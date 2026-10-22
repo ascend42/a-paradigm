@@ -135,7 +135,9 @@ export async function prepareClaude(home: string, sourceReal: string, opts: { al
   }
   const tmp = path.join(dir, `.claude-tmp-${process.pid}-${Date.now()}`);
   await fs.promises.copyFile(sourceReal, tmp, fs.constants.COPYFILE_EXCL);
-  await fs.promises.chmod(tmp, 0o500);
+  // win32: the mode is only the read-only bit (the home's DACL is the protection), and a read-only copy could not be
+  // replaced later; POSIX: r-x for the owner only
+  if (process.platform !== 'win32') await fs.promises.chmod(tmp, 0o500);
   // TD-2026-10-19-063 L1: the kind of the COPY (the bytes executed), never the source
   const kind = binaryKind(tmp);
   if (kind !== 'native' && !(kind === 'script' && opts.allowScripts)) {
@@ -148,9 +150,15 @@ export async function prepareClaude(home: string, sourceReal: string, opts: { al
     // TD-2026-10-19-063: the daemon pre-stages a re-pin card (the supervisor adds its cardId); offline the CLI is the raw form
     throw new PreflightRefusal('claude_binary_changed', `the claude binary differs from the pinned sha256 — approve the re-pin card in the Gnomon window (offline: \`${REPIN_COMMAND}\`)`, { expected: pin.sha256, found: digest, next: REPIN_NEXT });
   }
-  const exec = path.join(dir, `claude-${digest.slice(0, 32)}`);
-  await fs.promises.rm(exec, { force: true });
-  await fs.promises.rename(tmp, exec);
+  // win32 (W3): CreateProcess runs only a file with an executable extension
+  const exec = path.join(dir, `claude-${digest.slice(0, 32)}${process.platform === 'win32' ? '.exe' : ''}`);
+  if (process.platform === 'win32' && fs.existsSync(exec) && (await sha256File(exec)) === digest) {
+    // the same bytes are already there (and may be running in another session, which locks the file on Windows)
+    await fs.promises.rm(tmp, { force: true });
+  } else {
+    await fs.promises.rm(exec, { force: true });
+    await fs.promises.rename(tmp, exec);
+  }
   const state: PreparedClaude['pin'] = !pin ? 'first-use' : pin.by === 'repin' && !pin.logged ? 'repin' : 'match';
   return { exec, sha256: digest, source: sourceReal, pin: state, ...(state === 'repin' ? { repin: { from: pin!.from ?? null, to: digest, ...(pin!.approval ? { cardId: pin!.approval.cardId } : {}) } } : {}) };
 }

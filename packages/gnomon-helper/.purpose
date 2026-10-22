@@ -96,17 +96,30 @@ components:
       absolute drive paths only (no UNC, device or .. paths), pipe names
       gnomon-<hex>. Key ops (Windows Hello, W4) refuse unsupported-op.
       exec is containment for well-behaved trees (partial: WMI/COM/Task Scheduler
-      launches are not descendants, Aegis M4). W5 groundwork: sandbox [--desktop]
-      [--low] runs a session under a restricted token (restricting SIDs = the user's
-      enabled groups + user + GNOMON_SESSION_SID S-1-9-4174-2026-1022), Low integrity
-      and a private Low-labelled desktop, in a job with UI limits; acl.session places
-      the deny/allow ACEs naming that SID (with an OWNER RIGHTS ACE so the owner's
-      implicit WRITE_DAC cannot remove them) and the Low labels of writable roots.
+      launches are not descendants, Aegis M4). W5 (sessions): sandbox [--desktop]
+      [--low] [--session-sid <S-1-9-4174-2026-1022-n>] runs a session under a
+      restricted token (restricting SIDs = the user's enabled groups + user +
+      GNOMON_SESSION_SID S-1-9-4174-2026-1022 + this session's own SID), Low
+      integrity, an explicit user+SYSTEM default DACL (the launcher itself keeps the
+      shielded kernel's), a private Low-labelled desktop created with an explicit DACL,
+      in a job with UI limits. acl.session places per path the ACEs naming the Gnomon
+      SID (an allow may name the session's own SID: `sid`), replacing every explicit
+      Gnomon-SID ACE there: deny-read/write/all, deny-replace (no delete/rename/
+      re-ACL and no FILE_DELETE_CHILD: the parent of a literal deny), allow-read,
+      allow-write, allow-write-keep (allow below, no replace of the root), clear, and
+      the labels label-low / label-readable / label-meta (inherit-only no-read-up: the
+      dir itself readable for attributes) / label-no-read-up / label-clear; HKCU\ keys
+      take write denies (registry masks). A deny adds an OWNER RIGHTS READ_CONTROL-only
+      ACE (replaces the owner's implicit WRITE_DAC, grants nothing a session could
+      use). process.confine lowers a running child (the GUI transport) to Low in a
+      one-process job; process.shield denies the Gnomon SID every access to a process,
+      its threads and its token's default DACL (the kernel shields itself). The kernel
+      pipe's DACL denies the Gnomon SID; owner-only verdicts accept those denies.
       Unsigned until W7 (Trusted Signing): a dev kernel pins it by sha256, a
       release kernel refuses it. cargo test runs the pure checks.
     path: win32/src/
     type: module
-    tags: [gnomon, helper, native, rust, windows, paradigm-8, w2]
+    tags: [gnomon, helper, native, rust, windows, paradigm-8, w2, w5]
   gnomon-helper-build:
     description: >-
       scripts/build-darwin.mjs (swift build -c release → GnomonHelper.app,

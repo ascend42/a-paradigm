@@ -146,7 +146,7 @@ unsafe fn sddl_of(sd: PSECURITY_DESCRIPTOR) -> Result<String, HelperError> {
     Ok(take_local_wstr(s))
 }
 
-fn read_handle_sddl(h: HANDLE, ty: SE_OBJECT_TYPE) -> Result<String, HelperError> {
+pub fn read_handle_sddl(h: HANDLE, ty: SE_OBJECT_TYPE) -> Result<String, HelperError> {
     unsafe {
         let mut sd: PSECURITY_DESCRIPTOR = null_mut();
         let (mut owner, mut dacl): (PSID, *mut ACL) = (null_mut(), null_mut());
@@ -168,13 +168,18 @@ fn read_handle_sddl(h: HANDLE, ty: SE_OBJECT_TYPE) -> Result<String, HelperError
 }
 
 pub fn read_path_sddl(path: &str) -> Result<String, HelperError> {
+    read_named_sddl(path, SE_FILE_OBJECT)
+}
+
+/// Owner + DACL SDDL of a named object (a file path, or a `CURRENT_USER\…` registry key with SE_REGISTRY_KEY).
+pub fn read_named_sddl(path: &str, ty: SE_OBJECT_TYPE) -> Result<String, HelperError> {
     unsafe {
         let w = wide(path);
         let mut sd: PSECURITY_DESCRIPTOR = null_mut();
         let (mut owner, mut dacl): (PSID, *mut ACL) = (null_mut(), null_mut());
         let r = GetNamedSecurityInfoW(
             w.as_ptr(),
-            SE_FILE_OBJECT,
+            ty,
             OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
             &mut owner,
             null_mut(),
@@ -191,7 +196,21 @@ pub fn read_path_sddl(path: &str) -> Result<String, HelperError> {
 
 /// Replace the DACL of a file or directory with the protected owner-only one, then read it back.
 pub fn set_path_owner_only(path: &str, sid: &str, dir: bool) -> Result<String, HelperError> {
-    let sd = sd_from_sddl(&owner_only_sddl(sid, dir))?;
+    // Aegis M4: keep the explicit Gnomon-session DENY ACEs (and the OWNER RIGHTS ACE beside them) a live session put
+    // here: a kernel restart re-securing the home must not reopen it to sessions it adopts
+    let keep: String = match read_path_sddl(path).ok().and_then(|x| crate::protocol::parse_sddl(&x)) {
+        Some(f) => f
+            .aces
+            .iter()
+            .filter(|(t, fl, _, s)| !fl.contains("ID") && ((t == "D" && s.starts_with(crate::sandbox::GNOMON_SESSION_SID)) || (t == "A" && s == "OW")))
+            .map(|(t, fl, r, s)| format!("({t};{fl};{r};;;{s})"))
+            .collect(),
+        None => String::new(),
+    };
+    let base = owner_only_sddl(sid, dir);
+    // denies first (canonical order), then the owner's allow
+    let sddl = if keep.is_empty() { base } else { format!("D:P{keep}{}", &base["D:P".len()..]) };
+    let sd = sd_from_sddl(&sddl)?;
     unsafe {
         let w = wide(path);
         let r = SetNamedSecurityInfoW(
@@ -236,7 +255,9 @@ pub fn secure_pipe(name: &str, sid: &str) -> Result<PipeSecured, HelperError> {
             WaitNamedPipeW(path.as_ptr(), 250);
         }
     };
-    let sd = sd_from_sddl(&owner_only_sddl(sid, false))?;
+    // owner-only, plus a DENY for GNOMON_SESSION_SID: a session token carries the user SID as a restricting SID, so
+    // the owner's ACE alone would let a session connect to the kernel
+    let sd = sd_from_sddl(&format!("D:P(D;;FA;;;{})(A;;FA;;;{sid})", crate::sandbox::GNOMON_SESSION_SID))?;
     unsafe {
         let r = SetSecurityInfo(
             h.0,

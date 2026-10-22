@@ -109,6 +109,7 @@ import { spkiBase64Url, WebEndpoint, type LaunchGrant } from '../web/endpoint.js
 import type { LaunchAsker } from '../web/launch-cap.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { secureKernelPipe } from '../../platform/win32/pipe.js';
+import { shieldProcess } from '../../platform/win32/shield.js';
 import { ensureGnomonHome } from './home.js';
 import { DEFAULT_IDLE_EXIT_MS, IdleMonitor } from './idle.js';
 import { acquireDaemonLock, pidPathOf, reclaimResiduePidfile, releaseDaemonLock, type DaemonPidfile } from './pidfile.js';
@@ -1363,7 +1364,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     server = await listenSocket({
       socketPath: choice.path,
       handle: dispatcher.handle,
-      ...(choice.via === 'pipe' ? { securePipe: secureKernelPipe } : {}),
+      // win32: the kernel process is shielded from sessions, then its pipe secured, before anything is served
+      ...(choice.via === 'pipe' ? { securePipe: async (p: string) => (await shieldProcess(), await secureKernelPipe(p)) } : {}),
       ...(opts.maxFrameBytes !== undefined ? { maxFrameBytes: opts.maxFrameBytes } : {}),
       ...(opts.maxInFlight !== undefined ? { maxInFlight: opts.maxInFlight } : {}),
       ...(opts.preAuthMaxFrameBytes !== undefined ? { preAuthMaxFrameBytes: opts.preAuthMaxFrameBytes } : {}),

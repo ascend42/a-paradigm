@@ -191,7 +191,7 @@ export interface ModHostSeams {
 }
 
 export type ModStartResult =
-  | { state: 'running'; name: string; packageHash: string; dev: boolean; effects: ToolEffect[]; sandbox: 'full' | 'none'; profileHash: string | null; egressPort: number | null }
+  | { state: 'running'; name: string; packageHash: string; dev: boolean; effects: ToolEffect[]; sandbox: 'full' | 'partial' | 'none'; profileHash: string | null; egressPort: number | null }
   | { state: 'paused'; name: string; why: 'changed' | 'dev-expired' | 'user'; cardId: string | null; files?: TreeDiff };
 
 interface Running {
@@ -206,7 +206,7 @@ interface Running {
   effects: Set<ToolEffect>;
   proxy: EgressProxy | null;
   state: ModState;
-  sandbox: 'full' | 'none';
+  sandbox: 'full' | 'partial' | 'none';
   profileHash: string | null;
   ctx: CallContext;
   /** the callId of the host → mod call in force (null while idle) */

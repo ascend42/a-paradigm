@@ -107,12 +107,14 @@ import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, SESSION_UUID_RE, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { releaseSession, releaseSessionGrants, sessionSidFor } from '../../platform/win32/session-sandbox.js';
+import { privateToUser } from '../../platform/owner-only.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { buildSessionEnv, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, planSessionPath, sessionIdentity, sessionNodeDir, sessionPathFor, type SessionIdentity } from '../runner/env.js';
+import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, planSessionPath, sessionIdentity, sessionNodeDir, sessionPathFor, type SessionIdentity } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
@@ -467,9 +469,10 @@ export function ensureSessionEnvDir(userClaudeDir: string, uuid: string): string
     }
     if (st && (st.isSymbolicLink() || !st.isDirectory())) return `${dir} is ${st.isSymbolicLink() ? 'a symlink' : 'not a directory'}`;
     // Aegis L-2: an existing dir must be ours and not group/world-writable, else another user could plant an env file
+    // (win32: mode bits mean nothing there; the dir's owner and DACL are read instead, privateToUser)
     const uid = process.getuid?.();
     if (st && uid !== undefined && st.uid !== uid) return `${dir} is owned by uid ${st.uid}, not ${uid}`;
-    if (st && (st.mode & 0o022) !== 0) return `${dir} is group- or world-writable (mode ${(st.mode & 0o777).toString(8)})`;
+    if (st && !privateToUser(dir, st)) return process.platform === 'win32' ? `${dir} is not private to this user (owner or DACL)` : `${dir} is group- or world-writable (mode ${(st.mode & 0o777).toString(8)})`;
     if (!st) {
       try {
         fs.mkdirSync(dir, { mode: 0o700 });
@@ -645,6 +648,23 @@ export class SessionSupervisor {
     if (!row) return;
     const r = emptySessionEnvDir(path.join(this.#userHome(), row.userClaudeDir), uuid);
     if (r.removed > 0 || r.refused) await this.#o.log('session.sandbox', { hsid, phase: 'session-env-emptied', uuid, removed: r.removed, ...(r.refused ? { refused: r.refused } : {}) }, hsid ? { session: hsid } : {}).catch(() => undefined);
+    if (this.#platform === 'win32' && SESSION_UUID_RE.test(uuid)) {
+      // W5: the dir's own-SID allow-write-keep (platform/win32/session-sandbox.ts) ends with the session
+      try {
+        releaseSessionGrants([path.join(this.#userHome(), row.userClaudeDir, CLAUDE_SESSION_ENV_REL, uuid)]);
+      } catch (err) {
+        await this.#o.log('session.sandbox', { hsid, phase: 'session-env-grant-kept', uuid, error: err instanceof Error ? err.message : String(err) }, hsid ? { session: hsid } : {}).catch(() => undefined);
+      }
+    }
+  }
+
+  /** W5: undo this session's win32 labels and grants (platform/win32/session-sandbox.ts releaseSession); logged, never throws. */
+  #releaseWin32(hsid: string): void {
+    try {
+      releaseSession(sessionSidFor(hsid));
+    } catch (err) {
+      void this.#o.log('session.sandbox', { hsid, phase: 'release-failed', error: err instanceof Error ? err.message : String(err) }, { session: hsid }).catch(() => undefined);
+    }
   }
 
   #userHome(): string {
@@ -753,7 +773,7 @@ export class SessionSupervisor {
     if (!row) return this.#refuse(hsid, 'spawn_failed', `no Claude Code platform row for ${this.#platform}`);
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     // reviewer 9: the child's HOME IS the user home whose layers were scanned
-    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath, ...(repoContextFor(this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS) ? { inject: REPO_CONTEXT_ENV } : {}) });
+    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath, ...(this.#platform === 'win32' ? { tempDir: win32SessionTempDir(hsid) } : {}), ...(repoContextFor(this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS) ? { inject: REPO_CONTEXT_ENV } : {}) });
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
     let tracked = false;
@@ -827,17 +847,17 @@ export class SessionSupervisor {
       // P8-D94: in `audited` mode only the repo hooks the human approved reach Claude, through policy.json
       const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req, repoCtx ? repoContextLines(repoCtx) : []) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
-      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
+      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy, this.#platform), ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
       const distroServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {}; // verified generated (kernel output)
       const mcpServers = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
       // the screen-socket deny follows the TMPDIR the session actually gets (the OS one), not the daemon's inherited one
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: env.TMPDIR ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {
-          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
-          const ch = spawn(p.command, p.args, { cwd: req.cwd, env, stdio: ['ignore', 'pipe', 'ignore'] });
+          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+          const ch = spawn(p.command, p.args, { cwd: req.cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
           let stdout = '';
           const t = setTimeout(() => ch.kill('SIGKILL'), 15_000);
           ch.stdout?.setEncoding('utf8');
@@ -889,7 +909,7 @@ export class SessionSupervisor {
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
       const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
-      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
       if (wNow !== wHash || gitHash(req.worktree ?? req.cwd) !== gHash) {
@@ -908,7 +928,7 @@ export class SessionSupervisor {
         }
       }
       const intent = await this.#o.children.intend({ kind: 'session', hsid });
-      child = spawn(plan.command, plan.args, { cwd: req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      child = spawn(plan.command, plan.args, { cwd: req.cwd, env, detached: this.#platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }); // win32: stay in libuv's kill-on-close job (a dead kernel takes the launcher, so the session, with it)
       // the exit/close listeners are attached SYNCHRONOUSLY, before any await. 'exit' only lets paused stdout
       // drain; the release path runs on 'close' (after stdout ended), so a result written just before exit is recorded
       const c = child;
@@ -948,6 +968,8 @@ export class SessionSupervisor {
         trace.ctl({ event: 'open-failed' });
         void trace.close();
       }
+      // W5: an open that failed before a live session undoes its win32 labels and grants (a live one does at exit)
+      if (this.#platform === 'win32' && !live) this.#releaseWin32(hsid);
       if (tracked && child) {
         // round 3: a failure after track — stop the group; the wired exit path releases the permits
         await this.#o.children.stop(child, 'open-failed').catch(() => undefined);
@@ -1067,6 +1089,7 @@ export class SessionSupervisor {
     s.state = 'exited';
     // Aegis M-B: every exit path (exited, drained, killed) empties this session's session-env/<uuid>, links never followed
     await this.#emptySessionEnv(s.hsid, s.uuid);
+    if (this.#platform === 'win32') this.#releaseWin32(s.hsid);
     if (s.watch) clearInterval(s.watch);
     s.watch = null;
     await this.#expirePending(s, 'session-exited');

@@ -25,8 +25,8 @@ use windows_sys::Win32::Foundation::{
 use windows_sys::Win32::Security::Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, ConvertStringSidToSidW, SetSecurityInfo, SE_WINDOW_OBJECT};
 use windows_sys::Win32::Security::{
     CreateRestrictedToken, GetLengthSid, GetTokenInformation, SetTokenInformation, TokenGroups, TokenIntegrityLevel, TokenUser,
-    DISABLE_MAX_PRIVILEGE, GetSecurityDescriptorSacl, ACL, LABEL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SID_AND_ATTRIBUTES,
-    TOKEN_MANDATORY_LABEL, TOKEN_ADJUST_DEFAULT, TOKEN_ASSIGN_PRIMARY,
+    DISABLE_MAX_PRIVILEGE, GetSecurityDescriptorDacl, GetSecurityDescriptorSacl, TokenDefaultDacl, TOKEN_DEFAULT_DACL, ACL, LABEL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SID_AND_ATTRIBUTES,
+    SECURITY_ATTRIBUTES, TOKEN_MANDATORY_LABEL, TOKEN_ADJUST_DEFAULT, TOKEN_ASSIGN_PRIMARY,
     TOKEN_DUPLICATE, TOKEN_GROUPS, TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::System::Console::{GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
@@ -100,7 +100,7 @@ pub fn quote_arg(a: &str) -> String {
 }
 
 /// The restricted primary token (see the module doc).
-fn restricted_token(low: bool) -> Result<Owned, String> {
+fn restricted_token(low: bool, session_sid: Option<&str>) -> Result<Owned, String> {
     unsafe {
         let mut tok: HANDLE = null_mut();
         if OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY | TOKEN_ADJUST_DEFAULT, &mut tok) == 0 {
@@ -136,15 +136,31 @@ fn restricted_token(low: bool) -> Result<Owned, String> {
             }
         }
         restricting.push(SID_AND_ATTRIBUTES { Sid: gnomon, Attributes: 0 });
+        // this session's own SID (Aegis M2): its carve-backs are granted to it, so a concurrent session cannot use them
+        let mut own: PSID = null_mut();
+        if let Some(s) = session_sid {
+            let w = crate::win::wide(s);
+            if ConvertStringSidToSidW(w.as_ptr(), &mut own) == 0 {
+                return Err(last("ConvertStringSidToSidW(session)"));
+            }
+            restricting.push(SID_AND_ATTRIBUTES { Sid: own, Attributes: 0 });
+        }
         let mut rt: HANDLE = null_mut();
         let ok = CreateRestrictedToken(tok.0, DISABLE_MAX_PRIVILEGE, 0, null(), 0, null(), restricting.len() as u32, restricting.as_ptr(), &mut rt);
         windows_sys::Win32::Foundation::LocalFree(gnomon as *mut c_void);
+        if !own.is_null() {
+            windows_sys::Win32::Foundation::LocalFree(own as *mut c_void);
+        }
         // ubuf / gbuf (the SIDs the restricting list points into) live until here: CreateRestrictedToken copied them
         drop((ubuf, gbuf));
         if ok == 0 {
             return Err(last("CreateRestrictedToken"));
         }
         let rt = Owned(rt);
+        // the session's default DACL, explicitly: the launcher was spawned by the shielded kernel, whose default DACL
+        // denies GNOMON_SESSION_SID (shield.rs), and the restricted token would inherit that (the session could not
+        // open its own threads). Set on the SESSION token only; the launcher keeps the shielded default (Aegis M1).
+        set_default_dacl(rt.0)?;
         if low {
             // Low integrity (S-1-16-4096): no write up (only Low-labelled roots are writable), and NO_READ_UP |
             // NO_WRITE_UP on every Medium process object, so a session cannot open, read or inject into the kernel,
@@ -163,6 +179,35 @@ fn restricted_token(low: bool) -> Result<Owned, String> {
         }
         Ok(rt)
     }
+}
+
+/// User + SYSTEM full access, as an SDDL DACL string.
+fn user_system_sddl() -> Result<String, String> {
+    let user = crate::win::current_user_sid().map_err(|e| format!("current_user_sid: {}", e.message))?;
+    Ok(format!("D:(A;;GA;;;{user})(A;;GA;;;SY)"))
+}
+
+/// `tok`'s default DACL → user + SYSTEM full access.
+fn set_default_dacl(tok: HANDLE) -> Result<(), String> {
+    unsafe {
+        let w = crate::win::wide(&user_system_sddl()?);
+        let mut sd: PSECURITY_DESCRIPTOR = null_mut();
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(w.as_ptr(), 1, &mut sd, null_mut()) == 0 {
+            return Err(last("ConvertStringSecurityDescriptorToSecurityDescriptorW(default dacl)"));
+        }
+        let (mut present, mut defaulted) = (0i32, 0i32);
+        let mut dacl: *mut ACL = null_mut();
+        let ok = GetSecurityDescriptorDacl(sd, &mut present, &mut dacl, &mut defaulted) != 0 && present != 0 && {
+            let d = TOKEN_DEFAULT_DACL { DefaultDacl: dacl };
+            SetTokenInformation(tok, TokenDefaultDacl, &d as *const _ as *const c_void, std::mem::size_of::<TOKEN_DEFAULT_DACL>() as u32) != 0
+        };
+        let err = GetLastError();
+        windows_sys::Win32::Foundation::LocalFree(sd as *mut c_void);
+        if !ok {
+            return Err(format!("SetTokenInformation(TokenDefaultDacl) failed ({err})"));
+        }
+    }
+    Ok(())
 }
 
 /// Set a Low mandatory label (S:(ML;;NW;;;LW)) on a window-station object (the private desktop).
@@ -221,24 +266,32 @@ fn enter_job(ui: bool) -> Result<(), String> {
 pub fn run(args: &[String]) -> i32 {
     let mut desktop = false;
     let mut low = false;
+    let mut session_sid: Option<String> = None;
     let mut i = 0;
     while i < args.len() && args[i] != "--" {
         match args[i].as_str() {
             "--desktop" => desktop = true,
             "--low" => low = true,
+            "--session-sid" => {
+                i += 1;
+                match args.get(i) {
+                    Some(s) if crate::protocol::check_session_sid(s).is_ok() => session_sid = Some(s.clone()),
+                    _ => return fail("--session-sid takes S-1-9-4174-2026-1022-<n>"),
+                }
+            }
             other => return fail(&format!("unknown option {other}")),
         }
         i += 1;
     }
     if i >= args.len() {
-        return fail("usage: sandbox [--desktop] [--low] -- <absolute exe> [args…]");
+        return fail("usage: sandbox [--desktop] [--low] [--session-sid <sid>] -- <absolute exe> [args…]");
     }
     let rest = &args[i + 1..];
     let Some(exe) = rest.first() else { return fail("missing <exe>") };
     if crate::protocol::check_local_path(exe).is_err() || !exe.to_ascii_lowercase().ends_with(".exe") {
         return fail("<exe> must be an absolute path to an .exe");
     }
-    let token = match restricted_token(low) {
+    let token = match restricted_token(low, session_sid.as_deref()) {
         Ok(t) => t,
         Err(e) => return fail(&e),
     };
@@ -247,7 +300,18 @@ pub fn run(args: &[String]) -> i32 {
         let name = format!("gnomon-session-{}", std::process::id());
         let w = crate::win::wide(&name);
         // READ_CONTROL | WRITE_OWNER (0x20000 | 0x80000): needed to set the desktop's mandatory label below
-        let h = unsafe { CreateDesktopW(w.as_ptr(), null(), null(), 0, DESKTOP_CREATEWINDOW | DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS | 0x0002_0000 | 0x0008_0000, null()) };
+        // an explicit DACL (user + SYSTEM): the launcher's own default denies the session SID (Aegis M1)
+        let sddl = match user_system_sddl() {
+            Ok(x) => crate::win::wide(&x),
+            Err(e) => return fail(&e),
+        };
+        let mut dsd: PSECURITY_DESCRIPTOR = null_mut();
+        if unsafe { ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.as_ptr(), 1, &mut dsd, null_mut()) } == 0 {
+            return fail(&last("ConvertStringSecurityDescriptorToSecurityDescriptorW(desktop)"));
+        }
+        let sa = SECURITY_ATTRIBUTES { nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32, lpSecurityDescriptor: dsd, bInheritHandle: 0 };
+        let h = unsafe { CreateDesktopW(w.as_ptr(), null(), null(), 0, DESKTOP_CREATEWINDOW | DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS | 0x0002_0000 | 0x0008_0000, &sa) };
+        unsafe { windows_sys::Win32::Foundation::LocalFree(dsd as *mut c_void) };
         if h.is_null() {
             return fail(&last("CreateDesktopW"));
         }

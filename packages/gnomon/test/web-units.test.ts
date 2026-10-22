@@ -27,6 +27,7 @@ import path from 'node:path';
 import { hashBundleDir } from '../src/kernel/web/bundle.js';
 import { materializeGuiBundle } from '../src/kernel/web/gui-pin.js';
 import { transportLaunchPlan } from '../src/kernel/sandbox/index.js';
+import { TRANSPORT_BACKENDS } from '../src/kernel/sandbox/transport.js';
 import { validateChildRecord } from '../src/kernel/web/protocol.js';
 import { acceptKey, encodeClientFrame, FrameDecoder, OP, validCloseCode } from '../src/transport/ws-codec.js';
 
@@ -293,8 +294,11 @@ describe('G-WEB-08 bundle pin', () => {
 });
 
 describe('the transport profile is looked up per platform and fails closed (§15.5, G-WIN-05)', () => {
-  it.each(['linux', 'win32', 'freebsd'])('%s has no transport backend ⇒ sandbox-unavailable (never an unsandboxed child)', (platform) => {
+  it.each(['linux', 'freebsd'])('%s has no transport backend ⇒ sandbox-unavailable (never an unsandboxed child)', (platform) => {
     expect(() => transportLaunchPlan({ scriptPath: '/x.js', bundleDir: '/b' }, platform)).toThrow(expect.objectContaining({ reason: 'sandbox-unavailable' }));
+  });
+  it('darwin (sandbox-exec) and win32 (the confined child, W5) are the registered backends', () => {
+    expect(Object.keys(TRANSPORT_BACKENDS).sort()).toEqual(['darwin', 'win32']);
   });
 });
 

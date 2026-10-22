@@ -265,7 +265,8 @@ export function channelKind(s: { fd?: unknown; isTTY?: boolean }): 'pipe' | 'soc
   } catch {
     return 'other';
   }
-  if (st.isFIFO()) return 'pipe';
+  // win32: libuv reports a pipe as S_IFIFO (0o010000), but fs.constants has no S_IFIFO there, so isFIFO() is false
+  if (st.isFIFO() || (st.mode & 0o170000) === 0o010000) return 'pipe';
   if (st.isSocket()) return 'socket';
   if (st.isCharacterDevice()) return 'tty';
   if (st.isFile()) return 'file';

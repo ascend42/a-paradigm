@@ -94,6 +94,17 @@ export function isOwnerOnly(p: string, st: fs.Stats = fs.lstatSync(p), o: { stri
   }
 }
 
+/**
+ * win32 (W5): label `dir` Medium with no-read-up and no-write-up (inheritable), read back: no Low-integrity process — a
+ * session, the GUI transport — can read or write anything below it, whatever its DACL says. No-op on POSIX.
+ */
+export function noReadUpDir(dir: string): void {
+  if (!IS_WIN) return;
+  const r = helperOpSync(helper(), 'acl.session', { entries: [{ path: fs.realpathSync.native(dir), mode: 'label-no-read-up', match: 'subpath' }] });
+  const res = (r.results as Array<{ ok: boolean; sddl?: string; error?: string }> | undefined)?.[0];
+  if (!res?.ok || !/ML;OICI;(NWNR|NRNW);;;ME/.test(res.sddl ?? '')) throw new OwnerOnlyError(dir, `${dir}: the no-read-up label was not read back (${res?.error ?? res?.sddl ?? '?'})`);
+}
+
 /** Make a file owner-only: chmod 0600 on POSIX; on win32 a no-op inside a verified root, else the helper's DACL. */
 export function ownerOnlyFile(file: string): void {
   if (!IS_WIN) {
@@ -113,4 +124,31 @@ export function ownerOnlyWhat(st: fs.Stats): string {
 /** Test seam. */
 export function clearVerifiedRootsForTests(): void {
   verifiedRoots.clear();
+}
+
+/**
+ * win32: is `p` private to this user in the sense a POSIX 0700-ish dir is: owned by the user, and every ALLOW ACE names
+ * the user, SYSTEM, the Administrators group, OWNER RIGHTS or a Gnomon session SID (whose writes the session policy
+ * bounds). The default ACL of a profile dir passes; one another account can write (a shared folder, Everyone, Users)
+ * does not. On POSIX: owned by the uid and not group/world-writable.
+ */
+export function privateToUser(p: string, st: fs.Stats = fs.lstatSync(p)): boolean {
+  if (!IS_WIN) {
+    const uid = currentUid();
+    return (uid === null || st.uid === uid) && (st.mode & 0o022) === 0;
+  }
+  try {
+    const h = helper();
+    const user = String(helperOpSync(h, 'info', {}).userSid ?? '');
+    const sddl = String(helperOpSync(h, 'acl.read', { path: realOrSelf(p) }).sddl ?? '');
+    const owner = /^O:([^D]+)D:/.exec(sddl)?.[1];
+    if (!user || owner !== user) return false;
+    const allowed = new Set([user, 'SY', 'BA', 'OW']);
+    for (const m of sddl.matchAll(/\((A|D);[^;]*;[^;]*;;;([^)]+)\)/g)) {
+      if (m[1] === 'A' && !allowed.has(m[2]!) && !m[2]!.startsWith('S-1-9-4174-2026-1022')) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }

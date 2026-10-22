@@ -106,6 +106,7 @@ describeHelper('win32 helper (W2/W3)', () => {
       const name = sock.slice('\\\\.\\pipe\\'.length);
       const r = helperOpSync(pin(), 'pipe.read', { name });
       expect(r.ownerOnly).toBe(true);
+      expect(r.sessionDenied).toBe(true);
       expect(String(r.sddl)).not.toMatch(/;;;(WD|AN|BA|SY)\)/);
       // a connection after the read-back is served
       const c = net.connect(sock);
@@ -114,6 +115,10 @@ describeHelper('win32 helper (W2/W3)', () => {
         c.once('error', rej);
       });
       c.destroy();
+      // a session (a restricted token carrying GNOMON_SESSION_SID) cannot connect, though it carries the user SID
+      const probe = `require('net').connect(${JSON.stringify(sock)}).on('connect',()=>{console.log('CONNECTED');process.exit(0)}).on('error',(e)=>{console.log(e.code);process.exit(0)})`;
+      const out = spawnSync(pin().exe, ['sandbox', '--', process.execPath, '-e', probe], { encoding: 'utf8', input: '', windowsHide: true, timeout: 30_000 });
+      expect(out.stdout.trim()).toMatch(/^(EACCES|EPERM)$/);
     } finally {
       for (const s of early) s.destroy();
       await server.close();

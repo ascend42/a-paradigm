@@ -97,6 +97,28 @@ pub fn check_loopback_url(u: &str) -> Result<(), HelperError> {
     Ok(())
 }
 
+/// A per-session SID: `S-1-9-4174-2026-1022-<n>`, n a decimal u32 without leading zeros.
+pub fn check_session_sid(s: &str) -> Result<(), HelperError> {
+    let n = s.strip_prefix(crate::sandbox::GNOMON_SESSION_SID).and_then(|r| r.strip_prefix('-')).ok_or_else(|| bad("a session sid is S-1-9-4174-2026-1022-<n>"))?;
+    let ok = !n.is_empty() && n.len() <= 10 && n.bytes().all(|b| b.is_ascii_digit()) && !(n.len() > 1 && n.starts_with('0')) && n.parse::<u64>().is_ok_and(|v| v <= u32::MAX as u64);
+    if !ok {
+        return Err(bad("a session sid ends in a decimal u32"));
+    }
+    Ok(())
+}
+
+/// `HKCU\<key>`: bounded, no NUL, no empty segment, no '.'/'..' segment. Only this user's hive.
+pub fn check_registry_path(p: &str) -> Result<(), HelperError> {
+    let rest = p.strip_prefix("HKCU\\").ok_or_else(|| bad("registry path must start with HKCU\\"))?;
+    if rest.is_empty() || p.len() > 1024 || p.contains('\0') || p.contains('/') {
+        return Err(bad("registry path must name a key below HKCU"));
+    }
+    if rest.split('\\').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
+        return Err(bad("registry path segments must be non-empty and not '.' or '..'"));
+    }
+    Ok(())
+}
+
 /// Parsed DACL facts from a read-back SDDL (`O:<sid>D:<flags>(ace)(ace)…`).
 #[derive(Debug, PartialEq)]
 pub struct DaclFacts {
@@ -124,18 +146,31 @@ pub fn parse_sddl(sddl: &str) -> Option<DaclFacts> {
     Some(DaclFacts { owner, protected: flags.contains('P'), aces })
 }
 
-/// Owner-only = the owner is `sid`, and every ACE is an ALLOW for `sid` (inherited or explicit). `need_protected`:
-/// the object must not inherit from its parent (the home, the pipe); a file below the home inherits from it.
+/// Owner-only = the owner is `sid`, at least one ACE is an ALLOW for `sid` (inherited or explicit), and every other
+/// ACE is a DENY naming GNOMON_SESSION_SID (a deny only ever removes access: the kernel pipe's, and the session read
+/// denies a running session puts on the home) or the OWNER RIGHTS allow `acl.session` adds beside such a deny (it
+/// grants the owner, already `sid`, nothing more than its own ACE). `need_protected`: the object must not inherit from its parent (the
+/// home, the pipe); a file below the home inherits from it.
 pub fn owner_only(sddl: &str, sid: &str, need_protected: bool) -> bool {
     match parse_sddl(sddl) {
         Some(f) => {
             f.owner == sid
                 && (!need_protected || f.protected)
-                && !f.aces.is_empty()
-                && f.aces.iter().all(|(t, _, _, s)| t == "A" && s == sid)
+                && f.aces.iter().any(|(t, _, _, s)| t == "A" && s == sid)
+                && f.aces.iter().all(|(t, _, _, s)| (t == "A" && (s == sid || s == "OW")) || (t == "D" && s == crate::sandbox::GNOMON_SESSION_SID))
         }
         None => false,
     }
+}
+
+/// A DENY ACE (any rights, not inherit-only) names GNOMON_SESSION_SID (a process DACL: rights read back as hex).
+pub fn session_denied_any(sddl: &str) -> bool {
+    parse_sddl(sddl).is_some_and(|f| f.aces.iter().any(|(t, fl, _, s)| t == "D" && !fl.contains("IO") && s == crate::sandbox::GNOMON_SESSION_SID))
+}
+
+/// The pipe's DACL denies GNOMON_SESSION_SID full access (sessions carry the user SID, so owner-only alone admits them).
+pub fn session_denied(sddl: &str) -> bool {
+    parse_sddl(sddl).is_some_and(|f| f.aces.iter().any(|(t, fl, r, s)| t == "D" && !fl.contains("IO") && r == "FA" && s == crate::sandbox::GNOMON_SESSION_SID))
 }
 
 #[cfg(windows)]
@@ -144,7 +179,7 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
     match op {
         "info" => Ok(json!({
             "version": crate::VERSION, "protocol": crate::PROTOCOL, "platform": "win32",
-            "ops": ["info", "pipe.secure", "pipe.read", "acl.owner-only", "acl.read", "acl.session", "fs.rename-durable", "boot.id", "shell.open"],
+            "ops": ["info", "pipe.secure", "pipe.read", "acl.owner-only", "acl.read", "acl.session", "process.confine", "process.shield", "fs.rename-durable", "boot.id", "shell.open"],
             "sessionSid": crate::sandbox::GNOMON_SESSION_SID,
             "userSid": win::current_user_sid()?,
         })),
@@ -153,14 +188,14 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
             check_pipe_name(name)?;
             let sid = win::current_user_sid()?;
             let r = win::secure_pipe(name, &sid)?;
-            Ok(json!({ "sddl": r.sddl, "ownerOnly": owner_only(&r.sddl, &sid, true), "serverPid": r.server_pid }))
+            Ok(json!({ "sddl": r.sddl, "ownerOnly": owner_only(&r.sddl, &sid, true), "sessionDenied": session_denied(&r.sddl), "serverPid": r.server_pid }))
         }
         "pipe.read" => {
             let name = str_arg(req, "name")?;
             check_pipe_name(name)?;
             let sid = win::current_user_sid()?;
             let sddl = win::read_pipe_sddl(name)?;
-            Ok(json!({ "ownerOnly": owner_only(&sddl, &sid, true), "sddl": sddl }))
+            Ok(json!({ "ownerOnly": owner_only(&sddl, &sid, true), "sessionDenied": session_denied(&sddl), "sddl": sddl }))
         }
         "acl.owner-only" => {
             let path = str_arg(req, "path")?;
@@ -194,25 +229,56 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
             let mut parsed = Vec::with_capacity(entries.len());
             for e in entries {
                 let path = e.get("path").and_then(Value::as_str).ok_or_else(|| bad("entry.path must be a string"))?;
-                check_local_path(path)?;
                 let mode = e.get("mode").and_then(Value::as_str).and_then(crate::session_acl::Mode::parse).ok_or_else(|| bad("entry.mode is not a session mode"))?;
+                if path.starts_with("HKCU\\") {
+                    // a key of this user's hive: write denies (persistence: Run keys, Environment) and their removal only
+                    check_registry_path(path)?;
+                    if !mode.registry_ok() {
+                        return Err(bad("a registry entry takes deny-write, deny-all or clear"));
+                    }
+                } else {
+                    check_local_path(path)?;
+                }
                 let inherit = match e.get("match").and_then(Value::as_str) {
                     Some("subpath") => true,
                     Some("literal") => false,
                     _ => return Err(bad("entry.match must be subpath or literal")),
                 };
-                parsed.push((path, mode, inherit));
+                let own = match e.get("sid") {
+                    None => None,
+                    Some(v) => {
+                        let s = v.as_str().ok_or_else(|| bad("entry.sid must be a string"))?;
+                        check_session_sid(s)?;
+                        if !matches!(mode, crate::session_acl::Mode::AllowRead | crate::session_acl::Mode::AllowWrite | crate::session_acl::Mode::AllowWriteKeep) {
+                            return Err(bad("entry.sid is for an allow mode only"));
+                        }
+                        Some(s)
+                    }
+                };
+                parsed.push((path, mode, inherit, own));
             }
             // every entry is attempted; each reports on its own (a missing path is "missing", never a silent pass)
             let results: Vec<Value> = parsed
                 .into_iter()
-                .map(|(path, mode, inherit)| match crate::session_acl::apply(path, mode, inherit) {
+                .map(|(path, mode, inherit, own)| match crate::session_acl::apply(path, mode, inherit, own) {
                     Ok(sddl) => json!({ "path": path, "ok": true, "sddl": sddl }),
                     Err(e) if e.status == Some(2) || e.status == Some(3) => json!({ "path": path, "ok": false, "error": "missing" }),
                     Err(e) => json!({ "path": path, "ok": false, "error": e.code, "message": e.message }),
                 })
                 .collect();
             Ok(json!({ "results": results }))
+        }
+        "process.confine" => {
+            // W5: lower a running child (the GUI transport) to Low integrity in a locked-down job (confine.rs)
+            let pid = req.get("pid").and_then(Value::as_u64).filter(|p| *p > 4 && *p <= u32::MAX as u64).ok_or_else(|| bad("pid must be a process id"))?;
+            let rid = crate::confine::confine(pid as u32)?;
+            Ok(json!({ "integrity": format!("0x{rid:x}") }))
+        }
+        "process.shield" => {
+            // W5: deny Gnomon sessions every access to one of Gnomon's own processes (shield.rs)
+            let pid = req.get("pid").and_then(Value::as_u64).filter(|p| *p > 4 && *p <= u32::MAX as u64).ok_or_else(|| bad("pid must be a process id"))?;
+            let r = crate::shield::shield(pid as u32)?;
+            Ok(json!({ "sddl": r.sddl, "sessionDenied": true, "threads": r.threads }))
         }
         "fs.rename-durable" => {
             let (from, to) = (str_arg(req, "from")?, str_arg(req, "to")?);
@@ -325,6 +391,40 @@ mod tests {
         // a file below the home: inherited, not protected
         assert!(owner_only(&format!("O:{SID}D:AI(A;ID;FA;;;{SID})"), SID, false));
         assert!(!owner_only(&format!("O:{SID}D:AI(A;ID;FA;;;{SID})"), SID, true));
+    }
+
+    #[test]
+    fn session_sids_are_below_the_gnomon_sid_with_a_u32() {
+        for ok in ["S-1-9-4174-2026-1022-0", "S-1-9-4174-2026-1022-7", "S-1-9-4174-2026-1022-4294967295"] {
+            assert!(check_session_sid(ok).is_ok(), "{ok}");
+        }
+        for bad in ["S-1-9-4174-2026-1022", "S-1-9-4174-2026-1022-", "S-1-9-4174-2026-1022-01", "S-1-9-4174-2026-1022-4294967296", "S-1-9-4174-2026-1022-1-2", "S-1-9-4174-2026-10221", "S-1-5-32-544", "S-1-9-4174-2026-1022--1"] {
+            assert!(check_session_sid(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn registry_paths_are_this_users_hive_only() {
+        assert!(check_registry_path(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run").is_ok());
+        assert!(check_registry_path(r"HKCU\Environment").is_ok());
+        for p in [r"HKCU\", r"HKLM\Software", r"HKCU\a\\b", r"HKCU\..\x", "HKCU\\a\0b", r"HKCU/Software", r"HKEY_CURRENT_USER\Software"] {
+            assert!(check_registry_path(p).is_err(), "{p}");
+        }
+    }
+
+    #[test]
+    fn owner_only_accepts_session_denies_and_owner_rights() {
+        let g = crate::sandbox::GNOMON_SESSION_SID;
+        let pipe = format!("O:{SID}D:P(D;;FA;;;{g})(A;;FA;;;{SID})");
+        assert!(owner_only(&pipe, SID, true));
+        assert!(session_denied(&pipe));
+        assert!(!session_denied(&format!("O:{SID}D:P(A;;FA;;;{SID})")));
+        assert!(!session_denied(&format!("O:{SID}D:P(D;OICIIO;FA;;;{g})(A;;FA;;;{SID})")));
+        // a key file below the home while a session's read deny is on it
+        assert!(owner_only(&format!("O:{SID}D:AI(D;ID;CCDCLC;;;{g})(A;ID;FA;;;OW)(A;ID;FA;;;{SID})"), SID, false));
+        // a session SID ALLOW, or an owner-rights ACE alone, is not owner-only
+        assert!(!owner_only(&format!("O:{SID}D:P(A;;FA;;;{g})(A;;FA;;;{SID})"), SID, true));
+        assert!(!owner_only(&format!("O:{SID}D:P(A;;FA;;;OW)"), SID, true));
     }
 
     #[test]

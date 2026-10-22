@@ -52,6 +52,11 @@ describe('buildSessionEnv: identity names come only from the OS identity', () =>
     const { env } = buildSessionEnv({ ...base, path: null, from: { USERPROFILE: 'C:\\Users\\a', USER: 'a' }, identity: null });
     expect(env).toMatchObject({ USERPROFILE: 'C:\\Users\\a', USER: 'a' });
   });
+  it('a sandboxed win32 session (tempDir): its own TEMP/TMP and git over OpenSSL (schannel refuses the token); never elsewhere', () => {
+    const { env } = buildSessionEnv({ ...base, path: null, from: { TEMP: 'C:\\T', Tmp: 'C:\\T' }, identity: null, platform: 'win32', tempDir: 'C:\\T\\gnomon-s-0123' });
+    expect(env).toMatchObject({ TEMP: 'C:\\T\\gnomon-s-0123', TMP: 'C:\\T\\gnomon-s-0123', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'http.sslBackend', GIT_CONFIG_VALUE_0: 'openssl' });
+    for (const p of ['win32', 'darwin'] as const) expect(buildSessionEnv({ ...base, path: null, from: {}, identity: null, platform: p }).env).not.toHaveProperty('GIT_CONFIG_COUNT');
+  });
   it('envKeys are names only: no identity value appears in them', () => {
     const { envKeys } = buildSessionEnv({ ...base, path: null, from: { HOME: '/h', USER: 'gnomon-wrong-user-probe' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
     expect(envKeys).toEqual(['GNOMON_HSID', 'GNOMON_SESSION_KEY', 'GNOMON_SOCK', 'HOME', 'LOGNAME', 'SHELL', 'TMPDIR', 'USER']);

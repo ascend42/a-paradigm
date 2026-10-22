@@ -514,8 +514,12 @@ export const ALWAYS_ASK_TOOLS = Object.freeze(['Bash', 'Edit', 'Write', 'MultiEd
  */
 export const CLAUDE_SESSION_ENV: Readonly<Record<string, string>> = Object.freeze({ CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' });
 
-export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[]; ask: string[] }; env: Record<string, string> } {
+export function claudePermissions(p: SessionPolicy, platform: string = process.platform): { permissions: { deny: string[]; ask: string[] }; env: Record<string, string> } {
   const deny = new Set<string>();
+  // W5 (win32): sessions run at Low integrity, where Git Bash cannot start nested: Claude Code's PowerShell tool is the
+  // shell and its Bash tool is removed (a bare tool name in deny drops it from the session)
+  const win = platform === 'win32';
+  if (win) deny.add('Bash');
   for (const d of p.denyRead) {
     if (d.match !== 'dep-steering') {
       deny.add(rule('Read', d));
@@ -534,5 +538,5 @@ export function claudePermissions(p: SessionPolicy): { permissions: { deny: stri
     const base = rule('Edit', { ...d, match: 'literal' }).slice(0, -1);
     for (const g of ['**/CLAUDE*.md', '**/claude*.md', '**/.claude/**', '**/.Claude/**']) deny.add(`${base}/${g})`);
   }
-  return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] }, env: { ...CLAUDE_SESSION_ENV } };
+  return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] }, env: { ...CLAUDE_SESSION_ENV, ...(win ? { CLAUDE_CODE_USE_POWERSHELL_TOOL: '1' } : {}) } };
 }

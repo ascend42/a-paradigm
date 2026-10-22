@@ -45,6 +45,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { helperOp, helperOpSync, kernelWin32Helper } from '../../platform/win32/helper-client.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 
 export const SANDBOX_PROFILE_NAMES = ['gnomon-oracle', 'gnomon-reviewer', 'git', 'session', 'mod', 'transport', 'voice', 'link'] as const;
@@ -74,9 +75,15 @@ export interface ChildLaunchPlan {
   command: string;
   args: string[];
   env: Record<string, string>;
-  sandbox: 'full' | 'none';
+  sandbox: 'full' | 'partial' | 'none';
   profile: string | null;
   profileHash: string | null;
+  /**
+   * win32 (W5): confine the RUNNING child (Low integrity + a locked-down job) before the kernel sends it anything;
+   * it rejects when the confinement is not read back. The kernel hands sockets to the direct child's pid, so the
+   * transport cannot run under a launcher (gnomon-helper process.confine).
+   */
+  confine?: (pid: number) => Promise<void>;
 }
 
 const q = (p: string): string => JSON.stringify(p); // SBPL string literal (paths carry no quote by construction)
@@ -169,10 +176,41 @@ function darwinTransport(input: TransportLaunchInput): ChildLaunchPlan {
   };
 }
 
+/**
+ * win32 (W5): node runs the script directly (the kernel hands sockets to this pid) with a near-empty env; before the
+ * kernel sends the config, gnomon-helper lowers it to Low integrity in a job that allows no child process, no
+ * clipboard and no USER handles outside it. Low integrity keeps it out of the Gnomon home (labelled no-read-up by
+ * ensureGnomonHome) and out of every Medium process; the GUI bundle dir is labelled readable (Medium, no-write-up) so
+ * it can serve it and nothing Low can change it. `partial`: Low integrity does not deny network egress (the WFP
+ * filter, probe P10w) nor reads of the user's other files.
+ */
+function win32Transport(input: TransportLaunchInput): ChildLaunchPlan {
+  const pin = kernelWin32Helper();
+  const nodeReal = realpathSync.native(input.nodePath ?? process.execPath);
+  const scriptReal = realpathSync.native(input.scriptPath);
+  const bundleReal = realpathSync.native(input.bundleDir);
+  const r = helperOpSync(pin, 'acl.session', { entries: [{ path: bundleReal, mode: 'label-readable', match: 'subpath' }] });
+  const res = (r.results as Array<{ ok: boolean; error?: string }> | undefined)?.[0];
+  if (!res?.ok) throw new LifecycleRefusal('sandbox-unavailable', `the GUI bundle could not be labelled readable (${res?.error ?? 'error'})`, { profile: 'transport' });
+  const profile = JSON.stringify({ backend: 'win32-confine', integrity: 'low', job: ['active-process=1', 'ui-limits'], bundle: bundleReal });
+  return {
+    command: nodeReal,
+    args: [scriptReal],
+    env: { SystemRoot: process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\Windows' },
+    sandbox: 'partial',
+    profile,
+    profileHash: `sha256:${createHash('sha256').update(profile).digest('hex')}`,
+    confine: async (pid: number): Promise<void> => {
+      const c = await helperOp(pin, 'process.confine', { pid });
+      if (c.integrity !== '0x1000') throw new LifecycleRefusal('sandbox-unavailable', `the transport child was not confined (integrity ${String(c.integrity)})`, { profile: 'transport' });
+    },
+  };
+}
+
 /** Platform registry of transport sandbox backends (G-WIN-05). */
 export const TRANSPORT_BACKENDS: Readonly<Partial<Record<string, (input: TransportLaunchInput) => ChildLaunchPlan>>> = Object.freeze({
   darwin: darwinTransport,
-  // win32: restricted token + job object, Windows parity phase (P8-D78) — not built.
+  win32: win32Transport,
 });
 
 /** The launch plan for the transport child on `platform`; refuses where no profile can be applied. */

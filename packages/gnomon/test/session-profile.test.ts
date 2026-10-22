@@ -155,6 +155,19 @@ describe('TD-2026-10-19-814 item 1: ~/.claude/projects (Claude Code transcripts)
     // Claude's own Edit tool still may not write there (the carve-back is for Claude Code's transcript writer, not the model)
     expect(claudePermissions(p).permissions.deny).toContain(`Edit(/${claudeDir(w)}/**)`);
   });
+  it('win32 (W5): Low-integrity sessions get the PowerShell tool and no Bash tool; other platforms are unchanged', () => {
+    w = sessionWorld();
+    const p = buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: claudeDir(w), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null });
+    const win = claudePermissions(p, 'win32');
+    expect(win.permissions.deny).toContain('Bash');
+    expect(win.env).toMatchObject({ CLAUDE_CODE_USE_POWERSHELL_TOOL: '1' });
+    expect(win.permissions.ask).toContain('PowerShell');
+    for (const plat of ['darwin', 'linux']) {
+      const o = claudePermissions(p, plat);
+      expect(o.permissions.deny).not.toContain('Bash');
+      expect(o.env).not.toHaveProperty('CLAUDE_CODE_USE_POWERSHELL_TOOL');
+    }
+  });
   it('a deny inside the carve-back (a cwd under ~/.claude/projects) is re-denied AFTER the allow', () => {
     w = sessionWorld();
     const inner = path.join(projects(w), 'enc', 'pinned');
