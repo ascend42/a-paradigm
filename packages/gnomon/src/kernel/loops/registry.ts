@@ -81,6 +81,8 @@ interface Fold {
   trusted: TrustRecord | null;
   paused: { reason: string; by?: string } | null;
   deleted: { contentHash: string | null } | null;
+  /** when the loop last became runnable (the `at` of its latest loop.trusted or loop.resumed row) */
+  since?: number;
 }
 
 export interface LoopEntry {
@@ -234,6 +236,7 @@ export class LoopRegistry {
   readonly #snapshots: LoopSnapshots;
   #timer: NodeJS.Timeout | null = null;
   #closed = false;
+  readonly #listeners = new Set<() => void>();
 
   constructor(o: LoopRegistryOptions) {
     this.#o = o;
@@ -282,6 +285,30 @@ export class LoopRegistry {
     for (const r of rows) this.observe(r);
   }
 
+  /**
+   * Called after every scan and every folded trust row (#loop-timers reconciles its timers here). A listener must
+   * not throw; one that does is reported and skipped.
+   */
+  onChange(fn: () => void): () => void {
+    this.#listeners.add(fn);
+    return () => this.#listeners.delete(fn);
+  }
+
+  #changed(): void {
+    for (const fn of [...this.#listeners]) {
+      try {
+        fn();
+      } catch (err) {
+        this.#o.diag?.('loops.listener-failed', { why: err instanceof Error ? err.message.slice(0, 200) : 'listener failed' });
+      }
+    }
+  }
+
+  /** When the loop last became runnable (ms; its latest trusted or resumed row), or null when unknown. */
+  runnableSince(key: string): number | null {
+    return this.#folds.get(key)?.since ?? null;
+  }
+
   /** One committed row. Only the kernel's own rows count (LL6); a malformed row is ignored. */
   observe(r: LoopRow): void {
     if (r.principal !== this.#o.kernelPrincipal) return;
@@ -313,6 +340,7 @@ export class LoopRegistry {
         f.trusted = { contentHash, ...(str(p.coreHash) ? { coreHash: str(p.coreHash)! } : {}), ...(str(p.closureDigest) ? { closureDigest: str(p.closureDigest)! } : {}), ...(str(p.sourceHash) ? { sourceHash: str(p.sourceHash)! } : {}), ...(str(p.cardId) ? { cardId: str(p.cardId)! } : {}), ...(str(p.by) ? { by: str(p.by)! } : {}), ...(r.at ? { at: r.at } : {}) };
         if (f.paused && (f.paused.reason === 'content-changed' || f.paused.reason === 'closure-changed')) f.paused = null;
         f.deleted = null;
+        if (r.at && Number.isFinite(Date.parse(r.at))) f.since = Date.parse(r.at);
         break;
       }
       case 'loop.untrusted':
@@ -326,6 +354,7 @@ export class LoopRegistry {
         break;
       case 'loop.resumed':
         f.paused = null;
+        if (r.at && Number.isFinite(Date.parse(r.at))) f.since = Date.parse(r.at);
         break;
       case 'loop.deleted':
         f.trusted = null;
@@ -335,6 +364,7 @@ export class LoopRegistry {
     for (const k of [...this.#pending]) if (k.startsWith(`${key}#`) && k.endsWith(`#${r.kind}`)) this.#pending.delete(k);
     this.#history.push(ev);
     if (this.#history.length > 4096) this.#history.splice(0, this.#history.length - 4096);
+    this.#changed();
   }
 
   #fold(key: string): Fold {
@@ -367,6 +397,7 @@ export class LoopRegistry {
     for (const [k, e] of next) this.#entries.set(k, e);
     this.#hashAll();
     for (const e of this.#entries.values()) this.#detectChange(e);
+    this.#changed();
   }
 
   /** Recompute now (the runner calls this before every run and every node) and return the entry, or null. */
@@ -746,6 +777,7 @@ export class LoopRegistry {
 
   close(): void {
     this.#closed = true;
+    this.#listeners.clear();
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
     for (const id of [...this.#watchers.keys()]) this.#unwatch(id);

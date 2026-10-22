@@ -1214,7 +1214,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
   });
   // 8.0:loops (#loop-registry): the registry, trust cards and the human's request.loop.* (kernel/loops/wire.ts)
-  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver() });
+  // step 6 (#loop-timers): loop triggers become scheduler timers; the `loop` idle holder keeps the daemon up (D1)
+  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop') });
   const dispatcherCommon = {
     voice,
     voiceClient: {

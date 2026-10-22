@@ -2715,12 +2715,28 @@ components:
       the scheduler holds idle exit ('timer' holder). Clock and wake are seams
       (now, arm), so the 24 h soak is a unit test. Daemon wiring: DaemonOptions
       .automations (none by default; root-signed config later), handle.scheduler.
+      Loops step 6 (gnomon-loops.md §4): triggers add daily {at, tz} and weekly
+      {day, at, tz} (zoned.ts: one fire per local date; a time skipped by
+      spring-forward fires once at the end of the gap, a repeated one once at
+      its first occurrence; zones from the runtime's ICU, an unknown zone
+      refuses). parseAutomation's attended:false refusal lifts ONLY through an
+      `unattended` predicate (#loop-timers: the loop is trusted at its current
+      hash, unpaused, not held by the kill switch). Loop timers register and
+      unregister at run time (attachLoops, registerLoop, unregister,
+      unregisterAllLoops), keyed loop:<loopKey>#<trigger digest>; a due loop
+      timer is re-checked (still registered and trusted), writes its due row
+      {source: loop, loopKey, attended:false} and hands off to #loop-runner
+      (host.start(loopKey, {type, key, dueAt, late?})) instead of the refusal;
+      a late fire is a row for a human unless catchUp: once (runs once); a
+      refused hand-off writes schedule.dropped{reason: run-refused, refusal}.
+      Non-loop automations keep the hard-wired refusal.
     path: src/kernel/scheduler/
     type: module
     tags: [gnomon, kernel, scheduler, paradigm-8]
     tests:
       - test/scheduler.test.ts
       - test/scheduler-daemon.test.ts
+      - test/loop-timers.test.ts
     oracles: [G-SCH-01, G-LAW-05, G-LAW-05b]
 
   session-runner:
@@ -3594,6 +3610,44 @@ components:
       - src/kernel/loops/ledger.ts
       - src/kernel/loops/wire.ts
       - src/cli/loop-cli.ts
+
+  loop-timers:
+    description: >-
+      #loop-timers (docs/specs/gnomon-loops.md §4 scheduler integration and
+      uptime hold, §10 D1; build plan step 6, LP4a) in
+      src/kernel/loops/timers.ts, built by wire.ts when the daemon passes its
+      scheduler. Reconciles on every registry change (scan, folded trust row)
+      and runner event: each schedule trigger of a RUNNABLE loop (trusted at
+      its current hash, unpaused, not held by the kill switch) has one
+      scheduler timer (loop:<loopKey>#<digest>), every other loop none, so a
+      fresh install has zero loop timers (G-LAW-05b). daily/weekly times are
+      read in the daemon's zone (the host's IANA zone; the loop:v2 schema
+      states no tz yet); every is anchored at the loop's trust or resume
+      instant (registry.runnableSince), and fires at or before it are never
+      owed. Continuous: the next run is a one-shot timer at end + cooldown
+      (≥ 60 s), at boot, trust or resume now + cooldown; a paused loop (a
+      budget stop pauses), a killed one or a refused start (no next run that
+      local day) gets none. Kill switch: the runner's kill event drops every
+      loop timer synchronously before the pause rows (G-LOOP-26). Uptime
+      (D1): while any loop timer has a next due instant or a run is in
+      flight, the `loop` idle holder keeps the daemon up; status.loops.uptime
+      {enabled, running, waiting: {n, of}, keepingAlive, line: "Gnomon is
+      staying up for loops", nextDueAt}. The wrapper's window close already
+      hides the window and keeps the kernel (gnomon-wrapper main.rs
+      CloseRequested); only Cmd-Q stops it.
+    path: src/kernel/loops/timers.ts
+    type: module
+    tags: [gnomon, loops, scheduler, paradigm-8]
+    gates: [^loop-trusted]
+    flows: [$loop-run]
+    signals: []
+    tests:
+      - test/loop-timers.test.ts
+    anchors:
+      - src/kernel/loops/timers.ts
+      - src/kernel/scheduler/zoned.ts
+      - src/kernel/scheduler/scheduler.ts
+      - src/kernel/lifecycle/idle.ts
 
   trace-capture:
     description: >-

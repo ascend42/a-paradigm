@@ -9,6 +9,9 @@
  * #loop-runner (step 5): the run ledger is seeded from the log's LOOP_RUN_KINDS and kept current the same way; the
  * runner serves `request.loop.run|pause|resume` (pause{all:true} is the kill switch), and at boot closes every
  * started run with no end `daemon-restart` (G-LOOP-14). status.loops adds running, queued and recent runs.
+ *
+ * #loop-timers (step 6): given the daemon's scheduler, the loops' schedule and continuous triggers become scheduler
+ * timers that hand off to the runner, and the `loop` idle holder keeps the daemon up for them (status.loops.uptime).
  */
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import type { RaiseInput } from '../broker/broker.js';
@@ -19,6 +22,7 @@ import { pinParadigmCli, type CheckExecInput, type CheckResult, type FilePin } f
 import { LOOP_RUN_KINDS, LoopLedger } from './ledger.js';
 import { LOOP_FOLD_KINDS, LoopRegistry, type LoopRow } from './registry.js';
 import { LoopRunner, type LoopGlobalCaps, type LoopToast } from './runner.js';
+import { LoopTimers, type LoopScheduler } from './timers.js';
 import { LoopTrust, type LoopAsker } from './trust.js';
 
 /** The slice of the kernel log the loops need. */
@@ -47,6 +51,12 @@ export interface WireLoopsOptions {
   caps?: Partial<LoopGlobalCaps>;
   clock?: () => number;
   platform?: string;
+  /** #loop-timers: the daemon's scheduler (absent: no loop timers; manual runs only) */
+  scheduler?: LoopScheduler;
+  /** the `loop` idle holder */
+  holdIdle?: () => () => void;
+  /** the zone daily/weekly loop times are read in (default the host's) */
+  tz?: string;
 }
 
 /** The dispatcher's port (socket/dispatch.ts HumanRequestPort.loops). */
@@ -60,6 +70,7 @@ export interface WiredLoops {
   trust: LoopTrust;
   ledger: LoopLedger;
   runner: LoopRunner;
+  timers: LoopTimers | null;
   /** resolves once the boot sweep closed the runs a previous daemon left open */
   recovered: Promise<number>;
   port: LoopsPort;
@@ -135,6 +146,9 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
   });
   // daemon exit: no check process group outlives the kernel (the next boot closes the runs daemon-restart)
   const onExit = (): void => runner.abortAll();
+  const timers = o.scheduler
+    ? new LoopTimers({ registry, runner, scheduler: o.scheduler, ...(o.tz ? { tz: o.tz } : {}), ...(o.clock ? { clock: o.clock } : {}), ...(o.holdIdle ? { holdIdle: o.holdIdle } : {}), ...(o.diag ? { diag: o.diag } : {}) })
+    : null;
   if (o.start !== false) {
     registry.start();
     process.once('exit', onExit);
@@ -145,13 +159,15 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     trust,
     ledger,
     runner,
+    timers,
     recovered,
     port: {
       request: (asker, kind, payload) => (RUNNER_KINDS.has(kind) ? runner.request(asker, kind, payload) : trust.request(asker, kind, payload)),
-      status: () => ({ ...registry.status(), ...runner.status() }),
+      status: () => ({ ...registry.status(), ...runner.status(), ...(timers ? { uptime: timers.status() } : {}) }),
     },
     close: () => {
       process.removeListener('exit', onExit);
+      timers?.close();
       runner.abortAll();
       registry.close();
     },

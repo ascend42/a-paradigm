@@ -32,7 +32,7 @@ Branch `feat/gnomon-loops` (worktree `a-paradigm-loops`), cut from `feat/gnomon`
 | {3} | LP2 registry, hash (canonical JSON, argv0 realpath and sha, argv files, gate-class closure, node's realpath for shebang scripts), the `loop-trust` root card, trust folds, `gnomon loop list\|show\|trust\|untrust\|trust-status` | M | Aegis (heavy), Mika copy |
 | {4} | `loop-check` profile and check executor (copy via `git ls-files`, read-only node_modules, scrubbed env, process-control kill, tap/junit/tsc/json parsers, kernel-pinned builtins) | M | Aegis escape suite |
 | 5 | LP3 runner core plus manual run: graph walk, budgets, ledger, restart fold, concurrency, toasts, `gnomon loop run\|pause\|resume\|runs\|logs`; first end-to-end loop | L | |
-| 6 | LP4a schedule (daily/weekly with timezone and DST), trust predicate, dynamic registration, runner hand-off, `loop` idle holder (uptime), kill switch | M | |
+| 6 | LP4a schedule (daily/weekly with timezone and DST), trust predicate, dynamic registration, runner hand-off, `loop` idle holder (uptime), kill switch | M | built (#loop-timers) |
 | {7} | LP4b events: file.changed (per-repo watch), commit.landed, session.exited, approval.decide, continuous; `loop.trigger.fired` rows | M | |
 | {8} | LP5 local model nodes: `LocalLane.openLoop()` with `origin:'loop'`, verdict parse else `unsure`, `unavailable` retries, permit scope `loop`, thrash k=3 | L | Aegis |
 | {9} | Strictness-lite: per-repo levels via `request.strictness.set`, effective autonomy per node, L3 and brake pause | M | Aegis |
@@ -73,6 +73,14 @@ Branch `feat/gnomon-loops` (worktree `a-paradigm-loops`), cut from `feat/gnomon`
 - **Aegis review (approve-with-fixes, applied):** day counters independent of run-record eviction; callee compute charged to the root caller (`rootKey`); card `timeout` → `@pause` and `stop` → a terminal (validator `CARD_EDGE` + runner), a card that cannot be raised ends `@stop`; the kill switch flag is synchronous and holds every key until resumed; a run-budget stop pauses `budget` and drops the rerun; untrust/delete stop the run; the trust gate walks the caller chain; recover() skips live run ids.
 - **Builtins:** the daemon pins the paradigm CLI once (`paradigmCliResolver`: Node resolution of `@a-company/paradigm` from Gnomon, its dist digest). The signed app alone has no paradigm install, so builtins fail closed there; pinning at trust (on the card) is still the better design.
 - **Open:** the GUI has no handler for `loop.notified` yet (step 13; the kernel writes the row and calls an optional `toast` port that daemon.ts does not pass).
+
+## Notes from step 6 (LP4a schedule, uptime, kill switch wiring)
+
+- **Time zone.** `loop:v2` states no tz, so daily/weekly loop times are read in the daemon's zone (the host's IANA zone, `wireLoops({tz})` seam). The automation record carries the tz explicitly (`{daily: {at, tz}}`), so the timer is still a pure function of the record and the due rows; a host zone change re-keys the timer. Adding an optional `tz` to the schema is a schema change for a later step.
+- **DST** (`kernel/scheduler/zoned.ts`): one fire per local date; a time skipped by spring-forward fires at the end of the gap (02:30 → 03:00 local), a repeated one once at its first occurrence.
+- **status.loops.uptime** `{enabled, running, waiting: {n, of}, keepingAlive, line, nextDueAt}` (nested, because `status.loops.running` is already the runner's list). The `loop` idle holder holds while any loop timer has a next due instant at all (not only inside the scheduler's 10 min horizon): with no launchd until 8.1, a daily loop would otherwise never fire once the daemon idle-exits (D1).
+- **Wrapper:** closing the window already hides it and keeps the kernel (gnomon-wrapper `main.rs` `CloseRequested`); only Cmd-Q stops it. No wrapper change.
+- **Continuous** next runs are in-memory one-shot timers (end + cooldown); after a restart a continuous loop starts cooldown after boot. A refused continuous start gets no next run until the next local day (or a resume).
 
 ## Merge rules with the Windows work (feat/gnomon)
 

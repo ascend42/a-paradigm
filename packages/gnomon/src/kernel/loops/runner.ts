@@ -36,6 +36,9 @@
  * mid-step. Concurrency: one run per loop (a trigger during a run sets ONE rerun flag), at most `caps.repo` runs per
  * repo and `caps.global` overall (more wait in a FIFO). The kill switch (`request.loop.pause{all:true}`) aborts
  * every run (check-exec kills the process groups), and writes one `loop.paused{reason:'kill-switch'}` per loop.
+ *
+ * Step 6: `onEvent` tells #loop-timers when a run starts or ends (the continuous trigger, the uptime hold), when the
+ * kill switch flips (every loop timer is dropped synchronously, before the pause rows) and when a loop resumes.
  */
 import { randomBytes } from 'node:crypto';
 import { mintId, sanitizeDisplayText, type CardV1 } from '@a-company/gnomon-contracts';
@@ -84,6 +87,9 @@ export interface LoopToast {
   repo: string;
   text: string;
 }
+
+/** What #loop-timers hears from the runner (a run started or ended, the kill switch, a resume). */
+export type LoopRunnerEvent = { type: 'started' | 'ended' | 'resumed'; key: string } | { type: 'kill' };
 
 export interface LoopRunnerOptions {
   home: string;
@@ -211,6 +217,7 @@ export class LoopRunner {
   /** loops the kill switch paused, held here until each is resumed (covers the window before the rows fold) */
   readonly #killHeld = new Set<string>();
   #recovered = false;
+  readonly #listeners = new Set<(e: LoopRunnerEvent) => void>();
 
   constructor(o: LoopRunnerOptions) {
     this.#o = o;
@@ -219,6 +226,27 @@ export class LoopRunner {
 
   #now(): number {
     return (this.#o.clock ?? Date.now)();
+  }
+
+  /** Listen for run starts and ends, the kill switch and resumes (#loop-timers). Listeners run synchronously. */
+  onEvent(fn: (e: LoopRunnerEvent) => void): () => void {
+    this.#listeners.add(fn);
+    return () => this.#listeners.delete(fn);
+  }
+
+  #emit(e: LoopRunnerEvent): void {
+    for (const fn of [...this.#listeners]) {
+      try {
+        fn(e);
+      } catch (err) {
+        this.#o.diag?.('loops.listener-failed', { event: e.type, why: err instanceof Error ? err.message.slice(0, 200) : 'listener failed' });
+      }
+    }
+  }
+
+  /** Held by the kill switch (until this loop is resumed), or the kill switch is running now. */
+  isHeld(key: string): boolean {
+    return this.#killing || this.#killHeld.has(key);
   }
 
   // ── Restart ─────────────────────────────────────────────────────────────────
@@ -280,6 +308,7 @@ export class LoopRunner {
         return { reason: 'error' };
       })
       .finally(() => this.#after(a));
+    this.#emit({ type: 'started', key });
     return { runId, done: a.done };
   }
 
@@ -295,6 +324,7 @@ export class LoopRunner {
         this.#o.diag?.('loops.start-refused', { key: q.key, why: err instanceof Error ? err.message.slice(0, 200) : 'refused' });
       }
     }
+    this.#emit({ type: 'ended', key: a.key });
   }
 
   async #top(a: Active, entry: LoopEntry, budgets: LoopBudgets, trigger: Record<string, unknown>): Promise<LoopRunEnd> {
@@ -593,6 +623,7 @@ export class LoopRunner {
       a.abort.abort();
       keys.add(a.key);
     }
+    this.#emit({ type: 'kill' }); // #loop-timers drops every loop timer now, before any row is written
     try {
       this.#o.registry.scan();
       for (const e of this.#o.registry.entries()) if (this.#o.registry.stateOf(e).state === 'trusted') keys.add(e.key);
@@ -625,6 +656,7 @@ export class LoopRunner {
     if (!KERNEL_PAUSES_NEED_PRESENCE.has(s.reason ?? '')) {
       await this.#o.append('loop.resumed', { ...ids, by: asker.principal!, reason: s.reason ?? 'human' }, { connId: asker.connId });
       this.#killHeld.delete(key);
+      this.#emit({ type: 'resumed', key });
       return { resumed: true };
     }
     const cardId = mintId('card');
@@ -637,6 +669,7 @@ export class LoopRunner {
         if (decision !== 'continue') return;
         await this.#o.append('loop.resumed', { ...ids, by: asker.principal!, cardId, reason: s.reason }, { connId: c.connId ?? asker.connId });
         this.#killHeld.delete(key);
+        this.#emit({ type: 'resumed', key });
       },
     });
     return { pending: true, cardId: card.cardId, pausedFor: s.reason };
