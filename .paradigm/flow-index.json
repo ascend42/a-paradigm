@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-22T09:11:59.749Z",
+  "generatedAt": "2026-10-22T17:48:19.526Z",
   "flows": {
     "$ide-sync-flow": {
       "id": "$ide-sync-flow",
@@ -27,7 +27,7 @@
           "symbol": "#adapter-registry"
         }
       ],
-      "definedIn": "packages/paradigm/src/core/ide-adapters/.purpose"
+      "definedIn": "packages\\paradigm\\src\\core\\ide-adapters\\.purpose"
     },
     "$agent-orchestration-flow": {
       "id": "$agent-orchestration-flow",
@@ -59,7 +59,7 @@
           "symbol": "#audit-logger"
         }
       ],
-      "definedIn": "packages/paradigm/src/core/.purpose"
+      "definedIn": "packages\\paradigm\\src\\core\\.purpose"
     },
     "$event-ingestion": {
       "id": "$event-ingestion",
@@ -86,7 +86,7 @@
           "symbol": "#sentinel-web-client"
         }
       ],
-      "definedIn": "packages/sentinel-web/.purpose"
+      "definedIn": "packages\\sentinel-web\\.purpose"
     },
     "$oracle-run": {
       "id": "$oracle-run",
@@ -128,7 +128,7 @@
           "symbol": "#oracle"
         }
       ],
-      "definedIn": "packages/warpline/.purpose"
+      "definedIn": "packages\\warpline\\.purpose"
     },
     "$absorb-flow": {
       "id": "$absorb-flow",
@@ -155,7 +155,7 @@
           "symbol": "#warp-state"
         }
       ],
-      "definedIn": "packages/warpline/.purpose"
+      "definedIn": "packages\\warpline\\.purpose"
     },
     "$pick-flow": {
       "id": "$pick-flow",
@@ -187,7 +187,7 @@
           "symbol": "#pick"
         }
       ],
-      "definedIn": "packages/warpline/.purpose"
+      "definedIn": "packages\\warpline\\.purpose"
     },
     "$weave-forecast": {
       "id": "$weave-forecast",
@@ -219,7 +219,7 @@
           "symbol": "#weave"
         }
       ],
-      "definedIn": "packages/warpline/.purpose"
+      "definedIn": "packages\\warpline\\.purpose"
     },
     "$portal-validation-flow": {
       "id": "$portal-validation-flow",
@@ -251,7 +251,7 @@
           "symbol": "#validator"
         }
       ],
-      "definedIn": "packages/portal/core/.purpose"
+      "definedIn": "packages\\portal\\core\\.purpose"
     },
     "$symbol-aggregation": {
       "id": "$symbol-aggregation",
@@ -288,7 +288,7 @@
           "symbol": "#graph-builder"
         }
       ],
-      "definedIn": "packages/premise/core/.purpose"
+      "definedIn": "packages\\premise\\core\\.purpose"
     },
     "$purpose-parsing": {
       "id": "$purpose-parsing",
@@ -315,7 +315,7 @@
           "symbol": "#validator"
         }
       ],
-      "definedIn": "packages/purpose/core/.purpose"
+      "definedIn": "packages\\purpose\\core\\.purpose"
     }
   },
   "symbolToFlows": {

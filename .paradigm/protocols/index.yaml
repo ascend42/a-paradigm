@@ -1,9 +1,9 @@
 version: '1.0'
-generated: '2026-10-22T09:12:00.116Z'
+generated: '2026-10-22T17:48:20.495Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - agent provider
@@ -30,7 +30,7 @@ protocols:
       - cross-cutting
   - id: P-add-case-study
     name: Add a case study
-    status: stale
+    status: broken
     last_verified: '2026-03-17T14:25:02.383Z'
     trigger:
       - case study
@@ -42,7 +42,7 @@ protocols:
       - retrospective
   - id: P-add-cli-command
     name: Add a new CLI command
-    status: current
+    status: stale
     last_verified: '2026-03-01T10:00:00Z'
     trigger:
       - add command
@@ -67,7 +67,7 @@ protocols:
       - file-output
   - id: P-add-command-with-prompts
     name: Add a CLI command with interactive prompts
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - interactive command
@@ -81,7 +81,7 @@ protocols:
       - ux
   - id: P-add-command-with-subcommands
     name: Add a CLI command with subcommands
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - command with subcommands
@@ -132,7 +132,7 @@ protocols:
       - e2e
   - id: P-add-mcp-resource
     name: Add an MCP resource
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - mcp resource
@@ -145,7 +145,7 @@ protocols:
       - content
   - id: P-add-mcp-tool-with-status
     name: Add an MCP tool with status integration
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:45.268Z'
     trigger:
       - add tool with status
@@ -171,7 +171,7 @@ protocols:
       - backend
   - id: P-add-paradigm-type
     name: Add a TypeScript type definition
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - add type
@@ -223,7 +223,7 @@ protocols:
       - api
   - id: P-add-sentinel-adapter
     name: Add a Sentinel framework adapter
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - sentinel adapter
@@ -235,7 +235,7 @@ protocols:
       - middleware
   - id: P-add-sentinel-event-schema
     name: Add a Sentinel event schema
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - sentinel schema
@@ -261,7 +261,7 @@ protocols:
       - integration
   - id: P-add-sentinel-server-route
     name: Add a Sentinel server API route
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - sentinel route
@@ -287,7 +287,7 @@ protocols:
       - claude-code
   - id: P-add-spec
     name: Add a new spec
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:47.594Z'
     trigger:
       - add spec
@@ -301,7 +301,7 @@ protocols:
       - planning
   - id: P-add-team-subcommand
     name: Add a team subcommand
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - team subcommand
@@ -351,7 +351,7 @@ protocols:
       - workspace
   - id: P-add-unit-test
     name: Add a unit test
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - add test
@@ -402,7 +402,7 @@ protocols:
       - upgrade
   - id: P-add-wisdom-entry
     name: Add a wisdom entry
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - add wisdom
@@ -415,7 +415,7 @@ protocols:
       - decision
   - id: P-add-workspace-subcommand
     name: Add a workspace subcommand
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - workspace subcommand
@@ -537,6 +537,6 @@ protocols:
       - battle-test
 health:
   total: 40
-  current: 17
-  stale: 19
-  broken: 4
+  current: 2
+  stale: 33
+  broken: 5
