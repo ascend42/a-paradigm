@@ -260,7 +260,7 @@ function paintChatHead(): void {
     const started = s.openedAt ? s.openedAt.slice(11, 16) : '';
     const mins = s.openedAt ? Math.max(0, Math.round((Date.now() - Date.parse(s.openedAt)) / 60_000)) : null;
     meta.appendChild(h(doc, 'span', { class: `pink h${hue}` }, '■ ', s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped') as unknown as Node);
-    meta.appendChild(document.createTextNode(` · ${s.backend ?? 'claude'}`));
+    meta.appendChild(document.createTextNode(` · ${backendWord(s.backend)}`));
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
     // TD-2026-10-21-514: while a voice-origin turn is open, the header says edits ask first (the kernel clamps it)
     if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'chip warn clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
@@ -274,6 +274,16 @@ function paintChatHead(): void {
 }
 
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
+/** A backend id as the vocabulary words it (design-system: "one Claude (or local model) conversation"). */
+function backendWord(b: string | null | undefined): string {
+  return b === 'local' ? 'local model' : (b ?? 'claude');
+}
+/** Who answers in the focused session: a local-model session's replies are the local model's, never "claude". */
+function agentLabel(): string {
+  return backendWord(focused ? store.sessions.get(focused)?.backend : undefined) === 'local model' ? 'local model' : 'claude';
+}
+/** The speaker label the mounted transcript rows were drawn with (Mika #4: remount when it changes). */
+let mountedAgent: string | null = null;
 /** table talk: an assistant body whose lines start with a bold label (the agent's own A/B/C, 1/2/3 or names) shows those lines as chips. */
 function replyBody(it: ChatItem): MiniEl {
   // S2.5: agent text renders a SAFE markdown subset (DOM nodes only, never markup); the user's words stay verbatim
@@ -349,11 +359,11 @@ function itemEl(it: FoldedItem): HTMLElement {
   }
   if (it.role === 'working') {
     // a11y: one status ("Claude is working"); the ticking clock is not announced every second (aria-live off)
-    return h(doc, 'div', { class: 'trow role-working', role: 'status', 'aria-label': 'Claude is working' }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'live-clock', 'aria-live': 'off' }, liveText(it, Date.now()))) as unknown as HTMLElement;
+    return h(doc, 'div', { class: 'trow role-working', role: 'status', 'aria-label': agentLabel() === 'local model' ? 'The local model is working' : 'Claude is working' }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'live-clock', 'aria-live': 'off' }, liveText(it, Date.now()))) as unknown as HTMLElement;
   }
   // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
-  const label = spoken ? spoken.who : ROLE_LABEL[it.role];
+  const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
   // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (+ "edits ask first")
   const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: `sent-by${it.asksFirst ? ' asks-first' : ''}` }, `${spoken ? spoken.sent : it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`) : null;
@@ -530,6 +540,13 @@ function paintTranscript(remeasure = false): void {
       if (Math.abs(vp.scrollTop - want) >= 1) setScroll(vp, want);
     }
     const { start, end } = visibleRange(heights, vp.scrollTop, vp.clientHeight || 600);
+    // Mika #4: a row mounted before the session's backend arrived carries the wrong speaker label: remount them all
+    const agent = agentLabel();
+    if (agent !== mountedAgent) {
+      for (const el of mounted.values()) el.remove();
+      mounted.clear();
+      mountedAgent = agent;
+    }
     for (const [i, el] of mounted)
       if (i < start || i >= end) {
         el.remove();
@@ -591,7 +608,7 @@ function sessionRowEl(s: ReturnType<GuiStore['groups']>[number]['sessions'][numb
   return h(
     doc,
     'button',
-    { class: `session-row sess state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}${drooped.has(s.hsid) ? ' fx' : ''}`, type: 'button', 'data-hsid': s.hsid, title: `${s.hsid}${s.backend ? ` · ${s.backend}` : ''}` },
+    { class: `session-row sess state-${s.state}${isLiveState(s.state) ? ' live' : ' gone'}${focused === s.hsid ? ' active' : ''}${drooped.has(s.hsid) ? ' fx' : ''}`, type: 'button', 'data-hsid': s.hsid, title: `${s.hsid}${s.backend ? ` · ${backendWord(s.backend)}` : ''}`},
     h(doc, 'span', { class: `swatch h${hue}` }),
     h(doc, 'span', { class: 'sname' }, sessionTitle(s)),
     h(doc, 'span', { class: `snote tone-${note.tone}` }, `${mic}${note.text}`),

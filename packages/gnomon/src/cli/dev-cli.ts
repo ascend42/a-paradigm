@@ -1,15 +1,20 @@
 /**
  * @symbol #dev-launch
+ * @symbol #local-runner
  *
- * `gnomon dev init|up` (#dev-launch, spec §2.4 rule 6): the UNSIGNED,
+ * `gnomon dev init|up|local` (#dev-launch, spec §2.4 rule 6): the UNSIGNED,
  * DEV-ONLY dogfood path until #identity M1.3. See dev-home.ts for the home and
  * its guards. Every command prints a DEV ONLY banner. Writes plain text to the
  * streams it is given (zero deps, G-SEC-01; readout.ts voice). Never prints a
  * key; a launch token is printed only to an interactive terminal (the
  * launcher and terminal loop are shared with `gnomon up`: launch-tty.ts).
  */
+import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { GNOMON_VERSION } from '../version.js';
+import { LOCAL_COMPAT_NAMES, LOCAL_CONFIG_FILE, validateLocalEndpoints, writeSignedLocalConfig } from '../kernel/local/config.js';
+import { pinOf } from '../kernel/local/runner-pin.js';
 import { readout, refused } from './readout.js';
 import { DevHomeRefusal, defaultDevHome, loadDevHome, provisionDevHome, type DevHomeOptions, type LoadedDevHome } from './dev-home.js';
 import { isLifecycleRefusal, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
@@ -29,6 +34,11 @@ export const DEV_USAGE = `gnomon ${GNOMON_VERSION} dev — DEV ONLY, unsigned, u
 usage: gnomon dev init [--home <abs>]   provision a dev home (default ~/${'.gnomon-dev'})
        gnomon dev up   [--home <abs>] [--wrapper]   run the kernel on it and print a GUI launch URL
                                     (--wrapper: the grant goes on the stdout pipe of the parent, #gnomon-wrapper)
+       gnomon dev local --model <id> [--base <url>] [--compat <name>] [--id <name>] [--runner <dir>] [--home <abs>]
+                                    sign the local-model lane config (local.signed.json) with the dev root:
+                                    one loopback/LAN endpoint (default http://127.0.0.1:11434, ollama) and the
+                                    gnomon-local runner pinned by sha256 (default: this clone's gnomon-local/dist);
+                                    a running dev kernel picks it up at its next start
   Never ~/.gnomon. A home holding another root's registry is refused.
 `;
 
@@ -161,10 +171,86 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
   return code === 0 ? DEV_EXIT_OK : DEV_EXIT_REFUSED;
 }
 
+/** This clone's gnomon-local runner dir (dist/), next to this package: the bundled CLI or the sources. */
+export function defaultLocalRunnerDir(from: string = path.dirname(fileURLToPath(import.meta.url))): string | null {
+  for (const up of ['../../..', '../../../..', '../..']) {
+    const d = path.resolve(from, up, 'gnomon-local', 'dist');
+    if (fs.existsSync(path.join(d, 'cli.js'))) return d;
+  }
+  return null;
+}
+
+/**
+ * `gnomon dev local`: the root act that enables the local lane on a DEV home (spec §13.1; the production root signs
+ * the same row behind the hardware root, M1.3). Nothing but flags names the endpoint; the kernel re-validates the
+ * row (G-SUB-06: loopback/LAN, a local compat) and the runner pin at every local open anyway.
+ */
+export async function runDevLocal(argv: readonly string[], io: DevCliIo, opts: DevCliOptions = {}): Promise<number> {
+  const usage = (why: string): number => (io.stderr.write(`gnomon dev local: ${why}\n${DEV_USAGE}`), DEV_EXIT_USAGE);
+  const flags: Record<string, string> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    const v = argv[i + 1];
+    if (!['--home', '--base', '--model', '--compat', '--id', '--runner'].includes(a)) return usage(`unknown argument ${a}`);
+    if (v === undefined || v.startsWith('--')) return usage(`${a} needs a value`);
+    flags[a.slice(2)] = v;
+    i++;
+  }
+  if (!flags.model) return usage('--model is required (the model id the endpoint serves, e.g. qwen3.5:9b)');
+  if (flags.home !== undefined && !path.isAbsolute(flags.home)) return usage('--home needs an absolute path');
+  if (flags.runner !== undefined && !path.isAbsolute(flags.runner)) return usage('--runner needs an absolute path');
+  const home = flags.home ? path.resolve(flags.home) : defaultDevHome(opts.userHome);
+  const compat = flags.compat ?? 'ollama';
+  if (!LOCAL_COMPAT_NAMES.includes(compat)) return usage(`--compat must be one of ${LOCAL_COMPAT_NAMES.join(', ')}`);
+  const endpoint = { id: flags.id ?? compat, base: flags.base ?? 'http://127.0.0.1:11434', model: flags.model, compat };
+  io.stdout.write(DEV_BANNER);
+  try {
+    validateLocalEndpoints({ endpoints: [endpoint] }, []);
+  } catch (e) {
+    refused(io.stderr, 'dev', 'local-endpoint', e instanceof Error ? e.message : String(e), ['a local model endpoint is loopback or LAN only (law 7)']);
+    return DEV_EXIT_REFUSED;
+  }
+  const runnerDir = flags.runner ? path.resolve(flags.runner) : defaultLocalRunnerDir();
+  if (!runnerDir || !fs.existsSync(path.join(runnerDir, 'cli.js'))) {
+    refused(io.stderr, 'dev', 'no-runner', `no gnomon-local runner (dist/cli.js) at ${runnerDir ?? 'this clone'}`, ['build it: npm run build -w @a-company/gnomon-local', 'or pass --runner <abs dir holding cli.js>']);
+    return DEV_EXIT_REFUSED;
+  }
+  let dev: LoadedDevHome;
+  try {
+    dev = loadDevHome(home, opts);
+  } catch (e) {
+    if (e instanceof DevHomeRefusal) return reportRefusal(io, e);
+    throw e;
+  }
+  // the next version (the kernel refuses a row older than its high-water mark)
+  let version = 0;
+  try {
+    const prev = JSON.parse(fs.readFileSync(path.join(home, LOCAL_CONFIG_FILE), 'utf8')) as { row?: { version?: unknown } };
+    if (Number.isInteger(prev.row?.version)) version = (prev.row!.version as number) + 1;
+  } catch {
+    version = 0;
+  }
+  const runner = pinOf(runnerDir, 'cli.js');
+  writeSignedLocalConfig(home, dev.root, { endpoints: [endpoint], runner }, version);
+  io.stdout.write('SIGNED  local-model lane config\n');
+  readout(io.stdout, [
+    ['home', home],
+    ['file', LOCAL_CONFIG_FILE],
+    ['version', String(version)],
+    ['endpoint', `${endpoint.id} ${endpoint.base} (${endpoint.compat})`],
+    ['model', endpoint.model],
+    ['runner', `${runner.dir} (tree ${runner.treeSha256.slice(0, 12)}…)`],
+    ['node', `${runner.node} (${runner.nodeSha256.slice(0, 12)}…)`],
+    ['next', 'restart gnomon dev up, then open a session with model: local'],
+  ]);
+  return DEV_EXIT_OK;
+}
+
 export async function runDevCommand(argv: readonly string[], io: DevCliIo, opts: DevCliOptions & DevUpDeps = {}): Promise<number> {
   const [sub, ...rest] = argv;
   if (sub === 'init') return runDevInit(rest, io, opts);
   if (sub === 'up') return runDevUp(rest, io, opts);
+  if (sub === 'local') return runDevLocal(rest, io, opts);
   io.stdout.write(DEV_USAGE);
   return sub === '--help' || sub === '-h' ? DEV_EXIT_OK : DEV_EXIT_USAGE;
 }

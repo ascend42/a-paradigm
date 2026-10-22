@@ -884,6 +884,20 @@ describe('#gui chat transcript: the conversation, not the raw rows', () => {
     ]);
     expect(new Set(items.map((i) => i.key)).size).toBe(items.length);
   });
+  it('a local-model (gnomon-local) turn shows its tool call and its reply; streamed deltas and tool results are noise', () => {
+    const local: Row[] = [
+      ev(40, { type: 'message_update', delta: 'The' }, 'message_update'),
+      ev(41, { type: 'message_end', message: { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'read_file' }] }, finishReason: 'tool_calls' }, 'message_end'),
+      ev(42, { type: 'tool_execution_start', toolCallId: 'c1', toolName: 'read_file', args: { path: 'README.md' } }, 'tool_execution_start'),
+      ev(43, { type: 'tool_execution_end', toolCallId: 'c1', toolName: 'read_file', isError: false, result: '# trial' }, 'tool_execution_end'),
+      ev(44, { type: 'message_end', message: { role: 'assistant', content: 'It is a trial repo.', toolCalls: [] }, finishReason: 'stop' }, 'message_end'),
+      ev(45, { type: 'agent_end', stopReason: 'stop' }, 'agent_end'),
+    ];
+    expect(chatItems(local).items.map((i) => [i.role, i.text])).toEqual([
+      ['tool', toolSummary('read_file', { path: 'README.md' })],
+      ['assistant', 'It is a trial repo.'],
+    ]);
+  });
   it('"show raw events" shows every row; the composer echo hides the replay of the same text (shown once, list only grows)', () => {
     expect(chatItems(turn(), { raw: true }).items).toHaveLength(turn().length);
     const echo: Row = { seq: 18.5, kind: 'composer', connId: 'local', session: H, payload: 'fix the bug' };

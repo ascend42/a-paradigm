@@ -363,9 +363,12 @@ describe('review M2: a result pairs with the turn it names; a folded queued turn
 });
 
 describe('review a11y: the working row', () => {
-  it('is a status labelled "Claude is working" and its clock span is aria-live off', () => {
+  it('is a status labelled "Claude is working" (a local-model session: "The local model is working") and its clock span is aria-live off', () => {
     const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
-    expect(app).toMatch(/\{ class: 'trow role-working', role: 'status', 'aria-label': 'Claude is working' \}/);
+    expect(app).toMatch(/\{ class: 'trow role-working', role: 'status', 'aria-label': agentLabel\(\) === 'local model' \? 'The local model is working' : 'Claude is working' \}/);
+    expect(app).toMatch(/b === 'local' \? 'local model'/);
+    // Mika #4: a row drawn before the session's backend arrived is remounted when the speaker label changes
+    expect(app).toMatch(/if \(agent !== mountedAgent\) \{\s*for \(const el of mounted\.values\(\)\) el\.remove\(\);\s*mounted\.clear\(\);/);
     expect(app).toMatch(/h\(doc, 'span', \{ class: 'live-clock', 'aria-live': 'off' \}, liveText\(it, Date\.now\(\)\)\)/);
   });
 });

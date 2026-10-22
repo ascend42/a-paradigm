@@ -60,6 +60,11 @@ export interface SessionAclEntry {
   match: 'subpath' | 'literal';
   /** an allow for this session's own SID instead of GNOMON_SESSION_SID */
   sid?: string;
+  /**
+   * a write deny OUTSIDE the Low-labelled roots: defence in depth only (a Low process cannot write a Medium object
+   * anyway), so a path whose DACL this user may not change (Program Files) is reported partial, not refused
+   */
+  soft?: boolean;
 }
 
 export interface Win32SessionPlanInput {
@@ -184,13 +189,13 @@ export function win32SessionAcls(i: Win32SessionPlanInput): Win32SessionAcls {
     if (inWritable(p) && !isRoot(p) && fs.existsSync(p)) entries.push({ path: p, mode: 'label-readable', match });
   };
   const literal = (p: string, mode: SessionAclMode): void => {
-    entries.push({ path: p, mode, match: 'literal' });
+    entries.push({ path: p, mode, match: 'literal', ...(inWritable(p) ? {} : { soft: true }) });
     relabel(p, 'literal');
     if (inWritable(p) && fs.existsSync(p)) entries.push({ path: path.dirname(p), mode: 'deny-replace', match: 'literal' });
   };
   const writeDeny = (p: PolicyPath): void => {
     if (p.match === 'subpath') {
-      entries.push({ path: p.path, mode: 'deny-write', match: 'subpath' });
+      entries.push({ path: p.path, mode: 'deny-write', match: 'subpath', ...(inWritable(p.path) ? {} : { soft: true }) });
       relabel(p.path, 'subpath');
       return;
     }
@@ -257,11 +262,11 @@ export function mergeSessionAcls(entries: readonly SessionAclEntry[]): SessionAc
     if (a !== undefined && b !== undefined) {
       const bits = a | b;
       const mode: SessionAclMode = (bits & 3) === 3 ? 'deny-all' : bits & 1 ? (bits & 4 ? 'deny-all' : 'deny-read') : bits & 2 ? 'deny-write' : 'deny-replace';
-      by.set(k, { path: prev.path, mode, match });
+      by.set(k, { path: prev.path, mode, match, ...(prev.soft && e.soft ? { soft: true } : {}) });
       continue;
     }
     if (prev.mode === e.mode && prev.sid === e.sid) {
-      by.set(k, { ...prev, match });
+      by.set(k, { ...prev, match, ...(prev.soft && e.soft ? { soft: true } : { soft: undefined }) });
       continue;
     }
     throw new LifecycleRefusal('sandbox-unavailable', `the session ${prev.mode} and ${e.mode} on ${e.path} cannot be one entry`, { profile: 'session' });
@@ -296,7 +301,7 @@ export function applySessionAcls(acls: Win32SessionAcls, pin: Win32HelperPin = k
   const missing: string[] = [];
   for (let k = 0; k < acls.entries.length; k += 256) {
     const batch = acls.entries.slice(k, k + 256);
-    const r = helperOpSync(pin, 'acl.session', { entries: batch }, 120_000);
+    const r = helperOpSync(pin, 'acl.session', { entries: batch.map(({ soft: _soft, ...e }) => e) }, 120_000);
     const results = Array.isArray(r.results) ? (r.results as Array<{ path: string; ok: boolean; sddl?: string; error?: string; message?: string }>) : [];
     if (results.length !== batch.length) throw new LifecycleRefusal('sandbox-unavailable', 'the helper answered acl.session with the wrong number of results', { profile: 'session' });
     results.forEach((res, j) => {
@@ -307,6 +312,10 @@ export function applySessionAcls(acls: Win32SessionAcls, pin: Win32HelperPin = k
       }
       if (res.error === 'missing' && !e.mode.startsWith('allow-') && e.mode !== 'label-low' && e.mode !== 'label-readable') {
         missing.push(`${e.mode} ${e.path}`);
+        return;
+      }
+      if (e.soft && res.error === 'os-error' && /\(5\)/.test(res.message ?? '')) {
+        missing.push(`${e.mode} ${e.path} (not this user's to re-ACL; Low integrity already denies the write)`);
         return;
       }
       throw new LifecycleRefusal('sandbox-unavailable', `the session ${e.mode} on ${e.path} could not be applied (${res.error ?? 'error'}: ${res.message ?? ''})`, { profile: 'session', mode: e.mode });
@@ -335,7 +344,7 @@ export function win32SessionPlan(i: Win32SessionPlanInput & { binaryReal: string
   // held before the apply: a failure part-way is still undone by releaseSession
   holds.set(i.sessionSid, holdFor(i));
   const { missing } = applySessionAcls(acls, pin);
-  const partial = [...acls.partial, ...missing.map((m) => `not denied (path does not exist): ${m}`)];
+  const partial = [...acls.partial, ...missing.map((m) => `not placed: ${m}`)];
   const profile = JSON.stringify({ backend: 'win32-low-restricted', sid: GNOMON_SESSION_SID, own: i.sessionSid, entries: acls.entries, partial });
   pin.recheck();
   return {

@@ -791,6 +791,11 @@ components:
     description: >-
       #dev-launch (spec §2.4 rule 6) — the UNSIGNED, DEV-ONLY dogfood launch
       path until #identity M1.3. src/cli/dev-home.ts + src/cli/dev-cli.ts.
+      `gnomon dev local --model <id> [--base] [--compat] [--id] [--runner]` is the
+      dev root act that enables the local lane: it signs local.signed.json (one
+      loopback/LAN endpoint, default Ollama 127.0.0.1:11434; the gnomon-local
+      runner pinned by node + tree sha256, default this clone's
+      gnomon-local/dist), the version climbing past the last one (test/dev-local.test.ts).
       `gnomon dev init [--home <abs>]` provisions a DEV home (default
       ~/.gnomon-dev): a software P-256 dev-test root (DevTestRootAuthority
       behind DEV_TEST_ROOT_ACK, persisted 0600 as keys/DEV-ONLY-root-p256.pem),
@@ -3558,7 +3563,8 @@ components:
       forbidden web-endpoint port refused — G-SUB-06 BILLING_REFUSED via
       config.ts), config.ts (compat names = gnomon-local allowlist, no cloud;
       assertNotClaude: law 7 never runs claude under a backend:local permit),
-      probe.ts (/slots n_ctx, else /props; tools only on a live tool call),
+      probe.ts (/slots n_ctx, else /props, else Ollama /api/show num_ctx, else
+      the loaded context in /api/ps; tools only on a live tool call),
       routing.ts (local|claude|any; capable = probe ok + tools (or text-tool
       opt-in) + n_ctx >= floor 8192), src/adapters/local/runner.ts (pi rpc
       JSONL driver, tolerant parse, LocalUsageMeter no double count),
