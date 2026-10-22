@@ -107,7 +107,10 @@ components:
       safari.html for Safari by hand, P09_SAFARI_LINE to record it),
       p12-excalidraw-csp (pinned Excalidraw bundled by esbuild in a temp dir,
       loaded under the §11.2 CSP; violations by phase, size, parse time),
-      p14-link-outbound (default-deny sandbox-exec link profile); founder-run
+      p14-link-outbound (default-deny sandbox-exec link profile), p03-pipe-dacl
+      (win32, W1: Node cannot adopt a foreign pipe, the default pipe DACL lets Everyone and
+      Anonymous read, a WRITE_DAC client handle makes it owner-only pipe-wide, a squatted
+      name fails the listen EADDRINUSE); founder-run
       p00-sign-notary, p04-se-helper, p05-keychain-acl (signed
       GnomonHelperProbe.app from _shared/helper/ProbeHelper.swift; fail fast
       with a founder-steps pointer when the identity / provisioning profile /
@@ -145,6 +148,14 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    windows-pipe: >-
+      BUILT (Windows parity W3, docs/plans/gnomon-windows.md; spec §16 Kernel endpoint, G-WIN-01, probe P03).
+      On win32 selectSocketPath returns the named pipe gnomon-<32 hex> (windowsPipePath: sha256 of the case-folded
+      realpath of the home; via 'pipe'). listenSocket binds it (libuv FIRST_PIPE_INSTANCE: a squatter fails the
+      listen, endpoint-busy) and REQUIRES opts.securePipe (else endpoint-acl): until it resolves every accepted
+      connection is destroyed unserved, then every earlier one is dropped. The daemon passes
+      platform/win32/pipe.ts secureKernelPipe: the helper's pipe.secure sets the protected current-user-only
+      DACL and the kernel accepts only an owner-only read-back AND serverPid === its own pid.
     journal-cursor: >-
       BUILT (slice A4, T-2026-10-19-001, TD-2026-10-19-648 item 8, §5):
       SERVER_FEATURES = ['journal.cursor'] (inside the signed
@@ -3891,6 +3902,14 @@ flows:
     tags: [gnomon, setup]
 
   daemon-lifecycle:
+    windows-home: >-
+      BUILT (Windows parity W3; spec §16 Home dir + modes, G-WIN-02). ensureGnomonHome on win32 calls
+      platform/owner-only.ts ownerOnlyDir: the win32 helper (platform/win32/helper-client.ts; repo-built,
+      sha256-pinned and re-checked before every spawn in a dev kernel, refused unsigned by a release kernel until
+      W7) applies the protected owner-only DACL D:P(A;OICI;FA;;;<user SID>) and the home is accepted only from the
+      read-back, then becomes a verified root. isOwnerOnly / ownerOnlyFile replace the POSIX mode checks
+      (device-key.ts, dev-home.ts so far): a path inside a verified root inherits the ACE and needs no round trip;
+      anything else is read back with acl.read. POSIX behaviour is unchanged (0700 / 0600 read back).
     daemon-stop: >-
       PARTLY BUILT (T-2026-10-19-014 B0, TD-2026-10-19-528 F3, spec §3.1 I3).
       Kernel side built: DaemonHandle.requestStop(connId, reason='stop') raises

@@ -9,7 +9,8 @@ description: >-
   darwin/ is a SwiftPM package (swift-tools 5.9, macOS 14); scripts/ builds
   the signed .app (Developer ID identity looked up in the keychain, the
   provisioning profile embedded from ~/.config/gnomon-signing) and optionally
-  notarizes it (keychain profile gnomon-notary). win32/ will be Rust (P8-D71).
+  notarizes it (keychain profile gnomon-notary). win32/ is the Rust helper
+  (P8-D71, W2 of docs/plans/gnomon-windows.md), built by scripts/build-win32.mjs.
 
 components:
   gnomon-helper:
@@ -75,6 +76,37 @@ components:
     path: darwin/Sources/gnomon-helper/
     type: module
     tags: [gnomon, helper, native, swift, paradigm-8, secure-enclave, m1.3]
+  gnomon-helper-win32:
+    description: >-
+      The Windows platform helper (Rust, windows-sys, P8-D71; W2). gnomon-helper.exe
+      --version | serve | once speak the gnomon-helper:v2 envelope with the win32
+      platform ops: info (userSid), pipe.secure (opens the kernel's
+      kernel pipe gnomon-<hex> READ_CONTROL|WRITE_DAC, sets the protected
+      current-user-only DACL, reads it back, reports the pipe's server pid; P03
+      proved the DACL is pipe-wide and Node cannot adopt a foreign pipe), pipe.read,
+      acl.owner-only (file or dir, OICI on a dir) and acl.read (owner-only
+      verdicts from the read-back SDDL: owner = user SID, every ACE an allow for
+      it), fs.rename-durable (MoveFileExW REPLACE_EXISTING|WRITE_THROUGH),
+      boot.id (win:<PrefetchParameters BootId>), shell.open (loopback http(s)
+      only, never a URL carrying a launch token). exec -- <abs .exe> args is the
+      job-object launcher: it joins a fresh KILL_ON_JOB_CLOSE |
+      DIE_ON_UNHANDLED_EXCEPTION job BEFORE spawning, so every descendant is
+      in the job with no race and killing the launcher kills the tree
+      (G-RUN-03); never a .cmd/.bat, never a PATH lookup. Inputs bounded:
+      absolute drive paths only (no UNC, device or .. paths), pipe names
+      gnomon-<hex>. Key ops (Windows Hello, W4) refuse unsupported-op.
+      exec is containment for well-behaved trees (partial: WMI/COM/Task Scheduler
+      launches are not descendants, Aegis M4). W5 groundwork: sandbox [--desktop]
+      [--low] runs a session under a restricted token (restricting SIDs = the user's
+      enabled groups + user + GNOMON_SESSION_SID S-1-9-4174-2026-1022), Low integrity
+      and a private Low-labelled desktop, in a job with UI limits; acl.session places
+      the deny/allow ACEs naming that SID (with an OWNER RIGHTS ACE so the owner's
+      implicit WRITE_DAC cannot remove them) and the Low labels of writable roots.
+      Unsigned until W7 (Trusted Signing): a dev kernel pins it by sha256, a
+      release kernel refuses it. cargo test runs the pure checks.
+    path: win32/src/
+    type: module
+    tags: [gnomon, helper, native, rust, windows, paradigm-8, w2]
   gnomon-helper-build:
     description: >-
       scripts/build-darwin.mjs (swift build -c release → GnomonHelper.app,
@@ -84,7 +116,9 @@ components:
       --strict and against HELPER_REQUIREMENT, sha256 into checksums.json);
       --unsigned for CI. scripts/notarize-darwin.mjs (ditto, notarytool
       submit --keychain-profile gnomon-notary --wait, stapler) is optional and
-      founder-run, never run by tests.
+      founder-run, never run by tests. scripts/build-win32.mjs: cargo build
+      --release --locked → bin/win32/gnomon-helper.exe (gitignored), sha256 into
+      checksums.json (unsigned).
     path: scripts/
     type: module
     tags: [gnomon, helper, signing, build, m1.3]

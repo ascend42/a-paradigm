@@ -128,9 +128,7 @@ describe('#prefix-policy match time: git options, location (M3), manual mode (M2
     expect(m(book(rows(card(33), ['git', 'show'], 'git show')), 'git show --textc')).toBeNull();
     // harmless options and negations still match
     for (const c of ['git log --oneline', 'git log --no-ext-diff', 'git log --stat -n 5', 'git log --output-indicator-new=+', 'git log -- src']) expect(m(b, c), c).not.toBeNull();
-    // on win32 a ':' word reads as a drive or an alternate data stream (win-alias): a card, never an auto-allow
-    if (process.platform === 'win32') expect(m(b, 'git log --pretty=format:%h')).toBeNull();
-    else expect(m(b, 'git log --pretty=format:%h')).not.toBeNull();
+    // 'git log --pretty=format:%h' and 'git log HEAD~3': win-alias on win32 only, test/prefix-policy-alias-{posix,win32}.test.ts
     for (const a of ['--', '-n', '--stat', '--no-textconv']) expect(gitPrefixOptBad(a), a).toBe(false);
   });
 
@@ -141,9 +139,6 @@ describe('#prefix-policy match time: git options, location (M3), manual mode (M2
     expect(m(cp, 'cp a.txt b.txt')).not.toBeNull();
     for (const c of ['cp a.txt .git/config', `cp a.txt ${ROOT}/.git/hooks/pre-commit`, 'cp a.txt package.json', 'cp a.txt .claude/settings.json', 'cp a.txt sub/.git/config', 'cp a.txt --target=.git']) expect(m(cp, c), c).toBeNull();
     expect(m(b, 'git log -- .git/config')).toBeNull();
-    // a rev off win32; on win32 it also reads as an 8.3 short name (win-alias), so it needs a card there
-    if (process.platform === 'win32') expect(m(b, 'git log HEAD~3')).toBeNull();
-    else expect(m(b, 'git log HEAD~3')).not.toBeNull();
   });
 
   it('binds the match to the session roots: .., ~, \\ and absolute paths outside the roots refuse it', () => {

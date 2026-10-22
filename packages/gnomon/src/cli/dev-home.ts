@@ -44,6 +44,7 @@ import {
 } from '../kernel/identity/index.js';
 import { currentUid, ensureGnomonHome } from '../kernel/lifecycle/home.js';
 import { SoftwareEd25519Signer } from '../kernel/log/signer.js';
+import { isOwnerOnly } from '../platform/owner-only.js';
 
 export const DEV_HOME_SCHEMA = 'gnomon-dev-home:v1' as const;
 export const DEV_HOME_MARKER = 'DEV-ONLY-gnomon-home.json';
@@ -142,12 +143,13 @@ function productionHomes(userHome: string): string[] {
 
 /**
  * Refuse the production home (and anything inside it or containing it). On darwin the
- * comparison is case-folded (APFS is case-insensitive by default), so `~/.GNOMON` is refused
+ * comparison is case-folded on darwin and win32 (APFS and NTFS are case-insensitive by default), so `~/.GNOMON` is refused
  * even before `~/.gnomon` exists.
  */
 export function refuseProductionHome(home: string, opts: DevHomeOptions = {}): string {
   if (!path.isAbsolute(home)) throw new DevHomeRefusal('unsafe-home', `--home must be an absolute path`, ['gnomon dev init --home /absolute/path']);
-  const fold = (opts.platform ?? process.platform) === 'darwin' ? (p: string): string => p.toLowerCase() : (p: string): string => p;
+  const plat = opts.platform ?? process.platform;
+  const fold = plat === 'darwin' || plat === 'win32' ? (p: string): string => p.toLowerCase() : (p: string): string => p;
   const mine = [path.resolve(home), realLoose(home)].map(fold);
   const prods = productionHomes(opts.userHome ?? os.homedir()).map(fold);
   if (mine.some((m) => prods.some((q) => within(m, q) || within(q, m)))) {
@@ -182,7 +184,7 @@ function readOwnerOnly(file: string): string {
     }
     if (dir ? !st.isDirectory() : !st.isFile()) throw new DevHomeRefusal('dev-home-damaged', `${path.basename(p)} is not a plain ${dir ? 'directory' : 'file'}`);
     if (uid !== null && st.uid !== uid) throw new DevHomeRefusal('dev-home-damaged', `${path.basename(p)} is not owned by you`);
-    if ((st.mode & 0o077) !== 0) throw new DevHomeRefusal('dev-home-damaged', `${path.basename(p)} is not owner-only`);
+    if (!isOwnerOnly(p, st, { strict: true })) throw new DevHomeRefusal('dev-home-damaged', `${path.basename(p)} is not owner-only`);
   }
   return fs.readFileSync(file, 'utf8');
 }

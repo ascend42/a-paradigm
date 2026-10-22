@@ -69,6 +69,11 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   // TD-2026-10-19-063 self-update: the 0600 hand-off files and the helper re-pin fixture (POSIX modes); the pure half is self-update.test.ts.
   { test: 'test/self-update-e2e.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/self-update.test.ts', na: 'Windows parity phase (P8-D78): a real daemon on the unix-socket endpoint (named pipe waits for probe P03)' },
   { test: 'test/self-update-posix.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/self-update.test.ts', na: 'POSIX file modes (0600 hand-off, executable helper fixture); Windows ACL custody is the Windows parity phase (P8-D78)' },
+  // #prefix-policy win-alias (gate-class 8.3 / ADS words count on win32 only).
+  { test: 'test/prefix-policy-alias-posix.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/prefix-policy-alias-win32.test.ts' },
+  { test: 'test/prefix-policy-alias-win32.test.ts', platforms: ['win32'], sibling: 'test/prefix-policy-alias-posix.test.ts' },
+  // W2/W3 (docs/plans/gnomon-windows.md): the Windows platform helper against the real OS (pipe and home DACLs, job launcher, durable rename).
+  { test: 'test/win32-helper.test.ts', platforms: ['win32'], na: 'Windows-only mechanisms (DACL, job object, MoveFileExW); the POSIX equivalents are covered by test/socket-server.test.ts, test/daemon-lifecycle.test.ts and test/kernel-log-posix.test.ts' },
   // PR-5 $daemon-lifecycle core + #socket, macOS-first (P8-D78).
   { test: 'test/daemon-lifecycle.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   { test: 'test/socket-server.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
