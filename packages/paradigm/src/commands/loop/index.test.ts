@@ -8,7 +8,7 @@ import * as path from 'path';
 import { loopNewCommand, loopValidateCommand, loopListCommand, loopBuiltinCommand, runLoopBuiltin, LOOP_BUILTIN_NAMES } from './index.js';
 import { LOOP_BUILTINS } from '../../../../gnomon/src/loops/schema.js';
 import { spawnSync } from 'child_process';
-import { LOOP_EXAMPLE_NAMES } from '../../../../paradigm-mcp/src/utils/loop-files.js';
+import { LOOP_TEMPLATE_NAMES } from '../../../../paradigm-mcp/src/utils/loop-templates.js';
 
 let root: string;
 let stdout: string;
@@ -33,26 +33,40 @@ afterEach(() => {
 
 describe('paradigm loop new', () => {
   it('writes the YAML and the compiled JSON, and says nothing runs until trusted', async () => {
-    await loopNewCommand('nightly', { root, example: 'green' });
+    await loopNewCommand('nightly', { root, template: 'green' });
     expect(process.exitCode).toBe(0);
-    expect(stdout).toContain('Created .paradigm/loops/nightly.yaml from the green example');
+    expect(stdout).toContain('Created .paradigm/loops/nightly.yaml from the green template');
     expect(stdout).toContain('Nothing runs until you trust this exact definition in Gnomon');
     expect(fs.readFileSync(loops('nightly.yaml'), 'utf8')).toContain('id: nightly');
     expect(JSON.parse(fs.readFileSync(loops('nightly.loop.json'), 'utf8'))).toMatchObject({ id: 'nightly', schema: 'loop:v2' });
   });
 
-  it.each(LOOP_EXAMPLE_NAMES.map((n) => [n]))('--example %s produces a valid loop', async (name) => {
-    await loopNewCommand(`ex-${name}`, { root, example: name, json: true });
+  it.each(LOOP_TEMPLATE_NAMES.map((n) => [n]))('--template %s produces a valid loop', async (name) => {
+    await loopNewCommand(`ex-${name}`, { root, template: name, json: true });
     expect(process.exitCode).toBe(0);
     expect(lastJson()).toMatchObject({ ok: true, id: `ex-${name}` });
   });
 
-  it('refuses a bad id, an unknown example and an existing loop', async () => {
+  it('--example is the older name of --template; --dir and --flow reach the template', async () => {
+    await loopNewCommand('old', { root, example: 'tidy', json: true });
+    expect(lastJson()).toMatchObject({ ok: true, id: 'old' });
+    await loopNewCommand('gr', { root, template: 'green', dir: 'packages/app', json: true });
+    expect(fs.readFileSync(loops('gr.yaml'), 'utf8')).toContain('-p, packages/app/tsconfig.json');
+    await loopNewCommand('fh', { root, template: 'flow-health', flow: '$checkout-flow', json: true });
+    expect(fs.readFileSync(loops('fh.yaml'), 'utf8')).toContain('flows: [$checkout-flow]');
+    expect(process.exitCode).toBe(0);
+    await loopNewCommand('bad', { root, template: 'green', dir: '/etc' });
+    expect(process.exitCode).toBe(1);
+    expect(stderr).toContain('repo-relative');
+    expect(fs.existsSync(loops('bad.yaml'))).toBe(false);
+  });
+
+  it('refuses a bad id, an unknown template and an existing loop', async () => {
     await loopNewCommand('Bad_Id', { root });
     expect(process.exitCode).toBe(1);
     expect(stderr).toContain('kebab-case');
     process.exitCode = 0;
-    await loopNewCommand('x', { root, example: 'nope' });
+    await loopNewCommand('x', { root, template: 'nope' });
     expect(process.exitCode).toBe(1);
     process.exitCode = 0;
     await loopNewCommand('dup', { root });
@@ -77,7 +91,7 @@ describe('paradigm loop validate', () => {
   });
 
   it('validates one loop by id or by file path; --json gives the results', async () => {
-    await loopNewCommand('one', { root, example: 'tidy' });
+    await loopNewCommand('one', { root, template: 'tidy' });
     stdout = '';
     await loopValidateCommand('one', { root, json: true });
     expect(lastJson()).toMatchObject({ ok: true, results: [{ id: 'one', ok: true }] });
@@ -137,7 +151,7 @@ describe('paradigm loop list', () => {
   it('lists loops with their state', async () => {
     await loopListCommand({ root });
     expect(stdout).toContain('No loops');
-    await loopNewCommand('watcher', { root, example: 'watch' });
+    await loopNewCommand('watcher', { root, template: 'watch' });
     stdout = '';
     await loopListCommand({ root });
     expect(stdout).toContain('watcher');

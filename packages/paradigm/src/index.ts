@@ -2115,8 +2115,10 @@ const loopCmd = program
 loopCmd
   .command('new <id>')
   .description('Create .paradigm/loops/<id>.yaml (loop:v2) from a template')
-  .option('--example <name>', 'Template: flow-health | green | watch | tidy')
+  .option('--template <name>', 'Template: flow-health (Example A) | green (B) | watch (C) | tidy (D)')
+  .option('--example <name>', 'Older name of --template')
   .option('--flow <flow>', 'Flow the flow-health and watch templates serve (default: the first indexed flow)')
+  .option('--dir <path>', 'Directory the green template typechecks with tsc -p (default: the repo root)')
   .option('--json', 'Output as JSON')
   .action(async (id, options) => {
     const { loopNewCommand } = await import('./commands/loop/index.js');

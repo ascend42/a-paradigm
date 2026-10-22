@@ -13,16 +13,19 @@ import {
   issueLines,
   listLoops,
   orphanLoopJson,
-  loopTemplate,
   validateAllLoops,
   validateLoopFile,
   writeLoop,
   isLoopId,
   loopYamlPath,
-  LOOP_EXAMPLE_NAMES,
-  type LoopExampleName,
   type LoopFileResult,
 } from '../../../../paradigm-mcp/src/utils/loop-files.js';
+import {
+  isTemplateName,
+  loopTemplate,
+  LOOP_TEMPLATE_NAMES,
+  TemplateParamError,
+} from '../../../../paradigm-mcp/src/utils/loop-templates.js';
 import { log as libraryLog } from '../../../../paradigm-mcp/src/utils/mcp-logger.js';
 
 export interface LoopCliOptions {
@@ -50,8 +53,14 @@ function printResult(r: LoopFileResult): void {
   for (const line of issueLines(r.warnings)) warn(`  ${line}`);
 }
 
-/** paradigm loop new <id> [--example flow-health|green|watch|tidy] [--flow $id] */
-export async function loopNewCommand(id: string, options: LoopCliOptions & { example?: string; flow?: string } = {}): Promise<void> {
+/**
+ * paradigm loop new <id> [--template flow-health|green|watch|tidy] [--flow $id] [--dir <path>]
+ * (`--example` is the older name of `--template`).
+ */
+export async function loopNewCommand(
+  id: string,
+  options: LoopCliOptions & { template?: string; example?: string; flow?: string; dir?: string } = {},
+): Promise<void> {
   quiet();
   const root = options.root ?? process.cwd();
   if (!isLoopId(id)) {
@@ -59,13 +68,21 @@ export async function loopNewCommand(id: string, options: LoopCliOptions & { exa
     process.exitCode = 1;
     return;
   }
-  if (options.example !== undefined && !(LOOP_EXAMPLE_NAMES as readonly string[]).includes(options.example)) {
-    error(`--example is one of: ${LOOP_EXAMPLE_NAMES.join(', ')}`);
+  const template = options.template ?? options.example;
+  if (template !== undefined && !isTemplateName(template)) {
+    error(`--template is one of: ${LOOP_TEMPLATE_NAMES.join(', ')}`);
     process.exitCode = 1;
     return;
   }
-  const flow = options.flow ?? defaultTemplateFlow(root);
-  const text = loopTemplate(id, options.example as LoopExampleName | undefined, flow);
+  let text: string;
+  try {
+    text = loopTemplate(id, template, { flow: options.flow ?? defaultTemplateFlow(root), ...(options.dir !== undefined ? { dir: options.dir } : {}) });
+  } catch (e) {
+    if (!(e instanceof TemplateParamError)) throw e;
+    error(e.message);
+    process.exitCode = 1;
+    return;
+  }
   const r = writeLoop(root, 'create', { id, yaml: text });
   if (options.json) {
     json(r);
@@ -82,7 +99,7 @@ export async function loopNewCommand(id: string, options: LoopCliOptions & { exa
     process.exitCode = 1;
     return;
   }
-  success(`Created ${r.file}${options.example ? ` from the ${options.example} example` : ''}`);
+  success(`Created ${r.file}${template ? ` from the ${template} template` : ''}`);
   kv('compiled', r.compiledFile ?? '');
   for (const line of issueLines(r.warnings)) warn(line);
   dim(TRUST_HINT);
@@ -119,7 +136,7 @@ export async function loopValidateCommand(file: string | undefined, options: Loo
   }
   for (const o of removedOrphans) dim(`removed ${o} (its YAML is gone)`);
   if (results.length === 0) {
-    dim('No loops in .paradigm/loops/. Create one with: paradigm loop new <id> --example green');
+    dim('No loops in .paradigm/loops/. Create one with: paradigm loop new <id> --template flow-health');
     return;
   }
   header('Loops');
@@ -147,7 +164,7 @@ export async function loopListCommand(options: LoopCliOptions = {}): Promise<voi
   }
   for (const o of orphans) warn(`${o} has no YAML (run paradigm loop validate --all to remove it)`);
   if (loops.length === 0) {
-    dim('No loops in .paradigm/loops/. Create one with: paradigm loop new <id> --example green');
+    dim('No loops in .paradigm/loops/. Create one with: paradigm loop new <id> --template flow-health');
     return;
   }
   header(`Loops (${loops.length})`);

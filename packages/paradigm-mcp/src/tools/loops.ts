@@ -2,7 +2,8 @@
  * #loop-mcp — the `paradigm_loop` family (docs/specs/gnomon-loops.md §5; build plan LP1).
  *
  * ON-DEMAND tier, key `loops`, detector `loops` (`.paradigm/loops/` present). File ops only, no kernel:
- *   create   — write a new `.paradigm/loops/<id>.yaml` (yaml text, a definition object, or an example template)
+ *   create   — write a new `.paradigm/loops/<id>.yaml` (yaml text, a definition object, or a #loop-templates template;
+ *              `example` is the older name of `template`)
  *   update   — replace an existing one
  *   validate — validate one loop (id) or all, writing each compiled `<id>.loop.json` on success (all also
  *              removes orphan compiled JSON whose YAML is gone)
@@ -30,15 +31,13 @@ import {
   isLoopId,
   listLoops,
   orphanLoopJson,
-  loopTemplate,
   defaultTemplateFlow,
   loopYamlPath,
   validateAllLoops,
   validateLoopFile,
   writeLoop,
-  LOOP_EXAMPLE_NAMES,
-  type LoopExampleName,
 } from '../utils/loop-files.js';
+import { isTemplateName, loopTemplate, LOOP_TEMPLATE_NAMES, TemplateParamError } from '../utils/loop-templates.js';
 import { trackToolCall } from './context.js';
 
 export const LOOP_FILE_TOOL_NAMES = ['paradigm_loop_create', 'paradigm_loop_update', 'paradigm_loop_validate', 'paradigm_loop_list', 'paradigm_loop_get'] as const;
@@ -75,14 +74,17 @@ export function getLoopsToolsList(): ToolDefinition[] {
   return [
     {
       name: 'paradigm_loop_create',
-      description: 'Create .paradigm/loops/<id>.yaml (loop:v2) from yaml, a definition object or an example; validated first, compiled JSON written beside it. ~300 tokens.',
+      description: 'Create .paradigm/loops/<id>.yaml (loop:v2) from yaml, a definition object or a template (flow-health, green, watch, tidy); validated first, compiled JSON written beside it. ~300 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'Loop id (kebab-case); defaults to the definition id' },
           yaml: { type: 'string', description: 'loop:v2 YAML text' },
           definition: { type: 'object', description: 'loop:v2 definition as an object' },
-          example: { type: 'string', enum: [...LOOP_EXAMPLE_NAMES], description: 'Start from a template (needs id)' },
+          template: { type: 'string', enum: [...LOOP_TEMPLATE_NAMES], description: 'Start from a template (needs id): flow-health (Example A), green (B), watch (C), tidy (D)' },
+          example: { type: 'string', enum: [...LOOP_TEMPLATE_NAMES], description: 'Older name of template' },
+          flow: { type: 'string', description: 'flow-health and watch: the $flow served (default: the first indexed flow)' },
+          dir: { type: 'string', description: 'green: the repo-relative directory tsc -p checks (default: the repo root)' },
         },
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
@@ -219,10 +221,19 @@ function runLoopOpUnsafe(rootDir: string, op: string, args: Record<string, unkno
   switch (op) {
     case 'create': {
       let text = yamlText;
-      if (args.example !== undefined) {
-        if (!(LOOP_EXAMPLE_NAMES as readonly string[]).includes(args.example as string)) return { error: `example is one of ${LOOP_EXAMPLE_NAMES.join(', ')}` };
-        if (!isLoopId(id)) return { error: 'an example needs an id (kebab-case, ≤ 64 characters)' };
-        text = loopTemplate(id, args.example as LoopExampleName, defaultTemplateFlow(rootDir));
+      const template = args.template ?? args.example;
+      if (template !== undefined) {
+        if (!isTemplateName(template)) return { error: `template is one of ${LOOP_TEMPLATE_NAMES.join(', ')}` };
+        if (!isLoopId(id)) return { error: 'a template needs an id (kebab-case, ≤ 64 characters)' };
+        try {
+          text = loopTemplate(id, template, {
+            flow: typeof args.flow === 'string' ? args.flow : defaultTemplateFlow(rootDir),
+            ...(typeof args.dir === 'string' ? { dir: args.dir } : {}),
+          });
+        } catch (e) {
+          if (e instanceof TemplateParamError) return { error: e.message };
+          throw e;
+        }
       }
       const r = writeLoop(rootDir, 'create', { id, yaml: text, definition: args.definition });
       return 'error' in r ? r : { ...r, written: r.ok, ...(r.ok ? { note: TRUST_NOTE } : {}) };

@@ -124,7 +124,9 @@ components:
       the file name. On success <id>.loop.json (canonical key order, indented) is written beside the
       YAML; on failure a stale one is removed so the kernel never reads a definition the YAML no
       longer says. writeLoop (create/update), validateLoopFile/validateAllLoops, listLoops (fresh,
-      stale, missing), getLoop and the four templates (spec Examples A-D on the 8.0 subset). Shared
+      stale, missing), getLoop and defaultTemplateFlow (the templates are #loop-templates). A flow
+      index written on Windows (backslash paths) is normalized before it resolves, so a flow never
+      widens to ** on another platform; another machine's drive path resolves to nothing. Shared
       by #loop-cli and #loop-mcp. Hardened (Aegis LP1): symlinks refused for .paradigm, the loops
       dir and every loop file; the dir's realpath must be the repo's .paradigm/loops; validate takes
       only files directly in it; writes go temp + rename and never through a symlink; stale JSON is
@@ -133,6 +135,27 @@ components:
     type: loader
     anchors:
       - loop-files.ts
+    tags: [feature, gnomon, loops]
+  loop-templates:
+    description: >-
+      #loop-templates (Gnomon loops LP9, build plan step 14; docs/specs/gnomon-loops.md §2 Examples
+      A-D): the loop:v2 starting points behind `paradigm loop new <id> --template <name>` and
+      paradigm_loop create {template}. flow-health (Example A: read-only flow, .purpose and drift
+      checks, a local summary toast), green (Example B on a local model: tsc -p <dir>/tsconfig.json,
+      a local act step, every change a propose card), watch (Example C on a file trigger), tidy
+      (Example D in its 8.0 form: reindex and .purpose validation on a private copy plus a local
+      digest; reports only, because write checks are not in 8.0), and a minimal starter. All valid
+      under the 8.0 validator and runnable by the 8.0 runner (local models only, no write checks);
+      the wording fits approve-to-land (TD-2026-10-22-369): no template promises to land on its own.
+      green names the tsconfig FILE, because an argv path is protected from act edits and a
+      wildcard-free protected path covers everything beneath it. Parameters (flow, dir) are checked
+      against closed patterns before they reach YAML (TemplateParamError). Each template's compiled
+      hashes are pinned in its test.
+    type: utility
+    anchors:
+      - loop-templates.ts
+    tests:
+      - loop-templates.test.ts
     tags: [feature, gnomon, loops]
   tool-family:
     description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:''full'' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'

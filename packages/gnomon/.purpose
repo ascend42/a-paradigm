@@ -798,11 +798,13 @@ components:
     description: >-
       #dev-launch (spec §2.4 rule 6) — the UNSIGNED, DEV-ONLY dogfood launch
       path until #identity M1.3. src/cli/dev-home.ts + src/cli/dev-cli.ts.
-      `gnomon dev local --model <id> [--base] [--compat] [--id] [--runner]` is the
+      `gnomon dev local --model <id> [--base] [--compat] [--id] [--runner] [--loops]` is the
       dev root act that enables the local lane: it signs local.signed.json (one
       loopback/LAN endpoint, default Ollama 127.0.0.1:11434; the gnomon-local
       runner pinned by node + tree sha256, default this clone's
       gnomon-local/dist), the version climbing past the last one (test/dev-local.test.ts).
+      --loops signs loops: true on the endpoint, the opt-in that lets trusted loops' model
+      steps use it (loops step 8; off by default; loops step 14 field run).
       `gnomon dev init [--home <abs>]` provisions a DEV home (default
       ~/.gnomon-dev): a software P-256 dev-test root (DevTestRootAuthority
       behind DEV_TEST_ROOT_ACK, persisted 0600 as keys/DEV-ONLY-root-p256.pem),

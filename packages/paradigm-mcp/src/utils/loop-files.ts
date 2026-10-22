@@ -27,8 +27,6 @@ import {
 import { log } from './mcp-logger.js';
 
 export const LOOPS_DIR = path.join('.paradigm', 'loops');
-export const LOOP_EXAMPLE_NAMES = ['flow-health', 'green', 'watch', 'tidy'] as const;
-export type LoopExampleName = (typeof LOOP_EXAMPLE_NAMES)[number];
 const ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 export interface LoopFileResult {
@@ -97,7 +95,11 @@ export function loadFlowIndex(rootDir: string): Record<string, string[]> | undef
     return undefined;
   }
   const symbolDirs = loadSymbolDirs(rootDir);
-  const toGlob = (p: string): string | null => {
+  const toGlob = (raw: string): string | null => {
+    // the index may be written on Windows (`packages\\x\\.purpose`): its separators are normalized first, or a
+    // POSIX reader would take the whole path as one file name in the root and widen the flow to `**`
+    const p = raw.replace(/\\/g, '/');
+    if (/^[A-Za-z]:\//.test(p) && process.platform !== 'win32') return null; // another machine's absolute path
     const abs = path.isAbsolute(p) ? p : path.join(rootDir, p);
     const r = path.relative(rootDir, abs);
     if (r.startsWith('..') || path.isAbsolute(r)) return null;
@@ -438,101 +440,7 @@ export function writeLoop(
   }
 }
 
-// ── Templates (spec Examples A–D, adjusted to the 8.0 subset) ────────────────
-
-/** YAML for `paradigm loop new <id> [--example …]`. `flow` names the flow the flow-health and watch examples serve. */
-export function loopTemplate(id: string, example?: LoopExampleName, flow = '$example-flow'): string {
-  switch (example) {
-    case 'flow-health':
-      return `# Flow health check (spec Example A). Runs read-only checks and summarizes a failure locally.
-schema: loop:v2
-id: ${id}
-flows: [${flow}]
-triggers:
-  - schedule: { daily: "07:30" }
-  - event: { kind: file.changed, flow: ${flow} }
-    debounce: 5m
-autonomy: observe
-notify: { on: [fail], as: toast }
-budgets: { run: { wallMin: 15, computeSec: 300 }, day: { runs: 12 } }
-goal: { node: drift, verdict: pass }
-start: defn
-nodes:
-  - { id: defn, type: check, builtin: paradigm.flow-check, args: { flowId: ${flow}, checkImplementation: true }, on: { pass: gates, fail: why } }
-  - { id: gates, type: check, builtin: paradigm.purpose-validate, on: { pass: drift, fail: why } }
-  - { id: drift, type: check, builtin: paradigm.drift, args: { symbols: [${flow}] }, on: { pass: '@goal', fail: why } }
-  - { id: why, type: model, role: summarize, model: { use: local }, inputs: [last.evidence], on: { any: tell } }
-  - { id: tell, type: notify, as: toast, text: "{{loop.id}} failed at {{failed.node}}", on: { any: '@stop' } }
-`;
-    case 'green':
-      return `# Fix until green (spec Example B, local only). argv0 is a direct binary, never npx.
-schema: loop:v2
-id: ${id}
-triggers:
-  - schedule: { daily: "02:00" }
-autonomy: act
-budgets: { run: { rounds: 8, wallMin: 60, tokens: 400k } }
-goal: { node: tsc, verdict: pass, inputs: ["tsconfig*.json"] }
-land: { paths: ["src/**"], message: "fix: typecheck green, loop round {{round}}" }
-start: tsc
-nodes:
-  - { id: tsc, type: check, run: [node_modules/.bin/tsc, --noEmit], pass: { parse: tsc, failed: 0 }, on: { pass: '@goal', fail: fix } }
-  - id: fix
-    type: model
-    role: act
-    model: { use: local }
-    tools: [read, edit]
-    inputs: [tsc.evidence]
-    exit: { maxVisits: 8, maxFailStreak: 3 }
-    on: { pass: tsc, fail: tsc, unsure: ask, unavailable: ask }
-  - { id: ask, type: notify, as: card, choices: [continue, stop], on: { continue: fix, stop: '@stop', timeout: '@pause' } }
-`;
-    case 'watch':
-      return `# Watcher (spec Example C on a file trigger; the sentinel trigger lands in 8.1). A local judge classifies
-# the change. To hand off to a fix loop add a call node: { id: fix, type: call, loop: <loop-id>@<hash8> }.
-schema: loop:v2
-id: ${id}
-triggers:
-  - event: { kind: file.changed, flow: ${flow} }
-    debounce: 1m
-autonomy: observe
-budgets: { run: { wallMin: 20 }, day: { runs: 20 } }
-start: triage
-nodes:
-  - { id: triage, type: model, role: judge, model: { use: local }, inputs: [trigger.payload], verdict: { classes: [regression, other] }, on: { any: tell } }
-  - { id: tell, type: notify, as: toast, text: "change {{trigger.id}}: {{triage.class}}", on: { any: '@stop' } }
-`;
-    case 'tidy':
-      return `# Routine chore (spec Example D). .paradigm/** is gate-class: it lands only after the trust card names it.
-schema: loop:v2
-id: ${id}
-triggers:
-  - schedule: { daily: "18:30" }
-    catchUp: once
-autonomy: act
-budgets: { run: { wallMin: 20, computeSec: 900 }, day: { runs: 1 } }
-land: { paths: [".paradigm/lore/**", ".paradigm/**/index*"], message: "chore(#paradigm): evening tidy" }
-start: reindex
-nodes:
-  - { id: reindex, type: check, effect: write, builtin: paradigm.reindex, on: { pass: digest, fail: digest } }
-  - { id: digest, type: model, role: summarize, model: { use: local }, inputs: [day.lore, day.commits, day.loopRuns], on: { any: tell } }
-  - { id: tell, type: notify, as: toast, text: "daily digest ready", attach: [digest.text], on: { any: '@stop' } }
-`;
-    default:
-      return `# A loop:v2 definition (docs/specs/gnomon-loops.md §2). Nothing runs until a human trusts it in Gnomon.
-schema: loop:v2
-id: ${id}
-title: ${id}
-triggers: []          # manual is always implied; add schedule, event or continuous triggers
-autonomy: observe
-goal: { node: check, verdict: pass }
-start: check
-nodes:
-  - { id: check, type: check, builtin: git.clean, on: { pass: '@goal', fail: tell } }
-  - { id: tell, type: notify, as: toast, text: "{{loop.id}}: the working tree is not clean", on: { any: '@stop' } }
-`;
-  }
-}
+// ── Templates live in #loop-templates (loop-templates.ts) ────────────────────
 
 /** The first flow in the flow index, for templates (or the placeholder). */
 export function defaultTemplateFlow(rootDir: string): string {

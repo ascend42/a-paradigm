@@ -37,10 +37,11 @@ export const DEV_USAGE = `gnomon ${GNOMON_VERSION} dev — DEV ONLY, unsigned, u
 usage: gnomon dev init [--home <abs>]   provision a dev home (default ~/${'.gnomon-dev'})
        gnomon dev up   [--home <abs>] [--wrapper]   run the kernel on it and print a GUI launch URL
                                     (--wrapper: the grant goes on the stdout pipe of the parent, #gnomon-wrapper)
-       gnomon dev local --model <id> [--base <url>] [--compat <name>] [--id <name>] [--runner <dir>] [--home <abs>]
+       gnomon dev local --model <id> [--base <url>] [--compat <name>] [--id <name>] [--runner <dir>] [--loops] [--home <abs>]
                                     sign the local-model lane config (local.signed.json) with the dev root:
                                     one loopback/LAN endpoint (default http://127.0.0.1:11434, ollama) and the
                                     gnomon-local runner pinned by sha256 (default: this clone's gnomon-local/dist);
+                                    --loops lets trusted loops' model steps use the endpoint (off by default);
                                     a running dev kernel picks it up at its next start
   Never ~/.gnomon. A home holding another root's registry is refused.
 `;
@@ -204,8 +205,13 @@ export function defaultLocalRunnerDir(from: string = path.dirname(fileURLToPath(
 export async function runDevLocal(argv: readonly string[], io: DevCliIo, opts: DevCliOptions = {}): Promise<number> {
   const usage = (why: string): number => (io.stderr.write(`gnomon dev local: ${why}\n${DEV_USAGE}`), DEV_EXIT_USAGE);
   const flags: Record<string, string> = {};
+  let loops = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
+    if (a === '--loops') {
+      loops = true;
+      continue;
+    }
     const v = argv[i + 1];
     if (!['--home', '--base', '--model', '--compat', '--id', '--runner'].includes(a)) return usage(`unknown argument ${a}`);
     if (v === undefined || v.startsWith('--')) return usage(`${a} needs a value`);
@@ -218,7 +224,8 @@ export async function runDevLocal(argv: readonly string[], io: DevCliIo, opts: D
   const home = flags.home ? path.resolve(flags.home) : defaultDevHome(opts.userHome);
   const compat = flags.compat ?? 'ollama';
   if (!LOCAL_COMPAT_NAMES.includes(compat)) return usage(`--compat must be one of ${LOCAL_COMPAT_NAMES.join(', ')}`);
-  const endpoint = { id: flags.id ?? compat, base: flags.base ?? 'http://127.0.0.1:11434', model: flags.model, compat };
+  // loops step 8 (Aegis): an endpoint serves unattended loop steps only when the root-signed row says loops: true
+  const endpoint = { id: flags.id ?? compat, base: flags.base ?? 'http://127.0.0.1:11434', model: flags.model, compat, ...(loops ? { loops: true } : {}) };
   io.stdout.write(DEV_BANNER);
   try {
     validateLocalEndpoints({ endpoints: [endpoint] }, []);
@@ -255,6 +262,7 @@ export async function runDevLocal(argv: readonly string[], io: DevCliIo, opts: D
     ['version', String(version)],
     ['endpoint', `${endpoint.id} ${endpoint.base} (${endpoint.compat})`],
     ['model', endpoint.model],
+    ['loops', loops ? 'trusted loops may use this endpoint' : 'no (add --loops to let trusted loops use it)'],
     ['runner', `${runner.dir} (tree ${runner.treeSha256.slice(0, 12)}…)`],
     ['node', `${runner.node} (${runner.nodeSha256.slice(0, 12)}…)`],
     ['next', 'restart gnomon dev up, then open a session with model: local'],

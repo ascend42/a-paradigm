@@ -52,6 +52,16 @@ describe('#dev-launch: gnomon dev local', () => {
     expect(JSON.parse(fs.readFileSync(path.join(w.devHome, LOCAL_CONFIG_FILE), 'utf8')).row.version).toBe(1);
   });
 
+  it('--loops signs loops: true on the endpoint (loops step 8: off unless asked)', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'win-1' })).toBe(0);
+    const x = io();
+    expect(await runDevCommand(['local', '--home', w.devHome, '--model', 'qwen3.5:9b', '--loops', '--runner', w.runner], x, { userHome: w.userHome })).toBe(0);
+    expect(x.o.join('')).toContain('trusted loops may use this endpoint');
+    const dev = loadDevHome(w.devHome, { userHome: w.userHome });
+    expect(loadLocalConfig(w.devHome, dev.root).config?.endpoints).toEqual([{ id: 'ollama', base: 'http://127.0.0.1:11434', model: 'qwen3.5:9b', compat: 'ollama', loops: true }]);
+  });
+
   it('refuses a public endpoint, a cloud compat, a missing runner and a missing --model; writes nothing', async () => {
     const w = world();
     expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'win-1' })).toBe(0);

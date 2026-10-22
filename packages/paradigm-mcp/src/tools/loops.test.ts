@@ -1,6 +1,6 @@
 /**
  * #loop-mcp / #loop-files — the paradigm_loop family (file ops) over a temp repo: create (yaml, definition,
- * example), update, validate (compiled JSON written, stale JSON removed), list, get, the on-demand listing and
+ * template), update, validate (compiled JSON written, stale JSON removed), list, get, the on-demand listing and
  * the `loops` detector. The YAML forms of the spec examples (8.0 subset) parse and validate.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -12,7 +12,8 @@ import { registerTools } from './index.js';
 import { runLoopOp, runLoopKernelOp, setLoopKernelPort, LOOP_KERNEL_TOOL_NAMES } from './loops.js';
 import { invalidateFeatureCache, FEATURE_DETECTORS } from '../utils/tool-registry.js';
 import type { ProjectContext } from '../utils/index-loader.js';
-import { loadFlowIndex, loopTemplate, LOOP_EXAMPLE_NAMES, parseLoopYaml, validateLoopFile, validateAllLoops } from '../utils/loop-files.js';
+import { loadFlowIndex, parseLoopYaml, validateLoopFile, validateAllLoops } from '../utils/loop-files.js';
+import { loopTemplate, LOOP_TEMPLATE_NAMES } from '../utils/loop-templates.js';
 import { loopContentHash, validateLoop } from '@a-company/gnomon/loops';
 
 let root: string;
@@ -147,11 +148,26 @@ describe('paradigm_loop file ops', () => {
       components: { cart: { symbol: '#cart', path: path.join(root, 'packages', 'cart', '.purpose') } },
     }));
     expect(loadFlowIndex(root)).toEqual({ '$checkout-flow': ['packages/cart/**', 'packages/checkout/**'] });
-    const r = runLoopOp(root, 'create', { id: 'health', example: 'flow-health' });
+    const r = runLoopOp(root, 'create', { id: 'health', template: 'flow-health' });
     expect(r).toMatchObject({ ok: true });
     const compiled = JSON.parse(fs.readFileSync(file('health.loop.json'), 'utf8'));
     expect(compiled.flowPaths).toEqual({ '$checkout-flow': ['packages/cart/**', 'packages/checkout/**'] });
     expect(compiled.compiled.flowsResolved).toBe(true);
+  });
+
+  it('a flow index written on Windows resolves to the same globs (never widens to **)', () => {
+    fs.writeFileSync(path.join(root, '.paradigm', 'flow-index.json'), JSON.stringify({
+      flows: {
+        '$checkout-flow': { id: '$checkout-flow', definedIn: 'packages\\checkout\\.purpose', steps: [{ symbol: '#cart' }] },
+        '$elsewhere': { id: '$elsewhere', definedIn: 'D:\\other\\repo\\.purpose' },
+      },
+    }));
+    fs.writeFileSync(path.join(root, '.paradigm', 'scan-index.json'), JSON.stringify({
+      components: { cart: { symbol: '#cart', path: 'packages\\cart\\.purpose' } },
+    }));
+    const idx = loadFlowIndex(root)!;
+    expect(idx['$checkout-flow']).toEqual(['packages/cart/**', 'packages/checkout/**']);
+    expect(idx['$elsewhere']).not.toContain('**');
   });
 });
 
@@ -230,18 +246,29 @@ describe('Aegis LP1 review: file hardening', () => {
 });
 
 describe('templates (spec Examples A–D, 8.0 subset)', () => {
-  it.each(LOOP_EXAMPLE_NAMES.map((n) => [n]))('the %s template parses and validates', (name) => {
-    const text = loopTemplate(`ex-${name}`, name, '$checkout-flow');
+  it.each(LOOP_TEMPLATE_NAMES.map((n) => [n]))('the %s template parses and validates', (name) => {
+    const text = loopTemplate(`ex-${name}`, name, { flow: '$checkout-flow' });
     const parsed = parseLoopYaml(text);
     expect(parsed.error).toBeUndefined();
     const r = validateLoop(parsed.value);
     expect(r.errors).toEqual([]);
   });
 
-  it('the default template validates and create --example writes every template', () => {
+  it('the default template validates and create writes every template (template, or its older name example)', () => {
     expect(validateLoop(parseLoopYaml(loopTemplate('plain')).value).errors).toEqual([]);
-    for (const name of LOOP_EXAMPLE_NAMES) expect(runLoopOp(root, 'create', { id: `ex-${name}`, example: name })).toMatchObject({ ok: true });
-    expect(runLoopOp(root, 'create', { id: 'x', example: 'nope' })).toMatchObject({ error: expect.any(String) });
+    for (const name of LOOP_TEMPLATE_NAMES) expect(runLoopOp(root, 'create', { id: `ex-${name}`, template: name })).toMatchObject({ ok: true });
+    expect(runLoopOp(root, 'create', { id: 'old-name', example: 'tidy' })).toMatchObject({ ok: true });
+    expect(runLoopOp(root, 'create', { id: 'x', template: 'nope' })).toMatchObject({ error: expect.stringContaining('template is one of') });
+  });
+
+  it('create passes flow and dir to the template and refuses unsafe ones', () => {
+    expect(runLoopOp(root, 'create', { id: 'fh', template: 'flow-health', flow: '$checkout-flow' })).toMatchObject({ ok: true });
+    expect(fs.readFileSync(file('fh.yaml'), 'utf8')).toContain('flows: [$checkout-flow]');
+    expect(runLoopOp(root, 'create', { id: 'gr', template: 'green', dir: 'packages/app' })).toMatchObject({ ok: true });
+    expect(fs.readFileSync(file('gr.yaml'), 'utf8')).toContain('-p, packages/app/tsconfig.json');
+    expect(runLoopOp(root, 'create', { id: 'bad1', template: 'flow-health', flow: '$x]\nautonomy: act' })).toMatchObject({ error: expect.stringContaining('$kebab-id') });
+    expect(runLoopOp(root, 'create', { id: 'bad2', template: 'green', dir: '../elsewhere' })).toMatchObject({ error: expect.stringContaining('repo-relative') });
+    expect(fs.existsSync(file('bad1.yaml')) || fs.existsSync(file('bad2.yaml'))).toBe(false);
   });
 });
 
