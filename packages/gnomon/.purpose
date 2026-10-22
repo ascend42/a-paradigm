@@ -3551,7 +3551,7 @@ components:
       takes `timeout`); call nodes check registry.resolveCall (trusted pin,
       depth ≤ 3) and run the callee as a child run whose meter is chained to
       the caller's (goal → pass, budget → unsure, else fail); model nodes
-      are `unavailable` until step 8; act (model role act) and write
+      (step 8, below); act (model role act) and write
       (effect: write) nodes are refused at run start until step 10; effective
       autonomy = the loop's until step 9. Terminals @goal/@stop/@pause (a
       missing edge is @stop; @pause writes a kernel loop.paused{reason:
@@ -3596,17 +3596,77 @@ components:
       paradigm CLI for builtins once (wire.ts paradigmCliResolver: Node
       resolution of @a-company/paradigm from Gnomon, dist digest); not found,
       builtins fail closed.
+      Step 8 (LP5, local model nodes; gnomon-loops.md §2, §3.4-§3.6) in
+      src/kernel/loops/model-node.ts: judge and summarize steps open an
+      UNATTENDED local session through the `model` port
+      (supervisor.openLoop → LocalLane.openLoop), the one unattended open,
+      reachable only with a run reference the registry mints for a TRUSTED,
+      runnable loop (registry.runRef; module-private WeakMap,
+      loopRunRefInfo; forged or released ⇒ FORBIDDEN before any row). The
+      session: session.open{attended:false, origin:'loop', loopRun},
+      surface 'none' (no tools), one step per turn, no GNOMON_SOCK /
+      SESSION_KEY / HSID in its env (LL5: no paradigm_loop write op, no
+      loop.request), its model text only hashed in turn.event. Prompt: the
+      trusted template (kernel fields only), then each input as a fenced,
+      receipted DATA block with a per-prompt nonce (inputs: a node's
+      evidence on this run, last/failed evidence, loop/run fields, the
+      trigger's kernel-stamped fields TRIGGER_FIELDS); the receipt rides
+      session.inject{origin:'kernel', channel:'loop'} and loop.node
+      evidence.inputs. Verdict: exactly one JSON object {verdict,
+      confidence, summary?} from the closed enum (a judge's classes, first
+      class = pass, others fail; summarize pass|fail); otherwise ONE repair
+      turn, then `unsure`; confidence < minConfidence ⇒ unsure; nothing is
+      searched for in prose (G-LOOP-06). Free text is secret-scanned and
+      kept as the node's sensitive evidence (reply, summary). Availability:
+      none configured, profile unmatched, endpoint down or incapable, no
+      runner, a failed call or a timeout ⇒ LoopModelUnavailable, 3 retries
+      with backoff, then the unavailable edge (compiled default @pause,
+      loop.paused{unavailable}, a toast); never a fallback card, never
+      Claude (G-LCL-02, G-LOOP-12 N/A in 8.0, G-LOOP-13). A model loop with
+      no configured local model is refused at start (no-local-model).
+      Budgets: each step's spawn permit has scope.loop = the root caller's
+      key; the ledger folds permit.grant + budget.usage tokens by permitId
+      into its per-day counters (day.tokens, global dayTokens); the run
+      meter holds run.tokens; a node's limits.tokens caps the reply and an
+      overrun is unsure. Thrash (k=3): in a loop with model or write steps,
+      the same check-evidence hash three rounds in a row ends the run
+      `thrash` with loop.paused{thrash} and a toast; resuming takes the
+      hand-only loop-choice card. ^loop-origin-clamp
+      (supervisor/loop-clamp.ts): in loop sessions only the loop's own
+      trust rules auto-pass (none in 8.0), cards carry detail.origin 'loop'
+      and the line "Raised by loop X (authored by Y)" (authoredBy is `file`
+      until step 12's request rows); loop-choice cards carry it too.
+      Aegis step-8 review (applied): no public mint (the registry issues
+      its run-reference minter ONCE, taken by the runner, which vouches:
+      live run, judge/summarize node, the walk's real root); live() also
+      fails on the kill-switch hold and a strictness pause; openLoop closes
+      the session and throws if the run aborted or stopped being live
+      during the spawn, and nothing is asked once the signal is aborted;
+      the supervisor permission path routes a loop session's mode,
+      read-only and rule/always passes through loopClampAllows (exact
+      `loop-trust:<cardId>[#rule]`) and its cards through withLoopOrigin
+      (unreachable in 8.0; a source test fails if a pass skips mayAuto);
+      prompts are budgeted before building (≤ 8 inputs, END markers and the
+      answer line intact, receipts hash what is sent); verdict reasons never
+      echo model text; the thrash streak carries across runs
+      (loop.round{evidenceHash} folded in the ledger, reset by a thrash
+      end); only endpoints marked `loops: true` in the root-signed local
+      config serve loops (the runner refuses at start otherwise).
     path: src/kernel/loops/runner.ts
     type: module
     tags: [gnomon, loops, paradigm-8, security]
-    gates: [^loop-trusted]
+    gates: [^loop-trusted, ^loop-origin-clamp]
     flows: [$loop-run]
     signals: []
     tests:
       - test/loop-runner.test.ts
       - test/loop-runner-darwin.test.ts
+      - test/loop-model.test.ts
+      - test/loop-model-e2e.test.ts
     anchors:
       - src/kernel/loops/runner.ts
+      - src/kernel/loops/model-node.ts
+      - src/kernel/supervisor/loop-clamp.ts
       - src/kernel/loops/ledger.ts
       - src/kernel/loops/wire.ts
       - src/cli/loop-cli.ts
@@ -3648,6 +3708,70 @@ components:
       - src/kernel/scheduler/zoned.ts
       - src/kernel/scheduler/scheduler.ts
       - src/kernel/lifecycle/idle.ts
+
+  loop-strictness:
+    description: >-
+      #loop-strictness (docs/specs/gnomon-loops.md §3.3; build plan step 9,
+      M2.11-lite) in src/kernel/loops/strictness-cap.ts: a loop's EFFECTIVE
+      autonomy = min(its declared autonomy, the repo cap {level, effective run
+      mode}), re-read at run start, before every node and on every loop.node
+      row (Aegis M2), with a capReason for the GUI ("act → propose (L2)",
+      status.loops.effective). L3 or manual: no run starts
+      (FORBIDDEN{strictness-paused}) and a running loop pauses before its next
+      node (loop.paused{reason:'strictness'}, a kernel pause: resuming takes
+      fresh presence). L2: act runs as propose and lands nothing alone;
+      concurrency 1. L1: concurrency 2 per repo (spec strictness.concurrency.L1); gate-class and kernel-high-risk
+      lands need the second reviewer (8.1), so landDecision() makes them propose
+      with secondReviewer recorded. L0: as declared. The repo brake
+      (wire.ts brake(repoKey)) pauses the repo's running loops at once on a
+      level raise or a repo run-mode tightening. A missing or throwing cap
+      source is L3 (fail safe). Step 11's land calls landDecision() with the cap
+      re-read.
+    path: src/kernel/loops/strictness-cap.ts
+    type: module
+    tags: [gnomon, loops, strictness, paradigm-8]
+    gates: [^loop-trusted]
+    flows: [$loop-run]
+    signals: []
+    tests:
+      - test/loop-strictness.test.ts
+    oracles: [G-LOOP-10]
+    anchors:
+      - src/kernel/loops/strictness-cap.ts
+      - src/kernel/loops/runner.ts
+      - src/kernel/loops/wire.ts
+
+  strictness-levels:
+    description: >-
+      #strictness-levels (spec §3.4, D86–D88; M2.11-lite, build plan step 9),
+      a sub-component of #approval-broker in src/kernel/broker/strictness.ts.
+      Per-repo levels L0–L3 folded from KERNEL-signed
+      approval.strictness.raised|lowered rows only (StrictnessBook; an unknown
+      level folds as L3; no row is L0, the D87 L1 floor waits on Move 3).
+      request.strictness.set{repo, to} (repo: a key or an absolute path) from the human on a gui or
+      device connection only (dispatch.ts requests.strictness; every other
+      class FORBIDDEN{matrix}, G-STR-01). Tightening writes the request row and
+      approval.strictness.raised{presence:'none'} at once, withdraws a pending
+      loosening card and runs the repo brake (the loops pause). Loosening is one
+      level per step through a strictness card (detail.op level.loosen, allow
+      fresh presence, hand-only, no standing tuple; G-STR-04); its effect
+      re-checks the level and writes approval.strictness.lowered{presence:
+      'fresh'}. The level is run-mode.ts's `level` seam (the L0/L1 auto-edits,
+      L2 ask, L3 manual ceiling) and the loops' repo cap; status.strictness.
+      Not in the lite slice: signal score, hysteresis, evidence, the L1
+      floor, batched L2 landing, the cached-unlock remap.
+    path: src/kernel/broker/strictness.ts
+    type: module
+    tags: [gnomon, approvals, strictness, paradigm-8]
+    signals: []
+    tests:
+      - test/strictness-levels.test.ts
+    oracles: [G-STR-01, G-STR-04]
+    anchors:
+      - src/kernel/broker/strictness.ts
+      - src/kernel/broker/run-mode.ts
+      - src/kernel/socket/dispatch.ts
+      - src/kernel/lifecycle/daemon.ts
 
   trace-capture:
     description: >-
@@ -3733,6 +3857,24 @@ components:
     tests:
       - test/run-modes.test.ts
     oracles: [G-BRK-05]
+
+  strictness-cli:
+    description: >-
+      #strictness-cli `gnomon strictness show [<repo>]` and `gnomon strictness
+      set <repo> <L0|L1|L2|L3>` [--home <abs>] [--json] (src/cli/
+      strictness-cli.ts; spec §3.4, M2.11-lite). Connects to the RUNNING
+      daemon as `gnomon mode` does (hello key id pinned from the home, auth as
+      the home's human device). show prints status.strictness (one repo when
+      named, its default level if none is set). set sends
+      log.append{kind:'request.strictness.set', payload:{repo, to}}; a raise applies at once and pauses the repo's running loops, a
+      lower level prints the strictness card to allow with Touch ID. <repo> is
+      a folder (resolved against the cwd) or a sha256 repo key. A bad verb or
+      level is refused locally (exit 64).
+    path: src/cli/strictness-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, strictness, paradigm-8]
+    tests:
+      - test/strictness-levels.test.ts
 
   rules-revoke:
     description: >-
@@ -3834,7 +3976,14 @@ components:
 
   local-runner:
     description: >-
-      #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Kernel side:
+      #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Loops step 8:
+      LocalLane.openLoop(ref, req) (and supervisor.openLoop) is the ONE
+      unattended open: a trusted loop run's judge/summarize step, only with a
+      registry run reference; origin 'loop', surface none, maxSteps 1, no
+      kernel names in the env, permit scope.loop, model text hash-only in
+      turn.event, ask() returns the reply; no capable endpoint throws
+      LoopModelUnavailable (no card, never Claude); isLoopSession(hsid) for
+      step 12's loop.request pre-gate (see #loop-runner). Kernel side:
       local-session.ts maps a SUCCESSFUL compaction_end (summaryHash + both
       token counts, no error) onto the typed session.compacted{hsid, turn,
       reason, summaryHash, tokensBefore, tokensAfter} row (compactedPayloadOf;
@@ -4487,6 +4636,23 @@ gates:
     prizes: []
     tags: [gnomon, voice, security]
     oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
+  loop-origin-clamp:
+    description: >-
+      ^loop-origin-clamp (docs/specs/gnomon-loops.md §3.4, LL5; build plan
+      step 8; src/kernel/supervisor/loop-clamp.ts, after
+      ^voice-origin-clamp): every loop session opens with origin 'loop'
+      (session.open{origin, loopRun}) and only through LocalLane.openLoop
+      with a registry run reference. In those sessions standing grants, the
+      human's always rules, auto-edits and the read-only passes do not apply
+      (loopClampAllows admits only the loop's own trust-card modeRefs, none
+      in 8.0; default deny); cards carry detail.origin 'loop', loopId,
+      authoredBy and the kernel line "Raised by loop X (authored by Y)"
+      (withLoopOrigin, loopClampLine); the session env has no GNOMON_SOCK,
+      GNOMON_SESSION_KEY or GNOMON_HSID and judge/summarize have no tools, so
+      a loop session has no paradigm_loop write op and no loop.request.
+    prizes: []
+    tags: [gnomon, loops, security]
+    oracles: [G-LOOP-05, G-LOOP-06]
   offer-accept:
     description: >-
       ^offer-accept (TD-2026-10-20-812, spec §12.9; Aegis D1): request.offer.decide

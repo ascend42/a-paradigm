@@ -368,6 +368,14 @@ export const VOICE_SENDWORD_REQUEST = 'request.voice.sendword' as const;
 export interface HumanRequestPort {
   modeSet(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
   status(): Record<string, unknown>;
+  /**
+   * M2.11-lite (#strictness-levels, broker/strictness.ts): request.strictness.set{repoKey | repo, level} from the human
+   * on a gui or device connection ONLY (G-STR-01); status() is the human class's status.strictness.
+   */
+  strictness?: {
+    set(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    status(): Record<string, unknown>;
+  };
   /** TD-2026-10-20-086 F6 (#standing-grant): request.grant.standing / .revoke from the human; status.standing */
   standing?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; deviceId?: string }, payload: unknown): Promise<unknown>;
@@ -537,6 +545,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
+      ...(o.requests?.strictness && cls === 'human' ? { strictness: o.requests.strictness.status() } : {}),
       ...(o.requests?.standing && cls === 'human' ? { standing: o.requests.standing.status() } : {}),
       // 8.0:session-rename: the names of THIS human's sessions (display text; the GUI folds session.renamed rows too)
       ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
@@ -829,6 +838,16 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
           return await o.requests.modeSet({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // M2.11-lite: request.strictness.set from the human on a first-party connection (GUI launch token or human device)
+      if (pa?.kind === 'request.strictness.set' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.strictness) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.strictness.set({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

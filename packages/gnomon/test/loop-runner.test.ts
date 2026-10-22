@@ -4,7 +4,7 @@
  * loop-runner-darwin.test.ts). Platform-independent: the runner's platform is data ('darwin'), fixtures are built
  * with path.join under os.tmpdir().
  *
- *   graph      check → notify toast → @stop, @goal, a missing edge → @stop, model nodes take `unavailable`, act
+ *   graph      check → notify toast → @stop, @goal, a missing edge → @stop, a model loop with no local model is refused at start, act
  *              and write nodes refused ("lands in step 10"), call nodes (pin, goal → pass, budget → unsure), the
  *              loop-choice card (continue, stop, timeout → @pause)
  *   G-LOOP-11  rounds, wall, compute, day-runs and global caps stop the NEXT step; absent budgets are the defaults
@@ -203,12 +203,13 @@ describe('#loop-runner: the walk (§2)', () => {
     expect(r.of(runId, 'loop.notified')).toEqual([{ runId, loopId: 'lone', as: 'toast', text: 'lone: failed' }]);
   });
 
-  it('a model node is not built yet: verdict unavailable, its edge taken, "model nodes land in step 8"', async () => {
+  it('a loop with a model node and no local model configured is refused at start (step 8: never a silent fallback)', async () => {
     const root = repo([{ schema: 'loop:v2', id: 'judged', start: 'a', nodes: [chk('a', { pass: 'why', fail: 'why' }), { id: 'why', type: 'model', role: 'summarize', model: { use: 'local' }, inputs: ['a.evidence'], on: { pass: '@stop', fail: '@stop', unsure: '@stop', unavailable: 'tell' } }, { id: 'tell', type: 'notify', as: 'toast', text: 'x', on: { any: '@stop' } }] }]);
     const r = rig(root);
     r.trust('judged');
-    const { runId } = await r.run('judged');
-    expect(r.of(runId, 'loop.node')[1]).toMatchObject({ nodeId: 'why', verdict: 'unavailable', edge: 'unavailable', next: 'tell', detail: expect.stringMatching(/model nodes land in step 8/) });
+    expect(() => r.runner.start(r.key('judged'), { type: 'manual', by: HUMAN })).toThrow(/no local model/);
+    expect(r.calls).toHaveLength(0);
+    expect(r.rows.filter((x) => x.kind === 'loop.run.started')).toHaveLength(0);
   });
 
   it('no loop-check sandbox on win32 (W5) or linux: the run is refused sandbox-unavailable, nothing runs', () => {
@@ -269,7 +270,7 @@ describe('#loop-runner: the walk (§2)', () => {
     const b = await r.run('watch');
     expect(r.of(b.runId, 'loop.node')[0]).toMatchObject({ verdict: 'unsure', next: 'tell', detail: 'green ended budget' });
     // a callee run is not a top-level run, and its compute is charged to the ROOT caller (Aegis #2, §3.4)
-    expect(r.ledger.day(dayOf(), r.key('green'))).toEqual({ runs: 0, computeMs: 0 });
+    expect(r.ledger.day(dayOf(), r.key('green'))).toEqual({ runs: 0, computeMs: 0, tokens: 0 });
     expect(r.ledger.day(dayOf(), r.key('watch')).computeMs).toBeGreaterThan(0);
     expect(r.of(go.calleeRunId as string, 'loop.run.started')[0]).toMatchObject({ rootKey: r.key('watch') });
   });
@@ -283,7 +284,8 @@ describe('#loop-runner: the walk (§2)', () => {
     await new Promise((res) => setTimeout(res, 50));
     const card = r.cards[0]!;
     expect(card).toMatchObject({ kind: 'loop-choice', decisions: ['continue', 'stop'], attended: false, detail: { loopId: 'ask', runId: p1.runId, nodeId: 'q', origin: 'loop' } });
-    expect(card.lines[0]).toBe(`Raised by loop ask (run ${p1.runId})`);
+    expect(card.lines.slice(0, 2)).toEqual([`Raised by loop ask (authored by file)`, `Run ${p1.runId}`]);
+    expect(card.detail).toMatchObject({ origin: 'loop', authoredBy: 'file' });
     await card.effect('continue', { connId: gui.connId });
     expect(await p1.done).toMatchObject({ reason: 'goal' });
     expect(r.of(p1.runId, 'loop.node')[1]).toMatchObject({ verdict: 'pass', edge: 'continue', choice: 'continue', next: 'b', cardId: card.cardId });
@@ -506,7 +508,7 @@ describe('G-LOOP-14: a kill mid-run, then a restart', () => {
     await new Promise((res) => setTimeout(res, 30));
     expect(first.calls.map((c) => c.node.id)).toEqual(['defn', 'gates']); // the daemon dies inside `gates`
     const before = first.ledger.day(dayOf(), first.key('flow-health-checkout'));
-    expect(before).toEqual({ runs: 1, computeMs: 40 });
+    expect(before).toEqual({ runs: 1, computeMs: 40, tokens: 0 });
     // a new daemon: the same log, a fresh registry, ledger and runner
     const second = rig(root, { home, rows: [trustRow, ...rows] });
     expect(second.ledger.open().map((x) => x.runId)).toEqual([run.runId]);

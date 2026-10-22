@@ -80,6 +80,7 @@ import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
 import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js';
 import { LOOSEN_TIMEOUT_MS, modeSourceOf, RunModeBook, RunModeControl } from '../broker/run-mode.js';
+import { StrictnessBook, StrictnessControl, strictnessSourceOf } from '../broker/strictness.js';
 import { StandingGrantBook, StandingGrants, standingSourceOf } from '../broker/standing-grant.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
 import { paradigmCliResolver, wireLoops } from '../loops/wire.js';
@@ -865,9 +866,29 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     catchUp(modeBook, modeSourceOf(log));
     return modeBook;
   };
+  // M2.11-lite (#strictness-levels): per-repo levels folded from KERNEL-signed approval.strictness.* rows (default
+  // L0); the human's request.strictness.set tightens at once and loosens through a fresh-presence card. The level
+  // feeds the run-mode ceiling below and the loops' effective autonomy; a raise is the repo brake (loops pause).
+  const strictnessBook = new StrictnessBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
+  const syncStrictnessBook = (): StrictnessBook => {
+    catchUp(strictnessBook, strictnessSourceOf(log));
+    return strictnessBook;
+  };
+  let loopsBrake: (repoKey: string) => Promise<unknown> = async () => 0; // late-bound: the loops are wired below
+  const strictness = new StrictnessControl({
+    broker,
+    book: syncStrictnessBook,
+    logRequest: (payload, ids) => log.append({ kind: 'request.strictness.set', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }).then(() => undefined),
+    repoKeyOfPath: (abs) => repoKeyOf([abs]),
+    onTighten: (repoKey) => loopsBrake(repoKey),
+    onChange: () => supervisor.noteModeChange(),
+  });
   const runModes = new RunModeControl({
     broker,
     book: syncModeBook,
+    level: (repoKey) => strictness.level(repoKey),
+    // the run-mode emergency brake on a repo reaches its running loops too (gnomon-loops.md §3.3)
+    onRepoTighten: (repo) => loopsBrake(repo),
     sessions: { scope: (hsid) => supervisor.scopeOf(hsid), live: () => supervisor.liveScopes() },
     logRequest: (payload, ids) => log.append({ kind: 'request.mode.set', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     repoKeyOfPath: (abs) => repoKeyOf([abs]),
@@ -1215,7 +1236,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // 8.0:loops (#loop-registry): the registry, trust cards and the human's request.loop.* (kernel/loops/wire.ts)
   // step 6 (#loop-timers): loop triggers become scheduler timers; the `loop` idle holder keeps the daemon up (D1)
-  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop') });
+  // step 9 (#loop-strictness): each loop's repo cap is its level and its repo's effective run mode
+  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop'),
+    // step 8 (#loop-runner): judge/summarize steps open unattended local sessions only through supervisor.openLoop
+    model: { openLoop: (ref, req) => supervisor.openLoop(ref, req), configured: () => ({ endpoints: (localCfg.config?.endpoints ?? []).filter((e) => e.loops === true).map((e) => e.id), runner: localCfg.config?.runner !== undefined }) },
+    strictness: (repoKey) => ({ level: strictness.level(repoKey), mode: runModes.repoView(repoKey).effective }) });
+  loopsBrake = (repoKey) => loops.brake(repoKey);
   const dispatcherCommon = {
     voice,
     voiceClient: {
@@ -1258,6 +1284,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     requests: {
       modeSet: (asker: Parameters<RunModeControl['request']>[0], payload: unknown) => runModes.request(asker, payload),
       status: () => runModes.status(),
+      strictness: { set: (asker: Parameters<StrictnessControl['request']>[0], payload: unknown) => strictness.request(asker, payload), status: () => strictness.status() },
       standing: { request: (asker: Parameters<StandingGrants['request']>[0], payload: unknown) => standingGrants.request(asker, payload), revoke: (asker: Parameters<StandingGrants['revoke']>[0], payload: unknown) => standingGrants.revoke(asker, payload), status: () => standingGrants.status() },
       offer: { decide: (asker: Parameters<OfferRouter['decide']>[0], payload: unknown) => router.decide(asker, payload), mute: (asker: Parameters<OfferRouter['mute']>[0], payload: unknown) => router.mute(asker, payload) },
       mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },

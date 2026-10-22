@@ -640,6 +640,15 @@ export class ApprovalBroker {
     await this.#o.log('approval.mode.set', { scope: { repo: p.scope.repo, ...(p.scope.hsid ? { hsid: p.scope.hsid } : {}) }, from: p.from, to: p.to, by: p.by, presence: p.presence }, ids);
   }
 
+  /**
+   * approval.strictness.raised | lowered (§3.4 strictness, M2.11-lite, B3: only the broker appends approval.*): a
+   * repo's level moved. A raise (tightening) is written with presence `none`; a lowering only from its strictness
+   * card's effect, after fresh presence. Must reject if the row was not written (the caller changes nothing then).
+   */
+  async strictnessSet(dir: 'raised' | 'lowered', p: { repo: string; from: string; to: string; cause: 'manual'; by: Record<string, unknown>; presence: 'none' | 'fresh' | `standing:${string}` }, ids: { connId?: string } = {}): Promise<void> {
+    await this.#o.log(`approval.strictness.${dir}`, { repo: p.repo, from: p.from, to: p.to, cause: p.cause, by: p.by, presence: p.presence }, ids);
+  }
+
   /** approval.suspect from the kernel's own observation (B3: only the broker appends approval.*). */
   async suspect(why: string, data: Record<string, unknown>, hsid?: string): Promise<void> {
     await this.#o.log('approval.suspect', { why, ...data }, hsid ? { session: hsid } : {});

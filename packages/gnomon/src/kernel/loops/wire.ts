@@ -12,6 +12,11 @@
  *
  * #loop-timers (step 6): given the daemon's scheduler, the loops' schedule and continuous triggers become scheduler
  * timers that hand off to the runner, and the `loop` idle holder keeps the daemon up for them (status.loops.uptime).
+ *
+ * #loop-strictness (step 9): given the repo cap source (the daemon's strictness levels and run modes), the runner
+ * folds it into each loop's effective autonomy; `brake(repoKey)` is the repo brake (a level raise or a repo mode
+ * tightening pauses the repo's running loops at once, `loop.paused{reason:'strictness'}`); status.loops.effective
+ * carries each loop's effective autonomy and capReason for the GUI ("act → propose (L2)").
  */
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import type { RaiseInput } from '../broker/broker.js';
@@ -19,9 +24,11 @@ import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { pinParadigmCli, type CheckExecInput, type CheckResult, type FilePin } from './check-exec.js';
-import { LOOP_RUN_KINDS, LoopLedger } from './ledger.js';
+import { LOOP_RUN_KINDS, LOOP_TOKEN_KINDS, LoopLedger } from './ledger.js';
+import type { LoopModelPort } from './model-node.js';
 import { LOOP_FOLD_KINDS, LoopRegistry, type LoopRow } from './registry.js';
 import { LoopRunner, type LoopGlobalCaps, type LoopToast } from './runner.js';
+import type { RepoCap } from './strictness-cap.js';
 import { LoopTimers, type LoopScheduler } from './timers.js';
 import { LoopTrust, type LoopAsker } from './trust.js';
 
@@ -57,6 +64,10 @@ export interface WireLoopsOptions {
   holdIdle?: () => () => void;
   /** the zone daily/weekly loop times are read in (default the host's) */
   tz?: string;
+  /** #loop-runner step 8: the local model lane (supervisor.openLoop + the configured endpoints); absent: model loops refuse */
+  model?: LoopModelPort;
+  /** #loop-strictness: the repo's cap {level, effective run mode} (absent: loops run as declared) */
+  strictness?: (repoKey: string) => RepoCap;
 }
 
 /** The dispatcher's port (socket/dispatch.ts HumanRequestPort.loops). */
@@ -74,6 +85,8 @@ export interface WiredLoops {
   /** resolves once the boot sweep closed the runs a previous daemon left open */
   recovered: Promise<number>;
   port: LoopsPort;
+  /** the repo brake (#loop-strictness): pause every running loop of the repo now; resolves to the loops paused */
+  brake(repoKey: string, by?: string): Promise<number>;
   close(): void;
 }
 
@@ -121,7 +134,8 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
   }
   try {
     const runs: LoopRow[] = [];
-    for (const v of o.log.read({ reader: { class: 'human' }, kinds: [...LOOP_RUN_KINDS] })) if (v.view === 'full' && v.event) runs.push(rowOf(v.event));
+    // step 8: the fuse's permit.grant and budget.usage rows too (model tokens fold by permitId into the day counters)
+    for (const v of o.log.read({ reader: { class: 'human' }, kinds: [...LOOP_RUN_KINDS, ...LOOP_TOKEN_KINDS] })) if (v.view === 'full' && v.event) runs.push(rowOf(v.event));
     ledger.seed(runs);
   } catch {
     /* an unreadable run history: no open run to close, day counts start at zero (the global caps still bound) */
@@ -138,6 +152,8 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     append: (kind, payload, ids) => append(kind, payload, ids?.connId),
     ...(o.check ? { check: o.check } : {}), ...(o.paradigmCli ? { paradigmCli: o.paradigmCli } : {}), ...(o.toast ? { toast: o.toast } : {}),
     ...(o.caps ? { caps: o.caps } : {}), ...(o.clock ? { clock: o.clock } : {}), ...(o.platform ? { platform: o.platform } : {}), ...(o.diag ? { diag: o.diag } : {}),
+    ...(o.strictness ? { strictness: o.strictness } : {}),
+    ...(o.model ? { model: o.model } : {}),
   });
   stopRun = (key, reason) => void runner.stopRun(key, reason);
   const recovered = runner.recover().catch((err: unknown) => {
@@ -154,6 +170,27 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     process.once('exit', onExit);
   }
   const RUNNER_KINDS = new Set(['request.loop.run', 'request.loop.pause', 'request.loop.resume']);
+  const brake = async (repoKey: string, by = 'kernel'): Promise<number> => {
+    let n = 0;
+    for (const r of runner.running()) {
+      if (registry.entry(r.key)?.repoKey !== repoKey) continue;
+      const res = await runner.pause(r.key, by, 'strictness').catch((err: unknown) => {
+        o.diag?.('loops.brake-failed', { key: r.key, why: err instanceof Error ? err.message.slice(0, 200) : 'pause failed' });
+        return null;
+      });
+      if (res?.stopped) n++;
+    }
+    return n;
+  };
+  const effective = (): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const e of registry.entries()) {
+      if (!e.compiled) continue;
+      const x = runner.effective(e);
+      out[e.key] = { declared: x.declared, autonomy: x.autonomy, level: x.level, mode: x.mode, paused: x.paused, capReason: x.capReason };
+    }
+    return out;
+  };
   return {
     registry,
     trust,
@@ -163,8 +200,9 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     recovered,
     port: {
       request: (asker, kind, payload) => (RUNNER_KINDS.has(kind) ? runner.request(asker, kind, payload) : trust.request(asker, kind, payload)),
-      status: () => ({ ...registry.status(), ...runner.status(), ...(timers ? { uptime: timers.status() } : {}) }),
+      status: () => ({ ...registry.status(), ...runner.status(), ...(timers ? { uptime: timers.status() } : {}), effective: effective() }),
     },
+    brake,
     close: () => {
       process.removeListener('exit', onExit);
       timers?.close();

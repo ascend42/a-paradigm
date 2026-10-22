@@ -82,6 +82,17 @@ Branch `feat/gnomon-loops` (worktree `a-paradigm-loops`), cut from `feat/gnomon`
 - **Wrapper:** closing the window already hides it and keeps the kernel (gnomon-wrapper `main.rs` `CloseRequested`); only Cmd-Q stops it. No wrapper change.
 - **Continuous** next runs are in-memory one-shot timers (end + cooldown); after a restart a continuous loop starts cooldown after boot. A refused continuous start gets no next run until the next local day (or a resume).
 
+## Notes from step 8 (LP5 local model nodes)
+
+- **The one unattended open** is `supervisor.openLoop(ref, req)` → `LocalLane.openLoop`, only with a run reference `registry.runRef()` mints for a trusted, runnable loop (module-private WeakMap; forged or released ⇒ FORBIDDEN). `open()` keeps its blanket refusal.
+- **Payload fields** (opaque; document at the next contract move): `session.open` uses the reserved `origin`/`loopRun` plus `principalClass:'kernel'`; `session.inject{channel:'loop', receipt[]}`; `session.refused{code:'model_unavailable', origin, loopRun, why}`; `loop.node` adds `role`, `class`, `confidence`, `model{asked, used, escalated, endpoint}`, `usage{tokens}`, `permitId`, `hsid`; `loop.paused{reason:'thrash', detail}`.
+- **Profiles:** `model.profile` names a configured endpoint `id` (the root-signed local config has no profile field yet).
+- **Loops opt-in:** endpoints serve loops only with `loops: true` in the root-signed local config (Aegis); existing configs must be re-signed to enable model loops.
+- **Aegis review applied:** issued-once run-reference minter (runner vouches), live() checks kill hold and strictness, abort checks after spawn and before ask, the clamp wired into the supervisor permission path, budgeted prompts, no model text in `why`, thrash carried across runs via `loop.round{evidenceHash}`.
+- **authoredBy** is `file` on every card line until step 12 stamps it from request rows.
+- **Thrash** watches loops with model or write steps (check evidence hashed per round).
+- **Step 10 (act):** extend `openLoop` (role act, tools, scratch worktree) and hook `loopClampAllows`/`withLoopOrigin` into the permission path; step 12's pre-gate can use `supervisor.isLoopSession(hsid)`.
+
 ## Merge rules with the Windows work (feat/gnomon)
 
 - Merge `feat/gnomon` into this branch regularly, never the other way until both are done.
@@ -95,3 +106,10 @@ Branch `feat/gnomon-loops` (worktree `a-paradigm-loops`), cut from `feat/gnomon`
 ## Risks
 
 YAML in a zero-dep kernel (hash and show only the compiled JSON); shebang argv0 (hash node too); the unattended-open door (supervisor.ts:693, local-session.ts:47: use the voice-clamp pattern); `loop-act` can't allow LAN (SBPL localhost only); agents have no userland append path (log-append.ts:117, a new pre-gate); `loop.row` is userland-registered; scheduler change under G-SCH-01; DST fixtures; repo copy cost (cap size); merge friction; uptime vs the wrapper's window-close path; the one-week field run on the critical path.
+
+## Notes from step 9 (strictness-lite, M2.11-lite)
+
+- **Payloads** (opaque; document at the next contract move): `request.strictness.set{repo, to}` as the spec registry (`repo` a key or an absolute path, as `request.mode.set`); `approval.strictness.raised|lowered{repo, from, to, cause:'manual', by, presence}`; `loop.node` adds `capReason`; the loosening card is `strictness` with `detail.op: 'level.loosen'` (no standing tuple, hand-only).
+- **Default L0**, not the D87 L1 floor (that waits on Move 3's calibration). Concurrency follows the spec's root-config defaults (`strictness.concurrency` L1 2, L2 1) until that config is read.
+- **Brake:** a level raise, or a repo run-mode tightening, pauses the repo's running loops at once (`loop.paused{reason:'strictness'}`, a kernel pause: resume takes presence). A strictness pause does not lift by itself when the level drops.
+- **Land:** `landDecision()` in `kernel/loops/strictness-cap.ts` is what step 11 calls at land, with the cap re-read.

@@ -45,10 +45,10 @@
  * CEILING: the effective mode is the stricter of the chosen mode and the
  * repo's strictness ceiling (L0/L1 auto-edits, L2 ask, L3 manual); a request
  * looser than the ceiling is refused FORBIDDEN gate `strictness`, reason
- * `strictness-mode`. Strictness LEVELS are not built yet (M2.10): the level
- * source answers null and the ceiling then permits all three modes (status
- * says `strictness: {built: false}`), so today the refusal is reachable only
- * through the level seam.
+ * `strictness-mode`. The level comes from the `level` seam: the daemon wires
+ * #strictness-levels (strictness.ts, M2.11-lite, folded from kernel-signed
+ * approval.strictness.* rows, default L0). With no seam the ceiling permits
+ * all three modes (status says `strictness: {built: false}`).
  *
  * CHANGING: `request.mode.set{repo, hsid, to}` from a human on a first-party
  * connection (the GUI launch-token session, or this home's human device —
@@ -257,6 +257,8 @@ export interface RunModeDeps {
   onChange?: () => void;
   /** TD-2026-10-20-086 F3: the root-signed config's runModes.default (null/absent: none, the built-in ask) */
   configDefault?: () => RunMode | null;
+  /** M2.11-lite: a REPO was tightened (the emergency brake): the daemon pauses its running loops; a throw never undoes it */
+  onRepoTighten?: (repo: string, to: RunMode) => Promise<unknown> | unknown;
 }
 
 export type ModeSetResult =
@@ -428,6 +430,7 @@ export class RunModeControl {
       // repo's new mode is brought down to it (its own approval.mode.set, presence none); a stricter own mode stays
       if (!hsid) await this.#pullDown(asker, repo, to);
       this.#changed();
+      if (!hsid) await Promise.resolve().then(() => this.#d.onRepoTighten?.(repo, to)).catch(() => undefined);
       return { changed: true, applied: true, scope, from, to, effective: stricterMode(to, ceiling), presence: 'none' };
     }
     // loosening: one gesture plus fresh presence, through a strictness card
@@ -505,7 +508,7 @@ export class RunModeControl {
       // F3: the root-signed default for repos with no mode of their own (never home, above it or /)
       configDefault,
       modes: [...RUN_MODES],
-      strictness: { built: this.#d.level === undefined ? false : true, note: this.#d.level === undefined ? 'strictness levels are not built (M2.10): the ceiling permits every mode' : 'level per repo' },
+      strictness: { built: this.#d.level === undefined ? false : true, note: this.#d.level === undefined ? 'strictness levels are not wired: the ceiling permits every mode' : 'level per repo (M2.11-lite: set by the human, default L0)' },
       repos: this.#d.book().repos().map((r) => ({ repo: r.repo, ...this.repoView(r.repo) })),
       sessions: live.map((s) => ({ hsid: s.hsid, repo: s.repoKey, cwd: s.cwd, ...this.view(s.hsid, s.repoKey), ...(this.#pendingFor(s.repoKey, s.hsid) ? { pendingCardId: this.#pendingFor(s.repoKey, s.hsid) } : {}) })),
     };

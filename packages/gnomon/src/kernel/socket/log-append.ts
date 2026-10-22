@@ -33,7 +33,8 @@
  * on a first-party connection (credential `gui`, the launch-token GUI session,
  * or `device`, this home's human device) goes to the run-mode control BEFORE
  * this gate (dispatch.ts `requests`; broker/run-mode.ts), which validates it
- * and writes the KERNEL-signed request row itself. `request.session.model`
+ * and writes the KERNEL-signed request row itself. `request.strictness.set` (M2.11-lite) from the same human on
+ * the same connections goes to #strictness-levels (requests.strictness), which writes its request row. `request.session.model`
  * (8.0:model-switch) from the same human on the same connections goes to the
  * session port (SessionPort.model), which writes its request row. `request.offer.decide` and
  * `request.offer.mute` (TD-2026-10-20-812) from the same human on the same connections go to

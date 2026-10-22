@@ -788,6 +788,9 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
         } else if (cls === 'human' && kind === 'request.mod.install') {
           // #mods-admin (the GUI Mods panel): served for the human's own device like `gnomon mod install`; a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && kind === 'request.strictness.set') {
+          // M2.11-lite (#strictness-levels): served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
+          expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
         } else if (cls === 'human' && kind === 'request.mode.set') {
           // P8-D86/D87: served for the human's own device (a first-party connection); a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
@@ -905,7 +908,7 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     expect(added.map((x) => x.kind)).toEqual(['request.mode.set', 'approval.mode.set']);
     expect(added[1]!.env.payload).toMatchObject({ from: 'ask', to: 'manual', presence: 'none', by: { via: 'cli' } });
     const st = ok(await h.conn.call('status')) as { runModes?: { strictness: { built: boolean }; repos: Array<{ mode: string }> } };
-    expect(st.runModes).toMatchObject({ strictness: { built: false }, repos: [{ mode: 'manual' }] });
+    expect(st.runModes).toMatchObject({ strictness: { built: true }, repos: [{ mode: 'manual' }] });
     // only the human class sees status.runModes
     const a = await asDevice(r, 'agent');
     expect(Object.hasOwn(ok(await a.conn.call('status')), 'runModes')).toBe(false);
@@ -918,6 +921,44 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     cleanups.push(() => h2.conn.close());
     expect((ok(await h2.conn.call('status')) as { runModes: unknown }).runModes).toMatchObject({ repos: [{ mode: 'manual' }] });
     expect(ok(await h2.conn.call('log.append', { kind: 'request.mode.set', payload: { repo: repoPath, to: 'manual' } }))).toMatchObject({ changed: false, mode: 'manual' });
+  }, 60_000);
+
+  it('M2.11-lite request.strictness.set: the human device raises a repo level with no presence (request row, then approval.strictness.raised), status.strictness and the run-mode ceiling show it, and it survives a kernel restart; agent, mod, voice, session and read-token connections never set a level (G-STR-01)', async () => {
+    const r = await rig();
+    const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });
+    const before = r.d.log.head().seq;
+    const repoPath = path.join(r.home, 'some-repo');
+    for (const cls of ['agent', 'mod', 'voice'] as const) {
+      const s = await asDevice(r, cls);
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.strictness.set', payload: { repo: repoPath, to: 'L0' } })), cls).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
+    }
+    for (const s of [await asDevice(r, 'session'), await asToken(r, m.token)]) {
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.strictness.set', payload: { repo: repoPath, to: 'L0' } }))).toMatchObject({ c: 'FORBIDDEN', reason: 'matrix' });
+    }
+    const h = await asDevice(r, 'human');
+    const res = ok(await h.conn.call('log.append', { kind: 'request.strictness.set', payload: { repo: repoPath, to: 'L3' } }));
+    expect(res).toMatchObject({ changed: true, applied: true, from: 'L0', to: 'L3', presence: 'none' });
+    await settle();
+    const added = rows(r.home).slice(before).filter((x) => !x.kind.startsWith('socket.'));
+    expect(added.map((x) => x.kind)).toEqual(['request.strictness.set', 'approval.strictness.raised']);
+    expect(added[1]!.env.payload).toMatchObject({ from: 'L0', to: 'L3', cause: 'manual', presence: 'none', by: { via: 'cli' } });
+    const st = ok(await h.conn.call('status')) as { strictness?: unknown; runModes?: unknown };
+    expect(st.strictness).toMatchObject({ built: true, default: 'L0', repos: [{ level: 'L3' }] });
+    // the level is the run-mode ceiling: at L3 a looser mode is refused strictness-mode
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.mode.set', payload: { repo: repoPath, to: 'ask' } }))).toMatchObject({ c: 'FORBIDDEN', reason: 'strictness-mode' });
+    const a = await asDevice(r, 'agent');
+    expect(Object.hasOwn(ok(await a.conn.call('status')), 'strictness')).toBe(false);
+    await h.conn.close();
+    await r.d.shutdown('signal');
+    const d2 = await startDaemon({ home: r.home, idleMs: 60_000, kernelSigner: r.kernel, rootAuthority: r.root, clock: () => r.now.t });
+    cleanups.push(() => d2.shutdown('signal'));
+    const h2 = await connectGnomon({ socketPath: d2.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.creds.get('human')! });
+    cleanups.push(() => h2.conn.close());
+    expect((ok(await h2.conn.call('status')) as { strictness: unknown }).strictness).toMatchObject({ repos: [{ level: 'L3' }] });
+    // loosening raises a strictness card (fresh presence); nothing changes until it is allowed
+    const loosen = ok(await h2.conn.call('log.append', { kind: 'request.strictness.set', payload: { repo: repoPath, to: 'L2' } }));
+    expect(loosen).toMatchObject({ pending: true, from: 'L3', to: 'L2' });
+    expect((ok(await h2.conn.call('status')) as { strictness: unknown }).strictness).toMatchObject({ repos: [{ level: 'L3', pendingTo: 'L2' }] });
   }, 60_000);
 
   it('userland kinds: ungranted for human/agent (grants are M1.3), a mod only its own modns (M1.11), voice only voice.* (Move 4); bad kinds are BAD_REQUEST', async () => {

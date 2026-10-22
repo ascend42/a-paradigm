@@ -119,7 +119,7 @@ import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesF
 import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, inputHash, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
-import { LocalLane, type LocalLaneOptions } from './local-session.js';
+import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle } from './local-session.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
@@ -130,6 +130,8 @@ import { manualHolds } from '../broker/run-mode.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import type { RunMode, VoiceSentBy } from '@a-company/gnomon-contracts';
 import { clampAllows, pieceGuidance, VoiceClampBook, withVoiceOrigin } from './voice-clamp.js';
+import type { LoopRunRef } from '../loops/registry.js';
+import { loopClampAllows, withLoopOrigin } from './loop-clamp.js';
 import { guidanceHashOf } from '../voice/table-talk.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -399,6 +401,12 @@ interface Session {
   modelUncertain: { from: string; to: string; baseline: string | null; permit: PermitV1 } | null;
   /** TD-2026-10-21-514 ^voice-origin-clamp: the outstanding voice-origin turns (created at the first send) */
   voiceClamp?: VoiceClampBook;
+  /**
+   * ^loop-origin-clamp (loops step 8): set for a session a loop opened (origin 'loop'). No supervisor (Claude) session
+   * is a loop session in 8.0 (loop judge/summarize sessions are LocalLane's, surface none); step 10's act sessions set
+   * it. While set, only the loop's own trust-card modeRefs auto-pass and every card carries the loop origin.
+   */
+  loopOrigin?: { loopId: string; runId: string; authoredBy: string; trustCard?: string };
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -689,7 +697,30 @@ export class SessionSupervisor {
     }
   }
 
+  /**
+   * Loops step 8 (docs/specs/gnomon-loops.md §3.4, §3.6): the ONE unattended open, and only through here. A trusted
+   * loop run's judge/summarize step opens a local session (origin 'loop') with the run reference the runner got from
+   * the registry; LocalLane.openLoop refuses anything else (FORBIDDEN) and never falls back to Claude. open() keeps
+   * its blanket refusal of every other unattended open (law 5).
+   */
+  async openLoop(ref: LoopRunRef, req: LoopOpenRequest): Promise<LoopSessionHandle> {
+    this.#refuseIfDraining('session.open');
+    this.#opening++;
+    try {
+      return await this.#local.openLoop(ref, req);
+    } finally {
+      this.#opening--;
+      this.#wake();
+    }
+  }
+
+  /** Is this a loop session (origin 'loop', LL5)? */
+  isLoopSession(hsid: unknown): boolean {
+    return this.#local.isLoopSession(hsid);
+  }
+
   async #open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string; model?: string }> {
+    // law 5: no unattended or non-human open here; a loop step's unattended local session is openLoop() alone
     if (req.principalClass !== 'human' || req.attended !== true) {
       throw refused('FORBIDDEN', 'M1.7 slice 1 opens attended, human-started sessions only (agent/session/unattended opens wait for the broker decision, law 5)', { principalClass: req.principalClass });
     }
@@ -1265,7 +1296,9 @@ export class SessionSupervisor {
     const mode = this.#modeTransition(s, repoKey);
     // TD-2026-10-21-514 ^voice-origin-clamp: while a voice-origin turn is outstanding only a read-only modeRef may auto-pass
     const clampBy = s.voiceClamp?.active() ?? null;
-    const mayAuto = (modeRef: string): boolean => clampBy === null || clampAllows(modeRef);
+    // ^loop-origin-clamp: a loop session's mode, read-only, rule and always passes go through loopClampAllows (default deny)
+    const loopBy = s.loopOrigin ?? null;
+    const mayAuto = (modeRef: string): boolean => (loopBy !== null ? loopClampAllows(modeRef, loopBy.trustCard) : clampBy === null || clampAllows(modeRef));
     if (mode === 'manual' && manualHolds(ev.toolName) && !s.planApproved) {
       // manual: writes and exec wait on an approved plan — no card for them until one is approved (§3.4)
       await this.#write(s, permissionDenyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
@@ -1342,7 +1375,9 @@ export class SessionSupervisor {
     }
     const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId, ...(clampBy !== null ? { clamp: 'voice' as const } : {}) };
     // the card says it was asked during a voice-sent turn (detail.origin 'voice', the kernel-composed line)
-    const shown = clampBy !== null ? withVoiceOrigin(plan, clampBy) : plan;
+    const voiced = clampBy !== null ? withVoiceOrigin(plan, clampBy) : plan;
+    // ^loop-origin-clamp: a loop session's card carries detail.origin 'loop' and "Raised by loop X (authored by Y)"
+    const shown = loopBy !== null ? withLoopOrigin(voiced, loopBy) : voiced;
     if (clampBy !== null) this.#o.logger?.component('#supervisor').info?.('voice clamp applied', { hsid: s.hsid, tool: ev.toolName, sentBy: clampBy, signal: '!voice-clamp-applied' });
     s.pending.set(requestId, entry);
     let cardId: string;

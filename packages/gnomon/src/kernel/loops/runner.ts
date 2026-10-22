@@ -18,9 +18,21 @@
  *     ≤ LOOP_CALL_DEPTH_MAX), then run the callee as a child run whose meter is chained to the caller's (a callee
  *     draws min(its own budget, the caller's remaining)). The callee's goal is `pass`, a budget stop `unsure`,
  *     anything else `fail`.
- *   - **model** nodes are not built yet (step 8): their verdict is `unavailable` and they take that edge.
+ *   - **model** nodes (step 8, model-node.ts): judge and summarize run as an unattended local session (origin
+ *     'loop', LocalLane.openLoop through the `model` port) opened with a registry run reference minted per attempt;
+ *     the verdict is the closed-enum JSON answer (else `unsure`); `unavailable` is retried 3 times with backoff, then
+ *     takes its edge (compiled default @pause, with a toast). Never Claude in 8.0. Each step's spawn permit carries
+ *     scope.loop = the root caller's key; the ledger folds its budget.usage tokens into the per-day counters, and the
+ *     run meter holds run.tokens. A loop with model nodes and no configured local model (or a profile naming no
+ *     configured endpoint) is refused at start.
+ *   - **Thrash** (§3.5, k=3): in a loop with model or write steps, three rounds in a row whose check evidence hashes
+ *     the same end the run `thrash` and write loop.paused{reason:'thrash'}; only a human resumes (fresh presence).
  *   - Act (model `role: act`) and write (`effect: write`) nodes are not built yet (step 10): a loop with one is
- *     refused at run start. Effective autonomy is the loop's own until strictness lands (step 9).
+ *     refused at run start.
+ *   - **Strictness** (step 9, #loop-strictness, strictness-cap.ts): the `strictness` port's repo cap folds into the
+ *     effective autonomy at run start, before EVERY node and on every `loop.node` row (Aegis M2). L3 or `manual`
+ *     refuses the start FORBIDDEN{strictness-paused} and pauses a running loop before its next node
+ *     (`loop.paused{reason:'strictness'}`); L1 and L2 cap the repo's concurrency (2 and 1).
  *
  * Terminals `@goal | @stop | @pause`; a missing edge goes to `@stop`. `@pause` writes `loop.paused` (a kernel pause:
  * resuming it takes fresh presence). Per-node `exit.maxVisits` / `exit.maxFailStreak` end the run `node-exit`.
@@ -46,10 +58,14 @@ import { LOOP_BUDGET_DEFAULTS, LOOP_CALL_DEPTH_MAX, type CompiledLoop, type Comp
 import type { RaiseInput } from '../broker/broker.js';
 import { LOOP_CHECK_BACKENDS } from '../sandbox/loop-check.js';
 import { RpcRefusal } from '../socket/rpc.js';
+import { createHash } from 'node:crypto';
 import { runCheck, type CheckExecInput, type CheckResult, type FilePin } from './check-exec.js';
 import { dayKeyOf, type LoopLedger } from './ledger.js';
-import type { LoopEntry, LoopRegistry } from './registry.js';
+import { resolveInputs, runModelStep, type LoopModelPort, type ModelStepResult, type NodeNote } from './model-node.js';
+import type { LoopEntry, LoopRegistry, LoopRunRef } from './registry.js';
+import { loopClampLine } from '../supervisor/loop-clamp.js';
 import { parseLoopTarget, type LoopAsker } from './trust.js';
+import { effectiveAutonomy, FAIL_SAFE_CAP, OPEN_CAP, type EffectiveAutonomy, type RepoCap } from './strictness-cap.js';
 
 /** Global caps and defaults (root-signed `~/.gnomon/config.yaml` `loops:` replaces these once it is read). */
 export interface LoopGlobalCaps {
@@ -63,13 +79,20 @@ export interface LoopGlobalCaps {
   dayComputeSec: number;
   /** a loop-choice card waits at most this long (then `timeout`) */
   choiceTtlMs: number;
+  /** model tokens per day, all loops (local) */
+  dayTokens: number;
+  /** a model node's `unavailable` retries and their backoff (ms) */
+  modelRetries: number;
+  modelBackoffMs: readonly number[];
+  /** thrash: this many rounds in a row with the same evidence hash pause the loop (§3.5, k=3) */
+  thrashRounds: number;
   /** budget fields a compiled loop lacks */
   budgets: LoopBudgets;
 }
-export const LOOP_GLOBAL_CAPS: Readonly<LoopGlobalCaps> = Object.freeze({ repo: 2, global: 4, dayRuns: 240, dayComputeSec: 6 * 3600, choiceTtlMs: 3600_000, budgets: LOOP_BUDGET_DEFAULTS });
+export const LOOP_GLOBAL_CAPS: Readonly<LoopGlobalCaps> = Object.freeze({ repo: 2, global: 4, dayRuns: 240, dayComputeSec: 6 * 3600, choiceTtlMs: 3600_000, dayTokens: 8_000_000, modelRetries: 3, modelBackoffMs: Object.freeze([2_000, 8_000, 30_000]), thrashRounds: 3, budgets: LOOP_BUDGET_DEFAULTS });
 /** evidence tails kept on the loop.node row (each) */
 export const LOOP_NODE_EVIDENCE_BYTES = 16 * 1024;
-export const MODEL_NODES_LATER = 'model nodes land in step 8 (local model nodes, LP5)';
+export const NO_LOCAL_MODEL = 'no local model is configured for this loop (the root-signed local config marks no endpoint loops: true, or none matches model.profile)';
 export const ACT_NODES_LATER = 'act and write nodes land in step 10 (scratch worktree, LP6a)';
 const KERNEL_PAUSES_NEED_PRESENCE = new Set(['kill-switch', 'thrash', 'strictness', 'budget', 'node-exit', 'unavailable', 'timeout']);
 
@@ -105,10 +128,14 @@ export interface LoopRunnerOptions {
   paradigmCli?: () => FilePin | null;
   /** a notify toast for the GUI (the loop.notified row is written either way) */
   toast?: (t: LoopToast) => void;
+  /** the local model lane (supervisor.openLoop); absent: a loop with model nodes is refused */
+  model?: LoopModelPort;
   caps?: Partial<LoopGlobalCaps>;
   clock?: () => number;
   platform?: string;
   diag?: (event: string, data: Record<string, unknown>) => void;
+  /** step 9 (#loop-strictness): the repo's cap {level, effective run mode}; absent ⇒ as declared; a throw ⇒ L3 */
+  strictness?: (repoKey: string) => RepoCap;
 }
 
 interface Active {
@@ -125,12 +152,14 @@ interface Active {
 /** A run's meter, chained to the caller's for a call (a callee draws min(own, caller's remaining)). */
 class Meter {
   computeMs = 0;
+  tokens = 0;
   readonly startMs: number;
   constructor(
     readonly wallMs: number,
     readonly computeLimitMs: number,
     readonly clock: () => number,
     readonly parent?: Meter,
+    readonly tokenLimit: number = Infinity,
   ) {
     this.startMs = clock();
   }
@@ -138,10 +167,18 @@ class Meter {
     this.computeMs += ms;
     this.parent?.add(ms);
   }
+  addTokens(n: number): void {
+    this.tokens += n;
+    this.parent?.addTokens(n);
+  }
   exceeded(): string | null {
     if (this.clock() - this.startMs >= this.wallMs) return `run.wallMin (${Math.round(this.wallMs / 60_000)} min)`;
     if (this.computeMs >= this.computeLimitMs) return `run.computeSec (${Math.round(this.computeLimitMs / 1000)} s)`;
+    if (this.tokens >= this.tokenLimit) return `run.tokens (${this.tokenLimit})`;
     return this.parent?.exceeded() ?? null;
+  }
+  remainingTokens(): number {
+    return Math.min(this.tokenLimit - this.tokens, this.parent ? this.parent.remainingTokens() : Infinity);
   }
   remainingMs(): number {
     const own = Math.min(this.wallMs - (this.clock() - this.startMs), this.computeLimitMs - this.computeMs);
@@ -161,6 +198,10 @@ interface WalkCtx {
   budgets: LoopBudgets;
   /** the caller's walk (a callee's); the root's key and day budget pay for the whole chain */
   parent?: WalkCtx;
+  /** what each node recorded on this run (model inputs read only these, never repo text) */
+  notes: Map<string, NodeNote>;
+  /** the trigger (model inputs read only its kernel-stamped fields) */
+  trigger: Record<string, unknown>;
 }
 
 interface NodeResult {
@@ -228,6 +269,19 @@ export class LoopRunner {
     return (this.#o.clock ?? Date.now)();
   }
 
+  // ── step 9 (#loop-strictness): the autonomy-check hook, re-read at start, at every node and at land ──
+  effective(entry: Pick<LoopEntry, 'repoKey' | 'compiled'>): EffectiveAutonomy {
+    let cap: RepoCap = OPEN_CAP;
+    if (this.#o.strictness) {
+      try {
+        cap = this.#o.strictness(entry.repoKey);
+      } catch {
+        cap = FAIL_SAFE_CAP;
+      }
+    }
+    return effectiveAutonomy({ autonomy: entry.compiled?.autonomy }, cap);
+  }
+
   /** Listen for run starts and ends, the kill switch and resumes (#loop-timers). Listeners run synchronously. */
   onEvent(fn: (e: LoopRunnerEvent) => void): () => void {
     this.#listeners.add(fn);
@@ -242,6 +296,37 @@ export class LoopRunner {
         this.#o.diag?.('loops.listener-failed', { event: e.type, why: err instanceof Error ? err.message.slice(0, 200) : 'listener failed' });
       }
     }
+  }
+
+  /** live run id → its loop key and the key of the walk's root (the run-reference minter vouches with these) */
+  readonly #runRoots = new Map<string, { key: string; rootKey: string; top: Active }>();
+  #minter: ReturnType<LoopRegistry['issueRunRefMinter']> | null = null;
+
+  /** Why a loop's step may not open a model session now (the kill switch, its repo's strictness), or null. */
+  #hold(key: string): string | null {
+    if (this.isHeld(key)) return 'held by the kill switch';
+    const e = this.#o.registry.entry(key);
+    if (e?.compiled && this.effective(e).paused) return 'paused by its repo\'s strictness';
+    return null;
+  }
+
+  /** The registry's minter, taken once at the first model step (Aegis step-8 #2: there is no public mint). */
+  #mint(key: string, p: { runId: string; nodeId: string; rootKey: string }): LoopRunRef | null {
+    this.#minter ??= this.#o.registry.issueRunRefMinter({
+      vouch: (k, q) => {
+        const r = this.#runRoots.get(q.runId);
+        if (!r || !this.#live.has(q.runId) || r.key !== k || r.rootKey !== q.rootKey) return 'not a live run of this loop with this root';
+        if (r.top.stopping || r.top.abort.signal.aborted) return 'the run is stopping';
+        return this.#hold(r.rootKey) ?? this.#hold(k);
+      },
+      hold: (k) => this.#hold(k),
+    });
+    return this.#minter.mint(key, p);
+  }
+
+  /** Test seam and step-10 entry: mint a step reference; refused (null) unless the runner vouches for the step. */
+  mintStepRef(key: string, p: { runId: string; nodeId: string; rootKey: string }): LoopRunRef | null {
+    return this.#mint(key, p);
   }
 
   /** Held by the kill switch (until this loop is resumed), or the kill switch is running now. */
@@ -283,8 +368,14 @@ export class LoopRunner {
     if (!entry || !entry.compiled || !entry.hash || !can.ok) throw new RpcRefusal('FORBIDDEN', 'loop-not-runnable', `loop ${key.split('/').pop()} cannot run: ${can.ok ? 'not found' : can.reason} (nothing runs until you trust it: gnomon loop trust)`, { state: can.ok ? 'missing' : can.reason });
     const later = unsupportedNodes(entry.compiled);
     if (later.length) throw new RpcRefusal('ENGINE', 'not-implemented', `${ACT_NODES_LATER}: ${later.join(', ')}`, { nodes: later, milestone: 'loops-step-10' });
+    const noModel = this.#modelRefusal(entry.compiled);
+    if (noModel) throw new RpcRefusal('ENGINE', 'no-local-model', `loop ${entry.loopId}: ${NO_LOCAL_MODEL} (${noModel})`, { why: noModel });
     const platform = this.#o.platform ?? process.platform;
     if (!LOOP_CHECK_BACKENDS[platform]) throw new RpcRefusal('ENGINE', 'sandbox-unavailable', `no loop-check sandbox on ${platform}: loops run on macOS until the Windows backend (W5)`, { platform });
+    // ── step 9 (#loop-strictness): L3 or manual runs nothing; L1/L2 cap the repo's concurrency ──
+    const eff = this.effective(entry);
+    if (eff.paused) throw new RpcRefusal('FORBIDDEN', 'strictness-paused', `loop ${entry.loopId} cannot run: its repo is at ${eff.level}${eff.mode === 'manual' ? ' in manual mode' : ''} (${eff.capReason})`, { gate: 'strictness', level: eff.level, mode: eff.mode });
+    const repoCap = Math.min(this.#caps.repo, eff.concurrency ?? Infinity);
     const budgets = effectiveBudgets(entry.compiled.budgets, this.#caps.budgets);
     const today = dayKeyOf(this.#now());
     const mine = this.#o.ledger.day(today, key);
@@ -293,8 +384,12 @@ export class LoopRunner {
     if (mine.computeMs >= budgets.day.computeSec * 1000) throw new RpcRefusal('ENGINE', 'budget', `loop ${entry.loopId} used its ${budgets.day.computeSec} compute seconds today (budgets.day.computeSec)`, { cap: 'day.computeSec' });
     if (all.runs >= this.#caps.dayRuns) throw new RpcRefusal('ENGINE', 'budget', `loops used the global ${this.#caps.dayRuns} runs today`, { cap: 'global.dayRuns' });
     if (all.computeMs >= this.#caps.dayComputeSec * 1000) throw new RpcRefusal('ENGINE', 'budget', `loops used the global ${this.#caps.dayComputeSec} compute seconds today`, { cap: 'global.dayComputeSec' });
+    if (entry.compiled.nodes.some((n) => n.type === 'model')) {
+      if (mine.tokens >= budgets.day.tokens) throw new RpcRefusal('ENGINE', 'budget', `loop ${entry.loopId} used its ${budgets.day.tokens} model tokens today (budgets.day.tokens)`, { cap: 'day.tokens' });
+      if (all.tokens >= this.#caps.dayTokens) throw new RpcRefusal('ENGINE', 'budget', `loops used the global ${this.#caps.dayTokens} model tokens today`, { cap: 'global.dayTokens' });
+    }
     const inRepo = [...this.#active.values()].filter((a) => a.repoKey === entry.repoKey).length;
-    if (inRepo >= this.#caps.repo || this.#active.size >= this.#caps.global) {
+    if (inRepo >= repoCap || this.#active.size >= this.#caps.global) {
       if (!this.#queue.some((q) => q.key === key)) this.#queue.push({ key, trigger });
       return { queued: true };
     }
@@ -310,6 +405,18 @@ export class LoopRunner {
       .finally(() => this.#after(a));
     this.#emit({ type: 'started', key });
     return { runId, done: a.done };
+  }
+
+  /** Why a loop's model nodes cannot run here (no lane, no endpoint or runner, a profile naming no endpoint), or null. */
+  #modelRefusal(c: CompiledLoop): string | null {
+    const models = c.nodes.filter((n): n is Extract<CompiledNode, { type: 'model' }> => n.type === 'model');
+    if (!models.length) return null;
+    if (!this.#o.model) return 'no local model lane';
+    const cfg = this.#o.model.configured();
+    if (!cfg.endpoints.length) return 'no local endpoint is marked loops: true in the root-signed local config';
+    if (!cfg.runner) return 'no gnomon-local runner pinned';
+    const missing = models.filter((n) => n.model.profile !== undefined && !cfg.endpoints.includes(n.model.profile)).map((n) => `${n.id}: profile ${n.model.profile}`);
+    return missing.length ? `no configured endpoint for ${missing.join(', ')}` : null;
   }
 
   #after(a: Active): void {
@@ -328,8 +435,8 @@ export class LoopRunner {
   }
 
   async #top(a: Active, entry: LoopEntry, budgets: LoopBudgets, trigger: Record<string, unknown>): Promise<LoopRunEnd> {
-    const meter = new Meter(budgets.run.wallMin * 60_000, budgets.run.computeSec * 1000, () => this.#now());
-    return this.#run({ entry, compiled: entry.compiled!, runId: a.runId, meter, depth: 0, abort: a.abort, top: a, budgets }, trigger);
+    const meter = new Meter(budgets.run.wallMin * 60_000, budgets.run.computeSec * 1000, () => this.#now(), undefined, budgets.run.tokens);
+    return this.#run({ entry, compiled: entry.compiled!, runId: a.runId, meter, depth: 0, abort: a.abort, top: a, budgets, notes: new Map(), trigger }, trigger);
   }
 
   /** Stop a loop's run in flight before its next step (untrust, delete); no row beyond the run's own end. */
@@ -349,10 +456,12 @@ export class LoopRunner {
     const { entry, runId } = ctx;
     const ids = { runId, loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey };
     this.#live.add(runId);
+    this.#runRoots.set(runId, { key: entry.key, rootKey: rootOf(ctx).entry.key, top: ctx.top });
     try {
       return await this.#runLive(ctx, ids, trigger, parentRunId);
     } finally {
       this.#live.delete(runId);
+      this.#runRoots.delete(runId);
     }
   }
 
@@ -372,6 +481,12 @@ export class LoopRunner {
     if (end.terminal === '@pause') {
       await this.#o.append('loop.paused', { loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, runId, reason: end.detail ?? 'node-exit', by: 'kernel' });
       ctx.top.rerun = false;
+    } else if (end.reason === 'thrash') {
+      // §3.5: a kernel safety pause; only a human resumes it, with fresh presence (resume-class)
+      await this.#o.append('loop.paused', { loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, runId, reason: 'thrash', by: 'kernel', ...(end.detail ? { detail: end.detail } : {}) });
+      ctx.top.rerun = false;
+      await this.#toast(ctx, undefined, `${entry.loopId}: paused, no progress in ${this.#caps.thrashRounds} rounds (resume it yourself)`);
+      toasted = true;
     } else if (end.reason === 'budget' && ctx.depth === 0) {
       // Aegis step 5 #5: a run-budget stop is a kernel pause; no rerun, and only a human resume (with presence) lifts it
       await this.#o.append('loop.paused', { loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, runId, reason: 'budget', by: 'kernel', ...(end.detail ? { cap: end.detail } : {}) });
@@ -402,6 +517,8 @@ export class LoopRunner {
       }
       if (e.hash?.contentHash !== c.entry.hash?.contentHash) return { reason: 'content-changed', ...(who ? { detail: `${who}changed` } : {}) };
     }
+    // ── step 9 (#loop-strictness): the repo rose to L3 or went manual mid-run ⇒ a kernel pause before this node ──
+    if (this.effective(ctx.entry).paused) return { reason: 'strictness', terminal: '@pause', detail: 'strictness' };
     const over = ctx.meter.exceeded();
     if (over) return { reason: 'budget', detail: over };
     const today = dayKeyOf(this.#now());
@@ -409,6 +526,10 @@ export class LoopRunner {
     const root = rootOf(ctx);
     if (this.#o.ledger.day(today, root.entry.key).computeMs >= root.budgets.day.computeSec * 1000) return { reason: 'budget', detail: `day.computeSec (${root.budgets.day.computeSec} s)` };
     if (this.#o.ledger.day(today).computeMs >= this.#caps.dayComputeSec * 1000) return { reason: 'budget', detail: `global dayComputeSec (${this.#caps.dayComputeSec} s)` };
+    if (ctx.compiled.nodes.some((n) => n.type === 'model')) {
+      if (this.#o.ledger.day(today, root.entry.key).tokens >= root.budgets.day.tokens) return { reason: 'budget', detail: `day.tokens (${root.budgets.day.tokens})` };
+      if (this.#o.ledger.day(today).tokens >= this.#caps.dayTokens) return { reason: 'budget', detail: `global dayTokens (${this.#caps.dayTokens})` };
+    }
     return null;
   }
 
@@ -422,12 +543,33 @@ export class LoopRunner {
     let round = 1;
     let at: string = compiled.start;
     let last: { nodeId?: string; verdict?: string; failed?: string } = {};
-    const closeRound = async (): Promise<void> => {
-      await this.#o.append('loop.round', { runId, loopId: entry.loopId, round, nodeVisits: roundVisits, escalations: 0 });
+    let lastEvidence: string | undefined;
+    // thrash (§3.5, k=3): the check evidence of each round, hashed; the same hash k rounds in a row is no progress
+    const thrashWatch = compiled.nodes.some((n) => n.type === 'model' || (n.type === 'check' && n.effect === 'write'));
+    let roundEvidence: string[] = [];
+    // Aegis step-8 low: the streak carries across runs of the same loop (folded from loop.round{evidenceHash}), so a
+    // continuous or scheduled loop that keeps failing the same way trips it too
+    const carried = thrashWatch ? this.#o.ledger.thrash(entry.key) : null;
+    let prevHash: string | null = carried?.hash ?? null;
+    let sameRounds = carried?.same ?? 0;
+    let thrash = false;
+    /** close the round; `judge`: a round that ended normally (a revisit, @stop, @pause) feeds the thrash streak */
+    const closeRound = async (judge = false): Promise<void> => {
+      let evidenceHash: string | undefined;
+      if (judge && thrashWatch && roundEvidence.length) {
+        evidenceHash = `sha256:${createHash('sha256').update(roundEvidence.join('\n')).digest('hex')}`;
+        sameRounds = evidenceHash === prevHash ? sameRounds + 1 : 1;
+        prevHash = evidenceHash;
+        thrash = sameRounds >= this.#caps.thrashRounds;
+      }
+      roundEvidence = [];
+      await this.#o.append('loop.round', { runId, loopId: entry.loopId, round, nodeVisits: roundVisits, escalations: 0, ...(evidenceHash ? { evidenceHash } : {}) });
     };
+    const thrashEnd = (): LoopRunEnd => ({ reason: 'thrash', detail: `the same check evidence ${this.#caps.thrashRounds} rounds in a row`, ...(last.verdict ? { lastVerdict: last.verdict } : {}) });
     for (;;) {
       if (at === '@goal' || at === '@stop' || at === '@pause') {
-        await closeRound();
+        await closeRound(at !== '@goal');
+        if (thrash) return thrashEnd();
         const pauseWhy = at === '@pause' ? (last.verdict === 'unavailable' ? 'unavailable' : last.verdict === 'timeout' ? 'timeout' : 'node-exit') : undefined;
         return { reason: at === '@goal' ? 'goal' : at === '@stop' ? 'stop' : 'paused', terminal: at, ...(pauseWhy ? { detail: pauseWhy } : {}), ...(last.verdict ? { lastVerdict: last.verdict } : {}) };
       }
@@ -438,7 +580,8 @@ export class LoopRunner {
       }
       if (seen.has(at)) {
         // the walk came back to a node: the round closes (budgets.run.rounds counts these)
-        await closeRound();
+        await closeRound(true);
+        if (thrash) return thrashEnd();
         round++;
         setRound(round);
         seen = new Set();
@@ -459,8 +602,14 @@ export class LoopRunner {
       seen.add(at);
       roundVisits++;
       const fields = { 'loop.id': entry.loopId, 'loop.title': compiled.title, 'run.id': runId, round, 'failed.node': last.failed, 'last.node': last.nodeId, 'last.outcome': last.verdict };
-      const r = await this.#node(ctx, node, visit, fields, toasted);
+      const r = await this.#node(ctx, node, visit, fields, toasted, { last: lastEvidence, failed: last.failed });
+      const eff = this.effective(entry); // step 9 (#loop-strictness): the row records the autonomy this node ran under
       const edgeKey = r.edge;
+      if (node.type === 'check' || node.type === 'model') {
+        ctx.notes.set(at, { type: node.type, verdict: r.verdict, ...(r.evidence ? { evidence: r.evidence } : {}), ...(typeof r.evidence?.reply === 'string' ? { text: r.evidence.reply } : {}) });
+        lastEvidence = at;
+      }
+      if (node.type === 'check') roundEvidence.push(`${at}\u0000${r.verdict}\u0000${JSON.stringify(r.evidence ?? {})}`);
       let next: string | null = r.forceNext ?? node.on[edgeKey] ?? '@stop';
       if (node.type === 'notify' && node.as === 'card' && !r.forceNext) {
         // Aegis step 5 #3, enforced here too (an old compiled file): timeout pauses, stop ends the run
@@ -471,9 +620,13 @@ export class LoopRunner {
       streak.set(at, s);
       const failExit = node.exit?.maxFailStreak !== undefined && s >= node.exit.maxFailStreak;
       if (r.aborted || failExit) next = null;
+      if (node.type === 'model' && r.verdict === 'unavailable' && next === '@pause' && !r.aborted) {
+        await this.#toast(ctx, at, `${entry.loopId}: paused, the local model is unavailable (${(r.detail ?? '').slice(0, 160)})`);
+        toasted();
+      }
       await this.#o.append('loop.node', {
         runId, loopId: entry.loopId, nodeId: at, type: node.type, visit, round, verdict: r.verdict, edge: edgeKey, next,
-        durationMs: r.durationMs, evidenceRef: `loop-evidence:${runId}/${at}/${visit}`, effectiveAutonomy: compiled.autonomy,
+        durationMs: r.durationMs, evidenceRef: `loop-evidence:${runId}/${at}/${visit}`, effectiveAutonomy: eff.autonomy, ...(eff.capReason ? { capReason: eff.capReason } : {}),
         ...(r.detail ? { detail: r.detail } : {}), ...(r.choice ? { choice: r.choice } : {}), ...(r.evidence ? { evidence: r.evidence } : {}), ...(r.extra ?? {}),
       });
       last = { nodeId: at, verdict: r.verdict === 'error' && edgeKey === 'timeout' ? 'timeout' : r.verdict, failed: r.verdict === 'fail' || r.verdict === 'error' ? at : last.failed };
@@ -490,7 +643,7 @@ export class LoopRunner {
     }
   }
 
-  async #node(ctx: WalkCtx, node: CompiledNode, visit: number, fields: Record<string, string | number | undefined>, toasted: () => void): Promise<NodeResult> {
+  async #node(ctx: WalkCtx, node: CompiledNode, visit: number, fields: Record<string, string | number | undefined>, toasted: () => void, refs: { last?: string | undefined; failed?: string | undefined }): Promise<NodeResult> {
     const { entry, runId } = ctx;
     switch (node.type) {
       case 'check': {
@@ -518,7 +671,7 @@ export class LoopRunner {
         return { verdict: res.verdict, edge: res.verdict, durationMs, ...(res.detail ? { detail: res.detail.slice(0, 300) } : {}), evidence, ...(aborted ? { aborted } : {}) };
       }
       case 'model':
-        return { verdict: 'unavailable', edge: 'unavailable', durationMs: 0, detail: MODEL_NODES_LATER };
+        return this.#model(ctx, node, fields, refs);
       case 'notify': {
         const text = renderNotifyText(node.text, fields, `${entry.loopId}: ${node.id}`);
         if (node.as === 'toast') {
@@ -536,16 +689,63 @@ export class LoopRunner {
         if (!callee?.compiled || !callee.hash || callee.hash.contentHash !== rc.contentHash) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee} changed while resolving` };
         const later = unsupportedNodes(callee.compiled);
         if (later.length) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee}: ${ACT_NODES_LATER}` };
+        const noModel = this.#modelRefusal(callee.compiled);
+        if (noModel) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee}: ${noModel}` };
         const cb = effectiveBudgets(callee.compiled.budgets, this.#caps.budgets);
         const childId = `${runId}-c${visit}${node.id.slice(0, 8)}`.slice(0, 64);
-        const meter = new Meter(cb.run.wallMin * 60_000, cb.run.computeSec * 1000, () => this.#now(), ctx.meter);
-        const end = await this.#run({ entry: callee, compiled: callee.compiled, runId: childId, meter, depth: ctx.depth + 1, abort: ctx.abort, top: ctx.top, budgets: cb, parent: ctx }, { type: 'call', runId, nodeId: node.id }, runId);
+        const meter = new Meter(cb.run.wallMin * 60_000, cb.run.computeSec * 1000, () => this.#now(), ctx.meter, cb.run.tokens);
+        const callTrigger = { type: 'call', runId, nodeId: node.id };
+        const end = await this.#run({ entry: callee, compiled: callee.compiled, runId: childId, meter, depth: ctx.depth + 1, abort: ctx.abort, top: ctx.top, budgets: cb, parent: ctx, notes: new Map(), trigger: callTrigger }, callTrigger, runId);
         const verdict = end.reason === 'goal' ? 'pass' : end.reason === 'budget' ? 'unsure' : 'fail';
         const aborted = !!ctx.top.stopping || ctx.abort.signal.aborted;
         // durationMs 0: the callee's compute is on its own run's rows (and already on this run's meter)
         return { verdict, edge: verdict, durationMs: 0, detail: `${node.callee} ended ${end.reason}`, extra: { calleeRunId: childId, calleeComputeMs: meter.computeMs }, ...(aborted ? { aborted } : {}) };
       }
     }
+  }
+
+  /** A judge or summarize step (model-node.ts): local only, the verdict from the closed enum, budgets charged. */
+  async #model(ctx: WalkCtx, node: Extract<CompiledNode, { type: 'model' }>, fields: Record<string, string | number | undefined>, refs: { last?: string | undefined; failed?: string | undefined }): Promise<NodeResult> {
+    const port = this.#o.model;
+    if (!port) return { verdict: 'unavailable', edge: 'unavailable', durationMs: 0, detail: NO_LOCAL_MODEL };
+    if (node.role === 'act') return { verdict: 'error', edge: 'error', durationMs: 0, detail: ACT_NODES_LATER };
+    const blocks = resolveInputs(node.inputs, { notes: ctx.notes, ...(refs.last ? { last: refs.last } : {}), ...(refs.failed ? { failed: refs.failed } : {}), trigger: ctx.trigger, fields });
+    const left = ctx.meter.remainingTokens();
+    if (left <= 0) return { verdict: 'unsure', edge: 'unsure', durationMs: 0, detail: 'run.tokens spent' };
+    // the reply cap per turn: the node's limit and the run's remaining tokens, halved so the one repair turn fits
+    const maxTokens = Math.max(16, Math.floor(Math.min(node.limits.tokens, left) / 2));
+    const rootKey = rootOf(ctx).entry.key;
+    const t0 = this.#now();
+    const res: ModelStepResult = await runModelStep({
+      port, node, blocks, fields, maxTokens, signal: ctx.abort.signal,
+      ref: () => this.#mint(ctx.entry.key, { runId: ctx.runId, nodeId: node.id, rootKey }),
+      release: (r) => this.#minter?.release(r),
+      remainingMs: () => ctx.meter.remainingMs(),
+      retries: this.#caps.modelRetries, backoffMs: this.#caps.modelBackoffMs,
+      ...(this.#o.diag ? { diag: this.#o.diag } : {}),
+    });
+    const durationMs = Math.max(0, Math.round(this.#now() - t0));
+    ctx.meter.add(durationMs);
+    ctx.meter.addTokens(res.tokens);
+    let verdict: string = res.verdict;
+    let detail = res.detail;
+    if ((verdict === 'pass' || verdict === 'fail') && res.tokens > node.limits.tokens) {
+      verdict = 'unsure';
+      detail = `limits.tokens (${node.limits.tokens}) exceeded: ${res.tokens}`;
+    }
+    // the model's free text is sensitive evidence (secret-scanned); the edge reads only the verdict
+    const evidence: Record<string, unknown> = {
+      inputs: res.receipt, attempts: res.attempts,
+      ...(res.reply ? { reply: res.reply.text, redactions: res.reply.redactions } : {}),
+      ...(res.summary !== undefined ? { summary: res.summary } : {}),
+    };
+    const extra: Record<string, unknown> = {
+      model: { asked: 'local', used: res.model ?? null, escalated: false, ...(res.endpoint ? { endpoint: res.endpoint } : {}) },
+      usage: { tokens: res.tokens }, role: node.role,
+      ...(res.permitId ? { permitId: res.permitId } : {}), ...(res.hsid ? { hsid: res.hsid } : {}),
+      ...(res.confidence !== undefined ? { confidence: res.confidence } : {}), ...(res.class !== undefined ? { class: res.class } : {}),
+    };
+    return { verdict, edge: verdict, durationMs, ...(detail ? { detail: detail.slice(0, 300) } : {}), evidence, extra, ...(res.aborted || ctx.abort.signal.aborted ? { aborted: true } : {}) };
   }
 
   async #toast(ctx: WalkCtx, nodeId: string | undefined, text: string): Promise<void> {
@@ -573,8 +773,9 @@ export class LoopRunner {
     try {
       await this.#o.broker.raise({
         kind: 'loop-choice', cardId, requestedBy: this.#o.kernelPrincipal, attended: false,
-        detail: { loopId: ctx.entry.loopId, scope: ctx.entry.scope, repoKey: ctx.entry.repoKey, repo: ctx.entry.repoRoot, runId: ctx.runId, nodeId: node.id, origin: 'loop' },
-        lines: [`Raised by loop ${ctx.entry.loopId} (run ${ctx.runId})`, text, 'Continue lets the loop go on (Touch ID); stop ends this run'],
+        detail: { loopId: ctx.entry.loopId, scope: ctx.entry.scope, repoKey: ctx.entry.repoKey, repo: ctx.entry.repoRoot, runId: ctx.runId, nodeId: node.id, origin: 'loop', authoredBy: 'file' },
+        // ^loop-origin-clamp: the kernel line names the loop and who authored it (§3.4)
+        lines: [loopClampLine(ctx.entry.loopId, 'file'), `Run ${ctx.runId}`, text, 'Continue lets the loop go on (Touch ID); stop ends this run'],
         decisions: choices as RaiseInput['decisions'], timeoutMs: ttl,
         effect: async (decision) => settle(decision),
       });

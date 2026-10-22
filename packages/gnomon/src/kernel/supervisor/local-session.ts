@@ -44,8 +44,18 @@
  *   child gets contextTarget (min(~8k, n_ctx)) for compaction;
  *   send{steer:true} with a turn in flight writes the steer line under that
  *   turn's permit (session.inject + turn.steer), idle it is a normal send.
- * DEFERRED (reported): unattended local automations (law 5; the scheduler
- * still refuses), the claude estimate on the card (null: no per-task
+ * LOOPS STEP 8 (docs/specs/gnomon-loops.md §3.4, §3.6): openLoop(ref, req) is
+ *   the ONE unattended open: a judge/summarize step of a trusted loop run,
+ *   reachable only with the registry's run reference (loopRunRefInfo; a
+ *   forged or released one is FORBIDDEN). session.open{attended:false,
+ *   origin:'loop', loopRun}; surface 'none' (no tools), one step per turn,
+ *   no kernel socket or session key in its env (LL5); a session.spawn permit
+ *   with scope.loop = the paying (root) loop; never a fallback card and
+ *   never Claude: no capable endpoint is LoopModelUnavailable (G-LCL-02,
+ *   G-LOOP-13). Its model text never reaches a turn.event row (hash only);
+ *   ask() hands it back to the runner, which stores it secret-scanned.
+ * DEFERRED (reported): unattended local automations other than loops (law 5;
+ * the scheduler still refuses them), the claude estimate on the card (null: no per-task
  * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
  * children), `gnomon probe local` as a CLI verb.
  */
@@ -74,6 +84,8 @@ import { classifyEndpoint } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
+import { loopRunRefInfo, type LoopRunRef, type LoopRunRefInfo } from '../loops/registry.js';
+import { LOOP_ORIGIN, LOOP_SESSION_ENV_DROPPED } from './loop-clamp.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 const EVENT_LINE_CAP = 64 * 1024;
@@ -121,7 +133,53 @@ export interface LocalLaneOptions {
   launchPlan?: (i: SessionLaunchInput) => SessionLaunchPlan;
 }
 
+/** openLoop's request (the runner's model step). */
+export interface LoopOpenRequest {
+  role: 'judge' | 'summarize';
+  /** a configured endpoint id (model.profile); absent: the first capable endpoint in root-signed config order */
+  profile?: string;
+  systemPrompt: string;
+  /** the reply cap per turn (the node's limits.tokens, under the lane's maxTokens) */
+  maxTokens: number;
+  /** the run aborts (pause, kill switch, daemon exit): the session is stopped */
+  signal?: AbortSignal;
+}
+
+/** One model turn of a loop session. `text` is the model's free text: DATA, never steering (LL2). */
+export interface LoopTurn {
+  text: string | null;
+  tokens: number;
+  stopReason: string | null;
+  error: string | null;
+}
+
+export interface LoopSessionHandle {
+  hsid: string;
+  model: string;
+  endpoint: string;
+  permitId: string;
+  /** send one kernel-composed turn (logged session.inject{origin:'kernel', channel:'loop'} first) and wait for its end */
+  ask(text: string, o: { timeoutMs: number; receipt?: ReadonlyArray<Record<string, unknown>> }): Promise<LoopTurn>;
+  close(): Promise<void>;
+}
+
+/** The local model cannot serve this loop step (endpoint down, incapable, none configured): the node's `unavailable`. */
+export class LoopModelUnavailable extends Error {
+  constructor(readonly why: string) {
+    super(`#local-runner: no capable local model for the loop step (${why})`);
+  }
+}
+
+interface LoopState {
+  info: Readonly<LoopRunRefInfo>;
+  reply: string | null;
+  tokens: number;
+  fatal: string | null;
+  pending: ((t: LoopTurn) => void) | null;
+}
+
 interface LocalSession {
+  loop?: LoopState;
   hsid: string;
   principalId: string;
   owner: string;
@@ -177,6 +235,17 @@ export function compactedPayloadOf(hsid: string, turn: string | null, ev: Return
   // Aegis r2: a closed reason enum; anything the runner says outside it is recorded as `unspecified`
   const reason: CompactionReason = (COMPACTION_REASONS as readonly string[]).includes(ev.reason ?? '') ? (ev.reason as CompactionReason) : 'unspecified';
   return { hsid, turn, reason, summaryHash: ev.summaryHash, tokensBefore: ev.tokensBefore, tokensAfter: ev.tokensAfter };
+}
+
+/** The assistant text of a message_end line (a loop session's reply), or null. */
+function loopReplyOf(line: string): string | null {
+  try {
+    const j = JSON.parse(line) as { type?: unknown; message?: { role?: unknown; content?: unknown } };
+    if (j.type !== 'message_end' || !j.message || j.message.role !== 'assistant') return null;
+    return typeof j.message.content === 'string' ? j.message.content : null;
+  } catch {
+    return null;
+  }
 }
 
 export class LocalLane {
@@ -279,6 +348,116 @@ export class LocalLane {
     return this.#spawn(req, declared, route.reason, route.tools ?? 'native', first!.ep, first!.v.base, caps!, cfg);
   }
 
+  /** Is this a loop session (origin 'loop')? Step 12's loop.request pre-gate refuses them (LL5). */
+  isLoopSession(hsid: unknown): boolean {
+    return typeof hsid === 'string' && this.#sessions.get(hsid)?.loop !== undefined;
+  }
+
+  /**
+   * Loops step 8: an UNATTENDED local session for one judge/summarize step of a trusted loop run. `ref` must be a
+   * live run reference the registry minted (its issued minter, held by the runner); anything else is FORBIDDEN before any row. No capable
+   * endpoint (none configured, the profile names none, the endpoint is down or incapable, no runner) throws
+   * LoopModelUnavailable: no spawn, no card, never Claude (8.0 is local only).
+   */
+  async openLoop(ref: LoopRunRef, req: LoopOpenRequest): Promise<LoopSessionHandle> {
+    const info = loopRunRefInfo(ref);
+    if (!info) throw refused('FORBIDDEN', 'an unattended open takes a trusted loop run reference from the runner', { reason: 'not-a-loop-run' });
+    const live = info.live();
+    if (!live.ok) throw refused('FORBIDDEN', `the loop cannot run: ${live.reason}`, { reason: 'loop-not-runnable' });
+    if (req.role !== 'judge' && req.role !== 'summarize') throw refused('BAD_REQUEST', 'only judge and summarize steps open here (act nodes land in step 10)', { reason: 'bad-params' });
+    if (req.signal?.aborted) throw new LoopModelUnavailable('aborted');
+    const cfg: LocalLaneConfig = this.#o.config ?? { endpoints: [] };
+    let eps;
+    try {
+      eps = validateLocalEndpoints(cfg, this.#forbiddenPorts());
+    } catch (err) {
+      throw new LoopModelUnavailable(err instanceof RefusedError ? `endpoint-refused:${err.refusal.code}` : 'endpoint-refused');
+    }
+    const loopRun = { loopId: info.loopId, runId: info.runId, nodeId: info.nodeId, scope: info.scope, repoKey: info.repoKey };
+    const unavailable = async (why: string): Promise<never> => {
+      await this.#o.log('session.refused', { hsid: null, code: 'model_unavailable', backend: 'local', origin: LOOP_ORIGIN, loopRun, why }).catch(() => undefined);
+      throw new LoopModelUnavailable(why);
+    };
+    // Aegis step-8: only endpoints the root-signed config marks `loops: true` serve unattended loop steps
+    const forLoops = eps.filter((e) => e.ep.loops === true);
+    const pool = req.profile !== undefined ? forLoops.filter((e) => e.ep.id === req.profile) : forLoops;
+    if (pool.length === 0) return unavailable(req.profile !== undefined ? 'no-profile' : 'no-loop-endpoint');
+    if (!cfg.runner) return unavailable('no-runner');
+    const floor = cfg.ctxFloor ?? DEFAULT_CTX_FLOOR;
+    let pick: { e: (typeof eps)[number]; caps: LocalCapabilities } | null = null;
+    let reason = 'no-endpoint';
+    for (const e of pool) {
+      // a failed probe is not cached for a loop step: each retry asks the endpoint again
+      if (this.#probes.get(e.ep.id)?.caps.ok !== true) this.#probes.delete(e.ep.id);
+      const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model }).catch(() => null);
+      // judge and summarize use no tools (surface 'none'): capable = reachable and n_ctx ≥ the floor
+      const k = capability(c, floor, true);
+      if (k.capable && c) {
+        pick = { e, caps: c };
+        break;
+      }
+      reason = k.reason;
+    }
+    if (!pick) return unavailable(reason);
+    const lane: LocalOpenRequest = { principal: this.#o.kernelPrincipal, principalClass: 'kernel', attended: false, cwd: info.repoRoot, backend: 'local', model: 'local', systemPrompt: req.systemPrompt };
+    const opened = await this.#spawn(lane, 'local', 'capable', 'text', pick.e.ep, pick.e.v.base, pick.caps, cfg, { info, maxTokens: req.maxTokens });
+    const s = this.#sessions.get(opened.hsid)!;
+    const close = async (): Promise<void> => {
+      if (s.state === 'exited') return;
+      s.state = 'stopping';
+      try {
+        s.child.stdin?.write(abortLine());
+        s.child.stdin?.end();
+      } catch {
+        /* the pipe may already be gone */
+      }
+      await this.#o.children.stop(s.child, 'loop.step-ended').catch(() => undefined);
+      await s.exited.catch(() => undefined);
+    };
+    // Aegis step-8 #1: a kill, brake, pause or untrust during the spawn gets no model turn
+    const after = info.live();
+    if (req.signal?.aborted || !after.ok) {
+      await close();
+      throw new LoopModelUnavailable(req.signal?.aborted ? 'aborted' : `not-runnable: ${after.ok ? '' : after.reason}`);
+    }
+    const onAbort = (): void => void close();
+    req.signal?.addEventListener('abort', onAbort, { once: true });
+    return {
+      hsid: s.hsid, model: s.model, endpoint: pick.e.ep.id, permitId: s.spawnPermit.permitId,
+      ask: (text, o) => this.#askLoop(s, text, o),
+      close: async () => {
+        req.signal?.removeEventListener('abort', onAbort);
+        await close();
+      },
+    };
+  }
+
+  async #askLoop(s: LocalSession, text: string, o: { timeoutMs: number; receipt?: ReadonlyArray<Record<string, unknown>> }): Promise<LoopTurn> {
+    const L = s.loop!;
+    if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) return { text: null, tokens: 0, stopReason: null, error: L.fatal ?? 'the loop session is not running' };
+    if (L.pending) throw refused('BAD_REQUEST', 'a loop session takes one turn at a time', { reason: 'bad-params' });
+    const permit = await this.#o.fuse.reserve({ principal: s.owner, principalClass: 'kernel', attended: false, kind: 'turn', backend: 'local', model: s.model, scope: { user: s.spawnPermit.scope.user, session: s.hsid, ...(s.spawnPermit.scope.repo ? { repo: s.spawnPermit.scope.repo } : {}), ...(s.spawnPermit.scope.loop ? { loop: s.spawnPermit.scope.loop } : {}) } });
+    s.turnPermits.push(permit.permitId);
+    const n = ++s.turns;
+    const contentHash = sha(text);
+    L.reply = null;
+    L.tokens = 0;
+    const done = new Promise<LoopTurn>((resolve) => (L.pending = resolve));
+    // L2: kernel-added bytes are logged before the child reads them; the receipt names every fenced data block
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', channel: 'loop', hash: contentHash, bytes: Buffer.byteLength(text, 'utf8'), ...(o.receipt ? { receipt: o.receipt.slice(0, 32) } : {}) }, { session: s.hsid });
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local', origin: LOOP_ORIGIN }, { session: s.hsid });
+    s.child.stdin?.write(promptLine(text));
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<LoopTurn>((resolve) => {
+      timer = setTimeout(() => resolve({ text: null, tokens: L.tokens, stopReason: null, error: 'timeout' }), Math.max(1, o.timeoutMs));
+      timer.unref?.();
+    });
+    const t = await Promise.race([done, timeout]);
+    clearTimeout(timer);
+    L.pending = null;
+    return t;
+  }
+
   async #fallback(req: LocalOpenRequest, declared: DeclaredModel, reason: string, openClaude: (r: LocalOpenRequest) => Promise<unknown>): Promise<never> {
     const detail = { task: 'session.open', cwd: req.cwd, declared, reason, estimate: { backend: 'claude-code', billing: 'subscription', usd: null } };
     let cardId: string | null = null;
@@ -311,7 +490,7 @@ export class LocalLane {
     if (Date.parse(permit.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the spawn permit expired', {});
   }
 
-  async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
+  async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig, loop?: { info: Readonly<LoopRunRefInfo>; maxTokens: number }): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
     const pin = cfg.runner!;
     // before any row: claude never runs under a local permit (source paths), then the MANDATORY pin (round 2, Aegis H1):
     // the tree is copied into <home>/runners/<treeSha256>/ and the COPY is hashed; node is verified; we exec the copy
@@ -366,16 +545,25 @@ export class LocalLane {
     const model = caps.model ?? ep.model;
     const repo = repoIdOf(cwdReal);
     const userHome = this.#userHome();
-    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: true }, { session: hsid });
-    await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools }, { session: hsid });
+    const loopRun = loop ? { loopId: loop.info.loopId, runId: loop.info.runId, nodeId: loop.info.nodeId, scope: loop.info.scope, repoKey: loop.info.repoKey } : null;
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: !loop, ...(loopRun ? { principalClass: req.principalClass, origin: LOOP_ORIGIN, loopRun } : {}) }, { session: hsid });
+    await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools: loop ? 'none' : tools }, { session: hsid });
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
-    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath });
+    const built = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath });
+    const env = built.env;
+    let envKeys = built.envKeys;
+    if (loop) {
+      // LL5: a loop session talks to nothing but its model endpoint (no socket, no session key: no loop.request)
+      for (const k of LOOP_SESSION_ENV_DROPPED) delete env[k];
+      envKeys = envKeys.filter((k) => !LOOP_SESSION_ENV_DROPPED.includes(k));
+    }
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
     let tracked = false;
     let live: LocalSession | null = null;
     try {
-      permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: true, kind: 'session.spawn', backend: 'local', model, scope: { user: req.principal, session: hsid, repo } });
+      // a loop step's permit: scope.loop is the PAYING loop (the root caller), scope.user the human who trusted it
+      permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: !loop, kind: 'session.spawn', backend: 'local', model, scope: { user: loop?.info.trustedBy ?? req.principal, session: hsid, repo, ...(loop ? { loop: loop.info.rootKey } : {}) }, ...(loop ? { limits: { tokens: loop.maxTokens } } : {}) });
       this.assertLocalPermit(permit, hsid);
       const row = claudeCodePlatform(this.#platform);
       const userClaudeDir = path.join(userHome, row?.userClaudeDir ?? '.claude');
@@ -404,9 +592,10 @@ export class LocalLane {
         roots: rootsReal,
         endpoint: { base, model, compat: ep.compat },
         capabilities: { tools: tools === 'native', nCtx: caps.nCtx },
-        surface: ep.surface ?? 'compact',
-        maxSteps: cfg.maxSteps ?? 16,
-        maxTokens: cfg.maxTokens ?? 1024,
+        // a loop judge/summarize step: no tools at all and one model step per turn (§3.4)
+        surface: loop ? 'none' : (ep.surface ?? 'compact'),
+        maxSteps: loop ? 1 : (cfg.maxSteps ?? 16),
+        maxTokens: loop ? Math.max(16, Math.min(loop.maxTokens, cfg.maxTokens ?? 1024)) : (cfg.maxTokens ?? 1024),
         // the compaction working target: ~8k, never above what the endpoint holds
         contextTarget: Math.min(cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET),
         forbiddenPorts: this.#forbiddenPorts(),
@@ -433,11 +622,11 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter() };
+      const s: LocalSession = { hsid, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
-      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId }, { session: hsid });
+      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : {}) }, { session: hsid });
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
       if (tracked && child) {
@@ -481,8 +670,9 @@ export class LocalLane {
     s.state = 'exited';
     for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
     s.turnPermits = [];
+    if (s.loop?.pending) s.loop.pending({ text: null, tokens: s.loop.tokens, stopReason: null, error: s.loop.fatal ?? 'the loop session exited' });
     this.#sessions.delete(s.hsid);
-    this.#history.push({ hsid: s.hsid, principalId: s.principalId, backend: 'local', model: s.model, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode });
+    this.#history.push({ hsid: s.hsid, principalId: s.principalId, backend: 'local', model: s.model, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode, ...(s.loop ? { origin: LOOP_ORIGIN } : {}) });
     while (this.#history.length > HISTORY_CAP) this.#history.shift();
   }
 
@@ -490,9 +680,15 @@ export class LocalLane {
     const ev = parseLocalLine(line);
     const bytes = Buffer.byteLength(line);
     // S2: every driver event is a turn.event before anything acts on it
-    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
+    // a loop session's model text is DATA the runner stores secret-scanned on its loop.node row: the turn.event
+    // row of a message line carries its hash and size only (never unscanned model text in the log)
+    const hashOnly = bytes > EVENT_LINE_CAP || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.type.startsWith('message')));
+    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(hashOnly ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
+    if (s.loop && ev.kind === 'message') s.loop.reply = loopReplyOf(line) ?? s.loop.reply;
+    if (s.loop && ev.kind === 'fatal') s.loop.fatal = ev.error ?? 'fatal';
     const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {
       if (source === 'turn.usage' && tokens <= 0) return;
+      if (s.loop) s.loop.tokens += Math.max(0, tokens);
       await this.#o.log(source, { hsid: s.hsid, usage: { tokens }, backend: 'local', ...extra }, { session: s.hsid });
       await this.#o.fuse.recordStreamUsage({ source, permitId: s.spawnPermit.permitId, hsid: s.hsid, tokens });
     };
@@ -527,6 +723,7 @@ export class LocalLane {
         const head = s.turnPermits.shift();
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
+        if (s.loop?.pending) s.loop.pending({ text: s.loop.reply, tokens: s.loop.tokens, stopReason: ev.stopReason, error: ev.error ?? (ev.stopReason === 'error' ? 'the model call failed' : null) });
         return;
       }
       case 'response':

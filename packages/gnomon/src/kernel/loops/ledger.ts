@@ -20,11 +20,19 @@
  *     where it went (`next`); `replayLoopRuns` reproduces each run's walk from the rows alone and reports a
  *     divergence when a row's `next` is not the node the following row ran, or the end does not match the terminal.
  *
+ * - **Model tokens (step 8).** A loop model step's spawn permit names the paying loop (`permit.grant{permit.scope.loop}`
+ *   = the root caller's key); the ledger maps each such permitId to that key and folds the permit's `budget.usage`
+ *   tokens into the same per-day counters (the key and '*'), so `day.tokens` and the global day cap survive a restart.
+ *
  * Only rows from the kernel principal (and, when given, a kernel key) are folded: a forged row changes nothing.
  */
 import type { LoopRow } from './registry.js';
 
 export const LOOP_RUN_KINDS: readonly string[] = Object.freeze(['loop.run.started', 'loop.node', 'loop.round', 'loop.notified', 'loop.run.ended']);
+/** The fuse rows a loop model step's tokens come from (folded by permitId; step 8). */
+export const LOOP_TOKEN_KINDS: readonly string[] = Object.freeze(['permit.grant', 'budget.usage']);
+/** permitIds remembered for the token fold (oldest dropped first). */
+export const LOOP_LEDGER_MAX_PERMITS = 4096;
 /** Runs kept in memory for status and the CLI (older ones stay in the log). */
 export const LOOP_LEDGER_MAX_RUNS = 500;
 /** loop.node records kept per run in memory (the log keeps all). */
@@ -89,7 +97,11 @@ export class LoopLedger {
   readonly #o: LoopLedgerOptions;
   readonly #runs = new Map<string, LoopRunRecord>();
   /** day → (key | '*') → counters; independent of the run records (never evicted with them) */
-  readonly #days = new Map<string, Map<string, { runs: number; computeMs: number }>>();
+  readonly #days = new Map<string, Map<string, { runs: number; computeMs: number; tokens: number }>>();
+  /** thrash (§3.5): per loop key, the last round's evidence hash and how many rounds in a row carried it */
+  readonly #thrash = new Map<string, { hash: string; same: number }>();
+  /** a loop step's permitId → the paying loop key (permit.grant scope.loop) */
+  readonly #permits = new Map<string, string>();
 
   constructor(o: LoopLedgerOptions) {
     this.#o = o;
@@ -100,11 +112,13 @@ export class LoopLedger {
   }
 
   observe(r: LoopRow): void {
-    if (!LOOP_RUN_KINDS.includes(r.kind)) return;
+    const tokenRow = LOOP_TOKEN_KINDS.includes(r.kind);
+    if (!LOOP_RUN_KINDS.includes(r.kind) && !tokenRow) return;
     if (r.principal !== this.#o.kernelPrincipal) return;
     if (this.#o.isKernelKey && (typeof r.keyId !== 'string' || !this.#o.isKernelKey(r.keyId))) return;
     const p = r.payload;
     if (!isObj(p)) return;
+    if (tokenRow) return this.#token(r.kind, p, r.at);
     const runId = str(p.runId);
     const loopId = str(p.loopId);
     if (!runId || !loopId) return;
@@ -152,13 +166,25 @@ export class LoopLedger {
       }
     } else if (r.kind === 'loop.round') {
       run.rounds = Math.max(run.rounds, num(p.round) ?? 0);
+      const h = str(p.evidenceHash);
+      if (h && run.key) {
+        const t = this.#thrash.get(run.key);
+        this.#thrash.set(run.key, { hash: h, same: t?.hash === h ? t.same + 1 : 1 });
+      }
     } else if (r.kind === 'loop.notified') {
       run.notified++;
     } else if (r.kind === 'loop.run.ended') {
       if (run.reason !== undefined) return;
       run.reason = str(p.reason) ?? 'error';
+      // a thrash end pauses the loop (only a human resumes it): the streak starts over after it
+      if (run.reason === 'thrash' && run.key) this.#thrash.delete(run.key);
       if (r.at) run.endedAt = r.at;
     }
+  }
+
+  /** The thrash streak a loop carries into its next run (null: none); a thrash end resets it. */
+  thrash(key: string): { hash: string; same: number } | null {
+    return this.#thrash.get(key) ?? null;
   }
 
   run(runId: string): LoopRunRecord | null {
@@ -176,7 +202,27 @@ export class LoopLedger {
     return out.slice(0, o.limit ?? 50);
   }
 
-  #bump(day: string, key: string | undefined, runs: number, computeMs: number): void {
+  #token(kind: string, p: Record<string, unknown>, at: string | undefined): void {
+    if (kind === 'permit.grant') {
+      const permit = isObj(p.permit) ? p.permit : null;
+      const scope = permit && isObj(permit.scope) ? permit.scope : null;
+      const loop = scope ? str(scope.loop) : undefined;
+      const id = permit ? str(permit.permitId) : undefined;
+      if (!id || !loop || permit!.backend !== 'local') return;
+      this.#permits.set(id, loop);
+      while (this.#permits.size > LOOP_LEDGER_MAX_PERMITS) this.#permits.delete(this.#permits.keys().next().value!);
+      return;
+    }
+    // budget.usage: a malformed or over-permit row counts nothing (as the fuse's own restore)
+    if (p.malformed === true || p.overPermit === true) return;
+    const id = str(p.permitId);
+    const key = id ? this.#permits.get(id) : undefined;
+    const tokens = num(p.tokens);
+    if (!key || tokens === undefined || tokens <= 0) return;
+    this.#bump(dayKeyOf(at), key, 0, 0, tokens);
+  }
+
+  #bump(day: string, key: string | undefined, runs: number, computeMs: number, tokens = 0): void {
     let m = this.#days.get(day);
     if (!m) {
       m = new Map();
@@ -185,17 +231,18 @@ export class LoopLedger {
       while (this.#days.size > LOOP_LEDGER_DAYS) this.#days.delete([...this.#days.keys()].sort()[0]!);
     }
     for (const k of key ? [key, '*'] : ['*']) {
-      const c = m.get(k) ?? { runs: 0, computeMs: 0 };
+      const c = m.get(k) ?? { runs: 0, computeMs: 0, tokens: 0 };
       c.runs += runs;
       c.computeMs += computeMs;
+      c.tokens += tokens;
       m.set(k, c);
     }
   }
 
-  /** Top-level runs started and compute charged on `day` to `key` (callee compute counts to its root caller), or all. */
-  day(day: string, key?: string): { runs: number; computeMs: number } {
+  /** Top-level runs started, compute and model tokens charged on `day` to `key` (a callee's go to its root caller), or all. */
+  day(day: string, key?: string): { runs: number; computeMs: number; tokens: number } {
     const c = this.#days.get(day)?.get(key ?? '*');
-    return { runs: c?.runs ?? 0, computeMs: c?.computeMs ?? 0 };
+    return { runs: c?.runs ?? 0, computeMs: c?.computeMs ?? 0, tokens: c?.tokens ?? 0 };
   }
 }
 

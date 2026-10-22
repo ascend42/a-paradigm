@@ -47,6 +47,45 @@ const KEBAB = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const REPO_KEY = /^sha256:[0-9a-f]{64}$/;
 const CONTENT_HASH = /^sha256:[0-9a-f]{64}$/;
 
+/** An opaque capability: a trusted loop's run step (the registry's run-reference minter). Its fields are labels; the facts are private. */
+export interface LoopRunRef {
+  readonly runId: string;
+  readonly loopId: string;
+  readonly nodeId: string;
+}
+
+/** What a live run reference stands for (loopRunRefInfo). */
+export interface LoopRunRefInfo {
+  key: string;
+  loopId: string;
+  scope: LoopScopeName;
+  repoKey: string;
+  repoRoot: string;
+  runId: string;
+  nodeId: string;
+  /** the loop whose budget pays (the root caller) */
+  rootKey: string;
+  contentHash: string;
+  /** who authored the definition (`file` until step 12's request rows) */
+  authoredBy: string;
+  /** the human who trusted it */
+  trustedBy?: string;
+  trustCard?: string;
+  released: boolean;
+  /** still trusted at the run's hash and runnable now? */
+  live(): { ok: true } | { ok: false; reason: string };
+}
+
+/** Module-private: only the issued minter mints; a forged object is not a key here. */
+const RUN_REFS = new WeakMap<object, LoopRunRefInfo>();
+
+/** The facts behind a run reference, or null for anything the registry did not mint or already released. */
+export function loopRunRefInfo(ref: unknown): Readonly<LoopRunRefInfo> | null {
+  if (typeof ref !== 'object' || ref === null) return null;
+  const i = RUN_REFS.get(ref);
+  return i && !i.released ? i : null;
+}
+
 export interface LoopRow {
   kind: string;
   principal?: string;
@@ -712,6 +751,57 @@ export class LoopRegistry {
     if (!e) return { ok: false, reason: 'no such loop' };
     const r = this.#resolve(e, nodeId);
     return r.ok ? { ok: true, calleeKey: r.callee.key, contentHash: r.contentHash } : r;
+  }
+
+  #minterIssued = false;
+
+  /**
+   * Step 8 (§3.4, §3.6; Aegis step-8 #2): the run-reference minter, issued ONCE to its holder (the runner, at its first
+   * model step); a second issue throws, so there is no public mint. The holder's `vouch(key, p)` must confirm the step
+   * (the run is live, the node is a judge or summarize node of that loop, rootKey is the walk's real root) and
+   * `extra()` adds its own holds (strictness pause, kill switch) to the reference's live() check. A reference is minted
+   * only for a loop TRUSTED at its current hash and runnable now; it is an opaque, frozen object whose facts live in a
+   * module-private table (loopRunRefInfo). The holder releases it when the step ends; a released reference opens
+   * nothing.
+   */
+  issueRunRefMinter(o: { vouch: (key: string, p: { runId: string; nodeId: string; rootKey: string }) => string | null; hold: (key: string) => string | null }): {
+    mint(key: string, p: { runId: string; nodeId: string; rootKey: string }): LoopRunRef | null;
+    release(ref: LoopRunRef): void;
+  } {
+    if (this.#minterIssued) throw new Error('#loop-registry: the run-reference minter was already issued');
+    this.#minterIssued = true;
+    return {
+      mint: (key, p) => (o.vouch(key, p) === null ? this.#mintRunRef(key, p, o.hold) : null),
+      release: (ref) => {
+        const i = RUN_REFS.get(ref);
+        if (i) i.released = true;
+      },
+    };
+  }
+
+  #mintRunRef(key: string, p: { runId: string; nodeId: string; rootKey: string }, hold: (key: string) => string | null): LoopRunRef | null {
+    const e = this.verify(key);
+    if (!e || !e.hash || !this.canRun(key).ok || hold(key) !== null) return null;
+    const node = e.compiled?.nodes.find((n) => n.id === p.nodeId);
+    if (!node || node.type !== 'model' || (node.role !== 'judge' && node.role !== 'summarize')) return null;
+    const contentHash = e.hash.contentHash;
+    const t = this.#folds.get(key)?.trusted;
+    const ref: LoopRunRef = Object.freeze({ runId: p.runId, loopId: e.loopId, nodeId: p.nodeId });
+    RUN_REFS.set(ref, {
+      key, loopId: e.loopId, scope: e.scope, repoKey: e.repoKey, repoRoot: e.repoRoot, runId: p.runId, nodeId: p.nodeId, rootKey: p.rootKey, contentHash,
+      // attribution comes from the kernel's request rows (step 12); until then a definition with no request row is `file` (§3.1)
+      authoredBy: 'file', ...(t?.by ? { trustedBy: t.by } : {}), ...(t?.cardId ? { trustCard: t.cardId } : {}),
+      released: false,
+      live: () => {
+        const now = this.verify(key);
+        const can = this.canRun(key);
+        if (!now || !can.ok) return { ok: false, reason: can.ok ? 'the loop is gone' : can.reason };
+        if (now.hash?.contentHash !== contentHash) return { ok: false, reason: 'the loop changed since the run started' };
+        const held = hold(key);
+        return held === null ? { ok: true } : { ok: false, reason: held };
+      },
+    });
+    return ref;
   }
 
   /** status.loops (the human class): every loop, the count waiting for trust, refused dirs. */

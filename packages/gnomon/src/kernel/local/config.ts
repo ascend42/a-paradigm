@@ -56,6 +56,8 @@ export interface LocalEndpointConfig {
   surface?: ToolSurface;
   /** opt this model into the text-tool fallback when the probe finds no native tool calls (§13.1) */
   textTools?: boolean;
+  /** loops step 8 (Aegis): unattended loop steps may use this endpoint (opt-in; absent ⇒ never for loops) */
+  loops?: boolean;
 }
 
 export interface LocalRunnerCommand {
@@ -144,12 +146,13 @@ export function parseLocalLaneConfig(raw: unknown): LocalLaneConfig | null {
   const endpoints: LocalEndpointConfig[] = [];
   const ids = new Set<string>();
   for (const e of raw.endpoints as unknown[]) {
-    if (!isObj(e) || !onlyKeys(e, ['id', 'base', 'model', 'compat', 'surface', 'textTools'])) return null;
+    if (!isObj(e) || !onlyKeys(e, ['id', 'base', 'model', 'compat', 'surface', 'textTools', 'loops'])) return null;
     if (!str(e.id, 64) || !ID_RE.test(e.id) || ids.has(e.id) || !str(e.base, 2048) || !str(e.model, 128) || !str(e.compat, 32)) return null;
     if (e.surface !== undefined && (typeof e.surface !== 'string' || !SURFACES.includes(e.surface))) return null;
     if (e.textTools !== undefined && typeof e.textTools !== 'boolean') return null;
+    if (e.loops !== undefined && typeof e.loops !== 'boolean') return null;
     ids.add(e.id);
-    endpoints.push({ id: e.id, base: e.base, model: e.model, compat: e.compat, ...(e.surface !== undefined ? { surface: e.surface as ToolSurface } : {}), ...(e.textTools !== undefined ? { textTools: e.textTools } : {}) });
+    endpoints.push({ id: e.id, base: e.base, model: e.model, compat: e.compat, ...(e.surface !== undefined ? { surface: e.surface as ToolSurface } : {}), ...(e.textTools !== undefined ? { textTools: e.textTools } : {}), ...(e.loops === true ? { loops: true } : {}) });
   }
   let runner: LocalRunnerPin | undefined;
   if (raw.runner !== undefined) {
