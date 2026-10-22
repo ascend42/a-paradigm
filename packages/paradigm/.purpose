@@ -365,6 +365,10 @@ components:
       INSTALLED app. It NEVER runs Gnomon on the user's Node and imports only node: built-ins and its sibling (never
       the Node 24 kernel). Off macOS, or when npm skipped the platform package, it prints one plain line ("Gnomon runs
       on macOS only in 8.0; Windows and Linux are planned") and exits 69; an install or verify refusal exits 77.
+      Gnomon 8.0 ships for Apple silicon Macs only (TD-2026-10-22-310): macArch reads the MAC's arch, not Node's (an
+      x64 Node under Rosetta, sysctl.proc_translated or hw.optional.arm64 = 1, still gets the arm64 app; when npm
+      skipped the arm64 package for that Node it says so), and a genuine Intel Mac gets "Gnomon 8.0 runs on Apple
+      silicon Macs; Intel support is planned." (UNSUPPORTED_INTEL) and exits 69.
       Aegis M3 medium 3: each resolved package is realpath'd and must sit under allowedRoots (paradigm's own
       node_modules, the node_modules it is hoisted into, or the monorepo's node_modules / packages in dev) with the
       expected package.json name, so a package planted higher in the path or reached through NODE_PATH is refused.
@@ -372,7 +376,7 @@ components:
       passes none (falsified statically). Plain JS outside tsup; ships via files: bin.
     type: bin
     file: bin/gnomon.js
-    related: ["#gnomon-app-installer", "#gnomon-npm-packaging", "#gnomon-darwin-arm64", "#gnomon-darwin-x64"]
+    related: ["#gnomon-app-installer", "#gnomon-npm-packaging", "#gnomon-darwin-arm64"]
     tests:
       - tests/gnomon-shim.test.ts
       - tests/gnomon-shim-install.test.ts

@@ -25,7 +25,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.resolve(PKG, '..', 'gnomon-mods');
 const DST = path.join(PKG, 'gnomon-mods');
-export const APP_ZIP_ARCHES = ['arm64', 'x64'];
+// the arches a publishable release must pin a Gnomon.app zip for: Apple silicon only in 8.0 (TD-2026-10-22-310). The
+// release-manifest:v1 contract still admits x64 (gnomon-contracts APP_ZIP_ARCHES) for when it returns.
+export const APP_ZIP_ARCHES = ['arm64'];
 
 /** Problems with `dist` as a publishable release build of `version` (empty = ok). Imports dist/index.js. */
 export async function releaseDistProblems(dist, version) {

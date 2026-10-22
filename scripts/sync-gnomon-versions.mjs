@@ -4,8 +4,8 @@
  *
  * Keep the published Gnomon packages in lockstep (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3). The source of truth is
  * packages/gnomon/package.json `version`; this script makes everything else follow it, exactly (no ranges):
- *   - packages/gnomon-darwin-{arm64,x64}/package.json `version`;
- *   - packages/gnomon/package.json `optionalDependencies` for both platform packages;
+ *   - packages/gnomon-darwin-arm64/package.json `version` (Apple silicon only in 8.0, TD-2026-10-22-310);
+ *   - packages/gnomon/package.json `optionalDependencies` for the platform package (and nothing else);
  *   - packages/paradigm/package.json `dependencies["@a-company/gnomon"]`.
  * It never bumps paradigm's own version (the 8.0.0 release bump is M5).
  *
@@ -18,7 +18,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const ARCHES = Object.freeze(['arm64', 'x64']);
+// Apple silicon only in 8.0 (TD-2026-10-22-310); x64 is not published.
+export const ARCHES = Object.freeze(['arm64']);
 export const platformPackageName = (arch) => `@a-company/gnomon-darwin-${arch}`;
 
 const files = (root) => ({
@@ -29,7 +30,8 @@ const files = (root) => ({
 const read = (f) => JSON.parse(readFileSync(f, 'utf8'));
 
 /**
- * Every lockstep violation under `root`: [{ file, field, have, want }]. Empty means in step.
+ * Every lockstep violation under `root`: [{ file, field, have, want }] (want undefined = must not be there). Empty means
+ * in step.
  */
 export function gnomonVersionDrift(root = REPO) {
   const f = files(root);
@@ -44,6 +46,12 @@ export function gnomonVersionDrift(root = REPO) {
     const opt = gnomon.optionalDependencies?.[platformPackageName(a)];
     if (opt !== want) drift.push({ file: f.gnomon, field: `optionalDependencies.${platformPackageName(a)}`, have: opt, want });
   }
+  // A platform package that is not shipped (x64 in 8.0) must not be named either: npm would try to fetch it.
+  for (const [name, have] of Object.entries(gnomon.optionalDependencies ?? {})) {
+    if (name.startsWith('@a-company/gnomon-darwin-') && !ARCHES.some((a) => platformPackageName(a) === name)) {
+      drift.push({ file: f.gnomon, field: `optionalDependencies.${name}`, have, want: undefined });
+    }
+  }
   const dep = read(f.paradigm).dependencies?.['@a-company/gnomon'];
   if (dep !== want) drift.push({ file: f.paradigm, field: 'dependencies.@a-company/gnomon', have: dep, want });
   return drift;
@@ -57,7 +65,8 @@ export function syncGnomonVersions(root = REPO) {
     if (!byFile.has(d.file)) byFile.set(d.file, read(d.file));
     const j = byFile.get(d.file);
     const [head, ...rest] = d.field.split('.');
-    if (rest.length === 0) j[head] = d.want;
+    if (d.want === undefined) delete j[head]?.[rest.join('.')]; // an unshipped platform package: drop it
+    else if (rest.length === 0) j[head] = d.want;
     else {
       j[head] ??= {};
       j[head][rest.join('.')] = d.want;
@@ -71,7 +80,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   const check = process.argv.includes('--check');
   try {
     const drift = check ? gnomonVersionDrift() : syncGnomonVersions();
-    for (const d of drift) process.stdout.write(`${check ? 'drift' : 'fixed'}  ${path.relative(REPO, d.file)}  ${d.field}: ${d.have ?? '(missing)'} -> ${d.want}\n`);
+    for (const d of drift) process.stdout.write(`${check ? 'drift' : 'fixed'}  ${path.relative(REPO, d.file)}  ${d.field}: ${d.have ?? '(missing)'} -> ${d.want ?? '(removed)'}\n`);
     if (drift.length === 0) process.stdout.write('gnomon versions are in lockstep\n');
     if (check && drift.length) process.exitCode = 1;
   } catch (e) {

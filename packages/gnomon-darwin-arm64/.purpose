@@ -5,6 +5,9 @@ description: >-
   T-2026-10-21-030). Public; os darwin, cpu arm64; an optional dependency of
   @a-company/gnomon at the exact same version (scripts/sync-gnomon-versions.mjs).
   Outside the root workspaces (os/cpu would fail npm install on the other arch).
+  The ONLY platform package in 8.0: Gnomon 8.0 ships for Apple silicon Macs only
+  (TD-2026-10-22-310); packages/gnomon-darwin-x64 was removed and returns when x64
+  can be built and verified on Intel hardware.
 
 components:
   gnomon-darwin-arm64:

@@ -15,7 +15,8 @@ import { PKG_ROOT } from './helpers.js';
 const REPO = path.resolve(PKG_ROOT, '..', '..');
 const rootPkg = JSON.parse(readFileSync(path.join(REPO, 'package.json'), 'utf8'));
 const version = JSON.parse(readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')).version as string;
-const MANUAL = ['@a-company/gnomon-darwin-arm64', '@a-company/gnomon-darwin-x64', '@a-company/gnomon'];
+// Apple silicon only in 8.0 (TD-2026-10-22-310): x64 is neither published nor checked on npm
+const MANUAL = ['@a-company/gnomon-darwin-arm64', '@a-company/gnomon'];
 
 describe('CI release excludes gnomon', () => {
   it('the root release script goes through the preflight, never a bare changeset publish', () => {
@@ -29,7 +30,7 @@ describe('CI release excludes gnomon', () => {
     expect(rootPkg.workspaces).toContain('!packages/gnomon-darwin-*');
   });
 
-  it('lists gnomon and both platform packages as manual-only, in publish order, at the repo version', () => {
+  it('lists gnomon and the arm64 platform package (no x64) as manual-only, in publish order, at the repo version', () => {
     const pkgs = release.manualOnlyPackages();
     expect(pkgs.map((p: { name: string }) => p.name)).toEqual(MANUAL);
     for (const p of pkgs) expect(p.version).toBe(version);
@@ -64,7 +65,7 @@ describe('CI release excludes gnomon', () => {
     expect(ran).toEqual([]);
   });
 
-  it('runs changeset publish only once all three are on npm (changesets then skips them as published)', () => {
+  it('runs changeset publish only once both are on npm (changesets then skips them as published)', () => {
     const ran: string[][] = [];
     const code = release.runRelease({ hasVersion: () => true, run: (cmd: string, args: string[]) => (ran.push([cmd, ...args]), 0), write: () => undefined });
     expect(code).toBe(0);
@@ -75,7 +76,7 @@ describe('CI release excludes gnomon', () => {
 });
 
 describe('founder publish order', () => {
-  it('gate, then arm64, x64, gnomon, then verify; paradigm only with --release', () => {
+  it('gate, then arm64, gnomon, then verify; paradigm only with --release (no x64 step)', () => {
     const steps = publishPlan({ hasVersion: () => false, release: true });
     expect(steps.map((s: { kind: string; name?: string }) => `${s.kind}${s.name ? ` ${s.name}` : ''}`)).toEqual([
       'gate',

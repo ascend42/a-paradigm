@@ -1,0 +1,25 @@
+id: TD-2026-10-22-310
+timestamp: '2026-10-22T07:09:09.069Z'
+title: Gnomon 8.0 ships for Apple silicon Macs only
+decision: >-
+  8.0 publishes only @a-company/gnomon-darwin-arm64. The x64 platform package is not published, and Intel Macs get a
+  plain refusal from `gnomon` ("Gnomon 8.0 runs on Apple silicon Macs"). x64 returns when it can be built and verified
+  on Intel hardware.
+rationale: >-
+  Founder: "for now let just have support for the apple silicon mac as i dont have a non one". x64 can't be verified
+  (the node entitlement under the hardened runtime and the sherpa x64 libs are unmeasured), and shipping an unverified
+  signed build breaks the zero-build promise.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+symbols_affected:
+  - '#gnomon-kernel'
+  - '#gnomon-wrapper'
+  - '#paradigm'
+status: active
+tags:
+  - gnomon
+  - '8.0'
+  - release
+  - distribution

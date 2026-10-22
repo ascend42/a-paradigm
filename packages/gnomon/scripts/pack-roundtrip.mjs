@@ -17,7 +17,8 @@
  *   6. signed verification (`codesign --verify --strict --deep`, `spctl -a -t exec`) runs ONLY when the app carries a
  *      real (non-ad-hoc) signature; otherwise it is skipped with a message saying so.
  *
- *   node packages/gnomon/scripts/pack-roundtrip.mjs [--arch arm64|x64] [--zip <file>] [--keep]
+ *   node packages/gnomon/scripts/pack-roundtrip.mjs [--arch arm64] [--zip <file>] [--keep]
+ *   (Apple silicon only in 8.0, TD-2026-10-22-310: arm64 is the one platform package; x64 is refused.)
  * Output: one JSON summary on stdout; exit 1 on any failed check. macOS only (ditto, codesign).
  */
 import { spawnSync } from 'node:child_process';
@@ -76,9 +77,9 @@ export function signatureKind(app) {
   return /Signature=adhoc/.test(r.stderr) ? 'adhoc' : /Authority=Developer ID Application/.test(r.stderr) ? 'developer-id' : 'adhoc';
 }
 
-export function packRoundTrip({ arch = process.arch, zip, keep = false } = {}) {
+export function packRoundTrip({ arch = 'arm64', zip, keep = false } = {}) {
   if (process.platform !== 'darwin') throw new Error('the pack round trip needs macOS (ditto, codesign)');
-  if (arch !== 'arm64' && arch !== 'x64') throw new Error(`--arch must be arm64 or x64 (have ${arch})`);
+  if (arch !== 'arm64') throw new Error(`--arch must be arm64: Gnomon 8.0 ships for Apple silicon Macs only (TD-2026-10-22-310) (have ${arch})`);
   const work = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'gnomon-pack-roundtrip-')));
   const problems = [];
   try {
@@ -179,7 +180,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     return i >= 0 ? argv[i + 1] : undefined;
   };
   try {
-    const r = packRoundTrip({ arch: v('--arch') ?? process.arch, zip: v('--zip'), keep: argv.includes('--keep') });
+    const r = packRoundTrip({ arch: v('--arch') ?? 'arm64', zip: v('--zip'), keep: argv.includes('--keep') });
     process.stdout.write(`${JSON.stringify(r, null, 2)}\n`);
     if (typeof r.signedChecks === 'string') process.stderr.write(`pack-roundtrip: ${r.signedChecks}\n`);
     if (!r.ok) process.exitCode = 1;

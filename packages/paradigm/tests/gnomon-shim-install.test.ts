@@ -18,7 +18,7 @@ import * as inst from '../bin/gnomon-app.js';
 const BIN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin');
 const REPO = path.resolve(BIN, '..', '..', '..');
 const darwin = process.platform === 'darwin';
-const ARCH = process.arch === 'x64' ? 'x64' : 'arm64';
+const ARCH = 'arm64'; // the one shipped arch in 8.0 (TD-2026-10-22-310)
 const UNSIGNED = inst.ALLOW_UNSIGNED_FOR_TESTS.verifyApp as (app: string) => void;
 
 const dirs: string[] = [];

@@ -10,14 +10,14 @@ components:
       - mcp-surface
       - v7.13.0
   release-publish:
-    description: '`npm run release` (CI release.yml via changesets/action). Preflight first: @a-company/gnomon-darwin-arm64, -x64 and @a-company/gnomon must already be on npm at the checkout''s version (npm view; registry errors fail closed), else it refuses before building or publishing and names `npm run publish:gnomon`. Then `changeset publish`, which skips them as already published, so CI never publishes gnomon and paradigm (exact @a-company/gnomon dependency) never ships before it. `--check` runs the preflight only. Node >= 20, node: built-ins only. Guarded by packages/gnomon/test/release-excludes-gnomon.test.ts.'
+    description: '`npm run release` (CI release.yml via changesets/action). Preflight first: @a-company/gnomon-darwin-arm64 and @a-company/gnomon must already be on npm (no x64: Gnomon 8.0 ships for Apple silicon Macs only, TD-2026-10-22-310) at the checkout''s version (npm view; registry errors fail closed), else it refuses before building or publishing and names `npm run publish:gnomon`. Then `changeset publish`, which skips them as already published, so CI never publishes gnomon and paradigm (exact @a-company/gnomon dependency) never ships before it. `--check` runs the preflight only. Node >= 20, node: built-ins only. Guarded by packages/gnomon/test/release-excludes-gnomon.test.ts.'
     type: utility
     file: release.mjs
     tags:
       - release
       - gnomon
   publish-gnomon:
-    description: '`npm run publish:gnomon`, the founder''s Mac-only publish in install order: gate-gnomon-publish.mjs, then @a-company/gnomon-darwin-arm64, -x64, then @a-company/gnomon (each skipped if already on npm, so re-runnable), then verifies all three are visible on npm; `--release` then runs `npm run release` for paradigm; `--dry-run` runs the gate and prints the rest. Guarded by packages/gnomon/test/release-excludes-gnomon.test.ts.'
+    description: '`npm run publish:gnomon`, the founder''s Mac-only publish in install order: gate-gnomon-publish.mjs, then @a-company/gnomon-darwin-arm64, then @a-company/gnomon (each skipped if already on npm, so re-runnable), then verifies both are visible on npm (Apple silicon only in 8.0, TD-2026-10-22-310: x64 is not published); `--release` then runs `npm run release` for paradigm; `--dry-run` runs the gate and prints the rest. Guarded by packages/gnomon/test/release-excludes-gnomon.test.ts.'
     type: utility
     file: publish-gnomon.mjs
     tags:

@@ -3,7 +3,7 @@
   "note": "sha256 per built helper executable; written by scripts/build-darwin.mjs. ADVISORY: the kernel does not read this file; a release kernel pins the helper sha256 from its release manifest (packages/gnomon/scripts/write-release-manifest.mjs, G-HLP-01) on top of the code-signing requirement and the version floor. A timestamped signature changes the sha on every build.",
   "binaries": {
     "bin/darwin/GnomonHelper.app/Contents/MacOS/gnomon-helper": {
-      "sha256": "4aca51651375ea1880b1d87dc48d5f503aa04788e067d12dade7c73f419d8720",
+      "sha256": "26b72f044ff7cf98f4320d166d1286154ee0103ed34930c96a548450ebf6a572",
       "version": "1.8.0",
       "signed": true,
       "identity": "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",

@@ -26,7 +26,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const ARCHES = Object.freeze(['arm64', 'x64']);
+// Apple silicon only in 8.0 (TD-2026-10-22-310); x64 is not published.
+export const ARCHES = Object.freeze(['arm64']);
 
 const readPkg = (root, dir) => JSON.parse(readFileSync(path.join(root, 'packages', dir, 'package.json'), 'utf8'));
 

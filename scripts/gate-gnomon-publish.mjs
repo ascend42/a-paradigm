@@ -6,7 +6,7 @@
  * plain command (not an npm lifecycle hook: `--ignore-scripts` would skip one), and publishes nothing unless every
  * check passes:
  *   1. lockstep: scripts/sync-gnomon-versions.mjs finds no drift;
- *   2. each platform package (packages/gnomon-darwin-{arm64,x64}): exactly its files, no scripts, a Gnomon.app.zip that
+ *   2. each platform package (packages/gnomon-darwin-arm64; Apple silicon only in 8.0): exactly its files, no scripts, a Gnomon.app.zip that
  *      unpacks (ditto -x -k, into a fresh temp dir) to a Gnomon.app passing
  *        codesign --verify --deep --strict -R=<the wrapper requirement: Developer ID, team OU SW4BMQ8PNL>,
  *        xcrun stapler validate, and spctl -a -t exec -vv;
@@ -23,7 +23,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gnomonVersionDrift, REPO } from './sync-gnomon-versions.mjs';
 
-export const ARCHES = Object.freeze(['arm64', 'x64']);
+// Apple silicon only in 8.0 (TD-2026-10-22-310); x64 is not published.
+export const ARCHES = Object.freeze(['arm64']);
 export const PLATFORM_FILES = Object.freeze(['index.js', 'Gnomon.app.zip', 'Gnomon.app.zip.sha256']);
 export const TEAM = 'SW4BMQ8PNL';
 
@@ -85,7 +86,7 @@ export async function gnomonDistProblems(root) {
 
 /** Every reason not to publish (empty = publishable). */
 export async function gateProblems(root = REPO) {
-  const problems = gnomonVersionDrift(root).map((d) => `lockstep: ${path.relative(root, d.file)} ${d.field} is ${d.have ?? '(missing)'}, want ${d.want}`);
+  const problems = gnomonVersionDrift(root).map((d) => `lockstep: ${path.relative(root, d.file)} ${d.field} is ${d.have ?? '(missing)'}, want ${d.want ?? '(absent)'}`);
   const requirement = await appRequirement();
   for (const arch of ARCHES) problems.push(...platformPackageProblems(path.join(root, 'packages', `gnomon-darwin-${arch}`), arch, requirement));
   problems.push(...(await gnomonDistProblems(root)));

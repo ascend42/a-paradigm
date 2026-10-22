@@ -5,8 +5,9 @@
  * and bundled dependencies would also reach the kernel process at runtime, so
  * they are refused too.
  *
- * 8.0 M3 (T-2026-10-21-030, TD-2026-10-21-758): the ONE allowed optional dependency set is the two darwin platform
- * packages, at exactly the kernel's version. They hold only a zipped Gnomon.app (plus a tiny index.js exporting its
+ * 8.0 M3 (T-2026-10-21-030, TD-2026-10-21-758): the ONE allowed optional dependency is the darwin platform
+ * package, at exactly the kernel's version: @a-company/gnomon-darwin-arm64 only, since Gnomon 8.0 ships for Apple
+ * silicon Macs only (TD-2026-10-22-310). They hold only a zipped Gnomon.app (plus a tiny index.js exporting its
  * path); the kernel never imports them (the G-KRN-02 fence and dist scan still allow only node:* and relative
  * imports), so no third-party code reaches the kernel process.
  */
@@ -24,10 +25,9 @@ describe('G-SEC-01 kernel has zero runtime deps', () => {
     expect(Object.hasOwn(pkg, 'dependencies')).toBe(false);
   });
 
-  it('optionalDependencies are exactly the darwin platform packages, pinned to this version', () => {
+  it('optionalDependencies are exactly the arm64 darwin platform package, pinned to this version (no x64 in 8.0)', () => {
     expect(pkg.optionalDependencies).toEqual({
       '@a-company/gnomon-darwin-arm64': pkg.version,
-      '@a-company/gnomon-darwin-x64': pkg.version,
     });
   });
 
@@ -56,7 +56,7 @@ describe('G-SEC-01 kernel has zero runtime deps', () => {
  * and `files` exactly index.js, the zip and its sha256.
  */
 describe('G-SEC-01 darwin platform packages', () => {
-  const ARCHES = ['arm64', 'x64'] as const;
+  const ARCHES = ['arm64'] as const; // Apple silicon only in 8.0 (TD-2026-10-22-310)
   const dirOf = (arch: string) => path.join(PKG_ROOT, '..', `gnomon-darwin-${arch}`);
   const manifestOf = (arch: string) => JSON.parse(readFileSync(path.join(dirOf(arch), 'package.json'), 'utf8')) as Record<string, unknown>;
 

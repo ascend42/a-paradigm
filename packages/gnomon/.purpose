@@ -942,7 +942,9 @@ components:
     description: >-
       #release-darwin (T-2026-10-21-029, TD-2026-10-21-758; 8.0 M2) —
       scripts/release-darwin.mjs builds ONE relocatable Gnomon.app per arch on
-      the founder's Mac (host arch only; another arch is refused): helper and
+      the founder's Mac (host arch only; another arch is refused; Gnomon 8.0
+      ships for Apple silicon Macs only, TD-2026-10-22-310, so --arch x64 is
+      refused with X64_REFUSED unless --experimental-x64): helper and
       voice-io (their own signed builds), build:gnomon + build:release (#release-pins
       compiled in), the official Node 24 tarball from nodejs.org REFUSED unless it
       hashes to packages/gnomon-wrapper/bundled-node.lock.json (never which node),
@@ -999,10 +1001,16 @@ components:
       findFirstPartyRoot resolves them beside an installed kernel with their
       pinned packageHash; postpack removes the copy. gnomon-local, mod-sdk and
       gui are not runtime imports and do not ship. optionalDependencies are
-      exactly @a-company/gnomon-darwin-{arm64,x64} at this version (the one
-      G-SEC-01 exception: zip-only packages the kernel never imports).
+      exactly @a-company/gnomon-darwin-arm64 at this version (the one
+      G-SEC-01 exception: a zip-only package the kernel never imports).
+      Apple silicon only in 8.0 (TD-2026-10-22-310, "Gnomon 8.0 ships for
+      Apple silicon Macs only"): there is no x64 platform package; the
+      lockstep flags any other gnomon-darwin-* optional dependency and the
+      sync removes it, the publish gate, the release preflight, prepack and
+      seal-npm-release cover arm64 only, and release-darwin refuses --arch
+      x64 without --experimental-x64 (the x64 path is kept, unpublished).
       Lockstep: scripts/sync-gnomon-versions.mjs (repo root; --check for CI)
-      makes both platform package versions, these optional deps and
+      makes the platform package version, this optional dep and
       @a-company/paradigm's exact dependency follow this package's version;
       test/version-lockstep.test.ts fails on drift. The platform packages are
       excluded from the root workspaces ("!packages/gnomon-darwin-*"): their
@@ -1023,11 +1031,11 @@ components:
       dir, passes codesign --verify --deep --strict -R (the wrapper
       requirement, team OU SW4BMQ8PNL), xcrun stapler validate and spctl -a -t
       exec; gnomon's dist is a RELEASE build of this version whose compiled
-      appZips equal both zips. prepack refuses a non-release dist too.
+      appZips equal the arm64 zip. prepack refuses a non-release dist too.
       Release order (scripts/publish-gnomon.mjs, #publish-gnomon): gate, then
-      arm64, x64, then gnomon, verified on npm, before paradigm. CI never
+      arm64, then gnomon, verified on npm, before paradigm. CI never
       publishes them: `npm run release` (scripts/release.mjs, #release-publish)
-      refuses unless all three are already on npm at this version, so
+      refuses unless both are already on npm at this version, so
       changeset publish skips them and paradigm cannot ship first
       (test/release-excludes-gnomon.test.ts).
       release-darwin's `signed` now means Developer ID + notarized + stapled
@@ -1035,7 +1043,8 @@ components:
       else without --allow-unsigned-for-tests. (high 2) each zip's sha256 is
       COMPILED into the published gnomon: scripts/seal-npm-release.mjs runs
       build-release.mjs with write-release-manifest --app-zip <arch>=<zip> for
-      both platform zips (release-manifest:v1 appZips); src/kernel/lifecycle/
+      the arm64 platform zip (release-manifest:v1 appZips; the contract
+      still admits x64 for when it returns); src/kernel/lifecycle/
       app-zip.ts verifyAppZip checks a zip against that pin (dev ⇒ refused
       `dev`, no entry ⇒ `unpinned`, mismatch ⇒ `checksum`) and never reads the
       shipped .sha256; platformPackageZip realpaths the resolved package and
@@ -1049,7 +1058,7 @@ components:
     path: scripts/prepack.mjs
     type: script
     tags: [release, distribution, npm, gnomon]
-    related: ["#release-darwin", "#gnomon-darwin-arm64", "#gnomon-darwin-x64", "#gnomon-shim", "#mods-admin"]
+    related: ["#release-darwin", "#gnomon-darwin-arm64", "#gnomon-shim", "#mods-admin"]
     tests:
       - test/version-lockstep.test.ts
       - test/pack-roundtrip.test.ts

@@ -4,7 +4,8 @@
 // 8.0 M4). Node >= 20 syntax and node: built-ins ONLY: this file runs on whatever Node the user has, so it never
 // imports @a-company/gnomon (a Node 24 kernel). Gnomon itself only ever runs on the app's bundled Node.
 //
-//   1. pin: the sha256 of this arch's Gnomon.app.zip is read from @a-company/gnomon's RELEASE build stamp
+//   1. pin: the sha256 of this Mac's arch's Gnomon.app.zip (the shim passes macArch(), so arm64 under Rosetta too; only
+//      arm64 ships in 8.0, TD-2026-10-22-310, so an x64 pin is `unpinned`) is read from @a-company/gnomon's RELEASE build stamp
 //      (dist/build-id.json `release.appZips`, written from the same manifest the kernel compiles in by
 //      scripts/build-release.mjs). Never the .sha256 file beside the zip in the platform package: a swapped platform
 //      package cannot swap gnomon's stamp. A dev build (no release) is refused.

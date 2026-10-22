@@ -158,7 +158,7 @@ describe('#release-darwin --dry-run --unsigned', () => {
   }, 120_000);
 
   it('--package-dir refuses an unsigned or dry-run build unless --allow-unsigned-for-tests (Aegis M3 high 1)', () => {
-    const pkgDir = path.join(rel.PACKAGES, `gnomon-darwin-${process.arch === 'x64' ? 'x64' : 'arm64'}`);
+    const pkgDir = path.join(rel.PACKAGES, 'gnomon-darwin-arm64'); // the one shipped platform package (TD-2026-10-22-310)
     const refused = spawnSync(process.execPath, [SCRIPT, '--dry-run', '--unsigned', '--zip', '--out', tmp(), '--package-dir', pkgDir], { encoding: 'utf8', timeout: 60_000 });
     expect(refused.status).toBe(1);
     expect(refused.stderr).toMatch(/--package-dir takes only a signed, notarized, stapled release/);
@@ -176,9 +176,18 @@ describe('#release-darwin --dry-run --unsigned', () => {
     expect(existsSync(s.packaged.zip)).toBe(true);
   }, 180_000);
 
+  it('refuses --arch x64 in 8.0 (Apple silicon only, TD-2026-10-22-310) unless --experimental-x64, before building anything', () => {
+    for (const extra of [[], ['--dry-run']]) {
+      const r = spawnSync(process.execPath, [SCRIPT, '--unsigned', '--arch', 'x64', '--out', tmp(), ...extra], { encoding: 'utf8', timeout: 30_000 });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(rel.X64_REFUSED);
+    }
+    expect(rel.X64_REFUSED).toMatch(/^Gnomon 8\.0 runs on Apple silicon Macs; Intel support is planned\./);
+  });
+
   it('refuses another arch than the host outside --dry-run, before building anything', () => {
     const other = process.arch === 'arm64' ? 'x64' : 'arm64';
-    const r = spawnSync(process.execPath, [SCRIPT, '--unsigned', '--arch', other, '--out', tmp()], { encoding: 'utf8', timeout: 30_000 });
+    const r = spawnSync(process.execPath, [SCRIPT, '--unsigned', '--experimental-x64', '--arch', other, '--out', tmp()], { encoding: 'utf8', timeout: 30_000 });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(new RegExp(`--arch ${other} on a ${process.arch} Mac|built on macOS`));
   });

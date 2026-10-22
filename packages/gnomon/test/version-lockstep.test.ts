@@ -2,7 +2,7 @@
  * #gnomon-npm-packaging (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3): the published Gnomon packages stay in
  * lockstep (scripts/sync-gnomon-versions.mjs), and the published manifests carry nothing unpublished.
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,18 +12,18 @@ import { PKG_ROOT } from './helpers.js';
 
 const REPO = path.resolve(PKG_ROOT, '..', '..');
 const read = (rel: string): Record<string, any> => JSON.parse(readFileSync(path.join(REPO, rel), 'utf8'));
-const ARCHES = ['arm64', 'x64'] as const;
+const ARCHES = ['arm64'] as const; // Apple silicon only in 8.0 (TD-2026-10-22-310)
 
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-/** A copy of just the four package.json files the lockstep covers. */
+/** A copy of just the three package.json files the lockstep covers. */
 function fixtureRepo(): string {
   const d = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'gnomon-lockstep-')));
   dirs.push(d);
-  for (const p of ['gnomon', 'paradigm', 'gnomon-darwin-arm64', 'gnomon-darwin-x64']) {
+  for (const p of ['gnomon', 'paradigm', 'gnomon-darwin-arm64']) {
     mkdirSync(path.join(d, 'packages', p), { recursive: true });
     cpSync(path.join(REPO, 'packages', p, 'package.json'), path.join(d, 'packages', p, 'package.json'));
   }
@@ -43,7 +43,7 @@ describe('gnomon version lockstep', () => {
       f(j);
       writeFileSync(file, JSON.stringify(j, null, 2));
     };
-    edit('gnomon-darwin-x64', (j) => (j.version = '7.9.9'));
+    edit('gnomon-darwin-arm64', (j) => (j.version = '7.9.9'));
     edit('gnomon', (j) => (j.optionalDependencies['@a-company/gnomon-darwin-arm64'] = '^8.0.0'));
     edit('paradigm', (j) => delete j.dependencies['@a-company/gnomon']);
     const drift = sync.gnomonVersionDrift(d).map((x: { field: string }) => x.field).sort();
@@ -52,6 +52,25 @@ describe('gnomon version lockstep', () => {
     expect(sync.gnomonVersionDrift(d)).toEqual([]);
     const want = read('packages/gnomon/package.json').version;
     expect(JSON.parse(readFileSync(path.join(d, 'packages', 'paradigm', 'package.json'), 'utf8')).dependencies['@a-company/gnomon']).toBe(want);
+  });
+});
+
+describe('Apple silicon only in 8.0 (TD-2026-10-22-310)', () => {
+  it('the lockstep covers arm64 only, and there is no x64 platform package in the repo', () => {
+    expect(sync.ARCHES).toEqual(['arm64']);
+    expect(existsSync(path.join(REPO, 'packages', 'gnomon-darwin-x64'))).toBe(false);
+  });
+
+  it('an x64 optional dependency is drift, and the sync removes it', () => {
+    const d = fixtureRepo();
+    const file = path.join(d, 'packages', 'gnomon', 'package.json');
+    const j = JSON.parse(readFileSync(file, 'utf8'));
+    j.optionalDependencies['@a-company/gnomon-darwin-x64'] = j.version;
+    writeFileSync(file, JSON.stringify(j, null, 2));
+    expect(sync.gnomonVersionDrift(d)).toEqual([{ file, field: 'optionalDependencies.@a-company/gnomon-darwin-x64', have: j.version, want: undefined }]);
+    sync.syncGnomonVersions(d);
+    expect(JSON.parse(readFileSync(file, 'utf8')).optionalDependencies).toEqual({ '@a-company/gnomon-darwin-arm64': j.version });
+    expect(sync.gnomonVersionDrift(d)).toEqual([]);
   });
 });
 

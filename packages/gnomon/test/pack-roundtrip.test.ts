@@ -3,7 +3,7 @@
  * #gnomon-npm-packaging (T-2026-10-21-030 acceptance, TD-2026-10-21-758; 8.0 M3): a platform package holding a zip
  * built by `release-darwin --dry-run --unsigned --zip` survives `npm pack` → tar → `ditto -x -k` with the app layout
  * and its framework symlinks intact. The signed checks (codesign --verify --strict --deep, spctl -a) run only when a
- * signed release zip sits in packages/gnomon-darwin-<host arch>; otherwise that case is skipped and says why.
+ * signed release zip sits in packages/gnomon-darwin-arm64; otherwise that case is skipped and says why.
  */
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { packRoundTrip, signatureKind } from '../scripts/pack-roundtrip.mjs';
 import { PKG_ROOT } from './helpers.js';
 
-const arch = process.arch === 'x64' ? 'x64' : 'arm64';
+const arch = 'arm64'; // the one shipped platform package (Apple silicon only in 8.0, TD-2026-10-22-310)
 const releaseZip = path.join(PKG_ROOT, '..', `gnomon-darwin-${arch}`, 'Gnomon.app.zip');
 
 describe('#gnomon-npm-packaging pack round trip', () => {

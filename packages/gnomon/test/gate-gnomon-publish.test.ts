@@ -17,14 +17,14 @@ import { MIN_VOICE_IO_VERSION } from '../src/kernel/voice/voice-install.js';
 import { PKG_ROOT } from './helpers.js';
 
 const PACKAGES = path.resolve(PKG_ROOT, '..');
-const ARCHES = ['arm64', 'x64'];
+const ARCHES = ['arm64']; // Apple silicon only in 8.0 (TD-2026-10-22-310)
 let root = '';
 const sha = (f: string): string => createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 
-/** A repo-shaped fixture: the four manifests, both platform packages holding an UNSIGNED dry-run zip. */
+/** A repo-shaped fixture: the three manifests, the arm64 platform package holding an UNSIGNED dry-run zip. */
 beforeAll(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-gate-')));
-  for (const p of ['gnomon', 'paradigm', 'gnomon-darwin-arm64', 'gnomon-darwin-x64']) {
+  for (const p of ['gnomon', 'paradigm', 'gnomon-darwin-arm64']) {
     fs.mkdirSync(path.join(root, 'packages', p), { recursive: true });
     fs.copyFileSync(path.join(PACKAGES, p, 'package.json'), path.join(root, 'packages', p, 'package.json'));
   }
@@ -80,13 +80,28 @@ describe('gate-gnomon-publish', () => {
   });
 
   it('refuses version drift and a platform package that grew scripts', async () => {
-    const f = path.join(root, 'packages', 'gnomon-darwin-x64', 'package.json');
+    const f = path.join(root, 'packages', 'gnomon-darwin-arm64', 'package.json');
     const orig = fs.readFileSync(f, 'utf8');
     try {
       fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(orig), version: '7.0.0', scripts: { postinstall: 'echo hi' } }));
       const problems: string[] = await gateProblems(root);
-      expect(problems.join('\n')).toMatch(/lockstep: .*gnomon-darwin-x64.* version is 7.0.0, want 8.0.0/);
-      expect(problems.join('\n')).toMatch(/gnomon-darwin-x64: has scripts \(postinstall\)/);
+      expect(problems.join('\n')).toMatch(/lockstep: .*gnomon-darwin-arm64.* version is 7.0.0, want 8.0.0/);
+      expect(problems.join('\n')).toMatch(/gnomon-darwin-arm64: has scripts \(postinstall\)/);
+    } finally {
+      fs.writeFileSync(f, orig);
+    }
+  });
+
+  it('Apple silicon only (TD-2026-10-22-310): never gates or publishes x64, and refuses an x64 optional dependency', async () => {
+    const problems: string[] = await gateProblems(root);
+    expect(problems.join('\n')).not.toMatch(/gnomon-darwin-x64/);
+    const f = path.join(root, 'packages', 'gnomon', 'package.json');
+    const orig = fs.readFileSync(f, 'utf8');
+    try {
+      const j = JSON.parse(orig);
+      fs.writeFileSync(f, JSON.stringify({ ...j, optionalDependencies: { ...j.optionalDependencies, '@a-company/gnomon-darwin-x64': j.version } }));
+      const again: string[] = await gateProblems(root);
+      expect(again.join('\n')).toMatch(/lockstep: .*optionalDependencies\.@a-company\/gnomon-darwin-x64 is 8\.0\.0, want \(absent\)/);
     } finally {
       fs.writeFileSync(f, orig);
     }

@@ -6,10 +6,13 @@
  * Founder-run on the founder's Mac (secrets never in CI); `--unsigned` (ad-hoc) for CI and tests.
  *
  *   node packages/gnomon/scripts/release-darwin.mjs [--arch arm64|x64] [--out <dir>] [--unsigned] [--notarize]
- *        [--dry-run [--zip]] [--package-dir <dir>] [--node-cache <dir>] [--skip-native]
+ *        [--dry-run [--zip]] [--package-dir <dir>] [--node-cache <dir>] [--skip-native] [--experimental-x64]
  *
  *   --arch        default: this Mac's arch. The Swift helpers, cargo and the sherpa platform package build for the
- *                 HOST arch only, so another arch is refused (build each arch on a Mac of that arch).
+ *                 HOST arch only, so another arch is refused (build each arch on a Mac of that arch). Gnomon 8.0 ships
+ *                 for Apple silicon Macs only (TD-2026-10-22-310): x64 is refused with X64_REFUSED unless
+ *                 --experimental-x64 is given. The x64 path is kept for when Intel can be built and verified; nothing
+ *                 publishes it (there is no packages/gnomon-darwin-x64 to package into).
  *   --unsigned    ad-hoc signatures everywhere, no Developer ID, no notarization (CI, tests, any Mac).
  *   --notarize    after signing: packages/gnomon-wrapper/scripts/notarize-darwin.mjs (keychain profile gnomon-notary).
  *   --dry-run     no swift, npm, cargo, network or codesign: placeholder binaries stand in for the wrapper, node,
@@ -279,6 +282,9 @@ export function missingFromLayout(app) {
 
 // ---------------------------------------------------------------- CLI
 
+/** Why --arch x64 is refused in 8.0 (TD-2026-10-22-310); the shim prints the same first sentence on an Intel Mac. */
+export const X64_REFUSED = 'Gnomon 8.0 runs on Apple silicon Macs; Intel support is planned. --arch x64 is refused (TD-2026-10-22-310); --experimental-x64 builds it anyway, unpublished';
+
 function parseArgs(argv) {
   const v = (n) => {
     const i = argv.indexOf(n);
@@ -295,6 +301,7 @@ function parseArgs(argv) {
     packageDir: v('--package-dir') ? path.resolve(v('--package-dir')) : undefined,
     allowUnsignedForTests: argv.includes('--allow-unsigned-for-tests'),
     skipNative: argv.includes('--skip-native'),
+    experimentalX64: argv.includes('--experimental-x64'),
   };
 }
 
@@ -358,6 +365,7 @@ export async function release(argv) {
   const o = parseArgs(argv);
   if (process.platform !== 'darwin' && !o.dryRun) throw new Error('the release app is built on macOS');
   if (o.arch !== 'arm64' && o.arch !== 'x64') throw new Error(`--arch must be arm64 or x64 (have ${o.arch})`);
+  if (o.arch === 'x64' && !o.experimentalX64) throw new Error(X64_REFUSED);
   if (o.arch !== process.arch && !o.dryRun) throw new Error(`--arch ${o.arch} on a ${process.arch} Mac: the helpers, the wrapper and sherpa build for the host arch only; build ${o.arch} on a ${o.arch} Mac`);
   if (o.notarize && o.unsigned) throw new Error('--notarize needs a signed build (drop --unsigned)');
   // Aegis M3 high 1: only a Developer ID, notarized, stapled, real build may land in a platform package

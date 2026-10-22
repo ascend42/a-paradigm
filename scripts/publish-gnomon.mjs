@@ -5,9 +5,10 @@
  * `npm run publish:gnomon`: the founder's release flow, on their Mac, in the one order that installs for users.
  *   1. gate      scripts/gate-gnomon-publish.mjs (lockstep, signed + notarized + stapled zips, release-built dist
  *                pinning them). Refused = nothing published.
- *   2. platform  @a-company/gnomon-darwin-arm64, then -x64 (gnomon's optionalDependencies name them).
+ *   2. platform  @a-company/gnomon-darwin-arm64 (gnomon's optionalDependencies name it; Apple silicon only in
+ *                8.0, TD-2026-10-22-310: x64 is not published).
  *   3. gnomon    @a-company/gnomon (paradigm's exact dependency names it; its prepublishOnly re-runs the gate).
- *   4. verify    each of the three is visible on npm at this version.
+ *   4. verify    each of the two is visible on npm at this version.
  *   5. paradigm  only with --release: `npm run release` (scripts/release.mjs: its preflight re-checks step 4, then
  *                changeset publish). Without it, CI's release job publishes paradigm once the release PR merges, and
  *                refuses until steps 2-3 are on npm.
