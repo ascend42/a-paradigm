@@ -89,7 +89,7 @@ components:
     loops-contract: >-
       8.0:loops (docs/specs/gnomon-loops.md §3-§5, build step 2; the ONE loops
       clientApiId move, sha256:c4e2c7d9...e2c9 ->
-      sha256:f01dc9efc9b0910466b837e203d222932f156f296b414da1b5f59481a36bd1c1):
+      sha256:a23b2c75c92df061c1dafa5d32e818a6ae788ef7153613d45be0ecae3c4ba1ce):
       card kinds loop-trust (root class, never always/standing/voice) and
       loop-choice, decisions continue/stop (LOOP_CHOICE_ONLY_DECISIONS: valid only
       on loop-choice, isCardDecidable + strict heldDecision). Kernel-owned kinds

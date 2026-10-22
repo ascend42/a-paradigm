@@ -30,7 +30,9 @@ import { LOOP_FOLD_KINDS, LoopRegistry, type LoopRow } from './registry.js';
 import { LoopRunner, type LoopGlobalCaps, type LoopToast } from './runner.js';
 import type { RepoCap } from './strictness-cap.js';
 import { LoopTimers, type LoopScheduler } from './timers.js';
+import { LOOP_EVENT_INDEX_KINDS, LoopEvents, type LoopEventRow } from './events.js'; // #loop-events (step 7)
 import { LoopTrust, type LoopAsker } from './trust.js';
+import { LoopAgentOps, type LoopAgentAsker } from './agent-ops.js';
 
 /** The slice of the kernel log the loops need. */
 export interface LoopsLog {
@@ -68,12 +70,16 @@ export interface WireLoopsOptions {
   model?: LoopModelPort;
   /** #loop-strictness: the repo's cap {level, effective run mode} (absent: loops run as declared) */
   strictness?: (repoKey: string) => RepoCap;
+  /** #loop-agent-ops (step 12, LL5): is this hsid a loop session (supervisor.isLoopSession)? */
+  isLoopSession?: (hsid: string) => boolean;
 }
 
 /** The dispatcher's port (socket/dispatch.ts HumanRequestPort.loops). */
 export interface LoopsPort {
   request(asker: LoopAsker, kind: string, payload: unknown): Promise<unknown>;
   status(): Record<string, unknown>;
+  /** #loop-agent-ops (step 12): an agent's loop.request, the asker stamped from its connection */
+  agent(asker: LoopAgentAsker, payload: unknown): Promise<unknown>;
 }
 
 export interface WiredLoops {
@@ -165,11 +171,35 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
   const timers = o.scheduler
     ? new LoopTimers({ registry, runner, scheduler: o.scheduler, ...(o.tz ? { tz: o.tz } : {}), ...(o.clock ? { clock: o.clock } : {}), ...(o.holdIdle ? { holdIdle: o.holdIdle } : {}), ...(o.diag ? { diag: o.diag } : {}) })
     : null;
+  // ── #loop-events (build plan step 7, LP4b): event triggers, registered with the trust state like the timers ──
+  const closers: Array<() => void> = []; // run by close()
+  const events = new LoopEvents({
+    home: o.home, registry, runner, kernelPrincipal: o.kernelPrincipal, isKernelKey: (k) => o.log.isKernelKey(k),
+    append: (kind, payload) => append(kind, payload), watch: o.start !== false,
+    ...(o.clock ? { clock: o.clock } : {}), ...(o.diag ? { diag: o.diag } : {}),
+  });
+  try {
+    const idx: LoopEventRow[] = [];
+    for (const v of o.log.read({ reader: { class: 'human' }, kinds: [...LOOP_EVENT_INDEX_KINDS] })) if (v.view === 'full' && v.event) idx.push(v.event as LoopEventRow);
+    events.seed(idx);
+  } catch {
+    /* an unreadable history: no card or session to match yet (the self-trigger guard still sees every new row) */
+  }
+  o.log.onCommit((e) => void events.observe(e as LoopEventRow));
+  closers.push(() => events.close());
+  // ── end #loop-events ──
   if (o.start !== false) {
     registry.start();
     process.once('exit', onExit);
   }
-  const RUNNER_KINDS = new Set(['request.loop.run', 'request.loop.pause', 'request.loop.resume']);
+  const agentOps = new LoopAgentOps({
+    registry, runner, ledger, trust,
+    append: (kind, payload, ids) => append(kind, payload, ids.connId),
+    ...(o.toast ? { toast: o.toast } : {}),
+    ...(o.isLoopSession ? { isLoopSession: o.isLoopSession } : {}),
+    ...(o.tz ? { tz: o.tz } : {}), ...(o.clock ? { clock: o.clock } : {}),
+  });
+  const RUNNER_KINDS = new Set(['request.loop.run', 'request.loop.pause', 'request.loop.resume', 'request.loop.budget']);
   const brake = async (repoKey: string, by = 'kernel'): Promise<number> => {
     let n = 0;
     for (const r of runner.running()) {
@@ -201,10 +231,12 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     port: {
       request: (asker, kind, payload) => (RUNNER_KINDS.has(kind) ? runner.request(asker, kind, payload) : trust.request(asker, kind, payload)),
       status: () => ({ ...registry.status(), ...runner.status(), ...(timers ? { uptime: timers.status() } : {}), effective: effective() }),
+      agent: (asker, payload) => agentOps.request(asker, payload),
     },
     brake,
     close: () => {
       process.removeListener('exit', onExit);
+      for (const c of closers.splice(0)) c(); // #loop-events
       timers?.close();
       runner.abortAll();
       registry.close();

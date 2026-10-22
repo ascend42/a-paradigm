@@ -411,6 +411,26 @@ async function refusal(p: Promise<unknown>): Promise<{ code: string; reason: unk
 }
 
 describe('the loop-trust card (root class, one touch)', () => {
+  it('LP8: the GUI renders the real card: its root row is shown (Trust is offered), the loop is named, no top-level detail', async () => {
+    const { rootRowsOf } = await import('../../gnomon-gui/src/core/render.js');
+    const { cardLoopOf, loopCardTitle } = await import('../../gnomon-gui/src/core/loops.js');
+    const root = repo([checkLoop('one', { title: 'Check A' })]);
+    const c = cardRig();
+    c.reg.addRepo(root);
+    c.reg.scan();
+    const v = c.reg.list()[0]!;
+    const res = (await c.trust.request(gui(), 'request.loop.trust', { loopId: 'one', scope: 'repo', repo: root, contentHash: v.contentHash })) as { cardId: string };
+    const card = c.broker.card(res.cardId)! as unknown as Record<string, unknown>;
+    expect(card.detail).toBeUndefined();
+    const rows = rootRowsOf(card);
+    expect(rows).not.toBeNull();
+    expect(rows!.rootDecisions).toEqual(['allow']);
+    expect(rows!.lines).toEqual([expect.stringContaining('trust loop repo/one · contentHash sha256:')]);
+    const cl = cardLoopOf(card);
+    expect(cl).toMatchObject({ loopId: 'one', scope: 'repo', changed: false });
+    expect(loopCardTitle('loop-trust', cl, null)).toBe('Trust one');
+  });
+
   it('renders the whole definition, signs ONE loop.trusted row with the root key, and the loop becomes trusted', async () => {
     const root = repo([checkLoop('one', { title: 'Check A' })]);
     const c = cardRig();

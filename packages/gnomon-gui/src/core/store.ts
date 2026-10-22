@@ -153,6 +153,8 @@ export class GuiStore {
   /** Rows with no session, kept for the kernel feed. */
   readonly kernelFeed: Row[] = [];
   readonly cards = new Map<string, StackCard>();
+  /** #gui-loops: the kernel's loop.notified{as:'card'} rows by cardId (which loop run raised a loop-choice card; newest 256) */
+  readonly loopCards = new Map<string, { loopId: string; runId?: string; nodeId?: string; text?: string }>();
   /** Aegis C1e: root decisions logged with a rowsDigest that is not the shown rows' digest (newest 16), shown red */
   readonly rootMismatches: Array<{ cardId: string; decision: string; shown: string; logged: string | null }> = [];
   #cardSeq = 0;
@@ -247,6 +249,11 @@ export class GuiStore {
     this.rowsSeen++;
     const p = (r.payload && typeof r.payload === 'object' ? r.payload : {}) as Record<string, unknown>;
     const hsid = typeof r.session === 'string' ? r.session : typeof p.hsid === 'string' ? p.hsid : null;
+    if (r.kind === 'loop.notified' && p.as === 'card' && typeof p.cardId === 'string' && typeof p.loopId === 'string') {
+      this.loopCards.set(p.cardId, { loopId: p.loopId, ...(typeof p.runId === 'string' ? { runId: p.runId } : {}), ...(typeof p.nodeId === 'string' ? { nodeId: p.nodeId } : {}), ...(typeof p.text === 'string' ? { text: p.text } : {}) });
+      if (this.loopCards.size > 256) this.loopCards.delete(this.loopCards.keys().next().value!);
+      what.add('cards');
+    }
     const repo = typeof r.scope?.repo === 'string' ? r.scope.repo : null;
     if (hsid) {
       let t = this.#transcripts.get(hsid);

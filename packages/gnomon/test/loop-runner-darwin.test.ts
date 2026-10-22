@@ -156,7 +156,7 @@ describe.skipIf(!floor.ok)('#loop-runner end to end: Example A minus why, by han
     const node = k.rows.find((r) => r.kind === 'loop.node' && r.payload.runId === started.runId)!.payload;
     expect(node).toMatchObject({ verdict: 'error', next: null, evidence: { reason: 'killed' } });
     expect(k.rows.find((r) => r.kind === 'loop.run.ended' && r.payload.runId === started.runId)!.payload).toMatchObject({ reason: 'kill-switch' });
-    expect(k.rows.filter((r) => r.kind === 'loop.paused').map((r) => [r.payload.loopId, r.payload.reason])).toEqual([['sleeper', 'kill-switch'], ['flow-health-checkout', 'kill-switch']]);
+    expect(k.rows.filter((r) => r.kind === 'loop.paused').map((r) => [r.payload.loopId, r.payload.reason])).toEqual([[undefined, 'kill-switch'], ['sleeper', 'kill-switch'], ['flow-health-checkout', 'kill-switch']]);
     await expect(k.w.port.request(gui, 'request.loop.run', { loopId: 'sleeper', scope: 'repo', repo: root })).rejects.toThrow(/paused \(kill-switch\)/);
   }, 120_000);
 });

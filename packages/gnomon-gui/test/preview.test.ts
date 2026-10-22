@@ -39,7 +39,7 @@ async function connected(name: string): Promise<{ client: GnomonClient; store: G
 
 describe('#gui-preview fixtures', () => {
   it('names the fixtures the harness promises', () => {
-    expect([...FIXTURE_NAMES].sort()).toEqual(['app-menu', 'choices', 'desk', 'empty', 'model-switch', 'model-unconfirmed', 'offer-armed', 'offer-muted', 'offer-slip', 'paradigm-context', 'settings', 'settings-day', 'spoken', 'stack-heavy', 'voice-armed', 'voice-crashed', 'voice-ladder', 'voice-settings', 'workshop', 'workshop-absent', 'workshop-paused']);
+    expect([...FIXTURE_NAMES].sort()).toEqual(['app-menu', 'choices', 'desk', 'empty', 'loops', 'loops-many', 'loops-none', 'loops-paused', 'loops-trust', 'loops-waiting', 'model-switch', 'model-unconfirmed', 'offer-armed', 'offer-muted', 'offer-slip', 'paradigm-context', 'settings', 'settings-day', 'spoken', 'stack-heavy', 'voice-armed', 'voice-crashed', 'voice-ladder', 'voice-settings', 'workshop', 'workshop-absent', 'workshop-paused']);
   });
 
   it.each(FIXTURE_NAMES)('%s parses as kernel rows: JSON-clean, seq 1..n, registered kinds, valid hsids and card:v1 cards', (name) => {

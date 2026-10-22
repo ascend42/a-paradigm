@@ -29,6 +29,8 @@
 import type { LoopRow } from './registry.js';
 
 export const LOOP_RUN_KINDS: readonly string[] = Object.freeze(['loop.run.started', 'loop.node', 'loop.round', 'loop.notified', 'loop.run.ended']);
+/** What `gnomon replay` folds for loops: the run rows plus #loop-events' `loop.trigger.fired` (why a run started). */
+export const LOOP_REPLAY_KINDS: readonly string[] = Object.freeze([...LOOP_RUN_KINDS, 'loop.trigger.fired']);
 /** The fuse rows a loop model step's tokens come from (folded by permitId; step 8). */
 export const LOOP_TOKEN_KINDS: readonly string[] = Object.freeze(['permit.grant', 'budget.usage']);
 /** permitIds remembered for the token fold (oldest dropped first). */
@@ -253,6 +255,8 @@ export interface LoopReplayRun {
   /** [nodeId, verdict, edge, next] per visit, in log order */
   edges: Array<[string, string, string | null, string | null]>;
   ended: string | null;
+  /** #loop-events (step 7): the `loop.trigger.fired` trigger the run started from; present only for event-started runs */
+  why?: Record<string, unknown>;
 }
 
 export interface LoopReplayDivergence {
@@ -268,13 +272,34 @@ export interface LoopReplayDivergence {
 export function replayLoopRuns(rows: Iterable<{ kind: string; payload?: unknown }>): { runs: Record<string, LoopReplayRun>; divergences: LoopReplayDivergence[] } {
   const runs: Record<string, LoopReplayRun> = {};
   const divergences: LoopReplayDivergence[] = [];
-  for (const r of rows) {
+  // fireId → the loop.trigger.fired row's {loopId, trigger}. #loop-events hands off BEFORE it writes the row, so the
+  // row may follow its run's loop.run.started: join by fireId over the whole history (each fire starts at most one run)
+  const all = [...rows];
+  const fired = new Map<string, { loopId: string; trigger: Record<string, unknown>; used: boolean }>();
+  for (const r of all) {
+    if (r.kind !== 'loop.trigger.fired' || !isObj(r.payload)) continue;
+    const t = isObj(r.payload.trigger) ? r.payload.trigger : null;
+    const fireId = t ? str(t.fireId) : undefined;
+    if (t && fireId && !fired.has(fireId)) fired.set(fireId, { loopId: str(r.payload.loopId) ?? '?', trigger: t, used: false });
+  }
+  for (const r of all) {
     if (!LOOP_RUN_KINDS.includes(r.kind) || !isObj(r.payload)) continue;
     const p = r.payload;
     const runId = str(p.runId);
     if (!runId) continue;
     if (r.kind === 'loop.run.started') {
-      runs[runId] ??= { loopId: str(p.loopId) ?? '?', edges: [], ended: null };
+      const run: LoopReplayRun = (runs[runId] ??= { loopId: str(p.loopId) ?? '?', edges: [], ended: null });
+      const fireId = isObj(p.trigger) && p.trigger.type === 'event' ? str(p.trigger.fireId) : undefined;
+      if (fireId) {
+        const f = fired.get(fireId);
+        if (!f) divergences.push({ runId, detail: `started by trigger ${fireId}, which no loop.trigger.fired row names` });
+        else if (f.loopId !== run.loopId) divergences.push({ runId, detail: `started by trigger ${fireId}, which fired for loop ${f.loopId}` });
+        else if (f.used) divergences.push({ runId, detail: `trigger ${fireId} already started another run` });
+        else {
+          f.used = true;
+          run.why = { ...f.trigger };
+        }
+      }
       continue;
     }
     const run = runs[runId];

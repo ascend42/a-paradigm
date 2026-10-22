@@ -269,6 +269,8 @@ export interface CardView {
   batchUnavailable?: boolean;
   /** Aegis L2: the local trust set's namespace (localNsOf the connection's principal); null/absent => no shortening */
   localNs?: string | null;
+  /** #gui-loops: a loop-* card whose loop the kernel attributes to an agent key (authoredBy basis 'agent-key-claim'): the head says "claimed by <agent>" */
+  loopClaimedBy?: string | null;
 }
 
 /** A permission card's composed title: the verb, the whole arg (lines kept), and whether the arg hit TITLE_ARG_MAX. */
@@ -394,7 +396,7 @@ export function raisedLine(raisedAt: string | null | undefined, now: number): st
  * template (supervisor/permission.ts composePermission); the requester's question text starts at line 3 (askLines),
  * so it stays kernel-titled.
  */
-export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant']);
+export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant', 'loop-trust', 'loop-choice']);
 
 /**
  * Aegis S4 low (1): the stamp names the decision the kernel accepted (never always APPROVED). A closed map over the
@@ -536,6 +538,9 @@ export function rootRowLine(r: Record<string, unknown>): string | null {
       return s('publisher') && s('host') && s('namespace') ? `publisher ${s('publisher')} → ${s('host')}/${s('namespace')}` : null;
     case 'grant.install':
       return s('name') && s('source') ? `install ${s('name')} from ${s('source')} · packageHash ${short(r.packageHash)}` : null;
+    // 8.0:loops (trust.ts #raise): the one loop.trusted row a loop-trust card's allow signs
+    case 'loop.trusted':
+      return s('loopId') && (r.scope === 'repo' || r.scope === 'personal') && s('contentHash') ? `trust loop ${r.scope}/${s('loopId')} · contentHash ${short(r.contentHash, 23)}${s('closureDigest') ? ` · closure ${short(r.closureDigest, 15)}` : ''}` : null;
     case 'grant.uninstall':
       return s('name') ? `uninstall ${s('name')} · packageHash ${short(r.packageHash)}` : null;
     default:
@@ -767,12 +772,15 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       doc,
       'header',
       { class: 'card-head k', title: who },
+      // #gui-loops (design-system card.family): a loop card names its family by glyph and word, never by hue
+      v.kind.startsWith('loop-') ? h(doc, 'span', { class: 'fam' }, '↻ loop') : null,
+      v.kind.startsWith('loop-') ? ' · ' : null,
       v.project ? h(doc, 'span', { class: `card-project pink h${v.project.hue}` }, `■ ${v.project.name}`) : null,
       v.project ? ' · ' : null,
       h(doc, 'span', { class: 'card-kind' }, v.kind),
       // Aegis M1: who asked is VISIBLE text, never only a tooltip (the short mark; the full principal in title= and details)
       ' · ',
-      h(doc, 'span', { class: 'card-requester' }, `by ${shortRequester(v.requestedBy, v.localNs)}`),
+      h(doc, 'span', { class: 'card-requester' }, v.kind.startsWith('loop-') && v.loopClaimedBy ? `claimed by ${v.loopClaimedBy}` : `by ${shortRequester(v.requestedBy, v.localNs)}`),
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),

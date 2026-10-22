@@ -198,6 +198,8 @@ describe('the loop-origin clamp', () => {
     expect(plan.detail).toMatchObject({ origin: 'loop', loopId: 'tidy', authoredBy: 'file' });
     expect(plan.lines[0]).toBe(loopClampLine('tidy', 'file'));
     expect(plan.lines[0]).toBe('Raised by loop tidy (authored by file)');
+    // an agent's authorship is a claim made with its key, never stated as fact
+    expect(loopClampLine('tidy', 'arky')).toBe('Raised by loop tidy (claimed by arky)');
   });
 
   it('Aegis #3: a loop session can never reach the supervisor\'s mode, read-only, rule or always passes unclamped, and its card carries the loop origin', () => {

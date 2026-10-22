@@ -76,6 +76,7 @@ export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
   'request.loop.resume',
   'request.loop.run',
   'request.loop.delete',
+  'request.loop.budget', // LP8: tighten a loop's caps (human only, no presence; a looser cap waits for trust)
 ]);
 /** `request.voice.arm` is the only request kind the voice principal may append. */
 export const VOICE_REQUEST_KINDS: readonly string[] = Object.freeze(['request.voice.arm']);

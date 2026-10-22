@@ -78,3 +78,24 @@ describe('8.0:loops cards in the GUI', () => {
     expect(stampWord('stop')).toBe('STOPPED');
   });
 });
+
+describe('LP8 the loop card head names an agent key claim', () => {
+  it('a broker-shaped loop-trust card from an agent principal reads "claimed by arky", never a bare "by arky"', () => {
+    const AGENT = 'p:abcdefgh/arky';
+    const detail = { loopId: 'triage-on-commit', scope: 'repo', repoKey: 'sha256:' + 'a'.repeat(64), loopHash: 'sha256:' + 'b'.repeat(64), lines: [], rootRows: [{ kind: 'loop.trusted', loopId: 'triage-on-commit', scope: 'repo', repoKey: 'sha256:' + 'a'.repeat(64), contentHash: 'sha256:' + 'b'.repeat(64), by: AGENT }], rootDecisions: ['allow'] };
+    const base = { cardId: C, kind: 'loop-trust', requestedBy: AGENT, flags: [] as string[] };
+    const contentHash = cardContentHash(base, detail);
+    // card:v1 as broker.ts raise sends it: no top-level detail; the kernel lines, then the root-rows node
+    const c = { schemaVersion: 'card:v1', ...base, state: 'pending', contentHash, block: { schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: 'Trust loop triage-on-commit (repo loop in /w/a)' }, { type: 'root-rows', rootDecisions: ['allow'], detail }] } } as Record<string, unknown>;
+    expect(c.detail).toBeUndefined();
+    const v = { ...view(c, ['allow', 'deny']), requestedBy: AGENT };
+    const claimed = renderCard({ doc: fdoc }, { ...v, loopClaimedBy: 'arky' }, c.block) as FEl;
+    const head = claimed.all().find((e) => e.className === 'card-requester')!.text;
+    expect(head).toBe('claimed by arky');
+    expect(claimed.text.replace(/claimed by arky/g, '')).not.toMatch(/\bby arky\b/);
+    // a human requester (no claim) keeps the generic words
+    const human = renderCard({ doc: fdoc }, { ...v, requestedBy: 'p:abcdefgh/matt', loopClaimedBy: null }, c.block) as FEl;
+    expect(human.all().find((e) => e.className === 'card-requester')!.text).not.toContain('claimed');
+  });
+});
+

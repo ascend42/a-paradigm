@@ -52,8 +52,9 @@ const KERNEL_LOOP_KINDS = [
   'loop.trigger.fired',
   'loop.deleted',
   'loop.resumed',
+  'loop.budget.tightened', // LP8: a human tightened a loop's caps
 ];
-const REQUEST_LOOP_KINDS = ['request.loop.trust', 'request.loop.untrust', 'request.loop.pause', 'request.loop.resume', 'request.loop.run', 'request.loop.delete'];
+const REQUEST_LOOP_KINDS = ['request.loop.trust', 'request.loop.untrust', 'request.loop.pause', 'request.loop.resume', 'request.loop.run', 'request.loop.delete', 'request.loop.budget'];
 const ALL_LOOP_KINDS = [...KERNEL_LOOP_KINDS, ...REQUEST_LOOP_KINDS, 'loop.request'];
 
 describe('8.0:loops card kinds and decisions', () => {
@@ -156,7 +157,7 @@ describe('8.0:loops descriptor and the one clientApiId move', () => {
   });
   it('clientApiId moved once to the pinned value, and the pin file agrees', () => {
     expect(computeClientApiId()).toBe(CLIENT_API_ID);
-    expect(CLIENT_API_ID).toBe('sha256:f01dc9efc9b0910466b837e203d222932f156f296b414da1b5f59481a36bd1c1');
+    expect(CLIENT_API_ID).toBe('sha256:a23b2c75c92df061c1dafa5d32e818a6ae788ef7153613d45be0ecae3c4ba1ce');
     const pin = JSON.parse(readFileSync(fileURLToPath(new URL('../schemas/client-api.ids.json', import.meta.url)), 'utf8')) as { clientApiId: string };
     expect(pin.clientApiId).toBe(CLIENT_API_ID);
   });

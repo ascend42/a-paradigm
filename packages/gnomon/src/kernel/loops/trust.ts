@@ -35,7 +35,7 @@ import { repoKeyOf } from '../supervisor/repo-hooks.js';
 import type { LoopHash } from './hash.js';
 import { loopKeyOf, repoRootOf, type LoopEntry, type LoopRegistry, type LoopScopeName } from './registry.js';
 
-export const LOOP_REQUEST_KINDS: readonly string[] = Object.freeze(['request.loop.trust', 'request.loop.untrust', 'request.loop.pause', 'request.loop.resume', 'request.loop.run', 'request.loop.delete']);
+export const LOOP_REQUEST_KINDS: readonly string[] = Object.freeze(['request.loop.trust', 'request.loop.untrust', 'request.loop.pause', 'request.loop.resume', 'request.loop.run', 'request.loop.delete', 'request.loop.budget']);
 /** A loop-trust card waits this long for the human (then it expires; nothing is trusted). */
 export const LOOP_TRUST_CARD_TTL_MS = 24 * 3600 * 1000;
 /** Card lines are capped at 512 code points (card.ts MAX_LINE): longer ones wrap, never cut. */
@@ -219,6 +219,18 @@ export class LoopTrust {
     return this.#delete(asker, t);
   }
 
+  /**
+   * Step 12 (§3.1, §10 D2; G-LOOP-03): an agent created or changed this loop. Raise its ONE `loop-trust` card (one
+   * per version: a repeat finds the open card), requested by the agent and decided only by the human (root key,
+   * fresh presence). It never trusts anything by itself; with no envelope (8.0) an agent loop always takes the card.
+   */
+  async raiseForAgent(asker: LoopAsker, key: string): Promise<unknown> {
+    if (asker.principalClass !== 'agent' || !asker.principal) throw new RpcRefusal('FORBIDDEN', 'matrix', 'an agent-authored trust card is raised for an agent principal only');
+    const e = this.#o.registry.entry(key);
+    if (!e) throw new RpcRefusal('NOT_FOUND', 'not-found', `no loop ${key.split('/').pop()}`);
+    return this.#trust(asker, { loopId: e.loopId, scope: e.scope, repoKey: e.repoKey, contentHash: undefined }, asker.principal);
+  }
+
   #target(kind: string, payload: unknown): LoopTarget {
     return parseLoopTarget(this.#o.registry, kind, payload, kind === 'request.loop.trust' ? ['contentHash'] : []);
   }
@@ -230,7 +242,7 @@ export class LoopTrust {
     return e;
   }
 
-  async #trust(asker: LoopAsker, t: LoopTarget): Promise<unknown> {
+  async #trust(asker: LoopAsker, t: LoopTarget, agent?: string): Promise<unknown> {
     const e = this.#entry(t);
     if (!e.compiled || !e.hash) throw bad(`loop ${t.loopId} is refused: ${e.errors.map((x) => `${x.code}: ${x.message}`).slice(0, 3).join('; ')}`, { field: 'loopId' });
     const h = e.hash;
@@ -263,7 +275,7 @@ export class LoopTrust {
         ...(base ? changed.map((k) => `  ${k}: ${was.has(k) ? `sha256:${was.get(k)!.slice(0, 12)}` : 'new'} → ${now.has(k) ? `sha256:${now.get(k)!.slice(0, 12)}` : 'removed'}`) : [`  closure now: ${h.closure.all.map((f) => `${f.rel} sha256:${f.sha256.slice(0, 12)}`).join(', ')} (the trusted listing is not on this Mac)`]),
         'Allow needs Touch ID and the root key; deny or no answer keeps the loop paused',
       ].flatMap((l) => wrap(l));
-      return this.#raise(asker, e, h, lines, body, prior, openKey, true);
+      return this.#raise(asker, e, h, lines, body, prior, openKey, true, agent);
     }
     const lines = [
       `Trust loop ${e.loopId} (${e.scope} loop in ${e.repoRoot})`,
@@ -271,6 +283,7 @@ export class LoopTrust {
       'Trusting lets this exact version run unattended on its triggers; any change to it, its argv files or its config closure pauses it until you trust again',
       ...(e.callIssues.length ? [`Calls that cannot run now: ${e.callIssues.join('; ')}`] : []),
       ...body,
+      ...(agent ? [`Claimed by agent key: ${agent.split('/').pop()}: an agent's loop runs only after you trust it here`] : []),
       ...(lastTrusted
         ? base
           ? [`Changes since the trusted version ${short(lastTrusted)}:`, ...diffLines(base.lines, body)]
@@ -278,10 +291,10 @@ export class LoopTrust {
         : ['First trust of this loop']),
       'Allow needs Touch ID and the root key; deny or no answer trusts nothing',
     ].flatMap((l) => wrap(l));
-    return this.#raise(asker, e, h, lines, body, prior, openKey, false);
+    return this.#raise(asker, e, h, lines, body, prior, openKey, false, agent);
   }
 
-  async #raise(asker: LoopAsker, e: LoopEntry, h: LoopHash, lines: string[], body: string[], prior: { contentHash: string } | null, openKey: string, closureOnly: boolean): Promise<unknown> {
+  async #raise(asker: LoopAsker, e: LoopEntry, h: LoopHash, lines: string[], body: string[], prior: { contentHash: string } | null, openKey: string, closureOnly: boolean, agent?: string): Promise<unknown> {
     const reg = this.#o.registry;
     const cardId = mintId('card');
     const row = {
@@ -294,7 +307,9 @@ export class LoopTrust {
       closureDigest: h.closure.digest,
       ...(e.compiled?.compiled.sourceHash ? { sourceHash: e.compiled.compiled.sourceHash } : {}),
       cardId,
-      by: asker.principal!,
+      // step 12: an agent-raised card is still decided by the human with the root key; the agent only asked
+      by: agent ? 'root' : asker.principal!,
+      ...(agent ? { requestedBy: agent } : {}),
     };
     const key = e.key;
     const closure = h.closure.all;

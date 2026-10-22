@@ -42,6 +42,8 @@ export interface LoopFileResult {
   compiledFile?: string;
   /** True when a stale compiled JSON was removed because the YAML no longer validates. */
   removedStale?: boolean;
+  /** The compiled definition's source hash (what the kernel attributes an agent's write by), when written. */
+  sourceHash?: string;
 }
 
 export interface LoopListEntry {
@@ -427,6 +429,8 @@ export function writeLoop(
     atomicWrite(rootDir, f, text.endsWith('\n') ? text : `${text}\n`);
     atomicWrite(rootDir, jsonPath, out.json!);
     result.compiledFile = rel(rootDir, jsonPath);
+    const sourceHash = (JSON.parse(out.json!) as { compiled?: { sourceHash?: unknown } }).compiled?.sourceHash;
+    if (typeof sourceHash === 'string') result.sourceHash = sourceHash;
     log.component('#loop-files').info('Loop written', { id, mode });
     return result;
   } catch (e) {

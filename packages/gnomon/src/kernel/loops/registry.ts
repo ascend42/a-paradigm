@@ -37,7 +37,19 @@ export type LoopScopeName = 'repo' | 'personal';
 export type LoopState = 'untrusted' | 'trusted' | 'waiting-trust' | 'paused' | 'deleted' | 'invalid';
 
 /** The kernel rows this fold reads (seed kinds for log.read at boot). */
-export const LOOP_FOLD_KINDS: readonly string[] = Object.freeze(['loop.trusted', 'loop.untrusted', 'loop.closure.changed', 'loop.paused', 'loop.resumed', 'loop.deleted', 'session.open']);
+export const LOOP_FOLD_KINDS: readonly string[] = Object.freeze(['loop.trusted', 'loop.untrusted', 'loop.closure.changed', 'loop.paused', 'loop.resumed', 'loop.deleted', 'session.open', 'loop.request', 'loop.budget.tightened']);
+
+/**
+ * Step 12 (§3.1 "Attribution"): who authored a loop's current definition. The kernel stamps `{principal, hsid}` from
+ * the CONNECTION of an agent's `loop.request{op:'create'|'update', sourceHash}` (agent-ops.ts) and writes it as a
+ * kernel row; a definition whose source hash matches no such row is `file` (a git pull, an editor, a postinstall).
+ */
+export type LoopAuthor = { principal: string; hsid: string | null; at?: string; basis: 'agent-key-claim' } | 'file';
+
+/** The display form of an author: the principal's name ("arky"), or `file`. */
+export function authorLabel(a: LoopAuthor): string {
+  return a === 'file' ? 'file' : (a.principal.split('/').pop() ?? a.principal);
+}
 export const LOOP_FILE_SUFFIX = '.loop.json';
 export const LOOP_FILE_MAX_BYTES = 1024 * 1024;
 export const LOOP_FILES_PER_DIR_MAX = 256;
@@ -118,7 +130,7 @@ export interface TrustEvent {
 
 interface Fold {
   trusted: TrustRecord | null;
-  paused: { reason: string; by?: string } | null;
+  paused: { reason: string; by?: string; at?: number; epoch: number } | null;
   deleted: { contentHash: string | null } | null;
   /** when the loop last became runnable (the `at` of its latest loop.trusted or loop.resumed row) */
   since?: number;
@@ -159,6 +171,105 @@ export interface LoopView {
   cardId?: string;
   errors: string[];
   callIssues: string[];
+  /** step 12: who authored the current definition (a kernel-stamped loop.request row), else `file` */
+  authoredBy?: LoopAuthor;
+  /**
+   * LP8 (#gui-loops): the compiled definition's drawable shape, for the GUI's list and graph (status.loops is the
+   * human class's). Ids, types, roles, edges, trigger words, caps and land paths only: never argv, prompts or text.
+   */
+  shape?: LoopShape;
+}
+
+/** LP8: what the GUI draws of a compiled loop (loopShapeOf). */
+export interface LoopShape {
+  triggers: string[];
+  autonomy: string;
+  start: string;
+  goal?: string;
+  land?: string[];
+  budgets: { run: Record<string, number | string>; day: Record<string, number | string> };
+  authoredBy: string;
+  nodes: Array<{ id: string; type: string; role?: string; as?: string; callee?: string; on: Record<string, string> }>;
+  /** LP8: the cap fields a human tightened (request.loop.budget), as `run.rounds` */
+  tightened?: string[];
+}
+
+/** LP8: the shape's caps with a human's tightened ones applied (the lower of each), and which fields were tightened. */
+function withTightened(sh: LoopShape, t: TightenedBudgets | null): LoopShape {
+  if (!t) return sh;
+  const run = { ...sh.budgets.run };
+  const day = { ...sh.budgets.day };
+  for (const [f, x] of Object.entries(t.run)) if (typeof run[f] !== 'number' || x < (run[f] as number)) run[f] = x;
+  for (const [f, x] of Object.entries(t.day)) if (typeof day[f] !== 'number' || x < (day[f] as number)) day[f] = x;
+  return { ...sh, budgets: { run, day }, tightened: [...Object.keys(t.run).map((f) => `run.${f}`), ...Object.keys(t.day).map((f) => `day.${f}`)] };
+}
+
+/** LP8: the drawable shape of a compiled loop (no argv, prompt or notify text). */
+export function loopShapeOf(c: CompiledLoop): LoopShape {
+  const trig = c.triggers.map((t) => {
+    if (t.type === 'schedule') return t.every !== undefined ? `every ${t.every}s` : t.daily !== undefined ? `daily ${t.daily}` : `weekly ${t.weekly?.day ?? ''} ${t.weekly?.at ?? ''}`.trim();
+    if (t.type === 'event') return t.kind === 'file.changed' ? 'on change' : t.kind;
+    return 'continuous';
+  });
+  const pick = (o: Record<string, unknown> | undefined): Record<string, number | string> => {
+    const out: Record<string, number | string> = {};
+    for (const [k, v] of Object.entries(o ?? {})) if (typeof v === 'number' || typeof v === 'string') out[k] = v;
+    return out;
+  };
+  return {
+    triggers: trig,
+    autonomy: c.autonomy,
+    start: c.start,
+    ...(c.goal ? { goal: c.goal.node } : {}),
+    ...(c.land ? { land: [...c.land.paths] } : {}),
+    budgets: { run: pick(c.budgets.run as unknown as Record<string, unknown>), day: pick(c.budgets.day as unknown as Record<string, unknown>) },
+    authoredBy: 'file',
+    nodes: c.nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      ...(n.type === 'model' ? { role: n.role } : {}),
+      ...(n.type === 'check' ? { role: n.effect } : {}),
+      ...(n.type === 'notify' ? { as: n.as } : {}),
+      ...(n.type === 'call' ? { callee: n.callee } : {}),
+      on: { ...n.on },
+    })),
+  };
+}
+
+/** LP8: caps a human tightened (request.loop.budget): positive whole numbers, each only ever lowered. */
+export interface TightenedBudgets {
+  run: Partial<Record<'rounds' | 'wallMin' | 'tokens' | 'computeSec', number>>;
+  day: Partial<Record<'runs' | 'tokens' | 'computeSec', number>>;
+}
+export const TIGHTEN_FIELDS = Object.freeze({ run: ['rounds', 'wallMin', 'tokens', 'computeSec'], day: ['runs', 'tokens', 'computeSec'] } as const);
+
+/** The closed shape of a tightened-caps object, or null. */
+export function parseTightened(v: unknown): TightenedBudgets | null {
+  if (!isObj(v)) return null;
+  const out: TightenedBudgets = { run: {}, day: {} };
+  let n = 0;
+  for (const k of Object.keys(v)) if (k !== 'run' && k !== 'day') return null;
+  for (const scope of ['run', 'day'] as const) {
+    const o = v[scope];
+    if (o === undefined) continue;
+    if (!isObj(o)) return null;
+    for (const [f, x] of Object.entries(o)) {
+      if (!(TIGHTEN_FIELDS[scope] as readonly string[]).includes(f) || typeof x !== 'number' || !Number.isSafeInteger(x) || x < 1) return null;
+      (out[scope] as Record<string, number>)[f] = x;
+      n++;
+    }
+  }
+  return n ? out : null;
+}
+
+/** The lower of two tightened sets, field by field. */
+export function minTightened(a: TightenedBudgets, b: TightenedBudgets): TightenedBudgets {
+  const out: TightenedBudgets = { run: { ...a.run }, day: { ...a.day } };
+  for (const scope of ['run', 'day'] as const) for (const [f, x] of Object.entries(b[scope])) {
+    const cur = (out[scope] as Record<string, number | undefined>)[f];
+    (out[scope] as Record<string, number>)[f] = cur === undefined ? x : Math.min(cur, x);
+  }
+  return out;
 }
 
 export interface LoopRegistryOptions {
@@ -268,6 +379,12 @@ export class LoopRegistry {
   readonly #repos = new Map<string, string>(); // repoKey → realpath root
   readonly #entries = new Map<string, LoopEntry>();
   readonly #folds = new Map<string, Fold>();
+  /** step 12: loop key → source hash → the agent that authored it (kernel-stamped loop.request rows) */
+  readonly #authored = new Map<string, Map<string, { principal: string; hsid: string | null; at?: string; basis: 'agent-key-claim' }>>();
+  /** step 12 (Aegis): kill-switch epochs folded so far; a pause records the epoch it was made in */
+  #killEpoch = 0;
+  /** LP8: tightened caps per loop key, for one content hash (loop.budget.tightened) */
+  readonly #tightened = new Map<string, { contentHash: string; budgets: TightenedBudgets }>();
   readonly #history: TrustEvent[] = [];
   readonly #pending = new Set<string>();
   readonly #watchers = new Map<string, { close(): void }>();
@@ -360,11 +477,40 @@ export class LoopRegistry {
       return;
     }
     if (!LOOP_FOLD_KINDS.includes(r.kind)) return;
+    if (r.kind === 'loop.paused' && p.all === true) {
+      // step 12 (Aegis): ONE kill-epoch row per kill switch covers every loop, trusted, paused or untrusted
+      this.#killEpoch++;
+      this.#changed();
+      return;
+    }
     const loopId = str(p.loopId);
     const scope = p.scope === 'repo' || p.scope === 'personal' ? p.scope : undefined;
     const repoKey = str(p.repoKey);
     if (!loopId || !KEBAB.test(loopId) || !scope || !repoKey || !REPO_KEY.test(repoKey)) return;
     const key = loopKeyOf(scope, repoKey, loopId);
+    if (r.kind === 'loop.budget.tightened') {
+      // LP8: a human's tightened caps hold for the content hash they were set on (a changed loop starts from its file)
+      const contentHash = str(p.contentHash);
+      const b = parseTightened(p.budgets);
+      if (!contentHash || !CONTENT_HASH.test(contentHash) || !b) return;
+      const prev = this.#tightened.get(key);
+      this.#tightened.set(key, { contentHash, budgets: prev && prev.contentHash === contentHash ? minTightened(prev.budgets, b) : b });
+      this.#changed();
+      return;
+    }
+    if (r.kind === 'loop.request') {
+      // step 12: only the kernel's own request rows (stamped from the connection) attribute a definition
+      const sourceHash = str(p.sourceHash);
+      const by = str(p.by);
+      if ((p.op !== 'create' && p.op !== 'update') || !sourceHash || !/^[0-9a-f]{64}$/.test(sourceHash) || !by) return;
+      const authored = this.#authored.get(key) ?? new Map<string, { principal: string; hsid: string | null; at?: string; basis: 'agent-key-claim' }>();
+      authored.delete(sourceHash);
+      authored.set(sourceHash, { principal: by, hsid: str(p.hsid) ?? null, ...(r.at ? { at: r.at } : {}), basis: 'agent-key-claim' });
+      if (authored.size > 16) authored.delete(authored.keys().next().value!);
+      this.#authored.set(key, authored);
+      this.#changed();
+      return;
+    }
     const f = this.#fold(key);
     const contentHash = str(p.contentHash);
     const ev: TrustEvent = { event: r.kind.slice('loop.'.length) as TrustEvent['event'], loopId, scope, repoKey, ...(contentHash ? { contentHash } : {}), ...(str(p.by) ? { by: str(p.by)! } : {}), ...(str(p.cardId) ? { cardId: str(p.cardId)! } : {}), ...(str(p.reason) ? { reason: str(p.reason)! } : {}), ...(r.at ? { at: r.at } : {}) };
@@ -389,7 +535,7 @@ export class LoopRegistry {
         // recorded only: trust moves to a new closure only through a new loop.trusted row (Aegis LP2 #1)
         break;
       case 'loop.paused':
-        f.paused = { reason: str(p.reason) ?? 'human', ...(str(p.by) ? { by: str(p.by)! } : {}) };
+        f.paused = { reason: str(p.reason) ?? 'human', ...(str(p.by) ? { by: str(p.by)! } : {}), ...(r.at && Number.isFinite(Date.parse(r.at)) ? { at: Date.parse(r.at) } : {}), epoch: this.#killEpoch };
         break;
       case 'loop.resumed':
         f.paused = null;
@@ -415,8 +561,36 @@ export class LoopRegistry {
     return f;
   }
 
+  /** LP8: the caps a human tightened for this loop's current content hash, or null. */
+  tightenedBudgets(key: string, contentHash: string | undefined): TightenedBudgets | null {
+    const t = this.#tightened.get(key);
+    return t && contentHash && t.contentHash === contentHash ? t.budgets : null;
+  }
+
   trustOf(key: string): TrustRecord | null {
     return this.#folds.get(key)?.trusted ?? null;
+  }
+
+  /** The loop's pause as folded (reason and who), or null. Step 12: an agent resumes only its own `agent` pause. */
+  /** How many kill switches the log holds (each `loop.paused{all:true}` row is one epoch). */
+  killEpoch(): number {
+    return this.#killEpoch;
+  }
+
+  pauseOf(key: string): { reason: string; by?: string; at?: number; epoch: number } | null {
+    const p = this.#folds.get(key)?.paused;
+    return p ? { ...p } : null;
+  }
+
+  /**
+   * Step 12 (§3.1): who authored this entry's CURRENT definition. A kernel request row whose sourceHash is the
+   * compiled definition's source hash names the agent (principal and hsid from its connection); anything else is
+   * `file`. An authored row never trusts anything: it only attributes.
+   */
+  authoredBy(e: LoopEntry): LoopAuthor {
+    const source = e.compiled?.compiled.sourceHash;
+    const a = source ? this.#authored.get(e.key)?.get(source) : undefined;
+    return a ? { ...a } : 'file';
   }
 
   /** Every trust event, oldest first (who trusted which hash and when). */
@@ -714,6 +888,8 @@ export class LoopRegistry {
       ...(t ? { trustedHash: t.contentHash, ...(t.by ? { trustedBy: t.by } : {}), ...(t.at ? { trustedAt: t.at } : {}), ...(t.cardId ? { cardId: t.cardId } : {}) } : {}),
       errors: e.errors.map(formatLoopIssue),
       callIssues: [...e.callIssues],
+      authoredBy: this.authoredBy(e),
+      ...(e.compiled ? { shape: withTightened({ ...loopShapeOf(e.compiled), authoredBy: authorLabel(this.authoredBy(e)) }, this.tightenedBudgets(e.key, e.hash?.contentHash)) } : {}),
     };
   }
 
@@ -790,7 +966,7 @@ export class LoopRegistry {
     RUN_REFS.set(ref, {
       key, loopId: e.loopId, scope: e.scope, repoKey: e.repoKey, repoRoot: e.repoRoot, runId: p.runId, nodeId: p.nodeId, rootKey: p.rootKey, contentHash,
       // attribution comes from the kernel's request rows (step 12); until then a definition with no request row is `file` (§3.1)
-      authoredBy: 'file', ...(t?.by ? { trustedBy: t.by } : {}), ...(t?.cardId ? { trustCard: t.cardId } : {}),
+      authoredBy: authorLabel(this.authoredBy(e)), ...(t?.by ? { trustedBy: t.by } : {}), ...(t?.cardId ? { trustCard: t.cardId } : {}),
       released: false,
       live: () => {
         const now = this.verify(key);

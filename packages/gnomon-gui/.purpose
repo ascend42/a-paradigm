@@ -844,6 +844,37 @@ components:
       - test/mods.test.ts
       - test/workshop.test.ts
 
+  gui-loops:
+    description: >-
+      LP8, the GUI Loops view (docs/specs/gnomon-loops.md §6; Atelier
+      2026-10-22-gnomon-loops-ui, design-system loops-word, loops-leaf,
+      loop-row, loop-list, loop-detail, budget-field, loop-graph, run-trace,
+      loop-trust-unfolded, loop-diff, alert, trust-slip, toast loop-done).
+      core/loops.ts (PURE) reads the human class's status.loops (registry
+      list with each loop's drawable shape and authoredBy, the runner's
+      running set and run ledger, effective autonomy with capReason, the
+      uptime hold) into the header loops word, the leaf meta, keep-alive
+      line and edge tab, the needs-you-pinned project-grouped two-line
+      rows, detail keys that name their cost, budget keys (tighter /
+      looser), the run trace and run paths, stack alerts (fail, stop,
+      kernel pause), the waiting-for-trust slip, loop-done toasts from live
+      loop.run.ended{goal}, loop.landed and loop.notified rows, and the
+      unfolded trust card's sections. core/loop-graph.ts (PURE) lays the
+      graph out left to right when it fits, else top to bottom, with
+      collapsed labels (any / else), merged buses, boxes sized to their
+      type line, marks for verdicts; fit plus zoom inside the frame.
+      ui/loops-view.ts is the DOM (the centre leaf, Esc folds it to the
+      edge tab; Read unfolds a loop-trust card over the centre). Requests
+      are log.append of request.loop.* on a trusted press; Pause all is
+      request.loop.pause{all:true} (palette loops.pause-all, the leaf head,
+      the wordmark menu). Apply · tighter sends request.loop.budget (narrowing only, the kernel's loop.budget.tightened row); a looser cap is disabled as Loosen · needs trust. Loop cards are identified from the card:v1 the broker sends (the root-rows node, the kernel's loop.notified row, the kernel line), never a top-level detail.
+    tags: [gui, loops]
+    signals: []
+    tests:
+      - test/loops-view.test.ts
+      - test/loop-cards.test.ts
+      - test/desk.test.ts
+
   gui-offer-slip:
     description: >-
       The Desk's margin slip (TD-2026-10-20-812 O1, Luna's comp

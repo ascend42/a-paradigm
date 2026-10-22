@@ -1240,7 +1240,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop'),
     // step 8 (#loop-runner): judge/summarize steps open unattended local sessions only through supervisor.openLoop
     model: { openLoop: (ref, req) => supervisor.openLoop(ref, req), configured: () => ({ endpoints: (localCfg.config?.endpoints ?? []).filter((e) => e.loops === true).map((e) => e.id), runner: localCfg.config?.runner !== undefined }) },
-    strictness: (repoKey) => ({ level: strictness.level(repoKey), mode: runModes.repoView(repoKey).effective }) });
+    strictness: (repoKey) => ({ level: strictness.level(repoKey), mode: runModes.repoView(repoKey).effective }),
+    // step 12 (#loop-agent-ops, LL5): a loop session's hsid is refused every loop.request
+    isLoopSession: (hsid) => supervisor.isLoopSession(hsid) });
   loopsBrake = (repoKey) => loops.brake(repoKey);
   const dispatcherCommon = {
     voice,

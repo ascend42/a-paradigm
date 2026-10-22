@@ -29,7 +29,8 @@ export function loopClampAllows(modeRef: string, trustCardId: string | undefined
 
 /** The kernel-composed first line of a card raised by (or for) a loop. Display-sanitised by the caller's renderer. */
 export function loopClampLine(loopId: string, authoredBy: string): string {
-  return `Raised by loop ${loopId} (authored by ${authoredBy})`;
+  // an agent's authorship is a claim made with its key (registry LoopAuthor basis 'agent-key-claim'), never a fact
+  return authoredBy === 'file' ? `Raised by loop ${loopId} (authored by file)` : `Raised by loop ${loopId} (claimed by ${authoredBy})`;
 }
 
 /** A card plan raised inside a loop session: detail.origin 'loop', the kernel line first, the block rebuilt. */

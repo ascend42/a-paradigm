@@ -969,8 +969,13 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     for (const bad of [{}, { kind: 'Bad Kind' }, { kind: 'x'.repeat(200) + '.y' }, []]) expect(errOf(await h.conn.call('log.append', bad))).toMatchObject({ code: -32600, c: 'BAD_REQUEST' });
     const a = await asDevice(r, 'agent');
     expect(errOf(await a.conn.call('log.append', { kind: 'loop.row' }))).toMatchObject({ c: 'FORBIDDEN', reason: 'ungranted' });
-    // 8.0:loops: the agent's loop.request is userland and ungranted until its pre-gate (build step 12); the runner's rows are kernel-owned
-    expect(errOf(await a.conn.call('log.append', { kind: 'loop.request', payload: { op: 'run', loopId: 'x' } }))).toMatchObject({ c: 'FORBIDDEN', reason: 'ungranted' });
+    // 8.0:loops build step 12 (#loop-agent-ops): loop.request reaches the agent pre-gate (gnomon-loops.md §5), which judges
+    // the shape and the loop (a malformed ask is BAD_REQUEST, an unknown loop NOT_FOUND) and refuses every other class
+    // FORBIDDEN{matrix} (humans use request.loop.*); the runner's rows stay kernel-owned
+    expect(errOf(await a.conn.call('log.append', { kind: 'loop.request', payload: { op: 'run', loopId: 'x' } }))).toMatchObject({ c: 'BAD_REQUEST' });
+    expect(errOf(await a.conn.call('log.append', { kind: 'loop.request', payload: { op: 'trust', loopId: 'x', scope: 'personal' } }))).toMatchObject({ c: 'BAD_REQUEST' });
+    expect(errOf(await a.conn.call('log.append', { kind: 'loop.request', payload: { op: 'run', loopId: 'x', scope: 'personal', principal: 'p:abcdefgh/forged' } }))).toMatchObject({ c: 'NOT_FOUND' });
+    expect(errOf(await h.conn.call('log.append', { kind: 'loop.request', payload: { op: 'pause', loopId: 'x', scope: 'personal' } }))).toMatchObject({ c: 'FORBIDDEN', reason: 'matrix' });
     for (const k of ['loop.round', 'loop.trusted', 'loop.run.started', 'loop.node']) expect(errOf(await a.conn.call('log.append', { kind: k })), k).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
     const mod = await asDevice(r, 'mod');
     expect(errOf(await mod.conn.call('log.append', { kind: 'modns.workshop.saved' }))).toMatchObject({ c: 'ENGINE', reason: 'not-implemented', milestone: 'M1.11' });

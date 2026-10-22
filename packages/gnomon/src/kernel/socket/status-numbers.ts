@@ -86,6 +86,8 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'loops.runs[].nodes[].visit': 'ordinal', // the node's visit number in the run (1-based)
   'loops.runs[].nodes[].round': 'ordinal', // the round the visit was in (1-based)
   'loops.runs[].nodes[].durationMs': 'duration', // the node's check time
+  // LP8 (#gui-loops): a loop's configured run and day caps, as the GUI's list and budget fields show them
+  'loops.loops[].shape.budgets.*.*': 'limit',
 });
 
 export interface StatusNumberFinding {

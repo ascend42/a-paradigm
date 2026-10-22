@@ -1,6 +1,7 @@
 {
   "$comment": "P8-D81 symbol drift allowlist (test/symbols-drift.test.ts). A symbol declared in a packages/gnomon*/.purpose file that is NOT a spec Appendix A node (docs/specs/gnomon.md) must be listed here with a reason. Spec ids are never listed (the test refuses redundant entries), and an entry whose symbol is no longer declared anywhere fails as stale.",
   "entries": [
+    { "symbol": "#gui-loops", "reason": "8.0 loops LP8: the GUI Loops view, declared in docs/specs/gnomon-loops.md §6 (#gui-loops), not in docs/specs/gnomon.md Appendix A; sub-component of #gui (Atelier 2026-10-22-gnomon-loops-ui)" },
     { "symbol": "#gui-model-picker", "reason": "2026-10-20 founder ask: sub-component of #gui (the New-session Claude model select, the header model chip and the mid-session switch sheet); spec Appendix A node pending a spec pass" },
     { "symbol": "#gui-dictation", "reason": "TD-2026-10-20-262 sub-component of #gui (voice dictation into the composer, T-2026-10-19-026); spec Appendix A node pending the TD-2026-10-20-262 spec pass" },
     { "symbol": "#prefix-policy", "reason": "TD-2026-10-20-294 Aegis H1/M3 sub-component of #always-rules (spec §3.4 prefix rules are bounded); spec Appendix A node pending the TD" },
@@ -61,6 +62,8 @@
     { "symbol": "#loop-strictness", "reason": "Gnomon loops (docs/specs/gnomon-loops.md §3.3 Law 5 and strictness, build plan step 9, M2.11-lite): a loop's effective autonomy under its repo's level and run mode, the land decision and the repo brake; the loops spec is separate from docs/specs/gnomon.md, so Appendix A has no node for it" },
     { "symbol": "#strictness-levels", "reason": "M2.11-lite sub-component of #approval-broker (spec §3.4 strictness levels: the per-repo level fold, request.strictness.set, tighten without presence and loosen with fresh presence); spec Appendix A keeps strictness inside #approval-broker (part 2 judgment call: no new node), so the slice is listed here like #standing-grant" },
     { "symbol": "#strictness-cli", "reason": "the `gnomon strictness show|set` CLI verb (M2.11-lite, src/cli/strictness-cli.ts); spec §3.4 names `gnomon strictness` in prose and adds no Appendix A node, like #mode-cli" },
+    { "symbol": "#loop-events", "reason": "Gnomon loops (docs/specs/gnomon-loops.md §2 triggers and §4 #loop-events, build plan step 7, LP4b): file, commit, session-end and card-decided triggers, the loop.trigger.fired row and the self-trigger guard; the loops spec is separate from docs/specs/gnomon.md, so Appendix A has no node for it" },
+    { "symbol": "#loop-agent-ops", "reason": "Gnomon loops (docs/specs/gnomon-loops.md §5 What an agent may do and §3.1 Attribution, build plan step 12, LP7): the kernel pre-gate for an agent's loop.request (run, pause, resume, delete, redacted reads) and authoredBy stamped from the connection; the loops spec is separate from docs/specs/gnomon.md, so Appendix A has no node for it" },
     { "symbol": "#loop-timers", "reason": "Gnomon loops (docs/specs/gnomon-loops.md §4 scheduler integration and uptime hold, §10 D1, build plan step 6, LP4a): loop timers in the scheduler, the runner hand-off, the continuous trigger and the loop idle holder; the loops spec is separate from docs/specs/gnomon.md, so Appendix A has no node for it" }
   ]
 }

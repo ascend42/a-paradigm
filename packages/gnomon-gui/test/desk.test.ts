@@ -434,13 +434,13 @@ describe('Aegis S2/S3 review fixes', () => {
       expect(css).toContain(`.pink.h${i} {`);
     }
   });
-  it('the Gnomon menu runs only presets, the pane toggles, the Workshop placements, theme, Mods, Voice settings and Settings (never a kernel-owned region)', async () => {
+  it('the Gnomon menu runs only presets, the pane toggles, the Workshop placements, Loops (the leaf and Pause all loops), theme, Mods, Voice settings and Settings (never a kernel-owned region)', async () => {
     const { appMenuModel, APP_MENU_RUNS } = await import('../src/core/header.js');
     const { applyPreset } = await import('../src/core/commands.js');
     const { themeSwitchEntries } = await import('../src/core/settings.js');
-    const rows = appMenuModel({ layout: applyPreset('desk'), panesOpen: true, theme: themeSwitchEntries('auto', false), who: '' });
+    const rows = appMenuModel({ layout: applyPreset('desk'), panesOpen: true, theme: themeSwitchEntries('auto', false), who: '', loops: { note: '1 running', paused: false } });
     const runs = rows.flatMap((r) => (r.kind === 'item' ? [r.run] : r.kind === 'theme' ? r.options.map((o) => o.run) : []));
-    expect(runs).toEqual(['layout.desk', 'layout.focus', 'layout.decide', 'menu.panes', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle', 'workshop.footer', 'workshop.right', 'workshop.left', 'theme.day', 'theme.night', 'theme.auto', 'mods.open', 'voice.settings.open', 'settings.open']);
+    expect(runs).toEqual(['layout.desk', 'layout.focus', 'layout.decide', 'menu.panes', 'pane.sessions.toggle', 'pane.stack.toggle', 'pane.workshop.toggle', 'workshop.footer', 'workshop.right', 'workshop.left', 'loops.open', 'loops.pause-all', 'theme.day', 'theme.night', 'theme.auto', 'mods.open', 'voice.settings.open', 'settings.open']);
     expect([...APP_MENU_RUNS].sort()).toEqual([...runs].sort());
     expect(app).toMatch(/if \(!id \|\| !APP_MENU_RUNS\.has\(id\)\) return;/);
   });

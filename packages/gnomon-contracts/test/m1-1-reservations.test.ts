@@ -255,7 +255,7 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by 8.0:T-2026-10-21-008 (re-review M-1/M-2: offer.retired + session.anomaly + desk.retire/sessionAnomaly closed values): was sha256:4c2b9371…af2c.
 // Moved once by 8.0:session-rename (request.session.rename + session.renamed + descriptor sessionRename): was sha256:454cd632…7de.
 // Moved once by 8.0:loops (loop-trust/loop-choice cards, continue/stop, the loop.* + request.loop.* kinds, descriptor loops): was sha256:c4e2c7d9…e2c9.
-const PINNED_CLIENT_API_ID = 'sha256:f01dc9efc9b0910466b837e203d222932f156f296b414da1b5f59481a36bd1c1';
+const PINNED_CLIENT_API_ID = 'sha256:a23b2c75c92df061c1dafa5d32e818a6ae788ef7153613d45be0ecae3c4ba1ce';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -611,6 +611,7 @@ describe('event labels and payload docs (round 2)', () => {
       'loop.node': { evidence: 'sensitive', evidenceRef: 'sensitive' },
       'loop.landed': { paths: 'sensitive' },
       'loop.proposed': { paths: 'sensitive' },
+      'loop.request': { repo: 'sensitive' },
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {

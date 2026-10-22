@@ -255,9 +255,9 @@ const TABLE: Row[] = [
   //   loop.landed / loop.land.waiting / loop.parked                 the land step (§3.2)
   //   loop.trigger.fired                   a schedule, event or continuous trigger fired (§4 #loop-events)
   //   loop.deleted / loop.resumed          a delete; a resume after any pause (the fold's pause → idle edge)
-  ['loop', 'kernel', 'trusted untrusted closure.changed run.started node round notified proposed landed land.waiting parked run.ended trigger.fired deleted resumed', LOOPS],
+  ['loop', 'kernel', 'trusted untrusted closure.changed run.started node round notified proposed landed land.waiting parked run.ended trigger.fired deleted resumed budget.tightened', LOOPS],
   // The human's asks (§5 "Human ops"; the named request.* exception, gnomon.md §5): pause{all:true} is the kill switch.
-  ['request', 'kernel', 'loop.trust loop.untrust loop.pause loop.resume loop.run loop.delete', LOOPS],
+  ['request', 'kernel', 'loop.trust loop.untrust loop.pause loop.resume loop.run loop.delete loop.budget', LOOPS],
   // The agent's ask (§5): a userland kind bound in the paradigm grant; the kernel pre-gates it (build step 12).
   ['loop', 'userland', 'request', LOOPS],
 ];
@@ -301,6 +301,8 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'loop.node': { evidence: 'sensitive', evidenceRef: 'sensitive' },
   'loop.landed': { paths: 'sensitive' },
   'loop.proposed': { paths: 'sensitive' },
+  // build step 12 (Aegis): the agent's loop.request row names its repo by path; the path is project detail
+  'loop.request': { repo: 'sensitive' },
 };
 
 function build(): Readonly<Record<string, EventKindSpec>> {
@@ -418,6 +420,8 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'loop.run.ended': ['runId', 'loopId', 'reason'],
   'loop.trigger.fired': ['loopId', 'trigger', 'eventId'],
   'loop.deleted': ['loopId', 'scope', 'repoKey', 'by'],
+  // LP8 (#gui-loops): a human tightened a trusted loop's caps (never raised: that is a change waiting for trust)
+  'loop.budget.tightened': ['loopId', 'scope', 'repoKey', 'contentHash', 'budgets', 'by'],
   'loop.resumed': ['loopId', 'by', 'cardId'],
   'request.loop.trust': ['loopId', 'scope', 'repo'],
   'request.loop.untrust': ['loopId', 'scope', 'repo'],
@@ -425,6 +429,7 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'request.loop.resume': ['loopId', 'scope', 'repo'],
   'request.loop.run': ['loopId', 'scope', 'repo'],
   'request.loop.delete': ['loopId', 'scope', 'repo'],
+  'request.loop.budget': ['loopId', 'scope', 'repo', 'budgets'],
   'loop.request': ['op', 'loopId', 'scope', 'repo', 'hsid'],
 });
 

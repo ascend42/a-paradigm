@@ -88,7 +88,7 @@ export const FAMILY_META: FamilyMeta[] = [
   { name: 'paradigm_pipeline', tier: 'on-demand', keys: ['pipeline'], description: 'Pipelines: configure, start, status, advance, escalate, abort, list.' },
   { name: 'paradigm_graduation', tier: 'on-demand', keys: ['graduation', 'graduate'], description: 'Graduation: check or status.' },
   { name: 'paradigm_brain', tier: 'on-demand', keys: ['brain'], requires: 'brain-agent-access', description: 'Personal Brain, owner-shared notes only (metadata; headings are untrusted text).' },
-  { name: 'paradigm_loop', tier: 'on-demand', keys: ['loops', 'loop'], detector: 'loops', description: 'Gnomon loop definitions (.paradigm/loops): create, update, validate, list, get. File ops only.' },
+  { name: 'paradigm_loop', tier: 'on-demand', keys: ['loops', 'loop'], detector: 'loops', description: 'Gnomon loop definitions (.paradigm/loops): create, update, validate, list, get (files); run, pause, resume, delete, runs, logs, trust_status through Gnomon.' },
   { name: 'paradigm_test_fixtures', tier: 'on-demand', keys: ['test_fixtures', 'fixtures'], detector: 'fixtures', plain: true, description: '' },
 ];
 

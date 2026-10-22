@@ -24,12 +24,14 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     loops: 'src/loops/index.ts',
+    // step 12 (#loop-agent-ops): the agent principal's loop.request client, for paradigm-mcp
+    agent: 'src/agent/index.ts',
     'cli/gnomon': 'src/cli/gnomon.ts',
     'cli/gnomond': 'src/cli/gnomond.ts',
     'transport/gnomon-web': 'src/transport/gnomon-web.ts',
   },
   format: ['esm'],
-  dts: { entry: { index: 'src/index.ts', loops: 'src/loops/index.ts' } },
+  dts: { entry: { index: 'src/index.ts', loops: 'src/loops/index.ts', agent: 'src/agent/index.ts' } },
   clean: true,
   target: 'node24',
   platform: 'node',

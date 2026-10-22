@@ -33,7 +33,7 @@ Branch `feat/gnomon-loops` (worktree `a-paradigm-loops`), cut from `feat/gnomon`
 | {4} | `loop-check` profile and check executor (copy via `git ls-files`, read-only node_modules, scrubbed env, process-control kill, tap/junit/tsc/json parsers, kernel-pinned builtins) | M | Aegis escape suite |
 | 5 | LP3 runner core plus manual run: graph walk, budgets, ledger, restart fold, concurrency, toasts, `gnomon loop run\|pause\|resume\|runs\|logs`; first end-to-end loop | L | |
 | 6 | LP4a schedule (daily/weekly with timezone and DST), trust predicate, dynamic registration, runner hand-off, `loop` idle holder (uptime), kill switch | M | built (#loop-timers) |
-| {7} | LP4b events: file.changed (per-repo watch), commit.landed, session.exited, approval.decide, continuous; `loop.trigger.fired` rows | M | |
+| {7} | LP4b events: file.changed (per-repo watch), commit.landed, session.exited, approval.decide, continuous; `loop.trigger.fired` rows | M | built (#loop-events) |
 | {8} | LP5 local model nodes: `LocalLane.openLoop()` with `origin:'loop'`, verdict parse else `unsure`, `unavailable` retries, permit scope `loop`, thrash k=3 | L | Aegis |
 | {9} | Strictness-lite: per-repo levels via `request.strictness.set`, effective autonomy per node, L3 and brake pause | M | Aegis |
 | 10 | LP6a scratch worktree (`kernel/git/`), `loop-act` profile, act nodes via gnomon-local read/write tools, protected goal inputs, propose card | L | Aegis |
@@ -113,3 +113,15 @@ YAML in a zero-dep kernel (hash and show only the compiled JSON); shebang argv0 
 - **Default L0**, not the D87 L1 floor (that waits on Move 3's calibration). Concurrency follows the spec's root-config defaults (`strictness.concurrency` L1 2, L2 1) until that config is read.
 - **Brake:** a level raise, or a repo run-mode tightening, pauses the repo's running loops at once (`loop.paused{reason:'strictness'}`, a kernel pause: resume takes presence). A strictness pause does not lift by itself when the level drops.
 - **Land:** `landDecision()` in `kernel/loops/strictness-cap.ts` is what step 11 calls at land, with the cap re-read.
+
+## Notes from step 7 (LP4b event triggers)
+
+- **Continuous** was built in step 6 (#loop-timers); step 7 adds `file.changed`, `commit.landed`, `session.ended` and `card.decided` in `kernel/loops/events.ts`. `sentinel.incident.opened` stays refused at validation.
+- **Payload fields beyond the reservation** (opaque; document at the next contract move): `loop.trigger.fired` adds `scope`, `repoKey`; its `trigger` is `{type:'event', kind, fireId, count, path | sha+ref | hsid | cardId+loop+node}` and `eventId` is the source row's id (log-sourced kinds only). `loop.run.started.trigger` carries the same `fireId`; replay (`LOOP_REPLAY_KINDS`) joins them as `why`.
+- **Step 11 must write `loop.landed{runId, sha, paths}` BEFORE it moves the ref** (Aegis step 7). A commit is a loop's own only when a kernel-signed `loop.landed{sha}` row names it, never because of a trailer or a `@gnomon.invalid` identity, which anyone can write. A row written after the ref moves races the 250 ms settle, and the loop would trigger itself (G-LOOP-15). While a run is active, changes in its `land.paths` count as its own, as do changes for 60 s after a `loop.landed{paths}` row.
+- **Hand-off first (Aegis step 7):** a fire calls `runner.start` before writing anything. Only a run that starts or queues writes `loop.trigger.fired`. A coalesced fire (the rerun flag is already set) or a refused one (day caps, pause, strictness) writes no row; `dropped()` counts it per loop. Replay joins a run to its row by `fireId` over the whole history, because the row follows `loop.run.started`.
+- **Model inputs:** the hand-off trigger carries kernel ids only (`sha`, `hsid`, `cardId`, `loop`, `node`). The path and ref stay in the row and never reach `trigger.payload` (model-node.ts `TRIGGER_FIELDS` still lists `path` for other trigger types).
+- **Git dirs** are validated as git links them: the `.git` dir is not a symlink; a worktree's `gitdir` is a real `<common>/worktrees/<name>` that links back, and its `commondir` is that `<common>`. Anything else is refused. The watches cover HEAD and packed-refs (non-recursive) and the `refs/heads` tree, never the whole git dir.
+- **card.decided** matches only cards a run raised through `loop.notified{cardId}` in the same repo; a loop's trigger on its OWN card never fires (the decision is in that run's causes chain).
+- **session.ended** fires only for sessions whose `session.open{cwd}` is inside the loop's repo.
+- **Linux:** recursive fs.watch is Node's userland walker there; the real-watch tests are skipped on Linux, the deterministic ones (handleFsEvent, checkRefs) run everywhere. A watch that cannot start is a `loops.watch-unavailable` diag, not an error.

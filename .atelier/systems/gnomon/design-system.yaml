@@ -833,10 +833,8 @@ content:
   from: { session: 2026-10-15-gnomon-aesthetic, board: cli-voice, choice: instrument-readout, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
 
 specimen:
-  stylesheets: [packages/gnomon-gui/static/styles.css, .atelier/systems/gnomon/loops-direction.css]
-  # loops-direction.css is a bridge: the Loops components' CSS copied from the approved direction (session
-  # 2026-10-22-gnomon-loops-ui) so the specimen can draw them before the build. It is not product code; drop it when
-  # styles.css carries the loop classes.
+  stylesheets: [packages/gnomon-gui/static/styles.css]
+  # the loops-direction.css bridge was dropped by the LP8 build: styles.css carries the loop classes
   themes:
     day: { html_attrs: 'data-theme="day" data-motion="full"' }
     night: { html_attrs: 'data-theme="night" data-motion="full"' }

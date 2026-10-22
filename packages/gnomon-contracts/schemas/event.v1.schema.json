@@ -112,6 +112,7 @@
     "link.scan.hit",
     "liveness.digest.consumed",
     "liveness.violation",
+    "loop.budget.tightened",
     "loop.closed",
     "loop.closure.changed",
     "loop.deleted",
@@ -186,6 +187,7 @@
     "request.grant.standing.revoke",
     "request.incident",
     "request.link.revoke",
+    "request.loop.budget",
     "request.loop.delete",
     "request.loop.pause",
     "request.loop.resume",
@@ -331,6 +333,7 @@
     "link.renewed": "M1.1:P8-R9",
     "link.revoked": "M1.1:P8-R9",
     "link.scan.hit": "M1.1:P8-R9",
+    "loop.budget.tightened": "8.0:loops",
     "loop.closure.changed": "8.0:loops",
     "loop.deleted": "8.0:loops",
     "loop.land.waiting": "8.0:loops",
@@ -363,6 +366,7 @@
     "request.grant.standing.revoke": "8.0:TD-2026-10-20-086",
     "request.incident": "M1.1:P8-D86-D88",
     "request.link.revoke": "M1.1:P8-R9",
+    "request.loop.budget": "8.0:loops",
     "request.loop.delete": "8.0:loops",
     "request.loop.pause": "8.0:loops",
     "request.loop.resume": "8.0:loops",
@@ -710,6 +714,14 @@
       "repoKey",
       "by"
     ],
+    "loop.budget.tightened": [
+      "loopId",
+      "scope",
+      "repoKey",
+      "contentHash",
+      "budgets",
+      "by"
+    ],
     "loop.resumed": [
       "loopId",
       "by",
@@ -745,6 +757,12 @@
       "loopId",
       "scope",
       "repo"
+    ],
+    "request.loop.budget": [
+      "loopId",
+      "scope",
+      "repo",
+      "budgets"
     ],
     "loop.request": [
       "op",

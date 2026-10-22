@@ -62,7 +62,7 @@ import { createHash } from 'node:crypto';
 import { runCheck, type CheckExecInput, type CheckResult, type FilePin } from './check-exec.js';
 import { dayKeyOf, type LoopLedger } from './ledger.js';
 import { resolveInputs, runModelStep, type LoopModelPort, type ModelStepResult, type NodeNote } from './model-node.js';
-import type { LoopEntry, LoopRegistry, LoopRunRef } from './registry.js';
+import { authorLabel, parseTightened, type LoopEntry, type LoopRegistry, type LoopRunRef, type TightenedBudgets } from './registry.js';
 import { loopClampLine } from '../supervisor/loop-clamp.js';
 import { parseLoopTarget, type LoopAsker } from './trust.js';
 import { effectiveAutonomy, FAIL_SAFE_CAP, OPEN_CAP, type EffectiveAutonomy, type RepoCap } from './strictness-cap.js';
@@ -235,6 +235,16 @@ export function effectiveBudgets(b: Partial<LoopBudgets> | undefined, defaults: 
   };
 }
 
+/** LP8: the effective budgets with a human's tightened caps applied (only ever lower). */
+export function tightenBudgets(b: LoopBudgets, t: TightenedBudgets | null): LoopBudgets {
+  if (!t) return b;
+  const run = { ...b.run };
+  const day = { ...b.day };
+  for (const [f, x] of Object.entries(t.run) as Array<[keyof LoopBudgets['run'], number]>) run[f] = Math.min(run[f], x);
+  for (const [f, x] of Object.entries(t.day) as Array<[keyof LoopBudgets['day'], number]>) day[f] = Math.min(day[f], x);
+  return { ...b, run, day };
+}
+
 /** Nodes this build cannot run (act and write: step 10). */
 export function unsupportedNodes(c: CompiledLoop): string[] {
   return c.nodes.filter((n) => (n.type === 'model' && n.role === 'act') || (n.type === 'check' && n.effect === 'write')).map((n) => n.id);
@@ -376,7 +386,7 @@ export class LoopRunner {
     const eff = this.effective(entry);
     if (eff.paused) throw new RpcRefusal('FORBIDDEN', 'strictness-paused', `loop ${entry.loopId} cannot run: its repo is at ${eff.level}${eff.mode === 'manual' ? ' in manual mode' : ''} (${eff.capReason})`, { gate: 'strictness', level: eff.level, mode: eff.mode });
     const repoCap = Math.min(this.#caps.repo, eff.concurrency ?? Infinity);
-    const budgets = effectiveBudgets(entry.compiled.budgets, this.#caps.budgets);
+    const budgets = tightenBudgets(effectiveBudgets(entry.compiled.budgets, this.#caps.budgets), this.#o.registry.tightenedBudgets(entry.key, entry.hash?.contentHash));
     const today = dayKeyOf(this.#now());
     const mine = this.#o.ledger.day(today, key);
     const all = this.#o.ledger.day(today);
@@ -691,7 +701,7 @@ export class LoopRunner {
         if (later.length) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee}: ${ACT_NODES_LATER}` };
         const noModel = this.#modelRefusal(callee.compiled);
         if (noModel) return { verdict: 'error', edge: 'error', durationMs: 0, detail: `${node.callee}: ${noModel}` };
-        const cb = effectiveBudgets(callee.compiled.budgets, this.#caps.budgets);
+        const cb = tightenBudgets(effectiveBudgets(callee.compiled.budgets, this.#caps.budgets), this.#o.registry.tightenedBudgets(callee.key, callee.hash?.contentHash));
         const childId = `${runId}-c${visit}${node.id.slice(0, 8)}`.slice(0, 64);
         const meter = new Meter(cb.run.wallMin * 60_000, cb.run.computeSec * 1000, () => this.#now(), ctx.meter, cb.run.tokens);
         const callTrigger = { type: 'call', runId, nodeId: node.id };
@@ -773,9 +783,9 @@ export class LoopRunner {
     try {
       await this.#o.broker.raise({
         kind: 'loop-choice', cardId, requestedBy: this.#o.kernelPrincipal, attended: false,
-        detail: { loopId: ctx.entry.loopId, scope: ctx.entry.scope, repoKey: ctx.entry.repoKey, repo: ctx.entry.repoRoot, runId: ctx.runId, nodeId: node.id, origin: 'loop', authoredBy: 'file' },
-        // ^loop-origin-clamp: the kernel line names the loop and who authored it (§3.4)
-        lines: [loopClampLine(ctx.entry.loopId, 'file'), `Run ${ctx.runId}`, text, 'Continue lets the loop go on (Touch ID); stop ends this run'],
+        detail: { loopId: ctx.entry.loopId, scope: ctx.entry.scope, repoKey: ctx.entry.repoKey, repo: ctx.entry.repoRoot, runId: ctx.runId, nodeId: node.id, origin: 'loop', authoredBy: authorLabel(this.#o.registry.authoredBy(ctx.entry)) },
+        // ^loop-origin-clamp: the kernel line names the loop and who authored it (§3.4; step 12: from the request rows)
+        lines: [loopClampLine(ctx.entry.loopId, authorLabel(this.#o.registry.authoredBy(ctx.entry))), `Run ${ctx.runId}`, text, 'Continue lets the loop go on (Touch ID); stop ends this run'],
         decisions: choices as RaiseInput['decisions'], timeoutMs: ttl,
         effect: async (decision) => settle(decision),
       });
@@ -826,6 +836,9 @@ export class LoopRunner {
     }
     this.#emit({ type: 'kill' }); // #loop-timers drops every loop timer now, before any row is written
     try {
+      // step 12 (Aegis): ONE kill-epoch row first, covering every loop (trusted, paused or untrusted): a pause made
+      // before it (an agent's own) no longer lets that agent resume; only a human with presence lifts it
+      await this.#o.append('loop.paused', { all: true, reason: 'kill-switch', by }, connId ? { connId } : undefined);
       this.#o.registry.scan();
       for (const e of this.#o.registry.entries()) if (this.#o.registry.stateOf(e).state === 'trusted') keys.add(e.key);
       for (const k of keys) this.#killHeld.add(k);
@@ -904,7 +917,7 @@ export class LoopRunner {
       if (payload.all !== true || Object.keys(payload).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', 'the kill switch is request.loop.pause{all:true} alone');
       return this.pauseAll(asker.principal, asker.connId);
     }
-    const t = parseLoopTarget(this.#o.registry, kind, payload);
+    const t = parseLoopTarget(this.#o.registry, kind, payload, kind === 'request.loop.budget' ? ['budgets'] : []);
     this.#o.registry.scan();
     const e = this.#o.registry.find(t.loopId, t.scope, t.repoKey);
     if (!e) throw new RpcRefusal('NOT_FOUND', 'not-found', `no ${t.scope} loop ${t.loopId}`);
@@ -914,7 +927,26 @@ export class LoopRunner {
     }
     if (kind === 'request.loop.pause') return this.pause(e.key, asker.principal, 'human', asker.connId);
     if (kind === 'request.loop.resume') return this.resume(e.key, asker);
+    if (kind === 'request.loop.budget') return this.tighten(e, (payload as Record<string, unknown>).budgets, asker);
     throw new RpcRefusal('BAD_REQUEST', 'bad-params', `unknown loop request ${kind.slice(0, 64)}`);
+  }
+
+  /**
+   * LP8 (#gui-loops, steer-stop): a human tightens a loop's caps. Narrowing only: every field must be at or below the
+   * cap in force (the file's, or an earlier tightening), so no presence; a looser cap is a change to the loop file and
+   * waits for a loop-trust card. The row holds for the current content hash (the registry folds it).
+   */
+  async tighten(e: LoopEntry, raw: unknown, asker: LoopAsker): Promise<unknown> {
+    const want = parseTightened(raw);
+    if (!want) throw new RpcRefusal('BAD_REQUEST', 'bad-params', 'budgets is {run?: {rounds, wallMin, tokens, computeSec}, day?: {runs, tokens, computeSec}} of whole numbers above 0');
+    if (!e.compiled || !e.hash) throw new RpcRefusal('ENGINE', 'not-compiled', `loop ${e.loopId} does not compile`);
+    const cur = tightenBudgets(effectiveBudgets(e.compiled.budgets, this.#caps.budgets), this.#o.registry.tightenedBudgets(e.key, e.hash.contentHash));
+    const looser: string[] = [];
+    for (const [f, x] of Object.entries(want.run)) if (x > cur.run[f as keyof LoopBudgets['run']]) looser.push(`run.${f}`);
+    for (const [f, x] of Object.entries(want.day)) if (x > cur.day[f as keyof LoopBudgets['day']]) looser.push(`day.${f}`);
+    if (looser.length) throw new RpcRefusal('FORBIDDEN', 'needs-trust', `raising ${looser.join(', ')} is a change to the loop file: it waits for a loop-trust card`);
+    await this.#o.append('loop.budget.tightened', { loopId: e.loopId, scope: e.scope, repoKey: e.repoKey, contentHash: e.hash.contentHash, budgets: want, by: asker.principal! }, { connId: asker.connId });
+    return { tightened: true, budgets: tightenBudgets(cur, want) };
   }
 
   // ── Reads ───────────────────────────────────────────────────────────────────

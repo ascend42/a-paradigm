@@ -414,6 +414,8 @@ export interface HumanRequestPort {
   loops?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
     status(): Record<string, unknown>;
+    /** #loop-agent-ops (step 12): an AGENT's loop.request; the asker (principal, hsid) is stamped from this connection */
+    agent?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; hsid: string | null }, payload: unknown): Promise<unknown>;
   };
 }
 
@@ -912,6 +914,18 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
           return await o.requests.loops.request({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.kind, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // 8.0:loops step 12 (#loop-agent-ops): loop.request goes to the agent pre-gate and nowhere else; the asker's
+      // principal and hsid come from THIS connection, never the payload. Every class reaches the gate, which refuses
+      // all but an agent (sessions and loop sessions: LL5; peers, voice, mods: never)
+      if (pa?.kind === 'loop.request' && o.requests?.loops?.agent) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for loop.request (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.loops.agent({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential, hsid: s.hsid ?? null }, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

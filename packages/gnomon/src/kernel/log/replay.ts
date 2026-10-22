@@ -64,6 +64,9 @@
  * replayLoopRuns (kernel/loops/ledger.ts) into `projection.loops` (each run's edges: node, verdict, edge key, next),
  * present only when the log has loop runs, so earlier projection hashes are unchanged. A node row whose `next` is not
  * the node that ran after it, or an end naming a terminal the last edge did not reach, is `loop-edge-mismatch`.
+ * #loop-events (step 7): `loop.trigger.fired` rows are folded too, so each event-started run carries `why` (the
+ * trigger's kernel fields); a run citing a fireId no row of its loop names (joined over the history: the row follows the hand-off) is a
+ * `loop-edge-mismatch` too.
  *
  * Read-only: databases are opened `readOnly` exactly as verifyLog opens them.
  */
@@ -71,7 +74,7 @@ import { canonicalJson, EVENT_KINDS, isPlainObject, parseApproveScope, scopeDige
 import { verifyLog, type VerifiedRow, type VerifyLogOptions, type VerifyReport } from './kernel-log.js';
 import { contentHashOf } from '../broker/card.js';
 import { decisionRowV2, rowsDigestOf } from '../identity/decision-batch.js';
-import { LOOP_RUN_KINDS, replayLoopRuns, type LoopReplayRun } from '../loops/ledger.js';
+import { LOOP_REPLAY_KINDS, replayLoopRuns, type LoopReplayRun } from '../loops/ledger.js';
 import { answerDigest, approveMessage, decisionMessage, usesDecisionV2, type KeyRing } from './signer.js';
 
 export const REPLAY_PROJECTION = 'gnomon-replay:v1' as const;
@@ -144,7 +147,7 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
     p.log ??= str(e.log) ?? null;
     const pl = isPlainObject(e.payload) ? (e.payload as Record<string, unknown>) : {};
     const hsid = str(pl.hsid) ?? str(e.session);
-    if (LOOP_RUN_KINDS.includes(r.kind)) {
+    if (LOOP_REPLAY_KINDS.includes(r.kind)) {
       loopRows.push({ kind: r.kind, payload: pl });
       if (str(pl.runId)) loopSeq.set(str(pl.runId)!, r.seq);
     }

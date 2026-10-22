@@ -14,6 +14,10 @@
       "types": "./dist/loops.d.ts",
       "import": "./dist/loops.js"
     },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    },
     "./cli": "./dist/cli/gnomon.js",
     "./package.json": "./package.json"
   },

@@ -9,7 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { registerTools } from './index.js';
-import { runLoopOp } from './loops.js';
+import { runLoopOp, runLoopKernelOp, setLoopKernelPort, LOOP_KERNEL_TOOL_NAMES } from './loops.js';
 import { invalidateFeatureCache, FEATURE_DETECTORS } from '../utils/tool-registry.js';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { loadFlowIndex, loopTemplate, LOOP_EXAMPLE_NAMES, parseLoopYaml, validateLoopFile, validateAllLoops } from '../utils/loop-files.js';
@@ -263,5 +263,87 @@ describe('paradigm_loop family surface', () => {
     expect(lastJson(created.content[0].text)).toMatchObject({ ok: true, id: 'tiny' });
     const listed = await h.call('paradigm_loop', { op: 'list' });
     expect(lastJson(listed.content[0].text).loops[0]).toMatchObject({ id: 'tiny', compiled: 'fresh' });
+  });
+});
+
+describe('paradigm_loop kernel ops (LP7, build step 12)', () => {
+  const sent: Array<Record<string, unknown>> = [];
+  beforeEach(() => {
+    sent.length = 0;
+    setLoopKernelPort(async (p) => {
+      sent.push(p);
+      return { ok: true, op: p.op };
+    });
+  });
+  afterEach(() => setLoopKernelPort(null));
+
+  it('each op sends one loop.request with the repo target and no principal or hsid (the kernel stamps those)', async () => {
+    expect(await runLoopKernelOp(root, 'run', { id: 'tiny' })).toEqual({ ok: true, op: 'run' });
+    await runLoopKernelOp(root, 'pause', { id: 'tiny', personal: true });
+    await runLoopKernelOp(root, 'resume', { id: 'tiny' });
+    await runLoopKernelOp(root, 'delete', { id: 'tiny' });
+    await runLoopKernelOp(root, 'runs', { id: 'tiny', limit: 500 });
+    await runLoopKernelOp(root, 'logs', { runId: 'lr-abc' });
+    await runLoopKernelOp(root, 'trust_status', {});
+    expect(sent).toEqual([
+      { op: 'run', loopId: 'tiny', scope: 'repo', repo: root },
+      { op: 'pause', loopId: 'tiny', scope: 'personal' },
+      { op: 'resume', loopId: 'tiny', scope: 'repo', repo: root },
+      { op: 'delete', loopId: 'tiny', scope: 'repo', repo: root },
+      { op: 'runs', loopId: 'tiny', scope: 'repo', repo: root, limit: 50 },
+      { op: 'logs', runId: 'lr-abc', scope: 'repo', repo: root },
+      { op: 'trust-status', scope: 'repo', repo: root },
+    ]);
+    for (const p of sent) expect(Object.keys(p)).not.toContain('principal');
+    expect(await runLoopKernelOp(root, 'run', { id: 'Not_Kebab' })).toHaveProperty('error');
+    expect(await runLoopKernelOp(root, 'logs', { runId: '../x' })).toHaveProperty('error');
+  });
+
+  it('create sends op create with the compiled source hash, so the kernel attributes the file to this agent', async () => {
+    const srv = server(root);
+    const res = lastJson((await srv.call('paradigm_loop_create', { yaml: GOOD_YAML })).content[0]!.text);
+    expect(res.written).toBe(true);
+    expect(sent).toHaveLength(1);
+    const compiled = JSON.parse(fs.readFileSync(file('tiny.loop.json'), 'utf8'));
+    expect(sent[0]).toEqual({ op: 'create', loopId: 'tiny', scope: 'repo', repo: root, sourceHash: compiled.compiled.sourceHash });
+    expect(res.kernel).toEqual({ ok: true, op: 'create' });
+  });
+
+  it('without a kernel the op says "needs Gnomon running", and create still writes the file', async () => {
+    setLoopKernelPort(async () => {
+      throw new Error('needs Gnomon running (connect ENOENT)');
+    });
+    expect(await runLoopKernelOp(root, 'run', { id: 'tiny' })).toMatchObject({ needsGnomon: true, error: expect.stringMatching(/^needs Gnomon running/) });
+    const srv = server(root);
+    const res = lastJson((await srv.call('paradigm_loop_create', { yaml: GOOD_YAML })).content[0]!.text);
+    expect(res.written).toBe(true);
+    expect(res.kernel).toMatchObject({ needsGnomon: true });
+  });
+
+  it('the default port, with an empty Gnomon home, answers "needs Gnomon running"', async () => {
+    setLoopKernelPort(null);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'loops-mcp-home-'));
+    const was = process.env.GNOMON_HOME;
+    process.env.GNOMON_HOME = home;
+    try {
+      expect(await runLoopKernelOp(root, 'pause', { id: 'tiny' })).toMatchObject({ needsGnomon: true, error: expect.stringMatching(/^needs Gnomon running/) });
+    } finally {
+      if (was === undefined) delete process.env.GNOMON_HOME;
+      else process.env.GNOMON_HOME = was;
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('the grouped paradigm_loop tool routes every kernel op', async () => {
+    fs.mkdirSync(loopsDir(), { recursive: true });
+    const h = server(root);
+    await h.call('paradigm_tool_activate', { feature: 'loops' });
+    expect(await h.list()).toContain('paradigm_loop');
+    for (const n of LOOP_KERNEL_TOOL_NAMES) {
+      const op = n.slice('paradigm_loop_'.length);
+      const res = await h.call('paradigm_loop', { op, id: 'tiny', runId: 'lr-abc' });
+      expect(res.isError ?? false).toBe(false);
+    }
+    expect(sent.map((p) => p.op)).toEqual(['run', 'pause', 'resume', 'delete', 'runs', 'logs', 'trust-status']);
   });
 });

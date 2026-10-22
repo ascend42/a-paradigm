@@ -3709,6 +3709,60 @@ components:
       - src/kernel/scheduler/scheduler.ts
       - src/kernel/lifecycle/idle.ts
 
+  loop-events:
+    description: >-
+      #loop-events (docs/specs/gnomon-loops.md §2 triggers, §4 #loop-events;
+      build plan step 7, LP4b) in src/kernel/loops/events.ts, built by
+      wire.ts (one marked block). Event triggers for RUNNABLE loops only
+      (trusted at the current hash, unpaused, not held by the kill switch),
+      reconciled on every registry change and runner event like
+      #loop-timers: an untrusted, paused or killed loop has no watch and no
+      subscription. file.changed: one recursive fs.watch per repo (realpath
+      root), matched against the compiled flow globs (trigger.paths or
+      flowPaths); .git, node_modules and the Gnomon home (check copies in
+      loop-work) ignored; a path whose realpath leaves the repo is refused
+      (loops.event-refused symlink-escape). commit.landed: a watch on the git
+      dir (HEAD, refs/heads, packed-refs; worktree gitdir/commondir), parsed
+      directly (the kernel runs no git); a new sha on the same branch fires,
+      a branch switch is a new baseline. session.ended: kernel
+      session.exited rows whose session.open cwd is inside the loop's repo.
+      card.decided: kernel approval.decide rows for a card a run of {loop,
+      node} raised (loop.notified), same repo. Matching reads kernel-stamped
+      fields only. Debounce is trailing per (loop, trigger), at least 250 ms
+      for watch events, capped at 3x the debounce. Each fire hands off to
+      runner.start FIRST (trust, kill, strictness, day caps) with kernel ids
+      only {type:'event', kind, fireId, count, sha|hsid|cardId} (never path or
+      ref, which could reach a model prompt); only a run that starts or
+      queues writes loop.trigger.fired{loopId, scope, repoKey, trigger{...,
+      path|ref}, eventId?}; a coalesced or refused fire is a per-loop counter
+      (dropped()), not a row. Replay (G-LOOP-17): ledger.ts replayLoopRuns
+      joins each run to its row by fireId over the whole history (`why`); a
+      run citing an unknown or foreign fireId diverges. Git dirs are
+      validated as git links them (worktree gitdir back-link, commondir);
+      only HEAD, packed-refs and refs/heads are watched. Self-trigger guard
+      (G-LOOP-15): an event whose causes chain (runId, cardId, loop session
+      hsid, causes refs ev:/card:/hsid: transitively, parentRunId callers)
+      includes a run of L never triggers L; a commit is a loop's own only
+      when a kernel loop.landed{sha} row names it (land writes it before
+      moving the ref);
+      a file change in a loop's land.paths while it runs, or in a
+      loop.landed{paths} row for 60 s, is its own. sentinel.incident.opened
+      is refused at validation (8.1).
+    path: src/kernel/loops/events.ts
+    type: module
+    tags: [gnomon, loops, paradigm-8]
+    gates: [^loop-trusted]
+    flows: [$loop-run]
+    signals: []
+    tests:
+      - test/loop-events.test.ts
+    oracles: [G-LOOP-15, G-LOOP-17]
+    anchors:
+      - src/kernel/loops/events.ts
+      - src/kernel/loops/ledger.ts
+      - src/kernel/log/replay.ts
+      - src/kernel/loops/wire.ts
+
   loop-strictness:
     description: >-
       #loop-strictness (docs/specs/gnomon-loops.md §3.3; build plan step 9,
@@ -3740,6 +3794,54 @@ components:
       - src/kernel/loops/strictness-cap.ts
       - src/kernel/loops/runner.ts
       - src/kernel/loops/wire.ts
+
+  loop-agent-ops:
+    description: >-
+      #loop-agent-ops (docs/specs/gnomon-loops.md §5 "What an agent may do",
+      §3.1 Attribution; build plan step 12, LP7) in
+      src/kernel/loops/agent-ops.ts: the kernel pre-gate for an AGENT's
+      userland loop.request{op, loopId, …}, routed by one dispatch.ts block
+      (wire.ts port.agent). The asker's principal and hsid come from the
+      connection, never the payload (Aegis). Targets are repos the registry
+      already knows (never addRepo on this path); unknown repo and unknown loop
+      are one NOT_FOUND; rows carry the registry's repo root. run: trusted
+      loops only. pause: any loop (loop.paused{reason:'agent', by}); a loop it
+      did not author toasts the founder. resume: only its own agent pause made
+      in the current kill epoch (pauseAll writes one loop.paused{all:true}
+      epoch row), then ONE catch-up run if a schedule or continuous trigger
+      came due during the pause. delete: in 8.0 always a pause plus a founder
+      toast. Reads (runs, logs, trust-status) are scoped to a named repo and
+      redacted (verdicts and counts, no evidence or node detail, no row).
+      create/update with sourceHash writes a kernel loop.request row (repo is
+      a sensitive field) the registry folds into authoredBy{principal, hsid,
+      basis:'agent-key-claim'} for that source hash (else `file`), and
+      raises the loop's ONE loop-trust card (requested by the agent, decided
+      by the human with the root key; no envelope in 8.0). Session-class
+      askers and loop sessions (supervisor.isLoopSession, LL5) are refused
+      every op; peers, voice, mods, read tokens and humans too (humans use
+      request.loop.*). src/agent/index.ts (@a-company/gnomon/agent) is the
+      agent principal's client for paradigm-mcp (GNOMON_AGENT_KEY, which must
+      resolve inside the Gnomon home, or <home>/agent/device.key, with a
+      root-signed agent registry row). Residual: no peer-pid or
+      connection-to-session mapping exists, so loop sessions are recognised
+      only by a connection-bound hsid (none bound until session-key auth);
+      they hold today because loop sessions get no socket or session key.
+    path: src/kernel/loops/agent-ops.ts
+    type: module
+    tags: [gnomon, loops, agents, paradigm-8]
+    gates: [^loop-trusted]
+    flows: [$loop-run]
+    signals: []
+    tests:
+      - test/loop-agent-ops.test.ts
+    oracles: [G-LOOP-03, G-LOOP-05]
+    anchors:
+      - src/kernel/loops/agent-ops.ts
+      - src/kernel/loops/registry.ts
+      - src/kernel/loops/trust.ts
+      - src/kernel/loops/wire.ts
+      - src/kernel/socket/dispatch.ts
+      - src/agent/index.ts
 
   strictness-levels:
     description: >-

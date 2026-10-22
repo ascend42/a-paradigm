@@ -463,7 +463,8 @@ describe('G-LOOP-26: the kill switch and resume classes (§3.3)', () => {
     expect(r.of(run.runId, 'loop.node')[0]).toMatchObject({ verdict: 'error', next: null });
     expect(r.of(run.runId, 'loop.run.ended')[0]).toMatchObject({ reason: 'kill-switch' });
     const pauses = r.rows.filter((x) => x.kind === 'loop.paused').map((x) => [x.payload.loopId, x.payload.reason, x.payload.by]);
-    expect(pauses).toEqual([['k1', 'kill-switch', HUMAN], ['k2', 'kill-switch', HUMAN]]);
+    // step 12 (Aegis): one kill-epoch row (all:true, no loopId) first, then each trusted loop's pause
+    expect(pauses).toEqual([[undefined, 'kill-switch', HUMAN], ['k1', 'kill-switch', HUMAN], ['k2', 'kill-switch', HUMAN]]);
     expect(r.cards).toEqual([]); // the kill switch takes no card
     expect(() => r.runner.start(r.key('k2'), { type: 'manual' })).toThrow(/paused \(kill-switch\)/);
     // resume after a kernel pause: a hand-only loop-choice card; only `continue` (fresh presence) writes loop.resumed
@@ -568,5 +569,48 @@ describe('the daemon\'s pinned paradigm CLI (builtins)', () => {
     write(path.join(pkg, 'dist', 'more.js'), 'x\n');
     expect(get()).toBe(pin); // fixed for the daemon's life: a later dist change is check-exec's pin-mismatch
     expect(paradigmCliResolver(() => { throw new Error('MODULE_NOT_FOUND'); })()).toBeNull();
+  });
+});
+
+// ── LP8 (#gui-loops): what the GUI reads off the REAL cards and rows ─────────────────────────────────────────────
+describe('LP8: the GUI against broker-shaped loop cards and the budget op', () => {
+  it('a loop-choice card as the broker sends it (no top-level detail): the GUI names its loop, run and node', async () => {
+    const { ApprovalBroker } = await import('../src/kernel/broker/index.js');
+    const { SoftwareEd25519Signer } = await import('../src/kernel/log/signer.js');
+    const { cardLoopOf, loopCardTitle, loopsOf } = await import('../../gnomon-gui/src/core/loops.js');
+    const { GuiStore } = await import('../../gnomon-gui/src/core/store.js');
+    const def: Def = { schema: 'loop:v2', id: 'ask', start: 'a', goal: { node: 'b', verdict: 'pass', inputs: ['src/**'] }, budgets: { run: { rounds: 5 } }, nodes: [chk('a', { pass: 'q', fail: 'q' }), { id: 'q', type: 'notify', as: 'card', text: 'go on?', choices: ['continue', 'stop'], on: { continue: 'b', stop: '@stop', timeout: '@pause' } }, chk('b', { pass: '@goal' })] };
+    const root = repo([def]);
+    const r = rig(root, { caps: { choiceTtlMs: 1000 }, check: async () => ok('fail') });
+    r.trust('ask');
+    const p1 = r.runner.start(r.key('ask'), { type: 'manual' }) as { runId: string; done: Promise<any> };
+    await new Promise((res) => setTimeout(res, 50));
+    const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: KERNEL, log: async () => undefined });
+    const card = (await broker.raise(r.cards[0]!)) as unknown as Record<string, unknown>;
+    expect(card.detail).toBeUndefined();
+    const store = new GuiStore();
+    store.apply(r.rows.map((row, i) => ({ seq: i + 1, ...row })));
+    const cl = cardLoopOf(card, store.loopCards);
+    expect(cl).toMatchObject({ loopId: 'ask', runId: p1.runId, nodeId: 'q', authoredBy: 'file' });
+    expect(cardLoopOf(card)).toMatchObject({ loopId: 'ask', runId: p1.runId });
+    const m = loopsOf({ loops: { loops: [{ key: r.key('ask'), loopId: 'ask', scope: 'repo', repo: root, repoKey: 'x', state: 'trusted' }], runs: r.runner.status().runs } });
+    expect(loopCardTitle('loop-choice', cl, m)).toBe('ask: a is failing');
+    await r.cards[0]!.effect('stop', { connId: gui.connId });
+    await p1.done;
+  });
+
+  it('request.loop.budget tightens only: a lower cap is a kernel row the runner folds; a higher one is refused', async () => {
+    const root = repo([exampleA()]);
+    const r = rig(root);
+    r.trust('flow-health-checkout');
+    const target = { loopId: 'flow-health-checkout', scope: 'repo', repo: root };
+    expect(await r.runner.request(gui, 'request.loop.budget', { ...target, budgets: { day: { runs: 3 } } })).toMatchObject({ tightened: true, budgets: { day: { runs: 3 } } });
+    expect(r.rows.filter((x) => x.kind === 'loop.budget.tightened').map((x) => x.payload)).toEqual([{ loopId: 'flow-health-checkout', scope: 'repo', repoKey: repoKeyOf([root]), contentHash: r.registry.entry(r.key('flow-health-checkout'))!.hash!.contentHash, budgets: { run: {}, day: { runs: 3 } }, by: HUMAN }]);
+    expect(r.registry.list()[0]!.shape!.budgets.day.runs).toBe(3);
+    await expect(r.runner.request(gui, 'request.loop.budget', { ...target, budgets: { day: { runs: 4 } } })).rejects.toThrow(/waits for a loop-trust card/);
+    await expect(r.runner.request(gui, 'request.loop.budget', { ...target, budgets: { day: { runs: 0 } } })).rejects.toThrow(/whole numbers/);
+    await expect(r.runner.request({ ...gui, principalClass: 'session', credential: 'session' }, 'request.loop.budget', { ...target, budgets: { day: { runs: 1 } } })).rejects.toThrow(/the human's/);
+    for (let i = 0; i < 3; i++) await r.run('flow-health-checkout');
+    expect(() => r.runner.start(r.key('flow-health-checkout'), { type: 'manual' })).toThrow(/3 runs today/);
   });
 });

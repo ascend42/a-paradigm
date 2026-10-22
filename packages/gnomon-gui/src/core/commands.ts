@@ -36,6 +36,9 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
   // #gui-mods-panel: which mods are on, what else ships, add one from a folder (also in the Gnomon menu and the Workshop)
   { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
+  // #gui-loops (gnomon-loops.md §6; Atelier 2026-10-22-gnomon-loops-ui): the Loops leaf and the kill switch
+  { id: 'loops.open', title: 'Loops… (the Loops view: list, graph, keys)' },
+  { id: 'loops.pause-all', title: 'Loops: pause all (no presence; resuming needs it)' },
   { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
   { id: 'theme.day', title: 'Theme: Day (papercraft)' },
   { id: 'theme.night', title: 'Theme: Night (phosphor)' },
@@ -102,7 +105,8 @@ export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
   // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer); nor mods.*
   // #gui-session-rename: nor session.rename (it opens an edit that writes request.session.rename on blur)
   // #gui-wordmark-menu: nor menu.* (the Gnomon menu holds Settings… and the pane toggles)
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.')),
+  // #gui-loops: nor loops.* (loops.pause-all is the kill switch; a block must never press it)
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.') && !id.startsWith('loops.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';
