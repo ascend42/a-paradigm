@@ -22,7 +22,6 @@ import * as yaml from 'js-yaml';
 import {
   createTask,
   loadTasks,
-  loadTask,
   updateTask,
   completeTask,
   shelveTask,
@@ -74,8 +73,6 @@ function shortId(id: string): string {
   const m = id.match(/-(\d+)$/);
   return m ? m[1] : id;
 }
-
-const ACTIVE: TaskFilterStatus = 'active';
 
 function isTerminal(t: Task): boolean {
   return t.status === 'done' || t.status === 'shelved';

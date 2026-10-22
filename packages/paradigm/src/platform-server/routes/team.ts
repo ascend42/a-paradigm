@@ -160,7 +160,7 @@ function loadTeamThreads(): TeamThread[] {
 
 // ── Router ───────────────────────────────────────────────────────────
 
-export function createTeamRouter(projectDir: string): Router {
+export function createTeamRouter(_projectDir: string): Router {
   const router = Router();
 
   // GET /roster — agent roster with bench status

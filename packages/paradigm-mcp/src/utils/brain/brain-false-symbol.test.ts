@@ -5,7 +5,6 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { findPurposeFiles } from '@a-company/purpose-core';
 import { initBrain, brainDir, brainFile, brainsHome } from './config.js';
 import { openBrainView, scanBrain } from './view.js';

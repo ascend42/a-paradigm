@@ -84,6 +84,7 @@ import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace } from '../utils/workspace-loader.js';
 import { loadProtocolIndex } from '../utils/protocol-loader.js';
 import { emitAndProcess } from '../utils/nomination-engine.js';
+import { portalRoutes, type PortalRoute } from '../utils/portal-routes.js';
 
 // ────────────────────────────────────────────────────────
 // Tool Registry Setup
@@ -797,7 +798,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           });
 
           // If no exact results and fuzzy is enabled, try fuzzy matching
-          let fuzzyMatches: Array<{ symbol: string; distance: number }> = [];
+          let fuzzyMatches: Array<{ match: string; distance: number }> = [];
           if (results.length === 0 && fuzzy) {
             const allSymbols = getAllSymbols(ctx.index);
             const symbolNames = allSymbols.map(s => s.symbol);
@@ -1150,37 +1151,13 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           const suggestions: Array<{ gate: string; reason: string; confidence: 'high' | 'medium' | 'low'; source?: string }> = [];
 
           // Learn from portal.yaml if available
-          const learnedPatterns: Array<{ route: string; gates: string[]; method?: string; source?: string }> = [];
-          if (ctx.gateConfig?.routes) {
-            for (const [routePattern, routeConfig] of Object.entries(ctx.gateConfig.routes)) {
-              if (routeConfig.gates) {
-                learnedPatterns.push({
-                  route: routePattern,
-                  gates: routeConfig.gates,
-                  method: routeConfig.method,
-                });
-              }
-            }
-          }
+          // Local routes come through portalRoutes(), empty until T-2026-10-22-002.
+          const learnedPatterns: Array<PortalRoute & { source?: string }> = [...portalRoutes(ctx.gateConfig)];
 
           // Learn from workspace sibling portal.yaml files
           if (ctx.workspace) {
             for (const [memberName, sibling] of ctx.workspace.siblingIndices) {
-              const siblingGateConfig = sibling.gateConfig as Record<string, unknown> | null;
-              if (siblingGateConfig?.routes) {
-                for (const [routePattern, routeConfig] of Object.entries(siblingGateConfig.routes as Record<string, unknown>)) {
-                  const rc = routeConfig as { gates?: string[]; method?: string } | string[];
-                  const gatesList = Array.isArray(rc) ? rc : rc?.gates;
-                  if (gatesList) {
-                    learnedPatterns.push({
-                      route: routePattern,
-                      gates: gatesList as string[],
-                      method: Array.isArray(rc) ? undefined : rc?.method,
-                      source: memberName,
-                    });
-                  }
-                }
-              }
+              for (const r of sibling.portalRoutes) learnedPatterns.push({ ...r, source: memberName });
             }
           }
 
@@ -1536,13 +1513,21 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
  * These were previously inline in each if-branch; now centralized.
  * All emissions are fire-and-forget (non-fatal).
  */
+const STREAM_SEVERITIES = ['info', 'warning', 'error', 'critical'] as const;
+type StreamSeverity = (typeof STREAM_SEVERITIES)[number];
+
+/** Narrow a caller-supplied severity to the event-stream vocabulary (default `warning`). */
+function toStreamSeverity(value: unknown): StreamSeverity {
+  return STREAM_SEVERITIES.find((s) => s === value) ?? 'warning';
+}
+
 function emitPostDispatchEvents(name: string, args: Record<string, unknown>, rootDir: string): void {
   try {
     switch (name) {
       case 'paradigm_sentinel_record':
         emitAndProcess(rootDir, {
           type: 'error-encountered', source: 'mcp-tool-call', tool: name,
-          severity: (args.severity as string) || 'warning',
+          severity: toStreamSeverity(args.severity),
           context: `Sentinel: ${args.title || args.summary || 'incident recorded'}`,
         });
         break;

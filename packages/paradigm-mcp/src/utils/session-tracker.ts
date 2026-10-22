@@ -436,9 +436,11 @@ export class SessionTracker {
     // Sanitize array fields — some writers store them as JSON strings instead of arrays
     if (checkpoint) {
       for (const key of ['modifiedFiles', 'symbolsTouched', 'decisions'] as const) {
-        const val = checkpoint[key];
+        const val: unknown = checkpoint[key];
         if (typeof val === 'string') {
-          try { (checkpoint as Record<string, unknown>)[key] = JSON.parse(val); } catch { (checkpoint as Record<string, unknown>)[key] = []; }
+          let parsed: unknown = [];
+          try { parsed = JSON.parse(val); } catch { /* malformed — reset to empty */ }
+          checkpoint[key] = Array.isArray(parsed) ? parsed : [];
         }
       }
     }

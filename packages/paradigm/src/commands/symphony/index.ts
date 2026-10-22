@@ -48,10 +48,8 @@ import {
   denyFileRequest,
   isPathDenied,
   loadTrustConfig,
-  ensureScoreDirs,
   type SymphonyMessage,
   type Participant,
-  type AgentIdentity,
 } from '../../../../paradigm-mcp/src/utils/symphony-loader.js';
 
 // ────────────────────────────────────────────────────────

@@ -7,14 +7,13 @@
 
 import type { HabitDefinition } from './habits-loader.js';
 import { loadHabits } from './habits-loader.js';
-import { getComplianceRate, getPracticeEvents } from './practice-store.js';
+import { getComplianceRate } from './practice-store.js';
 import {
   getConfig,
   getState,
   getAllStates,
   setTier,
   incrementFailure,
-  isGraduated,
 } from './graduation-store.js';
 import type {
   GraduationCheckResult,

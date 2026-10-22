@@ -115,7 +115,7 @@ components:
       - classroom
       - learning-loop
   tool-family:
-    description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:'full' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'
+    description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:''full'' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'
     type: utility
     tags:
       - feature
@@ -380,3 +380,13 @@ components:
     signals:
       - '!skill-used'
     tags: [feature, skills, learning-loop]
+  persona-sentinel-validation:
+    description: 'personas-loader validateAgainstSentinel — matches each persona journey step to its latest paradigm-personas Sentinel event (persona.step.complete / persona.step.fail, filtered by run_id, chain_id, environment). queryEvents returns newest first, so events are replayed oldest to newest and the latest event per step decides pass or fail. Reads GenericEvent.data (previously a non-existent data_json, so no step ever matched).'
+    type: service
+    file: packages/paradigm-mcp/src/utils/personas-loader.ts
+    tags: [personas, sentinel]
+  portal-routes:
+    description: 'Single accessor for portal.yaml routes. portalRoutes(gateConfig) returns [] because portal-core parseGateConfig drops routes (T-2026-10-22-002, owned by Aegis); fix it here and paradigm_gates_for_route, pm preflight/postflight and habits evaluation all pick it up. parsePortalRoutes(raw) reads the raw YAML routes map (gate list or { gates, method }) and is used for workspace siblings.'
+    type: utility
+    file: packages/paradigm-mcp/src/utils/portal-routes.ts
+    tags: [portal, security]

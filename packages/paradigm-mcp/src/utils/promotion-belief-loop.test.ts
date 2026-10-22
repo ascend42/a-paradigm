@@ -16,7 +16,6 @@ import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vites
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as yaml from 'js-yaml';
 
 const shared = vi.hoisted(() => {
   /* eslint-disable @typescript-eslint/no-require-imports */
@@ -126,7 +125,7 @@ describe('addNotebookEntry confidence persistence', () => {
         provenance: { source: 'lore', createdBy: 'kit' },
         concepts: ['beta'],
         tags: [],
-      } as Parameters<typeof addNotebookEntry>[1],
+      } as unknown as Parameters<typeof addNotebookEntry>[1], // deliberately omits the required `confidence`
       'global',
     );
     expect(entry.confidence).toBe(0.5);

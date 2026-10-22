@@ -15,8 +15,6 @@ import {
   loadAllSeedPatterns,
 } from '@a-company/sentinel';
 import type {
-  SymbolicIncidentRecord,
-  PatternMatch,
   CreatePatternInput,
   IncidentStatus,
   PatternSource,
@@ -30,7 +28,7 @@ let storageInitialized = false;
  * Get or initialize sentinel storage
  * Lazy-initializes with seed patterns on first use
  */
-function getStorage(ctx?: ProjectContext): SentinelStorage {
+function getStorage(): SentinelStorage {
   if (!storage) {
     storage = new SentinelStorage();
   }
@@ -38,7 +36,7 @@ function getStorage(ctx?: ProjectContext): SentinelStorage {
   // Load seed patterns on first use (idempotent)
   if (!storageInitialized) {
     try {
-      const seedPatterns = loadAllSeedPatterns();
+      const { patterns: seedPatterns } = loadAllSeedPatterns();
       for (const pattern of seedPatterns) {
         // Only add if pattern doesn't already exist
         try {
@@ -479,9 +477,9 @@ export function getSentinelToolsList() {
 export async function handleSentinelTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: ProjectContext
+  _ctx: ProjectContext
 ): Promise<{ handled: boolean; text: string }> {
-  const store = getStorage(ctx);
+  const store = getStorage();
   const matcher = new PatternMatcher(store);
 
   switch (name) {

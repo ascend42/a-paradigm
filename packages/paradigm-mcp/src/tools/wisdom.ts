@@ -14,11 +14,10 @@ import {
   getWisdomForSymbols,
   findExperts,
   recordAntipattern,
-  recordDecision,
   type ScopedAntipattern,
   type ScopedDecision,
 } from '../utils/wisdom-loader.js';
-import { loadLoreEntries, type LoreEntry } from '../utils/lore-loader.js';
+import { loadLoreEntries } from '../utils/lore-loader.js';
 import type { WisdomAntipattern, WisdomDecision } from '../types/wisdom.js';
 import {
   recordGlobalAntipattern,
@@ -446,7 +445,8 @@ export async function handleWisdomTool(
         const td = recordTeamDecision(ctx.rootDir, {
           title,
           decision: description,
-          rationale: { factors: rationale.factors, conclusion: rationale.conclusion },
+          // TeamDecision.rationale is prose: conclusion first, then the factors.
+          rationale: [rationale.conclusion, ...rationale.factors.map((f) => `- ${f}`)].filter(Boolean).join('\n'),
           participants: [{ id: 'wisdom-record', role: 'agent', stance: 'proposed' }],
           symbols_affected: symbols,
           status: (status === 'accepted' ? 'active' : status === 'proposed' ? 'proposed' : 'active'),

@@ -59,7 +59,7 @@ export async function launchDashboard(opts: { port: string; open: boolean }): Pr
 /**
  * Initialize Sentinel in the current project.
  */
-export async function initProject(opts: { detect?: boolean }): Promise<void> {
+export async function initProject(_opts: { detect?: boolean }): Promise<void> {
   console.log(chalk.cyan('\n  Initializing Sentinel...\n'));
 
   const projectDir = process.cwd();
@@ -98,7 +98,6 @@ export async function triageList(opts: {
   limit: string;
 }): Promise<void> {
   const storage = await getStorage();
-  const matcher = new PatternMatcher(storage);
 
   const incidents = storage.getRecentIncidents({
     limit: parseInt(opts.limit, 10),
@@ -130,7 +129,6 @@ export async function triageList(opts: {
   }));
 
   for (const incident of incidents) {
-    const matches = matcher.match(incident, { maxResults: 3 });
     console.log(formatIncidentCompact(incident));
   }
   console.log('');

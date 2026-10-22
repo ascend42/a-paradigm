@@ -11,18 +11,18 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { ToolDefinition } from '../utils/tool-registry.js';
 import type { ProjectContext } from '../utils/index-loader.js';
-import type { NavigateInput, NavigateResult, NavigatorConfig } from '../types/navigator.js';
-import { loadNavigatorContext, navigate, getSkipPatterns } from '../utils/navigator-loader.js';
-import { getSymbolsByType, getAllSymbols, resolveSymbol } from '@a-company/premise-core';
+import type { NavigateInput, NavigatorConfig } from '../types/navigator.js';
+import { loadNavigatorContext, navigate } from '../utils/navigator-loader.js';
+import { getAllSymbols, resolveSymbol } from '@a-company/premise-core';
 import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace } from '../utils/workspace-loader.js';
 
 /**
  * Navigate tool definition
  */
-export const navigateTool: Tool = {
+export const navigateTool: ToolDefinition = {
   name: 'paradigm_navigate',
   description:
     'Navigate the codebase efficiently. Use "find" to locate a symbol, "explore" to browse an area, or "context" to get relevant files for a task. Returns file paths, symbol locations, and context summaries. ~200 tokens.',
@@ -63,7 +63,7 @@ export const navigateTool: Tool = {
 /**
  * Get navigate tool list
  */
-export function getNavigateToolsList(): Tool[] {
+export function getNavigateToolsList(): ToolDefinition[] {
   return [navigateTool];
 }
 
@@ -85,17 +85,10 @@ export async function handleNavigateTool(
     task: args.task as string | undefined,
   };
 
-  // Load navigator context
-  let navCtx = await loadNavigatorContext(ctx.rootDir);
-
+  // Load navigator config.
   // AUTO-GENERATE: If navigator.yaml missing, generate minimal config from symbols
-  if (!navCtx.config) {
-    const autoConfig = generateMinimalNavigator(ctx);
-    navCtx = {
-      config: autoConfig,
-      configPath: null, // Mark as auto-generated
-    };
-  }
+  const config: NavigatorConfig =
+    (await loadNavigatorContext(ctx.rootDir)).config ?? generateMinimalNavigator(ctx);
 
   // Validate input
   if (!input.intent) {
@@ -169,7 +162,7 @@ export async function handleNavigateTool(
   const navCacheKey = `navigate:${input.intent}:${input.target || ''}:${input.task || ''}`;
   const cachedText = await toolCache.getOrCompute(navCacheKey, () => {
     // Execute navigation
-    const result = navigate(navCtx.config, input, ctx.rootDir);
+    const result = navigate(config, input, ctx.rootDir);
 
     // Format response
     const response: Record<string, unknown> = {
@@ -184,7 +177,7 @@ export async function handleNavigateTool(
     };
 
     // Indicate if using auto-generated navigator
-    if (navCtx.config?.auto_generated) {
+    if (config.auto_generated) {
       response.auto_generated = true;
       response.tip = 'Using auto-generated navigator from .purpose files. Run `paradigm scan` for more accurate results.';
     }
@@ -273,12 +266,12 @@ export async function handleNavigateTool(
  */
 function generateMinimalNavigator(ctx: ProjectContext): NavigatorConfig {
   const symbols: Record<string, string> = {};
-  const structure: NavigatorConfig['structure'] = {
-    features: { paths: [], symbol: '@' },
-    components: { paths: [], symbol: '#' },
-    gates: { paths: [], symbol: '^' },
-    flows: { paths: [], symbol: '$' },
-  };
+  // v2 symbol types have no `feature`, so features.paths stays empty.
+  const features = { paths: [] as string[], symbol: '@' as const };
+  const components = { paths: [] as string[], symbol: '#' as const };
+  const gates = { paths: [] as string[], symbol: '^' as const };
+  const flows = { paths: [] as string[], symbol: '$' as const };
+  const structure: NavigatorConfig['structure'] = { features, components, gates, flows };
 
   // Build symbol-to-path mapping from index
   const allSymbols = getAllSymbols(ctx.index);
@@ -292,24 +285,19 @@ function generateMinimalNavigator(ctx: ProjectContext): NavigatorConfig {
       // Infer structure from symbol types
       const dir = sym.filePath.replace(/\/[^/]+$/, ''); // Get directory
       switch (sym.type) {
-        case 'feature':
-          if (!structure.features.paths.includes(dir)) {
-            structure.features.paths.push(dir);
-          }
-          break;
         case 'component':
-          if (!structure.components.paths.includes(dir)) {
-            structure.components.paths.push(dir);
+          if (!components.paths.includes(dir)) {
+            components.paths.push(dir);
           }
           break;
         case 'gate':
-          if (!structure.gates.paths.includes(dir)) {
-            structure.gates.paths.push(dir);
+          if (!gates.paths.includes(dir)) {
+            gates.paths.push(dir);
           }
           break;
         case 'flow':
-          if (!structure.flows.paths.includes(dir)) {
-            structure.flows.paths.push(dir);
+          if (!flows.paths.includes(dir)) {
+            flows.paths.push(dir);
           }
           break;
       }
@@ -321,7 +309,7 @@ function generateMinimalNavigator(ctx: ProjectContext): NavigatorConfig {
   const entryFiles: string[] = [];
 
   for (const pf of ctx.aggregation.purposeFiles) {
-    configFiles.push(pf.filePath);
+    configFiles.push(pf);
   }
 
   // Add standard config files if they might exist

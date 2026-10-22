@@ -151,7 +151,7 @@ describe('paradigm_authority_claim ↔ paradigm_authority_release (Case G)', () 
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(['paradigm_authority_claim', 'paradigm_authority_release']);
     const claim = tools.find((t) => t.name === 'paradigm_authority_claim')!;
-    expect(claim.inputSchema.properties.severity.enum).toEqual(['advise', 'warn', 'block']);
+    expect(claim.inputSchema.properties.severity?.enum).toEqual(['advise', 'warn', 'block']);
     expect(claim.inputSchema.required).toEqual(['claimant', 'scope']);
   });
 });

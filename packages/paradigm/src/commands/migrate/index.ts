@@ -13,7 +13,7 @@ import { detectProjectState, loadMigrationState } from './detector.js';
 import { getOrCreateState, saveMigrationState, runMigrations } from './runner.js';
 import { migrations } from './migrations.js';
 
-export async function migrateCommand(options: MigrateOptions = {}) {
+export async function migrateCommand(options: MigrateOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const paradigmDir = path.join(cwd, '.paradigm');
 
@@ -87,9 +87,9 @@ export async function migrateCommand(options: MigrateOptions = {}) {
   // ─── Quiet mode (shift integration) ────────────────────────────────
   if (options.quiet) {
     if (autoMigrations.length === 0) return;
-    const summary = await runMigrations(cwd, autoMigrations, options, state);
+    await runMigrations(cwd, autoMigrations, options, state);
     saveMigrationState(cwd, state);
-    return summary;
+    return;
   }
 
   // ─── Interactive mode ──────────────────────────────────────────────

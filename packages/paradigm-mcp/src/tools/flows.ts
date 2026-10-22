@@ -165,7 +165,7 @@ flows:
     case 'paradigm_flow_check':
     // backward-compat alias — old callers using paradigm_flow_validate still work
     case 'paradigm_flow_validate': {
-      const { flowId, checkImplementation = false } = args as {
+      const { flowId } = args as {
         flowId?: string;
         checkImplementation?: boolean;
       };

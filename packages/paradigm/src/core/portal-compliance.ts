@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { execFileSync } from 'child_process';
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'child_process';
 import { classifyYamlError } from '@a-company/portal-core';
 import { suggestForUndeclared, suggestForUnused, type ComplianceSuggestion } from './near-match.js';
 
@@ -215,10 +215,10 @@ function extractRouteAttachedGates(config: PortalConfig): Set<string> {
  * Prefers ripgrep (rg) when available — much faster on large repos.
  */
 function runGrep(rootDir: string, pattern: string): string {
-  const options = {
-    encoding: 'utf-8' as const,
+  const options: ExecFileSyncOptionsWithStringEncoding = {
+    encoding: 'utf-8',
     maxBuffer: 10 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'] as const,
+    stdio: ['ignore', 'pipe', 'pipe'],
   };
 
   // Try ripgrep first (faster on large codebases)
@@ -236,12 +236,8 @@ function runGrep(rootDir: string, pattern: string): string {
 
   try {
     return execFileSync('grep', grepArgs, options);
-  } catch (err) {
-    // grep exits 1 when no matches; treat as empty
-    const code = (err as NodeJS.ErrnoException)?.code;
-    if (code === 1 || (err as NodeJS.ErrnoException)?.status === 1) {
-      return '';
-    }
+  } catch {
+    // grep exits 1 when no matches; that and any other failure read as no matches
     return '';
   }
 }

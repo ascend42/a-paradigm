@@ -11,11 +11,8 @@ import * as yaml from 'js-yaml';
 import type {
   DataPolicy,
   TrustRing,
-  ObservationRules,
   EnforcementResult,
   EnforcementBoundary,
-  ContentCategory,
-  RedactionPattern,
 } from '../types/data-policy.js';
 import { DEFAULT_DATA_POLICY, TRUST_RING_ORDER } from '../types/data-policy.js';
 
@@ -171,7 +168,7 @@ export function enforce(
 
   // Content recording boundaries
   if ((boundary === 'work-log-recording' || boundary === 'journal-recording') && opts.content && opts.stream) {
-    const { filtered, redacted } = filterContent(opts.content, policy, opts.stream);
+    const { redacted } = filterContent(opts.content, policy, opts.stream);
     return {
       boundary,
       allowed: true,

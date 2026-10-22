@@ -503,7 +503,8 @@ export type PracticeCategory =
   | 'testing'
   | 'documentation'
   | 'collaboration'
-  | 'security';
+  | 'security'
+  | 'quality';
 
 export interface PracticeEvent {
   id: string;

@@ -320,7 +320,7 @@ export function validateProtocol(rootDir: string, protocol: Protocol): {
       const stat = fs.statSync(exemplarPath);
       if (stat.mtime.toISOString() > protocol.last_verified) {
         issues.push(`Exemplar modified since last verified: ${protocol.exemplar}`);
-        if (status !== 'broken') status = 'stale';
+        status = 'stale';
       }
     }
   }

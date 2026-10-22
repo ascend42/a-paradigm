@@ -2,46 +2,51 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-21T20:21:44.095Z",
+    "generatedAt": "2026-10-22T00:24:09.539Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 108,
+      "purposeFiles": 111,
       "portalFiles": 2,
       "premiseFiles": 0
     },
     "componentTypes": {
       "command": 114,
-      "utility": 65,
+      "utility": 76,
       "config": 11,
       "manager": 6,
-      "engine": 9,
+      "engine": 16,
       "detector": 11,
       "provider": 7,
       "router": 15,
       "view": 110,
-      "store": 16,
+      "store": 18,
       "filter": 3,
-      "service": 84,
+      "service": 92,
       "model": 15,
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 154,
+      "module": 158,
+      "package": 2,
       "cli": 3,
-      "tool": 45,
-      "tool-group": 10,
+      "script": 2,
+      "tool": 47,
+      "tool-group": 14,
       "util": 9,
-      "loader": 8,
+      "loader": 26,
       "app": 2,
       "schema": 4,
+      "bin": 1,
       "handler": 26,
       "installer": 1,
       "adapter": 1,
       "test": 7,
       "component": 29,
       "state": 5,
-      "integration": 1,
-      "types": 9,
+      "integration": 2,
+      "types": 10,
+      "constant": 1,
+      "registry": 1,
       "command-group": 8,
       "route": 3,
       "hook": 2,
@@ -1177,6 +1182,28 @@
       "related": [
         "#legacy-tool-map"
       ],
+      "componentType": "utility"
+    },
+    "release-publish": {
+      "id": "release-publish",
+      "name": "Release Publish",
+      "symbol": "#release-publish",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/scripts/.purpose",
+      "description": "`npm run release` (CI release.yml via changesets/action). Preflight first: @a-company/gnomon-darwin-arm64, -x64 and @a-company/gnomon must already be on npm at the checkout's version (npm view; registry errors fail closed), else it refuses before building or publishing and names `npm run publish:gnomon`. Then `changeset publish`, which skips them as already published, so CI never publishes gnomon and paradigm (exact @a-company/gnomon dependency) never ships before it. `--check` runs the preflight only. Node >= 20, node: built-ins only. Guarded by packages/gnomon/test/release-excludes-gnomon.test.ts.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "publish-gnomon": {
+      "id": "publish-gnomon",
+      "name": "Publish Gnomon",
+      "symbol": "#publish-gnomon",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/scripts/.purpose",
+      "description": "`npm run publish:gnomon`, the founder's Mac-only publish in install order: gate-gnomon-publish.mjs, then @a-company/gnomon-darwin-arm64, -x64, then @a-company/gnomon (each skipped if already on npm, so re-runnable), then verifies all three are visible on npm; `--release` then runs `npm run release` for paradigm; `--dry-run` runs the gate and prints the rest. Guarded by packages/gnomon/test/release-excludes-gnomon.test.ts.",
+      "visualTags": [],
+      "related": [],
       "componentType": "utility"
     },
     "pre-publish-check": {
@@ -2823,6 +2850,19 @@
       ],
       "componentType": "module"
     },
+    "contract-release-manifest": {
+      "id": "contract-release-manifest",
+      "name": "Contract Release Manifest",
+      "symbol": "#contract-release-manifest",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "release-manifest:v1 (T-2026-10-21-028, TD-2026-10-21-758 zero-build, G-HLP-01): {schemaVersion, release, artifacts[{name gnomon-helper | gnomon-voice-io, version a.b.c, sha256 hex, requirement, arch arm64 | x64 | universal}]}, one entry per (name, arch), a universal entry alone. validateReleaseManifestV1 / isReleaseManifestV1 (hand-written, zero deps) mirror RELEASE_MANIFEST_V1_SCHEMA (schemas/release-manifest.v1.schema.json, generated; in BUILD_SCHEMAS, NOT CONTRACT_SCHEMAS, so it is not a clientApiId input); releaseArtifactFor picks the exact-arch entry, else universal. Additive (T-2026-10-21-030, Aegis M3 high 2): optional appZips[{arch arm64|x64, sha256}] (one per arch, closed) = the published Gnomon.app.zip per arch, compiled into the npm @a-company/gnomon; releaseAppZipFor reads it. Written by packages/gnomon/scripts/write-release-manifest.mjs, compiled into the kernel bundle by build-release.mjs (tsup define), enforced by the kernel's #release-pins. Also VOICE_IO_TEAM / VOICE_IO_IDENTIFIER / VOICE_IO_REQUIREMENT: the ONE designated requirement (Developer ID CA + leaf, team SW4BMQ8PNL, gnomon.voice-io) shared by gnomon-voice/scripts/build-voice-io.mjs and the kernel's voice-install.ts.",
+      "visualTags": [],
+      "related": [
+        "#release-pins"
+      ],
+      "componentType": "module"
+    },
     "contract-voice-modes": {
       "id": "contract-voice-modes",
       "name": "Contract Voice Modes",
@@ -2844,6 +2884,36 @@
       "visualTags": [],
       "related": [],
       "componentType": "module"
+    },
+    "gnomon-darwin-arm64": {
+      "id": "gnomon-darwin-arm64",
+      "name": "Gnomon Darwin Arm64",
+      "symbol": "#gnomon-darwin-arm64",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-darwin-arm64/.purpose",
+      "description": "files are ONLY index.js, Gnomon.app.zip and Gnomon.app.zip.sha256. The zip is a ditto -c -k --keepParent archive (npm tarballs drop symlinks and modes an app bundle needs) that packages/gnomon/scripts/release-darwin.mjs copies in (default for a signed, notarized, stapled release; other builds only with --package-dir --allow-unsigned-for-tests); both files are gitignored. index.js exports platform, arch, zipPath, sha256Path and verifyZip(expected), which checks the zip against the sha256 compiled into @a-company/gnomon (appZips), never the shipped .sha256. No scripts at all (G-SEC-01); publishing goes through scripts/gate-gnomon-publish.mjs. The pack round trip (packages/gnomon/scripts/pack-roundtrip.mjs) proves the zip survives npm pack with its layout and framework symlinks.",
+      "visualTags": [],
+      "related": [
+        "#gnomon-npm-packaging",
+        "#release-darwin",
+        "#gnomon-shim"
+      ],
+      "componentType": "package"
+    },
+    "gnomon-darwin-x64": {
+      "id": "gnomon-darwin-x64",
+      "name": "Gnomon Darwin X64",
+      "symbol": "#gnomon-darwin-x64",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-darwin-x64/.purpose",
+      "description": "files are ONLY index.js, Gnomon.app.zip and Gnomon.app.zip.sha256. The zip is a ditto -c -k --keepParent archive (npm tarballs drop symlinks and modes an app bundle needs) that packages/gnomon/scripts/release-darwin.mjs copies in (default for a signed, notarized, stapled release; other builds only with --package-dir --allow-unsigned-for-tests); both files are gitignored. index.js exports platform, arch, zipPath, sha256Path and verifyZip(expected), which checks the zip against the sha256 compiled into @a-company/gnomon (appZips), never the shipped .sha256. No scripts at all (G-SEC-01); publishing goes through scripts/gate-gnomon-publish.mjs. The pack round trip (packages/gnomon/scripts/pack-roundtrip.mjs) proves the zip survives npm pack with its layout and framework symlinks.",
+      "visualTags": [],
+      "related": [
+        "#gnomon-npm-packaging",
+        "#release-darwin",
+        "#gnomon-shim"
+      ],
+      "componentType": "package"
     },
     "gui-session-rename": {
       "id": "gui-session-rename",
@@ -2943,7 +3013,7 @@
       "symbol": "#gui-dictation",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
-      "description": "UNVERIFIED VOICE (Dictate, the G-VOX-06 exception, founder bug 2026-10-21): a row the kernel stamped draftOnly fills the draft as a part marked unverified; the pill note reads \"draft · unverified voice · read it, then Enter sends\" and the transcript row \"in composer · unverified voice\"; the send-now key holds such a draft for Enter (HOTKEY_UNVERIFIED_NOTE); the word (wordReady and the grace), the piece ring (pieceDue) and the countdown (armed) never send it, and a preset switch holds it. Aegis privacy: the row is hash-only; app.ts queues live voice rows and releaseTurnRows joins the words from status.voice.unverified in seq order (a row waits at most UNVERIFIED_WAIT_MS, then goes on wordless and never becomes a part). sentLabel and clampedFrom treat turn.sent origin voice-unverified as clamped (\"spoken · unverified voice · sent by you\", asks first). A short refused turn (voice-speaker, cause too-short) reads \"too short to check it's you\" (capture refusalPhrase). VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk / Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented control in the pill menu; Send word and Pieces need the one-time liability acknowledgement, recorded per user); the reducer's 'word' policy treats a turn that IS the held send word (#send-word-matcher) as a command, never appended, acting only on a draft visible ≥ 1 s ('painted' via double rAF, page visible, focused, attached; any text change resets it); a near miss asks \"Did you say …?\"; a 1 s grace (\"Sending… Esc keeps it\", draft state word-grace) then request.voice.send.claim and the one send path. An ambient attach asks for the preset's send ceiling (with liabilityAck once the in-app acknowledgement recorded it). Labels: sentLabel(turn.sent) on voice messages (\"spoken · sent by you / on release / by send word / as a piece / by send-now\", + \"edits ask first\") and CLAMP_CHIP \"voice turn · edits ask first\" in the session header; teaching the send word INLINE under its row in the Voice settings sheet (core/send-word-teach.ts, a pure reducer over the kernel's attended trial: pick send / send it / over / your own, then \"Say <word> once, on its own.\" and the ONE counter \"take n of up to 4\" from status.voice.sendWordTrial, \"I heard …\", a mishearing kept as a variant, the risk check with \"I understand\" right before save via request.voice.sendword{op:'save'}; no lead-in, never the product name; Aegis R-1: keeping a mishearing is an explicit opt-in, each collected variant an UNTICKED box at save (\"Saying “x” on its own will also send. You said “w”; I heard “x”.\") and the save carries every unticked one as dropVariants; only a LISTENING trial makes a turn a take, and with the row open nothing heard becomes a draft; the heard text is read only from status.voice.sendWordTrial.last); a trialTake row is never a transcript line (store voiceItem) and never a draft (dictation turnText); Pieces (gap 1500 / cap 8000 ms, hold while busy, piece claim, piece ring); Mic key switch, Listening (open / toggle) choice sent as the client's capture kind, voice.preset.* palette commands, in-app bare `, send-now from the voice app. ONE SEND CONTROL (founder report 2026-10-20): the composer's own send (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no Send of its own. draftState / DRAFT_CONTROLS map the draft's state to its controls: idle (none), ambient (no hold: nothing counts down), ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send off: no hold). A new dictation mode adds a state and a row. The composer is one container: the form carries the border and, while the textarea has keyboard focus, the focus ring (:has); the textarea draws none. #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation into the composer. core/dictation.ts is a PURE reducer: a live voice.turn.user row with the kernel-stamped `forwardable: true`, non-empty text, no `intercepted`/refusal, for the attached session and past the start seq (no backlog; each seq once) appends to the draft with one space. One countdown ring runs over the per-machine delay (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s; pill menu picks and voice.delay.* palette commands) while the draft is unheld, the voice app idle (status.voice.dictation.activity), the session not streaming, and the attached session is the GUI's focused one (else the pill says \"draft waiting\"); new speech, transcription, a new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume], the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity), typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The send is session.send{hsid, content: one part per turn | the edit as ONE part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited, and a forwardable unsent turn as \"in composer\". Only a human-class connection (canAttach) gets these controls; a voice connection never. Aegis conditions: hold records who set it (gui | voice | detached; a voice toggle never clears a GUI-set or detached hold); no live attachment for the draft's session ⇒ held 'detached', never auto-sent; an edit while sending keeps hold and the edit; turn text is sanitized by the contracts sanitizeDisplayText (sent as the voice app's exact words only when sanitizing changed nothing); the holdToggles baseline resets per voice connection (connEpoch, else client.restarts); edited drafts echo as typed messages. TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A part whose turn's mode is not exactly 'ptt' (missing included) marks the draft ambient (ambientDraft); an ambient draft never arms the ring and only the composer send (Enter/⌘Enter/[send]) sends it (note \"draft · Enter sends (ambient never auto-sends)\"). PTT drafts keep the countdown; the delay picks say push-to-talk.",
+      "description": "UNVERIFIED VOICE (Dictate, the G-VOX-06 exception, founder bug 2026-10-21): a row the kernel stamped draftOnly fills the draft as a part marked unverified; the pill note reads \"draft · unverified voice · read it, then Enter sends\" and the transcript row \"in composer · unverified voice\"; the send-now key holds such a draft for Enter (HOTKEY_UNVERIFIED_NOTE); the word (wordReady and the grace), the piece ring (pieceDue) and the countdown (armed) never send it, and a preset switch holds it. Aegis privacy: the row is hash-only; app.ts queues live voice rows and releaseTurnRows joins the words from status.voice.unverified in seq order (a row waits at most UNVERIFIED_WAIT_MS, then goes on wordless and never becomes a part). sentLabel and clampedFrom treat turn.sent origin voice-unverified as clamped (\"spoken · unverified voice · sent by you\", asks first). Mika: a mixed draft's note quotes the unverified words (unverifiedQuote, cut at UNVERIFIED_QUOTE_MAX with …, full words in the title); an unverified row carries no speaker label (\"voice · in composer · unverified voice\"). A short refused turn (voice-speaker, cause too-short) reads \"too short to check it's you · say a few more words, or type it\" (capture refusalPhrase). VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk / Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented control in the pill menu; Send word and Pieces need the one-time liability acknowledgement, recorded per user); the reducer's 'word' policy treats a turn that IS the held send word (#send-word-matcher) as a command, never appended, acting only on a draft visible ≥ 1 s ('painted' via double rAF, page visible, focused, attached; any text change resets it); a near miss asks \"Did you say …?\"; a 1 s grace (\"Sending… Esc keeps it\", draft state word-grace) then request.voice.send.claim and the one send path. An ambient attach asks for the preset's send ceiling (with liabilityAck once the in-app acknowledgement recorded it). Labels: sentLabel(turn.sent) on voice messages (\"spoken · sent by you / on release / by send word / as a piece / by send-now\", + \"edits ask first\") and CLAMP_CHIP \"voice turn · edits ask first\" in the session header; teaching the send word INLINE under its row in the Voice settings sheet (core/send-word-teach.ts, a pure reducer over the kernel's attended trial: pick send / send it / over / your own, then \"Say <word> once, on its own.\" and the ONE counter \"take n of up to 4\" from status.voice.sendWordTrial, \"I heard …\", a mishearing kept as a variant, the risk check with \"I understand\" right before save via request.voice.sendword{op:'save'}; no lead-in, never the product name; Aegis R-1: keeping a mishearing is an explicit opt-in, each collected variant an UNTICKED box at save (\"Saying “x” on its own will also send. You said “w”; I heard “x”.\") and the save carries every unticked one as dropVariants; only a LISTENING trial makes a turn a take, and with the row open nothing heard becomes a draft; the heard text is read only from status.voice.sendWordTrial.last); a trialTake row is never a transcript line (store voiceItem) and never a draft (dictation turnText); Pieces (gap 1500 / cap 8000 ms, hold while busy, piece claim, piece ring); Mic key switch, Listening (open / toggle) choice sent as the client's capture kind, voice.preset.* palette commands, in-app bare `, send-now from the voice app. ONE SEND CONTROL (founder report 2026-10-20): the composer's own send (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no Send of its own. draftState / DRAFT_CONTROLS map the draft's state to its controls: idle (none), ambient (no hold: nothing counts down), ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send off: no hold). A new dictation mode adds a state and a row. The composer is one container: the form carries the border and, while the textarea has keyboard focus, the focus ring (:has); the textarea draws none. #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation into the composer. core/dictation.ts is a PURE reducer: a live voice.turn.user row with the kernel-stamped `forwardable: true`, non-empty text, no `intercepted`/refusal, for the attached session and past the start seq (no backlog; each seq once) appends to the draft with one space. One countdown ring runs over the per-machine delay (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s; pill menu picks and voice.delay.* palette commands) while the draft is unheld, the voice app idle (status.voice.dictation.activity), the session not streaming, and the attached session is the GUI's focused one (else the pill says \"draft waiting\"); new speech, transcription, a new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume], the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity), typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The send is session.send{hsid, content: one part per turn | the edit as ONE part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited, and a forwardable unsent turn as \"in composer\". Only a human-class connection (canAttach) gets these controls; a voice connection never. Aegis conditions: hold records who set it (gui | voice | detached; a voice toggle never clears a GUI-set or detached hold); no live attachment for the draft's session ⇒ held 'detached', never auto-sent; an edit while sending keeps hold and the edit; turn text is sanitized by the contracts sanitizeDisplayText (sent as the voice app's exact words only when sanitizing changed nothing); the holdToggles baseline resets per voice connection (connEpoch, else client.restarts); edited drafts echo as typed messages. TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A part whose turn's mode is not exactly 'ptt' (missing included) marks the draft ambient (ambientDraft); an ambient draft never arms the ring and only the composer send (Enter/⌘Enter/[send]) sends it (note \"draft · Enter sends (ambient never auto-sends)\"). PTT drafts keep the countdown; the delay picks say push-to-talk.",
       "visualTags": [],
       "related": [
         "$send-by-word",
@@ -3236,10 +3306,11 @@
       "symbol": "#gnomon-voice",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "Dictate, the G-VOX-06 exception (founder bug 2026-10-21): under a conversation ceiling with send ceiling key, an unverified speaker's ambient, non-intercepted turn of the attached human's voice principal is not refused voice-speaker at receipt; the other guards run and an accepted one is stamped forwardable, draftOnly:true and speakerVerified:false (client claims of either are BAD_REQUEST). Aegis privacy: its row is HASH-ONLY; its words stay in kernel memory (UNVERIFIED_TEXT_TTL_MS, UNVERIFIED_TEXT_CAP) and reach the human class only as status.voice.unverified (voiceStatusFor hides them from every other class). It fills the draft only: the direct send is refused, and a word, piece or send-now claim on that session is refused voice-speaker{cause draft-only} while ANY attachment's unverified turn there is unsent (a preset switch re-attaches); it is never the send word nor an adjacency anchor; only a human session.send (Enter) carries it, and originFor stamps that send sentBy 'unverified' (turn.sent origin voice-unverified, clamped by ^voice-origin-clamp) when its attribution matched one or a source:'voice' send happens while one is outstanding (consumed; releaseOrigin hands them back on a failed send). A refused unverified turn under VOICE_MIN_VERIFY_SPEECH_MS (contracts) of gated speech carries cause too-short. Voice drops fix (2026-10-20): busy (voice-playback) ends at the main-chain end_turn message_stop (supervisor turnBusy), re-armed by message_start; the append result carries refused/refusedCause; capture reports carry refusal/cause; voice.turn.user keeps speakerScore (bucket) and gatedSpeechMs; the kernel stamps localDrops counts (VoiceReports takeLocalDrops) on voice.turn.user and voice.session.end. Aegis M2: every enrolments.jsonl write (CLI enrol/forget, card enrol) goes through appendSignedEnrolRow (sig verified, seq recomputed under the lock, moved seq refused loudly, durable append). A missing `consent` is never \"unconsented\"; the text lives in voice/consents/<hex>.txt. TD-2026-10-20-514 (Aegis Q3/F3): the GUI enrol card is ROOT class and hand-only; prepareEnrol builds the voiceEnrolRow:v1 row (+cardId, consentHash; seq under the enrolments lock), commitEnrol re-checks seq and writes the consent text to voice/consents/<hex>.txt; the consent never enters the card or the log. ONE presence. Dictation (TD-2026-10-20-262): accepted voice.turn.user rows carry a kernel-stamped forwardable (a client forwardable is BAD_REQUEST); a human session.send{source:'voice'} is hash-matched against the attachment's pending turns and tagged turn.sent{source voice|voice-edited, voiceSessionId, voiceTurnSeqs, voiceTurnSeq} (attribution never refuses); request.voice.report {dictation} is relayed as status.voice.dictation{activity, holdToggles, at}. #gnomon-voice kernel side, slices V1 talk-only and V2a ambient (TD-2026-10-19-298: the attachment mode is a ceiling, ptt under any, conversation only under conversation; widening to conversation takes one fresh-presence strictness card per GUI login; ambient turns need an aec claim, an enrolled speaker and a not-busy session by the supervisor's own turn state plus the echo tail (voice-playback, clock kernel); idle auto-off of a conversation ceiling after voice.ambientIdleMs, default ten minutes, written voice.session.end reason idle; receipt-refused and unknown-speaker turns are stored as a keyed text hash, duration and reason, never text; status.voice attached, hsid, ceiling, since, idleAt) (spec §14.1-14.4, §14.7 Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026, TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts: attachment ONLY by a human gesture (log.append voice.session.start|end on a first-party GUI/device connection; the kernel mints voiceSessionId and writes the row); voice session.send to the attached session only, source voice forced, riding the attaching human's turn permit (never its own), accepted only for the voice connection's latest voice.turn.user in this attachment from an enrolled speaker, not intercepted, push-to-talk, outside every voice.turn.agent playback window + echoTailMs (750). Refusals are FORBIDDEN gate voice with reserved reasons: voice-target, voice-conn, voice-stale-utterance, voice-speaker, voice-grammar, voice-echo, voice-off (conversation mode). session.stop interrupt only; voice.* shape-validated; the voice reader sees its attached session + voice.*, redacted. approve stays voice-off in every form; request.voice.arm stays refused (V7). src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup | enrol | forget, root-signed rows (enrolments.jsonl, voice device key). Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after receipt, never before the attachment, echo checked on kernel times too; per-turn client mode claim cross-checked against the attachment (ptt is a client claim, §A.4); voice follow subscriptions end on every attachment change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice reader sees only its attached session's rows; enrolment order is the signed seq; windows bounded at VOICE_WINDOW_CAP. Slice V2e (spec §14.4.1): src/kernel/voice/voice-child.ts VoiceChildSupervisor spawns the voice client over an inherited socketpair (fd 3) the kernel authenticates itself as p:<ns>/voice (SocketServerHandle.adopt + dispatcher.adoptPreauthenticated, no hello/auth, no key in the child), allow-list env, backoff restarts, dies on every daemon exit and drain (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app into <home>/bin/voice and fetches models; the client entry resolves lazily, darwin only. Aegis M2: at DAEMON START createVoicePrepare checks the workspace gnomon-voice dist against dist/voice-client.manifest.json and that manifest against the loaded build stamp's voiceClientManifest (scripts/build-stamp.mjs; build gnomon-voice first), then copies all of dist, voice-models.manifest.json, a module package.json and the optional sherpa-onnx-node + platform packages into <home>/bin/voice/client (0700/0600), pins a sha256 of every file in memory, runs the model fetch and the spawn from the COPY, and re-verifies the pin last in every prepare; a changed, added or missing file is VoiceClientRefused, phase 'unavailable' with the reason, never retried. Every exit (signal, stop, idle, upgrade after its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol (fresh-presence strictness card, detail.op voice.enrol, writes the root-signed row), request.voice.forget (no card), request.voice.report (client progress + notices relayed in status.voice; 2026-10-20 prints{stale: names} = speakers whose print predates the client's speech gate, held per voice connection with no TTL, cleared when it closes, relayed as status.voice.prints; T-2026-10-20-005 A1 capture{state idle|hearing|transcribing|captured|dropped, segId, reason? closed too-short|echo|not-attached|no-words|not-enrolled| barge-in|refused on dropped only, level? 0..1 on hearing only} relayed as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor projects B1's capture.text{committed, tail} (the live partial words, hearing / transcribing only, voice principal only, sanitised, capped at CAPTURE_TEXT_MAX 600, in memory with the capture TTL, never a row) to a human-class connection on the gui credential only (V2; the shared CAPTURE_STATUS_KEYS never include text); voice.capture.level declared in status-numbers.ts. Aegis follow-ups: terminal states are marked claim:'client' and cross-checked against the kernel's own acceptances on that voice connection (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop shows captured with kernel:'accepted' and clientReason, a captured with no acceptance is kernel:'unconfirmed'; text only for cls human on the gui credential; the slot remembers its connId and clears when that connection closes); request.voice.client start|stop is human only. speakable.ts KernelSpeakable appends voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached session; the voice reader is narrowed to voice.* rows. speakerEnrolled is the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged. TABLE TALK (TD-2026-10-20-294, docs/guides/table-talk.md): the reply item prefers the first speak fenced block (markdown, URLs and long digit/hex runs stripped, 300-char sentence cap, unclosed fence = its first paragraph) as from:'block', else the gnome line / first paragraph as from:'heuristic'; kernel-written ask-waiting and edits items carry from:'kernel'. table-talk.ts holds the frozen guidance (at most 160 words, pinned hash); VoiceControl.guidanceFor(hsid) returns it only while voice is attached to that session, and the #supervisor writes it as a second <gnomon-voice> text block on every send (turn.sent guidanceHash; contentHash stays the human text, replay unchanged). The spoken scrub (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon trace allows one extra prompt block only when turn.sent names its guidanceHash and the hash matches (Aegis M2).",
+      "description": "Dictate, the G-VOX-06 exception (founder bug 2026-10-21): under a conversation ceiling with send ceiling key, an unverified speaker's ambient, non-intercepted turn of the attached human's voice principal is not refused voice-speaker at receipt; the other guards run and an accepted one is stamped forwardable, draftOnly:true and speakerVerified:false (client claims of either are BAD_REQUEST). Aegis privacy: its row is HASH-ONLY; its words stay in kernel memory (UNVERIFIED_TEXT_TTL_MS, UNVERIFIED_TEXT_CAP) and reach only a human on the gui credential, for sessions that human owns now: VoiceControl.unverifiedFor(principal), added per viewer by the dispatcher as status.voice.unverified (status() never carries them; voiceStatusFor strips them for any other class or credential). It fills the draft only: the direct send is refused, and a word, piece or send-now claim on that session is refused voice-speaker{cause draft-only} while ANY attachment's unverified turn there is unsent (a preset switch re-attaches); it is never the send word nor an adjacency anchor; only a human session.send (Enter) carries it, and originFor stamps that send sentBy 'unverified' (turn.sent origin voice-unverified, clamped by ^voice-origin-clamp) when its attribution matched one or a source:'voice' send happens while one is outstanding (consumed; releaseOrigin hands them back on a failed send). A refused unverified turn under VOICE_MIN_VERIFY_SPEECH_MS (contracts) of gated speech carries cause too-short. Voice drops fix (2026-10-20): busy (voice-playback) ends at the main-chain end_turn message_stop (supervisor turnBusy), re-armed by message_start; the append result carries refused/refusedCause; capture reports carry refusal/cause; voice.turn.user keeps speakerScore (bucket) and gatedSpeechMs; the kernel stamps localDrops counts (VoiceReports takeLocalDrops) on voice.turn.user and voice.session.end. Aegis M2: every enrolments.jsonl write (CLI enrol/forget, card enrol) goes through appendSignedEnrolRow (sig verified, seq recomputed under the lock, moved seq refused loudly, durable append). A missing `consent` is never \"unconsented\"; the text lives in voice/consents/<hex>.txt. TD-2026-10-20-514 (Aegis Q3/F3): the GUI enrol card is ROOT class and hand-only; prepareEnrol builds the voiceEnrolRow:v1 row (+cardId, consentHash; seq under the enrolments lock), commitEnrol re-checks seq and writes the consent text to voice/consents/<hex>.txt; the consent never enters the card or the log. ONE presence. Dictation (TD-2026-10-20-262): accepted voice.turn.user rows carry a kernel-stamped forwardable (a client forwardable is BAD_REQUEST); a human session.send{source:'voice'} is hash-matched against the attachment's pending turns and tagged turn.sent{source voice|voice-edited, voiceSessionId, voiceTurnSeqs, voiceTurnSeq} (attribution never refuses); request.voice.report {dictation} is relayed as status.voice.dictation{activity, holdToggles, at}. #gnomon-voice kernel side, slices V1 talk-only and V2a ambient (TD-2026-10-19-298: the attachment mode is a ceiling, ptt under any, conversation only under conversation; widening to conversation takes one fresh-presence strictness card per GUI login; ambient turns need an aec claim, an enrolled speaker and a not-busy session by the supervisor's own turn state plus the echo tail (voice-playback, clock kernel); idle auto-off of a conversation ceiling after voice.ambientIdleMs, default ten minutes, written voice.session.end reason idle; receipt-refused and unknown-speaker turns are stored as a keyed text hash, duration and reason, never text; status.voice attached, hsid, ceiling, since, idleAt) (spec §14.1-14.4, §14.7 Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026, TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts: attachment ONLY by a human gesture (log.append voice.session.start|end on a first-party GUI/device connection; the kernel mints voiceSessionId and writes the row); voice session.send to the attached session only, source voice forced, riding the attaching human's turn permit (never its own), accepted only for the voice connection's latest voice.turn.user in this attachment from an enrolled speaker, not intercepted, push-to-talk, outside every voice.turn.agent playback window + echoTailMs (750). Refusals are FORBIDDEN gate voice with reserved reasons: voice-target, voice-conn, voice-stale-utterance, voice-speaker, voice-grammar, voice-echo, voice-off (conversation mode). session.stop interrupt only; voice.* shape-validated; the voice reader sees its attached session + voice.*, redacted. approve stays voice-off in every form; request.voice.arm stays refused (V7). src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup | enrol | forget, root-signed rows (enrolments.jsonl, voice device key). Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after receipt, never before the attachment, echo checked on kernel times too; per-turn client mode claim cross-checked against the attachment (ptt is a client claim, §A.4); voice follow subscriptions end on every attachment change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice reader sees only its attached session's rows; enrolment order is the signed seq; windows bounded at VOICE_WINDOW_CAP. Slice V2e (spec §14.4.1): src/kernel/voice/voice-child.ts VoiceChildSupervisor spawns the voice client over an inherited socketpair (fd 3) the kernel authenticates itself as p:<ns>/voice (SocketServerHandle.adopt + dispatcher.adoptPreauthenticated, no hello/auth, no key in the child), allow-list env, backoff restarts, dies on every daemon exit and drain (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app into <home>/bin/voice and fetches models; T-2026-10-21-028 (#release-pins): the copied executable is hashed before and after codesign (VOICE_IO_REQUIREMENT from gnomon-contracts, the build's own), must equal the release's compiled sha256 for this arch in a release build (VoiceAppRefused 'checksum', dev flag or not) and answer --version ≥ MIN_VOICE_IO_VERSION in every build ('version'); createVoicePrepare re-verifies it LAST, right before the spawn (recheckVoiceApp: path, inode, size, mtime, sha256, the release pin, codesign hash-verify-rehash), so the model-fetch window cannot swap it; the client entry resolves lazily, darwin only. Aegis M2: at DAEMON START createVoicePrepare checks the workspace gnomon-voice dist against dist/voice-client.manifest.json and that manifest against the loaded build stamp's voiceClientManifest (scripts/build-stamp.mjs; build gnomon-voice first), then copies all of dist, voice-models.manifest.json, a module package.json and the optional sherpa-onnx-node + platform packages into <home>/bin/voice/client (0700/0600), pins a sha256 of every file in memory, runs the model fetch and the spawn from the COPY, and re-verifies the pin last in every prepare; a changed, added or missing file is VoiceClientRefused, phase 'unavailable' with the reason, never retried. Every exit (signal, stop, idle, upgrade after its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol (fresh-presence strictness card, detail.op voice.enrol, writes the root-signed row), request.voice.forget (no card), request.voice.report (client progress + notices relayed in status.voice; 2026-10-20 prints{stale: names} = speakers whose print predates the client's speech gate, held per voice connection with no TTL, cleared when it closes, relayed as status.voice.prints; T-2026-10-20-005 A1 capture{state idle|hearing|transcribing|captured|dropped, segId, reason? closed too-short|echo|not-attached|no-words|not-enrolled| barge-in|refused on dropped only, level? 0..1 on hearing only} relayed as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor projects B1's capture.text{committed, tail} (the live partial words, hearing / transcribing only, voice principal only, sanitised, capped at CAPTURE_TEXT_MAX 600, in memory with the capture TTL, never a row) to a human-class connection on the gui credential only (V2; the shared CAPTURE_STATUS_KEYS never include text); voice.capture.level declared in status-numbers.ts. Aegis follow-ups: terminal states are marked claim:'client' and cross-checked against the kernel's own acceptances on that voice connection (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop shows captured with kernel:'accepted' and clientReason, a captured with no acceptance is kernel:'unconfirmed'; text only for cls human on the gui credential; the slot remembers its connId and clears when that connection closes); request.voice.client start|stop is human only. speakable.ts KernelSpeakable appends voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached session; the voice reader is narrowed to voice.* rows. speakerEnrolled is the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged. TABLE TALK (TD-2026-10-20-294, docs/guides/table-talk.md): the reply item prefers the first speak fenced block (markdown, URLs and long digit/hex runs stripped, 300-char sentence cap, unclosed fence = its first paragraph) as from:'block', else the gnome line / first paragraph as from:'heuristic'; kernel-written ask-waiting and edits items carry from:'kernel'. table-talk.ts holds the frozen guidance (at most 160 words, pinned hash); VoiceControl.guidanceFor(hsid) returns it only while voice is attached to that session, and the #supervisor writes it as a second <gnomon-voice> text block on every send (turn.sent guidanceHash; contentHash stays the human text, replay unchanged). The spoken scrub (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon trace allows one extra prompt block only when turn.sent names its guidanceHash and the hash matches (Aegis M2).",
       "visualTags": [],
       "related": [
         "^voice-origin-clamp",
+        "#release-pins",
         "#supervisor",
         "$voice-turn"
       ],
@@ -3284,14 +3355,15 @@
       "symbol": "#gnomon-wrapper",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-wrapper/.purpose",
-      "description": "Package-level component (allowlisted in packages/gnomon/test/symbol-allowlist.json: Appendix A treats gnomon-wrapper as a package, not a spec node). Tauri pinned exact (=2.12.4; tauri-build =2.7.3). One window whose main frame is in exactly one phase the NATIVE side moves (src/nav.rs): the bundled status page (tauri://localhost) or the one kernel origin http://127.0.0.1:<port>; on_navigation refuses every other URL (another port, localhost, userinfo tricks, other schemes) and on_new_window denies. IPC is disabled for page content (src/surface.rs): invoke_system replaces Tauri's invoke script with a stub that holds no invoke key and throws, there is no command and no invoke handler, capabilities: [] (the generated gen/schemas/capabilities.json is {}), withGlobalTauri: false, freezePrototype: true. Devtools only in debug builds (no devtools feature). A document-start script defines a frozen window.gnomonSurface='wrapper' on the 127.0.0.1 origin only, which the GUI reads to declare hello surface wrapper and drop the extension-risk badge (display only). Hardened runtime with an EMPTY entitlements set. Double-click flow (src/main.rs): the app spawns `node --disable-sigusr1 <dist>/cli/gnomon.js up --wrapper` (src/kernel.rs: env_clear + HOME USER LOGNAME LANG TMPDIR SHELL + fixed PATH, no NODE_OPTIONS/GNOMON_*/DYLD_*). Trust root (Aegis C1, src/tree.rs shared with build.rs): the build records the node path as found plus the sha256 of its realpath target, and the gnomon-wrapper-kernel-tree:v1 hash of packages/gnomon/{dist,package.json}; check_trust_root re-hashes both before every spawn and refuses \"built against a different node/kernel … Rebuild the app\" (covers brew upgrade node). local.signed.json is not a node source (Aegis C2). Stderr to ~/Library/Logs/Gnomon/kernel.log (0600), reads gnomon-wrapper-channel:v1 (src/contract.rs; LaunchGrant Debug redacts token and key), and on a grant runs the native preflight (src/loopback.rs): channel bundleHash == the pin compiled from gui-bundle.ts (src/bundle.rs), its own WebSocket hello with surface wrapper verified natively (src/verify.rs: ed25519-dalek strict, exact SPKI, kernel keyId, sent clientNonce, gnomon:auth-server:v2), then every pinned file and / re-hashed — only then Phase::Kernel and navigate. Any refusal (unprovisioned shows `gnomon identity init`) stays on the status page. Window close hides (kernel keeps running), Dock click reopens, Cmd-Q sends quit, waits 10 s, kills. Tests: unit (nav, surface, contract, verify against TS-generated vectors, bundle, kernel env/argv), tests/live_kernel.rs (preflight vs a live dev kernel; a foreign key and another pin refused), tests/no_page_ipc.rs (config falsifiers). Round 2: the child is `node --disable-sigusr1 …` (NODE_FLAGS, first and only); the channel is #wrapper-channel; lines are capped at 64 KiB at read time; at stdout EOF the phase returns to Status and an EOF without a refusal/down line says \"the kernel exited before starting\" with the status; Cmd-Q prevent_exit + worker-thread stop (try_wait, 10 s, kill); src/logfile.rs opens kernel.log O_NOFOLLOW with fchmod/fstat checks and a 0700 dir; tests/crafted_ipc.rs (Tauri mock runtime: keyless messages dropped, keyed commands refused from both origins); subframes are excluded by the kernel CSP frame-src 'none' (falsified statically and on the live header). #setup-endpoint (T-2026-10-19-005 MVP-b): an unprovisioned home makes `up --wrapper` emit {t:setup,port,setupToken, setupPublicKey,bundleHash,expiresAt} (contract.rs SetupGrant, Debug redacted; ^setup-token exactly 43 base64url); loopback.rs setup_preflight runs the SAME pin and serverSig checks against the ephemeral setup key speaking gnomon-setup:v1; nav.rs Phase::Setup{port} locks navigation to that one origin; the page reaches no Tauri command (G-GUI-12). After success the channel's {t:up} continues into the normal launch. refusal_text no longer says \"In Terminal\". The bundled status page (static/status.css) uses the GUI's type tokens (--fs-reading, --fs-title) and base radius (--radius 3), see #gui-type and #gui-space-radius, and copies the GUI's --ground, --ink, --fail per theme (light / prefers-color-scheme dark) and its --mono stack (JetBrains Mono): it cannot import styles.css, so the values are duplicated and must change with it.",
+      "description": "Package-level component (allowlisted in packages/gnomon/test/symbol-allowlist.json: Appendix A treats gnomon-wrapper as a package, not a spec node). Tauri pinned exact (=2.12.4; tauri-build =2.7.3). One window whose main frame is in exactly one phase the NATIVE side moves (src/nav.rs): the bundled status page (tauri://localhost) or the one kernel origin http://127.0.0.1:<port>; on_navigation refuses every other URL (another port, localhost, userinfo tricks, other schemes) and on_new_window denies. IPC is disabled for page content (src/surface.rs): invoke_system replaces Tauri's invoke script with a stub that holds no invoke key and throws, there is no command and no invoke handler, capabilities: [] (the generated gen/schemas/capabilities.json is {}), withGlobalTauri: false, freezePrototype: true. Devtools only in debug builds (no devtools feature). A document-start script defines a frozen window.gnomonSurface='wrapper' on the 127.0.0.1 origin only, which the GUI reads to declare hello surface wrapper and drop the extension-risk badge (display only). Hardened runtime with an EMPTY entitlements set. Double-click flow (src/main.rs): the app spawns `node --disable-sigusr1 <dist>/cli/gnomon.js up --wrapper` (src/kernel.rs: env_clear + HOME USER LOGNAME LANG TMPDIR SHELL + fixed PATH, no NODE_OPTIONS/GNOMON_*/DYLD_*). Trust root (Aegis C1, src/tree.rs shared with build.rs): the build records the node path as found plus the sha256 of its realpath target, and the gnomon-wrapper-kernel-tree:v1 hash of packages/gnomon/{dist,package.json}; check_trust_root re-hashes both before every spawn and refuses \"built against a different node/kernel … Rebuild the app\" (covers brew upgrade node). local.signed.json is not a node source (Aegis C2). Stderr to ~/Library/Logs/Gnomon/kernel.log (0600), reads gnomon-wrapper-channel:v1 (src/contract.rs; LaunchGrant Debug redacts token and key), and on a grant runs the native preflight (src/loopback.rs): channel bundleHash == the pin compiled from gui-bundle.ts (src/bundle.rs), its own WebSocket hello with surface wrapper verified natively (src/verify.rs: ed25519-dalek strict, exact SPKI, kernel keyId, sent clientNonce, gnomon:auth-server:v2), then every pinned file and / re-hashed — only then Phase::Kernel and navigate. Any refusal (unprovisioned shows `gnomon identity init`) stays on the status page. Window close hides (kernel keeps running), Dock click reopens, Cmd-Q sends quit, waits 10 s, kills. Tests: unit (nav, surface, contract, verify against TS-generated vectors, bundle, kernel env/argv), tests/live_kernel.rs (preflight vs a live dev kernel; a foreign key and another pin refused), tests/no_page_ipc.rs (config falsifiers). Round 2: the child is `node --disable-sigusr1 …` (NODE_FLAGS, first and only); the channel is #wrapper-channel; lines are capped at 64 KiB at read time; at stdout EOF the phase returns to Status and an EOF without a refusal/down line says \"the kernel exited before starting\" with the status; Cmd-Q prevent_exit + worker-thread stop (try_wait, 10 s, kill); src/logfile.rs opens kernel.log O_NOFOLLOW with fchmod/fstat checks and a 0700 dir; tests/crafted_ipc.rs (Tauri mock runtime: keyless messages dropped, keyed commands refused from both origins); subframes are excluded by the kernel CSP frame-src 'none' (falsified statically and on the live header). #setup-endpoint (T-2026-10-19-005 MVP-b): an unprovisioned home makes `up --wrapper` emit {t:setup,port,setupToken, setupPublicKey,bundleHash,expiresAt} (contract.rs SetupGrant, Debug redacted; ^setup-token exactly 43 base64url); loopback.rs setup_preflight runs the SAME pin and serverSig checks against the ephemeral setup key speaking gnomon-setup:v1; nav.rs Phase::Setup{port} locks navigation to that one origin; the page reaches no Tauri command (G-GUI-12). After success the channel's {t:up} continues into the normal launch. refusal_text no longer says \"In Terminal\". The bundled status page (static/status.css) uses the GUI's type tokens (--fs-reading, --fs-title) and base radius (--radius 3), see #gui-type and #gui-space-radius, and copies the GUI's --ground, --ink, --fail per theme (light / prefers-color-scheme dark) and its --mono stack (JetBrains Mono): it cannot import styles.css, so the values are duplicated and must change with it. 8.0 M2 (T-2026-10-21-029, TD-2026-10-21-758 zero-build): two build modes, chosen at BUILD time (build.rs, GNOMON_BUILD_MODE). BUNDLE (the release script sets GNOMON_WRAPPER_BUNDLE_STAGE to a Contents-shaped stage): build.rs pins the BUNDLE-RELATIVE paths of src/layout.rs (Resources/node/bin/node, Resources/kernel; shared verbatim with the app like tree.rs) and the sha256 of the staged, already-signed node and the kernel tree hash of the staged kernel; a stage that does not hash fails the build. At every spawn check_trust_root resolves Contents from current_exe's realpath (must be <X>.app/Contents/MacOS), refuses a node or kernel that is a symlink or reaches outside the bundle, and refuses a hash mismatch with \"reinstall Gnomon\" — so the app runs from any location (moved/copied) and a modified one is refused (Aegis C1 intent kept). DEV (no stage): the absolute checkout pins exactly as before, for founder dogfooding. NodeEntitlements.plist (allow-jit, allow-unsigned-executable-memory only) signs the bundled node; bundled-node.lock.json pins the official Node 24.x tarball per arch. Tests: kernel.rs relocation (an app moved to another directory resolves at its new location, through a symlink too), stage pins == assembled bundle, modified/symlinked node or kernel refused, non-.app executable refused, and a tree-hash vector shared with the release script's JS twin. Aegis M2 review: right before the spawn src/codesign.rs verifies the bundled node with SecStaticCodeCheckValidity (strict, all architectures) against GNOMON_BUILD_NODE_REQUIREMENT (layout::node_requirement: developer-id = Apple anchor + Developer ID + team SW4BMQ8PNL + identifier gnomon.node; adhoc = identifier only, for --unsigned), on top of the hash; pinned files with nlink > 1 are refused; a release-profile build without a stage panics unless GNOMON_WRAPPER_DEV=1 (build-darwin.mjs sets it); `gnomon-wrapper --build-mode` prints bundle|dev and the release script refuses to sign anything else. NodeEntitlements.plist is allow-jit only (measured on arm64). node-release-keys.json vendors the Node release key fingerprints bump-bundled-node.mjs verifies SHASUMS256.txt against. Residual: check-to-posix_spawn window, covered by App Management protection (spec §18.1). 8.0 M4 (T-2026-10-21-031): the app also carries Resources/gnomon-mods (the kernel's first-party mods; not part of the wrapper's pins, covered by the app seal and their packageHash pins). Paradigm's `gnomon` (#gnomon-app-installer) installs the app and opens it through LaunchServices, so this wrapper stays the trust root for bare `gnomon`; WRAPPER_REQUIREMENT is the requirement it verifies. CLI passthrough (Aegis M4 high 1): `gnomon-wrapper --cli -- <args>` (kernel.rs parse_cli / cli_command, main.rs run_cli) runs check_trust_root, then execs the bundled node `--disable-sigusr1 <kernel>/dist/cli/gnomon.js <args>` with the SAME env allow-list as the kernel child (stdio inherited, cwd kept, exit code and signals the kernel's); no `--` exits 64, a trust-root refusal 69. Paradigm's `gnomon <verb>` uses it, so the terminal and the window share one trust root. Tests: kernel.rs cli units, tests/cli_mode.rs (the built binary; NODE_OPTIONS / GNOMON_* set by the caller never reach the kernel).",
       "visualTags": [],
       "related": [
         "#wrapper-channel",
         "#setup-endpoint",
         "^setup-token",
         "#gui-type",
-        "#gui-space-radius"
+        "#gui-space-radius",
+        "#gnomon-app-installer"
       ],
       "componentType": "module"
     },
@@ -3395,11 +3467,12 @@
       "symbol": "#identity",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "TD-2026-10-20-514 (G-ID-09, G-ID-10): HelperApprovalsKey.signDecisionBatch sends ONE decision.sign (helper >= 1.8.0, chosen from info.version) for a whole card decision, pre-checked by decision-batch.ts (the TS mirror of the helper rules, shared vectors), every signature verified against the pinned keys and `shown` compared byte-exact; HelperProcess / SupervisedHelper stash the handshake version. #identity (spec §3.1; M1.4 slice of it — hardware custody is M1.3, blocked on the founder's provisioning profile). root-authority.ts — the RootAuthority seam: UnprovisionedRootAuthority is the production default (verifies nothing, signRow refuses UNSUPPORTED{root-unprovisioned, milestone M1.3}; never a software fallback); DevTestRootAuthority is a software P-256 root constructible only with the literal DEV_TEST_ROOT_ACK, never from env/argv (§15.3), reported as root state `dev-test` in status and daemon.start; RootVerifier verifies rows from a pinned root public key (the client side). Row sigs: gnomon:row-sig:v1 over canonical JSON, P-256 IEEE-P1363. device-key.ts — the Ed25519 device key at <home>/keys/device.key: written O_EXCL 0600, loaded only if a regular owner-only file in an owner-only keys/ dir; a device signer cannot approve. registry.ts — <home>/keys/registry.jsonl, append-only {row, signer, sig} rows (kind kernel | device); fail-closed reader: untrusted signer, bad signature, keyId ≠ sha256(PEM), principal or deviceId outside the root's ns, foreign principals and peer/kernel kinds never resolve and are surfaced in rejected[]; first row pins a deviceId and a keyId. The kernel principal is p:<root ns>/kernel, or p:00000000/kernel while no root exists (UNPROVISIONED_NS). kernel-pub.ts — PUBLIC halves of every kernel key the home ran with (<home>/keys/kernel-pub.jsonl, 0600), loaded into the log's key ring and kernelKeyIds so verify works across restarts; same-user writable and not root-signed, so across restarts kernel signatures prove nothing against a same-user forger until M1.3 (custody partial). presence.ts (T-2026-10-17-009(c), Aegis S34-10) — PresenceToken, a branded type minted only by this module: private constructor guarded by a module-private mint key, a `#state` private field and a `unique symbol` brand (nominal by type; `PresenceToken.is` is a `#state in v` runtime brand check no copy, prototype object or Proxy passes); bound to one purpose (`log.gap.acknowledge`; M1.5 adds `mod.install` and `mod.rollback`), single-use and fresh for 60 s (`consumePresence` → ok | not-a-token | wrong-purpose | stale | used). `requestPresence` refuses UNSUPPORTED{presence-unavailable, M1.3} until the signed helper's prompt exists; the only mint before then is the internal test seam (method `test-seam`). read-token.ts (M1.4 slice 3, P8-D89a) — <home>/keys/read-tokens.jsonl, append-only root-signed rows {op: mint, tokenId rtk:<26>, keyId, publicKeyPem, principalId (root ns, not kernel, not foreign), createdAt, expiresAt (default 1 h, ≤ 24 h)} and {op: revoke, tokenId}; PUBLIC keys only. mintReadToken (library only: no verb, no argv; now within 5 min of the real clock and clamped to it, so expiresAt ≤ real now + ttl) returns grt:v1:<id>.<seed> once; parseReadToken gives the client a readToken-class signer that signs only gnomon:auth-token:v1. ReadTokenStore: fail-closed reader; not valid before createdAt − 60 s; revocations STICKY for its life and seeded from key.token.revoked rows on the chain (daemon.ts records each newly seen revoke); the file must grow append-only — shrinking or a lost/rewritten line, or more than 1 MiB / 10 000 rows, makes it untrusted for the store's life (nothing resolves; key.registry.malformed{file, reason}). Open questions (spec silent; most restrictive reading chosen): the CLI verb that mints, the revocation re-check period. M1.3 slice 1 (hardware custody, the signed #gnomon-helper): helper.ts — pinHelper resolves the path once (realpathSync.native), refuses missing / non-executable / group- or world-writable files, verifies `codesign --verify --strict` + HELPER_REQUIREMENT (Developer ID Application, team SW4BMQ8PNL, identifier gnomon.helper), records inode/size/mtime/sha256 and RE-CHECKS them synchronously before every spawn; HelperProcess runs `gnomon-helper serve` (NDJSON, one request in flight, ≤ 16 queued, 1 MiB lines, timeouts kill it; out-of-order or oversized replies kill it — fail closed); SupervisedHelper restarts it on demand; helperOnceSync runs `once` for synchronous root signatures. The unsigned verifier exists only behind DEV_TEST_HELPER_ACK. Round 2: the pin is hash → verify → re-hash (H5); after spawn the RUNNING child is code-sign-verified by pid and must answer `info` with gnomon-helper:v2 (helper 1.6.0) and version ≥ MIN_HELPER_VERSION before any request (H1 c — a version floor, not a CDHash allowlist, because timestamped signatures change every build); the platform check is src/platform/helper-verifier.ts (R6); SupervisedHelper never restarts after close() and backs off 1 s doubling to 30 s (R5). hardware.ts — HardwareRootAuthority (state `hardware`; verifies with the pinned root; signRow sync via `once`, signRowAsync via the daemon's helper; fresh presence per signature; a signature that does not verify under the pinned root is refused); HelperApprovalsKey (ApprovalsKey whose decisionSig the helper makes after presence: fresh, optionally kept as the connId's cached unlock IN THE HELPER, or cached; the same touch signs a kernel presence challenge so the broker gets a bound `helper-se` PresenceToken; every helper signature verified before use; approver must be the key's human). presence.ts — production mint = hardware attestation: beginHardwarePresence (single-use challenge, ≤ 64 outstanding, 120 s) / completeHardwarePresence (mints only on a `gnomon:presence:v1` signature that verifies in the pinned ring). provision.ts — <home>/keys/identity.json (identity:v1, public only: gen, root key + ns, root-signed approvals binding to the human, device, helperPath) and keys/identity.jsonl journal; openHardwareIdentity opens it for gnomond only when the pinned helper confirms both SE public keys and the binding verifies under the root, else the daemon refuses to start (identity-<reason>), never a software root. cli/identity-cli.ts — `gnomon identity init` provisions the real root once (refused from a kernel-spawned shell, while the daemon runs, and when identity.json exists unless `--rotate` on a TTY with the typed confirmation, logged to stderr and a journal line signed by the OLD root; old registry moved aside as evidence, old SE keys retired): pins the helper, creates root + approvals in the SE under a fresh generation, two root signatures with presence (approvals binding, device row), identity.json last; a failure deletes the keys it made. Round 2: rotate needs the OLD root in the SE to sign a gnomon-root-rotate:v1 statement the helper demands before it creates the new generation (H4/H2); `--recover` (typed `recover`) replaces a LOST root with a new namespace, journalled as not signed by it; init asks the helper (key.list) and refuses while another generation is held; every touch's expected digest is printed (H3); the device row is signed first and appended only after identity.json (R3); a failure before the record restores moved files (R2) and deletes its keys via the live helper or a fresh one with presence (R4), never after; Ctrl-C stops at the next step and cleans up. `gnomon identity purge-keys --gen <g>` deletes another generation's keys, one touch each. registry.ts gains deviceRowFor + appendSignedRegistryRow. `gnomon identity status`. Founder hardware test: GNOMON_HW_TESTS=1 test/identity-hw.test.ts (it.todo in CI).",
+      "description": "TD-2026-10-20-514 (G-ID-09, G-ID-10): HelperApprovalsKey.signDecisionBatch sends ONE decision.sign (helper >= 1.8.0, chosen from info.version) for a whole card decision, pre-checked by decision-batch.ts (the TS mirror of the helper rules, shared vectors), every signature verified against the pinned keys and `shown` compared byte-exact; HelperProcess / SupervisedHelper stash the handshake version. #identity (spec §3.1; M1.4 slice of it — hardware custody is M1.3, blocked on the founder's provisioning profile). root-authority.ts — the RootAuthority seam: UnprovisionedRootAuthority is the production default (verifies nothing, signRow refuses UNSUPPORTED{root-unprovisioned, milestone M1.3}; never a software fallback); DevTestRootAuthority is a software P-256 root constructible only with the literal DEV_TEST_ROOT_ACK, never from env/argv (§15.3), reported as root state `dev-test` in status and daemon.start; RootVerifier verifies rows from a pinned root public key (the client side). Row sigs: gnomon:row-sig:v1 over canonical JSON, P-256 IEEE-P1363. device-key.ts — the Ed25519 device key at <home>/keys/device.key: written O_EXCL 0600, loaded only if a regular owner-only file in an owner-only keys/ dir; a device signer cannot approve. registry.ts — <home>/keys/registry.jsonl, append-only {row, signer, sig} rows (kind kernel | device); fail-closed reader: untrusted signer, bad signature, keyId ≠ sha256(PEM), principal or deviceId outside the root's ns, foreign principals and peer/kernel kinds never resolve and are surfaced in rejected[]; first row pins a deviceId and a keyId. The kernel principal is p:<root ns>/kernel, or p:00000000/kernel while no root exists (UNPROVISIONED_NS). kernel-pub.ts — PUBLIC halves of every kernel key the home ran with (<home>/keys/kernel-pub.jsonl, 0600), loaded into the log's key ring and kernelKeyIds so verify works across restarts; same-user writable and not root-signed, so across restarts kernel signatures prove nothing against a same-user forger until M1.3 (custody partial). presence.ts (T-2026-10-17-009(c), Aegis S34-10) — PresenceToken, a branded type minted only by this module: private constructor guarded by a module-private mint key, a `#state` private field and a `unique symbol` brand (nominal by type; `PresenceToken.is` is a `#state in v` runtime brand check no copy, prototype object or Proxy passes); bound to one purpose (`log.gap.acknowledge`; M1.5 adds `mod.install` and `mod.rollback`), single-use and fresh for 60 s (`consumePresence` → ok | not-a-token | wrong-purpose | stale | used). `requestPresence` refuses UNSUPPORTED{presence-unavailable, M1.3} until the signed helper's prompt exists; the only mint before then is the internal test seam (method `test-seam`). read-token.ts (M1.4 slice 3, P8-D89a) — <home>/keys/read-tokens.jsonl, append-only root-signed rows {op: mint, tokenId rtk:<26>, keyId, publicKeyPem, principalId (root ns, not kernel, not foreign), createdAt, expiresAt (default 1 h, ≤ 24 h)} and {op: revoke, tokenId}; PUBLIC keys only. mintReadToken (library only: no verb, no argv; now within 5 min of the real clock and clamped to it, so expiresAt ≤ real now + ttl) returns grt:v1:<id>.<seed> once; parseReadToken gives the client a readToken-class signer that signs only gnomon:auth-token:v1. ReadTokenStore: fail-closed reader; not valid before createdAt − 60 s; revocations STICKY for its life and seeded from key.token.revoked rows on the chain (daemon.ts records each newly seen revoke); the file must grow append-only — shrinking or a lost/rewritten line, or more than 1 MiB / 10 000 rows, makes it untrusted for the store's life (nothing resolves; key.registry.malformed{file, reason}). Open questions (spec silent; most restrictive reading chosen): the CLI verb that mints, the revocation re-check period. M1.3 slice 1 (hardware custody, the signed #gnomon-helper): helper.ts — pinHelper resolves the path once (realpathSync.native), refuses missing / non-executable / group- or world-writable files, verifies `codesign --verify --strict` + HELPER_REQUIREMENT (Developer ID Application, team SW4BMQ8PNL, identifier gnomon.helper), records inode/size/mtime/sha256 and RE-CHECKS them synchronously before every spawn; HelperProcess runs `gnomon-helper serve` (NDJSON, one request in flight, ≤ 16 queued, 1 MiB lines, timeouts kill it; out-of-order or oversized replies kill it — fail closed); SupervisedHelper restarts it on demand; helperOnceSync runs `once` for synchronous root signatures. The unsigned verifier exists only behind DEV_TEST_HELPER_ACK. Round 2: the pin is hash → verify → re-hash (H5); after spawn the RUNNING child is code-sign-verified by pid and must answer `info` with gnomon-helper:v2 (helper 1.6.0) and version ≥ MIN_HELPER_VERSION before any request (H1 c — a version floor, not a CDHash allowlist, because timestamped signatures change every build); the platform check is src/platform/helper-verifier.ts (R6); SupervisedHelper never restarts after close() and backs off 1 s doubling to 30 s (R5). G-HLP-01 wired (T-2026-10-21-028, #release-pins): in a RELEASE build pinHelper also requires the sha256 the release build compiled in for this arch (releaseHelperSha256; mismatch, no entry for the arch, a broken compiled manifest or another requirement ⇒ 'checksum'; a pinned version below MIN_HELPER_VERSION ⇒ 'version'). Every call site (provisioner, openHardwareIdentity, HelperRepin, preflight) goes through it; a dev build (no manifest) keeps signature + version floor only. hardware.ts — HardwareRootAuthority (state `hardware`; verifies with the pinned root; signRow sync via `once`, signRowAsync via the daemon's helper; fresh presence per signature; a signature that does not verify under the pinned root is refused); HelperApprovalsKey (ApprovalsKey whose decisionSig the helper makes after presence: fresh, optionally kept as the connId's cached unlock IN THE HELPER, or cached; the same touch signs a kernel presence challenge so the broker gets a bound `helper-se` PresenceToken; every helper signature verified before use; approver must be the key's human). presence.ts — production mint = hardware attestation: beginHardwarePresence (single-use challenge, ≤ 64 outstanding, 120 s) / completeHardwarePresence (mints only on a `gnomon:presence:v1` signature that verifies in the pinned ring). provision.ts — <home>/keys/identity.json (identity:v1, public only: gen, root key + ns, root-signed approvals binding to the human, device, helperPath) and keys/identity.jsonl journal; openHardwareIdentity opens it for gnomond only when the pinned helper confirms both SE public keys and the binding verifies under the root, else the daemon refuses to start (identity-<reason>), never a software root. cli/identity-cli.ts — `gnomon identity init` provisions the real root once (refused from a kernel-spawned shell, while the daemon runs, and when identity.json exists unless `--rotate` on a TTY with the typed confirmation, logged to stderr and a journal line signed by the OLD root; old registry moved aside as evidence, old SE keys retired): pins the helper, creates root + approvals in the SE under a fresh generation, two root signatures with presence (approvals binding, device row), identity.json last; a failure deletes the keys it made. Round 2: rotate needs the OLD root in the SE to sign a gnomon-root-rotate:v1 statement the helper demands before it creates the new generation (H4/H2); `--recover` (typed `recover`) replaces a LOST root with a new namespace, journalled as not signed by it; init asks the helper (key.list) and refuses while another generation is held; every touch's expected digest is printed (H3); the device row is signed first and appended only after identity.json (R3); a failure before the record restores moved files (R2) and deletes its keys via the live helper or a fresh one with presence (R4), never after; Ctrl-C stops at the next step and cleans up. `gnomon identity purge-keys --gen <g>` deletes another generation's keys, one touch each. registry.ts gains deviceRowFor + appendSignedRegistryRow. `gnomon identity status`. Founder hardware test: GNOMON_HW_TESTS=1 test/identity-hw.test.ts (it.todo in CI).",
       "visualTags": [],
       "related": [
         "#state",
-        "#gnomon-helper"
+        "#gnomon-helper",
+        "#release-pins"
       ],
       "componentType": "module"
     },
@@ -3443,6 +3516,78 @@
       "related": [
         "!daemon-update-detected"
       ]
+    },
+    "release-pins": {
+      "id": "release-pins",
+      "name": "Release Pins",
+      "symbol": "#release-pins",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#release-pins (T-2026-10-21-028, TD-2026-10-21-758 zero-build, G-HLP-01; Aegis M1 review) — the exact native bytes THIS kernel build accepts, COMPILED INTO THE BUNDLE. npm run build:release (scripts/build-release.mjs): tsup (dev pass) → scripts/write-release-manifest.mjs (release-manifest:v1 from the signed GnomonHelper.app / GnomonVoiceIO.app executables: name, --version ≥ the kernel floor, sha256, the requirement the kernel enforces checked with codesign -R, arch via lipo) → tsup again with GNOMON_RELEASE_MANIFEST, so tsup.config.ts defines __GNOMON_RELEASE__ and __GNOMON_RELEASE_MANIFEST__ → build-stamp.mjs (copies the manifest into the stamp for status only). lifecycle/release-pins.ts reads ONLY the compiled values: release ⇒ identity/helper.ts pinHelper and voice/voice-install.ts (install and recheckVoiceApp right before the spawn) require the pinned sha256 for this arch on top of the signature and version floor ('checksum'); a release with a missing or invalid compiled manifest is broken (every pin refused); deleting or editing the stamp, loading dist/index.js or copying dist never makes it dev. Not a release ⇒ dev (signature + version floor only). The daemon records the mode in <home>/kernel-build.json; `gnomon daemon status` reports build: release | dev | broken; the setup helper row says which.",
+      "visualTags": [],
+      "related": [
+        "#identity",
+        "#gnomon-voice",
+        "#update-watch",
+        "#setup-preflight"
+      ],
+      "componentType": "module"
+    },
+    "app-bundle": {
+      "id": "app-bundle",
+      "name": "App Bundle",
+      "symbol": "#app-bundle",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#app-bundle (T-2026-10-21-029, TD-2026-10-21-758 zero-build; 8.0 M2) — where a kernel running from a release Gnomon.app finds its siblings, derived from its OWN file's realpath at run time (never recorded), so a moved or copied app (M4: ~/Applications) still works. Layout: <X>.app/Contents/Resources/kernel (this kernel), Resources/node/bin/node (the bundled node: the wrapper spawns the kernel with it, so process.execPath and every child — gnomon-web, mods, the voice client, the model fetch, successors — use it, never PATH node), Resources/gnomon-voice (the voice client + sherpa), Helpers/GnomonHelper.app, Helpers/GnomonVoiceIO.app. appBundleOf(from) is null outside a bundle, where every caller keeps its monorepo / node_modules lookup. In a bundle: defaultHelperPath and helperPathFor (identity-cli, provision.ts openHardwareIdentity, setup-cli and setup-endpoint completeDevice) use the app's own helper over a recorded identity.json path (stale after a move); resolveVoiceClientEntry looks ONLY in Resources/gnomon-voice (never walks above the app); voiceIoSourceApp copies voice-io from Helpers. Trust is unchanged: requirement + release sha256 pin (#release-pins), never path. appInstallDir (M4's one install-location choice): /Applications when writable without sudo, else ~/Applications (App Management protection). 8.0 M4 (T-2026-10-21-031): Resources/gnomon-mods (AppBundle.mods, BUNDLE_MODS_REL) is the first-party mods catalog; inside a bundle mods-admin findFirstPartyRoot reads ONLY it (null when absent, never walks out of the app). openHardwareIdentity takes `from` and `pins` (test seams) and HelperRepin `pins`: a running release kernel whose app was replaced in place refuses the newer helper (its compiled pin names the old sha256) until restart; the identity (SE keys bound to the helper's access group, never its path) survives a move, a replace and a raised helper floor (test/app-upgrade-identity.test.ts). The paradigm shim (#gnomon-app-installer) mirrors appInstallDir in plain JS.",
+      "visualTags": [],
+      "related": [
+        "#release-pins",
+        "#gnomon-app-installer",
+        "#release-darwin",
+        "#identity",
+        "#gnomon-voice",
+        "#gnomon-wrapper",
+        "#mods-admin"
+      ],
+      "componentType": "module"
+    },
+    "release-darwin": {
+      "id": "release-darwin",
+      "name": "Release Darwin",
+      "symbol": "#release-darwin",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#release-darwin (T-2026-10-21-029, TD-2026-10-21-758; 8.0 M2) — scripts/release-darwin.mjs builds ONE relocatable Gnomon.app per arch on the founder's Mac (host arch only; another arch is refused): helper and voice-io (their own signed builds), build:gnomon + build:release (#release-pins compiled in), the official Node 24 tarball from nodejs.org REFUSED unless it hashes to packages/gnomon-wrapper/bundled-node.lock.json (never which node), a Contents-shaped stage (Resources/node, Resources/kernel = dist + package.json only: zero runtime deps, Resources/gnomon-voice = package, dist, models manifest, sherpa-onnx-node + its darwin-<arch> package), inside-out signing in the stage (sherpa libs, then node with NodeEntitlements.plist), cargo tauri build with GNOMON_WRAPPER_BUNDLE_STAGE (build.rs pins bundle-relative paths and the staged hashes), assembly with Helpers/ (ditto, signatures kept; the assembled app must re-hash to the staged pins), the app signed with its empty Entitlements.plist (no --deep), verify --strict --deep + the wrapper requirement, optional --notarize (notarize-darwin.mjs, keychain profile gnomon-notary), then ditto -c -k --keepParent zip + .sha256. --unsigned = ad-hoc (CI/tests); --dry-run = no swift/npm/cargo/network/codesign, placeholder binaries, the real layout and pin logic. kernelTreeHash is the JS twin of the wrapper's tree.rs (shared test vector). Aegis M2 review: the lock must carry gpg provenance from scripts/bump-bundled-node.mjs (SHASUMS256.txt.sig verified against the vendored Node release keys, both tarballs checked, signer recorded); staged trees refuse symlinks (dereference false); node is signed with identifier gnomon.node and verified with codesign -R against the requirement the wrapper compiles; the built wrapper must report --build-mode bundle before signing; --unsigned signs node ad-hoc without the hardened runtime (ad-hoc sherpa addons fail library validation). 8.0 M3 (T-2026-10-21-030): step 10 copies the zip + sha256 into the npm platform package as Gnomon.app.zip(.sha256) (copyIntoPlatformPackage; a SIGNED release defaults to packages/gnomon-darwin-<arch>, an --unsigned or --dry-run build only with --package-dir); --dry-run --zip runs the ditto zip on the placeholder app, whose placeholder GnomonHelper.app carries a versioned framework with real symlinks (PLACEHOLDER_FRAMEWORK) for the pack round trip. 8.0 M4 (T-2026-10-21-031): stageMods copies packages/gnomon-mods byte for byte (no symlinks, no native code) to Resources/gnomon-mods (LAYOUT.mods, required by missingFromLayout); the dry-run test checks the moved app's kernel finds them and each still hashes to a FIRST_PARTY_PACKAGE_HASHES pin.",
+      "visualTags": [],
+      "related": [
+        "#release-pins",
+        "#app-bundle",
+        "#gnomon-wrapper",
+        "#gnomon-helper",
+        "#gnomon-voice"
+      ],
+      "componentType": "script"
+    },
+    "gnomon-npm-packaging": {
+      "id": "gnomon-npm-packaging",
+      "name": "Gnomon Npm Packaging",
+      "symbol": "#gnomon-npm-packaging",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#gnomon-npm-packaging (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3) — @a-company/gnomon is PUBLIC (publishConfig access public; files dist + gnomon-mods; bins gnomon, gnomond, gnomon-web; exports ./cli and ./package.json for the paradigm shim). Its tarball carries no unpublished dependency: gnomon-contracts is a devDependency inlined by tsup (noExternal; the G-KRN-02 dist scan), and scripts/prepack.mjs copies the first-party mods (packages/gnomon-mods, no package.json, symlinks refused) to packages/gnomon/gnomon-mods byte for byte so findFirstPartyRoot resolves them beside an installed kernel with their pinned packageHash; postpack removes the copy. gnomon-local, mod-sdk and gui are not runtime imports and do not ship. optionalDependencies are exactly @a-company/gnomon-darwin-{arm64,x64} at this version (the one G-SEC-01 exception: zip-only packages the kernel never imports). Lockstep: scripts/sync-gnomon-versions.mjs (repo root; --check for CI) makes both platform package versions, these optional deps and @a-company/paradigm's exact dependency follow this package's version; test/version-lockstep.test.ts fails on drift. The platform packages are excluded from the root workspaces (\"!packages/gnomon-darwin-*\"): their os/cpu fields make npm install fail on the other arch. Acceptance: scripts/pack-roundtrip.mjs builds a zip with release-darwin --dry-run --unsigned --zip (or takes --zip <signed zip>), copies it into a copy of the platform package, npm pack, tar -x, ditto -x -k, then checks the file set, the sha256, the app layout (missingFromLayout), every symlink against the source app and each framework's Versions/Current, and runs codesign --verify --strict --deep + spctl -a only for a Developer ID signature (otherwise skipped with a message); it reports packed and unpacked sizes. Aegis M3 review: (high 1) nothing unsigned or dev is publishable. `npm run publish:gnomon` runs scripts/gate-gnomon-publish.mjs FIRST as a plain command (lifecycle hooks are skippable with --ignore-scripts; it is also gnomon's prepublishOnly): lockstep; each platform package has no scripts and exact files, and its zip, unpacked with ditto into a temp dir, passes codesign --verify --deep --strict -R (the wrapper requirement, team OU SW4BMQ8PNL), xcrun stapler validate and spctl -a -t exec; gnomon's dist is a RELEASE build of this version whose compiled appZips equal both zips. prepack refuses a non-release dist too. Release order (scripts/publish-gnomon.mjs, #publish-gnomon): gate, then arm64, x64, then gnomon, verified on npm, before paradigm. CI never publishes them: `npm run release` (scripts/release.mjs, #release-publish) refuses unless all three are already on npm at this version, so changeset publish skips them and paradigm cannot ship first (test/release-excludes-gnomon.test.ts). release-darwin's `signed` now means Developer ID + notarized + stapled (stapler validate after notarize) and --package-dir refuses anything else without --allow-unsigned-for-tests. (high 2) each zip's sha256 is COMPILED into the published gnomon: scripts/seal-npm-release.mjs runs build-release.mjs with write-release-manifest --app-zip <arch>=<zip> for both platform zips (release-manifest:v1 appZips); src/kernel/lifecycle/ app-zip.ts verifyAppZip checks a zip against that pin (dev ⇒ refused `dev`, no entry ⇒ `unpinned`, mismatch ⇒ `checksum`) and never reads the shipped .sha256; platformPackageZip realpaths the resolved package and checks its name. Exported as appZip from the package index; the M4 installer must call it before unpacking. Changesets cannot exclude these packages (its `ignore` is versioning-only and rejects non-workspace packages and paradigm's dependency on gnomon), so release.yml's `changeset publish` is stopped by gnomon's prepack and prepublishOnly gate instead, and never sees the platform packages (not workspaces).",
+      "visualTags": [],
+      "related": [
+        "!packages",
+        "#publish-gnomon",
+        "#release-publish",
+        "#release-darwin",
+        "#gnomon-darwin-arm64",
+        "#gnomon-darwin-x64",
+        "#gnomon-shim",
+        "#mods-admin"
+      ],
+      "componentType": "script"
     },
     "gui-resume": {
       "id": "gui-resume",
@@ -3513,11 +3658,12 @@
       "symbol": "#setup-preflight",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "#setup-preflight (spec §2.4 rule 9) — READ-ONLY first-run checks (no key, no file write, no prompt; only key.list): helper signed+pinned and not from a sandboxed shell, touch-id (helper 1.4.0 presence.available: LAContext canEvaluatePolicy, never a prompt; pass or fail), macos, sip (csrutil; off = warn), claude (resolved, pin none/match/mismatch → `gnomon session repin-claude`), law-7 billing env, runtime (NODE_OPTIONS / node flags), node floor, leftover generations (purge, never adopt), home state (dev marker, symlink, malformed identity.json: shown, never touched). Each check {id, status pass|warn|fail, detail, fix}. INFORMATIVE only (Aegis I12): #provisioner and #gnomon-up enforce on their own.",
+      "description": "#setup-preflight (spec §2.4 rule 9) — READ-ONLY first-run checks (no key, no file write, no prompt; only key.list): helper signed+pinned and not from a sandboxed shell, touch-id (helper 1.4.0 presence.available: LAContext canEvaluatePolicy, never a prompt; pass or fail), macos, sip (csrutil; off = warn), claude (resolved, pin none/match/mismatch → `gnomon session repin-claude`), law-7 billing env, runtime (NODE_OPTIONS / node flags), node floor (NODE_MAJOR_FLOOR 24, equal to scripts/install-darwin.mjs: the source-install floor; a zero-build release bundles its own Node), leftover generations (purge, never adopt), home state (dev marker, symlink, malformed identity.json: shown, never touched). Each check {id, status pass|warn|fail, detail, fix}. INFORMATIVE only (Aegis I12): #provisioner and #gnomon-up enforce on their own. The helper row names the build's #release-pins mode (release sha256-pinned, or dev).",
       "visualTags": [],
       "related": [
         "#provisioner",
         "#gnomon-up",
+        "#release-pins",
         "#first-run"
       ],
       "componentType": "module"
@@ -3691,9 +3837,11 @@
       "symbol": "#mods-admin",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "#mods-admin (the GUI Mods panel's kernel half; founder dogfood 2026-10-21). src/kernel/modhost/mods-admin.ts: status() merges installed / available / catalog into the human class's status.mods (pin, tier, source, version, run state, MCP server, offers, Desk counts, a shipped first-party tree that is not the pin = update; available = packages/gnomon-mods beside the kernel, findFirstPartyRoot, tier by hash). request() serves request.mod.install{source:'folder', path} (the A8 contracts kind, written as a row) and the dispatcher-only request.mod.link|pause|start|uninstall|config, each exactly its `gnomon mod` verb (stageInstall, writePause, requestStart, requestUninstall, requestMcpConfig), human on a gui/device connection only; then StagedCardPickup / McpConfigCards scan at once so the card is in the stack before the answer. Signs nothing. A URL source is refused UNSUPPORTED (slice S4).",
+      "description": "#mods-admin (the GUI Mods panel's kernel half; founder dogfood 2026-10-21). src/kernel/modhost/mods-admin.ts: status() merges installed / available / catalog into the human class's status.mods (pin, tier, source, version, run state, MCP server, offers, Desk counts, a shipped first-party tree that is not the pin = update; available = packages/gnomon-mods beside the kernel, findFirstPartyRoot, tier by hash). request() serves request.mod.install{source:'folder', path} (the A8 contracts kind, written as a row) and the dispatcher-only request.mod.link|pause|start|uninstall|config, each exactly its `gnomon mod` verb (stageInstall, writePause, requestStart, requestUninstall, requestMcpConfig), human on a gui/device connection only; then StagedCardPickup / McpConfigCards scan at once so the card is in the stack before the answer. Signs nothing. A URL source is refused UNSUPPORTED (slice S4). 8.0 M4: in a release Gnomon.app the catalog is ONLY the app's Contents/Resources/gnomon-mods (#app-bundle; never a folder beside the app); elsewhere the nearest gnomon-mods above the module (clone, npm package).",
       "visualTags": [],
-      "related": []
+      "related": [
+        "#app-bundle"
+      ]
     },
     "desk-stats": {
       "id": "desk-stats",
@@ -4692,6 +4840,39 @@
       "visualTags": [],
       "related": [],
       "componentType": "schema"
+    },
+    "gnomon-shim": {
+      "id": "gnomon-shim",
+      "name": "Gnomon Shim",
+      "symbol": "#gnomon-shim",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "The `gnomon` bin of @a-company/paradigm (T-2026-10-21-030 M3, T-2026-10-21-031 M4; TD-2026-10-21-758). npm does not link a dependency's bins on a global install, so this Node >= 20 shim resolves the exact-version @a-company/gnomon dependency, then that package's @a-company/gnomon-darwin-<arch> optional dependency (same version, else refused), and hands off to #gnomon-app-installer: install or upgrade Gnomon.app, then launch the INSTALLED app. It NEVER runs Gnomon on the user's Node and imports only node: built-ins and its sibling (never the Node 24 kernel). Off macOS, or when npm skipped the platform package, it prints one plain line (\"Gnomon runs on macOS only in 8.0; Windows and Linux are planned\") and exits 69; an install or verify refusal exits 77. Aegis M3 medium 3: each resolved package is realpath'd and must sit under allowedRoots (paradigm's own node_modules, the node_modules it is hoisted into, or the monorepo's node_modules / packages in dev) with the expected package.json name, so a package planted higher in the path or reached through NODE_PATH is refused. run(args, o) is the whole command; `o` (resolve, installDir, verifyApp, open) is for tests only and the CLI entry passes none (falsified statically). Plain JS outside tsup; ships via files: bin.",
+      "visualTags": [],
+      "related": [
+        "#gnomon-app-installer",
+        "#gnomon-npm-packaging",
+        "#gnomon-darwin-arm64",
+        "#gnomon-darwin-x64"
+      ],
+      "componentType": "bin"
+    },
+    "gnomon-app-installer": {
+      "id": "gnomon-app-installer",
+      "name": "Gnomon App Installer",
+      "symbol": "#gnomon-app-installer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "bin/gnomon-app.js (T-2026-10-21-031, TD-2026-10-21-758; 8.0 M4): installs and launches the signed Gnomon.app for #gnomon-shim, Node >= 20, node: built-ins only. compiledAppZipPin reads this arch's zip sha256 from @a-company/gnomon's RELEASE build stamp (dist/build-id.json release.appZips; a dev build is refused), never the platform package's .sha256. ensureApp: a present, complete app of this version or newer is used as is (no lock, no copy); else under acquireInstallLock (<installDir>/.Gnomon.app.lock, mkdir-atomic, owner pid + nonce, a dead owner's lock renamed aside and broken) it restores an app a crashed swap left aside, refuses a Gnomon.app that is not ours, checks the zip hash BEFORE unpacking, `ditto -x -k` into a staging dir beside the target (one volume), requires exactly Gnomon.app with the release layout, no top-level symlink and exactly this version, runs verifyApp (codesignVerifyApp: codesign --verify --strict --deep -R=WRAPPER_REQUIREMENT, team SW4BMQ8PNL, identifier gnomon.wrapper), then renames the old app aside, the new one into place, and removes the old; any failure keeps the old app. Target: appInstallDir (/Applications when writable without sudo, else ~/Applications; the kernel's app-bundle.ts rule). No postinstall, no sudo. Aegis M4 review: every path ends in a VERIFIED app (a present app is codesign-verified before every launch; one that fails is never opened, moved aside to .Gnomon.app.rejected-<time>, reported and reinstalled); recovery restores an aside copy only if it verifies; the lock owner is pid + process start time (ps lstart), an ownerless lock is stale after 30 s, a waiter gives up after 5 min naming the lock. launchApp: bare `gnomon` opens the app via /usr/bin/open (a fresh Mac lands on setup, two Touch ID prompts, the desk); with arguments it runs `gnomon-wrapper --cli -- <args>`, so the Rust wrapper is the ONE trust root (hashes, designated requirement, env scrub, then exec of the bundled node). Every child gets scrubbedEnv() (the wrapper's ENV_ALLOWLIST + a fixed PATH), never process.env. ALLOW_UNSIGNED_FOR_TESTS is the tests-only verifier seam. WRAPPER_REQUIREMENT and LAYOUT are kept equal to gnomon-wrapper's build-darwin.mjs and release-darwin.mjs by test.",
+      "visualTags": [],
+      "related": [
+        "#gnomon-shim",
+        "#app-bundle",
+        "#release-darwin",
+        "#gnomon-npm-packaging",
+        "#gnomon-wrapper"
+      ],
+      "componentType": "module"
     },
     "migration-detector": {
       "id": "migration-detector",
@@ -6177,12 +6358,13 @@
       "name": "University Loader",
       "symbol": "#university-loader",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university-core/.purpose",
-      "description": "#university-loader: Canonical content read/write + index/search/onboard/validate. resolveContentFile rejects a content file that is a symlink or whose realpath escapes the pack root realpath (same rules as resolveSkillDirs); tested in src/__tests__/content-containment.test.ts",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple. v6.0 sub-phase 1: accepts optional packRoot on all CRUD fns, walks discipline sub-packs via discoverDisciplineSubPacks, preserves v5 behavior via loadOrFabricatePackManifest (implicit pack when pack.yaml absent), stamps pack_id on writes. Pack-selector fix: resolveContentBase probes content/ + src/content/ (shared with countPackEntries); scanPackEntries is the single frontmatter→entry mapper used by both rebuildUniversityIndex (project, writes index) and loadPackIndex (selected pack, in-memory scan, no write); searchContent/getOnboardingSequence/validateUniversityContent take optional trailing packRoot — when present they read the selected pack, when omitted they keep the byte-identical project path. Deep-validate symbol/staleness/coverage checks stay rootDir-relative (project owns symbol authority).",
       "visualTags": [
         "spinner"
       ],
-      "related": []
+      "related": [],
+      "componentType": "loader"
     },
     "content-base-resolver": {
       "id": "content-base-resolver",
@@ -8004,11 +8186,11 @@
       "name": "Event Stream",
       "symbol": "#event-stream",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "#event-stream: Streams gate events to clients",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Ambient event stream — emit, store (JSONL), query, and attention-score events for ambient coordination. Append-only with automatic pruning.",
       "visualTags": [],
       "related": [],
-      "componentType": "service"
+      "componentType": "engine"
     },
     "session-tracker": {
       "id": "session-tracker",
@@ -9343,6 +9525,76 @@
       "related": [],
       "componentType": "tool"
     },
+    "captain-context-brief": {
+      "id": "captain-context-brief",
+      "name": "Captain Context Brief",
+      "symbol": "#captain-context-brief",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "Cid's pre-task context discovery (paradigm_captain_context). Searches symbols per keyword cluster and records each hit's defining file from premise-core SymbolEntry.filePath (previously read a non-existent `file` field, so briefs carried no file), maps blast radius, checks route patterns against portal.yaml, finds protocols and surfaces warnings.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "tool"
+    },
+    "platform-tools": {
+      "id": "platform-tools",
+      "name": "Platform Tools",
+      "symbol": "#platform-tools",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "paradigm_platform_* tools (navigate, highlight, …) that drive the Platform UI through platform-bridge sendAgentCommand, addressed by the project's rootDir (previously passed the non-existent ctx.projectDir, so the port and agent were never resolved from the project).",
+      "visualTags": [
+        "form"
+      ],
+      "related": [],
+      "componentType": "tool-group"
+    },
+    "sentinel-tools": {
+      "id": "sentinel-tools",
+      "name": "Sentinel Tools",
+      "symbol": "#sentinel-tools",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "paradigm_sentinel_* tools over SentinelStorage. On first use the storage is seeded with the universal and Paradigm failure patterns from loadAllSeedPatterns().patterns, skipping ids that already exist (the seed export was previously iterated as an array, threw, and seeded nothing).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "tool-group"
+    },
+    "persona-tools": {
+      "id": "persona-tools",
+      "name": "Persona Tools",
+      "symbol": "#persona-tools",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "paradigm_persona_* tools. Persona runs emit paradigm-personas events to Sentinel under a valid EventSchemaDeclaration (eventTypes array, string scope on persona_id, persona.step.complete for passes, persona.step.fail for failures); validation reads them back through personas-loader validateAgainstSentinel.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "tool-group"
+    },
+    "tags-tools": {
+      "id": "tags-tools",
+      "name": "Tags Tools",
+      "symbol": "#tags-tools",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "paradigm_tags_* tools over .paradigm/tags.yaml. paradigm_tags_suggest queues a pending tag suggestion that now keeps the caller's description (meaning and when to apply) alongside reason, applies-to and example symbols.",
+      "visualTags": [
+        "badge"
+      ],
+      "related": [],
+      "componentType": "tool-group"
+    },
+    "gates-for-route": {
+      "id": "gates-for-route",
+      "name": "Gates For Route",
+      "symbol": "#gates-for-route",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "paradigm_gates_for_route (inline in tools/index.ts). Suggests gates for a route from heuristics plus similar routes declared in portal.yaml. Route patterns come from utils/portal-routes — local routes are empty until ParsedGateConfig carries routes (T-2026-10-22-002); workspace sibling routes are parsed from each sibling's raw portal.yaml.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "tool"
+    },
     "UniversityTypes": {
       "id": "UniversityTypes",
       "name": "UniversityTypes",
@@ -9443,6 +9695,614 @@
       "visualTags": [],
       "related": [],
       "componentType": "types"
+    },
+    "context-freshness": {
+      "id": "context-freshness",
+      "name": "Context Freshness",
+      "symbol": "#context-freshness",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "#context-freshness (7.15.0, TD-2026-10-13-661 Phase 1): the MCP server's ProjectContext is backed by premise-core #live-index. index-loader.ts loadProjectContext uses getLiveIndex; ensureFreshContext (called at every getContext() choke point: tools/index.ts CallTool, resources/index.ts, resources/symbols.ts) swaps index/aggregation/gateConfig atomically in place when files changed on disk, shares one in-flight refresh per context and debounces checks (FRESHNESS_DEBOUNCE_MS = 500). Hand edits and git checkouts become visible without paradigm_reindex. tool-cache.ts bindIndex clears the result cache when the index changes, with a generation counter so late computes are not cached. Removed the dead ensureFreshIndex/isContextStale TTL path. integrity-checker.ts counts only declared symbols as defined and reports undeclared references (refType 'undeclared', warning, danglingCount in the reindex summary).",
+      "visualTags": [],
+      "related": [
+        "#live-index"
+      ],
+      "componentType": "loader"
+    },
+    "symphony-loader": {
+      "id": "symphony-loader",
+      "name": "Symphony Loader",
+      "symbol": "#symphony-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "The Score: file-based agent messaging — agent identity, JSONL parts, threads, file pipeline, trust config. ensureMailDirs renamed to ensureScoreDirs (deprecated alias retained). Ring 1 content filtering seam: isRing1Content, recordRing1Interception (audit trail), readOutboxRaw (unfiltered, relay-internal), readOutbox (filtered). SymphonyMessage.contentType field added.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "platform-bridge": {
+      "id": "platform-bridge",
+      "name": "Platform Bridge",
+      "symbol": "#platform-bridge",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "HTTP bridge for MCP → Platform server communication. Resolves port from config.yaml, resolves agent identity, sends POST to /api/platform/agent-command.",
+      "visualTags": [
+        "form"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "symphony-peers": {
+      "id": "symphony-peers",
+      "name": "Symphony Peers",
+      "symbol": "#symphony-peers",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
+      "description": "List trusted remote peers and their agents",
+      "visualTags": [],
+      "related": [],
+      "componentType": "command"
+    },
+    "symphony-relay": {
+      "id": "symphony-relay",
+      "name": "Symphony Relay",
+      "symbol": "#symphony-relay",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "WebSocket relay engine for cross-machine Symphony networking — hub/spoke modes, outbox watcher, message routing, dedup, keepalive, auto-reconnect. Unsafe inline Ring 1 filter sites removed; delegates to symphony-loader for content filtering.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "integration"
+    },
+    "agent-loader": {
+      "id": "agent-loader",
+      "name": "Agent Loader",
+      "symbol": "#agent-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade. v7.9.1 normalizeAgentProfile runs after every profile yaml.load — legacy transferable[].pattern becomes id (explicit id wins; pattern removed; migrated to id on next save), no other defaults injected (learnedIn/appliedIn stay optional; enrichment omits learned-in when absent); never touches id/role/permissions so integrityHash is unaffected. Skills Phase 1 (v7.10.0): buildProfileEnrichment takes a 6th optional skills?: SkillSummary[] (stays pure; callers resolve via #skill-loader resolveAgentSkills) and renders a '## Your Skills' section after Transferable Patterns — certified+ok for every agent, non-certified only to the steward (labelled), stale/invalid omitted; AgentProfile.skills is excluded from integrityHash",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "#skill-loader"
+      ],
+      "componentType": "loader"
+    },
+    "agent-registry": {
+      "id": "agent-registry",
+      "name": "Agent Registry",
+      "symbol": "#agent-registry",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "v7.9.1 (TD-2026-09-26-846) resolveDispatchableAgents(rootDir, opts?) — roster.yaml + loaded .agent profiles are authoritative for dispatch; .paradigm/agents.yaml is an optional overlay (role/focus/triggers/handoff_to/defaultModel/context/protocol override profile-derived values) and emits a one-time deprecation warning. Candidates = roster ids, else union(profile ids, agents.yaml ids). Benched profiles and roster members with neither profile nor agents.yaml entry are REPORTED as undispatchable, never dropped. Profile-derived definition: role = agents.yaml › ROLE_PROMPTS › profile.role; focus.reads = attention.paths; triggers = attention.concepts (keyword) + attention.symbols (symbol), tagged derived: true; handoff_to = partners › collaboration.with. Returns the parsed agents.yaml (manifest) for reuse and the orchestration block (default_mode, budget). Never deletes agents.yaml.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "loader"
+    },
+    "role-prompts": {
+      "id": "role-prompts",
+      "name": "Role Prompts",
+      "symbol": "#role-prompts",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "ROLE_PROMPTS — battle-tested role prompts for the core agents, extracted from tools/orchestration.ts so",
+      "visualTags": [],
+      "related": [],
+      "componentType": "constant"
+    },
+    "notebook-loader": {
+      "id": "notebook-loader",
+      "name": "Notebook Loader",
+      "symbol": "#notebook-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count. The Classroom (TD-2026-06-19-007): reviseDown is the fail-side mutation (bumps appliedAndBrokeCount, lowers confidence, captures the \"X except Y\" refinement exception mechanically — prose authored at gated /paradigm:class refine, dedup by sourceFailureId); listAllAgentNotebookEntries + decayUnusedEntry are the decay-pass enumerate/mutate seams.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "#soft-provenance"
+      ],
+      "componentType": "loader"
+    },
+    "classroom-decay": {
+      "id": "classroom-decay",
+      "name": "Classroom Decay",
+      "symbol": "#classroom-decay",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "The Classroom decay pass (TD-2026-06-19-007, Phase 2) — load-bearing for the metric, not cleanup. Flips pending certs aged past the SURVIVAL_WINDOW (14d) with no attributed break to outcome:survived (makes repeat-failure-rate's resolved denominator real instead of a structural 1.0); gently decays confidence of entries idle past IDLE_WINDOW (30d) with low appliedCount (silence is signal; never deletes). runDecayPass is best-effort/idempotent, wired into ambient postflight right after runFieldFailureReducer.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "classroom-fail-side": {
+      "id": "classroom-fail-side",
+      "name": "Classroom Fail Side",
+      "symbol": "#classroom-fail-side",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "The Classroom fail-side event writers + reducer (TD-2026-06-19-007). field-failures.ts: append-only field-failures.jsonl + classroom-certifications.jsonl; overturnCertification (pending→overturned) and surviveCertification (pending→survived, decay-pass writer) — both idempotent, overturn wins. field-failure-reducer.ts: joins reviewer verdicts to notebook-refs by orchestrationId, revises down, back-binds certs, seeds field-failure scenarios.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "tool-family": {
+      "id": "tool-family",
+      "name": "Tool Family",
+      "symbol": "#tool-family",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:'full' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op's params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "tool-registry": {
+      "id": "tool-registry",
+      "name": "Tool Registry",
+      "symbol": "#tool-registry",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Tiered tool registration system — core/feature/advanced tiers with auto-detection. getAllTools() lists every module regardless of tier (backs listToolDefinitions for skill pin checks). v7.11: university detection is pack-based (detectUniversityPacks — a discovered pack with entries or skillDirs, or an implicit v5 project pack with content; requires .paradigm; fail-closed false) — an empty scaffold no longer activates the tools. v7.13: listed definitions strip `aliases`; dispatch falls through to inactive modules (hidden aliases); readMcpToolsConfig reads mcp.tools.enable / legacy_listing.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "loader"
+    },
+    "compliance-checker": {
+      "id": "compliance-checker",
+      "name": "Compliance Checker",
+      "symbol": "#compliance-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Shared compliance checking logic — purpose coverage, portal gates, aspect anchors, code quality",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "DocsLoader": {
+      "id": "DocsLoader",
+      "name": "DocsLoader",
+      "symbol": "#DocsLoader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Reads scan-index, .purpose files, portal.yaml, and flows.yaml to produce structured documentation page data",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "graduation-types": {
+      "id": "graduation-types",
+      "name": "Graduation Types",
+      "symbol": "#graduation-types",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Type definitions for the automation tier graduation system — GraduationState, GraduationConfig, GraduationTier, NON_GRADUATABLE_CHECK_TYPES",
+      "visualTags": [],
+      "related": [],
+      "componentType": "types"
+    },
+    "graduation-store": {
+      "id": "graduation-store",
+      "name": "Graduation Store",
+      "symbol": "#graduation-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "YAML read/write for .paradigm/graduation.yaml — state accessors, mutations, 30s cache",
+      "visualTags": [],
+      "related": [],
+      "componentType": "store"
+    },
+    "graduation-engine": {
+      "id": "graduation-engine",
+      "name": "Graduation Engine",
+      "symbol": "#graduation-engine",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Core graduation logic — eligibility checking against practice events, graduate/demote actions, failure tracking",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "aspect-fingerprint": {
+      "id": "aspect-fingerprint",
+      "name": "Aspect Fingerprint",
+      "symbol": "#aspect-fingerprint",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "data-policy-loader": {
+      "id": "data-policy-loader",
+      "name": "Data Policy Loader",
+      "symbol": "#data-policy-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Data policy loader — reads .paradigm/data-policy.yaml, merges with defaults, enforces trust rings, observation rules, content redaction, and per-agent overrides.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "work-log-loader": {
+      "id": "work-log-loader",
+      "name": "Work Log Loader",
+      "symbol": "#work-log-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "journal-loader": {
+      "id": "journal-loader",
+      "name": "Journal Loader",
+      "symbol": "#journal-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Learning Journal CRUD — record/search/stats for agent learnings. Agent-private YAML in ~/.paradigm/agents/{id}/journal/",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "decision-loader": {
+      "id": "decision-loader",
+      "name": "Decision Loader",
+      "symbol": "#decision-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/. v6.0 sub-phase 1: updateDecision accepts absorbed ADR fields (context/consequences/date/migrated_from/supersedes); supersedeDecision backfills supersedes[] on the new entry (D2 Loid addendum); exposes writeCompanionLoreEntry helper for D3 companion-lore writes (not yet wired — sub-phase 2 wires the tool handler).",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "nomination-engine": {
+      "id": "nomination-engine",
+      "name": "Nomination Engine",
+      "symbol": "#nomination-engine",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. 7.12.0: `work-completed` events never nominate (NON_NOMINATING_EVENT_TYPES, D1 — they stay in stream.jsonl). Journal-to-notebook promotion (autoPromoteJournalEntries — pattern_discovered + human_feedback) is gated by the BELIEF-DELTA gate decidePromotion() with configurable bands loadPromotionBands() (config.yaml learning.promotion.{floor,deltaMin,epsilon,novelBar}; defaults 0.7/0.10/0.05/0.8, uncalibrated) — prior from notebookPrior (never journal confidence_before); absolute 0.8 survives only as the novel-concept fallback; human_feedback is floor-only; each candidate appends a promotion-decisions.jsonl row with gate:belief-delta-v1, reason, shadow absoluteWouldPromote, after:null when missing (kills the ?? 0 artifact); a small rise (epsilon <= delta < deltaMin) is reason below-delta, distinct from hold-silence (|delta| < epsilon); the shadow bar is LEGACY_ABSOLUTE_BAR; certifiedBy:gate, or certifiedBy:human for human_feedback promotions. The GATED single-entry path (gatedPromoteJournalEntry — /class sign-off, human ruling IS the gate, NEVER the delta gate, certifiedBy:peer|quorum, no instrument row; TD-2026-06-25-044), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "session-work-log": {
+      "id": "session-work-log",
+      "name": "Session Work Log",
+      "symbol": "#session-work-log",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Session work log — JSONL append log capturing agent contributions and user verdicts during a session. Read by Maestro at postflight for targeted learning feedback. Bounded at 200 entries, cleared on session start. Also hosts the durable iteration-revision channel (readPendingIterationRevisions / markIterationRevisionsConsumed, IterationRevisionEntry) — agent belief-revisions from iteration loops, kept separate from the human-verdict channel and routed to the self_reflection journal trigger. T-2026-06-13-004 adds the postflight-liveness channel (recordPostflightLiveness / readPostflightLiveness, PostflightLivenessRecord → .paradigm/events/postflight-liveness.jsonl) — every non-dry-run postflight pass appends one durable row (postflight-live when it journaled, postflight-noop{reason} when it did not) so a broken loop is no longer byte-identical to a healthy one (the falsifiable liveness invariant `paradigm doctor` reads).",
+      "visualTags": [],
+      "related": [
+        "#activity-metrics"
+      ],
+      "componentType": "loader"
+    },
+    "agent-state": {
+      "id": "agent-state",
+      "name": "Agent State",
+      "symbol": "#agent-state",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Per-project + global state tracking for agent continuity. Tracks last session summary, pending work, decisions, patterns, and career stats across sessions.",
+      "visualTags": [],
+      "related": [
+        "$agent-learning-loop",
+        "!agent-state-recorded"
+      ],
+      "componentType": "service"
+    },
+    "gap-narrator": {
+      "id": "gap-narrator",
+      "name": "Gap Narrator",
+      "symbol": "#gap-narrator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Human-readable narration engine for enforcement check gaps. Produces explanations and fix instructions for 13 check types (missing-purpose, missing-gates, aspect-drift, stale-purpose, unregistered-symbol, unregistered-event, missing-flow, uncovered-endpoint, uncovered-gate, uncovered-flow, undocumented-aspect, missing-tests, missing-lore). Used by doctor --explain and postflight report generation.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "activity-metrics": {
+      "id": "activity-metrics",
+      "name": "Activity Metrics",
+      "symbol": "#activity-metrics",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Proxy metrics tracking for session activity. Records tool call count, payload size, and session duration per agent. No dollar figures or token counts. Types: ActivityMetric, SessionActivitySummary. Functions: recordActivityMetric(), getSessionActivitySummary(), clearActivityMetrics().",
+      "visualTags": [],
+      "related": [
+        "#session-work-log"
+      ],
+      "componentType": "service"
+    },
+    "soft-provenance": {
+      "id": "soft-provenance",
+      "name": "Soft Provenance",
+      "symbol": "#soft-provenance",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Optional parentId and lineageType fields on NotebookEntry for tracking derivation chains without DAG validation. Enables notebook promotion lineage tracking (promoted-from-lore, derived-from-notebook, manual-input). Used by paradigm_notebook_add tool and prepareForPublish() ringfencing.",
+      "visualTags": [],
+      "related": [
+        "#notebook-loader"
+      ],
+      "componentType": "service"
+    },
+    "outcome-reference-tracking": {
+      "id": "outcome-reference-tracking",
+      "name": "Outcome Reference Tracking",
+      "symbol": "#outcome-reference-tracking",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Records which notebook entries were loaded into agent prompts during orchestration. Pure data collection — no scoring or attribution.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "compliance-health": {
+      "id": "compliance-health",
+      "name": "Compliance Health",
+      "symbol": "#compliance-health",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Tracks stop hook violation frequency over time and computes compliance trends (improving/stable/degrading). Powers Conductor health dot.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "provisional-intake": {
+      "id": "provisional-intake",
+      "name": "Provisional Intake",
+      "symbol": "#provisional-intake",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Provisional-candidate intake (T-2026-06-13-004) — the floor-trust session miner that lets the loop LEARN FROM FAILURE without breaching the classroom gate. mineProvisionalCandidates(rootDir, projectName, fallbackClaimant) reads already-recorded failure signals (overrides.jsonl, dismissed/revised durable verdicts) and stages each as a journal entry stamped provenance {source:external, trust:external} with the NON-promotable failure_analysis trigger, tagged provisional-candidate/floor-trust. Invoked once per session-boundary postflight pass; idempotent via .paradigm/events/provisional-mined.jsonl. Invisible to autoPromoteJournalEntries (which only promotes pattern_discovered/human_feedback) so nothing reaches a notebook or CLAUDE.md until the gated Classroom adjudicates it.",
+      "visualTags": [],
+      "related": [
+        "#journal-loader",
+        "#session-work-log"
+      ],
+      "componentType": "engine"
+    },
+    "orchestration-marker": {
+      "id": "orchestration-marker",
+      "name": "Orchestration Marker",
+      "symbol": "#orchestration-marker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "v7 \"Teeth\" T-005 — single best-effort writer of the .paradigm/.orchestrated enforcement marker that satisfies the Stop-hook orchestration-required gate. recordOrchestrationCompletion(rootDir, {verdicts, source}) writes { timestamp, type:orchestrated, verdicts, source }. Called ONLY from real completion signals (a chainLive settlement in task-settlement.ts, or a debrief with real agent verdicts in captain.ts) — never on orchestrate_inline tool entry. Enforcement now verifies completion (verdicts>0), not invocation. Write failures are logged and swallowed so settlement/debrief never break.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "yaml-validator": {
+      "id": "yaml-validator",
+      "name": "Yaml Validator",
+      "symbol": "#yaml-validator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "write-and-confirm": {
+      "id": "write-and-confirm",
+      "name": "Write And Confirm",
+      "symbol": "#write-and-confirm",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "v5.38.0 atomic-write + read-back verify wrapper for mutation handlers. Writes to .tmp sibling then renames; re-reads the file; runs verify callback; throws WriteVerificationError on failure. Returns WriteEnvelope with truncated HMAC (first 12 hex chars of HMAC-SHA256 keyed with per-install secret) and byte count. Applied to portal_add_gate, portal_add_route, purpose_add_component, purpose_link, purpose_remove. Logs redacted — no gate names or file paths in error surfaces.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "consistency-tracker": {
+      "id": "consistency-tracker",
+      "name": "Consistency Tracker",
+      "symbol": "#consistency-tracker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "v5.38.0 round-trip consistency audit log. Records transformation CLASSES (prefix-stripped/array-coerced/default-applied/duplicate-key-detected/case-normalized) with fixed surface classifiers (portal.yaml/purpose.yaml) and counts — never gate names, route paths, or file contents. One injectable singleton per reindex pass; report rendered into paradigm_reindex envelope and .paradigm/manifest.consistency.json. Lossy transformations trigger strict-mode reindex failure.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "strict-mode": {
+      "id": "strict-mode",
+      "name": "Strict Mode",
+      "symbol": "#strict-mode",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "v5.38.0 PARADIGM_STRICT=1 env var gate. Default OFF; flip ON in v5.39.0 after field observation. In strict mode, safeLoad throws on any non-ok/non-missing result, reindex fails on lossy transformations, and writeAndConfirm verify failures are never downgraded.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "wisdom-loader": {
+      "id": "wisdom-loader",
+      "name": "Wisdom Loader",
+      "symbol": "#wisdom-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Reads team wisdom from .paradigm/wisdom/ — preferences/antipatterns/expertise. 30s TTL cache, invalidated on writes. Global antipatterns/preferences merged from ~/.paradigm/wisdom/ (local wins on id collision). 7.12.0 (D2): the legacy wisdom/decisions read path is REMOVED (project and global) — WisdomContext.decisions is always []; canonical decisions live in .paradigm/decisions/ (#decision-loader); `paradigm migrate learning-stores` moves leftovers. recordDecision (legacy writer) is @deprecated.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "#decision-loader"
+      ],
+      "componentType": "loader"
+    },
+    "learning-stores": {
+      "id": "learning-stores",
+      "name": "Learning Stores",
+      "symbol": "#learning-stores",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Learning-stores registry (7.12.0, D5) — READ-ONLY facade listLearningStores(rootDir) naming every learning store with class (ledger|knowledge|pipeline|policy|native), path, scope, owner and a never-throwing count(). Classes follow the spec's three conceptual stores: ledger = lore (counts .lore/.yaml under lore/entries/<date>/), work-log, history, raw journals; knowledge = decisions, antipatterns, notebooks, protocols, skills, preferences; pipeline = event-stream, nominations, debates + the promotion-decisions / classroom-certifications / notebook-refs / liveness instruments. Encodes Loid's must-NOT-consolidate list as separate rows (journals vs notebooks; the instruments; decisions vs antipatterns). Habits = policy (hook policy, D3). Claude Code native memory registered read-only, never migrated. Used by the doctor census and migrate learning-stores.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "registry"
+    },
+    "protocol-loader": {
+      "id": "protocol-loader",
+      "name": "Protocol Loader",
+      "symbol": "#protocol-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Loads/validates .paradigm/protocols/*.protocol and rebuilds the protocol index. 7.12.0 (D4): lintProtocol emits PROTOCOL_IS_SKILL (warn only, never changes status; surfaced in validateProtocol issues) when no step names a repo path — the reverse of skill-loader's SKILL_IS_PROTOCOL, reusing its exported repoPathTokens detector.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "global-store": {
+      "id": "global-store",
+      "name": "Global Store",
+      "symbol": "#global-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Cross-project wisdom store at ~/.paradigm/wisdom/ (antipatterns, preferences, decisions). 7.12.0 (D2): loadGlobalDecisions is @deprecated and no longer part of the wisdom read path — retained only for the promote-to-global duplicate check in tools/wisdom.ts.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "store"
+    },
+    "arch-loader": {
+      "id": "arch-loader",
+      "name": "Arch Loader",
+      "symbol": "#arch-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Symbol architecture loader — reads and resolves project symbol graph for arch tools. Provides structured access to component hierarchy, flows, gates, and signals for the Atlas cartographer agent.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "calibration-aggregate": {
+      "id": "calibration-aggregate",
+      "name": "Calibration Aggregate",
+      "symbol": "#calibration-aggregate",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package.",
+      "visualTags": [],
+      "related": [
+        "#calibration"
+      ],
+      "componentType": "utility"
+    },
+    "skill-loader": {
+      "id": "skill-loader",
+      "name": "Skill Loader",
+      "symbol": "#skill-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Skills Phase 1 (T-2026-09-26-002) — the ONE loader/validator for agent-owned SKILL.md sources (project .paradigm/skills/<id> › global ~/.paradigm/skills/<id>; SkillEnv makes homedir/globalDir injectable). parseSkill/serializeSkill (round-trip), resolveSkill, listSkills(Detailed), lintSkill (SKILL_IS_PROTOCOL, SKILL_IS_NOTEBOOK, OWNED_SKILL_CAP, missing notebook/protocol, unresolved steward, kebab name, semver), computeContentHash (sha256 of canonical frontmatter minus certification + body + references/assets/scripts), checkPins (paradigm_* hashed against injected listToolDefinitions; host/* never checked; third-party unknown unless a tools/list dump is supplied), computeStatus (invalid › stale › ok › uncertified — never stored), resolveAgentSkills for enrichment, and the PURE $skill-certification verifier evaluateCertification (TTY, founder, lint, pins, ≥1 scenario with fixture + non-steward probe on skill:<id>@<ver> + human-confirmed survival) + applyCertification + buildSkillCertRow (kind skill ledger row). Imported by #skill-cli by relative path; certification is CLI-only (never an MCP tool). Fix pass: KEBAB id guard (isValidSkillId/assertSkillId) on every id that becomes a path; DIR_ID_MISMATCH + RESOURCE_SYMLINK lint errors; NOTEBOOK_MISSING warns for bundled; certification is drift-detection (not tamper-proof; signing = follow-up) — ok requires the SKILL.md block AND a matching kind skill ledger row (loadSkillCertLedger = project classroom ledger + global ~/.paradigm/events/skill-certifications.jsonl via appendGlobalSkillCertRow); evaluateCertification needs env, a resolvable non-steward probe agent and an existing fixture; listSkillScripts lists scripts/ with sha256 for certify; resolveAgentSkills uses cached structural lint only (no notebook scan, pins unchecked). v7.11 pack scope: third, lowest-precedence read-only scope `pack` (project › global › pack) from university-core discoverPacks skillDirs (SkillEnv.packSkillDirs injectable; only probed when <root>/.paradigm exists); parseSkill FORCES trust external + drops certification for scope pack; dir basename must equal meta.id; listPackSkills(env) → PackSkillEntry[] {packId, skill, scriptCount, shadowedBy?} (all pack skills incl. shadowed — backs Platform Academy /skills + pack_list); findPackSkill; importPackSkill(packId, id, {env, scope}) copies SKILL.md + resources (no symlinks/dotfiles) as trust provisional, provenance.source pack, upstream <pack>:<id>@<ver>, never overwrites; lint PACK_SHADOWED warn both directions; steward/protocol/notebook resolution downgraded to warn for pack scope; pack skills excluded from OWNED_SKILL_CAP. v7.11 fix pass: resolveSkill(id, env, {includePack}) — a project/global source that exists but fails to parse resolves to null (no fall-through to global/pack); resolveAgentSkills passes includePack:false so pack skills never reach agent prompts / Your Skills. importPackSkill takes expectedHash (refused content-changed on mismatch) and lstats each resource file right before copying (refused symlink). v7.12 (D8): splitFrontmatter is a thin strict wrapper over premise-core #frontmatter-parser — same exported signature ({data, body}) and the same error strings, pinned by skill-loader-frontmatter.test.ts.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "$skill-certification",
+        "#skill-cli",
+        "#frontmatter-parser"
+      ],
+      "componentType": "loader"
+    },
+    "aspect-graph": {
+      "id": "aspect-graph",
+      "name": "Aspect Graph",
+      "symbol": "#aspect-graph",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "SQLite aspect graph utils (.paradigm/aspect-graph.db): materializeAspects, ripple, heatmap, checkDrift. v7.12 (D9) section anchors: anchors table gains anchor_kind TEXT DEFAULT 'lines' + anchor_key TEXT via idempotent ALTER migrations (PRAGMA table_info guard + catch; safe twice, safe on pre-7.12 DBs). Heading/block anchors resolve to the section's CURRENT line range at materialize (premise-core resolveSectionAnchorLines; 0/0 when unresolvable) with baseline hashes; checkDrift re-resolves the KEY first then hashes the range — moved section = clean (row lines updated, .purpose untouched), whitespace = cosmetic, content change = modified, renamed/removed heading or block = missing (exists:true, drifted). No git line-shift or content-search heal for section anchors. Line anchors (anchor_kind lines) are byte-identical to before.",
+      "visualTags": [
+        "chart"
+      ],
+      "related": []
+    },
+    "docs-loader": {
+      "id": "docs-loader",
+      "name": "Docs Loader",
+      "symbol": "#docs-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Docs section loader (config, portal, university index, markdown guides). v7.12 (D8): its private parseFrontmatter is a null-returning adapter over premise-core #frontmatter-parser (lenient) — no block or malformed YAML → null; non-mapping → frontmatter {}; now also accepts CRLF and a closing fence at EOF.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "#frontmatter-parser"
+      ]
+    },
+    "skill-projector": {
+      "id": "skill-projector",
+      "name": "Skill Projector",
+      "symbol": "#skill-projector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Skills Phase 1 — one-way projection of certified skill sources to ~/.claude/skills/pdg-<id>/ (or <root>/.claude/skills with target project). Gates: lint errors, stale pins, trust (only status ok; allowProvisional injects the PROVISIONAL banner). Rewrites name pdg-<id>, FLATTENS metadata.paradigm to a string map (paradigm-id/version/steward/trust/source), drops certification, writes .pdg-generated.json marker; refuses unmarked or downstream-drifted dests and HARD-REFUSES anything under ~/.claude/skills/synced/ (symlink-aware). Atomic temp-dir + rename; idempotent. adoptSkill pulls downstream edits back: patch+1, provisional, provenance adopted, certification dropped, prior archived to .versions/<ver>/, metadata un-flattened preserving source-only fields, re-projected under a fresh marker. Fix pass: scripts/ never projected for non-certified skills (marker.scriptsWithheld); any symlink in a projected dir = drift; dotfiles ignored in the drift hash; stale .pdg-*.tmp-* swept; synced/ checked first; adopt refuses source-changed (unless force) and widened allowed-tools (unless confirmAllowedTools), returns frontmatterDiff, validates semver before the .versions path, and lints before re-projecting (reprojected:false on errors). v7.11: projectSkill refuses scope pack (untrusted, hint `paradigm skill import <pack>:<id>`); adoptSkill never treats a pack source as writable (not-found).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "skill-usage": {
+      "id": "skill-usage",
+      "name": "Skill Usage",
+      "symbol": "#skill-usage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Skills Phase 1 — append-only .paradigm/events/skill-usage.jsonl (pruned to 500, modelled on appendFieldFailure). Rows carry entryId skill:<id>@<ver>, the same key as the scenario probe and the cert row. buildSkillUsageRow maps a host Skill invocation pdg-<id> to the skill id + version from the projection sidecar (for the PostToolUse Skill hook). Fix pass: KEBAB-validates the id, trusts only a marker whose skillId matches; resolveHookProjectDir prefers CLAUDE_PROJECT_DIR over payload cwd.",
+      "visualTags": [],
+      "related": [
+        "!skill-used"
+      ],
+      "componentType": "service"
+    },
+    "persona-sentinel-validation": {
+      "id": "persona-sentinel-validation",
+      "name": "Persona Sentinel Validation",
+      "symbol": "#persona-sentinel-validation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "personas-loader validateAgainstSentinel — matches each persona journey step to its latest paradigm-personas Sentinel event (persona.step.complete / persona.step.fail, filtered by run_id, chain_id, environment). queryEvents returns newest first, so events are replayed oldest to newest and the latest event per step decides pass or fail. Reads GenericEvent.data (previously a non-existent data_json, so no step ever matched).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "portal-routes": {
+      "id": "portal-routes",
+      "name": "Portal Routes",
+      "symbol": "#portal-routes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Single accessor for portal.yaml routes. portalRoutes(gateConfig) returns [] because portal-core parseGateConfig drops routes (T-2026-10-22-002, owned by Aegis); fix it here and paradigm_gates_for_route, pm preflight/postflight and habits evaluation all pick it up. parsePortalRoutes(raw) reads the raw YAML routes map (gate list or { gates, method }) and is used for workspace siblings.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
     },
     "ServeCommand": {
       "id": "ServeCommand",
@@ -10545,17 +11405,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
       "description": "Start WebSocket relay server for cross-machine Symphony networking — pairing codes, message relay, auto-reconnect",
-      "visualTags": [],
-      "related": [],
-      "componentType": "command"
-    },
-    "symphony-peers": {
-      "id": "symphony-peers",
-      "name": "Symphony Peers",
-      "symbol": "#symphony-peers",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
-      "description": "List trusted remote peers and their agents",
       "visualTags": [],
       "related": [],
       "componentType": "command"
@@ -12042,6 +12891,16 @@
       "visualTags": [],
       "related": []
     },
+    "release-pins.": {
+      "id": "release-pins.",
+      "name": "Release Pins.",
+      "symbol": "#release-pins.",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "Referenced from #contract-release-manifest",
+      "visualTags": [],
+      "related": []
+    },
     "rename-btn": {
       "id": "rename-btn",
       "name": "Rename Btn",
@@ -12944,18 +13803,6 @@
       "visualTags": [],
       "related": []
     },
-    "skill-loader": {
-      "id": "skill-loader",
-      "name": "Skill Loader",
-      "symbol": "#skill-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Referenced from #frontmatter-parser",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": []
-    },
     "native-memory-scan": {
       "id": "native-memory-scan",
       "name": "Native Memory Scan",
@@ -13032,23 +13879,13 @@
       "visualTags": [],
       "related": []
     },
-    "learning-stores": {
-      "id": "learning-stores",
-      "name": "Learning Stores",
-      "symbol": "#learning-stores",
+    "live-index.": {
+      "id": "live-index.",
+      "name": "Live Index.",
+      "symbol": "#live-index.",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose",
-      "description": "Referenced from #DoctorCommand",
-      "visualTags": [],
-      "related": []
-    },
-    "gap-narrator": {
-      "id": "gap-narrator",
-      "name": "Gap Narrator",
-      "symbol": "#gap-narrator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
-      "description": "Referenced from #doctor-handler",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Referenced from #context-freshness",
       "visualTags": [],
       "related": []
     },
@@ -15421,6 +16258,14 @@
       "description": "Referenced from #graph-slice-projector",
       "steps": []
     },
+    "agent-learning-loop": {
+      "id": "agent-learning-loop",
+      "name": "Agent Learning Loop",
+      "symbol": "$agent-learning-loop",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Referenced from #agent-state",
+      "steps": []
+    },
     "roster-setup": {
       "id": "roster-setup",
       "name": "Roster Setup",
@@ -16854,6 +17699,15 @@
       "description": "Referenced from #update-watch",
       "related": []
     },
+    "packages": {
+      "id": "packages",
+      "name": "Packages",
+      "symbol": "!packages",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "Referenced from #gnomon-npm-packaging",
+      "related": []
+    },
     "schema-registered": {
       "id": "schema-registered",
       "name": "Schema Registered",
@@ -16944,13 +17798,22 @@
       "description": "Referenced from #CaptainTools",
       "related": []
     },
+    "agent-state-recorded": {
+      "id": "agent-state-recorded",
+      "name": "Agent State Recorded",
+      "symbol": "!agent-state-recorded",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Referenced from #agent-state",
+      "related": []
+    },
     "skill-used": {
       "id": "skill-used",
       "name": "Skill Used",
       "symbol": "!skill-used",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
-      "description": "Referenced from #skill-used-hook",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Referenced from #skill-usage",
       "related": []
     },
     "compliance-violation": {
@@ -19829,6 +20692,14 @@
       "category": "components",
       "id": "migrate-tool-names"
     },
+    "#release-publish": {
+      "category": "components",
+      "id": "release-publish"
+    },
+    "#publish-gnomon": {
+      "category": "components",
+      "id": "publish-gnomon"
+    },
     "#pre-publish-check": {
       "category": "components",
       "id": "pre-publish-check"
@@ -20361,6 +21232,10 @@
       "category": "components",
       "id": "contract-voice-allowlist"
     },
+    "#contract-release-manifest": {
+      "category": "components",
+      "id": "contract-release-manifest"
+    },
     "#contract-voice-modes": {
       "category": "components",
       "id": "contract-voice-modes"
@@ -20368,6 +21243,14 @@
     "#send-word-matcher": {
       "category": "components",
       "id": "send-word-matcher"
+    },
+    "#gnomon-darwin-arm64": {
+      "category": "components",
+      "id": "gnomon-darwin-arm64"
+    },
+    "#gnomon-darwin-x64": {
+      "category": "components",
+      "id": "gnomon-darwin-x64"
     },
     "#gui-session-rename": {
       "category": "components",
@@ -20548,6 +21431,22 @@
     "#update-watch": {
       "category": "components",
       "id": "update-watch"
+    },
+    "#release-pins": {
+      "category": "components",
+      "id": "release-pins"
+    },
+    "#app-bundle": {
+      "category": "components",
+      "id": "app-bundle"
+    },
+    "#release-darwin": {
+      "category": "components",
+      "id": "release-darwin"
+    },
+    "#gnomon-npm-packaging": {
+      "category": "components",
+      "id": "gnomon-npm-packaging"
     },
     "#gui-resume": {
       "category": "components",
@@ -20928,6 +21827,14 @@
     "#paradigm-symbols-grammar": {
       "category": "components",
       "id": "paradigm-symbols-grammar"
+    },
+    "#gnomon-shim": {
+      "category": "components",
+      "id": "gnomon-shim"
+    },
+    "#gnomon-app-installer": {
+      "category": "components",
+      "id": "gnomon-app-installer"
     },
     "#migration-detector": {
       "category": "components",
@@ -22377,6 +23284,30 @@
       "category": "components",
       "id": "captain-board"
     },
+    "#captain-context-brief": {
+      "category": "components",
+      "id": "captain-context-brief"
+    },
+    "#platform-tools": {
+      "category": "components",
+      "id": "platform-tools"
+    },
+    "#sentinel-tools": {
+      "category": "components",
+      "id": "sentinel-tools"
+    },
+    "#persona-tools": {
+      "category": "components",
+      "id": "persona-tools"
+    },
+    "#tags-tools": {
+      "category": "components",
+      "id": "tags-tools"
+    },
+    "#gates-for-route": {
+      "category": "components",
+      "id": "gates-for-route"
+    },
     "#UniversityTypes": {
       "category": "components",
       "id": "UniversityTypes"
@@ -22412,6 +23343,206 @@
     "#PackTypes": {
       "category": "components",
       "id": "PackTypes"
+    },
+    "#context-freshness": {
+      "category": "components",
+      "id": "context-freshness"
+    },
+    "#symphony-loader": {
+      "category": "components",
+      "id": "symphony-loader"
+    },
+    "#platform-bridge": {
+      "category": "components",
+      "id": "platform-bridge"
+    },
+    "#symphony-peers": {
+      "category": "components",
+      "id": "symphony-peers"
+    },
+    "#symphony-relay": {
+      "category": "components",
+      "id": "symphony-relay"
+    },
+    "#agent-loader": {
+      "category": "components",
+      "id": "agent-loader"
+    },
+    "#agent-registry": {
+      "category": "components",
+      "id": "agent-registry"
+    },
+    "#role-prompts": {
+      "category": "components",
+      "id": "role-prompts"
+    },
+    "#notebook-loader": {
+      "category": "components",
+      "id": "notebook-loader"
+    },
+    "#classroom-decay": {
+      "category": "components",
+      "id": "classroom-decay"
+    },
+    "#classroom-fail-side": {
+      "category": "components",
+      "id": "classroom-fail-side"
+    },
+    "#tool-family": {
+      "category": "components",
+      "id": "tool-family"
+    },
+    "#tool-registry": {
+      "category": "components",
+      "id": "tool-registry"
+    },
+    "#compliance-checker": {
+      "category": "components",
+      "id": "compliance-checker"
+    },
+    "#DocsLoader": {
+      "category": "components",
+      "id": "DocsLoader"
+    },
+    "#graduation-types": {
+      "category": "components",
+      "id": "graduation-types"
+    },
+    "#graduation-store": {
+      "category": "components",
+      "id": "graduation-store"
+    },
+    "#graduation-engine": {
+      "category": "components",
+      "id": "graduation-engine"
+    },
+    "#aspect-fingerprint": {
+      "category": "components",
+      "id": "aspect-fingerprint"
+    },
+    "#data-policy-loader": {
+      "category": "components",
+      "id": "data-policy-loader"
+    },
+    "#work-log-loader": {
+      "category": "components",
+      "id": "work-log-loader"
+    },
+    "#journal-loader": {
+      "category": "components",
+      "id": "journal-loader"
+    },
+    "#decision-loader": {
+      "category": "components",
+      "id": "decision-loader"
+    },
+    "#nomination-engine": {
+      "category": "components",
+      "id": "nomination-engine"
+    },
+    "#session-work-log": {
+      "category": "components",
+      "id": "session-work-log"
+    },
+    "#agent-state": {
+      "category": "components",
+      "id": "agent-state"
+    },
+    "#gap-narrator": {
+      "category": "components",
+      "id": "gap-narrator"
+    },
+    "#activity-metrics": {
+      "category": "components",
+      "id": "activity-metrics"
+    },
+    "#soft-provenance": {
+      "category": "components",
+      "id": "soft-provenance"
+    },
+    "#outcome-reference-tracking": {
+      "category": "components",
+      "id": "outcome-reference-tracking"
+    },
+    "#compliance-health": {
+      "category": "components",
+      "id": "compliance-health"
+    },
+    "#provisional-intake": {
+      "category": "components",
+      "id": "provisional-intake"
+    },
+    "#orchestration-marker": {
+      "category": "components",
+      "id": "orchestration-marker"
+    },
+    "#yaml-validator": {
+      "category": "components",
+      "id": "yaml-validator"
+    },
+    "#write-and-confirm": {
+      "category": "components",
+      "id": "write-and-confirm"
+    },
+    "#consistency-tracker": {
+      "category": "components",
+      "id": "consistency-tracker"
+    },
+    "#strict-mode": {
+      "category": "components",
+      "id": "strict-mode"
+    },
+    "#wisdom-loader": {
+      "category": "components",
+      "id": "wisdom-loader"
+    },
+    "#learning-stores": {
+      "category": "components",
+      "id": "learning-stores"
+    },
+    "#protocol-loader": {
+      "category": "components",
+      "id": "protocol-loader"
+    },
+    "#global-store": {
+      "category": "components",
+      "id": "global-store"
+    },
+    "#arch-loader": {
+      "category": "components",
+      "id": "arch-loader"
+    },
+    "#calibration-aggregate": {
+      "category": "components",
+      "id": "calibration-aggregate"
+    },
+    "#skill-loader": {
+      "category": "components",
+      "id": "skill-loader"
+    },
+    "#aspect-graph": {
+      "category": "components",
+      "id": "aspect-graph"
+    },
+    "#docs-loader": {
+      "category": "components",
+      "id": "docs-loader"
+    },
+    "#skill-projector": {
+      "category": "components",
+      "id": "skill-projector"
+    },
+    "#skill-usage": {
+      "category": "components",
+      "id": "skill-usage"
+    },
+    "#persona-sentinel-validation": {
+      "category": "components",
+      "id": "persona-sentinel-validation"
+    },
+    "#portal-routes": {
+      "category": "components",
+      "id": "portal-routes"
     },
     "#ServeCommand": {
       "category": "components",
@@ -22796,10 +23927,6 @@
     "#symphony-serve": {
       "category": "components",
       "id": "symphony-serve"
-    },
-    "#symphony-peers": {
-      "category": "components",
-      "id": "symphony-peers"
     },
     "#symphony-peers-revoke": {
       "category": "components",
@@ -24985,6 +26112,10 @@
       "category": "flows",
       "id": "voice-approval"
     },
+    "#release-pins.": {
+      "category": "components",
+      "id": "release-pins."
+    },
     "#rename-btn": {
       "category": "components",
       "id": "rename-btn"
@@ -25088,6 +26219,10 @@
     "!daemon-update-detected": {
       "category": "signals",
       "id": "daemon-update-detected"
+    },
+    "!packages": {
+      "category": "signals",
+      "id": "packages"
     },
     "$USER": {
       "category": "flows",
@@ -25445,10 +26580,6 @@
       "category": "components",
       "id": "x"
     },
-    "#skill-loader": {
-      "category": "components",
-      "id": "skill-loader"
-    },
     "#native-memory-scan": {
       "category": "components",
       "id": "native-memory-scan"
@@ -25517,21 +26648,25 @@
       "category": "signals",
       "id": "cid-postflight-self-healed"
     },
-    "#learning-stores": {
+    "#live-index.": {
       "category": "components",
-      "id": "learning-stores"
+      "id": "live-index."
     },
-    "$roster-setup": {
+    "$agent-learning-loop": {
       "category": "flows",
-      "id": "roster-setup"
+      "id": "agent-learning-loop"
     },
-    "#gap-narrator": {
-      "category": "components",
-      "id": "gap-narrator"
+    "!agent-state-recorded": {
+      "category": "signals",
+      "id": "agent-state-recorded"
     },
     "!skill-used": {
       "category": "signals",
       "id": "skill-used"
+    },
+    "$roster-setup": {
+      "category": "flows",
+      "id": "roster-setup"
     },
     "!compliance-violation": {
       "category": "signals",

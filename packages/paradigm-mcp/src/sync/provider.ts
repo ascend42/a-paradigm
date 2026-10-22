@@ -95,8 +95,11 @@ export interface SyncProvider {
   /** Post a comment on an already-linked external item. */
   comment(ref: ExternalRef, message: string): Promise<void>;
 
-  /** Close/resolve an external item. Optional — gated by `capabilities().close`. */
-  close?(ref: ExternalRef): Promise<void>;
+  /**
+   * Close/resolve an external item. Optional — gated by `capabilities().close`.
+   * `reason` distinguishes a `done` (completed, the default) from a `shelved` (not-planned).
+   */
+  close?(ref: ExternalRef, reason?: 'completed' | 'not-planned'): Promise<void>;
 
   /** Reopen a closed external item. Optional — gated by `capabilities().close`. */
   reopen?(ref: ExternalRef): Promise<void>;

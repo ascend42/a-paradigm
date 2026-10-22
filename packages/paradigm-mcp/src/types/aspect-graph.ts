@@ -5,7 +5,7 @@
  * Core aspect types (AspectRelation, AspectEdge, etc.) live in premise-core.
  */
 
-import type { AspectRelation, AspectSeverity, AspectCategory } from '@a-company/premise-core';
+import type { AspectSeverity, AspectCategory } from '@a-company/premise-core';
 
 // ============================================
 // Graph Traversal

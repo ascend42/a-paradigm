@@ -95,23 +95,25 @@ export function createTasksRouter(projectDir: string): Router {
       // cards by their proposedClaimant (the archetype that WOULD pick them up).
       const { loadLearnedTokenTable, estimateForTask, classifyTaskLocal } = await import('../../../../paradigm-mcp/src/tools/orchestration.js');
       const learned = loadLearnedTokenTable(projectDir);
-      for (const run of board.runs ?? []) {
-        for (const node of run.nodes ?? []) {
-          (node as Record<string, unknown>).estimate = estimateForTask(learned, { blurb: node.blurb, claimant: node.claimant });
-          (node as Record<string, unknown>).taskType = classifyTaskLocal(node.blurb).type;
-        }
-      }
-      for (const u of board.unclaimed ?? []) {
-        const hint = u.proposedClaimant?.kind === 'archetype' ? u.proposedClaimant.ref : undefined;
-        (u as Record<string, unknown>).estimate = estimateForTask(learned, { blurb: u.blurb }, hint);
-        (u as Record<string, unknown>).taskType = classifyTaskLocal(u.blurb).type;
-      }
-      for (const node of board.loose ?? []) {
-        (node as Record<string, unknown>).estimate = estimateForTask(learned, { blurb: node.blurb, claimant: node.claimant });
-        (node as Record<string, unknown>).taskType = classifyTaskLocal(node.blurb).type;
-      }
+      const withRunEstimate = <N extends { blurb: string; claimant?: Parameters<typeof estimateForTask>[1]['claimant'] }>(node: N) => ({
+        ...node,
+        estimate: estimateForTask(learned, { blurb: node.blurb, claimant: node.claimant }),
+        taskType: classifyTaskLocal(node.blurb).type,
+      });
 
-      res.json(board);
+      res.json({
+        ...board,
+        runs: board.runs?.map((run) => ({ ...run, nodes: run.nodes?.map(withRunEstimate) })),
+        unclaimed: board.unclaimed?.map((u) => {
+          const hint = u.proposedClaimant?.kind === 'archetype' ? u.proposedClaimant.ref : undefined;
+          return {
+            ...u,
+            estimate: estimateForTask(learned, { blurb: u.blurb }, hint),
+            taskType: classifyTaskLocal(u.blurb).type,
+          };
+        }),
+        loose: board.loose?.map(withRunEstimate),
+      });
     } catch (err) {
       res.status(500).json({ error: 'Failed to assemble board', detail: String(err) });
     }

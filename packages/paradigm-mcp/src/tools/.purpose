@@ -301,3 +301,34 @@ components:
     description: v7 §3 — paradigm_captain_board, Cid's owned run-DAG artifact (read|claim|advance). read assembles the live orchestration DAG from non-terminal epic tasks + their stage children (ordered by stage/dependsOn) plus ripple-ranked unclaimed open tasks; claim writes a task claimant keeping status open (human/peer override archetype); advance records a Cid-owned blocked_on reason. Session-open proposes claimants (a real per-session mutation, replacing the anonymous task dump); session-close debrief reads the settlement-liveness probe and self-heals (runs postflight itself, advise-not-guard). Resolves the audit's inert-Captain finding.
     file: src/tools/captain.ts
     type: tool
+  captain-context-brief:
+    description: Cid's pre-task context discovery (paradigm_captain_context). Searches symbols per keyword cluster and records each hit's defining file from premise-core SymbolEntry.filePath (previously read a non-existent `file` field, so briefs carried no file), maps blast radius, checks route patterns against portal.yaml, finds protocols and surfaces warnings.
+    file: src/tools/captain.ts
+    type: tool
+    tags: [orchestration, navigation]
+  platform-tools:
+    description: paradigm_platform_* tools (navigate, highlight, …) that drive the Platform UI through platform-bridge sendAgentCommand, addressed by the project's rootDir (previously passed the non-existent ctx.projectDir, so the port and agent were never resolved from the project).
+    file: src/tools/platform.ts
+    type: tool-group
+    tags: [platform]
+  sentinel-tools:
+    description: paradigm_sentinel_* tools over SentinelStorage. On first use the storage is seeded with the universal and Paradigm failure patterns from loadAllSeedPatterns().patterns, skipping ids that already exist (the seed export was previously iterated as an array, threw, and seeded nothing).
+    file: src/tools/sentinel.ts
+    type: tool-group
+    tags: [sentinel, incidents]
+  persona-tools:
+    description: paradigm_persona_* tools. Persona runs emit paradigm-personas events to Sentinel under a valid EventSchemaDeclaration (eventTypes array, string scope on persona_id, persona.step.complete for passes, persona.step.fail for failures); validation reads them back through personas-loader validateAgainstSentinel.
+    file: src/tools/personas.ts
+    type: tool-group
+    tags: [personas, sentinel]
+  tags-tools:
+    description: paradigm_tags_* tools over .paradigm/tags.yaml. paradigm_tags_suggest queues a pending tag suggestion that now keeps the caller's description (meaning and when to apply) alongside reason, applies-to and example symbols.
+    file: src/tools/tags.ts
+    type: tool-group
+    tags: [tags]
+  gates-for-route:
+    description: paradigm_gates_for_route (inline in tools/index.ts). Suggests gates for a route from heuristics plus similar routes declared in portal.yaml. Route patterns come from utils/portal-routes — local routes are empty until ParsedGateConfig carries routes (T-2026-10-22-002); workspace sibling routes are parsed from each sibling's raw portal.yaml.
+    file: src/tools/index.ts
+    type: tool
+    gates: []
+    tags: [portal, security]

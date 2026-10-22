@@ -34,6 +34,10 @@ jobs:
       - name: Test
         run: npm test
 
+      # Root script runs the per-project typechecks (paradigm-mcp, paradigm —
+      # which also checks the paradigm-mcp sources it bundles — sentinel, gnomon).
+      # T-2026-10-21-032: the old root `tsc --noEmit` had no tsconfig and never
+      # checked a file.
       - name: Typecheck
         run: npm run typecheck
 

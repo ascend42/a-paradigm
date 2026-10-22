@@ -137,7 +137,7 @@ describe('breadcrumb rotation — recover never returns the CURRENT session', ()
 
     // Even after the current session records its own breadcrumbs (clobbering the
     // live file), the previous session is still recoverable.
-    tracker.addBreadcrumb({ action: 'tool-call', tool: 'y', summary: 'current work' });
+    tracker.addBreadcrumb('tool-call', 'current work', { tool: 'y' });
     const prevAfter = tracker.loadPreviousSession();
     expect(prevAfter?.sessionId).toBe('sPREVIOUS');
   });
@@ -146,7 +146,7 @@ describe('breadcrumb rotation — recover never returns the CURRENT session', ()
     const proj = initProject(path.join(tmp, 'proj'));
     const tracker = new SessionTracker();
     tracker.setRootDir(proj);
-    tracker.addBreadcrumb({ action: 'tool-call', tool: 'y' });
+    tracker.addBreadcrumb('tool-call', 'y called', { tool: 'y' });
     expect(tracker.loadPreviousSession()).toBeNull();
   });
 });

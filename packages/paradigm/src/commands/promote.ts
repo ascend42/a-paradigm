@@ -16,7 +16,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import chalk from 'chalk';
 import ora from 'ora';
 import { out, success, warn, error as cliError, dim, header, json as cliJson } from '../utils/cli-output.js';
 

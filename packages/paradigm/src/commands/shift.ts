@@ -800,7 +800,7 @@ export async function shiftCommand(options: ShiftOptions = {}) {
   console.log(chalk.white('  Created/Updated:'));
   console.log(chalk.gray('  ─────────────────────────────────────────────────'));
 
-  const files = [
+  const files: Array<{ path: string; desc: string; isDir?: boolean; optional?: boolean }> = [
     { path: '.paradigm/config.yaml', desc: 'Project configuration' },
     { path: '.paradigm/navigator.yaml', desc: 'Symbol navigation map' },
     { path: '.paradigm/agents.yaml', desc: 'Team agent configuration' },

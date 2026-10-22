@@ -13,7 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
-import { searchSymbols, getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
+import { searchSymbols } from '@a-company/premise-core';
 import { loadArchMap } from '../utils/arch-loader.js';
 import { log } from '../utils/mcp-logger.js';
 import { trackToolCall } from './context.js';
@@ -227,7 +227,7 @@ async function handleCaptainBrief(
             id: r.symbol,
             type: symType,
             description: r.description || '',
-            file: r.file,
+            file: r.filePath,
           });
           searchResults.push(r.symbol);
         }
@@ -357,9 +357,7 @@ async function handleCaptainBrief(
   const routePatterns = extractRoutePatterns(taskDescription);
   if (routePatterns.length > 0) {
     try {
-      const { handleGatesForRoute } = await import('./index.js').catch(() => ({ handleGatesForRoute: null }));
-      // We can't easily call gates_for_route without the inline handler,
-      // so we check portal.yaml directly
+      // gates_for_route lives in the inline tools handler; check portal.yaml directly
       const portalPath = path.join(ctx.rootDir, 'portal.yaml');
       if (fs.existsSync(portalPath)) {
         const portalContent = fs.readFileSync(portalPath, 'utf8');

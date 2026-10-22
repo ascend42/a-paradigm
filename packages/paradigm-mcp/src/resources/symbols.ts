@@ -8,7 +8,6 @@ import {
   getSymbolsByType,
   getSymbolCounts,
   getAllSymbols,
-  type SymbolIndex,
   type SymbolType,
 } from '@a-company/premise-core';
 import { refreshContextSafely, type ProjectContext } from '../utils/index-loader.js';

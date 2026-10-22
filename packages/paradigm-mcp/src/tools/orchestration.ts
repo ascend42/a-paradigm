@@ -87,7 +87,12 @@ export interface AgentDefinition {
     derived?: boolean;
   }>;
   handoff_to?: string[];
-  defaultModel?: 'opus' | 'sonnet' | 'haiku';
+  /**
+   * Model for this agent. Declared as opus|sonnet|haiku in older manifests, but
+   * after resolveModelForAgent() it may be any id the project's
+   * `model-resolution` table maps a tier to (docs/specs/model-resolution.md).
+   */
+  defaultModel?: string;
   context?: {
     include?: string[];
     exclude?: string[];
@@ -173,7 +178,8 @@ export interface OrchestrationPlan {
 
 interface AgentPromptResult {
   agent: string;
-  model: 'opus' | 'sonnet' | 'haiku';
+  /** Resolved model id (see AgentDefinition.defaultModel). */
+  model: string;
   prompt: string;
   taskDescription: string;
   subagentType: string;
@@ -223,19 +229,6 @@ const SYMBOL_PATTERN = /[@#$%^!?&~][a-zA-Z0-9_-]+/g;
  * gets no `nativeSubagentType` and falls back to `general-purpose`.
  */
 export const PLUGIN_AGENT_ROLES = new Set(['architect', 'builder', 'reviewer', 'security', 'tester']);
-
-// Legacy — kept for backward compat, prefer AGENT_TIERS + resolveModelForAgent()
-const DEFAULT_MODELS: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
-  advocate: 'opus',
-  architect: 'opus',
-  compliance: 'sonnet',
-  ftux: 'opus',
-  security: 'opus',
-  reviewer: 'sonnet',
-  builder: 'haiku',
-  tester: 'haiku',
-  documentor: 'haiku',
-};
 
 // Agent capability tier assignments
 const AGENT_TIERS: Record<string, 'tier-1' | 'tier-2' | 'tier-3'> = {
@@ -1038,8 +1031,8 @@ async function handleOrchestrateInline(
   // Record agent state for each participating agent
   try {
     const { recordAgentSession } = await import('../utils/agent-state.js');
-    const sessionTracker = await import('../utils/session-tracker.js');
-    const sessionId = sessionTracker.default?.session?.sessionId || orchestrationId;
+    const { getSessionTracker } = await import('../utils/session-tracker.js');
+    const sessionId = getSessionTracker().getStats().sessionId || orchestrationId;
 
     for (const stage of stagePrompts) {
       for (const agent of stage.agents) {
@@ -2969,63 +2962,6 @@ export function planBuilderStages(relay: AgentRelay | undefined): ParallelBuilde
     totalFiles,
     totalBuilders,
   };
-}
-
-/**
- * Build narrowed prompt for a parallel builder
- * Each builder gets only the context it needs for its assigned files
- */
-function buildParallelBuilderPrompt(
-  baseBuilderPrompt: string,
-  assignedFiles: FileAssignment[],
-  availableFiles: string[],
-  architectSpec: string,
-  groupName: string
-): string {
-  const parts: string[] = [];
-
-  // Start with base builder prompt
-  parts.push(baseBuilderPrompt);
-  parts.push('');
-  parts.push('---');
-  parts.push('');
-
-  // Specific assignment
-  parts.push('## Your Assignment');
-  parts.push('');
-  parts.push(`You are responsible for implementing the **${groupName}** group.`);
-  parts.push('');
-  parts.push('### Files to Create:');
-  for (const file of assignedFiles) {
-    parts.push(`- \`${file.path}\`: ${file.description}`);
-  }
-  parts.push('');
-
-  // Available files (from earlier sub-phases)
-  if (availableFiles.length > 0) {
-    parts.push('### Available Files (already created):');
-    parts.push('These files exist and you can import from them:');
-    for (const file of availableFiles) {
-      parts.push(`- \`${file}\``);
-    }
-    parts.push('');
-  }
-
-  // Architect spec
-  if (architectSpec) {
-    parts.push('### Architect Specification:');
-    parts.push(architectSpec);
-    parts.push('');
-  }
-
-  // Instructions
-  parts.push('### Instructions:');
-  parts.push('1. Create ONLY the files assigned to you');
-  parts.push('2. You can import from available files (already created)');
-  parts.push('3. Follow the architect\'s specification exactly');
-  parts.push('4. End with the standard Agent Relay block');
-
-  return parts.join('\n');
 }
 
 /**

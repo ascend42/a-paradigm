@@ -287,7 +287,7 @@ const SEED_HABITS: HabitDefinition[] = [
     category: 'collaboration',
     trigger: 'on-stop',
     severity: 'advisory',
-    check: { type: 'lore-recorded' },
+    check: { type: 'lore-recorded', params: {} },
     enabled: true,
   },
 ];

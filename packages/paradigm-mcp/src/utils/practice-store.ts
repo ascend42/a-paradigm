@@ -95,6 +95,7 @@ export async function getComplianceByCategory(
     'documentation',
     'collaboration',
     'security',
+    'quality',
   ];
 
   const results = [];

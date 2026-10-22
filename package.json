@@ -28,7 +28,7 @@
     "dev:sentinel": "npm run dev:ui --workspace=@a-company/sentinel",
     "lint": "eslint packages --ext .ts,.tsx",
     "clean": "rm -rf packages/*/dist packages/*/*/dist packages/paradigm/visualizer-dist",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p packages/paradigm-mcp && tsc --noEmit -p packages/paradigm && tsc --noEmit -p packages/sentinel && tsc --noEmit -p packages/gnomon",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "changeset": "changeset",

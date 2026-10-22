@@ -11,7 +11,6 @@ import * as path from 'path';
 import {
   searchSymbols,
   getReferencesTo,
-  getAllSymbols,
   getSymbolsByType,
   checkAspectAnchors,
 } from '@a-company/premise-core';
@@ -19,7 +18,6 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import {
   loadHabits,
-  getHabitsByTrigger,
   evaluateHabits,
   buildEvaluationContext,
 } from '../utils/habits-loader.js';
@@ -28,6 +26,7 @@ import { getSessionTracker } from '../utils/session-tracker.js';
 import { execSync } from 'child_process';
 import { narrateAllGaps, type CheckResult as GapCheckResult } from '../utils/gap-narrator.js';
 import { extractDeclaredGateNames } from '../utils/compliance-checker.js';
+import { portalRoutes } from '../utils/portal-routes.js';
 
 // ============================================================================
 // Constants
@@ -199,12 +198,8 @@ async function runPreflightCheck(task: string, ctx: ProjectContext) {
     const gateNames = extractDeclaredGateNames(ctx.gateConfig);
     portalStatus.gateCount = gateNames.length;
     portalStatus.gates = gateNames.map(g => `^${g}`);
-    // routes exists on the raw yaml shape only — ParsedGateConfig omits it.
-    const rawRoutes = (ctx.gateConfig as unknown as { routes?: unknown }).routes;
-    portalStatus.routeCount =
-      rawRoutes && !Array.isArray(rawRoutes) && typeof rawRoutes === 'object'
-        ? Object.keys(rawRoutes as Record<string, unknown>).length
-        : 0;
+    // ParsedGateConfig drops routes; portalRoutes() is [] until T-2026-10-22-002.
+    portalStatus.routeCount = portalRoutes(ctx.gateConfig).length;
   }
 
   // 4. Task adds routes?
@@ -343,11 +338,8 @@ export function runPostflightCheck(
   const violations: PostflightViolation[] = [];
 
   // 1. Check for new routes without portal.yaml entries
-  const rawRoutes = (ctx.gateConfig as unknown as { routes?: unknown } | null)?.routes;
-  const declaredRoutes =
-    rawRoutes && !Array.isArray(rawRoutes) && typeof rawRoutes === 'object'
-      ? Object.keys(rawRoutes as Record<string, unknown>)
-      : [];
+  // Empty until T-2026-10-22-002 (ParsedGateConfig drops routes).
+  const declaredRoutes = portalRoutes(ctx.gateConfig).map((r) => r.route);
 
   for (const file of filesModified) {
     const absPath = path.isAbsolute(file) ? file : path.join(ctx.rootDir, file);
@@ -458,8 +450,6 @@ export function runPostflightCheck(
       if (!symbol.startsWith('#')) continue; // aspects mostly apply to components
 
       // Check if any sibling components are in applies-to but this one isn't
-      const data = (aspect.data || {}) as Record<string, unknown>;
-      const aspectRefs = (data.aspects || []) as string[];
       // We only flag if the aspect uses glob patterns that might match
       for (const pattern of appliesTo) {
         if (!pattern.includes('*')) continue;
@@ -545,7 +535,7 @@ export function runPostflightCheck(
       filesModified,
       symbolsTouched,
       loreRecorded,
-      hasPortalRoutes: ctx.gateConfig !== null && (ctx.gateConfig as unknown as Record<string, unknown>).routes != null,
+      hasPortalRoutes: portalRoutes(ctx.gateConfig).length > 0, // T-2026-10-22-002
       taskAddsRoutes: false,
       gitClean,
     });

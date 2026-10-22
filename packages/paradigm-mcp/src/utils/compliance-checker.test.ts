@@ -10,7 +10,7 @@ vi.mock('@a-company/premise-core', () => ({
 }));
 
 import { checkSpecCompliance, checkCodeQuality, type ComplianceContext } from './compliance-checker.js';
-import { searchSymbols, checkAspectAnchors } from '@a-company/premise-core';
+import { searchSymbols, checkAspectAnchors, type SymbolIndex } from '@a-company/premise-core';
 
 const mockSearchSymbols = vi.mocked(searchSymbols);
 const mockCheckAspectAnchors = vi.mocked(checkAspectAnchors);
@@ -36,7 +36,8 @@ describe('checkSpecCompliance', () => {
   function makeCtx(overrides?: Partial<ComplianceContext>): ComplianceContext {
     return {
       rootDir: tmpDir,
-      index: {},
+      // premise-core is mocked here, so the index is never read.
+      index: {} as SymbolIndex,
       gateConfig: null,
       purposeFiles: [],
       ...overrides,

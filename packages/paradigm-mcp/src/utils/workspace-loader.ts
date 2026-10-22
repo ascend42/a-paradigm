@@ -21,7 +21,7 @@ import {
   getAllSymbols,
   type SymbolIndex,
 } from '@a-company/premise-core';
-import type { ParsedGateConfig } from '@a-company/portal-core';
+import { parsePortalRoutes, type PortalRoute } from './portal-routes.js';
 
 // ============================================================================
 // Types
@@ -42,7 +42,8 @@ export interface WorkspaceConfig {
 
 export interface SiblingIndex {
   index: SymbolIndex;
-  gateConfig: ParsedGateConfig | null;
+  /** Routes declared in the sibling's portal.yaml (read from the raw YAML) */
+  portalRoutes: PortalRoute[];
 }
 
 export interface WorkspaceContext {
@@ -177,23 +178,19 @@ export function loadWorkspaceContext(
         index = filterByExports(index, member.exports);
       }
 
-      // Load sibling's portal.yaml if it exists
-      let gateConfig: ParsedGateConfig | null = null;
+      // Load sibling's portal.yaml routes if it exists (raw YAML: parseGateConfig
+      // is async and drops routes, T-2026-10-22-002)
+      let portalRoutes: PortalRoute[] = [];
       const portalPath = path.join(memberAbsPath, 'portal.yaml');
       if (fs.existsSync(portalPath)) {
         try {
-          // parseGateConfig is async but we need sync here — read raw YAML instead
-          const portalContent = fs.readFileSync(portalPath, 'utf8');
-          const portalData = yaml.load(portalContent) as ParsedGateConfig & { routes?: Record<string, unknown> };
-          if (portalData) {
-            gateConfig = portalData as ParsedGateConfig;
-          }
+          portalRoutes = parsePortalRoutes(yaml.load(fs.readFileSync(portalPath, 'utf8')));
         } catch {
-          // Gate config is optional for siblings
+          // Portal config is optional for siblings
         }
       }
 
-      siblingIndices.set(member.name, { index, gateConfig });
+      siblingIndices.set(member.name, { index, portalRoutes });
     } catch (e) {
       log.component('#workspace-loader').warn('Could not load index for workspace member', { member: member.name, error: (e as Error).message });
     }

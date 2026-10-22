@@ -22,7 +22,7 @@ import type {
   AttentionScore,
   Debate,
 } from '../types/ambient.js';
-import type { AgentProfile, AgentAttention } from '../types/agents.js';
+import type { AgentProfile } from '../types/agents.js';
 import { emitEvent, scoreEventForAgent } from './event-stream.js';
 import { loadDataPolicy, canObservePath } from './data-policy-loader.js';
 import { loadAllAgentProfiles, loadAgentProfile, saveAgentProfile, isAgentActive } from './agent-loader.js';
@@ -209,7 +209,7 @@ function generateBrief(profile: AgentProfile, event: StreamEvent, score: Attenti
  * Group overlapping nominations (same triggered event or shared symbols).
  * Mark as conflicting vs complementary.
  */
-export function detectDebates(rootDir: string, newNominations: Nomination[]): Debate[] {
+export function detectDebates(_rootDir: string, newNominations: Nomination[]): Debate[] {
   if (newNominations.length < 2) return [];
 
   const debates: Debate[] = [];
@@ -1289,7 +1289,7 @@ export function gatedPromoteJournalEntry(
 
 // ── Surfacing Config ──
 
-import type { SurfacingConfig, NominationUrgencyLevel as UrgencyLevel } from '../types/ambient.js';
+import type { SurfacingConfig } from '../types/ambient.js';
 
 const SURFACING_FILE = '.paradigm/surfacing.yaml';
 
