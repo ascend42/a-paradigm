@@ -6,6 +6,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../utils/logger.js';
+import { ensureSessionMarkersGitignore } from '../core/session-markers-gitignore.js';
 import {
   detectIDE,
   getAdapter,
@@ -51,6 +52,9 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
   }
 
   if (!quiet) spinner.succeed(`Loaded configuration for ${chalk.cyan(files.projectName)}`);
+
+  // Keep hook session markers (.purpose-paths, .orchestrated, ...) out of git
+  ensureSessionMarkersGitignore(path.join(rootDir, '.paradigm'));
   log.command('sync').debug('Configuration loaded', { projectName: files.projectName });
 
   // Sync to all IDEs if --all flag

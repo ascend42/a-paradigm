@@ -70,6 +70,12 @@ features:
       - '#route-detector'
       - '#auth-detector'
       - '#signal-detector'
+  notices-command:
+    description: "`paradigm notices` lists pending one-time notices (read-only); `paradigm notices ack <id|all>` writes the acknowledgement marker"
+    type: command
+    components:
+      - '#migration-notices'
+      - '#command-policy'
   status-command:
     description: Show project symbol status, counts, and configuration overview
     type: command
@@ -359,7 +365,7 @@ components:
     type: engine
     file: src/commands/migrate/runner.ts
   migration-registry:
-    description: Ordered array of 19 self-contained migration steps covering legacy, directory, config, template, and hook migrations
+    description: Ordered array of self-contained migration steps covering legacy, directory, config, template, hook and format migrations (incl. lore-legacy-entries, 7.15.2, which moves legacy root-level lore entries now that lore reads never migrate)
     type: config
     file: src/commands/migrate/migrations.ts
   init-handler:

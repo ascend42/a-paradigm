@@ -341,8 +341,18 @@ export async function tasksForClaimant(
   });
 }
 
+/**
+ * True when a task id may be joined into a file path: letters, digits, `-`
+ * and `_` only (no separator, no dot, so no `..`). Any other id is only
+ * compared against stored ids.
+ */
+export function isPathSafeTaskId(id: string): boolean {
+  return /^[A-Za-z0-9_-]{1,160}$/.test(id);
+}
+
 export async function loadTask(rootDir: string, taskId: string): Promise<Task | null> {
-  const dateMatch = taskId.match(/^T-(\d{4}-\d{2}-\d{2})-/);
+  // The direct lookup joins the id into a file path: only for a path-safe id.
+  const dateMatch = isPathSafeTaskId(taskId) ? taskId.match(/^T-(\d{4}-\d{2}-\d{2})-/) : null;
   if (dateMatch) {
     const filePath = path.join(rootDir, TASKS_ROOT, ENTRIES_DIR, dateMatch[1], `${taskId}.yaml`);
     if (fs.existsSync(filePath)) {
@@ -509,6 +519,7 @@ export async function updateTask(rootDir: string, taskId: string, partial: Parti
   if (!task) return false;
 
   const dateStr = task.created.slice(0, 10);
+  if (!isPathSafeTaskId(taskId) || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const taskPath = path.join(rootDir, TASKS_ROOT, ENTRIES_DIR, dateStr, `${taskId}.yaml`);
   if (!fs.existsSync(taskPath)) return false;
 

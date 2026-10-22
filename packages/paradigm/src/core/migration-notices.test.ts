@@ -3,7 +3,15 @@ import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { checkAndEmitMigrationNotices, isCohortC } from './migration-notices.js';
+import {
+  checkAndEmitMigrationNotices,
+  isCohortC,
+  pendingNotices,
+  acknowledgeNotice,
+  findNotice,
+  resetPrintedNoticesForTests,
+  NO_NOTICES_ENV,
+} from './migration-notices.js';
 
 describe('isCohortC', () => {
   let tmpDir: string;
@@ -85,63 +93,100 @@ describe('isCohortC', () => {
 
 describe('checkAndEmitMigrationNotices', () => {
   let tmpDir: string;
-  let logSpy: ReturnType<typeof vi.spyOn>;
+  let printed: string[];
+  const write = (t: string) => { printed.push(t); };
+  const marker = () => path.join(tmpDir, '.paradigm', '.v6-0-4-migration-acknowledged');
+
+  function cohortC(): void {
+    fs.writeFileSync(path.join(tmpDir, '.purpose'), 'aspects:\n  ~thing:\n    description: x\n', 'utf8');
+    fs.writeFileSync(path.join(tmpDir, '.paradigm', 'roster.yaml'), 'version: 1.0\nactive: [architect]\n', 'utf8');
+  }
 
   beforeEach(async () => {
     tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'paradigm-migration-emit-'));
     fs.mkdirSync(path.join(tmpDir, '.paradigm'), { recursive: true });
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printed = [];
+    resetPrintedNoticesForTests();
+    delete process.env[NO_NOTICES_ENV];
   });
 
   afterEach(async () => {
-    logSpy.mockRestore();
+    delete process.env[NO_NOTICES_ENV];
     await fsp.rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('emits the notice and writes a marker for cohort C', async () => {
-    fs.writeFileSync(
-      path.join(tmpDir, '.purpose'),
-      'aspects:\n  ~thing:\n    description: x\n',
-      'utf8'
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, '.paradigm', 'roster.yaml'),
-      'version: 1.0\nactive: [architect]\n',
-      'utf8'
-    );
+  it('write command: emits the notice and writes the marker', async () => {
+    cohortC();
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: false, write });
+    expect(printed.join('')).toContain('Enforcement model changed');
+    expect(printed.join('')).toContain('will not appear again');
+    expect(fs.existsSync(marker())).toBe(true);
+  });
 
-    await checkAndEmitMigrationNotices(tmpDir);
+  it('read-only command: emits the notice but writes nothing', async () => {
+    cohortC();
+    const before = fs.readdirSync(path.join(tmpDir, '.paradigm')).sort();
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: true, write });
+    expect(printed.join('')).toContain('Enforcement model changed');
+    expect(printed.join('')).toContain('paradigm notices ack v6.0.4');
+    expect(fs.readdirSync(path.join(tmpDir, '.paradigm')).sort()).toEqual(before);
+    expect(pendingNotices(tmpDir).map(n => n.id)).toEqual(['v6.0.4']);
+  });
 
-    expect(logSpy).toHaveBeenCalled();
-    const printed = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
-    expect(printed).toContain('Enforcement model changed');
-    expect(fs.existsSync(path.join(tmpDir, '.paradigm', '.v6-0-4-migration-acknowledged'))).toBe(true);
+  it('prints at most once per process', async () => {
+    cohortC();
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: true, write });
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: true, write });
+    expect(printed.length).toBe(1);
+  });
+
+  it(`${NO_NOTICES_ENV}=1 hides the notice and writes nothing`, async () => {
+    cohortC();
+    process.env[NO_NOTICES_ENV] = '1';
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: false, write });
+    expect(printed).toEqual([]);
+    expect(fs.existsSync(marker())).toBe(false);
+  });
+
+  it('defaults to stderr, never stdout', async () => {
+    cohortC();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await checkAndEmitMigrationNotices(tmpDir, { readOnly: true });
+      expect(logSpy).not.toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+    }
+  });
+
+  it('acknowledgeNotice silences it', async () => {
+    cohortC();
+    expect(acknowledgeNotice(tmpDir, findNotice('v6.0.4')!)).toBe(true);
+    expect(pendingNotices(tmpDir)).toEqual([]);
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: true, write });
+    expect(printed).toEqual([]);
   });
 
   it('does not emit twice when marker exists', async () => {
-    fs.writeFileSync(
-      path.join(tmpDir, '.purpose'),
-      'aspects:\n  ~thing:\n    description: x\n',
-      'utf8'
-    );
-    fs.writeFileSync(path.join(tmpDir, '.paradigm', 'roster.yaml'), 'active: [architect]\n', 'utf8');
-    fs.writeFileSync(path.join(tmpDir, '.paradigm', '.v6-0-4-migration-acknowledged'), 'x\n', 'utf8');
-
-    await checkAndEmitMigrationNotices(tmpDir);
-
-    expect(logSpy).not.toHaveBeenCalled();
+    cohortC();
+    fs.writeFileSync(marker(), 'x\n', 'utf8');
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: false, write });
+    expect(printed).toEqual([]);
   });
 
   it('does not emit for projects with no .paradigm directory', async () => {
     await fsp.rm(path.join(tmpDir, '.paradigm'), { recursive: true });
-    await checkAndEmitMigrationNotices(tmpDir);
-    expect(logSpy).not.toHaveBeenCalled();
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: false, write });
+    expect(printed).toEqual([]);
   });
 
   it('does not emit when compliance is rostered', async () => {
     fs.writeFileSync(path.join(tmpDir, '.purpose'), 'aspects:\n  ~x:\n    description: x\n', 'utf8');
     fs.writeFileSync(path.join(tmpDir, '.paradigm', 'roster.yaml'), 'active: [compliance]\n', 'utf8');
-    await checkAndEmitMigrationNotices(tmpDir);
-    expect(logSpy).not.toHaveBeenCalled();
+    await checkAndEmitMigrationNotices(tmpDir, { readOnly: false, write });
+    expect(printed).toEqual([]);
   });
 });

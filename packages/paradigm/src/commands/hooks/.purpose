@@ -15,6 +15,57 @@ components:
     signals:
       - '!compliance-violation'
       - '!hook-installed'
+  hook-monitor:
+    description: |
+      7.15.2 hook self-monitoring (scripts/paradigm-hook-monitor.sh, sourced by
+      every Claude Code hook via _pm_begin <Hook> <timeoutMs> <budgetMs>).
+      Appends a start record and, from an EXIT trap, an end record (wall ms,
+      rc, outcome ok|blocked|error|killed; SIGTERM/HUP/INT -> killed) to the
+      ring .paradigm/events/hook-timings.jsonl. A SIGKILLed hook leaves a
+      start with no end; readers treat it as killed once older than its
+      timeout + 5 s. Cost: two date(1) calls and two shell appends, no CLI or
+      node spawn. Ring trimmed to PARADIGM_HOOK_RING_MAX (500) lines on ~1 in
+      64 runs and deterministically at SessionStart. Fail open: no stdout,
+      exit code preserved, every write best-effort; PARADIGM_HOOK_MONITOR_OFF=1
+      disables it. Ring + marker are in the #session-markers-gitignore block.
+    type: utility
+    file: scripts/paradigm-hook-monitor.sh
+    tags:
+      - hooks
+      - observability
+  hook-health-warning:
+    description: |
+      7.15.2 SessionStart hook (scripts/claude-code-session-start.sh, plugin
+      paradigm-session-start.sh, hooks.json SessionStart, timeout 10 s). One
+      awk pass over the #hook-monitor ring; for each hook killed (start with no
+      end older than timeout + 5 s, or a recorded SIGTERM) or over its budget
+      since the last warning it prints ONE line to stdout (added to the agent's
+      context), e.g. "Paradigm Stop hook timed out 11 time(s) since <date>;
+      enforcement did not run. Run `paradigm doctor`." Once per session
+      (.paradigm/.hook-health-warned = "<session_id> <ms>"); also trims the
+      ring to its cap. Always exits 0. Registered by the plugin hooks.json AND by
+      the project-level `paradigm hooks install --claude-code` (.claude/settings.json).
+    type: hook
+    file: scripts/claude-code-session-start.sh
+    tags:
+      - hooks
+      - observability
+  stop-hook-timing:
+    description: |
+      7.15.2 timing contract for every plugin hook. Claude Code waits for EOF on
+      a hook's stdout/stderr, not for its exit, until the hook timeout (Stop: 30 s).
+      Rules: (1) never background a command without </dev/null >/dev/null 2>&1;
+      (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
+      --exclude-standard` (nested agent worktrees and node_modules are skipped)
+      and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
+      Check 4 anchors); (3) no network (npx --no-install). Enforced by
+      tests/hooks-timing.test.ts (each hook under 2 s through a pipe, plus a
+      lint check on background jobs).
+    type: utility
+    file: scripts/paradigm-common.sh
+    tags:
+      - hooks
+      - performance
   has-compliance-claimant:
     description: |
       v6.0.4 POSIX sh helper in paradigm-common.sh that reads

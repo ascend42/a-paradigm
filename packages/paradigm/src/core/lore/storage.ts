@@ -18,6 +18,14 @@ import type { LoreEntry, LoreFilter, LoreTimeline, LoreAssessment } from './type
 import { applyLoreFilter } from './filter.js';
 import { normalizeLoreEntry } from './normalize.js';
 import { resolveAuthor, sanitizeAuthor } from './resolve-author.js';
+// Relative-path import into bundled paradigm-mcp source (same pattern as task-loader): one implementation.
+import {
+  allocateLoreId,
+  isPathSafeLoreId,
+  migrateLegacyEntries as migrateLegacy,
+  planLegacyMigration,
+  readLoreEntriesWithLegacy,
+} from '../../../../paradigm-mcp/src/utils/lore-legacy.js';
 
 const LORE_DIR = '.paradigm/lore';
 const ENTRIES_DIR = 'entries';
@@ -32,6 +40,8 @@ function isLoreFile(filename: string): boolean {
  * Resolve the file path for a lore entry ID, trying .lore first then .yaml.
  */
 function resolveEntryPath(rootDir: string, dateStr: string, entryId: string): string | null {
+  // The id becomes a file name: never one with a separator, a dot or `..`.
+  if (!isPathSafeLoreId(entryId) || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
   const dirPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr);
   // Try .lore first (new format)
   const lorePath = path.join(dirPath, `${entryId}.lore`);
@@ -175,8 +185,12 @@ export async function recordLore(
     validation = validateLoreSymbols(rootDir, allSymbols);
   }
 
+  // Write path: settle legacy entries first so ids are allocated against the real layout.
+  migrateLegacyEntries(rootDir);
+
   const lorePath = path.join(rootDir, LORE_DIR);
   const dateStr = entry.timestamp.slice(0, 10); // "2026-02-21"
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error('Invalid lore timestamp: must start YYYY-MM-DD');
   const datePath = path.join(lorePath, ENTRIES_DIR, dateStr);
 
   // Ensure directory exists
@@ -197,6 +211,10 @@ export async function recordLore(
   // Generate ID if not provided
   if (!entry.id) {
     entry.id = generateLoreId(rootDir, dateStr, entry.author, entry.timestamp);
+  }
+  // The id and the timestamp's date become a file path: refuse anything that could leave entries/.
+  if (!isPathSafeLoreId(entry.id) || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error(`Invalid lore entry id or timestamp: ids use letters, digits, - and _ only; timestamps start YYYY-MM-DD`);
   }
 
   // Write entry as .lore
@@ -257,44 +275,9 @@ export function draftLoreFromBreadcrumbs(
  * Load lore entries with optional filtering
  */
 export async function loadLoreEntries(rootDir: string, filter?: LoreFilter): Promise<LoreEntry[]> {
-  const entriesPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR);
-
-  if (!fs.existsSync(entriesPath)) {
-    return [];
-  }
-
-  // Auto-migrate any legacy root-level entries first
-  migrateLegacyEntries(rootDir);
-
-  const entries: LoreEntry[] = [];
-
-  // Read all date directories
-  const dateDirs = fs.readdirSync(entriesPath)
-    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
-    .sort()
-    .reverse(); // newest first
-
-  for (const dateDir of dateDirs) {
-    // Quick date range pruning
-    if (filter?.dateFrom && dateDir < filter.dateFrom.slice(0, 10)) continue;
-    if (filter?.dateTo && dateDir > filter.dateTo.slice(0, 10)) continue;
-
-    const dirPath = path.join(entriesPath, dateDir);
-    const files = fs.readdirSync(dirPath)
-      .filter(isLoreFile)
-      .sort();
-
-    for (const file of files) {
-      try {
-        const content = fs.readFileSync(path.join(dirPath, file), 'utf8');
-        const raw = yaml.load(content) as Record<string, unknown>;
-        entries.push(normalizeLoreEntry(raw));
-      } catch {
-        // Skip malformed files
-      }
-    }
-  }
-
+  // Read-only: legacy root-level entries are shown as they will look after
+  // migration, without moving any file (write paths migrate).
+  const entries = readLoreEntriesWithLegacy(rootDir, resolveAuthor, normalizeLoreEntry, filter);
   return filter ? applyLoreFilter(entries, filter) : entries;
 }
 
@@ -396,6 +379,7 @@ export async function addReview(
   entryId: string,
   review: NonNullable<LoreEntry['review']>
 ): Promise<boolean> {
+  migrateLegacyEntries(rootDir); // write path
   const entries = await loadLoreEntries(rootDir);
   const entry = entries.find(e => e.id === entryId);
 
@@ -437,6 +421,7 @@ export async function addAssessment(
   entryId: string,
   assessment: LoreAssessment
 ): Promise<boolean> {
+  migrateLegacyEntries(rootDir); // write path
   const entries = await loadLoreEntries(rootDir);
   const entry = entries.find(e => e.id === entryId);
 
@@ -468,7 +453,9 @@ export async function addAssessment(
  */
 export async function loadLoreEntry(rootDir: string, entryId: string): Promise<LoreEntry | null> {
   // Extract date from ID: "L-2026-02-21-001" or "L-2026-03-02-ascend-143025-001"
-  const dateMatch = entryId.match(/^L-(\d{4}-\d{2}-\d{2})-/);
+  // The direct lookup joins the id into a file path: only for a path-safe id.
+  // Any other id is only compared against stored ids (the scan below).
+  const dateMatch = isPathSafeLoreId(entryId) ? entryId.match(/^L-(\d{4}-\d{2}-\d{2})-/) : null;
   if (dateMatch) {
     const dateStr = dateMatch[1];
     const entryPath = resolveEntryPath(rootDir, dateStr, entryId);
@@ -496,6 +483,7 @@ export async function updateLoreEntry(
   entryId: string,
   partial: Partial<Omit<LoreEntry, 'id' | 'timestamp' | 'author'>>
 ): Promise<boolean> {
+  migrateLegacyEntries(rootDir); // write path
   const entry = await loadLoreEntry(rootDir, entryId);
   if (!entry) return false;
 
@@ -537,6 +525,7 @@ export async function updateLoreEntry(
  * Delete a lore entry by ID
  */
 export async function deleteLoreEntry(rootDir: string, entryId: string): Promise<boolean> {
+  migrateLegacyEntries(rootDir); // write path
   const entry = await loadLoreEntry(rootDir, entryId);
   if (!entry) return false;
 
@@ -558,127 +547,30 @@ export async function deleteLoreEntry(rootDir: string, entryId: string): Promise
 }
 
 /**
- * Migrate old-format lore entries (root-level YAML without date partitioning)
- * to v2 schema in dated directories. Runs automatically on rebuild/load.
+ * Migrate legacy root-level lore entries to dated v2 files (moves files).
+ * WRITE paths only: lore writes call it first, and `paradigm migrate` runs it
+ * as the `lore-legacy-entries` step. Read paths never call it. One shared
+ * implementation with the MCP lore-loader (paradigm-mcp utils/lore-legacy.ts).
  */
-function migrateLegacyEntries(rootDir: string): number {
-  const entriesPath = path.join(rootDir, LORE_DIR, ENTRIES_DIR);
-  if (!fs.existsSync(entriesPath)) return 0;
+export function migrateLegacyEntries(rootDir: string): number {
+  return migrateLegacy(rootDir, resolveAuthor);
+}
 
-  const rootFiles = fs.readdirSync(entriesPath)
-    .filter(f => isLoreFile(f) && !f.startsWith('.'));
-
-  let migrated = 0;
-  for (const file of rootFiles) {
-    const filePath = path.join(entriesPath, file);
-    const stat = fs.statSync(filePath);
-    if (!stat.isFile()) continue;
-
-    try {
-      const content = fs.readFileSync(filePath, 'utf8');
-      const raw = yaml.load(content) as Record<string, unknown>;
-
-      // Skip if already v2 format (has author block as object — old style)
-      // or author as string (new style) — these should be in date dirs
-      if (raw.author && typeof raw.author === 'object') continue;
-      if (typeof raw.author === 'string' && raw.timestamp) continue;
-
-      // Extract date — old format uses `date: "2026-02-21"`
-      const dateStr = typeof raw.date === 'string'
-        ? raw.date.slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
-
-      const datePath = path.join(entriesPath, dateStr);
-      if (!fs.existsSync(datePath)) {
-        fs.mkdirSync(datePath, { recursive: true });
-      }
-
-      const author = resolveAuthor();
-      const timestamp = `${dateStr}T00:00:00.000Z`;
-      const id = generateLoreId(rootDir, dateStr, author, timestamp);
-
-      // Map old type to v2 type.
-      // v6.0: 'decision' is no longer a valid LoreType. v1 entries with
-      // type:'decision' are remapped to 'insight' on migration to preserve the
-      // timeline. The canonical decision record lives in .paradigm/decisions/.
-      // Forensic audit trail: when remapped, we add the `v6-migrated:from-decision`
-      // tag so users can recover the original type via paradigm_lore_search
-      // (mirrors migrate-assessments.ts's `assessment:decision` preservation).
-      const oldType = String(raw.type || 'agent-session');
-      const wasDecision = oldType === 'decision';
-      const v2Type = wasDecision
-        ? 'insight'
-        : (['agent-session', 'human-note', 'review', 'incident', 'milestone', 'insight'].includes(oldType)
-          ? oldType
-          : 'agent-session');
-
-      // Convert test_results to verification
-      let verification: LoreEntry['verification'] | undefined;
-      if (raw.test_results && typeof raw.test_results === 'object') {
-        const tr = raw.test_results as Record<string, number>;
-        verification = {
-          status: tr.total === tr.passed ? 'pass' : 'partial',
-          details: { tests: tr.total === tr.passed ? 'pass' : 'fail' },
-        };
-      }
-
-      const migrationTags = ['migrated', oldType];
-      if (wasDecision) migrationTags.push('v6-migrated:from-decision');
-
-      const v2Entry: LoreEntry = {
-        id,
-        type: v2Type as LoreEntry['type'],
-        timestamp,
-        author: 'unknown',
-        agent: { provider: 'unknown', model: 'unknown' },
-        title: String(raw.title || file.replace(/\.(yaml|lore)$/, '')),
-        summary: String(raw.summary || ''),
-        symbols_touched: Array.isArray(raw.symbols_touched) ? raw.symbols_touched : [],
-        files_modified: Array.isArray(raw.files_modified) ? raw.files_modified : undefined,
-        ...(verification ? { verification } : {}),
-        tags: migrationTags,
-      };
-
-      fs.writeFileSync(
-        path.join(datePath, `${id}.lore`),
-        yaml.dump(v2Entry, { lineWidth: -1, noRefs: true })
-      );
-      fs.unlinkSync(filePath);
-      migrated++;
-    } catch {
-      // Skip files that can't be parsed
-    }
-  }
-  return migrated;
+/** Number of legacy root-level entries a migration would move (pure read). */
+export function countLegacyEntries(rootDir: string): number {
+  return planLegacyMigration(rootDir, resolveAuthor).length;
 }
 
 /**
  * Generate a unique lore entry ID for a given date.
  * New format: L-{date}-{author}-{HHMMSS}-{counter}
  */
-export function generateLoreId(rootDir: string, dateStr: string, author: string, timestamp: string): string {
-  const sanitized = sanitizeAuthor(author);
-  const ts = new Date(timestamp);
-  const hh = String(ts.getUTCHours()).padStart(2, '0');
-  const mm = String(ts.getUTCMinutes()).padStart(2, '0');
-  const ss = String(ts.getUTCSeconds()).padStart(2, '0');
-  const timeStr = `${hh}${mm}${ss}`;
-  const prefix = `L-${dateStr}-${sanitized}-${timeStr}`;
-
-  const datePath = path.join(rootDir, LORE_DIR, ENTRIES_DIR, dateStr);
-
-  if (!fs.existsSync(datePath)) {
-    return `${prefix}-001`;
-  }
-
-  // Count existing entries with the same prefix
-  const existing = fs.readdirSync(datePath)
-    .filter(f => f.startsWith(prefix) && isLoreFile(f))
-    .map(f => {
-      const match = f.match(/-(\d{3})\.(yaml|lore)$/);
-      return match ? parseInt(match[1], 10) : 0;
-    });
-
-  const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
-  return `${prefix}-${String(next).padStart(3, '0')}`;
+export function generateLoreId(
+  rootDir: string,
+  dateStr: string,
+  author: string,
+  timestamp: string,
+  reserved?: ReadonlySet<string>,
+): string {
+  return allocateLoreId(rootDir, dateStr, sanitizeAuthor(author), timestamp, reserved);
 }
