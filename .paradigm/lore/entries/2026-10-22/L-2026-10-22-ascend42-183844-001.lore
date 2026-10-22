@@ -1,0 +1,46 @@
+id: L-2026-10-22-ascend42-183844-001
+type: agent-session
+timestamp: '2026-10-22T18:38:44.083Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'W4 phase A: Windows approvals by click for routine cards'
+summary: The founder chose dev approvals first. The win32 helper gained an approvals key in the Microsoft Software KSP (key.create/key.public/sign mode click, approve domain only). The kernel reuses HelperApprovalsKey with a clickClass flag over a long-lived win32 helper, and the broker signs cached-class decisions of permission/ask-user/plan cards as presence 'click'. The dev up kernel binds the key with a dev-root-signed row. A Claude write card was approved by click in the GUI and the file was written. Aegis approved with fixes, all folded in.
+symbols_touched:
+  - '#approval-broker'
+  - '#identity'
+  - '#gnomon-helper'
+  - '#dev-launch'
+decisions:
+  - id: W4A-click
+    decision: On Windows dev, routine cards (CLICK_KINDS permission/ask-user/plan, cached class) are decided by click, signed by a DPAPI software approvals key; everything else needs Windows Hello (phase B)
+    rationale: Founder chose dev approvals first; matches TD-2026-10-22-278 hybrid; a software key is never presence (kernel-side refusal)
+  - id: W4A-no-contract-bump
+    decision: '''click'' is not added to PRESENCE_VALUES'
+    rationale: Changing the enum moves the pinned clientApiId (a protocol bump); the presence enum is additive so 'click' already validates
+errors_encountered:
+  - description: Adding 'click' to PRESENCE_VALUES moved the pinned clientApiId and broke contract tests
+    resolution: Reverted; the enum is additive
+  - description: 'build-win32 failed EBUSY: the kernel''s long-lived approvals helper held the exe'
+    resolution: Stop the kernel before rebuilding the helper
+  - description: Committed a GUI change without updating the GUI bundle pin test (523ed66f)
+    resolution: Pin updated in ef24276e
+verification:
+  status: pass
+  details:
+    live: GUI click-approve of a Claude write card
+    tests: identity-hardware 31/31, win32-approvals 2/2 (real CNG), helper cargo 14/14, contracts 587/587
+tags:
+  - windows
+  - gnomon
+  - W4
+  - security
+linked_tasks:
+  - T-2026-10-22-007
+linked_commits:
+  - ef24276e
+git_context:
+  ref: ef24276e462de4416546dce235d9fd5afc69a1f5
+  branch: feat/gnomon-windows
+  dirty: true
