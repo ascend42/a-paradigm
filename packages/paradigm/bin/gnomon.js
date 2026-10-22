@@ -5,8 +5,8 @@
 // dependency's bins on a global install, so paradigm carries this shim. It NEVER runs Gnomon on the user's Node: it
 // resolves @a-company/gnomon and its @a-company/gnomon-darwin-<arch> platform package, installs (or upgrades) the
 // signed Gnomon.app from that package's zip into /Applications or ~/Applications (gnomon-app.js ensureApp: pinned
-// zip hash, codesign, atomic swap, a lock), then launches the INSTALLED app (gnomon-app.js launchApp). Node >= 20
-// syntax and node: built-ins only (paradigm's floor); nothing of the Node 24 kernel is ever imported here. Off macOS,
+// zip hash, codesign, atomic swap, a lock), then launches the INSTALLED app (gnomon-app.js launchApp). node:
+// built-ins only; nothing of the kernel is ever imported here (Gnomon runs on the app's bundled Node). Off macOS,
 // or when npm skipped the darwin platform package, it prints one plain line and exits non-zero: Gnomon runs on macOS
 // only in 8.0. Gnomon 8.0 ships for Apple silicon Macs only (TD-2026-10-22-310): @a-company/gnomon-darwin-arm64 is the
 // one platform package, and an Intel Mac gets UNSUPPORTED_INTEL. The arch is the MAC's, not Node's: an x64 Node under

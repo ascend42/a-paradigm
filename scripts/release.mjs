@@ -18,7 +18,7 @@
  *   node scripts/release.mjs              preflight, then changeset publish (exit code is changesets')
  *   node scripts/release.mjs --check      preflight only
  *
- * Node >= 20 (release.yml runs Node 20 on ubuntu); node: built-ins only.
+ * Node >= 24 (release.yml runs Node 24 on ubuntu); node: built-ins only.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';

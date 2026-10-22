@@ -289,7 +289,7 @@ describe('#gnomon-app-installer pins and constants', () => {
   });
 });
 
-describe('#gnomon-shim never loads Node 24 code and never runs Gnomon on the user\'s node', () => {
+describe('#gnomon-shim never loads kernel code and never runs Gnomon on the user\'s node', () => {
   const sources = ['gnomon.js', 'gnomon-app.js'].map((f) => [f, readFileSync(path.join(BIN, f), 'utf8')] as const);
 
   it('imports only node: built-ins and its sibling, no dynamic import, no package CLI on process.execPath', () => {
@@ -309,20 +309,8 @@ describe('#gnomon-shim never loads Node 24 code and never runs Gnomon on the use
     expect(sources[0][1]).not.toMatch(/ALLOW_UNSIGNED_FOR_TESTS/);
   });
 
-  /** the oldest node on this machine below 24 (nvm), or GNOMON_SHIM_OLD_NODE */
-  function oldNode(): string | null {
-    if (process.env.GNOMON_SHIM_OLD_NODE) return process.env.GNOMON_SHIM_OLD_NODE;
-    const nvm = path.join(os.homedir(), '.nvm', 'versions', 'node');
-    if (!existsSync(nvm)) return null;
-    const v = readdirSync(nvm).filter((n) => /^v2[0-3]\./.test(n)).sort((a, b) => Number(a.split('.')[0]!.slice(1)) - Number(b.split('.')[0]!.slice(1)))[0];
-    return v ? path.join(nvm, v, 'bin', 'node') : null;
-  }
-
-  it.runIf(darwin)('end to end on a pre-24 node: installs, then a verb runs the app\'s wrapper --cli with a scrubbed env and bare gnomon opens the app', () => {
-    const node = oldNode() ?? process.execPath;
-    const major = Number(spawnSync(node, ['-p', 'process.versions.node.split(".")[0]'], { encoding: 'utf8' }).stdout.trim());
-    if (node === process.execPath) process.stderr.write('gnomon-shim-install: no node < 24 found (set GNOMON_SHIM_OLD_NODE); ran on this node\n');
-    else expect(major).toBeLessThan(24);
+  it.runIf(darwin)('end to end: installs, then a verb runs the app\'s wrapper --cli with a scrubbed env and bare gnomon opens the app', () => {
+    const node = process.execPath;
     const { zip, sha256 } = fakeAppZip('8.0.0');
     // a paradigm install tree whose gnomon carries a release stamp pinning this zip
     const root = tmp();

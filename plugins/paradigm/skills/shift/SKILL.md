@@ -78,7 +78,7 @@ entries when 3+ source files are modified in a session.
 
 ## Error Handling
 
-- If `npx` fails, check if Node.js >= 18 is installed
+- If `npx` fails, check if Node.js >= 24 is installed
 - If `paradigm shift` fails mid-way, read the error and help fix it
 - If specific steps fail (e.g., scan finds nothing), note it but continue
 - Always run doctor at the end even if earlier steps had issues

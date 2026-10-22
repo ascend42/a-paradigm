@@ -5,7 +5,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   clean: true,
-  target: 'es2022',
+  target: 'node24',
   treeshake: true,
   minify: true,
   banner: {

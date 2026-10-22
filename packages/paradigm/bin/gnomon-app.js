@@ -1,8 +1,8 @@
 // @symbol #gnomon-app-installer
 //
 // Install and launch the signed Gnomon.app for paradigm's `gnomon` shim (T-2026-10-21-031, TD-2026-10-21-758;
-// 8.0 M4). Node >= 20 syntax and node: built-ins ONLY: this file runs on whatever Node the user has, so it never
-// imports @a-company/gnomon (a Node 24 kernel). Gnomon itself only ever runs on the app's bundled Node.
+// 8.0 M4). node: built-ins ONLY: this file runs on the user's Node (>= 24, paradigm's floor), and it never
+// imports @a-company/gnomon (the kernel). Gnomon itself only ever runs on the app's bundled Node.
 //
 //   1. pin: the sha256 of this Mac's arch's Gnomon.app.zip (the shim passes macArch(), so arm64 under Rosetta too; only
 //      arm64 ships in 8.0, TD-2026-10-22-310, so an x64 pin is `unpinned`) is read from @a-company/gnomon's RELEASE build stamp

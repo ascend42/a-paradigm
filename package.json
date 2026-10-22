@@ -37,11 +37,10 @@
     "publish:all": "npm publish --workspace=@a-company/paradigm --workspace=@a-company/paradigm-runtime --workspace=@a-company/university --workspace=@a-company/sentinel --workspace=@a-company/sentinel-web --workspace=@a-company/purpose-core --workspace=@a-company/portal-core --workspace=@a-company/portal-sdk --workspace=@a-company/portal-manager --workspace=@a-company/portal-viewer --workspace=@a-company/premise-core --workspace=@a-company/probe-core",
     "publish:gnomon": "node scripts/publish-gnomon.mjs",
     "release:check": "node scripts/release.mjs --check",
-    "test": "npm run test:cli && npm run test:warpline && npm run test:gnomon:gated",
+    "test": "npm run test:cli && npm run test:warpline && npm run test:gnomon",
     "test:cli": "npm run test --workspace=@a-company/paradigm",
     "test:warpline": "npm run build --workspace=@a-company/warpline && npm run test --workspace=@a-company/warpline",
     "test:gnomon": "npm run build:gnomon && npm run test --workspace=@a-company/gnomon-contracts && npm run test --workspace=@a-company/gnomon-mod-sdk && npm run test --workspace=@a-company/gnomon-local && npm run test --workspace=@a-company/gnomon-gui && npm run test --workspace=@a-company/gnomon",
-    "test:gnomon:gated": "node scripts/gnomon-node-gate.mjs test:gnomon",
     "prepublishOnly": "node scripts/pre-publish-check.mjs",
     "gnomon:gate-publish": "node scripts/gate-gnomon-publish.mjs"
   },
@@ -64,7 +63,7 @@
   },
   "homepage": "https://github.com/ascend42/a-paradigm#readme",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",

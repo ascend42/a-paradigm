@@ -1,7 +1,7 @@
 version: "2.0"
 description: >-
   GitHub Actions workflows for the monorepo. ci.yml builds and tests the 7.x
-  packages on Node 20/22 (plus a blocking Warpline job); release.yml runs
+  packages on Node 24 (plus a blocking Warpline job); release.yml runs
   changesets on main; warpline-guard.yml is the advisory Warpline Guard
   self-test; gnomon.yml is the Paradigm 8.0 Gnomon CI. All of them install
   through .github/actions/install-deps.
@@ -9,9 +9,9 @@ description: >-
 components:
   ci-workflow:
     description: >-
-      ci.yml: root build + test + typecheck on Node 20/22 (ubuntu), a blocking
-      Warpline test job, and a publish dry run on PRs. Gnomon is not part of it
-      (G-MIG-01).
+      ci.yml: root build + test + typecheck on Node 24 (ubuntu), a blocking
+      Warpline test job, and a publish dry run on PRs. Root `npm test` runs the
+      Gnomon suites too (8.0 M3); Node 24 is the floor for every package.
     path: ci.yml
     tags: [ci]
 

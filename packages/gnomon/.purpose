@@ -1009,6 +1009,8 @@ components:
       sync removes it, the publish gate, the release preflight, prepack and
       seal-npm-release cover arm64 only, and release-darwin refuses --arch
       x64 without --experimental-x64 (the x64 path is kept, unpublished).
+      Node floor: engines node >=24.0.0, the same as paradigm and every other
+      package (8.0 is Node 24 everywhere; scripts/gnomon-node-gate.mjs is gone).
       Lockstep: scripts/sync-gnomon-versions.mjs (repo root; --check for CI)
       makes the platform package version, this optional dep and
       @a-company/paradigm's exact dependency follow this package's version;

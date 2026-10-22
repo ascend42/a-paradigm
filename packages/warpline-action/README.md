@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0 # the oracle needs the merge-base locally
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       # Until the action is published, consume it from a checkout of this
       # monorepo (see "Consuming the action", below). Once published:
       # uses: ascend42/warpline-action@v0

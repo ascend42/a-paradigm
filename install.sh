@@ -33,13 +33,13 @@ echo -e "${BLUE}Checking prerequisites...${NC}"
 
 if ! command -v node &> /dev/null; then
     echo -e "${RED}❌ Node.js is not installed${NC}"
-    echo "Please install Node.js 18+ from https://nodejs.org"
+    echo "Please install Node.js 24+ from https://nodejs.org"
     exit 1
 fi
 
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "${RED}❌ Node.js version 18+ required (found v$NODE_VERSION)${NC}"
+if [ "$NODE_VERSION" -lt 24 ]; then
+    echo -e "${RED}❌ Node.js version 24+ required (found v$NODE_VERSION)${NC}"
     exit 1
 fi
 

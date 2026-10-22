@@ -68,7 +68,7 @@ Dynamic: [Minimal context] → [Need #checkout info?] → [Query MCP] → [Conti
 Before setting up MCP, ensure you have:
 
 1. **A Paradigm project** — Run `paradigm shift` if you haven't already
-2. **Node.js 18+** — Required for the MCP server
+2. **Node.js 24+** — Required for the MCP server
 3. **A supported AI client** — Claude Code, Cursor, Claude Desktop, Continue, or Cline
 
 > **Claude Code users:** The fastest path is the Claude Code plugin — it handles both enforcement hooks and MCP in one step. See [Claude Code Plugin](#claude-code-plugin) below. If you prefer manual config without the plugin, see [Claude Code (Manual)](#claude-code-manual) in the Manual Setup section.

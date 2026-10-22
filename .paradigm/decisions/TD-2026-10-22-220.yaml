@@ -1,0 +1,21 @@
+id: TD-2026-10-22-220
+timestamp: '2026-10-22T08:59:02.460Z'
+title: '8.0 README and platform floors: root README is the source, parked products listed, macOS 15 floor'
+decision: >-
+  (1) The root README.md is the single source; packages/paradigm copies it at prepack so GitHub and npm match. (2) The
+  README has a short Parked section (conductor, vscode, sentinel-rs, sentinel-web, runtime, warpline-action, site). (3)
+  Gnomon's macOS floor is 15 everywhere: preflight, the helper build target, and the README. Sessions already refuse
+  below 15. (4) Node 24+ required everywhere (founder: "hard switch to 24 as long as it's safe").
+rationale: >-
+  The README audit (T-2026-10-22-003) found 76 claims: 45 true, 20 stale, 11 false; the two READMEs had drifted;
+  preflight (13), helper (14) and sessions (15) disagreed on the macOS floor; Node 20 is EOL and gnomon needed 24.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+status: active
+tags:
+  - readme
+  - '8.0'
+  - release
+  - platform

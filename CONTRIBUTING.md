@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Paradigm! This guide will help yo
 
 ### Prerequisites
 
-- Node.js 18 or higher
+- Node.js 24 or higher
 - npm 9 or higher
 
 ### Getting Started

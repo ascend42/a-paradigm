@@ -1,7 +1,7 @@
 # Gnomon (Paradigm 8.0) — PR-0 CI (research 29 §3; spec §16 rule, §19.1).
 # Platform-independent tests run on Windows from day one (A23-5). Since 8.0 M3
 # (T-2026-10-21-030) Gnomon is part of the root build/test scripts too (ci.yml,
-# Node 24 leg); this workflow keeps the cross-OS matrix through build:gnomon /
+# Node 24, the floor for every package); this workflow keeps the cross-OS matrix through build:gnomon /
 # test:gnomon on Node 24 only.
 name: Gnomon
 

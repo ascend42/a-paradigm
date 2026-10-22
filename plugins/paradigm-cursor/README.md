@@ -97,7 +97,7 @@ Most teams use both: the plugin for global enforcement, `paradigm shift` for pro
 ## Requirements
 
 - Cursor 2.5 or later (for hook support)
-- Node.js >= 18
+- Node.js >= 24
 - `@a-company/paradigm` npm package (auto-installed via `npx`)
 
 ## Links
