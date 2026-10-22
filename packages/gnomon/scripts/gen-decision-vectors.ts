@@ -94,6 +94,16 @@ add('F2: equal floats sign', A, batch('install', 'install', [typed(1.5), inst()]
 add('F2: an integer against a different float is refused', A, batch('install', 'install', [typed(2), inst()], { intentText: intentWith(2.5) }));
 add('read paths are listed in full on the uncompacted line', A, batch('install', 'install', [trust(), cap({ read: ['/Users/x/notes', '/Users/x/docs'] }), inst()]));
 add('read paths are only counted on a compacted line', A, batch('install', 'install', [trust(), cap({ capabilities: many, read: ['/Users/x/notes', '/Users/x/docs'] }), inst()]));
+// 8.0:loops (gnomon-loops.md §3.1): a loop-trust signs exactly one loop.trusted row (needs a helper rebuilt with this table)
+const looped = (o: R = {}) => ({ kind: 'loop.trusted', createdAt: T, loopId: 'flow-health', scope: 'repo', repoKey: H2, contentHash: MH, coreHash: MH2, closureDigest: PK, cardId: C, by: ME, ...o });
+add('loop-trust: one loop.trusted row', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped()]));
+add('C3: a loop-trust with no row', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', []));
+add('C3: a loop-trust never signs a grant row', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped(), trust()]));
+add('C3: a loop.trusted row without its content hash', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ contentHash: undefined })]));
+add('C3: a loop.trusted row for another card', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ cardId: C2 })]));
+add('C3: a loop.trusted row with an unknown field', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ envelopeId: 'env-1' })]));
+add('C3: a loop.trusted row with a malformed repo key', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ repoKey: 'sha256:xyz' })]));
+add('C3: a loop.trusted row with an unknown scope', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ scope: 'global' })]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
   note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',

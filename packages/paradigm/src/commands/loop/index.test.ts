@@ -5,7 +5,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { loopNewCommand, loopValidateCommand, loopListCommand } from './index.js';
+import { loopNewCommand, loopValidateCommand, loopListCommand, loopBuiltinCommand, runLoopBuiltin, LOOP_BUILTIN_NAMES } from './index.js';
+import { LOOP_BUILTINS } from '../../../../gnomon/src/loops/schema.js';
+import { spawnSync } from 'child_process';
 import { LOOP_EXAMPLE_NAMES } from '../../../../paradigm-mcp/src/utils/loop-files.js';
 
 let root: string;
@@ -143,5 +145,46 @@ describe('paradigm loop list', () => {
     stdout = '';
     await loopListCommand({ root, json: true });
     expect(lastJson().loops[0]).toMatchObject({ id: 'watcher', ok: true, compiled: 'fresh', triggers: ['file.changed $example-flow'] });
+  });
+});
+
+describe('paradigm loop builtin (#loop-check runs it inside the loop-check sandbox)', () => {
+  it('names exactly the schema builtins', () => {
+    expect([...LOOP_BUILTIN_NAMES]).toEqual([...LOOP_BUILTINS]);
+  });
+
+  it('purpose-validate wraps the MCP handler: a broken .purpose fails with a count; --json prints one object; exit 1', async () => {
+    fs.writeFileSync(path.join(root, '.purpose'), 'name: ok\ndescription: fine\n');
+    fs.mkdirSync(path.join(root, 'bad'));
+    fs.writeFileSync(path.join(root, 'bad', '.purpose'), 'components: [unclosed\n');
+    await loopBuiltinCommand('paradigm.purpose-validate', { root, json: true });
+    const r = lastJson();
+    expect(r).toMatchObject({ builtin: 'paradigm.purpose-validate', ok: false });
+    expect(r.failed).toBeGreaterThanOrEqual(1);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('flow-check with no flows is an error (exit 2), never a pass', async () => {
+    const r = await runLoopBuiltin('paradigm.flow-check', root);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/No flows/);
+    await loopBuiltinCommand('paradigm.flow-check', { root, json: true });
+    expect(process.exitCode).toBe(2);
+  });
+
+  it('git.clean counts dirty paths; a clean tree passes', async () => {
+    const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', HOME: root };
+    expect(spawnSync('git', ['init', '-q'], { cwd: root, env }).status).toBe(0);
+    fs.writeFileSync(path.join(root, 'x.txt'), 'x');
+    expect(await runLoopBuiltin('git.clean', root)).toMatchObject({ ok: false, failed: 1, result: { dirty: ['?? x.txt'] } });
+    fs.writeFileSync(path.join(root, '.gitignore'), '*\n');
+    expect(await runLoopBuiltin('git.clean', root)).toMatchObject({ ok: true, failed: 0, passed: 1 });
+  });
+
+  it('refuses an unknown builtin and bad --args with exit 2', async () => {
+    expect(await runLoopBuiltin('rm.rf', root)).toMatchObject({ ok: false, error: expect.stringContaining('unknown builtin') });
+    await loopBuiltinCommand('paradigm.ripple', { root, json: true, args: '[1]' });
+    expect(process.exitCode).toBe(2);
+    expect(lastJson().error).toContain('--args');
   });
 });

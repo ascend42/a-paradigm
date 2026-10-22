@@ -288,25 +288,58 @@ export interface SessionEnvInput {
   path: string | null;
 }
 
-export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, string>; envKeys: string[] } {
+/** The allowlist, the scrub, the OS identity and the PATH: the base every kernel child env is built on. */
+function scrubbedChildEnv(from: Readonly<Record<string, string | undefined>>, identity: SessionIdentity | null, pathValue: string | null): Record<string, string> {
   const env: Record<string, string> = {};
   for (const k of [...ENV_ALLOWLIST, ...WINDOWS_EXTRA]) {
-    const v = i.from[k];
+    const v = from[k];
     if (typeof v === 'string' && !isScrubbed(k)) env[k] = v;
   }
-  if (i.identity) {
+  if (identity) {
     for (const k of IDENTITY_KEYS) delete env[k];
-    if (i.identity.user) {
-      env.USER = i.identity.user;
-      env.LOGNAME = i.identity.user;
+    if (identity.user) {
+      env.USER = identity.user;
+      env.LOGNAME = identity.user;
     }
-    if (i.identity.shell) env.SHELL = i.identity.shell;
-    if (i.identity.tmpdir) env.TMPDIR = i.identity.tmpdir;
+    if (identity.shell) env.SHELL = identity.shell;
+    if (identity.tmpdir) env.TMPDIR = identity.tmpdir;
   }
-  if (i.path !== null) env.PATH = i.path;
+  if (pathValue !== null) env.PATH = pathValue;
+  return env;
+}
+
+export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, string>; envKeys: string[] } {
+  const env = scrubbedChildEnv(i.from, i.identity, i.path);
   env.GNOMON_HSID = i.hsid;
   env.GNOMON_SOCK = i.sock;
   env.GNOMON_SESSION_KEY = i.sessionKeyPath;
   for (const [k, v] of Object.entries(i.inject ?? {})) env[k] = v;
+  return { env, envKeys: Object.keys(env).sort() };
+}
+
+export interface CheckEnvInput {
+  /** the daemon's env (only allowlisted names are read) */
+  from: Readonly<Record<string, string | undefined>>;
+  identity: SessionIdentity | null;
+  /** the check PATH (sessionPathFor / defaultSessionPath); null (win32): the allowlist's */
+  path: string | null;
+  /** the check's private HOME and TMPDIR (inside its copy): never the user's home */
+  home: string;
+  tmpdir: string;
+  /** extra names (NO_COLOR …); a scrubbed name is never injected */
+  inject?: Readonly<Record<string, string>>;
+}
+
+/**
+ * #loop-check (docs/specs/gnomon-loops.md §4 "Sandboxes", G-SEC-02): a loop check child's env. The same allowlist,
+ * scrub and OS identity as a session, HOME and TMPDIR replaced by the check's private dirs, and NO kernel names at
+ * all (no GNOMON_HSID / GNOMON_SOCK / GNOMON_SESSION_KEY: a check talks to nothing). `inject` never re-adds a
+ * scrubbed name (NODE_OPTIONS, ANTHROPIC_*, GNOMON_* …).
+ */
+export function buildCheckEnv(i: CheckEnvInput): { env: Record<string, string>; envKeys: string[] } {
+  const env = scrubbedChildEnv(i.from, i.identity, i.path);
+  env.HOME = i.home;
+  env.TMPDIR = i.tmpdir;
+  for (const [k, v] of Object.entries(i.inject ?? {})) if (!isScrubbed(k)) env[k] = v;
   return { env, envKeys: Object.keys(env).sort() };
 }

@@ -3381,11 +3381,137 @@ components:
       readShebang. The shared INTERPRETER_DENYLIST gained cmd, powershell,
       pwsh, wscript, cscript, mshta, arch, script, stdbuf, setsid, chroot,
       sandbox-exec and busybox; loop-choice joined NEVER_STANDING_KINDS.
+      LP2: compiled.sourceHash = loopContentHash(the parsed YAML), the hash a
+      caller's pin names; src/loops/compiled.ts validateCompiledLoop is the
+      kernel's re-validation of a .loop.json (decompile, validateLoop, compile
+      again with the file's own budgets/flowPaths/interpreters, byte compare;
+      protected and callsResolved are the kernel's own).
     path: src/loops/schema.ts
     type: module
     tags: [gnomon, loops, paradigm-8, security]
     tests:
       - test/loop-schema.test.ts
+
+  loop-registry:
+    description: >-
+      #loop-registry (docs/specs/gnomon-loops.md §3.1, §4, §5; build plan LP2)
+      in src/kernel/loops/{registry,hash,trust,wire}.ts and src/cli/loop-cli.ts.
+      Registry: watches compiled .paradigm/loops/*.loop.json in known repos
+      (from kernel-signed session.open{cwd}, live sessions, or a human loop
+      request naming the repo) and <home>/loops/*.loop.json (personal; refused
+      when a symlink, group/world-writable or another user's); lstat on every
+      dir and file, symlinks refused, size-capped; every file re-validated
+      (validateCompiledLoop), never trusted. Content hash (hash.ts) = sha256
+      of canonicalJson {def: sha256(canonicalJson(parsed file)), argv: per run
+      check argv0 as resolveArgv0 finds it (path word vs repo root, bare name
+      in <repo>/node_modules/.bin then the session PATH) with realpath+sha256
+      and its shebang interpreter (`/usr/bin/env node` = the runner's node,
+      process.execPath), every file an argv word names in or out of the repo,
+      calls: each pin + the callee's CURRENT hash, closure: digest of the
+      gate-class files (manifest/layers.ts gateClassPathRule file/test/code/env
+      rules + tsconfig*) in the repo root and on the way to each argv path};
+      coreHash omits the closure. The kernel's protected set adds callees' and
+      closure paths. State is a fold of kernel-signed loop.trusted|untrusted|
+      closure.changed|paused|resumed|deleted rows keyed {loopId, scope,
+      repoKey}: untrusted, trusted, waiting-trust, paused, deleted, invalid. A
+      trusted loop whose hash moves gets ONE loop.paused{content-changed}; a
+      closure-only move asks the origin (gitClosureOrigin: uncommitted or
+      Gnomon-Session/Loop-Authored-By = agent, Gnomon-Loop or
+      @gnomon.invalid = loop, else human): loop/agent write
+      loop.closure.changed{by} + loop.paused{closure-changed}, a human commit
+      only loop.closure.changed{by:human} and the trust moves to the new hash.
+      resolveCall(): callee in scope, TRUSTED at its current hash, pin =
+      its trusted sourceHash. Trust (trust.ts): request.loop.trust{loopId,
+      scope, repo|repoKey, contentHash?} raises ONE loop-trust card (root
+      class, handOnly, never always/standing) rendering every node, argv0
+      realpath+sha and interpreter, argv files, tools, model, triggers,
+      budgets, goal/protected inputs, land, call pins, closure, and a line
+      diff vs the trusted version's snapshot (<home>/loop-trust/<hex>.json);
+      allow re-checks the hash under beginRootDecision and signs ONE
+      loop.trusted{loopId, scope, repoKey, contentHash, coreHash,
+      closureDigest, sourceHash, cardId, by} row with the root key in the same
+      touch (decision-batch.ts and Protocol.swift row table `loop-trust`); the
+      effect appends it as a kernel row with rootSig. request.loop.untrust is a
+      tightening (no presence, loop.untrusted{by}); request.loop.delete writes
+      loop.deleted (a personal file is removed; repo files stay);
+      pause/resume/run refuse not-implemented (step 5). Wiring: one wireLoops()
+      in daemon.ts, one request.loop.* block in dispatch.ts, status.loops for
+      the human. CLI: gnomon loop list|show|trust|untrust|trust-status.
+    path: src/kernel/loops/registry.ts
+    type: module
+    tags: [gnomon, loops, paradigm-8, security]
+    gates: [^loop-trusted]
+    signals: []
+    tests:
+      - test/loop-registry.test.ts
+      - test/loop-compiled.test.ts
+      - test/loop-cli.test.ts
+      - test/decision-batch.test.ts
+
+  loop-check:
+    description: >-
+      #loop-check (docs/specs/gnomon-loops.md §2 check nodes, §4 Sandboxes and
+      Evidence, §7; build plan step 4; TD-2026-10-22-129: the loops' own
+      read-only profile in place of M2.3's gnomon-oracle, G:1596). Profile:
+      src/kernel/sandbox/loop-check.ts (LOOP_CHECK_PROFILE, registry
+      LOOP_CHECK_BACKENDS = {darwin}; win32 is absent for W5 and, like linux,
+      refuses sandbox-unavailable; darwinFloor macOS 15+ and SIP;
+      assertNoProtectedGrant against $HOME, the Gnomon home, keys/ and
+      LOOP_CHECK_CREDENTIAL_STORES) and src/platform/darwin/loop-check-sbpl.ts
+      (default-deny: exec literals of the kernel node, the hashed argv0 and its
+      shebang interpreter only, fork allowed; read the run dir, the linked
+      node_modules (write-denied), the Node runtime and the pinned paradigm CLI
+      package; write the run dir only; NO network rule; the Gnomon home and
+      credential stores read/write-denied last). Executor:
+      src/kernel/loops/check-exec.ts runCheck. git ls-files -co
+      --exclude-standard (core.fsmonitor off) copied into the KERNEL-OWNED
+      run dir <home>/loop-work/check-<runId>/{repo,home,tmp} (0700, under the
+      Gnomon home, never inside the repo; the profile denies the home and
+      re-allows only the run dir after it). Every parent lstat'd (no links),
+      files read through O_NOFOLLOW fds for at most their lstat size, then
+      the parent chain (dev:ino), file identity and realpath containment
+      re-checked: a swap refuses the whole copy (Aegis step-4 review). Caps
+      50 000 files, half a gigabyte, 500 node_modules links (copy-too-large);
+      node_modules linked read-only only when its realpath is inside the repo
+      (else copy-failed); env from runner/env.ts buildCheckEnv (G-SEC-02);
+      argv exec'd directly in its own process group, timeoutSec then SIGTERM,
+      SIGKILL after 2 s and a group SIGKILL after every exit, all through
+      process-control; the tree is polled (a snapshot every half second) and descendants
+      that left the group (setsid) are SIGKILLed by pid + start witness
+      (escapedKilled). argv0 (copy-mapped inside the repo) re-hashed against
+      its pin; a script argv0 needs a pinned, unchanged interpreter
+      (src/kernel/loops/shebang.ts, the one shebang parser shared with the
+      registry hash); the paradigm CLI pin is a digest of its whole dist dir
+      (pinParadigmCli, dirDigest). Builtins run as node <paradigm cli> loop
+      builtin <name> --json and need a JSON verdict for that builtin: exit 2
+      or no valid verdict is error builtin-error. A json rule's value is
+      bounded (256 chars) and secret-scanned. Residual: node_modules
+      dependencies of checks are not pinned (8.1: pin or ship builtins in
+      Gnomon). Verdict: check-parse.ts pass rule (exit; tap, junit, tsc
+      with failed as the allowed maximum; json JSONPath with == != < <= > >=);
+      crash, timeout, spawn failure, sandbox refusal, unparseable report or
+      output past 8 MiB is error. Evidence: stdout and stderr tails of 64 KiB
+      through secret-scan.ts (AWS keys and secrets, GitHub, GitLab, npm,
+      Stripe, Slack, Anthropic, OpenAI and Google tokens, JWTs, URL passwords, PEM private keys incl. cut blocks, bearer and
+      generic api_key/secret/token/password assignments), labelled private and
+      sensitive, envKeys names only. The run dir is removed after pass/fail,
+      kept on error with a retention note; sweepCheckCopies removes kept dirs
+      past the window. Falsifiers: G-SBX-07, G-SBX-04..06 and G-SEC-02 against
+      this profile (test/loop-check-sandbox.test.ts, darwin); parsers,
+      scanner, env, registry and copy everywhere (test/loop-check.test.ts).
+    path: src/kernel/loops/check-exec.ts
+    type: module
+    tags: [gnomon, loops, sandbox, paradigm-8, security]
+    tests:
+      - test/loop-check.test.ts
+      - test/loop-check-sandbox.test.ts
+    anchors:
+      - src/kernel/loops/check-exec.ts
+      - src/kernel/loops/check-parse.ts
+      - src/kernel/loops/secret-scan.ts
+      - src/kernel/loops/shebang.ts
+      - src/kernel/sandbox/loop-check.ts
+      - src/platform/darwin/loop-check-sbpl.ts
 
   trace-capture:
     description: >-

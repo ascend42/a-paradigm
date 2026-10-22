@@ -232,7 +232,11 @@ export type CompiledNode =
 
 export interface CompiledLoop {
   schema: typeof LOOP_SCHEMA;
-  compiled: { version: typeof LOOP_COMPILED_VERSION; flowsResolved: boolean; callsResolved: boolean };
+  /**
+   * `sourceHash` (LP2): loopContentHash of the PARSED source definition (the YAML), the hash a caller's `id@hash8`
+   * pin names. The kernel never sees the YAML, so it resolves a pin against the TRUSTED callee's sourceHash.
+   */
+  compiled: { version: typeof LOOP_COMPILED_VERSION; flowsResolved: boolean; callsResolved: boolean; sourceHash?: string };
   id: string;
   title?: string;
   scope: 'repo' | 'personal';
@@ -1177,7 +1181,7 @@ export function compileLoop(input: unknown, opts: LoopCompileOptions = {}): Loop
   const callsResolved = callTargets(d).length === 0 || !!known;
   const compiled: CompiledLoop = {
     schema: LOOP_SCHEMA,
-    compiled: { version: LOOP_COMPILED_VERSION, flowsResolved, callsResolved },
+    compiled: { version: LOOP_COMPILED_VERSION, flowsResolved, callsResolved, sourceHash: loopContentHash(input) },
     id: d.id,
     ...(d.title !== undefined ? { title: d.title } : {}),
     scope: opts.scope ?? 'repo',

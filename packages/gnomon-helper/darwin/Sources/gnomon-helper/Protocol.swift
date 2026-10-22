@@ -338,6 +338,18 @@ func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
         return kinds == ["grant.uninstall"] ? nil : "an uninstall signs exactly one grant.uninstall"
     case "voice.enrol":
         return kinds == ["voice.enrol"] ? nil : "a voice enrolment signs exactly one enrol row"
+    case "loop-trust":
+        // 8.0:loops (gnomon-loops.md §3.1): a loop trust signs exactly one loop.trusted row naming the loop and its hash
+        guard kinds == ["loop.trusted"] else { return "a loop-trust signs exactly one loop.trusted row" }
+        let r = rows[0]
+        let fields: Set<String> = ["kind", "loopId", "scope", "repoKey", "contentHash", "coreHash", "closureDigest", "sourceHash", "cardId", "by", "createdAt"]
+        for k in r.keys.sorted() where !fields.contains(k) { return "a loop.trusted row never carries \(String(k.prefix(40)))" }
+        func isHash(_ v: Any?) -> Bool { (v as? String).map { $0.range(of: "^sha256:[0-9a-f]{64}$", options: .regularExpression) != nil } ?? false }
+        guard let l = r["loopId"] as? String, l.range(of: "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", options: .regularExpression) != nil,
+              let sc = r["scope"] as? String, sc == "repo" || sc == "personal", isHash(r["repoKey"]), isHash(r["contentHash"]) else { return "a loop.trusted row names its loop, scope, repo and content hash" }
+        for k in ["coreHash", "closureDigest"] where r[k] != nil && !isHash(r[k]) { return "a loop.trusted \(k) is sha256:<64 hex>" }
+        if let v = r["sourceHash"], !((v as? String).map { $0.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil } ?? false) { return "a loop.trusted sourceHash is 64 hex" }
+        return nil
     case "mod.mcp.config", "api-token", "peer-pair", "grant":
         return kinds.isEmpty ? nil : "a \(cardKind) decision signs only its decision row"
     default:
@@ -482,6 +494,9 @@ func rowShown(_ r: Json, compactCaps: Bool) -> String? {
     case "voice.enrol":
         guard let sp = s("speakerId") else { return nil }
         return "voice enrol \(sp)"
+    case "loop.trusted":
+        guard let l = s("loopId"), let sc = s("scope"), let rk = s("repoKey"), let h = s("contentHash") else { return nil }
+        return "trust loop \(sc)/\(l) repo \(rk.dropFirst(7).prefix(12)) \(h.prefix(19))"
     default:
         return nil
     }

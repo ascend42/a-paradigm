@@ -160,3 +160,131 @@ export async function loopListCommand(options: LoopCliOptions = {}): Promise<voi
   }
   if (loops.some((l) => l.compiled !== 'fresh' && l.ok)) dim('Run paradigm loop validate --all to refresh the compiled JSON.');
 }
+
+/** The builtins a loop check node may name (#loop-schema LOOP_BUILTINS); Gnomon runs them through this command. */
+export const LOOP_BUILTIN_NAMES = [
+  'paradigm.flow-check', 'paradigm.flow-affected', 'paradigm.ripple', 'paradigm.purpose-validate',
+  'paradigm.drift', 'paradigm.reindex', 'git.clean',
+] as const;
+export type LoopBuiltinName = (typeof LOOP_BUILTIN_NAMES)[number];
+
+export interface LoopBuiltinResult {
+  builtin: string;
+  ok: boolean;
+  passed: number;
+  failed: number;
+  error?: string;
+  result?: unknown;
+}
+
+const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+/** Run one builtin against `root` through the existing MCP handlers (never reimplemented) and count pass/fail. */
+export async function runLoopBuiltin(name: string, root: string, args: Record<string, unknown> = {}): Promise<LoopBuiltinResult> {
+  if (!(LOOP_BUILTIN_NAMES as readonly string[]).includes(name)) {
+    return { builtin: name, ok: false, passed: 0, failed: 0, error: `unknown builtin (one of: ${LOOP_BUILTIN_NAMES.join(', ')})` };
+  }
+  const done = (passed: number, failed: number, result: unknown): LoopBuiltinResult => ({ builtin: name, ok: failed === 0, passed, failed, result });
+  const errorOf = (r: unknown): string | null => (r && typeof r === 'object' && typeof (r as { error?: unknown }).error === 'string' ? (r as { error: string }).error : null);
+  try {
+    if (name === 'git.clean') {
+      const { spawnSync } = await import('child_process');
+      const g = spawnSync('git', ['-c', 'core.fsmonitor=false', 'status', '--porcelain'], { cwd: root, encoding: 'utf8' });
+      if (g.status !== 0) return { builtin: name, ok: false, passed: 0, failed: 0, error: `git status failed: ${(g.stderr || String(g.error ?? '')).trim().slice(0, 300)}` };
+      const lines = g.stdout.split('\n').filter(Boolean);
+      return done(lines.length ? 0 : 1, lines.length, { dirty: lines });
+    }
+    const { loadProjectContext } = await import('../../../../paradigm-mcp/src/utils/index-loader.js');
+    const ctx = await loadProjectContext(root);
+    let text: string;
+    switch (name as LoopBuiltinName) {
+      case 'paradigm.flow-check':
+      case 'paradigm.flow-affected': {
+        const { handleFlowTool } = await import('../../../../paradigm-mcp/src/tools/flows.js');
+        text = (await handleFlowTool(name === 'paradigm.flow-check' ? 'paradigm_flow_check' : 'paradigm_flows_affected', args, ctx)).text;
+        break;
+      }
+      case 'paradigm.ripple': {
+        const { handleRippleTool } = await import('../../../../paradigm-mcp/src/tools/ripple.js');
+        text = (await handleRippleTool('paradigm_ripple', args, ctx)).text;
+        break;
+      }
+      case 'paradigm.purpose-validate': {
+        const { handlePurposePortalTool } = await import('../../../../paradigm-mcp/src/tools/purpose-portal.js');
+        text = (await handlePurposePortalTool('paradigm_purpose_validate', args, ctx, async () => {})).text;
+        break;
+      }
+      case 'paradigm.drift': {
+        const { handleAspectGraphTool } = await import('../../../../paradigm-mcp/src/tools/aspect-graph.js');
+        // a check never heals: report drift, write nothing
+        text = (await handleAspectGraphTool('paradigm_aspect_drift', { ...args, autoHeal: false }, ctx)).text;
+        break;
+      }
+      default: {
+        const { handleReindexTool } = await import('../../../../paradigm-mcp/src/tools/reindex.js');
+        text = (await handleReindexTool('paradigm_reindex', args, ctx, () => loadProjectContext(root))).text;
+      }
+    }
+    let r: Record<string, unknown>;
+    try {
+      r = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return { builtin: name, ok: false, passed: 0, failed: 0, error: text.slice(0, 300) };
+    }
+    const e = errorOf(r);
+    if (e) return { builtin: name, ok: false, passed: 0, failed: 0, error: e, result: r };
+    switch (name as LoopBuiltinName) {
+      case 'paradigm.flow-check':
+        return done(num(r.validFlows), num(r.invalidFlows), r);
+      case 'paradigm.flow-affected':
+        return done(num(r.totalFlows), 0, r);
+      case 'paradigm.ripple':
+        return done(num((r.summary as Record<string, unknown> | undefined)?.totalAffected), 0, r);
+      case 'paradigm.purpose-validate': {
+        const files = Array.isArray(r.results) ? (r.results as Array<{ valid?: boolean }>) : [];
+        return done(files.filter((f) => f.valid !== false).length, files.filter((f) => f.valid === false).length, r);
+      }
+      case 'paradigm.drift':
+        return done(num(r.clean) + num(r.cosmetic) + num(r.shifted), num(r.modified) + num(r.missing), r);
+      default:
+        return done(num(r.symbolCount), num(r.issues), r);
+    }
+  } catch (err) {
+    return { builtin: name, ok: false, passed: 0, failed: 0, error: (err as Error).message };
+  }
+}
+
+/**
+ * paradigm loop builtin <name> --json [--args <json>] — the thin wrapper Gnomon's #loop-check runs as
+ * `node <pinned paradigm cli> loop builtin <name> --json` inside the loop-check sandbox (gnomon-loops.md §2).
+ * Prints one JSON object {builtin, ok, passed, failed, error?, result}; exit 0 pass, 1 fail, 2 error.
+ */
+export async function loopBuiltinCommand(name: string, options: LoopCliOptions & { args?: string } = {}): Promise<void> {
+  quiet();
+  const root = options.root ?? process.cwd();
+  let args: Record<string, unknown> = {};
+  if (options.args !== undefined) {
+    try {
+      const parsed = JSON.parse(options.args) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+      args = parsed as Record<string, unknown>;
+    } catch {
+      const r: LoopBuiltinResult = { builtin: name, ok: false, passed: 0, failed: 0, error: '--args must be a JSON object' };
+      if (options.json) json(r);
+      else error(r.error!);
+      process.exitCode = 2;
+      return;
+    }
+  }
+  const r = await runLoopBuiltin(name, root, args);
+  process.exitCode = r.error ? 2 : r.ok ? 0 : 1;
+  if (options.json) {
+    json(r);
+    return;
+  }
+  if (r.error) {
+    error(`${name}: ${r.error}`);
+    return;
+  }
+  (r.ok ? success : warn)(`${name}: ${r.passed} passed, ${r.failed} failed`);
+}

@@ -2110,7 +2110,7 @@ graphCmd
 // paradigm loop <command> — Gnomon loop definitions (.paradigm/loops, #loop-cli)
 const loopCmd = program
   .command('loop')
-  .description('Gnomon loop definitions: new, validate (compiles .loop.json), list');
+  .description('Gnomon loop definitions: new, validate (compiles .loop.json), list, builtin');
 
 loopCmd
   .command('new <id>')
@@ -2141,6 +2141,22 @@ loopCmd
   .action(async (options) => {
     const { loopListCommand } = await import('./commands/loop/index.js');
     await loopListCommand(options);
+  });
+
+loopCmd
+  .command('builtin <name>')
+  .description('Run a loop check builtin (Gnomon runs this inside its loop-check sandbox) and print pass/fail counts')
+  .option('--args <json>', 'Builtin arguments as a JSON object (for example {"symbol":"#x"})')
+  .option('--json', 'Output as JSON')
+  .action(async (name, options) => {
+    try {
+      const { loopBuiltinCommand } = await import('./commands/loop/index.js');
+      await loopBuiltinCommand(name, options);
+    } catch (e) {
+      // never a bare exit 1 (= fail): a builtin that crashed could not judge (exit 2, no JSON verdict)
+      process.stderr.write(`loop builtin ${name}: ${(e as Error)?.message ?? String(e)}\n`);
+      process.exitCode = 2;
+    }
   });
 
 // paradigm habits <command>

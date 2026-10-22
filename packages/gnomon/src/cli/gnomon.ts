@@ -22,6 +22,7 @@ import { runDeskCommand } from './desk-cli.js';
 import { runTraceCommand } from './trace-cli.js';
 import { runRulesCommand } from './rules-cli.js';
 import { runModeCommand } from './mode-cli.js';
+import { runLoopCommand } from './loop-cli.js';
 import { runVoiceCommand } from './voice-cli.js';
 import { runSessionCommand } from './session-cli.js';
 import { runSetupCommand } from './setup-cli.js';
@@ -75,6 +76,17 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'mode') {
   // P8-D87: `gnomon mode [manual|ask|auto-edits] [--session <hsid>] [--repo]` (run modes, mode-cli.ts)
   runModeCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'loop') {
+  // 8.0:loops (#loop-registry): `gnomon loop list|show|trust|untrust|trust-status` (loop-cli.ts)
+  runLoopCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },

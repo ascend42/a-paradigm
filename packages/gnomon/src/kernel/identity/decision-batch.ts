@@ -23,7 +23,7 @@ export const DECISION_HELPER_VERSION = '1.8.0';
 export const DECISION_BOUNDS = Object.freeze({ maxMessages: 10, maxApprovals: 2, maxRootRows: 8, maxMessageBytes: 65_536, maxBytes: 256 * 1024, maxLineChars: 1200, maxReasonChars: 160 });
 
 /** The card kinds that have a row table (C3). A root-class card's decision row names one of these. */
-export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant'] as const);
+export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust'] as const);
 export type RowTableKind = (typeof ROW_TABLE_KINDS)[number];
 
 export interface DecisionRowV2 {
@@ -82,6 +82,11 @@ export function intentOf(r: Row): Row {
   return out;
 }
 
+/** 8.0:loops: the closed field set of a loop.trusted root row (the cardId is bound to the decision by bindDecisionBatch). */
+const LOOP_TRUSTED_FIELDS: readonly string[] = ['kind', 'loopId', 'scope', 'repoKey', 'contentHash', 'coreHash', 'closureDigest', 'sourceHash', 'cardId', 'by', 'createdAt'];
+const SHA256_TAG = /^sha256:[0-9a-f]{64}$/;
+const LOOP_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
 /** C3: the closed per-cardKind row table (rows after the decision row). null = allowed. */
 export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string | null {
   const kinds = rows.map(rowKind);
@@ -106,6 +111,17 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       return kinds.length === 1 && kinds[0] === 'grant.uninstall' ? null : 'an uninstall signs exactly one grant.uninstall';
     case 'voice.enrol':
       return kinds.length === 1 && kinds[0] === 'voice.enrol' ? null : 'a voice enrolment signs exactly one enrol row';
+    case 'loop-trust': {
+      // 8.0:loops (gnomon-loops.md §3.1): a loop trust signs exactly one loop.trusted row naming the loop and its hash
+      if (kinds.length !== 1 || kinds[0] !== 'loop.trusted') return 'a loop-trust signs exactly one loop.trusted row';
+      const r = rows[0]!;
+      for (const k of Object.keys(r)) if (!LOOP_TRUSTED_FIELDS.includes(k)) return `a loop.trusted row never carries ${k.slice(0, 40)}`;
+      const hash = (v: unknown): boolean => typeof v === 'string' && SHA256_TAG.test(v);
+      if (typeof r.loopId !== 'string' || !LOOP_ID.test(r.loopId) || (r.scope !== 'repo' && r.scope !== 'personal') || !hash(r.repoKey) || !hash(r.contentHash)) return 'a loop.trusted row names its loop, scope, repo and content hash';
+      for (const k of ['coreHash', 'closureDigest']) if (r[k] !== undefined && !hash(r[k])) return `a loop.trusted ${k} is sha256:<64 hex>`;
+      if (r.sourceHash !== undefined && !(typeof r.sourceHash === 'string' && /^[0-9a-f]{64}$/.test(r.sourceHash))) return 'a loop.trusted sourceHash is 64 hex';
+      return null;
+    }
     case 'mod.mcp.config':
     case 'api-token':
     case 'peer-pair':
@@ -203,6 +219,10 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
       return s('name') !== null ? `uninstall ${s('name')}` : null;
     case 'voice.enrol':
       return s('speakerId') !== null ? `voice enrol ${s('speakerId')}` : null;
+    case 'loop.trusted': {
+      const [l, sc, rk, h] = [s('loopId'), s('scope'), s('repoKey'), s('contentHash')];
+      return l !== null && sc !== null && rk !== null && h !== null ? `trust loop ${sc}/${l} repo ${rk.slice(7, 19)} ${h.slice(0, 19)}` : null;
+    }
     default:
       return null;
   }

@@ -782,6 +782,12 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
         } else if (cls === 'human' && (kind === 'request.offer.decide' || kind === 'request.offer.mute' || kind === 'request.session.rename')) {
           // TD-2026-10-20-812 (Aegis D1) / 8.0:session-rename: served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && (kind === 'request.loop.trust' || kind === 'request.loop.untrust' || kind === 'request.loop.delete')) {
+          // 8.0:loops (#loop-registry): served for the human's own device; a bad payload is BAD_REQUEST and appends nothing
+          expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+        } else if (cls === 'human' && (kind === 'request.loop.pause' || kind === 'request.loop.resume' || kind === 'request.loop.run')) {
+          // 8.0:loops: the runner's verbs land with build step 5
+          expect(e, kind).toMatchObject({ c: 'ENGINE', reason: 'not-implemented' });
         } else if (cls === 'human' && kind === 'request.mod.install') {
           // #mods-admin (the GUI Mods panel): served for the human's own device like `gnomon mod install`; a bad payload is BAD_REQUEST and appends nothing
           expect(e, kind).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });

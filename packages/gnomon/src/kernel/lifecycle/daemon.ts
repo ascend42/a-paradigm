@@ -82,6 +82,7 @@ import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js
 import { LOOSEN_TIMEOUT_MS, modeSourceOf, RunModeBook, RunModeControl } from '../broker/run-mode.js';
 import { StandingGrantBook, StandingGrants, standingSourceOf } from '../broker/standing-grant.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
+import { wireLoops } from '../loops/wire.js';
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse, FUSE_RESTORE_KINDS, type FuseRow } from '../budget/fuse.js';
@@ -1212,6 +1213,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     logRequest: (kind, payload, ids) => log.append({ kind, principal: kernelPrincipal, payload, connId: ids.connId }).then(() => undefined),
     ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
   });
+  // 8.0:loops (#loop-registry): the registry, trust cards and the human's request.loop.* (kernel/loops/wire.ts)
+  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority });
   const dispatcherCommon = {
     voice,
     voiceClient: {
@@ -1258,6 +1261,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       offer: { decide: (asker: Parameters<OfferRouter['decide']>[0], payload: unknown) => router.decide(asker, payload), mute: (asker: Parameters<OfferRouter['mute']>[0], payload: unknown) => router.mute(asker, payload) },
       mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
+      loops: loops.port,
     },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
