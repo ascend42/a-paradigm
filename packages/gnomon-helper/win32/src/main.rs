@@ -19,6 +19,8 @@ mod protocol;
 mod approvals;
 mod b64;
 #[cfg(windows)]
+mod presence;
+#[cfg(windows)]
 mod confine;
 #[cfg(windows)]
 mod exec;

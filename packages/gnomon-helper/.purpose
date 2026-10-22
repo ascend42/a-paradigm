@@ -98,10 +98,16 @@ components:
       the APPROVALS key only — a non-exportable P-256 key in the Microsoft Software
       KSP (gnomon-<gen>-approvals, DPAPI per user); sign {mode:'click'} signs
       approve-domain messages only (gnomon:approve:v1, domain-refused otherwise),
-      DER over SHA-256; mode fresh refuses presence-unavailable and cached
-      no-unlock (Windows Hello presence is phase B, a separate Passport KSP key);
-      unlock.drop / unlock.drop-all / conn.close are no-ops; the root key and
-      voice arms refuse unsupported-op. Version 0.2.0.
+      DER over SHA-256; cached refuses no-unlock. W4 phase B (presence.rs, probe
+      P02): the PRESENCE key, a separate P-256 key in the Microsoft Passport
+      (Windows Hello) KSP, //gnomon.local/<gen>/presence, NgcCacheType
+      AUTH_MANDATORY (Hello on creation and on every signature), key.create /
+      key.public {key:'presence'}; sign {mode:'fresh', messages:[approve,
+      presence]} signs the presence challenge (gnomon:presence:v1 only) under a
+      Hello prompt owned by the foreground window FIRST, then the decision with
+      the approvals key; a cancel is presence-denied. unlock.drop /
+      unlock.drop-all / conn.close are no-ops; the root key and voice arms refuse
+      unsupported-op. Version 0.3.0.
       exec is containment for well-behaved trees (partial: WMI/COM/Task Scheduler
       launches are not descendants, Aegis M4). W5 (sessions): sandbox [--desktop]
       [--low] [--session-sid <S-1-9-4174-2026-1022-n>] runs a session under a

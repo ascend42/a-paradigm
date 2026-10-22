@@ -798,6 +798,9 @@ export class ApprovalBroker {
     // Aegis Q3: a decision whose effect uses the root key is root class (never standing, never by voice)
     const cls = r.rootDecisions?.includes(decision) ? 'root' : r.standingGrant && decision === 'allow' ? 'fresh' : baseClass(String(card.kind), decision, flags);
     if (cls === undefined) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not a decision of a ${String(card.kind)} card (valid: ${validDecisions(String(card.kind)).join(', ')})`, { cardId });
+    // Aegis W4-B M2: a click-class (Windows) approvals key has no root key behind it in the helper and no decision.sign
+    // (the helper never shows the exact root line it signs): root-class decisions stay refused until a Windows root key
+    if (cls === 'root' && this.#approvals.clickClass === true) throw fail('UNSUPPORTED', 'presence', 'a root-class decision needs a Windows root key (not built yet)', { cardId });
     if (r.decisions && decision !== 'withdraw' && !r.decisions.includes(decision)) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not one of this card's actions (${r.decisions.join(', ')})`, { cardId });
     if (decision === 'always' && !r.ruleScope) throw fail('BAD_REQUEST', 'bad-params', 'this card has no rule scope: always is not available on it', { cardId });
     // TD-2026-10-20-294: a prefix scope only with always on a Bash permission card whose SHOWN command is one literal

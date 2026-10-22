@@ -65,9 +65,17 @@ function dropKey(home: string): void {
     expect(r.token).toBeNull();
 
     const gen = JSON.parse(fs.readFileSync(path.join(dev.home, DEV_APPROVALS_FILE), 'utf8')).row.gen as string;
-    const fresh = await transport.request({ op: 'sign', key: 'approvals', gen, mode: 'fresh', messages: [Buffer.from('x').toString('base64')] }).catch((e: unknown) => e);
-    expect(fresh).toBeInstanceOf(HelperRefusal);
-    expect((fresh as HelperRefusal).code).toBe('presence-unavailable');
+    // W4 phase B: a fresh sign is exactly [approve, presence], and needs this gen's Windows Hello key (none bound here:
+    // ensureDevApprovals ran without `presence`, so no Hello prompt in a test)
+    const b = (s: string): string => Buffer.from(s).toString('base64');
+    const one = await transport.request({ op: 'sign', key: 'approvals', gen, mode: 'fresh', messages: [b('gnomon:approve:v1\nx')] }).catch((e: unknown) => e);
+    expect((one as HelperRefusal).code).toBe('bad-request');
+    const noKey = await transport.request({ op: 'sign', key: 'approvals', gen, mode: 'fresh', messages: [b('gnomon:approve:v1\nx'), b('gnomon:presence:v1\ny')] }).catch((e: unknown) => e);
+    expect((noKey as HelperRefusal).code).toBe('not-found');
+    const wrongDomain = await transport.request({ op: 'sign', key: 'approvals', gen, mode: 'fresh', messages: [b('gnomon:approve:v1\nx'), b('gnomon:approve:v1\ny')] }).catch((e: unknown) => e);
+    expect((wrongDomain as HelperRefusal).code).toBe('domain-refused');
+    // and kernel-side: with no presence key bound, the key refuses fresh before asking the helper
+    await expect(again.approvals.signDecision({ connId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA', approver: dev.device.principalId, message, mode: 'fresh', presence: { purpose: 'approval.decide', binding: { x: 'y' } } })).rejects.toThrow(/no Windows Hello presence key is bound/);
   });
 
   it('refuses a binding for another human, and a record whose key the helper does not hold', async () => {

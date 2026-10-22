@@ -30,7 +30,7 @@ export const DEV_EXIT_USAGE = 64;
 export const DEV_BANNER =
   'DEV ONLY  unsigned dogfood path (#dev-launch): a SOFTWARE dev-test root, never production.\n' +
   (process.platform === 'win32'
-    ? '          Approvals: routine cards by click (dev approvals key, no presence); Windows Hello classes refused until W4 phase B.\n'
+    ? '          Approvals: routine cards by click (dev approvals key, no presence); sensitive cards by Windows Hello.\n'
     : '          Approvals are refused UNSUPPORTED until M1.3 (hardware root, signed helper).\n');
 
 export const DEV_USAGE = `gnomon ${GNOMON_VERSION} dev — DEV ONLY, unsigned, until M1.3
@@ -99,6 +99,8 @@ export interface DevKernel extends InProcessKernel {
   readonly dev: LoadedDevHome;
   /** win32: the helper-held approvals key is wired (routine cards are a click) */
   readonly approvals?: boolean;
+  /** win32 (W4 phase B): the Windows Hello presence key's state (bound / created / off / unavailable: why) */
+  readonly presence?: string;
   /** win32: the approvals key's long-lived helper, closed when the kernel stops (Aegis W4-A L4) */
   readonly approvalsHelper?: { close(): Promise<void> };
 }
@@ -124,11 +126,11 @@ export async function startDevKernel(home: string, opts: DevHomeOptions & DevUpD
   const start = opts.start ?? startDaemon;
   // W4 phase A (win32): the helper-held approvals key, bound to this home's human by the dev root; routine cards are
   // a click (platform/win32/approvals.ts). darwin dev homes keep refusing approvals until M1.3, as before.
-  const wired = (opts.platform ?? process.platform) === 'win32' && !opts.start ? await ensureDevApprovals(dev.home, dev.root, dev.device.principalId) : null;
+  const wired = (opts.platform ?? process.platform) === 'win32' && !opts.start ? await ensureDevApprovals(dev.home, dev.root, dev.device.principalId, undefined, { presence: true }) : null;
   const approvals = wired?.approvals ?? null;
   const handle = await start({ home: dev.home, kernelSigner: dev.kernel, rootAuthority: dev.root, ...(approvals ? { approvalsKey: approvals } : {}), ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}) });
   const k = await attachInProcess(handle, { home: dev.home, clientName: 'gnomon-dev-up', kernelKey: dev.kernelKey, credential: dev.device });
-  return { ...k, dev, approvals: approvals !== null, ...(wired ? { approvalsHelper: wired.helper } : {}) };
+  return { ...k, dev, approvals: approvals !== null, ...(wired ? { approvalsHelper: wired.helper, presence: wired.presenceState } : {}) };
 }
 
 export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevCliOptions & DevUpDeps = {}): Promise<number> {
@@ -177,7 +179,7 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
       ['socket', k.handle.pidfile.socketPath],
       ['root', `dev-test ${k.dev.root.rootKeyId}`],
       ['device', `${k.dev.device.deviceId} as ${k.client.principal ?? k.dev.device.principalId}`],
-      ['approve', k.approvals ? 'routine cards by click (dev approvals key, no presence); Windows Hello classes refused until W4 phase B' : 'refused UNSUPPORTED until M1.3 (no presence, no approvals key)'],
+      ['approve', !k.approvals ? 'refused UNSUPPORTED until M1.3 (no presence, no approvals key)' : k.presence === 'bound' || k.presence === 'created' ? `routine cards by click; sensitive cards by Windows Hello (presence key ${k.presence})` : `routine cards by click; sensitive cards refused (Windows Hello ${k.presence ?? 'off'})`],
     ],
     keysHint: 'Enter = a fresh URL (a reload cannot Reconnect until M1.3)   q or Ctrl-C = stop',
   });

@@ -2026,8 +2026,14 @@ components:
       via `gnomon dev up`) signs a CACHED-class GUI decision of a CLICK_KINDS card
       (permission, ask-user, plan) with no presence: approval.decide{presence:
       'click'}, no unlock. Everything else on such a key refuses presence-
-      unavailable kernel-side (fresh, cached, batch, CLI); a click never learns a
-      rule (rules.ts takes fresh/cli only); click-beyond-class is a suspicion.
+      unavailable kernel-side (cached, batch), and fresh only with W4 phase B's
+      SEPARATE Windows Hello presence key bound (presencePublicKeyPem, a
+      root-signed gnomon-presence-key:v1 row; `gnomon dev up` creates it with one
+      Hello prompt): the approvals key signs the decision, the Hello key the
+      presence challenge (verified against presenceKeyId, never the click key);
+      no unlock is ever kept. A click never learns a rule (rules.ts takes
+      fresh/cli only); click-beyond-class is a suspicion. The GUI's approve calls
+      wait 150 s (a PIN prompt), above the kernel's 120 s helper sign timeout.
       Tests: test/identity-hardware.test.ts, test/win32-approvals.test.ts.
       Voice (TD-2026-10-19-194): whether voice may take a decision is
       gnomon-contracts' VOICE_ALLOWLIST (#contract-voice-allowlist, §14.7), not

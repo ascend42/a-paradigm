@@ -397,3 +397,56 @@ describe('W4 phase A (Windows hybrid): a click-class approvals key', () => {
     expect(helper.signs).toEqual([]);
   });
 });
+
+describe('W4 phase B (Windows): a Windows Hello presence key beside the click-class approvals key', () => {
+  function helloRig(o: { presencePem?: (h: FakeHelper) => string } = {}) {
+    const helper = new FakeHelper(GEN, { presenceKey: true });
+    const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper, { clickClass: true, presencePublicKeyPem: (o.presencePem ?? ((h) => h.publicPem('presence')))(helper) });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: 'p:abcdefgh/kernel', log: async (kind, payload) => void rows.push({ kind, payload }), approvals });
+    const permission = () => broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' }, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
+    return { helper, approvals, broker, rows, permission };
+  }
+
+  it('a fresh decision (always) takes ONE Hello prompt: the approvals key signs the decision, the presence key the challenge', async () => {
+    const r = helloRig();
+    const c = await r.permission();
+    const d = await r.broker.approve(gui(), { cardId: c.cardId, decision: 'always' });
+    expect(d.presence).toBe('fresh');
+    expect(r.helper.prompts.length).toBe(1);
+    expect(r.helper.signs.at(-1)).toMatchObject({ key: 'approvals', mode: 'fresh', n: 2 });
+    const decide = r.rows.find((x) => x.kind === 'approval.decide')!;
+    expect(r.approvals.verify(HUMAN, approveMessage({ cardId: c.cardId, decision: 'always', cardContentHash: c.contentHash, approverPrincipalId: HUMAN }), String(decide.payload.decisionSig))).toBe('ok');
+    expect(r.rows.some((x) => x.kind === 'approval.unlock')).toBe(false); // no unlock is ever kept
+  });
+
+  it('routine cards stay a click (no Hello prompt) with a presence key bound', async () => {
+    const r = helloRig();
+    const d = await r.broker.approve(gui(), { cardId: (await r.permission()).cardId, decision: 'allow' });
+    expect(d.presence).toBe('click');
+    expect(r.helper.prompts).toEqual([]);
+  });
+
+  it('a presence challenge NOT signed by the bound Hello key is refused (the click key is never presence)', async () => {
+    // bind an unrelated key as the presence key: the fake's presence signature then does not verify against it
+    const other = generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const r = helloRig({ presencePem: () => other });
+    const ref = await refusalOf(r.broker.approve(gui(), { cardId: (await r.permission()).cardId, decision: 'always' }));
+    expect(ref.code).toBe('FORBIDDEN');
+    expect(r.rows.some((x) => x.kind === 'approval.decide')).toBe(false);
+  });
+
+  it('Aegis W4-B M2: a root-class decision stays refused on a click-class key, Hello or not (no Windows root key yet)', async () => {
+    const r = helloRig();
+    const c = await r.broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' }, rootDecisions: ['allow'], ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
+    const ref = await refusalOf(r.broker.approve(gui(), { cardId: c.cardId, decision: 'allow' }));
+    expect(ref).toEqual({ code: 'UNSUPPORTED', reason: 'presence' });
+    expect(r.helper.signs).toEqual([]);
+    expect(r.helper.prompts).toEqual([]);
+  });
+
+  it('the presence key can never be the approvals key', () => {
+    const helper = new FakeHelper(GEN, { presenceKey: true });
+    expect(() => new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper, { clickClass: true, presencePublicKeyPem: helper.publicPem('approvals') })).toThrow(/must not be the approvals key/);
+  });
+});

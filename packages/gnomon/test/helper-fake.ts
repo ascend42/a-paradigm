@@ -58,6 +58,8 @@ export interface FakeHelperOptions {
   wrongKey?: boolean;
   /** refuse sign {mode:'click'} (a helper with no click class) */
   noClick?: boolean;
+  /** the win32 shape (W4 phase B): a SEPARATE presence key signs a fresh sign's presence message (the 2nd) */
+  presenceKey?: boolean;
   /** corrupt the n-th signature of a sign reply (0-based) */
   corruptSig?: number;
   /** the human approves this many prompts, then declines */
@@ -107,7 +109,7 @@ export class FakeHelper implements HelperTransport {
   /** `gen` = keys that already exist in this fake SE; null = an empty SE. */
   constructor(gen: string | null = 'test0001', opts: FakeHelperOptions = {}) {
     this.opts = opts;
-    if (gen !== null) for (const k of ['root', 'approvals']) {
+    if (gen !== null) for (const k of ['root', 'approvals', ...(opts.presenceKey ? ['presence'] : [])]) {
       const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
       this.keys.set(`${gen}.${k}`, { priv: privateKey, pub: publicKey });
     }
@@ -159,7 +161,7 @@ export class FakeHelper implements HelperTransport {
     if (this.#alive) this.crash();
   }
 
-  publicPem(key: 'root' | 'approvals', gen = 'test0001'): string {
+  publicPem(key: 'root' | 'approvals' | 'presence', gen = 'test0001'): string {
     return this.keys.get(`${gen}.${key}`)!.pub.export({ type: 'spki', format: 'pem' }).toString();
   }
 
@@ -299,8 +301,9 @@ export class FakeHelper implements HelperTransport {
         }
         this.signs.push({ key: String(req.key), mode: String(req.mode), ...(conn ? { connId: conn } : {}), n: msgs.length });
         const priv = this.opts.wrongKey ? this.#other.privateKey : k.priv;
+        const presence = this.opts.presenceKey && req.mode === 'fresh' ? this.keys.get(`${String(req.gen)}.presence`)!.priv : null;
         const sigs = msgs.map((m, i) => {
-          const s = cryptoSign('sha256', i === this.opts.corruptSig ? Buffer.concat([m, Buffer.from('x')]) : m, { key: priv, dsaEncoding: 'der' });
+          const s = cryptoSign('sha256', i === this.opts.corruptSig ? Buffer.concat([m, Buffer.from('x')]) : m, { key: presence && i === 1 ? presence : priv, dsaEncoding: 'der' });
           return s.toString('base64');
         });
         // #first-run I1 falsifiers: a broken / impostor helper drops (null) or replaces its own prompt line

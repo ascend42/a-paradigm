@@ -6,9 +6,10 @@
 //! ask-user, plan: the `cached` decision class), which on Windows take no presence: `sign {mode:'click'}`.
 //!
 //! What it is NOT: a presence proof. Any process of this user can use a DPAPI-protected software key, so a click
-//! signature proves "this user's session", never "a human was there". The fresh / root classes need Windows Hello
-//! (phase B, a Passport KSP key): `mode:'fresh'` refuses `presence-unavailable` here, and there are no unlocks to
-//! cache (`mode:'cached'` refuses `no-unlock`; unlock.drop / unlock.drop-all / conn.close are no-ops).
+//! signature proves "this user's session", never "a human was there". The fresh classes need Windows Hello: phase B's
+//! SEPARATE presence key (presence.rs) signs the presence challenge of a `mode:'fresh'` sign, this key only its
+//! decision. There are no unlocks to cache (`mode:'cached'` refuses `no-unlock`; unlock.drop / unlock.drop-all /
+//! conn.close are no-ops).
 //!
 //! Wire (the darwin helper's, protocol v2): key.create / key.public {key:'approvals', gen} → {publicKey: base64 X9.63
 //! uncompressed point}; sign {key:'approvals', gen, mode, messages: [base64 …]} → {sigs: [base64 DER ECDSA-Sig-Value
@@ -28,7 +29,7 @@ const NTE_EXISTS: i32 = 0x8009_000Fu32 as i32;
 pub const MAX_MESSAGES: usize = 4;
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 
-struct Prov(NCRYPT_PROV_HANDLE);
+pub(crate) struct Prov(pub(crate) NCRYPT_PROV_HANDLE);
 impl Drop for Prov {
     fn drop(&mut self) {
         if self.0 != 0 {
@@ -36,7 +37,7 @@ impl Drop for Prov {
         }
     }
 }
-struct Key(NCRYPT_KEY_HANDLE);
+pub(crate) struct Key(pub(crate) NCRYPT_KEY_HANDLE);
 impl Drop for Key {
     fn drop(&mut self) {
         if self.0 != 0 {
@@ -45,7 +46,7 @@ impl Drop for Key {
     }
 }
 
-fn st(what: &str, s: i32) -> HelperError {
+pub(crate) fn st(what: &str, s: i32) -> HelperError {
     HelperError::os(what, s as u32)
 }
 
@@ -85,7 +86,7 @@ fn open(gen: &str) -> Result<(Prov, Key), HelperError> {
 }
 
 /// The key's public point as X9.63 uncompressed (0x04 ‖ X ‖ Y), 65 bytes.
-fn public_x963(k: &Key) -> Result<Vec<u8>, HelperError> {
+pub(crate) fn public_x963(k: &Key) -> Result<Vec<u8>, HelperError> {
     unsafe {
         let mut len = 0u32;
         let s = NCryptExportKey(k.0, 0, BCRYPT_ECCPUBLIC_BLOB, null(), null_mut(), 0, &mut len, 0);
@@ -137,7 +138,7 @@ pub fn public(gen: &str) -> Result<Vec<u8>, HelperError> {
     public_x963(&k)
 }
 
-fn sha256(m: &[u8]) -> Result<[u8; 32], HelperError> {
+pub(crate) fn sha256(m: &[u8]) -> Result<[u8; 32], HelperError> {
     let mut out = [0u8; 32];
     let s = unsafe { BCryptHash(BCRYPT_SHA256_ALG_HANDLE, null(), 0, m.as_ptr(), m.len() as u32, out.as_mut_ptr(), 32) };
     if s != 0 {

@@ -109,6 +109,9 @@ type Pending = { resolve: (v: unknown) => void; reject: (e: unknown) => void; ti
 
 /** Default per-call timeout (a call the kernel never answers fails visibly instead of hanging the page). */
 export const CALL_TIMEOUT_MS = 30_000;
+/** Calls that may wait on a presence prompt, and their timeout (above the kernel's HELPER_SIGN_TIMEOUT_MS, 120 s). */
+export const PRESENCE_METHODS: ReadonlySet<string> = new Set(['approve']);
+export const PRESENCE_CALL_TIMEOUT_MS = 150_000;
 
 export class GnomonClient {
   readonly #t: Transport;
@@ -185,13 +188,16 @@ export class GnomonClient {
     // provably never sent (closed, or the socket left OPEN) ⇒ CLOSED; DELIVERY_UNKNOWN is only for a sent frame
     if (this.#closed || this.#t.isOpen?.() === false) return Promise.reject(new RpcError({ code: 'CLOSED', reason: 'connection-closed', message: 'the connection is closed', next: [], data: null }));
     const id = this.#nextId++;
+    // a call that may wait on a human (a presence prompt: Touch ID, Windows Hello) outlives the kernel's own helper
+    // sign timeout, so the page never gives up while the person is still typing their PIN
+    const ms = this.#timeoutMs > 0 && PRESENCE_METHODS.has(method) ? Math.max(this.#timeoutMs, PRESENCE_CALL_TIMEOUT_MS) : this.#timeoutMs;
     return new Promise<T>((resolve, reject) => {
       const timer =
-        this.#timeoutMs > 0
+        ms > 0
           ? setTimeout(() => {
               if (!this.#pending.delete(id)) return;
-              reject(new RpcError({ code: 'TIMEOUT', reason: 'call-timeout', message: `${method}: no answer within ${this.#timeoutMs} ms`, next: [], data: null }));
-            }, this.#timeoutMs)
+              reject(new RpcError({ code: 'TIMEOUT', reason: 'call-timeout', message: `${method}: no answer within ${ms} ms`, next: [], data: null }));
+            }, ms)
           : null;
       this.#pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
       this.#t.send(JSON.stringify({ jsonrpc: '2.0', rpc: RPC, id, method, ...(params !== undefined ? { params } : {}) }));

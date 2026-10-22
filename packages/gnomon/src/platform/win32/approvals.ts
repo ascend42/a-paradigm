@@ -29,7 +29,7 @@ import { isOwnerOnly } from '../owner-only.js';
 
 /** The win32 helper's protocol and the first version with the approvals key ops. */
 export const WIN32_HELPER_PROTOCOL = 'gnomon-helper:v2';
-export const WIN32_APPROVALS_HELPER_VERSION = '0.2.0';
+export const WIN32_APPROVALS_HELPER_VERSION = '0.3.0'; // 0.3.0: the Windows Hello presence key (W4 phase B)
 export const DEV_APPROVALS_FILE = 'DEV-ONLY-approvals.json';
 
 /** The win32 helper's handshake: protocol v2, platform win32, a version with the approvals ops. */
@@ -66,11 +66,23 @@ export function win32HelperTransport(pin: Win32HelperPin = kernelWin32Helper()):
   return new SupervisedHelper(() => HelperProcess.start(p, { env: win32HelperEnv(), checkInfo: checkWin32HelperInfo }));
 }
 
+/** W4 phase B: the Windows Hello presence key's binding to the human (root-signed, beside the approvals row). */
+export const PRESENCE_ROW_SCHEMA = 'gnomon-presence-key:v1' as const;
+export interface PresenceRow {
+  schemaVersion: typeof PRESENCE_ROW_SCHEMA;
+  keyId: string;
+  publicKeyPem: string;
+  principalId: string;
+  gen: string;
+}
+
 export interface Win32ApprovalsRecord {
   schemaVersion: 'gnomon-dev-approvals:v1';
   row: ApprovalsRow;
   signer: string;
   sig: string;
+  /** W4 phase B: the Windows Hello presence key (absent: fresh / root classes stay refused) */
+  presence?: { row: PresenceRow; signer: string; sig: string };
 }
 
 export class Win32ApprovalsError extends Error {
@@ -81,10 +93,18 @@ export class Win32ApprovalsError extends Error {
 }
 
 /**
- * A dev home's approvals key: create it (first run: a fresh gen, the root-signed binding row written 0600) or reopen
- * it (the helper's public key must be the bound one). Returns the HelperApprovalsKey (clickClass) and its transport.
+ * A dev home's approvals key: create it (first run: a fresh gen, the root-signed binding row) or reopen it (the
+ * helper's public key must be the bound one). W4 phase B: with `presence`, the Windows Hello presence key of the same
+ * gen is bound too (its creation is a Hello prompt; a cancelled or unavailable Hello leaves it unbound and the fresh /
+ * root classes refused, logged in `presenceState`). Returns the HelperApprovalsKey (clickClass) and its transport.
  */
-export async function ensureDevApprovals(home: string, root: Pick<RootAuthority, 'signRow' | 'verifyRow'>, principalId: string, helper: HelperTransport = win32HelperTransport()): Promise<{ approvals: HelperApprovalsKey; helper: HelperTransport; created: boolean }> {
+export async function ensureDevApprovals(
+  home: string,
+  root: Pick<RootAuthority, 'signRow' | 'verifyRow'>,
+  principalId: string,
+  helper: HelperTransport = win32HelperTransport(),
+  o: { presence?: boolean } = {},
+): Promise<{ approvals: HelperApprovalsKey; helper: HelperTransport; created: boolean; presenceState: 'bound' | 'created' | 'off' | `unavailable: ${string}` }> {
   const file = path.join(home, DEV_APPROVALS_FILE);
   let rec: Win32ApprovalsRecord | null = null;
   // Aegis W4-A L1: only ABSENT means "create": a record that cannot be read or parsed refuses (never a silent rebind)
@@ -106,6 +126,7 @@ export async function ensureDevApprovals(home: string, root: Pick<RootAuthority,
   if (rec) {
     const r = rec.row;
     if (rec.schemaVersion !== 'gnomon-dev-approvals:v1' || r?.schemaVersion !== APPROVALS_ROW_SCHEMA || r.principalId !== principalId || !root.verifyRow(rec.signer, r, rec.sig)) throw new Win32ApprovalsError(`${DEV_APPROVALS_FILE} is not this root's binding for ${principalId}`);
+    if (p256KeyIdOfPem(r.publicKeyPem) !== r.keyId) throw new Win32ApprovalsError(`${DEV_APPROVALS_FILE}: the approvals row's key and keyId disagree`); // Aegis W4-B L3
     const pem = await helperPublicKey(helper, 'approvals', r.gen);
     if (!pem || p256KeyIdOfPem(pem) !== r.keyId) throw new Win32ApprovalsError(`the helper's approvals key ${r.gen} is ${pem ? 'not the bound one' : 'missing'}`);
   } else {
@@ -119,6 +140,41 @@ export async function ensureDevApprovals(home: string, root: Pick<RootAuthority,
     fs.writeFileSync(file, `${JSON.stringify(rec, null, 2)}\n`, { flag: 'wx' });
     created = true;
   }
-  const approvals = new HelperApprovalsKey({ gen: rec.row.gen, approvalsPublicKeyPem: rec.row.publicKeyPem }, principalId, helper, { clickClass: true });
-  return { approvals, helper, created };
+  // W4 phase B: the presence key (a separate Passport-KSP key, same gen)
+  let presenceState: 'bound' | 'created' | 'off' | `unavailable: ${string}` = 'off';
+  if (rec.presence) {
+    const pr = rec.presence.row;
+    if (pr?.schemaVersion !== PRESENCE_ROW_SCHEMA || pr.principalId !== principalId || pr.gen !== rec.row.gen || !root.verifyRow(rec.presence.signer, pr, rec.presence.sig)) throw new Win32ApprovalsError(`${DEV_APPROVALS_FILE}: the presence binding is not this root's for ${principalId}`);
+    if (p256KeyIdOfPem(pr.publicKeyPem) !== pr.keyId) throw new Win32ApprovalsError(`${DEV_APPROVALS_FILE}: the presence row's key and keyId disagree`); // Aegis W4-B L3
+    const r = await helper.request({ op: 'key.public', key: 'presence', gen: pr.gen }).catch((e: unknown) => e);
+    const pem = r instanceof Error ? null : pemOf(p256FromX963(String((r as HelperReply).publicKey)));
+    if (!pem || p256KeyIdOfPem(pem) !== pr.keyId) throw new Win32ApprovalsError(`the helper's presence key ${pr.gen} is ${pem ? 'not the bound one' : 'missing'}`);
+    presenceState = 'bound';
+  } else if (o.presence) {
+    try {
+      const reply = await helper.request({ op: 'key.create', key: 'presence', gen: rec.row.gen, reason: 'Gnomon: set up Windows Hello for sensitive approvals' }, 300_000);
+      const pem = pemOf(p256FromX963(String(reply.publicKey)));
+      const row: PresenceRow = { schemaVersion: PRESENCE_ROW_SCHEMA, keyId: p256KeyIdOfPem(pem), publicKeyPem: pem, principalId, gen: rec.row.gen };
+      const { signer, sig } = root.signRow(row);
+      rec = { ...rec, presence: { row, signer, sig } };
+      // replace the record atomically (the approvals binding in it is unchanged)
+      const tmp = `${file}.${process.pid}.tmp`;
+      try {
+        fs.writeFileSync(tmp, `${JSON.stringify(rec, null, 2)}\n`, { flag: 'wx' });
+        fs.renameSync(tmp, file);
+      } finally {
+        fs.rmSync(tmp, { force: true }); // the tmp never outlives a failure
+      }
+      presenceState = 'created';
+    } catch (e) {
+      // Aegis W4-B L2: a key created but not bound (a crash, a failed rename) answers `exists` on every retry: say how to clear it
+      const msg = e instanceof Error ? e.message.slice(0, 160) : String(e);
+      presenceState = `unavailable: ${msg}${/exists/.test(msg) ? ` (an unbound Windows Hello key //gnomon.local/${rec.row.gen}/presence exists: remove it with certutil -user -csp "Microsoft Passport Key Storage Provider" -delkey, then restart)` : ''}`;
+    }
+  }
+  const approvals = new HelperApprovalsKey({ gen: rec.row.gen, approvalsPublicKeyPem: rec.row.publicKeyPem }, principalId, helper, {
+    clickClass: true,
+    ...(rec.presence ? { presencePublicKeyPem: rec.presence.row.publicKeyPem } : {}),
+  });
+  return { approvals, helper, created, presenceState };
 }

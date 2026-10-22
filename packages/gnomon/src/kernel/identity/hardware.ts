@@ -312,16 +312,24 @@ export class HelperApprovalsKey {
   readonly gen: string;
   /** W4 (Windows hybrid): the cached decision class is a click, signed with no presence (broker: mode 'click') */
   readonly clickClass: boolean;
+  /**
+   * W4 phase B (Windows): the SEPARATE presence key (Windows Hello, Passport KSP) that signs the presence challenge of a
+   * fresh decision; the decision itself stays the approvals key's. null = presence is this approvals key's (darwin) or,
+   * on a click-class key, unavailable.
+   */
+  readonly presenceKeyId: string | null;
   readonly #ring = new KeyRing();
   readonly #helper: HelperTransport;
 
   /** `principalId` = the human the approvals key belongs to (its root-signed registry row). */
-  constructor(keys: Pick<HardwareKeys, 'gen' | 'approvalsPublicKeyPem'>, principalId: string, helper: HelperTransport, o: { clickClass?: boolean } = {}) {
+  constructor(keys: Pick<HardwareKeys, 'gen' | 'approvalsPublicKeyPem'>, principalId: string, helper: HelperTransport, o: { clickClass?: boolean; presencePublicKeyPem?: string } = {}) {
     this.keyId = this.#ring.addP256(keys.approvalsPublicKeyPem);
     this.principalId = principalId;
     this.gen = keys.gen;
     this.#helper = helper;
     this.clickClass = o.clickClass === true;
+    this.presenceKeyId = o.presencePublicKeyPem ? this.#ring.addP256(o.presencePublicKeyPem) : null;
+    if (this.presenceKeyId !== null && this.presenceKeyId === this.keyId) throw new TypeError('#identity: the presence key must not be the approvals key');
   }
 
   available(): boolean {
@@ -339,8 +347,11 @@ export class HelperApprovalsKey {
     if (req.approver !== this.principalId) throw new HardwarePresenceDenied('the approver is not the human this approvals key belongs to');
     if (req.mode === 'click' && !this.clickClass) throw new HardwarePresenceDenied('this approvals key signs no decision without presence');
     // Aegis W4-A M2: a click-class key is a software key (DPAPI), never presence, whatever the helper would answer;
-    // Windows Hello presence (phase B) is a SEPARATE key with its own keyId
-    if (this.clickClass && req.mode !== 'click') throw new HardwarePresenceDenied('presence-unavailable: this approvals key proves no presence (Windows Hello is W4 phase B)');
+    // Windows Hello presence (phase B) is a SEPARATE key with its own keyId: a fresh decision needs it AND a presence
+    // challenge (the token is what proves the touch); cached never exists on such a key
+    if (this.clickClass && req.mode !== 'click' && !(req.mode === 'fresh' && this.presenceKeyId !== null && req.presence)) {
+      throw new HardwarePresenceDenied(this.presenceKeyId === null ? 'presence-unavailable: no Windows Hello presence key is bound' : 'presence-unavailable: a fresh decision on this key needs a presence challenge');
+    }
     const challenge = req.mode === 'fresh' && req.presence ? beginHardwarePresence(req.presence.purpose, req.presence.binding, req.connId) : null;
     const messages = [b64('approve', req.message), ...(challenge ? [b64('presence', challenge.message)] : [])];
     let reply: HelperReply;
@@ -371,11 +382,14 @@ export class HelperApprovalsKey {
     }
     let token: PresenceToken | null = null;
     if (challenge) {
-      const t = completeHardwarePresence(challenge.challengeId, this.keyId, sigs[1]!, this.#ring);
+      // the presence challenge verifies against the presence key when there is one (Windows Hello), never the click key
+      const t = completeHardwarePresence(challenge.challengeId, this.presenceKeyId ?? this.keyId, sigs[1]!, this.#ring);
       if (!PresenceToken.is(t)) throw new HardwarePresenceDenied(`presence attestation ${t}`);
       token = t;
     }
-    return { decisionSig, token, kept: reply.kept === true, ...(reply.kept === true && reply.bounds !== undefined ? { bounds: reply.bounds } : {}) };
+    // a click-class key never keeps an unlock (each fresh decision is its own Hello gesture), whatever the helper says
+    const kept = reply.kept === true && !this.clickClass;
+    return { decisionSig, token, kept, ...(kept && reply.bounds !== undefined ? { bounds: reply.bounds } : {}) };
   }
 
   /** TD-2026-10-20-514: the running helper's version (its handshake; else one `info`). null = unknown. */

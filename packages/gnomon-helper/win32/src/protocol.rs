@@ -296,11 +296,15 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
         }
         // W4 phase A (approvals.rs): the approvals key; the root key and presence (Windows Hello) are phase B
         "key.create" | "key.public" => {
-            if str_arg(req, "key")? != "approvals" {
-                return Err(HelperError::new("unsupported-op", "only the approvals key lives in this helper (the root is phase B)"));
-            }
             let gen = str_arg(req, "gen")?;
-            let pk = if op == "key.create" { crate::approvals::create(gen)? } else { crate::approvals::public(gen)? };
+            let pk = match (str_arg(req, "key")?, op) {
+                ("approvals", "key.create") => crate::approvals::create(gen)?,
+                ("approvals", _) => crate::approvals::public(gen)?,
+                // W4 phase B (presence.rs): the Windows Hello key; creating it is itself a Hello prompt
+                ("presence", "key.create") => crate::presence::create(gen, req.get("reason").and_then(Value::as_str).unwrap_or("Gnomon: create your approvals presence key"))?,
+                ("presence", _) => crate::presence::public(gen)?,
+                _ => return Err(HelperError::new("unsupported-op", "this helper holds the approvals and presence keys only (no root key)")),
+            };
             Ok(json!({ "publicKey": crate::b64::encode(&pk) }))
         }
         "sign" => {
@@ -323,7 +327,19 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
                     Ok(json!({ "sigs": sigs.iter().map(|s| crate::b64::encode(s)).collect::<Vec<_>>(), "kept": false }))
                 }
                 "cached" => Err(HelperError::new("no-unlock", "this helper holds no unlocks (click classes sign as mode click)")),
-                "fresh" => Err(HelperError::new("presence-unavailable", "Windows Hello presence is not built yet (W4 phase B)")),
+                // W4 phase B: [approve, presence] — the presence challenge under a Windows Hello prompt FIRST (presence.rs),
+                // then the decision by the approvals key; a cancelled prompt signs nothing
+                "fresh" => {
+                    if messages.len() != 2 {
+                        return Err(bad("a fresh sign is exactly [approve, presence]"));
+                    }
+                    let reason = req.get("reason").and_then(Value::as_str).unwrap_or("Gnomon: approve a decision");
+                    // Aegis W4-B L5: the approvals key must be there BEFORE the Hello prompt (never a wasted gesture)
+                    crate::approvals::public(gen)?;
+                    let p = crate::presence::sign(gen, &messages[1], reason)?;
+                    let a = crate::approvals::sign_click(gen, &messages[..1])?;
+                    Ok(json!({ "sigs": [crate::b64::encode(&a[0]), crate::b64::encode(&p)], "kept": false }))
+                }
                 _ => Err(bad("mode must be click, cached or fresh")),
             }
         }
