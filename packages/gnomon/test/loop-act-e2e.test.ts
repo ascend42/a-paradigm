@@ -79,7 +79,7 @@ function snapshot(root: string): Record<string, string> {
 }
 
 /** A committed repo: src/a.ts with a type error, tsconfig, a check script, a link, an exec bit, node_modules (ignored). */
-function gitRepo(def?: Def): string {
+function gitRepo(def?: Def, o: { attributes?: boolean } = {}): string {
   const root = tmp('gnomon-actrepo-');
   git(root, 'init', '-q', '-b', 'main');
   fs.mkdirSync(path.join(root, 'src'));
@@ -92,7 +92,7 @@ function gitRepo(def?: Def): string {
   fs.symlinkSync('a.ts', path.join(root, 'src', 'link.ts'));
   fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\n');
   // a smudge filter and a post-checkout hook a `git worktree add` would run: the scratch must run neither
-  fs.writeFileSync(path.join(root, '.gitattributes'), '*.ts filter=evil\n');
+  if (o.attributes !== false) fs.writeFileSync(path.join(root, '.gitattributes'), '*.ts filter=evil\n');
   git(root, 'config', 'filter.evil.smudge', `sh -c 'touch ${path.join(root, 'SMUDGED')}; cat'`);
   fs.writeFileSync(path.join(root, '.git', 'hooks', 'post-checkout'), `#!/bin/sh\ntouch ${path.join(root, 'HOOKED')}\n`, { mode: 0o755 });
   if (def) {
@@ -228,8 +228,9 @@ function rig(root: string, base: string) {
     const t = fs.readFileSync(path.join(i.scratch!.tree, 'src', 'a.ts'), 'utf8');
     return t.includes("'oops'") ? result('fail', "src/a.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.") : result('pass', '');
   };
+  const toasts: string[] = [];
   const runner = new LoopRunner({
-    home, kernelPrincipal: KERNEL, registry, ledger, append, platform: 'darwin',
+    home, kernelPrincipal: KERNEL, registry, ledger, append, platform: 'darwin', toast: (t) => toasts.push(t.text),
     broker: { raise: async (i: any) => { cards.push(i); return { cardId: i.cardId } as any; } },
     check, model: { openLoop: (ref, req) => lane.openLoop(ref, req), configured: () => ({ endpoints: ['qwen'], runner: true }), settled: (runId) => lane.loopSessionsSettled(runId) },
     caps: { modelBackoffMs: [1, 1, 1] },
@@ -244,7 +245,7 @@ function rig(root: string, base: string) {
     if (!('done' in r)) throw new Error('not started');
     return { runId: r.runId, end: await r.done };
   };
-  return { home, rows, cards, launches, checked, lane, key, trust, run, of: (runId: string, kind: string) => rows.filter((r) => r.kind === kind && r.payload.runId === runId).map((r) => r.payload) };
+  return { home, rows, cards, launches, checked, lane, key, trust, run, runner, toasts, of: (runId: string, kind: string) => rows.filter((r) => r.kind === kind && r.payload.runId === runId).map((r) => r.payload) };
 }
 
 const writeCall = (p: string, content: string): FakeReply => ({ toolCalls: [{ name: 'write_file', arguments: JSON.stringify({ path: p, content }) }] });
@@ -285,11 +286,13 @@ describe('Example B (green-typecheck) against a fake local endpoint: the act ste
     expect(card.lines[0]).toBe('Raised by loop green-typecheck (from the loop file)');
     expect(card.lines).toContain('Goal check tsc: pass (goal met)');
     expect(card.lines).toContain('M src/a.ts');
-    expect(card.lines.some((l: string) => l.includes('auto-land lands in step 11'))).toBe(true);
+    expect(card.lines).toContain('Proposed because auto-land lands in 8.1');
+    expect(card.lines).toContain('Accept lands it on main (Touch ID; it waits while you are editing those files); reject drops it');
+    expect(card.handOnly).toBe(true);
     expect(card.lines).toContain("-export const x: number = 'oops';");
     expect(card.lines).toContain('+export const x: number = 1;');
     expect(r.of(runId, 'loop.parked')[0]).toMatchObject({ ref: card.detail.ref, reason: 'propose' });
-    expect(r.of(runId, 'loop.proposed')[0]).toMatchObject({ cardId: card.cardId, paths: ['src/a.ts'], why: 'auto-land-later' });
+    expect(r.of(runId, 'loop.proposed')[0]).toMatchObject({ cardId: card.cardId, paths: ['src/a.ts'], why: 'land-blocked', blockers: ['auto-land lands in 8.1'] });
     const park = parkRepoDir(fs.realpathSync.native(r.home), root);
     expect(hardenedGit(['rev-parse', card.detail.ref], { gitDir: park }).stdout.toString('utf8').trim()).toBe(card.detail.sha);
     // the scratch is gone; the founder's real checkout (and .git) is byte-identical; nothing ran from repo config
@@ -326,5 +329,93 @@ describe('Example B (green-typecheck) against a fake local endpoint: the act ste
     expect(r.cards[0].detail.hazards).toEqual([{ kind: 'suppression-marker', path: 'src/a.ts', marker: '@ts-ignore' }]);
     expect(r.cards[0].lines).toContain('Proposed because it adds a suppression marker @ts-ignore in src/a.ts');
     expect(r.of(runId, 'loop.proposed')[0]).toMatchObject({ why: 'land-hazard', hazards: ['suppression-marker'] });
+  }, 60_000);
+});
+
+// ── step 11 (#loop-land): the same act step, landed ─────────────────────────────────────────────────────────────
+
+describe('Example B lands only through its card in 8.0 (build plan step 11, G-LOOP-07, G-LOOP-09, G-LOOP-15)', () => {
+  it('a change that would land alone at L0 raises the card; accepting it lands exactly the proposed bytes, the human\'s wip untouched', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1;\n'), done('pass')] });
+    const root = gitRepo({ ...greenTypecheck('lander'), notify: { on: ['landed'], as: 'toast' } }, { attributes: false });
+    const base = git(root, 'rev-parse', 'HEAD').trim();
+    const before = snapshot(root);
+    const r = rig(root, srv.base);
+    r.trust('lander');
+    const { runId, end } = await r.run('lander');
+    expect(end).toMatchObject({ reason: 'goal' });
+    // 8.0: nothing lands alone, whatever the level (founder decision)
+    expect(r.of(runId, 'loop.landed')).toEqual([]);
+    expect(r.cards).toHaveLength(1);
+    expect(r.cards[0].lines).toContain('Proposed because auto-land lands in 8.1');
+    expect(r.of(runId, 'loop.parked')[0]).toMatchObject({ reason: 'propose' });
+    expect(git(root, 'rev-parse', 'HEAD').trim()).toBe(base);
+    await r.cards[0].effect('accept', {});
+    await waitFor(() => r.of(runId, 'loop.landed').length === 2, 10_000);
+    const landed = r.of(runId, 'loop.landed');
+    expect(landed[0]).toEqual(expect.objectContaining({ loopId: 'lander', paths: ['src/a.ts'], baseSha: base, ref: 'refs/heads/main', how: 'approved', cardId: r.cards[0].cardId, phase: 'intent' }));
+    expect(landed[1]).toMatchObject({ phase: 'done' });
+    const sha = landed[0]!.sha as string;
+    expect(git(root, 'rev-parse', 'HEAD').trim()).toBe(sha);
+    expect(git(root, 'rev-parse', 'HEAD^').trim()).toBe(base);
+    expect(git(root, 'log', '-1', '--format=%an <%ae>%n%(trailers:only,unfold)')).toBe('Gnomon Loop <loop+lander@gnomon.invalid>\nOn-Behalf-Of: p:abcdefgh/matt\nTrusted-By: card:01HZZZZZZZZZZZZZZZZZZZZZZZ\nGnomon-Loop: lander@' + (r.of(runId, 'loop.run.started')[0]!.contentHash as string).replace(/^sha256:/, '').slice(0, 8) + '\nGnomon-Run: ' + runId + '\nLoop-Authored-By: file\n\n');
+    // the checkout: src/a.ts is the proposed bytes, the human's wip b.ts and everything else is byte-identical
+    const after = snapshot(root);
+    const changed = Object.keys({ ...before, ...after }).filter((k) => before[k] !== after[k] && !k.startsWith('.git/') && k !== '.git/');
+    expect(changed).toEqual(['src/a.ts']);
+    expect(fs.readFileSync(path.join(root, 'src', 'b.ts'), 'utf8')).toBe('export const b = 2; // wip\n');
+    expect(git(root, 'status', '--porcelain')).toBe(' M src/b.ts\n');
+    expect(fs.existsSync(path.join(root, 'HOOKED'))).toBe(false);
+    const park = parkRepoDir(fs.realpathSync.native(r.home), root);
+    expect(hardenedGit(['for-each-ref', 'refs/gnomon'], { gitDir: park }).stdout.toString('utf8')).toBe('');
+    expect(r.toasts.some((t) => t.startsWith(`lander: landed ${sha.slice(0, 12)} on main`))).toBe(true);
+    // G-LOOP-09: a revert of the landed commit is a merge.reverted row
+    git(root, 'checkout', '-q', '--', 'src/b.ts');
+    git(root, 'revert', '--no-edit', sha);
+    expect(await r.runner.lander.scanReverts()).toBe(1);
+    expect(r.rows.filter((x) => x.kind === 'merge.reverted').map((x) => x.payload)).toEqual([expect.objectContaining({ landedRef: sha, detectedBy: 'content', loopId: 'lander', runId })]);
+    expect(await r.runner.lander.scanReverts()).toBe(0);
+  }, 60_000);
+
+  it('a repo whose .gitattributes filters the touched path: accepting parks it with a toast; the checkout is byte-identical', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1;\n'), done('pass')] });
+    const root = gitRepo(greenTypecheck('filtered'));
+    const before = snapshot(root);
+    const r = rig(root, srv.base);
+    r.trust('filtered');
+    const { runId } = await r.run('filtered');
+    expect(r.cards).toHaveLength(1);
+    await r.cards[0].effect('accept', {});
+    await waitFor(() => r.of(runId, 'loop.parked').length === 2, 10_000);
+    expect(r.of(runId, 'loop.landed')).toEqual([]);
+    expect(r.of(runId, 'loop.parked').map((p) => p.reason)).toEqual(['propose', 'attributes']);
+    expect(r.toasts.some((t) => t.startsWith('filtered: could not land') && t.includes('refs/gnomon/loops/filtered/'))).toBe(true);
+    expect(snapshot(root)).toEqual(before);
+    expect(fs.existsSync(path.join(root, 'SMUDGED'))).toBe(false);
+  }, 60_000);
+
+  it('approve-to-land: a dirty overlap waits, then lands once the human\'s edit is gone', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1;\n'), done('pass')] });
+    const root = gitRepo(greenTypecheck('asker', { decide: 'before-land' }), { attributes: false });
+    const base = git(root, 'rev-parse', 'HEAD').trim();
+    const r = rig(root, srv.base);
+    r.trust('asker');
+    const { runId } = await r.run('asker');
+    expect(r.cards).toHaveLength(1);
+    // the human is editing the same file: accept waits (loop.land.waiting{dirty}); nothing lands, their bytes stay
+    fs.writeFileSync(path.join(root, 'src', 'a.ts'), 'human edit\n');
+    await r.cards[0].effect('accept', {});
+    await waitFor(() => r.of(runId, 'loop.land.waiting').length > 0, 5_000);
+    expect(r.of(runId, 'loop.land.waiting')[0]).toMatchObject({ reason: 'dirty' });
+    expect(git(root, 'rev-parse', 'HEAD').trim()).toBe(base);
+    expect(fs.readFileSync(path.join(root, 'src', 'a.ts'), 'utf8')).toBe('human edit\n');
+    expect(r.runner.lander.waiting()).toEqual([expect.objectContaining({ runId, reason: 'dirty', how: 'approved' })]);
+    // the human drops their edit; the next nudge lands it, named by the card
+    git(root, 'checkout', '-q', '--', 'src/a.ts');
+    await r.runner.lander.nudge();
+    expect(r.of(runId, 'loop.landed')[0]).toEqual(expect.objectContaining({ how: 'approved', cardId: r.cards[0].cardId }));
+    expect(git(root, 'rev-parse', 'HEAD^').trim()).toBe(base);
+    expect(fs.readFileSync(path.join(root, 'src', 'a.ts'), 'utf8')).toBe('export const x: number = 1;\n');
+    expect(r.runner.lander.waiting()).toEqual([]);
   }, 60_000);
 });

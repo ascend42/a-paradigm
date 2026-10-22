@@ -605,7 +605,8 @@ export function loopRowToast(row: { kind?: string; payload?: unknown }, m: Loops
   const run = x?.runs.find((r) => r.runId === runId);
   const base = { tag: `↻ loop · ${loopId}`, ...(runId ? { runId } : {}), ...(x ? { key: x.key } : {}) };
   if (row.kind === 'loop.run.ended' && p.reason === 'goal') return { ...base, text: `reached its goal${project ? ` on ${project}` : ''}${run?.startedAt && run.endedAt ? ` · ${durText(Date.parse(run.endedAt) - Date.parse(run.startedAt))}` : ''}` };
-  if (row.kind === 'loop.landed') return { ...base, text: `landed ${String(str(p.sha) ?? '').slice(0, 7)}${project ? ` on ${project}` : ''}` };
+  // step 11: a land writes loop.landed{phase:'intent'} BEFORE it moves the ref and {phase:'done'} after; only done landed
+  if (row.kind === 'loop.landed' && p.phase === 'done') return { ...base, text: `landed ${String(str(p.sha) ?? '').slice(0, 7)}${project ? ` on ${project}` : ''}` };
   if (row.kind === 'loop.notified' && p.as !== 'card') return { ...base, text: `${str(p.nodeId) ?? 'notify'}: the loop run has news${project ? ` on ${project}` : ''}` };
   return null;
 }

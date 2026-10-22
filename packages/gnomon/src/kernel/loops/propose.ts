@@ -5,8 +5,9 @@
  * The propose step (docs/specs/gnomon-loops.md §3.3 effective autonomy, §3.4 protected goal inputs; build plan step
  * 10, G-LOOP-23 card half). After a run with act nodes, its scratch diff (parked at refs/gnomon/loops/<id>/<runId>)
  * becomes ONE `verdict` card in the stack with the diff, the files and the goal check's result. Why it proposes:
- *   - the effective autonomy: `propose` (declared, or act capped to propose by strictness L2), or `act` at L0/L1,
- *     which in 8.0 still proposes: "auto-land lands in step 11";
+ *   - the effective autonomy: `propose` (declared, or act capped to propose by strictness L2), or `act` with a
+ *     reason it may not land alone (step 11, the runner's autoLandBlockers: no goal reached, no land block, a path
+ *     outside land.paths, `decide: before-land`, a gate-class path, the kill switch);
  *   - land hazards that ALWAYS force propose, whatever the autonomy (G-LOOP-23): the diff touches a protected path
  *     (goal.inputs, the config closure, argv-named paths, node_modules), deletes a tracked file, or adds a
  *     suppression marker (SUPPRESSION_MARKERS) on an added line, or touches an execution surface (EXECUTION_SURFACES:
@@ -15,7 +16,7 @@
  *     `diff --git` and the first `@@`, so an added line `++ x` (shown `+++ x`) is still an added line.
  *   - Paths and diff bytes are shown with control, format and bidi characters escaped visibly (Aegis M3), and every
  *     hazard path is listed in the reasons even when the file list is cut.
- * Accept keeps the commit parked for the land step (step 11); reject drops the parked ref. Model text never reaches
+ * Accept lands the commit (step 11, #loop-land: hand-only, fresh presence); reject drops the parked ref. Model text never reaches
  * the card: its lines are kernel fields, file paths and the diff (repo bytes the loop wrote, shown as data).
  */
 import { globToRegExp } from './events.js';
@@ -61,7 +62,7 @@ export function addedLines(diff: string): Array<{ path: string | undefined; line
 }
 
 export interface LandHazard {
-  kind: 'protected-input' | 'tracked-deletion' | 'suppression-marker' | 'execution-surface' | 'diff-unscanned';
+  kind: 'protected-input' | 'tracked-deletion' | 'suppression-marker' | 'execution-surface' | 'symlink' | 'diff-unscanned';
   path?: string;
   marker?: string;
 }
@@ -69,13 +70,15 @@ export interface LandHazard {
 const isNodeModules = (p: string): boolean => p.split('/').some((c) => c.toLowerCase() === 'node_modules');
 
 /** The land hazards in a parked diff (each one forces propose, G-LOOP-23). */
-export function landHazards(parked: Pick<Parked, 'changes' | 'scanDiff' | 'scanComplete'>, protectedGlobs: readonly string[]): LandHazard[] {
+export function landHazards(parked: Pick<Parked, 'changes' | 'scanDiff' | 'scanComplete'> & { changes: ReadonlyArray<Pick<ScratchChange, 'path' | 'status'> & { mode?: ScratchChange['mode'] }> }, protectedGlobs: readonly string[]): LandHazard[] {
   const out: LandHazard[] = [];
   const res = protectedGlobs.map((g) => new RegExp(globToRegExp(g).source, 'i'));
   for (const c of parked.changes) {
     if (isNodeModules(c.path) || res.some((re) => re.test(c.path))) out.push({ kind: 'protected-input', path: c.path });
     if (c.status === 'deleted') out.push({ kind: 'tracked-deletion', path: c.path });
     if (EXECUTION_SURFACES.some((re) => re.test(c.path))) out.push({ kind: 'execution-surface', path: c.path });
+    // Aegis L4: a land that creates or changes a symlink (it can point anywhere; the card shows its target)
+    if (c.status !== 'deleted' && c.mode === '120000') out.push({ kind: 'symlink', path: c.path });
   }
   for (const { path: file, line } of addedLines(parked.scanDiff)) {
     for (const re of SUPPRESSION_MARKERS) {
@@ -87,16 +90,17 @@ export function landHazards(parked: Pick<Parked, 'changes' | 'scanDiff' | 'scanC
   return out;
 }
 
-/** Why this run proposes instead of landing (8.0 never lands: step 11). */
-export function proposeReasons(eff: Pick<EffectiveAutonomy, 'declared' | 'autonomy' | 'level' | 'capReason'>, hazards: readonly LandHazard[]): string[] {
+/** Why this run proposes instead of landing alone: the autonomy, then the blockers (step 11), then every hazard. */
+export function proposeReasons(eff: Pick<EffectiveAutonomy, 'declared' | 'autonomy' | 'level' | 'capReason'>, hazards: readonly LandHazard[], blockers: readonly string[] = []): string[] {
   const out: string[] = [];
   if (eff.autonomy === 'propose') out.push(eff.declared === 'propose' ? 'the loop\'s autonomy is propose' : `strictness ${eff.level} caps act to propose${eff.capReason ? ` (${eff.capReason})` : ''}`);
-  else out.push('act at this level would land the change itself: auto-land lands in step 11, so 8.0 proposes it');
+  else out.push(...blockers);
   for (const h of hazards) {
     if (h.kind === 'protected-input') out.push(`it touches a protected goal input: ${h.path}`);
     else if (h.kind === 'tracked-deletion') out.push(`it deletes a tracked file: ${h.path}`);
     else if (h.kind === 'suppression-marker') out.push(`it adds a suppression marker ${h.marker}${h.path ? ` in ${h.path}` : ''}`);
     else if (h.kind === 'execution-surface') out.push(`it touches a file that runs code (hooks, CI, editor tasks, scripts): ${h.path}`);
+    else if (h.kind === 'symlink') out.push(`it creates or changes a symlink: ${h.path}`);
     else out.push('the diff is too large to scan for land hazards');
   }
   return out.map(visible);
@@ -111,6 +115,8 @@ export interface ProposeCardInput {
   goal: { node: string; verdict: string | null; met: boolean } | null;
   parked: Parked;
   reasons: readonly string[];
+  /** the branch accept lands on (null: a detached HEAD; accept cannot land it) */
+  branch?: string | null;
 }
 
 /** The verdict card's lines: the kernel line first, then kernel fields, files, reasons and the diff (as data). */
@@ -124,7 +130,9 @@ export function proposeLines(i: ProposeCardInput): string[] {
     ...(files.length > PROPOSE_FILE_LINES ? [`… and ${files.length - PROPOSE_FILE_LINES} more files`] : []),
     ...i.reasons.map((r) => `Proposed because ${visible(r)}`),
     `Parked at ${i.parked.ref} (${i.parked.sha.slice(0, 12)})`,
-    'Accept keeps the commit parked for landing (landing arrives in step 11); reject drops it',
+    i.branch
+      ? `Accept lands it on ${visible(i.branch.replace(/^refs\/heads\//, ''))} (Touch ID; it waits while you are editing those files); reject drops it`
+      : 'HEAD was detached when the run started: accept cannot land it; reject drops it',
   ];
   const diff = i.parked.diff.split('\n');
   const shown = diff.slice(0, PROPOSE_DIFF_LINES);

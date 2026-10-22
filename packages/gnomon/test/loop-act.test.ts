@@ -108,8 +108,9 @@ describe('G-LOOP-23 (card half): land hazards always propose', () => {
     expect(landHazards({ changes: [], scanDiff: '', scanComplete: false }, [])).toEqual([{ kind: 'diff-unscanned' }]);
   });
 
-  it('the reasons: autonomy propose, act capped by L2, act at L0 ("auto-land lands in step 11"), then every hazard', () => {
-    expect(proposeReasons({ declared: 'act', autonomy: 'act', level: 'L0', capReason: null }, [])).toEqual(['act at this level would land the change itself: auto-land lands in step 11, so 8.0 proposes it']);
+  it('the reasons: autonomy propose, act capped by L2, act with the step-11 blockers, then every hazard', () => {
+    expect(proposeReasons({ declared: 'act', autonomy: 'act', level: 'L0', capReason: null }, [], ['the loop asks for a decision before it lands (decide: before-land)'])).toEqual(['the loop asks for a decision before it lands (decide: before-land)']);
+    expect(proposeReasons({ declared: 'act', autonomy: 'act', level: 'L0', capReason: null }, [{ kind: 'execution-surface', path: 'package.json' }])).toEqual(['it touches a file that runs code (hooks, CI, editor tasks, scripts): package.json']);
     expect(proposeReasons({ declared: 'act', autonomy: 'propose', level: 'L2', capReason: 'act → propose (L2)' }, [])[0]).toBe('strictness L2 caps act to propose (act → propose (L2))');
     expect(proposeReasons({ declared: 'propose', autonomy: 'propose', level: 'L0', capReason: null }, [{ kind: 'tracked-deletion', path: 'a.ts' }])).toEqual(['the loop\'s autonomy is propose', 'it deletes a tracked file: a.ts']);
     const lines = proposeLines({ clampLine: loopClampLine('g', 'file'), runId: 'lr-1', ending: '@goal', goal: { node: 'tsc', verdict: 'pass', met: true }, parked: { sha: 'a'.repeat(40), ref: 'refs/gnomon/loops/g/lr-1', parkRepo: '/x', changes: [{ path: 'src/a.ts', status: 'modified' }], diff: '+++ b/src/a.ts\n+x', diffTruncated: false, scanDiff: '', scanComplete: true }, reasons: ['r1'] });
@@ -117,6 +118,9 @@ describe('G-LOOP-23 (card half): land hazards always propose', () => {
     expect(lines).toContain('Goal check tsc: pass (goal met)');
     expect(lines).toContain('M src/a.ts');
     expect(lines).toContain('Proposed because r1');
+    expect(lines).toContain('HEAD was detached when the run started: accept cannot land it; reject drops it');
+    const onMain = proposeLines({ clampLine: 'k', runId: 'lr-1', ending: '@goal', goal: null, parked: { sha: 'a'.repeat(40), ref: 'r', parkRepo: '/x', changes: [], diff: '', diffTruncated: false, scanDiff: '', scanComplete: true }, reasons: [], branch: 'refs/heads/main' });
+    expect(onMain).toContain('Accept lands it on main (Touch ID; it waits while you are editing those files); reject drops it');
     expect(lines.slice(-2)).toEqual(['+++ b/src/a.ts', '+x']);
   });
 });

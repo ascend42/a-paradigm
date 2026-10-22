@@ -234,6 +234,7 @@ nodes:
 ### 3.3 Law 5 and strictness
 
 - **Defaults.** `act` is the definition default, but nothing runs or spends until the first enable. The trust card (or an opted-in envelope grant) is law 5's human mark: `attended:false` plus `model` (G:1177). It is also the opt-in for that loop's Claude use (§3.5). Fresh install: zero grants (`G-LAW-05`).
+- **8.0 is approve-to-land** (founder decision, 2026-10-22, build plan step 11). At every level, an act change raises the propose card and lands only when the human accepts it (hand-only, fresh presence). The trust card of a loop with act nodes and a land block says so: "Proposes changes to your current branch; nothing lands until you accept the card." The auto-landing rules below (L0/L1) are built and tested behind one seam and take effect in 8.1.
 - **Effective autonomy** = min(the loop's autonomy, the repo cap), re-evaluated at every node and again at land:
   - L3 or `manual`: nothing runs (`FORBIDDEN{strictness-paused}`, G:616).
   - L2: auto-landing is off, and the `ask` mode ceiling (G:615) wins over the loop's `auto-edits`. Act nodes become `propose`; their diffs are batched into the repo's verdict card.
@@ -387,7 +388,7 @@ Further rules:
 - **G-LOOP-07** A human dirty file on a touched path means no land. A disjoint path lands and the human's edits are byte-identical.
 - **G-LOOP-08** A human turn in flight means `loop.land.waiting`. After `maxWaitMin` the commit is parked at a ref.
 - **G-LOOP-09** Loop commits have author and committer `Gnomon Loop <loop+<id>@gnomon.invalid>` and the kernel's trailers last. A `land.message` carrying `Trusted-By:` or `On-Behalf-Of:` lines has them stripped. Reverting one emits `merge.reverted`.
-- **G-LOOP-10** At L2, `act` lands nothing alone and act nodes run as `propose`. At L3 or `manual`, zero runs. Tightening a repo mid-run pauses its running loops before their next node.
+- **G-LOOP-10** In 8.0, `act` lands nothing alone at any level: every change raises a propose card and lands only on accept (from 8.1, L0 and L1 may land alone). At L2 act nodes run as `propose`. At L3 or `manual`, zero runs and an accepted land waits. Tightening a repo mid-run pauses its running loops before their next node.
 - **G-LOOP-11** Run, day and global caps stop the next permit request. A definition with no budgets runs under the global defaults. A continuous loop with no goal and no rounds, or with no `day.runs` or `day.computeSec`, is refused.
 - **G-LOOP-12** A loop with no `claude.optIn` never starts a Claude process, whatever its `escalate`. For an opted-in loop, crossing `claudeWindowCeiling` mid-session stops it before its next turn.
 - **G-LOOP-13** With the endpoint down and no `on-unavailable`, no Claude process starts. With it and the opt-in, `session.routed` cites the trust card.

@@ -30,9 +30,12 @@
  *   - **Act** (step 10, #loop-act): a top-level run with act nodes first creates a scratch worktree at the branch
  *     head (kernel/git createScratch, outside the repo); its checks copy the SCRATCH, its act steps edit it through
  *     LocalLane.openLoop (role act: the clamp's tools, the protected globs, the `loop-act` profile). When the run
- *     ends, any change is parked at refs/gnomon/loops/<id>/<runId> (loop.parked) and becomes one `verdict` card
- *     (loop.proposed, propose.ts): 8.0 never lands (step 11). A called loop with act nodes is refused, and so are
- *     write checks (`effect: write`). The scratch tree is removed when the run ends.
+ *     ends, any change is parked at refs/gnomon/loops/<id>/<runId> (loop.parked). Step 11 (#loop-land, land.ts):
+ *     a change that may land alone (effective autonomy `act` at land, the goal reached on a check, a `land` block
+ *     whose paths cover every change, no `decide: before-land`, no land hazard, no gate-class path) is handed to the
+ *     lander; anything else becomes one `verdict` card (loop.proposed, propose.ts) whose accept lands it (hand-only,
+ *     fresh presence) and whose reject drops the ref. A called loop with act nodes is refused, and so are write
+ *     checks (`effect: write`). The scratch tree is removed when the run ends.
  *   - **Strictness** (step 9, #loop-strictness, strictness-cap.ts): the `strictness` port's repo cap folds into the
  *     effective autonomy at run start, before EVERY node and on every `loop.node` row (Aegis M2). L3 or `manual`
  *     refuses the start FORBIDDEN{strictness-paused} and pauses a running loop before its next node
@@ -69,9 +72,13 @@ import { resolveInputs, runModelStep, type LoopModelPort, type ModelStepResult, 
 import { authorLabel, parseTightened, type LoopEntry, type LoopRegistry, type LoopRunRef, type TightenedBudgets } from './registry.js';
 import { loopClampLine } from '../supervisor/loop-clamp.js';
 import { createScratch, dropParkedRef, GitRefusal, listScratchFiles, parkScratch, removeScratch, type Scratch } from '../git/scratch.js';
-import { landHazards, proposeLines, proposeReasons } from './propose.js';
+import { landHazards, proposeLines, proposeReasons, type LandHazard } from './propose.js';
+import { LoopLander, type LandJob } from './land.js';
+import { gateClassPathRule } from '../manifest/layers.js';
+import { globToRegExp } from './events.js';
 import { parseLoopTarget, type LoopAsker } from './trust.js';
-import { effectiveAutonomy, FAIL_SAFE_CAP, OPEN_CAP, type EffectiveAutonomy, type RepoCap } from './strictness-cap.js';
+import { effectiveAutonomy, FAIL_SAFE_CAP, landDecision, OPEN_CAP, type EffectiveAutonomy, type RepoCap } from './strictness-cap.js';
+import type { Parked } from '../git/scratch.js';
 
 /** Global caps and defaults (root-signed `~/.gnomon/config.yaml` `loops:` replaces these once it is read). */
 export interface LoopGlobalCaps {
@@ -100,6 +107,9 @@ export const LOOP_GLOBAL_CAPS: Readonly<LoopGlobalCaps> = Object.freeze({ repo: 
 export const LOOP_NODE_EVIDENCE_BYTES = 16 * 1024;
 export const NO_LOCAL_MODEL = 'no local model is configured for this loop (the root-signed local config marks no endpoint loops: true, or none matches model.profile)';
 export const ACT_NODES_LATER = 'write checks (effect: write) are not built in 8.0 yet';
+/** 8.0 is approve-to-land (founder decision): no loop change lands without the human accepting its card. */
+export const LOOP_AUTO_LAND = false;
+export const AUTO_LAND_LATER = 'auto-land lands in 8.1';
 /** Paths an act node never edits beyond the loop's protected set: loop definitions (LL5) and the repo's Gnomon dir. */
 export const ACT_ALWAYS_PROTECTED: readonly string[] = Object.freeze(['.paradigm/loops/**', '.gnomon/**', '**/node_modules/**']);
 const KERNEL_PAUSES_NEED_PRESENCE = new Set(['kill-switch', 'thrash', 'strictness', 'budget', 'node-exit', 'unavailable', 'timeout']);
@@ -144,6 +154,17 @@ export interface LoopRunnerOptions {
   diag?: (event: string, data: Record<string, unknown>) => void;
   /** step 9 (#loop-strictness): the repo's cap {level, effective run mode}; absent ⇒ as declared; a throw ⇒ L3 */
   strictness?: (repoKey: string) => RepoCap;
+  /** step 11 (#loop-land): a human attended session in the repo (its realpath) has a turn in flight (the land waits) */
+  humanBusy?: (repo: string) => boolean;
+  /** step 11: the lander (default one built from these options); `landRetryMs` its retry period */
+  lander?: LoopLander;
+  landRetryMs?: number;
+  /** TEST seam: the land mechanics' step hook */
+  landStep?: ConstructorParameters<typeof LoopLander>[0]['step'];
+  /** TEST seam for the 8.1 auto path (default LOOP_AUTO_LAND, false in 8.0) */
+  autoLand?: boolean;
+  /** only rows signed by a kernel key fold (the lander's landed set, L6) */
+  isKernelKey?: (keyId: string) => boolean;
 }
 
 interface Active {
@@ -285,9 +306,34 @@ export class LoopRunner {
   #recovered = false;
   readonly #listeners = new Set<(e: LoopRunnerEvent) => void>();
 
+  /** step 11 (#loop-land): lands auto and approved changes, waits, parks, and watches for reverts */
+  readonly lander: LoopLander;
+  /** an auto land the re-gate refused alone: the run's propose card, raised instead (by runId) */
+  readonly #fallback = new Map<string, (reason: string) => Promise<void>>();
+
   constructor(o: LoopRunnerOptions) {
     this.#o = o;
     this.#caps = { ...LOOP_GLOBAL_CAPS, ...(o.caps ?? {}) };
+    this.lander = o.lander ?? new LoopLander({
+      home: o.home, kernelPrincipal: o.kernelPrincipal, append: (k, p) => o.append(k, p), registry: o.registry,
+      ...(o.isKernelKey ? { isKernelKey: o.isKernelKey } : {}),
+      effective: (e) => this.effective(e), isHeld: (k) => this.isHeld(k),
+      ...(o.humanBusy ? { humanBusy: o.humanBusy } : {}),
+      toast: (t) => {
+        try {
+          o.toast?.(t);
+        } catch {
+          /* the GUI port never stops a land */
+        }
+      },
+      propose: async (job, reason) => {
+        const raise = this.#fallback.get(job.runId);
+        this.#fallback.delete(job.runId);
+        if (raise) await raise(reason);
+      },
+      ...(o.diag ? { diag: o.diag } : {}), ...(o.clock ? { clock: o.clock } : {}),
+      ...(o.landRetryMs !== undefined ? { retryMs: o.landRetryMs } : {}), ...(o.landStep ? { step: o.landStep } : {}),
+    });
   }
 
   #now(): number {
@@ -812,14 +858,15 @@ export class LoopRunner {
   }
 
   /**
-   * Step 10 propose: park what the run changed in its scratch and raise ONE `verdict` card (§3.3, §3.4, G-LOOP-23).
-   * A run stopped from outside (pause, kill switch, untrust) parks its work and raises no card (§3.3 kill switch).
+   * Step 10 park + step 11 land: park what the run changed in its scratch, then either hand it to the lander (it may
+   * land alone: autoLandBlockers is empty) or raise ONE `verdict` card whose accept lands it (§3.2, §3.3, §3.4,
+   * G-LOOP-23). A run stopped from outside (pause, kill switch, untrust) parks its work and raises no card (§3.3).
    */
   async #propose(ctx: WalkCtx, end: LoopRunEnd): Promise<void> {
     const s = ctx.scratch!;
     const { entry, runId } = ctx;
     const ids = { loopId: entry.loopId, runId };
-    let parked;
+    let parked: Parked | null;
     try {
       parked = parkScratch(s, { home: this.#o.home, message: ctx.compiled.land?.message ?? `loop ${entry.loopId}: proposed change`, loopTrailer: `${entry.loopId}@${entry.hash!.contentHash.replace(/^sha256:/, '').slice(0, 8)}`, now: () => this.#now() });
     } catch (err) {
@@ -828,11 +875,61 @@ export class LoopRunner {
     }
     if (!parked) return;
     const stopped = !!ctx.top.stopping || ctx.abort.signal.aborted;
-    await this.#o.append('loop.parked', { ...ids, ref: parked.ref, sha: parked.sha, baseSha: s.headSha, reason: stopped ? (ctx.top.stopping ?? 'paused') : 'propose' });
-    if (stopped) return;
     const eff = this.effective(entry);
     const hazards = landHazards(parked, [...(entry.compiled?.protected ?? []), ...ACT_ALWAYS_PROTECTED]);
-    const reasons = proposeReasons(eff, hazards);
+    const blockers = stopped ? [] : this.#autoLandBlockers(ctx, end, parked, eff);
+    const auto = !stopped && eff.autonomy === 'act' && !hazards.length && !blockers.length;
+    await this.#o.append('loop.parked', { ...ids, ref: parked.ref, sha: parked.sha, baseSha: s.headSha, reason: stopped ? (ctx.top.stopping ?? 'paused') : auto ? 'land' : 'propose' });
+    if (stopped) return;
+    const job: LandJob = {
+      key: entry.key, loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, repo: s.repo, runId, parkRepo: parked.parkRepo,
+      ref: parked.ref, parkedSha: parked.sha, baseSha: s.headSha, headRef: s.headRef, contentHash: entry.hash!.contentHash,
+      message: ctx.compiled.land?.message ?? `loop ${entry.loopId}: change`, maxWaitMin: ctx.compiled.land?.maxWaitMin ?? 120,
+      how: 'auto', notifyLanded: ctx.compiled.notify.as === 'toast' && ctx.compiled.notify.on.includes('landed'),
+      gateClass: parked.changes.some((c) => gateClassPathRule(c.path) !== null),
+    };
+    const card = (extra: readonly string[]): Promise<void> => this.#proposeCard(ctx, end, parked!, job, eff, hazards, extra);
+    if (!auto) return card(blockers);
+    // the lander re-gates at every attempt; if it no longer lets the change land alone, the card is raised instead
+    this.#fallback.set(runId, (reason) => card([reason]));
+    try {
+      await this.lander.request(job);
+    } finally {
+      this.#fallback.delete(runId);
+    }
+  }
+
+  /**
+   * Why this run's change may not land alone (empty: it may). Each line is a reason on the propose card.
+   * 8.0 (founder decision, step 11 follow-up): ALWAYS ask. Every change raises the propose card and lands only when
+   * the human accepts it; LOOP_AUTO_LAND is the seam the 8.1 auto path turns on (the rules below stay tested).
+   */
+  #autoLandBlockers(ctx: WalkCtx, end: LoopRunEnd, parked: Parked, eff: EffectiveAutonomy): string[] {
+    // the autonomy and the land hazards have their own lines on the card (proposeReasons)
+    if (eff.autonomy !== 'act') return [];
+    if (!(this.#o.autoLand ?? LOOP_AUTO_LAND)) return [AUTO_LAND_LATER];
+    const out: string[] = [];
+    const land = ctx.compiled.land;
+    if (!ctx.scratch!.headRef) out.push('HEAD was detached when the run started');
+    if (end.reason !== 'goal') out.push('the run did not reach its goal check (a land rests on a passing check)');
+    if (!land) out.push('the loop has no land block');
+    if (ctx.compiled.decide === 'before-land') out.push('the loop asks for a decision before it lands (decide: before-land)');
+    if (land) {
+      const res = land.paths.map(globToRegExp);
+      const outside = parked.changes.map((c) => c.path).filter((p) => !res.some((re) => re.test(p)));
+      if (outside.length) out.push(`it changes ${outside.length === 1 ? outside[0] : `${outside[0]} and ${outside.length - 1} more`}, outside land.paths`);
+    }
+    const d = landDecision(eff, { gateClass: parked.changes.some((c) => gateClassPathRule(c.path) !== null) });
+    if (!d.land) out.push(d.reason);
+    if (this.isHeld(ctx.entry.key)) out.push('the kill switch holds this loop');
+    return out;
+  }
+
+  /** The propose card: accept lands the parked commit (hand-only, fresh presence); reject drops the ref. */
+  async #proposeCard(ctx: WalkCtx, end: LoopRunEnd, parked: Parked, job: LandJob, eff: EffectiveAutonomy, hazards: readonly LandHazard[], blockers: readonly string[]): Promise<void> {
+    const { entry, runId } = ctx;
+    const ids = { loopId: entry.loopId, runId };
+    const reasons = proposeReasons(eff, hazards, blockers);
     const goalNode = ctx.compiled.goal?.node;
     const goal = goalNode ? { node: goalNode, verdict: ctx.notes.get(goalNode)?.verdict ?? null, met: end.reason === 'goal' } : null;
     const author = authorLabel(this.#o.registry.authoredBy(entry));
@@ -840,23 +937,25 @@ export class LoopRunner {
     const paths = parked.changes.map((c) => c.path);
     try {
       await this.#o.broker.raise({
-        kind: 'verdict', cardId, requestedBy: this.#o.kernelPrincipal, attended: false,
+        kind: 'verdict', cardId, requestedBy: this.#o.kernelPrincipal, attended: false, handOnly: true,
         detail: {
           op: 'loop.propose', origin: 'loop', loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, repo: entry.repoRoot, runId, authoredBy: author,
-          ref: parked.ref, sha: parked.sha, baseSha: s.headSha, headRef: s.headRef, files: parked.changes.map((c) => ({ path: c.path, status: c.status })),
+          ref: parked.ref, sha: parked.sha, baseSha: job.baseSha, headRef: job.headRef, files: parked.changes.map((c) => ({ path: c.path, status: c.status })),
           goal, effectiveAutonomy: eff.autonomy, ...(eff.capReason ? { capReason: eff.capReason } : {}), hazards, reasons, diff: parked.diff, diffTruncated: parked.diffTruncated,
         },
-        lines: proposeLines({ clampLine: loopClampLine(entry.loopId, author), runId, ending: end.terminal ?? end.reason, goal, parked, reasons }),
+        lines: proposeLines({ clampLine: loopClampLine(entry.loopId, author), runId, ending: end.terminal ?? end.reason, goal, parked, reasons, branch: job.headRef }),
         effect: async (decision) => {
-          // accept keeps the parked commit for the land step (11); reject drops the ref (the objects age out)
-          if (decision === 'reject') dropParkedRef(this.#o.home, s.repo, parked.ref);
+          // reject drops the ref (the objects age out); accept hands the commit to the lander (it waits or parks
+          // without holding the card: the rows say what happened)
+          if (decision === 'reject') dropParkedRef(this.#o.home, job.repo, parked.ref);
+          else if (decision === 'accept') void this.lander.request({ ...job, how: 'approved', cardId }).catch(() => undefined);
         },
       });
     } catch (err) {
       this.#o.diag?.('loops.propose-card-failed', { runId, why: err instanceof Error ? err.message.slice(0, 200) : 'refused' });
       return;
     }
-    await this.#o.append('loop.proposed', { ...ids, cardId, paths, why: hazards.length ? 'land-hazard' : eff.autonomy === 'propose' ? 'autonomy' : 'auto-land-later', hazards: hazards.map((h) => h.kind), ref: parked.ref });
+    await this.#o.append('loop.proposed', { ...ids, cardId, paths, why: hazards.length ? 'land-hazard' : eff.autonomy === 'propose' ? 'autonomy' : 'land-blocked', hazards: hazards.map((h) => h.kind), ...(blockers.length ? { blockers: [...blockers] } : {}), ref: parked.ref });
   }
 
   async #toast(ctx: WalkCtx, nodeId: string | undefined, text: string): Promise<void> {
@@ -943,6 +1042,8 @@ export class LoopRunner {
       this.#o.registry.scan();
       for (const e of this.#o.registry.entries()) if (this.#o.registry.stateOf(e).state === 'trusted') keys.add(e.key);
       for (const k of keys) this.#killHeld.add(k);
+      // Aegis M3: every waiting land, approved ones too, parks now
+      await this.lander.parkAll(by).catch((err: unknown) => this.#o.diag?.('loops.land-park-all-failed', { why: err instanceof Error ? err.message.slice(0, 200) : 'failed' }));
       let paused = 0;
       for (const key of keys) {
         const e = this.#o.registry.entry(key);

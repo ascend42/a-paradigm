@@ -3558,7 +3558,8 @@ components:
       Gnomon-Run after the stripped message) into a kernel-owned bare park
       repo <home>/loop-work/park/<repoHash>.git whose objects borrow the
       human's through alternates, at refs/gnomon/loops/<id>/<runId>; the
-      human repo gets no ref and no object (step 11 lands). diff-tree -p
+      human repo gets no ref and no object until #loop-land moves them in
+      under the land lock (src/kernel/git/land.ts). diff-tree -p
       --no-renames --no-ext-diff --no-textconv for the card. removeScratch at
       run end; sweepLoopScratch (boot, LOOP_RETENTION_DAYS) removes stale run
       dirs and parked refs past the window, never a live scratch. Aegis
@@ -3580,6 +3581,75 @@ components:
     anchors:
       - src/kernel/git/scratch.ts
       - src/kernel/git/index.ts
+
+  loop-land:
+    description: >-
+      #loop-land (docs/specs/gnomon-loops.md §3.2 Landing, Conflicts,
+      Commits, Revert signals, §3.3 effective autonomy at land, LL4, threat
+      37; build plan step 11, LP6b; G-LOOP-07, G-LOOP-08, G-LOOP-09,
+      G-LOOP-15, G-LOOP-24, G-LOOP-25). Mechanics in src/kernel/git/land.ts
+      (landCommit): the per-repo in-process land lock (withLandLock) plus the
+      human's own <gitDir>/index.lock taken O_CREAT|O_EXCL; refusals that land
+      nothing: merge/rebase/cherry-pick/revert/bisect in progress, index.lock,
+      a human turn in flight (waitable), HEAD detached or on another branch
+      (symbolic-ref), the branch moved since the run's base, a rename, a
+      gitlink at or above a path, a .git component, unsafe names, case and
+      NFD collisions with any index path, unmerged, assume-unchanged,
+      skip-worktree or staged entries, an untracked or ignored add, any
+      .gitattributes attribute, core.autocrlf/eol/splitIndex/sparseCheckout,
+      and a worktree entry whose bytes or exec bit differ from the base blob.
+      The land commit is re-made in the park repo with Gnomon Loop
+      <loop+<id>@gnomon.invalid> and the trailers On-Behalf-Of, Trusted-By,
+      Gnomon-Loop, Gnomon-Run, Loop-Authored-By (and Symbols) last
+      (landMessage strips trailer-shaped lines); its objects are re-hashed in
+      the kernel and written with hash-object -w, then rev-list --objects
+      --missing=error. loop.landed is written (beforeLand) BEFORE any visible
+      change. Files: DirGuard (every parent lstat'd a real dir, realpath
+      exact, the dir inode held open and re-compared), the original moved
+      aside and compared to the base blob again, the new bytes in a temp file
+      (O_EXCL|O_NOFOLLOW, old permission bits kept, exec only per the blob
+      mode) linked in with link() (never replaces); any mismatch rolls every
+      placed file back. Then update-ref <ref> <new> <base> (CAS), HEAD
+      re-checked, and the index copy (update-index --index-info on a private
+      GIT_INDEX_FILE) written through the held lock. findRevert finds a later
+      commit that restores the land's blobs (content) or names it (message).
+      Orchestration in src/kernel/loops/land.ts (LoopLander): auto lands
+      re-gated each attempt (trusted at the run's hash, runnable, not held,
+      landDecision with the cap re-read, else the runner's propose card);
+      approved lands need the trust only; L3/manual wait. Waitable refusals
+      write loop.land.waiting once per reason and retry (timer and nudge on
+      turn.result/session.exited) until land.maxWaitMin, then loop.parked
+      {max-wait} and a toast; structural ones park at once; an undone land
+      writes loop.land.waiting{undone, sha}. scanReverts writes ONE
+      merge.reverted{landedRef, revertSha, detectedBy} per reverted loop
+      commit, from one log --raw read (strictness scoring of it is 8.1, and
+      message-only reverts must not drive it). Aegis review fixes: the new
+      index is written fully into the held lock and verified (size, read
+      back, trailer checksum or skipHash zeros) BEFORE the CAS, so only the
+      rename follows it and a failed rename undoes the land (H1); the private
+      index copy keeps the original's mtime rounded down (racy git, H2); a
+      split index, an unreadable or crlf/attributes-setting global, XDG or
+      system config refuse (the read-only queries see the human's HOME, M2);
+      the kill switch parks every waiting land (parkAll, M3); a second
+      loop.landed{phase:'done'} closes each land and the boot reconcile closes
+      interrupted ones (stale index.lock, leftovers to
+      <home>/loop-work/recovered/<runId>/, a toast) and parks lands waiting
+      at the restart (M4); in-progress re-checked under the lock, the undo CAS
+      checked (a conflict leaves the files), changed originals kept in
+      recovered/, a branch checked out in another worktree refused, local
+      attended sessions counted (L1-L7). 8.1: placement with openat/renameat
+      in the helper (M5).
+    path: src/kernel/loops/land.ts
+    type: module
+    tags: [gnomon, loops, git, paradigm-8, security]
+    tests:
+      - test/loop-land.test.ts
+      - test/loop-land-git.test.ts
+      - test/loop-act-e2e.test.ts
+      - test/loop-events.test.ts
+    anchors:
+      - src/kernel/loops/land.ts
+      - src/kernel/git/land.ts
 
   loop-act:
     description: >-
@@ -3613,10 +3683,16 @@ components:
       from the loop file)", files, goal result, reasons, the diff) and
       loop.proposed; land hazards (a protected path, a tracked deletion, an
       added @ts-nocheck|@ts-ignore|eslint-disable|.skip|.only|xit, an
-      unscanned diff) always propose; act at L0/L1 also proposes in 8.0
-      ("auto-land lands in step 11"); L2 caps act to propose; observe edits
-      nothing. Accept keeps the ref for step 11; reject drops it. A run
-      stopped from outside parks and raises no card. Aegis review: the
+      unscanned diff, a symlink) always propose; 8.0 is APPROVE-TO-LAND
+      (founder decision): autoLandBlockers returns "auto-land lands in 8.1"
+      while LOOP_AUTO_LAND is false, so every change raises the card (the
+      8.1 auto rules stay behind that seam: goal reached on a check, a land
+      block covering every path, no decide before-land, no gate-class path,
+      not held); the trust card of an act loop with a land block says
+      "Proposes changes to your current branch; nothing lands until you
+      accept the card."; L2 caps act to propose; observe edits nothing. The card is hand-only: accept lands it
+      through #loop-land, reject drops the ref. A run stopped from outside
+      parks and raises no card. Aegis review: the
       tail also denies fork, signals beyond itself, executable mapping of
       the scratch and tmp, deleting or renaming them, and reads of the git common
       dir and sibling worktrees; it re-denies the kernel's loopback ports

@@ -1242,7 +1242,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     model: { openLoop: (ref, req) => supervisor.openLoop(ref, req), configured: () => ({ endpoints: (localCfg.config?.endpoints ?? []).filter((e) => e.loops === true).map((e) => e.id), runner: localCfg.config?.runner !== undefined }), settled: (runId) => supervisor.loopSessionsSettled(runId) },
     strictness: (repoKey) => ({ level: strictness.level(repoKey), mode: runModes.repoView(repoKey).effective }),
     // step 12 (#loop-agent-ops, LL5): a loop session's hsid is refused every loop.request
-    isLoopSession: (hsid) => supervisor.isLoopSession(hsid) });
+    isLoopSession: (hsid) => supervisor.isLoopSession(hsid),
+    // step 11 (#loop-land): a land waits while a human session in the repo has a turn in flight
+    humanTurns: () => supervisor.humanTurns() });
   loopsBrake = (repoKey) => loops.brake(repoKey);
   const dispatcherCommon = {
     voice,

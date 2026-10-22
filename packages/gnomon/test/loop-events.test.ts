@@ -26,7 +26,7 @@ import { readShebang } from '../src/kernel/loops/hash.js';
 import { LoopLedger, replayLoopRuns } from '../src/kernel/loops/ledger.js';
 import { LoopRegistry } from '../src/kernel/loops/registry.js';
 import { LoopRunner } from '../src/kernel/loops/runner.js';
-import { gitDirsOf, globToRegExp, LoopEvents, type LoopEventRow } from '../src/kernel/loops/events.js';
+import { gitDirsOf, globToRegExp, LOOP_LANDED_QUIET_MS, LoopEvents, type LoopEventRow } from '../src/kernel/loops/events.js';
 import type { CheckResult } from '../src/kernel/loops/check-exec.js';
 import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
 
@@ -289,6 +289,33 @@ describe('#loop-events: file.changed', () => {
     await r.append('loop.landed', { loopId: 'fc', runId: 'lr-own', sha: 'a'.repeat(40), paths: ['src/fixed.ts'] });
     await r.append('loop.run.ended', { runId: 'lr-own', loopId: 'fc', reason: 'goal' });
     expect(r.events.handleFsEvent(root, 'src/fixed.ts')).toEqual([r.key(root, 'other')]);
+    // step 11: a landed row names its loop directly (an approved land long after its run's start row was evicted)
+    await r.append('loop.landed', { loopId: 'fc', scope: 'repo', repoKey, runId: 'lr-unknown', sha: 'c'.repeat(40), paths: ['src/late.ts'] });
+    expect(r.events.handleFsEvent(root, 'src/late.ts')).toEqual([r.key(root, 'other')]);
+    // step 11: landed paths match exactly (a landed path holding glob characters never covers its neighbours)
+    await r.append('loop.landed', { loopId: 'fc', runId: 'lr-own', sha: 'b'.repeat(40), paths: ['src/*.ts'] });
+    expect(r.events.handleFsEvent(root, 'src/other.ts')).toEqual([r.key(root, 'fc'), r.key(root, 'other')]);
+    // the quiet window ends LOOP_LANDED_QUIET_MS after the row: then the loop's own path fires it again
+    await r.t.advance(LOOP_LANDED_QUIET_MS + 1000);
+    expect(r.events.handleFsEvent(root, 'src/fixed.ts')).toEqual([r.key(root, 'fc'), r.key(root, 'other')]);
+  });
+
+  it('Aegis M1: an approved land (after its run ended) does not re-fire its own file.changed trigger: its paths, their dirs, its temps', async () => {
+    const root = repo([evLoop('fc', { kind: 'file.changed', flow: FLOW }), evLoop('other', { kind: 'file.changed', flow: FLOW })]);
+    const r = await rig([root]);
+    r.trust(root, 'fc');
+    r.trust(root, 'other');
+    const repoKey = repoKeyOf([root]);
+    await r.append('loop.run.started', { runId: 'lr-ap', loopId: 'fc', scope: 'repo', repoKey });
+    await r.append('loop.run.ended', { runId: 'lr-ap', loopId: 'fc', reason: 'goal' });
+    // the human accepts the card later: the land writes its intent row, then the files
+    await r.append('loop.landed', { loopId: 'fc', scope: 'repo', repoKey, runId: 'lr-ap', sha: 'd'.repeat(40), paths: ['src/deep/a.ts'], how: 'approved', phase: 'intent' });
+    expect(r.events.handleFsEvent(root, 'src/deep/a.ts')).toEqual([r.key(root, 'other')]);
+    expect(r.events.handleFsEvent(root, 'src/deep')).not.toContain(r.key(root, 'fc'));
+    // the land's own transient files fire nothing at all
+    for (const f of ['src/deep/.gnomon-land-0123456789abcdef.tmp', 'src/deep/.gnomon-land-0123456789abcdef.bak', 'src/.gnomon-land-0123456789abcdef.undo']) expect(r.events.handleFsEvent(root, f)).toEqual([]);
+    // a sibling the land did not touch still fires the loop
+    expect(r.events.handleFsEvent(root, 'src/deep/b.ts')).toContain(r.key(root, 'fc'));
   });
 
   it.skipIf(linux)('a real fs.watch: writing a flow file fires', async () => {

@@ -197,6 +197,8 @@ interface LoopState {
 interface LocalSession {
   loop?: LoopState;
   hsid: string;
+  /** the spawn cwd (realpath): #loop-land waits while an attended session in the repo is mid-turn */
+  cwd: string;
   principalId: string;
   owner: string;
   model: string;
@@ -675,7 +677,7 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
@@ -804,6 +806,11 @@ export class LocalLane {
   turnBusy(hsid: string): { streaming: boolean; endedAt: number | null } {
     const s = this.#sessions.get(hsid);
     return { streaming: !!s && s.state === 'running' && s.turnPermits.length > 0, endedAt: s?.lastTurnEndAt ?? null };
+  }
+
+  /** #loop-land (step 11, Aegis L7): every live ATTENDED local session (never a loop session), its cwd and turn state. */
+  humanTurns(): Array<{ hsid: string; cwd: string; busy: boolean }> {
+    return [...this.#sessions.values()].filter((s) => !s.loop && s.state === 'running').map((s) => ({ hsid: s.hsid, cwd: s.cwd, busy: this.turnBusy(s.hsid).streaming }));
   }
 
   /** The owner of a live local session, or undefined (#gnomon-voice attachment). */

@@ -246,6 +246,8 @@ const GATE_DIRS: ReadonlySet<string> = new Set([
   '.vscode', '.idea', '.cursor', '.devcontainer', '.yarn', '.cargo', '.paradigm', '.lefthook',
 ]);
 const GATE_FILES: ReadonlySet<string> = new Set([
+  // loops step 11 (Aegis L8): portal.yaml is the repo's gate and route authority (Paradigm portal protocol)
+  'portal.yaml',
   '.gitattributes', '.gitmodules', '.gitlab-ci.yml', '.travis.yml', 'azure-pipelines.yml', 'jenkinsfile', 'bitbucket-pipelines.yml',
   'package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'bun.lock', 'bun.lockb',
   '.npmrc', '.yarnrc', '.yarnrc.yml', '.mcp.json', 'pytest.ini', 'tox.ini', 'conftest.py', 'noxfile.py',

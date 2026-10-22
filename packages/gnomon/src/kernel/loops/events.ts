@@ -51,6 +51,8 @@ export const LOOP_EVENT_SETTLE_MS = 250;
 /** How long after a `loop.landed{paths}` row a change to those paths is still the loop's own. */
 export const LOOP_LANDED_QUIET_MS = 60_000;
 const INDEX_CAP = 4096;
+/** The land's own transient files beside a landed path (kernel/git/land.ts). */
+export const LAND_TEMP_NAME = /^\.gnomon-land-[0-9a-f]{16}\.(tmp|bak|undo)$/;
 const SHA = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 const REF_HEADS = /^refs\/heads\/[^\0\s]+$/;
 /** The trigger fields handed to runner.start besides type/kind/fireId/count: kernel ids only (never path or ref). */
@@ -268,7 +270,8 @@ export class LoopEvents {
   readonly #sessions = new Map<string, { cwd?: string; runId?: string }>();
   readonly #rowLoops = new Map<string, string[]>();
   readonly #landedSha = new Map<string, string[]>();
-  readonly #landedPaths: Array<{ keys: string[]; re: RegExp[]; until: number }> = [];
+  /** step 11: the exact paths a loop.landed row named (never globs: a path may hold `*` or `{`), with their window */
+  readonly #landedPaths: Array<{ keys: string[]; paths: ReadonlySet<string>; until: number }> = [];
   readonly #dropped = new Map<string, { coalesced: number; refused: number }>();
   #closed = false;
 
@@ -436,6 +439,8 @@ export class LoopEvents {
     if (!f || f.startsWith('/') || f.split('/').some((s) => s === '..')) return [];
     const segs = f.split('/');
     if (segs[0] === '.git' || segs.includes('node_modules')) return [];
+    // Aegis M1: a land's own temp, moved-aside original and undo files are never a change
+    if (LAND_TEMP_NAME.test(segs[segs.length - 1]!)) return [];
     const abs = path.join(realRoot, ...segs);
     if (within(this.#realHome, abs)) return [];
     const real = realOfMaybeMissing(abs);
@@ -460,7 +465,7 @@ export class LoopEvents {
   #ownFileChange(s: Sub, f: string): boolean {
     const now = this.#now();
     while (this.#landedPaths.length && this.#landedPaths[0]!.until < now) this.#landedPaths.shift();
-    if (this.#landedPaths.some((l) => l.keys.includes(s.key) && l.re.some((re) => re.test(f)))) return true;
+    if (this.#landedPaths.some((l) => l.keys.includes(s.key) && l.paths.has(f))) return true;
     // a land in flight (step 11 writes the repo under the run): the loop's own land paths are its own
     const live = this.#active.has(s.key) || this.#o.runner.running().some((r) => r.key === s.key);
     return live && (s.entry.compiled?.land?.paths ?? []).some((g) => globToRegExp(g).test(f));
@@ -601,11 +606,18 @@ export class LoopEvents {
       const info = runId ? this.#runs.get(runId) : undefined;
       if (cardId && runId && info) put(this.#cards, cardId, { runId, key: info.key, loopId: info.loopId, nodeId: str(p.nodeId) ?? '', repoKey: info.repoKey });
     } else if (r.kind === 'loop.landed') {
+      // step 11 rows name their loop directly (scope, repoKey, loopId): an approved land can come long after the run's
+      // start row left the index
+      const own = str(p.loopId) && str(p.scope) && str(p.repoKey) ? loopKeyOf(str(p.scope)!, str(p.repoKey)!, str(p.loopId)!) : undefined;
+      if (own) chain.add(own);
       const keys = [...chain];
       const sha = str(p.sha);
       if (sha && keys.length) put(this.#landedSha, sha, keys);
       const paths = Array.isArray(p.paths) ? p.paths.filter((x): x is string => typeof x === 'string') : [];
-      if (paths.length && keys.length) this.#landedPaths.push({ keys, re: paths.map(globToRegExp), until: this.#now() + LOOP_LANDED_QUIET_MS });
+      // Aegis M1: the landed paths and their ancestor dirs (a dir event for a created or emptied parent is the land's)
+      const covered = new Set<string>();
+      for (const x of paths) for (let d = x; d && d !== '.'; d = path.posix.dirname(d)) covered.add(d);
+      if (paths.length && keys.length) this.#landedPaths.push({ keys, paths: covered, until: this.#now() + LOOP_LANDED_QUIET_MS });
     }
     const out = [...chain];
     if (r.id && out.length) put(this.#rowLoops, r.id, out);

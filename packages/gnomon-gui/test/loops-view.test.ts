@@ -216,7 +216,9 @@ describe('LP8 loops model', () => {
     expect(runPath({ runId: 'r', loopId: 'x', rounds: 1, computeMs: 0, reason: 'stop', nodes: [{ nodeId: 'tsc', visit: 1, verdict: 'fail' }, { nodeId: 'fix', visit: 1, verdict: 'pass' }, { nodeId: 'fix', visit: 2, verdict: 'pass' }] })).toBe('tsc ✕ → fix ×2 → @stop');
     const m = loopsOf(status());
     expect(loopRowToast({ kind: 'loop.run.ended', payload: { loopId: 'evening-tidy', runId: 'run-fail', reason: 'goal' } }, m)).toMatchObject({ tag: '↻ loop · evening-tidy', runId: 'run-fail' });
-    expect(loopRowToast({ kind: 'loop.landed', payload: { loopId: 'evening-tidy', sha: '4c1e9a2ffff' } }, m)!.text).toBe('landed 4c1e9a2 on a-paradigm');
+    expect(loopRowToast({ kind: 'loop.landed', payload: { loopId: 'evening-tidy', sha: '4c1e9a2ffff', phase: 'done' } }, m)!.text).toBe('landed 4c1e9a2 on a-paradigm');
+    // the intent row comes before the ref moves (a land can still be undone): no toast
+    expect(loopRowToast({ kind: 'loop.landed', payload: { loopId: 'evening-tidy', sha: '4c1e9a2ffff', phase: 'intent' } }, m)).toBeNull();
     expect(loopRowToast({ kind: 'loop.notified', payload: { loopId: 'flow-health-checkout', nodeId: 'tell', as: 'toast' } }, m)!.text).toContain('tell');
     expect(loopRowToast({ kind: 'loop.notified', payload: { loopId: 'x', as: 'card' } }, m)).toBeNull();
     expect(loopRowToast({ kind: 'loop.run.ended', payload: { loopId: 'x', reason: 'budget' } }, m)).toBeNull();

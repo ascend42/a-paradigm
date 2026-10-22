@@ -102,6 +102,8 @@ export function renderDefinition(c: CompiledLoop, h: LoopHash): string[] {
   push(c.goal ? `Goal: ${c.goal.node} = ${c.goal.verdict}; goal inputs: ${list(c.goal.inputs)}` : 'Goal: none');
   push(`Protected (act nodes may not edit): ${list(c.protected)}`);
   push(c.land ? `Land paths: ${list(c.land.paths)}; message "${c.land.message}"; max wait ${c.land.maxWaitMin} min (gate-class paths never land without a card)` : 'Land: none (nothing lands)');
+  // 8.0 approve-to-land (founder decision, build plan step 11; Aegis M6): said plainly on the card that trusts it
+  if (c.land && c.nodes.some((n) => n.type === 'model' && n.role === 'act')) push('Proposes changes to your current branch; nothing lands until you accept the card.');
   push(`Start: ${c.start}`);
   const argvOf = new Map(h.argv.map((a) => [a.node, a]));
   const callOf = new Map(h.calls.map((x) => [x.node, x]));

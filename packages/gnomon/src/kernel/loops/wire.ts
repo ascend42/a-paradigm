@@ -17,6 +17,11 @@
  * folds it into each loop's effective autonomy; `brake(repoKey)` is the repo brake (a level raise or a repo mode
  * tightening pauses the repo's running loops at once, `loop.paused{reason:'strictness'}`); status.loops.effective
  * carries each loop's effective autonomy and capReason for the GUI ("act → propose (L2)").
+ *
+ * #loop-land (step 11): the runner's lander folds `loop.landed`, undone lands and `merge.reverted` from the log,
+ * retries waiting lands on every committed `turn.result` and `session.exited`, waits while a human session in the
+ * repo has a turn in flight (`humanTurns`, the supervisor's own streaming state), and scans landed loop commits for
+ * reverts at boot and every LAND_REVERT_SCAN_MS. status.loops.landing lists the waiting lands.
  */
 import { sweepCheckCopies } from './check-exec.js';
 import { sweepLoopScratch } from '../git/scratch.js';
@@ -37,6 +42,10 @@ import { LoopTimers, type LoopScheduler } from './timers.js';
 import { LOOP_EVENT_INDEX_KINDS, LoopEvents, type LoopEventRow } from './events.js'; // #loop-events (step 7)
 import { LoopTrust, type LoopAsker } from './trust.js';
 import { LoopAgentOps, type LoopAgentAsker } from './agent-ops.js';
+import { LOOP_LAND_FOLD_KINDS } from './land.js'; // #loop-land (step 11)
+
+/** How often landed loop commits are checked for reverts (read-only git). */
+export const LAND_REVERT_SCAN_MS = 60_000;
 
 /** The slice of the kernel log the loops need. */
 export interface LoopsLog {
@@ -76,6 +85,8 @@ export interface WireLoopsOptions {
   strictness?: (repoKey: string) => RepoCap;
   /** #loop-agent-ops (step 12, LL5): is this hsid a loop session (supervisor.isLoopSession)? */
   isLoopSession?: (hsid: string) => boolean;
+  /** #loop-land (step 11): the live human sessions' cwd and whether a turn is in flight (a land waits for them) */
+  humanTurns?: () => Array<{ cwd: string; busy: boolean }>;
 }
 
 /** The dispatcher's port (socket/dispatch.ts HumanRequestPort.loops). */
@@ -164,7 +175,29 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     ...(o.caps ? { caps: o.caps } : {}), ...(o.clock ? { clock: o.clock } : {}), ...(o.platform ? { platform: o.platform } : {}), ...(o.diag ? { diag: o.diag } : {}),
     ...(o.strictness ? { strictness: o.strictness } : {}),
     ...(o.model ? { model: o.model } : {}),
+    ...(o.humanTurns ? { humanBusy: (repo: string) => humanBusyIn(repo, o.humanTurns!()) } : {}),
+    isKernelKey: (k: string) => o.log.isKernelKey(k),
   });
+  // ── #loop-land (step 11): landed shas, undone lands and reported reverts fold from kernel rows ──
+  try {
+    const landRows: LoopRow[] = [];
+    for (const v of o.log.read({ reader: { class: 'human' }, kinds: [...LOOP_LAND_FOLD_KINDS] })) if (v.view === 'full' && v.event) landRows.push(rowOf(v.event));
+    runner.lander.seed(landRows);
+  } catch {
+    /* an unreadable history: no landed commit to watch for reverts yet */
+  }
+  // Aegis M4: lands a previous daemon left mid-way (or waiting) are closed and the human told
+  const reconciled = o.start !== false ? runner.lander.reconcile().catch((err: unknown) => {
+    o.diag?.('loops.land-reconcile-failed', { why: err instanceof Error ? err.message.slice(0, 200) : 'failed' });
+    return 0;
+  }) : Promise.resolve(0);
+  void reconciled;
+  o.log.onCommit((e) => {
+    runner.lander.observe(rowOf(e));
+    // a turn ended or a session exited: a land waiting on the human may go now
+    if (e.kind === 'turn.result' || e.kind === 'session.exited') void runner.lander.nudge();
+  });
+  // ── end #loop-land ──
   stopRun = (key, reason) => void runner.stopRun(key, reason);
   const recovered = runner.recover().catch((err: unknown) => {
     o.diag?.('loops.recover-failed', { why: err instanceof Error ? err.message.slice(0, 200) : 'recover failed' });
@@ -195,6 +228,12 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
   if (o.start !== false) {
     registry.start();
     process.once('exit', onExit);
+    // #loop-land: reverts of landed loop commits (merge.reverted), at boot and then on a slow timer
+    const scan = (): void => void runner.lander.scanReverts().catch((err: unknown) => o.diag?.('loops.revert-scan-failed', { why: err instanceof Error ? err.message.slice(0, 200) : 'failed' }));
+    scan();
+    const revertTimer = setInterval(scan, LAND_REVERT_SCAN_MS);
+    revertTimer.unref?.();
+    closers.push(() => clearInterval(revertTimer));
     // retention (loops.retentionDays, default LOOP_RETENTION_DAYS until the root config is read): kept check copies,
     // stale scratch run dirs (a daemon restart mid-run) and parked refs past the window, once at boot
     try {
@@ -243,16 +282,32 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     recovered,
     port: {
       request: (asker, kind, payload) => (RUNNER_KINDS.has(kind) ? runner.request(asker, kind, payload) : trust.request(asker, kind, payload)),
-      status: () => ({ ...registry.status(), ...runner.status(), ...(timers ? { uptime: timers.status() } : {}), effective: effective() }),
+      status: () => ({ ...registry.status(), ...runner.status(), ...(timers ? { uptime: timers.status() } : {}), effective: effective(), landing: runner.lander.waiting() }),
       agent: (asker, payload) => agentOps.request(asker, payload),
     },
     brake,
     close: () => {
       process.removeListener('exit', onExit);
-      for (const c of closers.splice(0)) c(); // #loop-events
+      for (const c of closers.splice(0)) c(); // #loop-events, the revert scan
+      runner.lander.close(); // #loop-land: waiting lands stop retrying (their commits stay parked)
       timers?.close();
       runner.abortAll();
       registry.close();
     },
   };
+}
+
+/** Is a human session whose cwd is inside `repo` (realpath) mid-turn? */
+export function humanBusyIn(repo: string, sessions: ReadonlyArray<{ cwd: string; busy: boolean }>): boolean {
+  for (const x of sessions) {
+    if (!x.busy) continue;
+    let cwd: string;
+    try {
+      cwd = fs.realpathSync.native(x.cwd);
+    } catch {
+      cwd = path.resolve(x.cwd);
+    }
+    if (cwd === repo || cwd.startsWith(repo.endsWith(path.sep) ? repo : repo + path.sep)) return true;
+  }
+  return false;
 }

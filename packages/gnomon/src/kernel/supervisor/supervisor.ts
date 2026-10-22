@@ -1922,6 +1922,14 @@ export class SessionSupervisor {
     return s && s.state !== 'exited' ? s.principalId : null;
   }
 
+  /**
+   * #loop-land (step 11, Aegis L7): every live human session, Claude and local attended (loop sessions excluded), its
+   * cwd and whether a turn is in flight now (the supervisor's own streaming state, never a client claim).
+   */
+  humanTurns(): Array<{ cwd: string; busy: boolean }> {
+    return [...this.liveScopes().map((x) => ({ cwd: x.cwd, busy: this.turnBusy(x.hsid).streaming })), ...this.#local.humanTurns().map((x) => ({ cwd: x.cwd, busy: x.busy }))];
+  }
+
   /** P8-D87: every live Claude session's mode scope (status.runModes). */
   liveScopes(): Array<{ hsid: string; repoKey: string; cwd: string }> {
     return [...this.#sessions.keys()].map((h) => this.scopeOf(h)).filter((x): x is { hsid: string; repoKey: string; cwd: string } => x !== null);
