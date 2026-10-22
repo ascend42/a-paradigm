@@ -11,7 +11,7 @@
     {
       "name": "paradigm",
       "source": "./plugins/paradigm",
-      "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools for symbol-driven development",
+      "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 32 grouped MCP tools (more on demand) for symbol-driven development",
       "category": "development",
       "tags": [
         "architecture",

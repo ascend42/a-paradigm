@@ -11,8 +11,10 @@ MCP (Model Context Protocol) server for Paradigm. Exposes symbols, gates, flows,
 
 ## Installation
 
+The server is not published on its own. It ships inside `@a-company/paradigm` as the `paradigm-mcp` bin:
+
 ```bash
-npm install @a-company/paradigm-mcp
+npm install -g @a-company/paradigm
 ```
 
 ## Usage
@@ -26,7 +28,7 @@ Add to your Claude Desktop configuration:
   "mcpServers": {
     "paradigm": {
       "command": "npx",
-      "args": ["@a-company/paradigm-mcp"],
+      "args": ["--package=@a-company/paradigm", "paradigm-mcp"],
       "cwd": "/path/to/your/project"
     }
   }

@@ -29,6 +29,7 @@ import { leftoverGens, listHelperKeys } from '../identity/provisioner.js';
 import { readClaudePin, REPIN_COMMAND, sha256File } from '../runner/binary.js';
 import { resolveClaudeBinary } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
+import { SESSION_SANDBOX_MIN_MACOS } from '../../platform/darwin/session-sbpl.js';
 
 export type CheckStatus = 'pass' | 'warn' | 'fail';
 export interface PreflightCheck {
@@ -45,7 +46,12 @@ export interface PreflightCheck {
  * scripts/install-darwin.mjs NODE_MAJOR_FLOOR (test/install-darwin.test.ts pins the two together).
  */
 export const NODE_MAJOR_FLOOR = 24;
-export const MACOS_MAJOR_FLOOR = 13;
+/**
+ * Gnomon's macOS floor (TD-2026-10-22-220): the session sandbox refuses below 15 (SESSION_SANDBOX_MIN_MACOS,
+ * launch constraints do not kill a copied launcher below it), so setup refuses there too rather than pass and leave
+ * every session refusing. The helper and voice-io build targets and the app's LSMinimumSystemVersion say 15 as well.
+ */
+export const MACOS_MAJOR_FLOOR = SESSION_SANDBOX_MIN_MACOS;
 const DEV_HOME_MARKER = 'DEV-ONLY-gnomon-home.json';
 
 export interface PreflightInput {
@@ -139,7 +145,8 @@ export async function runPreflight(i: PreflightInput): Promise<PreflightReport> 
     try {
       const v = exec('/usr/bin/sw_vers', ['-productVersion']).trim();
       const major = Number(v.split('.')[0]);
-      add({ id: 'macos', status: major >= MACOS_MAJOR_FLOOR ? 'pass' : 'fail', detail: `macOS ${v}`, ...(major >= MACOS_MAJOR_FLOOR ? {} : { fix: `update to macOS ${MACOS_MAJOR_FLOOR} or later` }) });
+      if (major >= MACOS_MAJOR_FLOOR) add({ id: 'macos', status: 'pass', detail: `macOS ${v}` });
+      else add({ id: 'macos', status: 'fail', detail: `macOS ${v}: Gnomon needs macOS ${MACOS_MAJOR_FLOOR} or later (its session sandbox cannot be enforced on older versions)`, fix: `update to macOS ${MACOS_MAJOR_FLOOR} or later in System Settings > General > Software Update` });
     } catch {
       add({ id: 'macos', status: 'warn', detail: 'the macOS version could not be read' });
     }

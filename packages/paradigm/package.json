@@ -28,6 +28,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/commands/",
+    "sync:readme": "node scripts/sync-readme.mjs",
+    "check:readme": "node scripts/sync-readme.mjs --check",
+    "prepack": "node scripts/sync-readme.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

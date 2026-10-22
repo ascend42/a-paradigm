@@ -6,7 +6,7 @@ description: Reference for all Paradigm MCP tools available to AI agents.
 
 ## Overview
 
-Paradigm exposes 90+ MCP tools that AI agents can call for context-aware development. These tools are the primary interface between Claude (or any MCP client) and the Paradigm knowledge graph. The most commonly used tools are listed below.
+Paradigm exposes 32 grouped MCP tools (more on demand) that AI agents can call for context-aware development. These tools are the primary interface between Claude (or any MCP client) and the Paradigm knowledge graph. The most commonly used tools are listed below.
 
 ## Navigation & Discovery
 

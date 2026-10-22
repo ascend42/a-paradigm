@@ -138,6 +138,21 @@ describe('gnomon setup (#first-run)', () => {
     expect(readIdentity(homeOf(u))!.principalId).toMatch(/\//);
   });
 
+  it('macOS floor (TD-2026-10-22-220): below macOS 15 preflight fails with a clear reason and setup asks for no key', async () => {
+    for (const v of ['13.6.9', '14.7.1']) {
+      const u = tmp();
+      const fake = new FakeHelper(null);
+      const o = io(['']);
+      const r = await runSetup(o.io, deps(u, fake, [], { exec: (f) => (f.endsWith('sw_vers') ? `${v}\n` : 'System Integrity Protection status: enabled.\n') }));
+      expect(r.code).toBe(1);
+      expect(o.text()).toContain(`macOS ${v}: Gnomon needs macOS 15 or later`);
+      expect(o.text()).toContain('fix: update to macOS 15 or later');
+      expect(o.errText()).toContain('preflight-failed');
+      expect(fake.signs.length).toBe(0);
+      expect(fs.existsSync(identityPath(homeOf(u)))).toBe(false);
+    }
+  });
+
   it('G-SET-02 (I1): a helper that drops or replaces its own line gets no committed signature; a multi-line "line" never passes', async () => {
     for (const shown of [null, 'Gnomon Helper: root key signs 1: 000000000000']) {
       const u = tmp();

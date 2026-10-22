@@ -62,7 +62,7 @@ AgentScope and Paradigm are **not competitors**. They sit on opposite sides of t
 
 ### MCP Integration
 
-**They sit on opposite sides of the protocol.** AgentScope provides `HttpStatelessClient`, `HttpStatefulClient`, `StdioStatefulClient` — three transport mechanisms to consume MCP servers. Paradigm provides 50+ MCP tools via its own server.
+**They sit on opposite sides of the protocol.** AgentScope provides `HttpStatelessClient`, `HttpStatefulClient`, `StdioStatefulClient` — three transport mechanisms to consume MCP servers. Paradigm provides 32 grouped MCP tools (more on demand) via its own server.
 
 **This means they are naturally composable:**
 ```python

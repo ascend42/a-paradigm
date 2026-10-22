@@ -1,6 +1,6 @@
 {
   "name": "paradigm",
-  "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools for symbol-driven development",
+  "description": "AI-native project architecture — structured context, enforcement hooks, multi-agent orchestration, and 32 grouped MCP tools (more on demand) for symbol-driven development",
   "version": "7.15.2",
   "author": {
     "name": "ascend42",

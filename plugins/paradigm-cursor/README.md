@@ -1,7 +1,7 @@
 # Paradigm — Cursor Plugin
 
 AI-native project architecture for Cursor. Deterministic enforcement hooks,
-50+ MCP tools, and compliance skills for symbol-driven development.
+32 grouped MCP tools (more on demand), and compliance skills for symbol-driven development.
 
 ## Installation
 
@@ -28,7 +28,7 @@ Copy or symlink this directory into your project as `.cursor-plugin/paradigm/`.
 | afterFileEdit | After file edits | Advisory reminder about .purpose coverage |
 | beforeShellExecution | Before `git commit` | Auto-rebuilds symbol index before commits |
 
-### 50+ MCP Tools (automatic)
+### 32 grouped MCP tools, more on demand (automatic)
 
 All tools are available via the MCP server — no configuration needed:
 

@@ -57,7 +57,7 @@ Paradigm adds a metadata layer (\`.purpose\` files + \`portal.yaml\`) to any cod
 - Answers queries about structure, dependencies, authorization, and history without file reads
 - Enforces coverage: hooks block sessions that modify code without updating \`.purpose\` files
 
-**Tool surface (50+ tools)**
+**Tool surface (32 grouped tools, more on demand via \`paradigm_tool_activate\`)**
 - Navigation: \`paradigm_status\`, \`paradigm_search\`, \`paradigm_navigate\`, \`paradigm_related\`
 - Impact: \`paradigm_ripple\`, \`paradigm_flow\` (op \`affected\`)
 - Authorization: \`paradigm_gates_for_route\`, \`paradigm_purpose\` (op \`portal_add_gate\`)

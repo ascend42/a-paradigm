@@ -16,7 +16,7 @@ export function createSymbolsRouter(projectDir: string): Router {
     if (!fs.existsSync(indexPath)) {
       res.status(404).json({
         error: 'scan-index.json not found',
-        hint: 'Run `paradigm scan` to generate the symbol index.',
+        hint: 'Run `paradigm index` to generate the symbol index.',
       });
       return;
     }

@@ -1266,7 +1266,10 @@ components:
       #setup-preflight (spec §2.4 rule 9) — READ-ONLY first-run checks (no
       key, no file write, no prompt; only key.list): helper signed+pinned and
       not from a sandboxed shell, touch-id (helper 1.4.0 presence.available:
-      LAContext canEvaluatePolicy, never a prompt; pass or fail), macos, sip (csrutil;
+      LAContext canEvaluatePolicy, never a prompt; pass or fail), macos (floor 15 =
+      SESSION_SANDBOX_MIN_MACOS, TD-2026-10-22-220: below it fails naming the update,
+      matching the app's LSMinimumSystemVersion and the helper/voice-io targets;
+      test/macos-floor.test.ts pins them), sip (csrutil;
       off = warn), claude (resolved, pin none/match/mismatch → `gnomon session
       repin-claude`), law-7 billing env, runtime (NODE_OPTIONS / node flags),
       node floor (NODE_MAJOR_FLOOR 24, equal to scripts/install-darwin.mjs: the

@@ -132,7 +132,7 @@ export async function promoteCommand(options: PromoteOptions): Promise<void> {
       } else {
         cliError(`Production directory not found: ${PARADIGM_CLI_DIR}`);
         dim('Paradigm CLI may not be globally installed.');
-        dim('Install with: curl -fsSL https://a-company.org/install | bash\n');
+        dim('Install from a clone with: bash install.sh (repository root), or re-run with --force\n');
       }
       return;
     }

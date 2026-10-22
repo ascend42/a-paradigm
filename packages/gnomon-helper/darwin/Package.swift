@@ -11,7 +11,8 @@ import PackageDescription
 let package = Package(
     name: "GnomonHelper",
     platforms: [
-        .macOS(.v14)
+        // macOS 15 floor (TD-2026-10-22-220). The string form keeps swift-tools-version 5.9 (.v15 needs 6.0).
+        .macOS("15.0")
     ],
     products: [
         .executable(name: "gnomon-helper", targets: ["gnomon-helper"])
