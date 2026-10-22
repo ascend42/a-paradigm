@@ -50,6 +50,14 @@ export const KIND_DECISIONS: Readonly<Record<CardKind, Readonly<Partial<Record<C
   incident: { accept: 'cached', reject: 'cached' },
   // P8-D98 (TD-2026-10-19-528 F3): gnomon daemon stop raises a signed daemon-stop card decided with Touch ID (fresh).
   'daemon-stop': { accept: 'fresh', reject: 'fresh' },
+  // ── 8.0:loops (docs/specs/gnomon-loops.md §3.1, §3.3) — loop rows live in THIS block only ─────────────────────
+  // loop-trust: trusting a loop's content hash is root class like `grant` (fresh presence AND the root key, the
+  //   loop.trusted row signed in the same touch); no `always` decision exists on it, it is in NEVER_STANDING_KINDS
+  //   (standing-grant.ts) and voice never decides it (contracts VOICE_ALLOWLIST: hand-only, deny included).
+  // loop-choice: a loop's decide card. `continue` lets the loop go on: fresh presence, hand-only (no voice);
+  //   `stop` is deny-direction: the cached unlock carries it (voice-eligible in the spec, deferred to 8.1).
+  'loop-trust': { allow: 'root', deny: 'fresh' },
+  'loop-choice': { continue: 'fresh', stop: 'cached' },
 });
 
 /** Kinds the M1.6 broker raises (the rest are classed for their milestones, never raised here). */

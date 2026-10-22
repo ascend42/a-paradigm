@@ -23,12 +23,13 @@ function releaseDefine(): Record<string, string> {
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    loops: 'src/loops/index.ts',
     'cli/gnomon': 'src/cli/gnomon.ts',
     'cli/gnomond': 'src/cli/gnomond.ts',
     'transport/gnomon-web': 'src/transport/gnomon-web.ts',
   },
   format: ['esm'],
-  dts: { entry: { index: 'src/index.ts' } },
+  dts: { entry: { index: 'src/index.ts', loops: 'src/loops/index.ts' } },
   clean: true,
   target: 'node24',
   platform: 'node',

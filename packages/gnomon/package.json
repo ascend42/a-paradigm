@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./loops": {
+      "types": "./dist/loops.d.ts",
+      "import": "./dist/loops.js"
+    },
     "./cli": "./dist/cli/gnomon.js",
     "./package.json": "./package.json"
   },

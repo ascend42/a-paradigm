@@ -404,6 +404,8 @@ const STAMP_WORDS: Readonly<Record<string, string>> = Object.freeze({
   allow: 'APPROVED', always: 'APPROVED', accept: 'APPROVED', 'approve-plan': 'APPROVED', install: 'INSTALLED',
   deny: 'DENIED', reject: 'REJECTED', withdraw: 'WITHDRAWN', answer: 'ANSWERED', resume: 'RESUMED', resolve: 'RESOLVED',
   'fallback-cloud': 'SENT TO CLOUD', 'use-api-token': 'APPROVED', extend: 'EXTENDED', restart: 'RESTARTED',
+  // 8.0:loops: the loop-choice card's decisions
+  continue: 'CONTINUED', stop: 'STOPPED',
 });
 export function stampWord(decision: string): string {
   return Object.prototype.hasOwnProperty.call(STAMP_WORDS, decision) ? STAMP_WORDS[decision]! : 'DECIDED';
@@ -493,7 +495,11 @@ export interface AskCardDetail {
 }
 
 /** Aegis C1e: decisions that are ROOT class by kind (the kernel's classes.ts); a voice.enrol card names its own in the node. */
-export const ROOT_CLASS_BY_KIND: Readonly<Record<string, readonly string[]>> = Object.freeze({ install: ['install'], 'api-token': ['use-api-token'], grant: ['allow'], 'peer-pair': ['accept'] });
+export const ROOT_CLASS_BY_KIND: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  install: ['install'], 'api-token': ['use-api-token'], grant: ['allow'], 'peer-pair': ['accept'],
+  // 8.0:loops: trusting a loop is root class (gnomon-loops.md §3.1)
+  'loop-trust': ['allow'],
+});
 
 export interface RootRowsView {
   /** the decisions that sign these rows (the kernel's node) */

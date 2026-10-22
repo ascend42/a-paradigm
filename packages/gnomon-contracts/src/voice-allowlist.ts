@@ -82,6 +82,12 @@ export const VOICE_ALLOWLIST: Readonly<Record<CardKind, VoiceAllowRow>> = Object
   // FOUNDER RULING (TD-2026-10-19-677, Aegis M2): fully hand-only by voice, deny/reject included — the D66 exception.
   incident: row({}, []),
   'daemon-stop': row({}, []), // `daemon stop` is root-signed-class (§14.7 Never)
+  // ── 8.0:loops (docs/specs/gnomon-loops.md §3.1, §7) ──
+  // loop-trust is root class and "never by voice", deny included (§3.1, §7: voice cannot trust or resume loops).
+  'loop-trust': row({}, []),
+  // loop-choice: `continue` is hand-only fresh presence; `stop` is voice-eligible in the spec (§3.3), but voice on
+  // loop-choice is deferred to 8.1 (founder scope, docs/plans/gnomon-loops-build.md), so it is hand-only in 8.0.
+  'loop-choice': row({}, []),
 });
 
 /** Refusal reasons this module can name (all reserved in refusal.ts VOICE_REFUSAL_REASONS). */

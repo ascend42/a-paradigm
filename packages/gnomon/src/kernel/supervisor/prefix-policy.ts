@@ -61,6 +61,8 @@ export const INTERPRETER_DENYLIST: ReadonlySet<string> = new Set([
   'sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'csh', 'tcsh', 'env', 'exec', 'command', 'builtin', 'eval', 'source', '.', 'xargs', 'find', 'nice', 'nohup', 'timeout',
   'sudo', 'doas', 'su', 'time', 'watch', 'node', 'deno', 'bun', 'python', 'python3', 'ruby', 'perl', 'php', 'lua', 'npx', 'pnpx', 'bunx', 'osascript', 'open',
   'awk', 'gawk', 'mawk', 'nawk', 'sed', 'ssh', 'docker', 'podman', 'kubectl', 'uvx', 'pipx',
+  // Aegis LP1 review (gnomon-loops §3.1): Windows script hosts and exec wrappers that run another program
+  'cmd', 'powershell', 'pwsh', 'wscript', 'cscript', 'mshta', 'arch', 'script', 'stdbuf', 'setsid', 'chroot', 'sandbox-exec', 'busybox',
 ]);
 
 /**

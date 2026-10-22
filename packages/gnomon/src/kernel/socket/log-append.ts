@@ -67,6 +67,14 @@ export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
   'request.offer.decide',
   'request.offer.mute',
   'request.session.rename',
+  // ── 8.0:loops (gnomon-loops.md §5 "Human ops"): the human's loop asks; refused here until a first-party route
+  // serves them (build steps 3 and 5); pause{all:true} is the kill switch ──
+  'request.loop.trust',
+  'request.loop.untrust',
+  'request.loop.pause',
+  'request.loop.resume',
+  'request.loop.run',
+  'request.loop.delete',
 ]);
 /** `request.voice.arm` is the only request kind the voice principal may append. */
 export const VOICE_REQUEST_KINDS: readonly string[] = Object.freeze(['request.voice.arm']);

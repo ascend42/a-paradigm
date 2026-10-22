@@ -1952,7 +1952,8 @@ components:
       grant.standing.used{grantId, cardId, tuple, decision, repo, hsid}.
       Never standing: root class, hand-only, install, gate-class,
       fallback-cloud, declassify, peer-pair, api-token, grant, handoff,
-      peer-flagged or irreversible cards (standingTupleOf + broker checks).
+      loop-trust (8.0:loops), peer-flagged or irreversible cards (standingTupleOf
+      + broker checks).
       Ends: expiresAt, Revoke (request.grant.standing.revoke{grantId} →
       grant.standing.revoked{grantId, by, reason:'human'}, a tighten, no
       presence), the next screen lock / sleep / user switch or a helper exit
@@ -1967,6 +1968,11 @@ components:
       - test/standing-grant.test.ts
   approval-broker:
     description: >-
+      8.0:loops (gnomon-loops.md §3.1, §3.3): classes.ts rows loop-trust
+      {allow root, deny fresh} (never always, never standing, hand-only) and
+      loop-choice {continue fresh hand-only, stop cached}; log-append.ts adds the
+      human request.loop.* kinds to the first-party request gate. Test:
+      test/loop-classes.test.ts.
       Aegis M1: a root-capable card's detail carries rootDecisions (hashed).
       TD-2026-10-20-514 follow-up: a client decisionSig takes the root-only
       decision.sign form (Aegis F6, 1 prompt); a root-capable card's block
@@ -3340,6 +3346,46 @@ components:
       - test/approval-prefix-scope.test.ts
       - test/always-prefix-rules.test.ts
       - test/permission-session.test.ts
+
+  loop-schema:
+    description: >-
+      #loop-schema (docs/specs/gnomon-loops.md §2, §3.1, §3.4, §3.5; build
+      plan LP1) in src/loops/schema.ts, exported as @a-company/gnomon/loops.
+      The loop:v2 definition: types, validateLoop (precise {path, code,
+      message} issues) and compileLoop to the canonical JSON the kernel reads
+      (.paradigm/loops/<id>.loop.json; the kernel never parses YAML, zero
+      runtime deps). Rules: closed shape; kebab ids <= 64; every edge target a
+      node or terminal (@goal/@stop/@pause); goal names a check node, a run
+      goal declares goal.inputs, only check/call nodes reach @goal (LL2);
+      argv literal (no {{), argv0 never in the kernel INTERPRETER_DENYLIST
+      (imported from #prefix-policy) or python*, never .cmd/.bat; judge and
+      summarize nodes have no tools; continuous needs cooldown >= 60 s
+      (MIN_AUTOMATION_PERIOD_MS), a goal or run.rounds, and day.runs or
+      day.computeSec; call is id@hash8, cycles and depth > 3 refused given
+      the known loops. 8.0 subset: model.use claude|any, escalate other than
+      never, the claude opt-in block, cron, sentinel.incident.opened, bash
+      tools and envelope fields are refused LANDS_IN_8_1 ("lands in 8.1").
+      Compile fills every default (absent budget field = global default,
+      never unbounded), durations in seconds, edges expanded per verdict,
+      flows resolved to path globs from a flow index (else symbolic with a
+      FLOWS_UNRESOLVED warning); canonicalLoopJson is the sorted-key hashing
+      form, loopFileJson the indented file form. Aegis LP1 review: @goal only
+      from goal.node or a call, and any @goal edge needs a goal block; a call
+      pin must equal loopContentHash(callee) (sha256 of canonicalJson of the
+      parsed definition, never file bytes) and a call reaching @goal needs a
+      callee goal; argv0 never a BUILD_TOOLS entry except tsc/vitest/jest
+      (LOOP_ARGV0_CHECKER_ALLOW); programName strips trailing dots/spaces,
+      .exe and .com; land paths never under node_modules; NaN/Infinity
+      refused; compiled `protected` = node_modules + goal.inputs + repo
+      argv words across the call chain; `argv0Interpreter` recorded via
+      readShebang. The shared INTERPRETER_DENYLIST gained cmd, powershell,
+      pwsh, wscript, cscript, mshta, arch, script, stdbuf, setsid, chroot,
+      sandbox-exec and busybox; loop-choice joined NEVER_STANDING_KINDS.
+    path: src/loops/schema.ts
+    type: module
+    tags: [gnomon, loops, paradigm-8, security]
+    tests:
+      - test/loop-schema.test.ts
 
   trace-capture:
     description: >-

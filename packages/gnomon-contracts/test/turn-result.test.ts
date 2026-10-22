@@ -12,6 +12,6 @@ describe('review M2: turn.result{turn}', () => {
     expect(Object.isFrozen(TURN_RESULT_PAIRING)).toBe(true);
   });
   it('the clientApiId moved once for it', () => {
-    expect(CLIENT_API_ID).toBe('sha256:c4e2c7d97cd09b0809eb2a1672e4bf37bf570b640abb0a6b9735bb4eeabfe2c9');
+    expect(CLIENT_API_ID).toBe('sha256:f01dc9efc9b0910466b837e203d222932f156f296b414da1b5f59481a36bd1c1');
   });
 });

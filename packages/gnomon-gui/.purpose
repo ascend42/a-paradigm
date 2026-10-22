@@ -66,6 +66,12 @@ components:
       fixture `model-switch` (preview/fixtures.ts).
     tags: [gui, model]
   gui:
+    loop-cards: >-
+      8.0:loops (gnomon-loops.md §3.1, §3.3; build step 2): the generic card
+      renderer shows the loop-trust and loop-choice kinds; core/render.ts
+      ROOT_CLASS_BY_KIND names loop-trust allow (no Approve without the kernel's
+      verified root-rows node), the stamp names continue (CONTINUED) and stop
+      (STOPPED). The Loops view is build step 13. Test: test/loop-cards.test.ts.
     root-rows: >-
       TD-2026-10-20-514 (Aegis C1e, G-ID-11): rootRowsOf verifies the card's root-rows node against contentHash;
       renderCard shows "This decision signs" in full and NO root-class key without it; GuiStore.rootMismatches

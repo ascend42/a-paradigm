@@ -45,7 +45,13 @@ const REPO_KEY = /^sha256:[0-9a-f]{64}$/;
 const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
 const DEVICE_KEY = /^udev:[0-9a-f]{40}$/;
 /** Card kinds a standing grant never covers (defence in depth: no tuple names them either). */
-export const NEVER_STANDING_KINDS: ReadonlySet<string> = new Set(['install', 'gate-class', 'fallback', 'declassify', 'peer-pair', 'api-token', 'grant', 'handoff']);
+export const NEVER_STANDING_KINDS: ReadonlySet<string> = new Set([
+  'install', 'gate-class', 'fallback', 'declassify', 'peer-pair', 'api-token', 'grant', 'handoff',
+  // ── 8.0:loops (gnomon-loops.md §3.1): trusting a loop is never standing; a loop-choice (continue is
+  // hand-only fresh presence) is never standing either (defence in depth, Aegis LP1 review) ──
+  'loop-trust',
+  'loop-choice',
+]);
 
 const obj = (v: unknown): Record<string, unknown> | null => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 const isTuple = (v: unknown): v is StandingTuple => (STANDING_TUPLES as readonly unknown[]).includes(v);

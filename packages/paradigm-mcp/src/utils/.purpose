@@ -114,6 +114,26 @@ components:
       - feature
       - classroom
       - learning-loop
+  loop-files:
+    description: >-
+      #loop-files (Gnomon loops LP1, docs/specs/gnomon-loops.md §2/§5): repo loop definition files.
+      .paradigm/loops/<id>.yaml is parsed with js-yaml (CORE schema), validated and compiled by
+      #loop-schema (@a-company/gnomon/loops) with the other repo loops (call cycles, depth, unknown
+      callees) and the flow index (.paradigm/flow-index.json; a flow resolves to its defining
+      .purpose dir plus each step symbol's .purpose dir from scan-index.json), and the id must match
+      the file name. On success <id>.loop.json (canonical key order, indented) is written beside the
+      YAML; on failure a stale one is removed so the kernel never reads a definition the YAML no
+      longer says. writeLoop (create/update), validateLoopFile/validateAllLoops, listLoops (fresh,
+      stale, missing), getLoop and the four templates (spec Examples A-D on the 8.0 subset). Shared
+      by #loop-cli and #loop-mcp. Hardened (Aegis LP1): symlinks refused for .paradigm, the loops
+      dir and every loop file; the dir's realpath must be the repo's .paradigm/loops; validate takes
+      only files directly in it; writes go temp + rename and never through a symlink; stale JSON is
+      removed even with write:false; orphan .loop.json (YAML gone) listed and removed by validate
+      all; readShebangAt records argv0Interpreter.
+    type: loader
+    anchors:
+      - loop-files.ts
+    tags: [feature, gnomon, loops]
   tool-family:
     description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:''full'' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'
     type: utility

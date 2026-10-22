@@ -41,7 +41,7 @@ describe('voice modes (TD-2026-10-21-514)', () => {
   });
 
   it('the module is not a clientApiId input (the golden literal is unchanged)', () => {
-    expect(CLIENT_API_ID).toBe('sha256:c4e2c7d97cd09b0809eb2a1672e4bf37bf570b640abb0a6b9735bb4eeabfe2c9');
+    expect(CLIENT_API_ID).toBe('sha256:f01dc9efc9b0910466b837e203d222932f156f296b414da1b5f59481a36bd1c1');
   });
 });
 

@@ -2107,6 +2107,42 @@ graphCmd
     await graphGenerateCommand(name, path, options);
   });
 
+// paradigm loop <command> — Gnomon loop definitions (.paradigm/loops, #loop-cli)
+const loopCmd = program
+  .command('loop')
+  .description('Gnomon loop definitions: new, validate (compiles .loop.json), list');
+
+loopCmd
+  .command('new <id>')
+  .description('Create .paradigm/loops/<id>.yaml (loop:v2) from a template')
+  .option('--example <name>', 'Template: flow-health | green | watch | tidy')
+  .option('--flow <flow>', 'Flow the flow-health and watch templates serve (default: the first indexed flow)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { loopNewCommand } = await import('./commands/loop/index.js');
+    await loopNewCommand(id, options);
+  });
+
+loopCmd
+  .command('validate [file]')
+  .description('Validate loop definitions; writes the compiled <id>.loop.json next to each valid YAML')
+  .option('--all', 'Validate every loop in .paradigm/loops/ (the default with no file)')
+  .option('--json', 'Output as JSON')
+  .action(async (file, options) => {
+    const { loopValidateCommand } = await import('./commands/loop/index.js');
+    await loopValidateCommand(file, options);
+  });
+
+loopCmd
+  .command('list')
+  .alias('ls')
+  .description('List repo loops with their validity and compiled state')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { loopListCommand } = await import('./commands/loop/index.js');
+    await loopListCommand(options);
+  });
+
 // paradigm habits <command>
 const habitsCmd = program
   .command('habits')

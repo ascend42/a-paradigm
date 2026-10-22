@@ -254,7 +254,8 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by review M2 (turn.result{turn} + descriptor turnResult): was sha256:eda8c627…1114.
 // Moved once by 8.0:T-2026-10-21-008 (re-review M-1/M-2: offer.retired + session.anomaly + desk.retire/sessionAnomaly closed values): was sha256:4c2b9371…af2c.
 // Moved once by 8.0:session-rename (request.session.rename + session.renamed + descriptor sessionRename): was sha256:454cd632…7de.
-const PINNED_CLIENT_API_ID = 'sha256:c4e2c7d97cd09b0809eb2a1672e4bf37bf570b640abb0a6b9735bb4eeabfe2c9';
+// Moved once by 8.0:loops (loop-trust/loop-choice cards, continue/stop, the loop.* + request.loop.* kinds, descriptor loops): was sha256:c4e2c7d9…e2c9.
+const PINNED_CLIENT_API_ID = 'sha256:f01dc9efc9b0910466b837e203d222932f156f296b414da1b5f59481a36bd1c1';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -606,6 +607,10 @@ describe('event labels and payload docs (round 2)', () => {
       'session.compacted': { summaryHash: 'sensitive' }, // P8-D93: digest of model-written summary text
       'request.session.rename': { name: 'sensitive' }, // 8.0:session-rename: the human's own words
       'session.renamed': { name: 'sensitive' },
+      // 8.0:loops: check/model evidence (as oracle.result) and landed/proposed repo paths (as approval.auto's path)
+      'loop.node': { evidence: 'sensitive', evidenceRef: 'sensitive' },
+      'loop.landed': { paths: 'sensitive' },
+      'loop.proposed': { paths: 'sensitive' },
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {
@@ -618,7 +623,8 @@ describe('event labels and payload docs (round 2)', () => {
     const d86 = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === D86);
     const d89 = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === 'M1.4:P8-D89');
     const standing = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === '8.0:TD-2026-10-20-086');
-    expect(Object.keys(RESERVED_KIND_PAYLOADS).sort()).toEqual([...d86, ...d89, ...standing].sort());
+    const loops = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === '8.0:loops');
+    expect(Object.keys(RESERVED_KIND_PAYLOADS).sort()).toEqual([...d86, ...d89, ...standing, ...loops].sort());
   });
   it('voice.approve:<class> is grant-derived only: never in any manifest, first-party included', () => {
     expect(GRANT_DERIVED_ONLY_CAPABILITIES).toEqual(['voice.approve:<class>']);

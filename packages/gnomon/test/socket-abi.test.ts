@@ -549,7 +549,8 @@ describe('G-ABI-02 matrix total: every principal class × every verb and both re
   });
 
   it('§5 namespace ownership: the registry\'s userland namespaces are exactly the §5 list', () => {
-    const SPEC_USERLAND = 'paradigm.* inject.* credit.* broke.* detector.* loop.row loop.open loop.closed tend.* decay.* calibration.* flow.* neurons.* voice.* modns.<name>.*'.split(' ');
+    // 8.0:loops (gnomon-loops.md §5): loop.request is the agent's userland loop ask; loop.round and the other runner rows are kernel-owned
+    const SPEC_USERLAND = 'paradigm.* inject.* credit.* broke.* detector.* loop.row loop.open loop.closed loop.request tend.* decay.* calibration.* flow.* neurons.* voice.* modns.<name>.*'.split(' ');
     const fromRegistry = new Set<string>();
     for (const k of EVENT_KIND_NAMES) if (EVENT_KINDS[k]!.owner === 'userland') fromRegistry.add(k.startsWith('loop.') ? k : `${k.split('.')[0]}.*`);
     for (const ns of OPEN_USERLAND_NAMESPACES) fromRegistry.add(ns === 'modns' ? 'modns.<name>.*' : `${ns}.*`);
@@ -765,6 +766,12 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     for (const k of ['grant.standing', 'grant.standing.used', 'grant.standing.revoked', 'approval.unlock.joined']) expect(kernelKinds).toContain(k);
     const before = r.d.log.head().seq;
     const humanRequest = new Set(['request.grant', 'request.voice.narrow', 'request.brief.send', 'request.cowork.allow', 'request.link.revoke', 'request.strictness.set', 'request.mode.set', 'request.incident', 'request.voice.arm']);
+    // 8.0:loops (gnomon-loops.md §5 Human ops): the human's loop asks take the same first-party request gate until a route serves them
+    const loopRequests = ['request.loop.trust', 'request.loop.untrust', 'request.loop.pause', 'request.loop.resume', 'request.loop.run', 'request.loop.delete'];
+    for (const k of loopRequests) {
+      expect(kernelKinds, k).toContain(k);
+      humanRequest.add(k);
+    }
     for (const cls of ['human', 'agent', 'mod', 'voice'] as const) {
       const s = await asDevice(r, cls);
       for (const kind of kernelKinds) {
@@ -918,6 +925,9 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     for (const bad of [{}, { kind: 'Bad Kind' }, { kind: 'x'.repeat(200) + '.y' }, []]) expect(errOf(await h.conn.call('log.append', bad))).toMatchObject({ code: -32600, c: 'BAD_REQUEST' });
     const a = await asDevice(r, 'agent');
     expect(errOf(await a.conn.call('log.append', { kind: 'loop.row' }))).toMatchObject({ c: 'FORBIDDEN', reason: 'ungranted' });
+    // 8.0:loops: the agent's loop.request is userland and ungranted until its pre-gate (build step 12); the runner's rows are kernel-owned
+    expect(errOf(await a.conn.call('log.append', { kind: 'loop.request', payload: { op: 'run', loopId: 'x' } }))).toMatchObject({ c: 'FORBIDDEN', reason: 'ungranted' });
+    for (const k of ['loop.round', 'loop.trusted', 'loop.run.started', 'loop.node']) expect(errOf(await a.conn.call('log.append', { kind: k })), k).toMatchObject({ c: 'FORBIDDEN', reason: 'kernel-owned' });
     const mod = await asDevice(r, 'mod');
     expect(errOf(await mod.conn.call('log.append', { kind: 'modns.workshop.saved' }))).toMatchObject({ c: 'ENGINE', reason: 'not-implemented', milestone: 'M1.11' });
     expect(errOf(await mod.conn.call('log.append', { kind: 'modns.other.saved' }))).toMatchObject({ c: 'FORBIDDEN', reason: 'modns-not-own' });

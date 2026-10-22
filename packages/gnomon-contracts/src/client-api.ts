@@ -54,6 +54,8 @@ import { JSON_RPC_CODES, MODEL_SWITCH_REASON_ROUTES } from './refusal.js';
 import { CONTEXT_SOURCES, OFFER_BLOCK_KEYS, OFFER_BLOCK_MAX, OFFER_DECISIONS, OFFER_LIMITS, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_REACHES, OFFER_SUPPRESS_REASONS, OFFER_SUPPRESS_UNNAMED, OFFER_TEXT_MAX, OFFERS_PER_MOD_MAX } from './offer.js';
 import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES, TURN_RESULT_PAIRING, OFFER_RETIRE_REASONS, SESSION_ANOMALY_REASONS, SESSION_NAME_MAX, SESSION_NAME_INPUT_MAX } from './event.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
+import { LOOP_AUTONOMY, LOOP_CLOSURE_BY, LOOP_LAND_WAIT_REASONS, LOOP_PAUSE_REASONS, LOOP_REQUEST_OPS, LOOP_RUN_END_REASONS, LOOP_SCOPES, LOOP_SESSION_ORIGIN, LOOP_VERDICTS } from './event.js';
+import { LOOP_CHOICE_ONLY_DECISIONS } from './card.js';
 import { FIRST_PARTY_DISPLAY_NAMES, FOUNDER_BRANDS, GIT_COMMIT_PATTERN, MANIFEST_FORMAT, MCP_SERVER_NAME_MAX, MOD_ID_LIMITS, MOD_ID_PATTERN, MOD_NAME_PATTERN, MOD_REFUSAL_ROUTES, PUBLISHER_PATTERN, QUALIFIED_TOOL_NAME_MAX, RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES } from './mod-id.js';
 
 export const KIT_V1 = 'kit:v1' as const;
@@ -213,6 +215,22 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
     },
     restart: { checkpointRefPattern: CHECKPOINT_REF_PATTERN.source },
     optionalPayloadKeys: KIND_PAYLOAD_OPTIONAL,
+  },
+  // ── 8.0:loops (docs/specs/gnomon-loops.md §2–§5; the ONE loops clientApiId move) ──────────────────────────────
+  // The kinds and their payload field names ride the event schema; the two card kinds and decisions ride the card
+  // enums. These are the closed values the loop rows carry, the loop-choice-only decisions and the kill switch form.
+  loops: {
+    verdicts: [...LOOP_VERDICTS],
+    autonomy: [...LOOP_AUTONOMY],
+    scopes: [...LOOP_SCOPES],
+    requestOps: [...LOOP_REQUEST_OPS],
+    pauseReasons: [...LOOP_PAUSE_REASONS],
+    runEndReasons: [...LOOP_RUN_END_REASONS],
+    closureBy: [...LOOP_CLOSURE_BY],
+    landWaitReasons: [...LOOP_LAND_WAIT_REASONS],
+    sessionOrigin: LOOP_SESSION_ORIGIN,
+    choiceOnlyDecisions: [...LOOP_CHOICE_ONLY_DECISIONS],
+    killSwitch: { kind: 'request.loop.pause', payload: { all: true } },
   },
 });
 

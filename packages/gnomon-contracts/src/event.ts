@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -85,6 +85,8 @@ const OFFER_SUPPRESS = '8.0:T-2026-10-21-006' as const;
 const REREVIEW = '8.0:T-2026-10-21-008' as const;
 /** The session rename (founder ask 2026-10-20: rename a session from the GUI or the CLI): one clientApiId move. */
 const SESSION_RENAME = '8.0:session-rename' as const;
+/** Gnomon loops (docs/specs/gnomon-loops.md §3–§5; TD-2026-10-22-213/-129): every loop kind of steps 2–12, ONE clientApiId move. */
+const LOOPS = '8.0:loops' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -240,6 +242,24 @@ const TABLE: Row[] = [
   // Standalone kernel-owned kinds named in §3.2 L5 and §5.
   ['blob', 'kernel', 'pruned'],
   ['digest', 'kernel', 'consumed'],
+  // ── 8.0:loops (docs/specs/gnomon-loops.md §3–§5) — loop entries live in THIS tail block only ──────────────────
+  // Kernel-written by #loop-registry / #loop-runner / #loop-events, folded only from kernel-signed rows (LL6). The
+  // runner's per-round ledger row is `loop.round` (kernel-owned), NOT `loop.row`: `loop.row|open|closed` stay the
+  // userland #learning-loop ledger (gnomon.md §5 namespace ownership, A17-3), which a granted principal may append,
+  // so a runner fold over loop.row could be fed forged rows. `loop.paused` (above) stays the one kernel pause row.
+  //   loop.trusted / loop.untrusted        a loop-trust card's decision / a revoke (§3.1)
+  //   loop.closure.changed                 a human commit changed the config closure; the loop keeps running (§3.1)
+  //   loop.run.started / loop.node / loop.round / loop.run.ended   the run ledger (§4)
+  //   loop.notified                        a notify node's toast or loop-choice card (§2)
+  //   loop.proposed                        an act diff went to a card instead of landing (§3.3 L2, §3.4)
+  //   loop.landed / loop.land.waiting / loop.parked                 the land step (§3.2)
+  //   loop.trigger.fired                   a schedule, event or continuous trigger fired (§4 #loop-events)
+  //   loop.deleted / loop.resumed          a delete; a resume after any pause (the fold's pause → idle edge)
+  ['loop', 'kernel', 'trusted untrusted closure.changed run.started node round notified proposed landed land.waiting parked run.ended trigger.fired deleted resumed', LOOPS],
+  // The human's asks (§5 "Human ops"; the named request.* exception, gnomon.md §5): pause{all:true} is the kill switch.
+  ['request', 'kernel', 'loop.trust loop.untrust loop.pause loop.resume loop.run loop.delete', LOOPS],
+  // The agent's ask (§5): a userland kind bound in the paradigm grant; the kernel pre-gates it (build step 12).
+  ['loop', 'userland', 'request', LOOPS],
 ];
 
 /** Per-kind sensitivity overrides from §9.1's last column. */
@@ -276,6 +296,11 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' }, // digests of model-visible bytes
   'daemon.log.quarantined': { evidencePath: 'sensitive' }, // a local filesystem path (P8-D89)
   'session.compacted': { summaryHash: 'sensitive' }, // digest of model-written summary text (P8-D93)
+  // ── 8.0:loops: check/model evidence is repo output (may carry secrets), as oracle.result's evidence; landed and
+  // proposed paths name project detail, as approval.auto's path (gnomon-loops.md §4 "Evidence")
+  'loop.node': { evidence: 'sensitive', evidenceRef: 'sensitive' },
+  'loop.landed': { paths: 'sensitive' },
+  'loop.proposed': { paths: 'sensitive' },
 };
 
 function build(): Readonly<Record<string, EventKindSpec>> {
@@ -312,7 +337,8 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   'verdict.founder': Object.freeze({ override: D86 }),
   // P8-D98 (§2.4 rule 11, B2): a resumed open carries resume{drainedEventId, outcome} (DRAIN_OUTCOMES) and every
   // open carries the opener's principalClass (a resume carries it over instead of assuming 'human').
-  'session.open': Object.freeze({ runMode: D86, resume: D98, principalClass: D98 }),
+  // 8.0:loops: a loop session opens with origin:'loop' (the origin clamp, gnomon-loops.md §3.4) and names its run
+  'session.open': Object.freeze({ runMode: D86, resume: D98, principalClass: D98, origin: LOOPS, loopRun: LOOPS }),
   // P8-D98 (§2.4 rule 11, B2): a resumed session's sandbox row names resumedFrom (the session.drained ev: id) and
   // drainOutcome (DRAIN_OUTCOMES); a drain-interrupted resume adds a row with phase:'resume-note' (SANDBOX_D98_PHASES),
   // note (RESUME_NOTES) and drainedEventId.
@@ -335,6 +361,8 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   'approval.expire': Object.freeze({ why: D98 }),
   // P8-D89 (M1.4 slice 3): the read-token file's untrusted diagnostic names the file and why (§9.1 `{line}` stays for the registry).
   'key.registry.malformed': Object.freeze({ file: D89, reason: D89 }),
+  // ── 8.0:loops: the kernel's loop pause row names the loop, why (LOOP_PAUSE_REASONS) and who (gnomon-loops.md §3.1, §3.3)
+  'loop.paused': Object.freeze({ loopId: LOOPS, runId: LOOPS, reason: LOOPS, by: LOOPS }),
 });
 
 /**
@@ -374,6 +402,30 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'request.grant.standing.revoke': ['grantId'],
   'approval.auto.miss': ['hsid', 'tool', 'why', 'inputHash', 'modeRef'],
   'approval.unlock.joined': ['connId', 'scope'],
+  // ── 8.0:loops (docs/specs/gnomon-loops.md §3–§5): field names only; a build step adds the closed check ──
+  'loop.trusted': ['loopId', 'scope', 'repoKey', 'contentHash', 'cardId', 'authoredBy'],
+  'loop.untrusted': ['loopId', 'scope', 'repoKey', 'contentHash', 'by'],
+  'loop.closure.changed': ['loopId', 'repoKey', 'digest', 'by'],
+  'loop.run.started': ['runId', 'loopId', 'contentHash', 'trigger', 'envelopeId'],
+  'loop.node': ['runId', 'nodeId', 'visit', 'verdict', 'confidence', 'model', 'permitId', 'usage', 'evidenceRef', 'effectiveAutonomy'],
+  // loop.row{…} (gnomon.md §M3.2) extended additively (gnomon-loops.md §4), kernel-owned
+  'loop.round': ['runId', 'loopId', 'repo', 'iter', 'goal_ref', 'tests_passing', 'tsc_errors', 'diff_lines', 'files_touched', 'symbols_touched', 'tokens', 'verdict', 'nodeVisits', 'escalations', 'landedSha'],
+  'loop.notified': ['runId', 'loopId', 'nodeId', 'as', 'cardId'],
+  'loop.proposed': ['runId', 'loopId', 'cardId', 'paths', 'why'],
+  'loop.landed': ['loopId', 'runId', 'sha', 'paths'],
+  'loop.land.waiting': ['loopId', 'runId', 'reason'],
+  'loop.parked': ['loopId', 'runId', 'ref', 'reason'],
+  'loop.run.ended': ['runId', 'loopId', 'reason'],
+  'loop.trigger.fired': ['loopId', 'trigger', 'eventId'],
+  'loop.deleted': ['loopId', 'scope', 'repoKey', 'by'],
+  'loop.resumed': ['loopId', 'by', 'cardId'],
+  'request.loop.trust': ['loopId', 'scope', 'repo'],
+  'request.loop.untrust': ['loopId', 'scope', 'repo'],
+  'request.loop.pause': ['loopId', 'scope', 'repo', 'all'],
+  'request.loop.resume': ['loopId', 'scope', 'repo'],
+  'request.loop.run': ['loopId', 'scope', 'repo'],
+  'request.loop.delete': ['loopId', 'scope', 'repo'],
+  'loop.request': ['op', 'loopId', 'scope', 'repo', 'hsid'],
 });
 
 /**
@@ -851,6 +903,34 @@ export function validateSessionCompactedPayload(value: unknown): string[] {
   }
   return c.errors;
 }
+
+/* ── 8.0:loops closed values (docs/specs/gnomon-loops.md; published in the descriptor's `loops` block) ────────── */
+
+/** A node's verdict (§2): the only thing an edge branches on (LL2). */
+export const LOOP_VERDICTS = ['pass', 'fail', 'unsure', 'unavailable', 'error'] as const;
+export type LoopVerdict = (typeof LOOP_VERDICTS)[number];
+/** A loop's (and a node's effective) autonomy (§2, §3.3). */
+export const LOOP_AUTONOMY = ['act', 'propose', 'observe'] as const;
+export type LoopAutonomy = (typeof LOOP_AUTONOMY)[number];
+/** Where a definition lives (§2): a repo's .paradigm/loops or the human's ~/.gnomon/loops. */
+export const LOOP_SCOPES = ['repo', 'personal'] as const;
+export type LoopScope = (typeof LOOP_SCOPES)[number];
+/** loop.request{op} (§5): the agent's kernel ops (reads go through log.read). */
+export const LOOP_REQUEST_OPS = ['create', 'update', 'run', 'pause', 'resume', 'delete'] as const;
+export type LoopRequestOp = (typeof LOOP_REQUEST_OPS)[number];
+/** loop.paused{reason} (§2 run ends, §3.1, §3.3, §3.5, §3.6). Kernel pauses resume only with fresh presence. */
+export const LOOP_PAUSE_REASONS = ['human', 'agent', 'kill-switch', 'content-changed', 'closure-changed', 'thrash', 'strictness', 'budget', 'node-exit', 'unavailable', 'timeout'] as const;
+export type LoopPauseReason = (typeof LOOP_PAUSE_REASONS)[number];
+/** loop.run.ended{reason} (§2, §4 Restart). */
+export const LOOP_RUN_END_REASONS = ['goal', 'stop', 'budget', 'node-exit', 'paused', 'kill-switch', 'content-changed', 'closure-changed', 'thrash', 'strictness', 'untrusted', 'daemon-restart', 'error'] as const;
+export type LoopRunEndReason = (typeof LOOP_RUN_END_REASONS)[number];
+/** loop.closure.changed{by} / who landed a config-closure change (§3.1): only `human` keeps the loop running. */
+export const LOOP_CLOSURE_BY = ['human', 'loop', 'agent'] as const;
+/** loop.land.waiting{reason} / loop.parked{reason} (§3.2 refusals). */
+export const LOOP_LAND_WAIT_REASONS = ['dirty', 'held', 'rename', 'untracked', 'ignored', 'gitlink', 'attributes', 'case-fold', 'in-progress', 'index-lock', 'human-turn', 'branch-moved', 'bytes-changed', 'gate-class', 'max-wait'] as const;
+export type LoopLandWaitReason = (typeof LOOP_LAND_WAIT_REASONS)[number];
+/** session.open{origin} of a loop session (§3.4, the origin clamp). */
+export const LOOP_SESSION_ORIGIN = 'loop' as const;
 
 /** The frozen kind registry (§9.1). */
 export const EVENT_KINDS: Readonly<Record<string, EventKindSpec>> = build();
