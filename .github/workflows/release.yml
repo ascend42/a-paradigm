@@ -37,6 +37,9 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
+          # scripts/release.mjs: refuses (before building or publishing anything) unless @a-company/gnomon and its
+          # platform packages are already on npm at this checkout's version, then runs changeset publish, which
+          # skips them as already published. Gnomon ships only via the founder's `npm run publish:gnomon`.
           publish: npm run release
           version: npm run version
           title: 'chore: release packages'

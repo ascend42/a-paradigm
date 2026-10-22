@@ -1024,6 +1024,12 @@ components:
       requirement, team OU SW4BMQ8PNL), xcrun stapler validate and spctl -a -t
       exec; gnomon's dist is a RELEASE build of this version whose compiled
       appZips equal both zips. prepack refuses a non-release dist too.
+      Release order (scripts/publish-gnomon.mjs, #publish-gnomon): gate, then
+      arm64, x64, then gnomon, verified on npm, before paradigm. CI never
+      publishes them: `npm run release` (scripts/release.mjs, #release-publish)
+      refuses unless all three are already on npm at this version, so
+      changeset publish skips them and paradigm cannot ship first
+      (test/release-excludes-gnomon.test.ts).
       release-darwin's `signed` now means Developer ID + notarized + stapled
       (stapler validate after notarize) and --package-dir refuses anything
       else without --allow-unsigned-for-tests. (high 2) each zip's sha256 is
@@ -1051,6 +1057,7 @@ components:
       - test/app-zip.test.ts
       - test/gate-gnomon-publish.test.ts
       - test/release-darwin.test.ts
+      - test/release-excludes-gnomon.test.ts
   gui-resume:
     description: >-
       #gui-resume (TD-2026-10-19-063, founder ruling "ONE Touch ID") — the
