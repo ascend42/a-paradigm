@@ -50,6 +50,12 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/install-deps
 
+      # W2/W3 (docs/plans/gnomon-windows.md): the kernel's Windows backends need the Rust platform helper; the
+      # win32-helper suite fails (never skips) on CI when it is missing. Unsigned: signing identities never enter CI.
+      - name: Build the Windows platform helper (unsigned)
+        if: runner.os == 'Windows'
+        run: node packages/gnomon-helper/scripts/build-win32.mjs
+
       # test:gnomon rebuilds first: the G-KRN-02 dist scan fails loudly (never
       # skips) when dist/ is missing.
       - name: Build (@a-company/gnomon-contracts, @a-company/gnomon)
@@ -174,7 +180,12 @@ jobs:
         working-directory: packages/gnomon-wrapper
         run: cargo test --locked
 
-      - name: gnomon-wrapper on Windows is the parity phase
+      # W0 (docs/plans/gnomon-windows.md): the Rust helper's own tests (pure checks: SDDL verdicts, path, pipe-name
+      # and URL bounds, argv quoting) plus a release build. The WebView2 wrapper joins this leg in W6.
+      - name: Test + build gnomon-helper (win32, unsigned)
         if: runner.os == 'Windows'
-        shell: bash
-        run: echo "gnomon-wrapper slice 1 is macOS; the WebView2 wrapper lands in the Windows parity phase (P8-D78)."
+        working-directory: packages/gnomon-helper/win32
+        run: |
+          cargo test --locked
+          cargo build --release --locked
+          target/release/gnomon-helper.exe --version

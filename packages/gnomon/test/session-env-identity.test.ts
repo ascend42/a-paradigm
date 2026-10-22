@@ -49,8 +49,23 @@ describe('buildSessionEnv: identity names come only from the OS identity', () =>
     expect(envKeys).toEqual(['GNOMON_HSID', 'GNOMON_SESSION_KEY', 'GNOMON_SOCK', 'HOME']);
   });
   it('identity null (win32) keeps the allowlist as it was; USERNAME/USERPROFILE stay WINDOWS_EXTRA data', () => {
-    const { env } = buildSessionEnv({ ...base, path: null, from: { USERPROFILE: 'C:\\Users\\a', USER: 'a' }, identity: null });
+    const { env } = buildSessionEnv({ ...base, path: null, from: { USERPROFILE: 'C:\\Users\\a', USER: 'a' }, identity: null, platform: 'win32' });
     expect(env).toMatchObject({ USERPROFILE: 'C:\\Users\\a', USER: 'a' });
+  });
+  it('PR #52 review: the Windows names are win32-only: a darwin/linux session never inherits them from the daemon env', () => {
+    const from = { HOME: '/h', USER: 'a', USERPROFILE: 'C:\\Users\\a', APPDATA: 'x', COMSPEC: 'cmd', SYSTEMROOT: 'C:\\Windows', TEMP: '/t', CLAUDE_CODE_GIT_BASH_PATH: 'b' };
+    for (const platform of ['darwin', 'linux'] as const) {
+      const { env, envKeys } = buildSessionEnv({ ...base, path: null, from, identity: null, platform });
+      for (const k of WINDOWS_EXTRA) expect(env, `${platform} ${k}`).not.toHaveProperty(k);
+      expect(envKeys.filter((k) => (WINDOWS_EXTRA as readonly string[]).includes(k))).toEqual([]);
+      expect(env).toMatchObject({ HOME: '/h', USER: 'a' });
+    }
+    expect(buildSessionEnv({ ...base, path: null, from, identity: null, platform: 'win32' }).env).toMatchObject({ USERPROFILE: 'C:\\Users\\a', APPDATA: 'x' });
+  });
+  it('a sandboxed win32 session (tempDir): its own TEMP/TMP and git over OpenSSL (schannel refuses the token); never elsewhere', () => {
+    const { env } = buildSessionEnv({ ...base, path: null, from: { TEMP: 'C:\\T', Tmp: 'C:\\T' }, identity: null, platform: 'win32', tempDir: 'C:\\T\\gnomon-s-0123' });
+    expect(env).toMatchObject({ TEMP: 'C:\\T\\gnomon-s-0123', TMP: 'C:\\T\\gnomon-s-0123', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'http.sslBackend', GIT_CONFIG_VALUE_0: 'openssl' });
+    for (const p of ['win32', 'darwin'] as const) expect(buildSessionEnv({ ...base, path: null, from: {}, identity: null, platform: p }).env).not.toHaveProperty('GIT_CONFIG_COUNT');
   });
   it('envKeys are names only: no identity value appears in them', () => {
     const { envKeys } = buildSessionEnv({ ...base, path: null, from: { HOME: '/h', USER: 'gnomon-wrong-user-probe' }, identity: { user: 'alice', shell: '/bin/zsh', tmpdir: '/var/folders/x/T/' } });
@@ -192,7 +207,7 @@ describe('TD-2026-10-21-162 / Aegis M: every user-writable dir on the session PA
     }
   });
   it('sessionNodeDir is the dir of the REALPATH of the node binary; null for win32', () => {
-    expect(sessionNodeDir(process.execPath)).toBe(path.dirname(fs.realpathSync.native(process.execPath)));
+    if (POSIX) expect(sessionNodeDir(process.execPath)).toBe(path.dirname(fs.realpathSync.native(process.execPath)));
     expect(sessionNodeDir(process.execPath, { platform: 'win32' })).toBeNull();
   });
   it.runIf(POSIX)('~/.local/bin is a persistence path: write-denied in every session policy', () => {

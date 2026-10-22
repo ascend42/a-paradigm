@@ -1,0 +1,62 @@
+id: L-2026-10-22-ascend42-191928-001
+type: milestone
+timestamp: '2026-10-22T19:19:28.200Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon on Windows: status after W5, the local model, W4 phase A and P02 (2026-10-22)'
+summary: |-
+  Gnomon runs from the repo on the founder's Windows laptop.
+  - The kernel runs on an owner-only named pipe and shields itself.
+  - Claude Code sessions run at Low integrity with PowerShell (3d642944).
+  - A local model, Ollama qwen3.5-9b-16k, runs sandboxed with tool calls (523ed66f).
+  - Routine approval cards are approved by click through a helper-held Software-KSP key (ef24276e).
+  - Probe P02 proved Windows Hello presence with an AUTH_MANDATORY Passport-KSP P-256 key (21ac9617).
+  - Everything is committed on feat/gnomon-windows and not pushed.
+  Next: W4 phase B (a Hello presence key for the fresh classes), then W6 (desktop app), then W7-W9 (signing, npm package, clean-machine test).
+symbols_touched:
+  - '#session-runner'
+  - '#gnomon-helper'
+  - '#local-runner'
+  - '#approval-broker'
+  - '#identity'
+  - '#dev-launch'
+tags:
+  - windows
+  - gnomon
+  - status
+  - milestone
+body: |-
+  ## Done on Windows (feat/gnomon-windows, unpushed)
+  - W0 CI legs, W1 P03 + P02, W2 Rust helper, W3 kernel on a named pipe.
+  - W5 session sandbox: Low integrity, restricted token, per-session SID, PowerShell tool / Bash denied, labels + session-SID ACEs, release at session end. The transport child is confined (outbound network not denied yet: P10w). Two Aegis reviews folded in.
+  - Local model: `gnomon dev local --model qwen3.5-9b-16k`; the probe reads Ollama ctx; the GUI renders gnomon-local replies as "local model".
+  - W4 phase A: click approvals for CLICK_KINDS (permission/ask-user/plan); presence 'click'; a click-class key refuses presence kernel-side.
+
+  ## Open
+  - W4 phase B: Passport KSP presence key (separate keyId) for fresh/root classes; the prompt needs a foreground owner window.
+  - W6 wrapper (Tauri/WebView2) to replace the stand-in launcher; release gating, so approvals come only from the wrapper.
+  - W7 Trusted Signing (needs the founder's account), W8 npm package + shim, W9 clean-machine test.
+  - P10w WFP loopback deny, AppContainer for link/mod, the Developer Mode symlink tests.
+
+  ## Dev workflow on this machine
+  - The kernel runs via a wrapper stand-in script (dev up --wrapper); the GUI is opened by launch URL in a browser.
+  - The test repo is C:\Users\ascen\gnomon-trial; the dev home is ~/.gnomon-dev.
+  - Stop the kernel before rebuilding the helper (the approvals helper holds the exe).
+  - On Windows, Python edits rewrite files with CRLF; prefer the Edit tool.
+linked_tasks:
+  - T-2026-10-22-007
+  - T-2026-10-22-008
+  - T-2026-10-22-005
+  - T-2026-10-22-006
+  - T-2026-10-22-009
+linked_commits:
+  - 3d642944
+  - 523ed66f
+  - ef24276e
+  - 21ac9617
+git_context:
+  ref: 21ac96176894aefbf26b8bf7924384b5532ab921
+  branch: feat/gnomon-windows
+  dirty: true

@@ -1,0 +1,27 @@
+id: L-2026-10-22-ascend42-195614-001
+type: human-note
+timestamp: '2026-10-22T19:56:14.693Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Windows work pushed for review: feat/gnomon-windows → feat/gnomon'
+summary: 'The founder asked to push and open a PR for the Windows build. feat/gnomon-windows (10 commits on top of feat/gnomon) went up for review against feat/gnomon, not main. It covers W0-W3 (CI, helper, kernel on a named pipe), the W5 session sandbox (Low + PowerShell), the local model via Ollama, W4 approvals phases A/B (click + Windows Hello), probe P02 and the lore. Next: W6 desktop app; the founder has optional TODOs: Developer Mode, Azure Trusted Signing.'
+symbols_touched:
+  - '#gnomon-helper'
+  - '#session-runner'
+  - '#local-runner'
+  - '#approval-broker'
+  - '#identity'
+tags:
+  - windows
+  - gnomon
+  - review
+linked_tasks:
+  - T-2026-10-22-006
+  - T-2026-10-22-007
+  - T-2026-10-22-008
+git_context:
+  ref: bb9c6c7a9382a482aa919bac439207e2de073a50
+  branch: feat/gnomon-windows
+  dirty: false

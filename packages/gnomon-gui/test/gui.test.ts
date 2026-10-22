@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { followLog, GnomonClient, GUI_FEATURES, gnomonPost, isCursorEpoch, refusalFromError, RpcError } from '../src/core/client.js';
+import { followLog, GnomonClient, GUI_FEATURES, gnomonPost, isCursorEpoch, PRESENCE_CALL_TIMEOUT_MS, PRESENCE_METHODS, refusalFromError, RpcError } from '../src/core/client.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, shownPrefixWords, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
@@ -580,6 +580,17 @@ describe('block buttons and the client (C6, I5)', () => {
     expect(seen).toEqual(['BAD_REQUEST:malformed-json']);
     await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'TIMEOUT', reason: 'call-timeout' } });
   });
+  it('an approve outlives the plain call timeout (a presence prompt: the person may still be typing their PIN)', async () => {
+    const t = { send: () => undefined, close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };
+    const c = new GnomonClient(t, { callTimeoutMs: 30 });
+    let settled = false;
+    const approve = c.call('approve', { cardId: 'card:x', decision: 'always' }).then(() => (settled = true), () => (settled = true));
+    await new Promise((r) => setTimeout(r, 120));
+    expect(settled).toBe(false); // a plain call would have timed out at 30 ms
+    expect(PRESENCE_METHODS.has('approve') && PRESENCE_CALL_TIMEOUT_MS > 120_000).toBe(true); // above the kernel's helper sign timeout
+    t.onClose!(1000);
+    await approve;
+  });
   it('FALSIFIER (T-2026-10-19-009 item 6): a drop after send rejects DELIVERY_UNKNOWN, a call after the drop CLOSED; never success', async () => {
     const sent: string[] = [];
     const t = { send: (s: string) => void sent.push(s), close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };
@@ -883,6 +894,20 @@ describe('#gui chat transcript: the conversation, not the raw rows', () => {
       ['result', 'success · $0.0123 · 1,234 tokens'],
     ]);
     expect(new Set(items.map((i) => i.key)).size).toBe(items.length);
+  });
+  it('a local-model (gnomon-local) turn shows its tool call and its reply; streamed deltas and tool results are noise', () => {
+    const local: Row[] = [
+      ev(40, { type: 'message_update', delta: 'The' }, 'message_update'),
+      ev(41, { type: 'message_end', message: { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'read_file' }] }, finishReason: 'tool_calls' }, 'message_end'),
+      ev(42, { type: 'tool_execution_start', toolCallId: 'c1', toolName: 'read_file', args: { path: 'README.md' } }, 'tool_execution_start'),
+      ev(43, { type: 'tool_execution_end', toolCallId: 'c1', toolName: 'read_file', isError: false, result: '# trial' }, 'tool_execution_end'),
+      ev(44, { type: 'message_end', message: { role: 'assistant', content: 'It is a trial repo.', toolCalls: [] }, finishReason: 'stop' }, 'message_end'),
+      ev(45, { type: 'agent_end', stopReason: 'stop' }, 'agent_end'),
+    ];
+    expect(chatItems(local).items.map((i) => [i.role, i.text])).toEqual([
+      ['tool', toolSummary('read_file', { path: 'README.md' })],
+      ['assistant', 'It is a trial repo.'],
+    ]);
   });
   it('"show raw events" shows every row; the composer echo hides the replay of the same text (shown once, list only grows)', () => {
     expect(chatItems(turn(), { raw: true }).items).toHaveLength(turn().length);

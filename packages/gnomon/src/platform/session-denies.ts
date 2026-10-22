@@ -30,18 +30,21 @@ export const SESSION_DENY_REALISATION: Readonly<Record<DenyPlatform, Readonly<Re
     'process-info:others': { mechanism: 'deny process-info* except self + sysctl kern.proc deny', fidelity: 'full' },
     'loopback:endpoint-port': { mechanism: 'network-outbound (remote ip "localhost:<port>") deny', fidelity: 'full' },
   },
+  // W5 as BUILT (platform/win32/session-sandbox.ts; Aegis M1, PR #52): Low integrity + a restricted token with the
+  // Gnomon and per-session SIDs + a private Low desktop + a kill-on-close job with UI limits. Classes it does not reach
+  // say so ('none'), never an intended mechanism.
   win32: {
-    'unix-socket:tmux': { mechanism: 'n/a (no tmux on Windows); AF_UNIX sockets under the user profile denied by ACE', fidelity: 'partial' },
+    'unix-socket:tmux': { mechanism: 'n/a (no tmux on Windows); a Low process is expected not to connect to a Medium-labelled AF_UNIX socket (unprobed)', fidelity: 'partial' },
     'unix-socket:screen': { mechanism: 'n/a (no screen on Windows)', fidelity: 'partial' },
-    'ipc:helper-service': { mechanism: 'helper pipe DACL excludes the restricting SID', fidelity: 'partial' },
-    'ipc:process-table-service': { mechanism: 'restricted token: no WMI / NtQuerySystemInformation process listing where the OS allows', fidelity: 'partial' },
-    'automation:apple-events': { mechanism: 'n/a (COM automation of other apps denied via job limits + helper)', fidelity: 'partial' },
-    'service-manager': { mechanism: 'schtasks / WMI / Start-Process -Verb RunAs denied via job limits + helper', fidelity: 'partial' },
-    'media:microphone': { mechanism: 'CapabilityAccessManager: no microphone capability for the restricted token', fidelity: 'partial' },
-    'media:camera': { mechanism: 'CapabilityAccessManager: no webcam capability for the restricted token', fidelity: 'partial' },
-    launchers: { mechanism: 'job object: no breakaway; explorer/rundll32/ShellExecute denied via helper', fidelity: 'partial' },
-    'process-info:others': { mechanism: 'restricted token process-info denial where the OS allows', fidelity: 'partial' },
-    'loopback:endpoint-port': { mechanism: 'WFP filter keyed by the S29-08 mechanism (restricting SID, install-time service, or AppContainer)', fidelity: 'partial' },
+    'ipc:helper-service': { mechanism: 'the kernel pipe DACL denies the Gnomon session SID; the kernel process is shielded (process.shield)', fidelity: 'full' },
+    'ipc:process-table-service': { mechanism: 'none: a Low process can still list processes (PROCESS_QUERY_LIMITED_INFORMATION, WMI reads)', fidelity: 'none' },
+    'automation:apple-events': { mechanism: 'UIPI: a Low process cannot send input or messages to Medium windows; private desktop; job UI limits. COM out-of-process servers not denied', fidelity: 'partial' },
+    'service-manager': { mechanism: 'Low integrity cannot write HKCU Run keys or the Startup folder; schtasks / WMI not denied', fidelity: 'partial' },
+    'media:microphone': { mechanism: 'none: no capability restriction on a restricted Low token', fidelity: 'none' },
+    'media:camera': { mechanism: 'none: no capability restriction on a restricted Low token', fidelity: 'none' },
+    launchers: { mechanism: 'kill-on-close job (no breakaway); ShellExecute of other apps not denied', fidelity: 'partial' },
+    'process-info:others': { mechanism: 'Low integrity: no VM read/write, thread or handle access to Medium processes; limited query still allowed', fidelity: 'partial' },
+    'loopback:endpoint-port': { mechanism: 'none yet: no WFP filter (probe P10w)', fidelity: 'none' },
   },
   linux: {
     'unix-socket:tmux': { mechanism: 'none yet (Linux sessions are CI-only in 8.0)', fidelity: 'none' },

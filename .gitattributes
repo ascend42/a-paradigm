@@ -28,3 +28,6 @@ docs/specs/gnomon-client-api.md text eol=lf
 packages/gnomon-mods/** text eol=lf
 # Voice decision preimage vectors, read by the TS and Swift suites (helper 1.6.0); keep LF on every OS.
 packages/gnomon-contracts/test/fixtures/*.json text eol=lf
+
+# Node scripts start with a shebang; vitest cannot parse a CRLF shebang line when a test imports one (Windows checkout). Keep LF on every OS.
+*.mjs text eol=lf

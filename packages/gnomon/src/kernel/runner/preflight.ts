@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileLayers, scanApiBilling, type BillingHit, type SettingsLayer } from '../budget/billing.js';
+import { registryLayers } from '../../platform/win32/registry.js';
 import { CLAUDE_MIN_VERSION, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 
 /** §3.3 closed refusal codes (flow's, preserved) + law 7. */
@@ -240,7 +241,11 @@ export function law7Layers(i: Law7Input): SettingsLayer[] {
   }
   if (i.policyPath) files.push({ where: 'session:policy.json', path: i.policyPath, kind: 'settings' });
   if (i.mcpConfigPath) files.push({ where: 'session:mcp.json', path: i.mcpConfigPath, kind: 'mcp' });
-  const unscannable: SettingsLayer[] = i.row.managedUnscannable.map((s) => ({ where: `managed:${s}`, json: undefined, kind: 'settings' }));
+  // win32 (W3): the HKLM/HKCU policy keys are read with reg.exe; an absent key is no layer, a JSON value is scanned,
+  // anything else stays unreadable (a law-7 hit). Every other unscannable source is a hit as before (fail closed).
+  const unscannable: SettingsLayer[] = i.row.managedUnscannable.flatMap((s): SettingsLayer[] =>
+    /^HK(LM|CU)\\/.test(s) ? registryLayers(s).map((l) => ({ ...l, kind: 'settings' as const })) : [{ where: `managed:${s}`, json: undefined, kind: 'settings' }],
+  );
   const cwds = roots.flatMap((r) => [path.resolve(r), realLoose(r)]);
   return [...fileLayers(files), ...claudeJsonLayers(i.userClaudeJson, cwds), ...unscannable];
 }

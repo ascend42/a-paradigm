@@ -207,6 +207,16 @@ describe('round 2 (steer race): an idle agent refuses a steer instead of queuein
   });
 });
 
+// A directory link is a junction on win32 (no privilege needed, the escape that matters there; ignored elsewhere).
+// A file symlink needs Developer Mode or admin on win32: without it, the 'filelink' case is not built.
+const linkDir = (target: string, p: string) => fs.symlinkSync(target, p, 'junction');
+const linkFile = (target: string, p: string): boolean => {
+  try { fs.symlinkSync(target, p); return true; } catch (e) {
+    if (process.platform === 'win32' && (e as NodeJS.ErrnoException).code === 'EPERM') return false;
+    throw e;
+  }
+};
+
 describe('Aegis H1 (round 2): tools confine paths to the realpath\'d session roots', () => {
   const setup = () => {
     const root = scratch();
@@ -221,7 +231,7 @@ describe('Aegis H1 (round 2): tools confine paths to the realpath\'d session roo
   it('reads inside the root work; reads outside (absolute, ../, symlinked dir) are refused', async () => {
     const { cwd, outside, ctx } = setup();
     expect(await runTool('read_file', { path: 'ok.txt' }, ctx)).toEqual({ content: 'fine', isError: false });
-    fs.symlinkSync(outside, path.join(cwd, 'link'));
+    linkDir(outside, path.join(cwd, 'link'));
     for (const p of [path.join(outside, 'secret'), '../outside/secret', 'link/secret']) {
       const r = await runTool('read_file', { path: p }, ctx);
       expect(r.isError, p).toBe(true);
@@ -231,9 +241,9 @@ describe('Aegis H1 (round 2): tools confine paths to the realpath\'d session roo
   });
   it('writes outside the root, via ../, absolute, a symlinked dir, a symlink final component, or under .git are refused', async () => {
     const { cwd, outside, ctx } = setup();
-    fs.symlinkSync(outside, path.join(cwd, 'dirlink'));
-    fs.symlinkSync(path.join(outside, 'secret'), path.join(cwd, 'filelink'));
-    for (const p of [path.join(outside, 'x'), '../outside/x', 'dirlink/x', 'dirlink/new/deeper/x', 'filelink', '.git/hooks/pre-commit', '.git/config', 'sub/.git/hooks/x', '.GIT/hooks/x', '.Git/config', '.git./config', '.git /config', 'GIT~1/config']) {
+    linkDir(outside, path.join(cwd, 'dirlink'));
+    const hasFileLink = linkFile(path.join(outside, 'secret'), path.join(cwd, 'filelink'));
+    for (const p of [path.join(outside, 'x'), '../outside/x', 'dirlink/x', 'dirlink/new/deeper/x', ...(hasFileLink ? ['filelink'] : []), '.git/hooks/pre-commit', '.git/config', 'sub/.git/hooks/x', '.GIT/hooks/x', '.Git/config', '.git./config', '.git /config', 'GIT~1/config']) {
       const r = await runTool('write_file', { path: p, content: 'pwn' }, ctx);
       expect(r.isError, p).toBe(true);
     }

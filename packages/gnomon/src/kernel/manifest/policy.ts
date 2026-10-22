@@ -254,7 +254,11 @@ export const KERNEL_LOG_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }> 
 /** The write denies for the local runner's node install and source dir (realpath'd; a prefix that is /, the user home or above it narrows to node's own dir). */
 export function localRunnerDenies(r: { node: string; dir: string }, userHome?: string): PolicyPath[] {
   const node = realpathLoose(r.node);
-  let prefix = path.dirname(path.dirname(node));
+  // POSIX: <prefix>/bin/node, so the prefix (bin/ + lib/) is two up. Windows: node.exe sits at the top of its install
+  // dir (Program Files/nodejs/node.exe) beside its DLLs: the prefix is that dir, never Program Files itself (keyed on the
+  // layout, a node.exe outside a bin/ dir, not on the platform: a POSIX-layout node under a drive path stays two up)
+  const winLayout = path.basename(node).toLowerCase() === 'node.exe' && path.basename(path.dirname(node)).toLowerCase() !== 'bin';
+  let prefix = winLayout ? path.dirname(node) : path.dirname(path.dirname(node));
   // Homebrew (Aegis): node loads sibling kegs' dylibs via <prefix>/opt/*/lib (libuv, llhttp, ada-url, simdjson, …),
   // so a Cellar node denies the WHOLE Homebrew prefix — the parent of `Cellar` (/opt/homebrew, /usr/local,
   // /home/linuxbrew/.linuxbrew) — covering Cellar/, opt/ and lib/. Consequence: sessions cannot brew install/upgrade.
@@ -514,8 +518,12 @@ export const ALWAYS_ASK_TOOLS = Object.freeze(['Bash', 'Edit', 'Write', 'MultiEd
  */
 export const CLAUDE_SESSION_ENV: Readonly<Record<string, string>> = Object.freeze({ CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' });
 
-export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[]; ask: string[] }; env: Record<string, string> } {
+export function claudePermissions(p: SessionPolicy, platform: string = process.platform): { permissions: { deny: string[]; ask: string[] }; env: Record<string, string> } {
   const deny = new Set<string>();
+  // W5 (win32): sessions run at Low integrity, where Git Bash cannot start nested: Claude Code's PowerShell tool is the
+  // shell and its Bash tool is removed (a bare tool name in deny drops it from the session)
+  const win = platform === 'win32';
+  if (win) deny.add('Bash');
   for (const d of p.denyRead) {
     if (d.match !== 'dep-steering') {
       deny.add(rule('Read', d));
@@ -534,5 +542,5 @@ export function claudePermissions(p: SessionPolicy): { permissions: { deny: stri
     const base = rule('Edit', { ...d, match: 'literal' }).slice(0, -1);
     for (const g of ['**/CLAUDE*.md', '**/claude*.md', '**/.claude/**', '**/.Claude/**']) deny.add(`${base}/${g})`);
   }
-  return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] }, env: { ...CLAUDE_SESSION_ENV } };
+  return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] }, env: { ...CLAUDE_SESSION_ENV, ...(win ? { CLAUDE_CODE_USE_POWERSHELL_TOOL: '1' } : {}) } };
 }

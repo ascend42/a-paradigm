@@ -1,0 +1,5 @@
+# PR #52: pin the toolchain the helper is built and reviewed with (CI and local builds agree).
+[toolchain]
+channel = "1.93.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

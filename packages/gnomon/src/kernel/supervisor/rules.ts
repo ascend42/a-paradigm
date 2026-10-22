@@ -178,7 +178,7 @@ export class RuleBook {
       const cardId = p.cardId;
       const isPrefix = p.match === 'prefix';
       const exact = 'match' in p ? p.match === 'exact' : p.matchExact === true;
-      if (typeof cardId !== 'string' || (!exact && !isPrefix) || typeof p.tool !== 'string' || typeof p.repoKey !== 'string' || p.presence === 'cached') return;
+      if (typeof cardId !== 'string' || (!exact && !isPrefix) || typeof p.tool !== 'string' || typeof p.repoKey !== 'string' || (p.presence !== 'fresh' && p.presence !== 'cli')) return; // Aegis W4-A L2: only a fresh (or CLI) touch learns a rule, never cached or click
       const req = this.#requests.get(cardId);
       const decided = this.#always.get(cardId);
       if (!req || req.tool !== p.tool || decided === undefined) return;

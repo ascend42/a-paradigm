@@ -121,6 +121,12 @@ export interface SocketServerOptions {
   onConnect?: (ctx: ConnectionContext) => void;
   onDisconnect?: (ctx: ConnectionContext) => void;
   onEvent?: (event: SocketEvent) => void;
+  /**
+   * REQUIRED for a named pipe (Windows, spec §16, P03): called right after the bind; resolves once the pipe's DACL
+   * is owner-only (the helper's read-back) and rejects otherwise. Until it resolves, every accepted connection is
+   * destroyed unserved (the default DACL lets Everyone read). A pipe without it refuses `endpoint-acl`.
+   */
+  securePipe?: (socketPath: string) => Promise<void>;
   /** Test seam: observes close()'s steps in order (pins "unlink the public name BEFORE server.close()"). */
   traceClose?: (step: 'unlink-public' | 'server-close') => void;
 }
@@ -445,13 +451,23 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
     });
     return ctx;
   };
-  const server = net.createServer((conn) => void serveConn(conn));
+  // A named pipe (Windows) has no directory, link or rename: bind it directly, then make it owner-only.
+  const pipe = opts.socketPath.startsWith('\\\\.\\pipe\\') || opts.socketPath.startsWith('\\\\?\\pipe\\');
+  if (pipe && !opts.securePipe) throw new LifecycleRefusal('endpoint-acl', `${opts.socketPath}: a named pipe needs the helper's owner-only DACL (securePipe)`);
+  // P03: the helper's own client open, and anything that connected under the default DACL, is never served
+  let pipeSecured = !pipe;
+  const server = net.createServer((conn) => {
+    if (!pipeSecured) {
+      conn.on('error', () => {});
+      conn.destroy();
+      return;
+    }
+    void serveConn(conn);
+  });
   let closedServer = false;
 
   server.maxConnections = opts.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
 
-  // A named pipe (Windows parity phase) has no directory, link or rename: bind it directly.
-  const pipe = opts.socketPath.startsWith('\\\\.\\pipe\\') || opts.socketPath.startsWith('\\\\?\\pipe\\');
   if (!pipe) assertPrivateDir(path.dirname(opts.socketPath));
   const bindPath = pipe ? opts.socketPath : privateBindName(opts.socketPath);
   await new Promise<void>((resolve, reject) => {
@@ -500,8 +516,16 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
 
   try {
     // A named pipe has no file mode, owner or inode: chmod/lstat on \\.\pipe\… would throw a plain Error
-    // (exit 70, restartable ⇒ a restart loop on Windows). Its ACL is the pipe's default DACL (owner + SYSTEM).
-    if (!pipe) {
+    // (exit 70, restartable ⇒ a restart loop on Windows). Its ACL comes from the helper (securePipe), read back.
+    if (pipe) {
+      try {
+        await opts.securePipe!(opts.socketPath);
+      } catch (e) {
+        throw new LifecycleRefusal('endpoint-acl', `${opts.socketPath}: the pipe could not be made owner-only (${e instanceof Error ? e.message : String(e)})`);
+      }
+      for (const s of sockets) s.destroy(); // nothing accepted before the read-back is served
+      pipeSecured = true;
+    } else {
       fs.chmodSync(bindPath, SOCKET_MODE);
       verifySocketAcl(bindPath);
       await publishSocket(bindPath, opts.socketPath, opts.holderProbeMs ?? DEFAULT_HOLDER_PROBE_MS, opts.holderProbe);

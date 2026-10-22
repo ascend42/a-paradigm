@@ -11,6 +11,7 @@ import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { RefusedError } from '@a-company/gnomon-contracts';
 import { ApprovalBroker } from '../src/kernel/broker/index.js';
 import { approveMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
+import { CLICK_KINDS } from '../src/kernel/broker/classes.js';
 import {
   beginHardwarePresence,
   completeHardwarePresence,
@@ -330,5 +331,122 @@ describe('broker on the helper-held approvals key (approve without a client deci
 
   it('HelperUnavailableError is the helper-down signal (type check)', () => {
     expect(new HelperUnavailableError('exited', 'x')).toBeInstanceOf(Error);
+  });
+});
+
+describe('W4 phase A (Windows hybrid): a click-class approvals key', () => {
+  function clickRig() {
+    const helper = new FakeHelper(GEN);
+    const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper, { clickClass: true });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: 'p:abcdefgh/kernel', log: async (kind, payload) => void rows.push({ kind, payload }), approvals });
+    const permission = () => broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' }, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
+    return { helper, approvals, broker, rows, permission };
+  }
+
+  it('a cached-class GUI decision is a click: no prompt, no unlock, the approvals key signs it and it verifies', async () => {
+    const r = clickRig();
+    const c = await r.permission();
+    const d = await r.broker.approve(gui(), { cardId: c.cardId, decision: 'allow' });
+    expect(d.presence).toBe('click');
+    expect(r.helper.prompts).toEqual([]);
+    expect(r.helper.signs.at(-1)).toEqual({ key: 'approvals', mode: 'click', connId: A, n: 1 });
+    expect(r.rows.some((x) => x.kind === 'approval.unlock')).toBe(false);
+    const decide = r.rows.find((x) => x.kind === 'approval.decide')!;
+    expect(decide.payload.presence).toBe('click');
+    expect(r.approvals.verify(HUMAN, approveMessage({ cardId: c.cardId, decision: 'allow', cardContentHash: c.contentHash, approverPrincipalId: HUMAN }), String(decide.payload.decisionSig))).toBe('ok');
+  });
+
+  it('fresh-class decisions (always) are never a click: refused presence-unavailable until Windows Hello (phase B)', async () => {
+    const r = clickRig();
+    const ref = await refusalOf(r.broker.approve(gui(), { cardId: (await r.permission()).cardId, decision: 'always' }));
+    expect(ref.code).toBe('FORBIDDEN');
+    expect(r.helper.signs).toEqual([]);
+    expect(r.helper.prompts).toEqual([]);
+    expect(r.rows.some((x) => x.kind === 'approval.decide')).toBe(false);
+  });
+
+  it('a CLI decision is not a click: it needs presence, refused on a click-class key', async () => {
+    const r = clickRig();
+    await refusalOf(r.broker.approve(cli(), { cardId: (await r.permission()).cardId, decision: 'allow' }));
+    expect(r.helper.signs).toEqual([]);
+    expect(r.rows.some((x) => x.kind === 'approval.decide')).toBe(false);
+  });
+
+  it('Aegis W4-A L5: an irreversible-flagged permission card is fresh (never a click); only permission / ask-user / plan are click kinds', async () => {
+    const r = clickRig();
+    const c = await r.broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'rm -rf x' }, lines: ['Bash: rm -rf x'], tool: 'Bash', toolInput: { command: 'rm -rf x' }, flags: ['irreversible'], ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
+    await r.broker.approve(gui(), { cardId: c.cardId, decision: 'allow' }).catch(() => undefined);
+    expect(r.helper.signs.every((s) => s.mode !== 'click')).toBe(true);
+    expect(CLICK_KINDS).toEqual(['permission', 'ask-user', 'plan']);
+  });
+
+  it('Aegis W4-A M2: a click-class key refuses fresh / cached / batch kernel-side (never presence), whatever the helper answers', async () => {
+    const helper = new FakeHelper(GEN);
+    const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper, { clickClass: true });
+    for (const mode of ['fresh', 'cached'] as const) await expect(approvals.signDecision({ connId: A, approver: HUMAN, message: 'm', mode, prompt: 'p' })).rejects.toBeInstanceOf(HardwarePresenceDenied);
+    expect(await approvals.decisionBatchAvailable()).toBe(false);
+    expect(helper.signs).toEqual([]);
+    expect(helper.prompts).toEqual([]);
+  });
+
+  it('a key without the click class refuses mode click (HardwarePresenceDenied), whatever the helper would do', async () => {
+    const helper = new FakeHelper(GEN);
+    const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper);
+    await expect(approvals.signDecision({ connId: A, approver: HUMAN, message: 'm', mode: 'click' })).rejects.toBeInstanceOf(HardwarePresenceDenied);
+    expect(helper.signs).toEqual([]);
+  });
+});
+
+describe('W4 phase B (Windows): a Windows Hello presence key beside the click-class approvals key', () => {
+  function helloRig(o: { presencePem?: (h: FakeHelper) => string } = {}) {
+    const helper = new FakeHelper(GEN, { presenceKey: true });
+    const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper, { clickClass: true, presencePublicKeyPem: (o.presencePem ?? ((h) => h.publicPem('presence')))(helper) });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: 'p:abcdefgh/kernel', log: async (kind, payload) => void rows.push({ kind, payload }), approvals });
+    const permission = () => broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' }, ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
+    return { helper, approvals, broker, rows, permission };
+  }
+
+  it('a fresh decision (always) takes ONE Hello prompt: the approvals key signs the decision, the presence key the challenge', async () => {
+    const r = helloRig();
+    const c = await r.permission();
+    const d = await r.broker.approve(gui(), { cardId: c.cardId, decision: 'always' });
+    expect(d.presence).toBe('fresh');
+    expect(r.helper.prompts.length).toBe(1);
+    expect(r.helper.signs.at(-1)).toMatchObject({ key: 'approvals', mode: 'fresh', n: 2 });
+    const decide = r.rows.find((x) => x.kind === 'approval.decide')!;
+    expect(r.approvals.verify(HUMAN, approveMessage({ cardId: c.cardId, decision: 'always', cardContentHash: c.contentHash, approverPrincipalId: HUMAN }), String(decide.payload.decisionSig))).toBe('ok');
+    expect(r.rows.some((x) => x.kind === 'approval.unlock')).toBe(false); // no unlock is ever kept
+  });
+
+  it('routine cards stay a click (no Hello prompt) with a presence key bound', async () => {
+    const r = helloRig();
+    const d = await r.broker.approve(gui(), { cardId: (await r.permission()).cardId, decision: 'allow' });
+    expect(d.presence).toBe('click');
+    expect(r.helper.prompts).toEqual([]);
+  });
+
+  it('a presence challenge NOT signed by the bound Hello key is refused (the click key is never presence)', async () => {
+    // bind an unrelated key as the presence key: the fake's presence signature then does not verify against it
+    const other = generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const r = helloRig({ presencePem: () => other });
+    const ref = await refusalOf(r.broker.approve(gui(), { cardId: (await r.permission()).cardId, decision: 'always' }));
+    expect(ref.code).toBe('FORBIDDEN');
+    expect(r.rows.some((x) => x.kind === 'approval.decide')).toBe(false);
+  });
+
+  it('Aegis W4-B M2: a root-class decision stays refused on a click-class key, Hello or not (no Windows root key yet)', async () => {
+    const r = helloRig();
+    const c = await r.broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'ls' }, lines: ['Bash: ls'], tool: 'Bash', toolInput: { command: 'ls' }, rootDecisions: ['allow'], ruleScope: { repoKey: 'sha256:' + '0'.repeat(64) } });
+    const ref = await refusalOf(r.broker.approve(gui(), { cardId: c.cardId, decision: 'allow' }));
+    expect(ref).toEqual({ code: 'UNSUPPORTED', reason: 'presence' });
+    expect(r.helper.signs).toEqual([]);
+    expect(r.helper.prompts).toEqual([]);
+  });
+
+  it('the presence key can never be the approvals key', () => {
+    const helper = new FakeHelper(GEN, { presenceKey: true });
+    expect(() => new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper, { clickClass: true, presencePublicKeyPem: helper.publicPem('approvals') })).toThrow(/must not be the approvals key/);
   });
 });

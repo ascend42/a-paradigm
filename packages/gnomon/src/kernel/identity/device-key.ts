@@ -15,6 +15,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { currentUid } from '../lifecycle/home.js';
+import { isOwnerOnly, ownerOnlyWhat } from '../../platform/owner-only.js';
 import { SoftwareEd25519Signer } from '../log/signer.js';
 
 export const KEYS_DIR = 'keys';
@@ -41,8 +42,8 @@ export function deviceKeyPath(home: string): string {
 function checkOwnerOnly(p: string, st: fs.Stats, what: 'file' | 'dir'): void {
   const uid = currentUid();
   if (uid !== null && st.uid !== uid) throw new DeviceKeyError('owner', `${p} is owned by uid ${st.uid}, not ${uid}`);
-  if ((st.mode & 0o077) !== 0) {
-    throw new DeviceKeyError(what === 'dir' ? 'dir-mode' : 'mode', `${p} mode ${(st.mode & 0o777).toString(8)} is not owner-only`);
+  if (!isOwnerOnly(p, st, { strict: true })) {
+    throw new DeviceKeyError(what === 'dir' ? 'dir-mode' : 'mode', `${p} ${ownerOnlyWhat(st)} is not owner-only`);
   }
 }
 

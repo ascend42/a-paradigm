@@ -5,7 +5,9 @@
  * model.capabilities", §13.2; the P06 probe's method, kernel-side): for one
  * configured endpoint —
  *   n_ctx   from llama.cpp `/slots` (the first slot), else `/props`
- *           default_generation_settings.n_ctx, else unknown (null);
+ *           default_generation_settings.n_ctx, else Ollama's `/api/show`
+ *           `num_ctx` parameter (a Modelfile's), else the context_length of
+ *           the model as loaded in Ollama's `/api/ps`, else unknown (null);
  *   model   `/v1/models` data[0].id, else the configured id;
  *   tools   LIVE only: one completion with a single `get_time` tool and
  *           tool_choice "required"; capable iff the reply's tool_calls[0]
@@ -29,7 +31,7 @@ export interface LocalCapabilities {
   tools: boolean;
   templateTools: boolean;
   nCtx: number | null;
-  nCtxSource: 'slots' | 'props' | null;
+  nCtxSource: 'slots' | 'props' | 'ollama-show' | 'ollama-ps' | null;
   error?: string;
 }
 
@@ -86,6 +88,25 @@ export async function probeLocalEndpoint(ep: { id: string; base: string; model: 
   const propsCtx = typeof pj?.default_generation_settings?.n_ctx === 'number' ? pj.default_generation_settings.n_ctx : typeof pj?.n_ctx === 'number' ? pj.n_ctx : null;
   const ids = ((models.json as { data?: Array<{ id?: unknown }> } | null)?.data ?? []).map((d) => d?.id).filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 128);
   const model = ids.includes(ep.model) ? ep.model : (ids[0] ?? null);
+  // Ollama serves neither /slots nor /props: its context is the model's num_ctx parameter, else the loaded size
+  let ollamaCtx: number | null = null;
+  let ollamaSource: 'ollama-show' | 'ollama-ps' | null = null;
+  if (slotCtx === null && propsCtx === null) {
+    const show = await getJson(f, `${v.base}/api/show`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ model: model ?? ep.model }) }, ms);
+    const params = (show.json as { parameters?: unknown } | null)?.parameters;
+    const m = typeof params === 'string' ? /^\s*num_ctx\s+(\d{1,7})\s*$/m.exec(params) : null;
+    if (m) {
+      ollamaCtx = Number(m[1]);
+      ollamaSource = 'ollama-show';
+    } else {
+      const ps = await getJson(f, `${v.base}/api/ps`, {}, ms);
+      const run = ((ps.json as { models?: Array<{ name?: unknown; model?: unknown; context_length?: unknown }> } | null)?.models ?? []).find((x) => x?.name === (model ?? ep.model) || x?.model === (model ?? ep.model));
+      if (typeof run?.context_length === 'number' && Number.isInteger(run.context_length) && run.context_length > 0) {
+        ollamaCtx = run.context_length;
+        ollamaSource = 'ollama-ps';
+      }
+    }
+  }
   const chat = await getJson(f, `${v.base}/v1/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -112,7 +133,7 @@ export async function probeLocalEndpoint(ep: { id: string; base: string; model: 
     model: model ?? ep.model,
     tools: call?.function?.name === 'get_time' && argsOk,
     templateTools: typeof pj?.chat_template === 'string' && /tool/i.test(pj.chat_template),
-    nCtx: slotCtx ?? propsCtx,
-    nCtxSource: slotCtx !== null ? 'slots' : propsCtx !== null ? 'props' : null,
+    nCtx: slotCtx ?? propsCtx ?? ollamaCtx,
+    nCtxSource: slotCtx !== null ? 'slots' : propsCtx !== null ? 'props' : ollamaSource,
   };
 }

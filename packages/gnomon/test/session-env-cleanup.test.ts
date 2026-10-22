@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { emptySessionEnvDir, ensureSessionEnvDir } from '../src/kernel/supervisor/supervisor.js';
 
+const POSIX = typeof process.getuid === 'function';
 const UUID = '0bac96b2-a05d-4b48-9f5f-d9bab166a40c';
 const dirs: string[] = [];
 afterEach(() => {
@@ -25,7 +26,8 @@ const world = (): { claude: string; env: string; outside: string } => {
 };
 
 describe('ensureSessionEnvDir ownership and mode (Aegis L-2)', () => {
-  it('withholds when an existing session-env or session-env/<uuid> is group- or world-writable', () => {
+  // POSIX modes: on win32 chmod only toggles the read-only bit (the owner-only DACL is W3's home check)
+  it.runIf(POSIX)('withholds when an existing session-env or session-env/<uuid> is group- or world-writable', () => {
     const { claude, env } = world();
     fs.chmodSync(env, 0o777);
     expect(ensureSessionEnvDir(claude, UUID)).toMatch(/group- or world-writable \(mode 777\)/);

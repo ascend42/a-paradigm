@@ -1,6 +1,7 @@
 {
   "$comment": "P8-D81 symbol drift allowlist (test/symbols-drift.test.ts). A symbol declared in a packages/gnomon*/.purpose file that is NOT a spec Appendix A node (docs/specs/gnomon.md) must be listed here with a reason. Spec ids are never listed (the test refuses redundant entries), and an entry whose symbol is no longer declared anywhere fails as stale.",
   "entries": [
+    { "symbol": "#gnomon-helper-win32", "reason": "2026-10-22 Windows parity W2 (docs/plans/gnomon-windows.md, P8-D71): the Rust half of #gnomon-helper (platform ops: pipe and home DACLs, job launcher, durable rename, boot id, ShellExecute); spec Appendix A node pending the parity pass" },
     { "symbol": "#gui-model-picker", "reason": "2026-10-20 founder ask: sub-component of #gui (the New-session Claude model select, the header model chip and the mid-session switch sheet); spec Appendix A node pending a spec pass" },
     { "symbol": "#gui-dictation", "reason": "TD-2026-10-20-262 sub-component of #gui (voice dictation into the composer, T-2026-10-19-026); spec Appendix A node pending the TD-2026-10-20-262 spec pass" },
     { "symbol": "#prefix-policy", "reason": "TD-2026-10-20-294 Aegis H1/M3 sub-component of #always-rules (spec §3.4 prefix rules are bounded); spec Appendix A node pending the TD" },

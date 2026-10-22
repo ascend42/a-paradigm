@@ -4,8 +4,9 @@
  * #session-runner child environment (spec §3.3 "Environment"; G-RUN-02,
  * G-SEC-02). The child's env is built from an ALLOWLIST, never by copying the
  * daemon's: `HOME USER LOGNAME LANG LC_ALL LC_CTYPE TMPDIR PATH SHELL` (plus
- * the Windows names, data in WINDOWS_EXTRA — the allowlist is the union, a
- * name absent on a platform is simply absent), then the scrub list is removed
+ * the Windows names, data in WINDOWS_EXTRA, on win32 ONLY — PR #52 review: a
+ * darwin session never inherits USERPROFILE, APPDATA, COMSPEC … from a daemon
+ * env that happens to carry them), then the scrub list is removed
  * again (defence in depth: `ANTHROPIC_* CLAUDE_CODE_USE_* CLAUDE_CODE_OAUTH*
  * CLAUDE_CONFIG_DIR NODE_OPTIONS GNOMON_* *_BASE_URL`), then the kernel adds
  * `GNOMON_HSID GNOMON_SOCK GNOMON_SESSION_KEY`. `envKeys[]` (names only, never
@@ -41,12 +42,17 @@
  * its system PATH lives in the registry and has no clean fixed equivalent.
  */
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 export const ENV_ALLOWLIST = Object.freeze(['HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'PATH', 'SHELL']);
-export const WINDOWS_EXTRA = Object.freeze(['USERPROFILE', 'SYSTEMROOT', 'WINDIR', 'SystemDrive', 'ProgramFiles', 'COMSPEC', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'CLAUDE_CODE_GIT_BASH_PATH']);
+export const WINDOWS_EXTRA = Object.freeze([
+  'USERPROFILE', 'SYSTEMROOT', 'WINDIR', 'SystemDrive', 'ProgramFiles', 'COMSPEC', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'CLAUDE_CODE_GIT_BASH_PATH',
+  // W3 (docs/plans/gnomon-windows.md): what Node, Git for Windows and Claude Code read to start on Windows
+  'TMP', 'USERNAME', 'ProgramData', 'ProgramFiles(x86)', 'CommonProgramFiles', 'HOMEDRIVE', 'HOMEPATH', 'OS', 'PROCESSOR_ARCHITECTURE', 'NUMBER_OF_PROCESSORS',
+]);
 /** The POSIX identity names a session gets from the OS, never from the daemon's env. */
 export const IDENTITY_KEYS = Object.freeze(['USER', 'LOGNAME', 'SHELL', 'TMPDIR']);
 const SCRUB = [/^ANTHROPIC_/i, /^CLAUDE_CODE_USE_/i, /^CLAUDE_CODE_OAUTH/i, /^CLAUDE_CONFIG_DIR$/i, /^NODE_OPTIONS$/i, /^GNOMON_/i, /_BASE_URL$/i];
@@ -286,13 +292,43 @@ export interface SessionEnvInput {
   identity: SessionIdentity | null;
   /** TD-2026-10-21-077: the session PATH (sessionPathFor); non-null REPLACES any daemon PATH. null (win32): the allowlist's. */
   path: string | null;
+  /**
+   * win32 (W5): the session's own temp dir (Low-labelled, the only temp a Low-integrity session can write); it
+   * REPLACES TEMP and TMP. Absent: the allowlisted ones.
+   */
+  tempDir?: string;
+  /** the platform whose env rules apply (default: this process's) */
+  platform?: NodeJS.Platform;
+}
+
+/**
+ * win32 (W5): the session's own temp dir, outside the Gnomon home (which a session cannot read), one of the session
+ * sandbox's writable roots: <user temp>gnomon-sessions\<16 hex of the hsid>. Every session's temp dir sits in ONE
+ * parent so the sandbox can deny that parent to all sessions and grant each dir to its own session only.
+ */
+export function win32SessionTempDir(hsid: string, tmp: string = os.tmpdir()): string {
+  return path.join(tmp, 'gnomon-sessions', createHash('sha256').update(hsid).digest('hex').slice(0, 16));
 }
 
 export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, string>; envKeys: string[] } {
   const env: Record<string, string> = {};
-  for (const k of [...ENV_ALLOWLIST, ...WINDOWS_EXTRA]) {
-    const v = i.from[k];
+  // win32 env names are case-insensitive: a daemon started from PowerShell or cmd has Path, SystemRoot, windir,
+  // ComSpec. Look every allowlisted name up case-insensitively there and emit the canonical spelling (W3).
+  const win = (i.platform ?? process.platform) === 'win32';
+  const folded = win ? new Map(Object.entries(i.from).map(([k, v]) => [k.toUpperCase(), v] as const)) : null;
+  for (const k of win ? [...ENV_ALLOWLIST, ...WINDOWS_EXTRA] : ENV_ALLOWLIST) {
+    const v = folded ? folded.get(k.toUpperCase()) : i.from[k];
     if (typeof v === 'string' && !isScrubbed(k)) env[k] = v;
+  }
+  if (win && i.tempDir) {
+    // a sandboxed win32 session (the supervisors pass tempDir for one and only then)
+    env.TEMP = i.tempDir;
+    env.TMP = i.tempDir;
+    // schannel refuses its restricted token (AcquireCredentialsHandle: SEC_E_NO_CREDENTIALS), so git over https uses
+    // Git for Windows' OpenSSL backend (W5)
+    env.GIT_CONFIG_COUNT = '1';
+    env.GIT_CONFIG_KEY_0 = 'http.sslBackend';
+    env.GIT_CONFIG_VALUE_0 = 'openssl';
   }
   if (i.identity) {
     for (const k of IDENTITY_KEYS) delete env[k];
