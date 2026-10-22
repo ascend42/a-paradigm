@@ -1,0 +1,20 @@
+id: TD-2026-10-22-197
+timestamp: '2026-10-22T09:16:38.381Z'
+title: 8.0 ships when Windows Gnomon is done
+decision: >-
+  The 8.0.0 publish is held until the Windows parity pass (docs/plans/gnomon-windows.md, TD-2026-10-22-278) is finished
+  on the founder's Windows machine. 8.0 then ships for Apple silicon Macs and Windows x64. Before release: update the
+  README and CHANGELOG (they currently say Apple silicon only), add @a-company/gnomon-win32-x64 to the publish order and
+  gate, then rebuild and seal the signed Mac app on the final commit, publish, and open the PR to main. Intel Macs stay
+  unsupported (TD-2026-10-22-310).
+rationale: 'Founder: "it will finish these pieces and then it will actually be 8.0".'
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+status: active
+tags:
+  - gnomon
+  - '8.0'
+  - release
+  - windows
