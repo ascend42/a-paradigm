@@ -35,6 +35,7 @@
  * The per-session file the kernel hands the child is written as JSON (the
  * JSON subset of YAML 1.2).
  */
+import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { canonicalJson, hex, refuse, RefusedError, sha256 } from '@a-company/gnomon-contracts';
@@ -128,7 +129,8 @@ export const LOCAL_CONFIG_SCHEMA = 'gnomon-root-local:v1' as const;
 /** The highest local-config `version` this home has applied (rollback detection). */
 export const LOCAL_SEEN_FILE = 'local.seen.json';
 const MAX_ENDPOINTS = 16;
-const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** An endpoint id (also the loop node's model.profile). */
+export const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const SURFACES: readonly string[] = ['none', 'compact', 'full'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -188,10 +190,17 @@ export interface LoadedLocalConfig {
   fellBack: boolean;
   hash: string | null;
   version: number | null;
+  /** the applied row's signer key id and its createdAt (a card-signed row carries one; a dev-local row none) */
+  signer?: string;
+  signedAt?: string | null;
 }
 
-/** Load `<home>/local.signed.json`: only a row signed by `root` is applied; anything else is NO config, logged. */
-export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyRow'>, emit: LocalConfigEvent = () => undefined, opts: { chainHighWater?: number } = {}): LoadedLocalConfig {
+/**
+ * Load `<home>/local.signed.json`: only a row signed by `root` is applied; anything else is NO config, logged.
+ * `opts.missing: 'removed'` (the human's request.local.config{op:'remove'}) logs the missing file as
+ * config.loaded{fallback:'none', why:'removed'} even on a home that never applied a version.
+ */
+export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyRow'>, emit: LocalConfigEvent = () => undefined, opts: { chainHighWater?: number; missing?: 'removed' } = {}): LoadedLocalConfig {
   const file = path.join(home, LOCAL_CONFIG_FILE);
   const seenFile = path.join(home, LOCAL_SEEN_FILE);
   let sidecar = 0;
@@ -210,6 +219,7 @@ export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyR
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch {
+    if (opts.missing === 'removed') return fallBack('removed', null, null);
     if (seen > 0) return fallBack('missing', null, null);
     return { config: undefined, signed: false, fellBack: false, hash: null, version: null };
   }
@@ -240,12 +250,82 @@ export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyR
     }
   }
   emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash, signed: true, version, highWater: seen, endpoints: config.endpoints.map((e) => e.id), runner: config.runner ? { node: config.runner.node, dir: config.runner.dir, treeSha256: config.runner.treeSha256 } : null });
-  return { config, signed: true, fellBack: false, hash, version };
+  const createdAt = (doc.row as { createdAt?: unknown }).createdAt;
+  return { config, signed: true, fellBack: false, hash, version, signer: doc.signer as string, signedAt: typeof createdAt === 'string' ? createdAt.slice(0, 40) : null };
 }
 
-/** Write a root-signed local config (the root act; tests). Throws RootUnavailableError without a root. */
+/**
+ * THE one writer of `<home>/local.signed.json` (TD-2026-10-22-769): `{row, signer, sig}` written to a private temp
+ * file (0600, exclusive create), fsynced, then renamed over the target. A target that is a symlink (or anything but a
+ * regular file) is refused, never followed or replaced. Used by the root act of `gnomon dev local`, the allow effect
+ * of a real home's local.config card (config-request.ts) and tests.
+ */
+export function writeLocalConfigDoc(home: string, doc: { row: Record<string, unknown>; signer: string; sig: string }): void {
+  const file = path.join(home, LOCAL_CONFIG_FILE);
+  const refuseTarget = (): void => {
+    let st: fs.Stats;
+    try {
+      st = fs.lstatSync(file);
+    } catch {
+      return; // no file yet
+    }
+    if (!st.isFile()) throw new RefusedError(refuse({ code: 'BAD_REQUEST', data: { reason: 'bad-params', why: 'local-config-target' } }), `#local-config-request: ${LOCAL_CONFIG_FILE} is not a regular file (a symlink is never followed): remove it first`);
+  };
+  refuseTarget();
+  const tmp = path.join(home, `.${LOCAL_CONFIG_FILE}.tmp-${process.pid}-${randomBytes(6).toString('hex')}`);
+  const fd = fs.openSync(tmp, 'wx', 0o600);
+  try {
+    fs.writeSync(fd, `${JSON.stringify(doc)}\n`);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  try {
+    refuseTarget(); // again, right before the rename
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+/** Write a root-signed local config (the dev root act; tests). Throws RootUnavailableError without a root. */
 export function writeSignedLocalConfig(home: string, root: Pick<RootAuthority, 'signRow'>, local: Record<string, unknown>, version = 0): void {
   const row = { schemaVersion: LOCAL_CONFIG_SCHEMA, version, local };
   const { signer, sig } = root.signRow(row);
-  fs.writeFileSync(path.join(home, LOCAL_CONFIG_FILE), `${JSON.stringify({ row, signer, sig })}\n`, { mode: 0o600 });
+  writeLocalConfigDoc(home, { row, signer, sig });
+}
+
+/**
+ * The chain's rollback high-water mark for local.signed.json: the highest version of a SIGNED config.loaded row
+ * naming the file (kernel rows only: the caller reads the log as the kernel principal's rows).
+ */
+export function localChainHighWater(payloads: Iterable<unknown>): number {
+  let hw = 0;
+  for (const raw of payloads) {
+    const p = raw as { file?: unknown; signed?: unknown; version?: unknown } | null | undefined;
+    if (p?.file === LOCAL_CONFIG_FILE && p.signed === true && typeof p.version === 'number' && Number.isInteger(p.version) && p.version > hw) hw = p.version;
+  }
+  return hw;
+}
+
+/**
+ * The version the next local config takes: one above the highest of the file's row, the sidecar and the chain
+ * (so the loader never refuses it as older). `previous` is that highest version, or null for a first config.
+ */
+export function nextLocalVersion(home: string, chainHighWater: number): { version: number; previous: number | null } {
+  const read = (f: string, pick: (j: Record<string, unknown>) => unknown): number | null => {
+    try {
+      const v = pick(JSON.parse(fs.readFileSync(path.join(home, f), 'utf8')) as Record<string, unknown>);
+      return Number.isSafeInteger(v) && (v as number) >= 0 ? (v as number) : null;
+    } catch {
+      return null;
+    }
+  };
+  const fileV = read(LOCAL_CONFIG_FILE, (j) => (isObj(j.row) ? j.row.version : undefined));
+  const seenV = read(LOCAL_SEEN_FILE, (j) => j.version);
+  const known = [fileV, seenV, chainHighWater > 0 ? chainHighWater : null].filter((x): x is number => x !== null);
+  if (!known.length) return { version: 1, previous: null };
+  const top = Math.max(...known);
+  return { version: top + 1, previous: top };
 }

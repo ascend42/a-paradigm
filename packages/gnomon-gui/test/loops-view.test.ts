@@ -190,6 +190,19 @@ describe('LP8 loops model', () => {
     expect(budgetKey(8, 'x').enabled).toBe(false);
   });
 
+  it('TD-2026-10-22-769 (Mika F4): a loop refused at start for want of a local model is ONE stack alert, deduped with a count; it goes when the kernel drops the refusal', () => {
+    const refused = { key: KEY('flow-health-checkout'), loopId: 'flow-health-checkout', code: 'no-local-model', why: 'none', at: '2026-10-22T18:30:00.000Z', since: '2026-10-20T18:30:00.000Z', count: 3, trigger: 'schedule', modelNodes: ['digest'] };
+    const m = loopsOf(status({ startRefused: [refused, { ...refused, key: KEY('nope'), why: 'made-up' }] }))!;
+    expect(m.loops[0]!.startRefused).toMatchObject({ why: 'none', count: 3, modelNodes: ['digest'] });
+    const a = loopAlerts(m, new Set()).filter((x) => x.kind === 'refused-start');
+    expect(a).toHaveLength(1);
+    expect(a[0]!.title).toBe('■ flow-health-checkout didn’t start');
+    expect(a[0]!.path).toMatch(/^no local model · scheduled \d\d:\d\d · refused before any step · ×3 since \d\d:\d\d$/);
+    expect(loopAlerts(loopsOf(status({ startRefused: [{ ...refused, why: 'sessions-only', count: 1 }] }))!, new Set()).find((x) => x.kind === 'refused-start')!.path).toMatch(/^the local model is for sessions only · scheduled/);
+    expect(loopAlerts(m, new Set([a[0]!.id])).filter((x) => x.kind === 'refused-start')).toEqual([]);
+    expect(loopAlerts(loopsOf(status({ startRefused: [] }))!, new Set()).filter((x) => x.kind === 'refused-start')).toEqual([]);
+  });
+
   it('alerts: a kernel pause; a stop by a limit; dismissed ones stay gone; the slip lists loops with no card', () => {
     const m = loopsOf(status())!;
     const a = loopAlerts(m, new Set());

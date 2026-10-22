@@ -517,9 +517,42 @@ export interface RootRowsView {
 const short = (v: unknown, n = 19): string => (typeof v === 'string' ? (v.length > n ? `${v.slice(0, n)}…` : v) : '?');
 const list = (v: unknown): string | null => (Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]).join(', ') : null);
 
+export const LOCAL_ROOT_SCHEMA = 'gnomon-root-local:v1';
+const LOCAL_COMPAT_LABEL: Readonly<Record<string, string>> = Object.freeze({ ollama: 'Ollama', 'lm-studio': 'LM Studio', 'llama.cpp': 'llama.cpp', vllm: 'vLLM', 'mlx-lm': 'MLX' });
+const LOOPBACK_BASE = /^https?:\/\/(?:127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|localhost|\[::1\])(?::[0-9]{1,5})?(?:\/[A-Za-z0-9._~%/-]*)?$/;
+const HEX64 = /^[0-9a-f]{64}$/;
+
+/**
+ * TD-2026-10-22-769 (Mika F3): a gnomon-root-local:v1 row (a real home's local-model config) as the card shows it:
+ * every signed field, in full. null (no Allow, Aegis C1e) on ANY field it cannot render: an unknown key anywhere, a
+ * non-loopback base, a compat outside the local transports, a malformed pin, more than 4 endpoints.
+ */
+export function localRootRowLine(r: Record<string, unknown>): string | null {
+  const only = (o: Record<string, unknown>, keys: readonly string[]): boolean => Object.keys(o).every((k) => keys.includes(k));
+  const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  if (!only(r, ['schemaVersion', 'version', 'local', 'cardId', 'createdAt']) || !Number.isSafeInteger(r.version) || (r.version as number) < 0 || !obj(r.local)) return null;
+  const l = r.local;
+  if (!only(l, ['endpoints', 'runner']) || !Array.isArray(l.endpoints) || l.endpoints.length < 1 || l.endpoints.length > 4 || !obj(l.runner)) return null;
+  const parts: string[] = [`local model config v${r.version as number}`];
+  for (const e of l.endpoints as unknown[]) {
+    if (!obj(e) || !only(e, ['id', 'base', 'model', 'compat', 'loops'])) return null;
+    const [id, base, model, compat] = [e.id, e.base, e.model, e.compat];
+    if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id) || typeof base !== 'string' || base.length > 256 || !LOOPBACK_BASE.test(base) || typeof model !== 'string' || !model || model.length > 128 || typeof compat !== 'string' || !LOCAL_COMPAT_LABEL[compat]) return null;
+    if (e.loops !== undefined && typeof e.loops !== 'boolean') return null;
+    parts.push(`endpoint ${id} · ${LOCAL_COMPAT_LABEL[compat]} at ${base} · model ${model} · ${e.loops === true ? 'loops may use it' : 'sessions only'}`);
+  }
+  const ru = l.runner;
+  if (!only(ru, ['node', 'nodeSha256', 'dir', 'treeSha256', 'entry'])) return null;
+  const [node, nodeSha, dir, tree, entry] = [ru.node, ru.nodeSha256, ru.dir, ru.treeSha256, ru.entry];
+  if (typeof node !== 'string' || !node.startsWith('/') || typeof dir !== 'string' || !dir.startsWith('/') || typeof nodeSha !== 'string' || !HEX64.test(nodeSha) || typeof tree !== 'string' || !HEX64.test(tree) || typeof entry !== 'string' || !/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(entry) || entry.split('/').includes('..')) return null;
+  parts.push(`runner ${dir}/${entry} · tree ${tree.slice(0, 8)}…${tree.slice(-4)} · node ${node} · sha ${nodeSha.slice(0, 8)}…`);
+  return parts.join('; ');
+}
+
 /** One root row as the card shows it, IN FULL; null = a kind this GUI cannot render (then no root key is shown). */
 export function rootRowLine(r: Record<string, unknown>): string | null {
   const s = (k: string): string | null => (typeof r[k] === 'string' ? (r[k] as string) : null);
+  if (r.schemaVersion === LOCAL_ROOT_SCHEMA) return localRootRowLine(r);
   if (r.schemaVersion === 'voiceEnrolRow:v1') return r.op === 'enrol' && s('speakerId') ? `enrol the voice speaker ${s('speakerId')} · consent ${short(r.consentHash)}` : null;
   switch (r.kind) {
     case 'grant.trust':

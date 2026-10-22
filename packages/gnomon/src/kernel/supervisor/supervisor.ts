@@ -852,7 +852,7 @@ export class SessionSupervisor {
         endpointPort: this.#o.endpointPort?.() ?? null,
         extraDenyWrite: [...binaryDenies(row, userHome, bin.real, this.#o.claudePath), ...this.#pathDenies],
         // round 3 (Aegis H1): a Claude session can no more swap the local runner's node or source than a local one
-        ...(this.#o.local?.runner ? { localRunner: { node: this.#o.local.runner.node, dir: this.#o.local.runner.dir } } : {}),
+        ...((r) => (r ? { localRunner: { node: r.node, dir: r.dir } } : {}))(this.#local.config()?.runner),
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
         ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
@@ -1880,6 +1880,24 @@ export class SessionSupervisor {
   /** #local-runner's daemon-start probe of every configured local endpoint (model.probe / model.capabilities rows). */
   probeLocal(): Promise<Array<{ endpoint: string; ok: boolean }>> {
     return this.#local.probeAll();
+  }
+
+  /**
+   * TD-2026-10-22-769 (#local-config-request hot apply): the daemon reloaded local.signed.json; new opens (attended and
+   * loop steps) use `config` at once, live local sessions keep their spawn-time config. Undefined = no local lane.
+   */
+  setLocalConfig(config: LocalLaneConfig | undefined): void {
+    this.#local.setConfig(config);
+  }
+
+  /** status.local's health rows: the last probe and the last fallback card (Mika's Settings section). */
+  localHealth(): { lastProbe: unknown; lastFallback: unknown } {
+    return { lastProbe: this.#local.lastProbe(), lastFallback: this.#local.lastFallback() };
+  }
+
+  /** The local lane config new opens use (undefined = none). */
+  localConfig(): LocalLaneConfig | undefined {
+    return this.#local.config();
   }
 
   /** status.sessionSandbox: the session profile's fidelity here (`unavailable` below the macOS floor or with SIP off, with the reason) */

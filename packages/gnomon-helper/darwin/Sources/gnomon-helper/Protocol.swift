@@ -32,7 +32,11 @@ import Foundation
 /// the card kind's closed row table. The helper's own line (what every row grants, every digest) goes FIRST in the
 /// dialog; the context is invalidated at once — never cached, never kept. `probe-decision` is the on-device check
 /// (C4). Additive op: same protocol, the kernel's 1.6.0 floor stays; the kernel picks decision.sign from info.version.
-let gnomonHelperVersion = "1.8.0"
+/// 1.9.0 (TD-2026-10-22-769): two row tables the 1.8.0 release did not carry — `loop-trust` (one loop.trusted row;
+/// `requestedBy`, the agent that asked, is in its field set) and `local.config` (one gnomon-root-local:v1 row: a real
+/// home's local-model config, loopback endpoints only, at most 4, the runner pinned by sha256). The kernel refuses a
+/// card of either kind when it is RAISED on an older helper ("update the Gnomon app"). Same protocol, additive.
+let gnomonHelperVersion = "1.9.0"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).
@@ -342,19 +346,103 @@ func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
         // 8.0:loops (gnomon-loops.md §3.1): a loop trust signs exactly one loop.trusted row naming the loop and its hash
         guard kinds == ["loop.trusted"] else { return "a loop-trust signs exactly one loop.trusted row" }
         let r = rows[0]
-        let fields: Set<String> = ["kind", "loopId", "scope", "repoKey", "contentHash", "coreHash", "closureDigest", "sourceHash", "cardId", "by", "createdAt"]
+        // 1.9.0: requestedBy (the agent that asked, #loop-agent-ops) is part of the closed set
+        let fields: Set<String> = ["kind", "loopId", "scope", "repoKey", "contentHash", "coreHash", "closureDigest", "sourceHash", "cardId", "by", "requestedBy", "createdAt"]
         for k in r.keys.sorted() where !fields.contains(k) { return "a loop.trusted row never carries \(String(k.prefix(40)))" }
-        func isHash(_ v: Any?) -> Bool { (v as? String).map { $0.range(of: "^sha256:[0-9a-f]{64}$", options: .regularExpression) != nil } ?? false }
-        guard let l = r["loopId"] as? String, l.range(of: "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$", options: .regularExpression) != nil,
+        func isHash(_ v: Any?) -> Bool { (v as? String).map { fullMatch($0, "^sha256:[0-9a-f]{64}$") } ?? false }
+        guard let l = r["loopId"] as? String, fullMatch(l, "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"),
               let sc = r["scope"] as? String, sc == "repo" || sc == "personal", isHash(r["repoKey"]), isHash(r["contentHash"]) else { return "a loop.trusted row names its loop, scope, repo and content hash" }
         for k in ["coreHash", "closureDigest"] where r[k] != nil && !isHash(r[k]) { return "a loop.trusted \(k) is sha256:<64 hex>" }
-        if let v = r["sourceHash"], !((v as? String).map { $0.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil } ?? false) { return "a loop.trusted sourceHash is 64 hex" }
+        if let v = r["sourceHash"], !((v as? String).map { fullMatch($0, "^[0-9a-f]{64}$") } ?? false) { return "a loop.trusted sourceHash is 64 hex" }
         return nil
+    case "local.config":
+        // TD-2026-10-22-769 (1.9.0): a real home's local-model config signs exactly one gnomon-root-local:v1 row
+        guard kinds == [localRootSchema] else { return "a local.config signs exactly one gnomon-root-local:v1 row" }
+        return localRowRefusal(rows[0])
     case "mod.mcp.config", "api-token", "peer-pair", "grant":
         return kinds.isEmpty ? nil : "a \(cardKind) decision signs only its decision row"
     default:
         return "no row table for card kind \(String(cardKind.prefix(40)))"
     }
+}
+
+/// The whole string matches `pattern` (ASCII classes only). A bare `range(of:)` with ^…$ would accept a trailing line
+/// terminator under ICU, which JavaScript's `$` does not: requiring the match to span the string keeps the mirrors equal.
+func fullMatch(_ s: String, _ pattern: String) -> Bool {
+    s.range(of: pattern, options: .regularExpression) == s.startIndex..<s.endIndex
+}
+
+let localRootSchema = "gnomon-root-local:v1"
+let localRowMaxEndpoints = 4
+/// The local transports (the kernel's LOCAL_COMPAT_NAMES; parity-tested through the shared vectors).
+let localCompats: Set<String> = ["llama.cpp", "ollama", "lm-studio", "vllm", "mlx-lm"]
+
+private func isJsonBool(_ v: Any?) -> Bool { (v as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() } ?? false }
+/// A JSON whole number in 0...2^53-1 (the TS mirror's Number.isSafeInteger, non-negative), never a boolean.
+private func jsonWhole(_ v: Any?) -> Int64? {
+    guard let n = v as? NSNumber, !isJsonBool(n) else { return nil }
+    let d = n.doubleValue
+    guard d.isFinite, d >= 0, d <= 9_007_199_254_740_991, d == d.rounded() else { return nil }
+    return Int64(d)
+}
+private func str(_ v: Any?, _ max: Int) -> String? {
+    guard let s = v as? String, !s.isEmpty, s.utf16.count <= max else { return nil }
+    return s
+}
+
+/// The local.config row check (mirror of localRowRefusal in the kernel's decision-batch.ts). nil = allowed.
+func localRowRefusal(_ r: Json) -> String? {
+    let rowFields: Set<String> = ["schemaVersion", "version", "local", "cardId", "createdAt"]
+    for k in r.keys.sorted() where !rowFields.contains(k) { return "a local config row never carries \(String(k.prefix(40)))" }
+    guard jsonWhole(r["version"]) != nil else { return "a local config row names its version (a whole number)" }
+    guard let l = r["local"] as? Json else { return "a local config row names its local section" }
+    for k in l.keys.sorted() where !["endpoints", "runner"].contains(k) { return "a local config never carries \(String(k.prefix(40)))" }
+    guard let eps = l["endpoints"] as? [Any], eps.count >= 1, eps.count <= localRowMaxEndpoints else { return "a local config names 1..\(localRowMaxEndpoints) endpoints" }
+    let epFields: Set<String> = ["id", "base", "model", "compat", "loops"]
+    for raw in eps {
+        guard let e = raw as? Json else { return "a local endpoint is an object" }
+        for k in e.keys.sorted() where !epFields.contains(k) { return "a local endpoint never carries \(String(k.prefix(40)))" }
+        guard let id = str(e["id"], 64), fullMatch(id, "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"), str(e["model"], 128) != nil,
+              let compat = str(e["compat"], 32), localCompats.contains(compat) else { return "a local endpoint names its id, model and a local compat" }
+        let loopback = "^https?://(?:127\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}|localhost|\\[::1\\])(?::([0-9]{1,5}))?(?:/[A-Za-z0-9._~%/-]*)?$"
+        guard let base = str(e["base"], 256), fullMatch(base, loopback) else { return "a local endpoint is loopback only in 8.0" }
+        if let port = loopbackPortDigits(base), port < 1 || port > 65535 { return "a local endpoint is loopback only in 8.0" }
+        if let v = e["loops"], !isJsonBool(v) { return "a local endpoint loops flag is true or false" }
+    }
+    guard let ru = l["runner"] as? Json else { return "a local config pins its runner" }
+    for k in ru.keys.sorted() where !["node", "nodeSha256", "dir", "treeSha256", "entry"].contains(k) { return "a local runner pin never carries \(String(k.prefix(40)))" }
+    func absPosix(_ v: String) -> Bool { v.hasPrefix("/") && !v.contains("\u{0}") }
+    guard let node = str(ru["node"], 1024), absPosix(node), let dir = str(ru["dir"], 1024), absPosix(dir),
+          let ns = ru["nodeSha256"] as? String, fullMatch(ns, "^[0-9a-f]{64}$"), let ts = ru["treeSha256"] as? String, fullMatch(ts, "^[0-9a-f]{64}$"),
+          let entry = str(ru["entry"], 128), fullMatch(entry, "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"), !entry.split(separator: "/", omittingEmptySubsequences: false).contains("..")
+    else { return "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry" }
+    return nil
+}
+
+/// The digits after the loopback host's `:` (the base already matched the loopback pattern), or nil when it names none.
+private func loopbackPortDigits(_ base: String) -> Int? {
+    guard let afterScheme = base.range(of: "://") else { return nil }
+    let rest = base[afterScheme.upperBound...]
+    let hostPort = rest.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+    guard let colon = hostPort.lastIndex(of: ":"), !hostPort.hasSuffix("]") else { return nil }
+    return Int(hostPort[hostPort.index(after: colon)...])
+}
+
+/// C2 for a local config row (mirror of localRowShown): the version, every endpoint in full, then the runner. The full
+/// line names the runner dir and the node path; the compact one only their sha256 prefixes. nil = not showable.
+func localRowShown(_ r: Json, compact: Bool) -> String? {
+    guard let l = r["local"] as? Json, let eps = l["endpoints"] as? [Any], let ru = l["runner"] as? Json, let version = jsonWhole(r["version"]) else { return nil }
+    var parts: [String] = []
+    for raw in eps {
+        guard let e = raw as? Json, let id = e["id"] as? String, let base = e["base"] as? String, let model = e["model"] as? String, let compat = e["compat"] as? String else { return nil }
+        let loops = isJsonBool(e["loops"]) && (e["loops"] as? NSNumber)?.boolValue == true
+        parts.append("endpoint \(id) \(base) model \(model) (\(compat))\(loops ? " loops: yes" : " loops: no")")
+    }
+    guard let dir = ru["dir"] as? String, let tree = ru["treeSha256"] as? String, let node = ru["node"] as? String, let nodeSha = ru["nodeSha256"] as? String, let entry = ru["entry"] as? String else { return nil }
+    let runner = compact
+        ? "runner tree \(tree.prefix(12)) node \(nodeSha.prefix(12))"
+        : "runner \(dir)/\(entry) tree \(tree.prefix(12)) node \(node) \(nodeSha.prefix(12))"
+    return "local model config v\(version): \(parts.joined(separator: ", ")); \(runner)"
 }
 
 func sha256Tag(_ d: Data) -> String {
@@ -497,6 +585,8 @@ func rowShown(_ r: Json, compactCaps: Bool) -> String? {
     case "loop.trusted":
         guard let l = s("loopId"), let sc = s("scope"), let rk = s("repoKey"), let h = s("contentHash") else { return nil }
         return "trust loop \(sc)/\(l) repo \(rk.dropFirst(7).prefix(12)) \(h.prefix(19))"
+    case localRootSchema:
+        return localRowShown(r, compact: compactCaps)
     default:
         return nil
     }

@@ -23,8 +23,9 @@
  *     never unbounded;
  *   - `call` is `id@hash8`; with the set of known loops the validator refuses call cycles and depth > 3;
  *   - 8.0 subset (founder scope 2026-10-22): `model.use: claude|any`, any `escalate` other than `never`,
- *     the `claude` opt-in block, `cron` triggers, `sentinel.incident.opened` events, `bash` tools and the
- *     envelope fields are refused with code LANDS_IN_8_1 ("lands in 8.1").
+ *     the `claude` opt-in block, `cron` triggers, `sentinel.incident.opened` events, `bash` tools, the
+ *     envelope fields and (TD-2026-10-22-769) write checks (`effect: write`) are refused with code LANDS_IN_8_1
+ *     ("lands in 8.1").
  *
  * Aegis LP1 review: an @goal edge comes only from goal.node or a call node, and any @goal edge needs a goal
  * block; a call pin must equal the callee's content hash (loopContentHash: sha256 of canonicalJson(parsed) —
@@ -919,7 +920,8 @@ function validateNode(
       c.oneOf(n.builtin, join(p, 'builtin'), 'builtin', LOOP_BUILTINS);
       if (has(n, 'args') && c.obj(n.args, join(p, 'args'), 'args')) c.literalArgs(n.args, join(p, 'args'));
     }
-    if (has(n, 'effect')) c.oneOf(n.effect, join(p, 'effect'), 'effect', ['read', 'write'] as const);
+    // TD-2026-10-22-769 (G): a write check cannot run in 8.0, so a definition naming one fails at validate, not at start
+    if (has(n, 'effect') && c.oneOf(n.effect, join(p, 'effect'), 'effect', ['read', 'write'] as const) && n.effect === 'write') c.later(join(p, 'effect'), 'effect: write (a write check)');
     if (has(n, 'timeoutSec')) c.posInt(n.timeoutSec, join(p, 'timeoutSec'), 'timeoutSec');
     if (has(n, 'pass') && c.obj(n.pass, join(p, 'pass'), 'pass')) {
       const pp = join(p, 'pass');

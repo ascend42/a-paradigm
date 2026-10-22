@@ -108,6 +108,8 @@ export interface WiredLoops {
   port: LoopsPort;
   /** the repo brake (#loop-strictness): pause every running loop of the repo now; resolves to the loops paused */
   brake(repoKey: string, by?: string): Promise<number>;
+  /** TD-2026-10-22-769: a local config applied; start refusals whose cause cleared are dropped (their alerts clear) */
+  localConfigApplied(): void;
   close(): void;
 }
 
@@ -286,6 +288,7 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
       agent: (asker, payload) => agentOps.request(asker, payload),
     },
     brake,
+    localConfigApplied: () => runner.recheckStartRefusals(),
     close: () => {
       process.removeListener('exit', onExit);
       for (const c of closers.splice(0)) c(); // #loop-events, the revert scan

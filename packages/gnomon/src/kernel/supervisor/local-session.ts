@@ -89,7 +89,7 @@ import { LineSplitter } from '../../adapters/claude-code/adapter.js';
 import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine } from '../../adapters/local/runner.js';
 import { prepareRunner, verifyNode } from '../local/runner-pin.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
-import { classifyEndpoint } from '../local/endpoint.js';
+import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
@@ -142,6 +142,17 @@ export interface LocalLaneOptions {
   probeTtlMs?: number;
   /** TEST RIG ONLY: the launch plan (default: the platform's `session` sandbox profile). The daemon never sets it. */
   launchPlan?: (i: SessionLaunchInput) => SessionLaunchPlan;
+}
+
+/** The last endpoint probe as status.local.lastProbe shows it. */
+export interface LocalProbeState {
+  endpoint: string;
+  at: string;
+  ok: boolean;
+  why: string;
+  error?: string;
+  tools: boolean;
+  contextSize: number | null;
 }
 
 /** openLoop's request (the runner's model step). */
@@ -276,9 +287,15 @@ export class LocalLane {
   readonly #platform: string;
   readonly #identity: SessionIdentity | null;
   readonly #sessionPath: string | null;
+  /** the root-signed lane config; replaced by setConfig (TD-2026-10-22-769 hot apply). A live session keeps its spawn-time copy. */
+  #config: LocalLaneConfig | undefined;
+  /** status.local.lastProbe / lastFallback (Mika: the Settings section's health rows) */
+  #lastProbe: LocalProbeState | null = null;
+  #lastFallback: { at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string } | null = null;
 
   constructor(o: LocalLaneOptions) {
     this.#o = o;
+    this.#config = o.config;
     this.#platform = o.platform ?? process.platform;
     this.#identity = o.identity !== undefined ? o.identity : sessionIdentity();
     this.#sessionPath = o.sessionPath;
@@ -293,6 +310,32 @@ export class LocalLane {
     return typeof hsid === 'string' && (this.#sessions.has(hsid) || this.#history.some((h) => h.hsid === hsid));
   }
 
+  /**
+   * TD-2026-10-22-769: apply a newly loaded root-signed config (or none) without a restart. The probe cache is cleared
+   * (an endpoint id may now name another base or model); sessions already running keep the config they were spawned
+   * with (#spawn copies what it needs).
+   */
+  setConfig(config: LocalLaneConfig | undefined): void {
+    this.#config = config;
+    this.#probes.clear();
+    this.#lastProbe = null;
+  }
+
+  /** The last probe of any endpoint (state for Settings: ok, why, tools, context), or null since the config applied. */
+  lastProbe(): Readonly<LocalProbeState> | null {
+    return this.#lastProbe;
+  }
+
+  /** The last fallback card a model:local open raised (its outcome follows the decision), or null. */
+  lastFallback(): Readonly<{ at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string }> | null {
+    return this.#lastFallback;
+  }
+
+  /** The config new opens use (status, tests). */
+  config(): LocalLaneConfig | undefined {
+    return this.#config;
+  }
+
   #forbiddenPorts(): number[] {
     const p = this.#o.endpointPort?.();
     return typeof p === 'number' ? [p] : [];
@@ -305,6 +348,8 @@ export class LocalLane {
     await this.#o.log('model.probe', { endpoint: ep.id, ok: caps.ok, ...(caps.error ? { error: caps.error } : {}) });
     if (caps.ok) await this.#o.log('model.capabilities', { backend: 'local', endpoint: ep.id, model: caps.model, tools: caps.tools, ctx: caps.nCtx, ctxSource: caps.nCtxSource, templateTools: caps.templateTools });
     this.#probes.set(ep.id, { at: Date.now(), caps });
+    const k = capability(caps, this.#config?.ctxFloor ?? DEFAULT_CTX_FLOOR, false);
+    this.#lastProbe = { endpoint: ep.id, at: new Date().toISOString(), ok: k.capable, why: k.reason, ...(caps.error ? { error: caps.error.slice(0, 200) } : {}), tools: caps.tools, contextSize: caps.nCtx };
     return caps;
   }
 
@@ -315,7 +360,7 @@ export class LocalLane {
    */
   async probeAll(): Promise<Array<{ endpoint: string; ok: boolean }>> {
     const out: Array<{ endpoint: string; ok: boolean }> = [];
-    for (const ep of this.#o.config?.endpoints ?? []) {
+    for (const ep of this.#config?.endpoints ?? []) {
       const v = classifyEndpoint(ep.base, this.#forbiddenPorts());
       if (!v.ok || !LOCAL_COMPAT_NAMES.includes(ep.compat)) continue;
       const caps = await this.#probe({ id: ep.id, base: v.base, model: ep.model }).catch(() => null);
@@ -332,7 +377,7 @@ export class LocalLane {
     const declared: DeclaredModel = req.model === 'local' ? 'local' : req.model === 'any' ? 'any' : req.model === undefined || req.model === 'claude' ? (req.backend === 'local' ? 'local' : 'claude') : 'local';
     if (req.backend === 'claude-code' && declared === 'local') throw refused('BAD_REQUEST', 'model local is never served by backend claude-code (S7)', { reason: 'bad-params' });
     if (req.backend === 'local' && req.model === 'claude') throw refused('BAD_REQUEST', 'backend local cannot serve model claude', { reason: 'bad-params' });
-    const cfg: LocalLaneConfig = this.#o.config ?? { endpoints: [] };
+    const cfg: LocalLaneConfig = this.#config ?? { endpoints: [] };
     let eps;
     try {
       eps = validateLocalEndpoints(cfg, this.#forbiddenPorts());
@@ -404,7 +449,7 @@ export class LocalLane {
       act = { scratch, tools, protect, maxSteps: Math.max(1, Math.min(128, Math.floor(req.act.maxSteps) || 1)) };
     } else if (req.act) throw refused('BAD_REQUEST', 'act options are for act steps', { reason: 'bad-params' });
     if (req.signal?.aborted) throw new LoopModelUnavailable('aborted');
-    const cfg: LocalLaneConfig = this.#o.config ?? { endpoints: [] };
+    const cfg: LocalLaneConfig = this.#config ?? { endpoints: [] };
     let eps;
     try {
       eps = validateLocalEndpoints(cfg, this.#forbiddenPorts());
@@ -516,6 +561,7 @@ export class LocalLane {
         detail,
         lines: [`No capable local model (${reason}).`, 'Run this task on Claude (subscription) instead?'],
         effect: async (decision) => {
+          if (this.#lastFallback?.cardId === card.cardId) this.#lastFallback = { ...this.#lastFallback, outcome: decision };
           await this.#o.log('model.fallback.decided', { cardId: card.cardId, decision });
           // S7: the ONLY way a model:local request reaches claude — a human's fallback-cloud decision
           if (decision === 'fallback-cloud') await openClaude({ ...req, backend: 'claude-code', model: 'claude' });
@@ -523,6 +569,8 @@ export class LocalLane {
       });
       cardId = card.cardId;
     }
+    // the session has no title yet (it never opened): the GUI names it by its folder
+    this.#lastFallback = { at: new Date().toISOString(), cardId, cwd: req.cwd, title: null, reason, outcome: cardId ? 'pending' : 'no-card' };
     await this.#o.log('model.fallback.requested', { cardId, declared, reason, task: 'session.open' });
     throw refused('MODEL_UNAVAILABLE', `no capable local model (${reason}); ${cardId ? `fallback card ${cardId} raised` : 'no broker to raise a fallback card'}`, { ...(cardId ? { cardId } : {}), why: reason });
   }
@@ -902,19 +950,8 @@ export class LocalLane {
   }
 }
 
-/** The loopback port of an endpoint base URL (127.0.0.0/8, ::1, localhost), or null for anything else. */
-export function loopbackPort(base: string): number | null {
-  let u: URL;
-  try {
-    u = new URL(base);
-  } catch {
-    return null;
-  }
-  const h = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (h !== 'localhost' && h !== '::1' && !/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return null;
-  const port = u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : u.protocol === 'http:' ? 80 : NaN;
-  return Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
-}
+/** The loopback port of a base URL (moved to kernel/local/endpoint.ts, shared with #local-config-request). */
+export { loopbackPort };
 
 /** A gnomon-local tool_execution_end line whose result is a protected-input refusal: the path, else null. */
 function protectedHitOf(line: string): string | null {

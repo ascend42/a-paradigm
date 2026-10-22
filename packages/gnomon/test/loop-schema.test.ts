@@ -85,7 +85,7 @@ const EXAMPLE_C: Def = {
 const PIN_B = loopContentHash(EXAMPLE_B).slice(0, 8);
 (EXAMPLE_C.nodes as any[])[1].loop = `green-typecheck-gnomon@${PIN_B}`;
 
-/** Example D: routine chore (unchanged). */
+/** Example D: routine chore, in its 8.0 form (the spec's `effect: write` on reindex lands in 8.1, TD-2026-10-22-769). */
 const EXAMPLE_D: Def = {
   schema: 'loop:v2',
   id: 'evening-tidy',
@@ -95,7 +95,7 @@ const EXAMPLE_D: Def = {
   land: { paths: ['.paradigm/lore/**', '.paradigm/**/index*'], message: 'chore(#paradigm): evening tidy' },
   start: 'reindex',
   nodes: [
-    { id: 'reindex', type: 'check', effect: 'write', builtin: 'paradigm.reindex', on: { pass: 'digest', fail: 'digest' } },
+    { id: 'reindex', type: 'check', builtin: 'paradigm.reindex', on: { pass: 'digest', fail: 'digest' } },
     { id: 'digest', type: 'model', role: 'summarize', model: { use: 'local' }, inputs: ['day.lore', 'day.commits', 'day.loopRuns'], on: { any: 'tell' } },
     { id: 'tell', type: 'notify', as: 'toast', text: 'daily digest ready', attach: ['digest.text'], on: { any: '@stop' } },
   ],
@@ -139,6 +139,15 @@ describe('#loop-schema: the spec examples (8.0 subset)', () => {
     }
     const c = mut(EXAMPLE_C, (d) => { d.triggers = [{ event: { kind: 'sentinel.incident.opened', severity: ['high'] }, debounce: '1m' }]; });
     expect(issue(c, LANDS_IN_8_1)?.path).toBe('triggers[0].event.kind');
+  });
+
+  it('TD-2026-10-22-769: the spec\'s Example D (a write check) is refused at validate with LANDS_IN_8_1', () => {
+    const d = mut(EXAMPLE_D, (x) => { x.nodes[0].effect = 'write'; });
+    const e = issue(d, LANDS_IN_8_1);
+    expect(e?.path).toBe('nodes[0].effect');
+    expect(e?.message).toBe('effect: write (a write check) lands in 8.1');
+    expect(validateLoop(mut(EXAMPLE_D, (x) => { x.nodes[0].effect = 'read'; })).ok).toBe(true);
+    expect(issue(mut(EXAMPLE_D, (x) => { x.nodes[0].effect = 'append'; }), LANDS_IN_8_1)).toBeUndefined();
   });
 });
 

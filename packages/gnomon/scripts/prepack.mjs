@@ -10,8 +10,10 @@
  *     the nearest `gnomon-mods` folder above the kernel module (mods-admin.ts findFirstPartyRoot), so prepack copies
  *     them to packages/gnomon/gnomon-mods (gitignored, listed in `files`) byte for byte, which keeps their pinned
  *     packageHash (FIRST_PARTY_PACKAGE_HASHES);
- *   - gnomon-local, gnomon-mod-sdk and gnomon-gui are not imported by the kernel at runtime (the GUI is embedded in
- *     dist; gnomon-local is a configured executable path), so nothing of theirs ships.
+ *   - gnomon-local SHIPS inside dist (TD-2026-10-22-769): the build copies its single-file cli.js to
+ *     dist/gnomon-local/cli.js and compiles its tree hash into the kernel (tsup.config.ts), which verifies it at load;
+ *     prepack refuses a dist without it. gnomon-mod-sdk and gnomon-gui are not imported by the kernel at runtime (the
+ *     GUI is embedded in dist), so nothing of theirs ships.
  * prepack refuses an unbuilt dist, any symlink in the copied tree, and (Aegis M3 high 1) a dist that is not a RELEASE
  * build: dist/index.js must report compiled release pins (__GNOMON_RELEASE__ with a valid compiled manifest) for this
  * package's version, pinning the app zip of every darwin arch (appZips; scripts/seal-npm-release.mjs). A dev dist is
@@ -72,6 +74,7 @@ if (isMain) try {
     const version = JSON.parse(readFileSync(path.join(PKG, 'package.json'), 'utf8')).version;
     const problems = await releaseDistProblems(path.join(PKG, 'dist'), version);
     if (problems.length) throw new Error(`refusing to pack a non-release dist: ${problems.join('; ')}`);
+    if (!existsSync(path.join(PKG, 'dist', 'gnomon-local', 'cli.js'))) throw new Error('dist carries no bundled gnomon-local (dist/gnomon-local/cli.js): build @a-company/gnomon-local, then the kernel');
     assertPlain(SRC);
     cpSync(SRC, DST, { recursive: true, dereference: false });
     process.stderr.write(`gnomon prepack: copied ${readdirSync(DST).length} first-party mods into gnomon-mods/\n`);

@@ -130,7 +130,9 @@ import { claudeCodePlatform } from '../../platform/claude-code.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { catchUp, RuleBook, ruleSourceOf } from '../supervisor/rules.js';
 import { createRulesRevokeHandler } from '../socket/rules-revoke.js';
-import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
+import { loadLocalConfig, localChainHighWater, type LoadedLocalConfig } from '../local/config.js';
+import { LocalConfigCards } from '../local/config-request.js';
+import { defaultLocalRunner, nodeVersionOf, runnerVersionOf } from '../local/bundled-runner.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { StagedCardPickup } from '../modhost/control.js';
@@ -836,7 +838,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     const humans = [...readRegistry(home, authority).devices.values()].filter((d) => d.principalKind === 'human').map((d) => d.principalId).sort();
     return humans[0] ?? null;
   };
-  const approvals = createApprovalPort({ broker, fuse, kernelPrincipal, extraStatus: () => ({ billing: apiTokens.status(), ...(broker.helperBatch() ? { helper: { batch: broker.helperBatch() } } : {}) }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
+  // TD-2026-10-22-769: status.local (the applied local-model config, the default runner, a pending card); bound below
+  let localStatus: () => Record<string, unknown> = () => ({ configured: false });
+  const approvals = createApprovalPort({ broker, fuse, kernelPrincipal, extraStatus: () => ({ billing: apiTokens.status(), ...(broker.helperBatch() ? { helper: { batch: broker.helperBatch() } } : {}), local: localStatus() }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
   const brokerTimer = setInterval(() => {
     void broker.expireDue().catch(() => undefined);
     void apiTokens.sweep().catch(() => undefined);
@@ -846,12 +850,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // platform's known locations (never PATH, p01) until the root-signed config names one.
   // #local-runner (M1.8 slice 2): the root-signed local lane config; its rollback high-water mark is the last
   // signed config.loaded{file: local.signed.json, version} on the chain. Anything unsigned ⇒ no local config.
-  let localHighWater = 0;
-  for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) {
-    const p = v.view === 'full' ? (v.event.payload as { file?: unknown; signed?: unknown; version?: unknown } | undefined) : undefined;
-    if (p?.file === LOCAL_CONFIG_FILE && p.signed === true && typeof p.version === 'number' && p.version > localHighWater) localHighWater = p.version;
-  }
-  const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
+  // TD-2026-10-22-769: the same high-water logic serves the boot load, the hot reload and the card's next version
+  const localHighWater = (): number =>
+    localChainHighWater(
+      (function* () {
+        for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) if (v.view === 'full') yield v.event.payload;
+      })(),
+    );
+  const localEmit = (kind: string, payload: Record<string, unknown>): void => void appendRow(kind, payload).catch(() => undefined);
+  let localCfg: LoadedLocalConfig = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater() });
   const ruleBook = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
   // S-L1: fold the KERNEL-signed approval.* rows appended since the last catch-up (rules.ts); shared by the
   // supervisor's exact-match check and the rules.revoke handler, so both read one book
@@ -1241,13 +1248,67 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // step 9 (#loop-strictness): each loop's repo cap is its level and its repo's effective run mode
   const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop'),
     // step 8 (#loop-runner): judge/summarize steps open unattended local sessions only through supervisor.openLoop
-    model: { openLoop: (ref, req) => supervisor.openLoop(ref, req), configured: () => ({ endpoints: (localCfg.config?.endpoints ?? []).filter((e) => e.loops === true).map((e) => e.id), runner: localCfg.config?.runner !== undefined }), settled: (runId) => supervisor.loopSessionsSettled(runId) },
+    model: { openLoop: (ref, req) => supervisor.openLoop(ref, req), configured: () => ({ endpoints: (localCfg.config?.endpoints ?? []).filter((e) => e.loops === true).map((e) => e.id), runner: localCfg.config?.runner !== undefined, any: localCfg.config?.endpoints.length ?? 0 }), settled: (runId) => supervisor.loopSessionsSettled(runId) },
     strictness: (repoKey) => ({ level: strictness.level(repoKey), mode: runModes.repoView(repoKey).effective }),
     // step 12 (#loop-agent-ops, LL5): a loop session's hsid is refused every loop.request
     isLoopSession: (hsid) => supervisor.isLoopSession(hsid),
     // step 11 (#loop-land): a land waits while a human session in the repo has a turn in flight
     humanTurns: () => supervisor.humanTurns() });
   loopsBrake = (repoKey) => loops.brake(repoKey);
+  // TD-2026-10-22-769 (#local-config-request, $local-config-flow): a real home's local-model config. The human's
+  // request.local.config raises a root-class card; its allow writes local.signed.json and reloads it HOT (the
+  // supervisor's lane, the loop runner's configured() and the daemon-start probe all read the reloaded config); a
+  // remove is notify-and-proceed. Live local sessions keep their spawn-time config.
+  const reloadLocalConfig = (why: 'set' | 'removed'): LoadedLocalConfig => {
+    localCfg = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), ...(why === 'removed' ? { missing: 'removed' as const } : {}) });
+    supervisor.setLocalConfig(localCfg.config);
+    if (localCfg.config?.endpoints.length) void supervisor.probeLocal().catch(() => undefined);
+    // a loop refused at start for want of a local model clears once the cause clears (its stack alert goes with it)
+    loops.localConfigApplied();
+    return localCfg;
+  };
+  const webPort = (): number[] => {
+    const st = web?.status() as { listening?: boolean; port?: number } | undefined;
+    return st?.listening && typeof st.port === 'number' ? [st.port] : [];
+  };
+  const localCards = new LocalConfigCards({ home, broker, forbiddenPorts: webPort, chainHighWater: localHighWater, current: () => localCfg.config, onApplied: (why) => reloadLocalConfig(why) });
+  localStatus = () => {
+    const c = localCfg.config;
+    const d = defaultLocalRunner();
+    const r = c?.runner;
+    const health = supervisor.localHealth();
+    return {
+      configured: c !== undefined,
+      signed: localCfg.signed,
+      fellBack: localCfg.fellBack,
+      version: localCfg.version,
+      signer: localCfg.signer ?? null,
+      signedAt: localCfg.signedAt ?? null,
+      endpoints: (c?.endpoints ?? []).map((e) => ({ id: e.id, base: e.base, model: e.model, compat: e.compat, loops: e.loops === true })),
+      runner: r
+        ? {
+            dir: r.dir,
+            entry: r.entry,
+            treeSha256: r.treeSha256,
+            source: d.ok && d.source === 'bundled' && d.treeSha256 === r.treeSha256 ? 'bundled' : 'override',
+            version: runnerVersionOf(r.dir, r.treeSha256),
+            node: r.node,
+            nodeSha256: r.nodeSha256,
+            nodeVersion: nodeVersionOf(r.node),
+          }
+        : null,
+      defaultRunner: d.ok ? { source: d.source, dir: d.dir, version: runnerVersionOf(d.dir, d.treeSha256) } : { source: null, why: d.why },
+      lastProbe: health.lastProbe,
+      lastFallback: health.lastFallback,
+      pendingCardId: localCards.pendingCardId(),
+      loopbackOnly: true,
+      platform: process.platform,
+      // Mika: the GUI says "not on Windows in 8.0" (a root-class decision needs the Windows root key, not built)
+      unsupported: process.platform === 'win32' ? 'platform' : null,
+      // request.local.config and request.local.probe are served by this kernel
+      offered: true,
+    };
+  };
   const dispatcherCommon = {
     voice,
     voiceClient: {
@@ -1296,6 +1357,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,
+      local: { request: (asker: Parameters<LocalConfigCards['request']>[0], payload: unknown) => localCards.request(asker, payload), probe: (asker: Parameters<LocalConfigCards['probe']>[0], payload: unknown) => localCards.probe(asker, payload) },
     },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),

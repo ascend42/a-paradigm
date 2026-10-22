@@ -64,6 +64,13 @@ components:
       row against the approve message, sha256(intent) against rowsDigest,
       each later row (volatile fields dropped) against intent[i], cardId and
       manifestHash binding, and the closed per-cardKind row table;
+      Helper 1.9.0 (TD-2026-10-22-769): the `local.config` row table (ONE
+      gnomon-root-local:v1 row: closed fields, 1..4 loopback endpoints with a
+      local compat, a pinned runner; localRowRefusal/localRowShown, mirrored
+      in the kernel's decision-batch.ts and held to the shared vectors) and
+      `requestedBy` in the loop.trusted field set; regexes are ASCII-only and
+      must span the whole string (fullMatch), so ICU and JS agree. The kernel
+      refuses a loop-trust or local.config card at raise on an older helper;
       decisionLine names what every row grants and every digest, FIRST in
       the dialog, refused rather than truncated. The TS mirror and shared
       vectors: gnomon src/kernel/identity/decision-batch.ts,

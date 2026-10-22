@@ -364,6 +364,10 @@ export const VOICE_CLIENT_REQUEST = 'request.voice.client' as const;
 /** TD-2026-10-21-514: the GUI's send claim and the held send word (dispatcher-only, never rows; no id moves). */
 export const VOICE_SEND_CLAIM_REQUEST = 'request.voice.send.claim' as const;
 export const VOICE_SENDWORD_REQUEST = 'request.voice.sendword' as const;
+/** TD-2026-10-22-769: the human's local-model config request (dispatcher-only, never a row; no contract id moves). */
+export const LOCAL_CONFIG_REQUEST = 'request.local.config' as const;
+/** TD-2026-10-22-769 (Mika C1): the read-only loopback check (dispatcher-only, never a row; no contract id moves). */
+export const LOCAL_PROBE_REQUEST = 'request.local.probe' as const;
 
 export interface HumanRequestPort {
   modeSet(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
@@ -411,6 +415,16 @@ export interface HumanRequestPort {
    * 8.0:loops (#loop-registry, kernel/loops/wire.ts): request.loop.trust|untrust|pause|resume|run|delete from the human
    * on a gui or device connection ONLY (the asker stamped here); status() is the human class's status.loops.
    */
+  /**
+   * TD-2026-10-22-769 (#local-config-request): request.local.config{op:'set', endpoint, runner?} | {op:'remove'} from the
+   * human on a gui or device connection ONLY (never voice, an agent or a session; the asker stamped here). Dispatcher-
+   * only and never a row: it is not in the §9.1 registry, so no contract id moves. status.local rides extraStatus.
+   */
+  local?: {
+    request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    /** request.local.probe{model, base?, compat?}: the read-only loopback check before a card (no card, no row) */
+    probe?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+  };
   loops?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
     status(): Record<string, unknown>;
@@ -904,6 +918,26 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
           return await o.requests.sessionNames.rename({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-22-769 (#local-config-request): the human sets or removes the local-model config (gui/device only)
+      if (pa?.kind === LOCAL_CONFIG_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.local) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${LOCAL_CONFIG_REQUEST}', payload:{op:'set', endpoint, runner?} | {op:'remove'}}`);
+        try {
+          return await o.requests.local.request({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-22-769 (Mika C1): the read-only loopback check before a card (gui/device human only; no row, no card)
+      if (pa?.kind === LOCAL_PROBE_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.local?.probe) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${LOCAL_PROBE_REQUEST}', payload:{model, base?, compat?}}`);
+        try {
+          return await o.requests.local.probe({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

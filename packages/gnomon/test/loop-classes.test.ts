@@ -4,10 +4,10 @@
  * `always`, never by voice. loop-choice continue is fresh and hand-only; stop is deny-direction (cached).
  */
 import { describe, expect, it } from 'vitest';
-import { RefusedError, voiceDecisionCheck } from '@a-company/gnomon-contracts';
+import { mintId, RefusedError, voiceDecisionCheck } from '@a-company/gnomon-contracts';
 import { ApprovalBroker, NEVER_STANDING_KINDS, StandingGrantBook, StandingGrants, standingTupleOf } from '../src/kernel/broker/index.js';
 import { baseClass, KIND_DECISIONS, STANDING_DECISIONS, validDecisions } from '../src/kernel/broker/classes.js';
-import { HelperApprovalsKey } from '../src/kernel/identity/index.js';
+import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identity/index.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { FakeHelper } from './helper-fake.js';
@@ -23,12 +23,12 @@ const ALL = ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voic
 const gui = () => ({ connId: A, principal: HUMAN, principalClass: 'human', surface: 'browser', credential: 'gui', deviceId: DEV });
 
 function rig() {
-  const helper = new FakeHelper(GEN, { bounds: NEW_BOUNDS });
+  const helper = new FakeHelper(GEN, { bounds: NEW_BOUNDS, version: '1.9.0' });
   const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper);
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const now = { t: Date.UTC(2026, 9, 22, 9) };
   const log = async (kind: string, payload: Record<string, unknown>) => void rows.push({ kind, payload });
-  const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: KERNEL, log, approvals, root: new DevTestRootAuthority(DEV_TEST_ROOT_ACK), clock: () => now.t, mono: () => now.t });
+  const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: KERNEL, log, approvals, root: new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: helper.publicPem('root') }, { helper, once: () => { throw new Error('never the once seam'); } }), clock: () => now.t, mono: () => now.t });
   const book = new StandingGrantBook({ principal: KERNEL, isKernelKey: (k) => k === 'kernel-key' });
   const grants = new StandingGrants({ broker, book: () => book, log, clock: () => now.t });
   broker.setStanding(grants);
@@ -37,7 +37,12 @@ function rig() {
     const r = await grants.request(gui(), { tuples: ALL, repos: [REPO] });
     await broker.approve(gui(), { cardId: r.cardId, decision: 'allow' });
   };
-  const trustCard = () => broker.raise({ kind: 'loop-trust', requestedBy: KERNEL, attended: true, detail: { loopId: 'flow-health', contentHash: `sha256:${'c'.repeat(64)}` }, lines: ['Trust loop flow-health'], decisions: ['allow', 'deny'] });
+  // helper 1.9.0 (TD-2026-10-22-769): the batch path holds the loop-trust row table, so the card shows its one row
+  const trustCard = () => {
+    const cardId = mintId('card');
+    const row = { kind: 'loop.trusted', loopId: 'flow-health', scope: 'repo', repoKey: REPO, contentHash: `sha256:${'c'.repeat(64)}`, cardId, by: HUMAN };
+    return broker.raise({ kind: 'loop-trust', cardId, requestedBy: KERNEL, attended: true, detail: { loopId: 'flow-health', contentHash: row.contentHash, rootRows: [row] }, lines: ['Trust loop flow-health'], decisions: ['allow', 'deny'], prepare: (d) => (d === 'allow' ? { rows: [{ ...row, createdAt: new Date(now.t).toISOString() }], release: () => undefined } : null) });
+  };
   const choiceCard = () => broker.raise({ kind: 'loop-choice', requestedBy: KERNEL, attended: true, detail: { loopId: 'green-typecheck', runId: 'run-1', nodeId: 'ask' }, lines: ['Loop green-typecheck asks: continue?'], decisions: ['continue', 'stop'] });
   return { helper, broker, rows, mint, trustCard, choiceCard, kinds: () => rows.map((r) => r.kind) };
 }

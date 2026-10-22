@@ -40,7 +40,7 @@ export type ModelNode = Extract<CompiledNode, { type: 'model' }>;
 export interface LoopModelPort {
   openLoop(ref: LoopRunRef, req: LoopOpenRequest): Promise<LoopSessionHandle>;
   /** the configured local endpoint ids marked `loops: true`, and whether a runner is pinned (start-time refusal) */
-  configured(): { endpoints: string[]; runner: boolean };
+  configured(): { endpoints: string[]; runner: boolean; /** every configured endpoint, loops or not (sessions-only tells apart) */ any?: number };
   /** step 10: resolves when every loop session of the run has exited (the runner waits on it before parking) */
   settled?(runId: string): Promise<void>;
 }

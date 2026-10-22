@@ -13,7 +13,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GNOMON_VERSION } from '../version.js';
-import { LOCAL_COMPAT_NAMES, LOCAL_CONFIG_FILE, validateLocalEndpoints, writeSignedLocalConfig } from '../kernel/local/config.js';
+import { LOCAL_COMPAT_NAMES, LOCAL_CONFIG_FILE, nextLocalVersion, writeSignedLocalConfig } from '../kernel/local/config.js';
+import { LAN_LATER, validateLocalConfigInput, type ValidatedLocalConfig } from '../kernel/local/config-request.js';
 import { pinOf } from '../kernel/local/runner-pin.js';
 import { ensureDevApprovals } from '../platform/win32/approvals.js';
 import { readout, refused } from './readout.js';
@@ -39,8 +40,9 @@ usage: gnomon dev init [--home <abs>]   provision a dev home (default ~/${'.gnom
                                     (--wrapper: the grant goes on the stdout pipe of the parent, #gnomon-wrapper)
        gnomon dev local --model <id> [--base <url>] [--compat <name>] [--id <name>] [--runner <dir>] [--loops] [--home <abs>]
                                     sign the local-model lane config (local.signed.json) with the dev root:
-                                    one loopback/LAN endpoint (default http://127.0.0.1:11434, ollama) and the
-                                    gnomon-local runner pinned by sha256 (default: this clone's gnomon-local/dist);
+                                    one LOOPBACK endpoint (default http://127.0.0.1:11434, ollama; LAN lands in 8.1)
+                                    and the gnomon-local runner pinned by sha256 (default: the runner that ships
+                                    with this build, else this clone's gnomon-local/dist);
                                     --loops lets trusted loops' model steps use the endpoint (off by default);
                                     a running dev kernel picks it up at its next start
   Never ~/.gnomon. A home holding another root's registry is refused.
@@ -198,9 +200,10 @@ export function defaultLocalRunnerDir(from: string = path.dirname(fileURLToPath(
 }
 
 /**
- * `gnomon dev local`: the root act that enables the local lane on a DEV home (spec §13.1; the production root signs
- * the same row behind the hardware root, M1.3). Nothing but flags names the endpoint; the kernel re-validates the
- * row (G-SUB-06: loopback/LAN, a local compat) and the runner pin at every local open anyway.
+ * `gnomon dev local`: the root act that enables the local lane on a DEV home (spec §13.1). A real home takes the same
+ * config through `gnomon local set` (a root-class card, #local-config-request); both go through ONE input check
+ * (validateLocalConfigInput: loopback only in 8.0, dev homes included, TD-2026-10-22-769) and ONE writer. Nothing but
+ * flags names the endpoint; the kernel re-validates the row (G-SUB-06) and the runner pin at every local open anyway.
  */
 export async function runDevLocal(argv: readonly string[], io: DevCliIo, opts: DevCliOptions = {}): Promise<number> {
   const usage = (why: string): number => (io.stderr.write(`gnomon dev local: ${why}\n${DEV_USAGE}`), DEV_EXIT_USAGE);
@@ -222,20 +225,20 @@ export async function runDevLocal(argv: readonly string[], io: DevCliIo, opts: D
   if (flags.home !== undefined && !path.isAbsolute(flags.home)) return usage('--home needs an absolute path');
   if (flags.runner !== undefined && !path.isAbsolute(flags.runner)) return usage('--runner needs an absolute path');
   const home = flags.home ? path.resolve(flags.home) : defaultDevHome(opts.userHome);
-  const compat = flags.compat ?? 'ollama';
-  if (!LOCAL_COMPAT_NAMES.includes(compat)) return usage(`--compat must be one of ${LOCAL_COMPAT_NAMES.join(', ')}`);
-  // loops step 8 (Aegis): an endpoint serves unattended loop steps only when the root-signed row says loops: true
-  const endpoint = { id: flags.id ?? compat, base: flags.base ?? 'http://127.0.0.1:11434', model: flags.model, compat, ...(loops ? { loops: true } : {}) };
+  if (flags.compat !== undefined && !LOCAL_COMPAT_NAMES.includes(flags.compat)) return usage(`--compat must be one of ${LOCAL_COMPAT_NAMES.join(', ')}`);
   io.stdout.write(DEV_BANNER);
+  // loops step 8 (Aegis): an endpoint serves unattended loop steps only when the root-signed row says loops: true
+  let v: ValidatedLocalConfig;
   try {
-    validateLocalEndpoints({ endpoints: [endpoint] }, []);
+    v = validateLocalConfigInput({ model: flags.model, ...(flags.base !== undefined ? { base: flags.base } : {}), ...(flags.compat !== undefined ? { compat: flags.compat } : {}), ...(flags.id !== undefined ? { id: flags.id } : {}), ...(loops ? { loops: true } : {}), ...(flags.runner !== undefined ? { runner: flags.runner } : {}) });
   } catch (e) {
-    refused(io.stderr, 'dev', 'local-endpoint', e instanceof Error ? e.message : String(e), ['a local model endpoint is loopback or LAN only (law 7)']);
-    return DEV_EXIT_REFUSED;
-  }
-  const runnerDir = flags.runner ? path.resolve(flags.runner) : defaultLocalRunnerDir();
-  if (!runnerDir || !fs.existsSync(path.join(runnerDir, 'cli.js'))) {
-    refused(io.stderr, 'dev', 'no-runner', `no gnomon-local runner (dist/cli.js) at ${runnerDir ?? 'this clone'}`, ['build it: npm run build -w @a-company/gnomon-local', 'or pass --runner <abs dir holding cli.js>']);
+    const r = (e as { refusal?: { data?: { field?: unknown; why?: unknown; reason?: unknown } } }).refusal;
+    const field = r?.data?.field;
+    if (field === 'runner') {
+      refused(io.stderr, 'dev', 'no-runner', e instanceof Error ? e.message : String(e), ['build it: npm run build -w @a-company/gnomon-local', 'or pass --runner <abs dir holding cli.js>']);
+      return DEV_EXIT_REFUSED;
+    }
+    refused(io.stderr, 'dev', 'local-endpoint', e instanceof Error ? e.message : String(e), [`a local model endpoint is loopback only in 8.0 (${LAN_LATER})`]);
     return DEV_EXIT_REFUSED;
   }
   let dev: LoadedDevHome;
@@ -245,15 +248,10 @@ export async function runDevLocal(argv: readonly string[], io: DevCliIo, opts: D
     if (e instanceof DevHomeRefusal) return reportRefusal(io, e);
     throw e;
   }
-  // the next version (the kernel refuses a row older than its high-water mark)
-  let version = 0;
-  try {
-    const prev = JSON.parse(fs.readFileSync(path.join(home, LOCAL_CONFIG_FILE), 'utf8')) as { row?: { version?: unknown } };
-    if (Number.isInteger(prev.row?.version)) version = (prev.row!.version as number) + 1;
-  } catch {
-    version = 0;
-  }
-  const runner = pinOf(runnerDir, 'cli.js');
+  // the next version: above the file, the sidecar the kernel keeps and (unread here) the chain; the kernel refuses older
+  const { version } = nextLocalVersion(home, 0);
+  const runner = pinOf(v.runnerDir, 'cli.js');
+  const endpoint = v.endpoint;
   writeSignedLocalConfig(home, dev.root, { endpoints: [endpoint], runner }, version);
   io.stdout.write('SIGNED  local-model lane config\n');
   readout(io.stdout, [

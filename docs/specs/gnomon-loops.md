@@ -171,7 +171,7 @@ budgets: { run: { wallMin: 20, computeSec: 900 }, day: { runs: 1 } }
 land: { paths: [".paradigm/lore/**", ".paradigm/**/index*"], message: "chore(#paradigm): evening tidy" }
 start: reindex
 nodes:
-  - { id: reindex, type: check, effect: write, builtin: paradigm.reindex, on: { pass: digest, fail: digest } }
+  - { id: reindex, type: check, effect: write, builtin: paradigm.reindex, on: { pass: digest, fail: digest } }   # 8.1: write checks; 8.0 refuses effect: write at validate (LANDS_IN_8_1)
   - { id: digest,  type: model, role: summarize, model: { use: local }, inputs: [day.lore, day.commits, day.loopRuns], on: { any: tell } }
   - { id: tell,    type: notify, as: toast, text: "daily digest ready", attach: [digest.text], on: { any: '@stop' } }
 ```

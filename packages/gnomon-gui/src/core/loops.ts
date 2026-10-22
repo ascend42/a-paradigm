@@ -96,6 +96,25 @@ export interface LoopItem {
   runningRun?: string;
   /** newest first */
   runs: LoopRun[];
+  /** TD-2026-10-22-769: its schedule or event fires are refused before any step (status.loops.startRefused) */
+  startRefused?: LoopStartRefused;
+}
+
+/** A loop whose fires the kernel refuses at start for want of a local model (the kernel's closed why). */
+export interface LoopStartRefused {
+  code: 'no-local-model';
+  why: 'none' | 'sessions-only' | 'no-runner' | 'no-profile';
+  at: string;
+  since: string;
+  count: number;
+  trigger: string;
+  modelNodes: string[];
+}
+
+const START_REFUSED_WHYS: readonly string[] = ['none', 'sessions-only', 'no-runner', 'no-profile'];
+function parseStartRefused(v: unknown): LoopStartRefused | null {
+  if (!isObj(v) || v.code !== 'no-local-model' || typeof v.why !== 'string' || !START_REFUSED_WHYS.includes(v.why) || typeof v.at !== 'string' || typeof v.since !== 'string') return null;
+  return { code: 'no-local-model', why: v.why as LoopStartRefused['why'], at: v.at, since: v.since, count: Math.max(1, Math.floor(num(v.count, 1))), trigger: str(v.trigger) ?? 'schedule', modelNodes: Array.isArray(v.modelNodes) ? v.modelNodes.filter((x): x is string => typeof x === 'string') : [] };
 }
 
 export interface LoopsModel {
@@ -196,6 +215,11 @@ export function loopsOf(status: unknown): LoopsModel | null {
   const runningBy = new Map<string, string>();
   for (const r of Array.isArray(l.running) ? l.running : []) if (isObj(r) && typeof r.key === 'string') runningBy.set(r.key, str(r.runId) ?? '');
   const eff = isObj(l.effective) ? l.effective : {};
+  const refusedBy = new Map<string, LoopStartRefused>();
+  for (const r of Array.isArray(l.startRefused) ? l.startRefused : []) {
+    const p = isObj(r) && typeof r.key === 'string' ? parseStartRefused(r) : null;
+    if (p) refusedBy.set((r as { key: string }).key, p);
+  }
   const loops: LoopItem[] = (Array.isArray(l.loops) ? l.loops : []).filter(isObj).map((v) => {
     const key = str(v.key) ?? `${str(v.scope)}/${str(v.repoKey)}/${str(v.loopId)}`;
     const registry = str(v.state) ?? 'untrusted';
@@ -220,6 +244,7 @@ export function loopsOf(status: unknown): LoopsModel | null {
       claimed: isObj(v.authoredBy) && v.authoredBy.basis === 'agent-key-claim',
       ...(isObj(e) ? { effective: { declared: str(e.declared), autonomy: str(e.autonomy), level: str(e.level), mode: str(e.mode), paused: e.paused === true, capReason: str(e.capReason) } } : {}),
       ...(runningBy.get(key) ? { runningRun: runningBy.get(key) } : {}),
+      ...(refusedBy.get(key) ? { startRefused: refusedBy.get(key) } : {}),
       runs: mine,
     };
   });
@@ -536,7 +561,7 @@ export function runPath(r: LoopRun | undefined): string {
 
 export interface LoopAlert {
   id: string;
-  kind: 'fail' | 'stop' | 'kernel-pause';
+  kind: 'fail' | 'stop' | 'kernel-pause' | 'refused-start';
   key: string;
   loopId: string;
   project: string;
@@ -552,6 +577,17 @@ export function loopAlerts(m: LoopsModel | null, dismissed: ReadonlySet<string>)
   const out: LoopAlert[] = [];
   for (const x of m.loops) {
     const project = projectOf(x);
+    // TD-2026-10-22-769 (Mika F4): one alert per loop whose fires are refused for want of a local model; it clears
+    // when the kernel drops the refusal (a config that serves it applied). Dismissing keys on the streak's start.
+    const sr = x.startRefused;
+    if (sr) {
+      const id = `refused:${x.key}:${sr.since}`;
+      if (!dismissed.has(id)) {
+        const what = sr.why === 'sessions-only' ? 'the local model is for sessions only' : sr.why === 'no-runner' ? 'the local model has no runner pinned' : sr.why === 'no-profile' ? 'no local endpoint matches its model profile' : 'no local model';
+        const when = sr.trigger === 'schedule' ? `scheduled ${hhmm(sr.at)}` : `${sr.trigger} ${hhmm(sr.at)}`;
+        out.push({ id, kind: 'refused-start', key: x.key, loopId: x.loopId, project, repo: x.repo, at: hhmm(sr.at), title: `■ ${x.loopId} didn’t start`, path: `${what} · ${when} · refused before any step${sr.count > 1 ? ` · ×${sr.count} since ${hhmm(sr.since)}` : ''}` });
+      }
+    }
     if (x.state === 'kernel-paused') {
       const id = `pause:${x.key}:${x.reason ?? ''}`;
       if (!dismissed.has(id)) out.push({ id, kind: 'kernel-pause', key: x.key, loopId: x.loopId, project, repo: x.repo, at: hhmm(x.runs[0]?.endedAt), title: `‖ ${x.loopId} paused by the kernel: ${x.reason ?? 'paused'}`, path: runPath(x.runs[0]), ...(x.runs[0] ? { runId: x.runs[0].runId } : {}) });

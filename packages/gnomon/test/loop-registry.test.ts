@@ -390,7 +390,7 @@ describe('G-LOOP-21: the config closure and callees', () => {
 // ── The trust card ─────────────────────────────────────────────────────────────
 
 function cardRig(opts: ConstructorParameters<typeof CountingFakeHelper>[1] = {}, withRoot = true) {
-  const helper = new CountingFakeHelper(GEN, { version: '1.8.0', bounds: { idleSeconds: 12 * 3600, absoluteSeconds: 12 * 3600, maxSignatures: 512 }, ...opts });
+  const helper = new CountingFakeHelper(GEN, { version: '1.9.0', bounds: { idleSeconds: 12 * 3600, absoluteSeconds: 12 * 3600, maxSignatures: 512 }, ...opts });
   const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper);
   const root = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: helper.publicPem('root') }, { helper, once: () => { throw new Error('never the once seam'); } });
   const logged: Array<{ kind: string; payload: Record<string, unknown> }> = [];
@@ -534,6 +534,17 @@ describe('the loop-trust card (root class, one touch)', () => {
     for (const asker of [{ ...gui(), principalClass: 'agent' }, { ...gui(), principalClass: 'voice' }, { ...gui(), credential: 'read-token' }]) {
       expect(await refusal(c.trust.request(asker, 'request.loop.trust', { loopId: 'one', scope: 'repo', repo: root }))).toMatchObject({ code: 'FORBIDDEN', reason: 'matrix' });
     }
+  });
+
+  it('TD-2026-10-22-769: a helper older than the loop-trust row table (1.9.0) refuses the card when it is RAISED: update the Gnomon app', async () => {
+    const root = repo([checkLoop('one')]);
+    const c = cardRig({ version: '1.8.0' });
+    c.reg.addRepo(root);
+    const e = await c.trust.request(gui(), 'request.loop.trust', { loopId: 'one', scope: 'repo', repo: root }).then(() => null, (x: unknown) => x as { refusal: { code: string; data: Record<string, unknown> }; message: string });
+    expect(e?.refusal).toMatchObject({ code: 'UNSUPPORTED', data: { reason: 'presence', why: 'helper-too-old', minVersion: '1.9.0', helperVersion: '1.8.0' } });
+    expect(e?.message).toMatch(/update the Gnomon app/);
+    expect(c.logged.map((x) => x.kind)).not.toContain('approval.request');
+    expect(c.helper.evaluations).toBe(0);
   });
 
   it('G-LOOP-04: without the root key the card cannot be allowed and nothing is trusted', async () => {

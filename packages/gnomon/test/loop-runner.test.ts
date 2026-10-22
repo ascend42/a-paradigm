@@ -23,7 +23,7 @@ import { removeTree } from '../src/kernel/manifest/index.js';
 import { readShebang } from '../src/kernel/loops/hash.js';
 import { LoopLedger, replayLoopRuns } from '../src/kernel/loops/ledger.js';
 import { LoopRegistry } from '../src/kernel/loops/registry.js';
-import { effectiveBudgets, LoopRunner, renderNotifyText } from '../src/kernel/loops/runner.js';
+import { ACT_NODES_LATER, effectiveBudgets, LoopRunner, renderNotifyText, unsupportedNodes } from '../src/kernel/loops/runner.js';
 import { foldReplay } from '../src/kernel/log/replay.js';
 import type { CheckExecInput, CheckResult } from '../src/kernel/loops/check-exec.js';
 import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
@@ -222,12 +222,16 @@ describe('#loop-runner: the walk (§2)', () => {
     }
   });
 
-  it('write checks are refused at run start (act nodes run since step 10), nothing runs', () => {
-    const root = repo([{ schema: 'loop:v2', id: 'writer', start: 'a', land: { paths: ['src/**'], message: 'chore(#x): y' }, nodes: [chk('a', { pass: '@stop' }, { effect: 'write' })] }]);
-    const r = rig(root);
-    r.trust('writer');
-    expect(() => r.runner.start(r.key('writer'), { type: 'manual' })).toThrow(/write checks \(effect: write\) are not built in 8\.0 yet/);
-    expect(r.rows).toEqual([]);
+  it('write checks: the validator refuses them (lands in 8.1); the runner keeps its backstop', () => {
+    const def = { schema: 'loop:v2', id: 'writer', start: 'a', land: { paths: ['src/**'], message: 'chore(#x): y' }, nodes: [chk('a', { pass: '@stop' }, { effect: 'write' })] };
+    const r0 = compileLoop(def as any, { scope: 'repo' });
+    expect(r0.ok).toBe(false);
+    expect(r0.errors.map((e) => [e.path, e.code])).toEqual([['nodes[0].effect', 'LANDS_IN_8_1']]);
+    // the backstop: a compiled loop that names a write check anyway (never from the registry: it re-validates)
+    const ok = compileLoop({ ...def, nodes: [chk('a', { pass: '@stop' })] } as any, { scope: 'repo' }).compiled!;
+    const forged = { ...ok, nodes: ok.nodes.map((n) => ({ ...n, effect: 'write' })) } as typeof ok;
+    expect(unsupportedNodes(forged)).toEqual(['a']);
+    expect(ACT_NODES_LATER).toBe('write checks (effect: write) land in 8.1');
   });
 
   it('exit.maxVisits and exit.maxFailStreak end the run node-exit before the next step', async () => {

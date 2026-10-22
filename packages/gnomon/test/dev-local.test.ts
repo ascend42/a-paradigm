@@ -45,11 +45,11 @@ describe('#dev-launch: gnomon dev local', () => {
     expect(x.o.join('')).toContain('SIGNED  local-model lane config');
     const dev = loadDevHome(w.devHome, { userHome: w.userHome });
     const loaded = loadLocalConfig(w.devHome, dev.root);
-    expect(loaded).toMatchObject({ signed: true, version: 0 });
+    expect(loaded).toMatchObject({ signed: true, version: 1 }); // nextLocalVersion: above the file, the sidecar and the chain
     expect(loaded.config?.endpoints).toEqual([{ id: 'ollama', base: 'http://127.0.0.1:11434', model: 'qwen3.5:9b', compat: 'ollama' }]);
     expect(loaded.config?.runner).toMatchObject({ dir: w.runner, entry: 'cli.js', node: process.execPath });
     expect(await runDevCommand(['local', '--home', w.devHome, '--model', 'qwen3.5:9b', '--runner', w.runner, '--base', 'http://127.0.0.1:8080', '--compat', 'llama.cpp'], io(), { userHome: w.userHome })).toBe(0);
-    expect(JSON.parse(fs.readFileSync(path.join(w.devHome, LOCAL_CONFIG_FILE), 'utf8')).row.version).toBe(1);
+    expect(JSON.parse(fs.readFileSync(path.join(w.devHome, LOCAL_CONFIG_FILE), 'utf8')).row.version).toBe(2);
   });
 
   it('--loops signs loops: true on the endpoint (loops step 8: off unless asked)', async () => {
@@ -72,6 +72,30 @@ describe('#dev-launch: gnomon dev local', () => {
     expect(await runDevCommand(['local', '--home', w.devHome, '--model', 'm', '--runner', path.join(w.userHome, 'nope')], io(), { userHome: w.userHome })).toBe(1);
     expect(await runDevCommand(['local', '--home', w.devHome], io(), { userHome: w.userHome })).toBe(64);
     expect(fs.existsSync(path.join(w.devHome, LOCAL_CONFIG_FILE))).toBe(false);
+  });
+
+  it('TD-2026-10-22-769: dev homes are loopback only too (the shared validator): a LAN endpoint is refused, lands in 8.1', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'win-1' })).toBe(0);
+    for (const base of ['http://192.168.1.20:11434', 'http://10.0.0.5:8080', 'http://[fd00::1]:8080']) {
+      const x = io();
+      expect(await runDevCommand(['local', '--home', w.devHome, '--model', 'm', '--runner', w.runner, '--base', base], x, { userHome: w.userHome })).toBe(1);
+      expect(x.e.join('')).toMatch(/LAN endpoints land in 8\.1/);
+    }
+    expect(fs.existsSync(path.join(w.devHome, LOCAL_CONFIG_FILE))).toBe(false);
+  });
+
+  it('a dev-home file copied into another home is not applied there (another root signed it)', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'win-1' })).toBe(0);
+    expect(await runDevCommand(['local', '--home', w.devHome, '--model', 'qwen3.5:9b', '--runner', w.runner], io(), { userHome: w.userHome })).toBe(0);
+    const w2 = world();
+    expect(await runDevCommand(['init', '--home', w2.devHome], io(), { userHome: w2.userHome, host: 'win-1' })).toBe(0);
+    fs.copyFileSync(path.join(w.devHome, LOCAL_CONFIG_FILE), path.join(w2.devHome, LOCAL_CONFIG_FILE));
+    const events: string[] = [];
+    const other = loadLocalConfig(w2.devHome, loadDevHome(w2.devHome, { userHome: w2.userHome }).root, (k, p) => void events.push(`${k}:${String(p.why)}`));
+    expect(other.config).toBeUndefined();
+    expect(events).toEqual(['config.unsigned:signature']);
   });
 
   it("finds this clone's gnomon-local runner when it is built", () => {

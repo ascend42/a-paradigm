@@ -27,7 +27,7 @@ Each command writes `.paradigm/loops/<id>.yaml` and the compiled `<id>.loop.json
 
 **Before you start:**
 - Gnomon must run from the clone install (`npm run gnomon:install`). Builtin checks run the paradigm CLI from this clone, and the signed app alone has none, so its builtins fail closed. Build paradigm first (`npm run build -w @a-company/paradigm`). If you rebuild it during the week, restart Gnomon.
-- The local endpoint must serve loops. An endpoint serves loop steps only when its root-signed config says `loops: true`. Today only `gnomon dev local --loops` writes that, on a dev home. Until a signed path exists for the real home, model steps return `unavailable`. Then `flow-health-symbols` and `evening-tidy` toast without a summary, and `green-gnomon` stops at its "continue or stop" card every night. Record that as a finding; it is not a loop bug.
+- Set up the local model, and let loops use it. Open **Settings → Local model** (being designed) and choose *Sessions and loops*; the raw form is `gnomon local set --model <id> --loops` (default endpoint Ollama on `http://127.0.0.1:11434`; loopback only in 8.0, LAN endpoints land in 8.1). Gnomon checks the server first, then raises a card you allow with your presence and the root key; the config applies at once, with no restart. The gnomon-local runner ships with Gnomon, so nothing is built. Without a config whose endpoint says loops may use it, a loop with a model node **refuses to start** (`no-local-model`): its run never begins, the refusal is logged, and the stack shows "■ <loop> didn't start" until a config applies. `gnomon local status` shows what is set.
 
 ## 2. Trust them in the GUI
 

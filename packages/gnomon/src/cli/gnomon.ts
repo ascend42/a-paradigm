@@ -24,6 +24,7 @@ import { runRulesCommand } from './rules-cli.js';
 import { runModeCommand } from './mode-cli.js';
 import { runStrictnessCommand } from './strictness-cli.js';
 import { runLoopCommand } from './loop-cli.js';
+import { runLocalCommand } from './local-cli.js';
 import { runVoiceCommand } from './voice-cli.js';
 import { runSessionCommand } from './session-cli.js';
 import { runSetupCommand } from './setup-cli.js';
@@ -88,6 +89,17 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'strictness') {
   // M2.11-lite (#strictness-cli): `gnomon strictness show [<repo>]` | `gnomon strictness set <repo> <L0-L3>` (strictness-cli.ts)
   runStrictnessCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'local') {
+  // TD-2026-10-22-769 (#local-config-request): `gnomon local set|status|remove` (local-cli.ts; Settings → Local model is the guided form)
+  runLocalCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },

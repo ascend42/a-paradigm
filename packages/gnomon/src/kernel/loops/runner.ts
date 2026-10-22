@@ -105,8 +105,28 @@ export interface LoopGlobalCaps {
 export const LOOP_GLOBAL_CAPS: Readonly<LoopGlobalCaps> = Object.freeze({ repo: 2, global: 4, dayRuns: 240, dayComputeSec: 6 * 3600, choiceTtlMs: 3600_000, dayTokens: 8_000_000, modelRetries: 3, modelBackoffMs: Object.freeze([2_000, 8_000, 30_000]), thrashRounds: 3, budgets: LOOP_BUDGET_DEFAULTS });
 /** evidence tails kept on the loop.node row (each) */
 export const LOOP_NODE_EVIDENCE_BYTES = 16 * 1024;
+/** TD-2026-10-22-769: why a loop with a model node cannot start (closed; the GUI maps each to its copy). */
+export type LoopStartRefusalWhy = 'none' | 'sessions-only' | 'no-runner' | 'no-profile';
+
+/** A schedule or event fire refused before any step, per loop (status.loops.startRefused). */
+export interface LoopStartRefusal {
+  key: string;
+  loopId: string;
+  code: 'no-local-model';
+  why: LoopStartRefusalWhy;
+  /** the last refused fire */
+  at: string;
+  /** the first refused fire of this streak */
+  since: string;
+  count: number;
+  trigger: string;
+  dueAt?: string;
+  modelNodes: string[];
+}
+
 export const NO_LOCAL_MODEL = 'no local model is configured for this loop (the root-signed local config marks no endpoint loops: true, or none matches model.profile)';
-export const ACT_NODES_LATER = 'write checks (effect: write) are not built in 8.0 yet';
+/** The runner's backstop for a write check (the validator refuses `effect: write` with LANDS_IN_8_1 first). */
+export const ACT_NODES_LATER = 'write checks (effect: write) land in 8.1';
 /** 8.0 is approve-to-land (founder decision): no loop change lands without the human accepting its card. */
 export const LOOP_AUTO_LAND = false;
 export const AUTO_LAND_LATER = 'auto-land lands in 8.1';
@@ -438,9 +458,16 @@ export class LoopRunner {
     const can = this.#o.registry.canRun(key);
     if (!entry || !entry.compiled || !entry.hash || !can.ok) throw new RpcRefusal('FORBIDDEN', 'loop-not-runnable', `loop ${key.split('/').pop()} cannot run: ${can.ok ? 'not found' : can.reason} (nothing runs until you trust it: gnomon loop trust)`, { state: can.ok ? 'missing' : can.reason });
     const later = unsupportedNodes(entry.compiled);
-    if (later.length) throw new RpcRefusal('ENGINE', 'not-implemented', `${ACT_NODES_LATER}: ${later.join(', ')}`, { nodes: later, milestone: 'loops-step-10' });
+    if (later.length) throw new RpcRefusal('ENGINE', 'not-implemented', `${ACT_NODES_LATER}: ${later.join(', ')}`, { nodes: later, milestone: '8.1' });
     const noModel = this.#modelRefusal(entry.compiled);
-    if (noModel) throw new RpcRefusal('ENGINE', 'no-local-model', `loop ${entry.loopId}: ${NO_LOCAL_MODEL} (${noModel})`, { why: noModel });
+    if (noModel) {
+      // TD-2026-10-22-769 (Mika F4): a schedule or event fire refused for want of a local model is not silent: one
+      // loop.trigger.fired{refused} row per fire and one start refusal per loop in status.loops (the GUI's stack alert),
+      // cleared once a config that serves it applies (recheckStartRefusals)
+      if (trigger.type === 'schedule' || trigger.type === 'event' || trigger.type === 'continuous') this.#noteStartRefused(entry, trigger, noModel.why);
+      throw new RpcRefusal('ENGINE', 'no-local-model', `loop ${entry.loopId}: ${NO_LOCAL_MODEL} (${noModel.text})`, { why: noModel.why, detail: noModel.text });
+    }
+    this.#startRefused.delete(key); // this loop can start again: its refusal (and alert) clears
     const platform = this.#o.platform ?? process.platform;
     if (!LOOP_CHECK_BACKENDS[platform]) throw new RpcRefusal('ENGINE', 'sandbox-unavailable', `no loop-check sandbox on ${platform}: loops run on macOS until the Windows backend (W5)`, { platform });
     // ── step 9 (#loop-strictness): L3 or manual runs nothing; L1/L2 cap the repo's concurrency ──
@@ -478,16 +505,42 @@ export class LoopRunner {
     return { runId, done: a.done };
   }
 
-  /** Why a loop's model nodes cannot run here (no lane, no endpoint or runner, a profile naming no endpoint), or null. */
-  #modelRefusal(c: CompiledLoop): string | null {
+  /**
+   * Why a loop's model nodes cannot run here, or null. `why` is closed (TD-2026-10-22-769, Mika's refusal copy):
+   * none (no local model, or no lane), sessions-only (endpoints exist but none is marked loops: true), no-runner (no
+   * gnomon-local pinned), no-profile (a node's model.profile names no loops endpoint).
+   */
+  #modelRefusal(c: CompiledLoop): { why: LoopStartRefusalWhy; text: string } | null {
     const models = c.nodes.filter((n): n is Extract<CompiledNode, { type: 'model' }> => n.type === 'model');
     if (!models.length) return null;
-    if (!this.#o.model) return 'no local model lane';
+    if (!this.#o.model) return { why: 'none', text: 'no local model lane' };
     const cfg = this.#o.model.configured();
-    if (!cfg.endpoints.length) return 'no local endpoint is marked loops: true in the root-signed local config';
-    if (!cfg.runner) return 'no gnomon-local runner pinned';
+    if (!cfg.endpoints.length) return (cfg.any ?? 0) > 0 ? { why: 'sessions-only', text: 'the local model is set up for sessions only: no endpoint is marked loops: true in the root-signed local config' } : { why: 'none', text: 'no local endpoint is marked loops: true in the root-signed local config' };
+    if (!cfg.runner) return { why: 'no-runner', text: 'no gnomon-local runner pinned' };
     const missing = models.filter((n) => n.model.profile !== undefined && !cfg.endpoints.includes(n.model.profile)).map((n) => `${n.id}: profile ${n.model.profile}`);
-    return missing.length ? `no configured endpoint for ${missing.join(', ')}` : null;
+    return missing.length ? { why: 'no-profile', text: `no configured endpoint for ${missing.join(', ')}` } : null;
+  }
+
+  readonly #startRefused = new Map<string, LoopStartRefusal>();
+
+  #noteStartRefused(entry: { key: string; loopId: string; scope: string; repoKey: string; compiled?: CompiledLoop | undefined }, trigger: Record<string, unknown>, why: LoopStartRefusalWhy): void {
+    const at = new Date(this.#now()).toISOString();
+    const prev = this.#startRefused.get(entry.key);
+    const modelNodes = (entry.compiled?.nodes ?? []).filter((n) => n.type === 'model').map((n) => n.id);
+    this.#startRefused.set(entry.key, { key: entry.key, loopId: entry.loopId, code: 'no-local-model', why, at, since: prev?.since ?? at, count: (prev?.count ?? 0) + 1, trigger: String(trigger.type), ...(typeof trigger.dueAt === 'string' ? { dueAt: trigger.dueAt } : {}), modelNodes });
+    void this.#o
+      .append('loop.trigger.fired', { loopId: entry.loopId, scope: entry.scope, repoKey: entry.repoKey, trigger: { type: String(trigger.type), ...(typeof trigger.kind === 'string' ? { kind: trigger.kind } : {}), ...(typeof trigger.dueAt === 'string' ? { dueAt: trigger.dueAt } : {}) }, refused: { code: 'no-local-model', why } })
+      .catch(() => undefined);
+  }
+
+  /** A local config applied: drop every start refusal whose loop could start now (its stack alert clears). */
+  recheckStartRefusals(): void {
+    for (const key of [...this.#startRefused.keys()]) {
+      const e = this.#o.registry.entry(key);
+      if (!e?.compiled || this.#modelRefusal(e.compiled) === null) {
+        this.#startRefused.delete(key);
+      }
+    }
   }
 
   #after(a: Active): void {
@@ -1169,6 +1222,8 @@ export class LoopRunner {
       queued: this.#queue.map((q) => q.key),
       caps: { repo: this.#caps.repo, global: this.#caps.global, dayRuns: this.#caps.dayRuns, dayComputeSec: this.#caps.dayComputeSec },
       runs: this.#o.ledger.recent({ limit: 50 }).map((r) => ({ ...r, nodes: r.nodes.slice(0, 64) })),
+      // TD-2026-10-22-769: fires refused before any step (no-local-model), one per loop, newest count
+      startRefused: [...this.#startRefused.values()],
     };
   }
 }

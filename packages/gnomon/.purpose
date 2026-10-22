@@ -4373,6 +4373,55 @@ components:
       - test/local-lane-spawn.test.ts
     oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
 
+  local-config-request:
+    description: >-
+      #local-config-request (TD-2026-10-22-769; spec §13.1 "Real homes";
+      G-LCL-07..G-LCL-10). A REAL home's local-model config:
+      src/kernel/local/config-request.ts. validateLocalConfigInput is the ONE
+      input check (shared with `gnomon dev local`): model required (<= 128),
+      compat a local transport, an endpoint id, validateLocalEndpoints with
+      the kernel's web port forbidden (BILLING_REFUSED), LOOPBACK ONLY in 8.0
+      (dev homes too; a LAN base is ENGINE not-implemented{milestone 8.1},
+      "LAN endpoints land in 8.1"), a runner dir absolute with cli.js, never
+      claude. LocalConfigCards.request{op:'set', endpoint, runner?} raises ONE
+      `grant` card (detail.action local.config; root class, hand only, never
+      standing or always) whose allow signs ONE gnomon-root-local:v1 row
+      (decision-batch.ts row table local.config: closed fields, <= 4 loopback
+      endpoints, a pinned runner; helper 1.9.0, refused at RAISE on an older
+      helper "update the Gnomon app", broker ROW_TABLE_MIN_HELPER); a set
+      edits ONE endpoint by id and keeps the others ("unchanged" on the card);
+      prepare re-pins the runner and recomputes the version (above the file,
+      the sidecar and the chain high-water) under beginRootDecision, else
+      "the config changed while the card was open: ask again"; the effect
+      writes local.signed.json through the ONE writer (config.ts
+      writeLocalConfigDoc: temp 0600, fsync, rename, never through a
+      symlink) and calls the daemon's hot reload. {op:'remove'} is
+      notify-and-proceed (no card): the file is deleted and the reload logs
+      config.loaded{fallback:'none', why:'removed'}. request.local.probe
+      {model, base?, compat?} is the read-only loopback check before a card
+      (Mika C1: no card, no row, human only, one in flight, one per 2 s).
+      Both are dispatcher-only (never rows; clientApiId unmoved);
+      status.local (extraStatus) carries the endpoints, the runner (bundled
+      or override, version, tree, node version and sha), signer, version and
+      signedAt, the last probe and the last fallback, the platform
+      (unsupported 'platform' on win32) and offered. bundled-runner.ts: the
+      gnomon-local cli.js ships inside the kernel's dist/gnomon-local
+      (tsup.config.ts bundle-gnomon-local; npm tarball and the app's
+      Resources/kernel/dist), its tree hash compiled in and verified at load;
+      a typed absolute runner dir overrides it. CLI raw form `gnomon local
+      set|status|remove` (src/cli/local-cli.ts); the guided form is Settings
+      → Local model (#gui, a separate design track).
+    path: src/kernel/local/config-request.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, td-2026-10-22-769]
+    signals: ['!config.loaded']
+    gates: ['^subscription-only']
+    tests:
+      - test/local-config-request.test.ts
+      - test/dev-local.test.ts
+      - test/decision-batch.test.ts
+    oracles: [G-SUB-06, G-LCL-07, G-LCL-08, G-LCL-09, G-LCL-10]
+
   claude-adapter:
     model-guard: >-
       Model picker (Aegis): buildClaudeArgv refuses a model that fails
@@ -4609,6 +4658,23 @@ components:
     tags: [cli, mods, M1.11]
     oracles: [G-MOD-04, G-MOD-08]
 flows:
+  local-config-flow:
+    description: >-
+      $local-config-flow (TD-2026-10-22-769, spec §13.1 "Real homes"): the
+      human asks (Settings → Local model, or `gnomon local set`) →
+      request.local.probe checks the loopback server first (no card) →
+      request.local.config{op:'set'} → #local-config-request validates
+      (loopback only) and raises the root `grant` card (local.config) →
+      #approval-broker: fresh presence + the root key in ONE helper touch
+      (decision.sign, row table local.config, helper 1.9.0) → the effect
+      writes local.signed.json (0600, atomic) → the daemon reloads it hot
+      (loadLocalConfig → supervisor.setLocalConfig → LocalLane.setConfig,
+      probe cache cleared → probeLocal; live sessions keep their spawn-time
+      config) → the loop runner's configured() sees it and drops start
+      refusals it now serves (recheckStartRefusals; their stack alerts
+      clear). Remove: request.local.config{op:'remove'} deletes the file and
+      reloads (config.loaded{why:'removed'}), no card.
+    steps: ['#local-config-request', '#approval-broker', '#local-runner', '#supervisor', '#loop-runner']
   send-by-word:
     description: >-
       $send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends

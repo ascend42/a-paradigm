@@ -104,9 +104,39 @@ add('C3: a loop.trusted row for another card', [approve(C, 'allow'), presence], 
 add('C3: a loop.trusted row with an unknown field', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ envelopeId: 'env-1' })]));
 add('C3: a loop.trusted row with a malformed repo key', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ repoKey: 'sha256:xyz' })]));
 add('C3: a loop.trusted row with an unknown scope', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ scope: 'global' })]));
+add('helper 1.9.0: a loop.trusted row names the agent that asked (requestedBy)', [approve(C, 'allow'), presence], batch('loop-trust', 'allow', [looped({ by: 'root', requestedBy: 'p:abcdefgh/a-01hzzzzz' })]));
+// TD-2026-10-22-769 (helper 1.9.0): a real home's local-model config signs exactly one gnomon-root-local:v1 row
+const SHA_N = 'a'.repeat(64), SHA_T = 'b'.repeat(64);
+const lep = (o: R = {}) => ({ id: 'ollama', base: 'http://127.0.0.1:11434', model: 'qwen3.5:9b', compat: 'ollama', loops: true, ...o });
+const lrun = (o: R = {}) => ({ node: '/Applications/Gnomon.app/Contents/Resources/node/bin/node', nodeSha256: SHA_N, dir: '/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local', treeSha256: SHA_T, entry: 'cli.js', ...o });
+const lrow = (o: R = {}, local: R = {}) => ({ schemaVersion: 'gnomon-root-local:v1', version: 3, local: { endpoints: [lep()], runner: lrun(), ...local }, cardId: C, createdAt: T, ...o });
+const LA = [approve(C, 'allow'), presence];
+add('local.config: one gnomon-root-local:v1 row', LA, batch('local.config', 'allow', [lrow()]));
+add('local.config: two endpoints, one for sessions only, on localhost and [::1]', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ loops: undefined, base: 'http://localhost:8080/v1', id: 'coder', compat: 'llama.cpp' }), lep({ base: 'http://[::1]:1234', compat: 'lm-studio' })] })]));
+add('local.config: a long runner path compacts the runner to its digests', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ model: 'm'.repeat(128) }), lep({ id: 'b', model: 'n'.repeat(128) }), lep({ id: 'c', model: 'o'.repeat(128) })], runner: lrun({ dir: `/${'d'.repeat(500)}`, node: `/${'e'.repeat(200)}` }) })]));
+add('C3: a local.config with no row', LA, batch('local.config', 'allow', []));
+add('C3: a local.config never signs a grant row', LA, batch('local.config', 'allow', [lrow(), trust()]));
+add('C3: a local.config row for another card', LA, batch('local.config', 'allow', [lrow({ cardId: C2 })]));
+add('C3: a LAN endpoint is refused (loopback only in 8.0)', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ base: 'http://192.168.1.20:11434' })] })]));
+add('C3: a public endpoint is refused', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ base: 'https://api.anthropic.com' })] })]));
+add('C3: a loopback base with a trailing newline is refused', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ base: 'http://127.0.0.1:11434\n' })] })]));
+add('C3: port 0 is refused', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ base: 'http://127.0.0.1:0' })] })]));
+add('C3: a cloud compat is refused', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ compat: 'openai' })] })]));
+add('C3: five endpoints are refused', LA, batch('local.config', 'allow', [lrow({}, { endpoints: ['a', 'b', 'c', 'd', 'e'].map((id) => lep({ id })) })]));
+add('C3: an endpoint field outside the closed set (surface)', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ surface: 'full' })] })]));
+add('C3: a lane limit outside the closed set (ctxFloor)', LA, batch('local.config', 'allow', [lrow({}, { ctxFloor: 8192 })]));
+add('C3: a row field outside the closed set', LA, batch('local.config', 'allow', [lrow({ signer: 'x' })]));
+add('C3: no runner pin', LA, batch('local.config', 'allow', [lrow({}, { runner: undefined })]));
+add('C3: a relative runner dir', LA, batch('local.config', 'allow', [lrow({}, { runner: lrun({ dir: 'gnomon-local/dist' }) })]));
+add('C3: a runner entry that climbs out', LA, batch('local.config', 'allow', [lrow({}, { runner: lrun({ entry: '../cli.js' }) })]));
+add('C3: a short tree hash', LA, batch('local.config', 'allow', [lrow({}, { runner: lrun({ treeSha256: 'abc' }) })]));
+add('C3: a fractional version', LA, batch('local.config', 'allow', [lrow({ version: 1.5 })]));
+add('C3: a boolean version', LA, batch('local.config', 'allow', [lrow({ version: true })]));
+add('C3: a loops flag that is not a boolean', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ loops: 1 })] })]));
+add('C2: a model with a control character cannot be shown', LA, batch('local.config', 'allow', [lrow({}, { endpoints: [lep({ model: 'qwen\u0007' })] })]));
 const out = {
   schema: 'gnomon-decision-batch-vectors:v2',
-  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
+  note: 'TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).',
   vectors: v,
 };
 writeFileSync(process.argv[2]!, JSON.stringify(out, null, 2) + '\n');
