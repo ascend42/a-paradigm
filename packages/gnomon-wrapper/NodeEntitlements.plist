@@ -8,7 +8,7 @@
      NodeEntitlements-x64.plist) and record why here.
      No library-validation opt-out: the sherpa addons are signed by the same team, which library validation accepts
      (an ad-hoc addon is refused, measured). No DYLD environment, no get-task-allow. The wrapper itself keeps its
-     EMPTY Entitlements.plist. An --unsigned (ad-hoc) release signs node WITHOUT the hardened runtime: ad-hoc code
+     EMPTY Entitlements.plist. An unsigned (ad-hoc) release signs node WITHOUT the hardened runtime: ad-hoc code
      has no team, so library validation would refuse the ad-hoc sherpa addons (CI and tests only). -->
 <plist version="1.0">
 <dict>
