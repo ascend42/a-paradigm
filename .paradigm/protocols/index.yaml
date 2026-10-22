@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-22T00:10:08.744Z'
+generated: '2026-10-22T09:12:00.116Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -248,7 +248,7 @@ protocols:
       - events
   - id: P-add-sentinel-mcp-integration
     name: Add Sentinel MCP tools
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - sentinel mcp tool
@@ -326,7 +326,7 @@ protocols:
       - reindex
   - id: P-add-tool-with-sentinel-schema
     name: Add an MCP tool for Sentinel data
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - sentinel tool
@@ -537,6 +537,6 @@ protocols:
       - battle-test
 health:
   total: 40
-  current: 19
-  stale: 17
+  current: 17
+  stale: 19
   broken: 4
