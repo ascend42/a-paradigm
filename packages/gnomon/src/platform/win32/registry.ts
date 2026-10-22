@@ -9,10 +9,11 @@
  */
 import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
+import { win32SystemRoot } from './system-root.js';
 
 export type RegistryRead = { exists: false } | { exists: true; values: Array<{ name: string; type: string; data: string }> } | { exists: 'unknown'; why: string };
 
-const SYSTEM_ROOT = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
+const SYSTEM_ROOT = win32SystemRoot();
 
 /** `reg query <key>` (values only, no subkeys); exit 1 with "unable to find" = the key does not exist. */
 export function readRegistryKey(key: string, run: typeof spawnSync = spawnSync): RegistryRead {

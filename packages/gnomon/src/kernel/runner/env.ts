@@ -4,8 +4,9 @@
  * #session-runner child environment (spec §3.3 "Environment"; G-RUN-02,
  * G-SEC-02). The child's env is built from an ALLOWLIST, never by copying the
  * daemon's: `HOME USER LOGNAME LANG LC_ALL LC_CTYPE TMPDIR PATH SHELL` (plus
- * the Windows names, data in WINDOWS_EXTRA — the allowlist is the union, a
- * name absent on a platform is simply absent), then the scrub list is removed
+ * the Windows names, data in WINDOWS_EXTRA, on win32 ONLY — PR #52 review: a
+ * darwin session never inherits USERPROFILE, APPDATA, COMSPEC … from a daemon
+ * env that happens to carry them), then the scrub list is removed
  * again (defence in depth: `ANTHROPIC_* CLAUDE_CODE_USE_* CLAUDE_CODE_OAUTH*
  * CLAUDE_CONFIG_DIR NODE_OPTIONS GNOMON_* *_BASE_URL`), then the kernel adds
  * `GNOMON_HSID GNOMON_SOCK GNOMON_SESSION_KEY`. `envKeys[]` (names only, never
@@ -315,7 +316,7 @@ export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, strin
   // ComSpec. Look every allowlisted name up case-insensitively there and emit the canonical spelling (W3).
   const win = (i.platform ?? process.platform) === 'win32';
   const folded = win ? new Map(Object.entries(i.from).map(([k, v]) => [k.toUpperCase(), v] as const)) : null;
-  for (const k of [...ENV_ALLOWLIST, ...WINDOWS_EXTRA]) {
+  for (const k of win ? [...ENV_ALLOWLIST, ...WINDOWS_EXTRA] : ENV_ALLOWLIST) {
     const v = folded ? folded.get(k.toUpperCase()) : i.from[k];
     if (typeof v === 'string' && !isScrubbed(k)) env[k] = v;
   }

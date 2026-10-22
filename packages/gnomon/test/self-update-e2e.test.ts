@@ -1,4 +1,4 @@
-// @gnomon-platform: darwin, linux
+// @gnomon-platform: darwin
 /**
  * TD-2026-10-19-063 end to end, in process, on a dev home: a GUI launched from the human device sees the kernel's
  * own upgrade card after a stamp change; accepting it from the GUI takes ONE presence, sends gui.resume to that

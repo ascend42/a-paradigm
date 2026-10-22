@@ -14,13 +14,13 @@ use windows_sys::Win32::Security::Authorization::{
     SetNamedSecurityInfoW, SetSecurityInfo, SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE,
 };
 use windows_sys::Win32::Security::{
-    GetSecurityDescriptorDacl, GetTokenInformation, TokenUser, ACL, DACL_SECURITY_INFORMATION,
+    GetSecurityDescriptorDacl, GetSecurityDescriptorOwner, GetTokenInformation, TokenUser, ACL, DACL_SECURITY_INFORMATION,
     OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
     TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, OPEN_EXISTING,
-    READ_CONTROL, WRITE_DAC,
+    READ_CONTROL, WRITE_DAC, WRITE_OWNER,
 };
 use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
 use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD};
@@ -103,6 +103,8 @@ pub fn owner_only_sddl(sid: &str, inherit: bool) -> String {
 struct Sd {
     sd: PSECURITY_DESCRIPTOR,
     dacl: *mut ACL,
+    /// the SDDL's `O:` owner (null without one); points into `sd`
+    owner: PSID,
 }
 impl Drop for Sd {
     fn drop(&mut self) {
@@ -120,10 +122,13 @@ fn sd_from_sddl(sddl: &str) -> Result<Sd, HelperError> {
             return Err(os_err("ConvertStringSecurityDescriptorToSecurityDescriptorW"));
         }
         // one owner of `sd` from here on: dropping `out` frees it exactly once (also on the error path)
-        let mut out = Sd { sd, dacl: null_mut() };
+        let mut out = Sd { sd, dacl: null_mut(), owner: null_mut() };
         let (mut present, mut defaulted) = (0i32, 0i32);
         if GetSecurityDescriptorDacl(out.sd, &mut present, &mut out.dacl, &mut defaulted) == 0 || present == 0 {
             return Err(os_err("GetSecurityDescriptorDacl"));
+        }
+        if GetSecurityDescriptorOwner(out.sd, &mut out.owner, &mut defaulted) == 0 {
+            return Err(os_err("GetSecurityDescriptorOwner"));
         }
         Ok(out)
     }
@@ -209,15 +214,17 @@ pub fn set_path_owner_only(path: &str, sid: &str, dir: bool) -> Result<String, H
     };
     let base = owner_only_sddl(sid, dir);
     // denies first (canonical order), then the owner's allow
-    let sddl = if keep.is_empty() { base } else { format!("D:P{keep}{}", &base["D:P".len()..]) };
-    let sd = sd_from_sddl(&sddl)?;
+    let dacl = if keep.is_empty() { base } else { format!("D:P{keep}{}", &base["D:P".len()..]) };
+    // the OWNER is set to the user too: an elevated administrator's token makes new objects owned by BUILTIN\Administrators
+    // (CI runners), which no owner-only verdict accepts (PR #52 CI). A user may always make itself owner.
+    let sd = sd_from_sddl(&format!("O:{sid}{dacl}"))?;
     unsafe {
         let w = wide(path);
         let r = SetNamedSecurityInfoW(
             w.as_ptr(),
             SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            null_mut(),
+            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            sd.owner,
             null_mut(),
             sd.dacl,
             null(),
@@ -243,7 +250,8 @@ pub fn secure_pipe(name: &str, sid: &str) -> Result<PipeSecured, HelperError> {
     let h = unsafe {
         let mut tries = 0;
         loop {
-            let h = CreateFileW(path.as_ptr(), READ_CONTROL | WRITE_DAC, 0, null(), OPEN_EXISTING, 0, null_mut());
+            // WRITE_OWNER: the owner is set to the user as well (an elevated admin's pipe is owned by BA)
+            let h = CreateFileW(path.as_ptr(), READ_CONTROL | WRITE_DAC | WRITE_OWNER, 0, null(), OPEN_EXISTING, 0, null_mut());
             if h != INVALID_HANDLE_VALUE {
                 break Handle(h);
             }
@@ -257,13 +265,13 @@ pub fn secure_pipe(name: &str, sid: &str) -> Result<PipeSecured, HelperError> {
     };
     // owner-only, plus a DENY for GNOMON_SESSION_SID: a session token carries the user SID as a restricting SID, so
     // the owner's ACE alone would let a session connect to the kernel
-    let sd = sd_from_sddl(&format!("D:P(D;;FA;;;{})(A;;FA;;;{sid})", crate::sandbox::GNOMON_SESSION_SID))?;
+    let sd = sd_from_sddl(&format!("O:{sid}D:P(D;;FA;;;{})(A;;FA;;;{sid})", crate::sandbox::GNOMON_SESSION_SID))?;
     unsafe {
         let r = SetSecurityInfo(
             h.0,
             SE_KERNEL_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            null_mut(),
+            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            sd.owner,
             null_mut(),
             sd.dacl,
             null(),

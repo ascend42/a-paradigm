@@ -46,6 +46,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { helperOp, helperOpSync, kernelWin32Helper } from '../../platform/win32/helper-client.js';
+import { win32SystemRoot } from '../../platform/win32/system-root.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 
 export const SANDBOX_PROFILE_NAMES = ['gnomon-oracle', 'gnomon-reviewer', 'git', 'session', 'mod', 'transport', 'voice', 'link'] as const;
@@ -196,7 +197,7 @@ function win32Transport(input: TransportLaunchInput): ChildLaunchPlan {
   return {
     command: nodeReal,
     args: [scriptReal],
-    env: { SystemRoot: process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\Windows' },
+    env: { SystemRoot: win32SystemRoot() },
     sandbox: 'partial',
     profile,
     profileHash: `sha256:${createHash('sha256').update(profile).digest('hex')}`,

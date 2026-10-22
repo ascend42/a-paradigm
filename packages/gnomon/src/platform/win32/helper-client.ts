@@ -19,6 +19,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { artifactPin, loadedReleasePins, type ReleasePins } from '../../kernel/lifecycle/release-pins.js';
+import { win32SystemRoot } from './system-root.js';
 
 export const WIN32_HELPER_PROTOCOL = 'gnomon-helper:v2';
 export const WIN32_HELPER_EXE = 'gnomon-helper.exe';
@@ -110,8 +111,8 @@ export function pinWin32Helper(exePath: string, o: { pins?: ReleasePins } = {}):
 
 /** The env a helper runs with: only what Windows needs to load a process (no GNOMON_*, no NODE_OPTIONS). */
 function helperEnv(): NodeJS.ProcessEnv {
-  const sys = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
-  return { SystemRoot: sys, PATH: `${sys}\\System32` };
+  const sys = win32SystemRoot();
+  return { SystemRoot: sys, PATH: path.win32.join(sys, 'System32') };
 }
 
 function parse(line: string): HelperReply {

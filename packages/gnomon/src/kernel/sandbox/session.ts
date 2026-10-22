@@ -44,6 +44,8 @@ export interface SessionLaunchPlan {
   sandbox: 'full' | 'partial';
   profile: string;
   profileHash: string;
+  /** what this launch could not deny (Aegis M1, PR #52): logged on the session.sandbox row, never dropped */
+  partial?: readonly string[];
 }
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
@@ -99,7 +101,7 @@ function darwinSession(i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe
 function win32Session(i: SessionLaunchInput): SessionLaunchPlan {
   if (!i.hsid) throw new LifecycleRefusal('sandbox-unavailable', 'a win32 session launch needs its hsid (its own SID)', { profile: 'session' });
   const p = win32SessionPlan({ policy: i.policy, roots: i.extras.roots, tempDir: i.extras.tmpdir, sessionSid: sessionSidFor(i.hsid), binaryReal: i.binaryReal, argv: i.argv });
-  return { command: p.command, args: p.args, sandbox: p.sandbox, profile: p.profile, profileHash: p.profileHash };
+  return { command: p.command, args: p.args, sandbox: p.sandbox, profile: p.profile, profileHash: p.profileHash, partial: p.partial };
 }
 
 /** Platform registry of session sandbox backends (G-WIN-05). */
