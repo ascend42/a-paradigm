@@ -89,6 +89,25 @@ pub fn current_user_sid() -> Result<String, HelperError> {
     }
 }
 
+/// How SDDL spells `sid` (a read-back writes a well-known account by its alias: the built-in Administrator,
+/// RID 500, reads back as `LA`, not `S-1-5-21-…-500`). Verdicts on read-back SDDL compare against THIS spelling.
+pub fn sddl_spelling(sid: &str) -> Result<String, HelperError> {
+    let sd = sd_from_sddl(&format!("O:{sid}D:"))?;
+    unsafe {
+        let mut s: *mut u16 = null_mut();
+        if ConvertSecurityDescriptorToStringSecurityDescriptorW(sd.sd, SDDL_REVISION_1, OWNER_SECURITY_INFORMATION, &mut s, null_mut()) == 0 {
+            return Err(os_err("ConvertSecurityDescriptorToStringSecurityDescriptorW"));
+        }
+        let o = take_local_wstr(s);
+        o.strip_prefix("O:").filter(|r| !r.is_empty()).map(str::to_string).ok_or_else(|| os_err("sddl_spelling"))
+    }
+}
+
+/// The current user's SID as read-back SDDL spells it (see `sddl_spelling`).
+pub fn current_user_sddl_sid() -> Result<String, HelperError> {
+    sddl_spelling(&current_user_sid()?)
+}
+
 /// The protected owner-only DACL SDDL: a pipe/file gets full access for `sid` only; a directory adds
 /// object+container inheritance so everything created below carries it.
 pub fn owner_only_sddl(sid: &str, inherit: bool) -> String {

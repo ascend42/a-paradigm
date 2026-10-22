@@ -139,7 +139,9 @@ export function privateToUser(p: string, st: fs.Stats = fs.lstatSync(p)): boolea
   }
   try {
     const h = helper();
-    const user = String(helperOpSync(h, 'info', {}).userSid ?? '');
+    // read-back SDDL spells a well-known account by alias (the built-in Administrator is LA): compare in that spelling
+    const info = helperOpSync(h, 'info', {});
+    const user = String(info.userSddlSid ?? info.userSid ?? '');
     const sddl = String(helperOpSync(h, 'acl.read', { path: realOrSelf(p) }).sddl ?? '');
     const owner = /^O:([^D]+)D:/.exec(sddl)?.[1];
     if (!user || owner !== user) return false;

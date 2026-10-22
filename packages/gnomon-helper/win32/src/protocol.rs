@@ -182,18 +182,21 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
             "ops": ["info", "pipe.secure", "pipe.read", "acl.owner-only", "acl.read", "acl.session", "process.confine", "process.shield", "fs.rename-durable", "boot.id", "shell.open"],
             "sessionSid": crate::sandbox::GNOMON_SESSION_SID,
             "userSid": win::current_user_sid()?,
+            // the same SID as read-back SDDL spells it (an alias such as LA for a well-known account): compare SDDL to this
+            "userSddlSid": win::current_user_sddl_sid()?,
         })),
         "pipe.secure" => {
             let name = str_arg(req, "name")?;
             check_pipe_name(name)?;
             let sid = win::current_user_sid()?;
             let r = win::secure_pipe(name, &sid)?;
-            Ok(json!({ "sddl": r.sddl, "ownerOnly": owner_only(&r.sddl, &sid, true), "sessionDenied": session_denied(&r.sddl), "serverPid": r.server_pid }))
+            let spelled = win::sddl_spelling(&sid)?;
+            Ok(json!({ "sddl": r.sddl, "ownerOnly": owner_only(&r.sddl, &spelled, true), "sessionDenied": session_denied(&r.sddl), "serverPid": r.server_pid }))
         }
         "pipe.read" => {
             let name = str_arg(req, "name")?;
             check_pipe_name(name)?;
-            let sid = win::current_user_sid()?;
+            let sid = win::current_user_sddl_sid()?;
             let sddl = win::read_pipe_sddl(name)?;
             Ok(json!({ "ownerOnly": owner_only(&sddl, &sid, true), "sessionDenied": session_denied(&sddl), "sddl": sddl }))
         }
@@ -207,12 +210,12 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
             };
             let sid = win::current_user_sid()?;
             let sddl = win::set_path_owner_only(path, &sid, dir)?;
-            Ok(json!({ "ownerOnly": owner_only(&sddl, &sid, true), "sddl": sddl }))
+            Ok(json!({ "ownerOnly": owner_only(&sddl, &win::sddl_spelling(&sid)?, true), "sddl": sddl }))
         }
         "acl.read" => {
             let path = str_arg(req, "path")?;
             check_local_path(path)?;
-            let sid = win::current_user_sid()?;
+            let sid = win::current_user_sddl_sid()?;
             let sddl = win::read_path_sddl(path)?;
             Ok(json!({
                 "ownerOnly": owner_only(&sddl, &sid, false),
@@ -488,6 +491,25 @@ mod tests {
         assert!(!owner_only(&format!("O:{SID}D:P(D;;FA;;;WD)(A;;FA;;;{SID})"), SID, true));
         assert!(!owner_only(&format!("O:{SID}D:P"), SID, true));
         assert!(!owner_only("garbage", SID, false));
+    }
+
+    #[test]
+    fn owner_only_compares_in_the_sddl_spelling() {
+        // CI's runner is the built-in Administrator (RID 500): its read-back says LA, so verdicts take the SDDL spelling
+        let la = "O:LAD:PAI(A;OICI;FA;;;LA)";
+        assert!(owner_only(la, "LA", true));
+        assert!(!owner_only(la, "S-1-5-21-1-2-3-500", true));
+        assert!(!owner_only(la, "BA", true));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sddl_spelling_aliases_well_known_and_keeps_others() {
+        assert_eq!(crate::win::sddl_spelling("S-1-5-18").unwrap(), "SY");
+        assert_eq!(crate::win::sddl_spelling(SID).unwrap(), SID);
+        let me = crate::win::current_user_sid().unwrap();
+        let spelled = crate::win::current_user_sddl_sid().unwrap();
+        assert!(spelled == me || (spelled.len() == 2 && me.ends_with("-500")), "{me} -> {spelled}");
     }
 
     #[test]
