@@ -1,0 +1,47 @@
+id: L-2026-10-22-ascend42-193605-001
+type: agent-session
+timestamp: '2026-10-22T19:36:05.397Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'W4 phase B: Windows Hello for sensitive approvals'
+summary: 'Probe P02 proved a Passport-KSP P-256 key with NgcCacheType AUTH_MANDATORY prompts on every use; the founder answered the prompts. The helper gained a separate Hello presence key: on fresh decisions it signs the presence challenge under a Hello prompt owned by the foreground window, while the approvals key signs the decision. The kernel verifies presence only against the Hello keyId, and the dev binding gains a root-signed presence row. Verified live: an always rule took one PIN. Aegis ship-with-fixes folded in: the AUTH_MANDATORY read-back, root class refused, keyId/PEM checks, and an orphan-key hint. The GUI approve timeout was raised to 150 s.'
+symbols_touched:
+  - '#identity'
+  - '#gnomon-helper'
+  - '#approval-broker'
+  - '#gnomon-gui'
+decisions:
+  - id: W4B-split-keys
+    decision: On a fresh decision the Software-KSP approvals key signs the decision and the Hello key signs only the presence challenge
+    rationale: decisionSig keeps verifying against the one bound approvals key (audit/replay unchanged); the PresenceToken proves the gesture; the click key can never be presence
+  - id: W4B-root-refused
+    decision: Root-class decisions stay refused on Windows click-class keys
+    rationale: No Windows root key and no decision.sign (the helper does not show the exact root line it signs); the dev software root must not stand in silently
+errors_encountered:
+  - description: The GUI approve call timed out at 30 s while the founder typed the PIN; the decision still landed
+    resolution: 'PRESENCE_METHODS approve: 150 s client timeout'
+  - description: NGC KSP reports a missing key as NTE_NO_KEY, not NTE_BAD_KEYSET
+    resolution: Both map to not-found
+  - description: The first Hello prompt (no owner window) opened behind other windows and waited 232 s
+    resolution: Owner = the foreground window at prompt time
+verification:
+  status: pass
+  details:
+    live: presence key created with one PIN; always rule by one PIN
+    tests: identity-hardware 36/36, win32 approvals/helper, kernel suite 2001 pass (13 env)
+tags:
+  - windows
+  - gnomon
+  - W4
+  - security
+linked_tasks:
+  - T-2026-10-22-007
+linked_commits:
+  - 21ac9617
+  - 6b4d67c0
+git_context:
+  ref: 6b4d67c0c356189621730bdb8f03c818d0409805
+  branch: feat/gnomon-windows
+  dirty: true
