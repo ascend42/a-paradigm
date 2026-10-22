@@ -20,8 +20,9 @@ use windows_sys::Win32::Security::Authorization::{
     NO_MULTIPLE_TRUSTEE, SE_KERNEL_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
 use windows_sys::Win32::Security::{
-    GetTokenInformation, SetTokenInformation, TokenDefaultDacl, ACL, DACL_SECURITY_INFORMATION, NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID,
-    TOKEN_ADJUST_DEFAULT, TOKEN_DEFAULT_DACL, TOKEN_QUERY,
+    EqualSid, GetTokenInformation, SetTokenInformation, TokenDefaultDacl, TokenOwner, TokenUser, ACL, DACL_SECURITY_INFORMATION,
+    NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID, TOKEN_ADJUST_DEFAULT, TOKEN_DEFAULT_DACL, TOKEN_INFORMATION_CLASS, TOKEN_OWNER,
+    TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32};
 use windows_sys::Win32::System::Threading::{OpenProcess, OpenProcessToken, OpenThread, PROCESS_QUERY_LIMITED_INFORMATION};
@@ -95,6 +96,51 @@ unsafe fn deny_on(h: HANDLE, sid: PSID, mask: u32, what: &str) -> Result<(), Hel
         return Err(HelperError::os(&format!("SetSecurityInfo({what})"), r));
     }
     Ok(())
+}
+
+/// `process.owner-default {pid}`: make the process token's DEFAULT OWNER its own user. An elevated administrator's
+/// token defaults the owner of everything it creates to BUILTIN\Administrators, and the kernel's owner-only checks
+/// (home, keys, pipe) require the user; with this, every object the process creates afterwards is owned by its user.
+/// Only ever the token's OWN user SID is written (never one from the request), so the op narrows who owns new
+/// objects and grants nothing; idempotent. Read back: refused unless TokenOwner now equals TokenUser.
+pub fn owner_default(pid: u32) -> Result<(), HelperError> {
+    unsafe {
+        let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if p.is_null() {
+            return Err(os("OpenProcess"));
+        }
+        let p = H(p);
+        let mut tok: HANDLE = null_mut();
+        if OpenProcessToken(p.0, TOKEN_QUERY | TOKEN_ADJUST_DEFAULT, &mut tok) == 0 {
+            return Err(os("OpenProcessToken"));
+        }
+        let tok = H(tok);
+        let user = token_info(tok.0, TokenUser, "TokenUser")?;
+        let user_sid = (*(user.as_ptr() as *const TOKEN_USER)).User.Sid;
+        let o = TOKEN_OWNER { Owner: user_sid };
+        if SetTokenInformation(tok.0, TokenOwner, &o as *const _ as *const c_void, std::mem::size_of::<TOKEN_OWNER>() as u32) == 0 {
+            return Err(os("SetTokenInformation(TokenOwner)"));
+        }
+        let back = token_info(tok.0, TokenOwner, "TokenOwner")?;
+        if EqualSid((*(back.as_ptr() as *const TOKEN_OWNER)).Owner, user_sid) == 0 {
+            return Err(HelperError::new("owner-default-failed", "the token's default owner did not read back as its user"));
+        }
+        Ok(())
+    }
+}
+
+/// A pointer-aligned (u64-backed) GetTokenInformation buffer.
+unsafe fn token_info(tok: HANDLE, class: TOKEN_INFORMATION_CLASS, what: &str) -> Result<Vec<u64>, HelperError> {
+    let mut len = 0u32;
+    GetTokenInformation(tok, class, null_mut(), 0, &mut len);
+    if len == 0 {
+        return Err(os(&format!("GetTokenInformation({what} size)")));
+    }
+    let mut buf = vec![0u64; (len as usize).div_ceil(8)];
+    if GetTokenInformation(tok, class, buf.as_mut_ptr() as *mut c_void, len, &mut len) == 0 {
+        return Err(os(&format!("GetTokenInformation({what})")));
+    }
+    Ok(buf)
 }
 
 pub struct Shielded {

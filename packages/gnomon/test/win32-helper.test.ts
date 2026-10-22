@@ -76,11 +76,19 @@ describeHelper('win32 helper (W2/W3)', () => {
     ensureGnomonHome(home);
     const r = helperOpSync(pin(), 'acl.read', { path: home });
     expect(r.ownerOnlyProtected).toBe(true);
-    expect(String(r.sddl)).toMatch(/^O:S-1-5-[\d-]+D:PAI?\(A;OICI;FA;;;S-1-5-[\d-]+\)$/);
+    // read-back SDDL spells the user as the OS does (an alias such as LA for the built-in Administrator on CI)
+    const me = String(helperOpSync(pin(), 'info').userSddlSid);
+    expect(String(r.sddl)).toBe(`O:${me}D:PAI(A;OICI;FA;;;${me})`);
     fs.mkdirSync(path.join(home, 'keys'));
     fs.writeFileSync(path.join(home, 'keys', 'k'), 'x');
     expect(helperOpSync(pin(), 'acl.read', { path: path.join(home, 'keys', 'k') }).ownerOnly).toBe(true);
     expect(isOwnerOnly(path.join(home, 'keys', 'k'))).toBe(true);
+    // ensureGnomonHome set this process's default owner to the user (an elevated admin's would be BA): what it
+    // creates below the home passes the STRICT check, which reads the owner back per file
+    expect(String(helperOpSync(pin(), 'acl.read', { path: path.join(home, 'keys') }).sddl)).toMatch(new RegExp(`^O:${me}D:`));
+    expect(isOwnerOnly(path.join(home, 'keys'), undefined, { strict: true })).toBe(true);
+    expect(isOwnerOnly(path.join(home, 'keys', 'k'), undefined, { strict: true })).toBe(true);
+    expect(helperOpSync(pin(), 'process.owner-default', { pid: process.pid }).ownerDefault).toBe('user');
     // a temp dir outside every verified root inherits the profile's DACL: not owner-only
     clearVerifiedRootsForTests();
     expect(isOwnerOnly(tmp())).toBe(false);

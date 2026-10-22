@@ -56,6 +56,7 @@ export function setOwnerOnlyHelperForTests(pin: Win32HelperPin | null): void {
   helperForTests = pin;
 }
 const helper = (): Win32HelperPin => helperForTests ?? kernelWin32Helper();
+let ownerDefaulted = false;
 
 /**
  * Make `dir` owner-only and READ IT BACK; on win32 it becomes a verified root (everything below inherits).
@@ -67,6 +68,12 @@ export function ownerOnlyDir(dir: string): void {
     const st = fs.lstatSync(dir);
     if ((st.mode & 0o777) !== 0o700) throw new OwnerOnlyError(dir, `${dir} mode ${(st.mode & 0o777).toString(8)} is not 700`);
     return;
+  }
+  if (!ownerDefaulted) {
+    // an elevated admin's token owns what it creates as BUILTIN\Administrators; the strict checks (keys, identity
+    // material) require the user, so this process's default owner becomes its user before anything is created below
+    helperOpSync(helper(), 'process.owner-default', { pid: process.pid });
+    ownerDefaulted = true;
   }
   const real = fs.realpathSync.native(dir);
   const r = helperOpSync(helper(), 'acl.owner-only', { path: real, kind: 'dir' });

@@ -160,7 +160,9 @@ components:
       own process (platform/win32/shield.ts: process, threads and default DACL deny the session SID).
       The helper sets the OWNER to the current user as well (pipe.secure and the home's owner-only DACL): on an
       elevated admin, new objects are owned by BUILTIN\Administrators, and the owner-only read-back requires the
-      user. platform/win32/system-root.ts win32SystemRoot is the ONE Windows-directory lookup (reg.exe, the helper
+      user. The first ownerOnlyDir in a process calls the helper's process.owner-default (TokenOwner := the token's
+      own user), so what the kernel creates below the home passes the strict per-file check too. Verdicts compare
+      in the SDDL spelling of the user (info.userSddlSid: the built-in Administrator reads back as LA). platform/win32/system-root.ts win32SystemRoot is the ONE Windows-directory lookup (reg.exe, the helper
       PATH, the transport child's env): the canonical SystemRoot first, then case-insensitive, and only a
       drive-rooted absolute path (never relative or UNC); otherwise C:\Windows.
     journal-cursor: >-

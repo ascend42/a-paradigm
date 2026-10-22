@@ -179,7 +179,7 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
     match op {
         "info" => Ok(json!({
             "version": crate::VERSION, "protocol": crate::PROTOCOL, "platform": "win32",
-            "ops": ["info", "pipe.secure", "pipe.read", "acl.owner-only", "acl.read", "acl.session", "process.confine", "process.shield", "fs.rename-durable", "boot.id", "shell.open"],
+            "ops": ["info", "pipe.secure", "pipe.read", "acl.owner-only", "acl.read", "acl.session", "process.confine", "process.shield", "process.owner-default", "fs.rename-durable", "boot.id", "shell.open"],
             "sessionSid": crate::sandbox::GNOMON_SESSION_SID,
             "userSid": win::current_user_sid()?,
             // the same SID as read-back SDDL spells it (an alias such as LA for a well-known account): compare SDDL to this
@@ -282,6 +282,12 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
             let pid = req.get("pid").and_then(Value::as_u64).filter(|p| *p > 4 && *p <= u32::MAX as u64).ok_or_else(|| bad("pid must be a process id"))?;
             let r = crate::shield::shield(pid as u32)?;
             Ok(json!({ "sddl": r.sddl, "sessionDenied": true, "threads": r.threads }))
+        }
+        "process.owner-default" => {
+            // the token's default owner becomes its own user (shield.rs owner_default; an elevated admin defaults to BA)
+            let pid = req.get("pid").and_then(Value::as_u64).filter(|p| *p > 4 && *p <= u32::MAX as u64).ok_or_else(|| bad("pid must be a process id"))?;
+            crate::shield::owner_default(pid as u32)?;
+            Ok(json!({ "ownerDefault": "user" }))
         }
         "fs.rename-durable" => {
             let (from, to) = (str_arg(req, "from")?, str_arg(req, "to")?);
