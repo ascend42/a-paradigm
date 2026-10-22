@@ -1,0 +1,31 @@
+{
+  "probe": "P02",
+  "question": "Can the Microsoft Passport (Windows Hello) KSP hold an ECDSA P-256 key that signs only after a Hello gesture, every time?",
+  "plan": "docs/plans/gnomon-windows.md W4 (TD-2026-10-22-278: Windows Hello for the hybrid list)",
+  "machine": "founder laptop, Windows 11 Home 10.0.26200, consumer Windows Hello PIN (dsregcmd NgcSet: NO is the Hello for Business flag; UserConsentVerifier: Available; KeyCredentialManager.IsSupportedAsync: true)",
+  "date": "2026-10-22",
+  "method": "NCryptOpenStorageProvider(MS_NGC_KEY_STORAGE_PROVIDER); NCryptCreatePersistedKey(BCRYPT_ECDSA_P256_ALGORITHM, name, NCRYPT_OVERWRITE_KEY_FLAG); NCRYPT_USE_CONTEXT_PROPERTY prompt text; NgcCacheType = 1 (AUTH_MANDATORY); NCryptFinalizeKey; NCryptExportKey(BCRYPT_ECCPUBLIC_BLOB); NCryptSignHash(SHA-256) twice; NCryptDeleteKey. Signatures verified in node (ieee-p1363).",
+  "runs": [
+    {
+      "name": "gnomon-p02-probe",
+      "result": "NCryptCreatePersistedKey 0x80090027 (NTE_INVALID_PARAMETER): the NGC KSP needs a '<SID>//<domain>/<sub>/<name>' key name"
+    },
+    {
+      "name": "//gnomon.local/approvals/p02-probe (empty SID part = the current user), no NgcCacheType",
+      "result": "create, finalize, export, sign all 0x0; the signature verifies; the founder saw no prompt: without AUTH_MANDATORY the key signs under an existing Hello unlock (NOT presence)"
+    },
+    {
+      "name": "//gnomon.local/approvals/p02-probe2, NgcCacheType = 1 (AUTH_MANDATORY)",
+      "finalizeMs": 232083,
+      "signMs": [7500, 6367],
+      "result": "all 0x0; both signatures verify; the founder answered 3 Hello prompts (create, sign, sign): every use takes a gesture"
+    }
+  ],
+  "verdict": "YES, with AUTH_MANDATORY. A Passport-KSP P-256 key with NgcCacheType=1 prompts Windows Hello on creation and on EVERY signature; the public key exports as BCRYPT_ECCPUBLIC_BLOB; signatures are IEEE P1363 (r||s), the helper converts to DER. This is the phase-B presence key: a SEPARATE key and keyId from the click-class Software-KSP approvals key (Aegis W4-A M2).",
+  "constraints": [
+    "Key names: '//<domain>/<sub>/<name>' (empty SID = current user); gnomon uses //gnomon.local/<gen>/presence.",
+    "NgcCacheType = 1 must be set before NCryptFinalizeKey; without it the key is not presence.",
+    "The prompt had no owner window (NCRYPT_WINDOW_HANDLE_PROPERTY with a null console hwnd): it appeared late and behind other windows (create waited 232 s until found). The helper must hand the prompt a foreground owner (the wrapper's window handle in W6; a dev path needs its own top-level owner) so it is seen at once.",
+    "Creation also prompts: provisioning the presence key is itself a Hello gesture."
+  ]
+}
