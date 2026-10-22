@@ -13,3 +13,6 @@
 {"timestamp":"2026-10-21T06:09:06Z","type":"bypass","source":"stop-hook","magnitude":3,"reasons":"3 source files","severity":"warn"}
 {"timestamp":"2026-10-21T06:11:18Z","type":"eligible","source":"prompt-gate","matched":"Fix "}
 {"timestamp":"2026-10-21T06:19:13Z","type":"eligible","source":"prompt-gate","matched":"Build "}
+{"timestamp":"2026-10-21T23:26:56Z","type":"bypass","source":"stop-hook","magnitude":14,"reasons":"11 source files, 2 packages, 2 .purpose files","severity":"warn"}
+{"timestamp":"2026-10-21T23:27:50Z","type":"eligible","source":"prompt-gate","matched":"fix "}
+{"timestamp":"2026-10-21T23:30:20Z","type":"edit-advisory","source":"team-gate","file":"app-zip.ts"}
