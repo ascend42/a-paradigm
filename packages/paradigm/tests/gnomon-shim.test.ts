@@ -1,7 +1,8 @@
 /**
- * #gnomon-shim (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3): paradigm's `gnomon` bin resolves its @a-company/gnomon
- * dependency and runs that package's CLI; off macOS, or without the platform package npm installs on a matching Mac,
- * it prints one plain line and exits non-zero.
+ * #gnomon-shim (T-2026-10-21-030, TD-2026-10-21-758; 8.0 M3/M4): paradigm's `gnomon` bin resolves its
+ * @a-company/gnomon dependency and that package's platform package (both inside its own install, same version); off
+ * macOS, or without the platform package npm installs on a matching Mac, it prints one plain line and exits non-zero.
+ * The install-and-launch half is tests/gnomon-shim-install.test.ts.
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, copyFileSync } from 'node:fs';
@@ -10,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error -- a plain .js bin, no declarations
-import { EXIT_UNSUPPORTED, resolveGnomon, UNSUPPORTED } from '../bin/gnomon.js';
+import { EXIT_REFUSED, EXIT_UNSUPPORTED, resolveGnomon, UNSUPPORTED } from '../bin/gnomon.js';
 
 const SHIM = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'gnomon.js');
 const dirs: string[] = [];
@@ -27,14 +28,15 @@ function installTree({ platformArch }: { platformArch?: string } = {}): { root: 
   mkdirSync(path.join(paradigm, 'bin'), { recursive: true });
   writeFileSync(path.join(paradigm, 'package.json'), JSON.stringify({ name: '@a-company/paradigm', type: 'module' }));
   copyFileSync(SHIM, path.join(paradigm, 'bin', 'gnomon.js'));
+  copyFileSync(path.join(path.dirname(SHIM), 'gnomon-app.js'), path.join(paradigm, 'bin', 'gnomon-app.js'));
   const gnomon = path.join(paradigm, 'node_modules', '@a-company', 'gnomon');
   mkdirSync(path.join(gnomon, 'dist', 'cli'), { recursive: true });
-  writeFileSync(path.join(gnomon, 'package.json'), JSON.stringify({ name: '@a-company/gnomon', type: 'module', bin: { gnomon: 'dist/cli/gnomon.js' }, exports: { '.': './dist/index.js', './package.json': './package.json' } }));
+  writeFileSync(path.join(gnomon, 'package.json'), JSON.stringify({ name: '@a-company/gnomon', version: '8.0.0', type: 'module', bin: { gnomon: 'dist/cli/gnomon.js' }, exports: { '.': './dist/index.js', './package.json': './package.json' } }));
   writeFileSync(path.join(gnomon, 'dist', 'cli', 'gnomon.js'), "process.stdout.write(JSON.stringify(process.argv.slice(2)));\nprocess.exitCode = 3;\n");
   if (platformArch) {
     const p = path.join(paradigm, 'node_modules', '@a-company', `gnomon-darwin-${platformArch}`);
     mkdirSync(p, { recursive: true });
-    writeFileSync(path.join(p, 'package.json'), JSON.stringify({ name: `@a-company/gnomon-darwin-${platformArch}`, type: 'module' }));
+    writeFileSync(path.join(p, 'package.json'), JSON.stringify({ name: `@a-company/gnomon-darwin-${platformArch}`, version: '8.0.0', type: 'module' }));
   }
   // npm links global bins as symlinks to the package file
   mkdirSync(path.join(root, 'bin'));
@@ -54,12 +56,16 @@ describe('#gnomon-shim resolveGnomon', () => {
     expect(resolveGnomon({ platform: 'darwin', arch: 'arm64', from })).toEqual({ ok: false, message: UNSUPPORTED });
   });
 
-  it('on macOS with the platform package: the gnomon package CLI', () => {
+  it('on macOS with the platform package: both packages and their (matching) version', () => {
     const { root } = installTree({ platformArch: 'x64' });
     const from = path.join(root, 'lib', 'node_modules', '@a-company', 'paradigm', 'bin', 'gnomon.js');
     const r = resolveGnomon({ platform: 'darwin', arch: 'x64', from });
-    expect(r.ok).toBe(true);
-    expect(r.cli).toBe(path.join(root, 'lib', 'node_modules', '@a-company', 'paradigm', 'node_modules', '@a-company', 'gnomon', 'dist', 'cli', 'gnomon.js'));
+    const nm = path.join(root, 'lib', 'node_modules', '@a-company', 'paradigm', 'node_modules', '@a-company');
+    expect(r).toEqual({ ok: true, gnomonPackage: path.join(nm, 'gnomon'), platformPackage: path.join(nm, 'gnomon-darwin-x64'), version: '8.0.0' });
+    // a platform package of another version (a half-finished upgrade) is refused
+    writeFileSync(path.join(nm, 'gnomon-darwin-x64', 'package.json'), JSON.stringify({ name: '@a-company/gnomon-darwin-x64', version: '7.9.9' }));
+    expect(resolveGnomon({ platform: 'darwin', arch: 'x64', from }).message).toMatch(/do not match; reinstall/);
+    writeFileSync(path.join(nm, 'gnomon-darwin-x64', 'package.json'), JSON.stringify({ name: '@a-company/gnomon-darwin-x64', version: '8.0.0' }));
     // an arch without its package (arm64 here) is still refused
     expect(resolveGnomon({ platform: 'darwin', arch: 'arm64', from }).ok).toBe(false);
   });
@@ -77,12 +83,12 @@ describe('#gnomon-shim resolveGnomon', () => {
 function plantGnomon(nm: string, { name = '@a-company/gnomon', platformArch }: { name?: string; platformArch?: string } = {}): string {
   const g = path.join(nm, '@a-company', 'gnomon');
   mkdirSync(path.join(g, 'dist', 'cli'), { recursive: true });
-  writeFileSync(path.join(g, 'package.json'), JSON.stringify({ name, type: 'module', bin: { gnomon: 'dist/cli/gnomon.js' } }));
+  writeFileSync(path.join(g, 'package.json'), JSON.stringify({ name, version: '8.0.0', type: 'module', bin: { gnomon: 'dist/cli/gnomon.js' } }));
   writeFileSync(path.join(g, 'dist', 'cli', 'gnomon.js'), "process.stdout.write('PLANTED');\n");
   if (platformArch) {
     const p = path.join(nm, '@a-company', `gnomon-darwin-${platformArch}`);
     mkdirSync(p, { recursive: true });
-    writeFileSync(path.join(p, 'package.json'), JSON.stringify({ name: `@a-company/gnomon-darwin-${platformArch}` }));
+    writeFileSync(path.join(p, 'package.json'), JSON.stringify({ name: `@a-company/gnomon-darwin-${platformArch}`, version: '8.0.0' }));
   }
   return g;
 }
@@ -96,6 +102,7 @@ describe('#gnomon-shim refuses packages outside its own install (Aegis M3 medium
     mkdirSync(path.join(paradigm, 'bin'), { recursive: true });
     writeFileSync(path.join(paradigm, 'package.json'), JSON.stringify({ name: '@a-company/paradigm', type: 'module' }));
     copyFileSync(SHIM, path.join(paradigm, 'bin', 'gnomon.js'));
+    copyFileSync(path.join(path.dirname(SHIM), 'gnomon-app.js'), path.join(paradigm, 'bin', 'gnomon-app.js'));
     return { root, from: path.join(paradigm, 'bin', 'gnomon.js') };
   }
 
@@ -128,11 +135,12 @@ describe('#gnomon-shim refuses packages outside its own install (Aegis M3 medium
 });
 
 describe('#gnomon-shim as a bin (through the npm symlink)', () => {
-  it.runIf(process.platform === 'darwin')('runs the gnomon CLI with the same args and exit code', () => {
+  it.runIf(process.platform === 'darwin')('never runs the gnomon package CLI on this node: a dev gnomon (no release pins) is refused', () => {
     const { shim } = installTree({ platformArch: process.arch });
     const r = spawnSync(process.execPath, [shim, 'up', '--no-open'], { encoding: 'utf8' });
-    expect(r.stdout).toBe('["up","--no-open"]');
-    expect(r.status).toBe(3);
+    expect(r.stdout).toBe(''); // the fake package CLI would print its argv
+    expect(r.status).toBe(EXIT_REFUSED);
+    expect(r.stderr).toMatch(/no readable build stamp|development build/);
   });
 
   it('without a platform package (or off macOS) it prints one line and exits non-zero', () => {

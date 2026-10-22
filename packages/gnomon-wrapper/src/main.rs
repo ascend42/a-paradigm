@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, read_line_capped, ChannelLine, LineRead, MAX_LINE};
-use gnomon_wrapper::kernel::{check_trust_root, child_command, BUILD_MODE};
+use gnomon_wrapper::kernel::{check_trust_root, child_command, cli_command, parse_cli, BUILD_MODE};
 use gnomon_wrapper::loopback::{preflight, setup_preflight};
 use gnomon_wrapper::nav::{navigation_allowed, Phase, APP_ORIGIN};
 use gnomon_wrapper::surface::{IPC_DISABLED_SCRIPT, SURFACE_SCRIPT};
@@ -219,12 +219,42 @@ fn stop_kernel(sh: &Shared) {
     sh.log("kernel killed after 10 s");
 }
 
+/// The `--cli` path: refuse (exit 64 usage, 69 trust root) or exec the kernel CLI.
+fn run_cli(cli: Result<Vec<String>, String>) -> i32 {
+    let args = match cli {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("gnomon: {e}");
+            return 64;
+        }
+    };
+    let t = match check_trust_root() {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("gnomon: {e}");
+            return 69;
+        }
+    };
+    let env: Vec<(String, String)> = std::env::vars().collect();
+    let e = std::os::unix::process::CommandExt::exec(&mut cli_command(&t.node, &t.gnomon_js, &args, &env));
+    eprintln!("gnomon: could not start the kernel CLI ({}): {e}", t.node.display());
+    70
+}
+
 fn main() {
     // release-darwin.mjs asks the BUILT binary which mode it was compiled in, before signing (Aegis M2 high 2):
     // `bundle` or `dev` on stdout, then exit, before any window or kernel exists
     if std::env::args().nth(1).as_deref() == Some("--build-mode") {
         println!("{BUILD_MODE}");
         return;
+    }
+    // `gnomon-wrapper --cli -- <args>` (8.0 M4, Aegis M4 high 1): paradigm's `gnomon <verb>` runs the kernel CLI
+    // THROUGH this binary, so the terminal has the same trust root as the window: the compiled node + kernel hashes,
+    // the node's designated requirement, no symlink or hard link, and the env scrub; then exec (stdio, signals and the
+    // exit code are the kernel's own). No window, no Tauri.
+    let argv: Vec<String> = std::env::args().collect();
+    if let Some(cli) = parse_cli(&argv) {
+        std::process::exit(run_cli(cli));
     }
     let sh = Arc::new(Shared { phase: Mutex::new(Phase::Status), status: Mutex::new(json!({ "state": "starting the kernel" })), stdin: Mutex::new(None), child: Mutex::new(None), quitting: AtomicBool::new(false), stopped: AtomicBool::new(false), log: Mutex::new(open_log()) });
     let setup_sh = sh.clone();

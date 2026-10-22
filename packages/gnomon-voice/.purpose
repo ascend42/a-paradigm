@@ -125,7 +125,14 @@ components:
       every download into ~/.gnomon/voice/models (0700), extracts with
       tar --no-same-owner, refuses symlinks, non-regular and unpinned
       members, and every model file is re-hashed against the manifest
-      before it is loaded. Prints are embeddings only, stored in voice/prints/<name>/.
+      before it is loaded. Mirror (8.0 M4, TD-2026-10-21-758): the
+      manifest's `mirror` names our GitHub Release gnomon-voice-models-v1
+      (<mirror>/<asset file name>, mirrorUrlFor); fetchModel tries upstream
+      first and, on an HTTP or network failure or bytes that miss the pin,
+      the mirror, whose bytes face the SAME size and sha256 pins (a mismatch
+      is refused, nothing kept); --from never falls back.
+      scripts/mirror-voice-models.mjs uploads to the mirror (gh release
+      upload) only after every file matches its pin. Prints are embeddings only, stored in voice/prints/<name>/.
       Speaker front end (founder regression 2026-10-20): every CAM++
       embedding passes the speech gate speechOnly (speech-gate:v1: frames
       of GATE_FRAME_MS, quiet below max(GATE_FLOOR_DBFS, peak -

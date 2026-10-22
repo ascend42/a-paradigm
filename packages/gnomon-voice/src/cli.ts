@@ -95,7 +95,7 @@ async function cmdFetch(home: string, o: { force: boolean; json: boolean; from?:
     try {
       const r = await fetchModel(home, e, {
         force: o.force,
-        ...(o.from ? { fetch: localFetch(o.from) } : {}),
+        ...(o.from ? { fetch: localFetch(o.from) } : m.mirror ? { mirror: m.mirror } : {}),
         progress: (_id, b, t) => {
           if (o.json) {
             const pct = Math.floor(((done + b) / total) * 100);

@@ -13,6 +13,12 @@
  *      non-regular entry is refused; the member set must EQUAL the manifest's and each member must hash to its
  *      pin; only then is it renamed into place. verified.json is a record of the install, never the authority.
  *
+ * Mirror (TD-2026-10-21-758, 8.0 M4): the manifest may name `mirror`, the base URL of our own GitHub Release that
+ * re-hosts the SAME assets (`<mirror>/<basename of url>`). The upstream URL is tried first; on an HTTP or network
+ * failure, or upstream bytes that fail the pin, the mirror is tried and its bytes face the SAME size and sha256
+ * pins: a mirror can only ever serve a file that hashes to the manifest (scripts/mirror-voice-models.mjs uploads only
+ * verified files). `--from <dir>` never falls back.
+ *
  * Loading (verifiedModelPaths): every file an engine will open is RE-HASHED immediately before load, against the
  * MANIFEST (single files: sha256 + size; archives: every member's pin). sherpa-onnx-node loads models by path only,
  * so "load from verified bytes" is not possible; the residual window is a same-user swap between the hash and the
@@ -43,6 +49,8 @@ export interface ModelEntry {
 }
 export interface ModelManifest {
   schemaVersion: 'voiceModels:v1';
+  /** OPTIONAL: base URL (https, no query, no trailing slash) of our own Release mirror of the same assets */
+  mirror?: string;
   models: ModelEntry[];
 }
 
@@ -63,6 +71,11 @@ function safeRel(f: string): boolean {
 export function validateManifest(m: unknown): ModelManifest {
   const mm = m as ModelManifest;
   if (!mm || mm.schemaVersion !== 'voiceModels:v1' || !Array.isArray(mm.models)) throw new ModelVerifyError('*', 'manifest', 'not a voiceModels:v1 manifest');
+  if (mm.mirror !== undefined) {
+    if (typeof mm.mirror !== 'string' || !/^https:\/\/[^?#\s]+[^/?#\s]$/.test(mm.mirror)) throw new ModelVerifyError('*', 'manifest', 'mirror is an https base URL with no query, fragment or trailing slash');
+    const names = mm.models.map((e) => (typeof e.url === 'string' && /^https:\/\//.test(e.url) ? assetName(e.url) : ''));
+    if (new Set(names).size !== names.length) throw new ModelVerifyError('*', 'manifest', 'with a mirror, every model URL needs a distinct file name');
+  }
   for (const e of mm.models) {
     if (typeof e.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(e.id)) throw new ModelVerifyError(String(e.id), 'manifest', 'bad model id');
     if (!HEX64.test(e.sha256) || !Number.isSafeInteger(e.size) || e.size <= 0) throw new ModelVerifyError(e.id, 'manifest', 'sha256/size missing or malformed');
@@ -82,6 +95,16 @@ export function validateManifest(m: unknown): ModelManifest {
     }
   }
   return mm;
+}
+
+/** The asset's file name (the URL path's last segment): the name it has on the mirror and in `--from <dir>`. */
+export function assetName(url: string): string {
+  return path.posix.basename(new URL(url).pathname);
+}
+
+/** Where the mirror serves `e`'s asset. */
+export function mirrorUrlFor(mirror: string, e: ModelEntry): string {
+  return `${mirror}/${encodeURIComponent(assetName(e.url))}`;
 }
 
 export function loadManifest(file?: string): ModelManifest {
@@ -121,7 +144,7 @@ const defaultFetch: FetchLike = async (url) => {
 /** `models fetch --from <dir>`: read each model's asset (the URL's basename) from a local directory. */
 export function localFetch(dir: string): FetchLike {
   return async (url) => {
-    const name = path.basename(new URL(url).pathname);
+    const name = assetName(url);
     const p = path.join(dir, name);
     if (!fs.existsSync(p) || !fs.statSync(p).isFile()) return { ok: false, status: 404, body: null };
     return { ok: true, status: 200, body: fs.createReadStream(p, { highWaterMark: 1 << 20 }) as AsyncIterable<Uint8Array> };
@@ -133,6 +156,8 @@ export interface FetchOptions {
   progress?: (id: string, bytes: number, total: number) => void;
   /** re-download even when present and verified */
   force?: boolean;
+  /** the manifest's `mirror`: tried when the upstream URL fails or serves bytes that miss the pin */
+  mirror?: string;
 }
 
 /** Download, verify and (for archives) extract one model. Throws ModelVerifyError on any mismatch. */
@@ -149,34 +174,16 @@ export async function fetchModel(home: string, e: ModelEntry, o: FetchOptions = 
     }
   }
   const partial = path.join(dir, `.${e.id}.partial`);
-  fs.rmSync(partial, { force: true });
-  const r = await (o.fetch ?? defaultFetch)(e.url);
-  if (!r.ok || !r.body) throw new ModelVerifyError(e.id, 'http', `download failed (HTTP ${r.status})`);
-  const h = createHash('sha256');
-  const fd = fs.openSync(partial, 'wx', 0o600);
-  let bytes = 0;
   try {
-    for await (const chunk of r.body) {
-      bytes += chunk.length;
-      if (bytes > e.size) throw new ModelVerifyError(e.id, 'size', `larger than the manifest's ${e.size} bytes`);
-      h.update(chunk);
-      fs.writeSync(fd, chunk);
-      o.progress?.(e.id, bytes, e.size);
+    await downloadVerified(e, e.url, partial, o);
+  } catch (upstream) {
+    if (!o.mirror || !(upstream instanceof ModelVerifyError || upstream instanceof TypeError)) throw upstream;
+    try {
+      await downloadVerified(e, mirrorUrlFor(o.mirror, e), partial, o);
+    } catch (m) {
+      const why = (x: unknown): string => (x instanceof Error ? x.message : String(x));
+      throw new ModelVerifyError(e.id, m instanceof ModelVerifyError ? m.reason : 'http', `upstream: ${why(upstream)}; mirror: ${why(m)}`);
     }
-  } catch (err) {
-    fs.closeSync(fd);
-    fs.rmSync(partial, { force: true });
-    throw err;
-  }
-  fs.closeSync(fd);
-  const digest = h.digest('hex');
-  if (bytes !== e.size) {
-    fs.rmSync(partial, { force: true });
-    throw new ModelVerifyError(e.id, 'size', `got ${bytes} bytes, the manifest pins ${e.size}`);
-  }
-  if (digest !== e.sha256) {
-    fs.rmSync(partial, { force: true });
-    throw new ModelVerifyError(e.id, 'sha256', `sha256 ${digest} does not match the manifest's ${e.sha256}; refusing it`);
   }
   if (e.kind === 'file') {
     const target = path.join(dir, e.id);
@@ -227,6 +234,42 @@ export async function fetchModel(home: string, e: ModelEntry, o: FetchOptions = 
   fs.renameSync(root, target);
   fs.rmSync(staging, { recursive: true, force: true });
   return 'fetched';
+}
+
+/**
+ * Download `url` to `partial` while hashing; refuse (deleting the partial) unless it is exactly the manifest's size
+ * and sha256. The same check for the upstream URL and the mirror.
+ */
+async function downloadVerified(e: ModelEntry, url: string, partial: string, o: FetchOptions): Promise<void> {
+  fs.rmSync(partial, { force: true });
+  const r = await (o.fetch ?? defaultFetch)(url);
+  if (!r.ok || !r.body) throw new ModelVerifyError(e.id, 'http', `download failed (HTTP ${r.status})`);
+  const h = createHash('sha256');
+  const fd = fs.openSync(partial, 'wx', 0o600);
+  let bytes = 0;
+  try {
+    for await (const chunk of r.body) {
+      bytes += chunk.length;
+      if (bytes > e.size) throw new ModelVerifyError(e.id, 'size', `larger than the manifest's ${e.size} bytes`);
+      h.update(chunk);
+      fs.writeSync(fd, chunk);
+      o.progress?.(e.id, bytes, e.size);
+    }
+  } catch (err) {
+    fs.closeSync(fd);
+    fs.rmSync(partial, { force: true });
+    throw err;
+  }
+  fs.closeSync(fd);
+  const digest = h.digest('hex');
+  if (bytes !== e.size) {
+    fs.rmSync(partial, { force: true });
+    throw new ModelVerifyError(e.id, 'size', `got ${bytes} bytes, the manifest pins ${e.size}`);
+  }
+  if (digest !== e.sha256) {
+    fs.rmSync(partial, { force: true });
+    throw new ModelVerifyError(e.id, 'sha256', `sha256 ${digest} does not match the manifest's ${e.sha256}; refusing it`);
+  }
 }
 
 /** Every regular file under root (relative); throws on a symlink or any other non-regular entry. */

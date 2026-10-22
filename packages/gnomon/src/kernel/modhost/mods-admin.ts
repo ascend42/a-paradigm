@@ -39,6 +39,7 @@ import { MANIFEST_FILE, readManifest, type ManifestV2, type TrustTier } from '..
 import { ManifestRefusal, noEvents } from '../manifest/refusal.js';
 import { hashSourceTree, pinnedDir } from '../manifest/snapshot.js';
 import { userMcpServerNames } from '../manifest/user-mcp.js';
+import { appBundleOf } from '../lifecycle/app-bundle.js';
 import { readDeskMods, readMcpConfigRequest, readMcpOverrides, requestMcpConfig, serverNameOf } from '../desk/mcp-passthrough.js';
 import type { DeskTallyView } from '../desk/desk-stats.js';
 import { RpcRefusal } from '../socket/rpc.js';
@@ -64,8 +65,21 @@ const MAX_CONFIG_ARGS = 64;
 const MAX_CONFIG_ENV = 32;
 const MAX_DESCRIPTION = 280;
 
-/** Where the shipped first-party mods are: the nearest `gnomon-mods` folder above this module (the clone layout). */
+/**
+ * Where the shipped first-party mods are. Inside a release Gnomon.app (#app-bundle, 8.0 M4): ONLY the app's own
+ * Contents/Resources/gnomon-mods (null when absent; the lookup never walks out of the app, so a `gnomon-mods` folder
+ * planted beside the app in /Applications is never read). Elsewhere: the nearest `gnomon-mods` folder above this
+ * module (the clone layout, and the npm package where prepack copies it).
+ */
 export function findFirstPartyRoot(from: string = path.dirname(fileURLToPath(import.meta.url))): string | null {
+  const bundle = appBundleOf(from);
+  if (bundle) {
+    try {
+      return fs.statSync(bundle.mods).isDirectory() ? fs.realpathSync.native(bundle.mods) : null;
+    } catch {
+      return null;
+    }
+  }
   let d = from;
   for (let i = 0; i < 6; i++) {
     const c = path.join(d, FIRST_PARTY_DIR);

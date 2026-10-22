@@ -641,6 +641,16 @@ export class SupervisedHelper implements HelperTransport {
 
 export type HelperRepinOutcome = 'unchanged' | 'busy' | 'respawned' | 'refused';
 
+export interface HelperRepinOptions {
+  helperPath: string;
+  holder: { pin: PinnedHelper };
+  helper: Pick<SupervisedHelper, 'inFlight' | 'recycle'>;
+  verifier?: HelperVerifier;
+  /** the release pins to check against (default: the ones compiled into this build; tests pass their own) */
+  pins?: ReleasePins;
+  confirm?: () => Promise<boolean>;
+}
+
 /**
  * TD-2026-10-19-063 #update-watch (helper half): a changed helper binary is picked up WITHOUT a card. `check()`
  * hashes the file at the identity's helperPath; unchanged ⇒ nothing. Changed and a request in flight ⇒ `busy`
@@ -650,12 +660,18 @@ export type HelperRepinOutcome = 'unchanged' | 'busy' | 'respawned' | 'refused';
  * the respawned helper still holds this identity's keys. An unsigned or unverifiable file, or a failed confirm,
  * FAILS CLOSED: the new bytes are never started, the old pin stays (its pre-spawn recheck refuses the changed file),
  * and the same bytes are not retried.
+ * App upgrade (8.0 M4, TD-2026-10-21-758): the shim replaces Gnomon.app in place, so a RUNNING release kernel sees a
+ * newer helper at its own bundle path. Its compiled pin names the OLD helper's sha256, so the new bytes are refused
+ * here (and by the old pin's pre-spawn recheck) until the kernel restarts from the new app, whose compiled pin names
+ * them (accepted by Aegis). The identity survives either way: identity.json records keys and a helper path that is
+ * informational inside a bundle (#app-bundle helperPathFor); the Secure Enclave keys are bound to the helper's
+ * keychain access group (team + identifier), not its path or version.
  */
 export class HelperRepin {
-  readonly #o: { helperPath: string; holder: { pin: PinnedHelper }; helper: Pick<SupervisedHelper, 'inFlight' | 'recycle'>; verifier?: HelperVerifier; confirm?: () => Promise<boolean> };
+  readonly #o: HelperRepinOptions;
   #refusedSha: string | null = null;
 
-  constructor(o: { helperPath: string; holder: { pin: PinnedHelper }; helper: Pick<SupervisedHelper, 'inFlight' | 'recycle'>; verifier?: HelperVerifier; confirm?: () => Promise<boolean> }) {
+  constructor(o: HelperRepinOptions) {
     this.#o = o;
   }
 
@@ -671,7 +687,7 @@ export class HelperRepin {
     if (this.#o.helper.inFlight > 0) return 'busy';
     let next: PinnedHelper;
     try {
-      next = pinHelper(this.#o.helperPath, this.#o.verifier ? { verifier: this.#o.verifier } : {});
+      next = pinHelper(this.#o.helperPath, { ...(this.#o.verifier ? { verifier: this.#o.verifier } : {}), ...(this.#o.pins ? { pins: this.#o.pins } : {}) });
     } catch {
       this.#refusedSha = sha;
       return 'refused';

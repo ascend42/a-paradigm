@@ -13,6 +13,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error -- a plain .mjs script, no declarations
 import * as rel from '../scripts/release-darwin.mjs';
 import { appBundleOf } from '../src/kernel/lifecycle/app-bundle.js';
+import { findFirstPartyRoot } from '../src/kernel/modhost/mods-admin.js';
+import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
+import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 // @ts-expect-error -- a plain .mjs script, no declarations
 import * as bump from '../scripts/bump-bundled-node.mjs';
 
@@ -142,6 +145,16 @@ describe('#release-darwin --dry-run --unsigned', () => {
     const b = appBundleOf(path.join(moved, 'Gnomon.app/Contents/Resources/kernel/dist/cli/gnomon.js'))!;
     expect(existsSync(b.helperExe) && existsSync(b.voiceIoApp) && existsSync(path.join(b.voicePackage, 'dist/cli.js')) && existsSync(b.node)).toBe(true);
     expect(rel.bundlePins(path.join(moved, 'Gnomon.app/Contents'))).toEqual(s.pins);
+    // 8.0 M4: the first-party mods ship inside the app and the moved kernel finds them bundle-relative, each byte
+    // for byte (its packageHash is still a pinned first-party hash)
+    const mods = findFirstPartyRoot(path.join(moved, 'Gnomon.app/Contents/Resources/kernel/dist/cli'));
+    expect(mods).toBe(realpathSync(b.mods));
+    const shipped = fs.readdirSync(path.join(rel.PACKAGES, 'gnomon-mods')).filter((n) => fs.statSync(path.join(rel.PACKAGES, 'gnomon-mods', n)).isDirectory()).sort();
+    expect(fs.readdirSync(mods!).sort()).toEqual(expect.arrayContaining(shipped));
+    for (const n of shipped) {
+      const m = JSON.parse(readFileSync(path.join(mods!, n, 'gnomon-manifest.json'), 'utf8')) as { name: string };
+      expect([...FIRST_PARTY_PACKAGE_HASHES]).toContain(hashSourceTree(path.join(mods!, n), m.name, () => undefined).packageHash);
+    }
   }, 120_000);
 
   it('--package-dir refuses an unsigned or dry-run build unless --allow-unsigned-for-tests (Aegis M3 high 1)', () => {

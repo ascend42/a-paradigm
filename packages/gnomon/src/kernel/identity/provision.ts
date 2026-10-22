@@ -31,6 +31,7 @@ import { p256KeyId } from '../log/signer.js';
 import { ensureKeysDir, keysDir } from './device-key.js';
 import { HardwareRootAuthority, HelperApprovalsKey, p256FromX963, pemOf } from './hardware.js';
 import { helperPathFor } from '../lifecycle/app-bundle.js';
+import type { ReleasePins } from '../lifecycle/release-pins.js';
 import { helperOnceSync, HelperProcess, HelperRepin, HelperUnavailableError, pinHelper, SupervisedHelper, type HelperTransport, type HelperVerifier, type PinnedHelper } from './helper.js';
 
 export const IDENTITY_FILE = 'identity.json';
@@ -185,15 +186,25 @@ export interface OpenedIdentity {
  * Returns null when no identity.json exists (unprovisioned). Throws
  * IdentityError / HelperUnavailableError otherwise — fail closed.
  */
-export async function openHardwareIdentity(home: string, o: { verifier?: HelperVerifier; start?: (pin: PinnedHelper) => HelperTransport } = {}): Promise<OpenedIdentity | null> {
+export async function openHardwareIdentity(
+  home: string,
+  o: {
+    verifier?: HelperVerifier;
+    start?: (pin: PinnedHelper) => HelperTransport;
+    /** release pins (default: compiled into this build) */
+    pins?: ReleasePins;
+    /** where this kernel runs from (default: this module; #app-bundle) */
+    from?: string;
+  } = {},
+): Promise<OpenedIdentity | null> {
   const record = readIdentity(home);
   if (!record) return null;
   // #app-bundle (T-2026-10-21-029): inside a release Gnomon.app the app's own helper, wherever the app now lives;
   // the recorded path otherwise. Trust is the signature + release pin either way (pinHelper), never the path.
-  const helperPath = helperPathFor(record.helperPath);
+  const helperPath = helperPathFor(record.helperPath, o.from);
   let pin: PinnedHelper;
   try {
-    pin = pinHelper(helperPath, o.verifier ? { verifier: o.verifier } : {});
+    pin = pinHelper(helperPath, { ...(o.verifier ? { verifier: o.verifier } : {}), ...(o.pins ? { pins: o.pins } : {}) });
   } catch (e) {
     throw new IdentityError('helper', e instanceof Error ? e.message : 'the helper could not be pinned');
   }
@@ -215,6 +226,7 @@ export async function openHardwareIdentity(home: string, o: { verifier?: HelperV
       holder,
       helper,
       ...(o.verifier ? { verifier: o.verifier } : {}),
+      ...(o.pins ? { pins: o.pins } : {}),
       confirm: async () => {
         const pem = await helperPublicKey(helper, 'root', record.gen);
         return !!pem && p256KeyId(createPublicKey(pem)) === record.rootKeyId;

@@ -9,6 +9,8 @@
  *   <X>.app/Contents/Resources/node/bin/node                 the bundled node (the wrapper spawns the kernel with it,
  *                                                            so process.execPath IS it, and every child inherits it)
  *   <X>.app/Contents/Resources/gnomon-voice/                 the voice client package (+ node_modules/sherpa-onnx-*)
+ *   <X>.app/Contents/Resources/gnomon-mods/                  the first-party mods catalog (8.0 M4; packages/gnomon-mods
+ *                                                            byte for byte, so each keeps its pinned packageHash)
  *   <X>.app/Contents/Helpers/GnomonHelper.app                the signed helper
  *   <X>.app/Contents/Helpers/GnomonVoiceIO.app               the signed voice I/O app
  *
@@ -26,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 export const BUNDLE_KERNEL_REL = path.join('Contents', 'Resources', 'kernel');
 export const BUNDLE_NODE_REL = path.join('Contents', 'Resources', 'node', 'bin', 'node');
 export const BUNDLE_VOICE_REL = path.join('Contents', 'Resources', 'gnomon-voice');
+export const BUNDLE_MODS_REL = path.join('Contents', 'Resources', 'gnomon-mods');
 export const BUNDLE_HELPERS_REL = path.join('Contents', 'Helpers');
 export const HELPER_APP_NAME = 'GnomonHelper.app';
 export const HELPER_EXE_IN_APP = path.join('Contents', 'MacOS', 'gnomon-helper');
@@ -37,6 +40,8 @@ export interface AppBundle {
   readonly kernel: string;
   readonly node: string;
   readonly voicePackage: string;
+  /** the first-party mods catalog shipped in the app (mods-admin.ts findFirstPartyRoot) */
+  readonly mods: string;
   readonly helperApp: string;
   readonly helperExe: string;
   readonly voiceIoApp: string;
@@ -65,6 +70,7 @@ export function appBundleOf(from: string = fileURLToPath(import.meta.url)): AppB
         kernel: path.join(app, BUNDLE_KERNEL_REL),
         node: path.join(app, BUNDLE_NODE_REL),
         voicePackage: path.join(app, BUNDLE_VOICE_REL),
+        mods: path.join(app, BUNDLE_MODS_REL),
         helperApp: path.join(helpers, HELPER_APP_NAME),
         helperExe: path.join(helpers, HELPER_APP_NAME, HELPER_EXE_IN_APP),
         voiceIoApp: path.join(helpers, VOICE_IO_APP_NAME),

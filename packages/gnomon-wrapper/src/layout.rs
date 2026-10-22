@@ -7,6 +7,7 @@
 //!   Contents/Resources/node/bin/node         the pinned official Node 24 (packages/gnomon-wrapper/bundled-node.lock.json)
 //!   Contents/Resources/kernel/{dist,package.json}   the build:release kernel, GUI embedded, zero runtime deps
 //!   Contents/Resources/gnomon-voice/         the voice client package (+ node_modules/sherpa-onnx-*)
+//!   Contents/Resources/gnomon-mods/          the first-party mods (8.0 M4; the kernel's, not checked here)
 //!   Contents/Helpers/GnomonHelper.app, Contents/Helpers/GnomonVoiceIO.app
 //! The stage the release script hands build.rs (env GNOMON_WRAPPER_BUNDLE_STAGE) is a `Contents`-shaped directory,
 //! so every relative path below is relative to `Contents` in both places.

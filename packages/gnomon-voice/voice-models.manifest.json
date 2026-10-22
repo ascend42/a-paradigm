@@ -1,5 +1,6 @@
 {
   "schemaVersion": "voiceModels:v1",
+  "mirror": "https://github.com/ascend42/a-paradigm/releases/download/gnomon-voice-models-v1",
   "note": "sha256/size of the release assets (k2-fsa/sherpa-onnx GitHub releases), RECOMPUTED 2026-10-19 from the downloaded files (all four match the previously pinned digests). Archives: `members` pins the sha256 + size of EVERY regular file in the archive (relative to `root`); extraction rejects symlinks and non-regular members, and load-time verification is against these pins, never against verified.json alone.",
   "models": [
     {

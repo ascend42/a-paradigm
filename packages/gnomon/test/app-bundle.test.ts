@@ -14,6 +14,7 @@ import { appBundleOf, appInstallDir, bundledHelperPath, helperPathFor } from '..
 import { defaultHelperPath } from '../src/cli/identity-cli.js';
 import { resolveVoiceClientEntry, voiceIoSourceApp } from '../src/kernel/voice/voice-install.js';
 import { transportLaunchPlan } from '../src/kernel/sandbox/transport.js';
+import { findFirstPartyRoot } from '../src/kernel/modhost/mods-admin.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -57,6 +58,7 @@ describe('#app-bundle layout', () => {
       kernel: path.join(app, 'Contents/Resources/kernel'),
       node: path.join(app, 'Contents/Resources/node/bin/node'),
       voicePackage: path.join(app, 'Contents/Resources/gnomon-voice'),
+      mods: path.join(app, 'Contents/Resources/gnomon-mods'),
       helperApp: path.join(app, 'Contents/Helpers/GnomonHelper.app'),
       helperExe: path.join(app, 'Contents/Helpers/GnomonHelper.app/Contents/MacOS/gnomon-helper'),
       voiceIoApp: path.join(app, 'Contents/Helpers/GnomonVoiceIO.app'),
@@ -82,6 +84,28 @@ describe('#app-bundle layout', () => {
     // reached through a symlinked parent: the realpath decides (the real bundle, not the link's directory)
     symlinkSync(path.join(d, 'Applications'), path.join(d, 'apps-link'));
     expect(appBundleOf(path.join(d, 'apps-link/Gnomon.app/Contents/Resources/kernel/dist/cli/gnomon.js'))?.app).toBe(path.join(d, 'Applications/Gnomon.app'));
+  });
+});
+
+describe('#app-bundle first-party mods (8.0 M4)', () => {
+  it('a bundled kernel finds Contents/Resources/gnomon-mods, also after the app moves', () => {
+    const parent = tmp();
+    const cli = makeApp(parent);
+    mkdirSync(path.join(parent, 'Gnomon.app/Contents/Resources/gnomon-mods/workshop'), { recursive: true });
+    expect(findFirstPartyRoot(path.dirname(cli))).toBe(path.join(parent, 'Gnomon.app/Contents/Resources/gnomon-mods'));
+    expect(appBundleOf(cli)!.mods).toBe(path.join(parent, 'Gnomon.app/Contents/Resources/gnomon-mods'));
+    const moved = path.join(tmp(), 'Applications');
+    mkdirSync(moved);
+    renameSync(path.join(parent, 'Gnomon.app'), path.join(moved, 'Gnomon.app'));
+    expect(findFirstPartyRoot(path.join(moved, 'Gnomon.app/Contents/Resources/kernel/dist/cli'))).toBe(path.join(moved, 'Gnomon.app/Contents/Resources/gnomon-mods'));
+  });
+
+  it('falsifier: a bundle without its mods never walks out of the app (a gnomon-mods planted beside it is not read)', () => {
+    const parent = tmp();
+    const cli = makeApp(parent);
+    mkdirSync(path.join(parent, 'gnomon-mods', 'evil'), { recursive: true });
+    mkdirSync(path.join(parent, 'Gnomon.app', 'Contents', 'gnomon-mods'), { recursive: true });
+    expect(findFirstPartyRoot(path.dirname(cli))).toBeNull();
   });
 });
 

@@ -103,6 +103,21 @@ components:
       key fingerprints bump-bundled-node.mjs verifies SHASUMS256.txt against.
       Residual: check-to-posix_spawn window, covered by App Management
       protection (spec §18.1).
+      8.0 M4 (T-2026-10-21-031): the app also carries
+      Resources/gnomon-mods (the kernel's first-party mods; not part of the
+      wrapper's pins, covered by the app seal and their packageHash pins).
+      Paradigm's `gnomon` (#gnomon-app-installer) installs the app and opens
+      it through LaunchServices, so this wrapper stays the trust root for
+      bare `gnomon`; WRAPPER_REQUIREMENT is the requirement it verifies.
+      CLI passthrough (Aegis M4 high 1): `gnomon-wrapper --cli -- <args>`
+      (kernel.rs parse_cli / cli_command, main.rs run_cli) runs
+      check_trust_root, then execs the bundled node `--disable-sigusr1
+      <kernel>/dist/cli/gnomon.js <args>` with the SAME env allow-list as the
+      kernel child (stdio inherited, cwd kept, exit code and signals the
+      kernel's); no `--` exits 64, a trust-root refusal 69. Paradigm's
+      `gnomon <verb>` uses it, so the terminal and the window share one trust
+      root. Tests: kernel.rs cli units, tests/cli_mode.rs (the built binary;
+      NODE_OPTIONS / GNOMON_* set by the caller never reach the kernel).
     path: src
     type: module
     tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]

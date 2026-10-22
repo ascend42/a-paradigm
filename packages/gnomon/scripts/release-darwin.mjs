@@ -34,7 +34,9 @@
  *   4. stage a Contents-shaped tree: Resources/node/bin/node (+ LICENSE), Resources/kernel/{dist,package.json}
  *      (the kernel has ZERO runtime deps, G-SEC-01: tsup already inlines gnomon-contracts, so no node_modules),
  *      Resources/gnomon-voice/{package.json, dist, voice-models.manifest.json, node_modules/sherpa-onnx-node,
- *      node_modules/sherpa-onnx-darwin-<arch>} (a pruned copy of exactly the client and its native engine);
+ *      node_modules/sherpa-onnx-darwin-<arch>} (a pruned copy of exactly the client and its native engine), and
+ *      Resources/gnomon-mods (packages/gnomon-mods byte for byte, plain .mjs + manifests, no native code: each keeps its
+ *      pinned packageHash; the kernel finds it bundle-relative, mods-admin.ts findFirstPartyRoot; 8.0 M4);
  *   5. sign inside-out IN THE STAGE: every sherpa .node/.dylib, then node (identifier gnomon.node,
  *      NodeEntitlements.plist = allow-jit only, hardened runtime + timestamp; --unsigned: ad-hoc, no runtime), then
  *      `codesign -R` against the requirement the wrapper checks at spawn. Signing rewrites node, so this precedes 6;
@@ -84,6 +86,7 @@ export const LAYOUT = Object.freeze({
   node: 'Resources/node/bin/node',
   kernel: 'Resources/kernel',
   voice: 'Resources/gnomon-voice',
+  mods: 'Resources/gnomon-mods',
   helper: 'Helpers/GnomonHelper.app',
   voiceIo: 'Helpers/GnomonVoiceIO.app',
 });
@@ -212,6 +215,14 @@ export function stageVoice(voicePkg, contents, arch, { requireNative = true } = 
   return dst;
 }
 
+/** Stage the first-party mods catalog (8.0 M4): packages/gnomon-mods copied byte for byte, no symlinks. */
+export function stageMods(modsSrc, contents) {
+  const dst = path.join(contents, LAYOUT.mods);
+  if (!existsSync(modsSrc)) throw new Error(`${modsSrc} is missing (the first-party mods ship inside the app)`);
+  copyTree(modsSrc, dst);
+  return dst;
+}
+
 /** Every Mach-O file under `dir` that must be signed before the app (.node addons, .dylib). */
 export function nativeLibsUnder(dir) {
   const out = [];
@@ -262,7 +273,7 @@ export function bundlePins(contents) {
 /** The relative paths a release app must contain (tests and the final check). */
 export function missingFromLayout(app) {
   const c = path.join(app, 'Contents');
-  const need = [LAYOUT.wrapper, LAYOUT.node, `${LAYOUT.kernel}/package.json`, `${LAYOUT.kernel}/dist/cli/gnomon.js`, `${LAYOUT.voice}/package.json`, `${LAYOUT.voice}/dist/cli.js`, `${LAYOUT.helper}/Contents/MacOS/gnomon-helper`, `${LAYOUT.voiceIo}/Contents/MacOS/gnomon-voice-io`, 'Info.plist'];
+  const need = [LAYOUT.wrapper, LAYOUT.node, `${LAYOUT.kernel}/package.json`, `${LAYOUT.kernel}/dist/cli/gnomon.js`, `${LAYOUT.voice}/package.json`, `${LAYOUT.voice}/dist/cli.js`, LAYOUT.mods, `${LAYOUT.helper}/Contents/MacOS/gnomon-helper`, `${LAYOUT.voiceIo}/Contents/MacOS/gnomon-voice-io`, 'Info.plist'];
   return need.filter((r) => !existsSync(path.join(c, r)));
 }
 
@@ -383,7 +394,7 @@ export async function release(argv) {
     const fetched = o.dryRun ? null : await fetchPinnedNode(lock, o.nodeCache, work);
     // 4. stage (Contents-shaped)
     const stage = path.join(work, 'stage', 'Contents');
-    plan.push('stage Resources/{node,kernel,gnomon-voice}');
+    plan.push('stage Resources/{node,kernel,gnomon-voice,gnomon-mods}');
     mkdirSync(path.join(stage, 'Resources', 'node', 'bin'), { recursive: true });
     const stagedNode = path.join(stage, LAYOUT.node);
     if (fetched) {
@@ -403,6 +414,7 @@ export async function release(argv) {
       copyFileSync(path.join(voicePkg, 'package.json'), path.join(stage, LAYOUT.voice, 'package.json'));
       writeFileSync(path.join(stage, LAYOUT.voice, 'dist', 'cli.js'), '// placeholder voice client\n');
     } else stageVoice(voicePkg, stage, o.arch, { requireNative: !o.dryRun });
+    stageMods(path.join(PACKAGES, 'gnomon-mods'), stage);
     // 5. sign inside-out in the stage: native addons, then node (signing rewrites node, so it precedes the pin)
     const libs = nativeLibsUnder(path.join(stage, LAYOUT.voice, 'node_modules'));
     const signing = o.unsigned ? 'adhoc' : 'developer-id';

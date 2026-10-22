@@ -91,6 +91,11 @@ The local lane config's runner node is not used until the wrapper can verify
 its root signature. The pins hold only up to the spawn: a same-user process
 could still swap the files in that window, which is the §15.1 posture.
 
+## CLI passthrough (8.0 M4)
+
+`Gnomon.app/Contents/MacOS/gnomon-wrapper --cli -- <args>` runs the kernel CLI through the same trust-root checks and
+env allow-list as a window launch, then execs the bundled node (no window). Paradigm's `gnomon <verb>` uses it.
+
 ## Bundle layout (release, 8.0 M2)
 
 One `Gnomon.app` per arch (TD-2026-10-21-758), built and signed once per
@@ -108,6 +113,8 @@ Gnomon.app/Contents/
   Resources/gnomon-voice/              the voice client: package.json, dist/, voice-models.manifest.json,
     node_modules/sherpa-onnx-node/     the native engine and its darwin-<arch> package (.node/.dylib signed)
     node_modules/sherpa-onnx-darwin-<arch>/
+  Resources/gnomon-mods/               the first-party mods (packages/gnomon-mods byte for byte; 8.0 M4), found
+                                       bundle-relative by the kernel and pinned by packageHash
   Helpers/GnomonHelper.app             signed by its own build (profile, keychain group)
   Helpers/GnomonVoiceIO.app            signed by its own build (audio-input only)
 ```

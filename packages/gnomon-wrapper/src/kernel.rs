@@ -152,6 +152,38 @@ pub fn child_command(node: &Path, gnomon_js: &Path, dev_home: Option<&Path>, fro
     c
 }
 
+/// `gnomon-wrapper --cli -- <args>` (8.0 M4, Aegis M4 high 1): the CLI passthrough paradigm's `gnomon <verb>` uses, so
+/// the wrapper is the ONE trust root for the terminal too. `argv` is the wrapper's full argv (argv[0] first). Returns
+/// the kernel CLI args when argv is exactly `<exe> --cli -- <args...>`; `Some(Err)` for a malformed `--cli` (no `--`);
+/// `None` when this is not a CLI invocation (the app starts normally).
+pub fn parse_cli(argv: &[String]) -> Option<Result<Vec<String>, String>> {
+    if argv.get(1).map(String::as_str) != Some("--cli") {
+        return None;
+    }
+    if argv.get(2).map(String::as_str) != Some("--") {
+        return Some(Err("usage: gnomon-wrapper --cli -- <gnomon args...>".into()));
+    }
+    Some(Ok(argv[3..].to_vec()))
+}
+
+/// The CLI child's argv after node: `--disable-sigusr1 <gnomon.js> <args...>` (the only node flag, first).
+pub fn cli_args(gnomon_js: &Path, args: &[String]) -> Vec<String> {
+    let mut a: Vec<String> = NODE_FLAGS.iter().map(|s| s.to_string()).collect();
+    a.push(gnomon_js.display().to_string());
+    a.extend(args.iter().cloned());
+    a
+}
+
+/// The CLI child: the SAME env scrub as the app's kernel child (env_clear, then [`ENV_ALLOWLIST`] and a fixed PATH;
+/// never NODE_OPTIONS, GNOMON_* or DYLD_*), stdio inherited, the caller's working directory kept (verbs like bare
+/// `gnomon` read the folder they are run in). main.rs execs it after [`check_trust_root`], so the exit code and
+/// signals are the kernel's own.
+pub fn cli_command(node: &Path, gnomon_js: &Path, args: &[String], from_env: &[(String, String)]) -> Command {
+    let mut c = Command::new(node);
+    c.args(cli_args(gnomon_js, args)).env_clear().envs(child_env(from_env, node));
+    c
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,6 +217,42 @@ mod tests {
         assert!(args.iter().all(|x| !x.contains("launch") && !x.contains("token")));
         let envs: Vec<String> = c.get_envs().map(|(k, _)| k.to_string_lossy().to_string()).collect();
         assert!(!envs.iter().any(|k| k == "NODE_OPTIONS" || k.starts_with("GNOMON_") || k.starts_with("DYLD_")), "{envs:?}");
+    }
+
+    fn argv(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn cli_mode_needs_the_separator_and_passes_every_arg_after_it() {
+        assert_eq!(parse_cli(&argv(&["w"])), None);
+        assert_eq!(parse_cli(&argv(&["w", "--build-mode"])), None);
+        assert!(matches!(parse_cli(&argv(&["w", "--cli", "identity"])), Some(Err(_))));
+        assert_eq!(parse_cli(&argv(&["w", "--cli", "--"])), Some(Ok(vec![])));
+        assert_eq!(parse_cli(&argv(&["w", "--cli", "--", "identity", "status", "--", "--cli"])), Some(Ok(argv(&["identity", "status", "--", "--cli"]))));
+        assert_eq!(cli_args(Path::new("/k/gnomon.js"), &argv(&["daemon", "stop"])), argv(&["--disable-sigusr1", "/k/gnomon.js", "daemon", "stop"]));
+    }
+
+    #[test]
+    fn falsifier_the_cli_child_never_sees_node_options_gnomon_or_dyld_vars() {
+        // a fake "node" that prints its environment and argv: what the kernel CLI would actually receive
+        let d = std::env::temp_dir().canonicalize().unwrap().join(format!("gw-cli-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let node = d.join("node");
+        std::fs::write(&node, b"#!/bin/sh\n/usr/bin/env\necho \"ARGS $*\"\n").unwrap();
+        std::fs::set_permissions(&node, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        let mut from = env();
+        from.push(("GNOMON_NO_OPEN".into(), "1".into()));
+        let out = cli_command(&node, Path::new("/k/gnomon.js"), &argv(&["identity", "status"]), &from).output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        let keys: Vec<&str> = text.lines().filter_map(|l| l.split_once('=').map(|(k, _)| k)).filter(|k| !k.starts_with("ARGS")).collect();
+        for k in &keys {
+            assert!(!(k.starts_with("NODE_") || k.starts_with("GNOMON_") || k.starts_with("DYLD_") || *k == "ANTHROPIC_API_KEY"), "{k} leaked: {text}");
+        }
+        assert!(keys.contains(&"HOME") && keys.contains(&"PATH"), "{text}");
+        assert!(text.contains("ARGS --disable-sigusr1 /k/gnomon.js identity status"), "{text}");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     /// A private scratch "checkout": pkg/dist/cli/gnomon.js + package.json, and a fake node.
