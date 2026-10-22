@@ -85,7 +85,7 @@ if (argv[0] === 'daemon') {
     },
   );
 } else if (argv[0] === 'loop') {
-  // 8.0:loops (#loop-registry): `gnomon loop list|show|trust|untrust|trust-status` (loop-cli.ts)
+  // 8.0:loops (#loop-registry, #loop-runner): `gnomon loop list|show|trust|untrust|trust-status|run|pause [--all]|resume|runs|logs` (loop-cli.ts)
   runLoopCommand(argv.slice(1), { stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;

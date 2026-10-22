@@ -20,7 +20,7 @@
  *   - **delete{loopId, scope, repo | repoKey}.** Writes `loop.deleted{…, by}` (trust revoked; this content hash
  *     stays deleted). A personal loop's file is removed too (the kernel's own dir); a repo loop's files are the
  *     human's and stay.
- *   - pause, resume and run land with the runner (build step 5): refused not-implemented here.
+ *   - pause, resume and run are #loop-runner's (runner.ts; wire.ts routes them there).
  *
  * Every row is a kernel row; the registry folds it back from the log (LL6).
  */
@@ -57,6 +57,8 @@ export interface LoopTrustOptions {
   broker: { raise(input: RaiseInput): Promise<CardV1>; card?(cardId: string): CardV1 | undefined };
   /** append a kernel row (as the kernel principal) */
   append: (kind: string, payload: Record<string, unknown>, ids: { connId: string }) => Promise<void>;
+  /** #loop-runner: an untrust or delete stops the loop's run in flight before its next step */
+  onRevoke?: (key: string, reason: 'untrusted') => void;
   clock?: () => number;
 }
 
@@ -153,11 +155,44 @@ export function diffLines(a: readonly string[], b: readonly string[]): string[] 
 
 // ── The request handler ────────────────────────────────────────────────────────
 
-interface Target {
+export interface LoopTarget {
   loopId: string;
   scope: LoopScopeName;
   repoKey: string | undefined;
   contentHash: string | undefined;
+}
+
+export function parseLoopTarget(registry: LoopRegistry, kind: string, payload: unknown, extraKeys: readonly string[] = []): LoopTarget {
+  const shape = `${kind} takes {loopId, scope, repo | repoKey${extraKeys.length ? `, ${extraKeys.join(', ')}` : ''}}`;
+  if (!isObj(payload)) throw bad(shape);
+  const allowed = ['loopId', 'scope', 'repo', 'repoKey', ...extraKeys];
+  const extra = Object.keys(payload).filter((k) => !allowed.includes(k));
+  if (extra.length) throw bad(`${shape} (unknown: ${extra.slice(0, 4).join(', ')})`);
+  const { loopId, scope, repo, repoKey, contentHash } = payload;
+  if (typeof loopId !== 'string' || !KEBAB.test(loopId) || loopId.length > 64) throw bad('loopId is a kebab-case loop id', { field: 'loopId' });
+  if (scope !== 'repo' && scope !== 'personal') throw bad("scope is 'repo' or 'personal'", { field: 'scope' });
+  let key: string | undefined;
+  if (repoKey !== undefined) {
+    if (typeof repoKey !== 'string' || !REPO_KEY.test(repoKey)) throw bad('repoKey is sha256:<64 hex>', { field: 'repoKey' });
+    key = repoKey;
+  }
+  if (repo !== undefined) {
+    if (typeof repo !== 'string' || !path.isAbsolute(repo) || repo.length > 4096 || repo.includes('\u0000')) throw bad('repo is an absolute path', { field: 'repo' });
+    // a human naming a repo makes it known (the registry scans it from now on)
+    const k = scope === 'repo' ? registry.addRepo(repoRootOf(repo)) : (() => {
+      try {
+        return repoKeyOf([fs.realpathSync.native(repoRootOf(repo))]);
+      } catch {
+        return null;
+      }
+    })();
+    if (!k) throw new RpcRefusal('NOT_FOUND', 'not-found', `no repo at ${repo}`);
+    if (key !== undefined && key !== k) throw bad('repo and repoKey name different repos');
+    key = k;
+  }
+  if (scope === 'repo' && key === undefined) throw bad('a repo loop names its repo (repo or repoKey)', { field: 'repo' });
+  if (contentHash !== undefined && (typeof contentHash !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(contentHash))) throw bad('contentHash is sha256:<64 hex>', { field: 'contentHash' });
+  return { loopId, scope, repoKey: key, contentHash: contentHash as string | undefined };
 }
 
 export class LoopTrust {
@@ -174,7 +209,8 @@ export class LoopTrust {
       throw new RpcRefusal('FORBIDDEN', 'matrix', `${kind} is the human's, on a gui or device connection`);
     }
     if (kind === 'request.loop.pause' || kind === 'request.loop.resume' || kind === 'request.loop.run') {
-      throw new RpcRefusal('ENGINE', 'not-implemented', `${kind} lands with the loop runner (build step 5)`, { verb: kind, milestone: 'loops-step-5' });
+      // wire.ts routes these to #loop-runner; reaching here means no runner is wired
+      throw new RpcRefusal('ENGINE', 'not-implemented', `${kind} is served by the loop runner, which is not wired`, { verb: kind });
     }
     if (!LOOP_REQUEST_KINDS.includes(kind)) throw bad(`unknown loop request ${kind.slice(0, 64)}`);
     const t = this.#target(kind, payload);
@@ -183,47 +219,18 @@ export class LoopTrust {
     return this.#delete(asker, t);
   }
 
-  #target(kind: string, payload: unknown): Target {
-    const shape = `${kind} takes {loopId, scope, repo | repoKey${kind === 'request.loop.trust' ? ', contentHash' : ''}}`;
-    if (!isObj(payload)) throw bad(shape);
-    const allowed = ['loopId', 'scope', 'repo', 'repoKey', ...(kind === 'request.loop.trust' ? ['contentHash'] : [])];
-    const extra = Object.keys(payload).filter((k) => !allowed.includes(k));
-    if (extra.length) throw bad(`${shape} (unknown: ${extra.slice(0, 4).join(', ')})`);
-    const { loopId, scope, repo, repoKey, contentHash } = payload;
-    if (typeof loopId !== 'string' || !KEBAB.test(loopId) || loopId.length > 64) throw bad('loopId is a kebab-case loop id', { field: 'loopId' });
-    if (scope !== 'repo' && scope !== 'personal') throw bad("scope is 'repo' or 'personal'", { field: 'scope' });
-    let key: string | undefined;
-    if (repoKey !== undefined) {
-      if (typeof repoKey !== 'string' || !REPO_KEY.test(repoKey)) throw bad('repoKey is sha256:<64 hex>', { field: 'repoKey' });
-      key = repoKey;
-    }
-    if (repo !== undefined) {
-      if (typeof repo !== 'string' || !path.isAbsolute(repo) || repo.length > 4096 || repo.includes('\u0000')) throw bad('repo is an absolute path', { field: 'repo' });
-      // a human naming a repo makes it known (the registry scans it from now on)
-      const k = scope === 'repo' ? this.#o.registry.addRepo(repoRootOf(repo)) : (() => {
-        try {
-          return repoKeyOf([fs.realpathSync.native(repoRootOf(repo))]);
-        } catch {
-          return null;
-        }
-      })();
-      if (!k) throw new RpcRefusal('NOT_FOUND', 'not-found', `no repo at ${repo}`);
-      if (key !== undefined && key !== k) throw bad('repo and repoKey name different repos');
-      key = k;
-    }
-    if (scope === 'repo' && key === undefined) throw bad('a repo loop names its repo (repo or repoKey)', { field: 'repo' });
-    if (contentHash !== undefined && (typeof contentHash !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(contentHash))) throw bad('contentHash is sha256:<64 hex>', { field: 'contentHash' });
-    return { loopId, scope, repoKey: key, contentHash: contentHash as string | undefined };
+  #target(kind: string, payload: unknown): LoopTarget {
+    return parseLoopTarget(this.#o.registry, kind, payload, kind === 'request.loop.trust' ? ['contentHash'] : []);
   }
 
-  #entry(t: Target): LoopEntry {
+  #entry(t: LoopTarget): LoopEntry {
     this.#o.registry.scan();
     const e = this.#o.registry.find(t.loopId, t.scope, t.repoKey);
     if (!e) throw new RpcRefusal('NOT_FOUND', 'not-found', `no ${t.scope} loop ${t.loopId}${t.scope === 'repo' ? ' in that repo (is its .loop.json compiled? paradigm loop validate)' : ''}`);
     return e;
   }
 
-  async #trust(asker: LoopAsker, t: Target): Promise<unknown> {
+  async #trust(asker: LoopAsker, t: LoopTarget): Promise<unknown> {
     const e = this.#entry(t);
     if (!e.compiled || !e.hash) throw bad(`loop ${t.loopId} is refused: ${e.errors.map((x) => `${x.code}: ${x.message}`).slice(0, 3).join('; ')}`, { field: 'loopId' });
     const h = e.hash;
@@ -340,20 +347,22 @@ export class LoopTrust {
     }
   }
 
-  async #untrust(asker: LoopAsker, t: Target): Promise<unknown> {
+  async #untrust(asker: LoopAsker, t: LoopTarget): Promise<unknown> {
     const key = this.#keyOf(t);
     const trusted = this.#o.registry.trustOf(key);
     if (!trusted) return { untrusted: false, changed: false };
     const [, repoKey] = key.split('/');
     await this.#o.append('loop.untrusted', { loopId: t.loopId, scope: t.scope, repoKey: repoKey!, contentHash: trusted.contentHash, by: asker.principal! }, { connId: asker.connId });
+    this.#o.onRevoke?.(key, 'untrusted');
     return { untrusted: true, changed: true, contentHash: trusted.contentHash };
   }
 
-  async #delete(asker: LoopAsker, t: Target): Promise<unknown> {
+  async #delete(asker: LoopAsker, t: LoopTarget): Promise<unknown> {
     const key = this.#keyOf(t);
     const e = this.#o.registry.entry(key);
     const [, repoKey] = key.split('/');
     await this.#o.append('loop.deleted', { loopId: t.loopId, scope: t.scope, repoKey: repoKey!, ...(e?.hash ? { contentHash: e.hash.contentHash } : {}), by: asker.principal! }, { connId: asker.connId });
+    this.#o.onRevoke?.(key, 'untrusted');
     let removedFile = false;
     if (t.scope === 'personal' && e && path.dirname(e.file) === this.#o.registry.personalDir) {
       try {
@@ -370,7 +379,7 @@ export class LoopTrust {
   }
 
   /** The loop's key: from the scanned entry when present, else from the request (a gone file can still be untrusted). */
-  #keyOf(t: Target): string {
+  #keyOf(t: LoopTarget): string {
     this.#o.registry.scan();
     const e = this.#o.registry.find(t.loopId, t.scope, t.repoKey);
     if (e) return e.key;

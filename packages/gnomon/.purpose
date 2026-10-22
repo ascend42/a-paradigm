@@ -3434,9 +3434,11 @@ components:
       effect appends it as a kernel row with rootSig. request.loop.untrust is a
       tightening (no presence, loop.untrusted{by}); request.loop.delete writes
       loop.deleted (a personal file is removed; repo files stay);
-      pause/resume/run refuse not-implemented (step 5). Wiring: one wireLoops()
+      pause/resume/run are #loop-runner's (wire.ts routes them). Wiring: one wireLoops()
       in daemon.ts, one request.loop.* block in dispatch.ts, status.loops for
-      the human. CLI: gnomon loop list|show|trust|untrust|trust-status.
+      the human. CLI: gnomon loop list|show|trust|untrust|trust-status
+      (run|pause|resume|runs|logs are #loop-runner's). trust.ts exports
+      parseLoopTarget, the one request.loop.* target parser.
     path: src/kernel/loops/registry.ts
     type: module
     tags: [gnomon, loops, paradigm-8, security]
@@ -3496,7 +3498,9 @@ components:
       generic api_key/secret/token/password assignments), labelled private and
       sensitive, envKeys names only. The run dir is removed after pass/fail,
       kept on error with a retention note; sweepCheckCopies removes kept dirs
-      past the window. Falsifiers: G-SBX-07, G-SBX-04..06 and G-SEC-02 against
+      past the window. CheckExecInput.abort (#loop-runner's pause and kill
+      switch) SIGKILLs the process group at once (then the setsid sweep): the
+      check is error `killed`. Falsifiers: G-SBX-07, G-SBX-04..06 and G-SEC-02 against
       this profile (test/loop-check-sandbox.test.ts, darwin); parsers,
       scanner, env, registry and copy everywhere (test/loop-check.test.ts).
     path: src/kernel/loops/check-exec.ts
@@ -3512,6 +3516,84 @@ components:
       - src/kernel/loops/shebang.ts
       - src/kernel/sandbox/loop-check.ts
       - src/platform/darwin/loop-check-sbpl.ts
+
+  loop-runner:
+    description: >-
+      #loop-runner (docs/specs/gnomon-loops.md §2 graph semantics, §3.3 kill
+      switch and resume classes, §3.5 budgets, §4 rows, restart, concurrency;
+      build plan step 5, LP3) in src/kernel/loops/{runner,ledger}.ts, wired
+      only through kernel/loops/wire.ts. Walks a TRUSTED loop's compiled
+      graph from `start` (registry.verify + canRun before the run and every
+      node; a hash, closure, trust or pause change ends the run before its
+      next node). check nodes run through check-exec runCheck with argv0 and
+      its interpreter pinned from the trusted hash and the timeout cut to the
+      run's remaining budget; notify `as: toast` writes loop.notified{as:
+      toast, text} (kernel-field template: loop.id, run.id, round,
+      failed.node, last.node, last.outcome; unknown fields render ?) and
+      hands the toast to the optional GUI port; notify `as: card` raises a
+      loop-choice card (continue/stop are the edge keys; no answer by the TTL
+      takes `timeout`); call nodes check registry.resolveCall (trusted pin,
+      depth ≤ 3) and run the callee as a child run whose meter is chained to
+      the caller's (goal → pass, budget → unsure, else fail); model nodes
+      are `unavailable` until step 8; act (model role act) and write
+      (effect: write) nodes are refused at run start until step 10; effective
+      autonomy = the loop's until step 9. Terminals @goal/@stop/@pause (a
+      missing edge is @stop; @pause writes a kernel loop.paused{reason:
+      timeout|unavailable|node-exit}); exit.maxVisits/maxFailStreak end the
+      run node-exit. Budgets (LL3) checked before every step: run.rounds (a
+      round closes when the walk revisits a node), run.wallMin,
+      run.computeSec, day.runs and day.computeSec per loop, global dayRuns
+      and dayComputeSec (LOOP_GLOBAL_CAPS); absent fields are the global
+      defaults (effectiveBudgets). Rows (kernel principal): loop.run.started
+      {runId, loopId, scope, repoKey, contentHash, trigger, budgets,
+      parentRunId?}, loop.node{runId, nodeId, type, visit, round, verdict,
+      edge, next, durationMs, evidenceRef, evidence (sensitive by the kind's
+      label), effectiveAutonomy}, loop.round, loop.notified, loop.run.ended
+      {reason, terminal?, rounds, computeMs}. The ledger (ledger.ts) folds
+      them back from the log (LL6): open runs, recent runs, per-day counts
+      from chain time; replayLoopRuns reproduces every edge and `gnomon
+      replay` (log/replay.ts) folds it into projection.loops with a
+      loop-edge-mismatch divergence (G-LOOP-17). Restart: recover() at boot
+      closes every open run daemon-restart, nothing resumes mid-step
+      (G-LOOP-14). Concurrency: one run per loop (a trigger during a run sets
+      ONE rerun flag), caps.repo (2) and caps.global per repo and overall,
+      more queue FIFO. Requests (human, gui or device): request.loop.run,
+      request.loop.pause (a tightening: loop.paused{human}, the run aborted),
+      request.loop.pause{all:true} (the kill switch: every run aborted, check
+      process groups killed, one loop.paused{kill-switch} per trusted loop,
+      no presence), request.loop.resume (after a human pause at once; after a
+      kernel pause a hand-only loop-choice card whose continue, with fresh
+      presence, writes loop.resumed{cardId}; content or closure changes need
+      a new trust; Aegis M3). status.loops adds running, queued, caps and
+      recent runs. CLI: gnomon loop run|pause [--all]|resume|runs|logs.
+      Aegis step-5 fixes: the ledger's per-day, per-key counters are their
+      own fold (record eviction never touches them) and a callee's compute
+      is charged to the root caller's key (loop.run.started.rootKey), whose
+      day.computeSec gates the chain; card nodes: timeout → @pause and stop
+      → a terminal (schema CARD_EDGE and the runner), a card that cannot be
+      raised ends the run @stop; the kill switch sets an in-memory flag and
+      holds every paused key synchronously (start refuses until resumed); a
+      run-budget stop writes loop.paused{budget} and drops the rerun flag;
+      untrust and delete stop the run (trust.ts onRevoke); the per-node
+      trust gate walks the caller chain; recover() skips live run ids; daemon
+      exit aborts runs (no check outlives the kernel). The daemon pins the
+      paradigm CLI for builtins once (wire.ts paradigmCliResolver: Node
+      resolution of @a-company/paradigm from Gnomon, dist digest); not found,
+      builtins fail closed.
+    path: src/kernel/loops/runner.ts
+    type: module
+    tags: [gnomon, loops, paradigm-8, security]
+    gates: [^loop-trusted]
+    flows: [$loop-run]
+    signals: []
+    tests:
+      - test/loop-runner.test.ts
+      - test/loop-runner-darwin.test.ts
+    anchors:
+      - src/kernel/loops/runner.ts
+      - src/kernel/loops/ledger.ts
+      - src/kernel/loops/wire.ts
+      - src/cli/loop-cli.ts
 
   trace-capture:
     description: >-

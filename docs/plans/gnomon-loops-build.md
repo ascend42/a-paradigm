@@ -65,6 +65,15 @@ Branch `feat/gnomon-loops` (worktree `a-paradigm-loops`), cut from `feat/gnomon`
 - **Residual (8.0):** the `node_modules` dependencies of checks are not pinned, beyond the lockfile in the config closure. 8.1 either pins them or ships the builtins inside Gnomon.
 - `git.clean` cannot judge from a copy with no `.git`, so it returns `error` until it runs kernel-side.
 
+## Notes from step 5 (LP3 runner core)
+
+- **Payload fields beyond the reservation** (opaque; document at the next contract move): `loop.run.started` adds `scope`, `repoKey`, `budgets`, `autonomy`, `parentRunId`; `loop.node` adds `loopId`, `type`, `round`, `edge`, `next`, `durationMs`, `detail`, `choice`, `cardId`, `evidence`, `calleeRunId`, `calleeComputeMs`; `loop.run.ended` adds `scope`, `repoKey`, `terminal`, `detail`, `rounds`, `computeMs`; `loop.notified` adds `text`; `loop.paused` from the runner adds `runId`; `loop.resumed` adds `scope`, `repoKey`, `reason`. `edge` + `next` + `terminal` are what `gnomon replay` needs (G-LOOP-17).
+- **`@pause` reasons** reuse LOOP_PAUSE_REASONS: a `timeout` edge pauses `timeout`, an `unavailable` verdict `unavailable`, any other `@pause` edge `node-exit`. All are kernel pauses: resuming raises a hand-only `loop-choice` card (Aegis M3); no new card kind.
+- **Kill switch** pauses every TRUSTED loop (untrusted ones cannot run anyway) plus every running one.
+- **Aegis review (approve-with-fixes, applied):** day counters independent of run-record eviction; callee compute charged to the root caller (`rootKey`); card `timeout` → `@pause` and `stop` → a terminal (validator `CARD_EDGE` + runner), a card that cannot be raised ends `@stop`; the kill switch flag is synchronous and holds every key until resumed; a run-budget stop pauses `budget` and drops the rerun; untrust/delete stop the run; the trust gate walks the caller chain; recover() skips live run ids.
+- **Builtins:** the daemon pins the paradigm CLI once (`paradigmCliResolver`: Node resolution of `@a-company/paradigm` from Gnomon, its dist digest). The signed app alone has no paradigm install, so builtins fail closed there; pinning at trust (on the card) is still the better design.
+- **Open:** the GUI has no handler for `loop.notified` yet (step 13; the kernel writes the row and calls an optional `toast` port that daemon.ts does not pass).
+
 ## Merge rules with the Windows work (feat/gnomon)
 
 - Merge `feat/gnomon` into this branch regularly, never the other way until both are done.

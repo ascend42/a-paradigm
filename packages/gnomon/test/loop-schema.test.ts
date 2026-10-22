@@ -258,6 +258,15 @@ describe('#loop-schema: the rule table', () => {
     expect(r.errors).toEqual([]);
   });
 
+  it('a card node: timeout goes to @pause and stop to a terminal, never to a node (Aegis step 5 #3)', () => {
+    const card = (on: Record<string, string>) => ({ schema: 'loop:v2', id: 'c', start: 'a', nodes: [{ id: 'a', type: 'check', run: ['bin/check'], on: { pass: 'q', fail: 'q' } }, { id: 'q', type: 'notify', as: 'card', choices: ['continue', 'stop'], on }] });
+    expect(codes(card({ continue: 'a', stop: '@stop', timeout: '@pause' }))).toEqual([]);
+    expect(codes(card({ continue: 'a', stop: '@pause' }))).toEqual([]);
+    expect(issue(card({ continue: 'a', stop: '@stop', timeout: 'a' }), 'CARD_EDGE')?.path).toBe('nodes[1].on.timeout');
+    expect(issue(card({ continue: 'a', stop: 'a', timeout: '@pause' }), 'CARD_EDGE')?.path).toBe('nodes[1].on.stop');
+    expect(codes(card({ any: 'a' })).filter((c) => c === 'CARD_EDGE')).toHaveLength(2);
+  });
+
   it('a personal loop without repo is refused; a relative repo is refused', () => {
     expect(issue(MINIMAL, 'REQUIRED', { scope: 'personal' })?.path).toBe('repo');
     expect(issue(mut(MINIMAL, (d) => { d.repo = 'code/app'; }), 'BAD_PATH', { scope: 'personal' })?.path).toBe('repo');

@@ -14,6 +14,14 @@
  *                 does not wait for it)
  *   untrust <id>  `request.loop.untrust`: a tightening, applied at once with no presence
  *   trust-status  who trusted (or revoked, or deleted) which hash and when
+ *   run <id>      `request.loop.run` (#loop-runner): a manual run of a trusted loop; prints the runId (or that a
+ *                 run in flight will rerun once, or that the run waits for a free slot)
+ *   pause <id>    `request.loop.pause`: a tightening, no presence; a run in flight stops before its next step
+ *   pause --all   the kill switch, `request.loop.pause{all:true}`: every run is killed, every trusted loop paused
+ *   resume <id>   `request.loop.resume`: after your own pause at once; after a kernel pause (kill switch, budget,
+ *                 node exit, timeout) it raises a loop-choice card you continue with Touch ID (Aegis M3)
+ *   runs <id>     the loop's recent runs (status.loops.runs): reason, rounds, compute, nodes visited
+ *   logs <runId>  one run's node visits: verdict, the edge taken and where it went, duration, detail
  *
  * Output: readout helpers only.
  */
@@ -34,6 +42,7 @@ export const LOOP_EXIT_REFUSED = 1;
 export const LOOP_EXIT_USAGE = 64;
 
 export const LOOP_USAGE = `usage: gnomon loop list | show <id> | trust <id> | untrust <id> | trust-status
+                   | run <id> | pause <id> | pause --all | resume <id> | runs <id> | logs <runId>
                    [--personal] [--repo <abs path>] [--all] [--home <abs>] [--json]
 
   Loops are recurring checks and fix loops for your flows. Nothing runs until you
@@ -45,13 +54,58 @@ export const LOOP_USAGE = `usage: gnomon loop list | show <id> | trust <id> | un
     trust <id>    raise the trust card; allow it in Gnomon with Touch ID
     untrust <id>  revoke trust now (no Touch ID: it only tightens)
     trust-status  who trusted which version, and when
+    run <id>      run a trusted loop now
+    pause <id>    pause a loop (a run in flight stops before its next step)
+    pause --all   the kill switch: stop every run and pause every loop
+    resume <id>   resume; after a kernel pause, allow it in Gnomon with Touch ID
+    runs <id>     a loop's recent runs
+    logs <runId>  one run's node visits and the edges it took
 
   A repo loop is found in the current folder's repo (or --repo); --personal names
   a loop in ~/.gnomon/loops.
 `;
 
-type Verb = 'list' | 'show' | 'trust' | 'untrust' | 'trust-status';
-const VERBS: readonly Verb[] = ['list', 'show', 'trust', 'untrust', 'trust-status'];
+type Verb = 'list' | 'show' | 'trust' | 'untrust' | 'trust-status' | 'run' | 'pause' | 'resume' | 'runs' | 'logs';
+const VERBS: readonly Verb[] = ['list', 'show', 'trust', 'untrust', 'trust-status', 'run', 'pause', 'resume', 'runs', 'logs'];
+const ID_VERBS: readonly string[] = ['show', 'trust', 'untrust', 'run', 'pause', 'resume', 'runs', 'logs'];
+
+/** A run as status.loops.runs carries it (ledger.ts LoopRunRecord). */
+export interface LoopRunView {
+  runId: string;
+  loopId: string;
+  key?: string;
+  repoKey?: string;
+  scope?: string;
+  trigger?: unknown;
+  parentRunId?: string;
+  startedAt?: string;
+  endedAt?: string;
+  reason?: string;
+  rounds: number;
+  computeMs: number;
+  notified: number;
+  nodes: Array<{ nodeId: string; type?: string; visit: number; round?: number; verdict: string; edge?: string; next?: string | null; durationMs?: number; detail?: string; choice?: string }>;
+}
+
+/** `gnomon loop runs` rows for one run. */
+export function runRows(r: LoopRunView): Array<[string, string]> {
+  const trig = r.trigger && typeof r.trigger === 'object' ? String((r.trigger as { type?: unknown }).type ?? '?') : '?';
+  return [
+    ['run', `${r.runId}${r.parentRunId ? ` (called by ${r.parentRunId})` : ''}`],
+    ['loop', `${r.scope ?? '?'}/${r.loopId}`],
+    ['trigger', trig],
+    ['started', r.startedAt ?? '—'],
+    ['ended', r.reason ? `${r.reason}${r.endedAt ? ` at ${r.endedAt}` : ''}` : 'running'],
+    ['rounds', String(r.rounds)],
+    ['compute', `${(r.computeMs / 1000).toFixed(1)} s`],
+    ['nodes', r.nodes.map((n) => `${n.nodeId}:${n.verdict}`).join(' → ') || '—'],
+  ];
+}
+
+/** `gnomon loop logs` lines: one per node visit, the edge taken and where it went. */
+export function logLines(r: LoopRunView): string[] {
+  return r.nodes.map((n) => `#${n.visit} ${n.nodeId} (${n.type ?? '?'}${n.round !== undefined ? `, round ${n.round}` : ''}) ${n.verdict}${n.choice ? ` [${n.choice}]` : ''} --${n.edge ?? '?'}--> ${n.next ?? '(stopped)'}${n.durationMs ? ` ${n.durationMs} ms` : ''}${n.detail ? ` · ${n.detail}` : ''}`);
+}
 
 export async function runLoopCommand(argv: readonly string[], io: { stdout: Out; stderr: Out }, cwd: string = process.cwd()): Promise<number> {
   let verb: Verb | undefined;
@@ -84,11 +138,14 @@ export async function runLoopCommand(argv: readonly string[], io: { stdout: Out;
     } else if (!a.startsWith('-') && verb === undefined) {
       if (!(VERBS as readonly string[]).includes(a)) return usage(`unknown verb ${a}: one of ${VERBS.join(', ')}`);
       verb = a as Verb;
-    } else if (!a.startsWith('-') && id === undefined && (verb === 'show' || verb === 'trust' || verb === 'untrust')) id = a;
+    } else if (!a.startsWith('-') && id === undefined && verb !== undefined && ID_VERBS.includes(verb)) id = a;
     else return usage(`unknown argument ${a}`);
   }
-  if (verb === undefined) return usage('name a verb: list, show, trust, untrust or trust-status');
-  if ((verb === 'show' || verb === 'trust' || verb === 'untrust') && id === undefined) return usage(`gnomon loop ${verb} takes a loop id`);
+  if (verb === undefined) return usage(`name a verb: ${VERBS.join(', ')}`);
+  const killSwitch = verb === 'pause' && all;
+  if (killSwitch && id !== undefined) return usage('gnomon loop pause --all takes no loop id (it pauses every loop)');
+  if (ID_VERBS.includes(verb) && id === undefined && !killSwitch) return usage(`gnomon loop ${verb} takes a ${verb === 'logs' ? 'run id' : 'loop id'}`);
+  if (verb === 'logs' && !/^lr-[0-9a-z-]{1,60}$/.test(id!)) return usage('gnomon loop logs takes a run id (lr-…, from gnomon loop runs)');
   if (personal && repo !== undefined) return usage('--personal and --repo name different scopes: give one');
   home = path.resolve(home ?? resolveGnomonHome());
   const root = repoRootOf(repo ?? cwd);
@@ -122,20 +179,42 @@ export async function runLoopCommand(argv: readonly string[], io: { stdout: Out;
         }
         return (r.result ?? {}) as Record<string, unknown>;
       };
-      const status = async (): Promise<{ loops: LoopView[]; trustStatus: TrustEvent[]; waitingTrust: number } | null> => {
+      const status = async (): Promise<{ loops: LoopView[]; trustStatus: TrustEvent[]; waitingTrust: number; runs: LoopRunView[] } | null> => {
         const st = await call('status', {});
         if (!st) return null;
-        const l = st.loops as { loops?: LoopView[]; trustStatus?: TrustEvent[]; waitingTrust?: { n?: number } } | undefined;
+        const l = st.loops as { loops?: LoopView[]; trustStatus?: TrustEvent[]; waitingTrust?: { n?: number }; runs?: LoopRunView[] } | undefined;
         if (!l) {
           refused(io.stderr, 'ENGINE', 'not-implemented', 'this kernel reports no loops (an older gnomond?)', ['gnomon daemon status']);
           return null;
         }
-        return { loops: l.loops ?? [], trustStatus: l.trustStatus ?? [], waitingTrust: l.waitingTrust?.n ?? 0 };
+        return { loops: l.loops ?? [], trustStatus: l.trustStatus ?? [], waitingTrust: l.waitingTrust?.n ?? 0, runs: l.runs ?? [] };
       };
       const scope = personal ? 'personal' : 'repo';
       const mine = (v: LoopView): boolean => all || (personal ? v.scope === 'personal' : v.scope === 'repo' && samePath(v.repo, root));
+      if (killSwitch) {
+        const res = await call('log.append', { kind: 'request.loop.pause', payload: { all: true } });
+        if (!res) return LOOP_EXIT_REFUSED;
+        if (json) io.stdout.write(`${JSON.stringify(res)}\n`);
+        else heading(io.stdout, 'loops', `kill switch: ${String(res.stopped ?? 0)} run(s) stopped, ${String(res.paused ?? 0)} loop(s) paused (resuming each takes Touch ID)`);
+        return LOOP_EXIT_OK;
+      }
       const st = await status();
       if (!st) return LOOP_EXIT_REFUSED;
+      if (verb === 'logs') {
+        const r = st.runs.find((x) => x.runId === id);
+        if (!r) {
+          refused(io.stderr, 'NOT_FOUND', 'not-found', `no run ${id} in the kernel's recent runs`, ['gnomon loop runs <id>']);
+          return LOOP_EXIT_REFUSED;
+        }
+        if (json) {
+          io.stdout.write(`${JSON.stringify(r)}\n`);
+          return LOOP_EXIT_OK;
+        }
+        heading(io.stdout, 'loop run', `${r.runId}: ${r.reason ?? 'running'}`);
+        readout(io.stdout, runRows(r));
+        for (const l of logLines(r)) io.stdout.write(`  ${l}\n`);
+        return LOOP_EXIT_OK;
+      }
       const unseen = !personal && !all && !st.loops.some((v) => v.scope === 'repo' && samePath(v.repo, root)) && hasLoopsDir(root);
       const unseenNote = (): void => readout(io.stdout, [['note', `the kernel has not seen ${root} yet (it learns a repo from a session opened there or a trust request naming it): gnomon loop trust <id> raises the card anyway`]]);
       if (verb === 'list') {
@@ -163,6 +242,39 @@ export async function runLoopCommand(argv: readonly string[], io: { stdout: Out;
       if (!v && verb === 'show' && unseen) {
         unseenNote();
         return LOOP_EXIT_REFUSED;
+      }
+      if (verb === 'runs') {
+        const rows = st.runs.filter((r) => r.loopId === id && (!v || r.repoKey === undefined || r.repoKey === v.repoKey));
+        if (json) {
+          io.stdout.write(`${JSON.stringify(rows)}\n`);
+          return LOOP_EXIT_OK;
+        }
+        heading(io.stdout, 'loop runs', `${scope}/${id}: ${rows.length} recent run(s)`);
+        for (const r of rows) readout(io.stdout, runRows(r));
+        return LOOP_EXIT_OK;
+      }
+      if (verb === 'run' || verb === 'pause' || verb === 'resume') {
+        const payload = { loopId: id!, scope, ...(personal ? {} : { repo: root }) };
+        const res = await call('log.append', { kind: `request.loop.${verb}`, payload });
+        if (!res) return LOOP_EXIT_REFUSED;
+        if (json) {
+          io.stdout.write(`${JSON.stringify(res)}\n`);
+          return LOOP_EXIT_OK;
+        }
+        if (verb === 'run') {
+          if (res.coalesced === true) heading(io.stdout, 'loop', `${scope}/${id}: a run is in flight (${String(res.runId)}); it runs once more when it ends`);
+          else if (res.queued === true) heading(io.stdout, 'loop', `${scope}/${id}: queued (the repo or global run cap is full); it starts when a slot frees`);
+          else {
+            heading(io.stdout, 'loop', `${scope}/${id}: run started`);
+            readout(io.stdout, [['run', String(res.runId)], ['next', `gnomon loop logs ${String(res.runId)}`]]);
+          }
+        } else if (verb === 'pause') {
+          heading(io.stdout, 'loop', res.paused === true ? `${scope}/${id}: paused${res.stopped === true ? ' (its run stops before its next step)' : ''}` : `${scope}/${id}: was already paused`);
+        } else if (res.pending === true) {
+          heading(io.stdout, 'loop', `${scope}/${id}: resuming waits on your Touch ID (it was paused by the kernel: ${String(res.pausedFor)})`);
+          readout(io.stdout, [['card', String(res.cardId)], ['kind', 'loop-choice (continue needs Touch ID)']]);
+        } else heading(io.stdout, 'loop', res.resumed === true ? `${scope}/${id}: resumed` : `${scope}/${id}: not paused (${String(res.state ?? '?')})`);
+        return LOOP_EXIT_OK;
       }
       if (!v && verb !== 'untrust' && !(verb === 'trust' && unseen)) {
         refused(io.stderr, 'NOT_FOUND', 'not-found', `no ${scope} loop ${id}${personal ? '' : ` in ${root}`}`, ['gnomon loop list', 'paradigm loop validate (compiles .paradigm/loops/<id>.yaml)']);

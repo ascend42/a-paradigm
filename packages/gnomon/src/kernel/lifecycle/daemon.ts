@@ -82,7 +82,7 @@ import { DaemonStopCards, type DaemonStopReason } from '../broker/daemon-stop.js
 import { LOOSEN_TIMEOUT_MS, modeSourceOf, RunModeBook, RunModeControl } from '../broker/run-mode.js';
 import { StandingGrantBook, StandingGrants, standingSourceOf } from '../broker/standing-grant.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
-import { wireLoops } from '../loops/wire.js';
+import { paradigmCliResolver, wireLoops } from '../loops/wire.js';
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse, FUSE_RESTORE_KINDS, type FuseRow } from '../budget/fuse.js';
@@ -1214,7 +1214,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
   });
   // 8.0:loops (#loop-registry): the registry, trust cards and the human's request.loop.* (kernel/loops/wire.ts)
-  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority });
+  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver() });
   const dispatcherCommon = {
     voice,
     voiceClient: {

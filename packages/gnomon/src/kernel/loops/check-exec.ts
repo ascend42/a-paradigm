@@ -61,7 +61,7 @@ export const CHECK_RUN_ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** repo-relative paths never copied (the session profile's Warpline token denies, the repo's own Gnomon dir) */
 const NEVER_COPY = [/^\.gnomon(\/|$)/, /(^|\/)node_modules(\/|$)/, /^\.warpline\/keys(\/|$)/, /^\.warpline\/daemon-tokens\.jsonl$/, /^\.warpline\/daemon\/mcp-tokens\.json$/, /^\.warpline\/daemon\/mcp\.token$/, /(^|\/)\.git(\/|$)/];
 
-export type CheckErrorReason = 'sandbox-unavailable' | 'sandbox-refused' | 'copy-too-large' | 'copy-failed' | 'pin-mismatch' | 'spawn-failed' | 'timeout' | 'crash' | 'output-too-large' | 'unparseable' | 'builtin-error' | 'bad-input';
+export type CheckErrorReason = 'sandbox-unavailable' | 'sandbox-refused' | 'copy-too-large' | 'copy-failed' | 'pin-mismatch' | 'spawn-failed' | 'timeout' | 'crash' | 'output-too-large' | 'unparseable' | 'builtin-error' | 'bad-input' | 'killed';
 
 /** `paradigm loop builtin` exit codes: 0 pass, 1 fail, 2 the builtin could not judge (error) */
 export const BUILTIN_ERROR_EXIT = 2;
@@ -117,6 +117,11 @@ export interface CheckExecInput {
   platform?: string;
   probe?: MacosProbe;
   sip?: SipProbe;
+  /**
+   * #loop-runner's kill switch and pause (gnomon-loops.md §3.3): aborting kills the check's process group at once
+   * (SIGKILL, then the setsid sweep) and the check is `error` `killed`. Aborted before the spawn, nothing runs.
+   */
+  abort?: AbortSignal;
 }
 
 export interface CheckEvidence {
@@ -491,7 +496,7 @@ class TreeTracker {
   }
 }
 
-function runPlan(plan: ChildLaunchPlan, cwd: string, timeoutSec: number, platform: string): Promise<Spawned> {
+function runPlan(plan: ChildLaunchPlan, cwd: string, timeoutSec: number, platform: string, abort?: AbortSignal): Promise<Spawned & { killed: boolean }> {
   const pc = processControlFor(platform as NodeJS.Platform);
   return new Promise((resolve) => {
     const out: Buffer[] = [];
@@ -532,6 +537,14 @@ function runPlan(plan: ChildLaunchPlan, cwd: string, timeoutSec: number, platfor
       errLen = keep(err, errLen + b.length, CHECK_EVIDENCE_TAIL_BYTES * 2);
     });
     let killTimer: NodeJS.Timeout | null = null;
+    let killed = false;
+    const onAbort = (): void => {
+      if (exited) return;
+      killed = true;
+      polling = polling.then(() => tree.poll()).catch(() => undefined);
+      pc.signalGroup(pgid, 'SIGKILL');
+    };
+    abort?.addEventListener('abort', onAbort, { once: true });
     const timer = setTimeout(() => {
       timedOut = true;
       // list the tree BEFORE the kill: once the parent dies its setsid'd children are reparented
@@ -544,12 +557,13 @@ function runPlan(plan: ChildLaunchPlan, cwd: string, timeoutSec: number, platfor
       settled = true;
       clearTimeout(timer);
       clearInterval(poller);
+      abort?.removeEventListener('abort', onAbort);
       if (killTimer) clearTimeout(killTimer);
       // descendants that left the group (setsid) are swept by pid + start witness after the group kill
       void polling
         .then(() => tree.killAll())
         .catch(() => 0)
-        .then((escaped) => resolve({ exitCode, signal, timedOut, spawnError, stdout: Buffer.concat(out), stderr: Buffer.concat(err), stderrHead, outDropped, escaped: escaped ?? 0 }));
+        .then((escaped) => resolve({ exitCode, signal, timedOut, spawnError, stdout: Buffer.concat(out), stderr: Buffer.concat(err), stderrHead, outDropped, escaped: escaped ?? 0, killed }));
     };
     child.on('error', (e) => {
       spawnError = e.message;
@@ -676,9 +690,11 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
     throw err;
   }
 
-  const s = await runPlan(plan, copy.tree, n.timeoutSec, platform);
+  if (i.abort?.aborted) return done(fail('killed', 'the run was stopped (pause or kill switch) before the check started'));
+  const s = await runPlan(plan, copy.tree, n.timeoutSec, platform, i.abort);
   const base = { exitCode: s.exitCode, signal: s.signal, durationMs: Date.now() - t0, evidence: evidenceOf(s.stdout, s.stderr, s.outDropped), profileHash: plan.profileHash, envKeys, escapedKilled: s.escaped, copy: copyInfo(false) };
   if (s.spawnError) return done({ ...base, verdict: 'error', reason: 'spawn-failed', detail: s.spawnError });
+  if (s.killed) return done({ ...base, verdict: 'error', reason: 'killed', detail: 'the run was stopped (pause or kill switch): the check process group was killed' });
   if (s.timedOut) return done({ ...base, verdict: 'error', reason: 'timeout', detail: `the check ran past its ${n.timeoutSec}s timeout; its process group was killed` });
   if (/^sandbox-exec: /m.test(s.stderrHead)) return done({ ...base, verdict: 'error', reason: 'sandbox-refused', detail: scanSecrets(s.stderrHead.split('\n')[0]!.slice(0, 300)).text });
   if (s.signal !== null || s.exitCode === null) return done({ ...base, verdict: 'error', reason: 'crash', detail: `the check was killed by ${s.signal ?? 'an unknown signal'}` });

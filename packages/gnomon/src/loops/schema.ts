@@ -1030,6 +1030,16 @@ function validateNode(
       c.err(join(p, 'choices'), 'UNKNOWN_KEY', 'choices are for cards (as: card)');
     }
     validateEdges(c, n, p, keys, edges, id, 'notify');
+    if (as === 'card' && isObj(n.on)) {
+      // Aegis step 5 #3: an unanswered card pauses (a kernel pause the human resumes), and `stop` ends the run: the
+      // author cannot route either to a node (the expanded edge, any included, is checked)
+      const on = n.on as Record<string, unknown>;
+      const eff = (k: string): unknown => on[k] ?? on[ANY];
+      const t = eff('timeout');
+      if (t !== undefined && t !== '@pause') c.err(join(join(p, 'on'), 'timeout'), 'CARD_EDGE', 'a card\'s timeout goes to @pause (an unanswered card pauses the loop)');
+      const st = eff('stop');
+      if (Array.isArray(n.choices) && n.choices.includes('stop') && st !== undefined && st !== '@stop' && st !== '@pause') c.err(join(join(p, 'on'), 'stop'), 'CARD_EDGE', 'a card\'s stop goes to @stop or @pause (stop never continues the loop)');
+    }
     return;
   }
 

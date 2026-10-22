@@ -5,10 +5,20 @@
  * for the human's `request.loop.*`; everything else lives here). Builds the registry and the trust card handler,
  * seeds the fold from the kernel log (LOOP_FOLD_KINDS, kernel-signed rows only), keeps it current from every
  * committed row, and starts the watch and rescan timer. Returns the dispatcher's `requests.loops` port.
+ *
+ * #loop-runner (step 5): the run ledger is seeded from the log's LOOP_RUN_KINDS and kept current the same way; the
+ * runner serves `request.loop.run|pause|resume` (pause{all:true} is the kill switch), and at boot closes every
+ * started run with no end `daemon-restart` (G-LOOP-14). status.loops adds running, queued and recent runs.
  */
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import type { RaiseInput } from '../broker/broker.js';
+import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
+import * as path from 'node:path';
+import { pinParadigmCli, type CheckExecInput, type CheckResult, type FilePin } from './check-exec.js';
+import { LOOP_RUN_KINDS, LoopLedger } from './ledger.js';
 import { LOOP_FOLD_KINDS, LoopRegistry, type LoopRow } from './registry.js';
+import { LoopRunner, type LoopGlobalCaps, type LoopToast } from './runner.js';
 import { LoopTrust, type LoopAsker } from './trust.js';
 
 /** The slice of the kernel log the loops need. */
@@ -30,6 +40,13 @@ export interface WireLoopsOptions {
   /** tests: no fs watch, no timer */
   start?: boolean;
   rescanMs?: number;
+  /** #loop-runner seams: the check executor, the builtins' pinned paradigm CLI, the GUI toast, caps, clock */
+  check?: (i: CheckExecInput) => Promise<CheckResult>;
+  paradigmCli?: () => FilePin | null;
+  toast?: (t: LoopToast) => void;
+  caps?: Partial<LoopGlobalCaps>;
+  clock?: () => number;
+  platform?: string;
 }
 
 /** The dispatcher's port (socket/dispatch.ts HumanRequestPort.loops). */
@@ -41,8 +58,33 @@ export interface LoopsPort {
 export interface WiredLoops {
   registry: LoopRegistry;
   trust: LoopTrust;
+  ledger: LoopLedger;
+  runner: LoopRunner;
+  /** resolves once the boot sweep closed the runs a previous daemon left open */
+  recovered: Promise<number>;
   port: LoopsPort;
   close(): void;
+}
+
+/**
+ * The paradigm CLI loop builtins run through, pinned ONCE (the first builtin check after boot) and then fixed for the
+ * daemon's life: `@a-company/paradigm` as Node resolves it from this module (Gnomon ships as paradigm's dependency,
+ * so its install is found walking up), its `dist/index.js` and a digest of the whole dist dir (pinParadigmCli, the
+ * same pin check-exec verifies before every builtin). Not found (the signed app alone, no paradigm install): null,
+ * and builtin checks fail closed (`error`).
+ */
+export function paradigmCliResolver(resolve: () => string = () => createRequire(import.meta.url).resolve('@a-company/paradigm/package.json')): () => FilePin | null {
+  let pin: FilePin | null | undefined;
+  return () => {
+    if (pin !== undefined) return pin;
+    try {
+      const entry = path.join(path.dirname(resolve()), 'dist', 'index.js');
+      pin = fs.statSync(entry).isFile() ? pinParadigmCli(entry) : null;
+    } catch {
+      pin = null;
+    }
+    return pin;
+  };
 }
 
 export function wireLoops(o: WireLoopsOptions): WiredLoops {
@@ -57,22 +99,61 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
     ...(o.diag ? { diag: o.diag } : {}),
     ...(o.rescanMs !== undefined ? { rescanMs: o.rescanMs } : {}),
   });
+  const ledger = new LoopLedger({ kernelPrincipal: o.kernelPrincipal, isKernelKey: (k) => o.log.isKernelKey(k) });
+  const rowOf = (e: { kind: string; principal: string; keyId?: string; at?: string; payload?: unknown }): LoopRow => ({ kind: e.kind, principal: e.principal, ...(typeof e.keyId === 'string' ? { keyId: e.keyId } : {}), ...(e.at ? { at: e.at } : {}), payload: e.payload });
   try {
     const seed: LoopRow[] = [];
-    for (const v of o.log.read({ reader: { class: 'human' }, kinds: [...LOOP_FOLD_KINDS] })) {
-      if (v.view === 'full' && v.event) seed.push({ kind: v.event.kind, principal: v.event.principal, ...(typeof v.event.keyId === 'string' ? { keyId: v.event.keyId } : {}), ...(v.event.at ? { at: v.event.at } : {}), payload: v.event.payload });
-    }
+    for (const v of o.log.read({ reader: { class: 'human' }, kinds: [...LOOP_FOLD_KINDS] })) if (v.view === 'full' && v.event) seed.push(rowOf(v.event));
     registry.seed(seed);
   } catch {
     /* an unreadable history trusts nothing: every loop shows untrusted (fail closed) */
   }
-  o.log.onCommit((e) => registry.observe({ kind: e.kind, principal: e.principal, ...(typeof e.keyId === 'string' ? { keyId: e.keyId } : {}), ...(e.at ? { at: e.at } : {}), payload: e.payload }));
-  const trust = new LoopTrust({ home: o.home, registry, broker: o.broker, append: (kind, payload, ids) => append(kind, payload, ids.connId) });
-  if (o.start !== false) registry.start();
+  try {
+    const runs: LoopRow[] = [];
+    for (const v of o.log.read({ reader: { class: 'human' }, kinds: [...LOOP_RUN_KINDS] })) if (v.view === 'full' && v.event) runs.push(rowOf(v.event));
+    ledger.seed(runs);
+  } catch {
+    /* an unreadable run history: no open run to close, day counts start at zero (the global caps still bound) */
+  }
+  o.log.onCommit((e) => {
+    const r = rowOf(e);
+    registry.observe(r);
+    ledger.observe(r);
+  });
+  let stopRun: (key: string, reason: string) => void = () => undefined;
+  const trust = new LoopTrust({ home: o.home, registry, broker: o.broker, append: (kind, payload, ids) => append(kind, payload, ids.connId), onRevoke: (key, reason) => stopRun(key, reason) });
+  const runner = new LoopRunner({
+    home: o.home, kernelPrincipal: o.kernelPrincipal, registry, ledger, broker: o.broker,
+    append: (kind, payload, ids) => append(kind, payload, ids?.connId),
+    ...(o.check ? { check: o.check } : {}), ...(o.paradigmCli ? { paradigmCli: o.paradigmCli } : {}), ...(o.toast ? { toast: o.toast } : {}),
+    ...(o.caps ? { caps: o.caps } : {}), ...(o.clock ? { clock: o.clock } : {}), ...(o.platform ? { platform: o.platform } : {}), ...(o.diag ? { diag: o.diag } : {}),
+  });
+  stopRun = (key, reason) => void runner.stopRun(key, reason);
+  const recovered = runner.recover().catch((err: unknown) => {
+    o.diag?.('loops.recover-failed', { why: err instanceof Error ? err.message.slice(0, 200) : 'recover failed' });
+    return 0;
+  });
+  // daemon exit: no check process group outlives the kernel (the next boot closes the runs daemon-restart)
+  const onExit = (): void => runner.abortAll();
+  if (o.start !== false) {
+    registry.start();
+    process.once('exit', onExit);
+  }
+  const RUNNER_KINDS = new Set(['request.loop.run', 'request.loop.pause', 'request.loop.resume']);
   return {
     registry,
     trust,
-    port: { request: (asker, kind, payload) => trust.request(asker, kind, payload), status: () => registry.status() },
-    close: () => registry.close(),
+    ledger,
+    runner,
+    recovered,
+    port: {
+      request: (asker, kind, payload) => (RUNNER_KINDS.has(kind) ? runner.request(asker, kind, payload) : trust.request(asker, kind, payload)),
+      status: () => ({ ...registry.status(), ...runner.status() }),
+    },
+    close: () => {
+      process.removeListener('exit', onExit);
+      runner.abortAll();
+      registry.close();
+    },
   };
 }

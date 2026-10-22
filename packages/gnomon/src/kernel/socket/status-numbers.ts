@@ -78,6 +78,14 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   // TD-2026-10-21-514: the GUI's in-app mic key count (the voice client toggles the mic on a change)
   'voice.micToggleSeq': 'gauge',
   'voice.dictation.sendNows': 'gauge', // the voice app's send-now (⌃⌥Return) presses on this voice connection (a counter)
+  // 8.0:loops #loop-runner (status.loops): the configured caps, and each recent run's ledger
+  'loops.caps.*': 'limit', // runs at once per repo / overall, runs and compute seconds per day (LOOP_GLOBAL_CAPS)
+  'loops.runs[].rounds': 'gauge', // rounds the run walked (the whole set)
+  'loops.runs[].computeMs': 'duration', // check time the run spent, summed from its node rows
+  'loops.runs[].notified': 'gauge', // loop.notified rows of the run (a counter)
+  'loops.runs[].nodes[].visit': 'ordinal', // the node's visit number in the run (1-based)
+  'loops.runs[].nodes[].round': 'ordinal', // the round the visit was in (1-based)
+  'loops.runs[].nodes[].durationMs': 'duration', // the node's check time
 });
 
 export interface StatusNumberFinding {
