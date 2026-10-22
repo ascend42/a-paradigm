@@ -35,7 +35,8 @@ function tmpHome(): string {
   homes.push(h);
   return h;
 }
-const ABS = '/opt/node/bin/node';
+// An absolute command that passes checkMcpOverride on the host (on win32 only an .exe runs, Aegis S1 M2).
+const ABS = process.platform === 'win32' ? 'C:\\Program Files\\nodejs\\node.exe' : '/opt/node/bin/node';
 const KEY = Buffer.alloc(32, 7);
 
 describe('#mcp-passthrough: merge', () => {

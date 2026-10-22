@@ -192,7 +192,7 @@ describe('TD-2026-10-21-162 / Aegis M: every user-writable dir on the session PA
     }
   });
   it('sessionNodeDir is the dir of the REALPATH of the node binary; null for win32', () => {
-    expect(sessionNodeDir(process.execPath)).toBe(path.dirname(fs.realpathSync.native(process.execPath)));
+    if (POSIX) expect(sessionNodeDir(process.execPath)).toBe(path.dirname(fs.realpathSync.native(process.execPath)));
     expect(sessionNodeDir(process.execPath, { platform: 'win32' })).toBeNull();
   });
   it.runIf(POSIX)('~/.local/bin is a persistence path: write-denied in every session policy', () => {

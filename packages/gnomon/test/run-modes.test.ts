@@ -59,7 +59,7 @@ describe('run modes: gate-class path rule (§15.7) and auto-edits eligibility (p
   });
 
   it('Aegis H1/M3: a symlink anywhere below the root (dangling or not, final or parent) cards; a home-rooted session never auto-edits', () => {
-    const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-ae-sl-')));
+    const top = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-ae-sl-')));
     const root = path.join(top, 'repo');
     const link = (target: string, at: string, type?: 'dir' | 'file'): boolean => {
       try {
@@ -120,7 +120,7 @@ describe('run modes: gate-class path rule (§15.7) and auto-edits eligibility (p
   });
 
   it('autoEditPass: only Edit/Write/MultiEdit/NotebookEdit, inside the roots, not gate-class, no hidden characters', () => {
-    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-ae-')));
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-ae-')));
     try {
       fs.mkdirSync(path.join(root, 'src'));
       const ok = autoEditPass('Edit', { file_path: path.join(root, 'src', 'a.ts') }, [root], ['Edit a.ts'], 'linux');
@@ -313,7 +313,7 @@ describe('run modes: the control (request.mode.set, the book, the ceiling) — e
   });
 
   it('Aegis M3: a folder that is the user\'s home, above it, or / never loosens to auto-edits (open or request); tightening still works', async () => {
-    const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-home-')));
+    const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-home-')));
     try {
       const HKEY = repoKeyOf([home]);
       const r = controlRig({ userHome: home, sessions: [{ hsid: HSID_A, repoKey: HKEY, cwd: home }] });

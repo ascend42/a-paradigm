@@ -239,7 +239,8 @@ describe('G-LAW-01b no setting changes the meter or law 7', () => {
     expect(rows.at(-1)).toMatchObject({ signed: true, sessions: { path: ['/opt/tools/bin', '/usr/bin'] } });
     const long = `/${'a'.repeat(SESSION_PATH_MAX_ENTRY)}`;
     const many = Array.from({ length: SESSION_PATH_MAX_ENTRIES + 1 }, (_, i) => `/d${i}`);
-    for (const bad of [[], ['relative/bin'], [''], ['/a:/b'], ['/a\n'], [long], many, '/usr/bin', [1]]) {
+    const joined = [`/a${path.delimiter}/b`]; // the host PATH delimiter (':' POSIX, ';' win32)
+    for (const bad of [[], ['relative/bin'], [''], joined, ['/a\n'], [long], many, '/usr/bin', [1]]) {
       writeSignedConfig(home, root, { sessions: { path: bad } }, 2);
       expect(loadFuseConfig(home, root, emit).sessions.path, JSON.stringify(bad).slice(0, 60)).toBeNull();
       expect(rows.at(-1)).toMatchObject({ why: 'invalid', fallback: 'defaults' });
