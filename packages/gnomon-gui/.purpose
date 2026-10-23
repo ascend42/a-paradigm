@@ -1515,6 +1515,31 @@ components:
       sr-only "new: " / "was: " text (no aria-label on a list item).
       Tests: test/local-model.test.ts, test/root-rows.test.ts,
       test/loops-view.test.ts.
+  gui-mcp-servers:
+    description: >-
+      #gui-mcp-servers (T-2026-10-23-003): Settings › MCP servers ·
+      kernel-owned, after Local model. core/mcp-servers.ts (pure) paints
+      status.mcp: the first-party Paradigm MCP row (Turn off / Turn on, no
+      card), the human's user and plugin servers, and the focused session's
+      folder's local and repo .mcp.json servers; each readonly row shows a
+      mark (✓ on, ✕ the kernel's reason, ? changed), how it runs (command
+      and args, or transport and URL), env and header NAMES only, the
+      ~/.gnomon/loop-env names it takes, and the shell / fetch-at-launch
+      warnings. Keys `mcp:on-all`, `mcp:on-repo`, `mcp:off`, `mcp:fp-*`,
+      `mcp:decide` (data-lm-act, routed by ui/settings-sheet.ts to
+      ui/mcp-servers.ts McpServersController, never SETTINGS_RUNS); a repo
+      server never offers all repos; a server with a problem has no key;
+      Windows shows rows without keys. Enable sends request.mcp.enable and
+      shows the request row (card waiting, Decide in the stack); the card's
+      approval.decide / approval.expire row gives On / Not changed; disable
+      needs no card. The enable card is the ⊙ gnomon grant family
+      (render.ts gnomonFam for detail.action mcp.enable). Palette mcp.open
+      "MCP servers…". Tests: test/mcp-servers.test.ts.
+    path: src/core/mcp-servers.ts
+    type: module
+    tags: [gnomon, gui, settings, mcp, paradigm-8]
+    tests:
+      - test/mcp-servers.test.ts
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto

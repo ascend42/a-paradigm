@@ -44,6 +44,8 @@ export interface SettingsDeps {
   run: (id: string) => void;
   revoke: (grantId: string) => void;
   local?: LocalPress;
+  /** #gui-mcp-servers: a press on an `mcp:` key (ui/mcp-servers.ts) */
+  mcp?: { press(act: string, value: string | null, trusted: boolean): void };
 }
 
 /** Where focus goes after a Local model press: a field, a key, or the section's heading. */
@@ -283,6 +285,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     if (lm) {
       // the submit key presses through the form's submit (Enter in a field presses it too)
       if (lm.disabled || lm.type === 'submit') return;
+      if (lm.dataset.lmAct!.startsWith('mcp:')) return d.mcp?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
       return d.local?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
     }
     const b = t.closest('[data-settings-run]') as HTMLButtonElement | null;

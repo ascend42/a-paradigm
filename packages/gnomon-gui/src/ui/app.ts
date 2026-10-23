@@ -44,6 +44,8 @@ import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type Toast
 import type { ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { LocalModelController } from './local-model.js';
+import { McpServersController } from './mcp-servers.js';
+import { MCP_SECTION } from '../core/mcp-servers.js';
 import { changeForm, localCurrentOf, localStatusOf, requestLine, setupForm, LOCAL_SECTION } from '../core/local-model.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
@@ -1279,8 +1281,23 @@ const localModel = new LocalModelController({
   toast: (text, kind, open) => void toasts().show(text, { kind, tag: 'local model', ...(open ? { key: { label: 'Open settings', onPress: (e: MouseEvent) => e.isTrusted && settings.open(LOCAL_SECTION) } } : {}) }),
   card: (cardId) => localCardRequest(cardId),
 });
+// #gui-mcp-servers (T-2026-10-23-003): the MCP servers section's press path (ui/mcp-servers.ts)
+const mcpServers = new McpServersController({
+  call: (req) => (client ? client.call('log.append', req) : Promise.reject(new Error('not connected'))),
+  status: () => status,
+  hsid: () => focused,
+  now: () => Date.now(),
+  time: (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  refreshStatus: () => refreshStatus(),
+  repaint: () => settings.repaint(),
+  decide: (cardId) => {
+    settings.close();
+    focusCardGroup(cardId);
+  },
+});
 const settings = mountSettings(document, {
   local: localModel,
+  mcp: mcpServers,
   model: () =>
     settingsModel({
       theme,
@@ -1296,6 +1313,7 @@ const settings = mountSettings(document, {
       gui: GUI_CLIENT,
       unlock: unlockSeenOf(store.kernelFeed, session?.connId ?? null, kernelPrincipalOf(session?.principal)),
       local: { ui: localModel.ui(), loopsUsing: loopsUsingLocal() },
+      mcp: { ui: mcpServers.ui(), hsid: focused },
     }),
   run: (id) => run(id, true), // the sheet acts on trusted presses only (settings-sheet.ts)
   revoke: (grantId) => void revokeGrant(grantId),
@@ -1439,6 +1457,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         standingFeed.row(r); // F6: a live grant.standing.used row is a toast + a feed line
         loopRow(r); // #gui-loops: loop done toasts and a status re-read
         localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
+        mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
     } else if (p.end) void followLog(c, store).catch(() => undefined);
@@ -3144,6 +3163,7 @@ function run(id: string, trusted: boolean): void {
   else if (id === 'voice.mic.toggle') void micToggle(trusted);
   else if (id === 'settings.open') settings.open();
   else if (id === 'local.setup') settings.open(LOCAL_SECTION); // #gui-local-model: section-focused
+  else if (id === 'mcp.open') settings.open(MCP_SECTION); // #gui-mcp-servers: section-focused
   else if (id === 'mods.open') modsPanel.open();
   else if (id === 'loops.open') loopsView.open();
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);

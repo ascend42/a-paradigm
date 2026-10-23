@@ -1081,7 +1081,8 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
   // design-system card.family ⊙ gnomon (C3): a root configuration card about Gnomon itself (local.config)
-  const gnomonFam = v.rootRows?.action === 'local.config';
+  // #gui-mcp-servers: turning on one of the human's MCP servers (detail.action mcp.enable) is a root configuration card too
+  const gnomonFam = v.rootRows?.action === 'local.config' || v.rootRows?.action === 'mcp.enable';
   const tag0 = voiceTagOf(v.voice ?? null);
   const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
   // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title

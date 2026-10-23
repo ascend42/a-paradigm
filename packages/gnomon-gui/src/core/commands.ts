@@ -39,6 +39,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   // #gui-mods-panel: which mods are on, what else ships, add one from a folder (also in the Gnomon menu and the Workshop)
   // #gui-local-model: Settings at the Local model section (section-focused); the title follows status.local
   { id: 'local.setup', title: 'Set up local model…', keys: 'Settings · Local model' },
+  // #gui-mcp-servers (T-2026-10-23-003): Settings at the MCP servers section (section-focused)
+  { id: 'mcp.open', title: 'MCP servers…', keys: 'Settings · MCP servers' },
   { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
   // #gui-loops (gnomon-loops.md §6; Atelier 2026-10-22-gnomon-loops-ui): the Loops leaf and the kill switch
   { id: 'loops.open', title: 'Loops… (the Loops view: list, graph, keys)' },
