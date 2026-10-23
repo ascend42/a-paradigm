@@ -156,6 +156,8 @@ interface RepoState {
   root: string;
   gitDir: string;
   branch: string;
+  /** Aegis round 2 M3/M4: the branch's commit, read ONCE; it is what is scanned, shown and pushed (`<sha>:refs/heads/<branch>`) */
+  sha: string;
 }
 
 const real = (p: string): string => {
@@ -203,6 +205,9 @@ export class GitVerbs {
   }
 
   /** Run one kernel MCP tool call for a session. Never throws: every outcome is a VerbResult. */
+  /** Aegis round 2 M3: the shas this kernel pushed, by `<gitDir>\0<remote>\0<branch>` (the scan's own exclusion record) */
+  readonly #pushed = new Map<string, string>();
+
   /** Aegis L5: verb calls in flight per hsid */
   readonly #inflight = new Map<string, number>();
 
@@ -433,8 +438,9 @@ export class GitVerbs {
     const git = (this.#o.git ?? gitPath)();
     if (!git) return { refused: 'tool-missing', text: 'git is not installed where Gnomon looks for it.' };
     const v = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', gitDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}^{commit}`], { cwd: root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.read });
-    if (v.code !== 0) return { refused: 'no-branch', text: `Branch ${branch} has no commits yet: commit first.` };
-    return { root, gitDir, branch };
+    const sha = v.stdout.trim();
+    if (v.code !== 0 || !/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha)) return { refused: 'no-branch', text: `Branch ${branch} has no commits yet: commit first.` };
+    return { root, gitDir, branch, sha };
   }
 
   /** The URL git itself resolves for a push to `remote` (same env and flags as the push), parsed. */
@@ -471,7 +477,7 @@ export class GitVerbs {
     const rule = pushRuleInput(info);
     const ruleHash = inputHash(rule);
     // Aegis M5: the commits this push sends, scanned for secrets; a hit (or a diff too large to scan) always takes the card
-    const scan = await this.#scanPush(st, remote);
+    const scan = await this.#scanPush(s, hash, st, remote, info);
     // Aegis L3: a force push leases on the kernel-read remote-tracking sha (or on the remote having no such branch)
     const lease = force ? await this.#trackingSha(st, remote) : null;
     const b = this.#o.broker;
@@ -494,7 +500,7 @@ export class GitVerbs {
       }
     }
     if (!viaRule) {
-      const d = await this.#decide(s, pushCard({ root, branch: st.branch, remote, remoteInfo: info, force, warning, lease, secrets: scan.secrets, scanIncomplete: scan.incomplete }), 'gnomon_git_push', rule, ruleHash);
+      const d = await this.#decide(s, pushCard({ root, branch: st.branch, sha: st.sha, remote, remoteInfo: info, force, warning, lease, secrets: scan.secrets, scanIncomplete: scan.incomplete }), 'gnomon_git_push', rule, ruleHash);
       cardId = d.cardId ?? undefined;
       if (d.decision === 'none') return this.#refuse(s, verb, hash, 'no-approval-surface', 'No approval surface could take the card: not pushed.', { host: info.host });
       if (d.decision !== 'allow' && d.decision !== 'always') return this.#refuse(s, verb, hash, scan.secrets.length ? 'secret-in-push' : 'denied', scan.secrets.length ? 'The human did not approve pushing commits that look like they hold a secret.' : 'The human did not approve this push.', { host: info.host, ...(cardId ? { cardId } : {}) });
@@ -503,9 +509,24 @@ export class GitVerbs {
   }
 
   /** Aegis M5: added lines of `<branch> --not --remotes=<remote>` scanned with #loop-check's scanSecrets (kinds only, per file). */
-  async #scanPush(st: RepoState, remote: string): Promise<{ secrets: Array<{ file: string; kinds: string[] }>; incomplete: boolean }> {
+  /**
+   * Aegis round 2 M3: the exclusion set is never a ref the session can write (refs/remotes/*): the kernel's own record of
+   * the sha it last pushed for this (repo, remote, branch), else the remote's heads from `ls-remote` under the push env
+   * (a `lookup` row), kept only when the object exists here; with neither, the WHOLE branch history is scanned.
+   */
+  async #scanPush(s: VerbSession, hash: string, st: RepoState, remote: string, info: RemoteInfo): Promise<{ secrets: Array<{ file: string; kinds: string[] }>; incomplete: boolean }> {
     const git = (this.#o.git ?? gitPath)()!;
-    const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'log', '-p', '--no-color', '--no-ext-diff', '--no-textconv', '--format=', `refs/heads/${st.branch}`, '--not', `--remotes=${remote}`], { cwd: st.root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.push });
+    const local = { cwd: st.root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.read };
+    let not: string[] = [];
+    const mine = this.#pushed.get(`${st.gitDir}\0${remote}\0${st.branch}`);
+    if (mine) not = [mine];
+    else {
+      await this.#row(s, 'git.push', 'lookup', hash, { host: info.host });
+      const ls = await this.#exec()(git, [...PUSH_GIT_FLAGS, '--git-dir', st.gitDir, 'ls-remote', '--heads', '--', remote], { cwd: st.root, env: await this.#netEnv(path.dirname(git), st.gitDir), timeoutMs: VERB_TIMEOUTS.read });
+      const shas = ls.code === 0 ? [...new Set(ls.stdout.split('\n').map((l) => l.split('\t')[0]!.trim()).filter((x) => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(x)))] : [];
+      for (const x of shas.slice(0, 256)) if ((await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'cat-file', '-e', `${x}^{commit}`], local)).code === 0) not.push(x);
+    }
+    const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'log', '-p', '--no-color', '--no-ext-diff', '--no-textconv', '--format=', st.sha, ...(not.length ? ['--not', ...not] : [])], { ...local, timeoutMs: VERB_TIMEOUTS.push });
     const added = new Map<string, string>();
     let file: string | null = null;
     for (const line of r.stdout.split('\n')) {
@@ -530,15 +551,20 @@ export class GitVerbs {
     const st2 = await this.#repoState(p.st.root, branchArg ?? p.st.branch);
     if (isRefused(st2)) return this.#refuse(s, verb, hash, st2.refused, st2.text, ids);
     const info2 = await this.#resolveRemote(st2, p.remote);
-    if (isRefused(info2) || info2.url !== p.info.url || st2.branch !== p.st.branch) return this.#refuse(s, verb, hash, 'remote-changed', 'The remote or the branch changed after the card: not pushed. Ask again.', ids);
+    if (isRefused(info2) || info2.url !== p.info.url || st2.branch !== p.st.branch || st2.sha !== p.st.sha) return this.#refuse(s, verb, hash, 'remote-changed', 'The remote or the branch changed after the card: not pushed. Ask again.', ids);
     const git = (this.#o.git ?? gitPath)()!;
     const ref = `refs/heads/${p.st.branch}`;
-    const args = [...PUSH_GIT_FLAGS, '--git-dir', p.st.gitDir, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no', ...(p.upstream ? ['--set-upstream'] : []), ...(p.force ? [`--force-with-lease=${ref}:${p.lease ?? ''}`] : []), '--', p.remote, `${ref}:${ref}`];
+    // Aegis round 2 M3: the sha read before the card is what is pushed (never whatever the branch points to now)
+    const args = [...PUSH_GIT_FLAGS, '--git-dir', p.st.gitDir, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no', ...(p.force ? [`--force-with-lease=${ref}:${p.lease ?? ''}`] : []), '--', p.remote, `${p.st.sha}:${ref}`];
     const r = await this.#exec()(git, args, { cwd: p.st.root, env: await this.#netEnv(path.dirname(git), p.st.gitDir), timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git push ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git push to ${p.info.slug} failed: ${redactOutput(`${r.stderr}\n${r.stdout}`, 800)}`, { ...ids, exitCode: r.code });
+    this.#pushed.set(`${p.st.gitDir}\0${p.remote}\0${p.st.branch}`, p.st.sha);
+    if (this.#pushed.size > 1024) this.#pushed.delete(this.#pushed.keys().next().value!);
+    // a create tracks the new remote branch (the kernel writes branch.<b>.remote/merge; a sha refspec sets no upstream)
+    if (p.upstream) await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', p.st.gitDir, 'branch', `--set-upstream-to=${p.remote}/${p.st.branch}`, '--', p.st.branch], { cwd: p.st.root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.read });
     await this.#row(s, verb, 'ran', hash, ids);
-    return { ok: true, text: `Pushed ${p.st.branch} to ${p.info.url} (${p.info.slug})${p.force ? ` with force (leased on ${p.lease ? p.lease.slice(0, 12) : 'no remote branch'})` : ''}.` };
+    return { ok: true, text: `Pushed ${p.st.branch} (${p.st.sha.slice(0, 12)}) to ${p.info.url} (${p.info.slug})${p.force ? ` with force (leased on ${p.lease ? p.lease.slice(0, 12) : 'no remote branch'})` : ''}.` };
   }
 
   /* ── repo.create ──────────────────────────────────────────────────────── */
@@ -691,9 +717,12 @@ export class GitVerbs {
     // Aegis M1: the steering files the base would check out (CLAUDE*.md, .claude/**, .mcp.json, any case) against this
     // checkout's HEAD; any difference raises the card even under auto-edits. The set's hash rides the verb's input
     // (approval.auto / approval.request tool_input), so the log names exactly what was checked out
-    const steer = remove ? { diff: [] as string[], hash: null as string | null } : await this.#steering(st.gitDir, `refs/heads/${base}`, local);
+    // Aegis round 2 M4: the base is resolved to a sha ONCE; the steering diff and the checkout both use that sha
+    const baseSha = remove ? '' : (await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${base}^{commit}`], local)).stdout.trim();
+    if (!remove && !/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(baseSha)) return this.#refuse(s, verb, hash, 'no-branch', `Branch ${base} does not exist.`);
+    const steer = remove ? { diff: [] as string[], hash: null as string | null } : await this.#steering(st.gitDir, baseSha, local);
     const card = worktreeCard({ root, name: a.name, dir, branch, base, remove, force, steeringDiff: steer.diff });
-    const gate = await this.#editGate(s, verb, hash, card, remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add', { verb, root, name: a.name, branch, base, force, ...(steer.hash ? { steeringHash: steer.hash } : {}) }, dir, force || steer.diff.length > 0);
+    const gate = await this.#editGate(s, verb, hash, card, remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add', { verb, root, name: a.name, branch, base, ...(baseSha ? { baseSha } : {}), force, ...(steer.hash ? { steeringHash: steer.hash } : {}) }, dir, force || steer.diff.length > 0);
     if ('ok' in gate) return gate;
     const ids = gate.cardId ? { cardId: gate.cardId } : {};
     if (remove) {
@@ -706,7 +735,7 @@ export class GitVerbs {
     const w = this.#worktreesDir(root, true);
     if (isRefused(w)) return this.#refuse(s, verb, hash, w.refused, w.text, ids);
     if (fs.existsSync(dir)) return this.#refuse(s, verb, hash, 'worktree-exists', `${dir} already exists.`, ids);
-    const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, '--work-tree', root, 'worktree', 'add', '--quiet', '-b', branch, '--', dir, `refs/heads/${base}`], { ...local, timeoutMs: VERB_TIMEOUTS.push });
+    const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, '--work-tree', root, 'worktree', 'add', '--quiet', '-b', branch, '--', dir, baseSha], { ...local, timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git worktree add ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git worktree add failed: ${redactOutput(r.stderr, 400)}`, { ...ids, exitCode: r.code });
     // keep the main checkout's status clean: the kernel's own exclude line (info/ is session-denied, the kernel writes it)

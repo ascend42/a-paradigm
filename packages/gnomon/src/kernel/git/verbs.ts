@@ -365,6 +365,8 @@ export function hostWarning(host: string): string | null {
 export interface PushPlan {
   root: string;
   branch: string;
+  /** Aegis round 2 M3: the commit pushed (read once, before the card) */
+  sha?: string;
   remote: string;
   remoteInfo: RemoteInfo;
   force: boolean;
@@ -406,7 +408,7 @@ export function pushCard(p: PushPlan): VerbCard {
     `url: ${r.url}`,
     `host: ${r.host}${r.port ? ` port ${r.port}` : ''}`,
     `remote: ${p.remote} → ${r.url} (the push URL git resolves for it: this repo's .git/config under Gnomon's own credential-only global config)`,
-    `branch: ${p.branch} (refs/heads/${p.branch} → refs/heads/${p.branch})`,
+    `branch: ${p.branch}${p.sha ? ` at ${p.sha.slice(0, 12)} (this exact commit is pushed to refs/heads/${p.branch})` : ` (refs/heads/${p.branch} → refs/heads/${p.branch})`}`,
     `repo: ${p.root}`,
     ...(p.secrets?.length ? [`Warning: the pushed commits add text that looks like a secret (${p.secrets.length} file${p.secrets.length === 1 ? '' : 's'}):`, ...p.secrets.slice(0, 12).map((x) => `  secret: ${x.file} (${x.kinds.join(', ')})`)] : []),
     ...(p.scanIncomplete ? ['Warning: the pushed diff is larger than Gnomon scans for secrets; only its start was scanned.'] : []),
@@ -414,7 +416,7 @@ export function pushCard(p: PushPlan): VerbCard {
     `Runs with your own git credentials, outside the session sandbox. Never tags, never a mirror${p.force ? '' : ', never a force push'}.`,
     ...(!p.force && !p.warning && !p.secrets?.length ? [`always: pushes to ${r.slug} from this repo with no card next time (any branch, never a force push).`] : []),
   ];
-  const detail = { verb: 'git.push', tool: 'gnomon_git_push', host: r.host, owner: r.owner, repo: r.repo, slug: r.slug, url: r.url, remote: p.remote, branch: p.branch, force: p.force, root: p.root, ...(p.warning ? { hostWarning: p.warning } : {}), ...(p.force ? { lease: p.lease ?? null } : {}), ...(p.secrets?.length ? { secrets: p.secrets.map((x) => ({ file: x.file, kinds: [...x.kinds] })) } : {}) };
+  const detail = { verb: 'git.push', tool: 'gnomon_git_push', host: r.host, owner: r.owner, repo: r.repo, slug: r.slug, url: r.url, remote: p.remote, branch: p.branch, ...(p.sha ? { sha: p.sha } : {}), force: p.force, root: p.root, ...(p.warning ? { hostWarning: p.warning } : {}), ...(p.force ? { lease: p.lease ?? null } : {}), ...(p.secrets?.length ? { secrets: p.secrets.map((x) => ({ file: x.file, kinds: [...x.kinds] })) } : {}) };
   const flags: VerbCard['flags'] = [...(p.warning ? (['claim-mismatch'] as const) : []), ...(p.force ? (['irreversible'] as const) : [])];
   return { lines, detail, decisions: p.force || p.warning || p.secrets?.length || p.scanIncomplete ? ['allow', 'deny'] : ['allow', 'deny', 'always'], flags };
 }

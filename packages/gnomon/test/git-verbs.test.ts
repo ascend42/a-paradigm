@@ -66,6 +66,8 @@ function rig(w: ReturnType<typeof world>, o: { gh?: (args: readonly string[]) =>
       return u === undefined ? { code: 2, stdout: '', stderr: 'error: No such remote', timedOut: false } : { code: 0, stdout: `${u}\n`, stderr: '', timedOut: false };
     }
     if (args.includes('push')) return { code: 0, stdout: 'To x\n', stderr: '', timedOut: false };
+    // the network read stays in the seam (never a real remote): the remote has no heads the rig knows of
+    if (args.includes('ls-remote')) return { code: 0, stdout: '', stderr: '', timedOut: false };
     return execTool(bin, args, x);
   };
   const verbs = new GitVerbs({
@@ -191,7 +193,10 @@ describe('git.push (^git-push-gate)', () => {
     expect(push.args).toContain('--no-follow-tags');
     expect(push.args).not.toContain('--tags');
     expect(push.args).not.toContain('--mirror');
-    expect(push.args.slice(-3)).toEqual(['--', 'origin', 'refs/heads/main:refs/heads/main']);
+    // Aegis round 2 M3: the sha read once before the card is what is pushed
+    const head = git(w.repo, 'rev-parse', 'refs/heads/main').stdout.trim();
+    expect(push.args.slice(-3)).toEqual(['--', 'origin', `${head}:refs/heads/main`]);
+    expect(c.lines).toContain(`branch: main at ${head.slice(0, 12)} (this exact commit is pushed to refs/heads/main)`);
     for (const k of NEVER_VERB_ENV) expect(push.env[k]).toBeUndefined();
     expect(push.env.HOME).toBe(w.userHome);
     expect(push.env.GIT_ALLOW_PROTOCOL).toBe('https:ssh');
@@ -267,6 +272,37 @@ describe('git.push (^git-push-gate)', () => {
     expect(input.slug).toBe('github.com/ascend42/a-platform-fighter');
     expect(pushRuleWords(input)).toBe('pushes to github.com/ascend42/a-platform-fighter from this repo (any branch, never a force push)');
     expect(pushRuleWords({ verb: 'git.init' })).toBeNull();
+  });
+  it('Aegis round 2 M3: the scan never trusts refs/remotes (a session-written tracking ref hides nothing); the kernel record then narrows it', async () => {
+    const w = world();
+    committed(w.repo);
+    fs.writeFileSync(path.join(w.repo, 'k.env'), 'AWS_SECRET_ACCESS_KEY=' + 'A'.repeat(40) + '\n');
+    git(w.repo, 'add', 'k.env');
+    git(w.repo, 'commit', '-qm', 'secret');
+    // the session could plant this tracking ref at HEAD to hide the secret commit from a --remotes based scan
+    git(w.repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+    const r = rig(w);
+    r.set.url = ['https://github.com/o/r.git'];
+    r.set.decision = 'allow';
+    // ls-remote (the exec seam answers it with nothing): no exclusion, the whole branch is scanned, the hit is shown
+    await r.verbs.call('gnomon_git_push', {}, sess(w));
+    expect((r.raised[0]!.lines as string[]).filter((l) => l.startsWith('  secret: '))).toEqual(['  secret: k.env (aws-secret)']);
+    expect(phases(r)).toContain('lookup');
+    // pushed: the kernel's own record is the next exclusion, so a later clean commit raises no secret card
+    fs.writeFileSync(path.join(w.repo, 'b.txt'), 'b\n');
+    git(w.repo, 'add', 'b.txt');
+    git(w.repo, 'commit', '-qm', 'clean');
+    await r.verbs.call('gnomon_git_push', {}, sess(w));
+    expect((r.raised[1]!.lines as string[]).some((l) => l.startsWith('  secret: '))).toBe(false);
+  });
+  it('Aegis round 2 M4: a worktree is added at the base sha read once (the steering diff ran on the same sha)', async () => {
+    const w = world();
+    committed(w.repo);
+    const r = rig(w);
+    const sha = git(w.repo, 'rev-parse', 'HEAD').stdout.trim();
+    expect((await r.verbs.call('gnomon_worktree_add', { name: 'wt9' }, sess(w, { mode: 'auto-edits' }))).ok).toBe(true);
+    const add = r.calls.find((x) => x.args.includes('worktree') && x.args.includes('add'))!;
+    expect(add.args.at(-1)).toBe(sha);
   });
   it('remote spoofing: the remote is re-read after the card; a change refuses remote-changed and nothing is pushed', async () => {
     const w = world();
@@ -398,7 +434,8 @@ describe('repo.create', () => {
     expect(create.args).toEqual(['repo', 'create', 'ascend42/a-platform-fighter', '--private']);
     for (const k of NEVER_VERB_ENV) expect(create.env[k]).toBeUndefined();
     expect(git(w.repo, 'remote', 'get-url', 'origin').stdout.trim()).toBe('https://github.com/ascend42/a-platform-fighter.git');
-    expect(r.calls.find((x) => x.args.includes('push'))!.args).toContain('--set-upstream');
+    // a sha refspec sets no upstream: the kernel tracks the new remote branch itself
+    expect(r.calls.some((x) => x.args.includes('--set-upstream-to=origin/main'))).toBe(true);
   });
   it('public is explicit and irreversible-flagged; an existing remote, gh signed out and a bad name refuse', async () => {
     const w = world();
