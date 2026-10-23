@@ -261,6 +261,11 @@ export interface SupervisorOptions {
    * distro servers only.
    */
   deskMcp?: (distroServers: Record<string, unknown>, ctx: { hsid: string; cwd: string; worktree?: string }) => Record<string, unknown>;
+  /**
+   * #mcp-servers (T-2026-10-23-003): extra write-denies for every session profile: the first-party Paradigm MCP's
+   * package dir and the node that runs it, so no session can swap what the next session's server runs.
+   */
+  mcpDenyWrite?: () => readonly PolicyPath[];
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
@@ -850,7 +855,7 @@ export class SessionSupervisor {
         managedSettingsPaths: managed,
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
-        extraDenyWrite: [...binaryDenies(row, userHome, bin.real, this.#o.claudePath), ...this.#pathDenies],
+        extraDenyWrite: [...binaryDenies(row, userHome, bin.real, this.#o.claudePath), ...this.#pathDenies, ...(this.#o.mcpDenyWrite?.() ?? [])],
         // round 3 (Aegis H1): a Claude session can no more swap the local runner's node or source than a local one
         ...((r) => (r ? { localRunner: { node: r.node, dir: r.dir } } : {}))(this.#local.config()?.runner),
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
