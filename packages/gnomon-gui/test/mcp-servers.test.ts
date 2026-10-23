@@ -3,7 +3,7 @@
  * each press sends, and the press path's outcomes (a card waiting, allow, deny, a refusal).
  */
 import { describe, expect, it } from 'vitest';
-import { MCP_COPY, MCP_FIRST_PARTY, MCP_SECTION, markMcp, mcpBatchRequest, mcpRefusalText, mcpRequestOf, mcpSection, emptyMcpUi } from '../src/core/mcp-servers.js';
+import { MCP_COPY, MCP_FIRST_PARTY, MCP_SECTION, markMcp, mcpStatusOf, mcpBatchRequest, mcpRefusalText, mcpRequestOf, mcpSection, emptyMcpUi } from '../src/core/mcp-servers.js';
 import { McpServersController } from '../src/ui/mcp-servers.js';
 import { GUI_COMMANDS } from '../src/core/commands.js';
 import { RpcError } from '../src/core/client.js';
@@ -202,12 +202,13 @@ describe('#gui-mcp-servers press path', () => {
     // the kernel skipped one at allow (changed while the card waited): the outcome names it, with next:
     let st: unknown = status();
     const calls: unknown[] = [];
-    const c = new McpServersController({ call: async (r) => (calls.push(r), { pending: true, cardId: 'card:S', ids: ['user::neurons', 'user::linear'] }), status: () => st, hsid: () => 'h1', now: () => 0, time: () => '10:00', refreshStatus: async () => undefined, repaint: () => undefined, decide: () => undefined });
+    const c = new McpServersController({ call: async (r) => (calls.push(r), { pending: true, cardId: 'card:S', ids: ['user::neurons', 'user::linear'] }), status: () => st, hsid: () => 'h1', now: () => 0, time: () => '10:00', refreshStatus: async () => undefined, repaint: () => undefined, decide: () => undefined, connId: () => 'c-me' });
     c.press('mcp:mark-all', 'user::neurons', true);
     c.press('mcp:mark-all', 'user::linear', true);
     c.press('mcp:enable', 'batch', true);
     await flush();
-    st = status({ skipped: { cardId: 'card:S', ids: ['user::neurons'], names: ['neurons'] } });
+    // kernel 09ecc6a8: per-card skips, newest last; this card's entry is not the newest (another card came after)
+    st = status({ skips: [{ cardId: 'card:S', ids: ['user::neurons'], names: ['neurons'], on: ['user::linear'], connId: 'c-me', at: 'x' }, { cardId: 'card:Z', ids: ['user::linear'], names: ['linear'], on: [], connId: 'c-me', at: 'y' }], skipped: { cardId: 'card:Z', ids: ['user::linear'], names: ['linear'], on: [], connId: 'c-me' } });
     c.row({ kind: 'approval.decide', payload: { cardId: 'card:S', decision: 'allow' } });
     await flush();
     expect(c.ui().result).toMatchObject({ lead: 'On', text: ' linear at 10:00. neurons changed while the card waited, so it stays off. next: look at it again, then turn it on again.' });
@@ -268,6 +269,47 @@ describe('#gui-mcp-servers one press, or several on one card (Mika 2026-10-23)',
     // a batch card names them all: one presence, "keeps them off"
     const many = rows(status({ pending: [{ cardId: 'card:M', id: 'user::neurons', scope: 'all', repo: null }, { cardId: 'card:M', id: 'user::linear', scope: 'all', repo: null }] }));
     expect((many.find((r) => r.id === 'mcp-request') as { how: string }).how).toContain('once for all of them. Deny keeps them off.');
+  });
+});
+
+describe('#gui-mcp-servers skips per card (kernel 09ecc6a8: status.mcp.skips)', () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  const run = async (st: unknown, connId: string | null) => {
+    let cur: unknown = status();
+    const c = new McpServersController({ call: async () => ({ pending: true, cardId: 'card:S', ids: ['user::neurons', 'user::linear'] }), status: () => cur, hsid: () => 'h1', now: () => 0, time: () => '10:00', refreshStatus: async () => undefined, repaint: () => undefined, decide: () => undefined, connId: () => connId });
+    c.press('mcp:mark-all', 'user::neurons', true);
+    c.press('mcp:mark-all', 'user::linear', true);
+    c.press('mcp:enable', 'batch', true);
+    await flush();
+    cur = st;
+    c.row({ kind: 'approval.decide', payload: { cardId: 'card:S', decision: 'allow' } });
+    await flush();
+    return c.ui().result;
+  };
+  const entry = { cardId: 'card:S', ids: ['user::neurons'], names: ['neurons'], on: ['user::linear'], connId: 'c-me', at: '2026-10-23T10:00:00Z' };
+
+  it('mcpStatusOf reads skips[] (newest last, at most 16); an older kernel\'s lone skipped reads as a list of one', () => {
+    const many = Array.from({ length: 20 }, (_, n) => ({ ...entry, cardId: `card:${n}` }));
+    const v = mcpStatusOf(status({ skips: many }));
+    expect(v.skips).toHaveLength(16);
+    expect(v.skips.at(-1)).toMatchObject({ cardId: 'card:19', on: ['user::linear'], connId: 'c-me' });
+    expect(mcpStatusOf(status({ skipped: { cardId: 'card:old', ids: ['a'], names: ['a'] } })).skips).toEqual([{ cardId: 'card:old', ids: ['a'], names: ['a'], on: [], connId: null, at: null }]);
+    expect(mcpStatusOf(status()).skips).toEqual([]);
+  });
+
+  it('this connection decided it: names the skip, and On is the kernel\'s `on`', async () => {
+    expect(await run(status({ skips: [entry] }), 'c-me')).toMatchObject({ lead: 'On', text: ' linear at 10:00. neurons changed while the card waited, so it stays off. next: look at it again, then turn it on again.' });
+  });
+
+  it('another connection decided it: no skip line; only what the kernel turned on', async () => {
+    expect(await run(status({ skips: [entry] }), 'c-other')).toEqual({ lead: 'On', text: ' linear at 10:00. New sessions start it.' });
+    expect(await run(status({ skips: [{ ...entry, on: [] }] }), 'c-other')).toBeNull();
+    // an unknown decider (older kernel: no connId) is never taken as this page
+    expect(await run(status({ skips: [{ ...entry, connId: null }] }), null)).toEqual({ lead: 'On', text: ' linear at 10:00. New sessions start it.' });
+  });
+
+  it('no entry for this card: the plain On result stays', async () => {
+    expect(await run(status({ skips: [{ ...entry, cardId: 'card:other' }] }), 'c-me')).toMatchObject({ lead: 'On', text: ' neurons, linear at 10:00. New sessions start them.' });
   });
 });
 

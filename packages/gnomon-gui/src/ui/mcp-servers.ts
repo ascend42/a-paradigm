@@ -14,7 +14,8 @@
  *   - Turn off: request.mcp.disable, no card, applies at once (even while a card waits). The first-party Paradigm MCP
  *     turns off and on the same way.
  *   - The card's outcome comes from the kernel's rows (approval.decide / approval.expire for OUR card); servers the
- *     kernel skipped at allow (changed while the card waited) are named from status.mcp.skipped.
+ *     kernel skipped at allow (changed while the card waited) are named from status.mcp.skips (this card's entry, by
+ *     cardId), and only when THIS page's connection decided it (entry.connId); the servers named On are entry.on.
  */
 import { RpcError } from '../core/client.js';
 import { clearMcp, emptyMcpUi, markMcp, startMarking, MCP_BATCH, MCP_FIRST_PARTY, mcpBatchRequest, mcpRefusalText, mcpRequestOf, mcpStatusOf, notChangedResult, reconcileMcp, skippedResult, turnedOffResult, turnedOnResult, unmarkMcp, type McpRowView, type McpUi } from '../core/mcp-servers.js';
@@ -33,6 +34,8 @@ export interface McpDeps {
   decide: (cardId: string) => void;
   /** after a press's outcome: move focus to this selector inside the section (Mika: never an off-screen heading) */
   focus?: (selector: string) => void;
+  /** this page's kernel connection (hello connId): a skip is shown only to the connection that decided its card */
+  connId?: () => string | null;
 }
 
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -188,11 +191,16 @@ export class McpServersController {
       .refreshStatus()
       .catch(() => undefined)
       .then(() => {
-        // #batch-card: the kernel names the servers it skipped at allow (changed while the card waited)
-        const sk = mcpStatusOf(this.#d.status()).skipped;
-        if (allowed && sk && sk.cardId === cardId) {
-          const on = [...this.#names].filter(([id]) => !sk.ids.includes(id)).map(([, n]) => n);
-          this.#ui = { ...this.#ui, result: skippedResult(on, sk.names, at) };
+        // #batch-card: the kernel names the servers it skipped at allow (changed while the card waited), per card;
+        // the servers that did turn on are the kernel's `on`, never this page's guess
+        const sk = allowed ? mcpStatusOf(this.#d.status()).skips.find((s) => s.cardId === cardId) : undefined;
+        if (sk) {
+          const nameOf = (id: string): string => this.#names.get(id) ?? this.#row(id)?.name ?? 'a server';
+          const on = sk.on.map(nameOf);
+          const mine = !!sk.connId && sk.connId === (this.#d.connId?.() ?? null);
+          // only the connection that decided the card is told what it skipped (another window's Allow is its own);
+          // here the result names only what the kernel says turned on, and nothing when none did
+          this.#ui = { ...this.#ui, result: mine ? skippedResult(on, sk.names, at) : on.length ? turnedOnResult(on.join(', '), at) : null };
         }
         this.reconcile();
         this.#d.repaint();

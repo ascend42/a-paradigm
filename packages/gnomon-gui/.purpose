@@ -1619,7 +1619,9 @@ components:
       with the batch, the other servers can be marked for the next card,
       Turn on waits and says why; Turn off applies at once even then. An
       allowed card that skipped a changed server names it (skippedResult
-      from status.mcp.skipped). Preview fixtures mcp-batch-card (the card,
+      from this card's entry in status.mcp.skips, by cardId; its `on` names
+      what turned on; the skip line only when entry.connId is this page's
+      connection, else only what turned on). Preview fixtures mcp-batch-card (the card,
       its body scrolling) and mcp-batch-waiting.
     path: src/core/mcp-servers.ts
     type: module

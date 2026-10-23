@@ -1318,6 +1318,7 @@ const mcpServers = new McpServersController({
     focusCardGroup(cardId);
   },
   focus: (sel) => (document.querySelector(`#settings-body [data-section="${MCP_SECTION}"] ${sel}`) as HTMLElement | null)?.focus(),
+  connId: () => session?.connId ?? null, // a card's skips are shown only to the connection that decided it
 });
 const settings = mountSettings(document, {
   local: localModel,

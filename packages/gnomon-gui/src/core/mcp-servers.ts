@@ -125,8 +125,10 @@ export interface McpStatusView {
   pending: Array<{ cardId: string; id: string; scope: string; repo: string | null }>;
   /** #batch-card: the kernel's cap of servers on one card */
   max: number;
-  /** the servers the last allowed card skipped because they changed while it waited */
-  skipped: { cardId: string; ids: string[]; names: string[] } | null;
+  /** the newest entry of skips (kept for an older kernel that sends only status.mcp.skipped) */
+  skipped: McpSkip | null;
+  /** kernel 09ecc6a8: per allowed card, the servers it skipped (changed while it waited), newest last, at most 16 */
+  skips: McpSkip[];
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -166,9 +168,27 @@ function rowOf(v: unknown): McpRowView | null {
   };
 }
 
+/** One allowed card's skips (status.mcp.skips[i]): who decided it (connId) and which servers did turn on (on). */
+export interface McpSkip {
+  cardId: string;
+  ids: string[];
+  names: string[];
+  /** the ids that turned on */
+  on: string[];
+  /** the connection that decided the card (null: not known, e.g. an older kernel) */
+  connId: string | null;
+  at: string | null;
+}
+/** the kernel keeps at most 16 (MCP_SKIPS_KEPT); the page reads no more */
+export const MCP_SKIPS_SHOWN = 16;
+function skipOf(v: unknown): McpSkip | null {
+  if (!isObj(v) || typeof v.cardId !== 'string') return null;
+  return { cardId: v.cardId, ids: strs(v.ids), names: strs(v.names).map((n) => shown(n, 64)), on: strs(v.on), connId: typeof v.connId === 'string' ? v.connId : null, at: typeof v.at === 'string' ? v.at : null };
+}
+
 /** status.mcp as the section reads it. */
 export function mcpStatusOf(status: unknown): McpStatusView {
-  const empty = { windows: false, envFile: '~/.gnomon/loop-env', firstParty: null, servers: [], repos: [], pending: [], max: MCP_ENABLE_MAX, skipped: null };
+  const empty = { windows: false, envFile: '~/.gnomon/loop-env', firstParty: null, servers: [], repos: [], pending: [], max: MCP_ENABLE_MAX, skipped: null, skips: [] };
   if (!isObj(status)) return { state: 'not-connected', ...empty };
   const m = status.mcp;
   if (!isObj(m) || m.offered !== true || !Array.isArray(m.servers)) return { state: 'not-offered', ...empty };
@@ -182,7 +202,9 @@ export function mcpStatusOf(status: unknown): McpStatusView {
     repos: (Array.isArray(m.repos) ? m.repos : []).filter(isObj).map((r) => ({ repo: String(r.repo), folder: shown(r.folder, 80), hsids: strs(r.hsids), servers: (Array.isArray(r.servers) ? r.servers : []).map(rowOf).filter((x): x is McpRowView => x !== null) })),
     pending: (Array.isArray(m.pending) ? m.pending : []).filter(isObj).map((p) => ({ cardId: String(p.cardId), id: String(p.id), scope: String(p.scope), repo: str(p.repo) })),
     max: typeof m.max === 'number' && m.max >= 1 ? Math.min(m.max, 64) : MCP_ENABLE_MAX,
-    skipped: isObj(m.skipped) && typeof m.skipped.cardId === 'string' ? { cardId: m.skipped.cardId, ids: strs(m.skipped.ids), names: strs(m.skipped.names).map((n) => shown(n, 64)) } : null,
+    skipped: skipOf(m.skipped),
+    // an older kernel sends only `skipped` (the newest): read it as a list of one
+    skips: Array.isArray(m.skips) ? m.skips.slice(-MCP_SKIPS_SHOWN).map(skipOf).filter((x): x is McpSkip => x !== null) : [skipOf(m.skipped)].filter((x): x is McpSkip => x !== null),
   };
 }
 
