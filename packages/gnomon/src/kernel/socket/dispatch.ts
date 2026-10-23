@@ -424,6 +424,13 @@ export interface HumanRequestPort {
    */
   rules?: {
     revoke(ctx: { connId: string; principal: string; surface: string | null; isLive: () => boolean }, payload: unknown): Promise<unknown>;
+    /**
+     * 8.0:rules-view (#rules-apply): request.rules.apply{changes} from the human on a gui or device connection ONLY (the
+     * asker stamped here). Narrowing applies at once; every `on` rides ONE fresh-presence card. Dispatcher-only.
+     */
+    apply?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    /** status.rules (the human class only): every standing rule, its state on the kernel clock, the presets */
+    status?(): Record<string, unknown>;
   };
   sessionNames?: {
     rename(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
@@ -458,12 +465,30 @@ export interface HumanRequestPort {
     /** Aegis M2: a closed connection closes the chooser it opened */
     connectionClosed?(connId: string): void;
   };
+  /**
+   * #mcp-servers (T-2026-10-23-003): request.mcp.enable | request.mcp.disable from the human on a gui or device
+   * connection ONLY (never voice, an agent, a mod or a session; the asker stamped here). Dispatcher-only and never a
+   * row: not in the §9.1 registry, so no contract id moves. status.mcp is the human class's (names, never values).
+   */
+  mcp?: {
+    request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
+    status(): Record<string, unknown>;
+  };
   loops?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
     status(): Record<string, unknown>;
     /** #loop-agent-ops (step 12): an AGENT's loop.request; the asker (principal, hsid) is stamped from this connection */
     agent?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; hsid: string | null }, payload: unknown): Promise<unknown>;
   };
+}
+
+/** #mcp-servers' status.mcp; a read that throws shows as `error`, never a failed status. */
+function mcpStatusSafe(m: NonNullable<HumanRequestPort['mcp']>): Record<string, unknown> {
+  try {
+    return m.status();
+  } catch (err) {
+    return { offered: true, error: err instanceof Error ? err.message.slice(0, 160) : 'unreadable' };
+  }
 }
 
 /** #mods-admin's status for the human's status.mods; a read that throws shows as `adminError`, never a failed status. */
@@ -599,10 +624,14 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // 8.0:session-rename: the names of THIS human's sessions (display text; the GUI folds session.renamed rows too)
       ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
       ...(o.requests?.loops && cls === 'human' ? { loops: o.requests.loops.status() } : {}),
+      // 8.0:rules-view: status.rules to the human class only (rule words and file paths are project detail)
+      ...(o.requests?.rules?.status && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') ? { rules: o.requests.rules.status() } : {}), // Aegis L-3, like status.folders
       // TD-2026-10-23-162 (#folder-picker): whether request.folder.choose is offered (the GUI's no-chooser state); the human's
       ...(o.requests?.folders && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') ? { folders: o.requests.folders.status() } : {}), // Aegis L4
       // Aegis M2 (TD-2026-10-22-769): status.local in full to the human only; any other class sees three facts
       ...(o.requests?.local?.status ? { local: localStatusFor(cls, o.requests.local.status()) } : {}),
+      // #mcp-servers: the human's own MCP servers (names only) to the human class; any other class sees only that it is offered
+      ...(o.requests?.mcp ? { mcp: cls === 'human' ? mcpStatusSafe(o.requests.mcp) : { offered: true } } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
       // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 projection (B1's partial words,
       // capture.text, reach a human-class connection on the gui credential only)
@@ -959,12 +988,32 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // 8.0:rules-view (#rules-apply): the Rules view's one save (gui/device human only, stamped by connId)
+      if (pa?.kind === 'request.rules.apply' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.rules?.apply) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.rules.apply({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       // 8.0:session-rename: the human names a session (gui/device human connections only, stamped by connId)
       if (pa?.kind === 'request.session.rename' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.sessionNames) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
           return await o.requests.sessionNames.rename({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // #mcp-servers (T-2026-10-23-003): the human turns their own MCP servers on or off (gui/device human only)
+      if ((pa?.kind === 'request.mcp.enable' || pa?.kind === 'request.mcp.disable') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.mcp) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.mcp.request({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.kind, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

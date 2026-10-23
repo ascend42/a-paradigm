@@ -26,6 +26,8 @@ import { clientBusy, clientOf } from './voice-client.js';
 import { canAttach, voiceStatusOf } from './voice.js';
 import { rungOf, RUNG_NAME } from './voice-ladder.js';
 import { emptyLocalUi, localSection, type LocalUi } from './local-model.js';
+import type { RulesBlockView } from './rules.js';
+import { emptyMcpUi, mcpSection, type McpUi } from './mcp-servers.js';
 
 export const THEME_KEY = 'gnomon.gui.theme';
 export const MOTION_KEY = 'gnomon.gui.motion';
@@ -123,9 +125,11 @@ export type SettingRow =
   // component settings-form (session 2026-10-22-gnomon-local-model): closed = its keys; open = the form
   | { kind: 'form'; id: string; label: string; keys: FormKey[]; form?: FormView; confirm?: { label: string; text: string; keys: FormKey[] }; result?: ResultView }
   | { kind: 'request'; id: string; label: string; chip: string; line: string; keys: FormKey[]; how: string }
-  | { kind: 'term'; id: string; text: string; code: string };
+  | { kind: 'term'; id: string; text: string; code: string }
+  // #gui-rules-view (8.0:rules-view): the Rules block (rule-row + rules-save-bar); its keys have their own press path
+  | { kind: 'rules'; id: string; view: RulesBlockView };
 
-export type SectionId = 'appearance' | 'layout' | 'voice' | 'local-model' | 'permissions' | 'about';
+export type SectionId = 'appearance' | 'layout' | 'voice' | 'local-model' | 'mcp-servers' | 'permissions' | 'rules' | 'about';
 export interface SettingsSection {
   id: SectionId;
   title: string;
@@ -205,6 +209,10 @@ export interface SettingsInput {
   time?: (iso: string) => string;
   /** #gui-local-model: the Local model section's transient state (ui/local-model.ts) and the loops that use it */
   local?: { ui: LocalUi; loopsUsing: readonly string[] };
+  /** #gui-rules-view: the Rules block's view (core/rules.ts rulesBlock); absent = the block is not shown */
+  rules?: RulesBlockView;
+  /** #gui-mcp-servers: the MCP servers section's transient state (ui/mcp-servers.ts) and the focused session */
+  mcp?: { ui: McpUi; hsid: string | null };
 }
 
 const short = (s: string, n = 12): string => (s.length > n + 4 ? `${s.slice(0, n)}…${s.slice(-4)}` : s);
@@ -341,7 +349,11 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
     { id: 'voice', title: 'Voice', rows: voice },
     // #gui-local-model (session 2026-10-22-gnomon-local-model): between Voice and Permissions, kernel-owned
     localSection({ status: s, ui: i.local?.ui ?? emptyLocalUi(), loopsUsing: i.local?.loopsUsing ?? [], time: fmt }),
+    // #gui-mcp-servers (T-2026-10-23-003): the human's own MCP servers and the first-party Paradigm MCP, kernel-owned
+    mcpSection({ status: s, ui: i.mcp?.ui ?? emptyMcpUi(), hsid: i.mcp?.hsid ?? null }),
     { id: 'permissions', title: 'Permissions', rows: permissions },
+    // #gui-rules-view (Mika C1): Settings › Permissions › Rules, its own focusable heading for "Rules…" and the mode menu
+    ...(i.rules ? [{ id: 'rules' as const, title: 'Permissions › Rules', owner: '· kernel-owned', intro: 'Every Always rule: what it allows, where and since when. Turn one off for a time, back on, or remove it; changes wait for one Save.', rows: [{ kind: 'rules' as const, id: 'rules', view: i.rules }] }] : []),
     { id: 'about', title: 'About', rows: about },
   ];
 }

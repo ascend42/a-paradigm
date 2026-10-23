@@ -255,8 +255,9 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by 8.0:T-2026-10-21-008 (re-review M-1/M-2: offer.retired + session.anomaly + desk.retire/sessionAnomaly closed values): was sha256:4c2b9371…af2c.
 // Moved once by 8.0:session-rename (request.session.rename + session.renamed + descriptor sessionRename): was sha256:454cd632…7de.
 // Moved once by 8.0:loops (loop-trust/loop-choice cards, continue/stop, the loop.* + request.loop.* kinds, descriptor loops): was sha256:c4e2c7d9…e2c9.
-// Moved once by 8.0:git-verbs (T-2026-10-23-002: the git.verb kind + descriptor gitVerbs): was sha256:aa537e4c…79d4.
-const PINNED_CLIENT_API_ID = 'sha256:b2d55aec0da8abf5369e895f5b85ae4d825d797151a0b7e64dab545f98aa1aaf';
+// Moved once by 8.0:rules-view (approval.rule.disabled + approval.rule.enabled + descriptor rulesView): was sha256:aa537e4c…79d4.
+// Moved once by 8.0:git-verbs (T-2026-10-23-002: the git.verb kind + descriptor gitVerbs, merged after 8.0:rules-view): was sha256:b4639c99…bd8b.
+const PINNED_CLIENT_API_ID = 'sha256:295c5ac772b6c621b465943a106c441a7572603090f96f7f01293f7af0cec298';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 

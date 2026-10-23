@@ -187,6 +187,19 @@ export class FakeKernel implements Transport {
           const shown = this.rows.find((r) => r.view === 'full' && r.event.kind === 'offer.shown' && (r.event.payload as { offerId?: string }).offerId === pl.offerId);
           if (shown && shown.view === 'full') this.append('offer.decided', { offerId: pl.offerId, hsid: shown.event.session, decision: String(pl.decision) }, shown.event.session);
         }
+        // #gui-mcp-servers: an enable raises a card (pending) unless a shot refuses it (__mcpPreview.refuse)
+        if (typeof p.kind === 'string' && p.kind.startsWith('request.mcp.')) {
+          const m = (globalThis as { __mcpPreview?: { refuse?: [string, string, string, Record<string, unknown>?] } }).__mcpPreview;
+          if (m?.refuse) {
+            const r = refusal(m.refuse[0], m.refuse[1], m.refuse[2]);
+            Object.assign(r.data.data as Record<string, unknown>, m.refuse[3] ?? {});
+            throw r;
+          }
+          // #batch-card: request.mcp.enable{servers} raises ONE card for every server (the kernel names them in ids)
+          const servers = (p.payload as { servers?: Array<{ id?: unknown }> } | undefined)?.servers;
+          if (p.kind === 'request.mcp.enable' && Array.isArray(servers)) return { pending: true, cardId: 'card:01JPREVIEWMCPCARD0000000001', id: servers[0]?.id, ids: servers.map((s) => s.id) };
+          return p.kind === 'request.mcp.enable' && (p.payload as { id?: unknown } | undefined)?.id !== 'first-party:paradigm' ? { pending: true, cardId: 'card:01JPREVIEWMCPCARD0000000001', id: (p.payload as { id?: unknown }).id } : { ok: true };
+        }
         // founder report 2026-10-23 (input selection): a shot may refuse the input change (__vxPreview.input)
         if (p.kind === 'request.voice.client' && (p.payload as { op?: unknown } | undefined)?.op === 'select-input' && previewVoice().input) throw previewVoice().input!;
         return { ok: true };

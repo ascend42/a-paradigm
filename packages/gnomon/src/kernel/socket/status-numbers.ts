@@ -58,6 +58,7 @@ export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Objec
   'subscriptions.onThisConnection': { subsetOf: 'subscriptions.n' },
   'subscriptions.perConnectionMax': 'limit',
   'subscriptions.backlogCap': 'limit',
+  'mcp.max': 'limit', // #mcp-servers (T-2026-10-23-003): how many servers a human may turn on (declared at the git-verbs merge)
   'budget.subscriptionWindow.windowMs': 'limit',
   'web.port': 'ordinal',
   'voice.echoTailMs': 'limit', // configured echo tail (spec §14.7 config)

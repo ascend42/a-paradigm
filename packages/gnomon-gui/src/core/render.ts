@@ -437,6 +437,42 @@ const PATH_FIELDS: Readonly<Record<string, string>> = Object.freeze({ Edit: 'fil
  * line, and is capped only for huge commands; a capped arg says so and the card then shows the kernel's body VISIBLY.
  */
 export const TITLE_ARG_MAX = 4000;
+/** design-system card.body-scroll: the accessible name of a card's body when it scrolls (then it is a tab stop). */
+export const CARD_BODY_LABEL = 'what the card says (scrolls)';
+/** The cue under a body that scrolls (macOS hides scrollbars at rest, so the cut alone does not say "more"). */
+export const CARD_MORE = Object.freeze({ more: '↓ more below: scroll the card text', end: 'end of the card text' });
+/** What markCardBody touches (an HTMLElement in the page; a fake in tests). */
+export interface ScrollBodyEl {
+  scrollHeight: number;
+  clientHeight: number;
+  scrollTop: number;
+  setAttribute(n: string, v: string): void;
+  removeAttribute(n: string): void;
+  classList: { toggle(c: string, on: boolean): unknown };
+}
+/**
+ * design-system card.body-scroll (Mika 2026-10-23): a card body is a tab stop ONLY when it overflows its cap, so a
+ * short card adds no stop to Tab through the pile. Called on mount and whenever the body's box changes (app.ts, a
+ * ResizeObserver) and on scroll (the cue's words). Returns whether it scrolls.
+ */
+export function markCardBody(b: ScrollBodyEl, cue?: { textContent: string | null; classList: { toggle(c: string, on: boolean): unknown } } | null): boolean {
+  const over = b.scrollHeight > b.clientHeight + 1;
+  b.classList.toggle('scrolls', over);
+  if (over) {
+    b.setAttribute('tabindex', '0');
+    b.setAttribute('role', 'group');
+    b.setAttribute('aria-label', CARD_BODY_LABEL);
+  } else {
+    b.removeAttribute('tabindex');
+    b.removeAttribute('role');
+    b.removeAttribute('aria-label');
+  }
+  if (cue) {
+    cue.classList.toggle('is-off', !over);
+    cue.textContent = over && b.scrollTop + b.clientHeight >= b.scrollHeight - 2 ? CARD_MORE.end : CARD_MORE.more;
+  }
+  return over;
+}
 /** Every line break a command can carry (the sanitizer already maps U+2028/2029 to \n): each is its own visible line. */
 const ARG_LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
 /** The shell's command separators and substitutions, marked visibly inside a line (quotes are not parsed: over-marking is safe). */
@@ -541,6 +577,13 @@ export function stampWord(decision: string): string {
  * without it. A claim-mismatch card keeps its block whole (its red first line stays the body's first line) and is
  * titled by its kind; so is every kind outside KERNEL_TITLED_KINDS (Aegis M1).
  */
+/** A block's top-level Text children minus the lines `drop` names (the card face shows them elsewhere). */
+function withoutLines(block: unknown, drop: (line: string) => boolean): unknown {
+  const b = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>) : null;
+  if (!b || !Array.isArray(b.children)) return block;
+  return { ...b, children: (b.children as unknown[]).filter((k) => !(k && typeof k === 'object' && (k as { type?: unknown }).type === 'Text' && typeof (k as { text?: unknown }).text === 'string' && drop((k as { text: string }).text))) };
+}
+
 export function splitCardBlock(block: unknown, kind: string, keepWhole: boolean): { title: string; body: unknown } {
   if (!KERNEL_TITLED_KINDS.has(kind)) keepWhole = true;
   const b = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>) : null;
@@ -1140,7 +1183,8 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
   // design-system card.family ⊙ gnomon (C3): a root configuration card about Gnomon itself (local.config)
-  const gnomonFam = v.rootRows?.action === 'local.config';
+  // #gui-mcp-servers: turning on one of the human's MCP servers (detail.action mcp.enable) is a root configuration card too
+  const gnomonFam = v.rootRows?.action === 'local.config' || v.rootRows?.action === 'mcp.enable';
   const tag0 = voiceTagOf(v.voice ?? null);
   const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
   // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title
@@ -1153,9 +1197,20 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const ct = loud ? null : (v.composedTitle ?? null);
   const titleText = ct ? `${ct.verb}${ct.arg ? ` ${ct.arg}` : ''}` : title;
   const capped = !!ct?.truncated;
-  const bodyShown = loud || capped;
+  // #gui-mcp-servers (Mika 2026-10-23): turning on an MCP server signs only its decision row, so the face would say
+  // nothing about the server; its kernel lines (what runs, where, the shell, fetch and repo warnings) ARE the decision,
+  // so they show on the face, not under details. The k-line and the presence line already show: not twice.
+  const mcpFace = v.rootRows?.action === 'mcp.enable';
+  const bodyShown = loud || capped || mcpFace;
+  const shownBody = mcpFace ? withoutLines(body, (l) => l === kLine || l.startsWith('Allow takes the root key')) : body;
   // a kind whose lines the kernel does not compose: its words are labelled as the requester's (never the kernel's)
-  const bodyEl = h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, quoted ? h(doc, 'span', { class: 'meta card-quote-label' }, `the requester's words (${v.requestedBy}):`) : null, renderBlock(ctx, body));
+  // design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
+  // large that's fine"): a body taller than its cap scrolls INSIDE the card (styles.css .card-body), so the title, the
+  // keys and the presence line stay in view. Only when it overflows (markCardBody, measured after mount) is it one tab
+  // stop (tabindex 0, named), so the keyboard can scroll it with the arrow keys; Tab moves on to the keys, so it never
+  // traps focus. The cue under it (hidden until it overflows) says there is more.
+  const bodyEl = h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, quoted ? h(doc, 'span', { class: 'meta card-quote-label' }, `the requester's words (${v.requestedBy}):`) : null, renderBlock(ctx, shownBody));
+  const moreEl = h(doc, 'p', { class: 'meta card-more is-off', 'aria-hidden': 'true' }, CARD_MORE.more);
   return h(
     doc,
     'section',
@@ -1176,13 +1231,14 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
-    h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
+    h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}${mcpFace ? ' wraps' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
     kLine ? h(doc, 'span', { class: 'k-line kernel-owned' }, kLine) : null,
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
     gitWarn ? h(doc, 'p', { class: 'card-warn kernel-owned' }, gitWarn) : null,
     // TD-2026-10-19-063: a claim-mismatch card's body (its red first line) is never collapsed; Aegis H1: nor a card
     // whose composed arg was capped (the kernel's body is then the whole command, visibly)
     bodyShown ? bodyEl : null,
+    bodyShown ? moreEl : null,
     raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     v.rootRows
@@ -1209,7 +1265,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     gnomonFam && keys.length ? h(doc, 'div', { class: 'lt-presence' }, LOCAL_PRESENCE_LINE) : null,
     // the contentHash line stays on every card: quiet, one line, the full hash in title=
     h(doc, 'small', { class: 'meta content-hash', title: `contentHash ${v.contentHash}` }, `contentHash ${v.contentHash.slice(0, 23)}…`),
-    h(doc, 'details', { class: 'card-details' }, h(doc, 'summary', { class: 'meta' }, 'details'), h(doc, 'p', { class: 'meta card-who' }, who), bodyShown ? null : bodyEl),
+    h(doc, 'details', { class: 'card-details' }, h(doc, 'summary', { class: 'meta' }, 'details'), h(doc, 'p', { class: 'meta card-who' }, who), bodyShown ? null : bodyEl, bodyShown ? null : moreEl),
     h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
     h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, ''),
   );

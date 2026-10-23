@@ -104,8 +104,8 @@ describe('#gui-settings sheet: only allowed controls', () => {
       }
     expect(voice(input({ status: null })).map((r) => r.id)).toEqual(['voice-app']);
   });
-  it('the six sections in order (Local model between Voice and Permissions)', () => {
-    expect(settingsModel(input()).map((s) => s.id)).toEqual(['appearance', 'layout', 'voice', 'local-model', 'permissions', 'about']);
+  it('the seven sections in order (Local model, then MCP servers, between Voice and Permissions)', () => {
+    expect(settingsModel(input()).map((s) => s.id)).toEqual(['appearance', 'layout', 'voice', 'local-model', 'mcp-servers', 'permissions', 'about']);
   });
   it('the folder run mode is the F2 folder switch; a choice above the ceiling is disabled with its reason', () => {
     const m = rows().find((r) => r.id === 'folder-mode');

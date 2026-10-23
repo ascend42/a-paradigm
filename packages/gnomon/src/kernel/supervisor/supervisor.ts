@@ -170,6 +170,12 @@ export const DRAIN_DEADLINE_MS = 30_000;
 /** After the deadline's interrupt, how long the drain waits for the interrupted turn's result line before it stops the child. */
 export const DRAIN_INTERRUPT_GRACE_MS = 1_000;
 /**
+ * After a drained child is stopped, how long the drain waits for that session's exit path (session-env emptied,
+ * permits released, history written; `#onExit` runs off the child's `close`, queued behind its stdout lines) before
+ * it reports the session. Bounded so a child whose pipes never close cannot hold the upgrade.
+ */
+export const DRAIN_EXIT_SETTLE_MS = 2_000;
+/**
  * The `session.exited{reason}` a drained Claude session's stop writes (the record slice B2 reads; session.drained's
  * payload is closed to {uuid, reason}). `drain-clean`: the session was at a turn boundary, so B2 resumes it
  * normally. `drain-interrupted`: a turn was still running at the deadline and was interrupted, so B2 resumes it
@@ -264,6 +270,11 @@ export interface SupervisorOptions {
    * distro servers only.
    */
   deskMcp?: (distroServers: Record<string, unknown>, ctx: { hsid: string; cwd: string; worktree?: string }) => Record<string, unknown>;
+  /**
+   * #mcp-servers (T-2026-10-23-003): extra write-denies for every session profile: the first-party Paradigm MCP's
+   * package dir and the node that runs it, so no session can swap what the next session's server runs.
+   */
+  mcpDenyWrite?: (ctx: { cwd: string; worktree?: string }) => readonly PolicyPath[];
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
@@ -893,7 +904,7 @@ export class SessionSupervisor {
         managedSettingsPaths: managed,
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
-        extraDenyWrite: [...binaryDenies(row, userHome, bin.real, this.#o.claudePath), ...this.#pathDenies],
+        extraDenyWrite: [...binaryDenies(row, userHome, bin.real, this.#o.claudePath), ...this.#pathDenies, ...(this.#o.mcpDenyWrite?.({ cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) ?? [])],
         // round 3 (Aegis H1): a Claude session can no more swap the local runner's node or source than a local one
         ...((r) => (r ? { localRunner: { node: r.node, dir: r.dir } } : {}))(this.#local.config()?.runner),
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
@@ -1996,7 +2007,10 @@ export class SessionSupervisor {
     if (errors.length) throw new Error(`#supervisor: session.drained payload: ${errors.join('; ')}`);
     await this.#o.log('session.drained', payload, { session: s.hsid });
     s.drained = outcome;
-    await this.#stopSession(s, DRAIN_EXIT_REASONS[outcome], 'session-drained'); // F4 also for a request that arrived after the expiry above
+    const stop = await this.#stopSession(s, DRAIN_EXIT_REASONS[outcome], 'session-drained'); // F4 also for a request that arrived after the expiry above
+    // the drain resolves only after the session's exit path ran (its permit.release rows are on the chain before the
+    // daemon shuts down or a successor reads the rows); #onExit drops the session from #sessions and wakes the waiters
+    if (stop.exited) await this.#until(() => this.#sessions.get(s.hsid) !== s, DRAIN_EXIT_SETTLE_MS);
     await s.trace?.flush(TRACE_DRAIN_FLUSH_MS); // #trace-capture (Aegis L3): the kernel is about to go away; a hung disk bounds the wait
     return { hsid: s.hsid, uuid: s.uuid, outcome };
   }

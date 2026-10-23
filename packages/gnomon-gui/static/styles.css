@@ -352,6 +352,8 @@ html, body {
 /* Aegis H1: a composed permission title never hides a command's tail: it WRAPS (no ellipsis, no one-line clip), each
    line of the command is its own line with a visible ⏎, and the shell separators are marked */
 .card-title.composed { white-space: normal; overflow: visible; text-overflow: clip; }
+/* #gui-mcp-servers (Mika): the MCP enable card's title carries its scope ("for all your repos"): it wraps, never cut */
+.card-title.wraps { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .card-title.composed .card-arg { white-space: pre-wrap; overflow-wrap: anywhere; }
 .card-title.composed .card-arg-line { white-space: pre-wrap; }
 .card-title.composed .card-nl { color: var(--warn-ink); font-weight: 600; }
@@ -372,6 +374,17 @@ html, body {
 .card.kind-knot .card-title { color: var(--knot); }
 .card.failed .card-title { color: var(--fail); }
 .card-body { margin: 4px 0 6px; font-size: var(--fs-control); color: var(--ink2); }
+/* design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
+   large that's fine"): a body taller than its cap (lines and field blocks: the MCP batch card, the Rules batch card,
+   the git push card) scrolls INSIDE the card; the title, the keys and the presence line stay in view, so Allow never
+   needs a scroll. The body is a named tab stop (render.ts CARD_BODY_LABEL): arrow keys scroll it, Tab moves on. */
+.card-body { --card-body-max: min(42vh, 26em); max-height: var(--card-body-max); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.card-body:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+/* Mika 2026-10-23: macOS hides scrollbars at rest, so a body that scrolls says so: a rule at its cut edge and the cue
+   under it ("↓ more below: scroll the card text", then "end of the card text"; words, never only a fade or a hue) */
+.card-body.scrolls { border-bottom: 1px dashed var(--rule); padding-bottom: 2px; }
+.card-more { margin: -4px 0 6px; font-size: var(--fs-label); color: var(--sec); }
+.card-more.is-off { display: none; }
 .card-raised { display: block; font-size: var(--fs-label); }
 .card .bar { height: 3px; margin-top: 6px; border-radius: var(--radius); overflow: hidden; background: var(--rule); display: none; }
 .card.held .bar { display: block; }
@@ -1463,6 +1476,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .settings-sec.focused .settings-h:focus-visible { outline: none; }
 /* a kernel-owned section's label sits on its value's first line when the value wraps (Last fallback) */
 .settings-sec[data-kernel-owned] .settings-row.settings-readonly { align-items: first baseline; }
+/* #gui-mcp-servers (Mika 2026-10-23): a long server name wraps in the label column without opening a gap between the
+   value and its how line (the label spans the row's value, how and keys) */
+.settings-sec[data-section="mcp-servers"] .settings-row[data-readonly] > .settings-label { grid-row: span 3; align-self: start; overflow-wrap: anywhere; }
 
 /* ── the loop detail's start-refusal line (loop-detail anatomy) ─────────────── */
 .lp-refusal { margin: 0 20px 6px; padding: 6px 10px; border: 1px solid var(--key-edge); border-left: var(--edge-w) solid var(--key-edge); border-radius: var(--radius); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: var(--fs-control); color: var(--ink2); background: var(--sheet); }
@@ -1543,3 +1559,38 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .ns-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
 .ns-foot > span { display: flex; gap: 8px; align-items: center; }
 .ff-why { font-size: var(--fs-label); color: var(--sec); }
+
+/* #gui-rules-view (8.0:rules-view; session 2026-10-23-gnomon-rules-view, components rule-row + rules-save-bar).
+   Settings › Permissions › Rules. State is carried by words and weight, never by hue: a staged row's "→ off for 1 hour"
+   is 600 ink; a removed row is struck through with a keep key; no amber ◆ anywhere in the block. */
+.settings-row.rules-block { display: block; padding: 0; }
+.rules-sum { margin: 0 0 6px; font-size: var(--fs-label); color: var(--sec); }
+.rules-filter { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.rules-empty { margin: 4px 0 8px; font-size: var(--fs-control); color: var(--ink2); max-width: 60ch; }
+.rules-group { margin: 0 0 10px; }
+.rules-repo { margin: 6px 0 2px; font-size: var(--fs-control); font-weight: 600; color: var(--ink); }
+.rules-count { font-weight: 400; font-size: var(--fs-label); color: var(--sec); }
+/* founder 2026-10-23 ("folded works"): at 50 rules or more the repo heading is the group's fold key; it reads as the
+   heading (same size and weight), ▸ folded / ▾ open by glyph, never by hue; the count stays visible when folded */
+.rules-fold { all: unset; cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.5ch; min-height: 24px; border-radius: var(--radius); }
+.rules-fold:hover .rules-fold-mark { color: var(--ink); }
+.rules-fold:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.rules-fold-mark { display: inline-block; width: 1em; color: var(--sec); }
+.rules-group.is-folded { margin-bottom: 2px; }
+.rules-list { list-style: none; margin: 0; padding: 0; }
+.rule-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 6px 0; border-top: 1px solid var(--rule); }
+.rule-row:first-child { border-top: 0; }
+.rule-what { grid-column: 1; font-size: var(--fs-control); font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.rule-what.struck { text-decoration: line-through; color: var(--sec); }
+.rule-meta { grid-column: 1; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.rule-row.is-off .rule-state { font-weight: 600; color: var(--ink2); }
+.rule-staged { grid-column: 1; font-size: var(--fs-label); font-weight: 600; color: var(--ink); }
+.rule-keys { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 6px; align-items: center; justify-self: end; }
+/* Turn off ▾ opens inline under the row, like the card's Always ▾ (.always-choices) */
+.rule-offs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; padding-left: 8px; border-left: 1px solid var(--rule); }
+.rules-save-bar { position: sticky; bottom: -14px; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0; padding: 8px 0; background: var(--sheet); border-top: 1px solid var(--rule); }
+.rules-save-bar .rsb-count { font-size: var(--fs-control); font-weight: 600; color: var(--ink); margin-right: auto; }
+.rules-save-bar .rules-result { flex: 1 1 100%; margin: 0; }
+.rules-next { display: block; margin-top: 2px; }
+.rules-close-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 8px; border: 1px solid var(--key-edge); border-radius: var(--radius); }
+.rules-close-prompt .rcp-text { font-size: var(--fs-control); font-weight: 600; margin-right: auto; }

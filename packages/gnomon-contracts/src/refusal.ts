@@ -293,6 +293,8 @@ export const MODEL_SWITCH_REFUSAL_REASONS = Object.freeze(Object.keys(MODEL_SWIT
 
 /** Other named reasons the spec uses (§3.4: `FORBIDDEN{reason:'presence'}`). */
 export const OTHER_REFUSAL_REASONS = ['presence'] as const;
+/** 8.0:rules-view (#rules-apply): why a Rules view save was refused (every one writes nothing, but `partial`). */
+export const RULES_VIEW_REFUSAL_REASONS = ['already-on', 'would-loosen', 'until-past', 'until-too-far', 'too-many', 'too-large', 'card-pending', 'partial'] as const;
 /** Additive: a client renders an unknown reason opaquely. */
 export const REFUSAL_REASONS = [
   ...VOICE_REFUSAL_REASONS,
@@ -305,6 +307,7 @@ export const REFUSAL_REASONS = [
   ...(SOCKET_REFUSAL_REASONS as readonly string[]),
   ...D98_REFUSAL_REASONS,
   ...MODEL_SWITCH_REFUSAL_REASONS,
+  ...RULES_VIEW_REFUSAL_REASONS,
 ] as readonly string[];
 
 /** Which gate (and code) each reserved P8-D86–D88 reason rides on (§4.11). */

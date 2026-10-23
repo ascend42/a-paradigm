@@ -11,7 +11,7 @@
  */
 import { PREVIEW } from './env.js'; // FIRST: stubs matchMedia and the surface before app.ts evaluates
 import { PIN_KEY } from '../core/launch.js';
-import { devArmOfferOnce, main } from '../ui/app.js';
+import { devArmOfferOnce, devRulesState, main } from '../ui/app.js';
 import { FakeKernel, fakeWebSocketClass, previewKey, signRows } from './fake-kernel.js';
 import { FIXTURES } from './fixtures.js';
 import { applyPreset, placeWorkshop, serializeLayout, togglePane } from '../core/commands.js';
@@ -53,6 +53,8 @@ async function boot(): Promise<void> {
   // opening needs no trust; its controls do (board header-5b: Settings… lives in the Gnomon menu and ⌘,)
   if (fx.open === 'settings') document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true }));
   if (fx.open === 'app-menu') document.getElementById('wordmark-btn')?.click();
+  // #gui-rules-view: Settings › Permissions › Rules, optionally in a staged state (DEV ONLY hook)
+  if (fx.open === 'rules') devRulesState(fx.rulesState ?? 'none');
   // #gui-voice-ladder / #gui-voice-settings: opening the ladder or the sheet needs no trust; a rung or a sheet press does
   if (fx.open === 'voice-ladder') document.getElementById('voice-pill')?.click();
   if (fx.open === 'voice-settings') {
@@ -79,6 +81,14 @@ async function boot(): Promise<void> {
   if (fx.open === 'steps') {
     for (let i = 0; i < 200 && !document.querySelector('#viewport .work-key'); i++) await frames(1);
     (document.querySelector('#viewport .work-key') as HTMLElement | null)?.click();
+  }
+  // #gui-mcp-servers: Settings at the MCP servers section (opening needs no trust; its keys do)
+  if (fx.open === 'mcp') {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true }));
+    await frames(2);
+    const hd = document.getElementById('settings-h-mcp-servers');
+    hd?.scrollIntoView({ block: 'start' });
+    hd?.focus({ preventScroll: true });
   }
   await frames(3);
   document.documentElement.dataset.preview = 'ready';

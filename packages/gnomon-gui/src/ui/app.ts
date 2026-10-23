@@ -26,7 +26,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, gitVerbOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
@@ -43,10 +43,13 @@ import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringShee
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
 import type { ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
+import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
+import { McpServersController } from './mcp-servers.js';
+import { MCP_SECTION } from '../core/mcp-servers.js';
 import { changeForm, localCurrentOf, localStatusOf, requestLine, setupForm, LOCAL_SECTION } from '../core/local-model.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
-import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
+import { isKernelPrincipal, kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, EDIT_RULE_REVOKE_LABEL, EDIT_RULE_REVOKE_NOTE, EDITS_BY_RULE_CHIP, EDITS_BY_RULE_NARROW, EDITS_BY_RULE_NARROW_NAME, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText, voiceRefusalText } from '../core/capture.js';
 import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, whoLine, type AppMenuRow, type LinkState } from '../core/header.js';
@@ -892,6 +895,23 @@ function fadeOff(cardId: string, decision: string): void {
 const lastState = new Map<string, string>();
 const drooped = new Set<string>();
 
+/**
+ * design-system card.body-scroll (Mika 2026-10-23): a card body is a tab stop, and shows its "more below" cue, only
+ * while it overflows its cap: measured after mount and on every box change (a resize, a details opening) and scroll.
+ * paintStack rebuilds every card, so it disconnects the observer before it clears the stack (no detached bodies kept).
+ */
+const markBodyOf = (b: HTMLElement): void => {
+  const cue = b.nextElementSibling;
+  markCardBody(b as unknown as ScrollBodyEl, cue && cue.classList.contains('card-more') ? (cue as HTMLElement) : null);
+};
+const bodyWatch = typeof ResizeObserver === 'function' ? new ResizeObserver((es) => es.forEach((e) => markBodyOf(e.target as HTMLElement))) : null;
+function watchCardBody(card: HTMLElement): void {
+  const b = card.querySelector<HTMLElement>('.card-body');
+  if (!b) return;
+  b.addEventListener('scroll', () => markBodyOf(b), { passive: true });
+  bodyWatch?.observe(b);
+}
+
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
   const cards = (stackScoped && focused ? store.stack(focusRepo) : store.stack()).filter((c) => !departing.has(c.cardId));
@@ -943,6 +963,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
       c.card.block,
     ) as unknown as HTMLElement;
     if (c.kind === 'loop-trust' || c.kind === 'loop-choice') decorateLoopCard(el, c.kind, c.card, c.cardId);
+    watchCardBody(el);
     const r = refusals.get(c.cardId);
     if (r) el.appendChild(h(doc, 'p', { class: 'refusal' }, refusalText(r)) as unknown as Node);
     if (arrived.has(`card-in:${c.cardId}`)) {
@@ -957,6 +978,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   };
   const pile = $('stack');
   const refocus = alwaysFocusOf(); // a repaint keeps focus on an Always fold or choice (Mika 2026-10-23)
+  bodyWatch?.disconnect(); // every card is rebuilt below (card.body-scroll)
   clear(pile);
   stackLaidOutAt = performance.now();
   // S3: a paper pile; more than PILE_MAX cards ⇒ the first PILE_MAX piled plus "+n more" (it opens the fanned pile)
@@ -1193,6 +1215,8 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
     await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
     fadeOff(cardId, decision); // S4: only after the kernel accepted the decision (a refusal throws before this)
+    // #gui-rules-view (Mika C1): an Always decision says where its rule lives
+    if (decision === 'always') toasts().show('Always rule saved: no card next time', { kind: 'info', key: { label: 'see Rules', onPress: (e: MouseEvent) => e.isTrusted && settings.open('rules') } });
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
     if (upgrade && !(err instanceof RpcError && err.refusal.code === 'DELIVERY_UNKNOWN')) clearRestarting(sessionStorage);
@@ -1280,8 +1304,26 @@ const localModel = new LocalModelController({
   toast: (text, kind, open) => void toasts().show(text, { kind, tag: 'local model', ...(open ? { key: { label: 'Open settings', onPress: (e: MouseEvent) => e.isTrusted && settings.open(LOCAL_SECTION) } } : {}) }),
   card: (cardId) => localCardRequest(cardId),
 });
+let rulesUi = emptyRulesUi();
+// #gui-mcp-servers (T-2026-10-23-003): the MCP servers section's press path (ui/mcp-servers.ts)
+const mcpServers = new McpServersController({
+  call: (req) => (client ? client.call('log.append', req) : Promise.reject(new Error('not connected'))),
+  status: () => status,
+  hsid: () => focused,
+  now: () => Date.now(),
+  time: (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  refreshStatus: () => refreshStatus(),
+  repaint: () => settings.repaint(),
+  decide: (cardId) => {
+    settings.close();
+    focusCardGroup(cardId);
+  },
+  focus: (sel) => (document.querySelector(`#settings-body [data-section="${MCP_SECTION}"] ${sel}`) as HTMLElement | null)?.focus(),
+  connId: () => session?.connId ?? null, // a card's skips are shown only to the connection that decided it
+});
 const settings = mountSettings(document, {
   local: localModel,
+  mcp: mcpServers,
   model: () =>
     settingsModel({
       theme,
@@ -1297,10 +1339,95 @@ const settings = mountSettings(document, {
       gui: GUI_CLIENT,
       unlock: unlockSeenOf(store.kernelFeed, session?.connId ?? null, kernelPrincipalOf(session?.principal)),
       local: { ui: localModel.ui(), loopsUsing: loopsUsingLocal() },
+      rules: rulesBlock(rulesStatusOf(status), rulesUi, (hsid) => sessionName(hsid) || null),
+      mcp: { ui: mcpServers.ui(), hsid: focused },
     }),
   run: (id) => run(id, true), // the sheet acts on trusted presses only (settings-sheet.ts)
   revoke: (grantId) => void revokeGrant(grantId),
+  // #gui-rules-view (8.0:rules-view): staged in the page; ONE request.rules.apply on Save
+  rules: {
+    press: (act, ruleId, value) => {
+      if (!ruleId) return;
+      const rs = rulesStatusOf(status);
+      // founder 2026-10-23 ("folded works"): a repo group's heading folds and unfolds it (ruleId is the repoKey here)
+      if (act === 'fold') {
+        const g = rulesBlock(rs, rulesUi).groups.find((x) => x.repoKey === ruleId);
+        if (!g?.foldable) return;
+        rulesUi = toggleFold(rulesUi, ruleId, !g.folded);
+        return settings.repaint(); // focus stays on the same heading key (the sheet restores it by act and id)
+      }
+      if (act === 'off-menu') rulesUi = toggleOffMenu(rulesUi, ruleId);
+      else if (act === 'off' && (value === 'hour' || value === 'tomorrow' || value === 'manual')) rulesUi = stageOff(rulesUi, ruleId, value as RulePreset, rs);
+      else if (act === 'on') rulesUi = stageOn(rulesUi, ruleId);
+      else if (act === 'remove') rulesUi = stageRemove(rulesUi, ruleId);
+      else if (act === 'keep' || act === 'undo') rulesUi = unstage(rulesUi, ruleId);
+      settings.repaint();
+      // the presets open inline: focus the first; a staged row keeps focus on its undo/keep key
+      if (act === 'off-menu') (document.querySelector(`#settings-body .rule-row[data-rule-id="${CSS.escape(ruleId)}"] [data-rule-value]`) as HTMLElement | null)?.focus();
+      else if (act !== 'keep' && act !== 'undo') (document.querySelector(`#settings-body .rule-row[data-rule-id="${CSS.escape(ruleId)}"] [data-rule-act]`) as HTMLElement | null)?.focus();
+    },
+    save: () => void saveRules(),
+    discard: () => {
+      rulesUi = rulesDiscard(rulesUi);
+      settings.repaint();
+      (document.querySelector('#settings-h-rules') as HTMLElement | null)?.focus();
+    },
+    decide: () => {
+      const id = rulesUi.waiting?.cardId;
+      if (!id) return;
+      settings.close();
+      focusCard(id);
+    },
+    filter: (text) => {
+      rulesUi = { ...rulesUi, filter: text.slice(0, 200) };
+      settings.repaint();
+    },
+    beforeClose: () => {
+      const c = rulesBeforeClose(rulesUi);
+      rulesUi = c.ui;
+      return c.close;
+    },
+    escape: () => {
+      const id = rulesUi.offOpen;
+      if (!id) return false;
+      rulesUi = toggleOffMenu(rulesUi, id);
+      settings.repaint();
+      (document.querySelector(`#settings-body .rule-row[data-rule-id="${CSS.escape(id)}"] [data-rule-act="off-menu"]`) as HTMLElement | null)?.focus();
+      return true;
+    },
+  },
 });
+/**
+ * #gui-rules-view: the one save. Narrowing applies at once; a batch that turns any rule back on comes back as ONE
+ * strictness card that this same press decides allow (Touch ID or the Mac password once, the setMode pattern). A
+ * refusal keeps every change staged; a check refused or still waiting reads "card waiting · Decide in the stack".
+ */
+async function saveRules(): Promise<void> {
+  const req = applyRequest(rulesUi);
+  if (!req || rulesUi.saving) return;
+  if (!client) {
+    rulesUi = { ...rulesUi, result: { kind: 'refused', text: 'Nothing was saved: not connected.', next: 'Reconnect (⌘K), then save again' } };
+    return settings.repaint();
+  }
+  rulesUi = { ...rulesUi, saving: true, result: null, closePrompt: false };
+  settings.repaint();
+  try {
+    const r = await client.call<{ cardId?: string | null }>('log.append', req);
+    let decided: boolean | null = null;
+    if (typeof r.cardId === 'string') {
+      try {
+        await client.call('approve', { cardId: r.cardId, decision: 'allow' });
+        decided = true;
+      } catch {
+        decided = false; // the card stays in the stack: decide it there
+      }
+    }
+    rulesUi = afterSave(rulesUi, { cardId: typeof r.cardId === 'string' ? r.cardId : null, decided });
+  } catch (err) {
+    rulesUi = { ...rulesUi, saving: false, result: err instanceof RpcError ? refusedResult(err.refusal) : { kind: 'refused', text: 'Nothing was saved: Gnomon did not answer.', next: 'check the connection, then save again' } };
+  }
+  await refreshStatus();
+}
 store.onChange((w) => {
   if (w.has('feed') || w.has('modes') || w.has('voice')) settings.repaint();
 });
@@ -1440,6 +1567,8 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         standingFeed.row(r); // F6: a live grant.standing.used row is a toast + a feed line
         loopRow(r); // #gui-loops: loop done toasts and a status re-read
         localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
+        rulesRow(r); // #gui-rules-view: a rule row re-reads status.rules; a timed off that ended is a 6 s toast
+        mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
     } else if (p.end) void followLog(c, store).catch(() => undefined);
@@ -2304,6 +2433,16 @@ function draftWaitingOf(): string | null {
   return on && dict.hsid && dictationNote(dict) === 'draft waiting' ? sessionName(dict.hsid) : null;
 }
 
+/** #gui-rules-view: rows that change status.rules re-read it; a kernel enabled{cause:'expired'} is a 6 s toast. */
+function rulesRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (!RULE_ROW_KINDS.has(r.kind)) return;
+  if (isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) {
+    const text = expiryToastOf(r, rulesStatusOf(status));
+    if (text) toasts().show(text, { kind: 'info', key: { label: 'see Rules', onPress: (e: MouseEvent) => e.isTrusted && settings.open('rules') } });
+  }
+  void refreshStatus();
+}
+
 /* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */
 /** The control's state is the kernel's status.runModes only (never a guess): re-read on a mode row (store 'modes'). */
 async function refreshStatus(): Promise<void> {
@@ -2322,6 +2461,8 @@ async function refreshStatus(): Promise<void> {
   voiceSheet.repaint();
   standingFeed.repaint(); // F6: today's grant (status.standing)
   localModel.statusChanged(); // #gui-local-model: a card waiting from an earlier load; the check after an Allow
+  rulesUi = rulesReconcile(rulesUi, rulesStatusOf(status), (cardId) => store.cards.has(cardId)); // #gui-rules-view
+  mcpServers.reconcile(); // #gui-mcp-servers: marks for servers gone, broken or already on drop
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
   modPanelsStatus(status); // a mod installed, paused or removed: its views (and the Workshop key) follow
@@ -2511,6 +2652,8 @@ function paintModeMenu(): void {
   if (sc.other) menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-mode-scope': sc.other.scope }, sc.other.label) as unknown as Node);
   // TD-2026-10-23-939 follow-up: an "edits in this repo" always rule stands: revoke it here (narrows: no Touch ID)
   if (v.effective === 'ask' && v.editsByRule) menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-revoke-rule': v.editsByRule }, h(doc, 'span', { class: 'mode-name' }, EDIT_RULE_REVOKE_LABEL), h(doc, 'span', { class: 'mode-note' }, EDIT_RULE_REVOKE_NOTE)) as unknown as Node);
+  // #gui-rules-view (Mika C1): every Always rule, from the mode menu
+  menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-open-rules': '' }, 'Always rules…') as unknown as Node);
 }
 
 function openMoreMenu(): void {
@@ -3144,7 +3287,9 @@ function run(id: string, trusted: boolean): void {
   } else if (id === 'voice.settings.open') openVoiceSettings();
   else if (id === 'voice.mic.toggle') void micToggle(trusted);
   else if (id === 'settings.open') settings.open();
+  else if (id === 'rules.open') settings.open('rules'); // #gui-rules-view: Settings › Permissions › Rules
   else if (id === 'local.setup') settings.open(LOCAL_SECTION); // #gui-local-model: section-focused
+  else if (id === 'mcp.open') settings.open(MCP_SECTION); // #gui-mcp-servers: section-focused
   else if (id === 'mods.open') modsPanel.open();
   else if (id === 'loops.open') loopsView.open();
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
@@ -3512,8 +3657,12 @@ function wire(): void {
   $('new-session').addEventListener('click', (e) => run('session.new', e.isTrusted));
   $('mode-btn').addEventListener('click', () => ($('mode-menu').hidden ? openModeMenu() : closeModeMenu()));
   $('mode-menu').addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest('[data-mode], [data-mode-scope], [data-revoke-rule]') as HTMLButtonElement | null;
+    const b = (e.target as HTMLElement).closest('[data-mode], [data-mode-scope], [data-revoke-rule], [data-open-rules]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
+    if (b.dataset.openRules !== undefined) {
+      closeModeMenu();
+      return settings.open('rules');
+    }
     if (b.dataset.revokeRule) {
       closeModeMenu();
       $('mode-btn').focus(); // the entry is gone with the menu: focus returns to the run mode key (Mika 2026-10-23)
@@ -3704,6 +3853,25 @@ function wire(): void {
  * already call the kernel client directly, so this widens nothing (the send still needs a trusted press). */
 export function devArmOfferOnce(): void {
   if (__GNOMON_PREVIEW__) devArmOffer = true; // L1: false in scripts/build.mjs, so the served bundle drops it
+}
+
+/** DEV ONLY (#gui-preview rules-*): open Settings › Rules in a staged state for the reference shots (presses need trust). */
+export function devRulesState(kind: string): void {
+  if (!__GNOMON_PREVIEW__) return; // false in scripts/build.mjs: the served bundle drops it
+  const rs = rulesStatusOf(status);
+  const ids = rs.rules.map((r) => r.ruleId);
+  let ui = emptyRulesUi();
+  if (kind === 'off-open' && ids[0]) ui = toggleOffMenu(ui, ids[0]);
+  else if (kind !== 'none' && ids.length > 1) {
+    ui = stageRemove(stageOff(ui, ids[0]!, 'hour', rs), ids[1]!);
+    const off = rs.rules.find((r) => r.state === 'off');
+    if (off && kind !== 'tighten') ui = stageOn(ui, off.ruleId);
+  }
+  if (kind === 'close') ui = rulesBeforeClose(ui).ui;
+  if (kind === 'refused') ui = { ...ui, result: refusedResult({ code: 'NOT_FOUND', reason: 'not-found', message: '#approval-broker: no standing always rule card:01JPREVIEWRULE000000000002 (unknown, or removed meanwhile)', next: [], data: { hint: 'the list has changed: look again, then save' } }) };
+  if (kind === 'waiting') ui = afterSave(ui, { cardId: 'card:01JPREVIEWRULESCARD00000001', decided: false });
+  rulesUi = ui;
+  settings.open('rules');
 }
 
 export function main(raw?: string): void {

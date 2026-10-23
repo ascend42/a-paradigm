@@ -51,6 +51,24 @@ gates:
     location: packages/gnomon/src/kernel/broker/broker.ts:767-775 (#approval-broker approve) + packages/gnomon/src/kernel/socket/dispatch.ts:813 (approve, voice class)
     check: principalClass is not voice AND the approve params carry no via voice and no voice key
     prizes: []
+  loop-trusted:
+    description: 'Gnomon Loops (docs/specs/gnomon-loops.md, TD-2026-10-22-369): a loop runs, fires or lands only while a human trust record (the loop-trust card, hand only, root key) matches its compiled definition and content hash; any change to the definition or its protected set drops trust until re-trusted.'
+    type: capability
+    location: packages/gnomon/src/kernel/loops/registry.ts (#loop-registry) and the loop runners that consult it
+    check: the loop's current compiled definition hash equals the hash in an unrevoked human loop-trust record
+    prizes: []
+  loop-origin-clamp:
+    description: 'Gnomon Loops: a session a loop raises gets no automatic pass (auto-edits, read-only, Always rules) beyond what its trusted definition allows; everything else raises a card (loop-clamp.ts, default deny, exact loop-trust match).'
+    type: capability
+    location: packages/gnomon/src/kernel/supervisor/loop-clamp.ts (#loop-clamp), packages/gnomon/src/kernel/supervisor/supervisor.ts (mayAuto)
+    check: loopClampAllows(origin, pass) is true for the loop's trusted definition
+    prizes: []
+  mcp-server-enable:
+    description: 'Gnomon turns on one of the human''s own MCP servers for sessions only by the human''s decision (T-2026-10-23-003, #mcp-servers). request.mcp.enable / request.mcp.disable are served from a human-class gui or device connection only (never voice, an agent, a mod or a session; dispatcher-only, never a row). Enable raises ONE grant card (detail.action mcp.enable): root class (presence AND the root key), hand-only, never standing, re-checked against the server''s launch hash inside the touch; a server from a repo''s own .mcp.json (or a per-folder ~/.claude.json entry) is turned on for that one repo only, never for all; a changed declaration is not launched until turned on again. Disable and the first-party Paradigm MCP on/off narrow or restore the default and take no card. Rows and cards carry env and header NAMES only; values reach only the session''s own 0600 mcp.json.'
+    type: capability
+    location: packages/gnomon/src/kernel/desk/mcp-server-cards.ts (McpServers.request) + packages/gnomon/src/kernel/socket/dispatch.ts (request.mcp.* routing)
+    check: principalClass human AND credential gui|device; enable needs an allowed grant card whose launchHash still matches; project/local servers only with scope repo = their own folder
+    prizes: []
   peer-paired:
     description: 'Gnomon kernel link is paired (spec §3.9, P8-R9, P8-D73–D76): link verbs (brief send, cowork, inject origin peer) require a root-signed pairing with the peer''s root key. Reserved in M1.1; enforced by #peer-link in M2.8.'
     type: capability

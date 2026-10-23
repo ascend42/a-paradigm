@@ -943,6 +943,38 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     expect(errOf(await h.conn.call('log.append', { kind: 'request.rules.revoke', payload: { ruleId: cardId } }))).toMatchObject({ c: 'NOT_FOUND' }); // already revoked
   }, 60_000);
 
+  it('8.0:rules-view request.rules.apply: the human turns a rule off at once (kernel-signed approval.rule.disabled, no card), status.rules says off (human class only), turning it back on raises ONE card; agent, mod and voice never', async () => {
+    const r = await rig();
+    const K = r.d.kernelPrincipal;
+    const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZC3';
+    const repoKey = `sha256:${'a'.repeat(64)}`;
+    await r.d.log.append({ kind: 'approval.request', principal: K, payload: { card: { cardId, kind: 'permission' }, tool: 'Bash', tool_input: { command: 'npm run build' } } });
+    await r.d.log.append({ kind: 'approval.decide', principal: K, payload: { cardId, decision: 'always' } });
+    await r.d.log.append({ kind: 'approval.rule.learned', principal: K, payload: { cardId, tool: 'Bash', matchExact: true, presence: 'fresh', repoKey } });
+    await settle();
+    for (const cls of ['agent', 'mod', 'voice'] as const) {
+      const s = await asDevice(r, cls);
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.rules.apply', payload: { changes: [{ ruleId: cardId, op: 'remove' }] } })), cls).toMatchObject({ c: 'FORBIDDEN' });
+      if (cls === 'agent') expect(Object.hasOwn(ok(await s.conn.call('status')), 'rules'), cls).toBe(false);
+      await s.conn.close();
+    }
+    const h = await asDevice(r, 'human');
+    const st0 = ok(await h.conn.call('status')) as { rules?: { rules: Array<{ ruleId: string; state: string; words: string }> } };
+    expect(st0.rules?.rules).toEqual([expect.objectContaining({ ruleId: cardId, state: 'on', words: 'this exact command: npm run build' })]);
+    const res = ok(await h.conn.call('log.append', { kind: 'request.rules.apply', payload: { changes: [{ ruleId: cardId, op: 'off', until: 'manual' }] } }));
+    expect(res).toMatchObject({ cardId: null, applied: [{ ruleId: cardId, op: 'off', until: null }] });
+    await settle();
+    expect(rows(r.home).filter((x) => x.kind === 'approval.rule.disabled').map((x) => x.env.payload)).toEqual([expect.objectContaining({ ruleId: cardId, repoKey, tool: 'Bash', until: null })]);
+    const st1 = ok(await h.conn.call('status')) as { rules: { rules: Array<{ state: string }> } };
+    expect(st1.rules.rules[0]!.state).toBe('off');
+    const back = ok(await h.conn.call('log.append', { kind: 'request.rules.apply', payload: { changes: [{ ruleId: cardId, op: 'on' }] } })) as { cardId: string | null; on: string[] };
+    expect(back.on).toEqual([cardId]);
+    expect(typeof back.cardId).toBe('string');
+    await settle();
+    expect(rows(r.home).filter((x) => x.kind === 'approval.rule.enabled')).toEqual([]); // waits on the card
+    expect((ok(await h.conn.call('status')) as { rules: { pendingCardId?: string } }).rules.pendingCardId).toBe(back.cardId);
+  }, 60_000);
+
   it('P8-D86/D87 request.mode.set: the human device tightens a repo with no presence (request row, then approval.mode.set), status.runModes shows it and it survives a kernel restart; agent, mod, voice, session and read-token connections never set a mode', async () => {
     const r = await rig();
     const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });

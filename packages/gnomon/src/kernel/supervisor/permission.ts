@@ -139,8 +139,11 @@ export const FIELD_BODY_PREFIX = '  │ ';
  * FIELD_BODY_PREFIX, and an end marker. Text inside a field can therefore
  * never start a card line, nor look like the line after the field.
  */
+/** Every break the display sanitizer can leave or make (it maps U+2028/U+2029 to a newline): each starts a fenced line. */
+const FIELD_LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
 export function fieldLines(label: string, text: string): string[] {
-  return [`${label}:`, ...text.split(/\r?\n/).map((l) => `${FIELD_BODY_PREFIX}${l}`), `  └ end of ${label}`];
+  // Aegis L2 (2026-10-23 batch review): split on every line break, not only \r?\n, so no line escapes the fence
+  return [`${label}:`, ...text.split(FIELD_LINE_BREAK).map((l) => `${FIELD_BODY_PREFIX}${l}`), `  └ end of ${label}`];
 }
 const full = fieldLines;
 const valueText = (v: unknown): string => {

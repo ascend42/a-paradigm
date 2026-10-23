@@ -22,6 +22,45 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-rules-view:
+    description: >-
+      8.0:rules-view (founder: see the list of rules, revert a bad call,
+      toggle one for a time, one save; session 2026-10-23-gnomon-rules-view,
+      Mika C1-C3). core/rules.ts (PURE): rulesStatusOf (status.rules,
+      fail-safe), the staging reducers (stageOff with a kernel-clock preset,
+      stageOn, stageRemove, unstage, discard, reconcile), saveCost / saveLabel
+      ("Save · no Touch ID" when the batch only tightens, "Save · asks Touch ID
+      or your Mac password once" when any rule turns back on), beforeClose and
+      closePromptText ("3 changes not saved · Save · Discard"), applyRequest
+      (ONE request.rules.apply), refusedResult (plain words + next:, every
+      change stays staged), afterSave ("card waiting · Decide in the stack"
+      when the same press could not decide the card), rulesBlock (grouped by
+      repo with counts, newest first, filter above 12 rules, the empty state)
+      and expiryToastOf ("rule back on: <rule>", 6 s). Staged rows are marked
+      by word and weight, never amber; a removed row is struck with a keep
+      key. ui/rules-block.ts paints the block (rule-row, rules-save-bar;
+      design system .atelier/systems/gnomon/); ui/settings-sheet.ts routes
+      its trusted presses and asks before closing with changes staged;
+      ui/app.ts owns the staged state, saveRules (ONE log.append, then the
+      same press decides the card allow), the three entry points (palette
+      rules.open "Rules…", the mode menu's "Always rules…", the Always toast's
+      "see Rules"), the expiry toast and a status re-read on rule rows.
+      Preview fixtures rules-0/1/5/50/200, rules-off-open, rules-tighten,
+      rules-staged, rules-close, rules-refused, rules-waiting (DEV hook
+      devRulesState, dropped from the served bundle). Mika's review
+      (2026-10-23): a refusal line never carries the kernel's message, ids or
+      codes; the waiting line says what was saved and the waiting row offers
+      no second Turn on; the close prompt's Save names the bar's cost; Esc
+      folds an open Turn off ▾ first; the meta line drops the repo its group
+      heading names; the settings sheet keeps its scroll on a repaint (the
+      filter no longer scrolls away while typing). Test:
+      test/rules-view.test.ts.
+      Folding (founder 2026-10-23: "folded works"): at FOLD_AT (50) rules or
+      more every repo group starts folded with its heading and count; the
+      heading holds the fold key (data-rule-act fold, aria-expanded, ▸/▾;
+      toggleFold, ui.folds); the filter unfolds every group it matches; a
+      group holding a staged change, an open Turn off ▾ or a waiting rule
+      stays unfolded. Design system rule-row.folding.
   gui-session-rename:
     description: >-
       8.0:session-rename (founder ask: rename a session). core/rename.ts
@@ -445,6 +484,19 @@ components:
       sits in the stack head; the composer placeholder is "Reply to <name>…"
       with the long hint in title=, and send is the filled primary key.
       Tests: test/desk.test.ts.
+    card-body-scroll: >-
+      design-system card.body_scroll (founder 2026-10-23: "as long as the
+      card text is scrollable in the event it's too large that's fine"):
+      renderCard's .card-body (lines and field blocks) caps at
+      --card-body-max (min(42vh, 26em)) and scrolls inside the card; the
+      title, k-line, root rows, keys, presence line and contentHash stay
+      outside it, so Allow shows without scrolling. Only while it overflows
+      (markCardBody, measured by a ResizeObserver in app.ts paintStack and
+      on scroll) is the body one named tab stop (tabindex 0, role group,
+      CARD_BODY_LABEL) with the worded cue .card-more under it (CARD_MORE:
+      "↓ more below: scroll the card text" / "end of the card text"); Tab
+      moves on to the keys; a body that fits adds no stop. Covers the MCP enable and batch cards, the Rules batch card
+      and the git push card. Test: test/card-scroll.test.ts.
     card-sheet-pile-s3: >-
       S3 card sheet and stack pile (critique 2026-10-20 §2 S3). renderCard
       anatomy (data only from kernel fields): header ■ <repo basename> in
@@ -1528,6 +1580,68 @@ components:
       sr-only "new: " / "was: " text (no aria-label on a list item).
       Tests: test/local-model.test.ts, test/root-rows.test.ts,
       test/loops-view.test.ts.
+  gui-mcp-servers:
+    description: >-
+      #gui-mcp-servers (T-2026-10-23-003): Settings › MCP servers ·
+      kernel-owned, after Local model. core/mcp-servers.ts (pure) paints
+      status.mcp: the first-party Paradigm MCP row (Turn off / Turn on, no
+      card), the human's user and plugin servers, and the focused session's
+      folder's local and repo .mcp.json servers; each readonly row shows a
+      mark (✓ on, ✕ the kernel's reason, ? changed), how it runs (command
+      and args, or transport and URL), env and header NAMES only, the
+      ~/.gnomon/loop-env names it takes, and the shell / fetch-at-launch
+      warnings. Keys `mcp:on-all`, `mcp:on-repo`, `mcp:off`, `mcp:fp-*`,
+      `mcp:decide` (data-lm-act, routed by ui/settings-sheet.ts to
+      ui/mcp-servers.ts McpServersController, never SETTINGS_RUNS); a repo
+      server never offers all repos; a server with a problem has no key;
+      Windows shows rows without keys. Enable sends request.mcp.enable and
+      shows the request row (card waiting, Decide in the stack); the card's
+      approval.decide / approval.expire row gives On / Not changed; disable
+      needs no card. The enable card is the ⊙ gnomon grant family
+      (render.ts gnomonFam for detail.action mcp.enable). Palette mcp.open
+      "MCP servers…". Tests: test/mcp-servers.test.ts.
+      TD-2026-10-23-361: rows and the Paradigm row name the human's own
+      Claude Code allow rules (autoAllowWords) and inline code; the Paradigm
+      row says where it runs from and "(linked: it runs live …)".
+      Tests: test/mcp-servers-allow.test.ts.
+      Mika's review (2026-10-23): the request or result row shows under the
+      pressed server and focus follows it; plain refusals (mcpRefusalText);
+      the Paradigm plugin copy reads "covered by the Paradigm MCP above"; a ✕
+      row ends with next: (problemNext); Windows' row comes first; the
+      folder's servers start a group; the allow words lead with "no card for
+      its tools" and close the how line; the enable card shows the kernel's
+      lines on its face and its title wraps (render.ts mcpFace). Preview
+      fixtures mcp-servers, mcp-waiting, mcp-none, mcp-fp-missing,
+      mcp-windows, mcp-not-offered.
+      #batch-card (founder 2026-10-23: "grouped cards of related things,
+      one password"): one server keeps one press (On for all repos / On in
+      <folder>, acts mcp:on-all / mcp:on-repo, its own card, its request
+      row under its row; Mika 2026-10-23, founder: fewer hurdles). "Mark
+      several" (act mcp:marking, the "Several at once" row after the list;
+      startMarking) turns the keys into Mark for all repos / Mark in
+      <folder> (acts mcp:mark-all / mcp:mark-repo), which STAGE a server in
+      the page (markMcp, unmarkMcp, clearMcp, reconcileMcp; value "marked
+      to turn on …", key Unmark; "none yet" + Stop marking before the
+      first mark; Mark keys also while a card waits; at
+      status.mcp.max marks the keys disable and say why); the "Marked to
+      turn on" row after the servers names them and the cost ("Turn on N
+      servers · asks Touch ID or your Mac password once") and sends ONE
+      request.mcp.enable{servers} (mcpBatchRequest); a refusal keeps every
+      mark. While a card waits its servers read "off until you allow its
+      card", the request row (one per waiting cardId, waitingCards) sits
+      with the batch, the other servers can be marked for the next card,
+      Turn on waits and says why; Turn off applies at once even then. An
+      allowed card that skipped a changed server names it (skippedResult
+      from this card's entry in status.mcp.skips, by cardId; its `on` names
+      what turned on; the skip line only when entry.connId is this page's
+      connection, else only what turned on). Preview fixtures mcp-batch-card (the card,
+      its body scrolling) and mcp-batch-waiting.
+    path: src/core/mcp-servers.ts
+    type: module
+    tags: [gnomon, gui, settings, mcp, paradigm-8]
+    tests:
+      - test/mcp-servers.test.ts
+      - test/mcp-servers-allow.test.ts
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto
