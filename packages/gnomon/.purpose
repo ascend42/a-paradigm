@@ -2752,6 +2752,20 @@ components:
       (root key). Every server runs inside the session sandbox (no nested
       SBPL, measured); the card names the host and says it has the
       session's network.
+      TD-2026-10-23-361 (Aegis review, founder rulings): H1 the human's own
+      ~/.claude/settings*.json allow rules for a server's mcp__ tools are
+      honoured and NAMED (autoAllowRules) on the card, the row and the
+      Paradigm row; Gnomon adds none. M3 the first party runs live from its
+      resolved path, unpinned, linked shown (accepted residual: a session in
+      a linked checkout can change the next session's Paradigm MCP, which
+      runs under the same profile); every enabled `all` server's command and
+      absolute args are write-denied in sessions, inside-roots exempt and
+      logged (mcp.deny.skipped). M1 ${NAME} only in URL path and query (a
+      loopback port excepted), placeholders shown, the expanded URL
+      re-checked at compose. M2 law-7 references refused. L1 repo .mcp.json
+      symlink / hard link / outside-repo refused. L2 secret NAME=value and
+      short-flag values hidden. L3 inline code flagged. L5 mcp.user.added
+      after the merge (noteMerged).
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
