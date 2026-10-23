@@ -13,7 +13,7 @@ import { chooseRung, clientFactOf, crashCauseOf, dropFact, inputChoices, inputRo
 import { COMPOSER_LINES, COMPOSER_TALL_LINES, composerFit, fitTallRoom, lineCountLabel, lineCountShown, parseTall, serializeTall, TALL_FEED_MIN_PX } from '../src/core/composer.js';
 import { initialTeach, reduceTeach, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
 import { clientOf, enrolStart, micTitleLine } from '../src/core/voice-client.js';
-import { ACK_TEXT, CARD_VOICE_LINE, cardVoiceOrigin, CLAMP_CHIP, sentLabel } from '../src/core/voice-presets.js';
+import { ACK_TEXT, sentLabel } from '../src/core/voice-presets.js';
 import { renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { ladderEls, sheetEls, sheetKey, trapNext, type SheetView } from '../src/ui/voice-settings.js';
 import { voiceStatusOf } from '../src/core/voice.js';
@@ -54,7 +54,7 @@ const root = (els: MiniEl[]): FEl => {
   return r;
 };
 
-const base: PillInput = { rung: 'off', hotkey: '⌃⌥Space', sendWord: null, attached: false, target: '', clientConnected: true, clientFact: null, capture: null, clamped: false, micClosed: false, micKeyBare: false, heardAgoS: null };
+const base: PillInput = { rung: 'off', hotkey: '⌃⌥Space', sendWord: null, attached: false, target: '', clientConnected: true, clientFact: null, capture: null, micClosed: false, micKeyBare: false, heardAgoS: null };
 const pill = (o: Partial<PillInput>) => voicePillOf({ ...base, ...o });
 const display = (state: 'idle' | 'hearing' | 'transcribing' | 'captured' | 'dropped', className = `capture-${state}`) => ({ state, label: state === 'idle' ? null : 'x', className, meter: 0, ghost: false, ghostText: null, caption: '', flashLeftMs: null });
 
@@ -76,10 +76,11 @@ describe('the pill: rung name + ONE live fact (design-system gnomon.voice.pill)'
     expect(pill({ rung: 'dictate', attached: true }).aria).toBe('Voice: Dictate, mic open, listening');
     expect(pill({ rung: 'talk', attached: true }).aria).toBe('Voice: Talk, mic closed, hold ⌃⌥Space');
   });
-  it('a clamped voice-origin turn: the amber edge and "edits ask first"; the edge stays under a louder fact', () => {
-    expect(pill({ rung: 'word', attached: true, sendWord: 'send', clamped: true })).toMatchObject({ fact: 'edits ask first', tone: 'clamp', clamped: true });
-    const drop = pill({ rung: 'word', attached: true, clamped: true, capture: { display: display('dropped'), cap: { reason: 'refused', refusal: 'voice-playback', cause: null } } });
-    expect(drop).toMatchObject({ fact: 'not sent · Claude was still finishing', tone: 'fail', clamped: true });
+  it('TD-2026-10-23-939: no clamp fact or amber edge; a voice turn reads like a typed one', () => {
+    const p = pill({ rung: 'word', attached: true, sendWord: 'send' });
+    expect(p).toMatchObject({ fact: 'say “send”', tone: 'plain' });
+    expect(p).not.toHaveProperty('clamped');
+    expect(APP).not.toMatch(/edits ask first|clampedFrom|pv\.clamped/);
   });
   it('speech not sent: vermilion, the reason in words; a mic-off drop is just the mic key', () => {
     expect(dropFact({ reason: 'too-short', refusal: null, cause: null })).toBe('not sent · too short to catch');
@@ -101,7 +102,7 @@ describe('the pill: rung name + ONE live fact (design-system gnomon.voice.pill)'
     expect(crashed.aria).toContain('voice crashed (the input device went away)');
     expect(crashed.title).toContain('the input device went away');
     // a fact that is not the client's carries no cause
-    expect(pill({ rung: 'dictate', attached: true, clamped: true, clientFact: 'voice crashed', clientCause: 'x' }).aria).not.toContain('(x)');
+    expect(pill({ rung: 'dictate', attached: true, capture: { display: display('dropped'), cap: { reason: 'too-short', refusal: null, cause: null } }, clientFact: 'voice crashed', clientCause: 'x' }).aria).not.toContain('(x)');
     expect(pill({ clientFact: 'voice app not running' })).toMatchObject({ name: 'Voice off', fact: 'voice app not running' });
     // a disconnected voice app never reads as an open mic
     expect(pill({ rung: 'dictate', attached: true, clientConnected: false }).live).toBe(false);
@@ -113,7 +114,7 @@ describe('the ladder replaces the pill menu (design-system gnomon.voice.model)',
   it('five rungs in trust order, one line each, cost tags', () => {
     const e = L();
     expect(e.map((x) => x.name)).toEqual(['Off', 'Talk', 'Dictate', 'Send word', 'Pieces']);
-    expect(e.map((x) => x.line)).toEqual(['the mic is closed', 'hold to speak; sends after release', 'open mic fills the box; you press Enter', 'say your word to send · edits ask first', 'each pause sends · edits ask first']);
+    expect(e.map((x) => x.line)).toEqual(['the mic is closed', 'hold to speak; sends after release', 'open mic fills the box; you press Enter', 'say your word to send', 'each pause sends']);
     expect(e.find((x) => x.rung === 'talk')).toMatchObject({ tag: '⌃⌥Space', tagKind: 'key' });
     expect(e.find((x) => x.rung === 'word')).toMatchObject({ tag: 'set up', tagKind: 'setup', needs: 'sendword' });
     expect(e.find((x) => x.rung === 'dictate')?.current).toBe(true);
@@ -277,7 +278,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     s = run(s, trialStatus(takes('send it', 'sand it', 'send it')));
     r = paint();
     expect(r.text).toContain('I heard: “send it” ✓');
-    expect(r.text).toContain('Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
+    expect(r.text).toContain('Anyone near my mic can send for me: the send word sends my whole draft, and it runs like a message I typed.');
     // Aegis R-1: each collected mishearing is an UNTICKED opt-in box with its consequence in words
     const box = r.all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!;
     expect(box.tag).toBe('input');
@@ -302,7 +303,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     const done = run(initialTeach(), { type: 'pick', text: 'over' }, trialStatus(takes('over', 'over')));
     let r = root(sheetEls(fdoc, view({ flow: { kind: 'teach', s: done, attached: true } })));
     const para = r.all((e) => e.className === 'vs-risk-text')[0]!;
-    expect(para.text).toBe("When you say “over”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, so any edit Claude tries in a voice-sent turn asks you first.");
+    expect(para.text).toBe("When you say “over”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, and a voice-sent turn runs under your run mode and Always rules, like a message you typed.");
     const box = r.all((e) => e.attrs.get('data-vs-ack') === 'teach')[0]!;
     expect(box.attrs.has('checked')).toBe(false);
     expect(r.all((e) => e.className === 'vs-check')[0]!.text.trim()).toBe(ACK_TEXT);
@@ -339,7 +340,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
   it('Pieces waits on the risk row: the exact text, "I understand", then "turn on Pieces"', () => {
     const r = root(sheetEls(fdoc, view({ flow: { kind: 'risk', rung: 'pieces', ack: false } })));
     const sec = r.all((e) => e.attrs.get('data-vs-section') === 'risk')[0]!;
-    expect(sec.text).toContain('Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
+    expect(sec.text).toContain('Anyone near my mic can send for me: the send word sends my whole draft, and it runs like a message I typed.');
     const go = sec.all((e) => e.attrs.get('data-vs-risk') === 'go')[0]!;
     expect(go.text).toBe('turn on Pieces');
     expect(go.attrs.has('disabled')).toBe(true);
@@ -390,7 +391,9 @@ describe('the composer grows, caps, and has a tall view; ONE send control (gnomo
   });
   it('empty is one line whatever the placeholder; the tall view gives back room it would take (Mika 2026-10-23)', () => {
     // a long "Reply to <title>…" wrapped at 1024 and made the empty composer two lines with a "2 lines" count
-    expect(APP).toMatch(/const content = ta\.value === '' \? px\(cs\.lineHeight\) \+ edge :/);
+    expect(APP).toMatch(/const own = ta\.value === '' \? px\(cs\.lineHeight\) \+ edge :/);
+    // B1 at the caret: only the live words can make the composer taller than its own text (never the placeholder)
+    expect(APP).toMatch(/const content = ghost\.hidden \? own : Math\.max\(own, ghost\.scrollHeight/);
     expect(CSS).toMatch(/\.composer-main > textarea:placeholder-shown \{ white-space: nowrap;/);
     const lh = 21.6;
     const tall = composerFit(lh * 30 + 4, lh, 4, true);
@@ -427,28 +430,22 @@ describe('the composer grows, caps, and has a tall view; ONE send control (gnomo
   });
 });
 
-describe('labels: spoken · sent by …, edits ask first, the chip and the card line', () => {
+describe('labels: spoken · sent by … (the plain origin; no chip and no card line since TD-2026-10-23-939)', () => {
   it('every way a spoken turn is sent has its words', () => {
     expect(sentLabel({ origin: 'hand', source: 'voice' })!.label).toBe('spoken · sent by you');
     expect(sentLabel({ origin: 'hand', source: 'voice', sentBy: 'release' })!.label).toBe('spoken · sent on release');
-    expect(sentLabel({ origin: 'voice', sentBy: 'word' })).toEqual({ label: 'spoken · sent by send word', asksFirst: true });
-    expect(sentLabel({ origin: 'voice', sentBy: 'piece' })).toEqual({ label: 'spoken · sent as a piece', asksFirst: true });
-    expect(sentLabel({ origin: 'voice', sentBy: 'hotkey' })).toEqual({ label: 'spoken · sent by send-now', asksFirst: true });
-    expect(APP).toContain("`${spoken ? spoken.sent : it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`");
+    expect(sentLabel({ origin: 'voice', sentBy: 'word' })).toEqual({ label: 'spoken · sent by send word' });
+    expect(sentLabel({ origin: 'voice', sentBy: 'piece' })).toEqual({ label: 'spoken · sent as a piece' });
+    expect(sentLabel({ origin: 'voice', sentBy: 'hotkey' })).toEqual({ label: 'spoken · sent by send-now' });
+    expect(APP).toContain("h(doc, 'span', { class: 'sent-by' }, `${spoken ? spoken.sent : it.sentLabel}`)");
   });
-  it('the session header chip while clamped, and the card asked during a voice-sent turn', () => {
-    expect(CLAMP_CHIP).toBe('voice turn · edits ask first');
-    expect(CARD_VOICE_LINE).toBe('asked during a voice-sent turn · check this was you');
-    expect(cardVoiceOrigin({ detail: { origin: 'voice', sentBy: 'word' } })).toBe(true);
-    expect(cardVoiceOrigin({ detail: { origin: 'hand' } })).toBe(false);
-    expect(cardVoiceOrigin({})).toBe(false);
-    const v = { cardId: 'card:1', kind: 'permission', requestedBy: 'p:a/claude', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:x', flags: [], decisions: ['allow', 'deny'], decidable: true, voiceOrigin: true };
-    const el = renderCard({ doc: fdoc }, v, { kind: 'text', text: 'Edit app.ts' }) as unknown as FEl;
-    expect(el.className).toContain('voice-origin');
-    expect(el.all((e) => e.className.includes('card-voice-origin'))[0]!.text).toBe('asked during a voice-sent turn · check this was you');
-    const plain = renderCard({ doc: fdoc }, { ...v, voiceOrigin: false }, { kind: 'text', text: 'Edit app.ts' }) as unknown as FEl;
-    expect(plain.all((e) => e.className.includes('card-voice-origin'))).toHaveLength(0);
-    expect(APP).toContain('voiceOrigin: cardVoiceOrigin(c.card),');
+  it('no session header chip and no voice card line: a card from a voice turn is a plain card', () => {
+    expect(APP).not.toMatch(/clamp-chip|CLAMP_CHIP|cardVoiceOrigin|voiceOrigin:/);
+    const v = { cardId: 'card:1', kind: 'permission', requestedBy: 'p:a/claude', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:x', flags: [], decisions: ['allow', 'deny'], decidable: true };
+    const el = renderCard({ doc: fdoc }, v as never, { kind: 'text', text: 'Edit app.ts' }) as unknown as FEl;
+    expect(el.className).not.toContain('voice-origin');
+    expect(el.all((e) => e.className.includes('card-voice-origin'))).toHaveLength(0);
+    expect(el.text).not.toMatch(/asked during a voice-sent turn|check this was you/);
   });
   it('reduced motion: the meters only follow the real level and every transition is instant', () => {
     expect(CSS).toMatch(/\[data-motion="reduced"\] \*[\s\S]{0,120}transition: none !important/);

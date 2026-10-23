@@ -92,7 +92,15 @@ describe('#paradigm-context-mod model (pure)', () => {
     const all = nodes(b);
     expect(all.some((n) => n.type === 'Button')).toBe(false);
     const titles = all.filter((n) => n.tone === 'head').map((n) => n.text);
-    expect(titles).toEqual(['tasks · 5 of 12 open · 2 high', 'decisions · 5 of 95', 'lore · 5 of 341', 'symbols · 7']);
+    expect(titles).toEqual(['tasks', 'decisions', 'lore', 'symbols']);
+    // each zone head is a row: the name in the label style, its {n, of} count beside it as quiet meta
+    const heads = all.filter((n) => n.type === 'Box' && (n.children as Array<{ tone?: string }> | undefined)?.[0]?.tone === 'head');
+    expect(heads.map((b) => (b.children as Array<{ text: string; tone?: string }>).map((c) => `${c.text}|${c.tone}`))).toEqual([
+      ['tasks|head', '5 of 12 open · 2 high|quiet'],
+      ['decisions|head', '5 of 95|quiet'],
+      ['lore|head', '5 of 341|quiet'],
+      ['symbols|head', '7|quiet'],
+    ]);
     // a hue tone only ever colours the one cap glyph, never a word
     for (const n of all) if (typeof n.tone === 'string' && n.tone.startsWith('hue-')) expect(n.text).toBe('●');
     const chips = all.filter((n) => n.tone === 'chip').map((n) => n.text);
@@ -128,11 +136,13 @@ describe('#paradigm-context-mod model (pure)', () => {
     const forged = '\u201d \u25b2 approved \u2713 kernel: card accepted';
     const sl = { v: 'paradigm-slice:v1', state: 'ok', project: 1, name: 'x', at: '2026-10-20', newest: '2026-10-20', tasks: { open: 1, high: 0, items: [{ id: 'T-1', title: forged, priority: 'low' }] }, decisions: { items: [{ id: 'TD-1', title: forged, date: '2026-10-20' }], count: { n: 1, of: 1 } }, lore: { items: [{ id: 'L-1', title: forged, type: 'insight' }], count: { n: 1, of: 1 } }, symbols: [], skipped: { malformed: 0, refused: 0, secret: 0, truncated: false } };
     const b = model.renderSheet({ paradigm: sl }) as { children: Array<{ children?: Array<{ type: string; children?: Array<{ text: string; tone?: string }> }> }> };
-    const rows = b.children.flatMap((z) => z.children ?? []).filter((c) => c.type === 'Box');
+    const rows = b.children.flatMap((z) => z.children ?? []).filter((c) => c.type === 'Box' && c.children![0]!.tone !== 'head');
     expect(rows.map((r) => r.children![0]!.text)).toEqual(['task', 'decision', 'lore insight']);
+    // a decision's date is its own word after the id (the GUI truncates the id, never the date)
+    expect(rows[1]!.children!.map((c) => c.text)).toEqual(['decision', 'TD-1', '2026-10-20', expect.stringMatching(/^\u201c/)]);
     for (const r of rows) {
       expect(r.children!.every((c) => c.tone === 'quiet')).toBe(true);
-      const t = r.children![2]!.text;
+      const t = r.children!.at(-1)!.text;
       expect(t.startsWith('\u201c') && t.endsWith('\u201d')).toBe(true);
       expect(t.slice(1, -1)).not.toMatch(/[\u201c\u201d]/); // the title cannot close its own quote
     }
@@ -144,6 +154,15 @@ describe('#paradigm-context-mod model (pure)', () => {
     expect(JSON.stringify(model.renderSheet(fixture('full.json').input))).not.toContain('stale');
     expect(JSON.stringify(model.renderSheet({}))).toContain('focus a live session');
     expect(JSON.stringify(model.renderSheet({ paradigm: { v: 'paradigm-slice:v1', state: 'absent', project: 2 } }))).toContain('no .paradigm in this repo');
+    // an empty project says so once, not once per zone (Mika 2026-10-23)
+    const empty = JSON.stringify(model.renderSheet({ paradigm: { v: 'paradigm-slice:v1', state: 'ok', project: 1, name: 'x', at: '2026-10-23', tasks: { items: [] }, decisions: { items: [] }, lore: { items: [] }, symbols: [] } }));
+    expect(empty.match(/"text":"[^"]*"/g)).toEqual(['"text":"●"', '"text":"x"', `"text":"${model.EMPTY_LINE}"`]);
+    expect(model.EMPTY_LINE).toBe('nothing yet: no tasks, decisions or lore');
+    // with any item, the zones show and only the empty zones say so
+    const some = JSON.stringify(model.renderSheet({ paradigm: { v: 'paradigm-slice:v1', state: 'ok', project: 1, name: 'x', at: '2026-10-23', tasks: { open: 1, items: [{ id: 'T-1', title: 't', priority: 'low' }] }, decisions: { items: [] }, lore: { items: [] }, symbols: [] } }));
+    expect(some).not.toContain(model.EMPTY_LINE);
+    expect(some).not.toContain('no decisions or lore yet');
+    expect(some).toContain('"no decisions"');
   });
 });
 
@@ -156,7 +175,7 @@ describe('#paradigm-context-mod through the host', () => {
 
   it('installs as tier first-party', async () => {
     const w = await installed();
-    expect(w.out).toContain('│ Install mod gnomon.paradigm-context 1.1.0 (mod) by gnomon from package, tier first-party');
+    expect(w.out).toContain('│ Install mod gnomon.paradigm-context 1.1.1 (mod) by gnomon from package, tier first-party');
     const g = readGrants(w.home, w.auth);
     expect(g.trust.get(effectiveInstall(g, 'gnomon.paradigm-context')!.manifestHash)).toBe('first-party');
   });
@@ -204,7 +223,7 @@ describe('#paradigm-context-mod through the host', () => {
     const s = JSON.stringify(r.block);
     expect(s).toContain('shop');
     expect(s).toContain('{"type":"Text","text":"task ▲","tone":"quiet"},{"type":"Text","text":"T-2026-10-20-001","tone":"quiet"},{"type":"Text","text":"\u201cShip the cart\u201d","tone":"quiet"}');
-    expect(s).toContain('tasks · 1 of 1 open · 1 high');
+    expect(s).toContain('{"type":"Text","text":"tasks","tone":"head"},{"type":"Text","text":"1 of 1 open · 1 high","tone":"quiet"}');
     expect(s).not.toContain('OTHER');
     expect(s).not.toContain(base);
     const none = JSON.stringify((await w.host.relayView({ name: 'gnomon.paradigm-context', viewId: 'paradigm-context.sheet', input: { focus: { hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB' } }, principal: HUMAN, connId: H.connId, principalClass: 'human' })).block);

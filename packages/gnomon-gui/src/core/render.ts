@@ -24,7 +24,6 @@
  * `contentHash` summary line — rendered by the GUI core, never by a mod.
  */
 import { BIDI_GLYPHS, canonicalJson, checkCap, hex, PRINCIPAL_ID_PATTERN, sanitizeDisplayText, sha256, type Cap } from '@a-company/gnomon-contracts';
-import { CARD_VOICE_LINE } from './voice-presets.js';
 import { BLOCK_SAFE_COMMANDS } from './commands.js';
 
 /** Legend for the `bidi` card flag chip: the glyphs the contracts sanitizer shows in place of bidi controls. */
@@ -91,7 +90,74 @@ export function text(doc: MiniDoc, s: unknown): unknown {
 
 /** S5: the closed Text tones (each maps to a .tone-* class); anything else is dropped. Generic, no mod-name case. */
 // Aegis S5 L2: no `violet` here: violet is the KNOT cap's (renderCap .knot), never a generic text tone
-export const TONES: ReadonlySet<string> = new Set(['cap', 'quiet', 'paused', 'warn', 'deny', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5']);
+// `head` (a section head in the label style) and `chip` (a symbol chip, design-system chip ink) are the mod kit's
+// two layout tones; styles.css has always styled them, so dropping them rendered heads as body text (founder 2026-10-23)
+export const TONES: ReadonlySet<string> = new Set(['cap', 'quiet', 'paused', 'warn', 'deny', 'head', 'chip', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5']);
+
+/** A hollow mark (a local backend, a project with no session): its swatch is the outlined □, else the filled ■. */
+const HOLLOW_MARK = /^[○◌◯□▢◇]$/u;
+/** In a fitted view, a Text with no whitespace longer than this is a token (an id): one line, ellipsis, full text in title. */
+export const FIT_TOKEN_MIN = 12;
+/** In a fitted view, prose longer than this carries its full text in title (a row clamps it to two lines). */
+export const FIT_TITLE_MIN = 40;
+/** A table cell or head shows at most this many characters (ellipsis; full text in title). */
+export const FIT_CELL_MAX = 24;
+/**
+ * The width buckets (in ch of the fitted view's 11.5 type) a table is sorted into by its natural width. styles.css has
+ * one container query per bucket: a container narrower than the table's bucket lays each row out as key-value pairs.
+ */
+export const FIT_TABLE_BUCKETS: readonly number[] = Object.freeze([20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 72, 80, 96]);
+const NIL_CELL = /^[-–—·]?$/u;
+const NUM_CELL = /^[-+−~≈<>]?[$€£]?\d[\d.,]*\s?[%kKMGTB]?$/u;
+const cps = (s: string): number => [...s].length;
+
+/** The shape of a fitted table: which columns are numbers, which cells are empty, and its width bucket. */
+export interface TableFit {
+  numeric: boolean[];
+  bucket: number;
+  /** natural width in ch (headers at label size count 10.5/11.5 of their length) */
+  need: number;
+}
+
+/** PURE: how a Table fits a narrow column (core of the fitted renderer; test/mod-fit.test.ts). */
+export function tableFit(columns: readonly string[], rows: readonly (readonly string[])[]): TableFit {
+  const n = Math.max(columns.length, ...rows.map((r) => r.length), 0);
+  const numeric: boolean[] = [];
+  let need = 0;
+  for (let c = 0; c < n; c++) {
+    const cells = rows.map((r) => (r[c] ?? '').trim());
+    const filled = cells.filter((x) => !NIL_CELL.test(x));
+    // a column of only empty cells ('-') aligns as numbers: an empty count is the common case (a fresh session)
+    numeric.push(filled.every((x) => NUM_CELL.test(x)));
+    const w = Math.max(Math.ceil(cps(columns[c] ?? '') * (10.5 / 11.5)), ...cells.map(cps), 1);
+    need += Math.min(w, FIT_CELL_MAX);
+  }
+  // 8px between columns is about 1.2ch at 11.5; one ch of slack so a table that just fits is never clipped
+  need = Math.ceil(need + Math.max(0, n - 1) * 1.2 + 1);
+  const bucket = FIT_TABLE_BUCKETS.find((b) => b >= need) ?? FIT_TABLE_BUCKETS[FIT_TABLE_BUCKETS.length - 1]!;
+  return { numeric, bucket, need };
+}
+
+export type FitTextKind = 'token' | 'word' | 'prose' | 'chip';
+/** PURE: how a fitted Text lays out: an id-like token (no whitespace, > FIT_TOKEN_MIN), a short word, prose, or a chip. */
+export function fitTextKind(t: string, tone: string | null): FitTextKind {
+  if (tone === 'chip') return 'chip';
+  if (/\s/u.test(t.trim())) return 'prose';
+  return cps(t) > FIT_TOKEN_MIN ? 'token' : 'word';
+}
+/** The fit kind of a block node (null: not a plain Text, e.g. a Box, a cap or a hue swatch). */
+function fitKindOf(node: unknown): FitTextKind | null {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return null;
+  const n = node as Record<string, unknown>;
+  const d = (n.data && typeof n.data === 'object' ? n.data : n) as Record<string, unknown>;
+  if (blockName(n) !== 'Text' || d.cap !== undefined) return null;
+  const tone = typeof d.tone === 'string' && TONES.has(d.tone) ? d.tone : null;
+  if (tone?.startsWith('hue-')) return null;
+  return fitTextKind(str(d.text), tone);
+}
+
+/** Whether a cell reads as empty ('-', '—', '·' or nothing): quiet in a table, left out of the key-value layout. */
+export const isNilCell = (s: string): boolean => NIL_CELL.test(s.trim());
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const SVG_TAGS = new Set(['svg', 'path']);
@@ -156,6 +222,14 @@ export interface RenderCtx {
   depth?: number;
   /** S5: a mod fence shows each Box title as a heading (card bodies never set this). */
   boxTitles?: boolean;
+  /**
+   * A mod view in a side column (every fence but the Workshop's): ids truncate on one line with their full text in
+   * title, row prose clamps to two lines, and a table fits its column (numbers right-aligned, a key-value layout
+   * below its width bucket). Styled by .mod-fit in styles.css; card bodies never set it.
+   */
+  fit?: boolean;
+  /** internal (fit): this prose follows an id in a row Box, so it starts its own line */
+  breakLine?: boolean;
 }
 
 /** Render one display-block node (any depth ≤ 32). */
@@ -166,11 +240,20 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
   const n = node as Record<string, unknown>;
   const data = (n.data && typeof n.data === 'object' ? n.data : n) as Record<string, unknown>;
   const kids = Array.isArray(n.children) ? n.children : [];
-  const child = (c: unknown): MiniEl => (depth >= 32 ? h(doc, 'span', { class: 'blk' }, '…') : renderBlock({ ...ctx, depth: depth + 1 }, c));
   const name = blockName(n);
+  const child = (c: unknown, breakLine = false): MiniEl => (depth >= 32 ? h(doc, 'span', { class: 'blk' }, '…') : renderBlock({ ...ctx, depth: depth + 1, breakLine }, c));
   switch (name) {
-    case 'Box':
-      return h(doc, 'div', { class: `blk blk-box${data.direction === 'row' ? ' blk-row' : ''}` }, ctx.boxTitles && typeof data.title === 'string' && data.title ? h(doc, 'div', { class: 'blk-title' }, data.title) : null, ...kids.map(child));
+    case 'Box': {
+      // fitted row: prose after an id starts its own line (the id keeps line 1 and truncates; the prose reads under it)
+      let afterToken = false;
+      const breaks = kids.map((c) => {
+        const k = ctx.fit && data.direction === 'row' ? fitKindOf(c) : null;
+        const b = afterToken && k === 'prose';
+        if (k === 'token') afterToken = true;
+        return b;
+      });
+      return h(doc, 'div', { class: `blk blk-box${data.direction === 'row' ? ' blk-row' : ''}` }, ctx.boxTitles && typeof data.title === 'string' && data.title ? h(doc, 'div', { class: 'blk-title' }, data.title) : null, ...kids.map((c, i) => child(c, breaks[i])));
+    }
     case 'Text': {
       // S5: a cap is drawn only when every field checks (contracts checkCap); otherwise the text form shows
       if (data.cap !== undefined) {
@@ -178,21 +261,51 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
         if (c.ok) return renderCap(doc, str(data.text), c.cap);
       }
       // a tone is one of the closed TONES mapped to a class (styles.css .tone-*), never a style or a colour value
-      return h(doc, 'p', { class: `blk blk-text${typeof data.tone === 'string' && TONES.has(data.tone) ? ` tone-${data.tone}` : ''}` }, str(data.text));
+      const tone = typeof data.tone === 'string' && TONES.has(data.tone) ? data.tone : null;
+      const t = str(data.text);
+      // a project hue is the project's swatch, the chat header's ■ in the hue's ink pair (hue-is-identity); the
+      // mod's glyph only says filled or hollow. Decorative: the name beside it carries the meaning
+      if (tone?.startsWith('hue-')) return h(doc, 'span', { class: `blk blk-swatch pink h${tone.slice(4)}`, 'aria-hidden': 'true' }, HOLLOW_MARK.test(t.trim()) ? '□' : '■');
+      const cls = `blk blk-text${tone ? ` tone-${tone}` : ''}`;
+      if (!ctx.fit) return h(doc, 'p', { class: cls }, t);
+      // fitted: an id never breaks mid-token (one line, ellipsis, the full id in title); a short word never wraps;
+      // long prose keeps its full text in title (a row clamps it to two lines)
+      const kind = fitTextKind(t, tone);
+      const fitCls = kind === 'token' ? ' blk-tok' : kind === 'word' ? ' blk-word' : kind === 'prose' ? ` blk-prose${ctx.breakLine ? ' blk-break' : ''}` : '';
+      return h(doc, 'p', { class: `${cls}${fitCls}`, ...(kind === 'token' || cps(t) > FIT_TITLE_MIN ? { title: t } : {}) }, t);
     }
     case 'List': {
       const items = Array.isArray(data.items) ? data.items : kids;
       return h(doc, 'ul', { class: 'blk blk-list' }, ...items.map((it) => h(doc, 'li', null, typeof it === 'object' && it !== null ? child(it) : str(it))));
     }
     case 'Table': {
-      const cols = Array.isArray(data.columns) ? data.columns : [];
-      const rows = Array.isArray(data.rows) ? data.rows : [];
+      const cols = (Array.isArray(data.columns) ? data.columns : []).map(str);
+      const rows = (Array.isArray(data.rows) ? data.rows : []).map((r) => (Array.isArray(r) ? r : [r]).map(str));
+      if (!ctx.fit) {
+        return h(
+          doc,
+          'table',
+          { class: 'blk blk-table' },
+          h(doc, 'thead', null, h(doc, 'tr', null, ...cols.map((c) => h(doc, 'th', null, c)))),
+          h(doc, 'tbody', null, ...rows.map((r) => h(doc, 'tr', null, ...r.map((c) => h(doc, 'td', null, c))))),
+        );
+      }
+      // fitted: explicit roles keep the table's semantics when the key-value layout changes its display
+      const fit = tableFit(cols, rows);
+      const cell = (s: string): MiniEl => h(doc, 'span', { class: 'blk-cell', ...(cps(s) > FIT_CELL_MAX ? { title: s } : {}) }, s);
       return h(
         doc,
         'table',
-        { class: 'blk blk-table' },
-        h(doc, 'thead', null, h(doc, 'tr', null, ...cols.map((c) => h(doc, 'th', null, str(c))))),
-        h(doc, 'tbody', null, ...rows.map((r) => h(doc, 'tr', null, ...(Array.isArray(r) ? r : [r]).map((c) => h(doc, 'td', null, str(c)))))),
+        { class: `blk blk-table tw-${fit.bucket}`, role: 'table', 'data-need': String(fit.need) },
+        h(doc, 'thead', { role: 'rowgroup' }, h(doc, 'tr', { role: 'row' }, ...cols.map((c, i) => h(doc, 'th', { role: 'columnheader', ...(fit.numeric[i] ? { class: 'num' } : {}) }, cell(c))))),
+        h(
+          doc,
+          'tbody',
+          { role: 'rowgroup' },
+          ...rows.map((r) =>
+            h(doc, 'tr', { role: 'row' }, ...r.map((c, i) => h(doc, 'td', { role: 'cell', class: [fit.numeric[i] ? 'num' : '', isNilCell(c) ? 'blk-nil' : ''].filter(Boolean).join(' '), 'data-col': cols[i] ?? '' }, cell(c)))),
+          ),
+        ),
       );
     }
     case 'Markdown':
@@ -215,6 +328,9 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
     case 'root-rows':
       // Aegis C1e: the kernel's structured root rows: renderCard's "This decision signs" section renders them (rootRowsOf)
       return h(doc, 'span', { class: 'blk blk-root-rows' });
+    case 'edit-scope':
+      // the kernel's structured edit-scope choices (TD-2026-10-23-939 follow-up): the card's always keys render them (editScopesOf)
+      return h(doc, 'span', { class: 'blk blk-edit-scope' });
     case 'bash-prefix':
       // the kernel's structured prefix choices: the card's always keys render them (prefixOptionsOf)
       return h(doc, 'span', { class: 'blk blk-bash-prefix' });
@@ -225,7 +341,7 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
       return h(doc, 'div', { class: 'blk blk-canvas' }, `[canvas ${str(data.ds)}] rendered by the host surface`);
     default:
       // unknown (or a kernel card block nested as a child): opaque label + its strings as text, never dropped
-      return h(doc, 'div', { class: 'blk blk-opaque' }, `[block ${name || '?'}] `, ...kids.map(child), typeof data.text === 'string' ? data.text : null);
+      return h(doc, 'div', { class: 'blk blk-opaque' }, `[block ${name || '?'}] `, ...kids.map((c) => child(c)), typeof data.text === 'string' ? data.text : null);
   }
 }
 
@@ -247,6 +363,10 @@ export interface CardView {
   ask?: AskCardDetail | null;
   /** Bash permission: the prefix-scoped always choices from the contentHash-verified detail (prefixOptionsOf); null ⇒ exact only */
   prefixOptions?: string[][] | null;
+  /** Edit/Write permission: the scoped always choices from the contentHash-verified detail (editScopesOf); null ⇒ exact only */
+  editScopes?: ('file' | 'repo-edits')[] | null;
+  /** Mika 2026-10-23: the scoped always choices are unfolded under the keys (the page keeps it per card and zone across repaints) */
+  alwaysOpen?: boolean;
   /** S3: the card's project (repo basename) and its ONE project hue (groupHue / projectHue); null ⇒ no project line */
   project?: { name: string; hue: number } | null;
   /** S3: the approval.request row's at and the page's now (ms) for "raised HH:MM · waiting Nm" */
@@ -254,8 +374,6 @@ export interface CardView {
   now?: number;
   /** S3: the kernel's voice handle of the card (card.voice: eligible none | reversible | gate, and its label) */
   voice?: { eligible: string; label: string } | null;
-  /** TD-2026-10-21-514: raised during a voice-origin turn (card.detail.origin 'voice'): the card says to check it was you */
-  voiceOrigin?: boolean;
   /** S4: a held voice decision the kernel reports (seconds left, the undo phrase): the amber countdown, kernel-owned */
   held?: { seconds: number; undo: string } | null;
   /** fidelity 2: a permission card's one-line title the GUI composed from the kernel's STRUCTURED fields (permissionTitleOf) */
@@ -434,7 +552,7 @@ export function splitCardBlock(block: unknown, kind: string, keepWhole: boolean)
  * `{type:'bash-prefix', detail}` node whose detail hashes to the card's contentHash (the kernel derived them with
  * its simple-command rule); display only — the broker re-checks any prefix against the shown command.
  */
-export type ApproveScopeParam = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] };
+export type ApproveScopeParam = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] } | { kind: 'file' } | { kind: 'repo-edits' };
 
 /**
  * TD-2026-10-20-294: the `approve` params a decision key sends. An `always` key carries its scope in
@@ -445,6 +563,7 @@ export function approveParamsOf(cardId: string, decision: string, note: string |
   const out: { cardId: string; decision: string; note?: string; scope?: ApproveScopeParam } = { cardId, decision, ...(note !== null ? { note } : {}) };
   if (decision !== 'always' || !key) return out;
   if (key.scope === 'exact') return { ...out, scope: { kind: 'exact' } };
+  if (key.scope === 'file' || key.scope === 'repo-edits') return { ...out, scope: { kind: key.scope } };
   if (key.scope !== 'prefix') return out;
   try {
     const p = JSON.parse(key.prefix ?? '') as unknown;
@@ -454,6 +573,41 @@ export function approveParamsOf(cardId: string, decision: string, note: string |
   }
   return out;
 }
+
+/**
+ * TD-2026-10-23-939 follow-up (Aegis 2026-10-23): the scoped `always` choices of an edit card ("this file", "edits in
+ * this repo") come ONLY from the block's `{type:'edit-scope', detail}` node whose detail hashes to the card's
+ * contentHash (the kernel offers them only when its auto-edits pass would allow the edit); display only, the broker
+ * re-checks the scope against the card.
+ */
+export function editScopesOf(card: Record<string, unknown>): ('file' | 'repo-edits')[] | null {
+  if (card.kind !== 'permission') return null;
+  const block = card.block;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'edit-scope');
+  if (nodes.length !== 1) return null;
+  const detail = (nodes[0] as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  if (typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
+  const d = detail as { tool?: unknown; editScopes?: unknown; editPath?: unknown };
+  if (!['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(String(d.tool)) || typeof d.editPath !== 'string' || !Array.isArray(d.editScopes)) return null;
+  const out = d.editScopes.filter((x): x is 'file' | 'repo-edits' => x === 'file' || x === 'repo-edits');
+  return out.length === d.editScopes.length && out.length > 0 ? [...new Set(out)] : null;
+}
+
+/**
+ * The plain words of a scoped edit always choice (Mika 2026-10-23): `label` is the accessible name (it contains the
+ * visible `short`), `note` is shown beside the key (never only on hover), `title` is the long form.
+ */
+export const EDIT_SCOPE_KEYS: Readonly<Record<'file' | 'repo-edits', { label: string; short: string; note: string; title: string }>> = Object.freeze({
+  file: { label: 'Always: edits to this file', short: 'edits to this file', note: 'any change to this file', title: 'always allow edits to this file, any content, in this repo (not in manual run mode)' },
+  'repo-edits': { label: 'Always: edits in this repo', short: 'edits in this repo', note: 'same as auto-edits for this repo', title: 'same as auto-edits for this repo: every edit inside the repo, except protected paths (not in manual run mode)' },
+});
+
+/** The exact and prefix always choices' notes (Mika 2026-10-23), shown beside each key. */
+export const ALWAYS_EXACT_NOTE: Readonly<Record<'edit' | 'command', string>> = Object.freeze({ edit: 'only this same change', command: 'only this same command text' });
+export const ALWAYS_PREFIX_NOTE = 'any single command starting with these words';
+export const ALWAYS_PREFIX_TITLE = 'always allow a single command starting with these words, in this repo (no ; | && $() redirections or env assignments)';
 
 export function prefixOptionsOf(card: Record<string, unknown>): string[][] | null {
   if (card.kind !== 'permission') return null;
@@ -923,6 +1077,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // S1 ink keys: the first non-deny decision is the filled primary key (.key.pri); never on a claim-mismatch card,
   // where Deny stays the default focus and nothing is filled
   const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
+  const scoped: 'command' | 'edit' | null = v.prefixOptions?.length ? 'command' : v.editScopes?.length ? 'edit' : null;
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
   // design-system card.family ⊙ gnomon (C3): a root configuration card about Gnomon itself (local.config)
@@ -943,7 +1098,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   return h(
     doc,
     'section',
-    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${v.project ? ` pe-h${Math.max(0, Math.min(5, Math.trunc(v.project.hue)))}` : ''}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}${v.voiceOrigin ? ' voice-origin' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}${v.project ? ` pe-h${Math.max(0, Math.min(5, Math.trunc(v.project.hue)))}` : ''}${loud ? ' claim-mismatch' : ''}${failed ? ' failed' : ''}${v.held ? ' held' : ''}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
     h(
       doc,
       'header',
@@ -960,7 +1115,6 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
-    v.voiceOrigin ? h(doc, 'small', { class: 'card-voice-origin kernel-owned' }, CARD_VOICE_LINE) : null,
     h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
     kLine ? h(doc, 'span', { class: 'k-line kernel-owned' }, kLine) : null,
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
@@ -980,22 +1134,43 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       'div',
       { class: 'card-keys' },
       ...v.flags.map((f) => h(doc, 'span', { class: `chip warn flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi: shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
-      ...keys.flatMap((d) =>
-        d === 'always' && v.prefixOptions?.length
-          ? [
-              h(doc, 'button', { class: `key key-always${d === pri ? ' pri' : ''}`, type: 'button', 'data-decision': d, 'data-scope': 'exact', 'data-card-id': v.cardId }, 'Always: this exact command'),
-              ...v.prefixOptions.map((p) => h(doc, 'button', { class: 'key key-always key-prefix', type: 'button', 'data-decision': d, 'data-scope': 'prefix', 'data-prefix': JSON.stringify(p), 'data-card-id': v.cardId, title: `always allow a single command starting with these words, in this repo (no ; | && $() redirections or env assignments)` }, `Always: ${shownPrefixWords(p)} …`)),
-            ]
-          : [h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d)],
+      ...keys.map((d) =>
+        // Mika 2026-10-23: scoped always choices fold under ONE "Always ▾" key (the row stays Allow · Deny · Always ▾ at every
+        // width); the key itself decides nothing, each choice below is the decision key
+        d === 'always' && scoped
+          ? h(doc, 'button', { class: `key key-always-fold${d === pri ? ' pri' : ''}`, type: 'button', 'data-always-fold': v.cardId, 'aria-expanded': String(!!v.alwaysOpen) }, `Always ${v.alwaysOpen ? '▴' : '▾'}`)
+          : h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d),
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
+    scoped && keys.includes('always') ? alwaysChoices(doc, v, scoped) : null,
     gnomonFam && keys.length ? h(doc, 'div', { class: 'lt-presence' }, LOCAL_PRESENCE_LINE) : null,
     // the contentHash line stays on every card: quiet, one line, the full hash in title=
     h(doc, 'small', { class: 'meta content-hash', title: `contentHash ${v.contentHash}` }, `contentHash ${v.contentHash.slice(0, 23)}…`),
     h(doc, 'details', { class: 'card-details' }, h(doc, 'summary', { class: 'meta' }, 'details'), h(doc, 'p', { class: 'meta card-who' }, who), bodyShown ? null : bodyEl),
     h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
     h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, ''),
+  );
+}
+
+/**
+ * Mika 2026-10-23: the scoped always choices of a card, unfolded under its keys by "Always ▾": one row per choice, the
+ * decision key (data-decision="always" + its scope, exactly as before) and its note in plain words beside it. The
+ * accessible name of each key starts "Always:" and contains its visible words (WCAG 2.5.3).
+ */
+function alwaysChoices(doc: MiniDoc, v: CardView, scoped: 'command' | 'edit'): MiniEl {
+  const row = (attrs: Record<string, string>, label: string, shown: string, note: string): MiniEl =>
+    h(doc, 'div', { class: 'always-row' }, h(doc, 'button', { class: `key key-always${attrs['data-scope'] === 'prefix' ? ' key-prefix' : attrs['data-scope'] === 'exact' ? '' : ' key-scope'}`, type: 'button', 'data-decision': 'always', 'data-card-id': v.cardId, 'aria-label': label, ...attrs }, shown), h(doc, 'span', { class: 'always-note' }, note));
+  const exact = scoped === 'command' ? 'this exact command' : 'this exact edit';
+  return h(
+    doc,
+    'div',
+    { class: `always-choices${v.alwaysOpen ? ' open' : ''}`, role: 'group', 'aria-label': 'Always allow, no card next time', 'data-always-for': v.cardId },
+    h(doc, 'span', { class: 'always-h' }, 'always allow, no card next time:'),
+    row({ 'data-scope': 'exact' }, `Always: ${exact}`, exact, ALWAYS_EXACT_NOTE[scoped]),
+    ...(scoped === 'command'
+      ? (v.prefixOptions ?? []).map((p) => row({ 'data-scope': 'prefix', 'data-prefix': JSON.stringify(p), title: ALWAYS_PREFIX_TITLE }, `Always: ${shownPrefixWords(p)} …`, `${shownPrefixWords(p)} …`, ALWAYS_PREFIX_NOTE))
+      : (v.editScopes ?? []).map((k) => row({ 'data-scope': k, title: EDIT_SCOPE_KEYS[k].title }, EDIT_SCOPE_KEYS[k].label, EDIT_SCOPE_KEYS[k].short, EDIT_SCOPE_KEYS[k].note))),
   );
 }
 

@@ -2296,13 +2296,13 @@ components:
       start row) the held word from the attached human's voice principal
       counts whoever said it (wordAnyVoice: isWord, speakerEnrolled false,
       speakerVerified false, never a draft part) and a word claim is accepted
-      over unverified or inherited draft turns; the send is clamped
+      over unverified or inherited draft turns; the send is stamped
       voice-unverified (originFor: the consumed word came from any voice, or
       the draft holds an unverified or inherited turn). Pieces, send-now,
       Talk and the direct send keep the gate; intercepted turns are refused.
       Aegis review 2026-10-23 (H-1, M-1, M-2, L-1..L-3): an inherited
       (continuity) turn is NOT verification (UserTurn.basis 'continuity'):
-      every send that includes one is clamped voice-unverified (originFor,
+      every send that includes one is stamped voice-unverified (originFor,
       attributed or a voice-hinted edit), it never anchors adjacency, the
       voice principal never sends it directly (cause 'inherited'), and a
       piece claim must cite a turn verified alone (cause 'inherited-only').
@@ -2355,7 +2355,7 @@ components:
       there is unsent (a preset switch re-attaches); it is never the send
       word nor an adjacency anchor; only a human session.send (Enter) carries
       it, and originFor stamps that send sentBy 'unverified' (turn.sent
-      origin voice-unverified, clamped by ^voice-origin-clamp) when its
+      origin voice-unverified, a record only, #voice-origin) when its
       attribution matched one or a source:'voice' send happens while one is
       outstanding (consumed; releaseOrigin hands them back on a failed send). A refused unverified turn under
       VOICE_MIN_VERIFY_SPEECH_MS (contracts) of gated speech carries cause
@@ -3281,6 +3281,32 @@ components:
       - test/repo-context.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
 
+  voice-origin:
+    description: >-
+      #voice-origin (TD-2026-10-23-939, superseding TD-2026-10-21-514's
+      edits-ask-first clamp; spec §14.7 "Voice submodes";
+      src/kernel/supervisor/voice-origin.ts). A voice-sent turn (Dictate's
+      Enter with unverified words, the send word, a piece, send-now) gets
+      EXACTLY a typed turn's permissions: #supervisor applies the run mode,
+      the human's saved always rules (exact and prefix) and standing grants
+      unchanged, and raises the same plain card a typed turn would (no
+      detail.origin 'voice', no voice line, no clamp field on the answer).
+      What stays: every turn.sent carries the kernel-stamped origin (hand |
+      voice | voice-unverified) and sentBy (word | piece | hotkey |
+      unverified) for the record; voice never approves anything
+      (#approval-broker refuses the voice principal and the voice intent
+      form voice-off, or voice-hand-only); a piece reaches the agent with the
+      piece note (pieceGuidance, numbered by VoicePieceCounter). The
+      remaining invariant is the portal gate ^voice-never-approves
+      (portal.yaml). The TD-2026-10-21-514 clamp, its signal and its
+      by-voice readback rule are retired.
+    path: src/kernel/supervisor/voice-origin.ts
+    type: module
+    tags: [gnomon, kernel, voice, security]
+    tests:
+      - test/voice-origin.test.ts
+    oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
+
   shell-readonly:
     description: >-
       #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1, Aegis
@@ -3384,7 +3410,25 @@ components:
   always-rules:
     description: >-
       #always-rules (spec §3.4 S-L1, S25-C2; gui-complete item 2) in
-      src/kernel/supervisor/rules.ts. Permission cards offer allow | deny |
+      src/kernel/supervisor/rules.ts. TD-2026-10-23-939 follow-up (Aegis
+      2026-10-23): Bash cards offer the 2- AND 3-word prefixes #prefix-policy
+      allows; an Edit/Write card the auto-edits pass would allow offers
+      scoped always {kind:'file'} ("edits to this file", any content) and
+      {kind:'repo-edits'} ("edits in this repo", same as auto-edits), via
+      detail.editScopes/editPath inside contentHash (withEditScopes); the
+      broker takes them only on such a card; approval.rule.learned{match:
+      'file', path | 'repo-edits'}; they match only through the supervisor's
+      own autoEditPass (ctx.editPath), never in manual mode, never in a loop
+      session; RuleBook.repoEditsRule feeds status.runModes editsByRule.
+      Aegis H1: repo-edits is offered and matched only where the strictness
+      ceiling allows auto-edits (ctx.repoEdits; never at L2/L3, never in
+      manual); a REPO-scope approval.mode.set tightening (the emergency
+      brake) drops that repo's repo-edits rules in the fold; file rules stay
+      allowed at L2 and cover any edit tool on their path (L4).
+      TD-2026-10-23-815: a learned row with presence standing:<grantId> forms
+      a rule only when the fold's own grant.standing rows show that grant
+      live at the decide row (permission:always, not revoked before it, not
+      expired at its kernel time, the repo among its repos). Permission cards offer allow | deny |
       always; `always` is fresh presence EVERY time (classes.ts, G-BRK-05)
       and needs the card's ruleScope {repoKey} (else bad-params). The broker
       logs approval.rule.learned{cardId, tool, matchExact, presence,
@@ -4322,7 +4366,10 @@ components:
   rules-revoke:
     description: >-
       #rules-revoke (P8-D98 human-device verb 14, TD-2026-10-19-528 F1) in
-      src/kernel/socket/rules-revoke.ts: the rules.revoke{ruleId} handler the
+      src/kernel/socket/rules-revoke.ts (TD-2026-10-23-939 follow-up: the
+      same handler and queue also serve the dispatcher-only
+      request.rules.revoke{ruleId} from the human on a gui or device
+      connection, narrowing only, no presence): the rules.revoke{ruleId} handler the
       daemon wires into DispatcherOptions.humanVerbs['rules.revoke'] (one
       key per verb in daemon.ts `humanVerbs`). Reached only for a verified
       human device connection (dispatch.ts refuses every other class, and a
@@ -4898,12 +4945,11 @@ flows:
       1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked,
       consumed atomically, bound to the connection for 5 s) →
       session.send{source:'voice'} gets origin 'voice', sentBy 'word' →
-      ^voice-origin-clamp until its turn.result. Backstop: an unclaimed
+      a record only (#voice-origin: the turn runs like a typed one). Backstop: an unclaimed
       pending word turn stamps voice anyway. Aegis fixes: the origin check
       runs on EVERY human send (stale or wrong-session claims stamp voice;
       under a word+ ceiling an ambient-matched send is a piece, so Enter on
-      an ambient draft is clamped); a voice turn closes only after its own
-      replay and a later result; a short word passes adjacency with or
+      an ambient draft is stamped voice); a short word passes adjacency with or
       without speakerBasis; a word or pieces attach carries liabilityAck
       (sha256 of the ack text), recorded in the kernel-written start row.
       The guided dialog teaches the word as an ATTENDED TRIAL (spec §14.7
@@ -4939,7 +4985,7 @@ flows:
       batches finalized segments by gap/cap (1500 / 8000 ms) and holds while
       the session is busy → request.voice.send.claim{by:'piece', turnSeqs} →
       session.send{source:'voice'} with origin 'voice', sentBy 'piece' and the
-      piece guidance note on the per-turn guidance block → ^voice-origin-clamp.
+      piece guidance note on the per-turn guidance block (#voice-origin).
     steps: ["#gui-dictation", "#gnomon-voice", "#supervisor"]
     tags: [gnomon, voice]
     oracles: [G-VOX-21]
@@ -5243,30 +5289,11 @@ flows:
     oracles: [G-DMN-01, G-DMN-02, G-DMN-03, G-DMN-04, G-DMN-05]
 
 gates:
-  voice-origin-clamp:
-    description: >-
-      ^voice-origin-clamp (TD-2026-10-21-514, spec §14.7 "Voice submodes";
-      src/kernel/supervisor/voice-clamp.ts): every turn.sent carries a
-      kernel-stamped origin (hand | voice | voice-unverified, sentBy word |
-      piece | hotkey | unverified; voice-unverified is a Dictate Enter send
-      holding an unverified voice's words, clamped the same way). While a
-      voice-origin turn is outstanding (turn.sent to the turn.result that
-      closes it; never closed ⇒ until the session ends) #supervisor skips the
-      auto-edits pass and every always rule (exact and prefix); only the
-      *:read-only modeRefs (#shell-readonly) still pass (clampAllows, default
-      deny for any new modeRef). Every other tool call raises a card with
-      detail.origin 'voice', detail.sentBy and the line "Asked during a
-      voice-sent turn (…). Check this was you."; #approval-broker refuses a
-      by-voice approve of such a card without readback + confirm
-      (voice-readback-missing, cause voice-origin-confirm); deny unchanged.
-    prizes: []
-    tags: [gnomon, voice, security]
-    oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
   loop-origin-clamp:
     description: >-
       ^loop-origin-clamp (docs/specs/gnomon-loops.md §3.4, LL5; build plan
-      step 8; src/kernel/supervisor/loop-clamp.ts, after
-      ^voice-origin-clamp): every loop session opens with origin 'loop'
+      step 8; src/kernel/supervisor/loop-clamp.ts, modelled on the retired
+      voice-origin clamp): every loop session opens with origin 'loop'
       (session.open{origin, loopRun}) and only through LocalLane.openLoop
       with a registry run reference. In those sessions standing grants, the
       human's always rules, auto-edits and the read-only passes do not apply
@@ -5323,18 +5350,6 @@ gates:
     tags: [gnomon, law-7, billing, paradigm-8, m1.6]
     oracles: [G-SUB-02, G-SUB-03, G-SUB-04]
 
-signals:
-  voice-clamp-applied:
-    description: >-
-      !voice-clamp-applied (TD-2026-10-21-514): a permission request was
-      raised under ^voice-origin-clamp. Carried as clamp:'voice' on the
-      answer's session.inject{channel:'permission'} row (an opaque payload
-      field, no new log kind, so clientApiId does not move) and as
-      detail.origin 'voice' on the card; the supervisor logs it on the
-      #supervisor component.
-    emitters: ["#supervisor"]
-    tags: [gnomon, voice, security]
-    oracles: [G-VOX-17]
 aspects:
   ~ample-internal-logs:
     description: >-

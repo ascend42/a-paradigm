@@ -146,11 +146,20 @@ export const DECISION_SIG_V2_DECISIONS = Object.freeze(['answer'] as const);
  * (scopeDigest: sha256 over canonicalJson({kind:'prefix', prefix})), so the line after the approver is the answer
  * digest for `answer` and the scope digest for a prefix `always` (the decision line tells them apart). An exact (or
  * absent) scope keeps the v1 message, unchanged.
+ *
+ * Scoped edits (TD-2026-10-23-939 follow-up, Aegis 2026-10-23): on an Edit / Write / MultiEdit / NotebookEdit card the
+ * kernel offered them on (detail.editScopes), `always` may carry
+ *   {kind:'file'}        the rule allows later edits of the card's own file (the kernel-held detail.editPath), any content
+ *   {kind:'repo-edits'}  the rule allows every edit the auto-edits pass would allow in this repo
+ * Both are `always` rules (fresh presence, approval.rule.learned), bound by decisionSig like a prefix (v2 layout, last
+ * line scopeDigest(scope)); neither applies in manual mode.
  */
-export const APPROVE_SCOPE_KINDS = Object.freeze(['exact', 'prefix'] as const);
+export const APPROVE_SCOPE_KINDS = Object.freeze(['exact', 'prefix', 'file', 'repo-edits'] as const);
 export const APPROVE_SCOPE_PREFIX_MAX_WORDS = 3;
 export const APPROVE_SCOPE_WORD_MAX_CHARS = 128;
-export type ApproveScope = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] };
+export type ApproveScope = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] } | { kind: 'file' } | { kind: 'repo-edits' };
+/** A scope that changes what the rule matches (everything but exact). */
+export type RuleScopeV1 = Exclude<ApproveScope, { kind: 'exact' }>;
 /** Decisions that may carry a scope; a prefix scope decision uses the v2 layout (last line = scope digest). */
 export const DECISION_SIG_V2_SCOPED_DECISIONS = Object.freeze(['always'] as const);
 
@@ -159,6 +168,7 @@ export function parseApproveScope(v: unknown): ApproveScope | null {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
   if (o.kind === 'exact') return Object.keys(o).length === 1 ? { kind: 'exact' } : null;
+  if (o.kind === 'file' || o.kind === 'repo-edits') return Object.keys(o).length === 1 ? { kind: o.kind } : null;
   if (o.kind !== 'prefix' || Object.keys(o).length !== 2 || !Array.isArray(o.prefix)) return null;
   const p = o.prefix as unknown[];
   if (p.length < 1 || p.length > APPROVE_SCOPE_PREFIX_MAX_WORDS) return null;
@@ -166,9 +176,9 @@ export function parseApproveScope(v: unknown): ApproveScope | null {
   return { kind: 'prefix', prefix: [...(p as string[])] };
 }
 
-/** sha256:<hex> over canonicalJson({kind:'prefix', prefix}) — the decisionSig v2 last line of a prefix `always`. */
-export function scopeDigest(scope: { kind: 'prefix'; prefix: readonly string[] }): string {
-  return sha256Tagged(canonicalJson({ kind: 'prefix', prefix: [...scope.prefix] }));
+/** sha256:<hex> over canonicalJson(scope) — the decisionSig v2 last line of a scoped `always` (prefix unchanged). */
+export function scopeDigest(scope: { kind: 'prefix'; prefix: readonly string[] } | { kind: 'file' } | { kind: 'repo-edits' }): string {
+  return sha256Tagged(canonicalJson(scope.kind === 'prefix' ? { kind: 'prefix', prefix: [...scope.prefix] } : { kind: scope.kind }));
 }
 
 /**

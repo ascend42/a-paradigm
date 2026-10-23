@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -73,6 +73,8 @@ const D89 = 'M1.4:P8-D89' as const;
 const D98 = '8.0:P8-D98' as const;
 /** TD-2026-10-20-294 part 3 (prefix-scoped always rules, a deliberate clientApiId move). */
 const PREFIX_RULES = '8.0:TD-2026-10-20-294' as const;
+/** TD-2026-10-23-939 follow-up (Aegis 2026-10-23): scoped edit always rules (file / repo-edits), a deliberate clientApiId move. */
+const EDIT_RULES = '8.0:TD-2026-10-23-939' as const;
 /** TD-2026-10-20-086 F6 (the daily standing grant) + T-2026-10-20-007 (approval.auto.miss, anchoredInputHash): one clientApiId move. */
 const STANDING = '8.0:TD-2026-10-20-086' as const;
 /** The mid-session Claude model switch (founder ask 2026-10-20; probe p-set-model): one clientApiId move. */
@@ -283,6 +285,8 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   // project or agent-written detail; the rows stay private + normal.
   'approval.auto': { path: 'sensitive', inputHash: 'sensitive', anchoredInputHash: 'sensitive' },
   'approval.auto.miss': { why: 'sensitive', inputHash: 'sensitive' },
+  // TD-2026-10-23-939 follow-up: a file rule's path is project detail, like approval.auto's
+  'approval.rule.learned': { path: 'sensitive' },
   // 8.0:session-rename: a session name is the human's own words (it may echo the conversation): a limited reader never gets it
   'request.session.rename': { name: 'sensitive' },
   'session.renamed': { name: 'sensitive' },
@@ -355,8 +359,10 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   'contract.claimed': Object.freeze({ claimGen: D98 }),
   // P8-D98 (TD-2026-10-19-528 F2): the match mode of a learned always-rule; only 'exact' (ALWAYS_RULE_MATCHES).
   // TD-2026-10-20-294: a prefix rule carries its words; the always decision that learned it carries the same scope.
-  'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES }),
-  'approval.decide': Object.freeze({ scope: PREFIX_RULES }),
+  // TD-2026-10-23-939 follow-up: a file rule carries the kernel-resolved path of the card's edit (sensitive: project detail)
+  'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES, path: EDIT_RULES }),
+  // TD-2026-10-23-815 (Aegis L2): a standing-covered decision names the device (unlock key) the grant matched on
+  'approval.decide': Object.freeze({ scope: PREFIX_RULES, device: EDIT_RULES }),
   // T-2026-10-20-007: the digest of the ANCHORED command the kernel actually ran (the rewritten updatedInput)
   'approval.auto': Object.freeze({ anchoredInputHash: STANDING }),
   // P8-D98 (TD-2026-10-19-528 F4, §2.4 rule 11): approval.expire{why:'session-drained'} (CARD_EXPIRY_WHYS).
@@ -644,14 +650,16 @@ export type VoiceDisarmReason = (typeof VOICE_DISARM_REASONS)[number];
 /**
  * Always-rule match modes (TD-2026-10-19-528 F2, amended TD-2026-10-20-294): closed. `exact` = (repoKey, tool,
  * inputHash); `prefix` = a Bash rule that widens ONLY within a single literal simple command whose argv starts with
- * the learned words (approval.rule.learned{match:'prefix', prefix}).
+ * the learned words (approval.rule.learned{match:'prefix', prefix}). TD-2026-10-23-939 follow-up (Aegis): `file` = later
+ * edits of one kernel-resolved path (approval.rule.learned{match:'file', path}); `repo-edits` = every edit the auto-edits
+ * pass allows in the repo. Both match only through the supervisor's auto-edits pass, never in manual mode.
  */
-export const ALWAYS_RULE_MATCHES = ['exact', 'prefix'] as const;
+export const ALWAYS_RULE_MATCHES = ['exact', 'prefix', 'file', 'repo-edits'] as const;
 export type AlwaysRuleMatch = (typeof ALWAYS_RULE_MATCHES)[number];
 
 /** F2: the always-rule `match` field is closed (absent = 'exact', the v1 `matchExact:true` reading). */
 export function validateAlwaysRuleMatch(value: unknown): string[] {
-  return (ALWAYS_RULE_MATCHES as readonly unknown[]).includes(value) ? [] : [`match: must be ${ALWAYS_RULE_MATCHES.join('|')} (a prefix rule widens only within one literal simple command)`];
+  return (ALWAYS_RULE_MATCHES as readonly unknown[]).includes(value) ? [] : [`match: must be ${ALWAYS_RULE_MATCHES.join('|')} (a prefix rule widens only within one literal simple command; file and repo-edits only through the auto-edits pass)`];
 }
 
 /** A standing rule's id is the cardId whose `always` decision learned it (#always-rules; approval.auto's modeRef is `rule:<ruleId>`). */

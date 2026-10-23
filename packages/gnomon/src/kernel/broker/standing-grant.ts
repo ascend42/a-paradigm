@@ -197,7 +197,8 @@ export interface StandingDeps {
 const SHORT = (s: string): string => (s.length > 16 ? `…${s.slice(-10)}` : s);
 const TUPLE_TEXT: Readonly<Record<StandingTuple, string>> = Object.freeze({
   'mode.loosen:auto-edits': 'loosen a folder or session to auto-edits',
-  'permission:always': 'make an "always" rule',
+  // TD-2026-10-23-815: the rule an Always makes under the grant outlives the grant (it stands until revoked in Rules)
+  'permission:always': 'make "always" rules (each rule stays after today, until you revoke it)',
   'voice.widen': 'widen voice to ambient listening',
   'voice-arm:allow': 'arm voice approvals',
   'daemon-stop:restart': 'restart Gnomon when its binary did not change',

@@ -143,8 +143,9 @@ describe('V3: the status poll cadence and its lifecycle', () => {
 });
 
 describe('the page', () => {
-  it('the ghost line is its own element (never the textarea) and the caption is polite', () => {
-    expect(HTML).toMatch(/<div id="composer-ghost" class="composer-ghost meta" aria-hidden="true" hidden>…<\/div>/);
+  it('the ghost is its own element (never the textarea) and the caption is polite', () => {
+    // founder report 2026-10-23: the ghost is now a mirror laid over the textarea (the words at the caret), still its own aria-hidden element
+    expect(HTML).toMatch(/<div id="composer-ghost" class="composer-ghost" aria-hidden="true" hidden>…<\/div>/);
     expect(HTML).toMatch(/<span id="voice-caption" class="sr-only" aria-live="polite"><\/span>/);
     expect(APP).not.toMatch(/composer-text'\)[^;\n]*(ghost|capture)/);
     expect(APP).toMatch(/if \(d\.caption !== captionState\) \{\s*captionState = d\.caption;\s*put\(\$\('voice-caption'\), d\.caption\);/);
@@ -207,17 +208,28 @@ describe('B1 live words: the ghost line (#composer-ghost)', () => {
     expect(g.committed.length + g.tail.length).toBeLessThanOrEqual(GHOST_TEXT_MAX);
   });
   it('the page paints the words into the ghost element only (text nodes via put), never the textarea; reduced motion has no fade', () => {
-    const paint = APP.slice(APP.indexOf('function paintGhost('), APP.indexOf('function paintGhost(') + 900);
+    const paint = APP.slice(APP.indexOf('function paintGhost('), APP.indexOf('function placeGhost('));
     expect(paint).toContain("committed.className = 'ghost-committed'");
     expect(paint).toContain("tail.className = 'ghost-tail'");
-    expect(paint).toContain('put(committed, t.committed)');
-    expect(paint).toContain('put(tail, t.tail)');
-    expect(paint).toContain("put(el, '…')");
-    expect(paint).not.toMatch(/innerHTML|composer-text/);
-    expect(APP).toContain('paintGhost(ghost, d.ghost ? d.ghostText : null);');
+    expect(paint).toContain('put(committed, core.slice(0, t.committed.length))');
+    expect(paint).toContain('put(tail, core.slice(t.committed.length))');
+    expect(paint).toContain("put(wait, '…')");
+    expect(paint).not.toMatch(/innerHTML|\.value\s*=|setRangeText|setSelectionRange/);
+    // founder report 2026-10-23: the words sit where the turn will land, by the reducer's own rule
+    expect(paint).toContain("placeWords(ta.value, at, words, !plainAppend({ text: ta.value, edited: dict.edited }, at))"); // the "…" too (Mika)
+    expect(APP).toContain('ghostOn = d.ghost;');
+    expect(APP).toContain('ghostWords = d.ghost ? d.ghostText : null;');
+    expect(CSS).toMatch(/\.composer-main > textarea\.ghosting \{ color: transparent; caret-color: var\(--ink\); \}/);
+    expect(CSS).toMatch(/\.composer-ghost \{ position: absolute;[^}]*pointer-events: none;[^}]*white-space: pre-wrap;/);
     expect(APP).not.toMatch(/composer-text'\)[^;\n]*(ghost|capture|text\.committed|text\.tail)/);
     expect(APP).not.toMatch(/\.value\s*=\s*[^;\n]*ghostText/);
-    expect(CSS).toMatch(/\.composer-ghost \.ghost-tail \{[^}]*opacity: 0\.55/);
+    // Mika 2026-10-23: the tail is --sec italic at full strength (0.55 was under 3:1); the stale selection and an
+    // offset caret are not drawn; an IME composition shows the textarea itself; the mirror is the text box's width
+    expect(CSS).toMatch(/\.composer-ghost \.ghost-tail \{ font-style: italic; color: var\(--sec\); \}/);
+    expect(CSS).toContain('.composer-main > textarea.ghosting::selection { background: transparent; color: transparent; }');
+    expect(CSS).toContain('.composer-main > textarea.ghosting.ghost-offset { caret-color: transparent; }');
+    expect(APP).toMatch(/const on = ghostOn && !composing;/);
+    expect(APP).toContain('el.style.width = `${ta.clientWidth}px`;');
     expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{ animation: none !important; transition: none !important; \}/);
     expect(CSS).not.toMatch(/\.ghost-(tail|committed)[^{]*\{[^}]*animation/);
   });

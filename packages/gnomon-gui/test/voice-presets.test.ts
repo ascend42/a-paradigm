@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ACK_KEY_PREFIX, ACK_TEXT, acked, ackedAt, ackWhen, riskSentence, saidTag, voiceWho, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
+import { ACK_KEY_PREFIX, ACK_TEXT, acked, ackedAt, ackWhen, riskSentence, saidTag, voiceWho, attachSend, choosePreset, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
 import { chatItems } from '../src/core/store.js';
 import { captureOf, parseCapturePref } from '../src/core/voice-presets.js';
 import { clientRequest } from '../src/core/voice-client.js';
@@ -25,10 +25,13 @@ describe('voice presets', () => {
   });
   it('Send word and Pieces need the one-time liability acknowledgement, recorded per user', () => {
     const st = mem();
-    expect(ACK_TEXT).toBe('Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
+    expect(ACK_TEXT).toBe('Anyone near my mic can send for me: the send word sends my whole draft, and it runs like a message I typed.');
     // Aegis L-1 (TD-2026-10-23-496): an acknowledgement of the OLD text no longer counts: the risk check is offered again
     const old = new Map<string, string>([[`${ACK_KEY_PREFIX}p:abcdefgh/me`, 'I understand a misheard or other voice can send for me; edits will still ask.']]);
     const store = { getItem: (k: string) => old.get(k) ?? null, setItem: (k: string, v: string) => void old.set(k, v), removeItem: (k: string) => void old.delete(k) };
+    expect(acked(store as never, 'p:abcdefgh/me')).toBe(false);
+    // TD-2026-10-23-939 re-version: the TD-2026-10-23-496 text ("Edits will still ask") no longer counts either
+    old.set(`${ACK_KEY_PREFIX}p:abcdefgh/me`, 'Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
     expect(acked(store as never, 'p:abcdefgh/me')).toBe(false);
     expect(choosePreset('send-word', { acked: acked(store as never, 'p:abcdefgh/me'), sendWord: { text: 'over', variants: [] } })).toBe('needs-ack');
     expect(choosePreset('send-word', { acked: acked(st, 'p:a/me'), sendWord: null })).toBe('needs-ack');
@@ -40,7 +43,8 @@ describe('voice presets', () => {
     expect(ackedAt(st, 'p:a/other')).toBeNull();
     expect(ackWhen('2026-10-21T09:00:00.000Z', new Date('2026-10-21T12:00:00.000Z'))).toBe('today');
     expect(ackWhen(null)).toBe('');
-    expect(riskSentence({ word: 'send it' })).toBe("When you say “send it”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, so any edit Claude tries in a voice-sent turn asks you first.");
+    expect(riskSentence({ word: 'send it' })).toBe("When you say “send it”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, and a voice-sent turn runs under your run mode and Always rules, like a message you typed.");
+    expect(riskSentence({ word: null, pieces: true })).not.toMatch(/asks you first/);
     expect(acked(st, 'p:a/other')).toBe(false);
     expect(choosePreset('send-word', { acked: true, sendWord: null })).toBe('needs-word');
     expect(choosePreset('send-word', { acked: true, sendWord: { text: 'over', variants: [] } })).toBe('apply');
@@ -53,31 +57,24 @@ describe('voice presets', () => {
     expect(clientRequest('start', 'toggle')).toEqual({ kind: 'request.voice.client', payload: { op: 'start', capture: 'toggle' } });
     expect(clientRequest('stop', 'toggle')).toEqual({ kind: 'request.voice.client', payload: { op: 'stop' } });
   });
-  it('the clamp chip shows while a voice-origin turn of the session is open (display only)', () => {
-    const H = 'hs:1';
-    expect(clampedFrom([{ kind: 'turn.sent', session: H, payload: { origin: 'voice', sentBy: 'word' } }], H)).toBe(true);
-    expect(clampedFrom([{ kind: 'turn.sent', session: H, payload: { origin: 'voice' } }, { kind: 'turn.result', session: H, payload: {} }], H)).toBe(false);
-    expect(clampedFrom([{ kind: 'turn.sent', session: 'hs:2', payload: { origin: 'voice' } }], H)).toBe(false);
-    expect(clampedFrom([{ kind: 'turn.sent', session: H, payload: { origin: 'hand' } }], H)).toBe(false);
-  });
   it('the transcript carries the sent label on a voice message', () => {
     const rows = [
       { seq: 5, kind: 'voice.turn.user', session: 'hs:1', payload: { turnId: '1', speakerId: 'spk:abcdefgh/matt', speakerEnrolled: true, forwardable: true, text: 'fix it', mode: 'conversation' } },
       { seq: 6, kind: 'turn.sent', session: 'hs:1', payload: { source: 'voice', origin: 'voice', sentBy: 'word', voiceTurnSeqs: [5], voiceTurnSeq: 5 } },
     ];
     const it = chatItems(rows.map((r) => ({ ...r, view: 'full' })) as never).items.find((x) => x.role === 'user');
-    expect(it).toMatchObject({ sentLabel: 'spoken · sent by send word', asksFirst: true });
+    expect(it).toMatchObject({ sentLabel: 'spoken · sent by send word' });
+    expect(it).not.toHaveProperty('asksFirst'); // TD-2026-10-23-939: the plain origin, nothing asks first
   });
   it('reads the held word and labels sent turns from turn.sent', () => {
     expect(sendWordOf({ voice: { sendWord: { text: 'Over', variants: [] } } })).toEqual({ text: 'over', variants: [] });
     expect(sendWordOf({ voice: {} })).toBeNull();
-    expect(sentLabel({ origin: 'voice', sentBy: 'word', source: 'voice' })).toEqual({ label: 'spoken · sent by send word', asksFirst: true });
-    expect(sentLabel({ origin: 'voice', sentBy: 'piece' })).toEqual({ label: 'spoken · sent as a piece', asksFirst: true });
-    expect(sentLabel({ origin: 'hand', source: 'voice' })).toEqual({ label: 'spoken · sent by you', asksFirst: false });
+    expect(sentLabel({ origin: 'voice', sentBy: 'word', source: 'voice' })).toEqual({ label: 'spoken · sent by send word' });
+    expect(sentLabel({ origin: 'voice', sentBy: 'piece' })).toEqual({ label: 'spoken · sent as a piece' });
+    expect(sentLabel({ origin: 'hand', source: 'voice' })).toEqual({ label: 'spoken · sent by you' });
     expect(sentLabel({ origin: 'hand' })).toBeNull();
-    expect(sentLabel({ origin: 'voice', sentBy: 'hotkey' })).toEqual({ label: 'spoken · sent by send-now', asksFirst: true });
-    expect(sentLabel({ origin: 'hand', sentBy: 'release', source: 'voice' })).toEqual({ label: 'spoken · sent on release', asksFirst: false });
-    expect(CLAMP_CHIP).toBe('voice turn · edits ask first');
+    expect(sentLabel({ origin: 'voice', sentBy: 'hotkey' })).toEqual({ label: 'spoken · sent by send-now' });
+    expect(sentLabel({ origin: 'hand', sentBy: 'release', source: 'voice' })).toEqual({ label: 'spoken · sent on release' });
   });
 });
 

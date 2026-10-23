@@ -1249,10 +1249,10 @@ export class VoiceClient {
     // 2026-10-23 (founder ruling: short speech is never thrown away): under every send ceiling; the kernel decides
     // (an attachment with no reported send ceiling is an older kernel that refuses it: the words stay withheld)
     // Aegis 2026-10-23 (Talk, narrow): a push-to-talk clip too short to verify fills the draft unverified too (the kernel
-    // clamps its send); a long one that does not match keeps the gate and stays withheld
+    // stamps its send voice-unverified); a long one that does not match keeps the gate and stays withheld
     const shortPtt = mode === 'ptt' && who.speechMs !== undefined && who.speechMs < MIN_VERIFY_SPEECH_MS;
     // TD-2026-10-23-496: under a send-word (or pieces) ceiling the human accepted that anyone near the mic can send with
-    // the word, so the word's text goes to the kernel whoever said it (it counts it, unverified; its send is clamped)
+    // the word, so the word's text goes to the kernel whoever said it (it counts it, unverified; its send is stamped voice-unverified)
     const anyVoiceWord = !trial && (a.send === 'word' || a.send === 'pieces') && isSendWord(text, word);
     const draftable = !enrolled && !trial && a.send !== undefined && ((mode === 'ambient' && a.mode !== 'ptt') || shortPtt || anyVoiceWord);
     const speakerId = adjacent ? this.#draftSpeaker! : stretch ? stretch.speakerId : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;

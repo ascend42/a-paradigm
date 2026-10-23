@@ -911,6 +911,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     onChange: () => supervisor.noteModeChange(),
     // TD-2026-10-20-086 F3: the root-signed config's runModes.default (null on any fallback: fail closed)
     configDefault: () => fuseCfg.runModes.default,
+    // TD-2026-10-23-939 follow-up: "ask · edits allowed by rule" while an "edits in this repo" always rule stands
+    editRule: (repoKey) => syncRuleBook().repoEditsRule(repoKey)?.ruleId ?? null,
   });
   // TD-2026-10-20-086 F6 (#standing-grant): the daily standing grant, folded from KERNEL-signed grant.standing* rows
   // only; the broker asks it before any presence prompt and writes its notify row after approval.decide.
@@ -1172,8 +1174,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         attended: true,
         detail: { op: 'voice.widen', hsid, from, to, connId: asker.connId, ...(send ? { send, liabilityAck: VOICE_LIABILITY_ACK_HASH } : {}) },
         lines: send === 'pieces'
-          ? [`Voice: send ambient speech in pieces to session …${hsid.slice(-10)}`, 'Each piece is sent as it is heard, marked as a piece; edits and commands still ask first', VOICE_LIABILITY_ACK_TEXT, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps the composer']
-          : [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, ...(send === 'word' ? ['Send word: a spoken send word sends the draft; edits and commands still ask first', VOICE_LIABILITY_ACK_TEXT] : []), 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
+          ? [`Voice: send ambient speech in pieces to session …${hsid.slice(-10)}`, 'Each piece is sent as it is heard, marked as a piece; it runs under the session\'s run mode and your Always rules, like a typed turn', VOICE_LIABILITY_ACK_TEXT, 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps the composer']
+          : [`Voice: listen ambiently to session …${hsid.slice(-10)}`, `${from ?? 'not attached'} → ${to}: an enrolled speaker's speech is sent to the model without push-to-talk`, ...(send === 'word' ? ['Send word: a spoken send word sends the draft; it runs under the session\'s run mode and your Always rules, like a typed turn', VOICE_LIABILITY_ACK_TEXT] : []), 'Once for this GUI login; ends after the idle timeout', 'Allow needs Touch ID; deny or no answer keeps push-to-talk'],
         decisions: ['allow', 'deny'],
         timeoutMs: LOOSEN_TIMEOUT_MS,
         effect: async (decision) => {
@@ -1370,6 +1372,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       offered: true,
     };
   };
+  // #rules-revoke: ONE handler (one queue) for the unix-only rules.revoke verb and the GUI's request.rules.revoke
+  const rulesRevoke = createRulesRevokeHandler({
+    lookup: (ruleId) => syncRuleBook().get(ruleId),
+    append: (payload, ids) => log.append({ kind: 'approval.rule.revoked', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }),
+  });
   const dispatcherCommon = {
     voice,
     voiceClient: {
@@ -1423,6 +1430,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       standing: { request: (asker: Parameters<StandingGrants['request']>[0], payload: unknown) => standingGrants.request(asker, payload), revoke: (asker: Parameters<StandingGrants['revoke']>[0], payload: unknown) => standingGrants.revoke(asker, payload), status: () => standingGrants.status() },
       offer: { decide: (asker: Parameters<OfferRouter['decide']>[0], payload: unknown) => router.decide(asker, payload), mute: (asker: Parameters<OfferRouter['mute']>[0], payload: unknown) => router.mute(asker, payload) },
       mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },
+      // TD-2026-10-23-939 follow-up: the GUI's revoke, the SAME handler (and queue) as the unix-only rules.revoke verb
+      rules: { revoke: (ctx: Parameters<typeof rulesRevoke>[0], payload: unknown) => rulesRevoke(ctx, payload) },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,
       // Aegis M2: status.local is the human's (dispatch.ts gives other classes only configured / loopbackOnly / offered)
@@ -1445,10 +1454,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // endpoint's shared launch-grant cap as a `socket` asker (its own share, launch-cap.ts).
   // One handler module per verb (socket/<verb>.ts; daemon.stop is socket/daemon-stop-verb.ts), one key per verb here.
   const humanVerbs: HumanDeviceVerbPorts = {
-    'rules.revoke': createRulesRevokeHandler({
-      lookup: (ruleId) => syncRuleBook().get(ruleId),
-      append: (payload, ids) => log.append({ kind: 'approval.rule.revoked', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }),
-    }),
+    'rules.revoke': rulesRevoke,
     'gui.open': createGuiOpenHandler({ requestLaunch: (connId: string) => requestWebLaunch(connId, 'socket'), withdrawLaunch: (t: string) => void web?.withdrawLaunch(t) }),
     // T-2026-10-19-014 B0 (TD-2026-10-19-339): raises the signed daemon-stop card; stops only on a Touch ID accept
     'daemon.stop': createDaemonStopHandler({ requestStop: (connId, reason) => requestStop(connId, reason) }),

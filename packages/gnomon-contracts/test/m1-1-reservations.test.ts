@@ -255,7 +255,7 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by 8.0:T-2026-10-21-008 (re-review M-1/M-2: offer.retired + session.anomaly + desk.retire/sessionAnomaly closed values): was sha256:4c2b9371…af2c.
 // Moved once by 8.0:session-rename (request.session.rename + session.renamed + descriptor sessionRename): was sha256:454cd632…7de.
 // Moved once by 8.0:loops (loop-trust/loop-choice cards, continue/stop, the loop.* + request.loop.* kinds, descriptor loops): was sha256:c4e2c7d9…e2c9.
-const PINNED_CLIENT_API_ID = 'sha256:a23b2c75c92df061c1dafa5d32e818a6ae788ef7153613d45be0ecae3c4ba1ce';
+const PINNED_CLIENT_API_ID = 'sha256:aa537e4c9af0efee02ebd5d03a734c4de915c5e02a58021d71a6fd892bf379d4';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -593,6 +593,8 @@ describe('event labels and payload docs (round 2)', () => {
     const labelled = Object.fromEntries(EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.fieldLabels).map((k) => [k, EVENT_KINDS[k]!.fieldLabels]));
     expect(labelled).toEqual({
       'approval.request': { tool_input: 'sensitive' },
+      // TD-2026-10-23-939 follow-up: a file rule's path is project detail
+      'approval.rule.learned': { path: 'sensitive' },
       'oracle.result': { evidence: 'sensitive' },
       'voice.turn.user': { audioRef: 'sensitive' },
       'approval.auto': { path: 'sensitive', inputHash: 'sensitive', anchoredInputHash: 'sensitive' },

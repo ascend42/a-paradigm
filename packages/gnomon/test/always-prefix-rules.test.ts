@@ -136,3 +136,56 @@ describe('#always-rules prefix rules (TD-2026-10-20-294)', () => {
     expect(bashArgvOfInput('git log')).toBeNull();
   });
 });
+
+describe('3-word prefixes (Aegis 2026-10-23, TD-2026-10-23-939 follow-up): offered beside the 2-word one, same policy', () => {
+  it('a Bash card offers the 2- and the 3-word prefix #prefix-policy allows; never one word, never a refused one', () => {
+    const offers = (command: string): unknown => {
+      const p = composePermission({ toolName: 'Bash', input: { command }, toolUseId: null } as never, { repo: '/work/repo', denyWrite: [] });
+      return p.kind === 'card' ? (p.detail.prefixOptions ?? []) : null;
+    };
+    expect(offers('paradigm lore record --type decision --title x')).toEqual([['paradigm', 'lore'], ['paradigm', 'lore', 'record']]);
+    expect(offers('git log -n 5')).toEqual([['git', 'log']]); // git: exactly two words
+    expect(offers('bash -c x')).toEqual([]); // an interpreter is never a prefix
+    expect(offers('ls')).toEqual([]); // one word is never a prefix
+  });
+  it('a 3-word rule answers the next call with different arguments (the founder\'s `paradigm lore record` case)', () => {
+    const P3 = ['paradigm', 'lore', 'record'];
+    const b = book(prefixRows(card(9), { command: 'paradigm lore record --type decision --title a', scope: { kind: 'prefix', prefix: P3 }, prefix: P3 }));
+    expect(m(b, 'paradigm lore record --type insight --title b')).toMatchObject({ ruleId: card(9) });
+    expect(m(b, 'paradigm lore list')).toBeNull();
+    expect(m(b, 'paradigm lore record --body /etc/passwd')).toBeNull(); // M3: an absolute path outside the roots
+  });
+});
+
+describe('scoped edit rules fold and match (TD-2026-10-23-939 follow-up)', () => {
+  const editRows = (cardId: string, scope: unknown, learned: Record<string, unknown>, tool = 'Write'): RuleRow[] => [
+    { principal: K, keyId: KEY, kind: 'approval.request', payload: { card: { cardId, kind: 'permission' }, tool, tool_input: { file_path: '/work/repo/a.ts', content: 'x' } } },
+    { principal: K, keyId: KEY, kind: 'approval.decide', payload: { cardId, decision: 'always', ...(scope === undefined ? {} : { scope }) } },
+    { principal: K, keyId: KEY, kind: 'approval.rule.learned', payload: { cardId, tool, presence: 'fresh', repoKey: REPO, ...learned } },
+  ];
+  const em = (b: RuleBook, tool: string, editPath: string | null, o: { repo?: string; prefixRules?: boolean; repoEdits?: boolean } = {}) => b.match(o.repo ?? REPO, tool, 'sha256:x', { file_path: editPath ?? '/x' }, { prefixRules: o.prefixRules ?? true, roots: ['/work/repo'], editPath, repoEdits: o.repoEdits ?? true });
+  it('a file rule matches only its path, any edit tool, any content; never without the pass, in manual mode or another repo', () => {
+    const b = book(editRows(card(20), { kind: 'file' }, { match: 'file', path: '/work/repo/a.ts' }));
+    expect(b.list()).toEqual([expect.objectContaining({ ruleId: card(20), match: 'file', path: '/work/repo/a.ts' })]);
+    expect(em(b, 'Edit', '/work/repo/a.ts')).toMatchObject({ ruleId: card(20) });
+    expect(em(b, 'Write', '/work/repo/b.ts')).toBeNull();
+    expect(em(b, 'Edit', null)).toBeNull(); // the auto-edits pass failed (gate-class, symlink, outside the roots, flagged)
+    expect(em(b, 'Edit', '/work/repo/a.ts', { prefixRules: false })).toBeNull(); // manual
+    expect(em(b, 'Edit', '/work/repo/a.ts', { repo: OTHER })).toBeNull();
+    expect(em(b, 'Bash', '/work/repo/a.ts')).toBeNull(); // a Bash write never matches an edit rule
+  });
+  it('a repo-edits rule matches any edit the pass allows in its repo', () => {
+    const b = book(editRows(card(21), { kind: 'repo-edits' }, { match: 'repo-edits' }));
+    expect(em(b, 'MultiEdit', '/work/repo/any/where.ts')).toMatchObject({ ruleId: card(21) });
+    expect(em(b, 'Edit', null)).toBeNull();
+    expect(em(b, 'Edit', '/work/repo/x', { prefixRules: false })).toBeNull();
+    expect(em(b, 'Edit', '/work/repo/x', { repoEdits: false })).toBeNull(); // Aegis H1: the ceiling forbids auto-edits
+  });
+  it('a learned row whose decide scope differs, a relative path or a non-edit tool forms no rule', () => {
+    expect(book(editRows(card(22), undefined, { match: 'repo-edits' })).list()).toEqual([]); // decided exact
+    expect(book(editRows(card(23), { kind: 'file' }, { match: 'repo-edits' })).list()).toEqual([]); // scope mismatch
+    expect(book(editRows(card(24), { kind: 'file' }, { match: 'file', path: 'a.ts' })).list()).toEqual([]);
+    expect(book(editRows(card(25), { kind: 'repo-edits' }, { match: 'repo-edits' }, 'Bash')).list()).toEqual([]);
+    expect(book(editRows(card(26), { kind: 'file', path: '/x' }, { match: 'file', path: '/work/repo/a.ts' })).list()).toEqual([]); // malformed scope
+  });
+});

@@ -66,7 +66,7 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number; mode?: { v: strin
   };
   const now = o.now;
   const broker = new ApprovalBroker({ kernel, kernelPrincipal: 'p:abcdefgh/kernel', log, approvals: approvalsKeyFrom(ring, (p) => (p === HUMAN ? keyId : undefined)), presence: touching, guiSessions: () => 1, ...(now ? { clock: () => now.t } : {}) });
-  const sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true, alwaysRule: (repoKey, tool, hash, input, ctx) => book.match(repoKey, tool, hash, input, ctx), ...(o.mode ? { runMode: () => ({ effective: o.mode!.v as never }) } : {}) });
+  const sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin' }), platform: 'darwin', watchMs: 10_000, allowScripts: true, alwaysRule: (repoKey, tool, hash, input, ctx) => book.match(repoKey, tool, hash, input, ctx), ...(o.mode ? { runMode: () => ({ effective: o.mode!.v as never, ceiling: 'auto-edits' as never }) } : {}) });
   live.push(() => children.stopAll('test-end'));
   // P8-D98: an answer signs the v2 message over its text's digest (signer decisionMessage); the rest stay v1
   const sig = (cardId: string, decision: string, contentHash: string, approver = HUMAN, note?: unknown) =>
@@ -76,6 +76,9 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number; mode?: { v: strin
   // TD-2026-10-20-294: a prefix always signs the v2 message over the scope digest
   const approvePrefix = (cardId: string, prefix: string[]) =>
     broker.approve(GUI as never, { cardId, decision: 'always', scope: { kind: 'prefix', prefix }, decisionSig: cryptoSign('sha256', signaturePreimage('approve', decisionMessage({ cardId, decision: 'always', cardContentHash: broker.card(cardId)!.contentHash, approverPrincipalId: HUMAN, scopeDigest: scopeDigest({ kind: 'prefix', prefix }) })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64') });
+  // TD-2026-10-23-939 follow-up: a scoped edit always ({kind:'file'} / {kind:'repo-edits'}) signs the same v2 layout
+  const approveScope = (cardId: string, scope: { kind: 'file' } | { kind: 'repo-edits' }) =>
+    broker.approve(GUI as never, { cardId, decision: 'always', scope, decisionSig: cryptoSign('sha256', signaturePreimage('approve', decisionMessage({ cardId, decision: 'always', cardContentHash: broker.card(cardId)!.contentHash, approverPrincipalId: HUMAN, scopeDigest: scopeDigest(scope) })), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64') });
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string, pred: (p: Record<string, unknown>) => boolean = () => true) => rows.findIndex((r) => r.kind === k && pred(r.payload));
   const answers = () => trace(w).filter((t) => t.t === 'perm-answer');
@@ -86,7 +89,7 @@ function rig(o: { now?: { t: number }; slowRequestMs?: number; mode?: { v: strin
     await sup.send(HUMAN, { hsid: s.hsid, text: 'go' });
     return s;
   };
-  return { rows, fuse, broker, sup, approve, approvePrefix, kinds, idx, answers, pending, prompts, open, gate, book };
+  return { rows, fuse, broker, sup, approve, approvePrefix, approveScope, kinds, idx, answers, pending, prompts, open, gate, book };
 }
 
 const marker = () => path.join(w.cwd, 'marker.txt');
@@ -595,4 +598,57 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     await new Promise((res) => setTimeout(res, 200));
     expect(r.answers()).toEqual([]);
   });
+});
+
+describe.skipIf(!SANDBOX_OK)('scoped edit always (TD-2026-10-23-939 follow-up, Aegis 2026-10-23): this file / edits in this repo', () => {
+  const wf = (id: string, file: string, content: string) => ({ request: { id, tool: 'Write', input: { file_path: path.join(w.cwd, file), content } } });
+  it('ask: "this file" allows later edits of that file with any content, another file still cards; one fresh presence', async () => {
+    const r = rig({ mode: { v: 'ask' } });
+    await r.open([wf('s-1', 'a.txt', 'one')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    expect(JSON.stringify(c.block)).toContain('"type":"edit-scope"');
+    await r.approveScope(c.cardId, { kind: 'file' });
+    expect(r.prompts.at(-1)).toContain('always allow edits to');
+    const learned = r.kinds('approval.rule.learned').map((x) => x.payload);
+    expect(learned).toEqual([expect.objectContaining({ cardId: c.cardId, match: 'file', path: expect.stringMatching(/a\.txt$/), presence: 'fresh' })]);
+    expect(await waitFor(() => r.answers().some((a) => a.id === 's-1'))).toBe(true);
+    await r.open([wf('s-2', 'a.txt', 'two, different content'), wf('s-3', 'b.txt', 'other file')], { hold: true });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 's-2') && r.pending().length === 1)).toBe(true);
+    expect(r.kinds('approval.auto').map((x) => x.payload.modeRef)).toEqual([`rule:${c.cardId}`]);
+    expect(r.answers().some((a) => a.id === 's-3')).toBe(false);
+  }, 30_000);
+
+  it('ask: "edits in this repo" allows every in-root edit; a gate-class path still cards and offers no scope; manual never matches', async () => {
+    const mode = { v: 'ask' };
+    const r = rig({ mode });
+    await r.open([wf('r-1', 'x.txt', 'x')], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    await r.approveScope(c.cardId, { kind: 'repo-edits' });
+    expect(r.prompts.at(-1)).toContain('same as auto-edits for this repo');
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'r-1'))).toBe(true);
+    await r.open([wf('r-2', 'y.txt', 'y'), { request: { id: 'r-3', tool: 'Write', input: { file_path: path.join(w.cwd, 'package.json'), content: '{}' } } }], { hold: true });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'r-2') && r.pending().length === 1)).toBe(true);
+    const gate = r.pending()[0]!;
+    expect(JSON.stringify(gate.block)).not.toContain('"type":"edit-scope"'); // gate-class: no scoped offer
+    const e = (await r.approveScope(gate.cardId, { kind: 'repo-edits' }).then(() => null, (x: unknown) => x)) as RefusedError;
+    expect(e).toBeInstanceOf(RefusedError);
+    expect(e.refusal.data).toMatchObject({ reason: 'bad-params' });
+    await r.approve(gate.cardId, 'deny');
+    // manual: the repo rule is skipped (a plan is needed first, so the Write is denied with no card and no rule use)
+    mode.v = 'manual';
+    await r.open([wf('r-4', 'z.txt', 'z')], { hold: true });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'r-4'))).toBe(true);
+    expect(r.answers().find((a) => a.id === 'r-4')).toMatchObject({ behavior: 'deny' });
+    expect(r.kinds('approval.auto')).toHaveLength(1);
+  }, 30_000);
+
+  it('a Bash card never takes an edit scope (Bash file writes stay carded)', async () => {
+    const r = rig({ mode: { v: 'ask' } });
+    await r.open([{ request: { id: 'b-1', tool: 'Bash', input: { command: 'touch q.txt' } } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const e = (await r.approveScope(r.pending()[0]!.cardId, { kind: 'repo-edits' }).then(() => null, (x: unknown) => x)) as RefusedError;
+    expect(e.refusal.data).toMatchObject({ reason: 'bad-params' });
+  }, 30_000);
 });

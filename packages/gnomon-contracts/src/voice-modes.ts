@@ -16,7 +16,9 @@
  *
  * Origin: every turn the kernel sends carries a kernel-stamped `origin` (hand | voice). Hand = typed, Enter / Send,
  * the send hotkey, a push-to-talk release (the key hold was the gesture). Voice = sent by a spoken send word or as a
- * piece. A voice-origin turn is CLAMPED (^voice-origin-clamp, #supervisor): nothing write-capable auto-passes.
+ * piece. The origin is a RECORD only (TD-2026-10-23-939, superseding TD-2026-10-21-514's edits-ask-first clamp): a
+ * voice-sent turn runs under the session's run mode and the human's saved Always rules and standing grants, exactly like
+ * a typed turn. Voice never approves anything (cards, grants, trust, mode changes).
  *
  * #send-word-matcher: ONE matcher, shared by the GUI dictation reducer, the voice client (short words by adjacency)
  * and the kernel (the claim check and the fail-closed backstop), so every side agrees on what the send word is.
@@ -46,11 +48,11 @@ export type SentBy = (typeof SENT_BY)[number];
 
 /**
  * The kernel-stamped origin of every turn.sent. `voice-unverified` (Dictate, the G-VOX-06 exception; Aegis 2026-10-21):
- * a human's Enter sent words from a voice the kernel did not verify (a draftOnly turn): clamped like `voice`.
+ * a human's Enter sent words from a voice the kernel did not verify (a draftOnly turn). Like `voice`, a record only.
  * TD-2026-10-23-496 supersedes G-VOX-06 on the SEND-WORD path only: once the human accepted at a send-word (or pieces)
  * attach that anyone near the mic can send with the word (VOICE_LIABILITY_ACK_TEXT, the start row's liabilityAck), the
  * held word sends the whole draft, checked parts or not, and the word itself counts whoever said it. Such a send is
- * `voice-unverified` (clamped: edits and tools ask first). Pieces, send-now, Talk and the voice principal's direct send
+ * `voice-unverified` (a record; its permissions are a typed turn's, TD-2026-10-23-939). Pieces, send-now, Talk and the voice principal's direct send
  * keep G-VOX-06; voice never approves anything.
  */
 export const VOICE_ORIGINS = Object.freeze(['hand', 'voice', 'voice-unverified'] as const);
@@ -58,7 +60,7 @@ export type VoiceOrigin = (typeof VOICE_ORIGINS)[number];
 
 /**
  * The sentBy values the kernel stamps on a voice-origin turn (request.voice.send.claim{by}), plus `unverified`: the
- * human's Enter sent a draft holding an unverified voice's words (origin `voice-unverified`; the clamp applies).
+ * human's Enter sent a draft holding an unverified voice's words (origin `voice-unverified`).
  */
 export const VOICE_SENT_BY = Object.freeze(['word', 'piece', 'hotkey', 'unverified'] as const);
 export type VoiceSentBy = (typeof VOICE_SENT_BY)[number];
@@ -78,9 +80,13 @@ export const LIABILITY_SEND_POLICIES = Object.freeze(['word', 'pieces'] as const
  * The one acceptance a Send word or Pieces attach needs (Aegis M-4). Re-versioned 2026-10-23 (Aegis L-1 on
  * TD-2026-10-23-496) to name the new scope: the send word now sends the whole draft whoever spoke. The hash changes, so
  * an earlier acknowledgement no longer counts and the human accepts once more (the GUI shows the risk check again).
- * Was: 'I understand a misheard or other voice can send for me; edits will still ask.'
+ * Re-versioned again 2026-10-23 (TD-2026-10-23-939): the clamp it promised ("Edits will still ask") is gone, so the text
+ * says what is true now: a sent draft runs under the run mode and Always rules like a typed message. The hash changes
+ * again, so every earlier acknowledgement stops counting and the human accepts once more.
+ * Was (TD-2026-10-23-496): 'Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.'
+ * Was (first): 'I understand a misheard or other voice can send for me; edits will still ask.'
  */
-export const VOICE_LIABILITY_ACK_TEXT = 'Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.';
+export const VOICE_LIABILITY_ACK_TEXT = 'Anyone near my mic can send for me: the send word sends my whole draft, and it runs like a message I typed.';
 /**
  * Aegis M-4: the hash a voice.session.start{send:'word'|'pieces'} must carry as `liabilityAck` (the human's own
  * attach, after the acknowledgement dialog); the kernel writes {principal, ackHash} into the start row it signs.
@@ -140,7 +146,7 @@ export const SEND_WORD_ADJACENT_MS = 2000;
  * A clip with less gated speech than VOICE_MIN_VERIFY_SPEECH_MS cannot be checked on its own (measured 2026-10-23:
  * CAM++ scores of sub-1.5 s clips do not separate speakers), so it may INHERIT the speaker of the stretch it belongs to:
  * voice.turn.user{speakerBasis: 'continuity'}. Inheritance is NOT verification: an inherited turn carries no speaker
- * evidence, so every send that includes one is clamped as origin 'voice-unverified' (no automatic tool approval), it
+ * evidence, so every send that includes one is stamped origin 'voice-unverified' (a record, TD-2026-10-23-939), it
  * never anchors adjacency, and a piece claim must cite at least one turn verified on its own. The rule, enforced by the
  * voice app and re-checked by the kernel at receipt:
  *   - the clip is short: gatedSpeechMs < VOICE_MIN_VERIFY_SPEECH_MS and t1 - t0 <= VOICE_CONTINUITY_CLIP_MS; a clip long

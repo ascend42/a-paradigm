@@ -68,8 +68,8 @@ describe('P8-D98 kinds: registered, kernel-owned, closed payload checks', () => 
   });
   it('claimGen, match and expire.why are reserved payload fields', () => {
     expect(RESERVED_PAYLOAD_FIELDS['contract.claimed']).toEqual({ claimGen: '8.0:P8-D98' });
-    expect(RESERVED_PAYLOAD_FIELDS['approval.rule.learned']).toEqual({ match: '8.0:P8-D98', prefix: '8.0:TD-2026-10-20-294' });
-    expect(RESERVED_PAYLOAD_FIELDS['approval.decide']).toEqual({ scope: '8.0:TD-2026-10-20-294' });
+    expect(RESERVED_PAYLOAD_FIELDS['approval.rule.learned']).toEqual({ match: '8.0:P8-D98', prefix: '8.0:TD-2026-10-20-294', path: '8.0:TD-2026-10-23-939' });
+    expect(RESERVED_PAYLOAD_FIELDS['approval.decide']).toEqual({ scope: '8.0:TD-2026-10-20-294', device: '8.0:TD-2026-10-23-939' });
     expect(RESERVED_PAYLOAD_FIELDS['approval.expire']).toEqual({ why: '8.0:P8-D98' });
   });
 });

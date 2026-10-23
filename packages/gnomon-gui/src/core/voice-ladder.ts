@@ -35,8 +35,8 @@ export const RUNG_LINE: Readonly<Record<Rung, string>> = Object.freeze({
   off: 'the mic is closed',
   talk: 'hold to speak; sends after release',
   dictate: 'open mic fills the box; you press Enter',
-  word: 'say your word to send · edits ask first',
-  pieces: 'each pause sends · edits ask first',
+  word: 'say your word to send',
+  pieces: 'each pause sends',
 });
 
 const PRESET_OF: Readonly<Record<Exclude<Rung, 'off'>, VoicePreset>> = Object.freeze({ talk: 'talk', dictate: 'dictate', word: 'send-word', pieces: 'pieces' });
@@ -171,8 +171,6 @@ export interface PillInput {
   clientTitle?: string | null;
   /** the capture overlay (core/capture.ts captureDisplayOf) and the capture it shows, or null */
   capture: { display: CaptureDisplay; cap: Pick<CaptureView, 'reason' | 'refusal' | 'cause'> | null } | null;
-  /** a voice-origin turn is open (the kernel clamps its edits) */
-  clamped: boolean;
   /** open-mic rungs under the mic key: the human closed the mic (status.voice.micWanted false) */
   micClosed: boolean;
   micKeyBare: boolean;
@@ -189,10 +187,8 @@ export interface PillView {
   name: string;
   /** the one live fact ('' for none) */
   fact: string;
-  /** the fact's colour: plain (secondary ink), clamp or note (warning ink: a draft waits elsewhere), fail (vermilion: speech was not sent) */
-  tone: 'plain' | 'clamp' | 'note' | 'fail';
-  /** the 2px amber edge: a voice-origin turn is clamped */
-  clamped: boolean;
+  /** the fact's colour: plain (secondary ink), note (warning ink: a draft waits elsewhere), fail (vermilion: speech was not sent) */
+  tone: 'plain' | 'note' | 'fail';
   /** the mic is open: the dot is filled with its soft ring */
   live: boolean;
   /** the accessible name: the rung, the mic state and the fact in words */
@@ -222,14 +218,13 @@ export function dropFact(cap: Pick<CaptureView, 'reason' | 'refusal' | 'cause'>)
 /**
  * The pill: rung name + one live fact, first match wins:
  *   speech not sent (a sticky drop)     vermilion "not sent · <reason>"   (a mic-off drop is just "mic off · ⌃`")
- *   a clamped voice-origin turn          amber edge, "edits ask first"
  *   the voice app's condition            "voice app not running", "voice crashed" (its cause in the title and aria), "setting up voice…"
  *   a draft waits on another session     warning ink "draft waiting · <session>"
  *   capture                              "hearing you…", "catching that…", "got it", "heard, not confirmed"
  *   the mic key closed the mic           "mic off · ⌃`"
  *   a turn heard lately (not Send word)  "heard 4s ago"
  *   at rest                              Talk "hold ⌃⌥Space" · Dictate/Pieces "listening" · Send word "say “send”"
- * The amber edge stays while clamped whatever the fact.
+ * TD-2026-10-23-939: no "edits ask first" fact or amber edge (a voice-sent turn runs like a typed one).
  */
 export function voicePillOf(i: PillInput): PillView {
   const name = PILL_NAME[i.rung];
@@ -238,14 +233,13 @@ export function voicePillOf(i: PillInput): PillView {
     const mic = live ? 'mic open' : 'mic closed';
     const cause = fact === i.clientFact && i.clientCause ? i.clientCause : null;
     const title = `Voice: ${name}${i.target ? ` on ${i.target}` : ''} (${mic}). Kernel-owned: it shows what the kernel says. Click for the ladder.`;
-    return { name, fact, tone, clamped: i.clamped, live, aria: `Voice: ${name}, ${mic}${fact ? `, ${fact}` : ''}${cause ? ` (${cause})` : ''}`, title: i.clientTitle ? `${title} ${i.clientTitle}` : title };
+    return { name, fact, tone, live, aria: `Voice: ${name}, ${mic}${fact ? `, ${fact}` : ''}${cause ? ` (${cause})` : ''}`, title: i.clientTitle ? `${title} ${i.clientTitle}` : title };
   };
   const d = i.capture?.display;
   if (d && d.state === 'dropped' && i.capture?.cap) {
     if (i.capture.cap.reason === 'mic-off') return mk(`mic off · ${micKeyName(i.micKeyBare)}`);
     return mk(dropFact(i.capture.cap), 'fail');
   }
-  if (i.clamped) return mk('edits ask first', 'clamp');
   if (i.clientFact) return mk(i.clientFact);
   if (i.draftWaiting) return mk(`draft waiting · ${i.draftWaiting}`, 'note');
   if (d && d.label !== null) {

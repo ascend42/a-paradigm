@@ -2,8 +2,8 @@
   "root": "/Users/ascend/Documents/GitHub/a-paradigm",
   "product": "gnomon",
   "name": "Gnomon console",
-  "generated": "2026-10-21T16:05:16.348Z",
-  "files": 56,
+  "generated": "2026-10-23T20:27:34.509Z",
+  "files": 67,
   "hasSystem": true,
   "values": {
     "color": [
@@ -15,79 +15,6 @@
           "packages/gnomon-gui/src/core/virtual.ts:52",
           "packages/gnomon-gui/src/core/virtual.ts:60",
           "packages/gnomon-gui/src/core/virtual.ts:81"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "#0f111659",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:518",
-          "packages/gnomon-gui/static/styles.css:603"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "#0000002e",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:611"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "#f3ecdc",
-        "count": 1,
-        "where": [
-          "packages/gnomon-wrapper/static/status.css:2"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "#2b2620",
-        "count": 1,
-        "where": [
-          "packages/gnomon-wrapper/static/status.css:2"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "#0f120e",
-        "count": 1,
-        "where": [
-          "packages/gnomon-wrapper/static/status.css:3"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "#b8f0a8",
-        "count": 1,
-        "where": [
-          "packages/gnomon-wrapper/static/status.css:3"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "#a3341f",
-        "count": 1,
-        "where": [
-          "packages/gnomon-wrapper/static/status.css:7"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "#ff8a70",
-        "count": 1,
-        "where": [
-          "packages/gnomon-wrapper/static/status.css:8"
         ],
         "onSystem": false,
         "tokens": []
@@ -113,256 +40,45 @@
         ],
         "onSystem": true,
         "tokens": []
-      },
-      {
-        "value": "Menlo",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:588"
-        ],
-        "onSystem": false,
-        "tokens": []
       }
     ],
-    "font-size": [
-      {
-        "value": "11",
-        "count": 41,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:168",
-          "packages/gnomon-gui/static/styles.css:244",
-          "packages/gnomon-gui/static/styles.css:249",
-          "packages/gnomon-gui/static/styles.css:253",
-          "packages/gnomon-gui/static/styles.css:263"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "12",
-        "count": 21,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:174",
-          "packages/gnomon-gui/static/styles.css:233",
-          "packages/gnomon-gui/static/styles.css:288",
-          "packages/gnomon-gui/static/styles.css:291",
-          "packages/gnomon-gui/static/styles.css:295"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "10.5",
-        "count": 20,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:309",
-          "packages/gnomon-gui/static/styles.css:310",
-          "packages/gnomon-gui/static/styles.css:329",
-          "packages/gnomon-gui/static/styles.css:355",
-          "packages/gnomon-gui/static/styles.css:356"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "11.5",
-        "count": 18,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:161",
-          "packages/gnomon-gui/static/styles.css:181",
-          "packages/gnomon-gui/static/styles.css:225",
-          "packages/gnomon-gui/static/styles.css:550",
-          "packages/gnomon-gui/static/styles.css:650"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "12.5",
-        "count": 9,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:265",
-          "packages/gnomon-gui/static/styles.css:538",
-          "packages/gnomon-gui/static/styles.css:582",
-          "packages/gnomon-gui/static/styles.css:659",
-          "packages/gnomon-gui/static/styles.css:696"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "13",
-        "count": 7,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:159",
-          "packages/gnomon-gui/static/styles.css:335",
-          "packages/gnomon-gui/static/styles.css:684",
-          "packages/gnomon-gui/static/styles.css:824",
-          "packages/gnomon-gui/static/styles.css:966"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "10",
-        "count": 4,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:349",
-          "packages/gnomon-gui/static/styles.css:458",
-          "packages/gnomon-gui/static/styles.css:500",
-          "packages/gnomon-gui/static/styles.css:782"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "9.5",
-        "count": 4,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:365",
-          "packages/gnomon-gui/static/styles.css:466",
-          "packages/gnomon-gui/static/styles.css:472",
-          "packages/gnomon-gui/static/styles.css:497"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "9",
-        "count": 3,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:465",
-          "packages/gnomon-gui/static/styles.css:468",
-          "packages/gnomon-gui/static/styles.css:499"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "17",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:157",
-          "packages/gnomon-gui/static/styles.css:923"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "15",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:308",
-          "packages/gnomon-gui/static/styles.css:704"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "20",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:830",
-          "packages/gnomon-wrapper/static/status.css:6"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "13.5",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:136"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "22",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:578"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "34",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:588"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "18",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:823"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "14",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:928"
-        ],
-        "onSystem": false,
-        "tokens": []
-      }
-    ],
+    "font-size": [],
     "spacing": [
       {
-        "value": "6",
-        "count": 78,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:165",
-          "packages/gnomon-gui/static/styles.css:219",
-          "packages/gnomon-gui/static/styles.css:221",
-          "packages/gnomon-gui/static/styles.css:225",
-          "packages/gnomon-gui/static/styles.css:225"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
         "value": "8",
-        "count": 64,
+        "count": 112,
         "where": [
-          "packages/gnomon-gui/static/styles.css:204",
-          "packages/gnomon-gui/static/styles.css:218",
-          "packages/gnomon-gui/static/styles.css:219",
-          "packages/gnomon-gui/static/styles.css:244",
-          "packages/gnomon-gui/static/styles.css:248"
+          "packages/gnomon-gui/static/styles.css:208",
+          "packages/gnomon-gui/static/styles.css:225",
+          "packages/gnomon-gui/static/styles.css:226",
+          "packages/gnomon-gui/static/styles.css:252",
+          "packages/gnomon-gui/static/styles.css:256"
         ],
         "onSystem": true,
         "tokens": []
       },
       {
-        "value": "10",
-        "count": 42,
+        "value": "6",
+        "count": 109,
         "where": [
-          "packages/gnomon-gui/static/styles.css:219",
-          "packages/gnomon-gui/static/styles.css:221",
-          "packages/gnomon-gui/static/styles.css:225",
-          "packages/gnomon-gui/static/styles.css:233",
-          "packages/gnomon-gui/static/styles.css:243"
+          "packages/gnomon-gui/static/styles.css:180",
+          "packages/gnomon-gui/static/styles.css:226",
+          "packages/gnomon-gui/static/styles.css:228",
+          "packages/gnomon-gui/static/styles.css:232",
+          "packages/gnomon-gui/static/styles.css:232"
         ],
         "onSystem": true,
         "tokens": []
       },
       {
         "value": "4",
-        "count": 41,
+        "count": 75,
         "where": [
-          "packages/gnomon-gui/static/styles.css:174",
-          "packages/gnomon-gui/static/styles.css:204",
-          "packages/gnomon-gui/static/styles.css:250",
-          "packages/gnomon-gui/static/styles.css:252",
-          "packages/gnomon-gui/static/styles.css:257"
+          "packages/gnomon-gui/static/styles.css:167",
+          "packages/gnomon-gui/static/styles.css:208",
+          "packages/gnomon-gui/static/styles.css:240",
+          "packages/gnomon-gui/static/styles.css:258",
+          "packages/gnomon-gui/static/styles.css:260"
         ],
         "onSystem": true,
         "tokens": [
@@ -371,165 +87,127 @@
       },
       {
         "value": "2",
-        "count": 33,
+        "count": 67,
         "where": [
-          "packages/gnomon-gui/static/styles.css:225",
-          "packages/gnomon-gui/static/styles.css:252",
-          "packages/gnomon-gui/static/styles.css:262",
-          "packages/gnomon-gui/static/styles.css:290",
-          "packages/gnomon-gui/static/styles.css:335"
+          "packages/gnomon-gui/static/styles.css:232",
+          "packages/gnomon-gui/static/styles.css:254",
+          "packages/gnomon-gui/static/styles.css:260",
+          "packages/gnomon-gui/static/styles.css:270",
+          "packages/gnomon-gui/static/styles.css:277"
+        ],
+        "onSystem": true,
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 63,
+        "where": [
+          "packages/gnomon-gui/static/styles.css:181",
+          "packages/gnomon-gui/static/styles.css:226",
+          "packages/gnomon-gui/static/styles.css:228",
+          "packages/gnomon-gui/static/styles.css:232",
+          "packages/gnomon-gui/static/styles.css:240"
         ],
         "onSystem": true,
         "tokens": []
       },
       {
         "value": "12",
-        "count": 22,
+        "count": 29,
         "where": [
-          "packages/gnomon-gui/static/styles.css:151",
-          "packages/gnomon-gui/static/styles.css:316",
-          "packages/gnomon-gui/static/styles.css:349",
+          "packages/gnomon-gui/static/styles.css:154",
+          "packages/gnomon-gui/static/styles.css:332",
           "packages/gnomon-gui/static/styles.css:364",
-          "packages/gnomon-gui/static/styles.css:375"
+          "packages/gnomon-gui/static/styles.css:379",
+          "packages/gnomon-gui/static/styles.css:390"
         ],
         "onSystem": true,
         "tokens": []
       },
       {
         "value": "14",
-        "count": 18,
+        "count": 29,
         "where": [
-          "packages/gnomon-gui/static/styles.css:152",
-          "packages/gnomon-gui/static/styles.css:174",
-          "packages/gnomon-gui/static/styles.css:246",
-          "packages/gnomon-gui/static/styles.css:248",
-          "packages/gnomon-gui/static/styles.css:298"
+          "packages/gnomon-gui/static/styles.css:155",
+          "packages/gnomon-gui/static/styles.css:167",
+          "packages/gnomon-gui/static/styles.css:254",
+          "packages/gnomon-gui/static/styles.css:256",
+          "packages/gnomon-gui/static/styles.css:309"
         ],
         "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "3",
-        "count": 12,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:186",
-          "packages/gnomon-gui/static/styles.css:233",
-          "packages/gnomon-gui/static/styles.css:255",
-          "packages/gnomon-gui/static/styles.css:269",
-          "packages/gnomon-gui/static/styles.css:269"
-        ],
-        "onSystem": false,
-        "tokens": [
-          "--edge-w",
-          "--radius"
-        ]
-      },
-      {
-        "value": "16",
-        "count": 9,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:312",
-          "packages/gnomon-gui/static/styles.css:312",
-          "packages/gnomon-gui/static/styles.css:438",
-          "packages/gnomon-gui/static/styles.css:438",
-          "packages/gnomon-gui/static/styles.css:440"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "5",
-        "count": 9,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:334",
-          "packages/gnomon-gui/static/styles.css:365",
-          "packages/gnomon-gui/static/styles.css:546",
-          "packages/gnomon-gui/static/styles.css:582",
-          "packages/gnomon-gui/static/styles.css:613"
-        ],
-        "onSystem": false,
         "tokens": []
       },
       {
         "value": "20",
-        "count": 9,
+        "count": 17,
         "where": [
-          "packages/gnomon-gui/static/styles.css:820",
-          "packages/gnomon-gui/static/styles.css:839",
-          "packages/gnomon-gui/static/styles.css:840",
-          "packages/gnomon-gui/static/styles.css:840",
-          "packages/gnomon-gui/static/styles.css:847"
+          "packages/gnomon-gui/static/styles.css:866",
+          "packages/gnomon-gui/static/styles.css:885",
+          "packages/gnomon-gui/static/styles.css:886",
+          "packages/gnomon-gui/static/styles.css:886",
+          "packages/gnomon-gui/static/styles.css:893"
         ],
         "onSystem": true,
         "tokens": []
+      },
+      {
+        "value": "16",
+        "count": 11,
+        "where": [
+          "packages/gnomon-gui/static/styles.css:328",
+          "packages/gnomon-gui/static/styles.css:328",
+          "packages/gnomon-gui/static/styles.css:456",
+          "packages/gnomon-gui/static/styles.css:456",
+          "packages/gnomon-gui/static/styles.css:458"
+        ],
+        "onSystem": true,
+        "tokens": []
+      },
+      {
+        "value": "28",
+        "count": 9,
+        "where": [
+          "packages/gnomon-gui/static/styles.css:296",
+          "packages/gnomon-gui/static/styles.css:300",
+          "packages/gnomon-gui/static/styles.css:309",
+          "packages/gnomon-gui/static/styles.css:605",
+          "packages/gnomon-gui/static/styles.css:718"
+        ],
+        "onSystem": true,
+        "tokens": [
+          "--key-h"
+        ]
       },
       {
         "value": "18",
         "count": 6,
         "where": [
-          "packages/gnomon-gui/static/styles.css:243",
-          "packages/gnomon-gui/static/styles.css:454",
-          "packages/gnomon-gui/static/styles.css:457",
-          "packages/gnomon-gui/static/styles.css:577",
-          "packages/gnomon-gui/static/styles.css:691"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "28",
-        "count": 6,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:288",
-          "packages/gnomon-gui/static/styles.css:292",
-          "packages/gnomon-gui/static/styles.css:577",
-          "packages/gnomon-gui/static/styles.css:675",
-          "packages/gnomon-gui/static/styles.css:676"
+          "packages/gnomon-gui/static/styles.css:251",
+          "packages/gnomon-gui/static/styles.css:474",
+          "packages/gnomon-gui/static/styles.css:477",
+          "packages/gnomon-gui/static/styles.css:605",
+          "packages/gnomon-gui/static/styles.css:732"
         ],
         "onSystem": true,
         "tokens": []
       },
       {
-        "value": "7",
-        "count": 5,
+        "value": "48",
+        "count": 3,
         "where": [
-          "packages/gnomon-gui/static/styles.css:266",
-          "packages/gnomon-gui/static/styles.css:541",
-          "packages/gnomon-gui/static/styles.css:839",
-          "packages/gnomon-gui/static/styles.css:973",
-          "packages/gnomon-gui/static/styles.css:984"
+          "packages/gnomon-gui/static/styles.css:1090",
+          "packages/gnomon-gui/static/styles.css:1256",
+          "packages/gnomon-gui/static/styles.css:1289"
         ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "9",
-        "count": 4,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:186",
-          "packages/gnomon-gui/static/styles.css:349",
-          "packages/gnomon-gui/static/styles.css:810",
-          "packages/gnomon-gui/static/styles.css:992"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "11",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:269",
-          "packages/gnomon-gui/static/styles.css:633"
-        ],
-        "onSystem": false,
+        "onSystem": true,
         "tokens": []
       },
       {
         "value": "76",
         "count": 2,
         "where": [
-          "packages/gnomon-gui/static/styles.css:445",
-          "packages/gnomon-gui/static/styles.css:446"
+          "packages/gnomon-gui/static/styles.css:464",
+          "packages/gnomon-gui/static/styles.css:465"
         ],
         "onSystem": true,
         "tokens": []
@@ -538,8 +216,8 @@
         "value": "110",
         "count": 2,
         "where": [
-          "packages/gnomon-gui/static/styles.css:699",
-          "packages/gnomon-gui/static/styles.css:701"
+          "packages/gnomon-gui/static/styles.css:741",
+          "packages/gnomon-gui/static/styles.css:743"
         ],
         "onSystem": true,
         "tokens": []
@@ -548,53 +226,17 @@
         "value": "22",
         "count": 2,
         "where": [
-          "packages/gnomon-gui/static/styles.css:840",
-          "packages/gnomon-gui/static/styles.css:847"
+          "packages/gnomon-gui/static/styles.css:886",
+          "packages/gnomon-gui/static/styles.css:893"
         ],
-        "onSystem": false,
+        "onSystem": true,
         "tokens": []
       },
       {
         "value": "64",
         "count": 1,
         "where": [
-          "packages/gnomon-gui/static/styles.css:365"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "6.4",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:572"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "9.6",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:572"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "4.8",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:574"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "48",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:685"
+          "packages/gnomon-gui/static/styles.css:380"
         ],
         "onSystem": true,
         "tokens": []
@@ -603,7 +245,7 @@
         "value": "24",
         "count": 1,
         "where": [
-          "packages/gnomon-gui/static/styles.css:828"
+          "packages/gnomon-gui/static/styles.css:874"
         ],
         "onSystem": true,
         "tokens": []
@@ -612,7 +254,7 @@
         "value": "36",
         "count": 1,
         "where": [
-          "packages/gnomon-gui/static/styles.css:829"
+          "packages/gnomon-gui/static/styles.css:875"
         ],
         "onSystem": true,
         "tokens": []
@@ -621,7 +263,7 @@
         "value": "140",
         "count": 1,
         "where": [
-          "packages/gnomon-gui/static/styles.css:941"
+          "packages/gnomon-gui/static/styles.css:1072"
         ],
         "onSystem": true,
         "tokens": []
@@ -629,58 +271,13 @@
     ],
     "radius": [
       {
-        "value": "2",
-        "count": 8,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:226",
-          "packages/gnomon-gui/static/styles.css:333",
-          "packages/gnomon-gui/static/styles.css:334",
-          "packages/gnomon-gui/static/styles.css:361",
-          "packages/gnomon-gui/static/styles.css:388"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "3",
-        "count": 5,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:167",
-          "packages/gnomon-gui/static/styles.css:252",
-          "packages/gnomon-gui/static/styles.css:282",
-          "packages/gnomon-gui/static/styles.css:613",
-          "packages/gnomon-gui/static/styles.css:895"
-        ],
-        "onSystem": true,
-        "tokens": [
-          "--edge-w",
-          "--radius"
-        ]
-      },
-      {
-        "value": "4",
-        "count": 5,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:250",
-          "packages/gnomon-gui/static/styles.css:572",
-          "packages/gnomon-gui/static/styles.css:611",
-          "packages/gnomon-gui/static/styles.css:885",
-          "packages/gnomon-wrapper/static/status.css:9"
-        ],
-        "onSystem": false,
-        "tokens": [
-          "--edge-w"
-        ]
-      },
-      {
         "value": "0",
-        "count": 5,
+        "count": 4,
         "where": [
-          "packages/gnomon-gui/static/styles.css:255",
-          "packages/gnomon-gui/static/styles.css:626",
-          "packages/gnomon-gui/static/styles.css:677",
-          "packages/gnomon-gui/static/styles.css:690",
-          "packages/gnomon-gui/static/styles.css:1043"
+          "packages/gnomon-gui/static/styles.css:655",
+          "packages/gnomon-gui/static/styles.css:720",
+          "packages/gnomon-gui/static/styles.css:731",
+          "packages/gnomon-gui/static/styles.css:1113"
         ],
         "onSystem": true,
         "tokens": [
@@ -690,65 +287,17 @@
           "--level",
           "--progress"
         ]
-      },
-      {
-        "value": "14",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:268",
-          "packages/gnomon-gui/static/styles.css:544"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "9",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:271",
-          "packages/gnomon-gui/static/styles.css:546"
-        ],
-        "onSystem": false,
-        "tokens": []
-      },
-      {
-        "value": "999",
-        "count": 2,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:625",
-          "packages/gnomon-gui/static/styles.css:1042"
-        ],
-        "onSystem": true,
-        "tokens": []
-      },
-      {
-        "value": "8",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:685"
-        ],
-        "onSystem": false,
-        "tokens": []
       }
     ],
-    "shadow": [
-      {
-        "value": "0 4px 16px rgba(0, 0, 0, 0.18)",
-        "count": 1,
-        "where": [
-          "packages/gnomon-gui/static/styles.css:611"
-        ],
-        "tokens": []
-      }
-    ],
+    "shadow": [],
     "duration": [
       {
         "value": "120",
         "count": 3,
         "where": [
-          "packages/gnomon-gui/static/styles.css:644",
           "packages/gnomon-gui/static/styles.css:671",
-          "packages/gnomon-gui/static/styles.css:718"
+          "packages/gnomon-gui/static/styles.css:760",
+          "packages/gnomon-gui/static/styles.css:1103"
         ],
         "onSystem": true,
         "tokens": []
@@ -757,7 +306,7 @@
         "value": "320",
         "count": 1,
         "where": [
-          "packages/gnomon-gui/static/styles.css:558"
+          "packages/gnomon-gui/static/styles.css:586"
         ],
         "onSystem": true,
         "tokens": []
@@ -766,7 +315,16 @@
         "value": "900",
         "count": 1,
         "where": [
-          "packages/gnomon-gui/static/styles.css:848"
+          "packages/gnomon-gui/static/styles.css:894"
+        ],
+        "onSystem": false,
+        "tokens": []
+      },
+      {
+        "value": "360",
+        "count": 1,
+        "where": [
+          "packages/gnomon-gui/static/styles.css:1286"
         ],
         "onSystem": true,
         "tokens": []
@@ -775,21 +333,30 @@
     "easing": [
       {
         "value": "linear",
-        "count": 4,
+        "count": 3,
         "where": [
-          "packages/gnomon-gui/static/styles.css:644",
           "packages/gnomon-gui/static/styles.css:671",
-          "packages/gnomon-gui/static/styles.css:718",
-          "packages/gnomon-gui/static/styles.css:848"
+          "packages/gnomon-gui/static/styles.css:760",
+          "packages/gnomon-gui/static/styles.css:894"
         ],
         "onSystem": true,
         "tokens": []
       },
       {
         "value": "cubic-bezier(.3,.7,.3,1)",
+        "count": 2,
+        "where": [
+          "packages/gnomon-gui/static/styles.css:586",
+          "packages/gnomon-gui/static/styles.css:1286"
+        ],
+        "onSystem": true,
+        "tokens": []
+      },
+      {
+        "value": "ease-out",
         "count": 1,
         "where": [
-          "packages/gnomon-gui/static/styles.css:558"
+          "packages/gnomon-gui/static/styles.css:1103"
         ],
         "onSystem": true,
         "tokens": []
@@ -798,101 +365,20 @@
   },
   "nearDuplicates": [
     {
-      "kind": "font-size",
-      "values": [
-        "11",
-        "10.5"
-      ],
-      "count": 61
-    },
-    {
-      "kind": "font-size",
-      "values": [
-        "12",
-        "11.5"
-      ],
-      "count": 39
-    },
-    {
-      "kind": "font-size",
-      "values": [
-        "12.5",
-        "13"
-      ],
-      "count": 16
-    },
-    {
-      "kind": "font-size",
-      "values": [
-        "10",
-        "9.5"
-      ],
-      "count": 8
-    },
-    {
-      "kind": "font-size",
-      "values": [
-        "13.5",
-        "14"
-      ],
-      "count": 2
-    },
-    {
-      "kind": "spacing",
-      "values": [
-        "6",
-        "5"
-      ],
-      "count": 87
-    },
-    {
-      "kind": "spacing",
-      "values": [
-        "8",
-        "7"
-      ],
-      "count": 69
-    },
-    {
-      "kind": "spacing",
-      "values": [
-        "10",
-        "9",
-        "9.6"
-      ],
-      "count": 47
-    },
-    {
-      "kind": "spacing",
-      "values": [
-        "4",
-        "3"
-      ],
-      "count": 53
-    },
-    {
       "kind": "spacing",
       "values": [
         "12",
         "14"
       ],
-      "count": 40
-    },
-    {
-      "kind": "spacing",
-      "values": [
-        "16",
-        "18"
-      ],
-      "count": 15
+      "count": 58
     },
     {
       "kind": "spacing",
       "values": [
         "20",
-        "22"
+        "18"
       ],
-      "count": 11
+      "count": 23
     },
     {
       "kind": "spacing",
@@ -900,97 +386,131 @@
         "28",
         "24"
       ],
-      "count": 7
+      "count": 10
     },
     {
-      "kind": "radius",
+      "kind": "duration",
       "values": [
-        "2",
-        "3"
+        "320",
+        "360"
       ],
-      "count": 13
-    },
-    {
-      "kind": "radius",
-      "values": [
-        "9",
-        "8"
-      ],
-      "count": 3
+      "count": 2
     }
   ],
   "tokens": [
     {
       "name": "--sec",
       "value": "#5A5850",
-      "uses": 88,
+      "uses": 144,
       "where": "packages/gnomon-gui/static/styles.css:20"
+    },
+    {
+      "name": "--fs-label",
+      "value": "10.5px",
+      "uses": 113,
+      "where": "packages/gnomon-gui/static/styles.css:119"
     },
     {
       "name": "--ink",
       "value": "#16150F",
-      "uses": 55,
+      "uses": 95,
       "where": "packages/gnomon-gui/static/styles.css:18"
+    },
+    {
+      "name": "--fs-control",
+      "value": "11.5px",
+      "uses": 75,
+      "where": "packages/gnomon-gui/static/styles.css:120"
     },
     {
       "name": "--rule",
       "value": "#D9D5CB",
-      "uses": 55,
+      "uses": 70,
       "where": "packages/gnomon-gui/static/styles.css:21"
     },
     {
       "name": "--key-edge",
       "value": "#2A2925",
-      "uses": 36,
+      "uses": 63,
       "where": "packages/gnomon-gui/static/styles.css:27"
     },
     {
       "name": "--ink2",
       "value": "#2A2925",
-      "uses": 31,
+      "uses": 58,
       "where": "packages/gnomon-gui/static/styles.css:19"
+    },
+    {
+      "name": "--radius",
+      "value": "3px",
+      "uses": 48,
+      "where": "packages/gnomon-gui/static/styles.css:114"
     },
     {
       "name": "--sheet",
       "value": "#F8F5EE",
-      "uses": 30,
+      "uses": 39,
       "where": "packages/gnomon-gui/static/styles.css:17"
     },
     {
       "name": "--warn-ink",
       "value": "#6E4700",
-      "uses": 27,
+      "uses": 28,
       "where": "packages/gnomon-gui/static/styles.css:24"
-    },
-    {
-      "name": "--radius",
-      "value": "3px",
-      "uses": 22,
-      "where": "packages/gnomon-gui/static/styles.css:118"
-    },
-    {
-      "name": "--warn-edge",
-      "value": "#A8730C",
-      "uses": 15,
-      "where": "packages/gnomon-gui/static/styles.css:28"
     },
     {
       "name": "--fail",
       "value": "#B4382A",
-      "uses": 14,
+      "uses": 21,
       "where": "packages/gnomon-gui/static/styles.css:23"
     },
     {
-      "name": "--warn-bg",
-      "value": "#F6E3B8",
-      "uses": 10,
-      "where": "packages/gnomon-gui/static/styles.css:25"
+      "name": "--fold",
+      "value": "#E1DBCC",
+      "uses": 20,
+      "where": "packages/gnomon-gui/static/styles.css:22"
+    },
+    {
+      "name": "--key-h",
+      "value": "28px",
+      "uses": 18,
+      "where": "packages/gnomon-gui/static/styles.css:115"
+    },
+    {
+      "name": "--fs-reading",
+      "value": "13.5px",
+      "uses": 15,
+      "where": "packages/gnomon-gui/static/styles.css:121"
+    },
+    {
+      "name": "--warn-edge",
+      "value": "#A8730C",
+      "uses": 13,
+      "where": "packages/gnomon-gui/static/styles.css:28"
     },
     {
       "name": "--fail-edge",
       "value": "#B4382A",
-      "uses": 8,
+      "uses": 12,
       "where": "packages/gnomon-gui/static/styles.css:29"
+    },
+    {
+      "name": "--mono",
+      "value": "JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
+      "uses": 12,
+      "where": "packages/gnomon-gui/static/styles.css:111"
+    },
+    {
+      "name": "--fs-title",
+      "value": "17px",
+      "uses": 11,
+      "where": "packages/gnomon-gui/static/styles.css:122"
+    },
+    {
+      "name": "--warn-bg",
+      "value": "#F6E3B8",
+      "uses": 8,
+      "where": "packages/gnomon-gui/static/styles.css:25"
     },
     {
       "name": "--on-ink",
@@ -999,10 +519,10 @@
       "where": "packages/gnomon-gui/static/styles.css:44"
     },
     {
-      "name": "--live",
-      "value": "#3F6664",
-      "uses": 7,
-      "where": "packages/gnomon-gui/static/styles.css:56"
+      "name": "--ground",
+      "value": "#EDE8DC",
+      "uses": 6,
+      "where": "packages/gnomon-gui/static/styles.css:16"
     },
     {
       "name": "--p-slate-fill",
@@ -1011,10 +531,10 @@
       "where": "packages/gnomon-gui/static/styles.css:34"
     },
     {
-      "name": "--fold",
-      "value": "#E1DBCC",
-      "uses": 5,
-      "where": "packages/gnomon-gui/static/styles.css:22"
+      "name": "--reflow",
+      "value": "220ms",
+      "uses": 6,
+      "where": "packages/gnomon-gui/static/styles.css:113"
     },
     {
       "name": "--knot",
@@ -1053,28 +573,22 @@
       "where": "packages/gnomon-gui/static/styles.css:37"
     },
     {
-      "name": "--mono",
-      "value": "JetBrains Mono\", ui-monospace, \"SF Mono\", Menlo, Consolas, monospace",
-      "uses": 5,
-      "where": "packages/gnomon-gui/static/styles.css:115"
-    },
-    {
-      "name": "--slate",
-      "value": "#44577C",
-      "uses": 4,
-      "where": "packages/gnomon-gui/static/styles.css:31"
-    },
-    {
       "name": "--sheet-shadow",
       "value": "0 1px 0 rgba(0, 0, 0, .06), 3px 4px 0 -1px var(--fold), 4px 6px 10px rgba(60, 48, 30, .14)",
-      "uses": 4,
+      "uses": 5,
       "where": "packages/gnomon-gui/static/styles.css:47"
     },
     {
-      "name": "--ground",
-      "value": "#EDE8DC",
-      "uses": 3,
-      "where": "packages/gnomon-gui/static/styles.css:16"
+      "name": "--radius-pill",
+      "value": "999px",
+      "uses": 5,
+      "where": "packages/gnomon-gui/static/styles.css:116"
+    },
+    {
+      "name": "--edge-w",
+      "value": "4px",
+      "uses": 4,
+      "where": "packages/gnomon-gui/static/styles.css:48"
     },
     {
       "name": "--knot-edge",
@@ -1131,70 +645,52 @@
       "where": "packages/gnomon-gui/static/styles.css:51"
     },
     {
-      "name": "--stamp",
-      "value": "#3F6664",
+      "name": "--edge",
+      "value": "var(--knot-edge)",
       "uses": 3,
-      "where": "packages/gnomon-gui/static/styles.css:54"
-    },
-    {
-      "name": "--reflow",
-      "value": "220ms",
-      "uses": 3,
-      "where": "packages/gnomon-gui/static/styles.css:117"
-    },
-    {
-      "name": "--r",
-      "value": "1.2deg",
-      "uses": 3,
-      "where": "packages/gnomon-gui/static/styles.css:369"
+      "where": "packages/gnomon-gui/static/styles.css:342"
     },
     {
       "name": "--level",
       "value": "0",
       "uses": 3,
-      "where": "packages/gnomon-gui/static/styles.css:642"
-    },
-    {
-      "name": "--edge-w",
-      "value": "4px",
-      "uses": 2,
-      "where": "packages/gnomon-gui/static/styles.css:48"
+      "where": "packages/gnomon-gui/static/styles.css:669"
     },
     {
       "name": "--title-font",
       "value": "Fraunces\", Georgia, serif",
       "uses": 2,
-      "where": "packages/gnomon-gui/static/styles.css:57"
+      "where": "packages/gnomon-gui/static/styles.css:54"
     },
     {
       "name": "--display-wght",
       "value": "600",
       "uses": 2,
-      "where": "packages/gnomon-gui/static/styles.css:58"
+      "where": "packages/gnomon-gui/static/styles.css:55"
     },
     {
       "name": "--slip-tilt",
       "value": "1",
       "uses": 2,
-      "where": "packages/gnomon-gui/static/styles.css:62"
+      "where": "packages/gnomon-gui/static/styles.css:59"
     },
     {
-      "name": "--fly",
-      "value": "550ms cubic-bezier(.3, .7, .3, 1)",
+      "name": "--scrim",
+      "value": "rgba(15, 17, 22, 0.35)",
       "uses": 2,
-      "where": "packages/gnomon-gui/static/styles.css:116"
+      "where": "packages/gnomon-gui/static/styles.css:110"
+    },
+    {
+      "name": "--t-arrive",
+      "value": "160ms ease-out",
+      "uses": 2,
+      "where": "packages/gnomon-gui/static/styles.css:112"
     },
     {
       "name": "--t-droop",
       "value": "500ms ease-out",
       "uses": 2,
-      "where": "packages/gnomon-gui/static/styles.css:121"
-    },
-    {
-      "name": "--edge",
-      "value": "var(--knot-edge)",
-      "uses": 2,
-      "where": "packages/gnomon-gui/static/styles.css:326"
+      "where": "packages/gnomon-gui/static/styles.css:125"
     },
     {
       "name": "--key-shadow",
@@ -1230,75 +726,73 @@
       "name": "--title-transform",
       "value": "none",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:59"
+      "where": "packages/gnomon-gui/static/styles.css:56"
     },
     {
       "name": "--title-spacing",
       "value": "0",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:60"
+      "where": "packages/gnomon-gui/static/styles.css:57"
     },
     {
       "name": "--slip-shadow",
       "value": "1px 2px 0 rgba(22, 21, 15, .08)",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:61"
+      "where": "packages/gnomon-gui/static/styles.css:58"
     },
     {
       "name": "--t-stamp",
       "value": "400ms cubic-bezier(.3, 1.4, .5, 1)",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:119"
+      "where": "packages/gnomon-gui/static/styles.css:123"
     },
     {
-      "name": "--t-flyout",
-      "value": "450ms ease-in",
+      "name": "--t-fade",
+      "value": "180ms ease-out",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:120"
+      "where": "packages/gnomon-gui/static/styles.css:124"
     },
     {
       "name": "--t-bob",
       "value": "1.1s ease-in-out",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:123"
+      "where": "packages/gnomon-gui/static/styles.css:126"
     },
     {
       "name": "--t-hold",
       "value": "3s linear",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:124"
+      "where": "packages/gnomon-gui/static/styles.css:127"
+    },
+    {
+      "name": "--r",
+      "value": "1.2deg",
+      "uses": 1,
+      "where": "packages/gnomon-gui/static/styles.css:384"
     },
     {
       "name": "--progress",
       "value": "0",
       "uses": 1,
-      "where": "packages/gnomon-gui/static/styles.css:680"
+      "where": "packages/gnomon-gui/static/styles.css:723"
     },
     {
-      "name": "--t-walk",
-      "value": "900ms ease-in-out",
+      "name": "--slate",
+      "value": "#44577C",
       "uses": 0,
-      "where": "packages/gnomon-gui/static/styles.css:122"
+      "where": "packages/gnomon-gui/static/styles.css:31"
     }
   ],
   "unusedTokens": [
-    "--t-walk"
+    "--slate"
   ],
   "undefinedTokens": [],
   "components": [],
   "classFamilies": [
     {
-      "family": "meta",
-      "classes": 1,
-      "uses": 61,
-      "members": [
-        "meta"
-      ]
-    },
-    {
       "family": "key",
       "classes": 3,
-      "uses": 57,
+      "uses": 83,
       "members": [
         "key",
         "key-always",
@@ -1306,9 +800,17 @@
       ]
     },
     {
+      "family": "meta",
+      "classes": 1,
+      "uses": 68,
+      "members": [
+        "meta"
+      ]
+    },
+    {
       "family": "vs",
-      "classes": 23,
-      "uses": 43,
+      "classes": 25,
+      "uses": 47,
       "members": [
         "vs-check",
         "vs-prompt",
@@ -1325,9 +827,17 @@
       ]
     },
     {
+      "family": "quiet",
+      "classes": 1,
+      "uses": 37,
+      "members": [
+        "quiet"
+      ]
+    },
+    {
       "family": "voice",
-      "classes": 18,
-      "uses": 33,
+      "classes": 17,
+      "uses": 32,
       "members": [
         "voice-noclient",
         "voice-setup",
@@ -1344,14 +854,48 @@
       ]
     },
     {
-      "family": "mod",
-      "classes": 19,
+      "family": "blk",
+      "classes": 17,
       "uses": 31,
+      "members": [
+        "blk",
+        "blk-text",
+        "blk-title",
+        "blk-list",
+        "blk-table",
+        "blk-cell",
+        "blk-md",
+        "blk-diff",
+        "blk-progress",
+        "blk-button-inert",
+        "blk-button",
+        "blk-image"
+      ]
+    },
+    {
+      "family": "sf",
+      "classes": 9,
+      "uses": 29,
+      "members": [
+        "sf-err",
+        "sf-note",
+        "sf-field",
+        "sf-label",
+        "sf-lead",
+        "sf-adv",
+        "sf-keys",
+        "sf-term",
+        "sf-request"
+      ]
+    },
+    {
+      "family": "mod",
+      "classes": 17,
+      "uses": 28,
       "members": [
         "mod-fence-head",
         "mod-label",
         "mod-dev",
-        "mod-fence-body",
         "mod-slot-head",
         "mod-pending",
         "mod-config",
@@ -1359,47 +903,33 @@
         "mod-result",
         "mod-keys",
         "mod-head",
-        "mod-name"
+        "mod-name",
+        "mod-desc"
       ]
     },
     {
-      "family": "blk",
-      "classes": 16,
-      "uses": 30,
+      "family": "ff",
+      "classes": 19,
+      "uses": 28,
       "members": [
-        "blk",
-        "blk-text",
-        "blk-title",
-        "blk-list",
-        "blk-table",
-        "blk-md",
-        "blk-diff",
-        "blk-progress",
-        "blk-button-inert",
-        "blk-button",
-        "blk-image",
-        "blk-root-rows"
-      ]
-    },
-    {
-      "family": "mode",
-      "classes": 8,
-      "uses": 18,
-      "members": [
-        "mode-note",
-        "mode-scope-head",
-        "mode-name",
-        "mode-item",
-        "mode-kbd",
-        "mode-wrap",
-        "mode-menu",
-        "mode-btn"
+        "ff-warn",
+        "ff",
+        "ff-hint",
+        "ff-empty",
+        "ff-list",
+        "ff-row",
+        "ff-mk",
+        "ff-text",
+        "ff-name",
+        "ff-path",
+        "ff-when",
+        "ff-opens"
       ]
     },
     {
       "family": "settings",
-      "classes": 9,
-      "uses": 18,
+      "classes": 12,
+      "uses": 27,
       "members": [
         "settings-sec",
         "settings-h",
@@ -1407,39 +937,60 @@
         "settings-card",
         "settings-head",
         "settings-body",
+        "settings-value",
+        "settings-row",
         "settings-label",
+        "settings-form",
         "settings-note",
-        "settings-value"
+        "settings-intro"
+      ]
+    },
+    {
+      "family": "lp",
+      "classes": 18,
+      "uses": 23,
+      "members": [
+        "lp-leaf",
+        "lp-edgetab",
+        "lp-head",
+        "lp-keep",
+        "lp-body",
+        "lp-empty",
+        "lp-gh",
+        "lp",
+        "lp-dhead",
+        "lp-back",
+        "lp-more",
+        "lp-more-menu"
       ]
     },
     {
       "family": "kernel",
       "classes": 1,
-      "uses": 17,
+      "uses": 20,
       "members": [
         "kernel-owned"
       ]
     },
     {
-      "family": "quiet",
-      "classes": 1,
-      "uses": 17,
+      "family": "mode",
+      "classes": 8,
+      "uses": 20,
       "members": [
-        "quiet"
-      ]
-    },
-    {
-      "family": "field",
-      "classes": 1,
-      "uses": 16,
-      "members": [
-        "field"
+        "mode-note",
+        "mode-scope-head",
+        "mode-name",
+        "mode-item",
+        "mode-kbd",
+        "mode-menu",
+        "mode-wrap",
+        "mode-btn"
       ]
     },
     {
       "family": "card",
       "classes": 15,
-      "uses": 15,
+      "uses": 18,
       "members": [
         "card-sep",
         "card-arg-line",
@@ -1450,39 +1001,60 @@
         "card-kind",
         "card-requester",
         "card-voice",
-        "card-voice-origin",
         "card-arg-capped",
-        "card-root-rows"
+        "card-root-rows",
+        "card-keys"
+      ]
+    },
+    {
+      "family": "field",
+      "classes": 1,
+      "uses": 15,
+      "members": [
+        "field"
       ]
     },
     {
       "family": "pri",
       "classes": 1,
-      "uses": 10,
+      "uses": 12,
       "members": [
         "pri"
       ]
     },
     {
-      "family": "composer",
-      "classes": 7,
-      "uses": 9,
+      "family": "g",
+      "classes": 12,
+      "uses": 12,
       "members": [
-        "composer-foot",
-        "composer",
-        "composer-main",
-        "composer-ghost",
-        "composer-ctrls",
-        "composer-tall",
-        "composer-lines"
+        "g-svg",
+        "g-mk",
+        "g-id",
+        "g-vis",
+        "g-ty",
+        "g-term",
+        "g-t",
+        "g-frame",
+        "g-tools",
+        "g-ori",
+        "g-view",
+        "g-key"
       ]
     },
     {
       "family": "title",
       "classes": 1,
-      "uses": 9,
+      "uses": 11,
       "members": [
         "title"
+      ]
+    },
+    {
+      "family": "sr",
+      "classes": 1,
+      "uses": 9,
+      "members": [
+        "sr-only"
       ]
     },
     {
@@ -1501,6 +1073,54 @@
       ]
     },
     {
+      "family": "step",
+      "classes": 5,
+      "uses": 8,
+      "members": [
+        "step",
+        "step-label",
+        "step-tail",
+        "step-clock",
+        "step-detail"
+      ]
+    },
+    {
+      "family": "composer",
+      "classes": 7,
+      "uses": 8,
+      "members": [
+        "composer-foot",
+        "composer",
+        "composer-main",
+        "composer-ghost",
+        "composer-ctrls",
+        "composer-lines",
+        "composer-tall"
+      ]
+    },
+    {
+      "family": "chip",
+      "classes": 1,
+      "uses": 7,
+      "members": [
+        "chip"
+      ]
+    },
+    {
+      "family": "chead",
+      "classes": 7,
+      "uses": 7,
+      "members": [
+        "chead-proj",
+        "chead-backend",
+        "chead-when",
+        "chead-sep",
+        "chead",
+        "chead-l",
+        "chead-meta"
+      ]
+    },
+    {
       "family": "overlay",
       "classes": 1,
       "uses": 7,
@@ -1514,6 +1134,20 @@
       "uses": 7,
       "members": [
         "sheet-card"
+      ]
+    },
+    {
+      "family": "toast",
+      "classes": 7,
+      "uses": 7,
+      "members": [
+        "toast-tag",
+        "toast-text",
+        "toast-next",
+        "toast-acts",
+        "toast-key",
+        "toast-close",
+        "toast-anchor"
       ]
     },
     {
@@ -1536,6 +1170,18 @@
         "capture-transcribing",
         "capture-dropped",
         "capture-captured"
+      ]
+    },
+    {
+      "family": "lt",
+      "classes": 5,
+      "uses": 6,
+      "members": [
+        "lt-presence",
+        "lt-wrap",
+        "lt-sec",
+        "lt-foot",
+        "lt-fold"
       ]
     },
     {
@@ -1564,16 +1210,12 @@
       ]
     },
     {
-      "family": "standing",
-      "classes": 6,
-      "uses": 6,
+      "family": "spacer",
+      "classes": 2,
+      "uses": 5,
       "members": [
-        "standing-feed",
-        "standing-offer",
-        "standing-list",
-        "standing-items",
-        "standing-revoke",
-        "standing-toast"
+        "spacer",
+        "spacer-v"
       ]
     },
     {
@@ -1610,6 +1252,44 @@
       ]
     },
     {
+      "family": "k",
+      "classes": 2,
+      "uses": 4,
+      "members": [
+        "k",
+        "k-line"
+      ]
+    },
+    {
+      "family": "caret",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "caret"
+      ]
+    },
+    {
+      "family": "sec",
+      "classes": 3,
+      "uses": 4,
+      "members": [
+        "sec-head",
+        "sec-toggle",
+        "sec-owner"
+      ]
+    },
+    {
+      "family": "ghost",
+      "classes": 4,
+      "uses": 4,
+      "members": [
+        "ghost-wait",
+        "ghost-committed",
+        "ghost-tail",
+        "ghost-offset"
+      ]
+    },
+    {
       "family": "menu",
       "classes": 4,
       "uses": 4,
@@ -1632,11 +1312,14 @@
       ]
     },
     {
-      "family": "fail",
-      "classes": 1,
+      "family": "bud",
+      "classes": 4,
       "uses": 4,
       "members": [
-        "fail"
+        "bud",
+        "bud-f",
+        "bud-l",
+        "bud-note"
       ]
     },
     {
@@ -1648,6 +1331,25 @@
         "model-wrap",
         "model-btn",
         "model-menu"
+      ]
+    },
+    {
+      "family": "seg",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "seg"
+      ]
+    },
+    {
+      "family": "standing",
+      "classes": 4,
+      "uses": 4,
+      "members": [
+        "standing-feed",
+        "standing-list",
+        "standing-items",
+        "standing-revoke"
       ]
     },
     {
@@ -1671,11 +1373,19 @@
       ]
     },
     {
-      "family": "badge",
+      "family": "warn",
       "classes": 1,
       "uses": 3,
       "members": [
-        "badge"
+        "warn"
+      ]
+    },
+    {
+      "family": "fam",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "fam"
       ]
     },
     {
@@ -1715,12 +1425,12 @@
       ]
     },
     {
-      "family": "sec",
+      "family": "live",
       "classes": 2,
       "uses": 3,
       "members": [
-        "sec-head",
-        "sec-toggle"
+        "live-clock",
+        "live"
       ]
     },
     {
@@ -1753,6 +1463,32 @@
       ]
     },
     {
+      "family": "why",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "why-off"
+      ]
+    },
+    {
+      "family": "ns",
+      "classes": 3,
+      "uses": 3,
+      "members": [
+        "ns-claude",
+        "ns-card",
+        "ns-foot"
+      ]
+    },
+    {
+      "family": "fail",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "fail"
+      ]
+    },
+    {
       "family": "mods",
       "classes": 3,
       "uses": 3,
@@ -1760,40 +1496,6 @@
         "mods-sec",
         "mods-card",
         "mods-body"
-      ]
-    },
-    {
-      "family": "seg",
-      "classes": 1,
-      "uses": 3,
-      "members": [
-        "seg"
-      ]
-    },
-    {
-      "family": "sr",
-      "classes": 1,
-      "uses": 3,
-      "members": [
-        "sr-only"
-      ]
-    },
-    {
-      "family": "notice",
-      "classes": 1,
-      "uses": 3,
-      "members": [
-        "notice"
-      ]
-    },
-    {
-      "family": "chead",
-      "classes": 3,
-      "uses": 3,
-      "members": [
-        "chead",
-        "chead-l",
-        "chead-meta"
       ]
     },
     {
@@ -1873,20 +1575,37 @@
       ]
     },
     {
-      "family": "chip",
+      "family": "reply",
       "classes": 2,
       "uses": 2,
       "members": [
-        "chip",
-        "chip-label"
+        "reply-part",
+        "reply-part-label"
       ]
     },
     {
-      "family": "live",
+      "family": "plain",
       "classes": 1,
       "uses": 2,
       "members": [
-        "live-clock"
+        "plain"
+      ]
+    },
+    {
+      "family": "work",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "work-key",
+        "work-label"
+      ]
+    },
+    {
+      "family": "raw",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "raw-line"
       ]
     },
     {
@@ -1907,12 +1626,68 @@
       ]
     },
     {
-      "family": "ghost",
+      "family": "path",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "path"
+      ]
+    },
+    {
+      "family": "row",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "row"
+      ]
+    },
+    {
+      "family": "mk",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "mk"
+      ]
+    },
+    {
+      "family": "rf",
       "classes": 2,
       "uses": 2,
       "members": [
-        "ghost-committed",
-        "ghost-tail"
+        "rf-h",
+        "rf-t"
+      ]
+    },
+    {
+      "family": "tr",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "tr"
+      ]
+    },
+    {
+      "family": "tm",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "tm"
+      ]
+    },
+    {
+      "family": "dur",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "dur"
+      ]
+    },
+    {
+      "family": "set",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "set-form"
       ]
     },
     {
@@ -1925,12 +1700,12 @@
       ]
     },
     {
-      "family": "spacer",
+      "family": "lw",
       "classes": 2,
       "uses": 2,
       "members": [
-        "spacer",
-        "spacer-v"
+        "lw-full",
+        "lw-narrow"
       ]
     },
     {
@@ -1940,6 +1715,14 @@
       "members": [
         "risk-chip",
         "risk-long"
+      ]
+    },
+    {
+      "family": "notice",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "notice"
       ]
     },
     {
@@ -1984,11 +1767,11 @@
       ]
     },
     {
-      "family": "k",
+      "family": "num",
       "classes": 1,
       "uses": 1,
       "members": [
-        "k"
+        "num"
       ]
     },
     {
@@ -2048,43 +1831,35 @@
       ]
     },
     {
-      "family": "clamp",
-      "classes": 1,
-      "uses": 1,
-      "members": [
-        "clamp-chip"
-      ]
-    },
-    {
-      "family": "plain",
-      "classes": 1,
-      "uses": 1,
-      "members": [
-        "plain"
-      ]
-    },
-    {
-      "family": "trow",
-      "classes": 1,
-      "uses": 1,
-      "members": [
-        "trow"
-      ]
-    },
-    {
-      "family": "role",
-      "classes": 1,
-      "uses": 1,
-      "members": [
-        "role-working"
-      ]
-    },
-    {
       "family": "spin",
       "classes": 1,
       "uses": 1,
       "members": [
         "spin"
+      ]
+    },
+    {
+      "family": "steps",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "steps"
+      ]
+    },
+    {
+      "family": "blank",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "blank"
+      ]
+    },
+    {
+      "family": "sent",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "sent-by"
       ]
     },
     {
@@ -2104,11 +1879,35 @@
       ]
     },
     {
+      "family": "trow",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "trow"
+      ]
+    },
+    {
+      "family": "role",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "role-raw-detail"
+      ]
+    },
+    {
       "family": "sname",
       "classes": 1,
       "uses": 1,
       "members": [
         "sname"
+      ]
+    },
+    {
+      "family": "closing",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "closing"
       ]
     },
     {
@@ -2168,11 +1967,11 @@
       ]
     },
     {
-      "family": "update",
+      "family": "lifted",
       "classes": 1,
       "uses": 1,
       "members": [
-        "update-banner"
+        "lifted"
       ]
     },
     {
@@ -2200,6 +1999,14 @@
       ]
     },
     {
+      "family": "ghosting",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "ghosting"
+      ]
+    },
+    {
       "family": "ok",
       "classes": 1,
       "uses": 1,
@@ -2208,11 +2015,115 @@
       ]
     },
     {
-      "family": "ns",
+      "family": "x",
       "classes": 1,
       "uses": 1,
       "members": [
-        "ns-claude"
+        "x"
+      ]
+    },
+    {
+      "family": "u",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "u"
+      ]
+    },
+    {
+      "family": "wt",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "wt-slip"
+      ]
+    },
+    {
+      "family": "tab",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "tab"
+      ]
+    },
+    {
+      "family": "nm",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "nm"
+      ]
+    },
+    {
+      "family": "l1",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "l1"
+      ]
+    },
+    {
+      "family": "nx",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "nx"
+      ]
+    },
+    {
+      "family": "l2",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "l2"
+      ]
+    },
+    {
+      "family": "ink",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "ink"
+      ]
+    },
+    {
+      "family": "dis",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "dis-why"
+      ]
+    },
+    {
+      "family": "gut",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "gut"
+      ]
+    },
+    {
+      "family": "leaf",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "leaf-split"
+      ]
+    },
+    {
+      "family": "long",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "long"
+      ]
+    },
+    {
+      "family": "gate",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "gate-note"
       ]
     },
     {
@@ -2272,6 +2183,14 @@
       ]
     },
     {
+      "family": "loops",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "loops-word"
+      ]
+    },
+    {
       "family": "repin",
       "classes": 1,
       "uses": 1,
@@ -2325,6 +2244,14 @@
       "uses": 1,
       "members": [
         "feed"
+      ]
+    },
+    {
+      "family": "toasts",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "toasts"
       ]
     },
     {
@@ -2393,7 +2320,7 @@
     }
   ],
   "copy": {
-    "distinct": 628,
+    "distinct": 907,
     "samples": [
       {
         "text": "Too short to catch. Hold a little longer, or say it again",
@@ -2428,80 +2355,108 @@
         "where": "packages/gnomon-gui/src/core/capture.ts:85"
       },
       {
-        "text": "Claude was still finishing",
-        "where": "packages/gnomon-gui/src/core/capture.ts:96"
-      },
-      {
-        "text": "it overlapped my spoken reply",
+        "text": "✕ not sent by voice · none of these words were checked as you\\n  next: press Enter to send it",
         "where": "packages/gnomon-gui/src/core/capture.ts:98"
       },
       {
+        "text": "✕ not sent by voice · these words were not checked as you\\n  next: press Enter to send it",
+        "where": "packages/gnomon-gui/src/core/capture.ts:99"
+      },
+      {
+        "text": "✕ not sent by voice · Gnomon couldn't confirm it was you for part of this draft\\n  next: press Enter to send it · or re-teach Gnomon your voice on this mic in Voice settings",
+        "where": "packages/gnomon-gui/src/core/capture.ts:101"
+      },
+      {
+        "text": "✕ not sent by voice · Gnomon didn't recognise your voice on this mic\\n  next: press Enter to send it · or re-teach Gnomon your voice on this mic in Voice settings",
+        "where": "packages/gnomon-gui/src/core/capture.ts:103"
+      },
+      {
+        "text": "Claude was still finishing",
+        "where": "packages/gnomon-gui/src/core/capture.ts:115"
+      },
+      {
+        "text": "it overlapped my spoken reply",
+        "where": "packages/gnomon-gui/src/core/capture.ts:117"
+      },
+      {
+        "text": "too short to check it's you · say a few more words, or type it",
+        "where": "packages/gnomon-gui/src/core/capture.ts:121"
+      },
+      {
+        "text": "unverified voice: Enter sends it",
+        "where": "packages/gnomon-gui/src/core/capture.ts:123"
+      },
+      {
+        "text": "not checked as you: Enter sends it",
+        "where": "packages/gnomon-gui/src/core/capture.ts:125"
+      },
+      {
         "text": "speaker not recognised",
-        "where": "packages/gnomon-gui/src/core/capture.ts:100"
+        "where": "packages/gnomon-gui/src/core/capture.ts:126"
       },
       {
         "text": "voice is not attached to this session",
-        "where": "packages/gnomon-gui/src/core/capture.ts:102"
+        "where": "packages/gnomon-gui/src/core/capture.ts:128"
       },
       {
         "text": "another voice app is connected",
-        "where": "packages/gnomon-gui/src/core/capture.ts:104"
+        "where": "packages/gnomon-gui/src/core/capture.ts:130"
       },
       {
         "text": "it was too old to send",
-        "where": "packages/gnomon-gui/src/core/capture.ts:106"
+        "where": "packages/gnomon-gui/src/core/capture.ts:132"
       },
       {
         "text": "handled as a command",
-        "where": "packages/gnomon-gui/src/core/capture.ts:108"
+        "where": "packages/gnomon-gui/src/core/capture.ts:134"
       },
       {
         "text": "no echo cancellation (use headphones or the built-in mic)",
-        "where": "packages/gnomon-gui/src/core/capture.ts:110"
+        "where": "packages/gnomon-gui/src/core/capture.ts:136"
       },
       {
         "text": "the open mic timed out",
-        "where": "packages/gnomon-gui/src/core/capture.ts:110"
+        "where": "packages/gnomon-gui/src/core/capture.ts:136"
       },
       {
         "text": "above the attached voice mode",
-        "where": "packages/gnomon-gui/src/core/capture.ts:110"
+        "where": "packages/gnomon-gui/src/core/capture.ts:136"
       },
       {
         "text": "dictated speech waits in the box",
-        "where": "packages/gnomon-gui/src/core/capture.ts:110"
+        "where": "packages/gnomon-gui/src/core/capture.ts:136"
       },
       {
         "text": "voice is off for this turn",
-        "where": "packages/gnomon-gui/src/core/capture.ts:110"
+        "where": "packages/gnomon-gui/src/core/capture.ts:136"
       },
       {
         "text": "Not sent: Claude was still finishing its reply. Say it again",
-        "where": "packages/gnomon-gui/src/core/capture.ts:120"
+        "where": "packages/gnomon-gui/src/core/capture.ts:146"
       },
       {
         "text": "Hearing you…",
-        "where": "packages/gnomon-gui/src/core/capture.ts:215"
+        "where": "packages/gnomon-gui/src/core/capture.ts:241"
       },
       {
         "text": "Hearing you",
-        "where": "packages/gnomon-gui/src/core/capture.ts:215"
+        "where": "packages/gnomon-gui/src/core/capture.ts:241"
       },
       {
         "text": "Catching that…",
-        "where": "packages/gnomon-gui/src/core/capture.ts:217"
+        "where": "packages/gnomon-gui/src/core/capture.ts:243"
       },
       {
         "text": "Catching that",
-        "where": "packages/gnomon-gui/src/core/capture.ts:217"
+        "where": "packages/gnomon-gui/src/core/capture.ts:243"
       },
       {
         "text": "Heard, but not confirmed: check the transcript",
-        "where": "packages/gnomon-gui/src/core/capture.ts:222"
+        "where": "packages/gnomon-gui/src/core/capture.ts:248"
       },
       {
         "text": "Got it",
-        "where": "packages/gnomon-gui/src/core/capture.ts:225"
+        "where": "packages/gnomon-gui/src/core/capture.ts:251"
       },
       {
         "text": "Reply with one of these options",
@@ -2529,231 +2484,411 @@
       },
       {
         "text": "the connection is closed",
-        "where": "packages/gnomon-gui/src/core/client.ts:186"
+        "where": "packages/gnomon-gui/src/core/client.ts:189"
       },
       {
         "text": "hello failed",
-        "where": "packages/gnomon-gui/src/core/client.ts:234"
+        "where": "packages/gnomon-gui/src/core/client.ts:240"
       },
       {
         "text": "auth failed",
-        "where": "packages/gnomon-gui/src/core/client.ts:245"
+        "where": "packages/gnomon-gui/src/core/client.ts:251"
       },
       {
         "text": "Command palette",
-        "where": "packages/gnomon-gui/src/core/commands.ts:31"
+        "where": "packages/gnomon-gui/src/core/commands.ts:33"
       },
       {
         "text": "New session",
-        "where": "packages/gnomon-gui/src/core/commands.ts:32"
-      },
-      {
-        "text": "Rename session",
-        "where": "packages/gnomon-gui/src/core/commands.ts:33"
-      },
-      {
-        "text": "double-click the title / F2 in the list",
-        "where": "packages/gnomon-gui/src/core/commands.ts:33"
-      },
-      {
-        "text": "Focus the composer",
         "where": "packages/gnomon-gui/src/core/commands.ts:34"
       },
       {
+        "text": "Rename session",
+        "where": "packages/gnomon-gui/src/core/commands.ts:35"
+      },
+      {
+        "text": "double-click the title / F2 in the list",
+        "where": "packages/gnomon-gui/src/core/commands.ts:35"
+      },
+      {
+        "text": "Focus the composer",
+        "where": "packages/gnomon-gui/src/core/commands.ts:36"
+      },
+      {
+        "text": "Set up local model…",
+        "where": "packages/gnomon-gui/src/core/commands.ts:41"
+      },
+      {
+        "text": "Settings · Local model",
+        "where": "packages/gnomon-gui/src/core/commands.ts:41"
+      },
+      {
         "text": "Mods… (installed, available, add from folder)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:38"
-      },
-      {
-        "text": "Kernel feed: every raw log row (S2.3: a view, never the default centre)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:39"
-      },
-      {
-        "text": "Theme: Auto (follow the Mac's appearance)",
         "where": "packages/gnomon-gui/src/core/commands.ts:42"
       },
       {
-        "text": "Motion: follow the OS",
+        "text": "Loops… (the Loops view: list, graph, keys)",
         "where": "packages/gnomon-gui/src/core/commands.ts:44"
       },
       {
-        "text": "Layout: Focus (the chat only)",
+        "text": "Kernel feed: every raw log row (S2.3: a view, never the default centre)",
         "where": "packages/gnomon-gui/src/core/commands.ts:46"
       },
       {
-        "text": "Layout: Decide (the stack wide)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:47"
-      },
-      {
-        "text": "Pane: show/hide sessions",
-        "where": "packages/gnomon-gui/src/core/commands.ts:48"
-      },
-      {
-        "text": "Pane: show/hide decision stack",
+        "text": "Theme: Auto (follow the Mac's appearance)",
         "where": "packages/gnomon-gui/src/core/commands.ts:49"
       },
       {
-        "text": "Pane: show/hide the Workshop (needs you / working caps)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:50"
+        "text": "Motion: follow the OS",
+        "where": "packages/gnomon-gui/src/core/commands.ts:51"
       },
       {
-        "text": "Workshop: footer strip (default)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:52"
-      },
-      {
-        "text": "Workshop: right column",
+        "text": "Layout: Focus (the chat only)",
         "where": "packages/gnomon-gui/src/core/commands.ts:53"
       },
       {
-        "text": "Workshop: left column",
+        "text": "Layout: Decide (the stack wide)",
         "where": "packages/gnomon-gui/src/core/commands.ts:54"
       },
       {
-        "text": "Decision stack: this project / all projects",
+        "text": "Pane: show/hide sessions",
         "where": "packages/gnomon-gui/src/core/commands.ts:55"
       },
       {
-        "text": "Voice: Off (the mic is closed)",
+        "text": "Pane: show/hide decision stack",
+        "where": "packages/gnomon-gui/src/core/commands.ts:56"
+      },
+      {
+        "text": "Pane: show/hide the Workshop (needs you / working caps)",
+        "where": "packages/gnomon-gui/src/core/commands.ts:57"
+      },
+      {
+        "text": "Workshop: footer strip (default)",
         "where": "packages/gnomon-gui/src/core/commands.ts:59"
       },
       {
-        "text": "hold ⌃⌥Space (voice app)",
+        "text": "Workshop: right column",
         "where": "packages/gnomon-gui/src/core/commands.ts:60"
       },
       {
-        "text": "Voice: set up your send word…",
-        "where": "packages/gnomon-gui/src/core/commands.ts:64"
+        "text": "Workshop: left column",
+        "where": "packages/gnomon-gui/src/core/commands.ts:61"
       },
       {
-        "text": "Voice settings…",
-        "where": "packages/gnomon-gui/src/core/commands.ts:65"
+        "text": "Decision stack: this project / all projects",
+        "where": "packages/gnomon-gui/src/core/commands.ts:62"
       },
       {
-        "text": "Voice: mic on / off",
+        "text": "Voice: Off (the mic is closed)",
         "where": "packages/gnomon-gui/src/core/commands.ts:66"
       },
       {
-        "text": "⌃` · ` in Gnomon",
-        "where": "packages/gnomon-gui/src/core/commands.ts:66"
+        "text": "hold ⌃⌥Space (voice app)",
+        "where": "packages/gnomon-gui/src/core/commands.ts:67"
       },
       {
-        "text": "Mode: manual (this folder) — writes and commands wait on a plan",
+        "text": "Voice: Send word (say your word to send)",
         "where": "packages/gnomon-gui/src/core/commands.ts:69"
       },
       {
-        "text": "Mode: ask (this folder) — every write and command asks",
+        "text": "Voice: Pieces (each pause sends)",
         "where": "packages/gnomon-gui/src/core/commands.ts:70"
       },
       {
-        "text": "Mode: auto-edits (this folder) — edits in this folder pass",
+        "text": "Voice: set up your send word…",
         "where": "packages/gnomon-gui/src/core/commands.ts:71"
       },
       {
-        "text": "⇧Tab cycles",
-        "where": "packages/gnomon-gui/src/core/commands.ts:71"
-      },
-      {
-        "text": "Mode: manual (this session only)",
+        "text": "Voice settings…",
         "where": "packages/gnomon-gui/src/core/commands.ts:72"
       },
       {
-        "text": "Mode: ask (this session only)",
+        "text": "Voice: mic on / off",
         "where": "packages/gnomon-gui/src/core/commands.ts:73"
       },
       {
-        "text": "Mode: auto-edits (this session only)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:74"
+        "text": "⌃` · ` in Gnomon",
+        "where": "packages/gnomon-gui/src/core/commands.ts:73"
       },
       {
-        "text": "Voice: start the voice app",
+        "text": "Mode: manual (this folder) · writes and commands wait on a plan",
         "where": "packages/gnomon-gui/src/core/commands.ts:76"
       },
       {
-        "text": "Voice: stop the voice app",
+        "text": "Mode: ask (this folder) · every write and command asks",
         "where": "packages/gnomon-gui/src/core/commands.ts:77"
       },
       {
-        "text": "Voice: teach Gnomon your voice",
+        "text": "Mode: auto-edits (this folder) · edits in this folder pass",
         "where": "packages/gnomon-gui/src/core/commands.ts:78"
       },
       {
-        "text": "Dictation: Talk auto-sends after 3 s of silence",
+        "text": "⇧Tab cycles",
+        "where": "packages/gnomon-gui/src/core/commands.ts:78"
+      },
+      {
+        "text": "Mode: manual (this session only)",
+        "where": "packages/gnomon-gui/src/core/commands.ts:79"
+      },
+      {
+        "text": "Mode: ask (this session only)",
+        "where": "packages/gnomon-gui/src/core/commands.ts:80"
+      },
+      {
+        "text": "Mode: auto-edits (this session only)",
         "where": "packages/gnomon-gui/src/core/commands.ts:81"
       },
       {
-        "text": "Dictation: Talk auto-sends after 5 s of silence (default)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:82"
-      },
-      {
-        "text": "Dictation: Talk auto-sends after 8 s of silence",
+        "text": "Voice: start the voice app",
         "where": "packages/gnomon-gui/src/core/commands.ts:83"
       },
       {
-        "text": "Dictation: Talk auto-sends after 15 s of silence",
+        "text": "Voice: stop the voice app",
         "where": "packages/gnomon-gui/src/core/commands.ts:84"
       },
       {
-        "text": "Dictation: Talk never auto-sends (Send or Enter only)",
+        "text": "Voice: teach Gnomon your voice",
         "where": "packages/gnomon-gui/src/core/commands.ts:85"
       },
       {
-        "text": "Dictation: hold / resume the auto-send",
-        "where": "packages/gnomon-gui/src/core/commands.ts:86"
-      },
-      {
-        "text": "⌃⌥H (voice app)",
-        "where": "packages/gnomon-gui/src/core/commands.ts:86"
-      },
-      {
-        "text": "Gnomon menu: layout, theme, mods, voice settings, settings",
+        "text": "Dictation: Talk auto-sends after 3 s of silence",
         "where": "packages/gnomon-gui/src/core/commands.ts:88"
       },
       {
-        "text": "Send a diagnostic note to gui.log",
+        "text": "Dictation: Talk auto-sends after 5 s of silence (default)",
+        "where": "packages/gnomon-gui/src/core/commands.ts:89"
+      },
+      {
+        "text": "Dictation: Talk auto-sends after 8 s of silence",
         "where": "packages/gnomon-gui/src/core/commands.ts:90"
       },
       {
+        "text": "Dictation: Talk auto-sends after 15 s of silence",
+        "where": "packages/gnomon-gui/src/core/commands.ts:91"
+      },
+      {
+        "text": "Dictation: Talk never auto-sends (Send or Enter only)",
+        "where": "packages/gnomon-gui/src/core/commands.ts:92"
+      },
+      {
+        "text": "Dictation: hold / resume the auto-send",
+        "where": "packages/gnomon-gui/src/core/commands.ts:93"
+      },
+      {
+        "text": "⌃⌥H (voice app)",
+        "where": "packages/gnomon-gui/src/core/commands.ts:93"
+      },
+      {
+        "text": "Gnomon menu: layout, theme, mods, voice settings, settings",
+        "where": "packages/gnomon-gui/src/core/commands.ts:95"
+      },
+      {
+        "text": "Send a diagnostic note to gui.log",
+        "where": "packages/gnomon-gui/src/core/commands.ts:97"
+      },
+      {
         "text": "not served",
-        "where": "packages/gnomon-gui/src/core/commands.ts:166"
+        "where": "packages/gnomon-gui/src/core/commands.ts:175"
+      },
+      {
+        "text": "draft · not checked as you",
+        "where": "packages/gnomon-gui/src/core/dictation.ts:212"
+      },
+      {
+        "text": "s draft (Dictate: the human",
+        "where": "packages/gnomon-gui/src/core/dictation.ts:494"
       },
       {
         "text": "Edited draft: press Enter to send",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:351"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:530"
+      },
+      {
+        "text": "Unverified voice in the draft: press Enter to send",
+        "where": "packages/gnomon-gui/src/core/dictation.ts:531"
+      },
+      {
+        "text": "draft · unverified voice · read it, then Enter sends",
+        "where": "packages/gnomon-gui/src/core/dictation.ts:533"
       },
       {
         "text": "draft · Enter sends (an open-mic draft never sends itself)",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:362"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:544"
       },
       {
         "text": "Sending… Esc keeps it",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:397"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:579"
       },
       {
         "text": "draft waiting",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:413"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:635"
       },
       {
         "text": "draft held · voice detached",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:414"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:636"
       },
       {
         "text": "piece held · Enter sends",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:419"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:662"
       },
       {
         "text": "piece waiting · Claude is answering",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:419"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:662"
       },
       {
-        "text": "sending in pieces · edits ask first",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:419"
+        "text": "sending in pieces",
+        "where": "packages/gnomon-gui/src/core/dictation.ts:662"
       },
       {
         "text": "draft held",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:421"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:664"
       },
       {
         "text": "draft · auto-send off",
-        "where": "packages/gnomon-gui/src/core/dictation.ts:422"
+        "where": "packages/gnomon-gui/src/core/dictation.ts:665"
+      },
+      {
+        "text": "Choose folder…",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:58"
+      },
+      {
+        "text": "Choose file…",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:59"
+      },
+      {
+        "text": "Choose another…",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:60"
+      },
+      {
+        "text": "Type a path ▸",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:62"
+      },
+      {
+        "text": "Type a path ▾",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:63"
+      },
+      {
+        "text": "No recent folders yet. Choose the project folder this session works in.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:68"
+      },
+      {
+        "text": "opens in ",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:69"
+      },
+      {
+        "text": " · outside your home folder",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:70"
+      },
+      {
+        "text": "The macOS folder chooser is open. If you don't see it, it may be behind this window.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:71"
+      },
+      {
+        "text": "The macOS file chooser is open. If you don't see it, it may be behind this window.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:72"
+      },
+      {
+        "text": "No folder chosen. Nothing changed.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:73"
+      },
+      {
+        "text": "a full path, or one starting with ~/ · checked as you type",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:75"
+      },
+      {
+        "text": "✓ folder found",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:76"
+      },
+      {
+        "text": "✓ file found",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:77"
+      },
+      {
+        "text": "✕ Start the path with / or ~/",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:79"
+      },
+      {
+        "text": "◆ This is your home folder.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:80"
+      },
+      {
+        "text": " A session here can read every project in it, and auto-edits is off here. Choose a project folder inside it if you can.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:81"
+      },
+      {
+        "text": "Suggested by `gnomon` in a terminal: check it, then Open.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:82"
+      },
+      {
+        "text": "This kernel can't open the macOS folder chooser here. Type a full path, or pick a recent folder.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:83"
+      },
+      {
+        "text": "from terminal",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:84"
+      },
+      {
+        "text": "just chosen",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:85"
+      },
+      {
+        "text": "choose a folder first",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:86"
+      },
+      {
+        "text": "waiting for the chooser",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:86"
+      },
+      {
+        "text": "fix the path first",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:86"
+      },
+      {
+        "text": "Gnomon can't read this folder",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:86"
+      },
+      {
+        "text": "choose another folder",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:86"
+      },
+      {
+        "text": "choose a folder with gnomon-manifest.json",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:88"
+      },
+      {
+        "text": "none · the bundled runner is used",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:89"
+      },
+      {
+        "text": "none · choose the folder that holds gnomon-manifest.json",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:89"
+      },
+      {
+        "text": "none · it launches as it does today",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:89"
+      },
+      {
+        "text": "Claude Code updated itself, so its binary no longer matches the one Gnomon pinned.",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:94"
+      },
+      {
+        "text": "review the re-pin card",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:95"
+      },
+      {
+        "text": "Review re-pin card",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:96"
+      },
+      {
+        "text": "Close this sheet and focus the re-pin card in the stack (it decides nothing)",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:97"
+      },
+      {
+        "text": "the kernel answered no folder",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:522"
+      },
+      {
+        "text": "the kernel’s check gave no answer",
+        "where": "packages/gnomon-gui/src/core/folder-field.ts:584"
       },
       {
         "text": "the chat only",
@@ -2776,432 +2911,221 @@
         "where": "packages/gnomon-gui/src/core/header.ts:49"
       },
       {
+        "text": "Pause all loops",
+        "where": "packages/gnomon-gui/src/core/header.ts:55"
+      },
+      {
+        "text": "no presence · resuming needs it",
+        "where": "packages/gnomon-gui/src/core/header.ts:55"
+      },
+      {
         "text": "installed, available, add from folder",
-        "where": "packages/gnomon-gui/src/core/header.ts:54"
+        "where": "packages/gnomon-gui/src/core/header.ts:60"
       },
       {
         "text": "not connected",
-        "where": "packages/gnomon-gui/src/core/header.ts:103"
+        "where": "packages/gnomon-gui/src/core/header.ts:111"
       },
       {
         "text": "no pinned kernel key on this page: run `gnomon` (or `gnomon up`) in a terminal",
-        "where": "packages/gnomon-gui/src/core/launch.ts:182"
+        "where": "packages/gnomon-gui/src/core/launch.ts:184"
       },
       {
         "text": "s own seconds: the heartbeat",
-        "where": "packages/gnomon-gui/src/core/live-turn.ts:22"
+        "where": "packages/gnomon-gui/src/core/live-turn.ts:23"
       },
       {
-        "text": "workshop not installed · gnomon mod install packages/gnomon-mods/workshop",
-        "where": "packages/gnomon-gui/src/core/mod-panels.ts:115"
+        "text": "Local model",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:31"
       },
       {
-        "text": "Install Workshop",
-        "where": "packages/gnomon-gui/src/core/mod-panels.ts:130"
+        "text": "gnomon local status | set | remove",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:34"
       },
       {
-        "text": "Install the first-party Workshop: the kernel raises its install card in the stack, and you allow it there with Touch ID",
-        "where": "packages/gnomon-gui/src/core/mod-panels.ts:130"
+        "text": "none set up",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:35"
       },
       {
-        "text": "This kernel lists no shipped Workshop: open Mods to see why and to add a mod from a folder",
-        "where": "packages/gnomon-gui/src/core/mod-panels.ts:131"
+        "text": "Loops with model steps can’t start. A session that asks for a local model raises a fallback card instead.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:35"
       },
       {
-        "text": "a kit.Button is not allowed in the panel slot or the Workshop (they sit beside the decision keys)",
-        "where": "packages/gnomon-gui/src/core/mod-panels.ts:165"
+        "text": "not on Windows in 8.0",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:36"
       },
       {
-        "text": "dev-linked mod (tier local)",
-        "where": "packages/gnomon-gui/src/core/mod-panels.ts:181"
-      },
-      {
-        "text": "pick a model",
-        "where": "packages/gnomon-gui/src/core/model-picker.ts:47"
-      },
-      {
-        "text": "type a model id, e.g. claude-opus-5-5",
-        "where": "packages/gnomon-gui/src/core/model-picker.ts:49"
-      },
-      {
-        "text": "no session focused",
-        "where": "packages/gnomon-gui/src/core/model-picker.ts:159"
-      },
-      {
-        "text": "local model (gnomon-local): no Claude model to switch",
-        "where": "packages/gnomon-gui/src/core/model-picker.ts:160"
-      },
-      {
-        "text": "The conversation continues in the same Claude process: the context comes with it.",
-        "where": "packages/gnomon-gui/src/core/model-picker.ts:178"
-      },
-      {
-        "text": "The prompt cache restarts for the new model, so the next turn is slower and bills its input once more.",
-        "where": "packages/gnomon-gui/src/core/model-picker.ts:179"
-      },
-      {
-        "text": "writes and commands wait on an approved plan",
-        "where": "packages/gnomon-gui/src/core/modes.ts:112"
-      },
-      {
-        "text": "every write and command raises a card",
-        "where": "packages/gnomon-gui/src/core/modes.ts:113"
-      },
-      {
-        "text": "this folder",
-        "where": "packages/gnomon-gui/src/core/modes.ts:132"
-      },
-      {
-        "text": "this session only",
-        "where": "packages/gnomon-gui/src/core/modes.ts:132"
-      },
-      {
-        "text": "type the folder that holds the mod (it has a gnomon-manifest.json)",
-        "where": "packages/gnomon-gui/src/core/mods.ts:172"
-      },
-      {
-        "text": "the path holds a control or line-separator character",
-        "where": "packages/gnomon-gui/src/core/mods.ts:176"
-      },
-      {
-        "text": "a network (UNC) path is not accepted: use a local folder",
-        "where": "packages/gnomon-gui/src/core/mods.ts:177"
-      },
-      {
-        "text": "change at least one field",
-        "where": "packages/gnomon-gui/src/core/mods.ts:220"
-      },
-      {
-        "text": "uninstall requested",
-        "where": "packages/gnomon-gui/src/core/mods.ts:232"
-      },
-      {
-        "text": "error: its pinned snapshot does not read",
-        "where": "packages/gnomon-gui/src/core/mods.ts:234"
-      },
-      {
-        "text": "no MCP server",
-        "where": "packages/gnomon-gui/src/core/mods.ts:240"
-      },
-      {
-        "text": "off while paused",
-        "where": "packages/gnomon-gui/src/core/mods.ts:241"
-      },
-      {
-        "text": "passed to new sessions",
-        "where": "packages/gnomon-gui/src/core/mods.ts:241"
-      },
-      {
-        "text": "already installed: nothing to approve",
-        "where": "packages/gnomon-gui/src/core/mods.ts:259"
-      },
-      {
-        "text": "requested: decide the card in the stack",
-        "where": "packages/gnomon-gui/src/core/mods.ts:260"
-      },
-      {
-        "text": "not now",
-        "where": "packages/gnomon-gui/src/core/offers.ts:19"
-      },
-      {
-        "text": "recent messages",
-        "where": "packages/gnomon-gui/src/core/offers.ts:64"
-      },
-      {
-        "text": "open files",
-        "where": "packages/gnomon-gui/src/core/offers.ts:65"
-      },
-      {
-        "text": "the repo path",
-        "where": "packages/gnomon-gui/src/core/offers.ts:66"
-      },
-      {
-        "text": "the selection",
-        "where": "packages/gnomon-gui/src/core/offers.ts:67"
-      },
-      {
-        "text": "a session summary",
-        "where": "packages/gnomon-gui/src/core/offers.ts:68"
-      },
-      {
-        "text": "takes: unknown (not reported by the kernel) · ↵ to open",
-        "where": "packages/gnomon-gui/src/core/offers.ts:285"
-      },
-      {
-        "text": "the name was not changed: it has a control character",
-        "where": "packages/gnomon-gui/src/core/rename.ts:41"
-      },
-      {
-        "text": "the name was not changed: it has an invisible formatting character",
-        "where": "packages/gnomon-gui/src/core/rename.ts:43"
-      },
-      {
-        "text": "the name was not changed",
-        "where": "packages/gnomon-gui/src/core/rename.ts:45"
-      },
-      {
-        "text": "this command is not available to a block",
-        "where": "packages/gnomon-gui/src/core/render.ts:208"
-      },
-      {
-        "text": "s namespace (localNsOf the connection",
-        "where": "packages/gnomon-gui/src/core/render.ts:268"
-      },
-      {
-        "text": "just now",
-        "where": "packages/gnomon-gui/src/core/render.ts:366"
-      },
-      {
-        "text": "SENT TO CLOUD",
-        "where": "packages/gnomon-gui/src/core/render.ts:404"
-      },
-      {
-        "text": "or type your own answer",
-        "where": "packages/gnomon-gui/src/core/render.ts:680"
-      },
-      {
-        "text": "type your answer",
-        "where": "packages/gnomon-gui/src/core/render.ts:680"
-      },
-      {
-        "text": "command separator",
-        "where": "packages/gnomon-gui/src/core/render.ts:714"
-      },
-      {
-        "text": "a line break: what follows is another command",
-        "where": "packages/gnomon-gui/src/core/render.ts:715"
-      },
-      {
-        "text": "The helper is older than 1.8.0: this approval asks Touch ID once per signed row.",
-        "where": "packages/gnomon-gui/src/core/render.ts:784"
-      },
-      {
-        "text": "Always: this exact command",
-        "where": "packages/gnomon-gui/src/core/render.ts:793"
-      },
-      {
-        "text": "key pri",
-        "where": "packages/gnomon-gui/src/core/render.ts:796"
-      },
-      {
-        "text": "no verified decision keys",
-        "where": "packages/gnomon-gui/src/core/render.ts:798"
-      },
-      {
-        "text": "Gnomon was updated",
-        "where": "packages/gnomon-gui/src/core/restart.ts:52"
-      },
-      {
-        "text": "Gnomon restarted, but the kernel now at this address did not prove the key the old one handed over, so this page did not reconnect. Open Gnomon again: from Gnomon.app, or by running `gnomon` in a terminal.",
-        "where": "packages/gnomon-gui/src/core/restart.ts:134"
-      },
-      {
-        "text": "Gnomon restarted, but not at this address (its old port was taken). Open Gnomon again: from Gnomon.app, or by running `gnomon` in a terminal. Your sessions were saved and resume in the new window.",
-        "where": "packages/gnomon-gui/src/core/restart.ts:137"
-      },
-      {
-        "text": "Type a word or pick a suggestion.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:73"
-      },
-      {
-        "text": "That is too long for a send word.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:75"
-      },
-      {
-        "text": "Letters and numbers only.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:76"
-      },
-      {
-        "text": "That is an approval or command word: a send word must never sound like a decision.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:77"
-      },
-      {
-        "text": "The time to test the word ran out. Pick it again.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:116"
-      },
-      {
-        "text": "Not a usable send word.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:121"
-      },
-      {
-        "text": "Pick another word.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:128"
-      },
-      {
-        "text": "Pick a word you’ll say on its own when you finish speaking.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:149"
-      },
-      {
-        "text": "Use it anyway?",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:151"
-      },
-      {
-        "text": "I could not make that out. Say just the word.",
-        "where": "packages/gnomon-gui/src/core/send-word-teach.ts:171"
-      },
-      {
-        "text": "the kernel answered another connection\\'s hello — run `gnomon open`",
-        "where": "packages/gnomon-gui/src/core/server-sig.ts:73"
-      },
-      {
-        "text": "the kernel public key is not base64url",
-        "where": "packages/gnomon-gui/src/core/server-sig.ts:79"
-      },
-      {
-        "text": "kernel key changed — run `gnomon open`",
-        "where": "packages/gnomon-gui/src/core/server-sig.ts:81"
-      },
-      {
-        "text": "the kernel public key does not import as Ed25519 SPKI",
-        "where": "packages/gnomon-gui/src/core/server-sig.ts:88"
-      },
-      {
-        "text": ", title: `Auto: follow the Mac",
-        "where": "packages/gnomon-gui/src/core/settings.ts:55"
-      },
-      {
-        "text": "It ends when the screen locks, the Mac sleeps or you switch user, and at the latest after 12 h or 512 signatures (an older Touch ID helper ends it sooner: 15 min idle, 60 min, 64).",
-        "where": "packages/gnomon-gui/src/core/settings.ts:129"
-      },
-      {
-        "text": "Follow the Mac",
-        "where": "packages/gnomon-gui/src/core/settings.ts:175"
-      },
-      {
-        "text": "full: cards stamp and fly off",
-        "where": "packages/gnomon-gui/src/core/settings.ts:178"
-      },
-      {
-        "text": "Workshop placement",
-        "where": "packages/gnomon-gui/src/core/settings.ts:183"
-      },
-      {
-        "text": "Footer strip",
-        "where": "packages/gnomon-gui/src/core/settings.ts:184"
-      },
-      {
-        "text": "Right column",
-        "where": "packages/gnomon-gui/src/core/settings.ts:184"
-      },
-      {
-        "text": "Left column",
-        "where": "packages/gnomon-gui/src/core/settings.ts:184"
-      },
-      {
-        "text": "under 900 px wide it is always the footer",
-        "where": "packages/gnomon-gui/src/core/settings.ts:185"
-      },
-      {
-        "text": "hidden now: a placement shows it again",
-        "where": "packages/gnomon-gui/src/core/settings.ts:185"
-      },
-      {
-        "text": "custom: you changed a pane",
-        "where": "packages/gnomon-gui/src/core/settings.ts:195"
-      },
-      {
-        "text": "kept in this browser",
-        "where": "packages/gnomon-gui/src/core/settings.ts:195"
-      },
-      {
-        "text": "Sessions pane",
-        "where": "packages/gnomon-gui/src/core/settings.ts:197"
-      },
-      {
-        "text": "Decision stack",
-        "where": "packages/gnomon-gui/src/core/settings.ts:198"
-      },
-      {
-        "text": "Always shown",
-        "where": "packages/gnomon-gui/src/core/settings.ts:200"
-      },
-      {
-        "text": "the voice pill, the run-mode control, the connection readout, the browser risk badge (and the chat itself)",
-        "where": "packages/gnomon-gui/src/core/settings.ts:200"
-      },
-      {
-        "text": "Voice app",
-        "where": "packages/gnomon-gui/src/core/settings.ts:207"
-      },
-      {
-        "text": "Reconnect (⌘K, then “Reconnect”) to see and change voice.",
-        "where": "packages/gnomon-gui/src/core/settings.ts:207"
-      },
-      {
-        "text": "not offered on this connection",
-        "where": "packages/gnomon-gui/src/core/settings.ts:208"
-      },
-      {
-        "text": "this kernel does not report a voice app",
-        "where": "packages/gnomon-gui/src/core/settings.ts:208"
-      },
-      {
-        "text": "Only the Gnomon window you opened yourself controls voice.",
-        "where": "packages/gnomon-gui/src/core/settings.ts:208"
-      },
-      {
-        "text": "not running",
-        "where": "packages/gnomon-gui/src/core/settings.ts:210"
-      },
-      {
-        "text": "Restart voice",
-        "where": "packages/gnomon-gui/src/core/settings.ts:216"
-      },
-      {
-        "text": "Start voice",
-        "where": "packages/gnomon-gui/src/core/settings.ts:216"
-      },
-      {
-        "text": "Your voice, send word, keys, listening, timing, risk",
-        "where": "packages/gnomon-gui/src/core/settings.ts:220"
-      },
-      {
-        "text": "Chosen live from the voice pill in the header (Off, Talk, Dictate, Send word, Pieces).",
-        "where": "packages/gnomon-gui/src/core/settings.ts:224"
-      },
-      {
-        "text": "Folder run mode",
-        "where": "packages/gnomon-gui/src/core/settings.ts:229"
-      },
-      {
-        "text": "no live session focused",
-        "where": "packages/gnomon-gui/src/core/settings.ts:229"
-      },
-      {
-        "text": "Open or focus a session on the left: its folder’s run mode shows here and in the chat header (mode ▾).",
-        "where": "packages/gnomon-gui/src/core/settings.ts:229"
-      },
-      {
-        "text": "Run mode",
-        "where": "packages/gnomon-gui/src/core/settings.ts:230"
-      },
-      {
-        "text": "Change it from the chat header’s mode ▾ or ⇧Tab in the composer.",
-        "where": "packages/gnomon-gui/src/core/settings.ts:230"
-      },
-      {
-        "text": "Mode ceiling",
-        "where": "packages/gnomon-gui/src/core/settings.ts:243"
-      },
-      {
-        "text": "Kernel-owned (§3.4 strictness): strictness levels are not built yet, so the ceiling allows all three modes. A choice above it shows disabled with its reason.",
-        "where": "packages/gnomon-gui/src/core/settings.ts:243"
-      },
-      {
-        "text": "Session model",
-        "where": "packages/gnomon-gui/src/core/settings.ts:247"
+        "text": "Local models run on the Mac for now. On this PC loops with model steps can’t start, and a session that asks for a local model raises a fallback card.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:36"
       },
       {
         "text": "not offered by this kernel",
-        "where": "packages/gnomon-gui/src/core/settings.ts:251"
+        "where": "packages/gnomon-gui/src/core/local-model.ts:37"
+      },
+      {
+        "text": "Update Gnomon to set one up here. The terminal form is `gnomon local status`.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:37"
+      },
+      {
+        "text": "Reconnect (⌘K, then “Reconnect”) to see and change the local model.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:38"
+      },
+      {
+        "text": "Point Gnomon at a model server running on this Mac.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:39"
+      },
+      {
+        "text": "Changing the local model. The card shows exactly what changes.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:40"
+      },
+      {
+        "text": "this Mac only in 8.0: 127.0.0.1 or localhost",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:41"
+      },
+      {
+        "text": "loops run their model steps on it unattended, inside their budgets",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:42"
+      },
+      {
+        "text": "what cards and logs call this endpoint",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:44"
+      },
+      {
+        "text": "use another runner (optional)",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:45"
+      },
+      {
+        "text": "Save · root card",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:47"
+      },
+      {
+        "text": "no change",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:48"
+      },
+      {
+        "text": "Nothing changes until you Allow its card in the stack. Allow takes the root key and your presence: Touch ID or your Mac password.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:49"
+      },
+      {
+        "text": "Allow takes the root key and your presence. Deny keeps things as they are and brings your entries back here.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:50"
+      },
+      {
+        "text": "Decide in the stack",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:51"
+      },
+      {
+        "text": "The kernel asks the server for its models, a tool call and its context size.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:52"
+      },
+      {
+        "text": "Local model settings…",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:53"
+      },
+      {
+        "text": "LM Studio",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:66"
+      },
+      {
+        "text": "as `ollama list` shows it",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:76"
+      },
+      {
+        "text": ", treeSha256: r.treeSha256 as string, version: str(r.version), source: str(r.source) ?? ",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:133"
+      },
+      {
+        "text": "✕ Not an address: start it with http://",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:194"
+      },
+      {
+        "text": "✕ The address is at most 256 characters",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:208"
+      },
+      {
+        "text": "✕ An endpoint name is 1 to 64 letters, digits, dots, dashes or underscores, starting with a letter or digit.",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:226"
+      },
+      {
+        "text": "sessions and loops",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:233"
+      },
+      {
+        "text": "sessions only",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:233"
+      },
+      {
+        "text": "connection refused",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:287"
+      },
+      {
+        "text": "no answer in time",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:290"
+      },
+      {
+        "text": "CODE  message · next: …",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:297"
+      },
+      {
+        "text": "no answer",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:346"
+      },
+      {
+        "text": "it can’t call tools",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:346"
+      },
+      {
+        "text": "context size unknown",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:346"
+      },
+      {
+        "text": "context too short",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:346"
+      },
+      {
+        "text": "no endpoint",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:346"
+      },
+      {
+        "text": "no runner pinned",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:346"
+      },
+      {
+        "text": "runner not pinned",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:352"
+      },
+      {
+        "text": "not checked yet",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:354"
+      },
+      {
+        "text": "the server",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:357"
+      },
+      {
+        "text": "ollama serve",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:369"
+      },
+      {
+        "text": "used by",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:381"
+      },
+      {
+        "text": "Sessions and loops",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:381"
+      },
+      {
+        "text": "Sessions only",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:381"
+      },
+      {
+        "text": "endpoint name",
+        "where": "packages/gnomon-gui/src/core/local-model.ts:382"
       }
     ]
   },
   "drift": {
-    "color": 11,
-    "font": 1,
-    "font-size": 83,
-    "spacing": 43,
-    "radius": 18
+    "color": 4,
+    "duration": 1
   }
 }

@@ -16,7 +16,7 @@ import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, palette
 import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, hostSurface, parseLaunchFragment } from '../src/core/launch.js';
 import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, shownPrefixWords, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
-import { Follow, isAtBottom } from '../src/core/follow.js';
+import { Follow, INTENT_MS, isAtBottom, ScrollIntent, scrollEvent } from '../src/core/follow.js';
 import { chatItems, foldRaw, GuiStore, rawFoldKey, rowDetail, rowOf, rowSummary, toolSummary, turnEventSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
 
@@ -193,7 +193,10 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     const v = { cardId: 'card:01J', kind: 'permission', requestedBy: base.requestedBy, hsid: null, repo: null, state: 'pending', contentHash: card.contentHash, flags: [], decisions: ['allow', 'deny', 'always'], decidable: true, prefixOptions: opts };
     const el = renderCard({ doc: fdoc }, v, block) as FEl;
     const always = el.all().filter((e) => e.attrs.get('data-decision') === 'always');
-    expect(always.map((e) => e.text)).toEqual(['Always: this exact command', "Always: 'git' …", "Always: 'git' 'log' …"]);
+    // Mika 2026-10-23: the choices fold under "Always ▾"; each key's accessible name says Always, its face the scope
+    expect(always.map((e) => e.attrs.get('aria-label'))).toEqual(['Always: this exact command', "Always: 'git' …", "Always: 'git' 'log' …"]);
+    expect(always.map((e) => e.text)).toEqual(['this exact command', "'git' …", "'git' 'log' …"]);
+    expect(el.all().filter((e) => e.attrs.has('data-always-fold')).map((e) => [e.text, e.attrs.get('aria-expanded'), e.attrs.has('data-decision')])).toEqual([['Always ▾', 'false', false]]);
     expect(always.map((e) => e.attrs.get('data-scope'))).toEqual(['exact', 'prefix', 'prefix']);
     expect(always.map((e) => e.attrs.get('data-prefix'))).toEqual([undefined, '["git"]', '["git","log"]']);
     // no verified prefix choices ⇒ the plain always key
@@ -223,7 +226,8 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     // and the card keys use it
     const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:x/s-1', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'c'.repeat(64), flags: [], decisions: ['always'], decidable: true, prefixOptions: [['git log', 'x'], ['gіt', 'log']] };
     const keys = (renderCard({ doc: fdoc }, v, { schemaVersion: 'display-block:v1', type: 'Box', children: [] }) as FEl).all().filter((e) => e.attrs.get('data-scope') === 'prefix');
-    expect(keys.map((e) => e.text)).toEqual(["Always: 'git log' 'x' …", "Always: 'g\\u0456t' 'log' …"]);
+    expect(keys.map((e) => e.text)).toEqual(["'git log' 'x' …", "'g\\u0456t' 'log' …"]);
+    expect(keys.map((e) => e.attrs.get('aria-label'))).toEqual(["Always: 'git log' 'x' …", "Always: 'g\\u0456t' 'log' …"]);
   });
   it('src/ has no HTML sinks, eval, inline handlers or remote loads (scan)', () => {
     const files: string[] = [];
@@ -590,7 +594,10 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
   });
   it('`color:` only ever takes a text token (project hues are fills, never text)', () => {
     const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot', 'slate', 'on-ink', 'p-terracotta-ink', 'p-sage-ink', 'p-slate-ink', 'p-ochre-ink', 'p-rose-clay-ink', 'p-sea-grey-ink']); // slate is a fixture text token (a project ink); on-ink: the filled primary key (S1)
-    for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?<![-a-z])color:\s*([^;}]+)/g)) {
+    const plain = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const m of plain.matchAll(/(?<![-a-z])color:\s*([^;}]+)/g)) {
+      // B1 at the caret (founder report 2026-10-23): the composer's own text hides while the ghost mirror draws it in --ink
+      if (m[1]!.trim() === 'transparent' && /\.ghosting[^{]*\{[^}]*$/.test(plain.slice(0, m.index))) continue;
       const v = /^var\(--([a-z0-9-]+)\)$/.exec(m[1]!.trim());
       expect(v && TEXT.has(v[1]!), `color: ${m[1]}`).toBe(true);
     }
@@ -1079,9 +1086,67 @@ describe('#gui transcript stickiness (founder rule)', () => {
     f.release(); // wheel up / PageUp / touch drag
     expect(f.shouldStick).toBe(false);
   });
+  it('FALSIFIER (founder report 2026-10-23, WebKit): a layout clamp is never the user scrolling up', () => {
+    // measured in WKWebView (the Gnomon.app engine): the composer re-measures (fitComposer resets its height) or
+    // shrinks, the transcript grows and its scrollTop is clamped 1726 → 1646, and WebKit fires that scroll BEFORE the
+    // ResizeObserver repaint, so it is not the page's own write. The old handler read it as the user moving up:
+    const old = new Follow();
+    old.onScroll(isAtBottom(1646, 354, 2000), 1646 < 1726 - 0.5);
+    expect(old.shouldStick).toBe(false); // the bug: unstuck on every dictated word
+    // now only the user's own scroll changes stickiness
+    const f = new Follow();
+    const clamp = { top: 1646, selfTop: 1726, lastTop: 1726, clientHeight: 354, scrollHeight: 2000, byUser: false };
+    expect(scrollEvent(f, clamp)).toBe('layout');
+    expect(f.shouldStick).toBe(true);
+    // the same-height re-measure: the clamp lands 80 px short of the bottom and the box is back to its size
+    expect(scrollEvent(f, { top: 699, selfTop: 779, lastTop: 779, clientHeight: 300, scrollHeight: 1079, byUser: false })).toBe('layout');
+    expect(f.shouldStick).toBe(true);
+    f.onAppend(3);
+    expect([f.shouldStick, f.unseen]).toEqual([true, 0]);
+    // the page's own write echoing back
+    expect(scrollEvent(f, { ...clamp, selfTop: 1646.4 })).toBe('own');
+    // the user wheels up: unstuck, and nothing moves it; back to the bottom by hand: stuck again
+    expect(scrollEvent(f, { ...clamp, top: 1200, byUser: true })).toBe('user');
+    expect(f.shouldStick).toBe(false);
+    expect(scrollEvent(f, { top: 1000, selfTop: 1726, lastTop: 1200, clientHeight: 354, scrollHeight: 2400, byUser: false })).toBe('layout');
+    expect(f.shouldStick).toBe(false); // a layout scroll never re-sticks either
+    expect(scrollEvent(f, { top: 2046, selfTop: 1726, lastTop: 1000, clientHeight: 354, scrollHeight: 2400, byUser: true })).toBe('user');
+    expect(f.shouldStick).toBe(true);
+  });
+  it('ScrollIntent: a gesture marks a short window; a held pointer or finger lasts until let go plus a tail', () => {
+    const i = new ScrollIntent();
+    expect(i.active(0)).toBe(false);
+    i.mark(1000, INTENT_MS.wheel);
+    expect([i.active(1000 + INTENT_MS.wheel), i.active(1001 + INTENT_MS.wheel)]).toEqual([true, false]);
+    i.hold(); // the scrollbar grabbed
+    expect(i.active(60_000)).toBe(true);
+    i.letGo(60_000);
+    expect([i.active(60_000 + INTENT_MS.pointer), i.active(60_001 + INTENT_MS.pointer)]).toEqual([true, false]);
+    i.letGo(90_000); // a stray pointerup with nothing held marks nothing
+    expect(i.active(90_000)).toBe(false);
+  });
+  it('app.ts: intent comes from wheel, keys, focus, a pointer or finger on the feed; rows that resize repaint; unfolding never scrolls', () => {
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/if \(\(e as WheelEvent\)\.deltaY !== 0\) intent\.mark\(performance\.now\(\), INTENT_MS\.wheel\);/);
+    expect(app).toMatch(/\$\('viewport'\)\.addEventListener\('pointerdown', \(\) => intent\.hold\(\)/);
+    expect(app).toMatch(/for \(const t of \['pointerup', 'pointercancel'\]\) window\.addEventListener\(t, \(\) => intent\.letGo\(performance\.now\(\)\)/);
+    expect(app).toMatch(/\$\('viewport'\)\.addEventListener\('focusin', \(\) => intent\.mark\(performance\.now\(\), INTENT_MS\.focus\)\);/);
+    expect(app).toMatch(/if \(SCROLL_KEYS\.has\(k\)\) intent\.mark\(performance\.now\(\), INTENT_MS\.key\);/);
+    // a row that changes height by itself (a font, a slip, a fold) repaints: stuck stays at the bottom
+    expect(app).toMatch(/const rowSizes = new ResizeObserver\(\(\) => \{\s*for \(const \[i, el\] of mounted\)\s*if \(el\.isConnected && el\.offsetHeight && el\.offsetHeight !== heights\.height\(i\)\) \{\s*paintTranscript\(\);/);
+    expect(app).toMatch(/restoreSteps\(el\);\s*watchRow\(el\);/);
+    // every row leaves through dropRow (unobserved), never a bare el.remove() in the feed
+    const feed = app.slice(app.indexOf('function unmountAll('), app.indexOf('/* ── narrow widths'));
+    expect(feed).not.toMatch(/\bel\.remove\(\)/);
+    expect(app).toMatch(/\?\.focus\(\{ preventScroll: true \}\);/);
+    // Mika 2026-10-23: a wheel tick up with nothing above (a chat that does not overflow yet, or at its top) never unsticks
+    expect(app).toMatch(/const releaseUp = \(\): void => \{\s*if \(!follow\.shouldStick \|\| \$\('viewport'\)\.scrollTop < 1\) return;/);
+    const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+    expect(css).toMatch(/\.viewport \{[^}]*overflow-anchor: none;/);
+  });
   it('app.ts ignores its own scroll writes and releases on wheel-up, touch and keys', () => {
     const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
-    expect(app).toMatch(/const own = Math\.abs\(top - selfTop\) < 1/);
+    expect(app).toMatch(/scrollEvent\(follow, \{ top, selfTop, lastTop, clientHeight: vp\.clientHeight, scrollHeight: vp\.scrollHeight, byUser: intent\.active\(performance\.now\(\)\) \}\)/);
     expect(app).toMatch(/addEventListener\('wheel'/);
     expect(app).toMatch(/'PageUp'/);
   });

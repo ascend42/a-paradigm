@@ -286,12 +286,13 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
   const lines = [`The session asks to run ${tool}`, `repo: ${ctx.repo}`, ...body];
   if (size(lines) > MAX_CARD_CHARS) return deny('too-large', `the ${tool} request is too large to show in full on a card`);
   // TD-2026-10-20-294: a Bash command that is ONE literal simple command offers prefix-scoped always choices (its
-  // first two argv words, when #prefix-policy allows them) as STRUCTURED detail inside contentHash, plus a {type:'bash-prefix', detail} block node the
+  // first two argv words, and its first three (Aegis 2026-10-23, TD-2026-10-23-939 follow-up), each only when
+  // #prefix-policy allows it; never one word) as STRUCTURED detail inside contentHash, plus a {type:'bash-prefix', detail} block node the
   // GUI verifies (like ask-user); the broker re-checks any prefix against the same simpleArgv rule
   const argv = tool === 'Bash' && typeof inp.command === 'string' ? simpleArgv(inp.command) : null;
   // Aegis H1: only prefixes #prefix-policy passes are offered (never one word, never an interpreter/runner, git
   // read-ish subcommands only); the broker and the rule fold re-check the same policy
-  const offered = argv && argv.length >= 2 && prefixRefusal([argv[0]!, argv[1]!]) === null ? [[argv[0]!, argv[1]!]] : [];
+  const offered = argv ? [2, 3].filter((n) => argv.length >= n).map((n) => argv.slice(0, n)).filter((p) => prefixRefusal(p) === null) : [];
   if (offered.length) {
     detail.prefixOptions = offered;
     const c = card('permission', PERMISSION_DECISIONS, detail, h, lines) as Extract<PermissionPlan, { kind: 'card' }>;
@@ -299,6 +300,20 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
     return { ...c, block: { ...c.block, children } };
   }
   return card('permission', PERMISSION_DECISIONS, detail, h, lines);
+}
+
+/** The scoped `always` choices an edit card may offer (TD-2026-10-23-939 follow-up, Aegis 2026-10-23). */
+export const EDIT_SCOPE_KINDS: readonly ('file' | 'repo-edits')[] = Object.freeze(['file', 'repo-edits'] as const);
+
+/**
+ * An edit card the auto-edits pass would allow (the supervisor checked it) offers scoped `always` choices: detail.editScopes
+ * and detail.editPath (the pass's resolved path) INSIDE contentHash, plus a {type:'edit-scope', detail} block node the GUI
+ * verifies, like bash-prefix. The broker takes {kind:'file'|'repo-edits'} only on a card that offers it.
+ */
+export function withEditScopes<P extends { detail: Record<string, unknown>; block: Record<string, unknown> }>(plan: P, editPath: string, kinds: readonly ('file' | 'repo-edits')[]): P {
+  const detail = { ...plan.detail, editScopes: [...kinds], editPath };
+  const children = [...((plan.block.children as unknown[]) ?? []), { type: 'edit-scope', detail: structuredClone(detail) }];
+  return { ...plan, detail, block: { ...plan.block, children } };
 }
 
 const size = (lines: readonly string[]): number => lines.reduce((n, l) => n + l.length, 0);

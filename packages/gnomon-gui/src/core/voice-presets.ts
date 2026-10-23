@@ -26,8 +26,8 @@ export const PRESET_LABELS: Readonly<Record<VoicePreset, string>> = Object.freez
 export const PRESET_NOTES: Readonly<Record<VoicePreset, string>> = Object.freeze({
   talk: 'hold the key; sends after the countdown',
   dictate: 'open-mic words fill the draft; Enter sends',
-  'send-word': 'say your send word to send; edits ask first',
-  pieces: 'open-mic speech is sent in pieces; edits ask first',
+  'send-word': 'say your send word to send',
+  pieces: 'open-mic speech is sent in pieces',
 });
 export const ACK_TEXT = VOICE_LIABILITY_ACK_TEXT;
 
@@ -78,13 +78,14 @@ export const ackedLine = (iso: string | null, now: Date = new Date()): string =>
 };
 
 /**
- * The risk check's paragraph (Atelier 2026-10-21 direction.html): what sends, and why edits ask first. With a send
+ * The risk check's paragraph (Atelier 2026-10-21 direction.html): what sends, and that a voice-sent turn runs like a typed
+ * one (TD-2026-10-23-939). With a send
  * word it names the word; Pieces names the pause. The box under it is ACK_TEXT itself (its hash is the kernel's).
  */
 export function riskSentence(o: { word: string | null; pieces?: boolean }): string {
   // TD-2026-10-23-496: the send word sends the whole draft, words Gnomon couldn't check as you included
-  if (!o.pieces && o.word) return `When you say “${o.word}”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, so any edit Claude tries in a voice-sent turn asks you first.`;
-  return 'When you pause, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.';
+  if (!o.pieces && o.word) return `When you say “${o.word}”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, and a voice-sent turn runs under your run mode and Always rules, like a message you typed.`;
+  return 'When you pause, Gnomon sends what you dictated. Another voice or a video could be taken for yours, and a voice-sent turn runs under your run mode and Always rules, like a message you typed.';
 }
 
 /**
@@ -104,13 +105,13 @@ export function sendWordOf(status: unknown): SendWord | null {
 }
 
 /** The transcript label of a sent turn, from its kernel-signed turn.sent payload (origin, sentBy, source). */
-export function sentLabel(p: unknown): { label: string; asksFirst: boolean } | null {
+export function sentLabel(p: unknown): { label: string } | null {
   const o = p && typeof p === 'object' ? (p as Record<string, unknown>) : null;
   if (!o || (o.source !== 'voice' && o.origin !== 'voice' && o.origin !== 'voice-unverified')) return null;
-  // Dictate (Aegis 2026-10-21): Enter sent words from a voice Gnomon did not verify: clamped like a voice-origin turn
-  if (o.origin === 'voice-unverified') return { label: 'spoken · unverified voice · sent by you', asksFirst: true };
-  if (o.origin === 'voice') return { label: o.sentBy === 'piece' ? 'spoken · sent as a piece' : o.sentBy === 'hotkey' ? 'spoken · sent by send-now' : 'spoken · sent by send word', asksFirst: true };
-  return { label: o.sentBy === 'release' ? 'spoken · sent on release' : 'spoken · sent by you', asksFirst: false };
+  // the plain origin, for the record (TD-2026-10-23-939: a voice-sent turn runs like a typed one; nothing asks first)
+  if (o.origin === 'voice-unverified') return { label: 'spoken · unverified voice · sent by you' };
+  if (o.origin === 'voice') return { label: o.sentBy === 'piece' ? 'spoken · sent as a piece' : o.sentBy === 'hotkey' ? 'spoken · sent by send-now' : 'spoken · sent by send word' };
+  return { label: o.sentBy === 'release' ? 'spoken · sent on release' : 'spoken · sent by you' };
 }
 
 /**
@@ -124,27 +125,3 @@ export function voiceWho(o: { speaker: string; edited: boolean; sent: string | n
 /** Luna #10: the tag before a reply's spoken part, in words ("voice" carries it, never a hue: board gnomon-status-colour). */
 export const saidTag = (by: 'kernel' | 'reply'): string => (by === 'kernel' ? 'voice · said aloud' : 'voice · spoken part');
 
-/** The session header chip while a voice-origin turn of that session is outstanding (Atelier 2026-10-21 direction). */
-export const CLAMP_CHIP = 'voice turn · edits ask first';
-/** The line a card raised during a voice-origin turn carries (card.detail.origin 'voice'; the kernel's own line stays in its body). */
-export const CARD_VOICE_LINE = 'asked during a voice-sent turn · check this was you';
-/** A card raised during a voice-origin turn (the kernel's ^voice-origin-clamp stamps detail.origin 'voice'). Display only. */
-export function cardVoiceOrigin(card: Record<string, unknown>): boolean {
-  const d = card.detail && typeof card.detail === 'object' && !Array.isArray(card.detail) ? (card.detail as Record<string, unknown>) : null;
-  return d?.origin === 'voice';
-}
-
-/**
- * Display only (the kernel's clamp is the boundary): is a voice-origin turn of this session still open — a
- * turn.sent{origin:'voice'} after the session's last turn.result? Rows in log order.
- */
-export function clampedFrom(rows: readonly { kind: string; session?: string | null; payload?: unknown }[], hsid: string): boolean {
-  let open = false;
-  for (const r of rows) {
-    if (r.session !== hsid) continue;
-    const p = r.payload && typeof r.payload === 'object' ? (r.payload as Record<string, unknown>) : null;
-    if (r.kind === 'turn.sent' && (p?.origin === 'voice' || p?.origin === 'voice-unverified')) open = true;
-    else if (r.kind === 'turn.result' || r.kind === 'session.exited') open = false;
-  }
-  return open;
-}

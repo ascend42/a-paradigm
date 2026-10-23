@@ -108,7 +108,7 @@ describe('S5 Workshop caps (core/render.ts renderCap)', () => {
     expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'violet' }) as FEl).className).toBe('blk blk-text'); // Aegis L2: violet is the knot cap's only
     expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'hue-7' }) as FEl).className).toBe('blk blk-text');
     expect((renderBlock({ doc: fdoc }, { type: 'Text', text: 'x', tone: 'evil' }) as FEl).className).toBe('blk blk-text');
-    expect([...TONES].sort()).toEqual(['cap', 'deny', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5', 'paused', 'quiet', 'warn']);
+    expect([...TONES].sort()).toEqual(['cap', 'chip', 'deny', 'head', 'hue-0', 'hue-1', 'hue-2', 'hue-3', 'hue-4', 'hue-5', 'paused', 'quiet', 'warn']);
   });
   it('the CSS colours caps by class only, bobs only .bob, and prints `working` under reduced motion', () => {
     expect(css).toMatch(/\.cap\.bob svg \{ transform-origin: 50% 100%; animation: bob var\(--t-bob\) infinite; \}/);

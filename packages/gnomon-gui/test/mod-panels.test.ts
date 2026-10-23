@@ -113,7 +113,10 @@ describe('#gui mod panels: the fence', () => {
     expect(el.all().find((e) => e.className === 'mod-label')!.text).toBe('mod:ledger');
     expect(el.all().some((e) => e.className.includes('mod-dev'))).toBe(false);
     expect(el.text).toContain('182k in · 9k out');
-    expect(el.all().map((e) => e.className)).toEqual(expect.arrayContaining(['blk blk-box blk-row', 'blk blk-text tone-hue-2', 'blk blk-text tone-warn']));
+    // the project hue is the ■ swatch in the hue's ink pair (the chat header's), never a ringed dot
+    expect(el.all().map((e) => e.className)).toEqual(expect.arrayContaining(['blk blk-box blk-row', 'blk blk-swatch pink h2', 'blk blk-text tone-warn blk-prose']));
+    expect(el.all().find((e) => e.className.includes('blk-swatch'))!.text).toBe('■');
+    expect(el.all().find((e) => e.className.startsWith('mod-fence-body'))!.className).toBe('mod-fence-body mod-fit');
     expect(el.all().some((e) => e.tag === 'progress')).toBe(true);
     const dev = renderModFence({ doc: fdoc }, panel!, { block: { type: 'Text', text: 'hi' } }) as FEl;
     expect(dev.all().find((e) => e.className.includes('mod-dev'))!.text).toBe('dev');
@@ -135,11 +138,12 @@ describe('#gui mod panels: the fence', () => {
     expect(PANEL_HEADING).toBe('mods');
   });
 
-  it('Aegis M2: the panel region is ruled and headed outside the stack scroll; hue chips have a non-key border', () => {
+  it('Aegis M2: the panel region is ruled and headed outside the stack scroll; a hue swatch has no key edge', () => {
     const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
     expect(css).toMatch(/\.mod-slot-right \{[^}]*border-top: 2px solid var\(--rule\)/);
-    const chip = /\.blk-text\[class\*="tone-hue-"\] \{([^}]*)\}/.exec(css)![1]!;
-    expect(chip).not.toContain('--key-edge');
+    const swatch = /\n\.blk-swatch \{([^}]*)\}/.exec(css)![1]!;
+    expect(swatch).not.toContain('--key-edge');
+    expect(swatch).not.toContain('border');
     const mount = readFileSync(path.join(ROOT, 'src', 'ui', 'mod-panels-mount.ts'), 'utf8');
     expect(mount).toContain("right: { id: 'mod-slot-panel', parent: 'pane-stack' }"); // a sibling of #stack, never inside it
     expect(mount).toContain('PANEL_HEADING');

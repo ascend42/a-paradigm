@@ -45,7 +45,7 @@
     { "symbol": "#contract-client-api-id", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
     { "symbol": "#contract-voice-allowlist", "reason": "contract sub-component of #gnomon-contracts; spec has no node (serves #gnomon-voice, $voice-approval, ^voice-armed; TD-2026-10-19-194)" },
     { "symbol": "#contract-release-manifest", "reason": "contract sub-component of #gnomon-contracts (release-manifest:v1, the zero-build release pins of T-2026-10-21-028 / TD-2026-10-21-758, enforced by #release-pins); spec has no node" },
-    { "symbol": "#contract-voice-modes", "reason": "contract sub-component of #gnomon-contracts; spec has no node (serves #gnomon-voice, #send-word-matcher, ^voice-origin-clamp; TD-2026-10-21-514)" },
+    { "symbol": "#contract-voice-modes", "reason": "contract sub-component of #gnomon-contracts; spec has no node (serves #gnomon-voice, #send-word-matcher, #voice-origin; TD-2026-10-21-514, TD-2026-10-23-939)" },
     { "symbol": "#gnomon-mod-sdk", "reason": "package-level component of @a-company/gnomon-mod-sdk (spec §18 names the package; Appendix A has no node)" },
     { "symbol": "#gnomon-voice-io", "reason": "the darwin audio I/O binary under packages/gnomon-voice (TD-2026-10-19-298, slice V2b): a sub-component serving the spec node #gnomon-voice, which stays undeclared until the voice child itself is built" },
     { "symbol": "#gnomon-voice-bench-partials", "reason": "the B0 partial-decode benchmark script (packages/gnomon-voice/scripts/bench-partials.mjs, T-2026-10-20-005, PROBES.md B0), a dev tool of #gnomon-voice, not shipped; spec has no node" },

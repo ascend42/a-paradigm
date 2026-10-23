@@ -3,7 +3,7 @@
   "kind": "mod",
   "publisher": "gnomon",
   "name": "paradigm-context",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "abi": "mod-abi:v1",
   "description": "Paradigm Context: the focused session's project knowledge (open tasks, recent decisions, recent lore and the symbols they touch), read-only, from the kernel's bounded paradigm-slice.",
   "provides": {

@@ -82,7 +82,7 @@ const text = (t, tone) => ({ type: 'Text', text: t, ...(tone ? { tone } : {}) })
 const nOf = (n, of) => `${n} of ${of}`;
 
 function head(sl) {
-  // the project swatch: a hue-toned cap glyph (hues are fills only, never text colour); the name is ink
+  // the project swatch: a hue-toned mark (the GUI draws the project's ■ in its hue); the name is ink
   const cap = sl && sl.project !== null ? text('●', `hue-${sl.project}`) : text('◌', 'quiet');
   return { type: 'Box', direction: 'row', children: [cap, text(sl && sl.name ? sl.name : 'paradigm')] };
 }
@@ -93,15 +93,19 @@ function head(sl) {
  * card (any status mark, like the ▲ of a high task, is the model's own, in the prefix). Curly quotes inside the
  * title are flattened so it cannot close its own quote.
  */
-function line(kind, id, title) {
+function line(kind, id, title, date = null) {
   const q = String(title).replace(/[\u201c\u201d]/g, '"');
-  return { type: 'Box', direction: 'row', children: [text(kind, 'quiet'), text(id, 'quiet'), text(`\u201c${q}\u201d`, 'quiet')] };
+  // the id and its date are separate words, so the GUI can truncate the id on one line and never break it mid-token
+  return { type: 'Box', direction: 'row', children: [text(kind, 'quiet'), text(id, 'quiet'), ...(date ? [text(date, 'quiet')] : []), text(`\u201c${q}\u201d`, 'quiet')] };
 }
 
-// a zone heading is a Text (tone head): the GUI's kit renderer draws no Box title, so the {n, of} count rides the text
-function zone(title, lines, empty) {
-  return { type: 'Box', direction: 'column', children: [text(title, 'head'), ...(lines.length ? lines : [text(empty, 'quiet')])] };
+// a zone heading is a row: the zone's name (tone head, the label style) and its {n, of} count as quiet meta beside it
+function zone(title, meta, lines, empty) {
+  return { type: 'Box', direction: 'column', children: [{ type: 'Box', direction: 'row', children: [text(title, 'head'), text(meta, 'quiet')] }, ...(lines.length ? lines : [text(empty, 'quiet')])] };
 }
+
+/** The one quiet line of a project with no open tasks, decisions or lore. */
+export const EMPTY_LINE = 'nothing yet: no tasks, decisions or lore';
 
 /** The sheet (sidebar): the project swatch, then tasks, decisions and lore, each with its {n, of} count. */
 export function renderSheet(input, prefs = {}) {
@@ -112,16 +116,18 @@ export function renderSheet(input, prefs = {}) {
   if (sl.state === 'absent') return { ...base, children: [head(sl), text('no .paradigm in this repo', 'quiet')] };
   const age = ageDays(sl.newest, sl.at);
   const children = [head(sl)];
-  if (sl.newest === null) children.push(text('no decisions or lore yet', 'quiet'));
-  else if (age !== null && age > STALE_DAYS) children.push(text(`stale · last entry ${sl.newest} (${age} days ago)`, 'warn'));
   const t = sl.tasks;
-  children.push(
-    zone(`tasks · ${nOf(t.items.length, t.of)} open${t.high ? ` · ${t.high} high` : ''}`, t.items.map((it) => line(`task${it.priority === 'high' ? ' ▲' : ''}`, it.id, it.title)), 'no open tasks'),
-    zone(`decisions · ${nOf(sl.decisions.items.length, sl.decisions.of)}`, sl.decisions.items.map((it) => line('decision', `${it.id}${it.date ? ` ${it.date}` : ''}`, it.title)), 'no decisions'),
-    zone(`lore · ${nOf(sl.lore.items.length, sl.lore.of)}`, sl.lore.items.map((it) => line(`lore ${it.type}`, it.id, it.title)), 'no lore'),
+  // an empty project says so once (Mika 2026-10-23), not once per zone; each zone's own empty line shows only beside a zone with items
+  const nothing = !t.items.length && !sl.decisions.items.length && !sl.lore.items.length;
+  if (nothing) children.push(text(EMPTY_LINE, 'quiet'));
+  else if (sl.newest !== null && age !== null && age > STALE_DAYS) children.push(text(`stale · last entry ${sl.newest} (${age} days ago)`, 'warn'));
+  if (!nothing) children.push(
+    zone('tasks', `${nOf(t.items.length, t.of)} open${t.high ? ` · ${t.high} high` : ''}`, t.items.map((it) => line(`task${it.priority === 'high' ? ' ▲' : ''}`, it.id, it.title)), 'no open tasks'),
+    zone('decisions', nOf(sl.decisions.items.length, sl.decisions.of), sl.decisions.items.map((it) => line('decision', it.id, it.title, it.date)), 'no decisions'),
+    zone('lore', nOf(sl.lore.items.length, sl.lore.of), sl.lore.items.map((it) => line(`lore ${it.type}`, it.id, it.title)), 'no lore'),
   );
   // symbol chips: mono ink text (tone chip), never a hue
-  if (sl.symbols.length) children.push({ type: 'Box', direction: 'column', children: [text(`symbols · ${sl.symbols.length}`, 'head'), { type: 'Box', direction: 'row', children: sl.symbols.map((s) => text(s, 'chip')) }] });
+  if (sl.symbols.length) children.push({ type: 'Box', direction: 'column', children: [{ type: 'Box', direction: 'row', children: [text('symbols', 'head'), text(String(sl.symbols.length), 'quiet')] }, { type: 'Box', direction: 'row', children: sl.symbols.map((s) => text(s, 'chip')) }] });
   const sk = sl.skipped;
   const notes = [sk.malformed ? `${sk.malformed} malformed` : '', sk.refused ? `${sk.refused} refused` : '', sk.secret ? `${sk.secret} secret` : '', sk.truncated ? 'truncated' : ''].filter(Boolean);
   if (notes.length) children.push(text(`skipped · ${notes.join(' · ')}`, 'quiet'));

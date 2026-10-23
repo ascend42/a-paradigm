@@ -57,7 +57,17 @@
  * other forged row. A revoke never widens anything: a later `always` on a
  * NEW card learns a new rule (a new id).
  * `gnomon rules list` reads the same fold offline (rules-cli.ts).
+ *
+ * SCOPED EDITS (TD-2026-10-23-939 follow-up, Aegis 2026-10-23): `match:'file', path` (the kernel-held detail.editPath
+ * of an Edit / Write / MultiEdit / NotebookEdit card, whose decide row carries scope {kind:'file'}) and
+ * `match:'repo-edits'` (scope {kind:'repo-edits'}). They are `always` rules like the others (fresh or CLI presence,
+ * revocable the same way) and match only through the supervisor's own auto-edits pass for the request
+ * (`ctx.editPath`: autoEditPass ok, the same in-root / session-roots / not-home-root / no-symlink / not-gate-class /
+ * not-flagged check auto-edits uses): a file rule when that path is the rule's path, a repo-edits rule for any edit
+ * in the rule's repo. Never in manual mode (`ctx.prefixRules` false), never without the pass. Bash file writes never
+ * match them (a Bash card stays a card).
  */
+import path from 'node:path';
 import type { KernelLog } from '../log/index.js';
 import { inputHash } from './permission.js';
 import { simpleArgv } from './shell-readonly.js';
@@ -98,14 +108,31 @@ const prefixOk = (v: unknown): v is string[] => Array.isArray(v) && v.length >= 
 export interface PrefixMatchContext {
   prefixRules: boolean;
   roots: readonly string[];
+  /** scoped edit rules: the path the auto-edits pass resolved for this edit request (pass ok), else absent/null */
+  editPath?: string | null;
+  /**
+   * Aegis H1: repo-edits rules may match (the strictness ceiling allows auto-edits AND the mode is not manual). Absent or
+   * false ⇒ no repo-edits rule matches (fail closed); file rules, like prefix rules, need only prefixRules.
+   */
+  repoEdits?: boolean;
 }
+
+/** The tools a scoped edit rule covers (the auto-edits tools). */
+export const EDIT_RULE_TOOLS: readonly string[] = Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 export const MAX_RULES = 1024;
 export const MAX_TRACKED_REQUESTS = 4096;
-export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned', 'approval.rule.revoked'] as const);
+// approval.mode.set (Aegis H1, TD-2026-10-23-939 follow-up): a REPO tightened (the emergency brake) stops its repo-edits rules
+// grant.standing / grant.standing.revoked (TD-2026-10-23-815): a standing-covered always is verified against the grant's own rows
+export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned', 'approval.rule.revoked', 'approval.mode.set', 'grant.standing', 'grant.standing.revoked'] as const);
+const STANDING_PREFIX = 'standing:';
+const GRANT_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
+const RULE_MODE_RANK: Readonly<Record<string, number>> = Object.freeze({ manual: 0, ask: 1, 'auto-edits': 2 });
 
 export interface RuleRow {
   seq?: number;
+  /** the row's kernel time (EventV1.at): a standing-covered always is checked against its grant's expiresAt at this time */
+  at?: string;
   kind: string;
   principal: string;
   keyId?: unknown;
@@ -120,10 +147,12 @@ export interface AlwaysRule {
   inputHash: string;
   /** RC5: Bash exact rules only — bashCommandHash of the learned request's input (null when it had another key) */
   commandHash?: string | null;
-  /** 'exact' (inputHash) or 'prefix' (a Bash rule over one literal simple command starting with `prefix`) */
-  match: 'exact' | 'prefix';
+  /** 'exact' (inputHash), 'prefix' (a Bash rule over one literal simple command starting with `prefix`), 'file' (edits of `path`) or 'repo-edits' (every edit the auto-edits pass allows in the repo) */
+  match: 'exact' | 'prefix' | 'file' | 'repo-edits';
   /** prefix rules only: the literal argv words */
   prefix?: string[];
+  /** file rules only: the absolute path the auto-edits pass resolved on the card */
+  path?: string;
   /** seq of the approval.rule.learned row (when the reader knows it) */
   seq: number | null;
   presence: string;
@@ -148,6 +177,10 @@ export class RuleBook {
   /** cardId → the decide row's scope key ('exact' or the canonical prefix JSON) */
   readonly #always = new Map<string, string>();
   readonly #rules = new Map<string, AlwaysRule>();
+  /** TD-2026-10-23-815: the standing grants as their kernel-signed rows say (permission:always tuple, repos, expiry, revoked) */
+  readonly #grants = new Map<string, { always: boolean; repos: string[]; device: string; expiresAt: number; revoked: boolean }>();
+  /** cardId → the standing grant that covered its always decide row, verified valid AT that row (else absent) */
+  readonly #standingDecides = new Map<string, { grantId: string; repos: string[] }>();
   /** the last seq folded (incremental readers resume after it) */
   lastSeq = 0;
 
@@ -165,20 +198,53 @@ export class RuleBook {
       const card = obj(p.card);
       if (!card || card.kind !== 'permission' || typeof card.cardId !== 'string' || typeof p.tool !== 'string' || !('tool_input' in p)) return;
       bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null }, MAX_TRACKED_REQUESTS);
+    } else if (r.kind === 'grant.standing') {
+      // TD-2026-10-23-815: the grant as minted (kernel-signed; a malformed row covers nothing)
+      const exp = typeof p.expiresAt === 'string' ? Date.parse(p.expiresAt) : NaN;
+      if (typeof p.grantId !== 'string' || !GRANT_ID.test(p.grantId) || !Number.isFinite(exp) || typeof p.device !== 'string' || p.device.length === 0) return;
+      // Aegis L1: a grant id is minted once; a second grant.standing row for a known id never re-mints (or un-revokes) it
+      if (this.#grants.has(p.grantId)) return;
+      const tuples = Array.isArray(p.tuples) ? p.tuples : [];
+      const repos = Array.isArray(p.repos) ? p.repos.filter((x): x is string => typeof x === 'string') : [];
+      bump(this.#grants, p.grantId, { always: tuples.includes('permission:always'), repos, device: p.device, expiresAt: exp, revoked: false }, MAX_TRACKED_REQUESTS);
+    } else if (r.kind === 'grant.standing.revoked') {
+      const g = typeof p.grantId === 'string' ? this.#grants.get(p.grantId) : undefined;
+      if (g) g.revoked = true;
     } else if (r.kind === 'approval.decide') {
       if (p.decision !== 'always' || typeof p.cardId !== 'string') return;
+      // TD-2026-10-23-815: a standing-covered always counts only when ITS grant, from the kernel's own rows, was live at
+      // this decide row: minted (folded before it), covering permission:always, not revoked before it, not expired at
+      // the row's kernel time. The id in the row alone is never trusted.
+      this.#standingDecides.delete(p.cardId);
+      if (typeof p.presence === 'string' && p.presence.startsWith(STANDING_PREFIX)) {
+        const grantId = p.presence.slice(STANDING_PREFIX.length);
+        const g = this.#grants.get(grantId);
+        const at = typeof r.at === 'string' ? Date.parse(r.at) : NaN;
+        // Aegis L2: the decide row's device (the unlock key the broker matched the grant on) must be the grant's own
+        if (g && g.always && !g.revoked && Number.isFinite(at) && at < g.expiresAt && typeof p.device === 'string' && p.device === g.device) bump(this.#standingDecides, p.cardId, { grantId, repos: [...g.repos] }, MAX_TRACKED_REQUESTS);
+      }
       let key = 'exact';
       if (p.scope !== undefined) {
         const sc = obj(p.scope);
-        if (!sc || sc.kind !== 'prefix' || !prefixOk(sc.prefix) || Object.keys(sc).length !== 2) return; // a malformed scope learns nothing
-        key = JSON.stringify(sc.prefix);
+        if (sc && (sc.kind === 'file' || sc.kind === 'repo-edits') && Object.keys(sc).length === 1) key = `@${sc.kind}`;
+        else {
+          if (!sc || sc.kind !== 'prefix' || !prefixOk(sc.prefix) || Object.keys(sc).length !== 2) return; // a malformed scope learns nothing
+          key = JSON.stringify(sc.prefix);
+        }
       }
       bump(this.#always, p.cardId, key, MAX_TRACKED_REQUESTS);
     } else if (r.kind === 'approval.rule.learned') {
       const cardId = p.cardId;
       const isPrefix = p.match === 'prefix';
+      const isEdit = p.match === 'file' || p.match === 'repo-edits';
       const exact = 'match' in p ? p.match === 'exact' : p.matchExact === true;
-      if (typeof cardId !== 'string' || (!exact && !isPrefix) || typeof p.tool !== 'string' || typeof p.repoKey !== 'string' || (p.presence !== 'fresh' && p.presence !== 'cli')) return; // Aegis W4-A L2: only a fresh (or CLI) touch learns a rule, never cached or click
+      if (typeof cardId !== 'string' || (!exact && !isPrefix && !isEdit) || typeof p.tool !== 'string' || typeof p.repoKey !== 'string') return;
+      // Aegis W4-A L2: only a fresh (or CLI) touch learns a rule, never cached or click. TD-2026-10-23-815: or a standing
+      // grant the fold verified at the decide row (same grant, permission:always, the rule's repo among its repos)
+      if (p.presence !== 'fresh' && p.presence !== 'cli') {
+        const sd = this.#standingDecides.get(cardId);
+        if (typeof p.presence !== 'string' || !sd || p.presence !== `${STANDING_PREFIX}${sd.grantId}` || !sd.repos.includes(p.repoKey)) return;
+      }
       const req = this.#requests.get(cardId);
       const decided = this.#always.get(cardId);
       if (!req || req.tool !== p.tool || decided === undefined) return;
@@ -188,10 +254,33 @@ export class RuleBook {
         bump(this.#rules, cardId, { ...base, match: 'exact', ...(p.tool === 'Bash' ? { commandHash: req.commandHash } : {}) }, MAX_RULES);
         return;
       }
+      if (isEdit) {
+        // scoped edits: an edit tool only, the decide row's scope is the same kind, a file rule names an absolute path
+        if (!EDIT_RULE_TOOLS.includes(p.tool) || decided !== `@${String(p.match)}`) return;
+        if (p.match === 'file') {
+          if (typeof p.path !== 'string' || !path.isAbsolute(p.path) || p.path.includes('\u0000')) return;
+          bump(this.#rules, cardId, { ...base, match: 'file', path: p.path }, MAX_RULES);
+        } else bump(this.#rules, cardId, { ...base, match: 'repo-edits' }, MAX_RULES);
+        return;
+      }
       // prefix: Bash only, the decide row's scope is the same prefix, and the shown command starts with it
       if (p.tool !== 'Bash' || !prefixOk(p.prefix) || decided !== JSON.stringify(p.prefix) || !req.argv || !startsWith(req.argv, p.prefix)) return;
       if (prefixRefusal(p.prefix) !== null) return; // Aegis H1: a prefix the policy refuses forms no rule, whatever the chain says
       bump(this.#rules, cardId, { ...base, match: 'prefix', prefix: [...p.prefix] }, MAX_RULES);
+    } else if (r.kind === 'approval.mode.set') {
+      // Aegis H1: the emergency brake. A REPO-scope tightening (no hsid) stops that repo's repo-edits rules, as a revoke
+      // would (the always decision is forgotten too, so a replayed learned row never brings one back); a later always
+      // on a new card learns a new rule. File and prefix rules are untouched (they stay allowed at a stricter level).
+      const sc = obj(p.scope);
+      if (!sc || typeof sc.repo !== 'string' || sc.hsid !== undefined) return;
+      const from = RULE_MODE_RANK[String(p.from)];
+      const to = RULE_MODE_RANK[String(p.to)];
+      if (from === undefined || to === undefined || to >= from) return;
+      for (const [id, rule] of [...this.#rules]) {
+        if (rule.match !== 'repo-edits' || rule.repoKey !== sc.repo) continue;
+        this.#rules.delete(id);
+        this.#always.delete(id);
+      }
     } else if (r.kind === 'approval.rule.revoked') {
       if (typeof p.ruleId !== 'string') return;
       this.#rules.delete(p.ruleId);
@@ -216,6 +305,16 @@ export class RuleBook {
       const ch = bashCommandHash(toolInput);
       if (ch !== null) for (const r of this.#rules.values()) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.commandHash === ch) return r;
     }
+    // scoped edits: only through the supervisor's auto-edits pass for this request, never in manual mode
+    if (EDIT_RULE_TOOLS.includes(tool)) {
+      if (!ctx || !ctx.prefixRules || typeof ctx.editPath !== 'string' || !ctx.roots.length) return null;
+      // Aegis L4: a file rule covers ANY edit tool on that path ("edits to this file, any content"), by design
+      for (const r of this.#rules.values()) if (r.repoKey === repoKey && r.match === 'file' && r.path === ctx.editPath) return r;
+      // Aegis H1: a repo-edits rule is auto-edits by another name: only where the ceiling allows auto-edits
+      if (ctx.repoEdits !== true) return null;
+      for (const r of this.#rules.values()) if (r.repoKey === repoKey && r.match === 'repo-edits') return r;
+      return null;
+    }
     // Aegis M2/M3: prefix rules need the session context (roots) and never apply in manual mode
     if (tool !== 'Bash' || toolInput === undefined || !ctx || !ctx.prefixRules || !ctx.roots.length) return null;
     let argv: string[] | null = null;
@@ -226,6 +325,13 @@ export class RuleBook {
       if (startsWith(argv, r.prefix) && prefixMatchRefusal(argv, r.prefix, ctx.roots) === null) return r;
     }
     return null;
+  }
+
+  /** The repo's standing "edits in this repo" rule (the newest), or null: the mode chip says "ask · edits allowed by rule". */
+  repoEditsRule(repoKey: string): AlwaysRule | null {
+    let last: AlwaysRule | null = null;
+    for (const r of this.#rules.values()) if (r.match === 'repo-edits' && r.repoKey === repoKey) last = r;
+    return last;
   }
 
   list(): AlwaysRule[] {
@@ -258,7 +364,7 @@ export function ruleSourceOf(log: Pick<KernelLog, 'releasedHead' | 'read'>): Rul
     head: () => log.releasedHead(),
     read: function* (fromSeq, toSeq) {
       for (const v of log.read({ reader: { class: 'human' }, fromSeq, toSeq, kinds: RULE_KINDS })) {
-        if (v.view === 'full') yield { seq: v.event.seq, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
+        if (v.view === 'full') yield { seq: v.event.seq, at: v.event.at, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
       }
     },
   };

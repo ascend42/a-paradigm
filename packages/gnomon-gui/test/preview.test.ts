@@ -39,7 +39,7 @@ async function connected(name: string): Promise<{ client: GnomonClient; store: G
 
 describe('#gui-preview fixtures', () => {
   it('names the fixtures the harness promises', () => {
-    expect([...FIXTURE_NAMES].sort()).toEqual(['app-menu', 'choices', 'desk', 'empty', 'loops', 'loops-many', 'loops-none', 'loops-paused', 'loops-trust', 'loops-waiting', 'model-switch', 'model-unconfirmed', 'offer-armed', 'offer-muted', 'offer-slip', 'paradigm-context', 'settings', 'settings-day', 'spoken', 'stack-heavy', 'turn-hook', 'turn-hooks', 'turn-steps', 'voice-armed', 'voice-crashed', 'voice-input', 'voice-ladder', 'voice-mic-fault', 'voice-mic-missing', 'voice-settings', 'workshop', 'workshop-absent', 'workshop-paused']);
+    expect([...FIXTURE_NAMES].sort()).toEqual(['always-scopes', 'app-menu', 'choices', 'desk', 'edits-by-rule', 'empty', 'loops', 'loops-many', 'loops-none', 'loops-paused', 'loops-trust', 'loops-waiting', 'model-switch', 'model-unconfirmed', 'offer-armed', 'offer-muted', 'offer-slip', 'paradigm-context', 'settings', 'settings-day', 'spoken', 'stack-heavy', 'turn-hook', 'turn-hooks', 'turn-steps', 'voice-armed', 'voice-crashed', 'voice-input', 'voice-ladder', 'voice-mic-fault', 'voice-mic-missing', 'voice-settings', 'workshop', 'workshop-absent', 'workshop-paused']);
   });
 
   it.each(FIXTURE_NAMES)('%s parses as kernel rows: JSON-clean, seq 1..n, registered kinds, valid hsids and card:v1 cards', (name) => {
@@ -103,7 +103,7 @@ describe('#gui-preview fake kernel (the real client over it)', () => {
     expect(r.label).toBe('mod:paradigm-context');
     const s = JSON.stringify(r.block);
     expect(s).toContain('billing');
-    expect(s).toContain('tasks · 5 of 9 open · 2 high');
+    expect(s).toContain('"text":"tasks","tone":"head"},{"type":"Text","text":"5 of 9 open · 2 high"');
     expect(s).not.toMatch(/Button/);
     // a forged repo never picks the slice; no focus ⇒ unfocused
     expect(JSON.stringify((await client.call<{ block: unknown }>('mod.view', { name: 'paradigm-context', viewId: 'paradigm-context.sheet', input: { repo: 'billing', path: '/Users/matt/code/billing' } })).block)).toContain('focus a live session');

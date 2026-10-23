@@ -257,6 +257,11 @@ export interface RunModeDeps {
   onChange?: () => void;
   /** TD-2026-10-20-086 F3: the root-signed config's runModes.default (null/absent: none, the built-in ask) */
   configDefault?: () => RunMode | null;
+  /**
+   * TD-2026-10-23-939 follow-up (Aegis): the repo's standing "edits in this repo" always rule (#always-rules), or null.
+   * In ask mode status.runModes.sessions[] then carries editsByRule (its rule id) and the loosen card's ask line says it.
+   */
+  editRule?: (repoKey: string) => string | null;
   /** M2.11-lite: a REPO was tightened (the emergency brake): the daemon pauses its running loops; a throw never undoes it */
   onRepoTighten?: (repo: string, to: RunMode) => Promise<unknown> | unknown;
 }
@@ -469,7 +474,7 @@ export class RunModeControl {
     const what =
       to === 'auto-edits'
         ? 'auto-edits: Edit / Write / MultiEdit / NotebookEdit inside the session\'s own folder pass with no card (each logged approval.auto); Bash, network, edits outside it and gate-class paths (.claude, CLAUDE*.md, .git, package.json, …) still ask'
-        : 'ask: write and exec tools raise a permission card each time';
+        : `ask: write and exec tools raise a permission card each time${this.#editRuleOf(scope.repo) ? ' (edits allowed by rule: an "edits in this repo" Always rule stands; revoke it in Rules)' : ''}`;
     return this.#d.broker.raise({
       kind: 'strictness',
       requestedBy: asker.principal!,
@@ -510,8 +515,22 @@ export class RunModeControl {
       modes: [...RUN_MODES],
       strictness: { built: this.#d.level === undefined ? false : true, note: this.#d.level === undefined ? 'strictness levels are not wired: the ceiling permits every mode' : 'level per repo (M2.11-lite: set by the human, default L0)' },
       repos: this.#d.book().repos().map((r) => ({ repo: r.repo, ...this.repoView(r.repo) })),
-      sessions: live.map((s) => ({ hsid: s.hsid, repo: s.repoKey, cwd: s.cwd, ...this.view(s.hsid, s.repoKey), ...(this.#pendingFor(s.repoKey, s.hsid) ? { pendingCardId: this.#pendingFor(s.repoKey, s.hsid) } : {}) })),
+      sessions: live.map((s) => {
+        const v = this.view(s.hsid, s.repoKey);
+        // Aegis H1: only where the ceiling allows auto-edits does a repo-edits rule apply, so only there does the chip say so
+        const rule = v.effective === 'ask' && MODE_RANK[v.ceiling] >= MODE_RANK['auto-edits'] ? this.#editRuleOf(s.repoKey) : null;
+        return { hsid: s.hsid, repo: s.repoKey, cwd: s.cwd, ...v, ...(rule ? { editsByRule: rule } : {}), ...(this.#pendingFor(s.repoKey, s.hsid) ? { pendingCardId: this.#pendingFor(s.repoKey, s.hsid) } : {}) };
+      }),
     };
+  }
+
+  /** an unreadable rule source shows no rule (display only: matching is the supervisor's) */
+  #editRuleOf(repo: string): string | null {
+    try {
+      return this.#d.editRule?.(repo) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   #pendingFor(repo: string, hsid: string): string | null {

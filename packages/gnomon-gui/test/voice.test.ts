@@ -279,9 +279,8 @@ describe('voice: palette, blocks and page wiring', () => {
     const pair = fx.themes.day.pairs.find((p: { what: string }) => p.what.startsWith('voice-armed'));
     expect(css).toContain(`--warn-ink: ${pair.fg};`);
     expect(css).toContain(`--warn-bg: ${pair.bg};`);
-    // Atelier 2026-10-21 pill: a clamped voice-sent turn is the 2px amber edge with the fact in --warn-ink
-    expect(css).toMatch(/\.voice-pill\.clamp \{ border: 2px solid var\(--warn-edge\);/);
-    expect(css).toMatch(/\.voice-fact\.clamp \{ color: var\(--warn-ink\); \}/);
+    // TD-2026-10-23-939: no clamp, so no amber clamp pill, chip, sent-by or card line is left in the CSS
+    expect(css).not.toMatch(/\.voice-pill\.clamp|\.voice-fact\.clamp|\.clamp-chip|\.sent-by\.asks-first|\.card\.voice-origin|\.card-voice-origin/);
     expect(css).toContain(`--slate: ${fx.themes.day.text.slate};`);
     expect(css).toContain(`--slate: ${fx.themes.night.text.slate};`);
     expect(css).toMatch(/\[data-motion="reduced"\] \*[\s\S]{0,120}animation: none !important/);
@@ -292,7 +291,7 @@ describe('voice: palette, blocks and page wiring', () => {
     expect(rules.find((l) => l.startsWith('.voice-pill.live .voice-dot'))).toMatch(/background: var\(--ink\); border-color: var\(--ink\); box-shadow: 0 0 0 3px/);
     for (const l of rules) {
       expect(l, l).not.toMatch(/infinite|voice-pulse|voice-ring|slate/);
-      if (/--warn-/.test(l)) expect(l, l).toMatch(/clamp|^\.voice-fact\.note \{/); // board header-5b: or a draft waiting elsewhere
+      if (/--warn-/.test(l)) expect(l, l).toMatch(/^\.voice-fact\.note \{/); // board header-5b: or a draft waiting elsewhere
       if (/--fail/.test(l)) expect(l, l).toMatch(/^\.voice-fact\.fail \{/);
     }
     expect(css).toMatch(/\.voice-meter i \{[^}]*background: var\(--ink\); height: calc\(15% \+ 85% \* var\(--level\)\);/); // moves only with the real mic level

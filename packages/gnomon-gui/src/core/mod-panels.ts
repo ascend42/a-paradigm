@@ -26,6 +26,11 @@
  *     manifest slot is unchanged. Placement is presentation only: the fence and its label stay. With no
  *     running Workshop the region shows one quiet line (not installed, or paused and why).
  *   - Mod fences render Box titles (`blk-title`), so a mod's zones keep their headings; card bodies do not.
+ *   - Fitted (founder 2026-10-23, "these mods have terrible display"): every fence but the Workshop's renders with
+ *     `fit` (core/render.ts, styles.css .mod-fit) so any mod reads right in a 200-460px column: control and label
+ *     type, ids truncated on one line (full text in title), row prose clamped to two lines, a project hue drawn as
+ *     the ■ swatch, and a Table fitted to its column (label-style heads, numbers right-aligned and tabular, a
+ *     key-value layout per row when the column is narrower than the table). Generic: no mod-name case.
  *   - Re-render only on a live store row whose kind is a #mod-host FEED kind,
  *     debounced 250 ms, one render in flight (a row during a render queues
  *     exactly one more), never on a timer.
@@ -151,6 +156,44 @@ export function modViewParams(v: ModPanelView, focused: string | null): { name: 
   return { name: v.name, viewId: v.viewId, input: focused ? { focus: { hsid: focused } } : {} };
 }
 
+/** What the fitted view truncates: ids, table cells, and row prose clamped to two lines (styles.css .mod-fit). */
+export const TRUNCATABLE_SELECTOR = '.mod-fit .blk-tok, .mod-fit .blk-cell, .mod-fit .blk-row > .blk-prose';
+
+/** The DOM surface markTruncated reads (a real element in the page; a fake in node tests). */
+export interface TruncEl {
+  scrollWidth: number;
+  clientWidth: number;
+  scrollHeight: number;
+  clientHeight: number;
+  textContent: string | null;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void;
+}
+
+/**
+ * Mika 2026-10-23: a truncated id, cell or clamped title is reachable without a mouse. Exactly the items the CSS
+ * actually cut get ONE tab stop each (tabindex 0, in DOM order) and their full text in title (the accessible
+ * description); styles.css shows the whole text on :focus-visible. An item that fits again loses its stop.
+ * Returns how many items are truncated now. Re-run after a render, a column resize or the fonts loading.
+ */
+export function markTruncated(els: Iterable<TruncEl>): number {
+  let n = 0;
+  for (const el of els) {
+    const cut = el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+    if (cut) {
+      n++;
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('data-trunc', '');
+      if (!el.getAttribute('title')) el.setAttribute('title', el.textContent ?? '');
+    } else if (el.getAttribute('data-trunc') !== null) {
+      el.removeAttribute('tabindex');
+      el.removeAttribute('data-trunc');
+    }
+  }
+  return n;
+}
+
 /** Whether a block tree holds a kit.Button anywhere (bounded depth). */
 export function holdsButton(node: unknown, depth = 0): boolean {
   if (depth > 64 || !node || typeof node !== 'object') return false;
@@ -171,6 +214,7 @@ export const PANEL_HEADING = 'mods';
 export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?: unknown; dev?: unknown } | null, refusal: string | null = null): MiniEl {
   const { doc } = ctx;
   const dev = v.dev || result?.dev === true;
+  const fit = v.region !== 'workshop';
   // Aegis M2 + S5 M1: the panel slot sits beside the decision keys, and the Workshop region can be placed in a
   // column beside them too (right / left), so neither ever carries a kit.Button, whatever the placement
   if (refusal === null && (v.region === 'right' || v.region === 'workshop') && holdsButton(result?.block)) refusal = PANEL_BUTTON_REFUSAL;
@@ -179,7 +223,8 @@ export function renderModFence(ctx: RenderCtx, v: ModPanelView, result: { block?
     'section',
     { class: `mod-fence mod-region-${v.region}`, role: 'group', 'aria-label': `${fenceLabel(v.name)} ${v.viewId}`, 'data-mod': v.name, 'data-view': v.viewId },
     h(doc, 'header', { class: 'mod-fence-head' }, h(doc, 'small', { class: 'mod-label' }, `mod:${modLabel(v.name, v.publisherDisplay)}`), dev ? h(doc, 'span', { class: 'chip warn mod-dev', title: 'dev-linked mod (tier local)' }, 'dev') : null),
-    h(doc, 'div', { class: 'mod-fence-body' }, refusal !== null ? h(doc, 'small', { class: 'meta' }, `${v.viewId} unavailable: ${refusal}`) : renderBlock({ ...ctx, boxTitles: true }, result?.block ?? null)),
+    // every fence but the Workshop's (its own placement rules) is fitted to its column: the same rules for every mod
+    h(doc, 'div', { class: `mod-fence-body${fit ? ' mod-fit' : ''}` }, refusal !== null ? h(doc, 'small', { class: 'meta' }, `${v.viewId} unavailable: ${refusal}`) : renderBlock({ ...ctx, boxTitles: true, fit }, result?.block ?? null)),
   );
 }
 

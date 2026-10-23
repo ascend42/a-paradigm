@@ -9,6 +9,18 @@
  *     `forwardable: true` and not `trialTake` (a take of the send word being taught is never a draft), its text is non-empty, it carries no `intercepted`, it is for the attached session, it
  *     arrived live after dictation started (`seq > sinceSeq`: no backlog) and it was not inserted before (seq
  *     high-water). Consecutive turns append with one space.
+ *   - At the caret (founder report 2026-10-23: "based on where the user's cursor is in the composer that is where all
+ *     of the text should be input"): a turn carries the composer's caret or selection (`at`; the app's
+ *     composerCaret: the focused selection, or the last caret collapsed when the composer is not focused, else
+ *     the end). At the end of an UNEDITED draft it appends exactly as before, so the parts stay the draft's text in
+ *     order and an unedited send still carries one part per turn (the kernel hash-matches the parts in order).
+ *     Anywhere else (the start, mid-paragraph, over a selection) placeWords splices it in with the joins fixed (one
+ *     space, never two; a capital at a sentence start, a lower-case first word mid-sentence, no stray full stop
+ *     before the sentence goes on) and the draft is EDITED and held: its text is no longer the parts in order, so
+ *     a send carries the composer text as ONE part (source voice as a hint; the kernel's origin check
+ *     applies, and the send runs like a typed one: TD-2026-10-23-939) and never a piece. The part still joins `parts` with its unverified / inherited marks, so the notes,
+ *     the send-word and pieces rules, and the kernel's unverified stamp see it. `caret` is where the app puts the
+ *     caret after it, so continued speech flows on.
  *   - The ring: armed while a draft exists, no hold, a delay is set (not off), the voice app is idle, the session is
  *     not streaming its turn, the attached session is the GUI's focused one, and nothing is sending. Arming starts the
  *     ring at the full delay; any new speech, transcription, inserted turn or streaming resets it to the full delay.
@@ -66,7 +78,7 @@ export interface DraftPart {
   unverified?: true;
   /**
    * Aegis H-1 (2026-10-23): a short clip that inherited its speaker from the verified turn before it
-   * (voice.turn.user{speakerBasis:'continuity'}): never checked as the human; any send carrying it is clamped (edits ask first)
+   * (voice.turn.user{speakerBasis:'continuity'}): never checked as the human (the mark is information: the send runs like a typed one, TD-2026-10-23-939)
    */
   inherited?: true;
 }
@@ -121,6 +133,8 @@ export interface DictationState {
   hotkeyHeld: boolean;
   /** $send-by-pieces: when the current piece's first part arrived (the cap runs from here) */
   pieceStartedAt: number | null;
+  /** founder report 2026-10-23: the caret just after the last inserted turn (the app moves the composer's caret there); null after any other change */
+  caret: number | null;
 }
 
 export type HoldBy = 'gui' | 'voice' | 'detached';
@@ -128,7 +142,8 @@ export type HoldBy = 'gui' | 'voice' | 'detached';
 export type DictationEvent =
   | { type: 'start'; sinceSeq: number; now: number }
   | { type: 'context'; attached: string | null; focused: string | null; now: number }
-  | { type: 'turnRow'; seq: number; hsid: string | null; payload: unknown; now: number }
+  /** `at`: the composer's caret or selection in `text` when the composer shows this draft (absent: the end) */
+  | { type: 'turnRow'; seq: number; hsid: string | null; payload: unknown; now: number; at?: TextRange }
   | { type: 'activity'; activity: Activity; now: number }
   | { type: 'holdToggle'; count: number; epoch?: string | null; now: number }
   | { type: 'hold'; hold: boolean; now: number }
@@ -149,7 +164,7 @@ export type DictationEvent =
   | { type: 'sendNowKey'; now: number };
 
 export function initialDictation(delayMs: number | null = DEFAULT_DELAY_MS): DictationState {
-  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false, policy: 'countdown', sendWord: null, pageVisible: true, visibleSince: null, grace: null, nearMiss: null, claim: null, pieceStartedAt: null, hotkeyHeld: false };
+  return { hsid: null, attached: null, focusedHere: false, sinceSeq: Number.POSITIVE_INFINITY, lastSeq: 0, parts: [], text: '', edited: false, hold: false, activity: 'idle', busy: false, lastActivityAt: 0, ringStartedAt: null, delayMs, sending: false, holdToggles: null, sentThrough: 0, holdBy: null, holdEpoch: null, editedInFlight: false, policy: 'countdown', sendWord: null, pageVisible: true, visibleSince: null, grace: null, nearMiss: null, claim: null, pieceStartedAt: null, hotkeyHeld: false, caret: null };
 }
 
 /**
@@ -176,7 +191,7 @@ export function pieceFraction(s: DictationState, now: number): number | null {
 export function wordReady(s: DictationState, now: number): boolean {
   // Aegis 2026-10-21 (high): a draft holding an unverified voice's words is never sent by the word (a preset switch keeps the draft)
   // TD-2026-10-23-496 (supersedes Aegis 2026-10-21 on this path): the word sends the whole draft, checked words or not;
-  // the human accepted it at attach, and the kernel clamps the send (edits ask first)
+  // the human accepted it at attach (the send runs like a typed one, TD-2026-10-23-939)
   return hasDraft(s) && s.policy === 'word' && s.pageVisible && s.focusedHere && s.attached !== null && s.attached === s.hsid && !s.sending && s.visibleSince !== null && now - s.visibleSince >= SEND_WORD_VISIBLE_MS;
 }
 
@@ -191,10 +206,10 @@ export const ambientDraft = (s: DictationState): boolean => s.parts.some((p) => 
 export const draftOnlyTurn = (payload: unknown): boolean => obj(payload)?.draftOnly === true;
 /** Aegis H-1: the turn inherited its speaker (speakerBasis 'continuity'): not checked as the human. */
 export const inheritedTurn = (payload: unknown): boolean => obj(payload)?.speakerBasis === 'continuity' && obj(payload)?.draftOnly !== true;
-/** The draft holds words not checked as the human (inherited): a send is clamped, and a piece needs a checked part. */
+/** The draft holds words not checked as the human (inherited): a piece needs a checked part. */
 export const inheritedDraft = (s: DictationState): boolean => s.parts.some((p) => p.inherited === true);
 /** The draft's not-checked note (Aegis H-1, design system transcript-row voice-heard state not-checked). */
-export const INHERITED_DRAFT_NOTE = 'draft · not checked as you, so edits ask first';
+export const INHERITED_DRAFT_NOTE = 'draft · not checked as you';
 /** The draft holds an unverified voice's words (only Enter sends it). */
 export const unverifiedDraft = (s: DictationState): boolean => s.parts.some((p) => p.unverified === true);
 
@@ -283,12 +298,91 @@ export function turnText(payload: unknown): { shown: string; send: string } | nu
 
 const append = (text: string, t: string): string => (!text ? t : /\s$/.test(text) ? text + t : `${text} ${t}`);
 
+/** A caret (start === end) or a selection in the composer text. */
+export interface TextRange {
+  start: number;
+  end: number;
+}
+
+/** What placeWords made: the new text, the caret just after the words, and the three pieces (for the ghost mirror). */
+export interface Placed {
+  text: string;
+  caret: number;
+  before: string;
+  /** the words as they land, with any join space before and after them */
+  insert: string;
+  after: string;
+  /** how many characters of `insert` lead (the join space) and trail it */
+  lead: number;
+  trail: number;
+}
+
+/** No space needed after these (an opening bracket or quote); none needed before these (closing punctuation). */
+const OPENS = /[([{“‘«]$/u;
+const CLOSES = /^[.,;:!?)\]}”’»…]/u;
+/** a sentence ended before the caret (or nothing is before it) */
+const sentenceStart = (before: string): boolean => {
+  const b = before.replace(/[ \t]+$/u, '');
+  return b === '' || /\n$/u.test(b) || /[.!?…]["”’)\]]*$/u.test(b);
+};
+/** "I", "I'm", "I’ll", … keep their capital mid-sentence */
+const PRONOUN_I = /^I(?:['’](?:m|ll|ve|d))?$/u;
+
+/**
+ * Mika 2026-10-23: a word the human already wrote with its capital mid-sentence ("ask Matt", "the Stripe hook") is a
+ * name: its capital stays when a turn starts with it mid-sentence. A name the draft never shows mid-sentence is still
+ * lowered (the recogniser capitalises every turn's first word, so lowering is right far more often than not).
+ */
+function nameIn(text: string, word: string): boolean {
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'gu');
+  for (const m of text.matchAll(re)) if (!sentenceStart(text.slice(0, (m.index ?? 0) + m[1].length))) return true;
+  return false;
+}
+
+/**
+ * Founder report 2026-10-23: put dictated words at the caret, or over a selection, with the joins fixed. `smart`
+ * false (an unedited draft at its end) is the plain append the in-order parts rely on (the words exactly as heard).
+ * Smart: one space before words that follow a word (none after an opening bracket or quote, never two), one after
+ * them when a word follows (none before closing punctuation); a capital when they start a sentence; mid-sentence a
+ * plainly capitalised first word ("And", never "I" or "NASA") is lowered; and when the sentence goes on after them
+ * (a lower-case word or punctuation next) their own final full stop is dropped. The human's text is never changed.
+ */
+export function placeWords(text: string, at: TextRange | null | undefined, words: string, smart: boolean): Placed {
+  const n = text.length;
+  const start = at ? Math.max(0, Math.min(n, Math.min(at.start, at.end))) : n;
+  const end = at ? Math.max(start, Math.min(n, Math.max(at.start, at.end))) : n;
+  if (!smart) {
+    const out = append(text, words);
+    const lead = out.length - text.length - words.length;
+    return { text: out, caret: out.length, before: text, insert: out.slice(n), after: '', lead, trail: 0 };
+  }
+  const before = text.slice(0, start);
+  const after = text.slice(end);
+  let w = words;
+  if (sentenceStart(before)) w = w.replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+  else {
+    const first = /^[^\s]+/u.exec(w)?.[0] ?? '';
+    const bare = first.replace(/[.,;:!?…]+$/u, '');
+    if (/^\p{Lu}[\p{Ll}'’]+$/u.test(bare) && !PRONOUN_I.test(bare) && !nameIn(text, bare)) w = w.replace(/^\p{Lu}/u, (c) => c.toLowerCase());
+  }
+  const next = after.replace(/^[ \t]+/u, '');
+  if ((/^\p{Ll}/u.test(next) || CLOSES.test(next)) && /[^.]\.$/u.test(w)) w = w.slice(0, -1);
+  const lead = before !== '' && !/\s$/u.test(before) && !OPENS.test(before) ? ' ' : '';
+  const trail = after !== '' && !/^\s/u.test(after) && !CLOSES.test(after) ? ' ' : '';
+  const insert = `${lead}${w}${trail}`;
+  return { text: `${before}${insert}${after}`, caret: before.length + lead.length + w.length, before, insert, after, lead: lead.length, trail: trail.length };
+}
+
+/** The insertion lands at the plain end of an unedited draft (the in-order append), else it is a splice. */
+export const plainAppend = (s: Pick<DictationState, 'text' | 'edited'>, at: TextRange | null | undefined): boolean =>
+  !s.edited && (!at || (at.start === at.end && s.text.slice(Math.min(at.end, s.text.length)).trim() === ''));
+
 /** After a send: the turns heard while it was in flight stay as the next (unedited) draft; hold and the rest clear. */
 function cleared(s: DictationState): DictationState {
   const rest = s.parts.filter((p) => p.seq > s.sentThrough);
   // Aegis M3: an edit made in flight is what the human sees: keep it (in-flight turns already appended to it), held
-  if (s.editedInFlight) return { ...s, parts: rest, edited: true, hold: true, holdBy: 'gui', sending: false, ringStartedAt: null, editedInFlight: false };
-  return { ...s, hsid: rest.length ? s.hsid : s.attached, parts: rest, text: rest.map((p) => p.text).join(' '), edited: false, hold: false, holdBy: null, sending: false, ringStartedAt: null, editedInFlight: false };
+  if (s.editedInFlight) return { ...s, parts: rest, edited: true, hold: true, holdBy: 'gui', sending: false, ringStartedAt: null, editedInFlight: false, caret: null };
+  return { ...s, hsid: rest.length ? s.hsid : s.attached, parts: rest, text: rest.map((p) => p.text).join(' '), edited: false, hold: false, holdBy: null, sending: false, ringStartedAt: null, editedInFlight: false, caret: null };
 }
 
 /** Aegis M2: a draft whose session is not the live attachment is held ('detached'); never auto-sent. */
@@ -333,7 +427,12 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
         if (m === 'near') return { ...n0, nearMiss: s.sendWord.text };
       }
       if ((hasDraft(s) || s.parts.length) && s.hsid !== e.hsid) return n0; // a draft for another session: never mixed
-      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }), ...(draftOnlyTurn(e.payload) ? { unverified: true as const } : {}), ...(inheritedTurn(e.payload) ? { inherited: true as const } : {}) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now };
+      // founder report 2026-10-23: at the caret. The plain end of an unedited draft keeps the in-order append; anywhere
+      // else the words splice in and the draft is edited and held (its text is no longer the parts in order)
+      const plain = plainAppend(s, e.at);
+      const placed = placeWords(s.text, e.at, t, !plain);
+      const part: DraftPart = { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }), ...(draftOnlyTurn(e.payload) ? { unverified: true as const } : {}), ...(inheritedTurn(e.payload) ? { inherited: true as const } : {}) };
+      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, part], text: placed.text, caret: placed.caret, lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now, ...(plain ? {} : { edited: true, hold: true, holdBy: 'gui' as const }) };
       return settle(n, e.now, true);
     }
     case 'activity': {
@@ -353,7 +452,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       return settle(e.hold ? { ...s, hold: true, holdBy: 'gui' } : { ...s, hold: false, holdBy: null }, e.now, e.hold !== s.hold);
     case 'userEdit': {
       if (e.text === s.text) return s;
-      const n = { ...s, text: e.text, edited: true, hold: true, holdBy: 'gui' as const, editedInFlight: s.editedInFlight || s.sending, visibleSince: null, grace: null };
+      const n = { ...s, text: e.text, edited: true, hold: true, holdBy: 'gui' as const, editedInFlight: s.editedInFlight || s.sending, visibleSince: null, grace: null, caret: null };
       if (!e.text.trim()) return settle({ ...n, parts: [], edited: false, hsid: s.attached }, e.now, false); // emptied: no draft left (hold stays)
       return settle(n, e.now, false);
     }
@@ -551,17 +650,16 @@ export function dictationNote(s: DictationState): string | null {
   }
   if (inheritedDraft(s)) {
     // Aegis H-1: quiet, text only; a MIXED draft quotes the words that were not checked (truncated like the unverified quote).
-    // Mika 2026-10-23: the next move ends the line, as in every draft note. "so edits ask first" only where it is news
-    // (Send word and Pieces already clamp every voice send; the rung says so), and tied to its cause, so "edits" never
-    // reads as the human's own edits to the draft. Pieces: a piece waits until one part is checked, so say Enter.
+    // Mika 2026-10-23: the next move ends the line, as in every draft note; a voice send runs like a typed one (TD-2026-10-23-939), so the plain
+    // draft says only the fact, like a checked draft. Pieces: a piece waits until one part is checked, so say Enter.
     const q = inheritedQuote(s);
     const base = `draft · ${q ? `“${q.short}” ` : ''}not checked as you`;
     if (s.policy === 'word' && s.sendWord) return `${base} · say '${s.sendWord.text}' or press Enter`;
     if (s.policy === 'pieces') return s.edited || s.hold || s.parts.every((p) => p.inherited === true) ? `${base} · Enter sends it` : s.busy ? `${base} · piece waiting` : `${base} · sending in pieces`;
-    return `${base}, so edits ask first`;
+    return base;
   }
   if (s.policy === 'word' && s.sendWord) return `draft · say '${s.sendWord.text}' or press Enter`;
-  if (s.policy === 'pieces') return s.edited || s.hold ? 'piece held · Enter sends' : s.busy ? 'piece waiting · Claude is answering' : 'sending in pieces · edits ask first';
+  if (s.policy === 'pieces') return s.edited || s.hold ? 'piece held · Enter sends' : s.busy ? 'piece waiting · Claude is answering' : 'sending in pieces';
   if (ambientDraft(s)) return AMBIENT_DRAFT_NOTE; // nothing counts down, so a hold means nothing here
   if (s.hold) return 'draft held';
   if (s.delayMs === null) return 'draft · auto-send off';

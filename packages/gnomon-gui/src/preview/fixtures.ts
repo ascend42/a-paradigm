@@ -16,7 +16,7 @@
  * (.atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
  */
 import { crockford, defaultLabelsFor, projectHue, sha256, sha256Tagged, type LogRow } from '@a-company/gnomon-contracts';
-import { cardContentHash } from '../core/render.js';
+import { cardContentHash, toolInputHash } from '../core/render.js';
 import { PARADIGM_CONTEXT_STATUS } from './paradigm-context.js';
 
 export const PREVIEW_NS = '7k2m9q4x';
@@ -211,6 +211,16 @@ export const DESK_CARDS: Record<string, unknown>[] = [
   }),
 ];
 
+/** TD-2026-10-23-939 follow-up: an Edit card offering "this file" and "edits in this repo", and a Bash card offering 2- and 3-word prefixes (built as the kernel builds them). */
+const ALWAYS_EDIT_INPUT = { file_path: 'src/totals.ts', old_string: '  return lines.map(round).reduce(sum, 0);', new_string: '  return round(lines.reduce(sum, 0));' };
+const ALWAYS_BASH_INPUT = { command: 'paradigm lore record --type fix --title "round once at the end"' };
+const ALWAYS_EDIT_DETAIL = { tool: 'Edit', path: '/Users/matt/code/billing/src/totals.ts', inputHash: toolInputHash(ALWAYS_EDIT_INPUT), editScopes: ['file', 'repo-edits'], editPath: '/Users/matt/code/billing/src/totals.ts' };
+const ALWAYS_BASH_DETAIL = { tool: 'Bash', inputHash: toolInputHash(ALWAYS_BASH_INPUT), prefixOptions: [['paradigm', 'lore'], ['paradigm', 'lore', 'record']] };
+const ALWAYS_CARDS: Record<string, unknown>[] = [
+  cardOf({ name: 'billing edit', kind: 'permission', hsid: BILLING, lines: ['The session asks to run Edit', 'repo: /Users/matt/code/billing', 'path: /Users/matt/code/billing/src/totals.ts', 'old:', '  return lines.map(round).reduce(sum, 0);', 'new:', '  return round(lines.reduce(sum, 0));'], extra: [{ type: 'edit-scope', detail: ALWAYS_EDIT_DETAIL }], detail: ALWAYS_EDIT_DETAIL, decisions: ['allow', 'deny', 'always'], voice: { eligible: 'reversible', label: 'card 5', readback: 'allow Edit src/totals.ts', echo: 'allowing card 5' } }),
+  cardOf({ name: 'billing lore', kind: 'permission', hsid: BILLING, lines: ['The session asks to run Bash', 'repo: /Users/matt/code/billing', 'command: paradigm lore record --type fix --title "round once at the end"', 'always: the rule pins this exact command text, not what it runs (a script or binary it calls can change).'], extra: [{ type: 'bash-prefix', detail: ALWAYS_BASH_DETAIL }], detail: ALWAYS_BASH_DETAIL, decisions: ['allow', 'deny', 'always'], voice: { eligible: 'reversible', label: 'card 6', readback: 'allow Bash paradigm lore record', echo: 'allowing card 6' } }),
+];
+
 const EXTRA_CARDS: Record<string, unknown>[] = [
   cardOf({ name: 'atelier ask', kind: 'ask-user', hsid: A('atelier').hsid, lines: ['The session asks you a question', 'repo: atelier', 'Which tells file wins, repo or home?', '  1. repo (.atelier/tells.yaml)', '  2. home (~/.atelier/tells.yaml)'], detail: { questions: [{ q: 'Which tells file wins, repo or home?', options: ['repo', 'home'] }] }, decisions: ['answer'] }),
   cardOf({ name: 'gnomon-web plan', kind: 'plan', hsid: A('gnomon-web').hsid, lines: ['The session proposes a plan', 'repo: gnomon-web', '1. Move SettingsPage onto kit.Box', '2. Drop the old modal', '3. Re-run the visual fixtures', 'approve-plan: the session leaves plan mode. reject: it stays, with your note.'], detail: { plan: 'settings on kit' }, decisions: ['approve-plan', 'reject'] }),
@@ -226,7 +236,7 @@ export const OFFER_ID = `offer:${ulid('offer constellation')}`;
 const OFFER_MUTED_ID = `offer:${ulid('offer neurons 1')}`;
 const OFFER_QUIET_ID = `offer:${ulid('offer neurons 2')}`;
 
-function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
+function deskChain(o: { always?: boolean; extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -306,6 +316,9 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
     const a = ACTIVE.find((x) => x.hsid === hsid)!;
     c.add(T(at[i]!), 'approval.request', { card, flags: card.flags ?? [], ...(card.kind === 'permission' ? { tool: 'Bash', tool_input: { command: 'pnpm test --filter billing' } } : {}) }, { session: hsid, repo: a.repo });
   });
+  // TD-2026-10-23-939 follow-up: the scoped always choices on an Edit card and a Bash card, pinned in billing (Mika's shots)
+  if (o.always)
+    ALWAYS_CARDS.forEach((card, i) => c.add(T(`14:07:3${i}`), 'approval.request', { card, flags: [], ...(i === 0 ? { tool: 'Edit', tool_input: ALWAYS_EDIT_INPUT } : { tool: 'Bash', tool_input: ALWAYS_BASH_INPUT }) }, { session: BILLING, repo: 'billing' }));
   if (o.extraCards)
     EXTRA_CARDS.forEach((card, i) => {
       const hsid = typeof card.hsid === 'string' ? card.hsid : null;
@@ -340,13 +353,13 @@ function deskChain(o: { extraCards?: boolean; voice?: 'armed' | 'crashed' | 'tal
 
 /* ── status (the kernel's `status` result, as the page reads it) ─── */
 
-function runModes(): Record<string, unknown> {
+function runModes(o: { editsByRule?: string } = {}): Record<string, unknown> {
   const live = ACTIVE.filter((a) => a.key !== 'ledgerette');
-  return { sessions: live.map((a) => ({ hsid: a.hsid, repo: a.repo, chosen: a.key === 'atelier' ? 'auto-edits' : 'ask', source: 'repo', ceiling: 'auto-edits', effective: a.key === 'atelier' ? 'auto-edits' : 'ask', level: 'L1' })) };
+  return { sessions: live.map((a) => ({ hsid: a.hsid, repo: a.repo, chosen: a.key === 'atelier' ? 'auto-edits' : 'ask', source: 'repo', ceiling: 'auto-edits', effective: a.key === 'atelier' ? 'auto-edits' : 'ask', level: 'L1', ...(o.editsByRule && a.key === 'billing' ? { editsByRule: o.editsByRule } : {}) })) };
 }
 
-function statusOf(voice: Record<string, unknown>, o: { runModes?: boolean } = {}): Record<string, unknown> {
-  return { principalKind: 'human', version: '8.0.0', ...(o.runModes === false ? {} : { runModes: runModes() }), voice };
+function statusOf(voice: Record<string, unknown>, o: { runModes?: boolean; editsByRule?: string } = {}): Record<string, unknown> {
+  return { principalKind: 'human', version: '8.0.0', ...(o.runModes === false ? {} : { runModes: runModes(o) }), voice };
 }
 
 const VOICE_RUNNING = { attached: false, clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, enrolled: [{ name: 'matt' }], maxMode: 'conversation', ambientIdleMs: 600_000 };
@@ -654,6 +667,8 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'voice-ladder': fixture('voice-ladder', 'The voice pill open: the trust ladder (Dictate live, Send word not set up)', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING, false, { open: 'voice-ladder' }),
   'voice-settings': fixture('voice-settings', 'The Voice settings sheet (your voice, send word, keys, listen, timing, risk)', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING, false, { open: 'voice-settings' }),
   ...MIC_FIXTURES,
+  'always-scopes': fixture('always-scopes', 'Billing: an Edit card offering Always for the file or the repo, and a Bash card offering 2- and 3-word prefixes', deskChain({ always: true }), statusOf(VOICE_RUNNING), BILLING),
+  'edits-by-rule': fixture('edits-by-rule', 'Billing in ask with an "edits in this repo" rule standing: the run mode chip and its revoke entry', deskChain(), statusOf(VOICE_RUNNING, { editsByRule: 'card:01JPREVIEWEDITSRULE00000001' }), BILLING),
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
   workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
   'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'gnomon.workshop', why: 'user', cardId: null }] } }, BILLING, true),

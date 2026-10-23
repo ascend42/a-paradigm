@@ -20,15 +20,15 @@ import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachStat
 import { chooseRung, clientFactOf, crashCauseOf, inputChoices, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungNameOf, rungOf, rungOfPresetCommand, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, trapNext, type FlowView, type SheetView } from './voice-settings.js';
 import { COMPOSER_LINES, composerFit, fitTallRoom, lineCountLabel, lineCountShown, parseTall, serializeTall, TALL_FEED_MIN_PX, TALL_KEY } from '../core/composer.js';
-import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
+import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
-import { Follow, isAtBottom } from '../core/follow.js';
+import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
 import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
 import { publisherDisplayOf } from '../core/mod-label.js';
@@ -47,11 +47,11 @@ import { LocalModelController } from './local-model.js';
 import { changeForm, localCurrentOf, localStatusOf, requestLine, setupForm, LOCAL_SECTION } from '../core/local-model.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
-import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
+import { defaultScope, EDIT_RULE_REVOKE_LABEL, EDIT_RULE_REVOKE_NOTE, EDITS_BY_RULE_CHIP, EDITS_BY_RULE_NARROW, EDITS_BY_RULE_NARROW_NAME, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText, voiceRefusalText } from '../core/capture.js';
 import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, whoLine, type AppMenuRow, type LinkState } from '../core/header.js';
 import { CLIENT_POLL_MS, clientOf, clientPillOf, micTitleLine, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh } from '../core/voice-client.js';
-import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, inheritedQuote, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, uncheckedWords, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
+import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, placeWords, plainAppend, type TextRange, dictationNote, dictationStatusOf, draftControls, hasDraft, inheritedQuote, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, uncheckedWords, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
@@ -209,7 +209,39 @@ const expandedActs = new Set<string>(); // S2.5: activity lines the human expand
 const PAST_KEY = 'gnomon.gui.pastOpen';
 let pastOpen = localStorage.getItem(PAST_KEY) === '1'; // S2.2: Past is collapsed by default; the toggle persists per browser
 const follow = new Follow(); // stickiness: core/follow.ts (unit-tested)
+/** founder report 2026-10-23: only the user's own scroll changes stickiness (core/follow.ts scrollEvent) */
+const intent = new ScrollIntent();
 const mounted = new Map<number, HTMLElement>();
+/**
+ * Founder report 2026-10-23: a mounted row that changes height by itself (a web font arriving, a slip settling, a
+ * fold) repaints the feed, so a stuck feed stays at the bottom and a reading position stays where it is. Rows are
+ * observed from the next frame (watchRow), so a paint this callback runs never queues a same-frame notification.
+ */
+const rowSizes = new ResizeObserver(() => {
+  for (const [i, el] of mounted)
+    if (el.isConnected && el.offsetHeight && el.offsetHeight !== heights.height(i)) {
+      paintTranscript();
+      return;
+    }
+});
+const rowsToWatch = new Set<HTMLElement>();
+let watchQueued = false;
+function watchRow(el: HTMLElement): void {
+  rowsToWatch.add(el);
+  if (watchQueued) return;
+  watchQueued = true;
+  requestAnimationFrame(() => {
+    watchQueued = false;
+    for (const r of rowsToWatch) if (r.isConnected) rowSizes.observe(r);
+    rowsToWatch.clear();
+  });
+}
+/** Take a row out of the feed (and out of the size watch). */
+function dropRow(el: HTMLElement): void {
+  el.remove();
+  rowSizes.unobserve(el);
+  rowsToWatch.delete(el);
+}
 let memo: { key: string; out: { items: ChatItem[]; hidden: number } } | null = null;
 
 const transcriptId = (): string => `${focused ?? (feedView ? 'feed' : 'empty')}${rawMode ? '\u0000raw' : ''}`;
@@ -236,7 +268,7 @@ function currentItems(): { items: ChatItem[]; hidden: number } {
 }
 
 function unmountAll(): void {
-  for (const el of mounted.values()) el.remove();
+  for (const el of mounted.values()) dropRow(el);
   mounted.clear();
 }
 
@@ -279,8 +311,6 @@ function paintChatHead(): void {
     // Mika (2026-10-23 delta): the project name ellipsizes last and keeps its whole name in the title
     meta.prepend(h(doc, 'span', { class: `pink h${hue}`, title: proj }, '■ ', h(doc, 'span', { class: 'chead-proj' }, proj)) as unknown as Node, h(doc, 'span', { class: 'chead-backend' }, ` · ${backendWord(s.backend)}`) as unknown as Node);
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
-    // TD-2026-10-21-514: while a voice-origin turn is open, the header says edits ask first (the kernel clamps it)
-    if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'chip warn clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
     // Mika (2026-10-23): "started · 9m" is the one part that ellipsizes, so the model key is never the one clipped
     meta.appendChild(h(doc, 'span', { class: 'chead-when' }, `${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`) as unknown as Node);
   }
@@ -325,7 +355,7 @@ function remountItem(key: string | null): void {
   if (key === null) return;
   for (const [i, el] of mounted)
     if (items[i]?.key === key) {
-      el.remove();
+      dropRow(el);
       mounted.delete(i);
     }
 }
@@ -443,8 +473,8 @@ function itemEl(it: FoldedItem): HTMLElement {
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
   const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
   const at = it.at ? it.at.slice(11, 16) : '';
-  // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (+ "edits ask first")
-  const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: `sent-by${it.asksFirst ? ' asks-first' : ''}` }, `${spoken ? spoken.sent : it.sentLabel}${it.asksFirst ? ' · edits ask first' : ''}`) : null;
+  // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (the plain origin; TD-2026-10-23-939)
+  const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: 'sent-by' }, `${spoken ? spoken.sent : it.sentLabel}`) : null;
   const body = label
     ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, saidTag(it.saidBy === 'kernel' ? 'kernel' : 'reply')), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
@@ -604,7 +634,7 @@ function paintTranscript(remeasure = false): void {
     const stale = new Set(changedBefore(items, next, lcp));
     for (const [i, el] of mounted)
       if (i >= lcp || stale.has(i)) {
-        el.remove();
+        dropRow(el);
         mounted.delete(i);
       }
     // re-review L-4: a stale kept item is remounted with new content: its old measured height no longer holds
@@ -643,13 +673,13 @@ function paintTranscript(remeasure = false): void {
     // Mika #4: a row mounted before the session's backend arrived carries the wrong speaker label: remount them all
     const agent = agentLabel();
     if (agent !== mountedAgent) {
-      for (const el of mounted.values()) el.remove();
+      for (const el of mounted.values()) dropRow(el);
       mounted.clear();
       mountedAgent = agent;
     }
     for (const [i, el] of mounted)
       if (i < start || i >= end) {
-        el.remove();
+        dropRow(el);
         mounted.delete(i);
       }
     let changed = false;
@@ -661,6 +691,7 @@ function paintTranscript(remeasure = false): void {
         vp.appendChild(el);
         mounted.set(i, el);
         restoreSteps(el);
+        watchRow(el);
       }
       const hgt = el.offsetHeight || heights.estimate;
       if (hgt !== heights.height(i)) {
@@ -803,10 +834,12 @@ function projectOfCard(c: { repo: string | null; hsid: string | null }): { name:
   return { name: repo.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || repo, hue: groupHue(repo, g?.sessions ?? []) };
 }
 /**
- * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps the decision it took (stampWord), then flies off
- * 550 ms later and is removed on its flyout's animationend. While it leaves it is kept out of fresh paints (no
- * duplicate) and re-inserted at its place. Reduced motion (in-app or the OS): removed at once, nothing waits on an
- * animation that never runs. A 1.5 s fallback removes it even if animationend never fires (a hidden tab).
+ * S4 motion: a card the human approved (the kernel accepted it; never on a refusal) stamps the decision it took
+ * (stampWord), then 550 ms later fades out (opacity only, --t-fade; founder 2026-10-23: "get rid of the whole card tilt
+ * and spin aspect and can go with a simple and tasteful fade out"), and on that fade's animationend the pile closes up
+ * over its height (--reflow) and it is removed. While it leaves it is kept out of fresh paints (no duplicate) and
+ * re-inserted at its place. Reduced motion (in-app or the OS): removed at once, nothing waits on an animation that
+ * never runs. A 1.5 s fallback removes it even if animationend or transitionend never fires (a hidden tab).
  */
 const departing = new Map<string, Array<{ el: HTMLElement; parent: HTMLElement; index: number }>>();
 function motionReduced(): boolean {
@@ -819,7 +852,18 @@ function settleDeparture(cardId: string): void {
   for (const x of d) x.el.remove();
   void paintStack();
 }
-function flyOff(cardId: string, decision: string): void {
+/** The fade is done: close the space the card held (its measured height to 0), then remove it. */
+function closeUp(cardId: string, el: HTMLElement): void {
+  if (el.classList.contains('closing')) return;
+  el.style.height = `${el.offsetHeight}px`;
+  void el.offsetHeight; // the measured height is the transition's start
+  el.classList.add('closing');
+  el.style.height = '0px';
+  el.addEventListener('transitionend', (e) => {
+    if ((e as TransitionEvent).propertyName === 'height') settleDeparture(cardId);
+  });
+}
+function fadeOff(cardId: string, decision: string): void {
   const els = [...document.querySelectorAll<HTMLElement>(`.card[data-card-id="${CSS.escape(cardId)}"]`)];
   if (!els.length || motionReduced()) return;
   departing.set(cardId, els.map((el) => ({ el, parent: el.parentElement as HTMLElement, index: Array.prototype.indexOf.call(el.parentElement?.children ?? [], el) })));
@@ -838,7 +882,7 @@ function flyOff(cardId: string, decision: string): void {
     for (const el of els) {
       el.classList.add('out');
       el.addEventListener('animationend', (e) => {
-        if ((e as AnimationEvent).animationName === 'flyout') settleDeparture(cardId);
+        if ((e as AnimationEvent).animationName === 'card-fade') closeUp(cardId, el);
       });
     }
   }, 550);
@@ -864,7 +908,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
       verified.set(k, await verifiedDecisions(crypto.subtle, verifyKey, session.hello.serverKeyId, { cardId: c.cardId, contentHash: String(c.card.contentHash ?? ''), actions: Array.isArray(c.card.actions) ? c.card.actions : [] }));
     }
   }
-  const mk = (c: (typeof cards)[number]): HTMLElement => {
+  const mk = (c: (typeof cards)[number], zone: 'pile' | 'pinned'): HTMLElement => {
     const el = renderCard(
       { doc },
       {
@@ -880,11 +924,12 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         decidable: isCardDecidable(c.card as never),
         ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
         prefixOptions: c.kind === 'permission' ? prefixOptionsOf(c.card) : null,
+        editScopes: c.kind === 'permission' ? editScopesOf(c.card) : null, // TD-2026-10-23-939 follow-up: scoped edit always
+        alwaysOpen: alwaysOpen.has(`${zone}|${c.cardId}`), // Mika 2026-10-23: the "Always ▾" fold survives a repaint
         project: projectOfCard(c),
         raisedAt: c.raisedAt ?? null,
         now: Date.now(),
         voice: cardVoiceOf(c.card),
-        voiceOrigin: cardVoiceOrigin(c.card), // TD-2026-10-21-514: "asked during a voice-sent turn · check this was you"
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
         localNs: localNsOf(session?.principal),
         // #gui-loops: the kernel's authorship basis (status.loops authoredBy agent-key-claim), never guessed from a name
@@ -910,11 +955,12 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
     return el;
   };
   const pile = $('stack');
+  const refocus = alwaysFocusOf(); // a repaint keeps focus on an Always fold or choice (Mika 2026-10-23)
   clear(pile);
   stackLaidOutAt = performance.now();
   // S3: a paper pile; more than PILE_MAX cards ⇒ the first PILE_MAX piled plus "+n more" (it opens the fanned pile)
   const shown = pileOpen ? cards : cards.slice(0, PILE_MAX);
-  for (const c of shown) pile.appendChild(mk(c));
+  for (const c of shown) pile.appendChild(mk(c, 'pile'));
   pile.classList.toggle('open', pileOpen);
   // Aegis C1e: a root decision whose logged rowsDigest is not the digest of the rows its card showed: flagged red
   for (const m of store.rootMismatches) pile.appendChild(h(doc, 'p', { class: 'refusal root-digest-mismatch', role: 'alert' }, `The ${m.decision} of ${m.cardId} was logged with rows the card did not show (rowsDigest ${m.logged ?? 'missing'} ≠ shown ${m.shown}). Check gnomon verify.`) as unknown as Node);
@@ -933,16 +979,17 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   if (mine.length) pinned.appendChild(h(doc, 'span', { class: 'lbl' }, 'Pending in this session') as unknown as Node);
   // S4: a pinned card settles at one of four preset tilts (classes, never inline style), picked by its cardId
   for (const c of mine) {
-    const el = mk(c);
+    const el = mk(c, 'pinned');
     let x = 0;
     for (const ch of c.cardId) x = (x + ch.charCodeAt(0)) % 997; // a tilt pick, not a hue: hues come from projectHue
     el.classList.add(['r-a', 'r-b', 'r-c', 'r-d'][x % 4]!);
     pinned.appendChild(el);
   }
-  // S4: cards still flying off go back where they were (the fresh paint never shows them twice)
+  // S4: cards still fading off go back where they were (the fresh paint never shows them twice)
   for (const d of departing.values())
     for (const x of d)
       if (!x.el.isConnected && (x.parent === pile || x.parent === pinned)) x.parent.insertBefore(x.el, x.parent.children[x.index] ?? null);
+  if (refocus) refocus();
   paintUpdateBanner();
   checkCardWait();
 }
@@ -1144,7 +1191,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   try {
     await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
-    flyOff(cardId, decision); // S4: only after the kernel accepted the decision (a refusal throws before this)
+    fadeOff(cardId, decision); // S4: only after the kernel accepted the decision (a refusal throws before this)
   } catch (err) {
     // a refused accept restarts nothing; a delivery-unknown one may: keep the marker then (the close decides)
     if (upgrade && !(err instanceof RpcError && err.refusal.code === 'DELIVERY_UNKNOWN')) clearRestarting(sessionStorage);
@@ -1728,7 +1775,14 @@ function fitComposer(): void {
   ta.style.height = 'auto';
   // empty, it is one line whatever the placeholder: a long "Reply to <title>…" wrapped at 1024 and made the empty
   // composer two lines tall with a "2 lines" count (Mika 2026-10-23; the placeholder stays on one line in styles.css)
-  const content = ta.value === '' ? px(cs.lineHeight) + edge : ta.scrollHeight + px(cs.borderTopWidth) + px(cs.borderBottomWidth);
+  const own = ta.value === '' ? px(cs.lineHeight) + edge : ta.scrollHeight + px(cs.borderTopWidth) + px(cs.borderBottomWidth);
+  // B1 at the caret: while the ghost mirror shows, the composer is as tall as the text WITH the live words
+  const ghost = $('composer-ghost');
+  if (!ghost.hidden) {
+    ghost.style.width = `${ta.clientWidth}px`;
+    ghost.style.height = 'auto';
+  }
+  const content = ghost.hidden ? own : Math.max(own, ghost.scrollHeight + px(cs.borderTopWidth) + px(cs.borderBottomWidth));
   let f = composerFit(content, px(cs.lineHeight), edge, composerTall);
   ta.style.height = `${f.heightPx}px`;
   if (composerTall && Math.min(f.lines, f.cap) > COMPOSER_LINES) {
@@ -1749,6 +1803,7 @@ function fitComposer(): void {
   const k = $('composer-tall');
   k.setAttribute('aria-pressed', String(composerTall));
   k.title = composerTall ? 'Tall view: up to 24 lines (again: back to 12)' : 'Tall view: up to 24 lines';
+  placeGhost();
 }
 function toggleComposerTall(): void {
   composerTall = !composerTall;
@@ -1833,11 +1888,30 @@ function dispatchDictation(e: DictationEvent): void {
   if (dict.focusedHere && dict.text !== prev.text && ta.value !== dict.text && e.type !== 'userEdit') ta.value = dict.text;
   if (e.type === 'context' && !prev.focusedHere && dict.focusedHere && dict.parts.length && !ta.value) ta.value = dict.text; // back on the draft's session
   if (prev.focusedHere && !dict.focusedHere && prev.parts.length && ta.value === prev.text) ta.value = ''; // the draft waits off-screen
+  // founder report 2026-10-23: the caret goes just after the words that landed, so continued speech flows on (focus is
+  // never taken: an unfocused composer keeps this as its last caret)
+  if (e.type === 'turnRow' && dict.caret !== null && dict.text !== prev.text && ta.value === dict.text) ta.setSelectionRange(dict.caret, dict.caret);
   if (dict.sending && !prev.sending) void sendDictation();
   syncDictationTimer();
   paintDictation();
   fitComposer();
+  paintGhost();
   stampPainted();
+}
+
+/**
+ * Founder report 2026-10-23: where dictated words land. Only while the composer shows this draft: the selection when
+ * the composer has the focus (the words replace it), else the last caret it had, collapsed (a selection is never
+ * replaced unseen: the words go after it). A textarea keeps its selection when it loses the focus, and a value the
+ * page sets puts it at the end, so "never placed" is the end. undefined: the end.
+ */
+function composerCaret(): TextRange | undefined {
+  const ta = $<HTMLTextAreaElement>('composer-text');
+  if (!dict.focusedHere || ta.value !== dict.text) return undefined;
+  const { selectionStart: a, selectionEnd: b } = ta;
+  if (document.activeElement === ta) return { start: a, end: b };
+  const at = ta.selectionDirection === 'backward' ? a : b;
+  return { start: at, end: at };
 }
 
 /**
@@ -2103,7 +2177,11 @@ function flushVoiceRows(): void {
   const now = Date.now();
   const { ready, rest } = releaseTurnRows(voiceRowQueue, unverifiedTextsOf(status), now);
   voiceRowQueue = rest;
-  for (const q of ready) dispatchDictation({ type: 'turnRow', seq: q.seq, hsid: q.hsid, payload: q.payload, now });
+  // founder report 2026-10-23: each turn lands at the composer's caret (read per turn: the last one moved it)
+  for (const q of ready) {
+    const at = composerCaret();
+    dispatchDictation({ type: 'turnRow', seq: q.seq, hsid: q.hsid, payload: q.payload, now, ...(at ? { at } : {}) });
+  }
   // a row still waits for its words: re-read status soon (the kernel holds them in memory, human class only)
   if (rest.length && !voiceRowTimer)
     voiceRowTimer = setTimeout(() => {
@@ -2126,7 +2204,7 @@ function syncDictationContext(): void {
   if (d.sendNows !== null) {
     const fresh = sendNowsSeen !== null && sendNowsSeen.epoch === d.epoch && d.sendNows > sendNowsSeen.n;
     sendNowsSeen = { n: d.sendNows, epoch: d.epoch };
-    // Aegis M-5: a voice-origin (clamped) send of an unedited draft; an edited one is held for Enter
+    // Aegis M-5: a voice-origin send of an unedited draft; an edited one is held for Enter
     if (fresh && hasDraft(dict) && dict.focusedHere) dispatchDictation({ type: 'sendNowKey', now });
   }
 }
@@ -2400,7 +2478,14 @@ function paintMode(): void {
   const v = currentMode();
   const btn = $('mode-btn');
   btn.hidden = !focused || !v; // the kernel feed and an exited session have no mode to set
-  put(btn, modeChip(v));
+  const chip = modeChip(v);
+  const at = chip.indexOf(EDITS_BY_RULE_CHIP);
+  if (at < 0) put(btn, chip);
+  else {
+    // the rule words in two forms; CSS shows one (≤1040px: the narrow one), so the name always matches what is seen
+    clear(btn);
+    btn.append(chip.slice(0, at), h(doc, 'span', { class: 'mb-full' }, EDITS_BY_RULE_CHIP) as unknown as Node, h(doc, 'span', { class: 'mb-narrow' }, h(doc, 'span', { 'aria-hidden': 'true' }, EDITS_BY_RULE_NARROW), h(doc, 'span', { class: 'sr-only' }, EDITS_BY_RULE_NARROW_NAME)) as unknown as Node, chip.slice(at + EDITS_BY_RULE_CHIP.length));
+  }
   btn.title = `Run mode: ${modeLabel(v).replace(/ ▾$/, '')} (kernel-owned; ⇧Tab in the composer cycles it)`;
   btn.className = `key quiet mode-btn kernel-owned${v ? ` mode-${v.effective}` : ''}`;
   const to = focused ? `to ${focused.slice(-10)}${v ? ` · mode ${v.effective} · ⇧Tab cycles` : ''}` : 'no session focused';
@@ -2423,6 +2508,8 @@ function paintModeMenu(): void {
     menu.appendChild(b);
   }
   if (sc.other) menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-mode-scope': sc.other.scope }, sc.other.label) as unknown as Node);
+  // TD-2026-10-23-939 follow-up: an "edits in this repo" always rule stands: revoke it here (narrows: no Touch ID)
+  if (v.effective === 'ask' && v.editsByRule) menu.appendChild(h(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-revoke-rule': v.editsByRule }, h(doc, 'span', { class: 'mode-name' }, EDIT_RULE_REVOKE_LABEL), h(doc, 'span', { class: 'mode-note' }, EDIT_RULE_REVOKE_NOTE)) as unknown as Node);
 }
 
 function openMoreMenu(): void {
@@ -2513,7 +2600,6 @@ function paintVoice(): void {
   const cap = paintCapture(v, cp.label === null);
   const trouble = cp.label !== null || cp.tail !== null;
   const rung = rungOf(v, voicePreset);
-  const clampHsid = v.hsid ?? focused;
   const bare = micKeyBareOf(status);
   const pv = voicePillOf({
     rung,
@@ -2527,7 +2613,6 @@ function paintVoice(): void {
     clientCause: c.micFault ? oneLine(c.micFault.text, ERROR_TITLE_MAX) : crashCauseOf(c, (e) => oneLine(e, ERROR_TITLE_MAX)),
     clientTitle: trouble && cp.title ? cp.title : null,
     capture: cap,
-    clamped: !!clampHsid && clampedFrom(store.transcript(clampHsid), clampHsid),
     // Mika 2026-10-23: a mic the voice app turned off is closed: a hollow dot and "mic closed", never "mic open"
     micClosed: attached && (v.micWanted === false || c.micFault !== null),
     micKeyBare: bare,
@@ -2538,7 +2623,7 @@ function paintVoice(): void {
   // running"); its accessible name says what a click does, and it opens no menu then
   const pa = pillActionOf(cp, attached, crashCauseOf(c, (e) => oneLine(e, ERROR_TITLE_MAX)));
   const btn = $('voice-pill');
-  btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${pv.clamped ? ' clamp' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${pa ? ' as-action' : ''}${cap ? ` ${cap.display.className}` : ''}`;
+  btn.className = `voice-pill kernel-owned rung-${rung}${pv.live ? ' live' : ''}${trouble ? ` voice-trouble ${cp.className}` : ''}${pa ? ' as-action' : ''}${cap ? ` ${cap.display.className}` : ''}`;
   btn.dataset.state = cp.label !== null ? `client-${c.phase}` : rung;
   if (pa) {
     btn.dataset.action = pa.action;
@@ -2558,7 +2643,7 @@ function paintVoice(): void {
   const fact = $('voice-fact');
   const factText = pa ? pa.fact : pv.fact;
   put(fact, factText ? `· ${factText}` : '');
-  fact.className = `voice-fact${pa ? '' : pv.tone === 'fail' ? ' fail' : pv.tone === 'clamp' ? ' clamp' : pv.tone === 'note' ? ' note' : ''}`;
+  fact.className = `voice-fact${pa ? '' : pv.tone === 'fail' ? ' fail' : pv.tone === 'note' ? ' note' : ''}`;
   // "heard Ns ago" counts up once a second until it is gone (a timeout, never an interval; nothing idles)
   if (heardTimer) clearTimeout(heardTimer);
   heardTimer = pv.fact.startsWith('heard ') && pv.fact.endsWith('s ago') ? setTimeout(() => ((heardTimer = null), paintVoice()), 1000) : null;
@@ -2600,9 +2685,9 @@ function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): 
   const meter = $('voice-meter');
   meter.hidden = !meterShownOf(live, d);
   meter.style.setProperty('--level', String(d.meter));
-  const ghost = $('composer-ghost');
-  ghost.hidden = !d.ghost;
-  paintGhost(ghost, d.ghost ? d.ghostText : null);
+  ghostOn = d.ghost;
+  ghostWords = d.ghost ? d.ghostText : null;
+  paintGhost();
   if (d.caption !== captionState) {
     captionState = d.caption;
     put($('voice-caption'), d.caption);
@@ -2613,26 +2698,100 @@ function paintCapture(v: ReturnType<typeof voiceStatusOf>, pillOwned: boolean): 
 }
 
 let ghostShown: string | null = null;
+/** B1: the capture's live words (null: none yet, "…") and whether the ghost shows (hearing or transcribing) */
+let ghostOn = false;
+let ghostWords: GhostText | null = null;
+/** Mika 2026-10-23: an IME composition in the composer shows the textarea itself (its own underline and text), not the mirror */
+let composing = false;
+/** Mika 2026-10-23: the mirror was rebuilt: bring the words into view once (a later scroll of the human's is theirs) */
+let ghostReveal = false;
 /**
- * B1 live words in #composer-ghost (never the textarea: a send can never carry non-final words). Text nodes only
- * (put → sanitizeDisplayText), repainted only when the words change; cleared to "…" when there are none.
+ * B1 live words, AT THE CARET (founder report 2026-10-23): #composer-ghost is an aria-hidden mirror laid over the
+ * textarea (placeGhost), never the textarea itself, so a send can never carry non-final words. While it shows, the
+ * textarea's own text is transparent (its caret stays) and the mirror draws the composer text with the words where
+ * the turn will land (placeWords, the reducer's own rule): committed solid, the unfixed tail dim, "…" before any
+ * words. Text nodes only (put → sanitizeDisplayText); rebuilt only when the words, the text or the caret change.
  */
-function paintGhost(el: HTMLElement, t: GhostText | null): void {
-  const key = t ? `${t.committed}\u0000${t.tail}` : '';
-  if (key === ghostShown) return;
-  ghostShown = key;
-  clear(el);
-  if (!t) {
-    put(el, '…');
+function paintGhost(): void {
+  const el = $('composer-ghost');
+  const ta = $<HTMLTextAreaElement>('composer-text');
+  const was = !el.hidden;
+  const on = ghostOn && !composing;
+  el.hidden = !on;
+  ta.classList.toggle('ghosting', on);
+  if (!on) {
+    ghostShown = null;
+    if (was) fitComposer();
     return;
   }
-  const committed = document.createElement('span');
-  committed.className = 'ghost-committed';
-  put(committed, t.committed);
-  const tail = document.createElement('span');
-  tail.className = 'ghost-tail';
-  put(tail, t.tail);
-  el.append(committed, document.createTextNode(t.committed && t.tail ? ' ' : ''), tail);
+  const t = ghostWords;
+  const at = composerCaret();
+  const key = `${t ? `${t.committed}\u0000${t.tail}` : ''}\u0001${at ? `${at.start}:${at.end}` : '-'}\u0001${dict.edited}\u0001${ta.value}`;
+  if (key === ghostShown) return placeGhost();
+  ghostShown = key;
+  ghostReveal = true;
+  clear(el);
+  const words = t ? `${t.committed}${t.committed && t.tail ? ' ' : ''}${t.tail}` : '…';
+  // the reducer's own rule, so the ghost sits exactly where the turn will land (the end when the composer is not this
+  // draft's); the "…" before any words sits there too (Mika 2026-10-23: it went to the end whatever the caret)
+  const p = placeWords(ta.value, at, words, !plainAppend({ text: ta.value, edited: dict.edited }, at));
+  const core = p.insert.slice(p.lead, p.insert.length - p.trail);
+  const before = document.createElement('span');
+  put(before, `${p.before}${p.insert.slice(0, p.lead)}`);
+  el.append(before);
+  if (!t) {
+    const wait = document.createElement('span');
+    wait.className = 'ghost-wait';
+    put(wait, '…');
+    el.append(wait);
+  } else {
+    const committed = document.createElement('span');
+    committed.className = 'ghost-committed';
+    put(committed, core.slice(0, t.committed.length));
+    const tail = document.createElement('span');
+    tail.className = 'ghost-tail';
+    put(tail, core.slice(t.committed.length));
+    el.append(committed, tail);
+  }
+  const after = document.createElement('span');
+  put(after, `${p.insert.slice(p.insert.length - p.trail)}${p.after}`);
+  el.append(after);
+  fitComposer();
+}
+/**
+ * Lay the ghost mirror exactly over the textarea, scrolled with it. Mika 2026-10-23: the mirror is as wide as the
+ * textarea's TEXT box (clientWidth: a shown scrollbar never makes the two wrap differently); after a rebuild the
+ * words are brought into view once (the textarea scrolls with the mirror, so its caret stays on the words); when the
+ * textarea cannot scroll that far (the words add lines past its end) its caret would float over other text, so it is
+ * hidden until the two line up again.
+ */
+function placeGhost(): void {
+  const el = $('composer-ghost');
+  if (el.hidden) return;
+  const ta = $<HTMLTextAreaElement>('composer-text');
+  el.style.top = `${ta.offsetTop}px`;
+  el.style.left = `${ta.offsetLeft}px`;
+  el.style.width = `${ta.clientWidth}px`;
+  el.style.height = `${ta.offsetHeight}px`;
+  if (ghostReveal) {
+    ghostReveal = false;
+    const marks = el.querySelectorAll('.ghost-committed, .ghost-tail, .ghost-wait');
+    const first = marks[0] as HTMLElement | undefined;
+    const last = marks[marks.length - 1] as HTMLElement | undefined;
+    if (first && last) {
+      const top = first.offsetTop;
+      const bottom = last.offsetTop + last.offsetHeight;
+      const view = el.clientHeight;
+      const line = parseFloat(getComputedStyle(el).lineHeight) || 0;
+      // one line of the human's text above the words when there is room, for context
+      let want = ta.scrollTop;
+      if (bottom > want + view) want = Math.max(0, Math.min(top - line, bottom - view));
+      else if (top < want) want = Math.max(0, top - line);
+      ta.scrollTop = want;
+      el.scrollTop = want;
+    }
+  } else el.scrollTop = ta.scrollTop;
+  ta.classList.toggle('ghost-offset', Math.abs(el.scrollTop - ta.scrollTop) >= 1);
 }
 
 /** The session a rung applies to: Off goes to the attached session; a rung goes to the focused session (else the attached one). */
@@ -3031,9 +3190,53 @@ function run(id: string, trusted: boolean): void {
   settings.repaint();
 }
 
+/**
+ * Mika 2026-10-23: a card's scoped always choices fold under "Always ▾" (per card and zone: the same card pinned and in
+ * the pile folds on its own). Opening moves focus to the first choice; Esc folds and returns to the key. The fold
+ * decides nothing: each choice is the decision key (data-decision="always" + its scope), pressed as before.
+ */
+const alwaysOpen = new Set<string>();
+const zoneOf = (el: Element): 'pile' | 'pinned' => (el.closest('#pinned') ? 'pinned' : 'pile');
+function setAlwaysFold(fold: HTMLElement, open: boolean): void {
+  const cardId = fold.dataset.alwaysFold!;
+  const card = fold.closest('.card');
+  const list = card?.querySelector<HTMLElement>('.always-choices');
+  if (!card || !list) return;
+  const k = `${zoneOf(card)}|${cardId}`;
+  if (open) alwaysOpen.add(k);
+  else alwaysOpen.delete(k);
+  list.classList.toggle('open', open);
+  fold.setAttribute('aria-expanded', String(open));
+  fold.textContent = `Always ${open ? '▴' : '▾'}`;
+  (open ? list.querySelector<HTMLElement>('[data-decision]') ?? fold : fold).focus();
+  if (open) list.scrollIntoView({ block: 'nearest' }); // pinned scrolls past 30vh: show every choice, not just the first
+}
+/** Before a stack repaint: a function that puts focus back on the same Always fold or choice, or null. */
+function alwaysFocusOf(): (() => void) | null {
+  const a = document.activeElement as HTMLElement | null;
+  const card = a?.closest?.('.card') as HTMLElement | null;
+  if (!a || !card || !(a.dataset.alwaysFold || a.closest('.always-choices'))) return null;
+  const zone = zoneOf(card);
+  const sel = a.dataset.alwaysFold
+    ? `[data-always-fold="${CSS.escape(a.dataset.alwaysFold)}"]`
+    : `.always-choices [data-card-id="${CSS.escape(a.dataset.cardId ?? '')}"][data-scope="${CSS.escape(a.dataset.scope ?? '')}"]${a.dataset.prefix !== undefined ? `[data-prefix="${CSS.escape(a.dataset.prefix)}"]` : ''}`;
+  return () => document.querySelector<HTMLElement>(`#${zone === 'pinned' ? 'pinned' : 'stack'} ${sel}`)?.focus();
+}
+function onAlwaysKey(e: KeyboardEvent): void {
+  if (e.key !== 'Escape') return;
+  const list = (e.target as HTMLElement).closest('.always-choices.open');
+  const fold = list?.closest('.card')?.querySelector<HTMLElement>('[data-always-fold]');
+  if (!fold) return;
+  e.preventDefault();
+  e.stopPropagation();
+  setAlwaysFold(fold, false);
+}
+
 /* ── events (every write verb hangs off a user gesture, G-GUI-04) ── */
 function onCardPress(e: Event): void {
   const t = e.target as HTMLElement;
+  const fold = t.closest('[data-always-fold]') as HTMLElement | null;
+  if (fold) return setAlwaysFold(fold, fold.getAttribute('aria-expanded') !== 'true');
   const b = t.closest('[data-decision]') as HTMLElement | null;
   if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null, b);
   const k = t.closest('[data-command]') as HTMLElement | null;
@@ -3055,32 +3258,44 @@ function onCardPress(e: Event): void {
   const x = review ? loopsOf(status)?.loops.find((y) => y.key === review.dataset.loopReview) : undefined;
   if (x) void loopRequest({ kind: 'request.loop.trust', payload: { loopId: x.loopId, scope: x.scope, repoKey: x.repoKey, contentHash: x.contentHash } }, e.isTrusted, `a loop-trust card for ${x.loopId} is in the stack: Read, then Trust`);
 }
+/** keys that scroll the transcript when it (or a row in it) has the focus */
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 function wire(): void {
   $('viewport').addEventListener(
     'scroll',
     () => {
       const vp = $('viewport');
       const top = vp.scrollTop;
-      const own = Math.abs(top - selfTop) < 1; // the page's own write echoing back: stickiness unchanged
-      if (!own) follow.onScroll(isAtBottom(top, vp.clientHeight, vp.scrollHeight), top < lastTop - 0.5);
+      // founder report 2026-10-23: the page's own write, or a scroll the layout made (WebKit clamps it when the composer
+      // re-measures, before the ResizeObserver repaint), leaves stickiness alone; only the user's own scroll changes it
+      scrollEvent(follow, { top, selfTop, lastTop, clientHeight: vp.clientHeight, scrollHeight: vp.scrollHeight, byUser: intent.active(performance.now()) });
       lastTop = top;
       paintTranscript();
     },
     { passive: true },
   );
   // intent to read back unsticks BEFORE the next streamed paint can snap the view down
+  // Mika 2026-10-23: only when there is something above to read: a wheel tick up on a chat that does not overflow yet (or
+  // is already at its top) unstuck it with nothing moved, so it stopped following once the rows outgrew the pane
   const releaseUp = (): void => {
-    if (!follow.shouldStick) return;
+    if (!follow.shouldStick || $('viewport').scrollTop < 1) return;
     follow.release();
     paintTranscript();
   };
   $('viewport').addEventListener('wheel', (e) => {
+    if ((e as WheelEvent).deltaY !== 0) intent.mark(performance.now(), INTENT_MS.wheel);
     if ((e as WheelEvent).deltaY < 0) releaseUp();
   }, { passive: true });
+  // the user's hand on the transcript (its scrollbar, a drag, a touch) is scroll intent until let go
+  $('viewport').addEventListener('pointerdown', () => intent.hold(), { passive: true });
+  for (const t of ['pointerup', 'pointercancel']) window.addEventListener(t, () => intent.letGo(performance.now()), { passive: true });
+  $('viewport').addEventListener('focusin', () => intent.mark(performance.now(), INTENT_MS.focus));
   let touchY = 0;
   $('viewport').addEventListener('touchstart', (e) => {
     touchY = (e as TouchEvent).touches[0]?.clientY ?? 0;
+    intent.hold();
   }, { passive: true });
+  for (const t of ['touchend', 'touchcancel']) $('viewport').addEventListener(t, () => intent.letGo(performance.now(), INTENT_MS.touch), { passive: true });
   $('viewport').addEventListener('touchmove', (e) => {
     const y = (e as TouchEvent).touches[0]?.clientY ?? touchY;
     if (y > touchY + 2) releaseUp(); // finger moves down ⇒ content scrolls up
@@ -3088,6 +3303,7 @@ function wire(): void {
   }, { passive: true });
   $('viewport').addEventListener('keydown', (e) => {
     const k = (e as KeyboardEvent).key;
+    if (SCROLL_KEYS.has(k)) intent.mark(performance.now(), INTENT_MS.key);
     if (k === 'ArrowUp' || k === 'PageUp' || k === 'Home') releaseUp();
   });
   new ResizeObserver(() => {
@@ -3115,7 +3331,8 @@ function wire(): void {
     const had = document.activeElement === a;
     remountItem(a.dataset.item ?? (k.startsWith('raw:') ? k.slice(4) : k));
     paintTranscript();
-    if (had) ($('viewport').querySelector(`[data-act="${CSS.escape(k)}"]`) as HTMLElement | null)?.focus();
+    // founder report 2026-10-23: unfolding never moves the page (the focus stays on the line without scrolling to it)
+    if (had) ($('viewport').querySelector(`[data-act="${CSS.escape(k)}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
   };
   wireOfferSlips($('viewport'), onOfferAct); // #gui-offer-slip: trusted Open (two-step) / not now
   $('viewport').addEventListener('click', (e) => {
@@ -3231,6 +3448,8 @@ function wire(): void {
     onCard(e);
   });
   $('pinned').addEventListener('click', onCard);
+  $('stack').addEventListener('keydown', onAlwaysKey);
+  $('pinned').addEventListener('keydown', onAlwaysKey);
   $('stack-scope').addEventListener('click', (e) => run('stack.scope.toggle', e.isTrusted));
   $('loops-word').addEventListener('click', () => loopsView.open());
   $('composer').addEventListener('submit', (e) => {
@@ -3262,6 +3481,21 @@ function wire(): void {
     if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'focusComposer', now: Date.now() });
   });
   $('composer-text').addEventListener('blur', () => dispatchDictation({ type: 'blurComposer', now: Date.now() }));
+  // B1 at the caret: the ghost follows the caret and the composer's own scroll
+  for (const t of ['select', 'keyup', 'pointerup', 'focus', 'input']) $('composer-text').addEventListener(t, () => paintGhost());
+  $('composer-text').addEventListener('scroll', () => placeGhost(), { passive: true });
+  // an IME composition shows in the textarea itself while it lasts (its underline and candidates sit on real text)
+  $('composer-text').addEventListener('compositionstart', () => {
+    composing = true;
+    paintGhost();
+  });
+  $('composer-text').addEventListener('compositionend', () => {
+    composing = false;
+    paintGhost();
+  });
+  document.addEventListener('selectionchange', () => {
+    if (ghostOn && document.activeElement === $('composer-text')) paintGhost();
+  });
   $('dictation-hold').addEventListener('click', () => dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() }));
   $('composer-text').addEventListener('keydown', (e) => {
     if (e.key === 'Tab' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -3277,8 +3511,19 @@ function wire(): void {
   $('new-session').addEventListener('click', (e) => run('session.new', e.isTrusted));
   $('mode-btn').addEventListener('click', () => ($('mode-menu').hidden ? openModeMenu() : closeModeMenu()));
   $('mode-menu').addEventListener('click', (e) => {
-    const b = (e.target as HTMLElement).closest('[data-mode], [data-mode-scope]') as HTMLButtonElement | null;
+    const b = (e.target as HTMLElement).closest('[data-mode], [data-mode-scope], [data-revoke-rule]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
+    if (b.dataset.revokeRule) {
+      closeModeMenu();
+      $('mode-btn').focus(); // the entry is gone with the menu: focus returns to the run mode key (Mika 2026-10-23)
+      const ruleId = b.dataset.revokeRule;
+      if (!client) return;
+      void client.call('log.append', { kind: 'request.rules.revoke', payload: { ruleId } }).then(
+        () => notice('Edits by rule stopped: edits ask again in this repo', 'info'),
+        (err: unknown) => notice(`Could not revoke the rule: ${err instanceof Error ? err.message : String(err)}`, 'fail'),
+      );
+      return;
+    }
     if (b.dataset.modeScope) {
       // the secondary scope (F2): the same three choices in the palette — mode.* for this session only, mode.repo.* for the folder
       closeModeMenu();

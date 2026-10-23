@@ -919,6 +919,30 @@ describe('G-SOCK-04 log.append of a kernel-owned kind ⇒ FORBIDDEN for every cl
     expect((ok(await h2.conn.call('status')) as { sessionNames?: unknown }).sessionNames).toEqual([]);
   }, 60_000);
 
+  it('TD-2026-10-23-939 follow-up request.rules.revoke: the human (gui or device) revokes an always rule with no presence (kernel-signed approval.rule.revoked); agent, mod and voice never; an unknown rule is NOT_FOUND', async () => {
+    const r = await rig();
+    const K = r.d.kernelPrincipal;
+    const cardId = 'card:01HZZZZZZZZZZZZZZZZZZZZZA1';
+    const repoKey = `sha256:${'a'.repeat(64)}`;
+    await r.d.log.append({ kind: 'approval.request', principal: K, payload: { card: { cardId, kind: 'permission' }, tool: 'Write', tool_input: { file_path: '/w/a.ts', content: 'x' } } });
+    await r.d.log.append({ kind: 'approval.decide', principal: K, payload: { cardId, decision: 'always', scope: { kind: 'repo-edits' } } });
+    await r.d.log.append({ kind: 'approval.rule.learned', principal: K, payload: { cardId, tool: 'Write', match: 'repo-edits', presence: 'fresh', repoKey } });
+    await settle();
+    for (const cls of ['agent', 'mod', 'voice'] as const) {
+      const s = await asDevice(r, cls);
+      expect(errOf(await s.conn.call('log.append', { kind: 'request.rules.revoke', payload: { ruleId: cardId } })), cls).toMatchObject({ c: 'FORBIDDEN' });
+      await s.conn.close();
+    }
+    const h = await asDevice(r, 'human');
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.rules.revoke', payload: { ruleId: 'card:01HZZZZZZZZZZZZZZZZZZZZZB2' } }))).toMatchObject({ c: 'NOT_FOUND' });
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.rules.revoke', payload: { ruleId: cardId }, extra: 1 }))).toMatchObject({ c: 'BAD_REQUEST', reason: 'bad-params' });
+    expect(ok(await h.conn.call('log.append', { kind: 'request.rules.revoke', payload: { ruleId: cardId } }))).toMatchObject({ ruleId: cardId, revoked: true });
+    await settle();
+    const revoked = rows(r.home).filter((x) => x.kind === 'approval.rule.revoked');
+    expect(revoked.map((x) => x.env.payload)).toEqual([expect.objectContaining({ ruleId: cardId, repoKey, tool: 'Write' })]);
+    expect(errOf(await h.conn.call('log.append', { kind: 'request.rules.revoke', payload: { ruleId: cardId } }))).toMatchObject({ c: 'NOT_FOUND' }); // already revoked
+  }, 60_000);
+
   it('P8-D86/D87 request.mode.set: the human device tightens a repo with no presence (request row, then approval.mode.set), status.runModes shows it and it survives a kernel restart; agent, mod, voice, session and read-token connections never set a mode', async () => {
     const r = await rig();
     const m = mintReadToken(r.home, r.root, { principalId: `p:${r.root.ns}/console`, ttlMs: 60_000 });

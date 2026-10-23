@@ -35,7 +35,7 @@ export const VOICE_USAGE = `usage: gnomon voice setup [--home <abs>]
   send-word
           set or clear the spoken send word (1-3 words, never an approval
           phrase); the GUI's "Teach Gnomon your send word" is the guided form.
-          A voice-sent turn asks before every edit (TD-2026-10-21-514).
+          A voice-sent turn runs under the session's run mode and Always rules, like a typed one (TD-2026-10-23-939).
 
   Speaker recognition is not authentication. Voice is talk-only: it never
   approves anything.

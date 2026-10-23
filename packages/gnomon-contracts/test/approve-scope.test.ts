@@ -16,7 +16,15 @@ describe('approve scope (TD-2026-10-20-294)', () => {
   it('approve publishes the scope param and the closed kinds', () => {
     const approve = CLIENT_API_DESCRIPTOR.verbs.find((v) => v.verb === 'approve')!;
     expect(approve.params).toContain('scope?');
-    expect([...APPROVE_SCOPE_KINDS]).toEqual(['exact', 'prefix']);
+    expect([...APPROVE_SCOPE_KINDS]).toEqual(['exact', 'prefix', 'file', 'repo-edits']);
+  });
+
+  it('scoped edits (TD-2026-10-23-939 follow-up): file and repo-edits carry no other key; their digest is over the kind alone', () => {
+    expect(parseApproveScope({ kind: 'file' })).toEqual({ kind: 'file' });
+    expect(parseApproveScope({ kind: 'repo-edits' })).toEqual({ kind: 'repo-edits' });
+    for (const bad of [{ kind: 'file', path: '/x' }, { kind: 'repo-edits', repo: 'x' }, { kind: 'repo' }]) expect(parseApproveScope(bad), JSON.stringify(bad)).toBeNull();
+    expect(scopeDigest({ kind: 'file' })).not.toBe(scopeDigest({ kind: 'repo-edits' }));
+    expect(scopeDigest({ kind: 'prefix', prefix: ['git', 'log'] })).toBe(scopeDigest({ kind: 'prefix', prefix: ['git', 'log'] }));
   });
 
   it('parses exact and 1-3 word prefixes only', () => {

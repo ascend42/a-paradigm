@@ -79,7 +79,7 @@ export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>([
   // S0b: manifest:2, publisher gnomon, 1.1.0
   'sha256:97d69bb8b35ffdc9bec8a38a9c4644e51a8cd8bb0014d30de10998f322d05aa7', // packages/gnomon-mods/workshop 1.1.0 (gnomon.workshop)
   'sha256:d63815e16e3b7f062a69e29efa2e62b6186836bb448564f856989eefe37c1852', // packages/gnomon-mods/ledger 1.1.0 (gnomon.ledger)
-  'sha256:8a1e491e72e1743e5342863bcd74a0ca59efc45bc9422f47aefe32f744c1fcc0', // packages/gnomon-mods/paradigm-context 1.1.0 (gnomon.paradigm-context)
+  'sha256:22bab5bf24abbc01ac5594e6fe4ff72f3b562479677c93b9a483196943bce1cb', // packages/gnomon-mods/paradigm-context 1.1.1 (gnomon.paradigm-context; fitted zone heads, 2026-10-23)
   'sha256:978705dfe2caa6dd26663ab9c5c8ace2d9cac755d86ee2b45bf582aff070862a', // packages/gnomon-mods/neurons 1.1.0 (gnomon.neurons, was neurons-brain)
   'sha256:1473214df42c5efe6f6d95739064d12e817515501591738c669c457e0a5f81c9', // packages/gnomon-mods/constellation 1.1.0 (gnomon.constellation)
   // the format-1 1.0.0 pins of workshop, ledger and paradigm-context (grants.ts; existing installs keep loading)

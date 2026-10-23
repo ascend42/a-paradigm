@@ -24,9 +24,20 @@
       "direction": "column",
       "children": [
         {
-          "type": "Text",
-          "text": "tasks · 5 of 12 open · 2 high",
-          "tone": "head"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "tasks",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "5 of 12 open · 2 high",
+              "tone": "quiet"
+            }
+          ]
         },
         {
           "type": "Box",
@@ -140,9 +151,20 @@
       "direction": "column",
       "children": [
         {
-          "type": "Text",
-          "text": "decisions · 5 of 95",
-          "tone": "head"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "decisions",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "5 of 95",
+              "tone": "quiet"
+            }
+          ]
         },
         {
           "type": "Box",
@@ -155,7 +177,12 @@
             },
             {
               "type": "Text",
-              "text": "TD-2026-10-20-294 2026-10-20",
+              "text": "TD-2026-10-20-294",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-20",
               "tone": "quiet"
             },
             {
@@ -176,7 +203,12 @@
             },
             {
               "type": "Text",
-              "text": "TD-2026-10-20-262 2026-10-20",
+              "text": "TD-2026-10-20-262",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-20",
               "tone": "quiet"
             },
             {
@@ -197,7 +229,12 @@
             },
             {
               "type": "Text",
-              "text": "TD-2026-10-19-063 2026-10-19",
+              "text": "TD-2026-10-19-063",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-19",
               "tone": "quiet"
             },
             {
@@ -218,7 +255,12 @@
             },
             {
               "type": "Text",
-              "text": "TD-2026-10-18-097 2026-10-18",
+              "text": "TD-2026-10-18-097",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-18",
               "tone": "quiet"
             },
             {
@@ -239,7 +281,12 @@
             },
             {
               "type": "Text",
-              "text": "TD-2026-10-17-041 2026-10-17",
+              "text": "TD-2026-10-17-041",
+              "tone": "quiet"
+            },
+            {
+              "type": "Text",
+              "text": "2026-10-17",
               "tone": "quiet"
             },
             {
@@ -256,9 +303,20 @@
       "direction": "column",
       "children": [
         {
-          "type": "Text",
-          "text": "lore · 5 of 341",
-          "tone": "head"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "lore",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "5 of 341",
+              "tone": "quiet"
+            }
+          ]
         },
         {
           "type": "Box",
@@ -372,9 +430,20 @@
       "direction": "column",
       "children": [
         {
-          "type": "Text",
-          "text": "symbols · 7",
-          "tone": "head"
+          "type": "Box",
+          "direction": "row",
+          "children": [
+            {
+              "type": "Text",
+              "text": "symbols",
+              "tone": "head"
+            },
+            {
+              "type": "Text",
+              "text": "7",
+              "tone": "quiet"
+            }
+          ]
         },
         {
           "type": "Box",

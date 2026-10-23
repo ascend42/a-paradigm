@@ -21,56 +21,8 @@
     },
     {
       "type": "Text",
-      "text": "no decisions or lore yet",
+      "text": "nothing yet: no tasks, decisions or lore",
       "tone": "quiet"
-    },
-    {
-      "type": "Box",
-      "direction": "column",
-      "children": [
-        {
-          "type": "Text",
-          "text": "tasks · 0 of 0 open",
-          "tone": "head"
-        },
-        {
-          "type": "Text",
-          "text": "no open tasks",
-          "tone": "quiet"
-        }
-      ]
-    },
-    {
-      "type": "Box",
-      "direction": "column",
-      "children": [
-        {
-          "type": "Text",
-          "text": "decisions · 0 of 0",
-          "tone": "head"
-        },
-        {
-          "type": "Text",
-          "text": "no decisions",
-          "tone": "quiet"
-        }
-      ]
-    },
-    {
-      "type": "Box",
-      "direction": "column",
-      "children": [
-        {
-          "type": "Text",
-          "text": "lore · 0 of 0",
-          "tone": "head"
-        },
-        {
-          "type": "Text",
-          "text": "no lore",
-          "tone": "quiet"
-        }
-      ]
     }
   ]
 }

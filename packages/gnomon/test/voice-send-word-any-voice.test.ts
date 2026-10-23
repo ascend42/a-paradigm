@@ -192,6 +192,6 @@ describe('Aegis M-1 / L-1 / L-2 on TD-2026-10-23-496 (through the daemon wiring,
     const r = rig();
     const oldHash = 'sha256:' + 'ab'.repeat(32);
     expect(await refusal(r.v.humanAppend(r.human, 'voice.session.start', { hsid: HSID, mode: 'conversation', send: 'word', liabilityAck: oldHash }))).toMatchObject({ reason: 'voice-off', cause: 'liability-ack', ackHash: VOICE_LIABILITY_ACK_HASH });
-    expect(VOICE_LIABILITY_ACK_TEXT).toBe('Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
+    expect(VOICE_LIABILITY_ACK_TEXT).toBe('Anyone near my mic can send for me: the send word sends my whole draft, and it runs like a message I typed.');
   });
 });

@@ -96,24 +96,6 @@ export function fail(code: RefusalCode, reason: string, message: string, data?: 
   return new RefusedError(refuse({ code, ...(gate ? { gate } : {}), data: { ...rest, reason } }), `#approval-broker: ${message}`);
 }
 
-/** Decisions that narrow (a voice deny is unchanged by the voice-origin rule). */
-const VOICE_ORIGIN_NARROWING: readonly string[] = Object.freeze(['deny', 'reject', 'withdraw']);
-
-/**
- * TD-2026-10-21-514 (^voice-origin-clamp, G-VOX-19): approving BY VOICE a card raised during a voice-origin turn
- * (detail.origin 'voice') needs a logged readback AND confirm (voice.readbackHash + voice.confirmHash). Returns the
- * refusal, or null when the rule does not apply or is met. Deny-direction decisions are unchanged. The reason is the
- * reserved `voice-readback-missing` with data.cause 'voice-origin-confirm' (a new reason would move clientApiId).
- */
-export function voiceOriginConfirmRefusal(detail: unknown, decision: unknown, voice: unknown, cardId?: string): RefusedError | null {
-  const d = detail !== null && typeof detail === 'object' ? (detail as Record<string, unknown>) : null;
-  if (!d || d.origin !== 'voice' || typeof decision !== 'string' || VOICE_ORIGIN_NARROWING.includes(decision)) return null;
-  const v = voice !== null && typeof voice === 'object' ? (voice as Record<string, unknown>) : null;
-  const has = (k: string): boolean => typeof v?.[k] === 'string' && /^sha256:[0-9a-f]{64}$/.test(v[k] as string);
-  if (has('readbackHash') && has('confirmHash')) return null;
-  return fail('FORBIDDEN', 'voice-readback-missing', 'this card was asked during a voice-sent turn: approving it by voice needs a readback and confirm', { gate: 'voice', cause: 'voice-origin-confirm', ...(cardId ? { cardId } : {}) });
-}
-
 /** The voice principal's every approve form before Move 4 (G-ABI-02 voice row): FORBIDDEN gate voice, reason voice-off (§3.1 I4). */
 export function voiceApproveRefusal(): RefusedError {
   return fail('FORBIDDEN', 'voice-off', 'voice approvals are off: no grant.voice-approvals row and no voice arm exist before Move 4 (§14.7)', { gate: 'voice' });
@@ -370,7 +352,16 @@ interface CardRecord {
   bashArgv?: readonly string[];
 }
 
-/** The extra presence-binding field of a v2 decision: the answer digest, or a prefix always's scope digest. */
+/**
+ * The scope an `always` decision was taken with, as the prompt shows it (TD-2026-10-20-294 prefix; TD-2026-10-23-939
+ * follow-up file / repo-edits: the file is the kernel-held detail.editPath of the card, never a client value).
+ */
+type ShownScope = { kind: 'prefix'; prefix: string[] } | { kind: 'file'; path: string } | { kind: 'repo-edits' };
+/** The tools an edit scope may be taken on (the auto-edits tools, broker/run-mode.ts AUTO_EDIT_TOOLS; no import: run-mode imports the broker). */
+const EDIT_SCOPE_TOOLS: readonly string[] = Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+const digestScope = (sc: ShownScope): string => scopeDigest(sc.kind === 'prefix' ? { kind: 'prefix', prefix: sc.prefix } : { kind: sc.kind });
+
+/** The extra presence-binding field of a v2 decision: the answer digest, or a scoped always's scope digest. */
 type BindingExtra = { answerDigest: string } | { scopeDigest: string };
 
 /** tool.permission default timeout (expires into deny). Other kinds wait. */
@@ -782,24 +773,14 @@ export class ApprovalBroker {
       return typeof id === 'string' && this.#cards.get(id)?.handOnly === true;
     };
     const voiceHandOnly = (): RefusedError => fail('FORBIDDEN', 'voice-hand-only', 'this card is decided by hand only, never by voice (§14.7: the claude-binary re-pin)', { gate: 'voice' });
-    // TD-2026-10-21-514: an origin-voice card approved by voice without readback + confirm names its own refusal first
-    const originVoice = (): RefusedError | null => {
-      if (params === null || typeof params !== 'object') return null;
-      const q = params as { cardId?: unknown; decision?: unknown; voice?: unknown };
-      const r0 = typeof q.cardId === 'string' ? this.#cards.get(q.cardId) : undefined;
-      return r0 ? voiceOriginConfirmRefusal(r0.detail, q.decision, q.voice, q.cardId as string) : null;
-    };
-    if (ctx.principalClass === 'voice') throw handOnly() ? voiceHandOnly() : (originVoice() ?? voiceApproveRefusal());
+    // TD-2026-10-23-939: voice never approves anything, whatever turn raised the card (no voice-origin card variant remains)
+    if (ctx.principalClass === 'voice') throw handOnly() ? voiceHandOnly() : voiceApproveRefusal();
     if (ctx.principalClass !== 'human') throw fail('FORBIDDEN', 'matrix', `approve is human-only; a ${ctx.principalClass} principal never decides a card (B4)`);
     if (params === null || typeof params !== 'object' || Array.isArray(params)) throw fail('BAD_REQUEST', 'bad-params', 'approve takes {cardId, decision, note?, decisionSig}');
     const p = params as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !(APPROVE_KEYS as readonly string[]).includes(k));
     if (extra.length) throw fail('BAD_REQUEST', 'bad-params', `unknown approve params: ${extra.join(', ')}`);
     if ((p.via === 'voice' || 'voice' in p) && handOnly()) throw voiceHandOnly();
-    if (p.via === 'voice' || 'voice' in p) {
-      const ov = originVoice();
-      if (ov) throw ov;
-    }
     if (p.via === 'voice' || 'voice' in p) throw fail('FORBIDDEN', 'voice-off', 'the voice intent form is refused: voice approvals are off (§14.7)', { gate: 'voice' });
     if (p.via === 'link') throw fail('FORBIDDEN', 'peer-via', 'no decision ever arrives over a link (§3.9)', { gate: 'link' });
     if (p.via !== undefined) throw fail('BAD_REQUEST', 'bad-params', 'via is set by the kernel from the connection, not by the caller');
@@ -828,10 +809,10 @@ export class ApprovalBroker {
     if (decision === 'always' && !r.ruleScope) throw fail('BAD_REQUEST', 'bad-params', 'this card has no rule scope: always is not available on it', { cardId });
     // TD-2026-10-20-294: a prefix scope only with always on a Bash permission card whose SHOWN command is one literal
     // simple command starting with exactly those words (the human never approves a prefix the command does not have)
-    let prefix: string[] | null = null;
+    let scope: ShownScope | null = null;
     if (p.scope !== undefined) {
       const sc = parseApproveScope(p.scope);
-      if (!sc) throw fail('BAD_REQUEST', 'bad-params', "scope is {kind:'exact'} or {kind:'prefix', prefix:[1-3 words]}", { cardId });
+      if (!sc) throw fail('BAD_REQUEST', 'bad-params', "scope is {kind:'exact'}, {kind:'prefix', prefix:[1-3 words]}, {kind:'file'} or {kind:'repo-edits'}", { cardId });
       if (decision !== 'always') throw fail('BAD_REQUEST', 'bad-params', 'a scope is taken only with always', { cardId });
       if (sc.kind === 'prefix') {
         const argv = r.bashArgv;
@@ -840,7 +821,16 @@ export class ApprovalBroker {
         // Aegis H1: a prefix that equals arbitrary code execution is never a rule (#prefix-policy; kernel-enforced here)
         const why = prefixRefusal(sc.prefix);
         if (why) throw fail('BAD_REQUEST', 'bad-params', `this prefix cannot be a standing rule: ${why}`, { cardId });
-        prefix = sc.prefix;
+        scope = { kind: 'prefix', prefix: sc.prefix };
+      } else if (sc.kind === 'file' || sc.kind === 'repo-edits') {
+        // TD-2026-10-23-939 follow-up (Aegis): only on an edit card the KERNEL offered the scope on (detail.editScopes and
+        // detail.editPath, inside contentHash: the supervisor sets them only when the auto-edits pass would allow the edit)
+        const offered = Array.isArray(r.detail.editScopes) ? (r.detail.editScopes as unknown[]) : [];
+        const editPath = r.detail.editPath;
+        if (String(card.kind) !== 'permission' || !r.tool || !EDIT_SCOPE_TOOLS.includes(r.tool) || !offered.includes(sc.kind) || typeof editPath !== 'string' || editPath.length === 0) {
+          throw fail('BAD_REQUEST', 'bad-params', 'an edit scope needs an edit card the kernel offered that scope on', { cardId });
+        }
+        scope = sc.kind === 'file' ? { kind: 'file', path: editPath } : { kind: 'repo-edits' };
       }
     }
     if (r.checkNote) {
@@ -854,7 +844,7 @@ export class ApprovalBroker {
     if (this.#approvals.available?.() === false) throw fail('UNSUPPORTED', 'presence', 'the approvals key lives behind the signed helper (M1.3); no software fallback', { milestone: 'M1.3', cardId });
     // P8-D98 v2: an answer binds its text (the digest), so an answer carries it in note or is refused here
     if (usesDecisionV2(decision) && (typeof p.note !== 'string' || p.note.length === 0)) throw fail('BAD_REQUEST', 'bad-params', `a ${decision} decision carries its text in note`, { cardId });
-    const sDigest = prefix ? scopeDigest({ kind: 'prefix', prefix }) : undefined;
+    const sDigest = scope ? digestScope(scope) : undefined;
     const digest: BindingExtra | undefined = usesDecisionV2(decision) ? { answerDigest: answerDigest(String(p.note)) } : sDigest ? { scopeDigest: sDigest } : undefined;
     const message = decisionMessage({ cardId, decision, cardContentHash: card.contentHash, approverPrincipalId: ctx.principal, ...(digest ?? {}) });
     // M1.3: no decisionSig from the caller + a helper-held key => the helper signs it after presence (step 4)
@@ -939,7 +929,7 @@ export class ApprovalBroker {
     if (batch) {
       // TD-2026-10-20-514: ONE fresh prompt: decisionSig + presence + the decision row + every prepared row
       const hadUnlock = this.unlocks.has(uk);
-      const prompt = this.#promptOf(r, decision, ctx, cls, prefix);
+      const prompt = this.#promptOf(r, decision, ctx, cls, scope);
       let res: DecisionBatchResult;
       try {
         res = await this.#freshPrompt(ctx, cardId, () =>
@@ -980,7 +970,7 @@ export class ApprovalBroker {
     } else if (helperSigns) {
       const hadUnlock = this.unlocks.has(uk);
       const keep = (cls === 'cached' || keepForGrant) && !isCli;
-      const prompt = this.#promptOf(r, decision, ctx, cls, prefix);
+      const prompt = this.#promptOf(r, decision, ctx, cls, scope);
       let res: DecisionSignResult;
       try {
         res = await this.#freshPrompt(ctx, cardId, () => this.#approvals.signDecision!({ connId: ctx.connId, unlockKey: uk, approver: ctx.principal, message, mode: 'fresh', prompt: prompt.text, keepUnlock: keep, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision, digest) } }));
@@ -1016,7 +1006,7 @@ export class ApprovalBroker {
       presence = 'cached';
     } else {
       const hadUnlock = this.unlocks.has(uk);
-      token = await this.#prove(r, decision, ctx, cls, hadUnlock, digest, prefix);
+      token = await this.#prove(r, decision, ctx, cls, hadUnlock, digest, scope);
       presence = isCli ? 'cli' : 'fresh';
       if (!r.presence?.consumedByEffect) {
         const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision, digest));
@@ -1056,7 +1046,7 @@ export class ApprovalBroker {
     // Aegis A3: claimed SYNCHRONOUSLY after the re-check — no expire() can interleave from here to the settle
     r.claim = decision;
     try {
-      await this.#decideAndApply(r, ctx, p, { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing, ...(rowSigs ? { rowSigs } : {}), ...(prepared ? { prepared } : {}), ...(decisionRow ? { decisionRow } : {}) });
+      await this.#decideAndApply(r, ctx, p, { scope, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing, ...(rowSigs ? { rowSigs } : {}), ...(prepared ? { prepared } : {}), ...(decisionRow ? { decisionRow } : {}) });
     } catch (err) {
       delete r.claim; // the row or the effect failed: the card stays pending (approval.decide is a record, never authority)
       throw err;
@@ -1075,18 +1065,18 @@ export class ApprovalBroker {
     r: CardRecord,
     ctx: DecideContext,
     p: Record<string, unknown>,
-    d: { prefix: string[] | null; cardId: string; decision: string; decisionSig: string; presence: string; via: string; cli: unknown; prov: CliProvenance | null; cls: DecisionClass; isCli: boolean; token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; card: CardV1; standing: StandingMatch | null; rowSigs?: Array<{ signer: string; sig: string }>; prepared?: PreparedRows; decisionRow?: DecisionRowV2 },
+    d: { scope: ShownScope | null; cardId: string; decision: string; decisionSig: string; presence: string; via: string; cli: unknown; prov: CliProvenance | null; cls: DecisionClass; isCli: boolean; token: PresenceToken | null; rootSig: { signer: string; sig: string } | null; card: CardV1; standing: StandingMatch | null; rowSigs?: Array<{ signer: string; sig: string }>; prepared?: PreparedRows; decisionRow?: DecisionRowV2 },
   ): Promise<void> {
-    const { prefix, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing, rowSigs, prepared, decisionRow } = d;
+    const { scope, cardId, decision, decisionSig, presence, via, cli, prov, cls, isCli, token, rootSig, card, standing, rowSigs, prepared, decisionRow } = d;
     await this.#o.log(
       'approval.decide',
-      { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(prefix ? { scope: { kind: 'prefix', prefix } } : {}), ...(rootSig ? { rootSig } : {}), ...(decisionRow ? { rowsDigest: decisionRow.rowsDigest, rootKind: decisionRow.cardKind } : {}), ...(p.note ? (r.privateNote ? { noteHash: `sha256:${createHash('sha256').update(String(p.note), 'utf8').digest('hex')}`, noteBytes: Buffer.byteLength(String(p.note), 'utf8') } : { note: p.note }) : {}) },
+      { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(scope ? { scope: scope.kind === 'prefix' ? { kind: 'prefix', prefix: scope.prefix } : { kind: scope.kind } } : {}), ...(standing ? { device: unlockKeyOf(ctx) } : {}), ...(rootSig ? { rootSig } : {}), ...(decisionRow ? { rowsDigest: decisionRow.rowsDigest, rootKind: decisionRow.cardKind } : {}), ...(p.note ? (r.privateNote ? { noteHash: `sha256:${createHash('sha256').update(String(p.note), 'utf8').digest('hex')}`, noteBytes: Buffer.byteLength(String(p.note), 'utf8') } : { note: p.note }) : {}) },
       { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) },
     );
     // F6: the notify row of a standing use, right after the record it notifies about (the GUI's feed + Revoke)
     if (standing && this.#standing) await this.#standing.used(standing, { cardId, decision, hsid: card.hsid ?? null, connId: ctx.connId });
     if (decision === 'always') {
-      const match = prefix ? { match: 'prefix', prefix } : { matchExact: true };
+      const match = scope?.kind === 'prefix' ? { match: 'prefix', prefix: scope.prefix } : scope?.kind === 'file' ? { match: 'file', path: scope.path } : scope?.kind === 'repo-edits' ? { match: 'repo-edits' } : { matchExact: true };
       await this.#o.log('approval.rule.learned', { cardId, tool: r.tool ?? null, ...match, presence, repoKey: r.ruleScope?.repoKey ?? null }, { connId: ctx.connId });
     }
     for (const why of this.#suspicions(ctx, isCli, prov, presence, cls)) {
@@ -1136,8 +1126,8 @@ export class ApprovalBroker {
   }
 
   /** Expected binding digest for a decision (tests: mint a token bound to it). */
-  bindingFor(cardId: string, decision: string, answer?: string, prefix?: readonly string[]): { purpose: PresencePurpose; binding: PresenceBinding; digest: string } {
-    const digest: BindingExtra | undefined = usesDecisionV2(decision) && answer !== undefined ? { answerDigest: answerDigest(answer) } : decision === 'always' && prefix ? { scopeDigest: scopeDigest({ kind: 'prefix', prefix: [...prefix] }) } : undefined;
+  bindingFor(cardId: string, decision: string, answer?: string, prefix?: readonly string[], editScope?: 'file' | 'repo-edits'): { purpose: PresencePurpose; binding: PresenceBinding; digest: string } {
+    const digest: BindingExtra | undefined = usesDecisionV2(decision) && answer !== undefined ? { answerDigest: answerDigest(answer) } : decision === 'always' && prefix ? { scopeDigest: scopeDigest({ kind: 'prefix', prefix: [...prefix] }) } : decision === 'always' && editScope ? { scopeDigest: scopeDigest({ kind: editScope }) } : undefined;
     const r = this.#cards.get(cardId);
     if (!r) throw fail('NOT_FOUND', 'not-found', `no card ${cardId}`);
     const binding = this.#binding(r, decision, digest);
@@ -1145,10 +1135,14 @@ export class ApprovalBroker {
   }
 
   /** The kernel-signed prompt for (card, decision) on this connection. */
-  #promptOf(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, prefix: readonly string[] | null = null): SignedPresencePrompt {
+  #promptOf(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, scope: ShownScope | null = null): SignedPresencePrompt {
     const reason =
-      decision === 'always' && prefix
-        ? `fresh presence: always allow Bash commands whose words start ${shownPrefixWords(prefix)} (${prefix.length} words) in this repo`
+      decision === 'always' && scope?.kind === 'prefix'
+        ? `fresh presence: always allow Bash commands whose words start ${shownPrefixWords(scope.prefix)} (${scope.prefix.length} words) in this repo`
+        : decision === 'always' && scope?.kind === 'file'
+        ? `fresh presence: always allow edits to ${JSON.stringify(scope.path)} (any content) in this repo`
+        : decision === 'always' && scope?.kind === 'repo-edits'
+        ? 'fresh presence: always allow edits in this repo (same as auto-edits for this repo)'
         : decision === 'always'
         ? 'fresh presence: always is a standing rule'
         : cls === 'root'
@@ -1166,9 +1160,9 @@ export class ApprovalBroker {
     return fail('UNSUPPORTED', 'presence', `the signed helper could not sign the decision (${err instanceof Error ? err.message.slice(0, 160) : 'helper error'}); there is no software fallback`, { cardId });
   }
 
-  async #prove(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, hadUnlock: boolean, digest: BindingExtra | undefined, prefix: readonly string[] | null = null): Promise<PresenceToken> {
+  async #prove(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, hadUnlock: boolean, digest: BindingExtra | undefined, scope: ShownScope | null = null): Promise<PresenceToken> {
     // Aegis M1: the same prompt as the helper path, so a prefix always shows its words quoted and escaped
-    const prompt = this.#promptOf(r, decision, ctx, cls, prefix);
+    const prompt = this.#promptOf(r, decision, ctx, cls, scope);
     const purpose = r.presence?.purpose ?? 'approval.decide';
     const binding = this.#binding(r, decision, digest);
     let token: PresenceToken;

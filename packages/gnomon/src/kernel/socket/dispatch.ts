@@ -417,6 +417,14 @@ export interface HumanRequestPort {
    * 8.0:session-rename (#session-names): request.session.rename{hsid, name} from the human on a gui or device
    * connection ONLY; status.sessionNames lists the names of the asker's own sessions. A name is display text only.
    */
+  /**
+   * TD-2026-10-23-939 follow-up (#rules-revoke): request.rules.revoke{ruleId} from the human on a gui or device
+   * connection: the same handler as the unix-only rules.revoke verb (kernel-signed approval.rule.revoked, one at a
+   * time). Revoking only narrows, so no presence; the GUI's "stop allowing edits by rule" and the Rules view use it.
+   */
+  rules?: {
+    revoke(ctx: { connId: string; principal: string; surface: string | null; isLive: () => boolean }, payload: unknown): Promise<unknown>;
+  };
   sessionNames?: {
     rename(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
     namesFor(principal: string): Array<{ hsid: string; name: string }>;
@@ -937,6 +945,16 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential };
         try {
           return await o.requests.mods.request(asker, pa.kind, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-23-939 follow-up: the human revokes an always rule from the GUI (narrows only; gui/device human only)
+      if (pa?.kind === 'request.rules.revoke' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && s.principal && o.requests?.rules) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.rules.revoke({ connId: s.connId, principal: s.principal, surface: s.client?.surface ?? null, isLive: () => !ctx.closed && conns.get(s.connId) === s }, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

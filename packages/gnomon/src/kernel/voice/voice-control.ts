@@ -57,7 +57,7 @@
  * Dictate, the G-VOX-06 exception (founder ruling 2026-10-21; spec §14.7): the human's Enter is the authorization. An
  * UNVERIFIED speaker's turn (not enrolled now, or too short to verify) of the attached human's own voice principal,
  * ambient (mode conversation) under a conversation ceiling (any send ceiling since 2026-10-23: short speech is never
- * thrown away; pieces and send-now stay refused while it is in the draft, and the send word sends it clamped, TD-2026-10-23-496), not intercepted, is NOT refused
+ * thrown away; pieces and send-now stay refused while it is in the draft, and the send word sends it stamped voice-unverified, TD-2026-10-23-496), not intercepted, is NOT refused
  * voice-speaker at receipt: the other guards run, and an accepted one keeps its text and is stamped forwardable:true,
  * draftOnly:true, speakerVerified:false (both kernel-stamped; a client claim is BAD_REQUEST). It fills the draft only:
  * the voice principal's direct send, a piece claim and a send-now (hotkey) claim over it are refused voice-speaker
@@ -92,7 +92,7 @@
  *   - request.voice.send.claim{hsid, by, turnSeq|turnSeqs} (human, gui/device): checks and CONSUMES the cited turns
  *     atomically (a second tab gets voice-stale-utterance) and binds {connId, hsid, by, expiresAt: now + 5 s};
  *     originFor() hands the binding to the next session.send{source:'voice'} of that connection, which gets
- *     origin 'voice' + sentBy (and the supervisor's clamp). An expired claim is dropped. Backstop (fail closed): a voice
+ *     origin 'voice' + sentBy (a record; the turn's permissions are a typed turn's, TD-2026-10-23-939). An expired claim is dropped. Backstop (fail closed): a voice
  *     send while an unclaimed pending turn of the attachment is the send word is stamped origin 'voice' anyway;
  *   - the attachment's SEND CEILING (voice.session.start{send?}): key (default) < word < pieces; word and pieces need a
  *     conversation ceiling; pieces takes one fresh presence per GUI login (the voice.widen strictness card with
@@ -465,7 +465,7 @@ export class VoiceControl {
     return ambientIdleMsOf(this.#o.ambientIdleMs);
   }
 
-  /** Dictate: an accepted unverified draft turn not yet sent (any attachment): it blocks piece and send-now claims, and clamps any send */
+  /** Dictate: an accepted unverified draft turn not yet sent (any attachment): it blocks piece and send-now claims, and stamps any send voice-unverified */
   #outstandingDraft(t: UserTurn): boolean {
     return t.draftOnly === true && !t.refused && t.seq > 0 && !this.#forwarded.has(t.turnId);
   }
@@ -825,16 +825,16 @@ export class VoiceControl {
         // human's own voice principal, an AMBIENT turn (ambient never sends itself, TD-2026-10-20-125) under a
         // conversation ceiling whose send ceiling is 'key' (no send word, no pieces). Not intercepted (a decision or
         // control phrase from an unverified speaker is still refused). Every other guard still runs at receipt.
-        // 2026-10-23 (founder ruling: short speech is never thrown away): under EVERY send ceiling. Pieces (and the send word until TD-2026-10-23-496, which lets it send the draft clamped)
+        // 2026-10-23 (founder ruling: short speech is never thrown away): under EVERY send ceiling. Pieces (and the send word until TD-2026-10-23-496, which lets it send the draft stamped voice-unverified)
         // and send-now stay refused while an unverified turn is in the draft (#outstandingUnverified), so only Enter sends it.
         // Aegis 2026-10-23 (Talk, narrow): a push-to-talk clip too short to verify (gated speech under the minimum) fills the
-        // draft unverified too; the kernel clamps its send as voice-unverified whatever the GUI does. A LONG ptt clip that
+        // draft unverified too; the kernel stamps its send voice-unverified whatever the GUI does. A LONG ptt clip that
         // does not match keeps the speaker gate.
         const shortPtt = p.mode === 'ptt' && typeof p.gatedSpeechMs === 'number' && p.gatedSpeechMs < VOICE_MIN_VERIFY_SPEECH_MS;
         // TD-2026-10-23-496 (founder): under a send-word (or pieces) ceiling the human accepted at attach that anyone near
         // the mic can send with the word (liabilityAck on the start row). The held word from the attached human's own voice
         // principal is then the word whoever spoke it: not a draft part, never verified (speakerVerified:false), and its
-        // send stays clamped. Not intercepted; never during a trial (a take).
+        // send is stamped voice-unverified. Not intercepted; never during a trial (a take).
         const wordAnyVoice = !trial && !enrolledNow && p.intercepted === undefined && a !== null && sendRank(a.send) >= sendRank('word') && voicePrincipalOf(a.owner) === c.principal && typeof p.text === 'string' && isSendWord(p.text, this.#word());
         const draftOnly = !wordAnyVoice && !trial && !enrolledNow && p.intercepted === undefined && a !== null && ((a.mode === 'conversation' && p.mode === 'conversation') || shortPtt) && voicePrincipalOf(a.owner) === c.principal;
         // Aegis M2: a per-turn mode claim, checked at send against the human's attachment ceiling
@@ -1016,7 +1016,7 @@ export class VoiceControl {
     return { anchorT1: prev.anchorT1, anchorReceivedAt: prev.anchorReceivedAt, inherited };
   }
 
-  /** TD-2026-10-23-496: a send word from any voice was consumed by this send's claim (or waits): the send is clamped. */
+  /** TD-2026-10-23-496: a send word from any voice was consumed by this send's claim (or waits): the send is stamped voice-unverified. */
   #anyVoiceWordPending(human: string, hsid: string): boolean {
     const vp = voicePrincipalOf(human);
     if (!vp) return false;
@@ -1024,7 +1024,7 @@ export class VoiceControl {
     return [...this.#userTurns.values()].some((t) => t.principal === vp && t.hsid === hsid && t.wordAnyVoice === true && !t.refused && now - t.receivedAt <= SEND_WORD_CLAIM_MAX_AGE_MS);
   }
 
-  /** Aegis H-1: the human's accepted inherited (continuity) turns on hsid not yet sent: a send that carries one is clamped. */
+  /** Aegis H-1: the human's accepted inherited (continuity) turns on hsid not yet sent: a send that carries one is stamped voice-unverified. */
   #outstandingInherited(human: string, hsid: string): UserTurn[] {
     const vp = voicePrincipalOf(human);
     if (!vp) return [];
@@ -1177,7 +1177,7 @@ export class VoiceControl {
     if (by === 'word') {
       if (sendRank(a.send) < sendRank('word')) throw voiceRefusal('voice-off', "the attachment's send ceiling does not allow a send word", { send: a.send, cause: 'send-ceiling' });
       // TD-2026-10-23-496 (supersedes the G-VOX-06 refusal on this path): the word sends the WHOLE draft, verified or not;
-      // the human accepted at this attach that anyone near the mic can send with it. originFor clamps the send
+      // the human accepted at this attach that anyone near the mic can send with it. originFor stamps the send
       // (voice-unverified) when the draft holds an unverified, inherited or any-voice turn.
       const t = pending.find((x) => x.seq === payload.turnSeq);
       if (!t) throw stale('the cited turn is not a pending turn of this attachment (already consumed by another send?)', { turnSeq: payload.turnSeq });
@@ -1224,17 +1224,17 @@ export class VoiceControl {
     try {
       // Dictate (Aegis 2026-10-21, fail closed): a send whose attribution matched an unverified draft turn, or a voice-hinted
       // send while one is outstanding on this session (any attachment: an edited draft matches nothing), is
-      // 'unverified' (turn.sent origin 'voice-unverified', clamped). Its outstanding turns are consumed (releaseOrigin
+      // 'unverified' (turn.sent origin 'voice-unverified'; for the record only since TD-2026-10-23-939: the turn's permissions are a typed turn's). Its outstanding turns are consumed (releaseOrigin
       // hands them back if the send fails).
       const matched = attr?.turnIds.some((id) => this.#userTurns.get(id)?.draftOnly === true) === true;
       const outstanding = this.#outstandingUnverified(human, hsid);
       // Aegis H-1: an inherited (continuity) turn carries no speaker evidence: a send that includes one (attributed, or a
-      // voice-hinted send while one is pending on this session) is clamped voice-unverified under every ceiling
-      // TD-2026-10-23-496: a word send whose word came from any voice (unverified) is clamped too
+      // voice-hinted send while one is pending on this session) is stamped voice-unverified under every ceiling
+      // TD-2026-10-23-496: a word send whose word came from any voice (unverified) is stamped so too
       const inherited = attr?.turnIds.some((id) => this.#userTurns.get(id)?.basis === 'continuity') === true || anyVoiceWord || (base?.sentBy === 'word' && claim === undefined && this.#anyVoiceWordPending(human, hsid));
       const pendingInherited = this.#outstandingInherited(human, hsid);
       // Aegis M-1 (defence in depth): a WORD send with any unverified or inherited turn outstanding on this session is
-      // clamped whatever the hint says (the word sends the whole draft, TD-2026-10-23-496)
+      // stamped voice-unverified whatever the hint says (the word sends the whole draft, TD-2026-10-23-496)
       const wordOverUnchecked = base?.sentBy === 'word' && (outstanding.length > 0 || pendingInherited.length > 0);
       if (matched || inherited || wordOverUnchecked || (voiceHint && (outstanding.length > 0 || pendingInherited.length > 0))) {
         const ids = [...outstanding, ...pendingInherited].map((t) => t.turnId);
@@ -1287,7 +1287,7 @@ export class VoiceControl {
       if (attr && a && a.hsid === hsid && sendRank(a.send) >= sendRank('word') && attr.turnIds.some((id) => this.#userTurns.get(id)?.mode !== 'ptt')) return { sentBy: 'piece' };
       return null;
     } catch {
-      return { sentBy: 'word' }; // an origin check that fails is a voice origin (the clamp fails closed)
+      return { sentBy: 'word' }; // an origin check that fails is a voice origin (the stamp fails toward voice)
     }
   }
 

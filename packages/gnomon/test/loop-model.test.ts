@@ -212,7 +212,9 @@ describe('the loop-origin clamp', () => {
     expect(autoIfs.length).toBeGreaterThanOrEqual(3);
     for (const l of autoIfs) expect(l, l.trim()).toMatch(/mayAuto\(/);
     expect((src.match(/await b\.auto\(/g) ?? []).length).toBe(autoIfs.length);
-    expect(src).toMatch(/const shown = loopBy !== null \? withLoopOrigin\(voiced, loopBy\) : voiced;/);
+    expect(src).toMatch(/const shown = loopBy !== null \? withLoopOrigin\(offered, loopBy\) : offered;/);
+    // scoped edit offers never reach a loop session's card
+    expect(src).toMatch(/const offered = editPass\?\.ok && loopBy === null \? withEditScopes\(/);
     // and nothing in 8.0 makes a supervisor session a loop session (step 10 sets loopOrigin, through this clamp)
     expect(src).not.toMatch(/loopOrigin\s*[:=][^?]/);
     for (const m of ['mode:auto-edits', 'mode:read-only', 'mode:ask:read-only', 'rule:']) expect(loopClampAllows(m, undefined)).toBe(false);

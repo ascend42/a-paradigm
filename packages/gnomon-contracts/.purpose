@@ -86,6 +86,13 @@ components:
       folds whitespace; trims; refuses > SESSION_NAME_MAX = 80 code points
       and kept format characters); '' resets. Descriptor sessionRename.
       Test: test/session-name.test.ts.
+    edit-rules-contract: >-
+      TD-2026-10-23-939 follow-up (Aegis 2026-10-23; one clientApiId move,
+      sha256:a23b2c75...a1ce -> sha256:aa537e4c9af0efee02ebd5d03a734c4de915c5e02a58021d71a6fd892bf379d4):
+      APPROVE_SCOPE_KINDS adds file and repo-edits (parseApproveScope, scopeDigest
+      over canonicalJson of the scope); ALWAYS_RULE_MATCHES adds file and
+      repo-edits; approval.rule.learned reserves path (tag
+      8.0:TD-2026-10-23-939, sensitive). Tests: test/approve-scope.test.ts.
     loops-contract: >-
       8.0:loops (docs/specs/gnomon-loops.md §3-§5, build step 2; the ONE loops
       clientApiId move, sha256:c4e2c7d9...e2c9 ->

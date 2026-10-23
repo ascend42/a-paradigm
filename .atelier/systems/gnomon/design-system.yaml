@@ -173,12 +173,12 @@ foundations:
     status: clear
     from: { session: 2026-10-20-gnomon-gui-fidelity, board: s1-tokens-themes, note: "material, never a state signal (world rule)", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
   motion:
-    durations: [120, 220, 320, 360, 400, 450, 500, 550, 1100, 3000]
+    durations: [120, 160, 180, 220, 320, 360, 400, 500, 1100, 3000]
     easings: ["cubic-bezier(.3, .7, .3, 1)", "cubic-bezier(.3, 1.4, .5, 1)", "cubic-bezier(.2, .8, .2, 1)", "ease-in", "ease-out", "ease-in-out", "linear"]
     tokens:
-      fly: "550ms cubic-bezier(.3,.7,.3,1)"     # card-in flutter
-      stamp: "400ms cubic-bezier(.3,1.4,.5,1)"  # APPROVED stamp
-      flyout: "450ms ease-in"
+      arrive: "160ms ease-out"                  # card-in: a quick fade-in, opacity only
+      stamp: "400ms cubic-bezier(.3,1.4,.5,1)"  # the decision stamp, landing straight (no tilt)
+      fade: "180ms ease-out"                    # a decided card fades out (opacity only), then the pile closes up (reflow)
       droop: "500ms ease-out"
       bob: "1100ms ease-in-out"                 # cap bob, only while streaming
       hold: "3000ms linear"                     # held voice countdown
@@ -188,6 +188,9 @@ foundations:
       meter: "120ms linear"                     # real mic level only
     status: clear
     from: { session: 2026-10-15-gnomon-aesthetic, board: motion, choice: lively-workshop, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+    amended_by:
+      - { date: 2026-10-23, decided_by: creator, what: "a decided card no longer flies off (the flyout's tilt, spin and drift are gone): after its stamp it fades out (opacity only, fade 180ms ease-out), then the space it held closes up (reflow 220ms) and it is removed. Reduced motion (the OS or Settings › Motion: reduce): removed at once. flyout (450ms ease-in) retired.", founder_words: "also with the cards completion / dismissal, we can get rid of the whole card tilt and spin aspect and can go with a simple and tasteful fade out", review: "atelier-mika 2026-10-23 (built and reviewed in the caret round). " }
+      - { date: 2026-10-23, decided_by: creator, what: "arrival is a quick fade-in (arrive 160ms ease-out, opacity only; the card-in flutter, its slide and its 12° spin are gone; fly 550ms retired), and the decision stamp lands straight (no -8° tilt), then the fade. Reduced motion: the card appears and goes at once and the stamp shows flat. Mid-sentence capitals in dictation keep Mika's rule (lowered, unless the human already wrote the word capitalised mid-sentence).", founder_words: "answers to Mika's three questions, 2026-10-23: keep the capitals rule; the APPROVED stamp lands straight, then the fade; arrival becomes a simple quick fade-in, no flutter, instant under reduced motion", review: "atelier-mika 2026-10-23: built and rendered (stack pile and pinned, day and night). The resting pile tilts stay: they are rest, not motion" }
   target:
     key-h: 28            # --key-h: the one height of every key, any variant, any zone (session 2026-10-23-gnomon-folder-picker)
     header-control: 28   # every header control (board header-5b); = key-h
@@ -263,15 +266,14 @@ components:
   voice-pill:
     role: "Kernel-owned header indicator and the ladder's trigger: mic dot + rung name + one live fact; never only a glyph."
     anatomy: [dot, rung, fact, "meter (only while hearing)", "progress (setup)"]
-    variants: { off: "hollow dot, 'Voice off'", live: "filled ink dot + soft ring", clamp: "2px amber edge, fact 'edits ask first'", fail: "vermilion fact with the reason", action: "'○ Start voice · app not running' when the app can't run" }
+    variants: { off: "hollow dot, 'Voice off'", live: "filled ink dot + soft ring", fail: "vermilion fact with the reason", action: "'○ Start voice · app not running' when the app can't run" }
     sizes: { header: { height: 28, font: 11.5 } }
-    states: [default, hover, focus, expanded, live, clamp, fail, action]
-    tokens: { edge: --key-edge, dot-live: --ink, clamp: --warn-edge, fail: --fail, radius: "pill by day, 0 at night" }
+    states: [default, hover, focus, expanded, live, fail, action]
+    tokens: { edge: --key-edge, dot-live: --ink, fail: --fail, radius: "pill by day, 0 at night" }
     source: packages/gnomon-gui/static/styles.css:624-645; packages/gnomon-gui/static/index.html:22
     examples:
       off: '<button id="voice-pill" class="voice-pill kernel-owned voice-off" type="button" aria-haspopup="menu" aria-expanded="false"><span class="voice-dot" aria-hidden="true"></span><span class="voice-rung">Voice off</span><span class="voice-fact"></span></button>'
       live: '<button class="voice-pill kernel-owned live" type="button" aria-haspopup="menu" aria-expanded="false"><span class="voice-dot" aria-hidden="true"></span><span class="voice-rung">Dictate</span><span class="voice-fact">heard 4s ago</span></button>'
-      clamp: '<button class="voice-pill kernel-owned live clamp" type="button"><span class="voice-dot" aria-hidden="true"></span><span class="voice-rung">Send word</span><span class="voice-fact clamp">edits ask first</span></button>'
       fail: '<button class="voice-pill kernel-owned fail" type="button"><span class="voice-dot" aria-hidden="true"></span><span class="voice-rung">Dictate</span><span class="voice-fact fail">not sent: too short</span></button>'
       action: '<button class="voice-pill kernel-owned voice-off" type="button"><span class="voice-dot" aria-hidden="true"></span><span class="voice-rung">○ Start voice</span><span class="voice-fact">app not running</span></button>'
       expanded: '<button class="voice-pill kernel-owned live" type="button" aria-haspopup="menu" aria-expanded="true"><span class="voice-dot" aria-hidden="true"></span><span class="voice-rung">Talk</span><span class="voice-fact">heard 4s ago</span></button>'
@@ -286,7 +288,7 @@ components:
     examples:
       default: '<button class="rung" role="menuitemradio" aria-checked="false"><span class="rung-r" aria-hidden="true"></span><span class="rung-text"><strong class="rung-name">Talk</strong><span class="rung-line">hold to speak; sends after release</span></span><span class="rung-tag"></span></button>'
       checked: '<button class="rung" role="menuitemradio" aria-checked="true"><span class="rung-r" aria-hidden="true"></span><span class="rung-text"><strong class="rung-name">Dictate</strong><span class="rung-line">open mic fills the box; you press Enter</span></span><span class="rung-tag"></span></button>'
-      not-ready: '<button class="rung" role="menuitemradio" aria-checked="false"><span class="rung-r" aria-hidden="true"></span><span class="rung-text"><strong class="rung-name">Send word</strong><span class="rung-line">say your word to send · edits ask first</span></span><span class="rung-tag chip">set up</span></button>'
+      not-ready: '<button class="rung" role="menuitemradio" aria-checked="false"><span class="rung-r" aria-hidden="true"></span><span class="rung-text"><strong class="rung-name">Send word</strong><span class="rung-line">say your word to send</span></span><span class="rung-tag chip">set up</span></button>'
       disabled: '<button class="rung" role="menuitemradio" aria-checked="false" disabled><span class="rung-r" aria-hidden="true"></span><span class="rung-text"><strong class="rung-name">Pieces</strong><span class="rung-line">open a session first</span></span><span class="rung-tag"></span></button>'
     status: clear
     from: { session: 2026-10-21-gnomon-voice, board: mode-model, choice: trust-ladder, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
@@ -302,17 +304,17 @@ components:
       risk: '<span id="risk" class="risk-chip kernel-owned">browser&nbsp;·&nbsp;<span class="risk-long" aria-hidden="true">extension&nbsp;</span>risk</span>'
     status: clear
     from: { session: 2026-10-21-gnomon-voice, board: header-5b, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
-    amended_by: [{ session: 2026-10-22-gnomon-loops-ui, board: running-indicator, what: "the loops word joins the kernel status (component loops-word)" }]
+    amended_by: [{ date: 2026-10-23, decided_by: creator, what: "TD-2026-10-23-939: the voice clamp is removed (voice-sent turns follow the run mode and Always rules, like typed turns). The clamp variant, state, token and example are gone; so are the header clamp chip, the card line and the transcript's amber \"edits ask first\". Amber on the pill is now only a draft waiting elsewhere (.voice-fact.note)." }, { session: 2026-10-22-gnomon-loops-ui, board: running-indicator, what: "the loops word joins the kernel status (component loops-word)" }]
   chip:
-    role: "A status label nobody clicks: one fact on a line (the card voice tag, hand only, flags, the voice clamp, mod symbols, dev). Anything you can click is a key (24px, --key-edge), never a chip."
+    role: "A status label nobody clicks: one fact on a line (the card voice tag, hand only, flags, mod symbols, dev). Anything you can click is a key (24px, --key-edge), never a chip."
     anatomy: [text, "handle word (gate voice tag only)"]
     looks: "Eight looks become three: the chip (this), the 24px quiet key (✎ rename, run mode ▾, stack filter), and the reply's labelled part (.reply-part, a left rule; it was never a chip)."
-    variants: { plain: "--sec text, --rule edge", ink: "--ink text (mod symbol chips)", warn: "--warn-ink text, --warn-edge, --warn-bg (flags, dev, the clamp)" }
+    variants: { plain: "--sec text, --rule edge", ink: "--ink text (mod symbol chips)", warn: "--warn-ink text, --warn-edge, --warn-bg (flags, dev)" }
     sizes: { default: { height: 18, font: 10.5, pad-x: 6, gap: 4 } }
     states: [plain, ink, warn]
     tokens: { edge: --rule, text: --sec, radius: "3 by day, 0 at night", warn-edge: --warn-edge, warn-bg: --warn-bg }
     tell: "The edge says whether it presses: a dark --key-edge presses, a faint --rule does not."
-    source: packages/gnomon-gui/static/styles.css:950 (the decided chip; .badge, .card-voice, .tone-chip, .clamp-chip fold into it, see migration batch chips-and-small-keys)
+    source: packages/gnomon-gui/static/styles.css:950 (the decided chip; .badge, .card-voice, .tone-chip fold into it; .clamp-chip is gone with the clamp, TD-2026-10-23-939, see migration batch chips-and-small-keys)
     examples:
       plain: '<span class="chip">hand only</span>'
       ink: '<span class="chip ink">#checkout</span>'
@@ -338,7 +340,7 @@ components:
       gate: 'say “<prefix> approve <handle>” · gate (the two-word challenge “confirm <w1> <w2>” is issued only after that phrase, and only in the capture-excluded kernel region)'
       none: 'hand only'
       from: { session: 2026-10-21-design-systems, board: gnomon-voice-tag, choice: say-instruction }
-    states: [arriving, default, buried (keys inert until fanned), fanned, held, stamped, leaving, failed]
+    states: ["arriving (a quick fade-in, opacity only)", default, buried (keys inert until fanned), fanned, held, "stamped (the decision word, straight)", "leaving (fades out, opacity only, then the pile closes up; founder 2026-10-23, tokens.motion amended_by)", failed]
     tokens: { fill: --sheet, edge-w: "4 day / 3 night", shadow: --sheet-shadow, pad: "10 12 10 14" }
     source: packages/gnomon-gui/static/styles.css:313-394,1009-1014; packages/gnomon-gui/src/core/render.ts:352-357,736-800
     examples:
@@ -358,6 +360,7 @@ components:
       - { session: 2026-10-22-gnomon-loops-ui, board: trust-card, what: "variant loop-trust (short in the pile, unfolds into the centre)" }
       - { session: 2026-10-22-gnomon-loops-ui, board: notify-decide, what: "variant loop-choice; the family head on every card" }
       - { session: 2026-10-22-gnomon-local-model, decided_by: creator, what: "variant local-config; family ⊙ gnomon (C3)" }
+      - { date: 2026-10-23, decided_by: atelier-mika, open_to: creator, what: "scoped Always (TD-2026-10-23-939 follow-up): when a card offers scoped always choices (Bash prefixes, edit file/repo), its key row is Allow · Deny · 'Always ▾'. The ▾ key decides nothing; it unfolds .always-choices under the row (a group labelled 'always allow, no card next time:'), one decision key per choice with its note visible under it (never only in title=), 8px between choices, 2px key-to-note. Keys read the scope ('this exact edit', 'edits to this file', 'edits in this repo', or the quoted prefix words); each key's accessible name starts 'Always:'. Esc folds back to the key; the fold and focus survive a repaint, per card and zone. Why: five long keys wrapped to three or four ragged rows in the pile at every width and to three pinned at 1024, and the one note that tells the repo choice from auto-edits lived only on hover. A popover menu was not used: the pile clips and fans, and a choice must never be buried.", source: "packages/gnomon-gui/src/core/render.ts alwaysChoices; packages/gnomon-gui/src/ui/app.ts setAlwaysFold; packages/gnomon-gui/static/styles.css .always-choices" }
     build_requirements: ["core/render.ts rootRowLine gains a case on schemaVersion 'gnomon-root-local:v1' that renders every signed field and returns null on any it can't (no Allow; Aegis C1e). Session 2026-10-22-gnomon-local-model.", "a loop card's title wraps to two lines at the 300-340px stack width instead of truncating ('fix is un…' in the direction at 1024)", "loop-choice's voice tag: the spec makes Stop voice-eligible (deny-direction, gnomon-loops.md §3.3) while the direction shows 'hand only'; the tag quotes Stop's phrase once the grammar has one (rule voice-tag-quotes-the-phrase), else stays 'hand only'"]
   pile:
     role: "The global stack as a paper pile: decision cards sorted by urgency, then alerts, then the waiting-for-trust slip at the foot; fans on hover AND focus-within so buried keys are keyboard-reachable (alerts and the slip sit flat)."
@@ -603,6 +606,7 @@ components:
     amended_by:
       - { date: 2026-10-23, what: "variant voice-heard gains state not-checked: a short clip that inherited its speaker from the verified turn before it (voice.turn.user speakerBasis 'continuity') reads '<speaker>: “…” · in composer · not checked as you'. Text only: no new colour, rule or mark; the speaker label stays (it is attributed, never verified). The draft note (composer foot) says 'draft · [“<words>”] not checked as you' and ends in its next move: ', so edits ask first' (Dictate: the send is clamped voice-unverified), ' · say '<word>' or press Enter' (Send word), ' · sending in pieces' / ' · piece waiting' / ' · Enter sends it' (Pieces: a piece waits until one part is checked). A cut quote's full words are the note's title. Voice send refusals: '✕ not sent by voice · none of these words were checked as you' (inherited-only) / '· these words were not checked as you' (inherited), then 'next: press Enter to send it'", provenance: "Aegis H-1 review 2026-10-23 (speaker continuity carries no speaker evidence); founder ruling 2026-10-23 (natural, fast speech is never cut)", review: "atelier-mika 2026-10-23: accepted with amendments (the next move ends the line, as in every draft note; 'edits ask first' only where it is news, and tied to its cause with 'so' so 'edits' never reads as the human's own edits to the draft; Send word and Pieces drop it because their rung already clamps every voice send; Pieces with no checked part says 'Enter sends it' instead of leaving a piece ring that never sends; the cut quote gets its full words in the title like the unverified quote). Row and refusal copy accepted as built" }
       - { date: 2026-10-23, what: "TD-2026-10-23-496: under the Send word rung an unchecked part (unverified or not checked) is information, not a block. The draft note reads 'draft · some words not checked as you · say '<word>' or press Enter' and the word sends the whole draft (clamped voice-unverified). The Send word risk check sentence reads 'When you say “<word>”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, so any edit Claude tries in a voice-sent turn asks you first.' (the acknowledgement box text is unchanged, so earlier acknowledgements stand)", provenance: "founder decision TD-2026-10-23-496 (the user owns their environment)", review: "atelier-mika 2026-10-23: accepted with amendments (information, not a warning: the note keeps the quiet --sec draft-note colour, no warn tone, and ends in its next move; 'some words' only when some are: a wholly unchecked unedited draft reads 'draft · not checked as you · say '<word>' or press Enter'; which words is the note's title 'not checked as you: <words>' under Send word, one vocabulary with the note (was 'unverified voice: …'); the risk sentence names a video as well as a person, since a quiet room is what the founder now asks of the user; measured 2 lines in the 261px note at 1024, 1 line at 1440, risk 4 lines at about 68ch). Aegis pending" }
+      - { date: 2026-10-23, decided_by: creator, what: "TD-2026-10-23-939 (the voice clamp is removed) supersedes the clamp wording above: the not-checked draft note ends 'draft · [“<words>”] not checked as you' (no ', so edits ask first'), Pieces says 'sending in pieces' (no '· edits ask first'), a voice-sent row has no amber 'edits ask first', and the Send word send is not clamped. The not-checked mark stays as information.", review: "atelier-mika 2026-10-23: copy changed in core/dictation.ts with its tests" }
       - { date: 2026-10-23, what: "variant raw: the activity fold reused for raw rows (founder: 'is there a way to know what is being shown here. i turned on raw responses'); reviewed: atelier-mika 2026-10-23, accepted as proposed" }
       - { date: 2026-10-23, what: "working becomes a key naming what the turn is doing now (thinking, writing, a tool and its target, a hook, finishing) that unfolds variant step-list; new variant hook-result (the turn's quiet summary line, warn only when a hook blocked, failed or timed out). Claude Code streams hook_started / hook_response under --include-hook-events: hook_name ('Stop', 'PreToolUse:Bash') and outcome, never the command; a blocking hook's command comes from Claude's own 'Stop hook feedback' line", founder_words: ["with gnomon seeing what the stop hooks are doing if that information can be shown in that little chip label and then after the result of it would be nice", "just right there where that 'working label' area is just a little bit of labeling on what is being called etc and maybe even clicking on it to expand out to see what is being done there is something that we dont even get in claude code which would be good for people to gain context in what is being done"], review: "atelier-mika 2026-10-23: accepted with amendments (the words ellipsize and the clock never does; a hook takes the key after 1 s; 24px rows; no live region in the remounting row, one persistent #turn-say; outcome copy 'failed (exit N)', '3 Stop hooks', outcomes a comma list). Aegis pending" }
   composer:
@@ -621,6 +625,8 @@ components:
       grown: '<div class="composer-ctrls"><span class="meta composer-lines">7 lines</span><button class="key quiet composer-tall" type="button" aria-pressed="false" aria-label="Tall view">⤢</button><button class="key pri" type="submit">send</button></div>'
     status: clear
     from: { session: 2026-10-21-gnomon-voice, board: composer, choice: autogrow-12-tall-24, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm }, amended: { date: 2026-10-23, by: "founder report 2026-10-23 (why is the text area default this size)", what: "controls in one row at the bottom right (line count, ⤢, send); line count only from 2 lines up" } }
+    amended_by:
+      - { date: 2026-10-23, what: "state dictating: the live words show AT THE CARET, where the turn will land (the start, mid-paragraph, over a selection; an unfocused composer uses its last caret, else the end). #composer-ghost becomes an aria-hidden mirror laid exactly over the textarea (same box, font, line height and wrapping); while it shows, the textarea's own text is transparent and its caret stays, and the mirror draws the composer text with the words spliced in. The textarea never holds a live word (B1). Committed words --ink with a dotted --sec underline (so they never read as typed text); the unfixed tail --sec italic at full strength (Mika: 0.55 was 2.4:1 day, 2.7:1 night); '…' (--sec italic) at the caret before any words. The textarea's stale selection highlight is not drawn while ghosting (the mirror shows the words replacing it); after new words the mirror and textarea scroll together to show them with one line of context, and when the textarea cannot scroll as far its caret hides until they line up. An IME composition shows the textarea itself while it lasts. Forced colours keep the textarea transparent. The composer grows to fit the words like typed text. Each heard turn lands at the caret and the caret moves just after it; the joins are fixed (one space, never two; a capital at a sentence start; a plainly capitalised first word lowered mid-sentence, never 'I' or an acronym; no full stop before the sentence goes on). A turn that lands anywhere but the end makes the draft edited and held: Enter (or the send word) sends it as one message", founder_words: "based on where the user's cursor is in the [composer] that is where all of the text should be input to. like if i go back to the top or in the middle of a paragraph what i say should be injected there", replaces: "the ghost line under the textarea (an italic --sec line of its own)", review: "proposed 2026-10-23 by the builder; atelier-mika 2026-10-23 accepted with amendments (the dotted --sec underline on committed words is accepted: --sec is 6.6:1 day and 5.8:1 night on --sheet, and it tells live words from typed ones in grayscale; the amendments are the full-strength tail, the '…' at the caret, the hidden stale selection, the offset caret, IME and forced colours). Mid-sentence capitals: lowered unless the human already wrote that word capitalised mid-sentence (a name); the creator may still choose never-lower. Aegis pending (a mid-draft turn sends as one edited part)" }
   session-row:
     role: "A session in the left rail: swatch, name, state note (needs you / failed / KNOT / with mod:<name>)."
     states: [default, hover, active, needs-you, failed (droops once), gone, renaming]
@@ -632,13 +638,27 @@ components:
     from: { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
   mod-fence:
     role: "A mod's view in a GUI-owned fence (label mod:<name>, dashed --rule edge); kit blocks only; never mimics kernel-owned regions; no kit.Button in panel or Workshop."
-    states: [default, dev-linked, paused, error, absent]
-    source: packages/gnomon-gui/static/styles.css:876-906
+    states: [default, dev-linked, paused, error, absent, fitted, key-value-table, truncated-focused]
+    source: packages/gnomon-gui/static/styles.css:962-1037 (fence 962-982, fitted .mod-fit 983-1037); packages/gnomon-gui/src/core/render.ts:97-150,226-270 (fit, tableFit, fitTextKind, the swatch); packages/gnomon-gui/src/core/mod-panels.ts:159-214 (TRUNCATABLE_SELECTOR, markTruncated, renderModFence); packages/gnomon-gui/src/ui/mod-panels-mount.ts:173
+    fitted:
+      rule: "Every fence but the Workshop's is fitted to its column (200-460px): the same rules for every mod, never a per-mod case."
+      type: "body 11.5 (control), quiet text and section heads 10.5 (label); a Box title 600; line-height 1.45"
+      rhythm: "2px grid: 8px between a view's top-level sections, 2px inside a section, 6px between words in a row"
+      head: "Text tone head = the label style (10.5, --sec, caps .06em); its count beside it as quiet meta"
+      swatch: "a project hue (Text tone hue-0..5) is the chat header's ■ in the hue's ink pair (□ for a hollow mark), aria-hidden; never a ringed dot"
+      ids: "a word with no whitespace longer than 12 characters is one line with an ellipsis and its full text in title; never broken mid-token"
+      prose: "row prose clamps to two lines with an ellipsis (full text in title past 40 characters); after an id it starts its own line; a short word (a date) stays beside the id"
+      table: "heads in the label style (400, --sec, a --rule underline); numbers right-aligned and tabular; cells at most min(24ch, 100%) with an ellipsis; below its width bucket (tw-N from its natural width, one container query per bucket) each row is its first cell over label/value pairs (each a flex line no wider than the column: the label keeps its width, the value ellipsizes), empty cells left out, 8px between rows"
+      truncated: "exactly the items the CSS cut get one tab stop each (tabindex 0, full text in title); :focus-visible shows the whole text inside a 2px --key-edge ring"
+      meter: "a mod's kit.Progress is ink (--ink2) on a 4px --rule track, never the platform blue"
+      empty: "a mod's empty state is one quiet line, not one per section (paradigm-context: 'nothing yet: no tasks, decisions or lore')"
     examples:
       default: '<div class="mod-fence"><div class="mod-fence-head"><span class="mod-label">mod:paradigm-context</span></div><div class="mod-fence-body">…</div></div>'
+      fitted: '<section class="mod-fence mod-region-left-bottom"><header class="mod-fence-head"><small class="mod-label">mod:paradigm-context</small></header><div class="mod-fence-body mod-fit"><div class="blk blk-box"><div class="blk-title">Paradigm</div><div class="blk blk-box blk-row"><span class="blk blk-swatch pink h4" aria-hidden="true">■</span><p class="blk blk-text blk-tok" title="a-platform-fighter">a-platform-fighter</p></div><div class="blk blk-box"><div class="blk blk-box blk-row"><p class="blk blk-text tone-head blk-word">lore</p><p class="blk blk-text tone-quiet blk-prose">1 of 1</p></div><div class="blk blk-box blk-row"><p class="blk blk-text tone-quiet blk-prose">lore insight</p><p class="blk blk-text tone-quiet blk-tok" title="L-2026-10-23-matt-canoy-claude-195956-001">L-2026-10-23-matt-canoy-claude-195956-001</p><p class="blk blk-text tone-quiet blk-prose blk-break">“Define core combat loop”</p></div></div></div></div></section>'
       dev-linked: '<div class="mod-fence"><div class="mod-fence-head"><span class="mod-label">mod:paradigm-context</span> <span class="chip warn">dev</span></div><div class="mod-fence-body">…</div></div>'
     status: clear
     from: { session: 2026-10-20-gnomon-gui-fidelity, board: s5-workshop-footer, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+    amended_by: [{ date: 2026-10-23, what: "fitted mod views: side-column type, label-style section heads with counts as meta, the ■ project swatch, one-line ids, two-line titles, tables that fit their column (key-value rows below their width bucket), keyboard-reachable truncation, an ink meter, one-line empty states", founder_words: "these mods have terrible display in gnomon", review: "atelier-mika 2026-10-23: approved with fixes (cells max-width 100% at the 200px rail, 8px between key-value rows, truncated items focusable with the full text on focus, one empty line for paradigm-context); applied. Mika's own pass after the builder finished: rendered at 200, 230, 300 and 444 px, day and night, real, long, empty and 9-session data; the 200px key-value field still ran 6px past the fence, so the field is now a flex line (td::before flex none); then no overflow, no run-together heads, no mid-token break. Open: a long paradigm-context view holds 35 tab stops (one per cut item); a per-fence 'show full' toggle would cost one" }]
   empty-state:
     role: "The quiet centre when no session is open: a sheet with title, meta and + New session."
     source: packages/gnomon-gui/static/styles.css:828-832; packages/gnomon-gui/static/index.html:44
@@ -932,12 +952,12 @@ zones:
     from: { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, choice: desk, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
   centre:
     surface: desk, centre
-    holds: ["chat header: title (✎ rename) · ■ project · model · started · run mode ▾ · ⋯ (small controls are 24px keys)", "the chat (timestamps, took Ns, activity fold, working line)", "offer slips under their reply", "this session's pending cards pinned above the composer (max 30vh)", "the composer (one send key)", "the empty sheet when no session is open", "the Loops leaf over the chat (header loops word, Gnomon ▾ Loops…, ⌘K loops.open); Esc folds it to an edge tab", "a loop-trust card unfolded over the chat by its Read key (fold or Esc puts it back)"]
+    holds: ["chat header: title (✎ rename) · ■ project · model · started · run mode ▾ · ⋯ (small controls are 24px keys)", "the chat (timestamps, took Ns, activity fold, working line)", "'↓ latest' (one key at the chat's bottom right, only while scrolled up; '↓ latest · N new')", "offer slips under their reply", "this session's pending cards pinned above the composer (max 30vh)", "the composer (one send key)", "the empty sheet when no session is open", "the Loops leaf over the chat (header loops word, Gnomon ▾ Loops…, ⌘K loops.open); Esc folds it to an edge tab", "a loop-trust card unfolded over the chat by its Read key (fold or Esc puts it back)"]
     never: ["the raw kernel feed as default (it is a palette view)", "a second send control", "a mod surface covering header, stack, Workshop or pinned cards", "a leaf or unfolded card that covers the sessions rail, the stack or the header", "page-level sideways scroll from a loop graph (it zooms inside its own frame)"]
     overflow: "Rows hold an 80ch measure; the title gives way before the meta; pinned scrolls past 30vh."
     status: clear
     from: { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, choice: desk, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
-    amended_by: [{ session: 2026-10-22-gnomon-loops-ui, board: loops-zone, choice: centre-leaf, what: "the Loops leaf" }, { session: 2026-10-22-gnomon-loops-ui, board: trust-card, choice: card-unfolds, what: "the unfolded loop-trust card" }]
+    amended_by: [{ session: 2026-10-22-gnomon-loops-ui, board: loops-zone, choice: centre-leaf, what: "the Loops leaf" }, { session: 2026-10-22-gnomon-loops-ui, board: trust-card, choice: card-unfolds, what: "the unfolded loop-trust card" }, { date: 2026-10-23, what: "records the chat's follow rule and its existing '↓ latest' key (#jump-latest, a .key at the chat's bottom right, 18px in, 10px up): at the bottom the chat follows every new row, a row that grows, a fold that opens and the composer growing; only the human's own scroll (wheel, scroll keys, touch, focus moving into the chat, a pointer on it or its scrollbar) unpins it, never a scroll the layout made. Scrolled up, nothing moves it (not a new row, not a send, not an unfold) and '↓ latest' shows, counting what arrived ('↓ latest · 3 new'); the key or scrolling back to the bottom by hand pins it again", founder_words: "as im speaking and the gnomon agent chat is going back and forth, it doesn't keep the scrolling to the bottom even though ive been at the bottom and haven't moved it", review: "records shipped behaviour (follow rule 2026-10-19, the key unchanged); atelier-mika 2026-10-23 accepted, with one amendment: a wheel, key or touch toward the top unpins only when there is something above to read (scrollTop > 0), so a chat that does not overflow yet never loses its follow" }, { date: 2026-10-23, decided_by: atelier-mika, what: "run mode ▾ while an 'edits in this repo' Always rule stands in ask: 'ask · edits by rule ▾', and ≤1040px 'ask ✓ ▾' (spoken 'edits allowed by rule'; the full words in its title). The wider forms pushed the model key out of the header at 1024. ask's menu line reads 'commands raise a card; edits in this repo pass by your Always rule', and the last entry is 'stop edits by rule' with its note (removes the rule, no Touch ID)." }]
   stack:
     surface: desk, right (300-340px; Decide preset 320-460px)
     holds: ["Stack head: 'n to decide · m alerts' · hover to fan · project filter (a 24px key)", "the pile, in this order: decision cards (most urgent first), then alerts, then the waiting-for-trust slip at the foot", "a family head on every card and alert, by glyph and word (↻ loop, ◇ session; ✦ mod and voice planned)", "+N more", "mod slot right (ruled off, headed mods, outside the pile's scroll)"]
@@ -1000,7 +1020,6 @@ content:
       rung: "a voice preset on the ladder: Off, Talk, Dictate, Send word, Pieces"
       open mic: "the mic is listening without a held key"
       send word: "the word that sends a voice turn"
-      edits ask first: "the clamp on a voice-sent turn"
       chip: "a status label nobody clicks (never 'badge' in copy)"
       key: "anything you click"
       toast: "a notice that is not a kernel alert"
@@ -1106,7 +1125,7 @@ rules:
     rule: "Violet (--knot) means KNOT and nothing else: card edge/title, cap, nothing decorative."
     from: { session: 2026-10-15-gnomon-aesthetic, board: colour }
   - id: three-semantic-colours
-    rule: "Vermilion = failed sessions/runs only; amber = warnings, held voice countdowns, the clamp and GATE; violet = KNOT. No other saturated colour."
+    rule: "Vermilion = failed sessions/runs only; amber = warnings, held voice countdowns and GATE; violet = KNOT. No other saturated colour."
     from: { session: 2026-10-15-gnomon-aesthetic, board: colour }
   - id: hue-is-identity
     rule: "A project hue is identity, never state; text in a hue uses its ink pair; every fill keeps a 1px key-edge ring."
@@ -1286,7 +1305,7 @@ migration:
   - { batch: chips-and-small-keys, from: ".badge (11px, --key-edge; .risk/.flag/.mod-dev)", to: "chip (warn for flag and dev)", uses: 4, files: ["packages/gnomon-gui/static/styles.css:164-172", "packages/gnomon-gui/src/core/render.ts:789"], from_decision: { session: 2026-10-21-design-systems, board: gnomon-chip } }
   - { batch: chips-and-small-keys, from: ".card-voice (currentColor edge, radius 2) and .handle (radius 2)", to: "chip (plain); handle keeps its warn fill at radius 3", uses: 2, files: ["packages/gnomon-gui/static/styles.css:333-334"], from_decision: { session: 2026-10-21-design-systems, board: gnomon-chip } }
   - { batch: chips-and-small-keys, from: ".tone-chip (11px, --rule, pad 0 4px)", to: "chip (ink)", uses: 1, files: ["packages/gnomon-gui/static/styles.css:895"], from_decision: { session: 2026-10-21-design-systems, board: gnomon-chip } }
-  - { batch: chips-and-small-keys, from: ".clamp-chip (warn pill, 11px)", to: "chip (warn), square at night; the pill stays the voice pill's alone", uses: 1, files: ["packages/gnomon-gui/static/styles.css:1042"], from_decision: { session: 2026-10-21-design-systems, board: gnomon-chip } }
+  - { batch: chips-and-small-keys, retired: "TD-2026-10-23-939: the voice clamp is removed, so .clamp-chip and its CSS are deleted, not migrated", from: ".clamp-chip (warn pill, 11px)", to: "chip (warn), square at night; the pill stays the voice pill's alone", uses: 1, files: ["packages/gnomon-gui/static/styles.css:1042"], from_decision: { session: 2026-10-21-design-systems, board: gnomon-chip } }
   - { batch: chips-and-small-keys, from: "✎ rename, run mode ▾, stack filter drawn as 18px chips with a --rule edge", to: "key.quiet at 24px, --key-edge, 11.5 (chat header row grows 6px)", uses: 3, files: ["packages/gnomon-gui/static/styles.css:965,971,999-1000"], from_decision: { session: 2026-10-21-design-systems, board: gnomon-chip } }
   - { batch: chips-and-small-keys, from: ".key.quiet min-height 0 (⋯, ⤢, Hold, Stop speaking ~18-21px)", to: "min-height 24, min-width 24", uses: 17, files: ["packages/gnomon-gui/static/styles.css:244,973,984"], from_decision: { extract: 2026-10-21, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } } }
   # batch card-voice-tag (board gnomon-voice-tag)

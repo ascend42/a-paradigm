@@ -118,7 +118,8 @@ import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, missi
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, hookFactsOf, hookStoredLine, syntheticStoredLine, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
-import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, inputHash, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
+import { EDIT_RULE_TOOLS as EDIT_SCOPE_TOOLS } from './rules.js';
+import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCOPE_KINDS, inputHash, withEditScopes, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle } from './local-session.js';
@@ -132,7 +133,7 @@ import { autoBashReadOnly, autoEditPass, READ_ONLY_ASK_MODE_REF, READ_ONLY_MODE_
 import { manualHolds } from '../broker/run-mode.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import type { RunMode, VoiceSentBy } from '@a-company/gnomon-contracts';
-import { clampAllows, pieceGuidance, VoiceClampBook, withVoiceOrigin } from './voice-clamp.js';
+import { pieceGuidance, VoicePieceCounter } from './voice-origin.js';
 import type { LoopRunRef } from '../loops/registry.js';
 import { loopClampAllows, withLoopOrigin } from './loop-clamp.js';
 import { guidanceHashOf } from '../voice/table-talk.js';
@@ -263,12 +264,12 @@ export interface SupervisorOptions {
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
-  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[] }) => { ruleId: string } | null;
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; editPath?: string | null; repoEdits?: boolean }) => { ruleId: string } | null;
   /**
    * P8-D87 run modes (broker/run-mode.ts RunModeControl.view): the session's EFFECTIVE mode (stricter of the chosen
    * mode and the strictness ceiling), read at every permission request. Absent ⇒ `ask` (Move 1's behaviour).
    */
-  runMode?: (hsid: string, repoKey: string) => { effective: RunMode; source?: string } | null;
+  runMode?: (hsid: string, repoKey: string) => { effective: RunMode; source?: string; ceiling?: RunMode } | null;
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
   allowScripts?: boolean;
@@ -402,8 +403,8 @@ interface Session {
    * session's exit releases it
    */
   modelUncertain: { from: string; to: string; baseline: string | null; permit: PermitV1 } | null;
-  /** TD-2026-10-21-514 ^voice-origin-clamp: the outstanding voice-origin turns (created at the first send) */
-  voiceClamp?: VoiceClampBook;
+  /** #voice-origin: the piece counter (created at the first send). A voice turn's permissions are a typed turn's (TD-2026-10-23-939) */
+  voicePieces?: VoicePieceCounter;
   /**
    * ^loop-origin-clamp (loops step 8): set for a session a loop opened (origin 'loop'). No supervisor (Claude) session
    * is a loop session in 8.0 (loop judge/summarize sessions are LocalLane's, surface none); step 10's act sessions set
@@ -426,8 +427,6 @@ interface PendingPermission {
   toolUseId: string | null;
   /** why the entry was closed before its card existed (a cancel / duplicate / exit during the raise): the expire `why` */
   closedWhy?: string;
-  /** TD-2026-10-21-514: raised under the voice-origin clamp (the answer row carries clamp:'voice') */
-  clamp?: 'voice';
 }
 
 const WIRE: Record<SessionRefusalCode, RefusalCode> = {
@@ -1236,8 +1235,6 @@ export class SessionSupervisor {
         s.consumedTurns = Math.max(0, s.consumedTurns - k);
         const turn = closedIds[closedIds.length - 1];
         await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError, ...(ev.split ? { split: ev.split } : {}), ...(turn !== undefined ? { turn } : {}) });
-        // TD-2026-10-21-514: the result that closes a voice-origin turn ends its clamp (after the result row: log first)
-        s.voiceClamp?.closed(closedIds);
         // voice busy guard: the reply's end is its message_stop when it was seen (the result may be ~30 s late);
         // the result is the fallback end. A turn still outstanding after this result streams next (re-armed).
         if (!s.replyDone) s.lastTurnEndAt = Date.now();
@@ -1256,10 +1253,7 @@ export class SessionSupervisor {
         // review M2: a replayed human message (no tool results) is Claude Code consuming the next outstanding turn
         // re-review L-2: not before the stream is live (a resumed session's history replays)
         if (ev.replay && ev.toolResults.length === 0 && s.replayLive) {
-          const before = s.consumedTurns;
           s.consumedTurns = Math.min(s.consumedTurns + 1, s.turnIds.length);
-          // Aegis M-3: the clamp book learns which turn Claude just consumed (the next outstanding one, FIFO)
-          if (s.consumedTurns > before) s.voiceClamp?.replayed(s.turnIds[s.consumedTurns - 1]);
         }
         // Aegis detector: a gated tool that ran (Claude accepted it, or it did not error) with no can_use_tool request
         for (const r of ev.toolResults) {
@@ -1337,18 +1331,23 @@ export class SessionSupervisor {
     const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);
     // P8-D87 run modes: the EFFECTIVE mode, read now (a change takes effect at the next request)
     const mode = this.#modeTransition(s, repoKey);
-    // TD-2026-10-21-514 ^voice-origin-clamp: while a voice-origin turn is outstanding only a read-only modeRef may auto-pass
-    const clampBy = s.voiceClamp?.active() ?? null;
+    // TD-2026-10-23-939 (#voice-origin): a voice-sent turn gets a typed turn's mode, rules and grants; no voice override.
     // ^loop-origin-clamp: a loop session's mode, read-only, rule and always passes go through loopClampAllows (default deny)
     const loopBy = s.loopOrigin ?? null;
-    const mayAuto = (modeRef: string): boolean => (loopBy !== null ? loopClampAllows(modeRef, loopBy.trustCard) : clampBy === null || clampAllows(modeRef));
+    const mayAuto = (modeRef: string): boolean => (loopBy !== null ? loopClampAllows(modeRef, loopBy.trustCard) : true);
     if (mode === 'manual' && manualHolds(ev.toolName) && !s.planApproved) {
       // manual: writes and exec wait on an approved plan — no card for them until one is approved (§3.4)
       await this.#write(s, permissionDenyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
       return;
     }
+    // the auto-edits pass for an edit request, outside manual mode: auto-edits uses it, and (TD-2026-10-23-939 follow-up,
+    // Aegis) it is the ONLY way a scoped edit rule (file / repo-edits) matches or is offered on the card
+    // Aegis H1: "edits in this repo" is auto-edits by another name, so it is offered and matched only where the
+    // strictness ceiling allows auto-edits (never at L2/L3) and never in manual mode; file rules need only mode ≠ manual
+    const repoEdits = mode !== 'manual' && this.#ceilingAllowsAutoEdits(s, repoKey);
+    const editPass = mode !== 'manual' && plan.cardKind === 'permission' && EDIT_SCOPE_TOOLS.includes(ev.toolName) ? autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.platform ?? process.platform, this.#userHome()) : null;
     if (mode === 'auto-edits' && mayAuto('mode:auto-edits') && plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
-      const pass = autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.platform ?? process.platform, this.#userHome());
+      const pass = editPass ?? autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.platform ?? process.platform, this.#userHome());
       if (pass.ok) {
         // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
         let logged = false;
@@ -1393,7 +1392,7 @@ export class SessionSupervisor {
       let rule: { ruleId: string } | null = null;
       try {
         // Aegis M2: prefix rules never apply in manual mode (exact rules do); M3: the match is bound to the session roots
-        rule = this.#o.alwaysRule?.(repoKey, ev.toolName, plan.inputHash, ev.input, { prefixRules: mode !== 'manual', roots: [s.cwd, ...(s.worktree ? [s.worktree] : [])] }) ?? null;
+        rule = this.#o.alwaysRule?.(repoKey, ev.toolName, plan.inputHash, ev.input, { prefixRules: mode !== 'manual', roots: [s.cwd, ...(s.worktree ? [s.worktree] : [])], editPath: editPass?.ok ? editPass.path : null, repoEdits }) ?? null;
       } catch {
         rule = null; // an unreadable rule source never allows
       }
@@ -1416,12 +1415,12 @@ export class SessionSupervisor {
       await this.#write(s, permissionDenyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
       return;
     }
-    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId, ...(clampBy !== null ? { clamp: 'voice' as const } : {}) };
-    // the card says it was asked during a voice-sent turn (detail.origin 'voice', the kernel-composed line)
-    const voiced = clampBy !== null ? withVoiceOrigin(plan, clampBy) : plan;
+    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, ...(plan.questions ? { questions: plan.questions } : {}), input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
+    // scoped edits (TD-2026-10-23-939 follow-up): an edit the auto-edits pass would allow offers "Always: this file" and
+    // "Always: edits in this repo" (detail.editScopes + editPath inside contentHash); never in a loop session or manual mode
+    const offered = editPass?.ok && loopBy === null ? withEditScopes(plan, editPass.path, repoEdits ? EDIT_SCOPE_KINDS : EDIT_SCOPE_KINDS.filter((k) => k !== 'repo-edits')) : plan;
     // ^loop-origin-clamp: a loop session's card carries detail.origin 'loop' and "Raised by loop X (authored by Y)"
-    const shown = loopBy !== null ? withLoopOrigin(voiced, loopBy) : voiced;
-    if (clampBy !== null) this.#o.logger?.component('#supervisor').info?.('voice clamp applied', { hsid: s.hsid, tool: ev.toolName, sentBy: clampBy, signal: '!voice-clamp-applied' });
+    const shown = loopBy !== null ? withLoopOrigin(offered, loopBy) : offered;
     s.pending.set(requestId, entry);
     let cardId: string;
     // ask-user: the answer is checked against the KERNEL-held questions before presence and before approval.decide,
@@ -1470,14 +1469,14 @@ export class SessionSupervisor {
       const parsed = parseAskAnswer(e.questions, note);
       if (!('error' in parsed)) {
         const line = permissionAllowLine(requestId, { ...e.input, answers: parsed.answers });
-        await this.#write(s, line, { answer: 'allow', requestId, cardId: e.cardId, decision, answers: Object.keys(parsed.answers).length, ...(e.clamp ? { clamp: e.clamp } : {}) });
+        await this.#write(s, line, { answer: 'allow', requestId, cardId: e.cardId, decision, answers: Object.keys(parsed.answers).length });
         return;
       }
     }
     if (e.cardKind === 'plan' && decision === 'approve-plan') s.planApproved = true; // manual: writes and exec may now raise cards
     const a = e.cardKind ? answerFor(e.cardKind, decision, note) : { behavior: 'deny' as const, message: 'Denied.' };
     const line = a.behavior === 'allow' ? permissionAllowLine(requestId, e.input) : permissionDenyLine(requestId, a.message);
-    await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision, ...(e.clamp ? { clamp: e.clamp } : {}) });
+    await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision });
   }
 
   /** session.inject{origin:'kernel'} (a byte COUNT and a hash, never the text), then the line — only while running. */
@@ -1763,14 +1762,15 @@ export class SessionSupervisor {
     await this.#o.log('session.inject', { hsid: s.hsid, origin: p.origin === 'kernel' ? 'kernel' : 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
     // table talk: while voice is attached to this session, EVERY turn carries the guidance as a second text block;
     // contentHash stays the human's text alone (replay binds to it), turn.sent names the guidance by an opaque hash
-    // TD-2026-10-21-514: every turn carries a kernel-stamped origin; a voice-origin turn starts the clamp, and a piece
-    // reaches the agent with the piece note on the per-turn guidance block (argv never changes per turn)
+    // #voice-origin: every turn carries a kernel-stamped origin, for the record only (TD-2026-10-23-939: a voice turn's
+    // permissions are a typed turn's); a piece reaches the agent with the piece note on the per-turn guidance block
+    // (argv never changes per turn)
     const sentBy = p.voiceOrigin?.sentBy ?? null;
-    const book = (s.voiceClamp ??= new VoiceClampBook());
+    const book = (s.voicePieces ??= new VoicePieceCounter());
     const base = this.#turnGuidance(s.hsid);
     const guidance = sentBy === 'piece' ? [base, pieceGuidance(book.nextPiece())].filter((x): x is string => x !== null).join('\n\n') : base;
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, ...voiceTag(p), origin: sentBy === 'unverified' ? 'voice-unverified' : sentBy !== null ? 'voice' : 'hand', ...(sentBy !== null ? { sentBy } : {}), ...(guidance !== null ? { guidanceHash: guidanceHashOf(guidance) } : {}) }, { session: s.hsid });
-    book.sent(turnId(s.hsid, n), sentBy);
+    book.sent(sentBy);
     this.#stdin(s, userMessageLine(p.text, guidance));
     return { turn: turnId(s.hsid, n) };
   }
@@ -1944,6 +1944,15 @@ export class SessionSupervisor {
    * P8-D87 (Aegis L2): read a session's effective mode and record the transition. Entering `manual` from any other
    * mode drops the approved plan: manual is plan-first from the moment it applies, however briefly the session left it.
    */
+  /** Aegis H1: does the strictness ceiling allow auto-edits for this session? An unreadable view never does. */
+  #ceilingAllowsAutoEdits(s: Session, repoKey: string): boolean {
+    try {
+      return this.#o.runMode?.(s.hsid, repoKey)?.ceiling === 'auto-edits';
+    } catch {
+      return false;
+    }
+  }
+
   #modeTransition(s: Session, repoKey: string): RunMode {
     let mode: RunMode = 'ask';
     try {

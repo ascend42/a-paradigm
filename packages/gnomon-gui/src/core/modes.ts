@@ -51,6 +51,8 @@ export interface SessionModeView {
   effective: RunMode;
   level: string | null;
   pendingCardId: string | null;
+  /** TD-2026-10-23-939 follow-up: in ask, the id of the repo's standing "edits in this repo" always rule (revocable), else null */
+  editsByRule?: string | null;
 }
 
 /** The focused session's mode from `status.runModes.sessions[]`, or null (unknown session, older kernel, no status). */
@@ -76,6 +78,7 @@ export function sessionModeOf(status: unknown, hsid: string | null): SessionMode
       effective: m(o.effective),
       level: typeof o.level === 'string' ? o.level : null,
       pendingCardId: typeof o.pendingCardId === 'string' ? o.pendingCardId : null,
+      ...(typeof o.editsByRule === 'string' ? { editsByRule: o.editsByRule } : {}),
     };
   }
   return null;
@@ -96,7 +99,9 @@ export function modeLabel(v: SessionModeView | null): string {
   const clamp = v.effective !== v.chosen ? ` → ${v.effective} (ceiling)` : '';
   // F3 (TD-2026-10-20-086): the folder runs the root-signed default because no mode was chosen for it
   const dflt = v.source === 'config' ? ' (default)' : '';
-  return `mode: ${v.chosen}${dflt}${clamp}${v.pendingCardId ? ' · Touch ID pending' : ''} ▾`;
+  // TD-2026-10-23-939 follow-up: ask with an "edits in this repo" always rule standing reads as what it is
+  const byRule = v.effective === 'ask' && v.editsByRule ? ' · edits allowed by rule' : '';
+  return `mode: ${v.chosen}${dflt}${clamp}${byRule}${v.pendingCardId ? ' · Touch ID pending' : ''} ▾`;
 }
 
 /**
@@ -104,8 +109,29 @@ export function modeLabel(v: SessionModeView | null): string {
  * clamp, a config default or a pending Touch ID still shows (kernel-owned: never shortened past what is true).
  */
 export function modeChip(v: SessionModeView | null): string {
-  return v ? modeLabel(v).replace(/^mode: /, '') : 'mode';
+  // Mika 2026-10-23: the chip says "edits by rule" (the whole "edits allowed by rule" is in its title and the menu)
+  return v ? modeLabel(v).replace(/^mode: /, '').replace(' · edits allowed by rule', EDITS_BY_RULE_CHIP) : 'mode';
 }
+
+/**
+ * The chip's rule words, and their narrow form at ≤1040px (the loops-word / risk-long idiom), so the chat header keeps
+ * its model key at 1024 (Mika 2026-10-23: "ask · edits allowed by rule ▾" and even "ask · edits ✓ ▾" pushed
+ * "default ▾" out of the header there; "ask ✓ ▾" fits, its full words are in the title, the name and the menu).
+ */
+export const EDITS_BY_RULE_CHIP = ' · edits by rule';
+export const EDITS_BY_RULE_NARROW = ' ✓';
+/** What the narrow ✓ says to a screen reader (the wide words are hidden then). */
+export const EDITS_BY_RULE_NARROW_NAME = ' · edits allowed by rule';
+
+/**
+ * The mode menu's revoke entry while an "edits in this repo" rule stands (tightening: no Touch ID), in the menu's
+ * name + note anatomy like its siblings (Mika 2026-10-23).
+ */
+export const EDIT_RULE_REVOKE_LABEL = 'stop edits by rule';
+export const EDIT_RULE_REVOKE_NOTE = 'removes the Always rule “edits in this repo”; every edit here raises a card again · no Touch ID';
+
+/** ask's menu line while an "edits in this repo" Always rule stands (Mika 2026-10-23). */
+export const ASK_WITH_EDIT_RULE_HELP = 'commands raise a card; edits in this repo pass by your Always rule';
 
 /** One line per mode for the menu: what it does, and why it is disabled when it is. */
 export const MODE_HELP: Readonly<Record<RunMode, string>> = Object.freeze({
@@ -121,7 +147,8 @@ export function menuEntries(v: SessionModeView, scope: ModeScope = defaultScope(
       mode,
       current: c.kind === 'same',
       disabled: c.kind === 'blocked',
-      note: c.kind === 'blocked' ? c.reason : c.kind === 'loosen' ? `${MODE_HELP[mode]} · needs Touch ID` : MODE_HELP[mode],
+      // Mika 2026-10-23: while an "edits in this repo" rule stands, ask's line says so (else it claims every write asks)
+      note: c.kind === 'blocked' ? c.reason : c.kind === 'loosen' ? `${MODE_HELP[mode]} · needs Touch ID` : mode === 'ask' && v.effective === 'ask' && v.editsByRule ? ASK_WITH_EDIT_RULE_HELP : MODE_HELP[mode],
     };
   });
 }

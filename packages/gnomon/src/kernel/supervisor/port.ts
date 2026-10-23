@@ -156,7 +156,7 @@ export function createSessionPort(sup: SessionSupervisor, modes?: RunModeControl
           const forOrigin = attr ?? (p.source !== 'voice' && voice.peekAttribution ? voice.peekAttribution(ctx.principal, p.hsid, texts as string[]) : null);
           origin = voice.originFor(ctx.connId, ctx.principal, p.hsid, forOrigin, p.source === 'voice');
         } catch {
-          origin = { sentBy: 'word' }; // fail closed: an origin check that throws clamps the turn
+          origin = { sentBy: 'word' }; // an origin check that throws stamps the turn voice (the record errs toward voice)
         }
       }
       const text = texts.join(attr?.source === 'voice' ? ' ' : '\n');

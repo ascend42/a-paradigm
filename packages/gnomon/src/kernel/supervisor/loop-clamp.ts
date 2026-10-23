@@ -2,8 +2,8 @@
  * @symbol ^loop-origin-clamp
  * @symbol #loop-runner
  *
- * The loop-origin clamp (docs/specs/gnomon-loops.md §3.4, LL5; build plan step 8), after the voice-origin clamp
- * (voice-clamp.ts, TD-2026-10-21-514). Every loop session opens with `origin:'loop'` (session.open{origin, loopRun}).
+ * The loop-origin clamp (docs/specs/gnomon-loops.md §3.4, LL5; build plan step 8), modelled on the voice-origin clamp
+ * (TD-2026-10-21-514; retired by TD-2026-10-23-939, voice-origin.ts keeps only the piece note). Every loop session opens with `origin:'loop'` (session.open{origin, loopRun}).
  * In those sessions:
  *   - standing grants and the human's `always` rules (exact and prefix), the auto-edits pass and the read-only
  *     passes do NOT apply: loopClampAllows() admits only a modeRef of the loop's OWN trust card

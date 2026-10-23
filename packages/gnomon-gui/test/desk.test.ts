@@ -335,21 +335,32 @@ describe('S3 the card sheet and the stack pile', () => {
 describe('S4 motion', () => {
   const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
   const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
-  it('fly-in is the comp\'s 4-step path, no opacity, settling at the pile rotation', () => {
-    const k = /@keyframes card-in \{([\s\S]*?)\n\}/.exec(css)![1]!;
-    expect(k).not.toMatch(/opacity/);
-    expect(k).toMatch(/55% \{ transform: translateX\(-5%\) rotate\(-3deg\); \}[\s\S]*75% \{ transform: translateX\(2%\) rotate\(1\.5deg\); \}[\s\S]*100% \{ transform: translateX\(0\) rotate\(var\(--r, 0deg\)\); \}/);
+  it('arrival is a quick fade-in, opacity only (founder 2026-10-23: no flutter); the stamp lands straight', () => {
+    expect(css).toMatch(/\.card\.arriving \{ animation: card-in var\(--t-arrive\); \}/);
+    expect(css).toMatch(/@keyframes card-in \{ from \{ opacity: 0; \} to \{ opacity: 1; \} \}/);
+    expect(css).toMatch(/--t-arrive: 160ms ease-out;/);
+    expect(css).not.toMatch(/--fly\b|translateX\(120%\)|rotate\(12deg\)|rotate\(-8deg\)/);
+    const st = /@keyframes stamp \{([\s\S]*?)\n\}/.exec(css)![1]!;
+    expect(st).not.toMatch(/rotate/);
   });
-  it('the stamp then fly-off runs only after the kernel accepted the decision; reduced motion removes at once', () => {
+  it('the stamp then fade-out runs only after the kernel accepted the decision; reduced motion removes at once', () => {
     const decide = app.slice(app.indexOf('async function decide('), app.indexOf('/* ── Shuttle view'));
-    expect(decide).toMatch(/await client\.call\('approve'[\s\S]*?refusals\.delete\(cardId\);\s*flyOff\(cardId, decision\);[\s\S]*\} catch \(err\)/);
-    const fly = app.slice(app.indexOf('function flyOff('), app.indexOf('const lastState'));
+    expect(decide).toMatch(/await client\.call\('approve'[\s\S]*?refusals\.delete\(cardId\);\s*fadeOff\(cardId, decision\);[\s\S]*\} catch \(err\)/);
+    const fly = app.slice(app.indexOf('function fadeOff('), app.indexOf('const lastState'));
     expect(fly).toMatch(/if \(!els\.length \|\| motionReduced\(\)\) return;/);
     expect(fly).toMatch(/setTimeout\(\(\) => settleDeparture\(cardId\), 1500\)/);
     expect(app).toMatch(/\.filter\(\(c\) => !departing\.has\(c\.cardId\)\)/);
     expect(css).toMatch(/\.card \.stamp\.on \{ animation: stamp var\(--t-stamp\) forwards; \}/);
-    expect(css).toMatch(/\.card\.out \{ animation: flyout var\(--t-flyout\) forwards; \}/);
-    expect(css).toMatch(/\[data-motion="reduced"\] \.card \.stamp\.on \{ opacity: 1; transform: rotate\(-8deg\); \}/);
+    // founder 2026-10-23: a simple fade (opacity only, --t-fade 180ms ease-out), then the pile closes up; no tilt or spin
+    expect(css).toMatch(/\.card\.out \{ animation: card-fade var\(--t-fade\) forwards; \}/);
+    expect(css).toMatch(/@keyframes card-fade \{ to \{ opacity: 0; \} \}/);
+    expect(css).toMatch(/--t-fade: 180ms ease-out;/);
+    expect(css).not.toMatch(/flyout|rotate\(-14deg\)/);
+    expect(fly).toMatch(/animationName === 'card-fade'\) closeUp\(cardId, el\)/);
+    const close = app.slice(app.indexOf('function closeUp('), app.indexOf('function fadeOff('));
+    expect(close).toMatch(/propertyName === 'height'\) settleDeparture\(cardId\)/);
+    expect(css).toMatch(/\.card\.closing \{[^}]*transition: height var\(--reflow\) ease-out/);
+    expect(css).toMatch(/\[data-motion="reduced"\] \.card \.stamp\.on \{ opacity: 1; transform: none; \}/);
   });
   it('Aegis S4 lows: the stamp names the decision; a leaving card is blurred and inert; ask-user stays kernel-titled', () => {
     expect(stampWord('allow')).toBe('APPROVED');
@@ -358,7 +369,7 @@ describe('S4 motion', () => {
     expect(stampWord('reject')).toBe('REJECTED');
     expect(stampWord('__proto__')).toBe('DECIDED');
     expect(stampWord('<b>x</b>')).toBe('DECIDED');
-    const fly = app.slice(app.indexOf('function flyOff('), app.indexOf('const lastState'));
+    const fly = app.slice(app.indexOf('function fadeOff('), app.indexOf('const lastState'));
     expect(fly).toMatch(/\.blur\(\)/);
     expect(fly).toMatch(/el\.inert = true;/);
     expect(fly).toMatch(/st\.textContent = stampWord\(decision\)/);
@@ -467,8 +478,8 @@ describe('board gnomon-chip (batch chips-and-small-keys): a chip is a status lab
     expect(css).not.toMatch(/\.badge\b/);
     expect(src).not.toMatch(/class: [`'"]badge\b/);
     expect(css).not.toMatch(/\n\.card-voice \{|\n\.tone-chip \{|\n\.mod-dev \{/);
-    expect(rule('.clamp-chip')).not.toMatch(/999px|border/);
-    expect(src).toContain("class: 'chip warn clamp-chip', role: 'status'");
+    // TD-2026-10-23-939: the voice clamp chip is gone with the clamp
+    expect(src).not.toContain('clamp-chip');
     expect(src).toContain("class: 'chip card-voice kernel-owned'");
     expect(src).toContain('class: `chip warn flag flag-${');
     expect(src).toContain("class: 'chip warn mod-dev'");

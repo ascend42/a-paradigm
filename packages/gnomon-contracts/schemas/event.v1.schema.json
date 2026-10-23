@@ -439,10 +439,12 @@
     },
     "approval.rule.learned": {
       "match": "8.0:P8-D98",
-      "prefix": "8.0:TD-2026-10-20-294"
+      "prefix": "8.0:TD-2026-10-20-294",
+      "path": "8.0:TD-2026-10-23-939"
     },
     "approval.decide": {
-      "scope": "8.0:TD-2026-10-20-294"
+      "scope": "8.0:TD-2026-10-20-294",
+      "device": "8.0:TD-2026-10-23-939"
     },
     "approval.auto": {
       "anchoredInputHash": "8.0:TD-2026-10-20-086"

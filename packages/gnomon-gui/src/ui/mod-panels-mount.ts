@@ -11,7 +11,7 @@
  */
 import type { GnomonClient } from '../core/client.js';
 import { RpcError } from '../core/client.js';
-import { PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, workshopAbsence, workshopInstallKey, WORKSHOP_NOT_INSTALLED, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
+import { markTruncated, TRUNCATABLE_SELECTOR, PANEL_HEADING, ModPanelScheduler, modPanelsOf, modViewParams, panelsIn, renderModFence, workshopAbsence, workshopInstallKey, WORKSHOP_NOT_INSTALLED, type ModPanelView, type ModRegion } from '../core/mod-panels.js';
 import { installRequest, workshopSource } from '../core/mods.js';
 import { requestMod } from './mods-panel.js';
 import type { MiniDoc } from '../core/render.js';
@@ -161,9 +161,24 @@ export function mountModPanels(o: MountOptions): (row: { kind?: unknown } | null
         el.appendChild(head);
       }
       for (const { v, r, why } of results) if (v.region === region) el.appendChild(renderModFence({ doc }, v, r, why) as unknown as Node);
+      if (mine.length) {
+        markIn(el);
+        resize?.observe(el);
+      }
     }
     paintWorkshopAbsence(absent, o.client, o.status, o.workshop);
   };
+  // Mika 2026-10-23: one tab stop per item the CSS cut; a column resize (the container queries relayout) or the
+  // fonts loading can cut or uncut one, so the marks are redone then too
+  const markIn = (root: Element): void => void markTruncated(root.querySelectorAll<HTMLElement>(TRUNCATABLE_SELECTOR));
+  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver((entries) => (live ? entries.forEach((e) => markIn(e.target)) : undefined)) : null;
+  void document.fonts?.ready.then(() => {
+    if (!live) return;
+    for (const r of Object.values(REGION_HOST)) {
+      const el = document.getElementById(r.id);
+      if (el) markIn(el);
+    }
+  });
   const scheduler = new ModPanelScheduler(render, { setTimeout: (fn, ms) => window.setTimeout(fn, ms), clearTimeout: (t) => window.clearTimeout(t as number) });
   let lifecycleTimer: number | null = null;
   current = {
@@ -185,6 +200,7 @@ export function mountModPanels(o: MountOptions): (row: { kind?: unknown } | null
     },
     dispose: () => {
       live = false;
+      resize?.disconnect();
       if (lifecycleTimer !== null) window.clearTimeout(lifecycleTimer);
     },
   };

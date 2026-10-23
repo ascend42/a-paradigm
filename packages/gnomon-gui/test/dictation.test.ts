@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { HOTKEY_UNVERIFIED_NOTE, INHERITED_DRAFT_NOTE, uncheckedWords, inheritedDraft, inheritedQuote, UNVERIFIED_DRAFT_NOTE, UNVERIFIED_QUOTE_MAX, unverifiedQuote, UNVERIFIED_WAIT_MS, pieceDue, releaseTurnRows, unverifiedDraft, unverifiedTextsOf, sendClaim, wordReady } from '../src/core/dictation.js';
-import { clampedFrom, sentLabel } from '../src/core/voice-presets.js';
+import { sentLabel } from '../src/core/voice-presets.js';
 import { refusalPhrase, dropLabelOf } from '../src/core/capture.js';
 import { dropFact } from '../src/core/voice-ladder.js';
 import { AMBIENT_DRAFT_NOTE, ambientDraft, armed, DRAFT_CONTROLS, dictationNote, draftControls, draftState, dictationStatusOf, initialDictation, insertableText, liveLine, parseDelay, reduceDictation, ringFraction, ringRemaining, sendRequest, serializeDelay, type DictationEvent, type DictationState } from '../src/core/dictation.js';
@@ -510,12 +510,8 @@ describe('Dictate, Aegis review 2026-10-21: an unverified voice never leaves by 
     const sent: Row = { seq: 2, kind: 'turn.sent', view: 'full', session: A, payload: { source: 'voice', voiceTurnSeqs: [1], origin: 'voice-unverified', sentBy: 'unverified' } };
     expect(chatItems([row, sent]).items.some((i) => i.text.includes('in composer'))).toBe(false);
   });
-  it('clamp display: a voice-unverified turn.sent asks first and lights the clamp chip until its result', () => {
-    expect(sentLabel({ source: 'voice', origin: 'voice-unverified', sentBy: 'unverified' })).toEqual({ label: 'spoken · unverified voice · sent by you', asksFirst: true });
-    expect(sentLabel({ origin: 'voice-unverified', sentBy: 'unverified' })).toMatchObject({ asksFirst: true });
-    const rows = [{ kind: 'turn.sent', session: A, payload: { origin: 'voice-unverified' } }];
-    expect(clampedFrom(rows, A)).toBe(true);
-    expect(clampedFrom([...rows, { kind: 'turn.result', session: A, payload: {} }], A)).toBe(false);
+  it('origin display (TD-2026-10-23-939): a voice-unverified turn.sent reads its plain origin; nothing asks first', () => {
+    expect(sentLabel({ source: 'voice', origin: 'voice-unverified', sentBy: 'unverified' })).toEqual({ label: 'spoken · unverified voice · sent by you' });
   });
 });
 
@@ -547,7 +543,7 @@ describe('Aegis H-1 (2026-10-23): words that inherited their speaker are marked 
     expect(s.parts[1]).toMatchObject({ inherited: true });
     expect(s.parts[0]).not.toHaveProperty('inherited');
     expect(inheritedDraft(s)).toBe(true);
-    expect(dictationNote(s)).toBe('draft · “and the docs” not checked as you, so edits ask first');
+    expect(dictationNote(s)).toBe('draft · “and the docs” not checked as you'); // TD-2026-10-23-939: no clamp to announce
     expect(inheritedQuote(s)).toEqual({ short: 'and the docs', full: 'and the docs' });
     s = run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 }, turn(11, 'yes', 0, inh));
     expect(dictationNote(s)).toBe(INHERITED_DRAFT_NOTE);

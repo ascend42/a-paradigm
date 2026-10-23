@@ -161,7 +161,8 @@ export class FakeKernel implements Transport {
         return { guiToken: 'preview-gui-token', principal: HUMAN_PRINCIPAL, connId: 'conn:01JAPREVX4K7Q2M9FBH3N8RTWC' };
       case 'status':
         // #gui-folder-field: the kernel opens the chooser (a shot sets __ffPreview.chooser false for no-chooser)
-        return { ...structuredClone(this.#status), folders: { chooser: previewFolders().chooser !== false }, ...(previewFolders().mods ? { mods: previewFolders().mods } : {}), ...(previewFolders().local ? { local: previewFolders().local } : {}) };
+        // founder report 2026-10-23 (dictation at the caret): a shot may show live words (__vxPreview.capture: status.voice.capture)
+        return { ...withCapture(structuredClone(this.#status)), folders: { chooser: previewFolders().chooser !== false }, ...(previewFolders().mods ? { mods: previewFolders().mods } : {}), ...(previewFolders().local ? { local: previewFolders().local } : {}) };
       case 'log.read': {
         if (p.follow === true) {
           this.#following = true;
@@ -271,6 +272,12 @@ function previewVoice(): VoicePreview {
     return r;
   };
   return { send: mk(o.send), input: mk(o.input) };
+}
+/** DEV ONLY: a screenshot script's live capture (status.voice.capture), so the composer ghost can be shot. */
+function withCapture(st: Record<string, unknown>): Record<string, unknown> {
+  const c = (globalThis as { __vxPreview?: { capture?: Record<string, unknown> } }).__vxPreview?.capture;
+  if (!c || !st.voice || typeof st.voice !== 'object') return st;
+  return { ...st, voice: { ...(st.voice as Record<string, unknown>), capture: c } };
 }
 function previewFolders(): FolderPreview {
   return ((globalThis as { __ffPreview?: FolderPreview }).__ffPreview ?? {}) as FolderPreview;

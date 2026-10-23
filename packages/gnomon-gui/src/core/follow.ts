@@ -12,6 +12,14 @@
  * The page asks `isAtBottom` on every user scroll and `shouldStick` before it
  * paints; it scrolls only when stuck, and otherwise keeps the reading
  * position anchored to the row in view (re-renders never jump).
+ *
+ * Founder report 2026-10-23 ("it doesn't keep the scrolling to the bottom even though I've been at the bottom and
+ * haven't moved it"): stickiness changes ONLY on the user's own scroll intent (a wheel, a scroll key, a touch, focus
+ * moving into the transcript, a pointer held on it: its scrollbar), never on a scroll the layout made. WebKit (the
+ * Gnomon.app wrapper) clamps the transcript's scrollTop when the composer shrinks or re-measures (fitComposer resets
+ * its height to measure it; the ghost line and the dictation bar come and go), and fires that scroll BEFORE the
+ * ResizeObserver repaint, so it read as "the user moved up" and unstuck the feed on nearly every dictated word.
+ * `scrollEvent` is the scroll handler's whole decision, pure, so that sequence is a unit test.
  */
 
 /** How close to the bottom still counts as "at the bottom" (a fractional scroll, a 1-2 px rounding). */
@@ -68,4 +76,59 @@ export class Follow {
     this.#stuck = true;
     this.#unseen = 0;
   }
+}
+
+/** How long one gesture counts as the user's scroll intent after it (a wheel tick and its momentum, a key's smooth scroll). */
+export const INTENT_MS = Object.freeze({ wheel: 300, key: 700, focus: 400, pointer: 300, touch: 1000 });
+
+/**
+ * The user's scroll intent: a gesture marks a short window (`mark`), and a pointer or finger held on the transcript
+ * (dragging its scrollbar, a touch scroll) holds it until let go plus a short tail (momentum, the last frame).
+ */
+export class ScrollIntent {
+  #until = Number.NEGATIVE_INFINITY;
+  #held = false;
+
+  mark(now: number, ms: number): void {
+    this.#until = Math.max(this.#until, now + ms);
+  }
+
+  hold(): void {
+    this.#held = true;
+  }
+
+  letGo(now: number, ms: number = INTENT_MS.pointer): void {
+    if (!this.#held) return;
+    this.#held = false;
+    this.mark(now, ms);
+  }
+
+  active(now: number): boolean {
+    return this.#held || now <= this.#until;
+  }
+}
+
+export interface ScrollEventView {
+  /** the viewport's scrollTop now */
+  top: number;
+  /** the page's own last scroll write (setScroll) */
+  selfTop: number;
+  /** scrollTop at the previous scroll event */
+  lastTop: number;
+  clientHeight: number;
+  scrollHeight: number;
+  /** the user is making this scroll (ScrollIntent.active) */
+  byUser: boolean;
+}
+
+/**
+ * One scroll event: 'own' (the page's write echoing back), 'user' (stickiness follows it: up unsticks, reaching the
+ * bottom sticks) or 'layout' (a scroll nobody chose: a clamp when the transcript grew or the composer re-measured;
+ * stickiness is unchanged and the repaint that follows puts a stuck feed back at the bottom).
+ */
+export function scrollEvent(f: Follow, e: ScrollEventView): 'own' | 'user' | 'layout' {
+  if (Math.abs(e.top - e.selfTop) < 1) return 'own';
+  if (!e.byUser) return 'layout';
+  f.onScroll(isAtBottom(e.top, e.clientHeight, e.scrollHeight), e.top < e.lastTop - 0.5);
+  return 'user';
 }

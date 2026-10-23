@@ -233,7 +233,7 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
         { run: 'motion.system', label: 'Follow the Mac', current: i.motion === 'system' },
         { run: 'motion.reduce', label: 'Reduce', current: i.motion === 'reduce' },
       ],
-      note: resolveMotion(i.motion, i.prefersReduced) === 'reduced' ? `reduced${i.motion === 'system' ? ' (the Mac asks for it)' : ''}: stamps and fly-offs are instant` : 'full: cards stamp and fly off',
+      note: resolveMotion(i.motion, i.prefersReduced) === 'reduced' ? `reduced${i.motion === 'system' ? ' (the Mac asks for it)' : ''}: stamps and fades are instant` : 'full: cards stamp and fade out',
     },
     {
       kind: 'choice',

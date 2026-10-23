@@ -109,7 +109,7 @@
 :root {
   --scrim: rgba(15, 17, 22, 0.35); /* color.overlay.scrim: overlay sheets and the narrow drawer, both themes */
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --fly: 550ms cubic-bezier(.3, .7, .3, 1);
+  --t-arrive: 160ms ease-out;
   --reflow: 220ms;
   --radius: 3px;
   --key-h: 28px; /* design-system foundations.target.key-h: the ONE height of every key, any variant, any zone (session 2026-10-23-gnomon-folder-picker) */
@@ -121,7 +121,7 @@
   --fs-reading: 13.5px;  /* replies, card titles, reply choices, body, section heads, night titles */
   --fs-title: 17px;      /* wordmark, sheet and pane titles, chat title, empty and setup titles, the setup digest */
   --t-stamp: 400ms cubic-bezier(.3, 1.4, .5, 1);
-  --t-flyout: 450ms ease-in;
+  --t-fade: 180ms ease-out;
   --t-droop: 500ms ease-out;
   --t-bob: 1.1s ease-in-out;
   --t-hold: 3s linear;
@@ -247,7 +247,7 @@ html, body {
 
 .transcript { background: transparent; }
 .feed { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; }
+.viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; overflow-anchor: none; }
 .jump { position: absolute; right: 18px; bottom: 10px; }
 .key.quiet { box-shadow: none; color: var(--ink2); font-size: var(--fs-control); min-height: var(--key-h); min-width: var(--key-h); padding: 0 8px; } /* quiet is a look, not a size (key-height) */
 .spacer-v { width: 1px; }
@@ -376,7 +376,7 @@ html, body {
 .card .bar { height: 3px; margin-top: 6px; border-radius: var(--radius); overflow: hidden; background: var(--rule); display: none; }
 .card.held .bar { display: block; }
 .card .bar-i { display: block; height: 100%; background: var(--warn-edge); transform-origin: left; }
-.card .stamp { position: absolute; right: 12px; top: 8px; font-size: var(--fs-label); font-weight: 600; letter-spacing: .12em; color: var(--sec); border: 2px solid currentColor; border-radius: var(--radius); padding: 0 6px; opacity: 0; transform: rotate(-8deg); pointer-events: none; }
+.card .stamp { position: absolute; right: 12px; top: 8px; font-size: var(--fs-label); font-weight: 600; letter-spacing: .12em; color: var(--sec); border: 2px solid currentColor; border-radius: var(--radius); padding: 0 6px; opacity: 0; pointer-events: none; }
 .card .content-hash { display: block; margin-top: 6px; padding-right: 64px; font-size: var(--fs-label); line-height: 1.3; color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* the pile: overlap, a few degrees of rotation, z-order top-down; fanned flat on hover / focus-within / .fan / .open */
 .pile .card + .card { margin-top: -64px; }
@@ -396,6 +396,14 @@ html, body {
 .card-body.quoted { padding-left: 8px; font-style: italic; color: var(--ink2); }
 .pinned .card { --r: 0deg; margin: 0; }
 .card-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Mika 2026-10-23: the scoped always choices, folded under "Always ▾": one row per choice, its note beside the key */
+.always-choices { display: none; margin-top: 6px; padding-left: 8px; border-left: 1px solid var(--rule); }
+.always-choices.open { display: grid; gap: 8px; }
+.always-h { font-size: var(--fs-label); color: var(--sec); }
+.always-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.always-row .key { text-transform: none; }
+.always-note { font-size: var(--fs-label); color: var(--sec); }
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .always-choices { pointer-events: none; }
 .card .refusal { color: var(--fail); font-size: var(--fs-control); white-space: pre-wrap; }
 .blk-text, .blk-md, .blk-diff { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .blk-opaque { color: var(--ink2); }
@@ -410,43 +418,42 @@ html, body {
 
 /* ── S4 motion (critique 2026-10-20 §2 S4). Every motion is an event's (nothing idles); the global reduced-motion kill
    above stays, and the rules at the end of this block keep the END states visible without motion. ── */
-.card.arriving { animation: card-in var(--fly); }
-@keyframes card-in {
-  0% { transform: translateX(120%) rotate(12deg); }
-  55% { transform: translateX(-5%) rotate(-3deg); }
-  75% { transform: translateX(2%) rotate(1.5deg); }
-  100% { transform: translateX(0) rotate(var(--r, 0deg)); }
-}
+.card.arriving { animation: card-in var(--t-arrive); }
+/* arrival is a quick fade-in, opacity only: no flutter, no slide (founder 2026-10-23); instant under reduced motion */
+@keyframes card-in { from { opacity: 0; } to { opacity: 1; } }
 /* a pinned card settles at one of four preset tilts (by cardId; classes, never inline style) */
 .pinned .card.r-a { --r: -.6deg; }
 .pinned .card.r-b { --r: .4deg; }
 .pinned .card.r-c { --r: -.3deg; }
 .pinned .card.r-d { --r: .7deg; }
-/* approved: the stamp lands, then the sheet flies off (removed on animationend; at once under reduced motion) */
+/* decided: the stamp lands, then the sheet fades out (opacity only) and the pile closes up over its height (founder
+   2026-10-23: "get rid of the whole card tilt and spin aspect and can go with a simple and tasteful fade out"; removed
+   after the close-up; at once under reduced motion) */
 .card .stamp { color: var(--ink); }
 .card .stamp.on { animation: stamp var(--t-stamp) forwards; }
+/* the stamp lands straight (no tilt; founder 2026-10-23), then the fade */
 @keyframes stamp {
-  0% { opacity: 0; transform: rotate(-8deg) scale(1.9); }
-  60% { opacity: 1; transform: rotate(-8deg) scale(.92); }
-  100% { opacity: 1; transform: rotate(-8deg) scale(1); }
+  0% { opacity: 0; transform: scale(1.6); }
+  60% { opacity: 1; transform: scale(.96); }
+  100% { opacity: 1; transform: none; }
 }
 .card.leaving { pointer-events: none; }
-.card.out { animation: flyout var(--t-flyout) forwards; }
-@keyframes flyout {
-  30% { transform: scale(.97) rotate(var(--r, 0deg)); }
-  100% { transform: translate(-30px, -60px) rotate(-14deg); opacity: 0; }
-}
+.card.out { animation: card-fade var(--t-fade) forwards; }
+@keyframes card-fade { to { opacity: 0; } }
+/* the close-up: app.ts sets the card's measured height, then 0; the space it held closes on --reflow */
+.card.closing { overflow: hidden; padding-top: 0; padding-bottom: 0; margin-top: 0; border-top-width: 0; border-bottom-width: 0; opacity: 0; transition: height var(--reflow) ease-out, padding var(--reflow) ease-out, margin var(--reflow) ease-out; }
+.pinned .card.closing { margin-bottom: -8px; } /* its share of the pinned gap closes too */
 /* a held voice decision: the amber edge and a 3 s countdown bar (kernel-owned; the seconds are also in the text) */
 .card.held .bar-i { animation: count var(--t-hold) forwards; }
 @keyframes count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .card .held-note { color: var(--warn-ink); font-weight: 500; }
 /* a failure droops once (no shake, ever) */
 .card.failed.fx, .session-row.fx { animation: droop var(--t-droop) forwards; }
-.card.failed.fx.arriving { animation: card-in var(--fly), droop var(--t-droop) 550ms forwards; }
+.card.failed.fx.arriving { animation: card-in var(--t-arrive), droop var(--t-droop) 160ms forwards; }
 @keyframes droop { to { transform: rotate(2.2deg) translateY(3px); } }
 .session-row.fx { transform-origin: left center; }
-[data-motion="reduced"] .card .stamp.on { opacity: 1; transform: rotate(-8deg); }
-@media (prefers-reduced-motion: reduce) { .card .stamp.on { opacity: 1; transform: rotate(-8deg); } }
+[data-motion="reduced"] .card .stamp.on { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .card .stamp.on { opacity: 1; transform: none; } }
 
 /* ── S5 the Workshop (critique 2026-10-20 §2 S5; comp workshop-placement.html): a 64 px footer strip (default) or a
    76 px column on either edge (Layout). The fence label stays; the status line sits at the footer's right end.
@@ -637,6 +644,8 @@ html, body {
 /* run-mode control (§11.4, P8-D87): kernel-owned state, a small menu under the header button */
 .mode-wrap { position: relative; display: inline-flex; }
 .mode-btn { white-space: nowrap; }
+.mode-btn .mb-narrow { display: none; }
+@media (max-width: 1040px) { .mode-btn .mb-full { display: none; } .mode-btn .mb-narrow { display: inline; } }
 .mode-btn.mode-auto-edits { color: var(--warn-ink); }
 .mode-menu { position: absolute; top: 100%; right: 0; z-index: 20; min-width: 300px; max-width: min(420px, calc(100vw - 32px)); margin-top: 4px; padding: 4px; display: flex; flex-direction: column; gap: 2px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
 .mode-menu[hidden] { display: none; }
@@ -649,8 +658,7 @@ html, body {
 .mode-item .mode-note { font-size: var(--fs-label); color: var(--sec); }
 /* #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html; design-system gnomon.voice.pill): the header
    pill is kernel-owned and names the rung plus ONE live fact. Existing tokens only: the open mic is a filled --ink
-   dot with a soft ring (status is ink, board gnomon-status-colour), a clamped voice-sent turn is a 2px amber --warn-edge with the fact in
-   --warn-ink, speech not sent is a vermilion --fail fact; nothing else is coloured, and nothing idles (the meter moves
+   dot with a soft ring (status is ink, board gnomon-status-colour), speech not sent is a vermilion --fail fact; nothing else is coloured, and nothing idles (the meter moves
    only with the REAL mic level, #gui-voice-capture). Day: a rounded paper pill; night: square, as every night key. */
 .voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .voice-pill { box-sizing: border-box; height: 28px; min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; font: inherit; font-size: var(--fs-control); font-weight: 500; white-space: nowrap; border-radius: var(--radius-pill); border: 1px solid var(--key-edge); background: var(--sheet); color: var(--ink); cursor: pointer; }
@@ -661,8 +669,6 @@ html, body {
 .voice-fact { color: var(--sec); font-weight: 400; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .voice-fact:empty { display: none; }
 .voice-fact.fail { color: var(--fail); }
-.voice-pill.clamp { border: 2px solid var(--warn-edge); padding: 0 10px; }
-.voice-fact.clamp { color: var(--warn-ink); }
 /* the voice app's trouble (not running, crashed, setting up): the words carry it, in the fact (board header-5b: one
    edge style in the row, so no dashed edge); while the app can't run the pill is the action itself, "Start voice ·
    app not running" (.as-action: the key's pressed offset, the same paper pill) */
@@ -695,11 +701,27 @@ html, body {
 .link { background: none; border: 0; padding: 0; font: inherit; font-size: var(--fs-control); color: var(--ink2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .link:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
 .link[disabled] { color: var(--sec); cursor: not-allowed; }
-.composer-ghost { padding: 2px 10px; font-style: italic; color: var(--sec); }
+/* B1 live words AT THE CARET (founder report 2026-10-23): #composer-ghost is an aria-hidden mirror laid exactly over
+   the textarea (app.ts placeGhost: same box, same font, same wrapping), drawing the composer's text with the live words
+   where the turn will land. While it shows, the textarea's own text is transparent and its caret stays visible; the
+   textarea never holds a live word. */
+.composer-main { position: relative; }
+.composer-ghost { position: absolute; top: 0; left: 0; margin: 0; padding: 0; border: 0; overflow: hidden; pointer-events: none; white-space: pre-wrap; overflow-wrap: break-word; font: inherit; line-height: 1.6; color: var(--ink); }
 .composer-ghost[hidden] { display: none; }
+.composer-main > textarea.ghosting { color: transparent; caret-color: var(--ink); }
+.composer-main > textarea.ghosting::placeholder { color: transparent; }
+/* Mika 2026-10-23: the textarea's own selection sits where the human text was, under the words that replace it in the
+   mirror; while ghosting the mirror shows the replacement, so the stale highlight is not drawn. When the words push
+   the mirror past where the textarea can scroll, its caret would float over other text: hidden until they line up. */
+.composer-main > textarea.ghosting::selection { background: transparent; color: transparent; }
+.composer-main > textarea.ghosting.ghost-offset { caret-color: transparent; }
+/* forced colours repaint text: keep the transparent textarea transparent so the mirror is never doubled */
+@media (forced-colors: active) { .composer-main > textarea.ghosting { forced-color-adjust: none; color: transparent; } }
+.composer-ghost .ghost-wait { font-style: italic; color: var(--sec); }
 /* B1 live words: committed solid, the unfixed tail dim (reduced motion: the global rule makes the fade instant) */
-.composer-ghost .ghost-committed { font-style: normal; color: var(--ink); }
-.composer-ghost .ghost-tail { opacity: 0.55; transition: opacity 0.12s linear; }
+.composer-ghost .ghost-committed { font-style: normal; color: var(--ink); text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--sec); text-underline-offset: 3px; }
+/* the unfixed tail: --sec italic, full strength (Mika 2026-10-23: at 0.55 it was 2.4:1 day, 2.7:1 night; --sec is 6.6 and 5.8:1) */
+.composer-ghost .ghost-tail { font-style: italic; color: var(--sec); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 /* the transcript's voice turns: ink2 and the word "voice" (board gnomon-status-colour: status is ink, never a hue) */
 .trow.voice .who { color: var(--ink2); }
@@ -948,22 +970,74 @@ html, body {
 .mod-label { color: var(--sec); font-size: var(--fs-label); }
 .mod-fence .blk-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mod-fence .blk-progress { display: inline-flex; gap: 6px; align-items: center; }
-.mod-fence progress { transition: none; }
+/* a mod meter is ink on a --rule track, like the voice meter (status-in-ink; never the platform's blue) */
+.mod-fence progress { transition: none; -webkit-appearance: none; appearance: none; height: 4px; border: 0; border-radius: var(--radius); background: var(--rule); color: var(--ink2); overflow: hidden; }
+.mod-fence progress::-webkit-progress-bar { background: var(--rule); }
+.mod-fence progress::-webkit-progress-value { background: var(--ink2); }
+.mod-fence progress::-moz-progress-bar { background: var(--ink2); }
 .tone-quiet { color: var(--sec); }
-/* #paradigm-context-mod: zone heads are mono; symbol chips (a mod's `chip` tone) are the status .chip in ink (below,
-   board gnomon-chip; never a hue: hues are fills on the cap glyph only) */
-.tone-head { color: var(--sec); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+/* #paradigm-context-mod: zone heads are the label style (caps, --sec); symbol chips (a mod's `chip` tone) are the
+   status .chip in ink (below, board gnomon-chip; never a hue) */
+.tone-head { color: var(--sec); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.06em; }
 .tone-warn { color: var(--warn-ink); }
 .tone-deny { color: var(--fail); font-weight: 600; }
-/* the cap: a project hue is a FILL (G-GUI-10), the glyph itself stays in ink */
 .tone-paused { color: var(--sec); }
-.blk-text[class*="tone-hue-"] { display: inline-block; min-width: 1.2em; text-align: center; border: 1px dotted var(--rule); border-radius: 50%; }
-.tone-hue-0 { background: var(--p-terracotta-fill); }
-.tone-hue-1 { background: var(--p-sage-fill); }
-.tone-hue-2 { background: var(--p-slate-fill); }
-.tone-hue-3 { background: var(--p-ochre-fill); }
-.tone-hue-4 { background: var(--p-rose-clay-fill); }
-.tone-hue-5 { background: var(--p-sea-grey-fill); }
+/* a project hue (Text tone hue-N) is the project's ■ swatch, the chat header's: the hue's ink pair, no ring, no dot */
+.blk-swatch { flex: none; display: inline-block; font-size: var(--fs-control); line-height: 1; }
+/* Fitted mod views (core/render.ts fit, every fence but the Workshop's; founder 2026-10-23): side-column type
+   (11.5 control, 10.5 label), a 2px grid rhythm, ids on one line with an ellipsis, row prose in two lines. */
+.mod-fit { container: mod-fit / inline-size; min-width: 0; font-size: var(--fs-control); line-height: 1.45; }
+.mod-fit .blk-box:not(.blk-row) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mod-fit > .blk-box:not(.blk-row) { gap: 8px; }
+.mod-fit .blk-title { font-weight: 600; }
+.mod-fit .blk-text { word-break: normal; overflow-wrap: break-word; }
+.mod-fit .tone-quiet, .mod-fit .tone-paused { font-size: var(--fs-label); }
+.mod-fit .blk-row { flex-wrap: wrap; align-items: baseline; gap: 0 6px; min-width: 0; }
+.mod-fit .blk-row > * { min-width: 0; }
+.mod-fit .blk-tok { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mod-fit .blk-row > .blk-tok { flex: 1 1 0; min-width: min(8ch, 100%); }
+.mod-fit .blk-word { white-space: nowrap; flex: none; }
+.mod-fit .blk-row > .blk-prose.blk-break { flex-basis: 100%; }
+.mod-fit .blk-row > .blk-prose { flex: 0 1 auto; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.mod-fit .blk-row > .tone-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+.mod-fit .blk-row:has(> .tone-chip) { gap: 4px; }
+.mod-fit .tone-chip + .tone-chip { margin-left: 0; }
+.mod-fit .blk-progress { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; font-size: var(--fs-label); color: var(--sec); }
+.mod-fit .blk-progress progress { width: 100%; }
+.mod-fit .blk-row > .blk-progress { flex: 1 1 12ch; }
+.mod-fit .blk-list { margin: 0; padding-left: 14px; }
+/* a table: label-style heads, numbers right-aligned and tabular, cells capped at 24ch with an ellipsis (full text in
+   title). Below its width bucket (tw-N, from its natural width) each row becomes its first cell over key-value pairs. */
+.mod-fit .blk-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mod-fit .blk-table th { font-size: var(--fs-label); font-weight: 400; color: var(--sec); text-align: left; white-space: nowrap; padding: 0 0 2px 8px; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+.mod-fit .blk-table td { white-space: nowrap; padding: 2px 0 0 8px; vertical-align: baseline; }
+.mod-fit .blk-table :is(th, td):first-child { padding-left: 0; }
+.mod-fit .blk-table .num { text-align: right; }
+.mod-fit .blk-table .blk-nil { color: var(--sec); }
+.mod-fit .blk-cell { display: inline-block; max-width: min(24ch, 100%); min-width: 0; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.mod-fit .blk-table td::before { content: attr(data-col); display: none; margin-right: 4px; color: var(--sec); font-size: var(--fs-label); }
+.mod-fit .blk-table td:first-child::before { content: none; }
+/* Mika 2026-10-23: in the key-value layout a field is a flex line no wider than the column: its label keeps its width and the
+   value ellipsizes (at the 200px rail a "↓ compactions 2 (190k → 41k)" field ran 6px past the fence) */
+.mod-fit .blk-table td::before { flex: none; }
+.mod-fit .blk-table tbody tr + tr { margin-top: 8px; }
+/* Mika 2026-10-23: a truncated id, cell or title (markTruncated: tabindex 0, full text in title) shows its whole text on keyboard focus */
+.mod-fit [data-trunc]:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip; -webkit-line-clamp: unset; line-clamp: none; }
+@container mod-fit (max-width: 20ch) { .mod-fit .tw-20 thead, .mod-fit .tw-20 td.blk-nil { display: none; } .mod-fit .tw-20, .mod-fit .tw-20 tbody, .mod-fit .tw-20 tr { display: block; } .mod-fit .tw-20 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-20 td:first-child { display: flex; } .mod-fit .tw-20 td::before { display: inline; } }
+@container mod-fit (max-width: 24ch) { .mod-fit .tw-24 thead, .mod-fit .tw-24 td.blk-nil { display: none; } .mod-fit .tw-24, .mod-fit .tw-24 tbody, .mod-fit .tw-24 tr { display: block; } .mod-fit .tw-24 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-24 td:first-child { display: flex; } .mod-fit .tw-24 td::before { display: inline; } }
+@container mod-fit (max-width: 28ch) { .mod-fit .tw-28 thead, .mod-fit .tw-28 td.blk-nil { display: none; } .mod-fit .tw-28, .mod-fit .tw-28 tbody, .mod-fit .tw-28 tr { display: block; } .mod-fit .tw-28 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-28 td:first-child { display: flex; } .mod-fit .tw-28 td::before { display: inline; } }
+@container mod-fit (max-width: 32ch) { .mod-fit .tw-32 thead, .mod-fit .tw-32 td.blk-nil { display: none; } .mod-fit .tw-32, .mod-fit .tw-32 tbody, .mod-fit .tw-32 tr { display: block; } .mod-fit .tw-32 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-32 td:first-child { display: flex; } .mod-fit .tw-32 td::before { display: inline; } }
+@container mod-fit (max-width: 36ch) { .mod-fit .tw-36 thead, .mod-fit .tw-36 td.blk-nil { display: none; } .mod-fit .tw-36, .mod-fit .tw-36 tbody, .mod-fit .tw-36 tr { display: block; } .mod-fit .tw-36 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-36 td:first-child { display: flex; } .mod-fit .tw-36 td::before { display: inline; } }
+@container mod-fit (max-width: 40ch) { .mod-fit .tw-40 thead, .mod-fit .tw-40 td.blk-nil { display: none; } .mod-fit .tw-40, .mod-fit .tw-40 tbody, .mod-fit .tw-40 tr { display: block; } .mod-fit .tw-40 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-40 td:first-child { display: flex; } .mod-fit .tw-40 td::before { display: inline; } }
+@container mod-fit (max-width: 44ch) { .mod-fit .tw-44 thead, .mod-fit .tw-44 td.blk-nil { display: none; } .mod-fit .tw-44, .mod-fit .tw-44 tbody, .mod-fit .tw-44 tr { display: block; } .mod-fit .tw-44 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-44 td:first-child { display: flex; } .mod-fit .tw-44 td::before { display: inline; } }
+@container mod-fit (max-width: 48ch) { .mod-fit .tw-48 thead, .mod-fit .tw-48 td.blk-nil { display: none; } .mod-fit .tw-48, .mod-fit .tw-48 tbody, .mod-fit .tw-48 tr { display: block; } .mod-fit .tw-48 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-48 td:first-child { display: flex; } .mod-fit .tw-48 td::before { display: inline; } }
+@container mod-fit (max-width: 52ch) { .mod-fit .tw-52 thead, .mod-fit .tw-52 td.blk-nil { display: none; } .mod-fit .tw-52, .mod-fit .tw-52 tbody, .mod-fit .tw-52 tr { display: block; } .mod-fit .tw-52 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-52 td:first-child { display: flex; } .mod-fit .tw-52 td::before { display: inline; } }
+@container mod-fit (max-width: 56ch) { .mod-fit .tw-56 thead, .mod-fit .tw-56 td.blk-nil { display: none; } .mod-fit .tw-56, .mod-fit .tw-56 tbody, .mod-fit .tw-56 tr { display: block; } .mod-fit .tw-56 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-56 td:first-child { display: flex; } .mod-fit .tw-56 td::before { display: inline; } }
+@container mod-fit (max-width: 60ch) { .mod-fit .tw-60 thead, .mod-fit .tw-60 td.blk-nil { display: none; } .mod-fit .tw-60, .mod-fit .tw-60 tbody, .mod-fit .tw-60 tr { display: block; } .mod-fit .tw-60 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-60 td:first-child { display: flex; } .mod-fit .tw-60 td::before { display: inline; } }
+@container mod-fit (max-width: 64ch) { .mod-fit .tw-64 thead, .mod-fit .tw-64 td.blk-nil { display: none; } .mod-fit .tw-64, .mod-fit .tw-64 tbody, .mod-fit .tw-64 tr { display: block; } .mod-fit .tw-64 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-64 td:first-child { display: flex; } .mod-fit .tw-64 td::before { display: inline; } }
+@container mod-fit (max-width: 72ch) { .mod-fit .tw-72 thead, .mod-fit .tw-72 td.blk-nil { display: none; } .mod-fit .tw-72, .mod-fit .tw-72 tbody, .mod-fit .tw-72 tr { display: block; } .mod-fit .tw-72 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-72 td:first-child { display: flex; } .mod-fit .tw-72 td::before { display: inline; } }
+@container mod-fit (max-width: 80ch) { .mod-fit .tw-80 thead, .mod-fit .tw-80 td.blk-nil { display: none; } .mod-fit .tw-80, .mod-fit .tw-80 tbody, .mod-fit .tw-80 tr { display: block; } .mod-fit .tw-80 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-80 td:first-child { display: flex; } .mod-fit .tw-80 td::before { display: inline; } }
+@container mod-fit (max-width: 96ch) { .mod-fit .tw-96 thead, .mod-fit .tw-96 td.blk-nil { display: none; } .mod-fit .tw-96, .mod-fit .tw-96 tbody, .mod-fit .tw-96 tr { display: block; } .mod-fit .tw-96 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-96 td:first-child { display: flex; } .mod-fit .tw-96 td::before { display: inline; } }
 /* #gui-model-picker: the New-session "claude model" select and the header model chip (ui/model-picker.ts) */
 .ns-claude { display: flex; flex-direction: column; gap: 6px; }
 .ns-claude[hidden], #ns-model-id[hidden], #ns-model-why[hidden] { display: none; }
@@ -1043,7 +1117,7 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .chrome { gap: 10px; }
 /* #gui-chip (board gnomon-chip, rule chip-is-not-a-key): a chip is a status label nobody clicks. 18px, 10.5, the faint
    --rule edge (a dark --key-edge presses; a --rule edge does not), radius 3 by day and square at night; tones plain,
-   ink (a mod's symbol chips: .chip.ink, and the mod-kit `chip` tone) and warn (flags, dev, the clamp). Never a <button>,
+   ink (a mod's symbol chips: .chip.ink, and the mod-kit `chip` tone) and warn (flags, dev). Never a <button>,
    never focusable: anything clickable is a 24px .key.quiet. */
 .chip, .tone-chip { display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box; height: 18px; padding: 0 6px; font-family: var(--mono); font-size: var(--fs-label); font-weight: 400; line-height: 16px; letter-spacing: 0; text-transform: none; color: var(--sec); background: transparent; border: 1px solid var(--rule); border-radius: var(--radius); white-space: nowrap; vertical-align: middle; }
 [data-theme="night"] .chip, [data-theme="night"] .tone-chip { border-radius: 0; }
@@ -1162,14 +1236,9 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .workshop-install-result { margin-left: 8px; }
 .key[aria-busy="true"] { cursor: progress; }
 
-/* TD-2026-10-21-514 + Atelier 2026-10-21: "spoken · sent by …" (amber "edits ask first" on a voice-origin turn), the
-   session header chip while it is clamped, and the card line of a card asked during one */
+/* TD-2026-10-21-514: "spoken · sent by …" on a voice-sent turn, in --sec (TD-2026-10-23-939: it runs like a typed
+   turn, so the row carries no other mark) */
 .who .sent-by { margin-left: 6px; color: var(--sec); font-size: var(--fs-label); }
-.who .sent-by.asks-first { color: var(--warn-ink); }
-/* the clamp is a warn .chip (square at night with every chip; the pill shape is the voice pill's alone) */
-.clamp-chip { margin-left: 8px; }
-.card.voice-origin { --edge: var(--warn-edge); }
-.card-voice-origin { display: block; font-size: var(--fs-label); color: var(--warn-ink); }
 
 /* ── #gui-loops (LP8; Atelier 2026-10-22-gnomon-loops-ui, design-system loops-word, loops-leaf, loop-row, loop-list,
    loop-detail, budget-field, loop-graph, run-trace, loop-trust-unfolded, loop-diff, alert, trust-slip). Moved from the

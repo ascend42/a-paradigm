@@ -378,7 +378,7 @@ describe('review a11y: the working row', () => {
     expect(app).toMatch(/class: 'step-clock', 'data-since': st\.since, 'aria-hidden': 'true'/);
     expect(app).toMatch(/b === 'local' \? 'local model'/);
     // Mika #4: a row drawn before the session's backend arrived is remounted when the speaker label changes
-    expect(app).toMatch(/if \(agent !== mountedAgent\) \{\s*for \(const el of mounted\.values\(\)\) el\.remove\(\);\s*mounted\.clear\(\);/);
+    expect(app).toMatch(/if \(agent !== mountedAgent\) \{\s*for \(const el of mounted\.values\(\)\) dropRow\(el\);\s*mounted\.clear\(\);/);
     expect(app).toMatch(/h\(doc, 'span', \{ class: 'work-label' \}, w\.label\), h\(doc, 'span', \{ class: 'live-clock' \}, w\.clock\)/);
   });
 });

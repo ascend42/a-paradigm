@@ -41,7 +41,7 @@ export const RULES_USAGE = `usage: gnomon rules list [<home>] [--json]
 
   list    Verifies the kernel log of <home> (default: the Gnomon home) and lists
           the standing "always allow" rules derived from kernel-signed rows:
-          id (the card it was learned on), tool, repoKey, match (exact, or prefix: the literal argv words), inputHash. Read-only.
+          id (the card it was learned on), tool, repoKey, match (exact; prefix: the literal argv words; file: edits to one file; repo-edits: every edit auto-edits would allow), inputHash. Read-only.
   revoke  Asks the running daemon of the home to revoke the rule, as this
           home's human device (no Touch ID: revoking only narrows). The kernel
           logs approval.rule.revoked; the next exact match raises the card.
@@ -62,13 +62,13 @@ export function rulesOfHome(home: string): { ok: true; rules: AlwaysRule[]; rows
   const report = verifyLog(home, { keyRing: ring, kernelPrincipal, kernelKeyIds: [...ids], onRow: (r) => void (want.has(r.kind) && seen.push(r)) });
   if (!report.ok) return { ok: false, why: `${report.failures.length} verify failure(s); first: ${report.failures[0]?.code ?? '?'}` };
   for (const r of seen) {
-    let e: { principal?: unknown; keyId?: unknown; payload?: unknown };
+    let e: { principal?: unknown; keyId?: unknown; payload?: unknown; at?: unknown };
     try {
       e = JSON.parse(r.envelope) as typeof e;
     } catch {
       continue;
     }
-    book.fold({ seq: r.seq, kind: r.kind, principal: typeof e.principal === 'string' ? e.principal : '', keyId: e.keyId, payload: e.payload });
+    book.fold({ seq: r.seq, ...(typeof e.at === 'string' ? { at: e.at } : {}), kind: r.kind, principal: typeof e.principal === 'string' ? e.principal : '', keyId: e.keyId, payload: e.payload });
   }
   return { ok: true, rules: book.list(), rows: report.rows };
 }
@@ -116,7 +116,7 @@ export async function runRulesCommand(argv: readonly string[], io: { stdout: Out
     return RULES_EXIT_OK;
   }
   heading(io.stdout, 'rules', `${r.rules.length} standing always-allow rule(s) · ${r.rows} rows verified`);
-  for (const x of r.rules) readout(io.stdout, [['id', x.ruleId], ['tool', x.tool], ['repoKey', x.repoKey], ['match', x.match === 'prefix' ? `prefix: ${(x.prefix ?? []).join(' ')} …` : 'exact'], ...(x.match === 'prefix' ? [] : [['inputHash', x.inputHash] as [string, string]]), ['presence', x.presence]]);
+  for (const x of r.rules) readout(io.stdout, [['id', x.ruleId], ['tool', x.tool], ['repoKey', x.repoKey], ['match', x.match === 'prefix' ? `prefix: ${(x.prefix ?? []).join(' ')} …` : x.match === 'file' ? `edits to ${x.path ?? '?'}` : x.match === 'repo-edits' ? 'edits in this repo (same as auto-edits)' : 'exact'], ...(x.match === 'exact' ? [['inputHash', x.inputHash] as [string, string]] : []), ['presence', x.presence]]);
   return RULES_EXIT_OK;
 }
 

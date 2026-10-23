@@ -184,9 +184,27 @@ components:
       change, calls mod.view with input {hsid: focused} as display context);
       app.ts only calls mountModPanels after each attach's status read and
       feeds live rows to its hook. render.ts: Text tone -> class tone-<token>
-      (closed token regex), Box direction row -> blk-row; styles.css: fence,
-      tone-quiet/warn/deny text tokens, project hue as a FILL on the cap only
-      (G-GUI-10), drawn as a dotted --rule chip (never a key border). Aegis M2:
+      (the closed TONES, now with the kit's head and chip), Box direction row
+      -> blk-row; a hue tone (hue-0..5) is the project's ■ swatch in the
+      hue's ink pair (□ for a hollow mark), the chat header's, never a ringed
+      dot. Fitted views (founder 2026-10-23, "these mods have terrible
+      display"): every fence but the Workshop's renders with ctx.fit (body
+      class mod-fit, an inline-size container): 11.5 body and 10.5 quiet,
+      a 2px-grid rhythm, an id (no whitespace, > FIT_TOKEN_MIN) on one line
+      with an ellipsis and its full text in title (never broken mid-token),
+      row prose clamped to two lines and starting its own line after an id,
+      and a Table fitted by tableFit (label-style heads, numbers right-aligned
+      and tabular, cells capped at FIT_CELL_MAX with title, a width bucket
+      tw-N from its natural width; one container query per FIT_TABLE_BUCKETS
+      entry lays a narrower table out as its first cell over key-value
+      pairs, empty cells left out, cells never wider than the column, 8px
+      between rows). Truncated items are keyboard-reachable (Mika
+      2026-10-23): markTruncated (core/mod-panels.ts) gives exactly the ids,
+      cells and clamped titles the CSS cut one tab stop each (tabindex 0,
+      full text in title), redone on render, column resize (ResizeObserver)
+      and fonts loading; :focus-visible shows the whole text in a 2px
+      --key-edge ring. A mod meter is ink on a --rule track.
+      Generic: no mod-name case. test/mod-fit.test.ts. Aegis M2:
       the right-pane region is a sibling after #stack (outside its scroll),
       ruled off by a 2px --rule top border and headed `mods`; a block holding
       any kit.Button is refused in the panel slot (PANEL_BUTTON_REFUSAL shown
@@ -448,12 +466,14 @@ components:
       Stack · n pending · hover to fan · scope key; rail minmax(300px,340px).
       The preview (dev only) takes ?fan=1. Tests: test/desk.test.ts.
     motion-s4: >-
-      S4 motion (critique 2026-10-20 §2 S4). Fly-in is the comp's 4-step
-      path with no opacity, settling at the pile rotation; a pinned card
+      S4 motion (critique 2026-10-20 §2 S4; founder 2026-10-23). Arrival is a
+      quick fade-in, opacity only (card-in on the --t-arrive motion token; no
+      flutter), at the pile rotation; the stamp lands straight; a pinned card
       takes one of four preset tilts (.r-a..d by cardId; never inline
       style). Approve: ONLY after the kernel accepted the decision (a
-      refusal throws first), flyOff stamps APPROVED (--ink; board gnomon-status-colour), adds
-      .out after a fixed stamp hold, a design constant set in flyOff (flyout) and removes the sheet on its animationend,
+      refusal throws first), fadeOff stamps APPROVED (--ink; board gnomon-status-colour), adds
+      .out after a fixed stamp hold: a fade-out, opacity only (card-fade on the --t-fade motion token, design-system tokens.motion; founder 2026-10-23,
+      no tilt or spin on the way out), then closeUp collapses its height on --reflow and removes it on that transitionend,
       with a fixed fallback timer (a design constant, not a measurement); a departing card is kept out of fresh paints and
       re-inserted at its place. Reduced motion (in-app or OS): nothing
       animates and the card goes at once; the stamp's end state is styled to
@@ -529,7 +549,18 @@ components:
       (isAtBottom, Follow) — at the bottom it stays stuck through new rows
       and sends; scrolled up nothing moves it (not even a send), a
       "↓ latest · N new" key jumps back, and scrolling to the bottom by hand
-      re-sticks; app.ts paints incrementally (no innerHTML, no
+      re-sticks. Founder report 2026-10-23 (it stopped following while he
+      spoke): stickiness changes ONLY on the user's own scroll (ScrollIntent:
+      a wheel, scroll keys, focus moving into the feed, a pointer or finger
+      held on it or its scrollbar); scrollEvent calls any other scroll
+      'layout' and leaves it alone. Root cause: WebKit (the Gnomon.app
+      wrapper) clamps the feed's scrollTop when the composer shrinks or
+      re-measures (fitComposer resets its height to measure) and fires that
+      scroll before the ResizeObserver repaint, so it read as the user moving
+      up. Mounted rows sit under a ResizeObserver (rowSizes, watched from the
+      next frame, dropRow unobserves) so a row that grows by itself repaints;
+      .viewport has overflow-anchor: none; an unfold refocuses its line with
+      preventScroll. app.ts paints incrementally (no innerHTML, no
       replaceChildren) and anchors the row in view while heights are
       measured. STALE SESSIONS: GuiStore counts daemon.start boots; a new
       boot ends every live session the old kernel did not exit, the boot
@@ -611,7 +642,21 @@ components:
       from prefixOptionsOf (the one {type:'bash-prefix', detail} node whose
       detail recomputes to the contentHash); approveParamsOf turns the
       clicked key's data-scope/data-prefix into approve{scope} (only for
-      always; a malformed key sends no scope, so the exact rule);
+      always; a malformed key sends no scope, so the exact rule); an
+      Edit/Write card with a verified {type:'edit-scope'} node (editScopesOf)
+      offers "this exact edit", "edits to this file" and "edits in this
+      repo" (noted "same as auto-edits for this repo"). On either card the
+      scoped choices fold under ONE "Always ▾" key (data-always-fold, no
+      decision; Mika 2026-10-23): the row stays Allow · Deny · Always ▾, and
+      the unfolded .always-choices group lists each choice as its own
+      decision key (accessible name "Always: …") with its note visible
+      under it; Esc folds back to the key, and the fold and focus survive a
+      stack repaint (per card and zone). The mode chip reads "ask · edits by
+      rule" (≤1040px "ask ✓", spoken "edits allowed by rule"; the full words
+      in its title) while status.runModes carries editsByRule; ask's menu
+      line says edits pass by the rule, and the menu's "stop edits by rule"
+      entry sends request.rules.revoke, returning focus to the run mode key
+      (TD-2026-10-23-939 follow-up);
       refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,
       papercraft day / phosphor night / auto themes and reduced motion.
@@ -620,6 +665,7 @@ components:
     tags: [gnomon, gui, paradigm-8, m1-10]
     tests:
       - test/gui.test.ts
+      - test/edit-scope.test.ts
       - test/modes.test.ts
       - test/voice.test.ts
       - test/voice-client.test.ts
@@ -697,8 +743,8 @@ components:
       voice rows and releaseTurnRows joins the words from
       status.voice.unverified in seq order (a row waits at most
       UNVERIFIED_WAIT_MS, then goes on wordless and never becomes a part).
-      sentLabel and clampedFrom treat turn.sent origin voice-unverified as
-      clamped ("spoken · unverified voice · sent by you", asks first). Mika:
+      sentLabel labels turn.sent origin voice-unverified ("spoken · unverified
+      voice · sent by you"); it runs like a typed turn (TD-2026-10-23-939). Mika:
       a mixed draft's note quotes the unverified words (unverifiedQuote,
       cut at UNVERIFIED_QUOTE_MAX with …, full words in the title); an
       unverified row carries no speaker label ("voice · in composer ·
@@ -717,8 +763,9 @@ components:
       for the preset's send ceiling (with liabilityAck once the in-app
       acknowledgement recorded it). Labels: sentLabel(turn.sent) on voice
       messages ("spoken · sent by you / on release / by send word / as a
-      piece / by send-now", + "edits ask first") and CLAMP_CHIP "voice turn ·
-      edits ask first" in the session header; teaching the send word INLINE
+      piece / by send-now"; the plain origin only since TD-2026-10-23-939,
+      which retired the "edits ask first" suffix, the header chip and the
+      voice card line with the kernel clamp); teaching the send word INLINE
       under its row in the Voice settings sheet (core/send-word-teach.ts, a
       pure reducer over the kernel's attended trial: pick send / send it /
       over / your own, then "Say <word> once, on its own." and the ONE
@@ -777,11 +824,27 @@ components:
       and only the composer send (Enter/⌘Enter/[send]) sends it (note "draft · Enter sends
       (ambient never auto-sends)"). PTT drafts keep the countdown; the delay
       picks say push-to-talk.
+      AT THE CARET (founder report 2026-10-23): turnRow carries the
+      composer's caret or selection (`at`, app.ts composerCaret: the focused
+      selection, else the last caret collapsed so a selection is never
+      replaced unseen, else the end; only while the composer shows this
+      draft). The plain end of an unedited draft keeps the in-order append
+      (plainAppend), so an unedited send is still one part per turn. Anywhere
+      else placeWords splices the words in (one space, never two; a capital
+      at a sentence start, a plainly capitalised first word lowered
+      mid-sentence, never "I" or an acronym; no full stop before the sentence
+      goes on) and the draft becomes edited and held: it sends as ONE part
+      (source voice; the kernel matches parts in order, so out-of-order parts
+      must never go as parts), never as a piece, and the voice send key holds
+      it for Enter. The part keeps its unverified / inherited / ambient marks.
+      `caret` is where app.ts puts the composer's caret after the turn
+      (setSelectionRange, never taking the focus) so speech flows on.
     path: src/core/dictation.ts
     type: module
     tags: [gnomon, gui, voice, dictation]
     tests:
       - test/dictation.test.ts
+      - test/dictation-caret.test.ts
   gui-preview:
     description: >-
       #gui-preview (DEV ONLY; never in the kernel-served bundle) - the GUI
@@ -829,7 +892,7 @@ components:
       Aegis H-1 (2026-10-23): a turn that inherited its speaker
       (speakerBasis 'continuity') is a draft part marked inherited: the row
       reads "in composer · not checked as you", the draft note "draft ·
-      [“words”] not checked as you · edits ask first", a piece needs a part
+      [“words”] not checked as you" (information: no clamp), a piece needs a part
       checked as the human; the refusal causes inherited-only / inherited
       read in plain words. A short unverified push-to-talk turn (draftOnly)
       stops the Talk countdown. The input picker opens, renews (10 s) and
@@ -869,7 +932,14 @@ components:
       (.ghost-tail) as text nodes into #composer-ghost (never the textarea,
       so a send can never carry non-final words), "…" with no words, and
       clears on captured / dropped / idle. Reduced motion: the global rule
-      makes the tail fade instant.
+      makes the tail fade instant. AT THE CARET (founder report 2026-10-23):
+      #composer-ghost is now an aria-hidden mirror laid over the textarea
+      (placeGhost: same box, font and wrapping; scrolled with it) that draws
+      the composer text with the live words where the turn will land
+      (placeWords, the reducer's rule, at composerCaret); the textarea's own
+      text is transparent while it shows (.ghosting, caret kept) and still
+      never holds a live word. Committed words carry a dotted --sec
+      underline; fitComposer grows the composer to fit them.
       Aegis follow-ups: a capture from a status received more than
       CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock);
       a captured the kernel marks kernel:'unconfirmed' reads "Heard, not
@@ -1138,8 +1208,8 @@ components:
       (a not-ready rung names the Voice settings section that readies it),
       voicePillOf (the kernel-owned header pill: mic dot filled + ring when
       open, rung name, ONE live fact: hold ⌃⌥Space / listening / say “word” /
-      mic off · ⌃` / heard Ns ago; 2px amber edge + "edits ask first" while a
-      voice-origin turn is clamped; vermilion "not sent · why"), sheetRows.
+      mic off · ⌃` / heard Ns ago; vermilion "not sent · why"; no clamp
+      fact or edge since TD-2026-10-23-939), sheetRows.
       The popover (role menu, rungs menuitemradio, arrows/Home/End, Esc back
       to the pill) holds the ladder only plus a foot line (mic key · listen)
       and "voice settings…"; the old Off/Push-to-talk/Ambient list, delay
@@ -1220,9 +1290,9 @@ components:
       clicks: <span class="chip">, 18px, 10.5, the faint --rule edge, radius 3
       by day and square at night; tones plain (card voice tag, mod tier), ink
       (.chip.ink and the mod-kit `chip` tone .tone-chip) and warn (.chip.warn:
-      card flags, mod pending, dev, the voice clamp). The gate handle in the
+      card flags, mod pending, dev). The gate handle in the
       voice tag keeps its warn fill at radius 3. It replaces .badge,
-      .card-voice's own edge, .tone-chip's own look and the clamp pill. Never
+      .card-voice's own edge and .tone-chip's own look (the clamp pill is gone with the clamp, TD-2026-10-23-939). Never
       a <button>, never focusable. Anything clickable is a key: every
       .key.quiet is at least 24 x 24 (⋯, ⤢, Hold, Stop speaking, close), and
       ✎ rename, the run mode ▾ and the stack filter are 24px quiet keys with
