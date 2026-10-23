@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { BLOCK_SAFE_COMMANDS, paletteEntries } from '../src/core/commands.js';
 import { chatItems, GuiStore, type Row } from '../src/core/store.js';
 import { canAttach, pillOf, voiceStatusOf } from '../src/core/voice.js';
-import {
+import { micFaultFact,
   clientMenuEntries,
   clientOf,
   CLIENT_POLL_MS,
@@ -122,6 +122,32 @@ describe('attached: the live state stands and the real voice-app condition is ap
     expect(p).toMatchObject({ state: 'ambient', label: 'Listening · voice crashed: the voice app stopped (exit 1): -10875', className: expect.stringContaining('voice-ambient') });
     expect(cp.title).toMatch(/stopped: the voice app stopped/);
   });
+  it('field bug 2026-10-23: a mic fault reads "· mic stopped: <plain words>" with [Restart], never silence', () => {
+    const text = 'The mic kept restarting because the input device kept changing, so Gnomon turned it off.';
+    const s = att('conversation', { phase: 'running' }, { clientConnected: true, mic: { device: null, aec: null, fault: { code: 'restart-loop', text }, at: 'x' } });
+    const { cp, p } = shown(s);
+    expect(cp).toMatchObject({ label: null, action: 'restart', actionLabel: 'Restart', className: expect.stringContaining('voice-micfault') });
+    // Mika 2026-10-23: the pill carries a short cause; the whole sentence is the title (and the aria and ladder row)
+    expect(cp.tail).toBe(' · mic stopped: input kept changing');
+    expect(cp.tail!.length).toBeLessThanOrEqual(' · mic stopped: '.length + PILL_ERROR_MAX);
+    expect(['no-input', 'engine-start', 'something-new'].map((code) => micFaultFact({ code }))).toEqual(['mic stopped: no input device', 'mic stopped: macOS refused it', 'mic stopped']);
+    expect(APP).toContain('micClosed: attached && (v.micWanted === false || c.micFault !== null)');
+    expect(APP).toContain('clientCause: c.micFault ? oneLine(c.micFault.text, ERROR_TITLE_MAX)');
+    // Mika 2026-10-23: the plain voice refusal is for a refused SEND only (an attach or input refusal is not "not sent")
+    expect(APP).toMatch(/function refusalText\(r: ShownRefusal\): string \{\n  return /);
+    expect(APP).toContain('(voiceRefusalText(err.refusal) ?? refusalText(err.refusal))');
+    expect(APP).toContain('`the input was not changed: ${err.refusal.message}');
+    expect(cp.title).toContain(text);
+    expect(cp.title).not.toMatch(/restart-loop|#|G-VOX/);
+    expect(p.label).toMatch(/· mic stopped:/);
+    // founder request 2026-10-23: a chosen mic that is not connected is named (voice still works on the default)
+    const miss = shown(att('conversation', { phase: 'running' }, { clientConnected: true, inputChoice: { id: 'usb-mic', name: 'Shure MV7' }, mic: { device: { name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, aec: 'vpio', fault: null, missing: true, inputs: [], at: 'x' } }));
+    expect(miss.cp).toMatchObject({ tail: ' · chosen mic missing', action: null, className: expect.stringContaining('voice-micmissing') });
+    expect(miss.cp.title).toMatch(/^Shure MV7 is not connected, so Gnomon is listening on MacBook Pro Microphone · built-in · 48 kHz\. It switches back/);
+    // the mic works again: no tail
+    expect(shown(att('conversation', { phase: 'running' }, { clientConnected: true, mic: { device: { name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, aec: 'vpio', fault: null, at: 'x' } })).cp.tail).toBeNull();
+    expect(clientOf({ voice: { client: { phase: 'running' }, mic: { device: { name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, fault: null } } }).micDevice).toEqual({ name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 });
+  });
   it('backoff (a crash loop) reads as crashed even while clientConnected flaps true', () => {
     const { cp, p } = shown(att('ptt', { phase: 'backoff', lastError: '-10875' }, { clientConnected: true }));
     expect(p.label).toBe('Hold ⌃⌥Space to talk · voice crashed: -10875');
@@ -187,7 +213,7 @@ describe('attached: the live state stands and the real voice-app condition is ap
     expect(fn.indexOf('clientPillOf(')).toBeLessThan(fn.indexOf('voicePillOf('));
     // board header-5b: no separate action key; attached, the action is the ladder's first row
     expect(APP).not.toContain("$('voice-action')");
-    expect(APP).toContain("const act = v.state !== 'off' && cp.action !== null ? { action: cp.action, label: cp.actionLabel, fact: clientFactOf(cp.label, cp.tail) ?? '' } : null;");
+    expect(APP).toContain("const act = v.state !== 'off' && cp.action !== null ? { action: cp.action, label: cp.actionLabel, fact: mf && cp.className.includes('voice-micfault') ? oneLine(mf.text, ERROR_TITLE_MAX) : (clientFactOf(cp.label, cp.tail) ?? '') } : null;");
   });
 });
 

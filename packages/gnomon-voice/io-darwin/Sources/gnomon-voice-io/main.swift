@@ -11,11 +11,13 @@
 //
 // Events (JSON frames, {"type":"event","event",tUs,...}; tUs = monotonic µs, the
 // same clock as capture hostTimeNs / 1000):
-//   ready {info…}  mic {on, voiceProcessing, aec}  route {route, aec, voiceProcessing}
+//   ready {info…}  mic {on, voiceProcessing, aec, input?, missing?}  route {route, aec, voiceProcessing}
 //   level {rmsDBFS, peakDBFS} ~15 Hz while the mic is on
 //   playback.start {engine, audibleAtUs, outputLatencyUs}  playback.end {reason, utteranceEnded, queuedMs}
 //   hotkey {action: talk|mic-toggle|mode-toggle|hold-toggle|stop-speaking, phase: down|up}
-//   engine {what, mic}  error {error, message}  exit {code}
+//   engine {what: restarted|failed|released, mic, reason?: restart-loop|input-change|engine-start|no-input|converter|no-engine}
+//   inputs {inputs: [{id, name, transport, sampleRate}], selected, current, missing}   a device came, went or the default changed
+//   error {error, message}  exit {code}
 
 import AppKit
 import Foundation

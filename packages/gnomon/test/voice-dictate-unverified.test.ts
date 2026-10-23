@@ -4,8 +4,9 @@
  * ambient turn fills the draft (kernel-stamped draftOnly:true, speakerVerified:false; the row is hash-only and the words
  * reach the human class through status.voice.unverified only) and only the human's Enter sends it, clamped as origin
  * 'voice-unverified'. The voice principal's direct send, and word, piece and send-now claims over it (from any
- * attachment of the session: a preset switch re-attaches) are refused. Talk, Send word and Pieces keep the speaker
- * gate, and a short unverified turn there is refused with cause 'too-short'. Pure (no daemon).
+ * attachment of the session: a preset switch re-attaches) are refused. Since 2026-10-23 (founder ruling: short speech
+ * is never thrown away) Send word and Pieces fill the draft the same way; Talk keeps the speaker gate, and a short
+ * unverified turn there is refused with cause 'too-short'. Pure (no daemon).
  */
 import { describe, expect, it } from 'vitest';
 import { RefusedError, VOICE_LIABILITY_ACK_HASH, VOICE_MIN_VERIFY_SPEECH_MS } from '@a-company/gnomon-contracts';
@@ -190,32 +191,51 @@ describe('G-VOX-06 Dictate exception: an unverified turn fills the draft, marked
     await r.attach('dictate');
     expect(await r.turn('no aec here', { ...UNVERIFIED, aec: undefined })).toMatchObject({ refused: 'voice-off', refusedCause: 'aec' });
     expect(await r.turn('allow', { ...UNVERIFIED, intercepted: 'decision' })).toMatchObject({ refused: 'voice-speaker' });
-    // a push-to-talk claim is not Dictate's open mic: the speaker gate stays
-    expect(await r.turn('held key words', { ...UNVERIFIED, mode: 'ptt' })).toMatchObject({ refused: 'voice-speaker' });
+    // a LONG push-to-talk clip that does not match keeps the speaker gate (Aegis 2026-10-23: only a short one may draft)
+    expect(await r.turn('held key words', { ...UNVERIFIED, gatedSpeechMs: VOICE_MIN_VERIFY_SPEECH_MS, mode: 'ptt' })).toMatchObject({ refused: 'voice-speaker' });
     expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
     expect(r.words().size).toBe(0);
   });
 });
 
 describe('G-VOX-06 stays for every rung that sends without a key press', () => {
-  for (const rung of ['talk', 'word', 'pieces'] as const) {
-    it(`${rung}: an unverified turn is refused voice-speaker at receipt, stored hash-only`, async () => {
+  it('talk: a LONG unverified turn is refused voice-speaker at receipt, stored hash-only', async () => {
+    const r = rig();
+    await r.attach('talk');
+    const got = await r.turn('rm -rf build', { ...UNVERIFIED, gatedSpeechMs: VOICE_MIN_VERIFY_SPEECH_MS, mode: 'ptt' });
+    expect(got).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('draftOnly');
+    await r.enter(['rm -rf build']);
+    expect(r.supSends.at(-1)).not.toHaveProperty('voiceAttribution');
+  });
+
+  // founder ruling 2026-10-23: short speech is never thrown away. Under Send word and Pieces an unverified turn fills the
+  // draft like Dictate; the word, pieces and send-now are refused while it is there, so only the human's Enter sends it
+  for (const rung of ['word', 'pieces'] as const) {
+    it(`${rung}: an unverified turn fills the draft (hash-only row); only Enter sends it, clamped`, async () => {
       const r = rig();
       await r.attach(rung);
-      const got = await r.turn('rm -rf build', { ...UNVERIFIED, ...(rung === 'talk' ? { mode: 'ptt' } : {}) });
-      expect(got).toMatchObject({ forwardable: false, refused: 'voice-speaker', refusedCause: 'too-short' });
+      const got = (await r.turn('rm -rf build', UNVERIFIED)) as { seq: number };
+      expect(got).toMatchObject({ forwardable: true, draftOnly: true });
       expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
-      expect(r.rows.at(-1)!.payload).not.toHaveProperty('draftOnly');
+      const w = (await r.turn('over and out')) as { seq: number };
+      if (rung === 'word') expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'word', turnSeq: w.seq }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
+      else expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'piece', turnSeqs: [got.seq] }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
+      expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'hotkey' }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
+      expect(await refusal(r.v.send(r.vc, { hsid: HSID, content: [{ text: 'rm -rf build' }] }))).toMatchObject({ code: 'FORBIDDEN', gate: 'voice' });
+      expect(r.supSends).toHaveLength(0);
       await r.enter(['rm -rf build']);
-      expect(r.supSends.at(-1)).not.toHaveProperty('voiceAttribution');
+      expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'unverified' } });
     });
   }
 
-  it(`a short turn (gated speech under ${VOICE_MIN_VERIFY_SPEECH_MS} ms) says too-short; a long unrecognised one carries no cause`, async () => {
+  it(`Talk: a short turn (gated speech under ${VOICE_MIN_VERIFY_SPEECH_MS} ms) fills the draft unverified (Aegis 2026-10-23); a long unrecognised one is refused with no cause`, async () => {
     const r = rig();
     await r.attach('talk');
-    expect(await r.turn('a', { ...UNVERIFIED, mode: 'ptt', gatedSpeechMs: VOICE_MIN_VERIFY_SPEECH_MS - 10 })).toMatchObject({ refused: 'voice-speaker', refusedCause: 'too-short' });
-    expect(r.rows.at(-1)!.payload).toMatchObject({ refusedReason: 'voice-speaker', refusedCause: 'too-short' });
+    expect(await r.turn('a', { ...UNVERIFIED, mode: 'ptt', gatedSpeechMs: VOICE_MIN_VERIFY_SPEECH_MS - 10 })).toMatchObject({ forwardable: true, draftOnly: true });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ draftOnly: true, speakerVerified: false });
+    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
     const long = await r.turn('b', { ...UNVERIFIED, mode: 'ptt', gatedSpeechMs: VOICE_MIN_VERIFY_SPEECH_MS });
     expect(long).toMatchObject({ refused: 'voice-speaker' });
     expect(long).not.toHaveProperty('refusedCause');

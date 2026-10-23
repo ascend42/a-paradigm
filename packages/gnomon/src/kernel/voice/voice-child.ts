@@ -15,8 +15,13 @@
  *     stop() ends the restarts.
  *   - prepare() (install the verified GnomonVoiceIO.app copy, fetch models) runs before every spawn and reports a
  *     GUI-visible phase (`installing`, `downloading-models{mb}`), so first start needs no terminal step.
+ *   - The child's stderr (its logger lines and warn notices; never audio, never transcripts: those go to stdout or
+ *     nowhere) is kept as a 2000-char tail for lastError AND appended to <home>/logs/voice.log (0600, one rollover to
+ *     voice.log.1 past VOICE_LOG_MAX_BYTES), so a voice failure can be diagnosed after the fact (field bug 2026-10-23).
  */
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type * as net from 'node:net';
 import { DEFAULT_REEXEC_PATH, DISABLE_SIGUSR1 } from '../lifecycle/env.js';
 
@@ -68,6 +73,39 @@ export interface VoiceChildOptions {
   stableMs?: number;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => { clear(): void };
+  /** where the child's stderr is persisted; default <home>/logs/voice.log, null ⇒ not persisted */
+  logFile?: string | null;
+}
+
+/** voice.log rolls over to voice.log.1 past this size (two files at most) */
+export const VOICE_LOG_MAX_BYTES = 256 * 1024;
+
+/**
+ * Appends `text` to a capped log file (dir 0700, file 0600); past `max` bytes the file becomes `<file>.1` (replacing
+ * the previous one). Never throws: a diagnostics log must not take voice down.
+ */
+export function appendCappedLog(file: string, text: string, max = VOICE_LOG_MAX_BYTES): void {
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    let size = 0;
+    try {
+      size = fs.statSync(file).size;
+    } catch {
+      /* new file */
+    }
+    if (size > 0 && size + Buffer.byteLength(text) > max) fs.renameSync(file, `${file}.1`);
+    // Aegis L-3: the modes hold for a file or folder that already existed (mode only applies on creation)
+    fs.chmodSync(path.dirname(file), 0o700);
+    const fd = fs.openSync(file, 'a', 0o600);
+    try {
+      fs.fchmodSync(fd, 0o600);
+      fs.writeSync(fd, text);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    /* diagnostics only */
+  }
 }
 
 /** Exact env names the voice child keeps; LC_* by pattern. */
@@ -235,8 +273,16 @@ export class VoiceChildSupervisor {
     this.#startedAt = this.#now();
     child.stdout?.resume();
     let tail = '';
-    child.stderr?.on('data', (b: Buffer) => void (tail = `${tail}${b.toString('utf8')}`.slice(-2000)));
+    const logFile = this.#o.logFile === undefined ? path.join(this.#o.home, 'logs', 'voice.log') : this.#o.logFile;
+    const stamp = (): string => new Date(this.#now()).toISOString();
+    if (logFile) appendCappedLog(logFile, `--- ${stamp()} voice app started (pid ${child.pid ?? '?'}) ---\n`);
+    child.stderr?.on('data', (b: Buffer) => {
+      const s = b.toString('utf8');
+      tail = `${tail}${s}`.slice(-2000);
+      if (logFile) appendCappedLog(logFile, s);
+    });
     child.once('exit', (code, signal) => {
+      if (logFile) appendCappedLog(logFile, `--- ${stamp()} voice app exited (${signal ?? `exit ${code}`}) ---\n`);
       if (this.#child !== child) return;
       this.#child = null;
       const waiters = this.#exitWaiters;

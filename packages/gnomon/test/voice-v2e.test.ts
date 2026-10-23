@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { VoiceChildSupervisor, voiceChildArgs, voiceChildEnv, type VoiceChildOptions } from '../src/kernel/voice/voice-child.js';
+import { appendCappedLog, VoiceChildSupervisor, voiceChildArgs, voiceChildEnv, type VoiceChildOptions } from '../src/kernel/voice/voice-child.js';
 import { resolveVoiceClientEntry } from '../src/kernel/voice/voice-install.js';
 import { createKernelDispatcher, RpcRefusal } from '../src/kernel/socket/index.js';
 
@@ -58,6 +58,7 @@ function rig(o: Partial<VoiceChildOptions> = {}) {
       return { ioBinary: '/h/bin/voice/GnomonVoiceIO.app/Contents/MacOS/gnomon-voice-io', devUnsigned: false };
     },
     attach: async () => `conn:V${++attaches}`,
+    logFile: null,
     now: () => t,
     setTimer: (fn, ms) => {
       const x = { fn, ms, cleared: false };
@@ -128,6 +129,33 @@ describe('#gnomon-voice V2e: VoiceChildSupervisor', () => {
     const s = await p;
     expect(s).toMatchObject({ phase: 'running', devUnsigned: true });
     expect(s).not.toHaveProperty('downloadMb');
+  });
+
+  it('field bug 2026-10-23: the child stderr is persisted to a capped voice log (0600), not only an in-memory tail', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-log-'));
+    const file = path.join(dir, 'logs', 'voice.log');
+    const r = rig({ logFile: file, backoffMinMs: 1000 });
+    await r.sup.start();
+    r.children.at(-1)!.crash();
+    const log = fs.readFileSync(file, 'utf8');
+    expect(log).toMatch(/voice app started/);
+    expect(log).toContain('boom: the mic went away');
+    expect(log).toMatch(/voice app exited \(exit 1\)/);
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
+    // capped: past the cap the file rolls over to voice.log.1 (two files at most)
+    appendCappedLog(file, 'x'.repeat(300), 400);
+    appendCappedLog(file, 'y'.repeat(300), 400);
+    expect(fs.readFileSync(file, 'utf8')).toBe('y'.repeat(300));
+    expect(fs.readFileSync(`${file}.1`, 'utf8')).toMatch(/x{300}$/);
+    // Aegis L-3: a pre-existing loose file and folder are tightened
+    fs.chmodSync(file, 0o644);
+    fs.chmodSync(path.dirname(file), 0o755);
+    appendCappedLog(file, 'z');
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
+    // never throws (an unwritable place is ignored)
+    expect(() => appendCappedLog('/dev/null/nope/voice.log', 'z')).not.toThrow();
   });
 
   it('restarts a crashed child with exponential backoff (doubling, capped) and resets after a stable run', async () => {
@@ -284,6 +312,12 @@ function drig() {
       forget: async (p) => (calls.push(`forget:${p.name}`), { forgotten: true }),
       report: (p) => (calls.push(`report:${JSON.stringify(p)}`), { ok: true }),
       stopSpeaking: () => (calls.push('stop-speaking'), { stopSpeakingSeq: calls.filter((c) => c === 'stop-speaking').length }),
+      micMeter: (open: boolean) => (calls.push(`mic-meter:${open}`), { micMeterOpen: open }),
+      selectInput: (c: { id: unknown; name?: unknown }) => {
+        if (c.id !== null && typeof c.id !== 'string') throw new TypeError('the input choice id is a device id or null');
+        calls.push(`select-input:${String(c.id)}`);
+        return { inputChoice: { id: c.id, name: c.name ?? null } };
+      },
       sendWord: async (p) => (calls.push(`sendword:${JSON.stringify(p)}`), { trial: null }),
     },
   });
@@ -353,6 +387,25 @@ describe('#gnomon-voice V2e: the adopted-fd principal is voice and nothing else'
 });
 
 describe('#gnomon-voice V2e: request.voice.client is human only', () => {
+  it("founder request 2026-10-23: ops 'select-input' and 'mic-meter' are human only; a bad id is BAD_REQUEST; other classes never reach it", async () => {
+    const r = drig();
+    const call = await r.connect({ kind: 'human', credential: 'gui' });
+    expect(await call('log.append', { kind: 'request.voice.client', payload: { op: 'select-input', id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone' } })).toEqual({ voiceClient: { inputChoice: { id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone' } } });
+    expect(await call('log.append', { kind: 'request.voice.client', payload: { op: 'select-input', id: null } })).toMatchObject({ voiceClient: { inputChoice: { id: null } } });
+    expect(await refusal(call('log.append', { kind: 'request.voice.client', payload: { op: 'select-input', id: 7 } }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await refusal(call('log.append', { kind: 'request.voice.client', payload: { op: 'select-input' } }))).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await refusal(call('log.append', { kind: 'request.voice.client', payload: { op: 'select-input', id: null, x: 1 } }))).toMatchObject({ code: 'BAD_REQUEST' });
+    for (const who of [{ kind: 'voice' }, { kind: 'agent' }, { kind: 'readToken' }] as Who[]) {
+      const c = await r.connect(who);
+      await expect(c('log.append', { kind: 'request.voice.client', payload: { op: 'select-input', id: null } }), who.kind).rejects.toBeInstanceOf(RpcRefusal);
+    }
+    expect(r.calls).toEqual(['select-input:BuiltInMicrophoneDevice', 'select-input:null']);
+    expect(await call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-meter', open: true } })).toEqual({ voiceClient: { micMeterOpen: true } });
+    expect(await refusal(call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-meter', open: 'yes' } }))).toMatchObject({ code: 'BAD_REQUEST' });
+    const v = await r.connect({ kind: 'voice' });
+    await expect(v('log.append', { kind: 'request.voice.client', payload: { op: 'mic-meter', open: true } })).rejects.toBeInstanceOf(RpcRefusal);
+  });
+
   it('a human (device or GUI) starts and stops the voice app; the port is reached, nothing is written as a row', async () => {
     const r = drig();
     for (const credential of ['device', 'gui'] as const) {

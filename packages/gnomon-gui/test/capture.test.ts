@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { GHOST_TEXT_MAX, ghostTextOf, CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, captureDismiss, meterShownOf, DROP_LABEL, dropLabelOf, refusalPhrase } from '../src/core/capture.js';
+import { GHOST_TEXT_MAX, ghostTextOf, CAPTURE_DROP_REASONS, CAPTURE_STALE_MS, freshCapture, CAPTURE_FAST_POLL_MS, CAPTURE_IDLE_POLL_MS, CAPTURED_FLASH_MS, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, captureDismiss, meterShownOf, DROP_LABEL, dropLabelOf, refusalPhrase, voiceRefusalText } from '../src/core/capture.js';
 import { clientOf, clientPillOf, oneLine } from '../src/core/voice-client.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -220,5 +220,31 @@ describe('B1 live words: the ghost line (#composer-ghost)', () => {
     expect(CSS).toMatch(/\.composer-ghost \.ghost-tail \{[^}]*opacity: 0\.55/);
     expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{ animation: none !important; transition: none !important; \}/);
     expect(CSS).not.toMatch(/\.ghost-(tail|committed)[^{]*\{[^}]*animation/);
+  });
+});
+
+describe('founder report 2026-10-23: a refused voice send is said in plain words', () => {
+  it('the draft-only refusal names no code, symbol or rule id, and says what to do next', () => {
+    const r = { code: 'FORBIDDEN', reason: 'voice-speaker', message: '#gnomon-voice: the draft holds an unverified voice: only Enter sends it (G-VOX-06)', next: [], data: { cause: 'draft-only', by: 'word' } };
+    const t = voiceRefusalText(r)!;
+    expect(t).toMatch(/^✕ not sent by voice · /);
+    expect(t).toMatch(/\n  next: press Enter to send it/);
+    expect(t).not.toMatch(/FORBIDDEN|voice-speaker|#gnomon|G-VOX|draft-only/);
+    expect(voiceRefusalText({ ...r, data: null })).toMatch(/didn't recognise your voice on this mic/);
+    expect(voiceRefusalText({ ...r, reason: 'voice-stale-utterance', data: null })).toMatch(/^✕ not sent by voice · it was too old to send\n  next: /);
+    // not a voice refusal: shown as before
+    expect(voiceRefusalText({ code: 'BAD_REQUEST', reason: 'bad-params', message: 'x', next: [], data: null })).toBeNull();
+  });
+});
+
+describe('Aegis H-1: the inherited causes read as plain words, then next: (DESIGN.md principle 5)', () => {
+  it('inherited-only and inherited', () => {
+    const r = { code: 'FORBIDDEN', reason: 'voice-speaker', message: '#gnomon-voice: a piece needs …', next: [], data: { cause: 'inherited-only', by: 'piece' } };
+    expect(voiceRefusalText(r)).toBe('✕ not sent by voice · none of these words were checked as you\n  next: press Enter to send it');
+    expect(voiceRefusalText({ ...r, data: { cause: 'inherited' } })).toBe('✕ not sent by voice · these words were not checked as you\n  next: press Enter to send it');
+    for (const c of ['inherited-only', 'inherited']) {
+      expect(refusalPhrase('voice-speaker', c)).toBe('not checked as you: Enter sends it');
+      expect(voiceRefusalText({ ...r, data: { cause: c } })).not.toMatch(/FORBIDDEN|voice-speaker|#gnomon|inherited/);
+    }
   });
 });

@@ -9,7 +9,8 @@
  *   - The pill's popover is the ladder only (role menu, rungs are menuitemradio), a foot line with the mic key and
  *     the listen mode, and a "voice settings…" link. A rung that is not ready opens the sheet at its section.
  *   - The sheet is a right-side drawer (role dialog, aria-modal: Tab stays inside it while open, trapNext, and focus
- *     returns to where it came from on close): your voice, send word, keys, listen, timing, risk. Teaching
+ *     returns to where it came from on close): input (the mic in use and its picker with a live meter, founder request
+ *     2026-10-23), your voice, send word, keys, listen, timing, risk. Teaching
  *     opens inline under its row (one prompt, a live "I heard", one counter, then the risk check right before save:
  *     the sentence naming the word, then the ACK_TEXT box, or "acknowledged · <date>" once this user acknowledged);
  *     there is no modal over the sheet.
@@ -20,7 +21,7 @@ import { DELAY_CHOICES, delayLabel, serializeDelay } from '../core/dictation.js'
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { teachAckLine, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariants, teachVariantsLine, TEACH_DROP_VARIANTS, TEACH_PICKS, type TeachState } from '../core/send-word-teach.js';
 import { consentText, enrolLine, normalizeVoiceName, type EnrolState } from '../core/voice-client.js';
-import { micKeyName, RUNG_NAME, type RungEntry, type SheetRowView, type SheetSection } from '../core/voice-ladder.js';
+import { micKeyName, RUNG_NAME, type InputChoiceView, type RungEntry, type SheetRowView, type SheetSection } from '../core/voice-ladder.js';
 import { ACK_TEXT, riskSentence } from '../core/voice-presets.js';
 
 /* ── the ladder popover ─────────────────────────────────────────────── */
@@ -63,7 +64,9 @@ export type FlowView =
   | { kind: 'enrol'; s: EnrolState; name: string; agreed: boolean; enrolled: string[] | null; forgetArmed: string | null; level: number | null }
   /** word: the held send word (the sentence names it), or null */
   | { kind: 'risk'; rung: 'word' | 'pieces' | null; ack: boolean; word?: string | null }
-  | { kind: 'keys'; bare: boolean };
+  | { kind: 'keys'; bare: boolean }
+  /** founder request 2026-10-23: the input picker and its live meter (the level is set without a repaint) */
+  | { kind: 'input'; choices: InputChoiceView[]; on: boolean | null };
 
 /** The section a flow opens under. */
 export const flowSection = (f: FlowView): SheetSection => (f.kind === 'teach' ? 'sendword' : f.kind === 'enrol' ? 'voice' : f.kind);
@@ -178,6 +181,43 @@ function keysEls(doc: MiniDoc, f: Extract<FlowView, { kind: 'keys' }>): MiniEl[]
   ];
 }
 
+/**
+ * The input picker (founder request 2026-10-23). Mika 2026-10-23: the choices are the folder field's choice rows
+ * (.ff-list / .ff-row, the system's stacked radiogroup; .plain drops the project swatch and lets a long device name
+ * wrap) instead of a new stacked segmented control: ✓ and weight 600 on the chosen row, the detail line under the
+ * name, "in use" on the input the mic is on now. Roving tabindex: Tab enters on the chosen row, the arrows MOVE focus
+ * and Enter or Space chooses (choosing restarts the mic on that input, so arrowing through must not switch it). Then
+ * the live level as a meter (role meter, 0..100, a word for it), the remembered-choice note and done.
+ */
+function inputEls(doc: MiniDoc, f: Extract<FlowView, { kind: 'input' }>): MiniEl[] {
+  const list = h(doc, 'div', { class: 'ff-list vs-inputs', role: 'radiogroup', 'aria-label': 'input' });
+  const at = Math.max(0, f.choices.findIndex((c) => c.checked));
+  f.choices.forEach((c, i) =>
+    list.appendChild(
+      h(
+        doc,
+        'button',
+        { type: 'button', role: 'radio', class: 'ff-row plain', 'aria-checked': String(c.checked), tabindex: i === at ? '0' : '-1', 'aria-label': `${c.label}${c.inUse ? ', in use' : ''}`, 'data-vs-input': c.id, 'data-vs-focus': `input:${c.id}` },
+        h(doc, 'span', { class: 'ff-mk', 'aria-hidden': 'true' }, c.checked ? '✓' : ''),
+        h(doc, 'span', { class: 'ff-text' }, h(doc, 'span', { class: 'ff-name' }, c.name), c.detail ? h(doc, 'span', { class: 'ff-path' }, c.detail) : null),
+        h(doc, 'span', { class: 'ff-when' }, c.inUse ? 'in use' : ''),
+      ),
+    ),
+  );
+  return [
+    list,
+    h(
+      doc,
+      'div',
+      { class: 'vs-row' },
+      h(doc, 'span', { class: 'vs-meter', role: 'meter', 'aria-label': 'input level', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0', 'aria-valuetext': 'quiet', 'data-vs-meter': '1' }, h(doc, 'span', null), h(doc, 'span', null), h(doc, 'span', null), h(doc, 'span', null), h(doc, 'span', null)),
+      h(doc, 'span', { class: 'meta' }, f.on === false ? 'the mic is off; the meter moves when it is on' : 'the meter moves when sound arrives on the input in use'),
+    ),
+    h(doc, 'p', { class: 'meta' }, 'A chosen mic is remembered; when it is unplugged, Gnomon listens on the system default until it is back.'),
+    h(doc, 'div', { class: 'vs-row' }, btn(doc, { class: 'key', 'data-vs-input-done': '1', 'data-vs-focus': 'input-done' }, 'done')),
+  ];
+}
+
 /** The timing row's control: the Talk auto-send delay as a segmented control, then the pieces line. */
 function timingEls(doc: MiniDoc, delayMs: number | null, attachable: boolean): MiniEl[] {
   const seg = h(doc, 'span', { class: 'seg vs-seg', role: 'radiogroup', 'aria-label': 'Talk sends after' });
@@ -203,7 +243,7 @@ export function sheetEls(doc: MiniDoc, v: SheetView): MiniEl[] {
     );
     if (r.id === 'timing') for (const e of timingEls(doc, v.delayMs, v.attachable)) sec.appendChild(e);
     if (v.flow && open === r.id) {
-      const els = v.flow.kind === 'teach' ? teachEls(doc, v.flow) : v.flow.kind === 'enrol' ? enrolEls(doc, v.flow) : v.flow.kind === 'risk' ? riskEls(doc, v.flow) : keysEls(doc, v.flow);
+      const els = v.flow.kind === 'teach' ? teachEls(doc, v.flow) : v.flow.kind === 'enrol' ? enrolEls(doc, v.flow) : v.flow.kind === 'risk' ? riskEls(doc, v.flow) : v.flow.kind === 'input' ? inputEls(doc, v.flow) : keysEls(doc, v.flow);
       sec.appendChild(h(doc, 'div', { class: 'vs-flow' }, ...els));
     }
     return sec;
@@ -231,7 +271,11 @@ export function trapNext<T>(items: readonly T[], active: T | null, back: boolean
   if (!back && i === items.length - 1) return items[0]!;
   return null;
 }
-const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+/** A flow's first control to focus: never a roving group's inactive row (tabindex -1). */
+const FLOW_FIRST = '.vs-flow [data-vs-focus]:not([tabindex="-1"])';
+/** The level the input meter calls "sound arriving" (0..1; room noise sits below it). */
+export const METER_SOUND = 0.1;
 
 export interface VoiceSheetDeps {
   view: () => SheetView;
@@ -266,6 +310,7 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
     // keep the focused control (and a text field's caret) across a repaint
     const a = document.activeElement as HTMLElement | null;
     const fk = a && body.contains(a) ? a.dataset.vsFocus : undefined;
+    const sec = a && body.contains(a) ? (a.closest('[data-vs-section]') as HTMLElement | null)?.dataset.vsSection : undefined;
     const sel = a instanceof HTMLInputElement && a.type === 'text' ? [a.selectionStart, a.selectionEnd, a.value] as const : null;
     while (body.firstChild) body.removeChild(body.firstChild);
     for (const el of sheetEls(document as unknown as MiniDoc, v)) body.appendChild(el as unknown as Node);
@@ -277,8 +322,11 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
         again.setSelectionRange(sel[0], sel[1]);
       } else again.focus();
     } else if (fk) {
-      // the focused control went away (a step moved on): the flow's first control, else the sheet's close key
-      ((body.querySelector('.vs-flow [data-vs-focus]') as HTMLElement | null) ?? document.getElementById('voice-settings-close'))?.focus();
+      // the focused control went away (a step moved on): the flow's first control (a roving group's current row), else
+      // (the flow closed: done, cancel) its row's key, else the sheet's close key. Mika 2026-10-23: was the close key
+      // after every done, which threw a keyboard user to the top of the drawer.
+      const from = sec ? body.querySelector(`[data-vs-section="${sec}"] [data-vs-act]`) : null;
+      ((body.querySelector(FLOW_FIRST) as HTMLElement | null) ?? (from as HTMLElement | null) ?? document.getElementById('voice-settings-close'))?.focus();
     }
   };
   const close = (): void => {
@@ -295,13 +343,15 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
     repaint(true);
     const sec = section ? (body.querySelector(`[data-vs-section="${section}"]`) as HTMLElement | null) : null;
     sec?.scrollIntoView?.({ block: 'nearest' });
-    ((sec?.querySelector('.vs-flow [data-vs-focus]') as HTMLElement | null) ?? (sec?.querySelector('[data-vs-focus]') as HTMLElement | null) ?? document.getElementById('voice-settings-close'))?.focus();
+    ((sec?.querySelector(FLOW_FIRST) as HTMLElement | null) ?? (sec?.querySelector('[data-vs-focus]') as HTMLElement | null) ?? document.getElementById('voice-settings-close'))?.focus();
   };
   body.addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
-    const el = t.closest('[data-vs-act], [data-vs-pick], [data-vs-teach], [data-vs-enrol], [data-vs-forget], [data-vs-risk], [data-vs-mickey], [data-vs-delay], [data-vs-keys]') as HTMLElement | null;
+    const el = t.closest('[data-vs-act], [data-vs-pick], [data-vs-teach], [data-vs-enrol], [data-vs-forget], [data-vs-risk], [data-vs-mickey], [data-vs-delay], [data-vs-keys], [data-vs-input], [data-vs-input-done]') as HTMLElement | null;
     if (!el || (el as HTMLButtonElement).disabled) return;
     const ds = el.dataset;
+    if (ds.vsInput !== undefined) return d.act('input', ds.vsInput, e.isTrusted);
+    if (ds.vsInputDone !== undefined) return d.act('input-done', '', e.isTrusted);
     const [action, value] = ds.vsAct !== undefined ? ['act', ds.vsAct] : ds.vsPick !== undefined ? ['pick', ds.vsPick] : ds.vsTeach !== undefined ? ['teach', ds.vsTeach] : ds.vsEnrol !== undefined ? ['enrol', ds.vsEnrol] : ds.vsForget !== undefined ? ['forget', ds.vsForget] : ds.vsRisk !== undefined ? ['risk', ds.vsRisk] : ds.vsMickey !== undefined ? ['mickey', ds.vsMickey] : ds.vsDelay !== undefined ? ['delay', ds.vsDelay] : ['keys', ds.vsKeys ?? ''];
     if (action === 'teach' && value === 'custom') {
       const f = body.querySelector('[data-vs-custom]') as HTMLInputElement | null;
@@ -322,6 +372,19 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
   });
   body.addEventListener('keydown', (e) => {
     const t = e.target as HTMLInputElement;
+    // Mika 2026-10-23: the input rows are one Tab stop; the arrows move focus (roving tabindex), Home and End jump, and
+    // Enter or Space chooses (a button's own press), never the arrows: each choice restarts the mic on that input
+    if (t.dataset.vsInput !== undefined && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const rows = [...body.querySelectorAll<HTMLElement>('[data-vs-input]')];
+      const i = rows.indexOf(t);
+      const to = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? (i + 1) % rows.length : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? (i - 1 + rows.length) % rows.length : e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : -1;
+      if (to >= 0) {
+        e.preventDefault();
+        rows.forEach((r, n) => r.setAttribute('tabindex', n === to ? '0' : '-1'));
+        rows[to]!.focus();
+      }
+      return;
+    }
     if (e.key !== 'Enter') return;
     if (t.dataset.vsCustom !== undefined) {
       e.preventDefault();
@@ -349,7 +412,13 @@ export function mountVoiceSheet(document: Document, d: VoiceSheetDeps): VoiceShe
   });
   const level = (n: number | null): void => {
     const m = body.querySelector('[data-vs-meter]') as HTMLElement | null;
-    m?.style.setProperty('--level', String(n === null ? 0 : Math.max(0, Math.min(1, n))));
+    const v = n === null ? 0 : Math.max(0, Math.min(1, n));
+    m?.style.setProperty('--level', String(v));
+    // Mika 2026-10-23: the input picker's meter is a role=meter (not a live region: it changes 4 times a second)
+    if (m?.getAttribute('role') === 'meter') {
+      m.setAttribute('aria-valuenow', String(Math.round(v * 100)));
+      m.setAttribute('aria-valuetext', n === null ? 'no level reported' : v >= METER_SOUND ? 'sound arriving' : 'quiet');
+    }
   };
   return { open, close, isOpen: () => !overlay.hidden, repaint, level };
 }

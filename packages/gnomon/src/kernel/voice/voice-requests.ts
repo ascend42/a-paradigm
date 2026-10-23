@@ -40,6 +40,10 @@
  *                                       so they count as NOT enrolled). Held per voice connection with NO TTL (a
  *                                       state, re-sent when it changes), cleared when that connection closes,
  *                                       relayed as status.voice.prints{stale, at}. The GUI nudges a re-enrolment.
+ *   request.voice.report{mic}           2026-10-23 (founder field bug: the mic failed silently): {device, aec, fault} =
+ *                                       the input in use and why the mic is off when the human did not turn it off
+ *                                       (MicReport). A state held per voice connection (no TTL), cleared when it
+ *                                       closes, relayed as status.voice.mic{…, at}. Display only.
  *   request.voice.client{op:'stop-speaking'} (dispatch.ts, human only) bumps status.voice.stopSpeakingSeq; the
  *                                       client re-reads status (300 ms while speaking) and stops playback on a change.
  */
@@ -148,6 +152,12 @@ export function voiceStatusFor(voice: Record<string, unknown>, credential: strin
     const { unverified: _unverified, ...rest } = voice;
     voice = rest;
   }
+  // Aegis L-2 (2026-10-23): the mic's live level and the list of input devices reach a human on the gui credential only
+  const m = voice.mic as Record<string, unknown> | null | undefined;
+  if (m && typeof m === 'object' && !(cls === 'human' && credential === 'gui') && ('level' in m || 'inputs' in m)) {
+    const { level: _level, inputs: _inputs, ...rest } = m;
+    voice = { ...voice, mic: rest };
+  }
   const c = voice.capture as Record<string, unknown> | null | undefined;
   if (!c || typeof c !== 'object') return voice;
   const allowed = cls === 'human' && credential === 'gui' ? CAPTURE_GUI_KEYS : CAPTURE_STATUS_KEYS;
@@ -205,6 +215,74 @@ function captureText(v: unknown): CaptureText {
   return { committed, tail };
 }
 
+/**
+ * request.voice.report{mic} (founder field bug 2026-10-23: the mic failed silently): the voice app's input as it is NOW,
+ * relayed as status.voice.mic{device, aec, fault, at}. `device` is the input in use ({name, transport, sampleRate}) or
+ * null; `fault` is why the mic is off when the human did not turn it off ({code, text}, e.g. code 'restart-loop':
+ * "the mic kept restarting, so Gnomon turned it off"), null when the mic works. A state (no TTL), cleared when the
+ * reporting connection closes. Display only: never an input to any voice decision.
+ */
+export interface MicReport {
+  device: { name: string; transport: string | null; sampleRate: number | null } | null;
+  aec: 'vpio' | 'headphones' | 'none' | null;
+  fault: { code: string; text: string } | null;
+  /** founder request 2026-10-23 (input selection): whether the mic is on, the inputs, the choice, a missing choice, the level */
+  on?: boolean;
+  inputs?: Array<{ id: string; name: string; transport: string | null; sampleRate: number | null }>;
+  selected?: string | null;
+  missing?: boolean;
+  /** 0..1, Voice settings' live meter (relayed at most 4 times a second) */
+  level?: number;
+  at: string;
+}
+export const MIC_INPUTS_MAX = 16;
+/** a mic-meter open request lapses after this long unless the GUI renews it */
+export const VOICE_MIC_METER_TTL_MS = 15_000;
+const DEVICE_ID = /^[\x20-\x7e]{1,256}$/;
+const MIC_NAME_MAX = 80;
+const MIC_FAULT_TEXT_MAX = 200;
+const TRANSPORT = /^[a-z0-9][a-z0-9 ._-]{0,31}$/i;
+function micReportOf(v: unknown, at: string): MicReport {
+  const shape = 'mic is {device: {name, transport?, sampleRate?} | null, aec?: vpio | headphones | none | null, fault: {code, text} | null, on?, inputs?, selected?, missing?, level?}';
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw bad(shape);
+  const m = v as Record<string, unknown>;
+  if (Object.keys(m).some((k) => !['device', 'aec', 'fault', 'on', 'inputs', 'selected', 'missing', 'level'].includes(k))) throw bad(shape);
+  const deviceOf = (x: unknown, withId: boolean): { id?: string; name: string; transport: string | null; sampleRate: number | null } => {
+    const d = x as Record<string, unknown>;
+    const keys = withId ? ['id', 'name', 'transport', 'sampleRate'] : ['name', 'transport', 'sampleRate'];
+    if (!d || typeof d !== 'object' || Array.isArray(d) || Object.keys(d).some((k) => !keys.includes(k)) || typeof d.name !== 'string' || !d.name.trim()) throw bad(shape);
+    if (withId && (typeof d.id !== 'string' || !DEVICE_ID.test(d.id))) throw bad('mic.inputs[].id is a device id (1-256 printable characters)');
+    if (d.transport !== undefined && d.transport !== null && (typeof d.transport !== 'string' || !TRANSPORT.test(d.transport))) throw bad('mic.device.transport is ≤ 32 of [A-Za-z0-9 ._-]');
+    if (d.sampleRate !== undefined && d.sampleRate !== null && (typeof d.sampleRate !== 'number' || !Number.isSafeInteger(d.sampleRate) || d.sampleRate < 1000 || d.sampleRate > 384_000)) throw bad('mic.device.sampleRate is an integer 1000..384000');
+    return { ...(withId ? { id: d.id as string } : {}), name: plain(d.name, MIC_NAME_MAX).trim(), transport: typeof d.transport === 'string' ? d.transport : null, sampleRate: typeof d.sampleRate === 'number' ? d.sampleRate : null };
+  };
+  const device: MicReport['device'] = m.device !== null && m.device !== undefined ? deviceOf(m.device, false) : null;
+  if (m.on !== undefined && typeof m.on !== 'boolean') throw bad('mic.on is a boolean');
+  if (m.missing !== undefined && typeof m.missing !== 'boolean') throw bad('mic.missing is a boolean');
+  if (m.selected !== undefined && m.selected !== null && (typeof m.selected !== 'string' || !DEVICE_ID.test(m.selected))) throw bad('mic.selected is a device id or null');
+  if (m.level !== undefined && (typeof m.level !== 'number' || !Number.isFinite(m.level) || m.level < 0 || m.level > 1)) throw bad('mic.level is 0..1');
+  if (m.inputs !== undefined && (!Array.isArray(m.inputs) || m.inputs.length > MIC_INPUTS_MAX)) throw bad(`mic.inputs is at most ${MIC_INPUTS_MAX} devices`);
+  const inputs = Array.isArray(m.inputs) ? m.inputs.map((x) => deviceOf(x, true) as { id: string; name: string; transport: string | null; sampleRate: number | null }) : undefined;
+  if (m.aec !== undefined && m.aec !== null && m.aec !== 'vpio' && m.aec !== 'headphones' && m.aec !== 'none') throw bad('mic.aec is vpio | headphones | none | null');
+  let fault: MicReport['fault'] = null;
+  if (m.fault !== null && m.fault !== undefined) {
+    const f = m.fault as Record<string, unknown>;
+    if (typeof f !== 'object' || Array.isArray(f) || Object.keys(f).some((k) => k !== 'code' && k !== 'text') || typeof f.code !== 'string' || !NOTICE_CODE.test(f.code) || typeof f.text !== 'string' || !f.text.trim()) throw bad('mic.fault is {code, text}');
+    fault = { code: f.code, text: plain(f.text, MIC_FAULT_TEXT_MAX).trim() };
+  }
+  return {
+    device,
+    aec: (m.aec ?? null) as MicReport['aec'],
+    fault,
+    ...(typeof m.on === 'boolean' ? { on: m.on } : {}),
+    ...(inputs ? { inputs } : {}),
+    ...(m.selected !== undefined ? { selected: m.selected as string | null } : {}),
+    ...(typeof m.missing === 'boolean' ? { missing: m.missing } : {}),
+    ...(typeof m.level === 'number' ? { level: Math.round(m.level * 100) / 100 } : {}),
+    at,
+  };
+}
+
 /** The client's relayed progress and notices (in memory only). */
 export class VoiceReports {
   #enrolment: EnrolmentReport | null = null;
@@ -215,6 +293,9 @@ export class VoiceReports {
   #playback: PlaybackReport | null = null;
   #capture: CaptureReport | null = null;
   #prints: PrintsReport | null = null;
+  /** 2026-10-23: the voice app's mic as it is now (status.voice.mic; no TTL, a state; cleared when its connection closes) */
+  #mic: MicReport | null = null;
+  #micConn: string | undefined;
   /** the voice connection that reported #prints (cleared when it closes) */
   #printsConn: string | undefined;
   /** Aegis L3: the voice connection that reported the capture slot (cleared when it closes) */
@@ -240,10 +321,10 @@ export class VoiceReports {
 
   /** request.voice.report payload → state. Throws TypeError on a bad shape. `connId` is the reporting voice connection. */
   report(p: unknown, connId?: string): { ok: true } {
-    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?, capture?, prints?}`;
+    const shape = `${VOICE_REPORT_REQUEST} payload is {enrolment?, notice?, dictation?, playback?, capture?, prints?, mic?}`;
     if (!p || typeof p !== 'object' || Array.isArray(p)) throw bad(shape);
     const o = p as Record<string, unknown>;
-    const keys = ['enrolment', 'notice', 'dictation', 'playback', 'capture', 'prints'];
+    const keys = ['enrolment', 'notice', 'dictation', 'playback', 'capture', 'prints', 'mic'];
     if (Object.keys(o).some((k) => !keys.includes(k)) || keys.every((k) => o[k] === undefined)) throw bad(shape);
     const at = new Date(this.#now()).toISOString();
     let enrolment: EnrolmentReport | undefined;
@@ -308,6 +389,11 @@ export class VoiceReports {
       if (r.stale.length > PRINTS_STALE_MAX || r.stale.some((n) => typeof n !== 'string' || !NAME.test(n))) throw bad(`prints.stale is at most ${PRINTS_STALE_MAX} speaker names`);
       prints = { stale: [...new Set(r.stale as string[])].sort(), at };
     }
+    const mic = o.mic !== undefined ? micReportOf(o.mic, at) : undefined;
+    if (mic) {
+      this.#mic = mic;
+      this.#micConn = connId;
+    }
     if (prints) {
       this.#prints = prints;
       this.#printsConn = connId;
@@ -349,6 +435,10 @@ export class VoiceReports {
     if (this.#printsConn === connId) {
       this.#prints = null;
       this.#printsConn = undefined;
+    }
+    if (this.#micConn === connId) {
+      this.#mic = null;
+      this.#micConn = undefined;
     }
   }
 
@@ -398,6 +488,29 @@ export class VoiceReports {
     this.#micToggleSeq++;
     return { micToggleSeq: this.#micToggleSeq };
   }
+  /**
+   * Founder request 2026-10-23: the human's input choice (Voice settings → Input): a device id and its name (shown while
+   * it is disconnected), or null = follow the system default. The daemon persists it (<home>/voice/input.json) and
+   * restores it at start; the voice client applies it when it changes. Not a security boundary.
+   */
+  #inputChoice: { id: string | null; name: string | null } = { id: null, name: null };
+  /**
+   * Aegis L-2: the voice app relays the mic level only while Voice settings' meter is open. The GUI says so with
+   * request.voice.client{op:'mic-meter', open} and renews it while open; it lapses after VOICE_MIC_METER_TTL_MS.
+   */
+  #micMeterUntil = 0;
+  micMeter(open: boolean): { micMeterOpen: boolean } {
+    this.#micMeterUntil = open ? this.#now() + VOICE_MIC_METER_TTL_MS : 0;
+    return { micMeterOpen: open };
+  }
+  inputChoice(choice: unknown): { inputChoice: { id: string | null; name: string | null } } {
+    const c = choice as Record<string, unknown> | null;
+    if (!c || typeof c !== 'object' || Array.isArray(c) || Object.keys(c).some((k) => k !== 'id' && k !== 'name')) throw bad('the input choice is {id: device id | null, name?}');
+    if (c.id !== null && (typeof c.id !== 'string' || !DEVICE_ID.test(c.id))) throw bad('the input choice id is a device id (1-256 printable characters) or null');
+    if (c.name !== undefined && c.name !== null && (typeof c.name !== 'string' || !c.name.trim())) throw bad('the input choice name is a device name');
+    this.#inputChoice = { id: c.id as string | null, name: c.id === null ? null : typeof c.name === 'string' ? plain(c.name, MIC_NAME_MAX).trim() : null };
+    return { inputChoice: { ...this.#inputChoice } };
+  }
   /** TD-2026-10-21-514: the Mic key switch: bare ` global (opt-in) or ⌃` (default); the client re-binds on a change */
   #micKeyBare = false;
   micKey(bare: boolean): { micKeyBare: boolean } {
@@ -416,9 +529,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; stopSpeakingSeq: number; micWanted: boolean | null; micToggleSeq: number; micKeyBare: boolean } {
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; mic: MicReport | null; inputChoice: { id: string | null; name: string | null }; micMeterOpen: boolean; stopSpeakingSeq: number; micWanted: boolean | null; micToggleSeq: number; micKeyBare: boolean } {
     const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted, micToggleSeq: this.#micToggleSeq, micKeyBare: this.#micKeyBare };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, mic: this.#mic, inputChoice: { ...this.#inputChoice }, micMeterOpen: this.#now() < this.#micMeterUntil, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted, micToggleSeq: this.#micToggleSeq, micKeyBare: this.#micKeyBare };
   }
 }
 

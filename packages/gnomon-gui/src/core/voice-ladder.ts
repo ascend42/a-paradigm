@@ -22,6 +22,7 @@ import type { CaptureDisplay } from './capture.js';
 import { refusalPhrase, type CaptureView } from './capture.js';
 import type { VoiceState, VoiceView } from './voice.js';
 import { ackedLine } from './voice-presets.js';
+import { aecWords, deviceLine, type ClientView } from './voice-client.js';
 
 export type Rung = 'off' | 'talk' | 'dictate' | 'word' | 'pieces';
 export const RUNGS: readonly Rung[] = Object.freeze(['off', 'talk', 'dictate', 'word', 'pieces'] as const);
@@ -69,8 +70,8 @@ export function rungOf(v: Pick<VoiceView, 'state' | 'send'>, preset: VoicePreset
 }
 
 /** The Voice settings sheet's sections, in order (design-system gnomon.voice.setup). */
-export type SheetSection = 'voice' | 'sendword' | 'keys' | 'listen' | 'timing' | 'risk';
-export const SHEET_SECTIONS: readonly SheetSection[] = Object.freeze(['voice', 'sendword', 'keys', 'listen', 'timing', 'risk'] as const);
+export type SheetSection = 'input' | 'voice' | 'sendword' | 'keys' | 'listen' | 'timing' | 'risk';
+export const SHEET_SECTIONS: readonly SheetSection[] = Object.freeze(['input', 'voice', 'sendword', 'keys', 'listen', 'timing', 'risk'] as const);
 
 export interface Readiness {
   /** the one-time liability acknowledgement (per user, this machine) */
@@ -298,13 +299,59 @@ export interface SheetInput extends Readiness {
   /** when the acknowledgement was recorded (ISO), for "acknowledged · today"; null/absent = unknown */
   ackedAt?: string | null;
   now?: Date;
+  /** founder request 2026-10-23: the voice app's mic (core/voice-client.ts clientOf); absent = no input row */
+  client?: ClientView | null;
+}
+
+/**
+ * Founder request 2026-10-23 ("a clear input selection inside gnomon"): the sheet's first row says which mic is in use,
+ * how (transport, rate, echo cancelling), and when it is not the one chosen or has stopped. Its flow is the picker.
+ */
+export function inputRow(c: ClientView | null | undefined, attachable: boolean): SheetRowView | null {
+  if (!c || !c.known) return null;
+  const change = attachable && c.mic.known ? { label: 'change', act: 'input' } : null;
+  if (c.micFault) return { id: 'input', label: 'input', value: `mic stopped · ${c.micFault.text}`, tone: 'warn', action: change };
+  const d = c.micDevice;
+  if (c.mic.missing) return { id: 'input', label: 'input', value: `${c.mic.chosenName ?? 'the chosen mic'} is not connected${d ? ` · using ${deviceLine(d)}` : ''}`, tone: 'warn', action: change };
+  if (!d) return { id: 'input', label: 'input', value: c.phase === 'running' ? 'the voice app has not said which mic it uses' : 'voice is not running', tone: 'plain', action: change };
+  const aec = aecWords(c.mic.aec);
+  const how = c.mic.chosen === null ? 'system default' : 'chosen';
+  return { id: 'input', label: 'input', value: `${deviceLine(d)}${aec ? ` · ${aec}` : ''} · ${how}${c.mic.on === false ? ' · mic off' : ''}`, tone: c.mic.on === false ? 'plain' : 'ok', action: change };
+}
+
+/**
+ * The picker's choices: follow the system default, then every connected input, then a chosen one that is missing.
+ * Mika 2026-10-23: drawn as the folder field's choice rows (name over detail, ✓, a right tag), so each carries its
+ * name, its detail line and whether it is the input in use now (matched by name: the voice app reports the device in
+ * use without its id). `label` is the whole line (the accessible name).
+ */
+export interface InputChoiceView {
+  /** the device id, or '' for the system default */
+  id: string;
+  label: string;
+  name: string;
+  /** "bluetooth · 24 kHz", "follows macOS", "not connected", or '' */
+  detail: string;
+  checked: boolean;
+  /** the input the mic is on right now */
+  inUse: boolean;
+}
+export function inputChoices(c: ClientView): InputChoiceView[] {
+  const using = c.micFault ? null : c.micDevice?.name ?? null;
+  const out: InputChoiceView[] = [{ id: '', label: 'system default (follows macOS)', name: 'system default', detail: 'follows macOS', checked: c.mic.chosen === null, inUse: false }];
+  for (const d of c.mic.inputs) {
+    const detail = [d.transport, d.sampleRate ? `${Math.round(d.sampleRate / 100) / 10} kHz` : null].filter((x): x is string => !!x).join(' · ');
+    out.push({ id: d.id, label: deviceLine(d), name: d.name, detail, checked: c.mic.chosen === d.id, inUse: using !== null && d.name === using });
+  }
+  if (c.mic.chosen !== null && !c.mic.inputs.some((d) => d.id === c.mic.chosen)) out.push({ id: c.mic.chosen, label: `${c.mic.chosenName ?? 'the chosen mic'} · not connected`, name: c.mic.chosenName ?? 'the chosen mic', detail: 'not connected', checked: true, inUse: false });
+  return out;
 }
 
 const secs = (ms: number): string => `${Math.round(ms / 100) / 10} s`;
 /** The pieces timing line (the gap that sends a piece and the cap), from the contracts' constants. */
 export const PIECES_TIMING = `pieces pause ${secs(PIECE_GAP_MS)}, up to ${secs(PIECE_CAP_MS)}`;
 
-/** The sheet's six rows (their inline flows are painted under them by ui/voice-settings.ts). */
+/** The sheet's rows: input (when the voice app reports its mic), then the six (their inline flows are painted under them by ui/voice-settings.ts). */
 export function sheetRows(i: SheetInput): SheetRowView[] {
   const variants = i.sendWord?.variants.length ?? 0;
   const voice: SheetRowView =
@@ -315,7 +362,9 @@ export function sheetRows(i: SheetInput): SheetRowView[] {
         : i.reteach
           ? { id: 'voice', label: 'your voice', value: 'the voice check was upgraded · teach it again', tone: 'warn', action: i.attachable ? { label: 'retrain', act: 'enrol' } : null }
           : { id: 'voice', label: 'your voice', value: `taught · ${i.enrolled.join(', ')}`, tone: 'ok', action: i.attachable ? { label: 'retrain', act: 'enrol' } : null };
+  const input = inputRow(i.client, i.attachable);
   return [
+    ...(input ? [input] : []),
     voice,
     i.sendWord
       ? { id: 'sendword', label: 'send word', value: `“${i.sendWord.text}”${variants ? ` · ${variants} variant${variants === 1 ? '' : 's'}` : ''}`, tone: 'ok', action: i.attachable ? { label: 'change', act: 'sendword' } : null }

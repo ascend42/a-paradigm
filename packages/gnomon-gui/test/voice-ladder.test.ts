@@ -9,10 +9,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { recordTrialTake, startSendWordTrial, trialTakeNumber, type SendWordTrialState } from '@a-company/gnomon-contracts';
-import { chooseRung, clientFactOf, crashCauseOf, dropFact, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, PIECES_TIMING, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type PillInput } from '../src/core/voice-ladder.js';
+import { chooseRung, clientFactOf, crashCauseOf, dropFact, inputChoices, inputRow, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, PIECES_TIMING, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type PillInput } from '../src/core/voice-ladder.js';
 import { COMPOSER_LINES, COMPOSER_TALL_LINES, composerFit, fitTallRoom, lineCountLabel, lineCountShown, parseTall, serializeTall, TALL_FEED_MIN_PX } from '../src/core/composer.js';
 import { initialTeach, reduceTeach, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
-import { enrolStart } from '../src/core/voice-client.js';
+import { clientOf, enrolStart, micTitleLine } from '../src/core/voice-client.js';
 import { ACK_TEXT, CARD_VOICE_LINE, cardVoiceOrigin, CLAMP_CHIP, sentLabel } from '../src/core/voice-presets.js';
 import { renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { ladderEls, sheetEls, sheetKey, trapNext, type SheetView } from '../src/ui/voice-settings.js';
@@ -466,5 +466,76 @@ describe('the Voice settings drawer traps Tab (Luna #11)', () => {
     expect(trapNext(items, null, false)).toBe('close'); // focus outside the drawer comes back in
     expect(trapNext(items, 'elsewhere', true)).toBe('save');
     expect(trapNext([], null, false)).toBeNull();
+  });
+});
+
+describe('founder request 2026-10-23: Voice settings › input says which mic is in use and lets the human pick one', () => {
+  const BUILTIN = { id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 };
+  const AIRPODS = { id: '30-7A:input', name: 'AirPods Pro', transport: 'bluetooth', sampleRate: 24000 };
+  const st = (mic: Record<string, unknown>, choice: Record<string, unknown> = { id: null, name: null }) => clientOf({ voice: { clientConnected: true, client: { phase: 'running' }, mic: { device: null, aec: null, fault: null, at: 'x', ...mic }, inputChoice: choice } });
+  it('the input row names the device, transport, rate and echo cancelling, and whether it follows the default', () => {
+    const c = st({ device: { name: 'AirPods Pro', transport: 'bluetooth', sampleRate: 24000 }, aec: 'headphones', on: true, inputs: [BUILTIN, AIRPODS], selected: null, missing: false });
+    expect(inputRow(c, true)).toEqual({ id: 'input', label: 'input', value: 'AirPods Pro · bluetooth · 24 kHz · headphones, no echo · system default', tone: 'ok', action: { label: 'change', act: 'input' } });
+    expect(rows({ client: c }).map((x) => x.label)).toEqual(['input', 'your voice', 'send word', 'keys', 'listen', 'timing', 'risk']);
+    expect(micTitleLine(c)).toBe('\nMic: AirPods Pro · bluetooth · 24 kHz · headphones, no echo');
+    const vp = st({ device: { name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, aec: 'vpio', on: false, inputs: [BUILTIN], selected: BUILTIN.id }, { id: BUILTIN.id, name: BUILTIN.name });
+    expect(inputRow(vp, true)!.value).toBe('MacBook Pro Microphone · built-in · 48 kHz · echo cancel on · chosen · mic off');
+    // no picker for a non-human connection, and no row for an older voice app that reports nothing
+    expect(inputRow(c, false)!.action).toBeNull();
+    expect(inputRow(clientOf({ voice: {} }), true)).toBeNull();
+  });
+  it('a missing chosen mic and a mic fault are warn rows; the pill names them too', () => {
+    const m = st({ device: { name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, aec: 'vpio', on: true, inputs: [BUILTIN], selected: 'usb-mic', missing: true }, { id: 'usb-mic', name: 'Shure MV7' });
+    expect(inputRow(m, true)).toMatchObject({ value: 'Shure MV7 is not connected · using MacBook Pro Microphone · built-in · 48 kHz', tone: 'warn' });
+    expect(micTitleLine(m)).toBe('\nMic: Shure MV7 is not connected; using MacBook Pro Microphone · built-in · 48 kHz.');
+    const f = st({ fault: { code: 'restart-loop', text: 'The mic kept restarting, so Gnomon turned it off.' }, inputs: [BUILTIN] });
+    expect(inputRow(f, true)).toMatchObject({ value: 'mic stopped · The mic kept restarting, so Gnomon turned it off.', tone: 'warn' });
+  });
+  it('the picker: the system default first, every input, a missing choice kept; radio keys, a live meter, done', () => {
+    const m = st({ inputs: [BUILTIN, AIRPODS], missing: true }, { id: 'usb-mic', name: 'Shure MV7' });
+    const ch = inputChoices(m);
+    expect(ch.map((x) => [x.id, x.label, x.checked])).toEqual([
+      ['', 'system default (follows macOS)', false],
+      [BUILTIN.id, 'MacBook Pro Microphone · built-in · 48 kHz', false],
+      [AIRPODS.id, 'AirPods Pro · bluetooth · 24 kHz', false],
+      ['usb-mic', 'Shure MV7 · not connected', true],
+    ]);
+    expect(ch.map((x) => [x.name, x.detail, x.inUse])).toEqual([
+      ['system default', 'follows macOS', false],
+      ['MacBook Pro Microphone', 'built-in · 48 kHz', false],
+      ['AirPods Pro', 'bluetooth · 24 kHz', false],
+      ['Shure MV7', 'not connected', false],
+    ]);
+    // the input in use is marked (by name: the voice app reports the device in use without its id); none while faulted
+    const using = st({ device: { name: 'AirPods Pro', transport: 'bluetooth', sampleRate: 24000 }, inputs: [BUILTIN, AIRPODS] });
+    expect(inputChoices(using).map((x) => x.inUse)).toEqual([false, false, true]);
+    expect(inputChoices(st({ device: { name: 'AirPods Pro', transport: null, sampleRate: null }, fault: { code: 'no-input', text: 'x' }, inputs: [AIRPODS] })).map((x) => x.inUse)).toEqual([false, false]);
+    const r = root(sheetEls(fdoc, view({ rows: rows({ client: m }), flow: { kind: 'input', choices: ch, on: true } })));
+    const keys = r.all((e) => e.attrs.has('data-vs-input'));
+    expect(keys.map((k) => k.attrs.get('aria-checked'))).toEqual(['false', 'false', 'false', 'true']);
+    expect(keys.every((k) => k.attrs.get('role') === 'radio')).toBe(true);
+    expect(r.all((e) => e.attrs.get('role') === 'radiogroup').some((g) => g.attrs.get('aria-label') === 'input')).toBe(true);
+    expect(r.all((e) => e.attrs.has('data-vs-meter'))).toHaveLength(1);
+    expect(r.all((e) => e.attrs.has('data-vs-input-done'))).toHaveLength(1);
+    // Mika 2026-10-23: the folder field's choice rows (no new stacked segmented control), one Tab stop, an ARIA meter
+    expect(CSS).not.toContain('.vs-choices');
+    expect(CSS).toContain('.ff-row.plain');
+    expect(keys.every((k) => k.className === 'ff-row plain')).toBe(true);
+    expect(keys.map((k) => k.attrs.get('tabindex'))).toEqual(['-1', '-1', '-1', '0']);
+    expect(keys.map((k) => k.attrs.get('data-vs-focus'))).toEqual(['input:', `input:${BUILTIN.id}`, `input:${AIRPODS.id}`, 'input:usb-mic']);
+    const meter = r.all((e) => e.attrs.has('data-vs-meter'))[0]!;
+    expect([meter.attrs.get('role'), meter.attrs.get('aria-label'), meter.attrs.get('aria-hidden')]).toEqual(['meter', 'input level', undefined]);
+    expect(r.all((e) => e.attrs.has('data-vs-input-done'))[0]!.attrs.get('data-vs-focus')).toBe('input-done');
+    expect(APP).toContain("op: 'select-input'");
+  });
+});
+
+describe('Aegis L-2: the input picker opens, renews and closes the mic meter', () => {
+  it("app.ts sends op 'mic-meter' open:true on the picker, renews it, and open:false when it closes", () => {
+    expect(APP).toMatch(/op: 'mic-meter', open/);
+    expect(APP).toMatch(/const want = vsFlow === 'input' && voiceSheet\.isOpen\(\);/);
+    expect(APP).toMatch(/micMeterTimer = setInterval\(\(\) => micMeter\(true\), MIC_METER_RENEW_MS\)/);
+    expect(APP).toMatch(/micMeterTimer = null;\s*micMeter\(false\);/);
+    expect(APP).toMatch(/enrolPollMs = every;\s*syncMicMeter\(\);/);
   });
 });

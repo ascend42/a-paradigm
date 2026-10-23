@@ -39,10 +39,17 @@ const USAGE = `usage: gnomon-voice run --fd <n> [--home <abs>] [--io <gnomon-voi
 const out = (s: string): void => void process.stdout.write(`${s}\n`);
 const err = (s: string): void => void process.stderr.write(`${s}\n`);
 
+/** Aegis L-3 (2026-10-23): stderr is persisted (<home>/logs/voice.log), so free-text fields are cut short there */
+export const LOG_FIELD_MAX = 200;
+export function logFields(d: Record<string, unknown>): string {
+  const cut = Object.fromEntries(Object.entries(d).map(([k, v]) => [k, typeof v === 'string' && v.length > LOG_FIELD_MAX ? `${v.slice(0, LOG_FIELD_MAX - 1)}…` : v]));
+  return JSON.stringify(cut);
+}
+
 function stderrLogger(verbose: boolean): VoiceLogger {
   const mk = (id: string) => ({
-    info: (m: string, d?: Record<string, unknown>) => verbose && err(`  [${id}] ${m}${d ? ` ${JSON.stringify(d)}` : ''}`),
-    warn: (m: string, d?: Record<string, unknown>) => err(`  [${id}] ${m}${d ? ` ${JSON.stringify(d)}` : ''}`),
+    info: (m: string, d?: Record<string, unknown>) => verbose && err(`  [${id}] ${m}${d ? ` ${logFields(d)}` : ''}`),
+    warn: (m: string, d?: Record<string, unknown>) => err(`  [${id}] ${m}${d ? ` ${logFields(d)}` : ''}`),
   });
   return { component: mk, flow: mk };
 }

@@ -25,10 +25,16 @@ final class AudioCore {
     var onCapture: ((UInt64, [Int16]) -> Void)?
     var onLevel: ((Double, Double) -> Void)?
     var onPlayback: ((String, [String: Any]) -> Void)?
-    var onEngineRestart: ((String) -> Void)?
+    /// engine {what: restarted | failed | released, reason?} (main queue)
+    var onEngineRestart: ((String, String?) -> Void)?
 
     private(set) var micOn = false
     private(set) var voiceProcessing = false
+    /// the human's input choice (a device UID) or nil: follow the system default (InputDevices.swift)
+    var preferredInput: String?
+    /// the input the running mic captures from, and whether a chosen device is missing (set at mic start)
+    private(set) var currentInput: InputDevice?
+    private(set) var inputMissing = false
     private var wantVoiceProcessing = true
     private let tapLock = NSLock()
     private var tapGen = 0
@@ -36,6 +42,9 @@ final class AudioCore {
     private var player: AVAudioPlayerNode?
     private var duplex = false
     private var configObserver: NSObjectProtocol?
+    /// the pending in-place recovery after a configuration change, and its budget (Recovery.swift)
+    private var recovery: DispatchWorkItem?
+    private var governor = RestartGovernor()
 
     private let playFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: AudioCore.playRate, channels: 1, interleaved: false)!
     private let captureFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: AudioCore.captureRate, channels: 1, interleaved: false)!
@@ -75,6 +84,7 @@ final class AudioCore {
     func startMic(voiceProcessing wantVP: Bool = true) throws {
         if micOn { return }
         teardown(reason: "mic-switch")
+        governor.reset()
         wantVoiceProcessing = wantVP
         let e = AVAudioEngine()
         let input = e.inputNode
@@ -89,15 +99,40 @@ final class AudioCore {
                 diag("voice processing could not be enabled: \(error.localizedDescription)")
             }
         }
+        // the human's input choice: a chosen, connected device is selected on the input unit; otherwise the
+        // engine follows the system default (and a chosen device that is absent is reported missing)
+        let pick = InputDevices.resolve(preferred: preferredInput)
+        currentInput = pick.device
+        inputMissing = pick.missing
+        if let d = pick.device, preferredInput != nil, d.uid != InputDevices.defaultInput()?.uid, let au = input.audioUnit {
+            var dev = d.id
+            let st = AudioUnitSetProperty(au, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &dev, UInt32(MemoryLayout<AudioObjectID>.size))
+            if st != noErr {
+                diag("could not select input \(d.name) (OSStatus \(st)); using the system default")
+                currentInput = InputDevices.defaultInput()
+            }
+        }
+        try armTap(e)
+        let p = AVAudioPlayerNode()
+        do { try startWithPlayer(e, p) } catch {
+            input.removeTap(onBus: 0)
+            throw error
+        }
+        install(engine: e, player: p, duplex: true)
+        micOn = true
+        voiceProcessing = vp
+    }
+
+    /// (Re)installs the capture tap for the input node's CURRENT format: channel 0 → 16 kHz mono Int16 →
+    /// onCapture, plus the level meter. Called at mic start and again after a configuration change, when
+    /// the device may run at another rate (a Bluetooth headset's call profile: 24 kHz).
+    private func armTap(_ e: AVAudioEngine) throws {
+        let input = e.inputNode
+        input.removeTap(onBus: 0)
         let inFmt = input.outputFormat(forBus: 0)
         guard inFmt.sampleRate > 0, inFmt.channelCount > 0 else { throw AudioError.noInput }
         guard let monoIn = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: inFmt.sampleRate, channels: 1, interleaved: false),
               let conv = AVAudioConverter(from: monoIn, to: captureFormat) else { throw AudioError.converter }
-        // The player is attached only AFTER the engine starts: with voice processing on, macOS
-        // (tested on MacBook Pro mic + speakers, 2026-10-19) fails `start()` with -10875 whenever any
-        // player node is already connected to the main mixer, whatever its format.
-        let p = AVAudioPlayerNode()
-
         tapLock.lock()
         tapGen += 1
         let myGen = tapGen
@@ -131,27 +166,44 @@ final class AudioCore {
             self.onCapture?(hostNs, samples)
             for r in meter.feed(samples) { self.onLevel?(r.rms, r.peak) }
         }
-        e.prepare()
-        do { try e.start() } catch {
-            input.removeTap(onBus: 0)
-            throw AudioError.start(error.localizedDescription)
+    }
+
+    /// Starts `e`, attaching the player only AFTER the start: with voice processing on, macOS (tested on
+    /// MacBook Pro mic + speakers, 2026-10-19) fails `start()` with -10875 whenever any player node is
+    /// already connected to the main mixer, whatever its format. A recovery detaches it first.
+    private func startWithPlayer(_ e: AVAudioEngine, _ p: AVAudioPlayerNode) throws {
+        if p.engine != nil {
+            e.disconnectNodeOutput(p)
+            e.detach(p)
         }
+        e.prepare()
+        do { try e.start() } catch { throw AudioError.start(error.localizedDescription) }
         e.attach(p)
         e.connect(p, to: e.mainMixerNode, format: playFormat)
         if !e.isRunning {
-            do { try e.start() } catch {
-                input.removeTap(onBus: 0)
-                throw AudioError.start(error.localizedDescription)
-            }
+            do { try e.start() } catch { throw AudioError.start(error.localizedDescription) }
         }
-        install(engine: e, player: p, duplex: true)
-        micOn = true
-        voiceProcessing = vp
     }
 
     func stopMic() {
         guard micOn else { return }
         teardown(reason: "mic-switch")
+    }
+
+    /// The input choice or the devices changed: when the mic is on and should now capture from another device, move
+    /// it there (a deliberate switch: a new engine). Returns whether the mic moved.
+    @discardableResult
+    func followInputChoice() throws -> Bool {
+        guard micOn else { return false }
+        let pick = InputDevices.resolve(preferred: preferredInput)
+        if pick.device?.uid == currentInput?.uid {
+            inputMissing = pick.missing
+            return false
+        }
+        let vp = wantVoiceProcessing
+        teardown(reason: "mic-switch")
+        try startMic(voiceProcessing: vp)
+        return true
     }
 
     // MARK: playback
@@ -213,6 +265,8 @@ final class AudioCore {
     }
 
     private func teardown(reason: String) {
+        recovery?.cancel()
+        recovery = nil
         stopPlayback(reason: reason)
         if let o = configObserver { NotificationCenter.default.removeObserver(o) }
         configObserver = nil
@@ -229,19 +283,50 @@ final class AudioCore {
         duplex = false
         micOn = false
         voiceProcessing = false
+        currentInput = nil
+        inputMissing = false
     }
 
     private func configurationChanged() {
-        // the engine stopped itself (device or route change): rebuild in the same mode. Our own
-        // post-start player attach also posts this notice with the engine still running; rebuilding
-        // then would loop (startMic attaches again) and drop every capture frame.
+        // Our own post-start player attach also posts this notice with the engine still running: nothing to do.
         if let e = engine, e.isRunning { return }
-        let wasMic = micOn
-        teardown(reason: "route-change")
-        if wasMic {
-            do { try startMic(voiceProcessing: wantVoiceProcessing) } catch { diag("mic restart after a configuration change failed: \(error)") }
+        // The engine stopped itself (a device, rate or route change). Field bug 2026-10-23: a Bluetooth headset
+        // switches to its call profile (48 → 24 kHz) a moment after a voice-processing engine starts. Tearing the
+        // engine down here turned voice processing off, which gave the headset back its music profile, so the
+        // rebuilt engine switched it again: a restart about once a second, the mic indicator flickering and no
+        // audio delivered. Now: let the device settle, then recover the SAME engine in place (recover()).
+        recovery?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.recover() }
+        recovery = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(RestartGovernor.settleMs), execute: w)
+    }
+
+    private func recover() {
+        recovery = nil
+        guard let e = engine, !e.isRunning else { return } // gone, or running again on its own
+        guard duplex else {
+            // output only: TTS was dropped with the stop; the next utterance starts a fresh output engine
+            teardown(reason: "route-change")
+            onEngineRestart?("released", nil)
+            return
         }
-        onEngineRestart?(wasMic ? (micOn ? "restarted" : "failed") : "released")
+        stopPlayback(reason: "route-change")
+        guard governor.allow(nowNs: Clock.nowNs()) else {
+            teardown(reason: "route-change")
+            diag("the audio device kept changing under the mic (\(governor.limit) restarts in \(governor.windowNs / 1_000_000_000) s); the mic is off")
+            onEngineRestart?("failed", "restart-loop")
+            return
+        }
+        do {
+            guard let p = player else { throw AudioError.noEngine }
+            try armTap(e)
+            try startWithPlayer(e, p)
+            onEngineRestart?("restarted", nil)
+        } catch {
+            teardown(reason: "route-change")
+            diag("mic restart after a configuration change failed: \(error)")
+            onEngineRestart?("failed", (error as? AudioError)?.code ?? "engine-start")
+        }
     }
 
     private func convertForPlayback(rate: UInt32, samples: [Int16], flush: Bool) -> AVAudioPCMBuffer? {

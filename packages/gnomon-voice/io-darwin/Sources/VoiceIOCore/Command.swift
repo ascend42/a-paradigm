@@ -9,6 +9,9 @@
 //   play.end                     the current utterance is complete: flush the resampler tail
 //   route.get                    the current output route and aec mode
 //   hotkeys.set {bindings}       partial update, e.g. {"talk":"ctrl+alt+space","mode-toggle":"none"}
+//   inputs.list                  the input devices, the chosen one (or null: the system default), the one in use
+//   input.select {device: uid|null} choose the input by CoreAudio device UID (null: follow the system default); remembered
+//                                while the process runs, also when the device is gone (it is used again when it returns)
 //   quit                         reply, then exit 0 (stdin EOF does the same)
 
 import Foundation
@@ -21,6 +24,8 @@ public enum Command: Equatable {
     case playEnd
     case routeGet
     case hotkeysSet([String: String], allowBare: Bool)
+    case inputsList
+    case inputSelect(String?)
     case quit
 
     public var op: String {
@@ -32,6 +37,8 @@ public enum Command: Equatable {
         case .playEnd: return "play.end"
         case .routeGet: return "route.get"
         case .hotkeysSet: return "hotkeys.set"
+        case .inputsList: return "inputs.list"
+        case .inputSelect: return "input.select"
         case .quit: return "quit"
         }
     }
@@ -92,6 +99,13 @@ public enum CommandParser {
         case "play.end": return (id, .playEnd)
         case "route.get": return (id, .routeGet)
         case "quit": return (id, .quit)
+        case "inputs.list": return (id, .inputsList)
+        case "input.select":
+            switch obj["device"] {
+            case nil, is NSNull: return (id, .inputSelect(nil))
+            case let u as String where InputChoice.wellFormedUID(u): return (id, .inputSelect(u))
+            default: throw bad("device is a device UID (1-256 printable characters) or null")
+            }
         case "hotkeys.set":
             guard let raw = obj["bindings"] as? [String: Any], !raw.isEmpty else { throw bad("bindings must be a non-empty object") }
             var out: [String: String] = [:]

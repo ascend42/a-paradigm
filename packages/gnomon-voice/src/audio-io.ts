@@ -5,11 +5,13 @@
  * (packages/gnomon-voice/io-darwin; everything wire-specific lives in this file):
  *
  *   frame = type:u8 · length:u32le · payload (max 1 MiB), both directions
- *   0x01 JSON      stdin: commands {op, id?} — info, mic.on, mic.off, play.stop, play.end, route.get, hotkeys.set, quit;
+ *   0x01 JSON      stdin: commands {op, id?} — info, mic.on, mic.off, play.stop, play.end, route.get, hotkeys.set,
+ *                  inputs.list, input.select{device: uid | null}, quit;
  *                  stdout: one {type:'reply', id, op, ok, error?, message?} per command, and
  *                  {type:'event', event, tUs, …}: ready, mic, route{route, aec: vpio|headphones|none}, level{rmsDBFS,
  *                  peakDBFS}, playback.start{audibleAtUs}, playback.end{reason, utteranceEnded, queuedMs}, hotkey{action,
- *                  phase}, engine, error, exit
+ *                  phase}, engine{what: restarted | failed | released, mic, reason?}, inputs{inputs, selected, current,
+ *                  missing}, error, exit
  *   0x02 capture   stdout: hostTimeNs:u64le · sampleRate:u32le · s16le mono (16 kHz, after VPIO AEC)
  *   0x03 playback  stdin: sampleRate:u32le · s16le mono (8–48 kHz)
  *
@@ -19,7 +21,7 @@
  * adapter sends mic.on at start and mic.off at close. PCM moves pipe → memory only (G-VOX-05).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import type { AudioIO, AudioIOEvents, PlaybackResult, RouteInfo } from './types.js';
+import type { AudioIO, AudioIOEvents, InputDeviceInfo, InputsInfo, PlaybackResult, RouteInfo } from './types.js';
 
 export const PROTOCOL = 'gnomon-voice-io:v1' as const;
 export const FRAME_JSON = 0x01;
@@ -88,8 +90,27 @@ export class FrameReader {
 
 type Listeners = { [E in keyof AudioIOEvents]: Set<AudioIOEvents[E]> };
 
+const s80 = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 256) : null);
+/** One device from the binary's JSON, or null when malformed. */
+export function inputDeviceOf(v: unknown): InputDeviceInfo | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const d = v as Record<string, unknown>;
+  const id = s80(d.id);
+  const name = s80(d.name);
+  if (!id || !name) return null;
+  const rate = typeof d.sampleRate === 'number' && Number.isSafeInteger(d.sampleRate) && d.sampleRate >= 1000 && d.sampleRate <= 384_000 ? d.sampleRate : null;
+  const transport = typeof d.transport === 'string' && /^[a-z0-9 ._-]{1,32}$/i.test(d.transport) ? d.transport : null;
+  return { id, name: name.slice(0, 80), transport, sampleRate: rate };
+}
+/** The binary's inputs.list reply / inputs event → InputsInfo (at most 16 devices), or null when it has none. */
+export function inputsInfoOf(m: Record<string, unknown>): InputsInfo | null {
+  if (!Array.isArray(m.inputs)) return null;
+  const inputs = m.inputs.slice(0, 16).map(inputDeviceOf).filter((x): x is InputDeviceInfo => x !== null);
+  return { inputs, selected: s80(m.selected), current: inputDeviceOf(m.current), missing: m.missing === true };
+}
+
 export class Emitter {
-  readonly l: Listeners = { frame: new Set(), hotkey: new Set(), mic: new Set(), route: new Set(), level: new Set(), closed: new Set(), control: new Set() };
+  readonly l: Listeners = { frame: new Set(), hotkey: new Set(), mic: new Set(), route: new Set(), level: new Set(), closed: new Set(), control: new Set(), fault: new Set(), restarted: new Set(), inputs: new Set() };
   on<E extends keyof AudioIOEvents>(event: E, cb: AudioIOEvents[E]): () => void {
     (this.l[event] as Set<AudioIOEvents[E]>).add(cb);
     return () => (this.l[event] as Set<AudioIOEvents[E]>).delete(cb);
@@ -153,6 +174,19 @@ export class SpawnedAudioIO implements AudioIO {
     return this.#micOn;
   }
   #killOnExit: (() => void) | undefined;
+  #inputs: InputsInfo | null = null;
+  inputs(): InputsInfo | null {
+    return this.#inputs;
+  }
+  #setInputs(i: InputsInfo | null): void {
+    if (!i) return;
+    this.#inputs = i;
+    this.#ev.emit('inputs', i);
+  }
+  /** Founder request 2026-10-23: the input by device id, or null to follow the system default (input.select). */
+  async selectInput(id: string | null): Promise<void> {
+    this.#setInputs(inputsInfoOf(await this.command('input.select', { device: id })));
+  }
 
   constructor(o: SpawnedAudioIOOptions) {
     this.#o = o;
@@ -216,6 +250,9 @@ export class SpawnedAudioIO implements AudioIO {
     this.#micOn = true;
     const r = await this.command('route.get').catch(() => undefined);
     if (r) this.#setRoute(r);
+    // an older binary has no inputs.list (unknown-op): the input stays unknown
+    const i = await this.command('inputs.list').catch(() => undefined);
+    if (i) this.#setInputs(inputsInfoOf(i));
   }
 
   /** Local mic toggle (⌃⌥M): mic.on / mic.off on the binary. Frames are dropped from the moment mic.off is sent. */
@@ -297,6 +334,10 @@ export class SpawnedAudioIO implements AudioIO {
         if (m.on !== true) this.#micOn = false; // duty 2
         this.#ev.emit('mic', m.on !== true);
         if (typeof m.aec === 'string') this.#setRoute({ route: this.#route.route, aec: m.aec, ...(m.transport !== undefined ? { transport: m.transport } : {}) });
+        if (m.on === true && m.input !== undefined && this.#inputs) this.#setInputs({ ...this.#inputs, current: inputDeviceOf(m.input), missing: m.missing === true });
+        break;
+      case 'inputs':
+        this.#setInputs(inputsInfoOf(m));
         break;
       case 'level':
         if (this.#micOn && typeof m.rmsDBFS === 'number') this.#ev.emit('level', m.rmsDBFS);
@@ -317,6 +358,14 @@ export class SpawnedAudioIO implements AudioIO {
       case 'playback.end':
         if (m.reason === 'drained' && m.utteranceEnded !== true) break; // queue ran dry mid-utterance: keep waiting
         this.#settlePlayback(m.reason === 'drained', at);
+        break;
+      case 'engine':
+        // field bug 2026-10-23: the binary recovers its engine in place after a device change; when it cannot (or the
+        // device keeps changing) it turns the mic off and says why. Before this the event was ignored: a silent mic.
+        if (m.what === 'failed') {
+          this.#micOn = false;
+          this.#ev.emit('fault', typeof m.reason === 'string' && /^[a-z0-9-]{1,32}$/.test(m.reason) ? m.reason : 'engine-failed');
+        } else if (m.what === 'restarted') this.#ev.emit('restarted');
         break;
       case 'exit':
         this.#ev.emit('closed', 'gnomon-voice-io exit event');

@@ -17,7 +17,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
-import { chooseRung, clientFactOf, crashCauseOf, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungNameOf, rungOf, rungOfPresetCommand, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
+import { chooseRung, clientFactOf, crashCauseOf, inputChoices, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungNameOf, rungOf, rungOfPresetCommand, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, trapNext, type FlowView, type SheetView } from './voice-settings.js';
 import { COMPOSER_LINES, composerFit, fitTallRoom, lineCountLabel, lineCountShown, parseTall, serializeTall, TALL_FEED_MIN_PX, TALL_KEY } from '../core/composer.js';
 import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
@@ -48,10 +48,10 @@ import { changeForm, localCurrentOf, localStatusOf, requestLine, setupForm, LOCA
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
-import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText } from '../core/capture.js';
+import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText, voiceRefusalText } from '../core/capture.js';
 import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, whoLine, type AppMenuRow, type LinkState } from '../core/header.js';
-import { CLIENT_POLL_MS, clientOf, clientPillOf, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh } from '../core/voice-client.js';
-import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
+import { CLIENT_POLL_MS, clientOf, clientPillOf, micTitleLine, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh } from '../core/voice-client.js';
+import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, inheritedQuote, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
@@ -1511,7 +1511,10 @@ function stampEcho(echo: Row, r: { turn?: unknown } | null | undefined): void {
 function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = echo?.session): void {
   if (echo) echo.unsent = true;
   localRev++;
-  const why = err instanceof RpcError ? refusalText(err.refusal) : 'may not have been sent: the connection to the kernel failed';
+  // founder report 2026-10-23: a refused voice SEND reads in plain words (core/capture.ts voiceRefusalText). Mika
+  // 2026-10-23: only here, on the send path; in refusalText every voice-* refusal (an attach, an input change) read
+  // "not sent by voice · … next: press Enter to send it"
+  const why = err instanceof RpcError ? (voiceRefusalText(err.refusal) ?? refusalText(err.refusal)) : 'may not have been sent: the connection to the kernel failed';
   if (echo || err instanceof RpcError) local.push({ seq: store.head + 0.6, kind: 'send.refused', connId: 'local', session: hsid, payload: why });
   schedule(new Set([`transcript:${hsid}`]));
 }
@@ -1791,6 +1794,21 @@ async function setMicKey(bare: boolean, trusted: boolean): Promise<void> {
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'the mic key was not changed', 'fail', { source: 'mic-key' });
   }
 }
+/**
+ * Founder request 2026-10-23: the human picks the voice input (null = follow the system default). The kernel keeps the
+ * choice across restarts and the voice app moves the mic to it; the sheet's input row shows the result.
+ */
+async function selectInput(id: string | null, trusted: boolean): Promise<void> {
+  if (!trusted || !client || !canAttach(status)) return;
+  const name = id === null ? undefined : clientOf(status).mic.inputs.find((d) => d.id === id)?.name ?? clientOf(status).mic.chosenName ?? undefined;
+  try {
+    await client.call('log.append', { kind: 'request.voice.client', payload: { op: 'select-input', id, ...(name ? { name } : {}) } });
+    await refreshStatus();
+  } catch (err) {
+    // Mika 2026-10-23: the kernel's plain words, no code (DESIGN.md principle 5, amended 2026-10-23)
+    notice(err instanceof RpcError ? `the input was not changed: ${err.refusal.message}${err.refusal.next.length ? `\n  next: ${err.refusal.next.join(' · ')}` : ''}` : 'the input was not changed: the kernel did not answer', 'fail', { source: 'voice-input' });
+  }
+}
 const micKeyBareOf = (st: unknown): boolean => (st as { voice?: { micKeyBare?: unknown } } | null)?.voice?.micKeyBare === true;
 /** a bare ` in-app: only while this window is focused and focus is not in an editable field */
 function editableFocus(): boolean {
@@ -1860,7 +1878,7 @@ function applyVoicePreset(p: typeof voicePreset): void {
 
 /* ── the voice ladder and the Voice settings sheet (#gui-voice-ladder, #gui-voice-settings; Atelier 2026-10-21) ── */
 /** the sheet's one open inline flow */
-let vsFlow: 'teach' | 'enrol' | 'risk' | 'keys' | null = null;
+let vsFlow: 'teach' | 'enrol' | 'risk' | 'keys' | 'input' | null = null;
 /** the rung waiting on a setup step (it is applied once the step is done) */
 let pendingRung: Rung | null = null;
 let riskAck = false;
@@ -1913,12 +1931,13 @@ function sheetView(): SheetView {
   const v = voiceStatusOf(status);
   const c = clientOf(status);
   const r = readiness();
-  const rows = sheetRows({ ...r, ackedAt: ackedAt(localStorage, myPrincipal()), enrolled: c.enrolled, reteach: enrolNudgeOf(c) === 'reteach', micKeyBare: micKeyBareOf(status), capture: capturePref, delayMs: dict.delayMs, hotkey: v.hotkey, attachable: canAttach(status) });
+  const rows = sheetRows({ ...r, ackedAt: ackedAt(localStorage, myPrincipal()), enrolled: c.enrolled, reteach: enrolNudgeOf(c) === 'reteach', micKeyBare: micKeyBareOf(status), capture: capturePref, delayMs: dict.delayMs, hotkey: v.hotkey, attachable: canAttach(status), client: c });
   let flow: FlowView | null = null;
   if (vsFlow === 'teach' && teach) flow = { kind: 'teach', s: teach, attached: v.hsid !== null };
   else if (vsFlow === 'enrol' && store.enrol) flow = { kind: 'enrol', s: store.enrol, name: enrolName, agreed: enrolAgreed, enrolled: c.enrolled, forgetArmed, level: null };
   else if (vsFlow === 'risk') flow = { kind: 'risk', rung: pendingRung === 'word' || pendingRung === 'pieces' ? pendingRung : null, ack: riskAck, word: r.sendWord?.text ?? null };
   else if (vsFlow === 'keys') flow = { kind: 'keys', bare: micKeyBareOf(status) };
+  else if (vsFlow === 'input') flow = { kind: 'input', choices: inputChoices(c), on: c.mic.on };
   return { rows, flow, delayMs: dict.delayMs, attachable: canAttach(status) };
 }
 
@@ -1931,6 +1950,7 @@ function sheetAct(action: string, value: string, trusted: boolean): void {
       pendingRung = null;
       startTeachFlow();
     } else if (value === 'keys') setFlow('keys');
+    else if (value === 'input') setFlow('input');
     else if (value === 'risk') {
       pendingRung = null;
       setFlow('risk');
@@ -1963,6 +1983,8 @@ function sheetAct(action: string, value: string, trusted: boolean): void {
   else if (action === 'mickey') void setMicKey(value === 'bare', true);
   else if (action === 'delay') setDictationDelay(parseDelay(value));
   else if (action === 'keys') setFlow(null);
+  else if (action === 'input') void selectInput(value || null, true);
+  else if (action === 'input-done') setFlow(null);
   voiceSheet.repaint();
 }
 
@@ -2180,7 +2202,9 @@ function paintDictation(): void {
   if (line !== dictLive) put($('dictation-live'), (dictLive = line)); // a changed line only: the live region speaks once a second at most
   // Mika: a mixed draft's note quotes the unverified words (truncated); the full words are the title
   const uq = on ? unverifiedQuote(dict) : null;
+  const iq = on && !uq ? inheritedQuote(dict) : null; // Aegis H-1: the cut quote's full words, the same way
   if (uq) $('dictation-live').title = `unverified voice: ${uq.full}`;
+  else if (iq) $('dictation-live').title = `not checked as you: ${iq.full}`;
   else $('dictation-live').removeAttribute('title');
   // one send control (the composer's send); [Hold] / [Resume] only beside a push-to-talk countdown (DRAFT_CONTROLS)
   const hold = $('dictation-hold');
@@ -2327,16 +2351,46 @@ function foldVoiceReports(): void {
 }
 
 let enrolPoll: ReturnType<typeof setInterval> | null = null;
+let enrolPollMs: number | null = null;
+/** the input picker's meter: the voice app relays the level at most 4 times a second */
+const INPUT_METER_POLL_MS = 250;
 /** A light status poll only while the enrol dialog waits on the Touch ID card or the voice app. */
 function syncEnrolPoll(): void {
   const s = store.enrol;
-  const want = !!s && vsFlow === 'enrol' && voiceSheet.isOpen() && (s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase');
-  if (want && !enrolPoll) enrolPoll = setInterval(() => void refreshStatus(), ENROL_POLL_MS);
-  else if (!want && enrolPoll) {
+  // founder request 2026-10-23: the input picker's live meter re-reads status.voice.mic.level while it is open
+  const every = vsFlow === 'input' && voiceSheet.isOpen() ? INPUT_METER_POLL_MS : !!s && vsFlow === 'enrol' && voiceSheet.isOpen() && (s.step === 'confirm' || s.step === 'waiting' || s.step === 'phrase') ? ENROL_POLL_MS : null;
+  if (enrolPoll && every !== enrolPollMs) {
     clearInterval(enrolPoll);
     enrolPoll = null;
   }
+  if (every !== null && !enrolPoll) enrolPoll = setInterval(() => void refreshStatus(), every);
+  enrolPollMs = every;
+  syncMicMeter();
 }
+
+/**
+ * Aegis L-2 (2026-10-23): the voice app relays the mic level only while this meter is open. The picker says so
+ * (request.voice.client{op:'mic-meter', open:true}), renews it every MIC_METER_RENEW_MS (the kernel lets it lapse after
+ * 15 s), and closes it when the picker or the sheet closes.
+ */
+let micMeterTimer: ReturnType<typeof setInterval> | null = null;
+const MIC_METER_RENEW_MS = 10_000;
+function micMeter(open: boolean): void {
+  if (!client || !canAttach(status)) return;
+  void client.call('log.append', { kind: 'request.voice.client', payload: { op: 'mic-meter', open } }).catch(() => undefined);
+}
+function syncMicMeter(): void {
+  const want = vsFlow === 'input' && voiceSheet.isOpen();
+  if (want && !micMeterTimer) {
+    micMeter(true);
+    micMeterTimer = setInterval(() => micMeter(true), MIC_METER_RENEW_MS);
+  } else if (!want && micMeterTimer) {
+    clearInterval(micMeterTimer);
+    micMeterTimer = null;
+    micMeter(false);
+  }
+}
+
 
 const currentMode = () => sessionModeOf(status, focused);
 
@@ -2467,11 +2521,13 @@ function paintVoice(): void {
     target: v.hsid ? sessionName(v.hsid) : '',
     clientConnected: v.clientConnected,
     clientFact: clientFactOf(cp.label, cp.tail),
-    clientCause: crashCauseOf(c, (e) => oneLine(e, ERROR_TITLE_MAX)),
+    // Mika 2026-10-23: a mic fault's whole sentence goes in the accessible name (the pill shows a short cause)
+    clientCause: c.micFault ? oneLine(c.micFault.text, ERROR_TITLE_MAX) : crashCauseOf(c, (e) => oneLine(e, ERROR_TITLE_MAX)),
     clientTitle: trouble && cp.title ? cp.title : null,
     capture: cap,
     clamped: !!clampHsid && clampedFrom(store.transcript(clampHsid), clampHsid),
-    micClosed: attached && v.micWanted === false,
+    // Mika 2026-10-23: a mic the voice app turned off is closed: a hollow dot and "mic closed", never "mic open"
+    micClosed: attached && (v.micWanted === false || c.micFault !== null),
     micKeyBare: bare,
     heardAgoS: lastHeardAt === null ? null : (Date.now() - lastHeardAt) / 1000,
     draftWaiting: (draftWaitingShown = draftWaitingOf()),
@@ -2492,7 +2548,9 @@ function paintVoice(): void {
     btn.setAttribute('aria-haspopup', 'menu');
     btn.setAttribute('aria-expanded', String(!$('voice-menu').hidden));
   }
-  btn.title = pa ? pa.title : pv.title;
+  // founder request 2026-10-23: the mic in use is always named (or that the chosen one is missing)
+  // (Mika 2026-10-23: not twice: a missing mic's tail title already names it and the fallback)
+  btn.title = `${pa ? pa.title : pv.title}${trouble && c.mic.missing ? '' : micTitleLine(c)}`;
   btn.setAttribute('aria-label', pa ? pa.aria : pv.aria);
   put($('voice-label'), pa ? pa.name : pv.name);
   const fact = $('voice-fact');
@@ -2515,7 +2573,7 @@ function paintVoice(): void {
   if (!$('voice-menu').hidden) paintVoiceMenu();
   if (voiceSheet.isOpen()) {
     voiceSheet.repaint();
-    voiceSheet.level(captureStatusOf(status)?.level ?? v.level);
+    voiceSheet.level(captureStatusOf(status)?.level ?? v.level ?? c.mic.level);
   }
   paintDictation();
 }
@@ -2594,7 +2652,9 @@ function paintVoiceMenu(): void {
   // board header-5b: attached, the live rung stands on the pill; the voice app's action (Restart, Start voice, Teach)
   // is the ladder's first row instead of a separate header key
   const cp = clientPillOf(clientOf(status), v.state !== 'off', canAttach(status));
-  const act = v.state !== 'off' && cp.action !== null ? { action: cp.action, label: cp.actionLabel, fact: clientFactOf(cp.label, cp.tail) ?? '' } : null;
+  // Mika 2026-10-23: a mic fault's row says the voice app's whole sentence (the pill has only the short cause)
+  const mf = clientOf(status).micFault;
+  const act = v.state !== 'off' && cp.action !== null ? { action: cp.action, label: cp.actionLabel, fact: mf && cp.className.includes('voice-micfault') ? oneLine(mf.text, ERROR_TITLE_MAX) : (clientFactOf(cp.label, cp.tail) ?? '') } : null;
   const key = JSON.stringify([entries, foot, target, act]);
   if (key === ladderShown && menu.firstChild) return;
   ladderShown = key;

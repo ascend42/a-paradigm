@@ -16,6 +16,29 @@ description: >-
 components:
   gnomon-voice:
     description: >-
+      Aegis review 2026-10-23: the client mirrors the bounded inheritance
+      (Stretch.inherited; at most VOICE_CONTINUITY_MAX_TURNS turns and
+      VOICE_CONTINUITY_MAX_MS per anchor, clips up to
+      VOICE_CONTINUITY_CLIP_MS), never claims continuity for the send word,
+      sends a short unverifiable push-to-talk clip's words for the draft, and
+      relays the mic level only while status.voice.micMeterOpen. The stderr
+      logger cuts free-text fields to LOG_FIELD_MAX (the log is persisted).
+      2026-10-23 (founder field bugs): speaker CONTINUITY: a clip with less
+      gated speech than MIN_VERIFY_SPEECH_MS that is not the send word
+      inherits the verified stretch it belongs to (voice.turn.user
+      speakerBasis 'continuity'; the rule is contracts VOICE_CONTINUITY_GAP_MS
+      3 s / VOICE_CONTINUITY_STRETCH_MS 30 s, re-checked by the kernel); the
+      stretch breaks on a turn of another or an unverified voice, a refusal,
+      agent playback between, mic off, barge-in, an engine restart or an
+      input switch, and a short clip that matches ANOTHER enrolled print.
+      Unverified short speech is never thrown away: under any send ceiling of
+      a conversation attachment it goes to the kernel as Dictate draft
+      (MIN_UTTERANCE_MS 250 -> 120). A gnomon-voice-io engine{what:'failed'}
+      turns capture off and is reported in plain words
+      (request.voice.report{mic.fault}, micFaultText, a warn notice);
+      request.voice.report{mic} also carries the input in use, the inputs,
+      the choice, a missing choice and a 4 Hz level (Voice settings), and the
+      client applies status.voice.inputChoice with input.select.
       TD-2026-10-21-514 (short words by adjacency, src/send-word.ts): the
       client reads the kernel-held <home>/voice/send-word.json (stat cached,
       canonical via #send-word-matcher, a broken file holds no word, and a
@@ -161,6 +184,24 @@ components:
     flows: [$voice-turn]
   gnomon-voice-io:
     description: >-
+      2026-10-23 field bug (mic flicker, no audio): a configuration change
+      that stops the engine (a Bluetooth headset switching to its call
+      profile, 48 -> 24 kHz, right after a voice-processing start) is now
+      recovered IN PLACE after the RestartGovernor.settleMs settle wait: same
+      engine, voice processing kept, the capture tap re-armed for the new
+      format (armTap), the player re-attached after start (startWithPlayer).
+      The old teardown turned voice processing off, which handed the headset
+      back its music profile and looped about once a second. RestartGovernor
+      (VoiceIOCore/Recovery.swift) allows 3 recoveries per 15 s; past that,
+      or when recovery fails, the mic goes off with engine{what:'failed',
+      reason: restart-loop | engine-start | no-input | converter} and a
+      mic{on:false} event. Input selection (founder request 2026-10-23):
+      inputs.list and input.select{device: uid | null} (InputChoice.resolve:
+      a connected choice, else the system default with missing:true; the
+      choice survives a disconnect), an InputWatch on the device list and the
+      default input (event inputs{inputs, selected, current, missing}; the
+      mic moves to the device it should use, engine{what:'restarted',
+      reason:'input-change'}), and mic events carry input and missing.
       TD-2026-10-21-514 mic key: mic-toggle (Carbon id 2) defaults to ctrl+`
       (kVK_ANSI_Grave 0x32; grave / backtick synonyms); a bare ` only via
       hotkeys.set{allowBare:true} and only for mic-toggle (F-keys stay

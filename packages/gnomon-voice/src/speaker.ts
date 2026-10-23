@@ -180,6 +180,8 @@ export interface SpeakerVerdict {
   score: number;
   /** the speech that survived the speech gate (ms), when the engine measures it (calibration, never audio) */
   speechMs?: number;
+  /** the best-scoring enrolled print on an UNKNOWN verdict (continuity uses it to see another enrolled voice) */
+  bestName?: string;
 }
 
 /**
@@ -258,6 +260,6 @@ export class SpeakerVerifier {
       this.#unknowns.push(e);
       idx = this.#unknowns.length - 1;
     }
-    return { unknownLabel: `unknown-${Math.min(idx + 1, 999_999)}`, score: best?.score ?? -1, ...gated };
+    return { unknownLabel: `unknown-${Math.min(idx + 1, 999_999)}`, score: best?.score ?? -1, ...gated, ...(best ? { bestName: best.name } : {}) };
   }
 }

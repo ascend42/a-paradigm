@@ -819,6 +819,18 @@ components:
       - test/preview.test.ts
   gui-voice-capture:
     description: >-
+      Aegis H-1 (2026-10-23): a turn that inherited its speaker
+      (speakerBasis 'continuity') is a draft part marked inherited: the row
+      reads "in composer · not checked as you", the draft note "draft ·
+      [“words”] not checked as you · edits ask first", a piece needs a part
+      checked as the human; the refusal causes inherited-only / inherited
+      read in plain words. A short unverified push-to-talk turn (draftOnly)
+      stops the Talk countdown. The input picker opens, renews (10 s) and
+      closes the mic meter (request.voice.client{op:'mic-meter'}).
+      2026-10-23: a refused voice send reads in plain words
+      (voiceRefusalText: "✕ not sent by voice · Gnomon couldn't confirm it
+      was you for part of this draft" + next: press Enter to send it · or
+      re-teach your voice on this mic), never the code, symbol or rule id.
       Voice drops fix (2026-10-20): a drop names its reason in words
       (dropLabelOf, refusalPhrase) and stays on the pill until the next capture
       or a dismiss (captureDismiss on opening the voice menu); the store renders
@@ -1155,6 +1167,20 @@ components:
       - test/copy-vocabulary.test.ts
   gui-voice-settings:
     description: >-
+      2026-10-23 (founder request): an input row first (the mic in use:
+      name, transport, rate, echo cancelling, system default or chosen; warn
+      when the chosen mic is missing or the mic stopped) whose flow is the
+      picker (core/voice-ladder.ts inputRow / inputChoices: system default,
+      every input, a missing choice kept; the folder field's choice rows
+      .ff-row.plain with "in use", one Tab stop, arrows move focus and
+      Enter or Space chooses; a role=meter level from status.voice.mic.level,
+      re-read every INPUT_METER_POLL_MS while open) and
+      request.voice.client{op:'select-input'}. The pill's title names the mic
+      (micTitleLine); a chosen mic that is not connected appends "· chosen mic
+      missing", a mic fault "· mic stopped: <short cause>"
+      (micFaultFact; the whole sentence in the title, the aria name and the
+      ladder's Restart row; the dot hollow). voiceRefusalText applies on the
+      send path only (unsentEcho), not to every voice-* refusal.
       #gui-voice-settings (Atelier 2026-10-21, setup-home.html + teach.html) -
       the Voice settings sheet, a right-side drawer on the sheet component
       (role dialog, Esc closes, focus returns): your voice (inline enrolment:

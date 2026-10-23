@@ -180,15 +180,21 @@ describe('Dictate, the G-VOX-06 exception (founder bug 2026-10-21): an unverifie
     expect(link.capture.filter((c) => c.state === 'captured' || c.state === 'dropped').map((c) => c.state)).toEqual(['captured']);
     expect(link.sends).toEqual([]);
   });
-  it('under Send word or Pieces (or no reported send ceiling) an unverified turn stays withheld and dropped', async () => {
-    for (const send of ['word', 'pieces', undefined]) {
-      const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', ...(send ? { send } : {}), texts: ['secret words'] });
+  it('founder ruling 2026-10-23: under Send word or Pieces an unverified turn goes to the draft too (the kernel decides); no reported send ceiling keeps it withheld', async () => {
+    for (const send of ['word', 'pieces']) {
+      const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', send, texts: ['short words'] });
+      link.turnVerdict = { draftOnly: true };
       unknown(audio);
       await client.idle();
-      expect(link.appends[0]!.payload, String(send)).toMatchObject({ speakerEnrolled: false, text: '', textWithheld: true });
-      expect(JSON.stringify(link.appends)).not.toContain('secret words');
-      expect(link.capture.at(-1), String(send)).toMatchObject({ state: 'dropped', reason: 'not-enrolled' });
+      expect(link.appends[0]!.payload, send).toMatchObject({ speakerEnrolled: false, text: 'short words' });
+      expect(link.capture.at(-1), send).toMatchObject({ state: 'captured' });
     }
+    const { audio, link, client } = await setup({ mode: 'ambient', attachMode: 'conversation', texts: ['secret words'] });
+    unknown(audio);
+    await client.idle();
+    expect(link.appends[0]!.payload).toMatchObject({ speakerEnrolled: false, text: '', textWithheld: true });
+    expect(JSON.stringify(link.appends)).not.toContain('secret words');
+    expect(link.capture.at(-1)).toMatchObject({ state: 'dropped', reason: 'not-enrolled' });
   });
   it("a refusal with cause too-short ends dropped as refused{voice-speaker, too-short} (\"too short to check it's you\")", async () => {
     const { audio, link, client } = await setup({ texts: ['hi'] });

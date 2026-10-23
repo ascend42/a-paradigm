@@ -131,6 +131,29 @@ export class FakeAudioIO implements AudioIO {
   emitClosed(reason: string): void {
     this.#ev.emit('closed', reason);
   }
+  /** The binary's engine{what:'failed', reason}: the mic turned itself off. */
+  emitFault(code: string): void {
+    this.micOn = false;
+    this.#ev.emit('fault', code);
+  }
+  /** The binary's inputs (null: an older binary without input selection). */
+  inputsInfo: import('./types.js').InputsInfo | null = null;
+  readonly inputOps: Array<string | null> = [];
+  inputs(): import('./types.js').InputsInfo | null {
+    return this.inputsInfo;
+  }
+  async selectInput(id: string | null): Promise<void> {
+    this.inputOps.push(id);
+    if (this.inputsInfo) this.emitInputs({ ...this.inputsInfo, selected: id, current: this.inputsInfo.inputs.find((d) => d.id === id) ?? this.inputsInfo.current, missing: id !== null && !this.inputsInfo.inputs.some((d) => d.id === id) });
+  }
+  emitInputs(i: import('./types.js').InputsInfo): void {
+    this.inputsInfo = i;
+    this.#ev.emit('inputs', i);
+  }
+  /** The binary's engine{what:'restarted'}. */
+  emitRestarted(): void {
+    this.#ev.emit('restarted');
+  }
 
   get isPlaying(): boolean {
     return this.#playing !== undefined;

@@ -2291,6 +2291,44 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
+      Aegis review 2026-10-23 (H-1, M-1, M-2, L-1..L-3): an inherited
+      (continuity) turn is NOT verification (UserTurn.basis 'continuity'):
+      every send that includes one is clamped voice-unverified (originFor,
+      attributed or a voice-hinted edit), it never anchors adjacency, the
+      voice principal never sends it directly (cause 'inherited'), and a
+      piece claim must cite a turn verified alone (cause 'inherited-only').
+      Inheritance is capped per anchor (VOICE_CONTINUITY_MAX_TURNS 2,
+      VOICE_CONTINUITY_MAX_MS of t1 - t0), the clip is at most
+      VOICE_CONTINUITY_CLIP_MS long, the gap and the stretch are also
+      checked on kernel receipt times (+ VOICE_CONTINUITY_RECEIPT_SLACK_MS,
+      anchorReceivedAt), t0 may not precede the previous t1 (50 ms grace), a voice.bargein row or
+      or model streaming since the previous turn breaks it. The send word never
+      rides continuity. Talk (narrow): a ptt clip with gated speech under the
+      minimum that is not verified is draftOnly (a long one keeps the gate).
+      status.voice.mic level and inputs reach the human class on the gui
+      credential only (voiceStatusFor); request.voice.client{op:'mic-meter',
+      open} sets status.voice.micMeterOpen (lapses after
+      VOICE_MIC_METER_TTL_MS) and the voice app relays the level only then.
+      appendCappedLog re-applies 0700/0600 on every write.
+      2026-10-23 (founder field bugs): speaker CONTINUITY at receipt
+      (#continuityOf; contracts VOICE_CONTINUITY_GAP_MS 3 s,
+      VOICE_CONTINUITY_STRETCH_MS 30 s): a voice.turn.user{speakerBasis:
+      'continuity'} with gatedSpeechMs under VOICE_MIN_VERIFY_SPEECH_MS is
+      its speaker's only when the turn right before it on the attachment is
+      an accepted turn of that speaker on the same connection (verified alone
+      or by continuity: UserTurn.anchorT1), within the gap, inside the
+      stretch of the last turn verified alone, with no agent playback between
+      and not intercepted; else it is unverified. A short send word needs
+      adjacency whatever basis it claims. Dictate's draft-only exception now
+      covers every send ceiling of a conversation attachment (short speech is
+      never thrown away; word, pieces and send-now stay refused while it is
+      in the draft). request.voice.report{mic} (MicReport: device, aec,
+      fault, on, inputs, selected, missing, level; a state per connection)
+      is status.voice.mic; request.voice.client{op:'select-input', id, name?}
+      (human, gui or device) sets status.voice.inputChoice, persisted at
+      <home>/voice/input.json (input-choice-store.ts, 0600). The voice child's
+      stderr is appended to <home>/logs/voice.log (0600, rolls to voice.log.1
+      past 256 KiB) besides the 2000-char lastError tail.
       Dictate, the G-VOX-06 exception (founder bug 2026-10-21): under a
       conversation ceiling with send ceiling key, an unverified speaker's
       ambient, non-intercepted turn of the attached human's voice principal is

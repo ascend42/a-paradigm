@@ -747,6 +747,10 @@ html, body {
 .vs-meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; --level: 0; }
 .vs-meter span { display: block; width: 3px; height: calc(15% + 85% * var(--level)); background: var(--sec); transition: height 0.12s linear; }
 .vs-meter.recording span { background: var(--ink); }
+/* founder request 2026-10-23: Voice settings › input picker. Mika 2026-10-23: the folder field's choice rows (.ff-row,
+   the system's stacked radiogroup) with no swatch, and a long device name wraps instead of being cut */
+.ff-row.plain { grid-template-columns: 12px minmax(0, 1fr) auto; }
+.ff-row.plain .ff-name { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 560px) { .vs-flow, .vs-sec > .vs-timing { margin-left: 0; } .vs-head { grid-template-columns: 80px minmax(0, 1fr) auto; } }
 
 /* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the

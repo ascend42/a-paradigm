@@ -352,6 +352,29 @@ function statusOf(voice: Record<string, unknown>, o: { runModes?: boolean } = {}
 const VOICE_RUNNING = { attached: false, clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, enrolled: [{ name: 'matt' }], maxMode: 'conversation', ambientIdleMs: 600_000 };
 const attached = (since: string): Record<string, unknown> => ({ attached: true, hsid: BILLING, ceiling: 'conversation', since, idleAt: null, voiceSessionId: `vs:${ulid('voice session')}`, turns: 2, echoTailMs: 400, ambientIdleMs: 600_000, maxMode: 'conversation', ambientConfirmed: true, enrolled: [{ name: 'matt' }] });
 
+/**
+ * Founder field report 2026-10-23 (the mic restart loop with AirPods; "a clear input selection inside gnomon"): the
+ * voice app's mic as status.voice.mic reports it (kernel voice-requests.ts MicReport) and the kernel-held inputChoice.
+ * Real CoreAudio UIDs and transport words (gnomon-voice-io InputDevices.swift); names up to the kernel's 80-char cap.
+ */
+const AIRPODS = { id: 'A8-91-3D-52-7E-10:input', name: 'Matt’s AirPods Pro (2nd generation) Hands-Free AG Audio', transport: 'bluetooth', sampleRate: 24000 };
+const BUILTIN = { id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 };
+const MIC_INPUTS = [
+  BUILTIN,
+  AIRPODS,
+  { id: 'AppleUSBAudioEngine:Shure Inc:Shure MV7+:2140000:1', name: 'Shure MV7+ Podcast Microphone', transport: 'usb', sampleRate: 48000 },
+  { id: 'AppleUSBAudioEngine:Apple Inc.:Studio Display:9A1C:6', name: 'Studio Display Microphone', transport: 'usb', sampleRate: 48000 },
+  { id: 'BlackHole2ch_UID', name: 'BlackHole 2ch', transport: 'virtual', sampleRate: 48000 },
+];
+const devOf = (d: { name: string; transport: string; sampleRate: number }) => ({ name: d.name, transport: d.transport, sampleRate: d.sampleRate });
+const micStatus = (mic: Record<string, unknown>, choice: { id: string | null; name: string | null } = { id: null, name: null }): Record<string, unknown> =>
+  statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, mic: { aec: null, fault: null, on: true, inputs: MIC_INPUTS, selected: choice.id, missing: false, at: T('14:08:00'), ...mic }, inputChoice: choice });
+const MIC_FIXTURES = {
+  'voice-mic-fault': fixture('voice-mic-fault', 'Dictate attached; the mic turned itself off (restart loop: the input kept changing)', deskChain({ voice: 'armed' }), micStatus({ device: null, on: false, fault: { code: 'restart-loop', text: 'The mic kept restarting because the input device kept changing, so Gnomon turned it off.' } }, { id: AIRPODS.id, name: AIRPODS.name }), BILLING),
+  'voice-mic-missing': fixture('voice-mic-missing', 'Dictate attached; the chosen mic (an Elgato) is unplugged, listening on the built-in mic', deskChain({ voice: 'armed' }), micStatus({ device: devOf(BUILTIN), aec: 'vpio', missing: true, level: 0.3 }, { id: 'AppleUSBAudioEngine:Elgato:Wave:3:BA1C:1', name: 'Elgato Wave:3' }), BILLING),
+  'voice-input': fixture('voice-input', 'Voice settings with the input row: AirPods chosen (a long name), headphones so no echo cancel', deskChain({ voice: 'armed' }), micStatus({ device: devOf(AIRPODS), aec: 'headphones', level: 0.55 }, { id: AIRPODS.id, name: AIRPODS.name }), BILLING, false, { open: 'voice-settings' }),
+};
+
 /** S5: the Workshop's declared view as #mod-host status reports a running mod's views. */
 const WORKSHOP_VIEW = { name: 'gnomon.workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
 
@@ -630,6 +653,7 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'voice-crashed': fixture('voice-crashed', 'Dictate attached, the voice app crashed (backoff)', deskChain({ voice: 'crashed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: false, client: { phase: 'backoff', restarts: 2, devUnsigned: false, lastError: 'gnomon-voice-io exited (SIGABRT): the input device went away' } }), BILLING),
   'voice-ladder': fixture('voice-ladder', 'The voice pill open: the trust ladder (Dictate live, Send word not set up)', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING, false, { open: 'voice-ladder' }),
   'voice-settings': fixture('voice-settings', 'The Voice settings sheet (your voice, send word, keys, listen, timing, risk)', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING, false, { open: 'voice-settings' }),
+  ...MIC_FIXTURES,
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
   workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
   'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'gnomon.workshop', why: 'user', cardId: null }] } }, BILLING, true),

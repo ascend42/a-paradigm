@@ -86,6 +86,25 @@ export const DROP_LABEL: Readonly<Record<CaptureDropReason, string>> = Object.fr
 });
 
 /**
+ * Founder field report 2026-10-23: a refused VOICE SEND (a send-word, piece or send-now claim, or a voice send) read
+ * `FORBIDDEN voice-speaker  #gnomon-voice: the draft holds an unverified voice: only Enter sends it (G-VOX-06)`: the
+ * code, the symbol and the rule id. A voice refusal is said in the system's voice instead: ✕, a lowercase label, the
+ * reason in plain words, then `next:`. Null for anything that is not a voice refusal (shown as before).
+ */
+export function voiceRefusalText(r: { code: string; reason: string | null; data: Record<string, unknown> | null }): string | null {
+  const cause = typeof r.data?.cause === 'string' ? r.data.cause : null;
+  if (r.code !== 'FORBIDDEN' || !r.reason?.startsWith('voice-')) return null;
+  // Aegis H-1: short words that rode the verified turn before them were never checked themselves
+  if (r.reason === 'voice-speaker' && cause === 'inherited-only') return "✕ not sent by voice · none of these words were checked as you\n  next: press Enter to send it";
+  if (r.reason === 'voice-speaker' && cause === 'inherited') return "✕ not sent by voice · these words were not checked as you\n  next: press Enter to send it";
+  if (r.reason === 'voice-speaker' && cause === 'draft-only')
+    return "✕ not sent by voice · Gnomon couldn't confirm it was you for part of this draft\n  next: press Enter to send it · or re-teach Gnomon your voice on this mic in Voice settings";
+  if (r.reason === 'voice-speaker')
+    return "✕ not sent by voice · Gnomon didn't recognise your voice on this mic\n  next: press Enter to send it · or re-teach Gnomon your voice on this mic in Voice settings";
+  return `✕ not sent by voice · ${refusalPhrase(r.reason, cause)}\n  next: press Enter to send it`;
+}
+
+/**
  * Voice drops fix: the kernel's voice refusal (voice.turn.user{refusedReason, refusedCause}, or a capture's
  * refusal/cause) as a short phrase. Shared by the pill (dropLabelOf) and the transcript row (store.ts). An unknown
  * reason is shown as its name (never dropped).
@@ -98,7 +117,13 @@ export function refusalPhrase(reason: string, cause?: string | null): string {
       return 'it overlapped my spoken reply';
     case 'voice-speaker':
       // a turn with too little gated speech was never checked (kernel cause 'too-short'); Dictate's draft-only turns wait for Enter
-      return cause === 'too-short' ? "too short to check it's you · say a few more words, or type it" : cause === 'draft-only' ? 'unverified voice: Enter sends it' : 'speaker not recognised';
+      return cause === 'too-short'
+        ? "too short to check it's you · say a few more words, or type it"
+        : cause === 'draft-only'
+          ? 'unverified voice: Enter sends it'
+          : cause === 'inherited-only' || cause === 'inherited'
+            ? 'not checked as you: Enter sends it'
+            : 'speaker not recognised';
     case 'voice-target':
       return 'voice is not attached to this session';
     case 'voice-conn':

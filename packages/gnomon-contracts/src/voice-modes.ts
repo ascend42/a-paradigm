@@ -124,6 +124,37 @@ export const SEND_WORD_SHORT_MS = 1500;
  */
 export const VOICE_MIN_VERIFY_SPEECH_MS = 1500;
 export const SEND_WORD_ADJACENT_MS = 2000;
+/**
+ * Speaker CONTINUITY (founder ruling 2026-10-23: natural, fast speech is never cut; narrowed by Aegis H-1 the same day).
+ * A clip with less gated speech than VOICE_MIN_VERIFY_SPEECH_MS cannot be checked on its own (measured 2026-10-23:
+ * CAM++ scores of sub-1.5 s clips do not separate speakers), so it may INHERIT the speaker of the stretch it belongs to:
+ * voice.turn.user{speakerBasis: 'continuity'}. Inheritance is NOT verification: an inherited turn carries no speaker
+ * evidence, so every send that includes one is clamped as origin 'voice-unverified' (no automatic tool approval), it
+ * never anchors adjacency, and a piece claim must cite at least one turn verified on its own. The rule, enforced by the
+ * voice app and re-checked by the kernel at receipt:
+ *   - the clip is short: gatedSpeechMs < VOICE_MIN_VERIFY_SPEECH_MS and t1 - t0 <= VOICE_CONTINUITY_CLIP_MS; a clip long
+ *     enough to verify must verify alone;
+ *   - it is not the send word and not intercepted (a decision or control phrase never rides continuity);
+ *   - the turn right before it, on the same attachment and voice connection, is an accepted turn of the SAME enrolled
+ *     speaker (verified alone or inherited); any other turn in between (an unknown voice, another speaker, a refused,
+ *     unverified, adjacent or intercepted turn) breaks the stretch;
+ *   - it starts at most VOICE_CONTINUITY_GAP_MS after that turn ended (client clock, and t0 >= that turn's t1 - 50 ms),
+ *     and the kernel received it at most GAP + (t1 - t0) + VOICE_CONTINUITY_RECEIPT_SLACK_MS after that turn;
+ *   - it ends at most VOICE_CONTINUITY_STRETCH_MS after the ANCHOR (the last turn verified alone) ended, and the kernel
+ *     received it at most STRETCH + RECEIPT_SLACK after the anchor;
+ *   - at most VOICE_CONTINUITY_MAX_TURNS inherited turns, with at most VOICE_CONTINUITY_MAX_MS of inherited speech
+ *     (t1 - t0 summed), per anchor;
+ *   - no agent speech (voice.turn.agent playback), no barge-in (voice.bargein) and no model streaming of the attached
+ *     session lies between the two turns.
+ * The voice app also breaks the stretch on mic off, an engine restart, an input switch, and a short clip that matches
+ * ANOTHER enrolled print over the threshold.
+ */
+export const VOICE_CONTINUITY_GAP_MS = 3000;
+export const VOICE_CONTINUITY_STRETCH_MS = 30_000;
+export const VOICE_CONTINUITY_CLIP_MS = 3000;
+export const VOICE_CONTINUITY_MAX_TURNS = 2;
+export const VOICE_CONTINUITY_MAX_MS = 3000;
+export const VOICE_CONTINUITY_RECEIPT_SLACK_MS = 5000;
 /** pieces: a gap this long closes a piece; a piece never grows past the cap */
 export const PIECE_GAP_MS = 1500;
 export const PIECE_CAP_MS = 8000;

@@ -12,21 +12,29 @@ final class Server {
     let hotkeys = Hotkeys()
     let micGate = MicGate(provider: { done in AudioCore.requestPermission(done) }, disclaimAllowed: { Disclaim.micAllowed })
     private var routeWatch: RouteWatch?
+    private var inputWatch: InputWatch?
     private var lastRoute: OutputRoute?
 
     func start() {
         audio.onCapture = { ns, samples in Output.shared.capture(hostTimeNs: ns, samples: samples) }
         audio.onLevel = { rms, peak in Output.shared.event("level", ["rmsDBFS": round1(rms), "peakDBFS": round1(peak)]) }
         audio.onPlayback = { name, fields in Output.shared.event(name, fields) }
-        audio.onEngineRestart = { [weak self] what in
+        audio.onEngineRestart = { [weak self] what, reason in
             guard let self else { return }
-            Output.shared.event("engine", ["what": what, "mic": self.audio.micOn])
+            var fields: [String: Any] = ["what": what, "mic": self.audio.micOn]
+            if let reason { fields["reason"] = reason }
+            Output.shared.event("engine", fields)
+            // the mic stopped for good: say so the way mic.off does, so the controller drops capture state
+            if what == "failed" { Output.shared.event("mic", ["on": false, "voiceProcessing": false, "aec": self.aec.rawValue, "transport": self.transport]) }
             self.reportRoute(force: true)
         }
         hotkeys.onHotkey = { action, phase in Output.shared.event("hotkey", ["action": action.rawValue, "phase": phase]) }
         let errs = hotkeys.apply(HotkeyConfig.defaults)
         watchSystem()
         routeWatch = RouteWatch { [weak self] in self?.reportRoute(force: false) }
+        // founder request 2026-10-23: a device came or went, or the default input changed: say so, and move the mic
+        // to the device it should use now (the chosen one when it is back, else the system default)
+        inputWatch = InputWatch { [weak self] in self?.inputsChanged() }
         lastRoute = OutputRoute.current()
         var ready = infoFields()
         if !errs.isEmpty { ready["hotkeyErrors"] = errs.map { "\($0.key.rawValue): OSStatus \($0.value)" }.sorted() }
@@ -134,8 +142,9 @@ final class Server {
                 }
                 do {
                     try self.audio.startMic()
-                    reply(["mic": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue, "transport": self.transport])
-                    Output.shared.event("mic", ["on": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue, "transport": self.transport])
+                    let input: Any = self.audio.currentInput?.json ?? NSNull()
+                    reply(["mic": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue, "transport": self.transport, "input": input, "missing": self.audio.inputMissing])
+                    Output.shared.event("mic", ["on": true, "voiceProcessing": self.audio.voiceProcessing, "aec": self.aec.rawValue, "transport": self.transport, "input": input, "missing": self.audio.inputMissing])
                 } catch let e as AudioError {
                     fail(e.code, e.description)
                 } catch {
@@ -165,10 +174,53 @@ final class Server {
             } else {
                 fail("hotkey-taken", "the system refused " + errs.map { "\($0.key.rawValue) (OSStatus \($0.value))" }.sorted().joined(separator: ", ") + "; the previous bindings stay")
             }
+        case .inputsList:
+            reply(inputFields())
+        case .inputSelect(let uid):
+            audio.preferredInput = uid
+            do {
+                if try audio.followInputChoice() { Output.shared.event("engine", ["what": "restarted", "mic": audio.micOn, "reason": "input-change"]) }
+            } catch let e as AudioError {
+                Output.shared.event("engine", ["what": "failed", "mic": false, "reason": e.code])
+                Output.shared.event("mic", ["on": false, "voiceProcessing": false, "aec": aec.rawValue, "transport": transport])
+            } catch {
+                Output.shared.event("engine", ["what": "failed", "mic": false, "reason": "engine-start"])
+            }
+            reply(inputFields())
         case .quit:
             reply([:])
             shutdown(code: 0)
         }
+    }
+
+    /// inputs.list / input.select reply and the `inputs` event: every input device, the choice, the one in use.
+    func inputFields() -> [String: Any] {
+        let pick = InputDevices.resolve(preferred: audio.preferredInput)
+        let current = audio.micOn ? audio.currentInput : pick.device
+        return [
+            "inputs": pick.inputs.prefix(16).map(\.json),
+            "selected": audio.preferredInput ?? NSNull(),
+            "current": current?.json ?? NSNull(),
+            "missing": audio.micOn ? audio.inputMissing : pick.missing,
+        ]
+    }
+
+    private var lastInputs: String?
+    private func inputsChanged() {
+        do {
+            if try audio.followInputChoice() { Output.shared.event("engine", ["what": "restarted", "mic": audio.micOn, "reason": "input-change"]) }
+        } catch let e as AudioError {
+            Output.shared.event("engine", ["what": "failed", "mic": false, "reason": e.code])
+            Output.shared.event("mic", ["on": false, "voiceProcessing": false, "aec": aec.rawValue, "transport": transport])
+        } catch {
+            Output.shared.event("engine", ["what": "failed", "mic": false, "reason": "engine-start"])
+        }
+        let f = inputFields()
+        // our own voice-processing aggregates come and go with every engine: report only a real change
+        let key = (try? JSONSerialization.data(withJSONObject: f, options: [.sortedKeys])).map { String(decoding: $0, as: UTF8.self) }
+        if key == lastInputs { return }
+        lastInputs = key
+        Output.shared.event("inputs", f)
     }
 
     // MARK: state
@@ -200,6 +252,7 @@ final class Server {
         for (k, v) in routeFields() { f[k] = v }
         for (k, v) in audio.status { f[k] = v }
         for (k, v) in Disclaim.json { f[k] = v }
+        for (k, v) in inputFields() { f[k] = v }
         return f
     }
 

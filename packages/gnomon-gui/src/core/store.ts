@@ -1009,7 +1009,9 @@ function voiceItem(r: Row, p: Record<string, unknown> | null, ctx: VoiceCtx): (P
           : p.forwardable === true
             ? p.draftOnly === true
               ? 'in composer · unverified voice' // Dictate (G-VOX-06 exception): the kernel let an unverified voice into the draft only
-              : 'in composer' // dictation: the kernel stamped it forwardable; it waits in the composer until sent
+              : p.speakerBasis === 'continuity'
+                ? 'in composer · not checked as you' // Aegis H-1: inherited from the verified turn before it, never checked itself
+                : 'in composer' // dictation: the kernel stamped it forwardable; it waits in the composer until sent
             : p.forwarded === false
               ? 'voice app says: not sent'
               : 'not sent to the session';

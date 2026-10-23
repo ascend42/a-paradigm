@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { attachmentFromStatus, GnomonKernelLink, nsOf, type GnomonClientLike } from '../src/kernel-link.js';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { decodeCapture, encodeCapture, encodeFrame, FRAME_CAPTURE, FRAME_JSON, FRAME_PLAYBACK, FrameReader, SpawnedAudioIO } from '../src/audio-io.js';
+import { decodeCapture, encodeCapture, encodeFrame, FRAME_CAPTURE, FRAME_JSON, FRAME_PLAYBACK, FrameReader, inputsInfoOf, SpawnedAudioIO } from '../src/audio-io.js';
 
 describe('GnomonKernelLink (structural client)', () => {
   it('reads the attachment from status.voice and the V1 send contract content: [{text}]', async () => {
@@ -91,6 +91,33 @@ function fakeBinary() {
 const tick = (): Promise<void> => new Promise((r) => setImmediate(r));
 
 describe('SpawnedAudioIO against a fake gnomon-voice-io:v1', () => {
+  it('field bug 2026-10-23: engine failed ⇒ mic off + fault; restarted ⇒ restarted; inputs events and input.select (founder request)', async () => {
+    const f = fakeBinary();
+    const io = new SpawnedAudioIO({ binary: 'x', spawnImpl: (() => f.child) as never });
+    const faults: string[] = [];
+    let restarts = 0;
+    const inputs: unknown[] = [];
+    io.on('fault', (c) => faults.push(c));
+    io.on('restarted', () => void restarts++);
+    io.on('inputs', (i) => inputs.push(i));
+    await io.start();
+    expect(io.micOn).toBe(true);
+    f.send({ type: 'event', event: 'engine', tUs: 1, what: 'restarted', mic: true });
+    f.send({ type: 'event', event: 'engine', tUs: 2, what: 'failed', mic: false, reason: 'restart-loop' });
+    f.send({ type: 'event', event: 'engine', tUs: 3, what: 'failed', mic: false, reason: 'Not A Code!' });
+    await tick();
+    expect(restarts).toBe(1);
+    expect(faults).toEqual(['restart-loop', 'engine-failed']);
+    expect(io.micOn).toBe(false);
+    f.send({ type: 'event', event: 'inputs', tUs: 4, inputs: [{ id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, { name: 'no id' }], selected: null, current: { id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, missing: false });
+    await tick();
+    expect(io.inputs()).toEqual({ inputs: [{ id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }], selected: null, current: { id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, missing: false });
+    expect(inputs).toHaveLength(1);
+    await io.selectInput('usb-mic');
+    expect(f.ops.at(-1)).toBe('input.select');
+    expect(inputsInfoOf({ inputs: 'x' })).toBeNull();
+  });
+
   it('mic.on + route.get at start; aec from the route; talk hotkeys; playback window from playback.start/end', async () => {
     const f = fakeBinary();
     let wall = 1_000_000;
@@ -102,7 +129,7 @@ describe('SpawnedAudioIO against a fake gnomon-voice-io:v1', () => {
     io.on('control', (a) => controls.push(a));
     io.on('frame', (fr) => frames.push(fr.t0));
     await io.start();
-    expect(f.ops).toEqual(['info', 'mic.on', 'route.get']);
+    expect(f.ops).toEqual(['info', 'mic.on', 'route.get', 'inputs.list']);
     expect(io.routeInfo()).toEqual({ route: 'headphones', aec: true, aecKind: 'headphones', transport: 'bluetooth' });
     f.send({ type: 'event', event: 'route', tUs: 1_000, route: { kind: 'speaker' }, aec: 'none' });
     f.send({ type: 'event', event: 'hotkey', tUs: 2_000, action: 'talk', phase: 'down' });

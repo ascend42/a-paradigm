@@ -150,15 +150,15 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(ok.forwardable).toBe(true);
     expect(r.rows.at(-1)!.payload).toMatchObject({ speakerBasis: 'adjacent', forwardable: true });
     const long = await r.turn('over and out', { speakerBasis: 'adjacent', t0: r.clock.t - 1600, t1: r.clock.t });
-    expect(long).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
+    expect(long).toMatchObject({ forwardable: true, draftOnly: true });
     expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
     const notWord = await r.turn('ship', { speakerBasis: 'adjacent', t0: r.clock.t - 500, t1: r.clock.t });
-    expect(notWord).toMatchObject({ refused: 'voice-speaker' });
+    expect(notWord).toMatchObject({ draftOnly: true });
     expect(await refusal(r.turn('x', { speakerBasis: 'verified' }))).toMatchObject({ code: 'BAD_REQUEST' });
     // Aegis L-1: a short send word WITHOUT speakerBasis is held to the same rule (no draft nearby ⇒ refused)
     const r3 = rig();
     await r3.attach('word');
-    expect(await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+    expect(await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t })).toMatchObject({ draftOnly: true });
     await r3.turn('a draft sentence long enough');
     expect((await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t })).forwardable).toBe(true);
     // no draft pending and nothing within 2 s ⇒ refused
@@ -170,7 +170,7 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     await r2.send(['draft']);
     expect(d.seq).toBeGreaterThan(0);
     r2.clock.t += 5_000;
-    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ draftOnly: true });
   });
 
   it('an attended trial take needs no speaker check or adjacency, is never forwardable, and the kernel counts it', async () => {
@@ -204,10 +204,10 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(r.v.status().sendWordTrial).toMatchObject({ state: 'ready', take: null, takes: 3, correct: 1 });
     await r.send(['ship it']);
     expect(r.supSends.at(-1)).not.toHaveProperty('voiceAttribution');
-    // Aegis M-2: once ready, take capture stops — an unenrolled voice is refused again (hash only), an enrolled
+    // Aegis M-2: once ready, take capture stops — an unenrolled voice is unverified draft again (hash only), an enrolled
     // turn is an ordinary turn, and the count does not move
     const after = await r.turn('ship it', { speakerId: 'spk:unknown-2', speakerEnrolled: false });
-    expect(after).toMatchObject({ refused: 'voice-speaker' });
+    expect(after).toMatchObject({ draftOnly: true });
     expect(after).not.toHaveProperty('trialTake');
     expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
     const ordinary = await r.turn('and then the docs');
@@ -329,14 +329,14 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     expect(r.v.status().sendWordTrial).toBeNull();
   });
 
-  it('the trial is time-boxed; after it a short unverified word is refused again', async () => {
+  it('the trial is time-boxed; after it a short unverified word is only unverified draft again', async () => {
     const r = rig();
     r.v.setSendWord(null);
     await r.attach('word');
     r.v.setTrialWord({ text: 'ship it' }, 10_000);
     r.clock.t += 11_000;
     expect(r.v.status().sendWordTrial).toBeNull();
-    expect(await r.turn('ship it', { speakerId: 'spk:unknown-1', speakerEnrolled: false, t0: r.clock.t - 700, t1: r.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+    expect(await r.turn('ship it', { speakerId: 'spk:unknown-1', speakerEnrolled: false, t0: r.clock.t - 700, t1: r.clock.t })).toMatchObject({ draftOnly: true });
     expect(await refusal(() => r.v.saveTrial())).toMatchObject({ reason: 'sendword-no-trial' });
     // a take never anchors adjacency for the held word either
     const r2 = rig();
@@ -344,7 +344,7 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     r2.v.setTrialWord({ text: 'ship it' }, 60_000);
     await r2.turn('ship it');
     r2.v.setTrialWord(null);
-    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ refused: 'voice-speaker' });
+    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ draftOnly: true });
   });
 
   it('the trial status reaches the human class only', () => {

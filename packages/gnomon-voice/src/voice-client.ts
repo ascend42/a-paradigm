@@ -52,9 +52,9 @@
  * cause 'too-short' ends dropped as refused{voice-speaker, too-short} ("too short to check it's you"). No audio is ever written to disk
  * (G-VOX-05): segments live in memory only for the STT and embedding calls.
  */
-import { isSendWord, SEND_WORD_SHORT_MS, trialTakeText, type SendWord } from '@a-company/gnomon-contracts';
+import { isSendWord, SEND_WORD_SHORT_MS, trialTakeText, VOICE_CONTINUITY_CLIP_MS, VOICE_CONTINUITY_GAP_MS, VOICE_CONTINUITY_MAX_MS, VOICE_CONTINUITY_MAX_TURNS, VOICE_CONTINUITY_STRETCH_MS, type SendWord } from '@a-company/gnomon-contracts';
 import { kernelSpeakable, sentences } from './speakable.js';
-import { gatedSpeechMsOf, SpeakerVerifier, speakerScoreBucket, type VoicePrint } from './speaker.js';
+import { gatedSpeechMsOf, MIN_VERIFY_SPEECH_MS, SpeakerVerifier, speakerScoreBucket, VERIFY_THRESHOLD, type SpeakerVerdict, type VoicePrint } from './speaker.js';
 import { withEarcon } from './earcon.js';
 import { capPartial, LiveAgreement, PARTIAL_ANCHOR_MARGIN_MS, PARTIAL_FULL_WINDOW_MS, PARTIAL_GATE_MS, PARTIAL_MAX_SEGMENT_MS, PARTIAL_MAX_WINDOW_MS, PARTIAL_PREROLL_MS, PARTIAL_TAIL_WINDOW_MS, PARTIAL_TICK_MS, type PartialText } from './partials.js';
 import type { AppendResult, AudioIO, PlaybackResult, KernelLink, KernelRefusal, PcmFrame, VadSegment, VoiceAttachment, VoiceEngines, VoiceLogger } from './types.js';
@@ -178,7 +178,43 @@ function frameDbfs(f: PcmFrame): number {
   return rms > 0 ? 20 * Math.log10(rms) : -Infinity;
 }
 const hr = (): number => Number(process.hrtime.bigint()) / 1e6;
-export const MIN_UTTERANCE_MS = 250;
+/**
+ * Below this a VAD segment is a click, not a word (founder ruling 2026-10-23: short speech is never thrown away; was
+ * 250 ms, which cut a quick "yes"). Anything longer goes to the STT; a segment with no words is still dropped no-words.
+ */
+export const MIN_UTTERANCE_MS = 120;
+/** status.voice.mic.level (Voice settings' live meter) is relayed at most this often */
+export const MIC_LEVEL_EVERY_MS = 250;
+
+/** Plain words for a mic fault code (gnomon-voice-io engine{what:'failed', reason}); the GUI pill shows them. */
+export function micFaultText(code: string): string {
+  switch (code) {
+    case 'restart-loop':
+      return 'The mic kept restarting because the input device kept changing, so Gnomon turned it off.';
+    case 'no-input':
+      return 'No input device is available, so the mic is off.';
+    case 'engine-start':
+      return 'macOS would not start the mic, so it is off.';
+    default:
+      return 'The mic stopped unexpectedly, so it is off.';
+  }
+}
+
+/**
+ * Speaker continuity (contracts VOICE_CONTINUITY_*, where the rule is written; the kernel re-checks it at receipt).
+ * The stretch the next short clip may continue: its speaker, the end of its anchor (the last turn verified alone), the
+ * end of its last turn, and what must not have changed since (mic epoch, attachment).
+ */
+interface Stretch {
+  speakerId: string;
+  name: string;
+  anchorT1: number;
+  lastT1: number;
+  micEpoch: number;
+  attachment: string;
+  /** Aegis H-1: inherited turns and their speech (t1 - t0) since the anchor */
+  inherited: { n: number; ms: number };
+}
 const WINDOW_KEEP = 64;
 /** dictation activity: an open VAD utterance with no speech for this long is treated as ended */
 const VAD_OPEN_MAX_SILENCE_MS = 2_000;
@@ -300,6 +336,15 @@ export class VoiceClient {
   #lastTurnMs = 0;
   /** TD-2026-10-21-514: the last enrolled speaker whose turn the kernel accepted (the draft speaker for adjacency) */
   #draftSpeaker: string | null = null;
+  /** 2026-10-23 speaker continuity: the verified stretch a short clip may continue (null = none) */
+  #stretch: Stretch | null = null;
+  /** the mic fault reported to the kernel (status.voice.mic.fault), null when the mic works */
+  #micFault: string | null = null;
+  /** the input choice last applied to gnomon-voice-io (undefined: none yet) and the input in use */
+  #inputApplied: string | null | undefined;
+  #inputCurrent: string | null = null;
+  /** the level last relayed in status.voice.mic (Voice settings' meter), and when */
+  #micLevelSent = { at: 0, level: -1 };
   #agentN = 0;
   #lastAgentMs = 0;
   #closed = false;
@@ -491,6 +536,13 @@ export class VoiceClient {
   /** The binary's level event (dBFS, ~15 Hz): kept, and reported only while a segment is being heard (A2). */
   #onLevel(db: number): void {
     this.#level = levelOf(db);
+    // Voice settings' live meter: status.voice.mic.level, only while the GUI's meter is open (Aegis L-2), at most 4 times
+    // a second and only when it moved
+    const t = this.#now();
+    if (this.#o.link.micMeterOpen?.() === true && t - this.#micLevelSent.at >= MIC_LEVEL_EVERY_MS && Math.abs(this.#level - this.#micLevelSent.level) >= 0.04) {
+      this.#micLevelSent = { at: t, level: this.#level };
+      void this.#reportMic();
+    }
     const live = this.#cap;
     if (live?.state === 'hearing' && !this.#paused && this.mode !== 'off') this.#capture({ state: 'hearing', segId: live.segId });
   }
@@ -650,6 +702,16 @@ export class VoiceClient {
       a.on('hotkey', (down, at) => this.#onHotkey(down, at)),
       a.on('level', (db) => this.#onLevel(db)),
       a.on('closed', (reason) => this.#notice('warn', `Audio stopped: ${reason}`)),
+      a.on('fault', (code) => void this.#onMicFault(code)),
+      // the input may have changed under a device switch: a stretch never crosses it
+      a.on('restarted', () => void (this.#stretch = null)),
+      a.on('inputs', (i) => {
+        // founder request 2026-10-23: another input device ⇒ another channel: a speaker stretch never crosses it
+        const now = i.current?.id ?? null;
+        if (now !== this.#inputCurrent) this.#stretch = null;
+        this.#inputCurrent = now;
+        void this.#reportMic();
+      }),
       a.on('control', (action) => void (action === 'mic-toggle' ? this.toggleMic() : action === 'mic-off' ? this.setMicWanted(false) : action === 'send-now' ? this.sendNow() : action === 'hold-toggle' ? this.holdToggle() : action === 'stop-speaking' ? this.stopSpeaking('hotkey') : this.toggleAmbient())),
     );
     await a.start();
@@ -659,6 +721,7 @@ export class VoiceClient {
       await a.setMic(false).catch(() => undefined);
     }
     await this.#reportPrints();
+    void this.#reportMic(); // status.voice.mic: the mic works (a previous run's fault is replaced)
     // warm the TTS once (off the critical path; the first reply's synthesis queues behind it, never in parallel)
     const tts = this.#o.engines.tts;
     if (tts.warmUp) {
@@ -691,6 +754,7 @@ export class VoiceClient {
       this.#restoreMic();
       this.#checkMicSeq();
       void this.#applyMicKey();
+      void this.#applyInputChoice();
     }
     // a detach (a SUCCESSFUL read with no or another attachment) stops speech; a failed read never does
     if (changed && prev && !readFailed) this.stopSpeaking('detach');
@@ -754,6 +818,24 @@ export class VoiceClient {
     } catch (err) {
       this.#micKeyApplied = null;
       this.#notice('warn', `The mic key was not changed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /**
+   * Founder request 2026-10-23: the human's input choice (Voice settings → Input), held by the kernel
+   * (status.voice.inputChoice, persisted across restarts), applied to gnomon-voice-io when it changes. A choice of a
+   * device that is not connected is still applied: the binary follows the system default and uses it when it returns.
+   */
+  async #applyInputChoice(): Promise<void> {
+    const c = this.#o.link.inputChoice?.() ?? null;
+    if (!c || c.id === this.#inputApplied || !this.#o.audio.selectInput) return;
+    this.#inputApplied = c.id;
+    this.#stretch = null; // a deliberate switch: a stretch never crosses it
+    try {
+      await this.#o.audio.selectInput(c.id);
+    } catch (err) {
+      this.#inputApplied = undefined;
+      this.#notice('warn', `The input was not changed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -840,6 +922,9 @@ export class VoiceClient {
       this.#live = null;
     }
     this.#flow.info('mic toggled', { on });
+    this.#stretch = null; // a stretch never crosses a mic off / on
+    if (on) this.#micFault = null;
+    void this.#reportMic(); // status.voice.mic: on or off, and a fault cleared by turning it on
     this.#report();
     const said = on ? 'Mic on.' : 'Mic off · ⌃` to listen';
     this.#notice('info', said);
@@ -861,6 +946,65 @@ export class VoiceClient {
     this.#notice('info', text);
     await this.relayNotice(text, 'ambient-above-ceiling');
     return eff;
+  }
+
+  /**
+   * Field bug 2026-10-23: the mic turned itself off (gnomon-voice-io engine failed). Capture is torn down like a mic off,
+   * the human hears why (a notice) and the GUI pill keeps saying it (status.voice.mic.fault) until the mic is on again.
+   * micWanted is NOT changed: the human did not turn the mic off, so a restart of the voice app tries again.
+   */
+  async #onMicFault(code: string): Promise<void> {
+    this.#micEpoch++;
+    this.#stretch = null;
+    this.#pttHeld = false;
+    this.#pttFrames = [];
+    this.#o.engines.vad.reset();
+    const seg = this.#cap?.state === 'hearing' ? this.#cap.segId : this.#live?.segId;
+    if (seg !== undefined) this.#endCapture(seg, 'dropped', 'mic-off');
+    this.#live = null;
+    this.#micFault = code;
+    const text = micFaultText(code);
+    this.#log.warn('mic fault', { code });
+    this.#notice('warn', text);
+    await this.#reportMic();
+    await this.relayNotice(text, 'mic-fault');
+  }
+
+  /** request.voice.report{mic}: the mic as it is now (status.voice.mic; the GUI pill and Voice settings). */
+  async #reportMic(): Promise<void> {
+    const ri = this.#o.audio.routeInfo();
+    const aec = ri.aecKind ?? null;
+    const fault = this.#micFault === null ? null : { code: this.#micFault, text: micFaultText(this.#micFault) };
+    const i = this.#o.audio.inputs?.() ?? null;
+    const on = this.#o.audio.micOn;
+    const dev = (d: { name: string; transport: string | null; sampleRate: number | null }) => ({ name: d.name, transport: d.transport, sampleRate: d.sampleRate });
+    const inputs = i ? { inputs: i.inputs.map((d) => ({ id: d.id, ...dev(d) })), selected: i.selected, missing: i.missing } : {};
+    const level = on && this.#micLevelSent.level >= 0 && this.#o.link.micMeterOpen?.() === true ? { level: Math.round(this.#level * 100) / 100 } : {};
+    try {
+      await this.#o.link.append('request.voice.report', { mic: { device: i?.current ? dev(i.current) : null, aec, fault, on, ...inputs, ...level } });
+    } catch (err) {
+      this.#log.warn('mic report not relayed', { reason: toRefusal(err).reason });
+    }
+  }
+
+  /**
+   * Speaker continuity: the speaker a SHORT clip inherits, or null. The rule is contracts VOICE_CONTINUITY_* (the kernel
+   * re-checks it); here also: no mic off or attachment change since, no playback (agent speech) between, and the clip
+   * does not match ANOTHER enrolled print over the threshold. A clip's own score is not used otherwise: measured
+   * 2026-10-23, CAM++ scores of sub-1.5 s clips do not separate speakers, so a floor would only reject the human.
+   */
+  #continues(seg: VadSegment, who: SpeakerVerdict, a: VoiceAttachment, epoch: number): Stretch | null {
+    const s = this.#stretch;
+    if (!s || who.name !== undefined || who.speechMs === undefined || who.speechMs >= MIN_VERIFY_SPEECH_MS) return null;
+    if (s.micEpoch !== epoch || s.attachment !== a.voiceSessionId) return null;
+    const dur = seg.t1 - seg.t0;
+    if (dur > VOICE_CONTINUITY_CLIP_MS) return null; // Aegis M-1
+    if (seg.t0 < s.lastT1 - 50 || seg.t0 - s.lastT1 > VOICE_CONTINUITY_GAP_MS || seg.t1 - s.anchorT1 > VOICE_CONTINUITY_STRETCH_MS) return null;
+    // Aegis H-1: a bounded inheritance per anchor
+    if (s.inherited.n + 1 > VOICE_CONTINUITY_MAX_TURNS || s.inherited.ms + dur > VOICE_CONTINUITY_MAX_MS) return null;
+    if (this.#playing || this.#windows.some((w) => w.t1 > s.lastT1 && w.t0 < seg.t0)) return null;
+    if (who.bestName !== undefined && who.bestName !== s.name && who.score >= VERIFY_THRESHOLD) return null;
+    return s;
   }
 
   /**
@@ -1095,12 +1239,20 @@ export class VoiceClient {
     const trial = (this.#o.sendWordTrial?.() ?? null) !== null;
     const adjacent = !trial && who.name === undefined && this.#draftSpeaker !== null && seg.t1 - seg.t0 < SEND_WORD_SHORT_MS && isSendWord(text, word);
     if (adjacent) text = word!.text;
-    const enrolled = who.name !== undefined || adjacent;
+    // 2026-10-23 speaker continuity: a short clip (not the send word, which keeps adjacency) inherits the verified stretch
+    // Aegis L-1: the send word never rides continuity (adjacency is its only basis; otherwise it is unverified)
+    const stretch = !trial && !adjacent && !isSendWord(text, word) ? this.#continues(seg, who, a, epoch) : null;
+    const enrolled = who.name !== undefined || adjacent || stretch !== null;
     const takeText = trial && !enrolled ? trialTakeText(text) : null;
     // Dictate (G-VOX-06 exception, spec §14.7): an ambient turn under an ambient ceiling with send ceiling 'key' may fill
     // the draft unverified (a human's Enter sends it), so its words go to the kernel, which decides (draftOnly)
-    const draftable = !enrolled && !trial && mode === 'ambient' && a.send === 'key' && a.mode !== 'ptt';
-    const speakerId = adjacent ? this.#draftSpeaker! : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
+    // 2026-10-23 (founder ruling: short speech is never thrown away): under every send ceiling; the kernel decides
+    // (an attachment with no reported send ceiling is an older kernel that refuses it: the words stay withheld)
+    // Aegis 2026-10-23 (Talk, narrow): a push-to-talk clip too short to verify fills the draft unverified too (the kernel
+    // clamps its send); a long one that does not match keeps the gate and stays withheld
+    const shortPtt = mode === 'ptt' && who.speechMs !== undefined && who.speechMs < MIN_VERIFY_SPEECH_MS;
+    const draftable = !enrolled && !trial && a.send !== undefined && ((mode === 'ambient' && a.mode !== 'ptt') || shortPtt);
+    const speakerId = adjacent ? this.#draftSpeaker! : stretch ? stretch.speakerId : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
     const ms = Math.max(this.#now(), this.#lastTurnMs);
     this.#lastTurnMs = ms;
     const turnId = turnStamp('u', ms, ++this.#turnN);
@@ -1113,13 +1265,21 @@ export class VoiceClient {
     // calibration (voice drops fix): the speaker score as a coarse bucket and the gated speech, numbers only
     const gatedMs = gatedSpeechMsOf(who.speechMs);
     const calib = { speakerScore: speakerScoreBucket(who.score), ...(gatedMs !== undefined ? { gatedSpeechMs: gatedMs } : {}) };
-    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled || draftable ? text : (takeText ?? ''), ...(enrolled || draftable || takeText !== null ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : {}), ...calib };
+    const payload: Record<string, unknown> = { turnId, speakerId, speakerEnrolled: enrolled, forwarded: direct && enrolled, mode: this.#wireMode(mode, a), aec, ...(ri.transport ? { aecTransport: ri.transport } : {}), t0: Math.round(seg.t0), t1: Math.round(seg.t1), text: enrolled || draftable ? text : (takeText ?? ''), ...(enrolled || draftable || takeText !== null ? {} : { textWithheld: true }), ...(adjacent ? { speakerBasis: 'adjacent' } : stretch ? { speakerBasis: 'continuity' } : {}), ...calib };
     let verdict: AppendResult;
+    // whatever the verdict, this turn is now the last one: only an accepted turn of the stretch's speaker keeps it
+    const prevStretch = this.#stretch;
+    this.#stretch = null;
     try {
       verdict = await this.#o.link.append('voice.turn.user', payload);
     } catch (err) {
       this.#refused(err, 'log.append');
       return end('dropped', 'refused', captureRefusalOf(toRefusal(err).reason));
+    }
+    const accepted = verdict?.refused === undefined && verdict?.draftOnly !== true && verdict?.trialTake !== true && verdict?.forwardable !== false;
+    if (accepted && enrolled && !adjacent) {
+      if (stretch && prevStretch === stretch) this.#stretch = { ...stretch, lastT1: seg.t1, inherited: { n: stretch.inherited.n + 1, ms: stretch.inherited.ms + (seg.t1 - seg.t0) } };
+      else if (!stretch && who.name !== undefined) this.#stretch = { speakerId, name: who.name, anchorT1: seg.t1, lastT1: seg.t1, micEpoch: epoch, attachment: a.voiceSessionId, inherited: { n: 0, ms: 0 } };
     }
     this.#flow.info('turn logged', { turnId, speakerEnrolled: enrolled, mode: payload.mode, ...calib });
     // a take of the word being taught: the dialog shows it; nothing is sent and the draft speaker is unchanged
@@ -1305,6 +1465,7 @@ export class VoiceClient {
   #bargeIn(by: 'speech' | 'hotkey'): void {
     if (!this.#playing || this.#bargedIn) return;
     this.#bargedIn = true;
+    this.#stretch = null;
     this.#speechRunMs = 0;
     this.#speechGen++;
     this.#speakQueue = [];

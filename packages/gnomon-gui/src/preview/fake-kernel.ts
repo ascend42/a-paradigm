@@ -186,9 +186,13 @@ export class FakeKernel implements Transport {
           const shown = this.rows.find((r) => r.view === 'full' && r.event.kind === 'offer.shown' && (r.event.payload as { offerId?: string }).offerId === pl.offerId);
           if (shown && shown.view === 'full') this.append('offer.decided', { offerId: pl.offerId, hsid: shown.event.session, decision: String(pl.decision) }, shown.event.session);
         }
+        // founder report 2026-10-23 (input selection): a shot may refuse the input change (__vxPreview.input)
+        if (p.kind === 'request.voice.client' && (p.payload as { op?: unknown } | undefined)?.op === 'select-input' && previewVoice().input) throw previewVoice().input!;
         return { ok: true };
       }
       case 'session.send':
+        // founder report 2026-10-23: a shot may refuse the send the way the kernel refuses an unverified voice draft (__vxPreview.send)
+        if (previewVoice().send) throw previewVoice().send!;
         return { ok: true };
       case 'mod.view': {
         if (this.#paradigm && p.name === PARADIGM_CONTEXT_MOD && p.viewId === PARADIGM_CONTEXT_VIEW) return paradigmContextView(this.#paradigm, p);
@@ -256,6 +260,18 @@ interface FolderPreview {
   local?: Record<string, unknown>;
 }
 const PREVIEW_HOME = '/Users/you';
+/** DEV ONLY: a screenshot script's voice overrides (refuse a send or an input change with this kernel refusal). */
+interface VoicePreview { send?: ReturnType<typeof refusal>; input?: ReturnType<typeof refusal> }
+function previewVoice(): VoicePreview {
+  const o = (globalThis as { __vxPreview?: { send?: [string, string, string, Record<string, unknown>?]; input?: [string, string, string] } }).__vxPreview ?? {};
+  const mk = (a?: [string, string, string, Record<string, unknown>?]) => {
+    if (!a) return undefined;
+    const r = refusal(a[0], a[1], a[2]);
+    Object.assign(r.data.data as Record<string, unknown>, a[3] ?? {});
+    return r;
+  };
+  return { send: mk(o.send), input: mk(o.input) };
+}
 function previewFolders(): FolderPreview {
   return ((globalThis as { __ffPreview?: FolderPreview }).__ffPreview ?? {}) as FolderPreview;
 }

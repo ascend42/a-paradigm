@@ -64,6 +64,11 @@ export interface DraftPart {
   ambient?: true;
   /** Dictate (G-VOX-06 exception): the kernel stamped the turn draftOnly (an unverified voice): only Enter sends it */
   unverified?: true;
+  /**
+   * Aegis H-1 (2026-10-23): a short clip that inherited its speaker from the verified turn before it
+   * (voice.turn.user{speakerBasis:'continuity'}): never checked as the human; any send carrying it is clamped (edits ask first)
+   */
+  inherited?: true;
 }
 
 export interface DictationState {
@@ -154,7 +159,8 @@ export function initialDictation(delayMs: number | null = DEFAULT_DELAY_MS): Dic
  */
 export function pieceDue(s: DictationState, now: number): boolean {
   // Aegis 2026-10-21 (high): an unverified voice's words are never sent as a piece; only Enter sends them
-  if (s.policy !== 'pieces' || !s.parts.length || unverifiedDraft(s) || s.edited || s.hold || s.sending || s.busy || s.attached === null || s.attached !== s.hsid) return false;
+  // Aegis H-1: a piece needs at least one part checked as the human (the kernel refuses an inherited-only piece claim)
+  if (s.policy !== 'pieces' || !s.parts.length || unverifiedDraft(s) || s.parts.every((p) => p.inherited === true) || s.edited || s.hold || s.sending || s.busy || s.attached === null || s.attached !== s.hsid) return false;
   const gap = s.activity === 'idle' && now - s.lastActivityAt >= PIECE_GAP_MS;
   const cap = s.pieceStartedAt !== null && now - s.pieceStartedAt >= PIECE_CAP_MS;
   return gap || cap;
@@ -181,6 +187,12 @@ export const ambientDraft = (s: DictationState): boolean => s.parts.some((p) => 
 
 /** Dictate: the kernel let an unverified voice into the draft only (voice.turn.user{draftOnly: true}). */
 export const draftOnlyTurn = (payload: unknown): boolean => obj(payload)?.draftOnly === true;
+/** Aegis H-1: the turn inherited its speaker (speakerBasis 'continuity'): not checked as the human. */
+export const inheritedTurn = (payload: unknown): boolean => obj(payload)?.speakerBasis === 'continuity' && obj(payload)?.draftOnly !== true;
+/** The draft holds words not checked as the human (inherited): a send is clamped, and a piece needs a checked part. */
+export const inheritedDraft = (s: DictationState): boolean => s.parts.some((p) => p.inherited === true);
+/** The draft's not-checked note (Aegis H-1, design system transcript-row voice-heard state not-checked). */
+export const INHERITED_DRAFT_NOTE = 'draft · not checked as you, so edits ask first';
 /** The draft holds an unverified voice's words (only Enter sends it). */
 export const unverifiedDraft = (s: DictationState): boolean => s.parts.some((p) => p.unverified === true);
 
@@ -313,7 +325,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
         if (m === 'near') return { ...n0, nearMiss: s.sendWord.text };
       }
       if ((hasDraft(s) || s.parts.length) && s.hsid !== e.hsid) return n0; // a draft for another session: never mixed
-      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }), ...(draftOnlyTurn(e.payload) ? { unverified: true as const } : {}) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now };
+      const n = { ...n0, hsid: e.hsid, parts: [...s.parts, { seq: e.seq, text: t, ...(tt.send !== t ? { send: tt.send } : {}), ...(pttTurn(e.payload) ? {} : { ambient: true as const }), ...(draftOnlyTurn(e.payload) ? { unverified: true as const } : {}), ...(inheritedTurn(e.payload) ? { inherited: true as const } : {}) }], text: append(s.text, t), lastActivityAt: e.now, visibleSince: null, grace: null, nearMiss: null, pieceStartedAt: s.parts.length && s.pieceStartedAt !== null ? s.pieceStartedAt : e.now };
       return settle(n, e.now, true);
     }
     case 'activity': {
@@ -484,6 +496,22 @@ export function unverifiedQuote(s: DictationState): { short: string; full: strin
   return { short: chars.length > UNVERIFIED_QUOTE_MAX ? `${chars.slice(0, UNVERIFIED_QUOTE_MAX - 1).join('').trimEnd()}…` : full, full };
 }
 
+const quoteOf = (full: string): string => {
+  const chars = [...full];
+  return chars.length > UNVERIFIED_QUOTE_MAX ? `${chars.slice(0, UNVERIFIED_QUOTE_MAX - 1).join('').trimEnd()}…` : full;
+};
+
+/**
+ * Aegis H-1, Mika 2026-10-23: in a MIXED unedited draft, the words that inherited their speaker (not checked as you):
+ * `short` for the note (cut like the unverified quote), `full` for its title. null when every part inherited (the plain
+ * note says it all), none did, or the draft was edited.
+ */
+export function inheritedQuote(s: DictationState): { short: string; full: string } | null {
+  if (s.edited || !inheritedDraft(s) || s.parts.every((p) => p.inherited === true)) return null;
+  const full = s.parts.filter((p) => p.inherited === true).map((p) => p.text).join(' ');
+  return { short: quoteOf(full), full };
+}
+
 /** The pill's dictation note: "draft waiting" when a draft waits on another focused session, "held", or null. */
 export function dictationNote(s: DictationState): string | null {
   if (!hasDraft(s) || !s.parts.length) return null;
@@ -496,6 +524,17 @@ export function dictationNote(s: DictationState): string | null {
     // the quiet marker (every policy). Mika: a MIXED draft names which words are unverified (quoted, truncated; full in title)
     const q = unverifiedQuote(s);
     return q ? `draft · unverified voice: “${q.short}” · read it, then Enter sends` : UNVERIFIED_DRAFT_NOTE;
+  }
+  if (inheritedDraft(s)) {
+    // Aegis H-1: quiet, text only; a MIXED draft quotes the words that were not checked (truncated like the unverified quote).
+    // Mika 2026-10-23: the next move ends the line, as in every draft note. "so edits ask first" only where it is news
+    // (Send word and Pieces already clamp every voice send; the rung says so), and tied to its cause, so "edits" never
+    // reads as the human's own edits to the draft. Pieces: a piece waits until one part is checked, so say Enter.
+    const q = inheritedQuote(s);
+    const base = `draft · ${q ? `“${q.short}” ` : ''}not checked as you`;
+    if (s.policy === 'word' && s.sendWord) return `${base} · say '${s.sendWord.text}' or press Enter`;
+    if (s.policy === 'pieces') return s.edited || s.hold || s.parts.every((p) => p.inherited === true) ? `${base} · Enter sends it` : s.busy ? `${base} · piece waiting` : `${base} · sending in pieces`;
+    return `${base}, so edits ask first`;
   }
   if (s.policy === 'word' && s.sendWord) return `draft · say '${s.sendWord.text}' or press Enter`;
   if (s.policy === 'pieces') return s.edited || s.hold ? 'piece held · Enter sends' : s.busy ? 'piece waiting · Claude is answering' : 'sending in pieces · edits ask first';

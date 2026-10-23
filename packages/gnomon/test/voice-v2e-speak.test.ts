@@ -4,9 +4,13 @@
  * full; never turn.* or a secret row). Plus the client's relayed reports (request.voice.report → status.voice).
  */
 import { describe, expect, it } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { inputChoicePath, readInputChoice, writeInputChoice } from '../src/kernel/voice/input-choice-store.js';
 import { KernelSpeakable, SpeakableProjector, speakableSummary, isKernelSpeakable, ASK_WAITING } from '../src/kernel/voice/speakable.js';
 import { mayBeVisible, projectForReader } from '../src/kernel/log/redaction.js';
-import { VoiceReports, VOICE_REPORT_TTL_MS } from '../src/kernel/voice/voice-requests.js';
+import { voiceStatusFor, VoiceReports, VOICE_MIC_METER_TTL_MS, VOICE_REPORT_TTL_MS } from '../src/kernel/voice/voice-requests.js';
 import { checkStatusNumbers } from '../src/kernel/socket/status-numbers.js';
 
 const HSID = 'hs:01JAAAAAAAAAAAAAAAAAAAAAAA';
@@ -77,11 +81,11 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
   it('validates and relays enrolment progress and notices; stale past the TTL', () => {
     let t = 1_000_000;
     const r = new VoiceReports(() => t);
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
     r.report({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5 } });
     r.report({ notice: { text: 'Microphone access is off.‮' } });
     const at = new Date(t).toISOString();
-    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null, playback: null, capture: null, prints: null, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
+    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
     for (const bad of [null, {}, { x: 1 }, { enrolment: { name: 'Bad Name', phase: 'ready' } }, { enrolment: { name: 'a', phase: 'nope' } }, { enrolment: { name: 'a', phase: 'ready', phrase: -1 } }, { enrolment: { name: 'a', phase: 'ready', extra: 1 } }, { notice: { text: '' } }, { notice: { text: 'x', y: 1 } }]) {
       expect(() => r.report(bad), JSON.stringify(bad)).toThrow(TypeError);
     }
@@ -94,7 +98,66 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     r.report({ notice: { text: 'x'.repeat(1000) } });
     expect(r.status().notice!.text).toHaveLength(280);
     t += VOICE_REPORT_TTL_MS + 1;
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
+  });
+
+  it('2026-10-23: the mic report relays the input in use and a mic fault as status.voice.mic (a state, per connection)', () => {
+    const t = 1_000_000;
+    const r = new VoiceReports(() => t);
+    const at = new Date(t).toISOString();
+    r.report({ mic: { device: { name: 'Matthew’s AirPods Pro', transport: 'bluetooth', sampleRate: 24000 }, aec: 'headphones', fault: null } }, 'conn:V');
+    expect(r.status().mic).toEqual({ device: { name: 'Matthew’s AirPods Pro', transport: 'bluetooth', sampleRate: 24000 }, aec: 'headphones', fault: null, at });
+    r.report({ mic: { device: null, fault: { code: 'restart-loop', text: 'The mic kept restarting, so Gnomon turned it off.\u202e' } } }, 'conn:V');
+    expect(r.status().mic).toEqual({ device: null, aec: null, fault: { code: 'restart-loop', text: 'The mic kept restarting, so Gnomon turned it off.' }, at });
+    for (const bad of [{ mic: null }, { mic: { device: null, fault: null, x: 1 } }, { mic: { device: { name: '' }, fault: null } }, { mic: { device: { name: 'a', sampleRate: 12.5 }, fault: null } }, { mic: { device: null, aec: 'maybe', fault: null } }, { mic: { device: null, fault: { code: 'Bad Code', text: 'x' } } }, { mic: { device: null, fault: { code: 'x', text: ' ' } } }]) {
+      expect(() => r.report(bad, 'conn:V'), JSON.stringify(bad)).toThrow(TypeError);
+    }
+    // the input-selection fields (founder request 2026-10-23)
+    r.report({ mic: { device: { name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, aec: 'vpio', fault: null, on: true, inputs: [{ id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }], selected: 'usb-mic', missing: true, level: 0.426 } }, 'conn:V');
+    expect(r.status().mic).toMatchObject({ on: true, selected: 'usb-mic', missing: true, level: 0.43, inputs: [{ id: 'BuiltInMicrophoneDevice' }] });
+    for (const bad of [{ inputs: 'x' }, { inputs: Array.from({ length: 17 }, (_, i) => ({ id: `d${i}`, name: 'n' })) }, { inputs: [{ name: 'no id' }] }, { selected: 5 }, { level: 2 }, { on: 'yes' }]) {
+      expect(() => r.report({ mic: { device: null, fault: null, ...bad } }, 'conn:V'), JSON.stringify(bad)).toThrow(TypeError);
+    }
+    // Aegis L-2: the level and the device list reach a human on the gui credential only
+    const st = { mic: r.status().mic } as Record<string, unknown>;
+    expect(voiceStatusFor(st, 'gui', 'human').mic).toMatchObject({ level: 0.43, inputs: [{ id: 'BuiltInMicrophoneDevice' }] });
+    for (const [cred, cls] of [['device', 'human'], ['gui', 'voice'], ['read-token', 'human'], [undefined, undefined]] as const) {
+      const m = voiceStatusFor(st, cred, cls).mic as Record<string, unknown>;
+      expect(m, `${cred} ${cls}`).not.toHaveProperty('level');
+      expect(m).not.toHaveProperty('inputs');
+      expect(m).toMatchObject({ on: true, missing: true });
+    }
+    r.connectionClosed('conn:other');
+    expect(r.status().mic).not.toBeNull();
+    r.connectionClosed('conn:V');
+    expect(r.status().mic).toBeNull();
+  });
+
+  it('founder request 2026-10-23: the input choice is held, validated and persisted (0600), a missing file is the default', () => {
+    const r = new VoiceReports(() => 1);
+    expect(r.status().inputChoice).toEqual({ id: null, name: null });
+    expect(r.inputChoice({ id: 'usb-mic', name: 'Shure MV7' })).toEqual({ inputChoice: { id: 'usb-mic', name: 'Shure MV7' } });
+    expect(r.status().inputChoice).toEqual({ id: 'usb-mic', name: 'Shure MV7' });
+    expect(r.inputChoice({ id: null, name: 'ignored' }).inputChoice).toEqual({ id: null, name: null });
+    for (const bad of [null, {}, { id: 5 }, { id: '' }, { id: 'a\nb' }, { id: 'x', other: 1 }, { id: 'x', name: '' }]) expect(() => r.inputChoice(bad), JSON.stringify(bad)).toThrow(TypeError);
+    // Aegis L-2: the meter-open signal lapses unless renewed
+    let t = 1_000;
+    const m = new VoiceReports(() => t);
+    expect(m.status().micMeterOpen).toBe(false);
+    expect(m.micMeter(true)).toEqual({ micMeterOpen: true });
+    expect(m.status().micMeterOpen).toBe(true);
+    t += VOICE_MIC_METER_TTL_MS;
+    expect(m.status().micMeterOpen).toBe(false);
+    m.micMeter(true);
+    m.micMeter(false);
+    expect(m.status().micMeterOpen).toBe(false);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'input-choice-'));
+    expect(readInputChoice(home)).toBeNull();
+    writeInputChoice(home, { id: 'usb-mic', name: 'Shure MV7' });
+    expect(readInputChoice(home)).toEqual({ id: 'usb-mic', name: 'Shure MV7' });
+    expect(fs.statSync(inputChoicePath(home)).mode & 0o777).toBe(0o600);
+    fs.writeFileSync(inputChoicePath(home), '{"format":"other","id":"x"}');
+    expect(readInputChoice(home)).toBeNull();
   });
 
   it('T-2026-10-19-026: playback edges relay as status.voice.playback; stop-speaking bumps a declared counter', () => {

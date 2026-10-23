@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { HOTKEY_UNVERIFIED_NOTE, UNVERIFIED_DRAFT_NOTE, UNVERIFIED_QUOTE_MAX, unverifiedQuote, UNVERIFIED_WAIT_MS, pieceDue, releaseTurnRows, unverifiedDraft, unverifiedTextsOf, sendClaim, wordReady } from '../src/core/dictation.js';
+import { HOTKEY_UNVERIFIED_NOTE, INHERITED_DRAFT_NOTE, inheritedDraft, inheritedQuote, UNVERIFIED_DRAFT_NOTE, UNVERIFIED_QUOTE_MAX, unverifiedQuote, UNVERIFIED_WAIT_MS, pieceDue, releaseTurnRows, unverifiedDraft, unverifiedTextsOf, sendClaim, wordReady } from '../src/core/dictation.js';
 import { clampedFrom, sentLabel } from '../src/core/voice-presets.js';
 import { refusalPhrase, dropLabelOf } from '../src/core/capture.js';
 import { dropFact } from '../src/core/voice-ladder.js';
@@ -531,5 +531,43 @@ describe('Mika 2026-10-21: a mixed draft names its unverified words', () => {
     expect(q.short.endsWith('…')).toBe(true);
     expect([...q.short].length).toBeLessThanOrEqual(UNVERIFIED_QUOTE_MAX);
     expect(dictationNote(s)).toBe(`draft · unverified voice: “${q.short}” · read it, then Enter sends`);
+  });
+});
+
+describe('Aegis H-1 (2026-10-23): words that inherited their speaker are marked "not checked as you"', () => {
+  const inh = { mode: 'conversation', speakerBasis: 'continuity' };
+  const ver = { mode: 'conversation' };
+  it('the draft note, the transcript row and the pieces rule', () => {
+    let s = run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 }, turn(11, 'please fix the flaky test', 0, ver), turn(12, 'and the docs', 100, inh));
+    expect(s.parts[1]).toMatchObject({ inherited: true });
+    expect(s.parts[0]).not.toHaveProperty('inherited');
+    expect(inheritedDraft(s)).toBe(true);
+    expect(dictationNote(s)).toBe('draft · “and the docs” not checked as you, so edits ask first');
+    expect(inheritedQuote(s)).toEqual({ short: 'and the docs', full: 'and the docs' });
+    s = run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 }, turn(11, 'yes', 0, inh));
+    expect(dictationNote(s)).toBe(INHERITED_DRAFT_NOTE);
+    const w = run(ready(5000), { type: 'setPolicy', policy: 'word', sendWord: { text: 'over and out', variants: [] }, now: 0 }, turn(11, 'ship it', 0, ver), turn(12, 'now', 100, inh));
+    expect(dictationNote(w)).toBe("draft · “now” not checked as you · say 'over and out' or press Enter"); // the rung already says edits ask first
+    // a piece needs a part checked as the human
+    const p = run(ready(5000), { type: 'setPolicy', policy: 'pieces', sendWord: null, now: 0 }, turn(11, 'yes', 0, inh));
+    expect(pieceDue(p, 60_000)).toBe(false);
+    expect(dictationNote(p)).toBe('draft · not checked as you · Enter sends it'); // Mika: the piece waits, so say what sends it
+    const p2 = run(ready(5000), { type: 'setPolicy', policy: 'pieces', sendWord: null, now: 0 }, turn(11, 'please fix it', 0, ver), turn(12, 'yes', 100, inh));
+    expect(pieceDue(p2, 60_000)).toBe(true);
+    expect(dictationNote(p2)).toBe('draft · “yes” not checked as you · sending in pieces');
+    const { items } = chatItems([{ seq: 1, kind: 'voice.turn.user', view: 'full', session: A, payload: fwd('and the docs', inh) }]);
+    expect(items[0]!.text).toContain('in composer · not checked as you');
+    expect(items[0]!.text).toMatch(/^Matt: “and the docs”/);
+  });
+
+  it('Talk (narrow): a short unverified push-to-talk turn stops the countdown; only Enter sends it', () => {
+    const unvPtt = { mode: 'ptt', speakerId: 'spk:unknown-1', speakerEnrolled: false, draftOnly: true, speakerVerified: false };
+    let s = run(ready(3000), turn(11, 'yes', 0, unvPtt));
+    expect(s.parts[0]).toMatchObject({ unverified: true });
+    expect(armed(s)).toBe(false);
+    s = run(s, { type: 'tick', now: 60_000 });
+    expect(s.sending).toBe(false);
+    expect(dictationNote(s)).toBe(UNVERIFIED_DRAFT_NOTE);
+    expect(run(s, { type: 'sendNow', now: 60_001 }).sending).toBe(true);
   });
 });

@@ -132,6 +132,16 @@ export class FakeLink implements KernelLink {
   micToggleSeq(): number | null {
     return this.micSeq;
   }
+  /** founder request 2026-10-23: status.voice.inputChoice (null ⇒ not held) */
+  inputChoiceVal: { id: string | null } | null = null;
+  inputChoice(): { id: string | null } | null {
+    return this.inputChoiceVal;
+  }
+  /** Aegis L-2: status.voice.micMeterOpen */
+  meterOpen = false;
+  micMeterOpen(): boolean {
+    return this.meterOpen;
+  }
   micKeyBare(): boolean | null {
     return this.micBare;
   }
@@ -146,6 +156,8 @@ export class FakeLink implements KernelLink {
   readonly capture: Array<{ state: string; segId: string; reason?: string; refusal?: string; cause?: string; level?: number }> = [];
   /** request.voice.report{prints} reports (stale voice prints, 2026-10-20) */
   readonly prints: Array<{ stale: string[] }> = [];
+  /** request.voice.report{mic} reports (2026-10-23: the mic as it is now, with its fault) */
+  readonly mic: Array<{ device: unknown; aec: unknown; fault: { code: string; text: string } | null }> = [];
   /** while set, every capture report waits on it (a slow kernel) */
   captureGate: Promise<void> | undefined;
   /** the kernel's verdict on the next voice.turn.user rows (voice drops fix): refused at receipt, hash-only */
@@ -159,6 +171,10 @@ export class FakeLink implements KernelLink {
     if (kind === 'request.voice.report' && payload.capture) {
       if (this.captureGate) await this.captureGate;
       this.capture.push(payload.capture as { state: string; segId: string; reason?: string; level?: number });
+      return { seq: 0 };
+    }
+    if (kind === 'request.voice.report' && payload.mic) {
+      this.mic.push(payload.mic as { device: unknown; aec: unknown; fault: { code: string; text: string } | null });
       return { seq: 0 };
     }
     if (kind === 'request.voice.report' && payload.prints) {

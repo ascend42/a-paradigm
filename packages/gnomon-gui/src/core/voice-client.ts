@@ -64,6 +64,31 @@ export interface ClientView {
   connected: boolean | null;
   /** the crash is the kernel's `backoff` (a restart is scheduled), not a terminal `failed` */
   backoff: boolean;
+  /**
+   * status.voice.mic.fault (field bug 2026-10-23): why the mic turned itself off, in the voice app's plain words, or
+   * null when the mic works (or the kernel does not say). The pill says it instead of failing silently.
+   */
+  micFault: { code: string; text: string } | null;
+  /** status.voice.mic.device: the input in use, when the voice app reports it */
+  micDevice: { name: string; transport: string | null; sampleRate: number | null } | null;
+  /** founder request 2026-10-23 (input selection): the mic as the voice app reports it, and the human's choice */
+  mic: MicView;
+}
+
+/** The Voice settings › input view: what is connected, chosen, in use, and how loud (status.voice.mic + inputChoice). */
+export interface MicView {
+  /** the voice app reported its inputs at all (an older voice app does not: no picker) */
+  known: boolean;
+  on: boolean | null;
+  aec: 'vpio' | 'headphones' | 'none' | null;
+  inputs: Array<{ id: string; name: string; transport: string | null; sampleRate: number | null }>;
+  /** the kernel-held choice: a device id, or null = follow the system default */
+  chosen: string | null;
+  /** the chosen device's name as saved (shown while it is disconnected) */
+  chosenName: string | null;
+  /** the chosen device is not connected (the mic follows the system default meanwhile) */
+  missing: boolean;
+  level: number | null;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -124,7 +149,75 @@ export function clientOf(status: unknown): ClientView {
     stale: Array.isArray(obj(v?.prints)?.stale) ? [...new Set((obj(v?.prints)!.stale as unknown[]).map(nameOf).filter((x): x is string => x !== null))] : [],
     connected,
     backoff: phase === 'crashed' && raw === 'backoff',
+    ...micOf(obj(v?.mic), obj(v?.inputChoice)),
   };
+}
+
+function micOf(m: Record<string, unknown> | null, choice: Record<string, unknown> | null): { micFault: ClientView['micFault']; micDevice: ClientView['micDevice']; mic: MicView } {
+  const f = obj(m?.fault);
+  const d = obj(m?.device);
+  const code = str(f?.code);
+  const text = str(f?.text);
+  const name = str(d?.name);
+  const inputs = Array.isArray(m?.inputs)
+    ? (m!.inputs as unknown[]).flatMap((x) => {
+        const i = obj(x);
+        const id = str(i?.id);
+        const n = str(i?.name);
+        return id && n ? [{ id, name: n, transport: str(i?.transport), sampleRate: num(i?.sampleRate) }] : [];
+      })
+    : [];
+  const aec = m?.aec === 'vpio' || m?.aec === 'headphones' || m?.aec === 'none' ? m.aec : null;
+  const level = num(m?.level);
+  return {
+    micFault: code && text ? { code, text } : null,
+    micDevice: name ? { name, transport: str(d?.transport), sampleRate: num(d?.sampleRate) } : null,
+    mic: {
+      known: Array.isArray(m?.inputs),
+      on: typeof m?.on === 'boolean' ? m.on : null,
+      aec,
+      inputs,
+      chosen: str(choice?.id),
+      chosenName: str(choice?.name),
+      missing: m?.missing === true,
+      level: level !== null && level <= 1 ? level : null,
+    },
+  };
+}
+
+const KHZ = (hz: number): string => `${Math.round(hz / 100) / 10} kHz`;
+/** "MacBook Pro Microphone · built-in · 48 kHz" (the parts the voice app reported). */
+export function deviceLine(d: { name: string; transport: string | null; sampleRate: number | null }): string {
+  return [d.name, d.transport, d.sampleRate ? KHZ(d.sampleRate) : null].filter((x): x is string => !!x).join(' · ');
+}
+/** What the echo canceller is doing, in words: on (voice processing), not needed (headphones), or off. */
+export function aecWords(aec: MicView['aec']): string | null {
+  return aec === 'vpio' ? 'echo cancel on' : aec === 'headphones' ? 'headphones, no echo' : aec === 'none' ? 'echo cancel off' : null;
+}
+/** The pill's title line naming the mic (founder request 2026-10-23: the current mic is always visible), or ''. */
+export function micTitleLine(c: ClientView): string {
+  if (c.micFault) return '';
+  const d = c.micDevice;
+  if (c.mic.missing) return `\nMic: ${c.mic.chosenName ?? 'the chosen mic'} is not connected${d ? `; using ${deviceLine(d)}` : ''}.`;
+  return d ? `\nMic: ${deviceLine(d)}${aecWords(c.mic.aec) ? ` · ${aecWords(c.mic.aec)}` : ''}` : '';
+}
+
+/**
+ * Mika 2026-10-23: a mic fault's words on the pill, short (the fact is capped at 20ch at 1024 and the header row never
+ * wraps): "mic stopped" plus the cause in a few words for the codes the voice app sends (gnomon-voice micFaultText).
+ * The full sentence goes in the title, the accessible name and the ladder's Restart row.
+ */
+export function micFaultFact(f: { code: string }): string {
+  switch (f.code) {
+    case 'restart-loop':
+      return 'mic stopped: input kept changing';
+    case 'no-input':
+      return 'mic stopped: no input device';
+    case 'engine-start':
+      return 'mic stopped: macOS refused it';
+    default:
+      return 'mic stopped';
+  }
 }
 
 /** The re-enrolment nudge's words (a print from an older voice check is ignored until the speaker enrols again). */
@@ -179,7 +272,7 @@ export const oneLine = (s: string, max: number): string => {
  * "Voice unavailable · <why>" · running with no enrolled voice: "Teach Gnomon your voice first" (unenrolled speech is
  * never forwarded). ATTACHED (T-2026-10-20-002), Aegis M (V2d) never under-report a live mic: `label` stays null (the
  * live class, meter and "Listening" / "Hold … to talk" stand) and the real condition is appended as `tail`, first
- * match wins: crashed or backoff "· voice crashed: <lastError>" [Restart] · the setup phases · unavailable · not
+ * match wins: crashed or backoff "· voice crashed: <lastError>" [Restart] · the setup phases · unavailable · a mic fault "· mic stopped: <why>" [Restart] · not
  * connected "· voice app not connected" [Start voice] · `enrolled` [] "· teach Gnomon your voice first" [Teach]
  * (`enrolled` null is unknown: no nudge). A non-human connection sees the same words and no action.
  */
@@ -264,6 +357,13 @@ function attachedTailOf(c: ClientView, act: (a: PillAction) => PillAction, none:
     case 'idle':
       return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
     case 'running':
+      // field bug 2026-10-23: the mic turned itself off; say why (the app's plain words) and offer the restart that retries it
+      // Mika 2026-10-23: the pill carries a short cause (its 20ch fact at 1024; a 518px pill at 1440 with the sentence),
+      // the voice app's whole sentence is the title, the accessible name and the ladder's Restart row
+      if (c.micFault) return t(micFaultFact(c.micFault), 'voice-noclient voice-crashed voice-micfault', `${oneLine(c.micFault.text, ERROR_TITLE_MAX)} Nothing is heard until the mic is on again. Restart voice to try again.`, act('restart'), 'Restart');
+      // founder request 2026-10-23: the chosen mic is not connected (voice still works, on the system default)
+      // (Mika 2026-10-23: 18 characters, whole inside the pill's 20ch fact at 1024; the title says 'is not connected')
+      if (c.mic.missing) return t('chosen mic missing', 'voice-nudge voice-micmissing', `${oneLine(c.mic.chosenName ?? 'The chosen mic', PILL_ERROR_MAX)} is not connected${c.micDevice ? `, so Gnomon is listening on ${oneLine(deviceLine(c.micDevice), PILL_ERROR_MAX)}` : ''}. It switches back when the mic reconnects. Voice settings › input changes it.`);
       if (c.connected === false) return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
       if (enrolNudgeOf(c) === 'reteach') return t('re-teach Gnomon your voice (the voice check was upgraded)', 'voice-nudge', 'Gnomon upgraded its voice check, so your old voice print is no longer used and what it hears is dropped. Teach it your voice again (about a minute).', act('enrol'), 'Re-teach');
       if (enrolNudgeOf(c) === 'teach') return t('teach Gnomon your voice first', 'voice-nudge', 'No voice is enrolled, so Gnomon drops what it hears. Teach it yours (about a minute).', act('enrol'), 'Teach');

@@ -59,6 +59,31 @@ export interface AudioIOEvents {
   level(db: number): void;
   /** the binary exited or the device went away */
   closed(reason: string): void;
+  /**
+   * The mic stopped by itself (gnomon-voice-io engine{what:'failed', reason}), e.g. 'restart-loop' (the device kept
+   * changing under it), 'engine-start', 'no-input'. The mic is off when this fires. Field bug 2026-10-23.
+   */
+  fault(code: string): void;
+  /** the engine was rebuilt under a device or route change (the input may have changed) */
+  restarted(): void;
+  /** the input devices, the human's choice and the input in use changed (gnomon-voice-io inputs / mic events) */
+  inputs(info: InputsInfo): void;
+}
+
+/** An input device as gnomon-voice-io reports it (id = CoreAudio device UID). */
+export interface InputDeviceInfo {
+  id: string;
+  name: string;
+  transport: string | null;
+  sampleRate: number | null;
+}
+/** Founder request 2026-10-23: what is connected, what was chosen (null: the system default), what is in use. */
+export interface InputsInfo {
+  inputs: InputDeviceInfo[];
+  selected: string | null;
+  current: InputDeviceInfo | null;
+  /** a chosen device is not connected now (the mic follows the system default meanwhile) */
+  missing: boolean;
 }
 
 /**
@@ -80,6 +105,10 @@ export interface AudioIO {
   readonly micOn: boolean;
   /** TD-2026-10-21-514: re-bind hotkeys (gnomon-voice-io hotkeys.set{bindings, allowBare}); absent ⇒ unsupported */
   setHotkeys?(bindings: Record<string, string>, allowBare: boolean): Promise<void>;
+  /** the last known inputs (null until the binary reported them); absent ⇒ unsupported */
+  inputs?(): InputsInfo | null;
+  /** choose the input by device id, or null to follow the system default; absent ⇒ unsupported */
+  selectInput?(id: string | null): Promise<void>;
 }
 
 export interface VadSegment {
@@ -196,6 +225,10 @@ export interface KernelLink {
   /** status.voice.micToggleSeq (the GUI's in-app `) and status.voice.micKeyBare (the Mic key switch) */
   micToggleSeq?(): number | null;
   micKeyBare?(): boolean | null;
+  /** founder request 2026-10-23: status.voice.inputChoice ({id: device id | null = system default}), null when none is held */
+  inputChoice?(): { id: string | null } | null;
+  /** Aegis L-2: status.voice.micMeterOpen (the GUI's level meter is open); absent ⇒ never relay the level */
+  micMeterOpen?(): boolean;
   append(kind: string, payload: Record<string, unknown>): Promise<AppendResult>;
   send(hsid: string, text: string): Promise<unknown>;
   /** session.stop{interrupt: true} — the only stop voice may make */

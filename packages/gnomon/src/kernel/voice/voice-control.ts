@@ -56,12 +56,13 @@
  *
  * Dictate, the G-VOX-06 exception (founder ruling 2026-10-21; spec §14.7): the human's Enter is the authorization. An
  * UNVERIFIED speaker's turn (not enrolled now, or too short to verify) of the attached human's own voice principal,
- * ambient (mode conversation) under a conversation ceiling whose send ceiling is 'key', not intercepted, is NOT refused
+ * ambient (mode conversation) under a conversation ceiling (any send ceiling since 2026-10-23: short speech is never
+ * thrown away; the send word, pieces and send-now stay refused while it is in the draft), not intercepted, is NOT refused
  * voice-speaker at receipt: the other guards run, and an accepted one keeps its text and is stamped forwardable:true,
  * draftOnly:true, speakerVerified:false (both kernel-stamped; a client claim is BAD_REQUEST). It fills the draft only:
  * the voice principal's direct send, a piece claim and a send-now (hotkey) claim over it are refused voice-speaker
  * {cause:'draft-only'}, it is never the send word nor an adjacency anchor; only a human session.send (the Enter)
- * carries it. Talk (ptt), Send word and Pieces keep the speaker gate. A refused unverified turn whose gatedSpeechMs is
+ * carries it. Talk (ptt) keeps the speaker gate. A refused unverified turn whose gatedSpeechMs is
  * under VOICE_MIN_VERIFY_SPEECH_MS carries cause 'too-short' ("too short to check it's you").
  *
  * Attachment (§14.7 "voice is attached to a session only by a human gesture"): a HUMAN on a first-party connection
@@ -83,6 +84,11 @@
  *   - short words by ADJACENCY: a voice.turn.user{speakerBasis:'adjacent'} is accepted only when it is under
  *     SEND_WORD_SHORT_MS, is the held send word, and starts within SEND_WORD_ADJACENT_MS of a forwardable turn of that
  *     speaker or while that speaker's draft turns are pending; else it is refused voice-speaker at receipt (hash only);
+ *   - speaker CONTINUITY (2026-10-23; the rule is contracts VOICE_CONTINUITY_*): a voice.turn.user{speakerBasis:
+ *     'continuity'} too short to verify alone is accepted as its speaker's only when the turn right before it on the
+ *     attachment is an accepted turn of that speaker on the same connection, within VOICE_CONTINUITY_GAP_MS, inside
+ *     VOICE_CONTINUITY_STRETCH_MS of the last turn verified alone, with no agent speech between and not intercepted
+ *     (#continuityOf); else it is an unverified turn (Dictate draft or refused). A short send word also needs adjacency;
  *   - request.voice.send.claim{hsid, by, turnSeq|turnSeqs} (human, gui/device): checks and CONSUMES the cited turns
  *     atomically (a second tab gets voice-stale-utterance) and binds {connId, hsid, by, expiresAt: now + 5 s};
  *     originFor() hands the binding to the next session.send{source:'voice'} of that connection, which gets
@@ -104,7 +110,7 @@
  */
 import { createHmac, randomBytes } from 'node:crypto';
 import { refuse, RefusedError, ulid, type RefusalCode } from '@a-company/gnomon-contracts';
-import { canonicalSendWord, isSendWord, recordTrialTake, startSendWordTrial, trialSaveable, trialTakeNumber, type SendWordTrialState, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, VOICE_MIN_VERIFY_SPEECH_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { canonicalSendWord, isSendWord, recordTrialTake, startSendWordTrial, trialSaveable, trialTakeNumber, type SendWordTrialState, VOICE_LIABILITY_ACK_HASH, VOICE_LIABILITY_ACK_TEXT, SEND_CLAIM_TTL_MS, SEND_WORD_ADJACENT_MS, SEND_WORD_CLAIM_MAX_AGE_MS, SEND_WORD_SHORT_MS, VOICE_CONTINUITY_CLIP_MS, VOICE_CONTINUITY_GAP_MS, VOICE_CONTINUITY_MAX_MS, VOICE_CONTINUITY_MAX_TURNS, VOICE_CONTINUITY_RECEIPT_SLACK_MS, VOICE_CONTINUITY_STRETCH_MS, VOICE_MIN_VERIFY_SPEECH_MS, type SendWord, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import { TABLE_TALK_GUIDANCE } from './table-talk.js';
 
 export const VOICE_ECHO_TAIL_MS_DEFAULT = 750;
@@ -334,6 +340,18 @@ interface UserTurn {
    * ceiling: it fills the draft only. Never a direct send, never a word or piece claim, never an adjacency anchor.
    */
   draftOnly?: boolean;
+  /**
+   * Speaker continuity (2026-10-23, contracts VOICE_CONTINUITY_*): the end (client t1) of the stretch's anchor, the last
+   * turn of this speaker verified on its own. Set on an accepted enrolled turn verified alone (its own t1) or by
+   * continuity (inherited); absent on every other turn, which therefore never continues a stretch.
+   */
+  anchorT1?: number;
+  /** Aegis M-2: the kernel receipt time of that anchor */
+  anchorReceivedAt?: number;
+  /** Aegis H-1: inherited turns and their speech (t1 - t0, ms) since the anchor, this turn included */
+  inherited?: { n: number; ms: number };
+  /** how the speaker was attributed when not verified on this segment (Aegis H-1: an inherited turn is never verified) */
+  basis?: 'adjacent' | 'continuity';
 }
 interface Attachment {
   voiceSessionId: string;
@@ -391,6 +409,8 @@ export class VoiceControl {
   readonly #lastTurnId = new Map<string, string>();
   /** client playback times and the kernel receipt time of each voice.turn.agent row */
   readonly #playback: Array<{ t0: number; t1: number; receivedAt: number }> = [];
+  /** Aegis M-2: kernel receipt times of the recent voice.bargein rows */
+  readonly #bargeins: number[] = [];
   readonly #forwarded = new Set<string>();
   /** V2a: first-party human connections that gave the widening presence (one GUI login each); dropped on close */
   readonly #widened = new Set<string>();
@@ -776,13 +796,20 @@ export class VoiceControl {
         // enrolled name — is treated as an unknown speaker: stored hash-only (no text) and never forwardable
         let enrolledNow = p.speakerEnrolled === true && !p.speakerId.startsWith('spk:unknown-') && this.#o.enrolled().has(p.speakerId);
         // TD-2026-10-21-514 short words by adjacency: the speaker is the draft speaker's, never verified on the segment
+        // 2026-10-23 speaker continuity: a short clip inherits the speaker of the stretch it belongs to (#continuityOf)
+        let stretch: { anchorT1: number; anchorReceivedAt: number; inherited?: { n: number; ms: number } } | undefined;
         if (p.speakerBasis !== undefined) {
-          if (p.speakerBasis !== 'adjacent') throw bad("speakerBasis is 'adjacent'");
-          if (enrolledNow && !this.#adjacentOk(p, receivedAt)) enrolledNow = false;
-        }
-        // Aegis L-1: a SHORT send word must pass the adjacency rule whether or not it says speakerBasis (a short
+          if (p.speakerBasis !== 'adjacent' && p.speakerBasis !== 'continuity') throw bad("speakerBasis is 'adjacent' or 'continuity'");
+          if (p.speakerBasis === 'adjacent' && enrolledNow && !this.#adjacentOk(p, receivedAt)) enrolledNow = false;
+          if (p.speakerBasis === 'continuity' && enrolledNow) {
+            // Aegis L-1: the send word never rides continuity (it is short by nature: adjacency is its only basis)
+            stretch = typeof p.text === 'string' && isSendWord(p.text, this.#word()) ? undefined : this.#continuityOf(p, c.connId, a, receivedAt);
+            if (stretch === undefined) enrolledNow = false;
+          }
+        } else if (enrolledNow && num(p.t1) && p.intercepted === undefined) stretch = { anchorT1: p.t1, anchorReceivedAt: receivedAt }; // verified alone: a stretch anchor
+        // Aegis L-1: a SHORT send word must pass the adjacency rule whatever basis it claims (continuity included; a short
         // segment is never speaker-verified, so a bare enrolled claim on one proves nothing)
-        if (enrolledNow && p.speakerBasis === undefined && num(p.t0) && num(p.t1) && p.t1 - p.t0 < SEND_WORD_SHORT_MS && typeof p.text === 'string' && isSendWord(p.text, this.#word()) && !this.#adjacentOk(p, receivedAt)) enrolledNow = false;
+        if (enrolledNow && p.speakerBasis !== 'adjacent' && num(p.t0) && num(p.t1) && p.t1 - p.t0 < SEND_WORD_SHORT_MS && typeof p.text === 'string' && isSendWord(p.text, this.#word()) && !this.#adjacentOk(p, receivedAt)) enrolledNow = false;
         if (p.intercepted !== undefined && p.intercepted !== 'decision' && p.intercepted !== 'control') throw bad('intercepted is decision | control');
         if (p.intercepted !== undefined && p.forwarded !== false) throw bad('an intercepted turn is never forwarded');
         if (typeof p.text !== 'string') throw bad('text is a string');
@@ -795,7 +822,13 @@ export class VoiceControl {
         // human's own voice principal, an AMBIENT turn (ambient never sends itself, TD-2026-10-20-125) under a
         // conversation ceiling whose send ceiling is 'key' (no send word, no pieces). Not intercepted (a decision or
         // control phrase from an unverified speaker is still refused). Every other guard still runs at receipt.
-        const draftOnly = !trial && !enrolledNow && p.intercepted === undefined && a !== null && a.send === 'key' && a.mode === 'conversation' && p.mode === 'conversation' && voicePrincipalOf(a.owner) === c.principal;
+        // 2026-10-23 (founder ruling: short speech is never thrown away): under EVERY send ceiling. The send word, pieces
+        // and send-now stay refused while an unverified turn is in the draft (#outstandingUnverified), so only Enter sends it.
+        // Aegis 2026-10-23 (Talk, narrow): a push-to-talk clip too short to verify (gated speech under the minimum) fills the
+        // draft unverified too; the kernel clamps its send as voice-unverified whatever the GUI does. A LONG ptt clip that
+        // does not match keeps the speaker gate.
+        const shortPtt = p.mode === 'ptt' && typeof p.gatedSpeechMs === 'number' && p.gatedSpeechMs < VOICE_MIN_VERIFY_SPEECH_MS;
+        const draftOnly = !trial && !enrolledNow && p.intercepted === undefined && a !== null && ((a.mode === 'conversation' && p.mode === 'conversation') || shortPtt) && voicePrincipalOf(a.owner) === c.principal;
         // Aegis M2: a per-turn mode claim, checked at send against the human's attachment ceiling
         if (!(VOICE_MODES_V1 as readonly unknown[]).includes(p.mode)) throw bad("voice.turn.user needs mode: ptt | conversation (the client's claim for this turn)");
         if (p.aec !== undefined && !(VOICE_AEC as readonly unknown[]).includes(p.aec)) throw bad('aec is vpio | headphones');
@@ -824,6 +857,8 @@ export class VoiceControl {
           isWord: trial === null && !draftOnly && isSendWord(p.text, this.#word()),
           ...(trial ? { trialTake: true } : {}),
           ...(draftOnly ? { draftOnly: true } : {}),
+          ...(enrolledNow && stretch ? { anchorT1: stretch.anchorT1, anchorReceivedAt: stretch.anchorReceivedAt, ...(stretch.inherited ? { inherited: stretch.inherited } : {}) } : {}),
+          ...(enrolledNow && (p.speakerBasis === 'adjacent' || p.speakerBasis === 'continuity') ? { basis: p.speakerBasis } : {}),
         };
         // V2a privacy: the guards decidable at receipt run now; a refused turn is stored without its text. V2e: an
         // unenrolled speaker's turn is refused at receipt even when intercepted (a decision or control phrase)
@@ -897,6 +932,8 @@ export class VoiceControl {
       case 'voice.bargein':
         if (typeof p.turnId !== 'string' || !TURN_ID.test(p.turnId)) throw bad(`${kind}{turnId}`);
         if (kind === 'voice.bargein' && (!num(p.atMs) || typeof p.heardText !== 'string' || Buffer.byteLength(p.heardText, 'utf8') > VOICE_TEXT_MAX_BYTES)) throw bad('voice.bargein{turnId, atMs, heardText ≤ 16 KiB}');
+        // Aegis M-2: a barge-in breaks a speaker stretch (kernel receipt clock)
+        if (kind === 'voice.bargein') commit.push(() => void (this.#bargeins.push(receivedAt), this.#bargeins.length > 16 && this.#bargeins.shift()));
         break;
       case 'voice.deck':
         if (typeof p.deckId !== 'string' || !Array.isArray(p.cardIds) || !p.cardIds.every((x) => typeof x === 'string') || typeof p.textHash !== 'string') throw bad('voice.deck{deckId, cardIds[], textHash}');
@@ -926,10 +963,48 @@ export class VoiceControl {
     if (typeof p.text !== 'string' || !isSendWord(p.text, this.#word())) return false;
     const start = receivedAt - (p.t1 - p.t0);
     for (const t of this.#userTurns.values()) {
-      if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.trialTake || t.draftOnly || t.attachment !== a.voiceSessionId || t.isWord) continue;
+      // Aegis H-1: an inherited (continuity) turn carries no speaker evidence: never an adjacency anchor
+      if (t.speakerId !== p.speakerId || t.refused || t.intercepted || t.trialTake || t.draftOnly || t.basis === 'continuity' || t.attachment !== a.voiceSessionId || t.isWord) continue;
       if (this.#pendingDictation(t) || Math.abs(start - t.receivedAt) <= SEND_WORD_ADJACENT_MS) return true;
     }
     return false;
+  }
+
+  /**
+   * Speaker continuity (contracts VOICE_CONTINUITY_*; the rule is written there): the stretch anchor's t1 this short clip
+   * inherits, or undefined when it does not belong to a verified stretch (it is then an unverified turn). Fail closed:
+   * a missing or pruned previous turn breaks the stretch.
+   */
+  #continuityOf(p: Record<string, unknown>, connId: string, a: Attachment | null, receivedAt: number): { anchorT1: number; anchorReceivedAt: number; inherited: { n: number; ms: number } } | undefined {
+    if (!a || !num(p.t0) || !num(p.t1) || p.t1 < p.t0 || p.intercepted !== undefined) return undefined;
+    const dur = p.t1 - p.t0;
+    // only a SHORT clip may inherit (Aegis M-1: by duration too); the claim must carry its gated speech
+    if (typeof p.gatedSpeechMs !== 'number' || p.gatedSpeechMs >= VOICE_MIN_VERIFY_SPEECH_MS || dur > VOICE_CONTINUITY_CLIP_MS) return undefined;
+    let prev: UserTurn | undefined;
+    for (const t of this.#userTurns.values()) if (t.attachment === a.voiceSessionId && !t.trialTake && (!prev || t.receivedAt >= prev.receivedAt)) prev = t;
+    if (!prev || prev.connId !== connId || prev.speakerId !== p.speakerId || !prev.speakerEnrolled || prev.refused || prev.draftOnly || prev.intercepted || prev.anchorT1 === undefined || prev.anchorReceivedAt === undefined) return undefined;
+    // the gap, on the client clock AND (Aegis M-2) the kernel's receipt clock
+    if (p.t0 < prev.t1 - 50 || p.t0 - prev.t1 > VOICE_CONTINUITY_GAP_MS) return undefined;
+    if (receivedAt - prev.receivedAt > VOICE_CONTINUITY_GAP_MS + dur + VOICE_CONTINUITY_RECEIPT_SLACK_MS) return undefined;
+    // the stretch, on both clocks
+    if (p.t1 - prev.anchorT1 > VOICE_CONTINUITY_STRETCH_MS || receivedAt - prev.anchorReceivedAt > VOICE_CONTINUITY_STRETCH_MS + VOICE_CONTINUITY_RECEIPT_SLACK_MS) return undefined;
+    // Aegis H-1: a bounded inheritance per anchor
+    const inherited = { n: (prev.inherited?.n ?? 0) + 1, ms: (prev.inherited?.ms ?? 0) + dur };
+    if (inherited.n > VOICE_CONTINUITY_MAX_TURNS || inherited.ms > VOICE_CONTINUITY_MAX_MS) return undefined;
+    // agent speech (client clock, the same voice app wrote both), a barge-in or model streaming (kernel clock) between
+    const t0 = p.t0;
+    if (this.#playback.some((w) => w.t1 > prev!.t1 && w.t0 < t0)) return undefined;
+    if (this.#bargeins.some((at) => at > prev!.receivedAt)) return undefined;
+    const b = this.#o.sessions.busy?.(a.hsid);
+    if (b && (b.streaming || (b.endedAt !== null && b.endedAt > prev.receivedAt))) return undefined;
+    return { anchorT1: prev.anchorT1, anchorReceivedAt: prev.anchorReceivedAt, inherited };
+  }
+
+  /** Aegis H-1: the human's accepted inherited (continuity) turns on hsid not yet sent: a send that carries one is clamped. */
+  #outstandingInherited(human: string, hsid: string): UserTurn[] {
+    const vp = voicePrincipalOf(human);
+    if (!vp) return [];
+    return [...this.#userTurns.values()].filter((t) => t.principal === vp && t.hsid === hsid && t.basis === 'continuity' && !t.refused && t.seq > 0 && !this.#forwarded.has(t.turnId));
   }
 
   /** TD-2026-10-21-514: the held send word (null = none). The daemon persists it; this only holds it. */
@@ -1096,6 +1171,8 @@ export class VoiceControl {
       if (ts.some((x) => x === undefined || x.isWord)) throw stale('every cited turn must be a pending draft turn of this attachment');
       // Dictate: an unverified turn fills the draft only; a human's Enter sends it, never a piece
       if (ts.some((x) => x!.draftOnly)) throw voiceRefusal('voice-speaker', 'an unverified turn only fills the draft: Enter sends it (G-VOX-06)', { by, cause: 'draft-only' });
+      // Aegis H-1: a piece must carry speaker evidence: at least one cited turn verified on its own (not inherited)
+      if (!ts.some((x) => x!.speakerEnrolled && x!.basis === undefined)) throw voiceRefusal('voice-speaker', 'a piece needs at least one turn verified as you: Enter sends it', { by, cause: 'inherited-only' });
       turnIds = (ts as UserTurn[]).map((x) => x.turnId);
       for (const id of turnIds) this.#claimed.add(id);
     }
@@ -1123,8 +1200,12 @@ export class VoiceControl {
       // hands them back if the send fails).
       const matched = attr?.turnIds.some((id) => this.#userTurns.get(id)?.draftOnly === true) === true;
       const outstanding = this.#outstandingUnverified(human, hsid);
-      if (matched || (voiceHint && outstanding.length > 0)) {
-        const ids = outstanding.map((t) => t.turnId);
+      // Aegis H-1: an inherited (continuity) turn carries no speaker evidence: a send that includes one (attributed, or a
+      // voice-hinted send while one is pending on this session) is clamped voice-unverified under every ceiling
+      const inherited = attr?.turnIds.some((id) => this.#userTurns.get(id)?.basis === 'continuity') === true;
+      const pendingInherited = this.#outstandingInherited(human, hsid);
+      if (matched || inherited || (voiceHint && (outstanding.length > 0 || pendingInherited.length > 0))) {
+        const ids = [...outstanding, ...pendingInherited].map((t) => t.turnId);
         for (const id of ids) this.#forwarded.add(id);
         if (connId !== undefined) this.#originConsumed.set(connId, ids);
         return { sentBy: 'unverified' };
@@ -1269,6 +1350,8 @@ export class VoiceControl {
     if (turn.trialTake) throw voiceRefusal('voice-grammar', 'a take of the send word being taught never reaches a model', { turnId: turn.turnId, cause: 'trial-take' });
     // Dictate: an unverified turn only fills the draft; only the human's key press sends it (G-VOX-06 exception)
     if (turn.draftOnly) throw voiceRefusal('voice-speaker', 'an unverified turn only fills the draft: a human sends it (G-VOX-06)', { turnId: turn.turnId, cause: 'draft-only' });
+    // Aegis H-1: an inherited (continuity) turn was never verified: it fills the draft only, never a direct send
+    if (turn.basis === 'continuity') throw voiceRefusal('voice-speaker', 'an inherited turn only fills the draft: a human sends it', { turnId: turn.turnId, cause: 'inherited' });
     const g = this.#guards(turn, a);
     if (g) throw g;
     // TD-2026-10-20-125 (founder ruling): ambient speech NEVER sends itself. Only a push-to-talk claim (the human held

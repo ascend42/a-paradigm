@@ -152,6 +152,7 @@ import { createVoicePrepare, resolveVoiceClientEntry } from '../voice/voice-inst
 import { loadedReleasePins } from './release-pins.js';
 import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
 import { cachedSendWordSource, parseSendWordRequest, writeSendWord, writeTrialWord } from '../voice/send-word-store.js';
+import { readInputChoice, writeInputChoice } from '../voice/input-choice-store.js';
 import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
@@ -1112,6 +1113,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       },
   });
   const voiceReports = new VoiceReports();
+  {
+    const saved = readInputChoice(home);
+    if (saved) {
+      try {
+        voiceReports.inputChoice(saved);
+      } catch {
+        /* a malformed saved choice: follow the system default */
+      }
+    }
+  }
   // voice slice V1 (#gnomon-voice, talk-only): attachment by human gesture, forwarding guards, voice.* shape checks.
   // Voice rows are userland (voice.* is the voice principal's grant, A23-2): appended `as: 'userland'` under the
   // appending principal, kernel-key attested like modns rows. Enrolment is read from the root-signed file each check.
@@ -1378,6 +1389,13 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       stopSpeaking: () => voiceReports.stopSpeaking(),
       micToggle: () => voiceReports.micToggle(),
       micKey: (bare: boolean) => voiceReports.micKey(bare),
+      micMeter: (open: boolean) => voiceReports.micMeter(open),
+      // founder request 2026-10-23: the input choice, kept across restarts (<home>/voice/input.json)
+      selectInput: (c: { id: unknown; name?: unknown }) => {
+        const r = voiceReports.inputChoice(c);
+        writeInputChoice(home, r.inputChoice);
+        return r;
+      },
       // TD-2026-10-21-514: the human sets or clears the held send word (persisted 0600; the kernel reads it back)
       sendWord: async (p: unknown) => {
         const r = parseSendWordRequest(p);
