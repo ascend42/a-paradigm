@@ -32,7 +32,7 @@ function world(): { userHome: string; devHome: string; runner: string } {
   const userHome = fs.realpathSync.native(path.dirname(t.home));
   const runner = path.join(userHome, 'runner');
   fs.mkdirSync(runner);
-  fs.writeFileSync(path.join(runner, 'cli.js'), '// a stand-in gnomon-local\n');
+  fs.writeFileSync(path.join(runner, 'cli.js'), '// a stand-in gnomon-local (gnomon-local-runner:v1)\n');
   return { userHome, devHome: path.join(userHome, 'devhome'), runner };
 }
 

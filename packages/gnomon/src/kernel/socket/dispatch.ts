@@ -366,6 +366,11 @@ export const VOICE_SEND_CLAIM_REQUEST = 'request.voice.send.claim' as const;
 export const VOICE_SENDWORD_REQUEST = 'request.voice.sendword' as const;
 /** TD-2026-10-22-769: the human's local-model config request (dispatcher-only, never a row; no contract id moves). */
 export const LOCAL_CONFIG_REQUEST = 'request.local.config' as const;
+/** Aegis M2: status.local as a class sees it: in full for the human; configured / loopbackOnly / offered for any other. */
+export function localStatusFor(cls: string, full: Record<string, unknown>): Record<string, unknown> {
+  return cls === 'human' ? full : { configured: full.configured === true, loopbackOnly: true, offered: full.offered === true };
+}
+
 /** TD-2026-10-22-769 (Mika C1): the read-only loopback check (dispatcher-only, never a row; no contract id moves). */
 export const LOCAL_PROBE_REQUEST = 'request.local.probe' as const;
 
@@ -422,6 +427,8 @@ export interface HumanRequestPort {
    */
   local?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    /** status.local in full (the human class only; localStatusFor) */
+    status?(): Record<string, unknown>;
     /** request.local.probe{model, base?, compat?}: the read-only loopback check before a card (no card, no row) */
     probe?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
   };
@@ -566,6 +573,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // 8.0:session-rename: the names of THIS human's sessions (display text; the GUI folds session.renamed rows too)
       ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
       ...(o.requests?.loops && cls === 'human' ? { loops: o.requests.loops.status() } : {}),
+      // Aegis M2 (TD-2026-10-22-769): status.local in full to the human only; any other class sees three facts
+      ...(o.requests?.local?.status ? { local: localStatusFor(cls, o.requests.local.status()) } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
       // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 projection (B1's partial words,
       // capture.text, reach a human-class connection on the gui credential only)

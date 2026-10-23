@@ -71,6 +71,11 @@ components:
       `requestedBy` in the loop.trusted field set; regexes are ASCII-only and
       must span the whole string (fullMatch), so ICU and JS agree. The kernel
       refuses a loop-trust or local.config card at raise on an older helper;
+      Aegis review: the local row's runner is never compacted (dir and node
+      <= 256 chars, too-large-to-show otherwise), runnerSource bundled |
+      override is in the closed row and an override is marked on the line;
+      loop.trusted by ('root' or a principal) and requestedBy are principal
+      ids of at most 128 chars;
       decisionLine names what every row grants and every digest, FIRST in
       the dialog, refused rather than truncated. The TS mirror and shared
       vectors: gnomon src/kernel/identity/decision-batch.ts,

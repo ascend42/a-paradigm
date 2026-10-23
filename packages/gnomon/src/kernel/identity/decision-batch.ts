@@ -98,10 +98,15 @@ export function intentOf(r: Row): Row {
  */
 const LOOP_TRUSTED_FIELDS: readonly string[] = ['kind', 'loopId', 'scope', 'repoKey', 'contentHash', 'coreHash', 'closureDigest', 'sourceHash', 'cardId', 'by', 'requestedBy', 'createdAt'];
 const SHA256_TAG = /^sha256:[0-9a-f]{64}$/;
+/** A principal id (contracts ANY_PRINCIPAL_PATTERN), at most 128 chars. */
+const PRINCIPAL = /^p:[0-9a-hjkmnp-tv-z]{8}\/[a-z0-9][a-z0-9._-]{0,63}(?:@[0-9a-f]{8})?$/;
+const principalField = (v: unknown): boolean => typeof v === 'string' && v.length <= 128 && PRINCIPAL.test(v);
 const LOOP_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 /** TD-2026-10-22-769 (helper 1.9.0): the closed shape of a gnomon-root-local:v1 row a local.config card signs. */
-const LOCAL_ROW_FIELDS: readonly string[] = ['schemaVersion', 'version', 'local', 'cardId', 'createdAt'];
+const LOCAL_ROW_FIELDS: readonly string[] = ['schemaVersion', 'version', 'local', 'cardId', 'runnerSource', 'createdAt'];
+/** Aegis M1: the runner dir and node path are always shown in full, so each is capped. */
+export const LOCAL_PATH_MAX = 256;
 const LOCAL_FIELDS: readonly string[] = ['endpoints', 'runner'];
 const LOCAL_ENDPOINT_FIELDS: readonly string[] = ['id', 'base', 'model', 'compat', 'loops'];
 const LOCAL_RUNNER_FIELDS: readonly string[] = ['node', 'nodeSha256', 'dir', 'treeSha256', 'entry'];
@@ -122,6 +127,7 @@ const strIn = (v: unknown, max: number): v is string => typeof v === 'string' &&
 export function localRowRefusal(r: Row): string | null {
   for (const k of Object.keys(r)) if (!LOCAL_ROW_FIELDS.includes(k)) return `a local config row never carries ${k.slice(0, 40)}`;
   if (!(typeof r.version === 'number' && Number.isSafeInteger(r.version) && r.version >= 0)) return 'a local config row names its version (a whole number)';
+  if (r.runnerSource !== 'bundled' && r.runnerSource !== 'override') return 'a local config row says whether its runner is bundled or an override';
   const l = r.local;
   if (!isObjRow(l)) return 'a local config row names its local section';
   for (const k of Object.keys(l)) if (!LOCAL_FIELDS.includes(k)) return `a local config never carries ${k.slice(0, 40)}`;
@@ -138,7 +144,7 @@ export function localRowRefusal(r: Row): string | null {
   const ru = l.runner;
   if (!isObjRow(ru)) return 'a local config pins its runner';
   for (const k of Object.keys(ru)) if (!LOCAL_RUNNER_FIELDS.includes(k)) return `a local runner pin never carries ${k.slice(0, 40)}`;
-  if (!strIn(ru.node, 1024) || !absPosix(ru.node) || !strIn(ru.dir, 1024) || !absPosix(ru.dir) || typeof ru.nodeSha256 !== 'string' || !HEX64.test(ru.nodeSha256) || typeof ru.treeSha256 !== 'string' || !HEX64.test(ru.treeSha256) || !strIn(ru.entry, 128) || !SAFE_ENTRY.test(ru.entry) || ru.entry.split('/').includes('..')) return 'a local runner pin names node, its sha256, the dir, its tree sha256 and the entry';
+  if (!strIn(ru.node, LOCAL_PATH_MAX) || !absPosix(ru.node) || !strIn(ru.dir, LOCAL_PATH_MAX) || !absPosix(ru.dir) || typeof ru.nodeSha256 !== 'string' || !HEX64.test(ru.nodeSha256) || typeof ru.treeSha256 !== 'string' || !HEX64.test(ru.treeSha256) || !strIn(ru.entry, 128) || !SAFE_ENTRY.test(ru.entry) || ru.entry.split('/').includes('..')) return 'a local runner pin names node, its sha256, the dir, its tree sha256 and the entry';
   return null;
 }
 
@@ -175,6 +181,9 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       if (typeof r.loopId !== 'string' || !LOOP_ID.test(r.loopId) || (r.scope !== 'repo' && r.scope !== 'personal') || !hash(r.repoKey) || !hash(r.contentHash)) return 'a loop.trusted row names its loop, scope, repo and content hash';
       for (const k of ['coreHash', 'closureDigest']) if (r[k] !== undefined && !hash(r[k])) return `a loop.trusted ${k} is sha256:<64 hex>`;
       if (r.sourceHash !== undefined && !(typeof r.sourceHash === 'string' && /^[0-9a-f]{64}$/.test(r.sourceHash))) return 'a loop.trusted sourceHash is 64 hex';
+      // Aegis L7 (1.9.0): who decided and who asked are principals (by may be 'root' for an agent-raised card)
+      if (!(r.by === 'root' || principalField(r.by))) return 'a loop.trusted by is a principal';
+      if (r.requestedBy !== undefined && !principalField(r.requestedBy)) return 'a loop.trusted requestedBy is a principal';
       return null;
     }
     case 'local.config': {
@@ -284,17 +293,17 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
       return l !== null && sc !== null && rk !== null && h !== null ? `trust loop ${sc}/${l} repo ${rk.slice(7, 19)} ${h.slice(0, 19)}` : null;
     }
     case LOCAL_ROOT_SCHEMA:
-      return localRowShown(r, compactCaps);
+      return localRowShown(r);
     default:
       return null;
   }
 }
 
 /**
- * C2 for a local config row (mirror of localRowShown): the version, every endpoint in full, then the runner. The full
- * line names the runner dir and the node path; the compact one only their sha256 prefixes. null = not showable.
+ * C2 for a local config row (mirror of localRowShown): the version, every endpoint in full, then the runner IN FULL
+ * (Aegis M1: never compacted; a row that does not fit is refused too-large-to-show). An override runner is marked.
  */
-export function localRowShown(r: Row, compact: boolean): string | null {
+export function localRowShown(r: Row): string | null {
   const l = r.local;
   if (!isObjRow(l) || !Array.isArray(l.endpoints) || !isObjRow(l.runner) || typeof r.version !== 'number') return null;
   const eps: string[] = [];
@@ -304,10 +313,8 @@ export function localRowShown(r: Row, compact: boolean): string | null {
   }
   const ru = l.runner;
   if (typeof ru.dir !== 'string' || typeof ru.treeSha256 !== 'string' || typeof ru.node !== 'string' || typeof ru.nodeSha256 !== 'string' || typeof ru.entry !== 'string') return null;
-  const runner = compact
-    ? `runner tree ${ru.treeSha256.slice(0, 12)} node ${ru.nodeSha256.slice(0, 12)}`
-    : `runner ${ru.dir}/${ru.entry} tree ${ru.treeSha256.slice(0, 12)} node ${ru.node} ${ru.nodeSha256.slice(0, 12)}`;
-  return `local model config v${r.version}: ${eps.join(', ')}; ${runner}`;
+  const which = r.runnerSource === 'override' ? 'OVERRIDE runner' : 'bundled runner';
+  return `local model config v${r.version}: ${eps.join(', ')}; ${which} ${ru.dir}/${ru.entry} tree ${ru.treeSha256.slice(0, 12)} node ${ru.node} ${ru.nodeSha256.slice(0, 12)}`;
 }
 
 const UNSHOWABLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;

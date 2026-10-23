@@ -26,6 +26,8 @@ function releaseDefine(): Record<string, string> {
 const LOCAL_CLI = path.resolve(process.cwd(), '..', 'gnomon-local', 'dist', 'cli.js');
 function localRunner(): { define: Record<string, string>; sha: string | null } {
   if (!existsSync(LOCAL_CLI) || !lstatSync(LOCAL_CLI).isFile()) {
+    // Aegis L5: a RELEASE build (build-release.mjs, so every app and npm release) never ships without its runner
+    if (process.env.GNOMON_RELEASE_MANIFEST) throw new Error(`tsup: a release build needs ${LOCAL_CLI} (build @a-company/gnomon-local first): the bundled runner and its pin are part of the release`);
     process.stderr.write(`tsup: no ${LOCAL_CLI}: this kernel build carries no bundled gnomon-local (build @a-company/gnomon-local first)\n`);
     return { define: {}, sha: null };
   }

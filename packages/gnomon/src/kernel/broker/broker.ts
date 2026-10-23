@@ -536,7 +536,8 @@ export class ApprovalBroker {
       const need = ROW_TABLE_MIN_HELPER[rootKindOf(String(input.kind), input.detail)];
       if (need !== undefined) {
         const have = await this.#approvals.helperVersion().catch(() => null);
-        if (have !== null && !versionAtLeast(have, need)) throw fail('UNSUPPORTED', 'presence', `this card needs Gnomon helper ${need} or later and the running helper is ${String(have).slice(0, 16)}: update the Gnomon app`, { why: 'helper-too-old', minVersion: need, helperVersion: String(have).slice(0, 16) });
+        // Aegis L2: on a hardware root an unknown helper version counts as too old (never a guess that it is new enough)
+        if ((have === null && this.#o.root?.state === 'hardware') || (have !== null && !versionAtLeast(have, need))) throw fail('UNSUPPORTED', 'presence', `this card needs Gnomon helper ${need} or later and the running helper is ${have === null ? 'of an unknown version' : String(have).slice(0, 16)}: update the Gnomon app`, { why: 'helper-too-old', minVersion: need, helperVersion: have === null ? null : String(have).slice(0, 16) });
       }
     }
     const rendered = blockOf(input.lines);

@@ -27,7 +27,10 @@
  *                             again". The effect writes the signed row atomically (0600, never through a symlink) and
  *                             calls onApplied, the daemon's hot reload.
  *                             {op:'remove'}: a narrowing, so notify-and-proceed with NO card: the file is deleted,
- *                             the reload logs config.loaded{fallback:'none', why:'removed'} and applies "no config".
+ *                             the reload logs config.loaded{fallback:'none', why:'removed'} and applies "no config"
+ *                             (Aegis M3: a tombstone sidecar first, under the one in-flight root decision, so the
+ *                             removed file never applies again and an open set card refuses "changed while open";
+ *                             afterwards model:any sessions go to Claude, Aegis L9).
  * The asker is the human on a gui or device connection only (the dispatcher routes nothing else here; refused again
  * here). A dev-home file copied into a real home is not applied: its row is signed by the dev root, which the real
  * root does not verify (config.ts loadLocalConfig).
@@ -38,9 +41,11 @@ import { mintId, sanitizeDisplayText, type CardV1 } from '@a-company/gnomon-cont
 import type { RaiseInput } from '../broker/broker.js';
 import { beginRootDecision } from '../manifest/grant-lock.js';
 import { RpcRefusal } from '../socket/rpc.js';
+import { writeLocalTombstone } from './config.js';
 import { assertNotClaude, DEFAULT_CTX_FLOOR, ID_RE, LOCAL_COMPAT_NAMES, LOCAL_CONFIG_FILE, LOCAL_CONFIG_SCHEMA, nextLocalVersion, validateLocalEndpoints, writeLocalConfigDoc, type LocalEndpointConfig, type LocalLaneConfig } from './config.js';
 import { loopbackPort } from './endpoint.js';
-import { BUNDLED_RUNNER_ENTRY, defaultLocalRunner, nodeVersionOf, runnerVersionOf, type DefaultRunner } from './bundled-runner.js';
+import { BUNDLED_RUNNER_ENTRY, compiledLocalRunnerPin, defaultLocalRunner, nodeVersionOf, runnerVersionOf, type DefaultRunner } from './bundled-runner.js';
+import type { RootAuthority } from '../identity/root-authority.js';
 import { probeLocalEndpoint, type ProbeFetch } from './probe.js';
 import { capability } from './routing.js';
 import { LOCAL_ROW_MAX_ENDPOINTS } from '../identity/decision-batch.js';
@@ -97,11 +102,21 @@ export function validateLocalConfigInput(input: unknown, o: { forbiddenPorts?: r
   const base0 = input.base ?? DEFAULT_LOCAL_BASE;
   if (typeof base0 !== 'string' || base0.length === 0 || base0.length > 2048) throw bad('base', 'the base is the endpoint URL, e.g. http://127.0.0.1:11434');
   if (input.loops !== undefined && typeof input.loops !== 'boolean') throw bad('loops', 'loops is true or false');
-  // G-SUB-06 (BILLING_REFUSED): public, link-local, named hosts, a cloud compat and the kernel's own web port
-  const [v] = validateLocalEndpoints({ endpoints: [{ id, base: base0, model, compat }] }, o.forbiddenPorts ?? []);
-  const base = v!.v.base;
-  // 8.0 is loopback only, dev homes included (TD-2026-10-22-769)
-  if (loopbackPort(base) === null) throw new RpcRefusal('ENGINE', 'not-implemented', `#local-config-request: ${base.slice(0, 120)} is a LAN endpoint: loopback only in 8.0; ${LAN_LATER}`, { field: 'base', milestone: '8.1', why: 'lan-endpoint' });
+  // G-SUB-06 (BILLING_REFUSED): public, link-local, named hosts, a cloud compat and the kernel's own loopback ports;
+  // 8.0 is loopback only, dev homes included (Aegis L3: validateLocalEndpoints itself refuses a LAN base, why lan-8.1)
+  let v: ReturnType<typeof validateLocalEndpoints>[number];
+  try {
+    [v] = validateLocalEndpoints({ endpoints: [{ id, base: base0, model, compat }] }, o.forbiddenPorts ?? []) as [typeof v];
+  } catch (err) {
+    if ((err as { refusal?: { data?: { why?: unknown } } }).refusal?.data?.why === 'lan-8.1') throw new RpcRefusal('ENGINE', 'not-implemented', `#local-config-request: ${base0.slice(0, 120)} is a LAN endpoint: loopback only in 8.0; ${LAN_LATER}`, { field: 'base', milestone: '8.1', why: 'lan-endpoint' });
+    throw err;
+  }
+  // Aegis L1 + info: no path in 8.0 (the probe and the child add /v1/…), and localhost is 127.0.0.1 (one spelling)
+  const u = new URL(v.v.base);
+  if (u.pathname !== '/' && u.pathname !== '') throw bad('base', 'the base is scheme, host and port only in 8.0 (no path): e.g. http://127.0.0.1:11434', { why: 'base-path' });
+  if (/[?#]/.test(base0)) throw bad('base', 'the base takes no query or fragment', { why: 'base-path' });
+  if (loopbackPort(v.v.base) === null) throw new RpcRefusal('ENGINE', 'not-implemented', `#local-config-request: ${v.v.base.slice(0, 120)} is a LAN endpoint: loopback only in 8.0; ${LAN_LATER}`, { field: 'base', milestone: '8.1', why: 'lan-endpoint' });
+  const base = `${u.protocol}//${u.hostname.toLowerCase() === 'localhost' ? '127.0.0.1' : u.hostname.includes(':') && !u.hostname.startsWith('[') ? `[${u.hostname}]` : u.hostname}${u.port ? `:${u.port}` : ''}`;
   if (base.length > MAX_LOCAL_BASE) throw bad('base', `the base is at most ${MAX_LOCAL_BASE} characters`);
   const endpoint0: LocalEndpointConfig = { id, base, model, compat, ...(input.loops === true ? { loops: true } : {}) };
   if (o.skipRunner) return { endpoint: endpoint0, runnerDir: '', runnerSource: 'bundled' };
@@ -127,8 +142,29 @@ export function validateLocalConfigInput(input: unknown, o: { forbiddenPorts?: r
   if (!entryOk) throw bad('runner', `no gnomon-local runner (${BUNDLED_RUNNER_ENTRY}) in ${runnerDir.slice(0, 200)}`, { why: 'no-runner' });
   // law 7 / S8: never claude, by the dir or the entry, as given or by realpath
   assertNotClaude({ command: process.execPath, args: [runnerDir, path.join(runnerDir, BUNDLED_RUNNER_ENTRY)] });
+  // Aegis L6: a runner that is not the bundled one must say it is gnomon-local (its package.json, or the marker in cli.js)
+  if (runnerSource !== 'bundled' && !isGnomonLocal(runnerDir)) throw bad('runner', `${runnerDir.slice(0, 200)} is not a gnomon-local runner (no @a-company/gnomon-local package.json beside it and no ${RUNNER_MARKER} marker in cli.js)`, { why: 'not-gnomon-local' });
   const endpoint: LocalEndpointConfig = { id, base, model, compat, ...(input.loops === true ? { loops: true } : {}) };
   return { endpoint, runnerDir, runnerSource };
+}
+
+/** The marker gnomon-local's cli.js carries (packages/gnomon-local/src/cli.ts RUNNER_MARKER). */
+export const RUNNER_MARKER = 'gnomon-local-runner:v1';
+
+/** Is `dir` gnomon-local: an @a-company/gnomon-local package.json one level up, or the marker in its cli.js? */
+export function isGnomonLocal(dir: string): boolean {
+  try {
+    const p = JSON.parse(fs.readFileSync(path.join(dir, '..', 'package.json'), 'utf8')) as { name?: unknown };
+    if (p.name === '@a-company/gnomon-local') return true;
+  } catch {
+    /* no package.json */
+  }
+  try {
+    const st = fs.lstatSync(path.join(dir, BUNDLED_RUNNER_ENTRY));
+    return st.isFile() && st.size <= 16 << 20 && fs.readFileSync(path.join(dir, BUNDLED_RUNNER_ENTRY), 'utf8').includes(RUNNER_MARKER);
+  } catch {
+    return false;
+  }
 }
 
 /** Sanitize then wrap at 480 code points (card lines are capped at 512, card.ts MAX_LINE). */
@@ -202,7 +238,10 @@ export interface LocalProbeResult {
   error?: string;
   toolsNative: boolean;
   contextSize: number | null;
-  model: string | null;
+  /** the configured model (Aegis L1: never an id the server chose) */
+  model: string;
+  /** does the server list that model? */
+  listed: boolean;
   endpoint: { base: string; model: string; compat: string };
 }
 
@@ -214,7 +253,11 @@ export interface LocalConfigOptions {
   /** the chain's high-water mark for local.signed.json (config.ts localChainHighWater over the log) */
   chainHighWater: () => number;
   /** the hot apply: reload local.signed.json and hand it to the supervisor (the daemon's reloadLocalConfig) */
-  onApplied: (why: 'set' | 'removed') => Promise<unknown> | unknown;
+  onApplied: (why: 'set' | 'removed', removedVersion?: number) => Promise<unknown> | unknown;
+  /** the root: the file's version counts toward the next only when its signature verifies (Aegis L8) */
+  verify?: Pick<RootAuthority, 'verifyRow'>;
+  /** the tree hash compiled into this build for its bundled runner (Aegis L5; default compiledLocalRunnerPin) */
+  bundledPin?: () => string | null;
   /** the applied config (a set edits ONE endpoint by id and keeps the others) */
   current?: () => LocalLaneConfig | undefined;
   defaultRunner?: () => DefaultRunner;
@@ -271,9 +314,11 @@ export class LocalConfigCards {
     try {
       const caps = await probeLocalEndpoint({ id: v.endpoint.id, base: v.endpoint.base, model: v.endpoint.model }, { forbiddenPorts: this.#o.forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
       const k = capability(caps, DEFAULT_CTX_FLOOR, false);
-      // Mika C1: the card is raised only when the model is there (the server lists others, not this one)
-      const missing = caps.ok && caps.model !== null && caps.model !== v.endpoint.model;
-      return { ok: k.capable && !missing, why: missing ? 'model-missing' : k.reason, ...(caps.error ? { error: caps.error.slice(0, 200) } : {}), toolsNative: caps.tools, contextSize: caps.nCtx, model: caps.model, endpoint: { base: v.endpoint.base, model: v.endpoint.model, compat: v.endpoint.compat } };
+      // Mika C1: the card is raised only when the model is there; Aegis L1: the CONFIGURED model and whether the
+      // server lists it (never another id the server named), and one error word (never the server's text)
+      const listed = caps.ok && caps.model === v.endpoint.model;
+      const missing = caps.ok && !listed;
+      return { ok: k.capable && !missing, why: missing ? 'model-missing' : k.reason, ...(caps.ok ? {} : { error: 'unreachable' }), toolsNative: caps.tools, contextSize: caps.nCtx, model: v.endpoint.model, listed, endpoint: { base: v.endpoint.base, model: v.endpoint.model, compat: v.endpoint.compat } };
     } finally {
       this.#probing = false;
     }
@@ -332,10 +377,12 @@ export class LocalConfigCards {
     // the endpoint keeps its place in signed order (the first capable endpoint serves): replace in place, else append
     const order = (this.#o.current?.()?.endpoints ?? []).map((e) => e.id);
     const endpoints = replaced ? order.map((id) => (id === v.endpoint.id ? v.endpoint : others.find((o) => o.id === id)!)) : [...others, v.endpoint];
-    const { version, previous } = nextLocalVersion(this.#o.home, this.#o.chainHighWater());
+    // Aegis L5: a runner called bundled IS this build's: its tree hash is the compiled pin
+    if (v.runnerSource === 'bundled' && pin.treeSha256 !== (this.#o.bundledPin ?? compiledLocalRunnerPin)()) throw bad('runner', "the bundled gnomon-local runner does not match this build's pin: reinstall Gnomon", { why: 'bundled-pin' });
+    const { version, previous } = nextLocalVersion(this.#o.home, this.#o.chainHighWater(), this.#o.verify);
     const cardId = mintId('card');
     const local = { endpoints, runner: { ...pin } };
-    const row = { schemaVersion: LOCAL_CONFIG_SCHEMA, version, local, cardId };
+    const row = { schemaVersion: LOCAL_CONFIG_SCHEMA, version, local, cardId, runnerSource: v.runnerSource === 'bundled' ? 'bundled' : 'override' };
     const now = this.#o.clock ?? Date.now;
     const runner: CardRunner = { pin, source: v.runnerSource, version: runnerVersionOf(pin.dir, v.runnerSource === 'bundled' ? pin.treeSha256 : null), nodeVersion: nodeVersionOf(pin.node) };
     const lines = localConfigCardLines({ endpoint: v.endpoint, others, replaced, runner, version, previous, via: asker.credential === 'gui' ? 'settings' : 'terminal', at: now(), platform: this.#o.platform ?? process.platform });
@@ -364,7 +411,7 @@ export class LocalConfigCards {
               throw bad('runner', CHANGED_WHILE_OPEN, { why: 'changed' });
             }
             if (again.treeSha256 !== pin.treeSha256 || again.nodeSha256 !== pin.nodeSha256) throw bad('runner', CHANGED_WHILE_OPEN, { why: 'changed' });
-            if (nextLocalVersion(home, this.#o.chainHighWater()).version !== version) throw bad('version', CHANGED_WHILE_OPEN, { why: 'changed' });
+            if (nextLocalVersion(home, this.#o.chainHighWater(), this.#o.verify).version !== version) throw bad('version', CHANGED_WHILE_OPEN, { why: 'changed' });
             return { rows: [{ ...row, createdAt: new Date(now()).toISOString() }], release };
           } catch (err) {
             release();
@@ -388,17 +435,33 @@ export class LocalConfigCards {
     }
   }
 
+  /**
+   * Aegis M3: a remove is durable and serialized. Under the home's one in-flight root decision: the tombstone sidecar
+   * {version: next, removed: true} is written atomically FIRST (so an open set card's prepare sees a newer version and
+   * refuses "changed while open", and the removed file can never apply again), then the file is unlinked; the reload
+   * logs config.loaded{removed: true, version}.
+   */
   async #remove(): Promise<unknown> {
-    const file = path.join(this.#o.home, LOCAL_CONFIG_FILE);
+    const home = this.#o.home;
+    const file = path.join(home, LOCAL_CONFIG_FILE);
+    const release = beginRootDecision(home);
     let existed = false;
+    let version: number;
     try {
-      fs.lstatSync(file);
-      existed = true;
-      fs.unlinkSync(file); // a symlink is removed itself, never its target
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      version = nextLocalVersion(home, this.#o.chainHighWater(), this.#o.verify).version;
+      writeLocalTombstone(home, version);
+      try {
+        fs.lstatSync(file);
+        existed = true;
+        fs.unlinkSync(file); // a symlink is removed itself, never its target
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      }
+    } finally {
+      release();
     }
-    await this.#o.onApplied('removed');
-    return { removed: true, existed };
+    await this.#o.onApplied('removed', version);
+    // Aegis L9: say what changes for sessions too
+    return { removed: true, existed, version, now: 'model: local sessions raise a fallback card, model: any sessions go to Claude, and loops with a model node refuse to start' };
   }
 }

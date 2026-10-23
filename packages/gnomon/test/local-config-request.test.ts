@@ -26,7 +26,8 @@ import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/
 import { intentOf } from '../src/kernel/identity/decision-batch.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
-import { LOCAL_CONFIG_FILE, LOCAL_SEEN_FILE, loadLocalConfig, writeSignedLocalConfig, type LocalLaneConfig } from '../src/kernel/local/config.js';
+import { LOCAL_CONFIG_FILE, LOCAL_SEEN_FILE, loadLocalConfig, localChainHighWater, localChainRemoved, nextLocalVersion, validateLocalEndpoints, writeHomeFileAtomic, writeSignedLocalConfig, type LocalLaneConfig } from '../src/kernel/local/config.js';
+import { localStatusFor } from '../src/kernel/socket/dispatch.js';
 import { CHANGED_WHILE_OPEN, LocalConfigCards, validateLocalConfigInput, type LocalAsker } from '../src/kernel/local/config-request.js';
 import { compiledLocalRunnerPin, defaultLocalRunner } from '../src/kernel/local/bundled-runner.js';
 import { pinOf, treeHash } from '../src/kernel/local/runner-pin.js';
@@ -57,7 +58,7 @@ afterEach(() => {
   while (tmps.length) removeTree(tmps.pop()!);
 });
 
-function runnerDir(text = '// a stand-in gnomon-local\n'): string {
+function runnerDir(text = '// a stand-in gnomon-local (gnomon-local-runner:v1)\n'): string {
   const d = tmp('gnomon-runner-');
   fs.writeFileSync(path.join(d, 'cli.js'), text);
   return d;
@@ -75,10 +76,17 @@ async function refusal(p: Promise<unknown> | (() => unknown)): Promise<{ code: s
   return { code: ref!.code, reason: ref!.data?.reason, data: ref!.data ?? {}, message: (e as Error).message };
 }
 
-function rig(o: { version?: string; runner?: string; fetch?: (u: string, i: RequestInit) => Promise<Response> } = {}) {
+/** A helper-held approvals key whose helper never says its version (Aegis L2). */
+class UnknownVersionKey extends HelperApprovalsKey {
+  override async helperVersion(): Promise<string | null> {
+    return null;
+  }
+}
+
+function rig(o: { version?: string; unknownVersion?: boolean; runner?: string; fetch?: (u: string, i: RequestInit) => Promise<Response> } = {}) {
   const home = tmp('gnomon-home-');
   const helper = new CountingFakeHelper(GEN, { version: o.version ?? '1.9.0', bounds: { idleSeconds: 12 * 3600, absoluteSeconds: 12 * 3600, maxSignatures: 512 } });
-  const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper);
+  const approvals = new (o.unknownVersion ? UnknownVersionKey : HelperApprovalsKey)({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper);
   const root = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: helper.publicPem('root') }, { helper, once: () => { throw new Error('never the once seam'); } });
   const logged: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: KERNEL, log: async (kind, payload) => void logged.push({ kind, payload }), approvals, root });
@@ -90,14 +98,16 @@ function rig(o: { version?: string; runner?: string; fetch?: (u: string, i: Requ
     home,
     broker,
     forbiddenPorts: () => [7531],
-    chainHighWater: () => 0,
+    chainHighWater: () => localChainHighWater(events.map((e) => e.payload)),
     current: () => state.cfg.config,
     // the daemon's reloadLocalConfig, minus the supervisor
-    onApplied: (why) => {
+    onApplied: (why, removedVersion) => {
       applied.push(why);
-      state.cfg = loadLocalConfig(home, root, (kind, payload) => void events.push({ kind, payload }), why === 'removed' ? { missing: 'removed' } : {});
+      state.cfg = loadLocalConfig(home, root, (kind, payload) => void events.push({ kind, payload }), { chainHighWater: localChainHighWater(events.map((e) => e.payload)), chainRemoved: localChainRemoved(events.map((e) => e.payload)), ...(why === 'removed' ? { missing: 'removed' as const, ...(removedVersion !== undefined ? { removedVersion } : {}) } : {}) });
     },
     defaultRunner: () => ({ ok: true, dir: runner, source: 'bundled', treeSha256: treeHash(runner) }),
+    bundledPin: () => treeHash(runner),
+    verify: root,
     platform: 'darwin',
     probeGapMs: 50,
     ...(o.fetch ? { probeFetch: o.fetch } : {}),
@@ -112,8 +122,9 @@ describe('#local-config-request: the ONE input check (shared with gnomon dev loc
   const ok = (input: Record<string, unknown>) => validateLocalConfigInput({ runner: dir(), ...input }, { forbiddenPorts: [7531] });
   it('defaults: Ollama on this Mac; loops only when asked', () => {
     expect(ok({ model: 'qwen3.5:9b' }).endpoint).toEqual({ id: 'ollama', base: 'http://127.0.0.1:11434', model: 'qwen3.5:9b', compat: 'ollama' });
-    expect(ok({ model: 'm', base: 'http://localhost:8080', compat: 'llama.cpp', id: 'coder', loops: true }).endpoint).toEqual({ id: 'coder', base: 'http://localhost:8080', model: 'm', compat: 'llama.cpp', loops: true });
-    expect(ok({ model: 'm', base: 'http://[::1]:1234/v1', compat: 'lm-studio' }).endpoint.base).toBe('http://[::1]:1234/v1');
+    // localhost is canonicalized to 127.0.0.1 (one spelling on the card and in the signed row)
+    expect(ok({ model: 'm', base: 'http://localhost:8080', compat: 'llama.cpp', id: 'coder', loops: true }).endpoint).toEqual({ id: 'coder', base: 'http://127.0.0.1:8080', model: 'm', compat: 'llama.cpp', loops: true });
+    expect(ok({ model: 'm', base: 'http://[::1]:1234/', compat: 'lm-studio' }).endpoint.base).toBe('http://[::1]:1234');
   });
   it('refuses LAN (lands in 8.1), public, a cloud compat, no model, the kernel port', async () => {
     for (const base of ['http://192.168.1.20:11434', 'http://10.0.0.5:8080', 'http://[fd00::1]:8080']) {
@@ -128,6 +139,8 @@ describe('#local-config-request: the ONE input check (shared with gnomon dev loc
     expect((await refusal(() => ok({ model: 'x'.repeat(129) }))).data).toMatchObject({ field: 'model' });
     expect((await refusal(() => ok({ model: 'm', id: '../x' }))).data).toMatchObject({ field: 'id' });
     expect((await refusal(() => ok({ model: 'm', surprise: 1 }))).data).toMatchObject({ field: 'surprise' });
+    // Aegis L1: no path, query or fragment in 8.0
+    for (const base of ['http://127.0.0.1:11434/v1', 'http://127.0.0.1:11434/api?x=1', 'http://127.0.0.1:11434/#a']) expect((await refusal(() => ok({ model: 'm', base }))).data, base).toMatchObject({ field: 'base', why: 'base-path' });
   });
   it('refuses a relative runner, a runner without cli.js and a claude runner', async () => {
     expect((await refusal(() => validateLocalConfigInput({ model: 'm', runner: 'gnomon-local/dist' }))).data).toMatchObject({ field: 'runner' });
@@ -236,14 +249,14 @@ describe('#local-config-request: the root card', () => {
     await r.broker.approve(gui(), { cardId: a.cardId, decision: 'allow' });
     const prompts = r.helper.evaluations;
     const cardsBefore = r.logged.filter((x) => x.kind === 'approval.request').length;
-    expect(await r.cards.request(gui(), { op: 'remove' })).toEqual({ removed: true, existed: true });
+    expect(await r.cards.request(gui(), { op: 'remove' })).toMatchObject({ removed: true, existed: true, now: expect.stringContaining('model: any sessions go to Claude') });
     expect(r.helper.evaluations).toBe(prompts);
     expect(r.logged.filter((x) => x.kind === 'approval.request').length).toBe(cardsBefore);
     expect(fs.existsSync(path.join(r.home, LOCAL_CONFIG_FILE))).toBe(false);
     expect(r.state.cfg.config).toBeUndefined();
     expect(r.events.at(-1)).toMatchObject({ kind: 'config.loaded', payload: { file: LOCAL_CONFIG_FILE, fallback: 'none', why: 'removed' } });
     // the old signed file copied back is refused as older than the high-water mark (the sidecar is kept)
-    expect(await r.cards.request(gui(), { op: 'remove' })).toEqual({ removed: true, existed: false });
+    expect(await r.cards.request(gui(), { op: 'remove' })).toMatchObject({ removed: true, existed: false });
   });
 
   it('a dev-home file copied into a real home is not applied (the dev root is not this root)', () => {
@@ -266,9 +279,98 @@ describe('#local-config-request: the root card', () => {
 
   it('Windows says so in words on the card (a click key refuses root at decide)', async () => {
     const r = rig();
-    const cards = new LocalConfigCards({ home: r.home, broker: r.broker, forbiddenPorts: () => [], chainHighWater: () => 0, onApplied: () => undefined, defaultRunner: () => ({ ok: true, dir: r.runner, source: 'bundled', treeSha256: treeHash(r.runner) }), platform: 'win32' });
+    const cards = new LocalConfigCards({ home: r.home, broker: r.broker, forbiddenPorts: () => [], chainHighWater: () => 0, onApplied: () => undefined, defaultRunner: () => ({ ok: true, dir: r.runner, source: 'bundled', treeSha256: treeHash(r.runner) }), bundledPin: () => treeHash(r.runner), platform: 'win32' });
     const a = (await cards.request(gui(), setEp({ model: 'm' }))) as { cardId: string };
     expect(JSON.stringify(r.broker.card(a.cardId)!.block)).toContain('Not on Windows in 8.0: a root-class decision needs the Windows root key');
+  });
+});
+
+describe('Aegis review fixes (merge after fixes)', () => {
+  it('M3: a remove is durable: the tombstone outranks the removed file, which never applies again, and the chain row says removed', async () => {
+    const r = rig();
+    const a = (await r.cards.request(gui(), setEp({ model: 'm' }))) as { cardId: string };
+    await r.broker.approve(gui(), { cardId: a.cardId, decision: 'allow' });
+    const saved = fs.readFileSync(path.join(r.home, LOCAL_CONFIG_FILE), 'utf8');
+    const res = (await r.cards.request(gui(), { op: 'remove' })) as { version: number };
+    expect(res.version).toBe(2);
+    expect(JSON.parse(fs.readFileSync(path.join(r.home, LOCAL_SEEN_FILE), 'utf8'))).toEqual({ version: 2, removed: true });
+    expect(r.events.at(-1)).toMatchObject({ kind: 'config.loaded', payload: { removed: true, version: 2, fallback: 'none', why: 'removed' } });
+    // replaying the removed (validly signed) file: refused, by the tombstone sidecar AND by the chain alone
+    fs.writeFileSync(path.join(r.home, LOCAL_CONFIG_FILE), saved);
+    const ev: string[] = [];
+    expect(loadLocalConfig(r.home, r.root, (k, p) => void ev.push(String(p.why))).config).toBeUndefined();
+    expect(ev).toEqual(['older']);
+    fs.rmSync(path.join(r.home, LOCAL_SEEN_FILE));
+    expect(loadLocalConfig(r.home, r.root, () => undefined, { chainRemoved: localChainRemoved(r.events.map((e) => e.payload)) }).config).toBeUndefined();
+    // a new set after the remove takes the next version and applies
+    const b = (await r.cards.request(gui(), setEp({ model: 'm' }))) as { cardId: string; version: number };
+    expect(b.version).toBe(3);
+  });
+
+  it('M3: Allow after Remove is refused (the open card is stale); a remove waits for no prompt and is serialized with root decisions', async () => {
+    const r = rig();
+    const a = (await r.cards.request(gui(), setEp({ model: 'm' }))) as { cardId: string };
+    await r.cards.request(gui(), { op: 'remove' });
+    expect((await refusal(r.broker.approve(gui(), { cardId: a.cardId, decision: 'allow' }))).message).toContain(CHANGED_WHILE_OPEN);
+    expect(fs.existsSync(path.join(r.home, LOCAL_CONFIG_FILE))).toBe(false);
+    // while a root decision is in flight on this home, a remove is refused busy (never interleaved)
+    const { beginRootDecision } = await import('../src/kernel/manifest/grant-lock.js');
+    const release = beginRootDecision(r.home);
+    try {
+      await expect(r.cards.request(gui(), { op: 'remove' })).rejects.toThrow();
+    } finally {
+      release();
+    }
+  });
+
+  it('M2: status.local in full for the human only', () => {
+    const full = { configured: true, offered: true, loopbackOnly: true, endpoints: [{ id: 'ollama', base: 'http://127.0.0.1:11434' }], runner: { dir: '/x' }, lastFallback: { cwd: '/secret' } };
+    expect(localStatusFor('human', full)).toBe(full);
+    for (const cls of ['agent', 'session', 'mod', 'voice', 'readToken', 'peer']) expect(localStatusFor(cls, full)).toEqual({ configured: true, loopbackOnly: true, offered: true });
+  });
+
+  it('L2: an unknown helper version on a hardware root counts as too old', async () => {
+    const r = rig({ unknownVersion: true });
+    expect(await refusal(r.cards.request(gui(), setEp({ model: 'm' })))).toMatchObject({ code: 'UNSUPPORTED', data: { why: 'helper-too-old', helperVersion: null } });
+  });
+
+  it('L3: the lane refuses a LAN endpoint at every open in 8.0, whoever signed it (why lan-8.1)', async () => {
+    expect((await refusal(() => validateLocalEndpoints({ endpoints: [{ id: 'lan', base: 'http://192.168.1.20:11434', model: 'm', compat: 'ollama' }] }, []))).data).toMatchObject({ why: 'lan-8.1' });
+    expect(validateLocalEndpoints({ endpoints: [{ id: 'lo', base: 'http://127.0.0.1:11434', model: 'm', compat: 'ollama' }] }, [])).toHaveLength(1);
+  });
+
+  it('L5: a runner called bundled must hash to the compiled pin', async () => {
+    const r = rig();
+    const cards = new LocalConfigCards({ home: r.home, broker: r.broker, forbiddenPorts: () => [], chainHighWater: () => 0, onApplied: () => undefined, defaultRunner: () => ({ ok: true, dir: r.runner, source: 'bundled', treeSha256: treeHash(r.runner) }), bundledPin: () => 'f'.repeat(64) });
+    expect((await refusal(cards.request(gui(), setEp({ model: 'm' })))).data).toMatchObject({ why: 'bundled-pin' });
+  });
+
+  it('L6: an override runner must be gnomon-local (package.json or marker); the signed row and the helper line say override', async () => {
+    const r = rig();
+    const plain = tmp('plain-');
+    fs.writeFileSync(path.join(plain, 'cli.js'), '// some script\n');
+    expect((await refusal(r.cards.request(gui(), setEp({ model: 'm' }, plain)))).data).toMatchObject({ why: 'not-gnomon-local' });
+    const pkg = tmp('pkg-');
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@a-company/gnomon-local', version: '8.0.0' }));
+    fs.mkdirSync(path.join(pkg, 'dist'));
+    fs.writeFileSync(path.join(pkg, 'dist', 'cli.js'), '// built\n');
+    const a = (await r.cards.request(gui(), setEp({ model: 'm' }, path.join(pkg, 'dist')))) as { cardId: string };
+    await r.broker.approve(gui(), { cardId: a.cardId, decision: 'allow' });
+    expect(r.helper.shown.at(-1)).toContain(`OVERRIDE runner ${path.join(pkg, 'dist')}/cli.js`);
+    expect(JSON.parse(fs.readFileSync(path.join(r.home, LOCAL_CONFIG_FILE), 'utf8')).row.runnerSource).toBe('override');
+  });
+
+  it('L8: an unsigned file does not push the next version; the sidecar is never written through a symlink', () => {
+    const r = rig();
+    fs.writeFileSync(path.join(r.home, LOCAL_CONFIG_FILE), JSON.stringify({ row: { schemaVersion: 'gnomon-root-local:v1', version: 999, local: {} }, signer: 'x', sig: 'y' }));
+    expect(nextLocalVersion(r.home, 0, r.root).version).toBe(1);
+    expect(nextLocalVersion(r.home, 0).version).toBe(1000); // without a root (old behaviour), it would
+    fs.rmSync(path.join(r.home, LOCAL_CONFIG_FILE));
+    const target = path.join(tmp('elsewhere-'), 'x.json');
+    fs.writeFileSync(target, '{}');
+    fs.symlinkSync(target, path.join(r.home, LOCAL_SEEN_FILE));
+    expect(() => writeHomeFileAtomic(r.home, LOCAL_SEEN_FILE, '{"version":1}\n')).toThrow(/symlink/);
+    expect(fs.readFileSync(target, 'utf8')).toBe('{}');
   });
 });
 
@@ -291,7 +393,7 @@ describe('request.local.probe: the read-only check before a card', () => {
   it('answers ok, tools native and the context size; writes nothing and raises no card', async () => {
     const s = server();
     const r = rig({ fetch: s.fetch });
-    expect(await r.cards.probe(gui(), { model: 'qwen3.5:9b', base: 'http://127.0.0.1:8080', compat: 'llama.cpp' })).toMatchObject({ ok: true, why: 'capable', toolsNative: true, contextSize: 32768, model: 'qwen3.5:9b' });
+    expect(await r.cards.probe(gui(), { model: 'qwen3.5:9b', base: 'http://127.0.0.1:8080', compat: 'llama.cpp' })).toMatchObject({ ok: true, why: 'capable', toolsNative: true, contextSize: 32768, model: 'qwen3.5:9b', listed: true });
     expect(r.logged).toEqual([]);
     expect(fs.existsSync(path.join(r.home, LOCAL_CONFIG_FILE))).toBe(false);
     expect(s.seen.every((u) => u.startsWith('http://127.0.0.1:8080/'))).toBe(true);
@@ -300,7 +402,10 @@ describe('request.local.probe: the read-only check before a card', () => {
     const cases: Array<[Parameters<typeof server>[0], string]> = [[{ models: ['other'] }, 'model-missing'], [{ tools: false }, 'no-tools'], [{ nCtx: 4096 }, 'ctx-below-floor'], [{ down: true }, 'probe-failed']];
     for (const [o, why] of cases) {
       const r = rig({ fetch: server(o).fetch });
-      expect(await r.cards.probe(gui(), { model: 'qwen3.5:9b' })).toMatchObject({ ok: false, why });
+      const got = await r.cards.probe(gui(), { model: 'qwen3.5:9b' });
+      expect(got).toMatchObject({ ok: false, why, model: 'qwen3.5:9b' }); // Aegis L1: the configured model, never the server's ids[0]
+      if (why === 'model-missing') expect(got.listed).toBe(false);
+      if (why === 'probe-failed') expect(got.error).toBe('unreachable');
     }
   });
   it('never touches a non-loopback address, and is rate-limited', async () => {

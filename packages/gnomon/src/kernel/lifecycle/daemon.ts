@@ -130,7 +130,7 @@ import { claudeCodePlatform } from '../../platform/claude-code.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { catchUp, RuleBook, ruleSourceOf } from '../supervisor/rules.js';
 import { createRulesRevokeHandler } from '../socket/rules-revoke.js';
-import { loadLocalConfig, localChainHighWater, type LoadedLocalConfig } from '../local/config.js';
+import { loadLocalConfig, localChainHighWater, localChainRemoved, type LoadedLocalConfig } from '../local/config.js';
 import { LocalConfigCards } from '../local/config-request.js';
 import { defaultLocalRunner, nodeVersionOf, runnerVersionOf } from '../local/bundled-runner.js';
 import { linkedFolders } from '../manifest/install.js';
@@ -840,7 +840,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   };
   // TD-2026-10-22-769: status.local (the applied local-model config, the default runner, a pending card); bound below
   let localStatus: () => Record<string, unknown> = () => ({ configured: false });
-  const approvals = createApprovalPort({ broker, fuse, kernelPrincipal, extraStatus: () => ({ billing: apiTokens.status(), ...(broker.helperBatch() ? { helper: { batch: broker.helperBatch() } } : {}), local: localStatus() }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
+  const approvals = createApprovalPort({ broker, fuse, kernelPrincipal, extraStatus: () => ({ billing: apiTokens.status(), ...(broker.helperBatch() ? { helper: { batch: broker.helperBatch() } } : {}) }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
   const brokerTimer = setInterval(() => {
     void broker.expireDue().catch(() => undefined);
     void apiTokens.sweep().catch(() => undefined);
@@ -851,14 +851,13 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #local-runner (M1.8 slice 2): the root-signed local lane config; its rollback high-water mark is the last
   // signed config.loaded{file: local.signed.json, version} on the chain. Anything unsigned ⇒ no local config.
   // TD-2026-10-22-769: the same high-water logic serves the boot load, the hot reload and the card's next version
-  const localHighWater = (): number =>
-    localChainHighWater(
-      (function* () {
-        for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) if (v.view === 'full') yield v.event.payload;
-      })(),
-    );
+  const localRows = function* (): Generator<unknown> {
+    for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) if (v.view === 'full') yield v.event.payload;
+  };
+  const localHighWater = (): number => localChainHighWater(localRows());
+  const localRemoved = (): number => localChainRemoved(localRows());
   const localEmit = (kind: string, payload: Record<string, unknown>): void => void appendRow(kind, payload).catch(() => undefined);
-  let localCfg: LoadedLocalConfig = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater() });
+  let localCfg: LoadedLocalConfig = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), chainRemoved: localRemoved() });
   const ruleBook = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) });
   // S-L1: fold the KERNEL-signed approval.* rows appended since the last catch-up (rules.ts); shared by the
   // supervisor's exact-match check and the rules.revoke handler, so both read one book
@@ -1259,19 +1258,21 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // request.local.config raises a root-class card; its allow writes local.signed.json and reloads it HOT (the
   // supervisor's lane, the loop runner's configured() and the daemon-start probe all read the reloaded config); a
   // remove is notify-and-proceed. Live local sessions keep their spawn-time config.
-  const reloadLocalConfig = (why: 'set' | 'removed'): LoadedLocalConfig => {
-    localCfg = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), ...(why === 'removed' ? { missing: 'removed' as const } : {}) });
+  const reloadLocalConfig = (why: 'set' | 'removed', removedVersion?: number): LoadedLocalConfig => {
+    localCfg = loadLocalConfig(home, authority, localEmit, { chainHighWater: localHighWater(), chainRemoved: localRemoved(), ...(why === 'removed' ? { missing: 'removed' as const, ...(removedVersion !== undefined ? { removedVersion } : {}) } : {}) });
     supervisor.setLocalConfig(localCfg.config);
     if (localCfg.config?.endpoints.length) void supervisor.probeLocal().catch(() => undefined);
     // a loop refused at start for want of a local model clears once the cause clears (its stack alert goes with it)
     loops.localConfigApplied();
     return localCfg;
   };
-  const webPort = (): number[] => {
+  // Aegis L1: the kernel's own loopback listeners are never a model endpoint: the web endpoint (when listening; every
+  // open re-validates with the live port) and every mod egress proxy
+  const kernelPorts = (): number[] => {
     const st = web?.status() as { listening?: boolean; port?: number } | undefined;
-    return st?.listening && typeof st.port === 'number' ? [st.port] : [];
+    return [...(st?.listening && typeof st.port === 'number' ? [st.port] : []), ...mods.loopbackPorts()];
   };
-  const localCards = new LocalConfigCards({ home, broker, forbiddenPorts: webPort, chainHighWater: localHighWater, current: () => localCfg.config, onApplied: (why) => reloadLocalConfig(why) });
+  const localCards = new LocalConfigCards({ home, broker, forbiddenPorts: kernelPorts, chainHighWater: localHighWater, verify: authority, current: () => localCfg.config, onApplied: (why, removedVersion) => reloadLocalConfig(why, removedVersion) });
   localStatus = () => {
     const c = localCfg.config;
     const d = defaultLocalRunner();
@@ -1357,7 +1358,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,
-      local: { request: (asker: Parameters<LocalConfigCards['request']>[0], payload: unknown) => localCards.request(asker, payload), probe: (asker: Parameters<LocalConfigCards['probe']>[0], payload: unknown) => localCards.probe(asker, payload) },
+      // Aegis M2: status.local is the human's (dispatch.ts gives other classes only configured / loopbackOnly / offered)
+      local: { request: (asker: Parameters<LocalConfigCards['request']>[0], payload: unknown) => localCards.request(asker, payload), probe: (asker: Parameters<LocalConfigCards['probe']>[0], payload: unknown) => localCards.probe(asker, payload), status: () => localStatus() },
     },
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),

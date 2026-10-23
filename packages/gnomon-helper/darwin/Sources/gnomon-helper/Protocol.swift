@@ -354,6 +354,9 @@ func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
               let sc = r["scope"] as? String, sc == "repo" || sc == "personal", isHash(r["repoKey"]), isHash(r["contentHash"]) else { return "a loop.trusted row names its loop, scope, repo and content hash" }
         for k in ["coreHash", "closureDigest"] where r[k] != nil && !isHash(r[k]) { return "a loop.trusted \(k) is sha256:<64 hex>" }
         if let v = r["sourceHash"], !((v as? String).map { fullMatch($0, "^[0-9a-f]{64}$") } ?? false) { return "a loop.trusted sourceHash is 64 hex" }
+        // Aegis L7 (1.9.0): who decided and who asked are principals (by may be "root" for an agent-raised card)
+        if !((r["by"] as? String) == "root" || isPrincipal(r["by"])) { return "a loop.trusted by is a principal" }
+        if let v = r["requestedBy"], !isPrincipal(v) { return "a loop.trusted requestedBy is a principal" }
         return nil
     case "local.config":
         // TD-2026-10-22-769 (1.9.0): a real home's local-model config signs exactly one gnomon-root-local:v1 row
@@ -372,7 +375,15 @@ func fullMatch(_ s: String, _ pattern: String) -> Bool {
     s.range(of: pattern, options: .regularExpression) == s.startIndex..<s.endIndex
 }
 
+/// A principal id (the contracts' ANY_PRINCIPAL_PATTERN), at most 128 UTF-16 units.
+func isPrincipal(_ v: Any?) -> Bool {
+    guard let s = v as? String, s.utf16.count <= 128 else { return false }
+    return fullMatch(s, "^p:[0-9a-hjkmnp-tv-z]{8}/[a-z0-9][a-z0-9._-]{0,63}(?:@[0-9a-f]{8})?$")
+}
+
 let localRootSchema = "gnomon-root-local:v1"
+/// Aegis M1: the runner dir and node path are always shown in full, so each is capped.
+let localPathMax = 256
 let localRowMaxEndpoints = 4
 /// The local transports (the kernel's LOCAL_COMPAT_NAMES; parity-tested through the shared vectors).
 let localCompats: Set<String> = ["llama.cpp", "ollama", "lm-studio", "vllm", "mlx-lm"]
@@ -392,9 +403,10 @@ private func str(_ v: Any?, _ max: Int) -> String? {
 
 /// The local.config row check (mirror of localRowRefusal in the kernel's decision-batch.ts). nil = allowed.
 func localRowRefusal(_ r: Json) -> String? {
-    let rowFields: Set<String> = ["schemaVersion", "version", "local", "cardId", "createdAt"]
+    let rowFields: Set<String> = ["schemaVersion", "version", "local", "cardId", "runnerSource", "createdAt"]
     for k in r.keys.sorted() where !rowFields.contains(k) { return "a local config row never carries \(String(k.prefix(40)))" }
     guard jsonWhole(r["version"]) != nil else { return "a local config row names its version (a whole number)" }
+    guard let src = r["runnerSource"] as? String, src == "bundled" || src == "override" else { return "a local config row says whether its runner is bundled or an override" }
     guard let l = r["local"] as? Json else { return "a local config row names its local section" }
     for k in l.keys.sorted() where !["endpoints", "runner"].contains(k) { return "a local config never carries \(String(k.prefix(40)))" }
     guard let eps = l["endpoints"] as? [Any], eps.count >= 1, eps.count <= localRowMaxEndpoints else { return "a local config names 1..\(localRowMaxEndpoints) endpoints" }
@@ -412,7 +424,7 @@ func localRowRefusal(_ r: Json) -> String? {
     guard let ru = l["runner"] as? Json else { return "a local config pins its runner" }
     for k in ru.keys.sorted() where !["node", "nodeSha256", "dir", "treeSha256", "entry"].contains(k) { return "a local runner pin never carries \(String(k.prefix(40)))" }
     func absPosix(_ v: String) -> Bool { v.hasPrefix("/") && !v.contains("\u{0}") }
-    guard let node = str(ru["node"], 1024), absPosix(node), let dir = str(ru["dir"], 1024), absPosix(dir),
+    guard let node = str(ru["node"], localPathMax), absPosix(node), let dir = str(ru["dir"], localPathMax), absPosix(dir),
           let ns = ru["nodeSha256"] as? String, fullMatch(ns, "^[0-9a-f]{64}$"), let ts = ru["treeSha256"] as? String, fullMatch(ts, "^[0-9a-f]{64}$"),
           let entry = str(ru["entry"], 128), fullMatch(entry, "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"), !entry.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     else { return "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry" }
@@ -428,9 +440,9 @@ private func loopbackPortDigits(_ base: String) -> Int? {
     return Int(hostPort[hostPort.index(after: colon)...])
 }
 
-/// C2 for a local config row (mirror of localRowShown): the version, every endpoint in full, then the runner. The full
-/// line names the runner dir and the node path; the compact one only their sha256 prefixes. nil = not showable.
-func localRowShown(_ r: Json, compact: Bool) -> String? {
+/// C2 for a local config row (mirror of localRowShown): the version, every endpoint in full, then the runner IN FULL
+/// (Aegis M1: never compacted; a row that does not fit is refused too-large-to-show). An override runner is marked.
+func localRowShown(_ r: Json) -> String? {
     guard let l = r["local"] as? Json, let eps = l["endpoints"] as? [Any], let ru = l["runner"] as? Json, let version = jsonWhole(r["version"]) else { return nil }
     var parts: [String] = []
     for raw in eps {
@@ -439,10 +451,8 @@ func localRowShown(_ r: Json, compact: Bool) -> String? {
         parts.append("endpoint \(id) \(base) model \(model) (\(compat))\(loops ? " loops: yes" : " loops: no")")
     }
     guard let dir = ru["dir"] as? String, let tree = ru["treeSha256"] as? String, let node = ru["node"] as? String, let nodeSha = ru["nodeSha256"] as? String, let entry = ru["entry"] as? String else { return nil }
-    let runner = compact
-        ? "runner tree \(tree.prefix(12)) node \(nodeSha.prefix(12))"
-        : "runner \(dir)/\(entry) tree \(tree.prefix(12)) node \(node) \(nodeSha.prefix(12))"
-    return "local model config v\(version): \(parts.joined(separator: ", ")); \(runner)"
+    let which = (r["runnerSource"] as? String) == "override" ? "OVERRIDE runner" : "bundled runner"
+    return "local model config v\(version): \(parts.joined(separator: ", ")); \(which) \(dir)/\(entry) tree \(tree.prefix(12)) node \(node) \(nodeSha.prefix(12))"
 }
 
 func sha256Tag(_ d: Data) -> String {
@@ -586,7 +596,7 @@ func rowShown(_ r: Json, compactCaps: Bool) -> String? {
         guard let l = s("loopId"), let sc = s("scope"), let rk = s("repoKey"), let h = s("contentHash") else { return nil }
         return "trust loop \(sc)/\(l) repo \(rk.dropFirst(7).prefix(12)) \(h.prefix(19))"
     case localRootSchema:
-        return localRowShown(r, compact: compactCaps)
+        return localRowShown(r)
     default:
         return nil
     }

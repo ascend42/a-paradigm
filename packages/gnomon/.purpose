@@ -4411,6 +4411,21 @@ components:
       a typed absolute runner dir overrides it. CLI raw form `gnomon local
       set|status|remove` (src/cli/local-cli.ts); the guided form is Settings
       → Local model (#gui, a separate design track).
+      Aegis review (merge after fixes): the helper line shows the runner dir
+      and node path in full (<= 256 chars each; never compacted; an
+      OVERRIDE runner marked through the row's runnerSource); status.local
+      in full to the human only (dispatch.ts localStatusFor); a remove writes
+      a tombstone sidecar under beginRootDecision before the unlink, logs
+      config.loaded{removed:true, version}, and no file at or below it
+      applies again (loadLocalConfig chainRemoved / tombstone floor);
+      nextLocalVersion counts the file only when its signature verifies; the
+      sidecar goes through writeHomeFileAtomic; the probe answers for the
+      configured model (listed) with one error word; no base path in 8.0,
+      localhost stored as 127.0.0.1; the kernel's web and mod egress ports
+      are forbidden; validateLocalEndpoints refuses non-loopback (lan-8.1);
+      a bundled runner must match the compiled pin and a release build fails
+      without it; an override runner must identify as gnomon-local; an
+      unknown helper version on a hardware root counts as too old.
     path: src/kernel/local/config-request.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, td-2026-10-22-769]

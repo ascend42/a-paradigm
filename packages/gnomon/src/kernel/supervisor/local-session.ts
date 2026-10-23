@@ -362,7 +362,7 @@ export class LocalLane {
     const out: Array<{ endpoint: string; ok: boolean }> = [];
     for (const ep of this.#config?.endpoints ?? []) {
       const v = classifyEndpoint(ep.base, this.#forbiddenPorts());
-      if (!v.ok || !LOCAL_COMPAT_NAMES.includes(ep.compat)) continue;
+      if (!v.ok || !LOCAL_COMPAT_NAMES.includes(ep.compat) || loopbackPort(v.base) === null) continue; // Aegis L3: loopback only in 8.0
       const caps = await this.#probe({ id: ep.id, base: v.base, model: ep.model }).catch(() => null);
       out.push({ endpoint: ep.id, ok: caps?.ok === true });
     }

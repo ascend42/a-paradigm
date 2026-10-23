@@ -41,7 +41,9 @@ export const LOCAL_USAGE = `usage: gnomon local set --model <id> [--base <url>] 
           This raises a card you allow in Gnomon with your password and the root
           key; once allowed it applies without a restart.
   status  show the applied local-model config and any card waiting for you.
-  remove  stop using a local model (no card: removing narrows).
+  remove  stop using a local model (no card: removing narrows). Afterwards
+          model: local sessions raise a fallback card, model: any sessions go
+          to Claude, and loops with a model node refuse to start.
 
   The guided form is Settings → Local model in Gnomon.
 `;
@@ -140,7 +142,8 @@ export async function runLocalCommand(argv: readonly string[], io: { stdout: Out
       }
       if (verb === 'remove') {
         heading(io.stdout, 'local', res.existed === true ? 'local model removed' : 'no local model was set');
-        readout(io.stdout, [['now', 'model: local sessions raise a fallback card; loops with a model node refuse to start']]);
+        // Aegis L9: what changes for sessions as well as loops
+        readout(io.stdout, [['now', 'model: local sessions raise a fallback card; model: any sessions go to Claude; loops with a model node refuse to start'], ['undo', 'gnomon local set --model <id> (a new card; the removed config never applies again)']]);
         return LOCAL_EXIT_OK;
       }
       const runner = (res.runner ?? {}) as Record<string, unknown>;
