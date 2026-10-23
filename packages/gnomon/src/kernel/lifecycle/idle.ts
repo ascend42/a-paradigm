@@ -8,10 +8,13 @@
  * count, §3.9). M1.9: an open GUI WebSocket holds as a 'subscriber', and
  * #scheduler holds as 'timer' while a due instant is inside 10 min (the "no due
  * timers inside 10 min" clause); sessions will hold as 'session' (M1.7).
+ * Loops (gnomon-loops.md §10 D1, build step 6): #loop-timers holds as 'loop'
+ * while any loop timer has a next due instant or a loop run is in flight, so a
+ * scheduled loop fires with the app window closed.
  */
 export const DEFAULT_IDLE_EXIT_MS = 10 * 60_000;
 
-export type IdleHolderKind = 'connection' | 'session' | 'subscriber' | 'timer';
+export type IdleHolderKind = 'connection' | 'session' | 'subscriber' | 'timer' | 'loop';
 
 export interface IdleMonitorOptions {
   idleMs: number;

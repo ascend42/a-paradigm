@@ -112,10 +112,27 @@
     "link.scan.hit",
     "liveness.digest.consumed",
     "liveness.violation",
+    "loop.budget.tightened",
     "loop.closed",
+    "loop.closure.changed",
+    "loop.deleted",
+    "loop.land.waiting",
+    "loop.landed",
+    "loop.node",
+    "loop.notified",
     "loop.open",
+    "loop.parked",
     "loop.paused",
+    "loop.proposed",
+    "loop.request",
+    "loop.resumed",
+    "loop.round",
     "loop.row",
+    "loop.run.ended",
+    "loop.run.started",
+    "loop.trigger.fired",
+    "loop.trusted",
+    "loop.untrusted",
     "manifest.generate",
     "manifest.installed",
     "manifest.load",
@@ -170,6 +187,13 @@
     "request.grant.standing.revoke",
     "request.incident",
     "request.link.revoke",
+    "request.loop.budget",
+    "request.loop.delete",
+    "request.loop.pause",
+    "request.loop.resume",
+    "request.loop.run",
+    "request.loop.trust",
+    "request.loop.untrust",
     "request.mod.install",
     "request.mode.set",
     "request.offer.decide",
@@ -309,6 +333,23 @@
     "link.renewed": "M1.1:P8-R9",
     "link.revoked": "M1.1:P8-R9",
     "link.scan.hit": "M1.1:P8-R9",
+    "loop.budget.tightened": "8.0:loops",
+    "loop.closure.changed": "8.0:loops",
+    "loop.deleted": "8.0:loops",
+    "loop.land.waiting": "8.0:loops",
+    "loop.landed": "8.0:loops",
+    "loop.node": "8.0:loops",
+    "loop.notified": "8.0:loops",
+    "loop.parked": "8.0:loops",
+    "loop.proposed": "8.0:loops",
+    "loop.request": "8.0:loops",
+    "loop.resumed": "8.0:loops",
+    "loop.round": "8.0:loops",
+    "loop.run.ended": "8.0:loops",
+    "loop.run.started": "8.0:loops",
+    "loop.trigger.fired": "8.0:loops",
+    "loop.trusted": "8.0:loops",
+    "loop.untrusted": "8.0:loops",
     "merge.ref.rewritten": "M1.1:P8-D86-D88",
     "merge.reverted": "M1.1:P8-D86-D88",
     "offer.decided": "8.0:TD-2026-10-20-812",
@@ -325,6 +366,13 @@
     "request.grant.standing.revoke": "8.0:TD-2026-10-20-086",
     "request.incident": "M1.1:P8-D86-D88",
     "request.link.revoke": "M1.1:P8-R9",
+    "request.loop.budget": "8.0:loops",
+    "request.loop.delete": "8.0:loops",
+    "request.loop.pause": "8.0:loops",
+    "request.loop.resume": "8.0:loops",
+    "request.loop.run": "8.0:loops",
+    "request.loop.trust": "8.0:loops",
+    "request.loop.untrust": "8.0:loops",
     "request.mod.install": "8.0:TD-2026-10-20-812",
     "request.mode.set": "M1.1:P8-D86-D88",
     "request.offer.decide": "8.0:TD-2026-10-20-812",
@@ -371,7 +419,9 @@
     "session.open": {
       "runMode": "M1.1:P8-D86-D88",
       "resume": "8.0:P8-D98",
-      "principalClass": "8.0:P8-D98"
+      "principalClass": "8.0:P8-D98",
+      "origin": "8.0:loops",
+      "loopRun": "8.0:loops"
     },
     "session.sandbox": {
       "resumedFrom": "8.0:P8-D98",
@@ -403,6 +453,12 @@
     "key.registry.malformed": {
       "file": "M1.4:P8-D89",
       "reason": "M1.4:P8-D89"
+    },
+    "loop.paused": {
+      "loopId": "8.0:loops",
+      "runId": "8.0:loops",
+      "reason": "8.0:loops",
+      "by": "8.0:loops"
     }
   },
   "x-gnomon-session-taints": [
@@ -553,6 +609,167 @@
     "approval.unlock.joined": [
       "connId",
       "scope"
+    ],
+    "loop.trusted": [
+      "loopId",
+      "scope",
+      "repoKey",
+      "contentHash",
+      "cardId",
+      "authoredBy"
+    ],
+    "loop.untrusted": [
+      "loopId",
+      "scope",
+      "repoKey",
+      "contentHash",
+      "by"
+    ],
+    "loop.closure.changed": [
+      "loopId",
+      "repoKey",
+      "digest",
+      "by"
+    ],
+    "loop.run.started": [
+      "runId",
+      "loopId",
+      "contentHash",
+      "trigger",
+      "envelopeId"
+    ],
+    "loop.node": [
+      "runId",
+      "nodeId",
+      "visit",
+      "verdict",
+      "confidence",
+      "model",
+      "permitId",
+      "usage",
+      "evidenceRef",
+      "effectiveAutonomy"
+    ],
+    "loop.round": [
+      "runId",
+      "loopId",
+      "repo",
+      "iter",
+      "goal_ref",
+      "tests_passing",
+      "tsc_errors",
+      "diff_lines",
+      "files_touched",
+      "symbols_touched",
+      "tokens",
+      "verdict",
+      "nodeVisits",
+      "escalations",
+      "landedSha"
+    ],
+    "loop.notified": [
+      "runId",
+      "loopId",
+      "nodeId",
+      "as",
+      "cardId"
+    ],
+    "loop.proposed": [
+      "runId",
+      "loopId",
+      "cardId",
+      "paths",
+      "why"
+    ],
+    "loop.landed": [
+      "loopId",
+      "runId",
+      "sha",
+      "paths"
+    ],
+    "loop.land.waiting": [
+      "loopId",
+      "runId",
+      "reason"
+    ],
+    "loop.parked": [
+      "loopId",
+      "runId",
+      "ref",
+      "reason"
+    ],
+    "loop.run.ended": [
+      "runId",
+      "loopId",
+      "reason"
+    ],
+    "loop.trigger.fired": [
+      "loopId",
+      "trigger",
+      "eventId"
+    ],
+    "loop.deleted": [
+      "loopId",
+      "scope",
+      "repoKey",
+      "by"
+    ],
+    "loop.budget.tightened": [
+      "loopId",
+      "scope",
+      "repoKey",
+      "contentHash",
+      "budgets",
+      "by"
+    ],
+    "loop.resumed": [
+      "loopId",
+      "by",
+      "cardId"
+    ],
+    "request.loop.trust": [
+      "loopId",
+      "scope",
+      "repo"
+    ],
+    "request.loop.untrust": [
+      "loopId",
+      "scope",
+      "repo"
+    ],
+    "request.loop.pause": [
+      "loopId",
+      "scope",
+      "repo",
+      "all"
+    ],
+    "request.loop.resume": [
+      "loopId",
+      "scope",
+      "repo"
+    ],
+    "request.loop.run": [
+      "loopId",
+      "scope",
+      "repo"
+    ],
+    "request.loop.delete": [
+      "loopId",
+      "scope",
+      "repo"
+    ],
+    "request.loop.budget": [
+      "loopId",
+      "scope",
+      "repo",
+      "budgets"
+    ],
+    "loop.request": [
+      "op",
+      "loopId",
+      "scope",
+      "repo",
+      "hsid"
     ]
   },
   "x-gnomon-kind-payloads": {

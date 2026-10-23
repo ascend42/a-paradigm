@@ -166,3 +166,59 @@ describe('Aegis C1e: the logged rowsDigest against the shown rows', () => {
     expect(deny.rootMismatches).toEqual([]);
   });
 });
+
+describe('TD-2026-10-22-769 (Mika F3): the local.config card renders its gnomon-root-local:v1 row, or offers no Allow', () => {
+  const ep = (o: Record<string, unknown> = {}) => ({ id: 'ollama', base: 'http://127.0.0.1:11434', model: 'qwen2.5-coder:14b', compat: 'ollama', loops: true, ...o });
+  const run = (o: Record<string, unknown> = {}) => ({ node: '/Applications/Gnomon.app/Contents/Resources/node/bin/node', nodeSha256: '5e2a90c1'.padEnd(64, '0'), dir: '/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local', treeSha256: '9c41e0b2'.padEnd(60, '1') + '3a7f', entry: 'cli.js', ...o });
+  const row = (o: Record<string, unknown> = {}, local: Record<string, unknown> = {}) => ({ schemaVersion: 'gnomon-root-local:v1', version: 1, runnerSource: 'bundled', local: { endpoints: [ep()], runner: run(), ...local }, cardId: C, ...o });
+  const grant = (r: Record<string, unknown>, detail: Record<string, unknown> = {}) => card([r], { kind: 'grant', detail: { action: 'local.config', previous: null, ...detail } });
+
+  it('every signed field in full, and Allow is offered', () => {
+    const c = grant(row({}, { endpoints: [ep(), ep({ id: 'coder', base: 'http://localhost:8080/v1', model: 'big', compat: 'llama.cpp', loops: undefined })] }));
+    const rr = rootRowsOf(c);
+    expect(rr).not.toBeNull();
+    // one line per signed field (Mika's card copy): the version, each endpoint and its model, the runner pin and folder
+    expect(rr!.lines).toEqual([
+      'local model config v1 · new',
+      'endpoint ollama · an Ollama server at http://127.0.0.1:11434',
+      'model qwen2.5-coder:14b · loops may use it',
+      'endpoint coder · a llama.cpp server at http://localhost:8080/v1',
+      'model big · sessions only',
+      'runner · bundled · tree 9c41e0b2…3a7f · sha 5e2a90c1…',
+      'runner folder /Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local/cli.js · node /Applications/Gnomon.app/Contents/Resources/node/bin/node',
+    ]);
+    const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+    expect(el.text).toContain('This decision signs');
+    // C3: the ⊙ gnomon family head, hand only · root key, and the presence line
+    expect(el.text).toContain('⊙ gnomon · grant');
+    expect(el.text).toContain('hand only · root key');
+    expect(el.text).toContain('Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice');
+    expect(keysOf(el)).toEqual(['allow', 'deny']);
+  });
+
+  it('fails closed (no Allow, deny kept) on anything it cannot render', () => {
+    const bad: Array<[string, Record<string, unknown>]> = [
+      ['a LAN endpoint', row({}, { endpoints: [ep({ base: 'http://192.168.1.20:11434' })] })],
+      ['a public endpoint', row({}, { endpoints: [ep({ base: 'https://api.anthropic.com' })] })],
+      ['a cloud compat', row({}, { endpoints: [ep({ compat: 'openai' })] })],
+      ['five endpoints', row({}, { endpoints: ['a', 'b', 'c', 'd', 'e'].map((id) => ep({ id })) })],
+      ['an unknown endpoint field', row({}, { endpoints: [ep({ surface: 'full' })] })],
+      ['an unknown local field', row({}, { ctxFloor: 8192 })],
+      ['an unknown row field', row({ signer: 'x' })],
+      ['no runner', row({}, { runner: undefined })],
+      ['a short tree hash', row({}, { runner: run({ treeSha256: 'abc' }) })],
+      ['a climbing entry', row({}, { runner: run({ entry: '../cli.js' }) })],
+      ['a fractional version', row({ version: 1.5 })],
+      ['no runnerSource', row({ runnerSource: undefined })],
+      ['a row for another card', row({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZY' })],
+      ['a loops flag that is a number', row({}, { endpoints: [ep({ loops: 1 })] })],
+    ];
+    for (const [name, r] of bad) {
+      const clean = JSON.parse(JSON.stringify(r)) as Record<string, unknown>;
+      const c = grant(clean);
+      expect(rootRowsOf(c), name).toBeNull();
+      const el = renderCard({ doc: fdoc }, view(c), c.block) as FEl;
+      expect(keysOf(el), name).toEqual(['deny']);
+    }
+  });
+});

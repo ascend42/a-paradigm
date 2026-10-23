@@ -1,6 +1,6 @@
 {
   "schema": "gnomon-decision-batch-vectors:v2",
-  "note": "TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).",
+  "note": "TD-2026-10-20-514 + Aegis C1-C3/C7: the decision.sign rules (helper 1.8.0; 1.9.0 adds loop-trust requestedBy and local.config, TD-2026-10-22-769). Generated from the TS mirror (packages/gnomon/src/kernel/identity/decision-batch.ts) and read by packages/gnomon/test/decision-batch.test.ts and packages/gnomon-helper/darwin/Tests (Swift). Every approvals[], root[] and intent string is the EXACT bytes (UTF-8); intent null = the field is absent. error null = signed, and shown is the helper line byte-exact; else the refusal code. LF-pinned (.gitattributes).",
   "vectors": [
     {
       "name": "install: approve + presence, the decision row and all five grant rows",
@@ -743,6 +743,538 @@
       "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"},{\"capabilities\":[\"tools:call-xxxxxxxxxx-0\",\"tools:call-xxxxxxxxxx-1\",\"tools:call-xxxxxxxxxx-2\",\"tools:call-xxxxxxxxxx-3\",\"tools:call-xxxxxxxxxx-4\",\"tools:call-xxxxxxxxxx-5\",\"tools:call-xxxxxxxxxx-6\",\"tools:call-xxxxxxxxxx-7\",\"tools:call-xxxxxxxxxx-8\",\"tools:call-xxxxxxxxxx-9\",\"tools:call-xxxxxxxxxx-10\",\"tools:call-xxxxxxxxxx-11\",\"tools:call-xxxxxxxxxx-12\",\"tools:call-xxxxxxxxxx-13\",\"tools:call-xxxxxxxxxx-14\",\"tools:call-xxxxxxxxxx-15\",\"tools:call-xxxxxxxxxx-16\",\"tools:call-xxxxxxxxxx-17\",\"tools:call-xxxxxxxxxx-18\",\"tools:call-xxxxxxxxxx-19\",\"tools:call-xxxxxxxxxx-20\",\"tools:call-xxxxxxxxxx-21\",\"tools:call-xxxxxxxxxx-22\",\"tools:call-xxxxxxxxxx-23\",\"tools:call-xxxxxxxxxx-24\",\"tools:call-xxxxxxxxxx-25\",\"tools:call-xxxxxxxxxx-26\",\"tools:call-xxxxxxxxxx-27\",\"tools:call-xxxxxxxxxx-28\",\"tools:call-xxxxxxxxxx-29\",\"tools:call-xxxxxxxxxx-30\",\"tools:call-xxxxxxxxxx-31\",\"tools:call-xxxxxxxxxx-32\",\"tools:call-xxxxxxxxxx-33\",\"tools:call-xxxxxxxxxx-34\",\"tools:call-xxxxxxxxxx-35\",\"tools:call-xxxxxxxxxx-36\",\"tools:call-xxxxxxxxxx-37\",\"tools:call-xxxxxxxxxx-38\",\"tools:call-xxxxxxxxxx-39\",\"tools:call-xxxxxxxxxx-40\",\"tools:call-xxxxxxxxxx-41\",\"tools:call-xxxxxxxxxx-42\",\"tools:call-xxxxxxxxxx-43\",\"tools:call-xxxxxxxxxx-44\",\"tools:call-xxxxxxxxxx-45\",\"tools:call-xxxxxxxxxx-46\",\"tools:call-xxxxxxxxxx-47\",\"tools:call-xxxxxxxxxx-48\",\"tools:call-xxxxxxxxxx-49\",\"tools:call-xxxxxxxxxx-50\",\"tools:call-xxxxxxxxxx-51\",\"tools:call-xxxxxxxxxx-52\",\"tools:call-xxxxxxxxxx-53\",\"tools:call-xxxxxxxxxx-54\",\"tools:call-xxxxxxxxxx-55\",\"tools:call-xxxxxxxxxx-56\",\"tools:call-xxxxxxxxxx-57\",\"tools:call-xxxxxxxxxx-58\",\"tools:call-xxxxxxxxxx-59\"],\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.capability\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"read\":[\"/Users/x/notes\",\"/Users/x/docs\"],\"schemaVersion\":\"grantRow:v1\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.install\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"name\":\"acme.diff-lens\",\"packageHash\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"schemaVersion\":\"grantRow:v2\",\"source\":\"package\"}]",
       "error": null,
       "shown": "Gnomon Helper: ONE presence signs install on install card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; trust community; 60 capabilities sha:5e2710ac220f (reads 2 paths); install acme.diff-lens from package sha256:eeeeeeeeeeee; digests 20625fbfd302 1a09afa1106a cc9fa5327bb2 e4612c1337d4 683d17b73e78 10792381ba03"
+    },
+    {
+      "name": "loop-trust: one loop.trusted row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:b892a3f963253eacc12e6bab21dff94dd0fc1b1581eb6c6c53d47b9b9b4da288\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on loop-trust card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; trust loop repo/flow-health repo bbbbbbbbbbbb sha256:cccccccccccc; digests 86df9d57b51c 1a09afa1106a cded7f7fceb6 8d0e9bdc81ad"
+    },
+    {
+      "name": "C3: a loop-trust with no row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": "batch-refused",
+      "why": "a loop-trust signs exactly one loop.trusted row"
+    },
+    {
+      "name": "C3: a loop-trust never signs a grant row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:e86ca6db403d79ec056dc40826be1fcbf3b69abb44ec918411b66e1c918d776f\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}"
+      ],
+      "intent": "[{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}]",
+      "error": "batch-refused",
+      "why": "a loop-trust signs exactly one loop.trusted row"
+    },
+    {
+      "name": "C3: a loop.trusted row without its content hash",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:9b5b223af36bda522d4676b32b46f385dffa2ca38b5ba310aa7ce163aa80345d\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}]",
+      "error": "batch-refused",
+      "why": "a loop.trusted row names its loop, scope, repo and content hash"
+    },
+    {
+      "name": "C3: a loop.trusted row for another card",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:ab54a40f093a89adf89388c84f6b07645992ff4eb4829e83085ff97ab07c8e39\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}]",
+      "error": "batch-refused",
+      "why": "a root row does not name the decided card"
+    },
+    {
+      "name": "C3: a loop.trusted row with an unknown field",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:b3b55ffc88acb9346c65ad626626d44e20b9be1cc0fc28bb9b743f6e448434fe\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"envelopeId\":\"env-1\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"envelopeId\":\"env-1\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}]",
+      "error": "batch-refused",
+      "why": "a loop.trusted row never carries envelopeId"
+    },
+    {
+      "name": "C3: a loop.trusted row with a malformed repo key",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:14c7e98527a466b1e740f60dea72f668a8aeb4e80d59e01028e8e77544bc07c2\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:xyz\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:xyz\",\"scope\":\"repo\"}]",
+      "error": "batch-refused",
+      "why": "a loop.trusted row names its loop, scope, repo and content hash"
+    },
+    {
+      "name": "C3: a loop.trusted row with an unknown scope",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:127347736b76ac18da42ae3465db196f3f9bf6dca8bb1e5a4ba859a6e4fa5263\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"global\"}"
+      ],
+      "intent": "[{\"by\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"global\"}]",
+      "error": "batch-refused",
+      "why": "a loop.trusted row names its loop, scope, repo and content hash"
+    },
+    {
+      "name": "helper 1.9.0: a loop.trusted row names the agent that asked (requestedBy)",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:217424e0c6b2d26f5128ee3396f94e48f5fe29a6a453429df4368139f2ab370e\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"root\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"requestedBy\":\"p:abcdefgh/a-01hzzzzz\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"root\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"requestedBy\":\"p:abcdefgh/a-01hzzzzz\",\"scope\":\"repo\"}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on loop-trust card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; trust loop repo/flow-health repo bbbbbbbbbbbb sha256:cccccccccccc; digests 86df9d57b51c 1a09afa1106a b55203de973c 2d9ed314b238"
+    },
+    {
+      "name": "local.config: one gnomon-root-local:v1 row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:92062b07b064a69971426ad2ad97b60c4a53f7b4cd52b5a2c56d82164a79cbaf\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on local.config card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; local model config v3: endpoint ollama http://127.0.0.1:11434 model qwen3.5:9b (ollama) loops: yes; bundled runner /Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local/cli.js tree bbbbbbbbbbbb node /Applications/Gnomon.app/Contents/Resources/node/bin/node aaaaaaaaaaaa; digests 86df9d57b51c 1a09afa1106a d24f01bc6042 95284de619a7"
+    },
+    {
+      "name": "local.config: two endpoints, one for sessions only, on localhost and [::1]",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:a3f810805a058b8467aa6174ad72310ec4b9c70b1827bee6f78acf7502b57664\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://localhost:8080/v1\",\"compat\":\"llama.cpp\",\"id\":\"coder\",\"model\":\"qwen3.5:9b\"},{\"base\":\"http://[::1]:1234\",\"compat\":\"lm-studio\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://localhost:8080/v1\",\"compat\":\"llama.cpp\",\"id\":\"coder\",\"model\":\"qwen3.5:9b\"},{\"base\":\"http://[::1]:1234\",\"compat\":\"lm-studio\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on local.config card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; local model config v3: endpoint coder http://localhost:8080/v1 model qwen3.5:9b (llama.cpp) loops: no, endpoint ollama http://[::1]:1234 model qwen3.5:9b (lm-studio) loops: yes; bundled runner /Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local/cli.js tree bbbbbbbbbbbb node /Applications/Gnomon.app/Contents/Resources/node/bin/node aaaaaaaaaaaa; digests 86df9d57b51c 1a09afa1106a 8d204200287d 2eeb11fa4c89"
+    },
+    {
+      "name": "Aegis M1: a runner dir over 256 characters is refused (the runner is never compacted)",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:9bab0832b4baa5b5bf8214ae9219196a15d742d4ebc132f109fa698d5f530136\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry"
+    },
+    {
+      "name": "Aegis M1: a node path over 256 characters is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:7bdf84d09fe1017c87eb98677655874435fdf4318abc7524eaf4e878cacd1542\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry"
+    },
+    {
+      "name": "Aegis M1: a row that does not fit the line in full is refused too-large-to-show, never compacted",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:eb2efae418953dd1dce782d2c7193aa5e0c40eadd81103cfb48e95ca4d7cdc25\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"b\",\"loops\":true,\"model\":\"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"c\",\"loops\":true,\"model\":\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"d\",\"loops\":true,\"model\":\"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\"}],\"runner\":{\"dir\":\"/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"entry\":\"cli.js\",\"node\":\"/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"b\",\"loops\":true,\"model\":\"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"c\",\"loops\":true,\"model\":\"oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"d\",\"loops\":true,\"model\":\"pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp\"}],\"runner\":{\"dir\":\"/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"entry\":\"cli.js\",\"node\":\"/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "too-large-to-show"
+    },
+    {
+      "name": "Aegis L6: an override runner is marked on the line",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:0f5ade2ac6afea6e8de7e0a92b88e7aec08cd8adcffad581f81818a1c6b34386\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Users/x/code/gnomon-local/dist\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"override\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Users/x/code/gnomon-local/dist\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"override\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs allow on local.config card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; local model config v3: endpoint ollama http://127.0.0.1:11434 model qwen3.5:9b (ollama) loops: yes; OVERRIDE runner /Users/x/code/gnomon-local/dist/cli.js tree bbbbbbbbbbbb node /Applications/Gnomon.app/Contents/Resources/node/bin/node aaaaaaaaaaaa; digests 86df9d57b51c 1a09afa1106a 19c119876acc 4bfc9ddaa70d"
+    },
+    {
+      "name": "Aegis L6: a row that does not say bundled or override is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:b3e1455d82eebbb99eb4010c2e7cb92ff9d8ff5790adfc8eae421e9ecad0a13e\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local config row says whether its runner is bundled or an override"
+    },
+    {
+      "name": "Aegis L7: a loop.trusted by that is not a principal is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:f03da62d0e21d0ae84bfa8b9eef94c4a8f52a1a3c83caa75192e303a0745c09b\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"someone\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"someone\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"scope\":\"repo\"}]",
+      "error": "batch-refused",
+      "why": "a loop.trusted by is a principal"
+    },
+    {
+      "name": "Aegis L7: a loop.trusted requestedBy over 128 characters is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"loop-trust\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:815750c531ae53452a583396ca6c527cb1d76a9de74bfbdca344df101a032698\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"by\":\"root\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"requestedBy\":\"p:abcdefgh/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"scope\":\"repo\"}"
+      ],
+      "intent": "[{\"by\":\"root\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"closureDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"contentHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"coreHash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"kind\":\"loop.trusted\",\"loopId\":\"flow-health\",\"repoKey\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"requestedBy\":\"p:abcdefgh/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"scope\":\"repo\"}]",
+      "error": "batch-refused",
+      "why": "a loop.trusted requestedBy is a principal"
+    },
+    {
+      "name": "C3: a local.config with no row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": "batch-refused",
+      "why": "a local.config signs exactly one gnomon-root-local:v1 row"
+    },
+    {
+      "name": "C3: a local.config never signs a grant row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:b15e6d4165b53b9c49d9d2f50cc5bf3d2888633da03909e39843ec4931324349\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3},{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"kind\":\"grant.trust\",\"manifestHash\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"schemaVersion\":\"grantRow:v1\",\"tier\":\"community\"}]",
+      "error": "batch-refused",
+      "why": "a local.config signs exactly one gnomon-root-local:v1 row"
+    },
+    {
+      "name": "C3: a local.config row for another card",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:5f33b62fa6c4c0cd89f6b0b7ba7229fa2bb7bbeab5e2609f4e5f08ceb9e0ef36\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZY\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a root row does not name the decided card"
+    },
+    {
+      "name": "C3: a LAN endpoint is refused (loopback only in 8.0)",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:20faf6fc6b98636cd881c48382ed99a2d346e319552c5cdd89ef57885fd4a974\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://192.168.1.20:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://192.168.1.20:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local endpoint is loopback only in 8.0"
+    },
+    {
+      "name": "C3: a public endpoint is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:2026f04d7edcd5838693512bc4b51e1937cb53146506b723e1e92069b17e522e\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"https://api.anthropic.com\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"https://api.anthropic.com\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local endpoint is loopback only in 8.0"
+    },
+    {
+      "name": "C3: a loopback base with a trailing newline is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:54501c9f629c0b3452c283b51407bf3b068ed1fcf8cc05bbaabb7b58061e3400\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\\n\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\\n\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local endpoint is loopback only in 8.0"
+    },
+    {
+      "name": "C3: port 0 is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:605375ac135b92baf5ae881bd5bc8c95ce3b33d81d80cf63539e5181ef72ebf8\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:0\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:0\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local endpoint is loopback only in 8.0"
+    },
+    {
+      "name": "C3: a cloud compat is refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:61861ca354a37e7dcaf58b39aa54e34bc3495bfe89238bad8c366798570e1ded\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"openai\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"openai\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local endpoint names its id, model and a local compat"
+    },
+    {
+      "name": "C3: five endpoints are refused",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:03b8b17abf552fa4bcb7da89952fe0d8ef7752daa5122d453aba5ea4fc6ace35\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"a\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"b\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"c\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"d\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"e\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"a\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"b\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"c\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"d\",\"loops\":true,\"model\":\"qwen3.5:9b\"},{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"e\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local config names 1..4 endpoints"
+    },
+    {
+      "name": "C3: an endpoint field outside the closed set (surface)",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:1496b66ac16368eef602db5a036b061335d15c507182658cd04be3c93f901409\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\",\"surface\":\"full\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\",\"surface\":\"full\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local endpoint never carries surface"
+    },
+    {
+      "name": "C3: a lane limit outside the closed set (ctxFloor)",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:d7a9a7bb9a991346a0021f0ffa4dc844a0e2263a0ec5b1a2fe80612eab65dc1e\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"ctxFloor\":8192,\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"ctxFloor\":8192,\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local config never carries ctxFloor"
+    },
+    {
+      "name": "C3: a row field outside the closed set",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:e7b65ae58e93f089406bc987ba4a39e5038b24c9f44d05def5cc663789380a07\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"signer\":\"x\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"signer\":\"x\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local config row never carries signer"
+    },
+    {
+      "name": "C3: no runner pin",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:eafbce3ff140e1a56316027c3c73489ebef806caeac53757698d94a267c6f1bf\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}]},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}]},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local config pins its runner"
+    },
+    {
+      "name": "C3: a relative runner dir",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:07b88204d941bd35e66b771707d9be6052c764c1c1a59f87ac483e7f2c84dc04\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"gnomon-local/dist\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"gnomon-local/dist\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry"
+    },
+    {
+      "name": "C3: a runner entry that climbs out",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:11e7af705d249809d9ad0261162632edf6f49d090cb0b95db06dbb2361d36bd2\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"../cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"../cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry"
+    },
+    {
+      "name": "C3: a short tree hash",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:5da5e67e979a57aca27da7d2e04db79f93722d578526732c488a73a34fee880a\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"abc\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"abc\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local runner pin names node, its sha256, the dir, its tree sha256 and the entry"
+    },
+    {
+      "name": "C3: a fractional version",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:b2a819710ecb1b5615b41e199dcaf5032e35709fb91547dbea95bab9230194f8\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":1.5}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":1.5}]",
+      "error": "batch-refused",
+      "why": "a local config row names its version (a whole number)"
+    },
+    {
+      "name": "C3: a boolean version",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:d54e9c2fe214582dd9620589972d8243e0acd7ca9795e718ed16ab76b6e14421\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":true}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":true}]",
+      "error": "batch-refused",
+      "why": "a local config row names its version (a whole number)"
+    },
+    {
+      "name": "C3: a loops flag that is not a boolean",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:dfc9f76150e92eef1d81eca78455cda9ec1b50b4f4b2f384788caecd9cb51c5d\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":1,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":1,\"model\":\"qwen3.5:9b\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a local endpoint loops flag is true or false"
+    },
+    {
+      "name": "C2: a model with a control character cannot be shown",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"local.config\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:023dc65208731cc24113fdad2c0b9e4d43bda111a01d19fa9cc934a69a104f80\",\"schemaVersion\":\"gnomon-root-decision:v2\"}",
+        "gnomon:row-sig:v1\n{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"createdAt\":\"2026-10-20T12:00:00.000Z\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen\\u0007\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}"
+      ],
+      "intent": "[{\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"local\":{\"endpoints\":[{\"base\":\"http://127.0.0.1:11434\",\"compat\":\"ollama\",\"id\":\"ollama\",\"loops\":true,\"model\":\"qwen\\u0007\"}],\"runner\":{\"dir\":\"/Applications/Gnomon.app/Contents/Resources/kernel/dist/gnomon-local\",\"entry\":\"cli.js\",\"node\":\"/Applications/Gnomon.app/Contents/Resources/node/bin/node\",\"nodeSha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"treeSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}},\"runnerSource\":\"bundled\",\"schemaVersion\":\"gnomon-root-local:v1\",\"version\":3}]",
+      "error": "batch-refused",
+      "why": "a root row holds a character the dialog cannot show"
     }
   ]
 }

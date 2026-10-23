@@ -61,6 +61,7 @@ usage: gnomon [<command>] [options]     (every command takes --help)
   identity           init | status: provision or inspect the hardware identity (Secure Enclave, Touch ID)
   session            repin-claude: re-pin the claude binary after Claude Code updates itself
   rules              list | revoke: standing always-allow rules
+  local              set | status | remove: the local model (loopback only; you allow it with the root key)
   mod                stage mod changes as cards for approval (never signs)
   desk               stats: offers shown and kept per mod (the Desk)
   replay             replay the hash-chained log and check its head

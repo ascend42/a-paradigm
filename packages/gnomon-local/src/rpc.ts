@@ -22,6 +22,8 @@ import { realpathSync } from 'node:fs';
 import { Agent, type Emit } from './agent.js';
 import { COMPAT_ALLOWLIST, type ToolSurface } from './compat.js';
 import { classifyEndpoint } from './endpoint.js';
+import { protectGlob } from './protect.js';
+import { TOOLS } from './tools.js';
 
 export interface LocalSessionConfig {
   schemaVersion: 'gnomon-local-session:v1';
@@ -38,6 +40,10 @@ export interface LocalSessionConfig {
   contextTarget: number;
   forbiddenPorts: number[];
   systemPrompt?: string;
+  /** Loops step 10 (an act session): the tool names allowed (absent = all) */
+  tools?: string[];
+  /** Loops step 10 (an act session): protected repo-relative globs write_file refuses (no card) */
+  protect?: string[];
 }
 
 export class ConfigError extends Error {}
@@ -90,7 +96,16 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
     contextTarget,
     forbiddenPorts,
     ...(typeof c.systemPrompt === 'string' ? { systemPrompt: c.systemPrompt } : {}),
+    ...strList(c.tools, 'tools', (t) => TOOLS.some((x) => x.name === t)),
+    ...strList(c.protect, 'protect', (g) => g.length > 0 && g.length <= 512),
   };
+}
+
+/** An optional list of strings, every one valid, or a ConfigError (fail closed: a malformed list never means "all"). */
+function strList<K extends 'tools' | 'protect'>(v: unknown, key: K, ok: (s: string) => boolean): Partial<Record<K, string[]>> {
+  if (v === undefined) return {};
+  if (!Array.isArray(v) || v.length > 4096 || v.some((x) => typeof x !== 'string' || !ok(x))) throw new ConfigError(`${key} must be a list of valid strings`);
+  return { [key]: [...v] } as Partial<Record<K, string[]>>;
 }
 
 /** Wire an agent to a line source; returns the line handler. */
@@ -108,6 +123,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
     contextTarget: cfg.contextTarget,
     forbiddenPorts: cfg.forbiddenPorts,
     ...(cfg.systemPrompt !== undefined ? { systemPrompt: cfg.systemPrompt } : {}),
+    ...(cfg.tools ? { allowTools: cfg.tools } : {}),
+    ...(cfg.protect ? { protect: cfg.protect.map(protectGlob) } : {}),
     emit,
   });
   emit({ type: 'model_capabilities', backend: 'local', model: cfg.endpoint.model, compat: cfg.endpoint.compat, tools: cfg.capabilities.tools, ctx: cfg.capabilities.nCtx, surface: cfg.surface, textTools: !cfg.capabilities.tools && cfg.surface !== 'none', contextTarget: cfg.contextTarget });

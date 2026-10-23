@@ -64,6 +64,17 @@ async function boot(): Promise<void> {
     (document.querySelector('#chead-meta .model-btn') as HTMLElement | null)?.click();
     (document.querySelector('#chead-meta .model-menu [data-model="opus"]') as HTMLElement | null)?.click();
   }
+  // #gui-loops: opening the leaf and unfolding a card need no trust; Trust and Review do
+  if (fx.open === 'loops-waiting') (document.querySelector('[data-loop-review-all]') as HTMLElement | null)?.click();
+  if (fx.open === 'loops-waiting' && !document.querySelector('.lp-leaf:not([hidden])')) document.getElementById('loops-word')?.click();
+  if (fx.open === 'loops-trust') {
+    // the pile repaints as status and rows settle: click Read once it has stayed put, and again if a repaint folded it
+    for (let tries = 0; tries < 20 && !document.querySelector('.lt-wrap:not([hidden])'); tries++) {
+      for (let i = 0; i < 200 && !document.querySelector('#stack [data-loop-read]'); i++) await frames(1);
+      (document.querySelector('#stack [data-loop-read]') as HTMLElement | null)?.click();
+      await frames(5);
+    }
+  }
   await frames(3);
   document.documentElement.dataset.preview = 'ready';
 }

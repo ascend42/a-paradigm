@@ -364,10 +364,27 @@ export const VOICE_CLIENT_REQUEST = 'request.voice.client' as const;
 /** TD-2026-10-21-514: the GUI's send claim and the held send word (dispatcher-only, never rows; no id moves). */
 export const VOICE_SEND_CLAIM_REQUEST = 'request.voice.send.claim' as const;
 export const VOICE_SENDWORD_REQUEST = 'request.voice.sendword' as const;
+/** TD-2026-10-22-769: the human's local-model config request (dispatcher-only, never a row; no contract id moves). */
+export const LOCAL_CONFIG_REQUEST = 'request.local.config' as const;
+/** Aegis M2: status.local as a class sees it: in full for the human; configured / loopbackOnly / offered for any other. */
+export function localStatusFor(cls: string, full: Record<string, unknown>): Record<string, unknown> {
+  return cls === 'human' ? full : { configured: full.configured === true, loopbackOnly: true, offered: full.offered === true };
+}
+
+/** TD-2026-10-22-769 (Mika C1): the read-only loopback check (dispatcher-only, never a row; no contract id moves). */
+export const LOCAL_PROBE_REQUEST = 'request.local.probe' as const;
 
 export interface HumanRequestPort {
   modeSet(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
   status(): Record<string, unknown>;
+  /**
+   * M2.11-lite (#strictness-levels, broker/strictness.ts): request.strictness.set{repoKey | repo, level} from the human
+   * on a gui or device connection ONLY (G-STR-01); status() is the human class's status.strictness.
+   */
+  strictness?: {
+    set(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    status(): Record<string, unknown>;
+  };
   /** TD-2026-10-20-086 F6 (#standing-grant): request.grant.standing / .revoke from the human; status.standing */
   standing?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; deviceId?: string }, payload: unknown): Promise<unknown>;
@@ -398,6 +415,28 @@ export interface HumanRequestPort {
   sessionNames?: {
     rename(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
     namesFor(principal: string): Array<{ hsid: string; name: string }>;
+  };
+  /**
+   * 8.0:loops (#loop-registry, kernel/loops/wire.ts): request.loop.trust|untrust|pause|resume|run|delete from the human
+   * on a gui or device connection ONLY (the asker stamped here); status() is the human class's status.loops.
+   */
+  /**
+   * TD-2026-10-22-769 (#local-config-request): request.local.config{op:'set', endpoint, runner?} | {op:'remove'} from the
+   * human on a gui or device connection ONLY (never voice, an agent or a session; the asker stamped here). Dispatcher-
+   * only and never a row: it is not in the §9.1 registry, so no contract id moves. status.local rides extraStatus.
+   */
+  local?: {
+    request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    /** status.local in full (the human class only; localStatusFor) */
+    status?(): Record<string, unknown>;
+    /** request.local.probe{model, base?, compat?}: the read-only loopback check before a card (no card, no row) */
+    probe?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+  };
+  loops?: {
+    request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
+    status(): Record<string, unknown>;
+    /** #loop-agent-ops (step 12): an AGENT's loop.request; the asker (principal, hsid) is stamped from this connection */
+    agent?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined; hsid: string | null }, payload: unknown): Promise<unknown>;
   };
 }
 
@@ -529,9 +568,13 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
       ...(o.approvals ? o.approvals.status() : {}),
       ...(o.requests && cls === 'human' ? { runModes: o.requests.status() } : {}),
+      ...(o.requests?.strictness && cls === 'human' ? { strictness: o.requests.strictness.status() } : {}),
       ...(o.requests?.standing && cls === 'human' ? { standing: o.requests.standing.status() } : {}),
       // 8.0:session-rename: the names of THIS human's sessions (display text; the GUI folds session.renamed rows too)
       ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
+      ...(o.requests?.loops && cls === 'human' ? { loops: o.requests.loops.status() } : {}),
+      // Aegis M2 (TD-2026-10-22-769): status.local in full to the human only; any other class sees three facts
+      ...(o.requests?.local?.status ? { local: localStatusFor(cls, o.requests.local.status()) } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
       // T-2026-10-20-005: status.voice.capture rides here too; voiceStatusFor is the V2 projection (B1's partial words,
       // capture.text, reach a human-class connection on the gui credential only)
@@ -824,6 +867,16 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // M2.11-lite: request.strictness.set from the human on a first-party connection (GUI launch token or human device)
+      if (pa?.kind === 'request.strictness.set' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.strictness) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.strictness.set({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       // 8.0:model-switch: the human switches a live Claude session's model (GUI launch token or human device only)
       if (pa?.kind === 'request.session.model' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.sessions?.model) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
@@ -874,6 +927,48 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
           return await o.requests.sessionNames.rename({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-22-769 (#local-config-request): the human sets or removes the local-model config (gui/device only)
+      if (pa?.kind === LOCAL_CONFIG_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.local) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${LOCAL_CONFIG_REQUEST}', payload:{op:'set', endpoint, runner?} | {op:'remove'}}`);
+        try {
+          return await o.requests.local.request({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // TD-2026-10-22-769 (Mika C1): the read-only loopback check before a card (gui/device human only; no row, no card)
+      if (pa?.kind === LOCAL_PROBE_REQUEST && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.local?.probe) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${LOCAL_PROBE_REQUEST}', payload:{model, base?, compat?}}`);
+        try {
+          return await o.requests.local.probe({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // 8.0:loops (#loop-registry): the human's request.loop.* (gui/device human connections only, stamped by connId)
+      if (typeof pa?.kind === 'string' && pa.kind.startsWith('request.loop.') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.loops) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.loops.request({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.kind, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // 8.0:loops step 12 (#loop-agent-ops): loop.request goes to the agent pre-gate and nowhere else; the asker's
+      // principal and hsid come from THIS connection, never the payload. Every class reaches the gate, which refuses
+      // all but an agent (sessions and loop sessions: LL5; peers, voice, mods: never)
+      if (pa?.kind === 'loop.request' && o.requests?.loops?.agent) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for loop.request (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.loops.agent({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential, hsid: s.hsid ?? null }, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

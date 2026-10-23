@@ -63,7 +63,7 @@ export interface MiniEl {
 
 // h2/h3 are for the GUI's own sheet titles and section heads (trusted strings). If markdown ever gains headings,
 // render them as a styled p or strong, never h2/h3: model text must not enter the page outline (Aegis).
-const ALLOWED_TAGS = new Set(['input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small', 'details', 'summary', 'h2', 'h3']);
+const ALLOWED_TAGS = new Set(['form', 'input', 'label', 'fieldset', 'legend', 'div', 'span', 'p', 'pre', 'ul', 'ol', 'li', 'em', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small', 'details', 'summary', 'h2', 'h3']);
 const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type|name|placeholder|maxlength)$/;
 
 /** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */
@@ -269,6 +269,8 @@ export interface CardView {
   batchUnavailable?: boolean;
   /** Aegis L2: the local trust set's namespace (localNsOf the connection's principal); null/absent => no shortening */
   localNs?: string | null;
+  /** #gui-loops: a loop-* card whose loop the kernel attributes to an agent key (authoredBy basis 'agent-key-claim'): the head says "claimed by <agent>" */
+  loopClaimedBy?: string | null;
 }
 
 /** A permission card's composed title: the verb, the whole arg (lines kept), and whether the arg hit TITLE_ARG_MAX. */
@@ -394,7 +396,7 @@ export function raisedLine(raisedAt: string | null | undefined, now: number): st
  * template (supervisor/permission.ts composePermission); the requester's question text starts at line 3 (askLines),
  * so it stays kernel-titled.
  */
-export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant']);
+export const KERNEL_TITLED_KINDS: ReadonlySet<string> = new Set(['permission', 'ask-user', 'plan', 'gate-class', 'strictness', 'daemon-stop', 'api-token', 'fallback', 'install', 'grant', 'loop-trust', 'loop-choice']);
 
 /**
  * Aegis S4 low (1): the stamp names the decision the kernel accepted (never always APPROVED). A closed map over the
@@ -404,6 +406,8 @@ const STAMP_WORDS: Readonly<Record<string, string>> = Object.freeze({
   allow: 'APPROVED', always: 'APPROVED', accept: 'APPROVED', 'approve-plan': 'APPROVED', install: 'INSTALLED',
   deny: 'DENIED', reject: 'REJECTED', withdraw: 'WITHDRAWN', answer: 'ANSWERED', resume: 'RESUMED', resolve: 'RESOLVED',
   'fallback-cloud': 'SENT TO CLOUD', 'use-api-token': 'APPROVED', extend: 'EXTENDED', restart: 'RESTARTED',
+  // 8.0:loops: the loop-choice card's decisions
+  continue: 'CONTINUED', stop: 'STOPPED',
 });
 export function stampWord(decision: string): string {
   return Object.prototype.hasOwnProperty.call(STAMP_WORDS, decision) ? STAMP_WORDS[decision]! : 'DECIDED';
@@ -493,7 +497,11 @@ export interface AskCardDetail {
 }
 
 /** Aegis C1e: decisions that are ROOT class by kind (the kernel's classes.ts); a voice.enrol card names its own in the node. */
-export const ROOT_CLASS_BY_KIND: Readonly<Record<string, readonly string[]>> = Object.freeze({ install: ['install'], 'api-token': ['use-api-token'], grant: ['allow'], 'peer-pair': ['accept'] });
+export const ROOT_CLASS_BY_KIND: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  install: ['install'], 'api-token': ['use-api-token'], grant: ['allow'], 'peer-pair': ['accept'],
+  // 8.0:loops: trusting a loop is root class (gnomon-loops.md §3.1)
+  'loop-trust': ['allow'],
+});
 
 export interface RootRowsView {
   /** the decisions that sign these rows (the kernel's node) */
@@ -504,14 +512,173 @@ export interface RootRowsView {
   lines: string[];
   /** sha256(canonicalJson(rows)): what the logged v2 decision row's rowsDigest must equal */
   rowsDigest: string;
+  /** a local.config card: one item per signed field, with the loop-diff marks on a change (lines is their text) */
+  items?: RootRowItem[];
+  /** the hashed detail's action (grant cards: 'local.config', 'mod.uninstall', …), for the card's family head */
+  action?: string;
+  /** the hashed detail, verified against contentHash */
+  detail?: Record<string, unknown>;
 }
 
 const short = (v: unknown, n = 19): string => (typeof v === 'string' ? (v.length > n ? `${v.slice(0, n)}…` : v) : '?');
 const list = (v: unknown): string | null => (Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]).join(', ') : null);
 
+export const LOCAL_ROOT_SCHEMA = 'gnomon-root-local:v1';
+export const LOCAL_COMPAT_LABEL: Readonly<Record<string, string>> = Object.freeze({ ollama: 'Ollama', 'lm-studio': 'LM Studio', 'llama.cpp': 'llama.cpp', vllm: 'vLLM', 'mlx-lm': 'MLX' });
+// Aegis L4: the SAME table as the kernel's localRowRefusal (decision-batch.ts) and the helper's (Protocol.swift).
+// ASCII classes only ([0-9], never \d): Arabic-Indic or fullwidth digits, LOCALHOST and [::ffff:127.0.0.1] are refused.
+const LOOPBACK_BASE = /^https?:\/\/(?:127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|localhost|\[::1\])(?::([0-9]{1,5}))?(?:\/[A-Za-z0-9._~%/-]*)?$/;
+const ENDPOINT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const SAFE_ENTRY = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+const HEX64 = /^[0-9a-f]{64}$/;
+/**
+ * A string the ONE contracts sanitizer would change or flag (control, bidi, hidden characters): the helper's dialog
+ * cannot show it (decision-batch.ts UNSHOWABLE), so the row is refused, never shown altered.
+ */
+const unshowable = (s: string): boolean => {
+  const r = sanitizeDisplayText(s);
+  return r.text !== s || r.flags.length > 0;
+};
+/** Aegis M1: the runner dir and node path are shown in full, so each is capped (decision-batch.ts LOCAL_PATH_MAX). */
+export const LOCAL_PATH_MAX = 256;
+export const LOCAL_ROW_MAX_ENDPOINTS = 4;
+/** The helper's one-line dialog (decision-batch.ts DECISION_BOUNDS.maxLineChars): a longer line is refused, never compacted. */
+export const HELPER_LINE_MAX = 1200;
+const LOCAL_ROW_FIELDS = ['schemaVersion', 'version', 'local', 'cardId', 'runnerSource', 'createdAt'];
+const LOCAL_COMPATS = ['llama.cpp', 'ollama', 'lm-studio', 'vllm', 'mlx-lm'];
+
+/** The presence line of a root configuration card (Mika's card copy; presence is Touch ID or the Mac password). */
+export const LOCAL_PRESENCE_LINE = 'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice';
+
+/** The kernel's Text lines of a card block, in order (each Text child may hold several lines). */
+export function kernelTextLines(block: unknown): string[] {
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const out: string[] = [];
+  for (const k of kids) if (k && typeof k === 'object' && (k as { type?: unknown }).type === 'Text' && typeof (k as { text?: unknown }).text === 'string') out.push(...((k as { text: string }).text.split('\n')));
+  return out;
+}
+
+/** One line of "This decision signs"; `mark` is the loop-diff mark of a change (presentation only: every field shows). */
+export interface RootRowItem {
+  text: string;
+  mark?: 'add' | 'del';
+}
+
+/** The applied local config as status.local shows it (what a change card is compared with, for the diff marks only). */
+export interface LocalCurrent {
+  version: number | null;
+  endpoints: ReadonlyArray<{ id: string; base: string; model: string; compat: string; loops: boolean }>;
+  runner: { dir: string; entry: string; node: string; nodeSha256: string; treeSha256: string } | null;
+  /** the gnomon-local version of the bundled runner dir (status.local.defaultRunner), for the runner line */
+  bundled?: { dir: string; version: string | null } | null;
+}
+
+type LocalRow = { version: number; runnerSource: 'bundled' | 'override'; cardId: string; endpoints: Array<{ id: string; base: string; model: string; compat: string; loops: boolean }>; runner: { node: string; nodeSha256: string; dir: string; treeSha256: string; entry: string } };
+
+const strIn = (v: unknown, max: number): v is string => typeof v === 'string' && v.length > 0 && v.length <= max;
+const absPath = (v: unknown): v is string => strIn(v, LOCAL_PATH_MAX) && v.startsWith('/') && !v.includes('\0') && !unshowable(v);
+
+/**
+ * TD-2026-10-22-769 (Mika F3, Aegis L4): a gnomon-root-local:v1 row, checked by the kernel's and the helper's own
+ * table, or null (then the card shows no Allow, Aegis C1e). Any field outside the closed sets, a non-loopback base,
+ * a port outside 1..65535, a compat outside the local transports, a model or path holding a control or bidi
+ * character, a path over 256 characters, more than 4 endpoints, or a row whose helper line would not fit (never
+ * compacted) is refused.
+ */
+export function localRowOf(r: Record<string, unknown>): LocalRow | null {
+  const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  const only = (o: Record<string, unknown>, keys: readonly string[]): boolean => Object.keys(o).every((k) => keys.includes(k));
+  if (!only(r, LOCAL_ROW_FIELDS) || r.schemaVersion !== LOCAL_ROOT_SCHEMA || typeof r.version !== 'number' || !Number.isSafeInteger(r.version) || r.version < 0) return null;
+  if (r.runnerSource !== 'bundled' && r.runnerSource !== 'override') return null;
+  if (typeof r.cardId !== 'string' || !obj(r.local)) return null;
+  const l = r.local;
+  if (!only(l, ['endpoints', 'runner']) || !Array.isArray(l.endpoints) || l.endpoints.length < 1 || l.endpoints.length > LOCAL_ROW_MAX_ENDPOINTS || !obj(l.runner)) return null;
+  const endpoints: LocalRow['endpoints'] = [];
+  for (const e of l.endpoints as unknown[]) {
+    if (!obj(e) || !only(e, ['id', 'base', 'model', 'compat', 'loops'])) return null;
+    if (!strIn(e.id, 64) || !ENDPOINT_ID.test(e.id) || !strIn(e.model, 128) || unshowable(e.model) || !strIn(e.compat, 32) || !LOCAL_COMPATS.includes(e.compat)) return null;
+    const m = strIn(e.base, 256) ? LOOPBACK_BASE.exec(e.base) : null;
+    if (!m || (m[1] !== undefined && (Number(m[1]) < 1 || Number(m[1]) > 65535))) return null;
+    if (e.loops !== undefined && typeof e.loops !== 'boolean') return null;
+    endpoints.push({ id: e.id, base: e.base as string, model: e.model, compat: e.compat, loops: e.loops === true });
+  }
+  const ru = l.runner;
+  if (!only(ru, ['node', 'nodeSha256', 'dir', 'treeSha256', 'entry'])) return null;
+  if (!absPath(ru.node) || !absPath(ru.dir) || typeof ru.nodeSha256 !== 'string' || !HEX64.test(ru.nodeSha256) || typeof ru.treeSha256 !== 'string' || !HEX64.test(ru.treeSha256) || !strIn(ru.entry, 128) || !SAFE_ENTRY.test(ru.entry) || ru.entry.split('/').includes('..')) return null;
+  const row: LocalRow = { version: r.version, runnerSource: r.runnerSource, cardId: r.cardId, endpoints, runner: { node: ru.node, nodeSha256: ru.nodeSha256, dir: ru.dir, treeSha256: ru.treeSha256, entry: ru.entry } };
+  return helperLineLength(row) <= HELPER_LINE_MAX ? row : null;
+}
+
+/**
+ * The length of the helper's dialog line for a local.config decision (decision-batch.ts decisionLine + localRowShown):
+ * the head, the one row in full, then four 12-character digests. Aegis L4: never compacted, so a row that would not
+ * fit is refused here as the helper refuses it.
+ */
+export function helperLineLength(r: LocalRow): number {
+  const head = `Gnomon Helper: ONE presence signs allow on local.config ${r.cardId} ${'s'.repeat(19)}`;
+  const eps = r.endpoints.map((e) => `endpoint ${e.id} ${e.base} model ${e.model} (${e.compat})${e.loops ? ' loops: yes' : ' loops: no'}`);
+  const which = r.runnerSource === 'override' ? 'OVERRIDE runner' : 'bundled runner';
+  const shown = `local model config v${r.version}: ${eps.join(', ')}; ${which} ${r.runner.dir}/${r.runner.entry} tree ${'t'.repeat(12)} node ${r.runner.node} ${'n'.repeat(12)}`;
+  return `${head}; ${shown}; digests ${Array.from({ length: 4 }, () => 'd'.repeat(12)).join(' ')}`.length;
+}
+
+const LOCAL_PRESENCE_WORDS = { loops: 'loops may use it', sessions: 'sessions only' };
+const serverPhrase = (compat: string): string => {
+  const name = LOCAL_COMPAT_LABEL[compat] ?? compat;
+  return `${/^[AEIOU]/i.test(name) || /^(LM|MLX)/.test(name) ? 'an' : 'a'} ${name} server`;
+};
+const mid = (h: string): string => `${h.slice(0, 8)}…${h.slice(-4)}`;
+
+/**
+ * "This decision signs" for a local.config card (Mika's card copy): one line per signed field (the config version,
+ * each endpoint with its server and address, its model and whether loops may use it, the runner pin and its folder).
+ * On a change (the card names a previous version and status.local holds the applied config) the lines carry the
+ * loop-diff marks: a changed field shows its old line struck (del) and its new line (add); the rest say "unchanged".
+ * null on anything the table refuses.
+ */
+export function localRootItems(r: Record<string, unknown>, previous: number | null, current?: LocalCurrent | null): RootRowItem[] | null {
+  const row = localRowOf(r);
+  if (!row) return null;
+  const items: RootRowItem[] = [{ text: previous === null ? `local model config v${row.version} · new` : `local model config v${previous} → v${row.version}` }];
+  const cur = previous !== null && current ? current : null;
+  const epLine = (e: { id: string; base: string; compat: string }): string => `endpoint ${e.id} · ${serverPhrase(e.compat)} at ${e.base}`;
+  const loopsWords = (b: boolean): string => (b ? LOCAL_PRESENCE_WORDS.loops : LOCAL_PRESENCE_WORDS.sessions);
+  for (const e of row.endpoints) {
+    const was = cur?.endpoints.find((x) => x.id === e.id);
+    if (!cur || !was) {
+      const add = cur ? ({ mark: 'add' } as const) : {};
+      items.push({ text: epLine(e), ...add }, { text: `model ${e.model} · ${loopsWords(e.loops)}`, ...add });
+      continue;
+    }
+    if (was.base === e.base && was.compat === e.compat) items.push({ text: `${epLine(e)} · unchanged` });
+    else items.push({ text: epLine(was), mark: 'del' }, { text: epLine(e), mark: 'add' });
+    if (was.model === e.model) items.push({ text: `model ${e.model} · unchanged` });
+    else items.push({ text: `model ${was.model}`, mark: 'del' }, { text: `model ${e.model}`, mark: 'add' });
+    if (was.loops === e.loops) items.push({ text: `${loopsWords(e.loops)} · unchanged` });
+    else items.push({ text: loopsWords(was.loops), mark: 'del' }, { text: loopsWords(e.loops), mark: 'add' });
+  }
+  for (const was of cur?.endpoints ?? []) if (!row.endpoints.some((e) => e.id === was.id)) items.push({ text: `${epLine(was)} · model ${was.model}`, mark: 'del' });
+  const ru = row.runner;
+  const version = current?.bundled && current.bundled.dir === ru.dir && current.bundled.version ? ` gnomon-local ${current.bundled.version}` : '';
+  const pin = `runner${version} · ${row.runnerSource === 'override' ? 'OVERRIDE: a folder you named' : 'bundled'} · tree ${mid(ru.treeSha256)} · sha ${ru.nodeSha256.slice(0, 8)}…`;
+  const folder = `runner folder ${ru.dir}/${ru.entry} · node ${ru.node}`;
+  const same = cur?.runner && cur.runner.dir === ru.dir && cur.runner.entry === ru.entry && cur.runner.node === ru.node && cur.runner.nodeSha256 === ru.nodeSha256 && cur.runner.treeSha256 === ru.treeSha256;
+  if (!cur || !cur.runner) items.push({ text: pin, ...(cur ? { mark: 'add' as const } : {}) }, { text: folder, ...(cur ? { mark: 'add' as const } : {}) });
+  else if (same) items.push({ text: `${pin} · unchanged` }, { text: folder });
+  else items.push({ text: `runner folder ${cur.runner.dir}/${cur.runner.entry} · tree ${mid(cur.runner.treeSha256)}`, mark: 'del' }, { text: pin, mark: 'add' }, { text: folder, mark: 'add' });
+  return items;
+}
+
+/** The single-line form (the generic rootRowLine contract): every field, joined. */
+export function localRootRowLine(r: Record<string, unknown>): string | null {
+  const items = localRootItems(r, null);
+  return items ? items.map((i) => i.text).join('; ') : null;
+}
+
 /** One root row as the card shows it, IN FULL; null = a kind this GUI cannot render (then no root key is shown). */
 export function rootRowLine(r: Record<string, unknown>): string | null {
   const s = (k: string): string | null => (typeof r[k] === 'string' ? (r[k] as string) : null);
+  if (r.schemaVersion === LOCAL_ROOT_SCHEMA) return localRootRowLine(r);
   if (r.schemaVersion === 'voiceEnrolRow:v1') return r.op === 'enrol' && s('speakerId') ? `enrol the voice speaker ${s('speakerId')} · consent ${short(r.consentHash)}` : null;
   switch (r.kind) {
     case 'grant.trust':
@@ -530,6 +697,9 @@ export function rootRowLine(r: Record<string, unknown>): string | null {
       return s('publisher') && s('host') && s('namespace') ? `publisher ${s('publisher')} → ${s('host')}/${s('namespace')}` : null;
     case 'grant.install':
       return s('name') && s('source') ? `install ${s('name')} from ${s('source')} · packageHash ${short(r.packageHash)}` : null;
+    // 8.0:loops (trust.ts #raise): the one loop.trusted row a loop-trust card's allow signs
+    case 'loop.trusted':
+      return s('loopId') && (r.scope === 'repo' || r.scope === 'personal') && s('contentHash') ? `trust loop ${r.scope}/${s('loopId')} · contentHash ${short(r.contentHash, 23)}${s('closureDigest') ? ` · closure ${short(r.closureDigest, 15)}` : ''}` : null;
     case 'grant.uninstall':
       return s('name') ? `uninstall ${s('name')} · packageHash ${short(r.packageHash)}` : null;
     default:
@@ -562,7 +732,7 @@ export const NON_ROOT_DECISIONS: readonly string[] = Object.freeze(['deny', 'rej
  * required to cover what the kind table makes root (a standing grant's allow excepted; a voice.enrol strictness card's
  * allow added); every row renderable. null = anything else.
  */
-export function rootRowsOf(card: Record<string, unknown>): RootRowsView | null {
+export function rootRowsOf(card: Record<string, unknown>, ctx: { local?: LocalCurrent | null } = {}): RootRowsView | null {
   const nodes = rootNodesOf(card.block);
   if (nodes.length !== 1) return null;
   const { detail, rootDecisions: nodeDecs } = nodes[0]!;
@@ -577,12 +747,24 @@ export function rootRowsOf(card: Record<string, unknown>): RootRowsView | null {
   const must = [...(kind === 'grant' && d.op === 'standing' ? [] : (ROOT_CLASS_BY_KIND[kind] ?? [])), ...(kind === 'strictness' && d.op === 'voice.enrol' ? ['allow'] : [])];
   if (must.some((m) => !(decs as string[]).includes(m))) return null;
   const lines: string[] = [];
-  for (const r of rows as Record<string, unknown>[]) {
-    const l = rootRowLine(r);
-    if (l === null) return null;
-    lines.push(l);
-  }
-  return { rootDecisions: decs as string[], rows: rows as Record<string, unknown>[], lines, rowsDigest: rowsDigestOf(rows) };
+  let items: RootRowItem[] | undefined;
+  const rowList = rows as Record<string, unknown>[];
+  // TD-2026-10-22-769: a local.config grant signs exactly ONE gnomon-root-local:v1 row, bound to this card
+  const local = d.action === 'local.config' || rowList.some((r) => r.schemaVersion === LOCAL_ROOT_SCHEMA);
+  if (local) {
+    if (kind !== 'grant' || d.action !== 'local.config' || rowList.length !== 1 || rowList[0]!.cardId !== card.cardId) return null;
+    const previous = d.previous === null || d.previous === undefined ? null : Number.isSafeInteger(d.previous) ? (d.previous as number) : NaN;
+    if (Number.isNaN(previous)) return null;
+    items = localRootItems(rowList[0]!, previous, ctx.local) ?? undefined;
+    if (!items) return null;
+    lines.push(...items.map((i) => i.text));
+  } else
+    for (const r of rowList) {
+      const l = rootRowLine(r);
+      if (l === null) return null;
+      lines.push(l);
+    }
+  return { rootDecisions: decs as string[], rows: rowList, lines, rowsDigest: rowsDigestOf(rows), ...(items ? { items } : {}), ...(typeof d.action === 'string' ? { action: d.action } : {}), detail: d };
 }
 
 /** The decision keys a card may show: with no verified rows, only the never-root decisions (Aegis C1e, M1). */
@@ -743,7 +925,12 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
-  const tag = voiceTagOf(v.voice ?? null);
+  // design-system card.family ⊙ gnomon (C3): a root configuration card about Gnomon itself (local.config)
+  const gnomonFam = v.rootRows?.action === 'local.config';
+  const tag0 = voiceTagOf(v.voice ?? null);
+  const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
+  // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title
+  const kLine = gnomonFam ? (kernelTextLines(block).find((l) => /^asked from (Settings|the terminal) · /.test(l)) ?? null) : null;
   const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
   const failed = v.kind === 'incident' || v.flags.includes('failed');
   const who = `requested by ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`;
@@ -761,17 +948,21 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       doc,
       'header',
       { class: 'card-head k', title: who },
+      // #gui-loops (design-system card.family): a loop card names its family by glyph and word, never by hue
+      v.kind.startsWith('loop-') ? h(doc, 'span', { class: 'fam' }, '↻ loop') : gnomonFam ? h(doc, 'span', { class: 'fam' }, '⊙ gnomon') : null,
+      v.kind.startsWith('loop-') || gnomonFam ? ' · ' : null,
       v.project ? h(doc, 'span', { class: `card-project pink h${v.project.hue}` }, `■ ${v.project.name}`) : null,
       v.project ? ' · ' : null,
       h(doc, 'span', { class: 'card-kind' }, v.kind),
       // Aegis M1: who asked is VISIBLE text, never only a tooltip (the short mark; the full principal in title= and details)
       ' · ',
-      h(doc, 'span', { class: 'card-requester' }, `by ${shortRequester(v.requestedBy, v.localNs)}`),
+      h(doc, 'span', { class: 'card-requester' }, v.kind.startsWith('loop-') && v.loopClaimedBy ? `claimed by ${v.loopClaimedBy}` : `by ${shortRequester(v.requestedBy, v.localNs)}`),
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
     v.voiceOrigin ? h(doc, 'small', { class: 'card-voice-origin kernel-owned' }, CARD_VOICE_LINE) : null,
     h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
+    kLine ? h(doc, 'span', { class: 'k-line kernel-owned' }, kLine) : null,
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
     // TD-2026-10-19-063: a claim-mismatch card's body (its red first line) is never collapsed; Aegis H1: nor a card
     // whose composed arg was capped (the kernel's body is then the whole command, visibly)
@@ -779,7 +970,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     v.rootRows
-      ? h(doc, 'div', { class: 'card-root-rows kernel-owned' }, h(doc, 'p', { class: 'meta root-rows-title' }, 'This decision signs'), h(doc, 'ul', null, ...(v.rootRows.lines.length ? v.rootRows.lines.map((l) => h(doc, 'li', null, l)) : [h(doc, 'li', null, 'its decision row only (no other row)')])))
+      ? h(doc, 'div', { class: 'card-root-rows kernel-owned' }, h(doc, 'p', { class: 'meta root-rows-title' }, 'This decision signs'), h(doc, 'ul', null, ...(v.rootRows.items ? v.rootRows.items.map((i) => h(doc, 'li', i.mark ? { class: i.mark } : null, i.mark ? h(doc, 'span', { class: 'sr-only' }, i.mark === 'add' ? 'new: ' : 'was: ') : null, i.text)) : v.rootRows.lines.length ? v.rootRows.lines.map((l) => h(doc, 'li', null, l)) : [h(doc, 'li', null, 'its decision row only (no other row)')])))
       : rootGated
         ? h(doc, 'p', { class: 'refusal root-rows-missing' }, 'This card does not show what its approval signs: there is no Approve here. Raise it again from the kernel.')
         : null,
@@ -799,6 +990,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
+    gnomonFam && keys.length ? h(doc, 'div', { class: 'lt-presence' }, LOCAL_PRESENCE_LINE) : null,
     // the contentHash line stays on every card: quiet, one line, the full hash in title=
     h(doc, 'small', { class: 'meta content-hash', title: `contentHash ${v.contentHash}` }, `contentHash ${v.contentHash.slice(0, 23)}…`),
     h(doc, 'details', { class: 'card-details' }, h(doc, 'summary', { class: 'meta' }, 'details'), h(doc, 'p', { class: 'meta card-who' }, who), bodyShown ? null : bodyEl),

@@ -454,6 +454,11 @@ export class ModHost {
     return p;
   }
 
+  /** TD-2026-10-22-769 (Aegis L1): the kernel's mod egress proxies' loopback ports (never a local model endpoint). */
+  loopbackPorts(): number[] {
+    return [...this.#running.values()].map((r) => r.proxy?.port).filter((p): p is number => typeof p === 'number' && p > 0);
+  }
+
   #runningResult(r: Running): ModStartResult {
     return { state: 'running', name: r.name, packageHash: r.packageHash, dev: r.dev, effects: [...r.effects].sort(), sandbox: r.sandbox, profileHash: r.profileHash, egressPort: r.proxy?.port ?? null };
   }

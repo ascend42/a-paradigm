@@ -18,12 +18,21 @@ export const ROOT_DECISION_V1 = 'gnomon-root-decision:v1';
 export const ROOT_DECISION_V2 = 'gnomon-root-decision:v2';
 export const VOICE_ENROL_SCHEMA = 'voiceEnrolRow:v1';
 export const DECISION_HELPER_VERSION = '1.8.0';
+export const LOCAL_ROOT_SCHEMA = 'gnomon-root-local:v1';
+
+/**
+ * TD-2026-10-22-769: the helper version a row table first shipped in. A root card whose kind is here is refused when
+ * it is RAISED if the running helper is older ("update the Gnomon app"), so a decision never reaches a helper whose
+ * decision.sign does not know the kind (the batch path never falls back after a decision.sign error, Aegis C6).
+ * loop-trust shipped in the 1.8.0 SOURCE after the signed 1.8.0 was cut, so it needs 1.9.0 too.
+ */
+export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.freeze({ 'loop-trust': '1.9.0', 'local.config': '1.9.0' });
 
 /** Mirrors Bounds in Protocol.swift. */
 export const DECISION_BOUNDS = Object.freeze({ maxMessages: 10, maxApprovals: 2, maxRootRows: 8, maxMessageBytes: 65_536, maxBytes: 256 * 1024, maxLineChars: 1200, maxReasonChars: 160 });
 
 /** The card kinds that have a row table (C3). A root-class card's decision row names one of these. */
-export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant'] as const);
+export const ROW_TABLE_KINDS = Object.freeze(['install', 'uninstall', 'voice.enrol', 'mod.mcp.config', 'api-token', 'peer-pair', 'grant', 'loop-trust', 'local.config'] as const);
 export type RowTableKind = (typeof ROW_TABLE_KINDS)[number];
 
 export interface DecisionRowV2 {
@@ -82,6 +91,63 @@ export function intentOf(r: Row): Row {
   return out;
 }
 
+/**
+ * 8.0:loops: the closed field set of a loop.trusted root row (the cardId is bound to the decision by bindDecisionBatch).
+ * Helper 1.9.0: `requestedBy` (the agent that asked, #loop-agent-ops step 12) is part of the set; before it, an
+ * agent-raised trust card could never be allowed on a real helper.
+ */
+const LOOP_TRUSTED_FIELDS: readonly string[] = ['kind', 'loopId', 'scope', 'repoKey', 'contentHash', 'coreHash', 'closureDigest', 'sourceHash', 'cardId', 'by', 'requestedBy', 'createdAt'];
+const SHA256_TAG = /^sha256:[0-9a-f]{64}$/;
+/** A principal id (contracts ANY_PRINCIPAL_PATTERN), at most 128 chars. */
+const PRINCIPAL = /^p:[0-9a-hjkmnp-tv-z]{8}\/[a-z0-9][a-z0-9._-]{0,63}(?:@[0-9a-f]{8})?$/;
+const principalField = (v: unknown): boolean => typeof v === 'string' && v.length <= 128 && PRINCIPAL.test(v);
+const LOOP_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+/** TD-2026-10-22-769 (helper 1.9.0): the closed shape of a gnomon-root-local:v1 row a local.config card signs. */
+const LOCAL_ROW_FIELDS: readonly string[] = ['schemaVersion', 'version', 'local', 'cardId', 'runnerSource', 'createdAt'];
+/** Aegis M1: the runner dir and node path are always shown in full, so each is capped. */
+export const LOCAL_PATH_MAX = 256;
+const LOCAL_FIELDS: readonly string[] = ['endpoints', 'runner'];
+const LOCAL_ENDPOINT_FIELDS: readonly string[] = ['id', 'base', 'model', 'compat', 'loops'];
+const LOCAL_RUNNER_FIELDS: readonly string[] = ['node', 'nodeSha256', 'dir', 'treeSha256', 'entry'];
+/** The local transports (config.ts LOCAL_COMPAT_NAMES; parity-tested). */
+const LOCAL_COMPATS: readonly string[] = ['llama.cpp', 'ollama', 'lm-studio', 'vllm', 'mlx-lm'];
+export const LOCAL_ROW_MAX_ENDPOINTS = 4;
+// ASCII classes only ([0-9], never \d) so ICU (Swift) and JS agree; Swift also requires the match to span the string
+const ENDPOINT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** 8.0 is loopback only: 127.0.0.0/8, localhost or [::1], an optional port, a plain path. */
+const LOOPBACK_BASE = /^https?:\/\/(?:127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|localhost|\[::1\])(?::([0-9]{1,5}))?(?:\/[A-Za-z0-9._~%/-]*)?$/;
+const HEX64 = /^[0-9a-f]{64}$/;
+const absPosix = (v: string): boolean => v.startsWith('/') && !v.includes('\0');
+const SAFE_ENTRY = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+const isObjRow = (v: unknown): v is Row => v !== null && typeof v === 'object' && !Array.isArray(v);
+const strIn = (v: unknown, max: number): v is string => typeof v === 'string' && v.length > 0 && v.length <= max;
+
+/** The local.config row check (mirror of localRowRefusal in Protocol.swift). null = allowed. */
+export function localRowRefusal(r: Row): string | null {
+  for (const k of Object.keys(r)) if (!LOCAL_ROW_FIELDS.includes(k)) return `a local config row never carries ${k.slice(0, 40)}`;
+  if (!(typeof r.version === 'number' && Number.isSafeInteger(r.version) && r.version >= 0)) return 'a local config row names its version (a whole number)';
+  if (r.runnerSource !== 'bundled' && r.runnerSource !== 'override') return 'a local config row says whether its runner is bundled or an override';
+  const l = r.local;
+  if (!isObjRow(l)) return 'a local config row names its local section';
+  for (const k of Object.keys(l)) if (!LOCAL_FIELDS.includes(k)) return `a local config never carries ${k.slice(0, 40)}`;
+  const eps = l.endpoints;
+  if (!Array.isArray(eps) || eps.length < 1 || eps.length > LOCAL_ROW_MAX_ENDPOINTS) return `a local config names 1..${LOCAL_ROW_MAX_ENDPOINTS} endpoints`;
+  for (const e of eps) {
+    if (!isObjRow(e)) return 'a local endpoint is an object';
+    for (const k of Object.keys(e)) if (!LOCAL_ENDPOINT_FIELDS.includes(k)) return `a local endpoint never carries ${k.slice(0, 40)}`;
+    if (!strIn(e.id, 64) || !ENDPOINT_ID.test(e.id) || !strIn(e.model, 128) || !strIn(e.compat, 32) || !LOCAL_COMPATS.includes(e.compat)) return 'a local endpoint names its id, model and a local compat';
+    const m = strIn(e.base, 256) ? LOOPBACK_BASE.exec(e.base) : null;
+    if (!m || (m[1] !== undefined && (Number(m[1]) < 1 || Number(m[1]) > 65535))) return 'a local endpoint is loopback only in 8.0';
+    if (e.loops !== undefined && typeof e.loops !== 'boolean') return 'a local endpoint loops flag is true or false';
+  }
+  const ru = l.runner;
+  if (!isObjRow(ru)) return 'a local config pins its runner';
+  for (const k of Object.keys(ru)) if (!LOCAL_RUNNER_FIELDS.includes(k)) return `a local runner pin never carries ${k.slice(0, 40)}`;
+  if (!strIn(ru.node, LOCAL_PATH_MAX) || !absPosix(ru.node) || !strIn(ru.dir, LOCAL_PATH_MAX) || !absPosix(ru.dir) || typeof ru.nodeSha256 !== 'string' || !HEX64.test(ru.nodeSha256) || typeof ru.treeSha256 !== 'string' || !HEX64.test(ru.treeSha256) || !strIn(ru.entry, 128) || !SAFE_ENTRY.test(ru.entry) || ru.entry.split('/').includes('..')) return 'a local runner pin names node, its sha256, the dir, its tree sha256 and the entry';
+  return null;
+}
+
 /** C3: the closed per-cardKind row table (rows after the decision row). null = allowed. */
 export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string | null {
   const kinds = rows.map(rowKind);
@@ -106,6 +172,25 @@ export function rowTableRefusal(cardKind: string, rows: readonly Row[]): string 
       return kinds.length === 1 && kinds[0] === 'grant.uninstall' ? null : 'an uninstall signs exactly one grant.uninstall';
     case 'voice.enrol':
       return kinds.length === 1 && kinds[0] === 'voice.enrol' ? null : 'a voice enrolment signs exactly one enrol row';
+    case 'loop-trust': {
+      // 8.0:loops (gnomon-loops.md §3.1): a loop trust signs exactly one loop.trusted row naming the loop and its hash
+      if (kinds.length !== 1 || kinds[0] !== 'loop.trusted') return 'a loop-trust signs exactly one loop.trusted row';
+      const r = rows[0]!;
+      for (const k of Object.keys(r)) if (!LOOP_TRUSTED_FIELDS.includes(k)) return `a loop.trusted row never carries ${k.slice(0, 40)}`;
+      const hash = (v: unknown): boolean => typeof v === 'string' && SHA256_TAG.test(v);
+      if (typeof r.loopId !== 'string' || !LOOP_ID.test(r.loopId) || (r.scope !== 'repo' && r.scope !== 'personal') || !hash(r.repoKey) || !hash(r.contentHash)) return 'a loop.trusted row names its loop, scope, repo and content hash';
+      for (const k of ['coreHash', 'closureDigest']) if (r[k] !== undefined && !hash(r[k])) return `a loop.trusted ${k} is sha256:<64 hex>`;
+      if (r.sourceHash !== undefined && !(typeof r.sourceHash === 'string' && /^[0-9a-f]{64}$/.test(r.sourceHash))) return 'a loop.trusted sourceHash is 64 hex';
+      // Aegis L7 (1.9.0): who decided and who asked are principals (by may be 'root' for an agent-raised card)
+      if (!(r.by === 'root' || principalField(r.by))) return 'a loop.trusted by is a principal';
+      if (r.requestedBy !== undefined && !principalField(r.requestedBy)) return 'a loop.trusted requestedBy is a principal';
+      return null;
+    }
+    case 'local.config': {
+      // TD-2026-10-22-769 (helper 1.9.0): a real home's local-model config signs exactly one gnomon-root-local:v1 row
+      if (kinds.length !== 1 || kinds[0] !== LOCAL_ROOT_SCHEMA) return 'a local.config signs exactly one gnomon-root-local:v1 row';
+      return localRowRefusal(rows[0]!);
+    }
     case 'mod.mcp.config':
     case 'api-token':
     case 'peer-pair':
@@ -203,9 +288,33 @@ export function rowShown(r: Row, compactCaps: boolean): string | null {
       return s('name') !== null ? `uninstall ${s('name')}` : null;
     case 'voice.enrol':
       return s('speakerId') !== null ? `voice enrol ${s('speakerId')}` : null;
+    case 'loop.trusted': {
+      const [l, sc, rk, h] = [s('loopId'), s('scope'), s('repoKey'), s('contentHash')];
+      return l !== null && sc !== null && rk !== null && h !== null ? `trust loop ${sc}/${l} repo ${rk.slice(7, 19)} ${h.slice(0, 19)}` : null;
+    }
+    case LOCAL_ROOT_SCHEMA:
+      return localRowShown(r);
     default:
       return null;
   }
+}
+
+/**
+ * C2 for a local config row (mirror of localRowShown): the version, every endpoint in full, then the runner IN FULL
+ * (Aegis M1: never compacted; a row that does not fit is refused too-large-to-show). An override runner is marked.
+ */
+export function localRowShown(r: Row): string | null {
+  const l = r.local;
+  if (!isObjRow(l) || !Array.isArray(l.endpoints) || !isObjRow(l.runner) || typeof r.version !== 'number') return null;
+  const eps: string[] = [];
+  for (const e of l.endpoints as unknown[]) {
+    if (!isObjRow(e) || typeof e.id !== 'string' || typeof e.base !== 'string' || typeof e.model !== 'string' || typeof e.compat !== 'string') return null;
+    eps.push(`endpoint ${e.id} ${e.base} model ${e.model} (${e.compat})${e.loops === true ? ' loops: yes' : ' loops: no'}`);
+  }
+  const ru = l.runner;
+  if (typeof ru.dir !== 'string' || typeof ru.treeSha256 !== 'string' || typeof ru.node !== 'string' || typeof ru.nodeSha256 !== 'string' || typeof ru.entry !== 'string') return null;
+  const which = r.runnerSource === 'override' ? 'OVERRIDE runner' : 'bundled runner';
+  return `local model config v${r.version}: ${eps.join(', ')}; ${which} ${ru.dir}/${ru.entry} tree ${ru.treeSha256.slice(0, 12)} node ${ru.node} ${ru.nodeSha256.slice(0, 12)}`;
 }
 
 const UNSHOWABLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;

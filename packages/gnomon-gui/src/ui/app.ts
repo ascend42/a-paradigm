@@ -42,6 +42,8 @@ import { cardIn, notArrivedText, type CardLabel } from './card-focus.js';
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type ToastKey, type Toasts } from './toasts.js';
 import type { ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
+import { LocalModelController } from './local-model.js';
+import { changeForm, localCurrentOf, localStatusOf, requestLine, setupForm, LOCAL_SECTION } from '../core/local-model.js';
 import { MOTION_KEY, parseMotion, parseTheme, settingsModel, THEME_KEY, themeSwitchEntries, unlockSeenOf } from '../core/settings.js';
 import { kernelPrincipalOf, revokeRequest } from '../core/standing.js';
 import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMode, planFor, RUN_MODES, scopeEntries, sessionModeOf, type ModeScope, type RunMode } from '../core/modes.js';
@@ -53,6 +55,8 @@ import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mo
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
+import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
+import { cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -786,13 +790,16 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         voiceOrigin: cardVoiceOrigin(c.card), // TD-2026-10-21-514: "asked during a voice-sent turn · check this was you"
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
         localNs: localNsOf(session?.principal),
+        // #gui-loops: the kernel's authorship basis (status.loops authoredBy agent-key-claim), never guessed from a name
+        loopClaimedBy: c.kind.startsWith('loop-') ? loopClaimOf(c.card) : null,
         // Aegis C1e: what a root-class decision signs, verified against contentHash (null ⇒ no root key)
-        rootRows: rootRowsOf(c.card),
+        rootRows: rootRowsOf(c.card, { local: localCurrentOf(localStatusOf(status)) }),
         // Q2: status.helper.batch 'unavailable (helper <1.8.0)' ⇒ a one-line notice on root cards
         batchUnavailable: typeof (status?.helper as { batch?: unknown } | undefined)?.batch === 'string' && String((status!.helper as { batch: string }).batch).startsWith('unavailable'),
       },
       c.card.block,
     ) as unknown as HTMLElement;
+    if (c.kind === 'loop-trust' || c.kind === 'loop-choice') decorateLoopCard(el, c.kind, c.card, c.cardId);
     const r = refusals.get(c.cardId);
     if (r) el.appendChild(h(doc, 'p', { class: 'refusal' }, refusalText(r)) as unknown as Node);
     if (arrived.has(`card-in:${c.cardId}`)) {
@@ -815,6 +822,12 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   // Aegis C1e: a root decision whose logged rowsDigest is not the digest of the rows its card showed: flagged red
   for (const m of store.rootMismatches) pile.appendChild(h(doc, 'p', { class: 'refusal root-digest-mismatch', role: 'alert' }, `The ${m.decision} of ${m.cardId} was logged with rows the card did not show (rowsDigest ${m.logged ?? 'missing'} ≠ shown ${m.shown}). Check gnomon verify.`) as unknown as Node);
   if (cards.length > PILE_MAX && !pileOpen) pile.appendChild(h(doc, 'button', { class: 'key quiet pile-more', type: 'button', 'data-pile-more': '1' }, `+${cards.length - PILE_MAX} more`) as unknown as Node);
+  // #gui-loops (the stack-of-alerts zone change): decision cards first, then loop alerts, then the trust slip at the foot
+  const lm = loopsOf(status);
+  for (const a of loopAlerts(lm, loopDismissed)) pile.appendChild(alertEl(document, a, a.repo ? hueOfRepo(a.repo) : 0));
+  const slip = trustSlip(lm, new Set([...store.cards.values()].filter((c) => c.kind === 'loop-trust').map((c) => cardLoopOf(c.card, store.loopCards)?.loopId).filter((x): x is string => !!x)));
+  if (slip) pile.appendChild(loopSlipEl(document, slip));
+  stackLoopSig = loopStackSig();
   put($('stack-hint'), cards.length > 1 ? ' · hover to fan' : '');
   const pinned = $('pinned');
   clear(pinned);
@@ -835,6 +848,114 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
       if (!x.el.isConnected && (x.parent === pile || x.parent === pinned)) x.parent.insertBefore(x.el, x.parent.children[x.index] ?? null);
   paintUpdateBanner();
   checkCardWait();
+}
+
+/* ── #gui-loops (gnomon-loops.md §6; Atelier 2026-10-22-gnomon-loops-ui) ───────────── */
+const loopDismissed = new Set<string>();
+let stackLoopSig = '';
+const hueOfRepo = (repo: string): number => groupHue(repo, store.groups().find((g) => g.repo === repo)?.sessions ?? []);
+/** what the stack's loop pieces depend on (a status refresh repaints the stack only when this changes) */
+function loopStackSig(): string {
+  const lm = loopsOf(status);
+  return JSON.stringify([loopAlerts(lm, loopDismissed).map((a) => a.id), trustSlip(lm, new Set())?.lines.map((l) => l.key) ?? []]);
+}
+/** The kernel's text lines of a card block (the loop-trust card's listing and diff). */
+function blockLines(block: unknown): string[] {
+  const out: string[] = [];
+  const walk = (b: unknown): void => {
+    if (!b || typeof b !== 'object') return;
+    const o = b as { type?: unknown; text?: unknown; children?: unknown };
+    if (o.type === 'Text' && typeof o.text === 'string') out.push(...o.text.split('\n'));
+    if (Array.isArray(o.children)) o.children.forEach(walk);
+  };
+  walk(block);
+  return out;
+}
+/**
+ * A loop card in the stack (design-system card variants loop-trust, loop-choice): loop-trust is short in the pile,
+ * with Read (it unfolds the same card over the centre, where Trust waits after the whole definition) and Don't trust;
+ * loop-choice carries the kernel line naming the loop and its run path, then Continue and Stop.
+ */
+/** The agent a loop card's loop is claimed by (the kernel's agent-key-claim basis), or null. */
+function loopClaimOf(card: Record<string, unknown>): string | null {
+  const cl = cardLoopOf(card, store.loopCards);
+  const x = cl ? loopsOf(status)?.loops.find((y) => y.loopId === cl.loopId && (!cl.repoKey || y.repoKey === cl.repoKey)) : undefined;
+  return x?.claimed && x.shape ? x.shape.authoredBy : null;
+}
+function decorateLoopCard(el: HTMLElement, kind: string, card: Record<string, unknown>, cardId: string): void {
+  const cl = cardLoopOf({ ...card, cardId }, store.loopCards);
+  const m = loopsOf(status);
+  const keys = el.querySelector('.card-keys');
+  // the title is a sentence (never the kind word); the kernel's own first line stays, as the kernel line under it
+  const title = el.querySelector<HTMLElement>('.card-title');
+  const sentence = loopCardTitle(kind, cl, m);
+  if (title && sentence && sentence !== cl?.kernelLine) {
+    title.textContent = sentence;
+    title.title = sentence;
+    if (cl?.kernelLine) title.after(h(doc, 'span', { class: 'k-line kernel-owned' }, cl.kernelLine) as unknown as Node);
+  }
+  if (kind === 'loop-trust') {
+    const allow = el.querySelector<HTMLElement>('[data-decision="allow"]');
+    if (allow) allow.hidden = true;
+    const deny = el.querySelector<HTMLElement>('[data-decision="deny"]');
+    if (deny) deny.textContent = "Don't trust";
+    keys?.insertBefore(h(doc, 'button', { class: 'key pri', type: 'button', 'data-loop-read': cardId, title: 'Read the whole definition; Trust is at its foot' }, 'Read') as unknown as Node, keys.firstChild);
+    return;
+  }
+  for (const b of el.querySelectorAll<HTMLElement>('[data-decision]')) b.textContent = b.dataset.decision === 'continue' ? 'Continue' : b.dataset.decision === 'stop' ? 'Stop' : b.textContent;
+  const path = choicePath(cl, m);
+  if (path) (el.querySelector('.k-line') ?? title)?.after(h(doc, 'p', { class: 'path' }, path) as unknown as Node);
+}
+function paintLoopsWord(): void {
+  const w = loopsWord(loopsOf(status));
+  const b = $('loops-word');
+  b.hidden = !w.shown || link.state !== 'connected';
+  put($('loops-word-text'), w.text);
+  put($('loops-word-narrow'), w.narrow);
+  b.title = w.title;
+  b.setAttribute('aria-label', w.text);
+}
+async function loopRequest(req: { kind: string; payload: Record<string, unknown> }, trusted: boolean, done: string, onRefused?: (r: ShownRefusal) => void): Promise<boolean> {
+  if (!trusted) return false; // Aegis L2: a request needs the human's own press
+  if (!client) {
+    notice('not connected: nothing was sent', 'fail', { source: 'loops' });
+    return false;
+  }
+  try {
+    await client.call('log.append', req);
+    notice(done, 'info', { source: 'loops' });
+    return true;
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the loop request was not sent', 'fail', { source: 'loops' });
+    if (err instanceof RpcError) onRefused?.(err.refusal);
+    return false;
+  } finally {
+    await refreshStatus();
+  }
+}
+async function pauseAllLoops(trusted: boolean): Promise<void> {
+  const before = loopsOf(status)?.running ?? 0;
+  const n = (loopsOf(status)?.loops ?? []).filter((x) => x.state !== 'waiting-trust' && x.state !== 'invalid').length;
+  if (await loopRequest(PAUSE_ALL_REQUEST, trusted, '')) {
+    notice(null, 'info', { source: 'loops' });
+    toasts().show(pauseAllText(before ? n : 0).replace(/^paused \d+ loops?/, `paused ${n === 1 ? '1 loop' : `${n} loops`}`), { tag: '↻ loops' });
+  }
+}
+let loopRefresh: ReturnType<typeof setTimeout> | null = null;
+/** A live loop row: done toasts (goal, landed, a notify toast), and a status re-read for the view, the word and the stack. */
+function loopRow(r: Row): void {
+  if (!r.kind.startsWith('loop.')) return;
+  const t = loopRowToast(r, loopsOf(status));
+  if (t)
+    toasts().show(t.text, {
+      tag: t.tag,
+      ...(t.key ? { key: { label: 'Open run', onPress: () => loopsView.open({ key: t.key!, ...(t.runId ? { runId: t.runId } : {}) }) } } : {}),
+    });
+  if (loopRefresh) return;
+  loopRefresh = setTimeout(() => {
+    loopRefresh = null;
+    void refreshStatus();
+  }, 250);
 }
 
 /* ── self-update (TD-2026-10-19-063, core/restart.ts) ───────────── */
@@ -996,7 +1117,26 @@ store.onChange(() => standingFeed.repaint());
 modelPicker = mountModelPicker(document, { client: () => client, rows: (hsid) => store.transcript(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), focused: () => focused, notice });
 store.onChange(() => modelPicker?.repaint());
 // #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
+// #gui-local-model: the Local model section's press paths (ui/local-model.ts); the sheet hands it presses
+const localModel = new LocalModelController({
+  call: (req) => (client ? client.call('log.append', req) : Promise.reject(new Error('not connected'))),
+  status: () => status,
+  loopsUsing: () => loopsUsingLocal(),
+  now: () => Date.now(),
+  time: (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  refreshStatus: () => refreshStatus(),
+  repaint: () => settings.repaint(),
+  focus: (t) => settings.focusLocal(t),
+  decide: (cardId) => {
+    settings.close();
+    focusCardGroup(cardId);
+  },
+  sheetOpen: () => settings.isOpen(),
+  toast: (text, kind, open) => void toasts().show(text, { kind, tag: 'local model', ...(open ? { key: { label: 'Open settings', onPress: (e: MouseEvent) => e.isTrusted && settings.open(LOCAL_SECTION) } } : {}) }),
+  card: (cardId) => localCardRequest(cardId),
+});
 const settings = mountSettings(document, {
+  local: localModel,
   model: () =>
     settingsModel({
       theme,
@@ -1011,6 +1151,7 @@ const settings = mountSettings(document, {
       connection: session && client ? { principal: session.principal, connId: session.connId, surface: SURFACE, clientApiDrift: session.clientApiDrift } : null,
       gui: GUI_CLIENT,
       unlock: unlockSeenOf(store.kernelFeed, session?.connId ?? null, kernelPrincipalOf(session?.principal)),
+      local: { ui: localModel.ui(), loopsUsing: loopsUsingLocal() },
     }),
   run: (id) => run(id, true), // the sheet acts on trusted presses only (settings-sheet.ts)
   revoke: (grantId) => void revokeGrant(grantId),
@@ -1033,6 +1174,29 @@ const voiceSheet = mountVoiceSheet(document, {
   },
 });
 // #gui-mods-panel: the Mods sheet (header Mods key, ⌘K "Mods…", the Workshop footer's key); requests only, never a decision
+const loopsView = mountLoopsView({
+  doc: document,
+  host: $('pane-transcript'),
+  status: () => status,
+  hue: (repo) => hueOfRepo(repo),
+  request: (req, trusted, done, onRefused) => loopRequest(req, trusted, done, onRefused),
+  openLocal: () => settings.open(LOCAL_SECTION),
+  pauseAll: (trusted) => void pauseAllLoops(trusted),
+  say: (text, kind = 'info') => notice(text, kind, { source: 'loops' }),
+  trustCard: (cardId) => {
+    const c = store.cards.get(cardId);
+    const inPile = cardInPile(cardId) as HTMLElement | null;
+    if (!c || !inPile) return null;
+    const el = inPile.cloneNode(true) as HTMLElement;
+    el.querySelector('[data-loop-read]')?.remove();
+    const allow = el.querySelector<HTMLElement>('[data-decision="allow"]');
+    if (allow) allow.hidden = false;
+    for (const d of el.querySelectorAll('details.card-details')) d.remove();
+    return { el, lines: blockLines(c.card.block), loopId: cardLoopOf(c.card, store.loopCards)?.loopId ?? null };
+  },
+  hasCard: (cardId) => store.cards.has(cardId),
+  onCardClick: (e) => onCardPress(e),
+});
 const modsPanel = mountMods(document, { client: () => client, status: () => status, cards: () => store.cards.values(), refreshStatus: () => refreshStatus(), focusCard: (cardId) => focusCard(cardId) });
 store.onChange(() => modsPanel.repaint());
 /** Settings → Revoke: the standing feed's own request (request.grant.standing.revoke, a tighten, no presence). */
@@ -1126,6 +1290,8 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         dictationRow(r); // dictation: only LIVE rows feed the composer (the backlog page never does)
         offerVoiceRow(r); // #gui-offer-slip L1: only a LIVE heard "not now" dismisses (never a backlog replay)
         standingFeed.row(r); // F6: a live grant.standing.used row is a toast + a feed line
+        loopRow(r); // #gui-loops: loop done toasts and a status re-read
+        localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
     } else if (p.end) void followLog(c, store).catch(() => undefined);
@@ -1291,6 +1457,42 @@ function focusCard(cardId: string, what: CardLabel = 'card'): void {
   }
   el.scrollIntoView({ block: 'nearest' });
   ((el.querySelector('[data-default]') ?? el.querySelector('[data-decision]') ?? el) as HTMLElement).focus();
+}
+
+/**
+ * #gui-local-model (rule form-says-where-the-card-is): Decide in the stack focuses the card GROUP, never its Allow,
+ * so a second Enter cannot allow it.
+ */
+function focusCardGroup(cardId: string): void {
+  const el = cardInPile(cardId) as HTMLElement | null;
+  if (!el) {
+    notice(notArrivedText('grant card'), 'warn');
+    if (noticeShown) cardWait = { cardId, toast: noticeShown };
+    return;
+  }
+  el.setAttribute('tabindex', '-1');
+  el.scrollIntoView({ block: 'nearest' });
+  el.focus();
+}
+/** The loops a turned-off local model stops: trusted, runnable, with a model step, while an endpoint serves loops. */
+function loopsUsingLocal(): string[] {
+  if (!localStatusOf(status).endpoints.some((e) => e.loops)) return [];
+  return (loopsOf(status)?.loops ?? []).filter((x) => x.trustedHash && x.state !== 'invalid' && x.state !== 'waiting-trust' && x.shape?.nodes.some((n) => n.type === 'model')).map((x) => x.loopId);
+}
+/** A local.config card waiting from an earlier load: its request line and the entries it asked for (verified rows). */
+function localCardRequest(cardId: string): { at: number; line: string; entries: ReturnType<typeof setupForm> | null } | null {
+  const c = store.cards.get(cardId);
+  const rr = c ? rootRowsOf(c.card) : null;
+  if (!c || !rr || rr.action !== 'local.config') return null;
+  const want = rr.detail?.endpoint;
+  const local = (rr.rows[0]?.local ?? {}) as { endpoints?: Array<{ id: string; base: string; model: string; compat: string; loops?: boolean }> };
+  const e = (local.endpoints ?? []).find((x) => x.id === want);
+  if (!e) return null;
+  const at = c.raisedAt ? Date.parse(c.raisedAt) : Date.now();
+  const ep = { id: e.id, base: e.base, model: e.model, compat: e.compat, loops: e.loops === true };
+  const was = localStatusOf(status).endpoints.find((x) => x.id === e.id);
+  const entries = was ? { ...changeForm(was), base: ep.base, model: ep.model, compat: ep.compat, loops: ep.loops } : { ...setupForm(), ...ep, baseTyped: true, idTyped: true };
+  return { at, line: requestLine(new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), ep), entries };
 }
 
 function focus(hsid: string | null): void {
@@ -1797,9 +1999,13 @@ async function refreshStatus(): Promise<void> {
   if (teach) teach = reduceTeach(teach, { type: 'status', status }); // the kernel's one take counter
   voiceSheet.repaint();
   standingFeed.repaint(); // F6: today's grant (status.standing)
+  localModel.statusChanged(); // #gui-local-model: a card waiting from an earlier load; the check after an Allow
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
   modPanelsStatus(status); // a mod installed, paused or removed: its views (and the Workshop key) follow
+  paintLoopsWord(); // #gui-loops: the header's loops word, the leaf, the edge tab and the stack's loop pieces
+  loopsView.repaint();
+  if (loopStackSig() !== stackLoopSig) void paintStack();
   syncDictationContext();
   foldVoiceReports();
   syncSpeakPoll();
@@ -2409,6 +2615,7 @@ function setLink(state: LinkState, who: { principal: string; connId: string } | 
   put(w, lv.word);
   w.className = lv.wordShown ? 'link-word' : 'link-word sr-only';
   if (!$('wordmark-menu').hidden) paintAppMenu();
+  paintLoopsWord();
 }
 /** The Gnomon menu's focusable rows, in order (arrow keys move among them). */
 const appMenuItems = (): HTMLElement[] => [...$('wordmark-menu').querySelectorAll<HTMLElement>('[data-run]')];
@@ -2432,9 +2639,13 @@ function paintAppMenu(): void {
   const had = (document.activeElement as HTMLElement | null)?.closest?.('#wordmark-menu [data-run]') as HTMLElement | null;
   const fk = had?.dataset.run ?? null;
   clear(m);
-  for (const r of appMenuModel({ layout, panesOpen: appPanesOpen, theme: themeSwitchEntries(theme, darkQ.matches), who: whoLine(link.state, link.who, store.head) })) m.appendChild(appMenuRowEl(r));
+  for (const r of appMenuModel({ layout, panesOpen: appPanesOpen, theme: themeSwitchEntries(theme, darkQ.matches), who: whoLine(link.state, link.who, store.head), loops: loopsMenu() })) m.appendChild(appMenuRowEl(r));
   m.setAttribute('aria-describedby', 'wordmark-who');
   if (fk) (m.querySelector(`[data-run="${fk}"]`) as HTMLElement | null)?.focus();
+}
+function loopsMenu(): { note: string; paused: boolean } | null {
+  const m = loopsOf(status);
+  return m ? { note: leafMeta(m), paused: m.pausedAll } : null;
 }
 function openAppMenu(focusAt: 'first' | 'last' | null): void {
   closeVoiceMenu(false);
@@ -2482,7 +2693,10 @@ function run(id: string, trusted: boolean): void {
   } else if (id === 'voice.settings.open') openVoiceSettings();
   else if (id === 'voice.mic.toggle') void micToggle(trusted);
   else if (id === 'settings.open') settings.open();
+  else if (id === 'local.setup') settings.open(LOCAL_SECTION); // #gui-local-model: section-focused
   else if (id === 'mods.open') modsPanel.open();
+  else if (id === 'loops.open') loopsView.open();
+  else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
   else if (id === 'menu.gnomon') openAppMenu('first');
   else if (id.startsWith('layout.')) layout = applyPreset(id.slice(7), layout.workshop);
   else if (id === 'pane.sessions.toggle') layout = togglePane(layout, 'sessions');
@@ -2528,6 +2742,29 @@ function run(id: string, trusted: boolean): void {
 }
 
 /* ── events (every write verb hangs off a user gesture, G-GUI-04) ── */
+function onCardPress(e: Event): void {
+  const t = e.target as HTMLElement;
+  const b = t.closest('[data-decision]') as HTMLElement | null;
+  if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null, b);
+  const k = t.closest('[data-command]') as HTMLElement | null;
+  if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!, e.isTrusted);
+  // #gui-loops: Read unfolds a loop-trust card; an alert opens its loop run or is dismissed; the slip raises a card
+  const read = t.closest('[data-loop-read]') as HTMLElement | null;
+  if (read) loopsView.unfoldTrust(read.dataset.loopRead!);
+  const openRun = t.closest('[data-loop-open]') as HTMLElement | null;
+  if (openRun) loopsView.open({ key: openRun.dataset.loopOpen!, ...(openRun.dataset.runId ? { runId: openRun.dataset.runId } : {}) });
+  // #gui-local-model: a refused-start alert's key opens Settings at the Local model section
+  if (t.closest('[data-local-open]')) settings.open(LOCAL_SECTION);
+  const dismiss = t.closest('[data-loop-dismiss]') as HTMLElement | null;
+  if (dismiss) {
+    loopDismissed.add(dismiss.dataset.loopDismiss!);
+    void paintStack();
+  }
+  if (t.closest('[data-loop-review-all]')) loopsView.open({ waiting: true });
+  const review = t.closest('[data-loop-review]') as HTMLElement | null;
+  const x = review ? loopsOf(status)?.loops.find((y) => y.key === review.dataset.loopReview) : undefined;
+  if (x) void loopRequest({ kind: 'request.loop.trust', payload: { loopId: x.loopId, scope: x.scope, repoKey: x.repoKey, contentHash: x.contentHash } }, e.isTrusted, `a loop-trust card for ${x.loopId} is in the stack: Read, then Trust`);
+}
 function wire(): void {
   $('viewport').addEventListener(
     'scroll',
@@ -2691,12 +2928,7 @@ function wire(): void {
   });
   $('transcript-title').addEventListener('dblclick', (e) => startRename(focused, 'head', e.isTrusted));
   $('rename-btn').addEventListener('click', (e) => startRename(focused, 'head', e.isTrusted));
-  const onCard = (e: Event): void => {
-    const b = (e.target as HTMLElement).closest('[data-decision]') as HTMLElement | null;
-    if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null, b);
-    const k = (e.target as HTMLElement).closest('[data-command]') as HTMLElement | null;
-    if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!, e.isTrusted);
-  };
+  const onCard = onCardPress;
   $('stack').addEventListener('click', (e) => {
     if ((e.target as HTMLElement).closest('[data-pile-more]')) {
       pileOpen = true;
@@ -2706,6 +2938,7 @@ function wire(): void {
   });
   $('pinned').addEventListener('click', onCard);
   $('stack-scope').addEventListener('click', (e) => run('stack.scope.toggle', e.isTrusted));
+  $('loops-word').addEventListener('click', () => loopsView.open());
   $('composer').addEventListener('submit', (e) => {
     e.preventDefault();
     const t = $<HTMLTextAreaElement>('composer-text');
@@ -2876,9 +3109,11 @@ function wire(): void {
       e.preventDefault(); // TD-2026-10-21-514: "Sending… Esc keeps it"
       dispatchDictation({ type: 'graceCancel', now: Date.now() });
     } else if (e.key === 'Escape' && settings.isOpen()) {
-      settings.close();
+      settings.escape(); // #gui-local-model: an open form (or the turn-off confirm) closes first, then the sheet
     } else if (e.key === 'Escape' && modsPanel.isOpen()) {
       modsPanel.close();
+    } else if (e.key === 'Escape' && !editableFocus() && $('palette').hidden && loopsView.escape()) {
+      e.preventDefault(); // #gui-loops: an unfolded trust card folds first, then the Loops leaf folds to its edge tab
     } else if (e.key === 'Escape' && !$('mode-menu').hidden) {
       closeModeMenu();
     } else if (e.key === 'Escape' && escStopsSpeaking({ shown: stopSpeakingShown(status), menuOpen: !$('mode-menu').hidden || !$('voice-menu').hidden, dialogOpen: !$('palette').hidden || !!document.querySelector('.overlay:not([hidden])') || !!(document.activeElement as HTMLElement | null)?.closest?.('[role="dialog"]'), inComposer: !!(document.activeElement as HTMLElement | null)?.closest?.('#composer') || document.activeElement === $('composer-text') })) {

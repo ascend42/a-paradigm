@@ -60,12 +60,21 @@
  * v1 before the cutover is a divergence. Without `decisionKeys` the check
  * does not run and the report says so (`decisionSigs: 'unchecked'`).
  *
+ * LOOP RUNS (#loop-runner, G-LOOP-17): the loop.run.started / loop.node / loop.run.ended rows are folded by
+ * replayLoopRuns (kernel/loops/ledger.ts) into `projection.loops` (each run's edges: node, verdict, edge key, next),
+ * present only when the log has loop runs, so earlier projection hashes are unchanged. A node row whose `next` is not
+ * the node that ran after it, or an end naming a terminal the last edge did not reach, is `loop-edge-mismatch`.
+ * #loop-events (step 7): `loop.trigger.fired` rows are folded too, so each event-started run carries `why` (the
+ * trigger's kernel fields); a run citing a fireId no row of its loop names (joined over the history: the row follows the hand-off) is a
+ * `loop-edge-mismatch` too.
+ *
  * Read-only: databases are opened `readOnly` exactly as verifyLog opens them.
  */
 import { canonicalJson, EVENT_KINDS, isPlainObject, parseApproveScope, scopeDigest, sha256Tagged } from '@a-company/gnomon-contracts';
 import { verifyLog, type VerifiedRow, type VerifyLogOptions, type VerifyReport } from './kernel-log.js';
 import { contentHashOf } from '../broker/card.js';
 import { decisionRowV2, rowsDigestOf } from '../identity/decision-batch.js';
+import { LOOP_REPLAY_KINDS, replayLoopRuns, type LoopReplayRun } from '../loops/ledger.js';
 import { answerDigest, approveMessage, decisionMessage, usesDecisionV2, type KeyRing } from './signer.js';
 
 export const REPLAY_PROJECTION = 'gnomon-replay:v1' as const;
@@ -87,11 +96,13 @@ export interface ReplayProjection {
   kinds: Record<string, number>;
   sessions: Record<string, { inputs: ReplayInput[]; host: Array<{ seq: number; kind: string; hashes: Record<string, string> }> }>;
   cards: Record<string, { state: string; seq: number }>;
+  /** #loop-runner (G-LOOP-17): every loop run's walk, each edge taken; present only when the log has loop runs */
+  loops?: Record<string, LoopReplayRun>;
 }
 
 export interface ReplayDivergence {
   seq: number;
-  reason: 'input-mismatch' | 'inject-plaintext' | 'malformed-envelope' | DecisionSigDivergence | RootDecisionDivergence;
+  reason: 'input-mismatch' | 'inject-plaintext' | 'malformed-envelope' | 'loop-edge-mismatch' | DecisionSigDivergence | RootDecisionDivergence;
   detail: string;
 }
 
@@ -121,6 +132,8 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
   /** The last unconsumed origin:client inject hash per session. */
   const pending = new Map<string, string>();
   const session = (hsid: string) => (p.sessions[hsid] ??= { inputs: [], host: [] });
+  const loopRows: Array<{ kind: string; payload: unknown }> = [];
+  const loopSeq = new Map<string, number>();
   for (const r of rows) {
     p.head = { seq: r.seq, hash: r.hash };
     p.kinds[r.kind] = (p.kinds[r.kind] ?? 0) + 1;
@@ -134,6 +147,10 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
     p.log ??= str(e.log) ?? null;
     const pl = isPlainObject(e.payload) ? (e.payload as Record<string, unknown>) : {};
     const hsid = str(pl.hsid) ?? str(e.session);
+    if (LOOP_REPLAY_KINDS.includes(r.kind)) {
+      loopRows.push({ kind: r.kind, payload: pl });
+      if (str(pl.runId)) loopSeq.set(str(pl.runId)!, r.seq);
+    }
     if (r.kind === 'session.inject' && hsid) {
       const hash = str(pl.hash) ?? '';
       const input: ReplayInput = { seq: r.seq, kind: 'session.inject', hash, ...(str(pl.origin) ? { origin: str(pl.origin)! } : {}) };
@@ -156,6 +173,11 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
       const cardId = str(pl.cardId) ?? str(card?.cardId);
       if (cardId) p.cards[cardId] = { state: r.kind === 'approval.request' ? 'open' : r.kind === 'approval.expire' ? 'expired' : (str(pl.decision) ?? 'decided'), seq: r.seq };
     }
+  }
+  if (loopRows.length) {
+    const lr = replayLoopRuns(loopRows);
+    if (Object.keys(lr.runs).length) p.loops = lr.runs;
+    for (const d of lr.divergences) divergences.push({ seq: loopSeq.get(d.runId) ?? p.head?.seq ?? 0, reason: 'loop-edge-mismatch', detail: `${d.runId}: ${d.detail}` });
   }
   return { projection: p, divergences };
 }

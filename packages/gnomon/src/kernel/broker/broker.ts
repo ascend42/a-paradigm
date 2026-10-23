@@ -80,7 +80,8 @@ import { consumeBoundPresence, PresenceToken, presenceBindingDigest, requestPres
 import type { RootAuthority } from '../identity/root-authority.js';
 import { RootUnavailableError } from '../identity/root-authority.js';
 import { HardwarePresenceDenied, HelperUnlockGone, type DecisionBatchRequest, type DecisionBatchResult, type DecisionSignRequest, type DecisionSignResult } from '../identity/hardware.js';
-import { decisionRowV2, intentOf, type DecisionRowV2 } from '../identity/decision-batch.js';
+import { decisionRowV2, intentOf, ROW_TABLE_MIN_HELPER, type DecisionRowV2 } from '../identity/decision-batch.js';
+import { versionAtLeast } from '../identity/helper.js';
 import { baseClass, CLICK_KINDS, KIND_DECISIONS, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
 import { helperBoundsOf, UnlockStore, type UnlockLimits, type UnlockUse } from './unlock.js';
@@ -162,6 +163,8 @@ export interface ApprovalsKey {
   signDecision?(req: DecisionSignRequest): Promise<DecisionSignResult>;
   /** TD-2026-10-20-514: the helper takes decision.sign (>= 1.8.0, from info.version only) */
   decisionBatchAvailable?(): Promise<boolean>;
+  /** TD-2026-10-22-769: the running helper's version (null = unknown): a root card whose row table is newer is refused at raise */
+  helperVersion?(): Promise<string | null>;
   /** TD-2026-10-20-514: ONE presence signs the decision and every root row */
   signDecisionBatch?(req: DecisionBatchRequest): Promise<DecisionBatchResult>;
   /**
@@ -240,7 +243,7 @@ function rootBlock(block: Record<string, unknown>, detail: Record<string, unknow
 
 /** The row-table kind (decision-batch.ts ROW_TABLE_KINDS) of a root-class card: its kind, or a grant/strictness card's action. */
 export function rootKindOf(kind: string, detail: Record<string, unknown>): string {
-  if (kind === 'grant') return detail.action === 'mod.uninstall' ? 'uninstall' : detail.action === 'mod.mcp.config' ? 'mod.mcp.config' : 'grant';
+  if (kind === 'grant') return detail.action === 'mod.uninstall' ? 'uninstall' : detail.action === 'mod.mcp.config' ? 'mod.mcp.config' : detail.action === 'local.config' ? 'local.config' : 'grant';
   if (kind === 'strictness' && detail.op === 'voice.enrol') return 'voice.enrol';
   return kind;
 }
@@ -526,6 +529,17 @@ export class ApprovalBroker {
     // Aegis M1 (final review): the root decisions are INSIDE the hashed detail, so a node cannot claim fewer
     const rootDecs = rootDecisionsOf(input.kind, input.rootDecisions).filter((d) => !(input.standingGrant && d === 'allow'));
     if (rootCapable) input = { ...input, detail: { ...input.detail, rootDecisions: rootDecs } };
+    // TD-2026-10-22-769: a row table newer than the running helper is refused HERE, before the card exists, never at
+    // decide (the batch path does not fall back after a decision.sign error, Aegis C6). A click-class (Windows) key
+    // refuses every root decision at decide anyway; an unknown version takes the legacy path, which has no row table.
+    if (rootCapable && this.#approvals.clickClass !== true && typeof this.#approvals.helperVersion === 'function') {
+      const need = ROW_TABLE_MIN_HELPER[rootKindOf(String(input.kind), input.detail)];
+      if (need !== undefined) {
+        const have = await this.#approvals.helperVersion().catch(() => null);
+        // Aegis L2: on a hardware root an unknown helper version counts as too old (never a guess that it is new enough)
+        if ((have === null && this.#o.root?.state === 'hardware') || (have !== null && !versionAtLeast(have, need))) throw fail('UNSUPPORTED', 'presence', `this card needs Gnomon helper ${need} or later and the running helper is ${have === null ? 'of an unknown version' : String(have).slice(0, 16)}: update the Gnomon app`, { why: 'helper-too-old', minVersion: need, helperVersion: have === null ? null : String(have).slice(0, 16) });
+      }
+    }
     const rendered = blockOf(input.lines);
     const flags = [...new Set<CardFlag>([...(input.flags ?? []), ...rendered.flags])].sort();
     const contentHash = input.contentHash ?? contentHashOf({ kind: input.kind, requestedBy: input.requestedBy, ...(input.hsid ? { hsid: input.hsid } : {}), detail: input.detail, flags });
@@ -644,6 +658,15 @@ export class ApprovalBroker {
    */
   async modeSet(p: { scope: { repo: string; hsid: string | null }; from: string; to: string; by: Record<string, unknown>; presence: 'none' | 'fresh' | `standing:${string}` }, ids: { connId?: string; session?: string } = {}): Promise<void> {
     await this.#o.log('approval.mode.set', { scope: { repo: p.scope.repo, ...(p.scope.hsid ? { hsid: p.scope.hsid } : {}) }, from: p.from, to: p.to, by: p.by, presence: p.presence }, ids);
+  }
+
+  /**
+   * approval.strictness.raised | lowered (§3.4 strictness, M2.11-lite, B3: only the broker appends approval.*): a
+   * repo's level moved. A raise (tightening) is written with presence `none`; a lowering only from its strictness
+   * card's effect, after fresh presence. Must reject if the row was not written (the caller changes nothing then).
+   */
+  async strictnessSet(dir: 'raised' | 'lowered', p: { repo: string; from: string; to: string; cause: 'manual'; by: Record<string, unknown>; presence: 'none' | 'fresh' | `standing:${string}` }, ids: { connId?: string } = {}): Promise<void> {
+    await this.#o.log(`approval.strictness.${dir}`, { repo: p.repo, from: p.from, to: p.to, cause: p.cause, by: p.by, presence: p.presence }, ids);
   }
 
   /** approval.suspect from the kernel's own observation (B3: only the broker appends approval.*). */

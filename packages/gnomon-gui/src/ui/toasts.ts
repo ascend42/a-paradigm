@@ -36,6 +36,8 @@ export interface ToastOptions {
   closeLabel?: string;
   /** called once when the person closes it (close key or Esc), not when its owner dismisses it */
   onClose?: () => void;
+  /** #gui-loops (toast loop-done): the family tag in place of the kind's ("↻ loop · evening-tidy") */
+  tag?: string;
 }
 
 export interface ToastHandle {
@@ -140,7 +142,7 @@ export function mountToasts(doc: Document, region: HTMLElement, opts: ToastMount
     const el = doc.createElement('div');
     el.className = `${toastClass(kind)}${persistent ? ' held' : ''}`;
     const { main, next } = splitToastText(text);
-    const tag = toastTag(kind, persistent);
+    const tag = o.tag ?? toastTag(kind, persistent);
     if (tag) {
       const g = doc.createElement('span');
       g.className = 'toast-tag';

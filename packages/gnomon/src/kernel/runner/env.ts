@@ -310,17 +310,34 @@ export function win32SessionTempDir(hsid: string, tmp: string = os.tmpdir()): st
   return path.join(tmp, 'gnomon-sessions', createHash('sha256').update(hsid).digest('hex').slice(0, 16));
 }
 
-export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, string>; envKeys: string[] } {
+/** The allowlist, the scrub, the OS identity and the PATH: the base every kernel child env is built on. */
+function scrubbedChildEnv(from: Readonly<Record<string, string | undefined>>, identity: SessionIdentity | null, pathValue: string | null, platform: NodeJS.Platform): Record<string, string> {
   const env: Record<string, string> = {};
   // win32 env names are case-insensitive: a daemon started from PowerShell or cmd has Path, SystemRoot, windir,
   // ComSpec. Look every allowlisted name up case-insensitively there and emit the canonical spelling (W3).
-  const win = (i.platform ?? process.platform) === 'win32';
-  const folded = win ? new Map(Object.entries(i.from).map(([k, v]) => [k.toUpperCase(), v] as const)) : null;
+  const win = platform === 'win32';
+  const folded = win ? new Map(Object.entries(from).map(([k, v]) => [k.toUpperCase(), v] as const)) : null;
   for (const k of win ? [...ENV_ALLOWLIST, ...WINDOWS_EXTRA] : ENV_ALLOWLIST) {
-    const v = folded ? folded.get(k.toUpperCase()) : i.from[k];
+    const v = folded ? folded.get(k.toUpperCase()) : from[k];
     if (typeof v === 'string' && !isScrubbed(k)) env[k] = v;
   }
-  if (win && i.tempDir) {
+  if (identity) {
+    for (const k of IDENTITY_KEYS) delete env[k];
+    if (identity.user) {
+      env.USER = identity.user;
+      env.LOGNAME = identity.user;
+    }
+    if (identity.shell) env.SHELL = identity.shell;
+    if (identity.tmpdir) env.TMPDIR = identity.tmpdir;
+  }
+  if (pathValue !== null) env.PATH = pathValue;
+  return env;
+}
+
+export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, string>; envKeys: string[] } {
+  const platform = i.platform ?? process.platform;
+  const env = scrubbedChildEnv(i.from, i.identity, i.path, platform);
+  if (platform === 'win32' && i.tempDir) {
     // a sandboxed win32 session (the supervisors pass tempDir for one and only then)
     env.TEMP = i.tempDir;
     env.TMP = i.tempDir;
@@ -330,19 +347,38 @@ export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, strin
     env.GIT_CONFIG_KEY_0 = 'http.sslBackend';
     env.GIT_CONFIG_VALUE_0 = 'openssl';
   }
-  if (i.identity) {
-    for (const k of IDENTITY_KEYS) delete env[k];
-    if (i.identity.user) {
-      env.USER = i.identity.user;
-      env.LOGNAME = i.identity.user;
-    }
-    if (i.identity.shell) env.SHELL = i.identity.shell;
-    if (i.identity.tmpdir) env.TMPDIR = i.identity.tmpdir;
-  }
-  if (i.path !== null) env.PATH = i.path;
   env.GNOMON_HSID = i.hsid;
   env.GNOMON_SOCK = i.sock;
   env.GNOMON_SESSION_KEY = i.sessionKeyPath;
   for (const [k, v] of Object.entries(i.inject ?? {})) env[k] = v;
+  return { env, envKeys: Object.keys(env).sort() };
+}
+
+export interface CheckEnvInput {
+  /** the daemon's env (only allowlisted names are read) */
+  from: Readonly<Record<string, string | undefined>>;
+  identity: SessionIdentity | null;
+  /** the check PATH (sessionPathFor / defaultSessionPath); null (win32): the allowlist's */
+  path: string | null;
+  /** the check's private HOME and TMPDIR (inside its copy): never the user's home */
+  home: string;
+  tmpdir: string;
+  /** extra names (NO_COLOR …); a scrubbed name is never injected */
+  inject?: Readonly<Record<string, string>>;
+  /** the platform whose env rules apply (default: this process's) */
+  platform?: NodeJS.Platform;
+}
+
+/**
+ * #loop-check (docs/specs/gnomon-loops.md §4 "Sandboxes", G-SEC-02): a loop check child's env. The same allowlist,
+ * scrub and OS identity as a session, HOME and TMPDIR replaced by the check's private dirs, and NO kernel names at
+ * all (no GNOMON_HSID / GNOMON_SOCK / GNOMON_SESSION_KEY: a check talks to nothing). `inject` never re-adds a
+ * scrubbed name (NODE_OPTIONS, ANTHROPIC_*, GNOMON_* …).
+ */
+export function buildCheckEnv(i: CheckEnvInput): { env: Record<string, string>; envKeys: string[] } {
+  const env = scrubbedChildEnv(i.from, i.identity, i.path, i.platform ?? process.platform);
+  env.HOME = i.home;
+  env.TMPDIR = i.tmpdir;
+  for (const [k, v] of Object.entries(i.inject ?? {})) if (!isScrubbed(k)) env[k] = v;
   return { env, envKeys: Object.keys(env).sort() };
 }

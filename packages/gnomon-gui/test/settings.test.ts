@@ -104,8 +104,8 @@ describe('#gui-settings sheet: only allowed controls', () => {
       }
     expect(voice(input({ status: null })).map((r) => r.id)).toEqual(['voice-app']);
   });
-  it('the five sections in order', () => {
-    expect(settingsModel(input()).map((s) => s.id)).toEqual(['appearance', 'layout', 'voice', 'permissions', 'about']);
+  it('the six sections in order (Local model between Voice and Permissions)', () => {
+    expect(settingsModel(input()).map((s) => s.id)).toEqual(['appearance', 'layout', 'voice', 'local-model', 'permissions', 'about']);
   });
   it('the folder run mode is the F2 folder switch; a choice above the ceiling is disabled with its reason', () => {
     const m = rows().find((r) => r.id === 'folder-mode');
@@ -140,7 +140,8 @@ describe('#gui-settings sheet: kernel-owned items are read-only', () => {
   });
   it('a how line never sends the human to a terminal', () => {
     const states: SettingsInput[] = [input(), input({ status: null, connection: null, mode: null }), input({ mode: { ...MODE, repo: null } }), input({ status: { principalKind: 'agent' } })];
-    for (const i of states) for (const r of rows(i)) if (r.kind === 'readonly') expect(r.how, r.id).not.toMatch(/terminal|`gnomon |\bgnomon (mode|voice|approve|up)\b/i);
+    // #gui-local-model: the approved "not offered" copy names `gnomon local status` (session 2026-10-22-gnomon-local-model)
+    for (const i of states) for (const r of rows(i)) if (r.kind === 'readonly' && !(r.id === 'local-model' && r.value === 'not offered by this kernel')) expect(r.how, r.id).not.toMatch(/terminal|`gnomon |\bgnomon (mode|voice|approve|up)\b/i);
   });
   it('the unlock row states the bounds and that a lock ends it', () => {
     const u = rows().find((r) => r.id === 'unlock');
@@ -179,7 +180,7 @@ describe('#gui-settings opens from ⚙, ⌘, and the palette', () => {
     expect(app).toMatch(/else if \(id === 'settings\.open'\) settings\.open\(\);/);
     expect(app).not.toContain("$('settings-btn')"); // board header-5b: no ⚙ key; the Gnomon menu runs settings.open
     expect(app).toMatch(/\(e\.metaKey \|\| e\.ctrlKey\) && !e\.altKey && !e\.shiftKey && e\.key === ','\) \{[\s\S]{0,160}settings\.open\(\);/);
-    expect(app).toMatch(/e\.key === 'Escape' && settings\.isOpen\(\)\) \{\s*settings\.close\(\);/);
+    expect(app).toMatch(/e\.key === 'Escape' && settings\.isOpen\(\)\) \{\s*settings\.escape\(\);/);
     expect(html).toMatch(/id="settings" class="overlay" hidden/);
     expect(html).toMatch(/role="dialog" aria-modal="true" aria-labelledby="settings-title"/);
   });

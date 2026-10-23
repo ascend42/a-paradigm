@@ -76,6 +76,7 @@ import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getEnforcementToolsList, handleEnforcementTool } from './enforcement.js';
 import { getArchToolsList, handleArchTool } from './arch.js';
 import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
+import { getLoopsToolsList, handleLoopsTool } from './loops.js';
 import { ARCH_FILE } from '../utils/arch-loader.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences } from './fallback-grep.js';
@@ -347,6 +348,13 @@ function buildRegistry(rootDir: string, reloadContext?: ReloadContextFn): ToolRe
       tier: 'feature',
       getToolsList: getAssessmentToolsList as () => ToolDefinition[],
       handleTool: wrap(handleAssessmentTool),
+    },
+    {
+      // Gnomon loops (LP1): file ops on .paradigm/loops/*.yaml; on-demand paradigm_loop family.
+      key: 'loops',
+      tier: 'feature',
+      getToolsList: getLoopsToolsList,
+      handleTool: wrap(handleLoopsTool),
     },
     {
       key: 'arch',

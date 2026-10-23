@@ -36,7 +36,9 @@
         "reconsider",
         "strictness",
         "incident",
-        "daemon-stop"
+        "daemon-stop",
+        "loop-trust",
+        "loop-choice"
       ],
       "x-gnomon-additive": true
     },
@@ -144,7 +146,9 @@
         "use-api-token",
         "withdraw",
         "extend",
-        "restart"
+        "restart",
+        "continue",
+        "stop"
       ],
       "x-gnomon-additive": true
     },

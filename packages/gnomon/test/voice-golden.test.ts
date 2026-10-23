@@ -12,9 +12,10 @@ import { CARD_KINDS, CLIENT_API_ID, VOICE_ALLOWLIST } from '@a-company/gnomon-co
 import { ABI_ID } from '../src/kernel/socket/dispatch.js';
 import { KIND_DECISIONS } from '../src/kernel/broker/classes.js';
 
-const FULLY_HAND_ONLY: readonly string[] = ['incident', 'daemon-stop'];
+// 8.0:loops: loop-trust is never by voice, deny included (gnomon-loops.md §3.1, §7)
+const FULLY_HAND_ONLY: readonly string[] = ['incident', 'daemon-stop', 'loop-trust'];
 const GOLDEN_ABI_ID = 'sha256:f54aa03625d414234bce961059fb6584a9acc31ea8b97b3dc28b9afa0db26a35';
-const GOLDEN_CLIENT_API_ID = 'sha256:c4e2c7d97cd09b0809eb2a1672e4bf37bf570b640abb0a6b9735bb4eeabfe2c9';
+const GOLDEN_CLIENT_API_ID = 'sha256:a23b2c75c92df061c1dafa5d32e818a6ae788ef7153613d45be0ecae3c4ba1ce';
 
 describe('voice golden: abiId and clientApiId are unchanged by every voice slice', () => {
   it('ABI_ID and CLIENT_API_ID equal the pre-voice literals', () => {

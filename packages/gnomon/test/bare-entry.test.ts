@@ -112,9 +112,9 @@ describe('#bare-entry: the folder hint (pure)', () => {
 
 describe('#bare-entry: help and dispatch', () => {
   it('help lists every verb with one line each, and the first-run steps', () => {
-    for (const v of ['up', 'dev', 'identity', 'session', 'rules', 'mod', 'replay', 'trace', 'log', 'daemon', 'help']) expect(GNOMON_HELP).toMatch(new RegExp(`^  ${v} +\\S`, 'm'));
+    for (const v of ['up', 'dev', 'identity', 'session', 'rules', 'local', 'mod', 'replay', 'trace', 'log', 'daemon', 'help']) expect(GNOMON_HELP).toMatch(new RegExp(`^  ${v} +\\S`, 'm'));
     expect(GNOMON_HELP).toContain('gnomon identity init');
-    expect(GNOMON_HELP.split('\n').length).toBeLessThan(25);
+    expect(GNOMON_HELP.split('\n').length).toBeLessThan(26);
   });
   it('gnomon.ts runs bare entry for no argv (no seam), help for help/--help/-h, and refuses an unknown verb without echoing it', () => {
     const src = fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli', 'gnomon.ts'), 'utf8');

@@ -171,7 +171,7 @@ budgets: { run: { wallMin: 20, computeSec: 900 }, day: { runs: 1 } }
 land: { paths: [".paradigm/lore/**", ".paradigm/**/index*"], message: "chore(#paradigm): evening tidy" }
 start: reindex
 nodes:
-  - { id: reindex, type: check, effect: write, builtin: paradigm.reindex, on: { pass: digest, fail: digest } }
+  - { id: reindex, type: check, effect: write, builtin: paradigm.reindex, on: { pass: digest, fail: digest } }   # 8.1: write checks; 8.0 refuses effect: write at validate (LANDS_IN_8_1)
   - { id: digest,  type: model, role: summarize, model: { use: local }, inputs: [day.lore, day.commits, day.loopRuns], on: { any: tell } }
   - { id: tell,    type: notify, as: toast, text: "daily digest ready", attach: [digest.text], on: { any: '@stop' } }
 ```
@@ -208,7 +208,7 @@ nodes:
 
 ### 3.2 Working-branch collisions (`#repo-lease`, `$loop-land`)
 
-- **Where loops work.** Write steps and act nodes work in a scratch worktree detached at the branch head (`<repo>/.gnomon/worktrees/`, G:1176; git hardening, G:1557). It reuses the trusted `node_modules`; there is no network install.
+- **Where loops work.** Write steps and act nodes work in a scratch worktree detached at the branch head, in the kernel-owned run dir `<home>/loop-work/act-<runId>/tree`, outside the repo (build plan step 10; git hardening, G:1557). It is the HEAD tree read with hardened git plumbing, never `git worktree add`, and has no `.git`. Its work parks at `refs/gnomon/loops/<id>/<runId>` in a kernel-owned park repo. It reuses the trusted `node_modules` read-only; there is no network install.
 - **Landing**, under a per-repo land lock held for seconds:
   1. If HEAD moved, rebase the loop commit in scratch and re-run the goal check.
   2. Refuse if:
@@ -234,6 +234,7 @@ nodes:
 ### 3.3 Law 5 and strictness
 
 - **Defaults.** `act` is the definition default, but nothing runs or spends until the first enable. The trust card (or an opted-in envelope grant) is law 5's human mark: `attended:false` plus `model` (G:1177). It is also the opt-in for that loop's Claude use (§3.5). Fresh install: zero grants (`G-LAW-05`).
+- **8.0 is approve-to-land** (founder decision, 2026-10-22, build plan step 11). At every level, an act change raises the propose card and lands only when the human accepts it (hand-only, fresh presence). The trust card of a loop with act nodes and a land block says so: "Proposes changes to your current branch; nothing lands until you accept the card." The auto-landing rules below (L0/L1) are built and tested behind one seam and take effect in 8.1.
 - **Effective autonomy** = min(the loop's autonomy, the repo cap), re-evaluated at every node and again at land:
   - L3 or `manual`: nothing runs (`FORBIDDEN{strictness-paused}`, G:616).
   - L2: auto-landing is off, and the `ask` mode ceiling (G:615) wins over the loop's `auto-edits`. Act nodes become `propose`; their diffs are batched into the repo's verdict card.
@@ -298,7 +299,7 @@ nodes:
   - `loop.row` per round (G:1061), extended additively with `{runId, nodeVisits, escalations, landedSha?}` and trusted only from the kernel principal (as scheduler.ts:20-22)
   - `loop.landed`, `loop.land.waiting`
   - `loop.run.ended{reason}`
-- **Restart.** A started run with no end is closed `loop.run.ended{reason:'daemon-restart'}` and its node is never resumed mid-step (like drain-interrupted, G:348). The scratch commit is parked as a ref. Continuous loops restart after the cooldown.
+- **Restart.** A started run with no end is closed `loop.run.ended{reason:'daemon-restart'}` and its node is never resumed mid-step (like drain-interrupted, G:348). Its scratch is not parked: the retention sweep removes the stale run dir. Continuous loops restart after the cooldown.
 - **Uptime hold.** While any loop is enabled, the daemon does not idle-exit and survives the app window closing (§3.3). Live runs and timers due inside the horizon also hold idle exit (scheduler.ts:260).
 - **Concurrency:**
   - one run per loop (triggers during a run coalesce into one rerun flag);
@@ -387,7 +388,7 @@ Further rules:
 - **G-LOOP-07** A human dirty file on a touched path means no land. A disjoint path lands and the human's edits are byte-identical.
 - **G-LOOP-08** A human turn in flight means `loop.land.waiting`. After `maxWaitMin` the commit is parked at a ref.
 - **G-LOOP-09** Loop commits have author and committer `Gnomon Loop <loop+<id>@gnomon.invalid>` and the kernel's trailers last. A `land.message` carrying `Trusted-By:` or `On-Behalf-Of:` lines has them stripped. Reverting one emits `merge.reverted`.
-- **G-LOOP-10** At L2, `act` lands nothing alone and act nodes run as `propose`. At L3 or `manual`, zero runs. Tightening a repo mid-run pauses its running loops before their next node.
+- **G-LOOP-10** In 8.0, `act` lands nothing alone at any level: every change raises a propose card and lands only on accept (from 8.1, L0 and L1 may land alone). At L2 act nodes run as `propose`. At L3 or `manual`, zero runs and an accepted land waits. Tightening a repo mid-run pauses its running loops before their next node.
 - **G-LOOP-11** Run, day and global caps stop the next permit request. A definition with no budgets runs under the global defaults. A continuous loop with no goal and no rounds, or with no `day.runs` or `day.computeSec`, is refused.
 - **G-LOOP-12** A loop with no `claude.optIn` never starts a Claude process, whatever its `escalate`. For an opted-in loop, crossing `claudeWindowCeiling` mid-session stops it before its next turn.
 - **G-LOOP-13** With the endpoint down and no `on-unavailable`, no Claude process starts. With it and the opt-in, `session.routed` cites the trust card.

@@ -44,6 +44,12 @@ export const CARD_KINDS = [
   'incident',
   // P8-D98 (TD-2026-10-19-528 F3): `gnomon daemon stop` raises a signed daemon-stop card decided with fresh presence.
   'daemon-stop',
+  // ── 8.0:loops (docs/specs/gnomon-loops.md §3.1, §3.3; the ONE loops clientApiId move) ──────────────────────────
+  // loop-trust: a human trusts a loop definition's exact content hash (root key + fresh presence; never always,
+  //             never standing, never by voice).
+  // loop-choice: a loop's decide node (`notify as: card`): continue (fresh, hand-only) or stop (deny-direction).
+  'loop-trust',
+  'loop-choice',
 ] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
 
@@ -69,6 +75,9 @@ export const CARD_DECISIONS = [
   'withdraw',
   'extend',
   'restart',
+  // ── 8.0:loops: the loop-choice card's two decisions (valid only on a loop-choice card) ──
+  'continue',
+  'stop',
 ] as const;
 export type CardDecision = (typeof CARD_DECISIONS)[number];
 
@@ -193,6 +202,11 @@ export const CARD_RESERVED_VALUES = Object.freeze({
   '8.0:P8-D98': Object.freeze({
     kind: ['daemon-stop'],
     expiryWhy: ['session-drained'],
+  }),
+  // ── 8.0:loops (docs/specs/gnomon-loops.md §3.1, §3.3, §5) ──
+  '8.0:loops': Object.freeze({
+    kind: ['loop-trust', 'loop-choice'],
+    decision: ['continue', 'stop'],
   }),
 });
 
@@ -324,6 +338,16 @@ export function hasUnknownFailSafeValue(card: Partial<Pick<CardV1, 'strictness' 
 /** `extend` and `restart` are valid only on a `reconsider` card (§3.4, §7.3). */
 export const RECONSIDER_ONLY_DECISIONS: readonly string[] = Object.freeze(['extend', 'restart']);
 
+/** 8.0:loops: `continue` and `stop` are valid only on a `loop-choice` card (gnomon-loops.md §3.3). */
+export const LOOP_CHOICE_ONLY_DECISIONS: readonly string[] = Object.freeze(['continue', 'stop']);
+
+/** The card kind a kind-scoped decision needs, or undefined (any kind). */
+function onlyKindOf(decision: string): string | undefined {
+  if (RECONSIDER_ONLY_DECISIONS.includes(decision)) return 'reconsider';
+  if (LOOP_CHOICE_ONLY_DECISIONS.includes(decision)) return 'loop-choice';
+  return undefined;
+}
+
 /**
  * Is the card decidable with this decision, from a client's point of view?
  * When the card's kind is given, `extend`/`restart` need a `reconsider` card.
@@ -334,8 +358,10 @@ export function isCardDecidable(
   card: Pick<CardV1, 'state'> & Partial<Pick<CardV1, 'kind' | 'strictness' | 'note'>>,
   decision?: string,
 ): boolean {
-  // extend/restart only on a card KNOWN to be a reconsider card (unknown/omitted kind ⇒ no).
-  if (decision !== undefined && RECONSIDER_ONLY_DECISIONS.includes(decision) && card.kind !== 'reconsider') return false;
+  // extend/restart only on a card KNOWN to be a reconsider card, continue/stop only on a KNOWN loop-choice card
+  // (unknown/omitted kind ⇒ no).
+  const only = decision !== undefined ? onlyKindOf(decision) : undefined;
+  if (only !== undefined && card.kind !== only) return false;
   // fail-safe: a value this release does not know in a fail-safe field ⇒ render, never decide.
   if (hasUnknownFailSafeValue(card)) return false;
   if (card.state === 'pending') return decision !== 'withdraw';
@@ -404,6 +430,10 @@ export function validateCardV1(value: unknown, opts: ValidateOptions = {}): stri
     // extend/restart only on reconsider (§3.4) — also as a held decision.
     if (typeof v.heldDecision === 'string' && RECONSIDER_ONLY_DECISIONS.includes(v.heldDecision) && v.kind !== 'reconsider') {
       c.fail('heldDecision', `${v.heldDecision} is valid only on a reconsider card`);
+    }
+    // 8.0:loops: continue/stop only on loop-choice (also as a held decision).
+    if (typeof v.heldDecision === 'string' && LOOP_CHOICE_ONLY_DECISIONS.includes(v.heldDecision) && v.kind !== 'loop-choice') {
+      c.fail('heldDecision', `${v.heldDecision} is valid only on a loop-choice card`);
     }
     // Producer cross-field checks on the change note (§3.4; G-CHG-01, G-CHG-04).
     const n = v.note as { agentClaims?: any; kernel?: any } | undefined;

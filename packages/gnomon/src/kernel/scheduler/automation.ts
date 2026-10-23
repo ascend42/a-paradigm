@@ -20,10 +20,18 @@
  * are strict ISO-8601 with `Z` or `±hh:mm`, years 0001–9999; `every` is 1 min
  * to 10 years, so every derived instant stays inside the Date range.
  *
+ * Loops (docs/specs/gnomon-loops.md §4, build step 6): `daily {at, tz}` and `weekly {day, at, tz}` are local wall
+ * times in a stated IANA zone (zoned.ts: a time skipped by spring-forward fires once at the end of the gap, a
+ * repeated one once at its first occurrence), still a pure function of the record and the due rows. The
+ * `attended:false` refusal lifts ONLY when the caller passes a predicate that says the record's loop is trusted at
+ * its current hash and not paused (#loop-registry, through #loop-timers); every other record keeps refusing.
+ *
  * LOCAL SHAPE: `automation:v1` / `timer:v1` are not wire objects yet (no verb
  * carries them), so they live here, not in @a-company/gnomon-contracts —
  * moving them there would move clientApiId (reported as a candidate).
  */
+
+import { calendarWindow, parseHhmm, validTimeZone, WEEKDAYS, type CalendarRule, type Weekday } from './zoned.js';
 
 export const AUTOMATION_MODELS = ['local', 'claude', 'any'] as const;
 export type AutomationModel = (typeof AUTOMATION_MODELS)[number];
@@ -33,14 +41,26 @@ export const MIN_AUTOMATION_PERIOD_MS = 60_000;
 /** Largest period: 10 Julian years. */
 export const MAX_AUTOMATION_PERIOD_MS = 10 * 365.25 * 86_400_000;
 
-export type AutomationTrigger = { at: string } | { every: number; anchor: string };
+export type AutomationTrigger =
+  | { at: string }
+  | { every: number; anchor: string }
+  | { daily: { at: string; tz: string } }
+  | { weekly: { day: Weekday; at: string; tz: string } };
 
 export interface AutomationV1 {
   id: string;
   trigger: AutomationTrigger;
   model: AutomationModel;
-  /** Always true until the M1.6 decision + M1.7/M1.8 run step land. */
-  attended: true;
+  /** true unless the record is a trusted loop's (parseAutomation's `unattended` predicate said yes). */
+  attended: boolean;
+}
+
+export interface ParseAutomationOptions {
+  /**
+   * May this record run unattended? Only #loop-timers passes one (the loop is trusted at its current hash, not
+   * paused, not held by the kill switch). Absent, `attended:false` refuses `unattended-unavailable`.
+   */
+  unattended?: (a: { id: string; trigger: AutomationTrigger; model: AutomationModel }) => boolean;
 }
 
 export class AutomationRefusal extends Error {
@@ -65,8 +85,18 @@ export function strictIsoMs(v: unknown, field: string): number {
   return ms;
 }
 
+function parseWall(v: unknown, field: string, keys: readonly string[]): { at: string; tz: string; day?: Weekday } {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new AutomationRefusal('bad-trigger', `${field} must be an object`);
+  const o = v as Record<string, unknown>;
+  for (const k of Object.keys(o)) if (!keys.includes(k)) throw new AutomationRefusal('bad-trigger', `unknown field ${field}.${k}`);
+  if (parseHhmm(o.at) === null) throw new AutomationRefusal('bad-trigger', `${field}.at must be "HH:MM" (24-hour)`);
+  if (!validTimeZone(o.tz)) throw new AutomationRefusal('bad-trigger', `${field}.tz must be an IANA time zone this runtime knows`);
+  if (keys.includes('day') && !(WEEKDAYS as readonly unknown[]).includes(o.day)) throw new AutomationRefusal('bad-trigger', `${field}.day must be one of ${WEEKDAYS.join('|')}`);
+  return { at: o.at as string, tz: o.tz as string, ...(keys.includes('day') ? { day: o.day as Weekday } : {}) };
+}
+
 /** Validate a raw record. Unknown fields refuse (closed shape, additive only by a spec change). */
-export function parseAutomation(raw: unknown): AutomationV1 {
+export function parseAutomation(raw: unknown, opts: ParseAutomationOptions = {}): AutomationV1 {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AutomationRefusal('bad-shape', 'not an object');
   const r = raw as Record<string, unknown>;
   for (const k of Object.keys(r)) {
@@ -89,18 +119,26 @@ export function parseAutomation(raw: unknown): AutomationV1 {
     }
     strictIsoMs(tr.anchor, 'trigger.anchor');
     trigger = { every: tr.every, anchor: tr.anchor as string };
+  } else if ('daily' in tr && Object.keys(tr).length === 1) {
+    const w = parseWall(tr.daily, 'trigger.daily', ['at', 'tz']);
+    trigger = { daily: { at: w.at, tz: w.tz } };
+  } else if ('weekly' in tr && Object.keys(tr).length === 1) {
+    const w = parseWall(tr.weekly, 'trigger.weekly', ['day', 'at', 'tz']);
+    trigger = { weekly: { day: w.day!, at: w.at, tz: w.tz } };
   } else {
-    throw new AutomationRefusal('bad-trigger', 'trigger must be exactly {at} or {every, anchor}');
+    throw new AutomationRefusal('bad-trigger', 'trigger must be exactly {at}, {every, anchor}, {daily: {at, tz}} or {weekly: {day, at, tz}}');
   }
   const attended = r.attended === undefined ? true : r.attended;
   if (typeof attended !== 'boolean') throw new AutomationRefusal('bad-shape', 'attended must be a boolean');
+  const model = r.model as AutomationModel;
+  if (!attended && opts.unattended?.({ id: r.id, trigger, model }) === true) return { id: r.id, trigger, model, attended: false };
   if (!attended) {
     throw new AutomationRefusal(
       'unattended-unavailable',
       'attended:false needs an #approval-broker decision (M1.6) and the unattended run step (#session-runner M1.7 / #local-runner M1.8); refused until both land (law 5)',
     );
   }
-  return { id: r.id, trigger, model: r.model as AutomationModel, attended: true };
+  return { id: r.id, trigger, model, attended: true };
 }
 
 /** The timer key of an automation (one daemon ⇒ one timer per key). */
@@ -114,6 +152,8 @@ export function automationKey(id: string): string {
  * `afterMs` is the last fired due instant from the log (-Infinity when none).
  */
 export function dueWindow(trigger: AutomationTrigger, afterMs: number, uptoMs: number): { count: number; last: number | null; next: number | null } {
+  if ('daily' in trigger) return calendarWindow(calendarRule(trigger), afterMs, uptoMs);
+  if ('weekly' in trigger) return calendarWindow(calendarRule(trigger), afterMs, uptoMs);
   if ('at' in trigger) {
     const at = Date.parse(trigger.at);
     if (at <= afterMs) return { count: 0, last: null, next: null };
@@ -125,4 +165,10 @@ export function dueWindow(trigger: AutomationTrigger, afterMs: number, uptoMs: n
   if (first > uptoMs) return { count: 0, last: null, next: first };
   const kLast = Math.floor((uptoMs - anchor) / trigger.every);
   return { count: kLast - k0 + 1, last: anchor + kLast * trigger.every, next: anchor + (kLast + 1) * trigger.every };
+}
+
+/** A daily or weekly trigger as zoned.ts's rule. */
+export function calendarRule(t: { daily: { at: string; tz: string } } | { weekly: { day: Weekday; at: string; tz: string } }): CalendarRule {
+  if ('daily' in t) return { minute: parseHhmm(t.daily.at)!, tz: t.daily.tz };
+  return { minute: parseHhmm(t.weekly.at)!, tz: t.weekly.tz, weekday: WEEKDAYS.indexOf(t.weekly.day) };
 }

@@ -44,7 +44,7 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings';
+  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust';
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -446,6 +446,102 @@ function emptyChain(): Chain {
   return c;
 }
 
+
+/* ── #gui-loops: the Loops view fixtures (status.loops as the human class's status, loop cards as the broker raises them) ── */
+
+const LOOP_REPO_KEY = `sha256:${'b'.repeat(64)}`;
+const LN = (id: string, type: string, on: Record<string, string>, extra: Record<string, string> = {}): Record<string, unknown> => ({ id, type, on, ...extra });
+const LOOP_SHAPES: Record<string, { start: string; nodes: Record<string, unknown>[]; triggers: string[]; autonomy: string; goal?: string; land?: string[] }> = {
+  'flow-health-checkout': { start: 'defn', triggers: ['daily 02:00', 'on change'], autonomy: 'observe', goal: 'drift', nodes: [LN('defn', 'check', { pass: 'gates', fail: 'why' }, { role: 'read' }), LN('gates', 'check', { pass: 'tests', fail: 'why' }, { role: 'read' }), LN('tests', 'check', { pass: 'drift', fail: 'why' }, { role: 'read' }), LN('drift', 'check', { pass: '@goal', fail: 'why' }, { role: 'read' }), LN('why', 'model', { pass: 'tell', fail: 'tell', unsure: 'tell', unavailable: 'tell' }, { role: 'summarize' }), LN('tell', 'notify', { any: '@stop' }, { as: 'toast' })] },
+  'green-typecheck-gnomon': { start: 'tsc', triggers: ['on change'], autonomy: 'act', goal: 'tsc', land: ['packages/gnomon/src/**'], nodes: [LN('tsc', 'check', { pass: '@goal', fail: 'fix' }, { role: 'read' }), LN('fix', 'model', { pass: 'tsc', fail: 'tsc', unsure: 'ask', unavailable: 'ask' }, { role: 'act' }), LN('ask', 'notify', { continue: 'fix', stop: '@stop', timeout: '@pause' }, { as: 'card' })] },
+  'triage-on-commit': { start: 'triage', triggers: ['git.commit'], autonomy: 'propose', nodes: [LN('triage', 'model', { pass: 'fix', fail: 'tell', unsure: 'tell', unavailable: 'tell' }, { role: 'judge' }), LN('fix', 'call', { pass: 'tell', fail: 'tell' }, { callee: 'green-typecheck-gnomon' }), LN('tell', 'notify', { any: '@stop' }, { as: 'toast' })] },
+  'evening-tidy': { start: 'reindex', triggers: ['daily 18:30'], autonomy: 'act', nodes: [LN('reindex', 'check', { pass: 'digest', fail: 'digest' }, { role: 'write' }), LN('digest', 'model', { any: 'tell' }, { role: 'summarize' }), LN('tell', 'notify', { any: '@stop' }, { as: 'toast' })] },
+};
+const loopKey = (repo: string, id: string): string => `repo/${LOOP_REPO_KEY}/${repo}/${id}`;
+const ago = (min: number): string => new Date(Date.now() - min * 60_000).toISOString();
+const ahead = (min: number): string => new Date(Date.now() + min * 60_000).toISOString();
+function loopEntry(id: string, repo: string, state: string, o: { reason?: string; trusted?: string; content?: string; by?: string; shapeOf?: string } = {}): Record<string, unknown> {
+  const s = LOOP_SHAPES[o.shapeOf ?? id] ?? LOOP_SHAPES['evening-tidy']!;
+  const content = o.content ?? `sha256:${sha256Tagged(`loop ${id}`).slice(-64)}`;
+  return {
+    key: loopKey(repo, id), loopId: id, scope: 'repo', repo: `/Users/matt/code/${repo}`, repoKey: LOOP_REPO_KEY, state, ...(o.reason ? { reason: o.reason } : {}), contentHash: content, ...(o.trusted ? { trustedHash: o.trusted === 'same' ? content : o.trusted } : {}), errors: [], callIssues: [], authoredBy: o.by ? { principal: `p:${PREVIEW_NS}/${o.by}`, hsid: null, basis: 'agent-key-claim' } : 'file',
+    shape: { triggers: s.triggers, autonomy: s.autonomy, start: s.start, ...(s.goal ? { goal: s.goal } : {}), ...(s.land ? { land: s.land } : {}), budgets: { run: { rounds: 8, wallMin: 30, tokens: 200000, computeSec: 900 }, day: { runs: 12, tokens: 1000000, computeSec: 3600 } }, authoredBy: o.by ?? 'file', nodes: s.nodes },
+  };
+}
+const rn = (nodeId: string, verdict: string, next: string | null, at: string, durationMs: number, round?: number): Record<string, unknown> => ({ nodeId, visit: 1, verdict, next, edge: verdict, at, durationMs, ...(round ? { round } : {}) });
+
+function loopsStatus(kind: 'desk' | 'paused' | 'many' | 'none'): Record<string, unknown> {
+  if (kind === 'none') return { loops: [], running: [], runs: [], effective: {}, uptime: { enabled: { n: 0, of: 0 }, running: { n: 0, of: 0 }, waiting: { n: 0, of: 0 }, keepingAlive: false } };
+  const loops = [
+    loopEntry('green-typecheck-gnomon', 'gnomon-web', 'trusted', { trusted: 'same', by: 'arky' }),
+    loopEntry('flow-health-checkout', 'billing', 'trusted', { trusted: 'same' }),
+    loopEntry('triage-on-commit', 'billing', 'waiting-trust', { reason: 'content-changed', trusted: `sha256:${'c'.repeat(64)}`, by: 'arky' }),
+    loopEntry('evening-tidy', 'atelier', 'paused', { reason: 'budget', trusted: 'same' }),
+    loopEntry('nightly-dependency-audit-for-every-workspace-package', 'ledgerette', 'untrusted', { by: 'scholar', shapeOf: 'evening-tidy' }),
+    loopEntry('weekly-lore-digest', 'billing', 'untrusted', { by: 'loid', shapeOf: 'evening-tidy' }),
+  ];
+  const runs: Record<string, unknown>[] = [
+    { runId: 'run:01JLOOPLIVE000000000000GT', loopId: 'green-typecheck-gnomon', key: loopKey('gnomon-web', 'green-typecheck-gnomon'), startedAt: ago(9), rounds: 4, computeMs: 410_000, nodes: [rn('tsc', 'fail', 'fix', ago(9), 21_000), rn('fix', 'pass', 'tsc', ago(8), 95_000, 1), rn('tsc', 'fail', 'fix', ago(6), 20_000), rn('fix', 'pass', 'tsc', ago(5), 88_000, 2), rn('tsc', 'fail', 'fix', ago(4), 19_000), rn('fix', 'unsure', 'ask', ago(2), 101_000, 3), { nodeId: 'ask', visit: 1, verdict: 'waiting', at: ago(1) }], notified: 1 },
+    { runId: 'run:01JLOOPFAIL000000000000FH', loopId: 'flow-health-checkout', key: loopKey('billing', 'flow-health-checkout'), startedAt: ago(130), endedAt: ago(127), reason: 'stop', rounds: 1, computeMs: 180_000, nodes: [rn('defn', 'pass', 'gates', ago(130), 2_000), rn('gates', 'pass', 'tests', ago(130), 3_000), rn('tests', 'fail', 'why', ago(129), 120_000), rn('why', 'pass', 'tell', ago(128), 40_000), rn('tell', 'pass', '@stop', ago(127), 100)], notified: 1 },
+    { runId: 'run:01JLOOPGOAL000000000000FH', loopId: 'flow-health-checkout', key: loopKey('billing', 'flow-health-checkout'), startedAt: ago(600), endedAt: ago(598), reason: 'goal', rounds: 1, computeMs: 90_000, nodes: [rn('defn', 'pass', 'gates', ago(600), 2_000), rn('gates', 'pass', 'tests', ago(600), 3_000), rn('tests', 'pass', 'drift', ago(599), 70_000), rn('drift', 'pass', '@goal', ago(598), 9_000)], notified: 0 },
+    { runId: 'run:01JLOOPBUDG000000000000ET', loopId: 'evening-tidy', key: loopKey('atelier', 'evening-tidy'), startedAt: ago(45), endedAt: ago(40), reason: 'budget', rounds: 8, computeMs: 900_000, nodes: [rn('reindex', 'pass', 'digest', ago(45), 60_000), rn('digest', 'unsure', 'tell', ago(41), 240_000)], notified: 0 },
+  ];
+  const uptime = { enabled: { n: 2, of: 6 }, running: { n: 1, of: 6 }, waiting: { n: 0, of: 6 }, keepingAlive: true, line: 'Gnomon is staying up for loops', nextDueAt: ahead(95) };
+  const effective = { [loopKey('gnomon-web', 'green-typecheck-gnomon')]: { declared: 'act', autonomy: 'propose', level: 'L2', capReason: 'L2: gnomon-web strictness' } };
+  if (kind === 'paused') {
+    for (const l of loops) if (l.state === 'trusted' || l.state === 'paused') Object.assign(l, { state: 'paused', reason: 'kill-switch' });
+    return { loops, running: [], runs: runs.map((r) => (r.endedAt ? r : { ...r, endedAt: ago(0), reason: 'kill-switch' })), effective, uptime: { ...uptime, enabled: { n: 0, of: 6 }, running: { n: 0, of: 6 }, keepingAlive: false, line: undefined } };
+  }
+  if (kind === 'many') {
+    const repos = ['billing', 'warpline', 'ledgerette', 'gnomon-web', 'atelier'];
+    const states = ['trusted', 'trusted', 'trusted', 'paused', 'untrusted', 'waiting-trust'];
+    for (let i = 0; i < 54; i++) loops.push(loopEntry(`loop-${String(i).padStart(2, '0')}-${['tidy', 'health', 'typecheck-and-lint-every-package', 'digest'][i % 4]}`, repos[i % 5]!, states[i % 6]!, { trusted: states[i % 6] === 'untrusted' ? undefined : 'same', reason: states[i % 6] === 'paused' ? 'human' : states[i % 6] === 'waiting-trust' ? 'content-changed' : undefined, shapeOf: Object.keys(LOOP_SHAPES)[i % 4] } as never));
+  }
+  return { loops, running: [{ key: loopKey('gnomon-web', 'green-typecheck-gnomon'), runId: 'run:01JLOOPLIVE000000000000GT', rerun: false }], runs, effective, uptime };
+}
+
+const TRIAGE_BODY = [
+  'Node triage (model, judge): local profile small, min confidence 0.7; tools paradigm:ripple|navigate; inputs git.diff; classes fix, ignore; limits 6 turns, 40000 tokens; on pass → fix; fail, unsure, unavailable → tell',
+  'Node fix (call): green-typecheck-gnomon → callee hash 3f9a1c22; on pass, fail → tell',
+  'Node tell (notify, toast): "triage done"; on any → @stop',
+  'Triggers: git.commit; manual',
+  'Budgets: run 8 rounds, 30 min, 200000 tokens, 900s compute; day 12 runs, 1000000 tokens, 3600s compute; escalations 1/run, 3/day',
+  'Protected (act nodes may not edit): .paradigm/**, portal.yaml',
+  'Land paths: packages/billing/src/**; message "triage: fix"; max wait 30 min (gate-class paths never land without a card)',
+];
+function loopTrustCard(): Record<string, unknown> {
+  const row = { kind: 'loop.trusted', loopId: 'triage-on-commit', scope: 'repo', repoKey: LOOP_REPO_KEY, contentHash: `sha256:${'d'.repeat(64)}`, coreHash: `sha256:${'e'.repeat(64)}`, closureDigest: `sha256:${'f'.repeat(64)}`, cardId: cardIdOf('loop trust triage'), by: 'root', requestedBy: `p:${PREVIEW_NS}/arky` };
+  const detail = { loopId: 'triage-on-commit', scope: 'repo', repoKey: LOOP_REPO_KEY, repo: '/Users/matt/code/billing', loopHash: row.contentHash, lines: TRIAGE_BODY, previousHash: `sha256:${'c'.repeat(64)}`, rootRows: [row], rootDecisions: ['allow'] };
+  const lines = [
+    'Trust loop triage-on-commit (repo loop in /Users/matt/code/billing)',
+    `Content hash ${row.contentHash.slice(0, 19)}… (definition 1a2b3c4d, closure 9e8d7c6b)`,
+    'Trusting lets this exact version run unattended on its triggers; any change to it, its argv files or its config closure pauses it until you trust again',
+    ...TRIAGE_BODY,
+    'Claimed by agent key: arky: an agent\'s loop runs only after you trust it here',
+    'Changes since the trusted version cccccccc:',
+    '- Triggers: git.commit; manual',
+    '+ Triggers: git.commit; daily 09:00; manual',
+    '- Land paths: none',
+    '+ Land paths: packages/billing/src/**; message "triage: fix"; max wait 30 min (gate-class paths never land without a card)',
+    'Allow needs Touch ID and the root key; deny or no answer trusts nothing',
+  ];
+  const card = cardOf({ name: 'loop trust triage', kind: 'loop-trust', hsid: null, requestedBy: `p:${PREVIEW_NS}/arky`, lines, extra: [{ type: 'root-rows', rootDecisions: ['allow'], detail }], detail, decisions: ['allow', 'deny'] });
+  return card;
+}
+function loopChoiceCard(): Record<string, unknown> {
+  const detail = { loopId: 'green-typecheck-gnomon', scope: 'repo', repoKey: LOOP_REPO_KEY, repo: '/Users/matt/code/gnomon-web', runId: 'run:01JLOOPLIVE000000000000GT', nodeId: 'ask', origin: 'loop', authoredBy: 'arky' };
+  return cardOf({ name: 'loop choice gt', kind: 'loop-choice', hsid: null, lines: ['Raised by loop green-typecheck-gnomon (claimed by arky)', 'Run run:01JLOOPLIVE000000000000GT', 'fix is unsure after 3 rounds: tsc still fails on src/kernel/loops/runner.ts:812 (a narrowed union). Continue for 3 more rounds?', 'Continue lets the loop go on (Touch ID); stop ends this run'], detail, decisions: ['continue', 'stop'] });
+}
+function loopsChain(cards: boolean): Chain {
+  const c = deskChain();
+  if (cards) {
+    c.add(T('14:07:30'), 'approval.request', { card: loopChoiceCard(), flags: [] }, { repo: 'gnomon-web' });
+    c.add(T('14:07:40'), 'approval.request', { card: loopTrustCard(), flags: [] }, { repo: 'billing' });
+  }
+  return c;
+}
+const loopsFx = (name: string, title: string, kind: 'desk' | 'paused' | 'many' | 'none', cards = true): Fixture => fixture(name, title, loopsChain(cards), { ...statusOf(VOICE_RUNNING), loops: loopsStatus(kind) }, BILLING);
+
 export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   desk: fixture('desk', 'Desk: 5 active, 12 past, the billing chat, 4 cards', deskChain(), statusOf(VOICE_RUNNING), BILLING),
   empty: fixture('empty', 'Fresh install: no sessions, voice app not started', emptyChain(), statusOf({ attached: false, clientConnected: false, client: { phase: 'stopped', restarts: 0, devUnsigned: false }, enrolled: [] }, { runModes: false }), null),
@@ -468,6 +564,12 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'offer-muted': fixture('offer-muted', '"not now" on mod:neurons: a trace, and its next offer stays quiet (L4)', deskChain({ offer: 'muted' }), statusOf(VOICE_RUNNING), BILLING),
   'workshop-absent': fixture('workshop-absent', 'Desk without the Workshop installed (one quiet line)', deskChain(), statusOf(VOICE_RUNNING), BILLING, true),
   'paradigm-context': { ...fixture('paradigm-context', 'Desk with the Paradigm Context mod in the sidebar (billing focused)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { modAbiId: 'preview', running: [{ name: 'paradigm-context', packageHash: 'preview', dev: false, sandbox: 'full' }], paused: [], ...PARADIGM_CONTEXT_STATUS } }, BILLING), paradigm: paradigmSlices() },
+  loops: loopsFx('loops', 'Loops: 6 loops, one running at ask, a loop-choice and a loop-trust card, a failure, a kernel pause, two waiting', 'desk'),
+  'loops-waiting': { ...loopsFx('loops-waiting', 'Loops leaf on the loops waiting for trust (Review all)', 'desk'), open: 'loops-waiting' },
+  'loops-trust': { ...loopsFx('loops-trust', 'A loop-trust card unfolded over the centre (Read)', 'desk'), open: 'loops-trust' },
+  'loops-paused': loopsFx('loops-paused', 'Loops after Pause all (kill switch)', 'paused', false),
+  'loops-many': loopsFx('loops-many', 'Loops: 60 loops across five projects', 'many', false),
+  'loops-none': loopsFx('loops-none', 'Loops served, none written yet', 'none', false),
 });
 
 export const FIXTURE_NAMES: readonly string[] = Object.freeze(Object.keys(FIXTURES));

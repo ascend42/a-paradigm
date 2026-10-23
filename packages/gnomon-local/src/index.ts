@@ -12,3 +12,4 @@ export { TOOLS, runTool, insideRoots, isDotGit, PATH_CASE_INSENSITIVE } from './
 export { Agent } from './agent.js';
 export { COMPACTION_HEADINGS, DEFAULT_CONTEXT_TARGET, compactedHistory, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 export { parseSessionConfig, rpcSession, ConfigError, type LocalSessionConfig } from './rpc.js';
+export { PROTECTED_PREFIX, ProtectedRefused, protectGlob, protectedHit } from './protect.js';

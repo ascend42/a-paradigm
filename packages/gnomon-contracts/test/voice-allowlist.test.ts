@@ -51,6 +51,10 @@ const EXPECTED: Record<string, Record<Cls, string[]>> = {
   // founder ruling (TD-2026-10-19-194): fully hand-only, deny included
   incident: { reversible: [], gate: [], judgment: [] },
   'daemon-stop': { reversible: [], gate: [], judgment: [] },
+  // 8.0:loops (gnomon-loops.md §3.1, §7): loop-trust is never by voice, deny included; loop-choice stop is
+  // voice-eligible in the spec but deferred to 8.1 (founder scope), so both are fully hand-only in 8.0
+  'loop-trust': { reversible: [], gate: [], judgment: [] },
+  'loop-choice': { reversible: [], gate: [], judgment: [] },
 };
 
 /** Approving decisions take the hold; deny-direction and withdraw do not (§14.7 Hold, echo, undo; D66). */

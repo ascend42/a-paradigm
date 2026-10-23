@@ -79,3 +79,21 @@ export function classifyEndpoint(base: string, forbiddenPorts: readonly number[]
   const path = u.pathname.replace(/\/+$/, '');
   return { ok: true, base: `${u.protocol}//${u.host}${path}`, host, port, class: cls };
 }
+
+/**
+ * The loopback port of an endpoint base URL (127.0.0.0/8, ::1, localhost), or null for anything else. 8.0 serves
+ * loopback endpoints only (TD-2026-10-22-769): a real home's request.local.config and `gnomon dev local` take a base
+ * this answers for, and a loop act step's profile allows exactly this port. LAN endpoints land in 8.1.
+ */
+export function loopbackPort(base: string): number | null {
+  let u: URL;
+  try {
+    u = new URL(base);
+  } catch {
+    return null;
+  }
+  const h = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (h !== 'localhost' && h !== '::1' && !/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return null;
+  const port = u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : u.protocol === 'http:' ? 80 : NaN;
+  return Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
+}

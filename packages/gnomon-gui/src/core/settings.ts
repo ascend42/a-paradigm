@@ -24,6 +24,7 @@ import { isKernelPrincipal, standingStatusOf, STANDING_TUPLE_TEXT } from './stan
 import { clientBusy, clientOf } from './voice-client.js';
 import { canAttach, voiceStatusOf } from './voice.js';
 import { rungOf, RUNG_NAME } from './voice-ladder.js';
+import { emptyLocalUi, localSection, type LocalUi } from './local-model.js';
 
 export const THEME_KEY = 'gnomon.gui.theme';
 export const MOTION_KEY = 'gnomon.gui.motion';
@@ -65,18 +66,70 @@ export interface SettingOption {
   disabled?: boolean;
   note?: string;
 }
+/**
+ * A key of a row kind with its own press path (component settings-form: form and request rows). `act` names the press
+ * (ui/settings-sheet.ts data-lm-act); it never runs through SETTINGS_RUNS.
+ */
+export interface FormKey {
+  act: string;
+  label: string;
+  pri?: boolean;
+  quiet?: boolean;
+  disabled?: boolean;
+  busy?: boolean;
+  /** aria-expanded on a key that opens a form under its row */
+  expanded?: boolean;
+  /** a seg option's value */
+  value?: string;
+  title?: string;
+  /** the submit key of a form */
+  submit?: boolean;
+}
+/** A result line (role=status, or alert when it fails): the outcome word in 600, then the rest. */
+export interface ResultView {
+  lead?: string;
+  text: string;
+  fail?: boolean;
+}
+/** One field of a settings-form: label over control over note (or the ✕ error that replaces the note). */
+export type FieldView =
+  | { kind: 'seg'; name: string; label: string; options: FormKey[]; note: string }
+  | { kind: 'text'; name: string; label: string; value: string; width: 'w-addr' | 'w-model' | 'w-name' | 'w-path'; note: string; error?: string; placeholder?: string }
+  | { kind: 'value'; name: string; label: string; value: string };
+export interface FormView {
+  /** the form's accessible name ("Set up a local model" | "Change the local model") */
+  label: string;
+  lead: string;
+  result?: ResultView;
+  fields: FieldView[];
+  advanced: { open: boolean; label: string; fields: FieldView[] };
+  /** the "changes:" line of a change */
+  changes?: string;
+  keys: FormKey[];
+  /** why the submit key is disabled, beside it ("no change") */
+  whyOff?: string;
+  foot: string;
+}
 export type SettingRow =
   | { kind: 'choice'; id: string; label: string; options: SettingOption[]; note?: string }
   | { kind: 'toggle'; id: string; label: string; run: string; on: boolean; note?: string }
   | { kind: 'action'; id: string; label: string; run: string; note?: string }
   | { kind: 'revoke'; id: string; label: string; grantId: string; note?: string }
-  | { kind: 'readonly'; id: string; label: string; value: string; how: string; slot?: string };
+  // `how` may be '' (no how line); mark (✓ ✕ ?) leads the value in 600; grp starts a group by space; live = polite
+  | { kind: 'readonly'; id: string; label: string; value: string; how: string; slot?: string; mark?: string; grp?: boolean; live?: boolean; keys?: FormKey[]; title?: string }
+  // component settings-form (session 2026-10-22-gnomon-local-model): closed = its keys; open = the form
+  | { kind: 'form'; id: string; label: string; keys: FormKey[]; form?: FormView; confirm?: { label: string; text: string; keys: FormKey[] }; result?: ResultView }
+  | { kind: 'request'; id: string; label: string; chip: string; line: string; keys: FormKey[]; how: string }
+  | { kind: 'term'; id: string; text: string; code: string };
 
-export type SectionId = 'appearance' | 'layout' | 'voice' | 'permissions' | 'about';
+export type SectionId = 'appearance' | 'layout' | 'voice' | 'local-model' | 'permissions' | 'about';
 export interface SettingsSection {
   id: SectionId;
   title: string;
   rows: SettingRow[];
+  /** a section the kernel owns says so once in its heading ("· kernel-owned"); its rows drop the per-row suffix */
+  owner?: string;
+  intro?: string;
 }
 
 /** The run ids a Settings control may name: existing GUI commands only (plus the standing Revoke, a kind of its own). */
@@ -147,6 +200,8 @@ export interface SettingsInput {
   unlock: UnlockSeen;
   /** a clock for "until 18:00" (tests pass a fixed formatter) */
   time?: (iso: string) => string;
+  /** #gui-local-model: the Local model section's transient state (ui/local-model.ts) and the loops that use it */
+  local?: { ui: LocalUi; loopsUsing: readonly string[] };
 }
 
 const short = (s: string, n = 12): string => (s.length > n + 4 ? `${s.slice(0, n)}…${s.slice(-4)}` : s);
@@ -281,6 +336,8 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
     { id: 'appearance', title: 'Appearance', rows: appearance },
     { id: 'layout', title: 'Layout', rows: layout },
     { id: 'voice', title: 'Voice', rows: voice },
+    // #gui-local-model (session 2026-10-22-gnomon-local-model): between Voice and Permissions, kernel-owned
+    localSection({ status: s, ui: i.local?.ui ?? emptyLocalUi(), loopsUsing: i.local?.loopsUsing ?? [], time: fmt }),
     { id: 'permissions', title: 'Permissions', rows: permissions },
     { id: 'about', title: 'About', rows: about },
   ];

@@ -37,7 +37,7 @@ const PRESET_NOTE: Readonly<Record<string, string>> = Object.freeze({ desk: 'ses
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** The wordmark menu, top to bottom (refs/header-5b.html option C). */
-export function appMenuModel(i: { layout: Layout; panesOpen: boolean; theme: readonly ThemeSwitchEntry[]; who: string }): AppMenuRow[] {
+export function appMenuModel(i: { layout: Layout; panesOpen: boolean; theme: readonly ThemeSwitchEntry[]; who: string; loops?: { note: string; paused: boolean } | null }): AppMenuRow[] {
   const rows: AppMenuRow[] = [{ kind: 'head', label: 'layout' }];
   for (const name of Object.keys(PRESETS)) rows.push({ kind: 'item', run: `layout.${name}`, name: cap(name), note: PRESET_NOTE[name] ?? '', radio: true, checked: i.layout.name === name });
   rows.push({ kind: 'item', run: PANES_RUN, name: 'Panes and Workshop…', note: 'show or hide a pane, move the Workshop', expands: true, expanded: i.panesOpen });
@@ -47,6 +47,12 @@ export function appMenuModel(i: { layout: Layout; panesOpen: boolean; theme: rea
     rows.push({ kind: 'item', run: 'pane.stack.toggle', name: `${v.stack ? 'Hide' : 'Show'} the stack` });
     rows.push({ kind: 'item', run: 'pane.workshop.toggle', name: `${v.workshop ? 'Hide' : 'Show'} the Workshop` });
     for (const p of WORKSHOP_PLACES) rows.push({ kind: 'item', run: `workshop.${p}`, name: `Workshop: ${p}`, note: p === 'footer' ? 'a strip under the desk' : `a column on the ${p}`, radio: true, checked: v.workshop && i.layout.workshop === p });
+  }
+  // #gui-loops (board running-indicator): the Loops leaf and Pause all loops, when the kernel serves loops
+  if (i.loops) {
+    rows.push({ kind: 'rule' });
+    rows.push({ kind: 'item', run: 'loops.open', name: 'Loops…', note: i.loops.note });
+    if (!i.loops.paused) rows.push({ kind: 'item', run: 'loops.pause-all', name: 'Pause all loops', note: 'no presence · resuming needs it' });
   }
   rows.push({ kind: 'rule' }, { kind: 'head', label: 'theme' });
   rows.push({ kind: 'theme', options: i.theme.map((e) => ({ run: e.run, label: e.label, checked: e.current, title: e.title })) });
@@ -72,6 +78,8 @@ export const APP_MENU_RUNS: ReadonlySet<string> = new Set([
   'mods.open',
   'voice.settings.open',
   'settings.open',
+  'loops.open',
+  'loops.pause-all',
 ]);
 
 /** A key on the trigger while the menu is closed: ↓ opens on the first row, ↑ on the last (Enter / Space are its click). */

@@ -22,6 +22,12 @@ class Fatal extends Error {
 }
 
 /** never process.exit after a write: the fatal line must drain, then the exit code stands */
+/**
+ * TD-2026-10-22-769 (Aegis L6): the identity marker the kernel looks for in an OVERRIDE runner's cli.js (a typed
+ * runner dir must be gnomon-local: its package.json or this marker). Kept live by the bad-argv message below.
+ */
+export const RUNNER_MARKER = 'gnomon-local-runner:v1';
+
 function fatal(error: string, code: number): never {
   throw new Fatal(error, code);
 }
@@ -31,7 +37,7 @@ function main(argv: string[]): void {
   for (let i = 0; i < argv.length; i += 2) {
     const k = argv[i]!;
     const v = argv[i + 1];
-    if (!['--mode', '--config', '--session'].includes(k) || v === undefined || args.has(k)) fatal(`bad argv near ${k.slice(0, 32)} (gnomon-local --mode rpc --config <local.yaml> --session <hsid>)`, 2);
+    if (!['--mode', '--config', '--session'].includes(k) || v === undefined || args.has(k)) fatal(`bad argv near ${k.slice(0, 32)} (gnomon-local --mode rpc --config <local.yaml> --session <hsid>; ${RUNNER_MARKER})`, 2);
     args.set(k, v);
   }
   if (args.get('--mode') !== 'rpc') fatal('only --mode rpc is served', 2);

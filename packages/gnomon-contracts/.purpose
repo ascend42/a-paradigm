@@ -86,6 +86,26 @@ components:
       folds whitespace; trims; refuses > SESSION_NAME_MAX = 80 code points
       and kept format characters); '' resets. Descriptor sessionRename.
       Test: test/session-name.test.ts.
+    loops-contract: >-
+      8.0:loops (docs/specs/gnomon-loops.md §3-§5, build step 2; the ONE loops
+      clientApiId move, sha256:c4e2c7d9...e2c9 ->
+      sha256:a23b2c75c92df061c1dafa5d32e818a6ae788ef7153613d45be0ecae3c4ba1ce):
+      card kinds loop-trust (root class, never always/standing/voice) and
+      loop-choice, decisions continue/stop (LOOP_CHOICE_ONLY_DECISIONS: valid only
+      on loop-choice, isCardDecidable + strict heldDecision). Kernel-owned kinds
+      loop.trusted, untrusted, closure.changed, run.started, node, round, notified,
+      proposed, landed, land.waiting, parked, run.ended, trigger.fired, deleted,
+      resumed (loop.paused stays the kernel pause row) and request.loop.trust,
+      untrust, pause (all:true = kill switch), resume, run, delete; userland
+      loop.request (the agent ask). The runner's per-round row is the kernel-owned
+      loop.round: loop.row|open|closed stay the userland #learning-loop ledger.
+      Labels: loop.node evidence/evidenceRef sensitive (as oracle.result),
+      loop.landed/proposed paths sensitive. RESERVED_KIND_PAYLOADS documents every
+      loop kind; loop.paused and session.open (origin, loopRun) gain reserved
+      fields. Closed values LOOP_VERDICTS, LOOP_AUTONOMY, LOOP_SCOPES,
+      LOOP_REQUEST_OPS, LOOP_PAUSE_REASONS, LOOP_RUN_END_REASONS, LOOP_CLOSURE_BY,
+      LOOP_LAND_WAIT_REASONS in descriptor `loops`. VOICE_ALLOWLIST: both kinds
+      hand-only in 8.0 (stop by voice is 8.1). Test: test/loops-contracts.test.ts.
     mod-id-contract: >-
       S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
       src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner

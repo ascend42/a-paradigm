@@ -32,6 +32,17 @@ components:
       - mcp
       - brain
       - security
+  loop-mcp:
+    description: 'paradigm_loop({op: create|update|validate|list|get}) — ON-DEMAND family (key loops/loop, detector loops: .paradigm/loops/ present; families.ts, legacy-tool-map paradigm_loop_*). File ops only over #loop-files: create (yaml text, a definition object, or template flow-health|green|watch|tidy with an id, plus optional flow and dir; example is the older name of template; templates from #loop-templates) refuses an existing id, update refuses a missing one, both validate first and never write an invalid definition; validate (one id or all) writes each compiled <id>.loop.json; list and get read. Kernel ops (LP7, build step 12): run, pause, resume, delete (8.0: a pause plus a founder toast), runs, logs, trust_status (reads scoped to this repo or personal), each a loop.request{op} through @a-company/gnomon/agent (#gnomon-ts-client) as the agent principal, judged by the kernel #loop-agent-ops pre-gate (principal and hsid from the connection); create/update also send loop.request{op, sourceHash} so the kernel attributes the file and raises its one loop-trust card; without a kernel each answers needs Gnomon running (setLoopKernelPort injects a port in tests). Writing never makes a loop run (LL1: one loop-trust card per agent-created or changed loop).'
+    type: tool
+    parent: '#ToolHandlers'
+    anchors:
+      - loops.ts
+    tags:
+      - feature
+      - mcp
+      - gnomon
+      - loops
   paradigm-retrieve:
     description: Rehydrate a large payload SPILLED to .paradigm/spill/{handle}.json (the #spill primitive) — full data on disk, bounded preview + handle inline; optional offset/limit windows for arrays
     type: tool

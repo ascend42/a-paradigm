@@ -70,12 +70,24 @@ components:
       fixture `model-switch` (preview/fixtures.ts).
     tags: [gui, model]
   gui:
+    loop-cards: >-
+      8.0:loops (gnomon-loops.md §3.1, §3.3; build step 2): the generic card
+      renderer shows the loop-trust and loop-choice kinds; core/render.ts
+      ROOT_CLASS_BY_KIND names loop-trust allow (no Approve without the kernel's
+      verified root-rows node), the stamp names continue (CONTINUED) and stop
+      (STOPPED). The Loops view is build step 13. Test: test/loop-cards.test.ts.
     root-rows: >-
       TD-2026-10-20-514 (Aegis C1e, G-ID-11): rootRowsOf verifies the card's root-rows node against contentHash;
       renderCard shows "This decision signs" in full and NO root-class key without it; GuiStore.rootMismatches
       flags a logged rowsDigest that is not the shown rows' digest; a notice when status.helper.batch is
       unavailable (helper < 1.8.0). Aegis M1: rootDecisions come from the HASHED detail and must cover the kind
       table; any root-rows node, or a root kind, without verified rows shows only deny/reject/withdraw.
+      TD-2026-10-22-769 (Mika F3): rootRowLine renders a gnomon-root-local:v1 row (localRootRowLine: the config
+      version, every endpoint with its server, base, model and who may use it, the runner folder, tree and node
+      sha) and returns null on ANY field it cannot render (unknown keys, a non-loopback base, a cloud compat, more
+      than 4 endpoints, a malformed pin), so the local.config card shows only deny. core/loops.ts: status.loops
+      startRefused becomes one `refused-start` stack alert per loop ("■ <id> didn’t start", ×n since), gone when
+      the kernel drops the refusal.
     fidelity-2: >-
       Design fidelity pass 2 (2026-10-20, comp .atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
       Cards (core/render.ts renderCard): "■ project · kind · by <name>" + the bordered voice chip, a title
@@ -842,6 +854,37 @@ components:
       - test/mods.test.ts
       - test/workshop.test.ts
 
+  gui-loops:
+    description: >-
+      LP8, the GUI Loops view (docs/specs/gnomon-loops.md §6; Atelier
+      2026-10-22-gnomon-loops-ui, design-system loops-word, loops-leaf,
+      loop-row, loop-list, loop-detail, budget-field, loop-graph, run-trace,
+      loop-trust-unfolded, loop-diff, alert, trust-slip, toast loop-done).
+      core/loops.ts (PURE) reads the human class's status.loops (registry
+      list with each loop's drawable shape and authoredBy, the runner's
+      running set and run ledger, effective autonomy with capReason, the
+      uptime hold) into the header loops word, the leaf meta, keep-alive
+      line and edge tab, the needs-you-pinned project-grouped two-line
+      rows, detail keys that name their cost, budget keys (tighter /
+      looser), the run trace and run paths, stack alerts (fail, stop,
+      kernel pause), the waiting-for-trust slip, loop-done toasts from live
+      loop.run.ended{goal}, loop.landed and loop.notified rows, and the
+      unfolded trust card's sections. core/loop-graph.ts (PURE) lays the
+      graph out left to right when it fits, else top to bottom, with
+      collapsed labels (any / else), merged buses, boxes sized to their
+      type line, marks for verdicts; fit plus zoom inside the frame.
+      ui/loops-view.ts is the DOM (the centre leaf, Esc folds it to the
+      edge tab; Read unfolds a loop-trust card over the centre). Requests
+      are log.append of request.loop.* on a trusted press; Pause all is
+      request.loop.pause{all:true} (palette loops.pause-all, the leaf head,
+      the wordmark menu). Apply · tighter sends request.loop.budget (narrowing only, the kernel's loop.budget.tightened row); a looser cap is disabled as Loosen · needs trust. Loop cards are identified from the card:v1 the broker sends (the root-rows node, the kernel's loop.notified row, the kernel line), never a top-level detail.
+    tags: [gui, loops]
+    signals: []
+    tests:
+      - test/loops-view.test.ts
+      - test/loop-cards.test.ts
+      - test/desk.test.ts
+
   gui-offer-slip:
     description: >-
       The Desk's margin slip (TD-2026-10-20-812 O1, Luna's comp
@@ -1185,6 +1228,52 @@ components:
     tests:
       - test/voice-ladder.test.ts
       - test/dictation.test.ts
+  gui-local-model:
+    description: >-
+      #gui-local-model (TD-2026-10-22-769; Atelier session
+      2026-10-22-gnomon-local-model, design-system settings-form, sheet
+      section-focused, card family gnomon, alert refused-start, loop-detail
+      cant_start). The Settings sheet's "Local model · kernel-owned" section
+      between Voice and Permissions. core/local-model.ts (PURE): localStatusOf
+      (status.local: not-connected | not-offered | windows | none | set),
+      the form (setupForm, changeForm, pickServer fills the address only until
+      typed), the page's checks (addressError: scheme, loopback host in lower
+      case, port 1..65535, no path; model; endpoint name; runner path),
+      probeRequest / setRequest / REMOVE_REQUEST, probeVerdict (C1 check-first:
+      only an answer with the model listed raises the card), checkRowOf, the
+      results (denied, expired, turned off) and toasts, localSection (every
+      state, rows kinds readonly, form, request, term). ui/local-model.ts
+      LocalModelController (no DOM): trusted presses only; one request at a
+      time; Save = page checks (focus the first invalid field), then
+      request.local.probe (rate-limited retry once), then request.local.config
+      {op:'set'} (the card; focus Decide in the stack, which closes the sheet
+      and focuses the card group, never Allow); the outcome from rows
+      (approval.decide allow -> checking until status.local.lastProbe, a toast
+      only when no sheet is open; deny / approval.expire / daemon.start -> the
+      form returns with the entries and a "Not changed" line); Turn off =
+      {op:'remove'}, an inline confirm only when loops use it (C2); Esc closes
+      the confirm or form first. ui/settings-sheet.ts paints the section
+      (heading "· kernel-owned" once, open(section) section-focused) and routes
+      data-lm-act / data-lm-field / submit. core/render.ts localRowOf mirrors
+      the kernel's and helper's gnomon-root-local:v1 row table (Aegis L4:
+      runnerSource, port 1..65535, paths <= 256, no control or bidi characters,
+      never compacted: a row whose helper line exceeds 1200 is refused) and
+      localRootItems renders one line per signed field with the loop-diff marks
+      on a change; the card head reads "⊙ gnomon". core/loops.ts startLine /
+      cantStart / runRefusalOf: the loop detail's can't-start line per kernel
+      why (none, sessions-only, no-runner, no-profile), Run now's reason, the
+      needs-you pin and the refused-start alert key. Palette local.setup.
+      Follow-ups: the Check row says "checking…" only from the kernel's
+      status.local.probing (or a Check again in flight), "not checked yet"
+      with Check again otherwise; Check again reads the refreshed
+      status.local.lastProbe (the kernel records it), ui.check holds only a
+      call that failed. A never-fired start refusal (count 0) is the same
+      one alert, worded "■ <id> can’t start". settings-sheet.ts
+      compositionGate: no repaint while an IME composition is active (owed,
+      run at compositionend). The card's signed lines say their diff mark in
+      sr-only "new: " / "was: " text (no aria-label on a list item).
+      Tests: test/local-model.test.ts, test/root-rows.test.ts,
+      test/loops-view.test.ts.
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto

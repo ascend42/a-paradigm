@@ -24,3 +24,6 @@ export { pinHelper } from './kernel/identity/helper.js';
 // T-2026-10-21-030 (#gnomon-npm-packaging, Aegis M3 high 2): the published Gnomon.app.zip is checked against the
 // sha256 compiled into this build (release-manifest:v1 appZips), never the .sha256 shipped beside it
 export * as appZip from './kernel/lifecycle/app-zip.js';
+// TD-2026-10-22-769 (#local-config-request): the gnomon-local runner that ships with this build, verified against the
+// tree hash compiled in (prepack, the release scripts and test/local-config-request.test.ts read it from dist)
+export * as bundledRunner from './kernel/local/bundled-runner.js';

@@ -191,6 +191,10 @@ html, body {
 .key:active { transform: translate(2px, 2px); box-shadow: none; }
 .key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .key[disabled] { color: var(--sec); cursor: not-allowed; }
+/* design-system migration keys (session 2026-10-22-gnomon-local-model F10): a disabled pri key (Run now, a busy Allow,
+   Checking…) draws as a default key with --sec text, as .seg-key[disabled]; --sec on the ink fill was about 2.6:1 */
+.key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
+[data-theme="night"] .key.pri[disabled]::before, [data-theme="night"] .key.pri[disabled]::after { color: var(--sec); }
 
 .field {
   font: inherit; color: var(--ink);
@@ -1086,3 +1090,244 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .clamp-chip { margin-left: 8px; }
 .card.voice-origin { --edge: var(--warn-edge); }
 .card-voice-origin { display: block; font-size: var(--fs-label); color: var(--warn-ink); }
+
+/* ── #gui-loops (LP8; Atelier 2026-10-22-gnomon-loops-ui, design-system loops-word, loops-leaf, loop-row, loop-list,
+   loop-detail, budget-field, loop-graph, run-trace, loop-trust-unfolded, loop-diff, alert, trust-slip). Moved from the
+   bridge .atelier/systems/gnomon/loops-direction.css onto the system tokens. ── */
+.transcript { position: relative; }
+.lp-leaf { position: absolute; inset: 0; z-index: 12; display: flex; background: var(--ground); border-left: 1px solid var(--rule); }
+.lp-leaf > .lp, .lp-leaf > .lp-detail { flex: 1 1 auto; min-width: 0; background: var(--sheet); }
+.lp-leaf > .leaf-split { flex: 1 1 auto; min-width: 0; }
+.sw.h0 { background: var(--p-terracotta-fill); }
+.sw.h1 { background: var(--p-sage-fill); }
+.sw.h2 { background: var(--p-slate-fill); }
+.sw.h3 { background: var(--p-ochre-fill); }
+.sw.h4 { background: var(--p-rose-clay-fill); }
+.sw.h5 { background: var(--p-sea-grey-fill); }
+.lp-row .sw, .lp-gh .sw { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: 0; }
+.lp-row .l1 strong, .lp-row .l1 b { font-weight: 600; }
+.lp-empty, .lp-pick { padding: 12px 14px; }
+.lp-dhead .spacer, .g-tools .spacer { flex: 1; }
+.lp-more { position: relative; }
+.lp-more > summary { list-style: none; cursor: pointer; }
+.lp-more > summary::-webkit-details-marker { display: none; }
+.lp-more-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column; min-width: 12ch; }
+.lst .hd strong { font-weight: 600; }
+.lt-wrap .lt-fold { margin: 0 auto 8px; display: block; max-width: 96ch; }
+.lp-tab-on .feed > .toast-anchor { right: 48px; }
+.loops-word .lw-narrow { display: none; }
+@media (max-width: 1040px) { .loops-word .lw-full { display: none; } .loops-word .lw-narrow { display: inline; } }
+@media (max-width: 1199px) { .lp-leaf > .lp-detail .lp-back { display: inline-flex; } }
+@media (min-width: 1200px) { .lp-back { display: none; } }
+[data-motion="reduced"] .lp-leaf.arrive { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lp-leaf.arrive { animation: none; } }
+.kstat .loops-word { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; font: inherit; font-size: var(--fs-control); color: var(--ink2); background: none; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; white-space: nowrap; }
+.kstat .loops-word:hover { border-color: var(--rule); background: var(--sheet); }
+.kstat .loops-word:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.lp { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.lp-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule); }
+.lp-head .title { font-size: var(--fs-title); }
+.lp-head .meta { font-size: var(--fs-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lp-head .spacer { flex: 1; }
+.lp-head .key { white-space: nowrap; flex: none; }
+.lp-keep { padding: 4px 14px; font-size: var(--fs-label); color: var(--sec); border-bottom: 1px dashed var(--rule); }
+.lp-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0 12px; }
+.lp-gh { display: flex; align-items: center; gap: 6px; padding: 10px 14px 2px; font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); }
+.lp-row { display: grid; grid-template-columns: 18px minmax(0, max-content) minmax(0, 1fr) auto; column-gap: 8px; row-gap: 0; width: 100%; text-align: left; padding: 6px 14px; font: inherit; color: var(--ink2); background: transparent; border: 0; border-left: 2px solid transparent; cursor: pointer; }
+.lp-row:hover { background: var(--fold); }
+.lp-row:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.lp-row.active { border-left-color: var(--key-edge); background: var(--fold); color: var(--ink); }
+.lp-row .mk { grid-row: 1 / span 2; font-size: var(--fs-control); color: var(--ink); line-height: 20px; }
+.lp-row .l1 { font-size: var(--fs-control); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
+.lp-row .l2 { grid-column: 2 / -1; font-size: var(--fs-label); color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-row .nx { font-size: var(--fs-label); color: var(--sec); white-space: nowrap; line-height: 20px; }
+.lp-row .x { color: var(--fail); font-weight: 600; }
+.lp-leaf .gut { flex: 0 0 8px; background: repeating-linear-gradient(135deg, var(--rule) 0 2px, transparent 2px 6px); border-right: 1px dashed var(--rule); }
+.lp-leaf .lp { flex: 1 1 auto; min-width: 0; background: var(--sheet); }
+.lp-leaf.arrive { animation: leaf-in 360ms cubic-bezier(.3, .7, .3, 1) both; }
+@keyframes leaf-in { from { transform: translateX(100%); } to { transform: none; } }
+[data-motion="reduced"] .lp-leaf.arrive { animation: none; }
+.lp-edgetab { position: absolute; top: 48px; right: 0; z-index: 11; writing-mode: vertical-rl; padding: 10px 4px; min-width: 24px; font: inherit; font-size: var(--fs-label); color: var(--ink2); background: var(--sheet); border: 1px solid var(--key-edge); border-right: 0; border-radius: var(--radius); cursor: pointer; background-image: repeating-linear-gradient(135deg, var(--rule) 0 2px, transparent 2px 6px); }
+.lp-edgetab:hover { background-color: var(--fold); }
+.lp-edgetab:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.lp-detail { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow-y: auto; padding: 0 0 16px; }
+.lp-dhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 20px; border-bottom: 1px solid var(--rule); }
+.lp-dhead .title { font-size: var(--fs-title); }
+.lp-dmeta { padding: 6px 20px; font-size: var(--fs-label); color: var(--sec); }
+.lp-sec { padding: 8px 20px 4px; }
+.lp-sec > h3 { margin: 0 0 4px; font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); font-weight: 500; }
+.lst { list-style: none; margin: 0; padding: 0; font-size: var(--fs-control); }
+.lst > li { display: grid; grid-template-columns: 20px 20px minmax(0, 1fr); column-gap: 6px; padding: 4px 0; border-top: 1px dashed var(--rule); }
+.lst > li:first-child { border-top: 0; }
+.lst .v { color: var(--ink); text-align: center; }
+.lst .v.fail { color: var(--fail); font-weight: 600; }
+.lst .v.unsure { color: var(--warn-ink); font-weight: 600; }
+.lst .n { color: var(--sec); text-align: right; }
+.lst .hd { color: var(--ink); }
+.lst .hd .ty { color: var(--sec); }
+.lst .ln { grid-column: 3; color: var(--ink2); overflow-wrap: anywhere; }
+.lst .ln code { font: inherit; color: var(--ink); background: var(--fold); border-radius: var(--radius); padding: 0 4px; }
+.lst .ln .k { color: var(--sec); display: inline-block; min-width: 10ch; }
+.lst .ed { grid-column: 3; color: var(--sec); font-size: var(--fs-label); }
+.kv { display: grid; grid-template-columns: 14ch minmax(0, 1fr); column-gap: 10px; row-gap: 2px; font-size: var(--fs-control); }
+.kv > dt { color: var(--sec); }
+.kv > dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.kv code { font: inherit; background: var(--fold); border-radius: var(--radius); padding: 0 4px; }
+.gate-note { color: var(--warn-ink); font-size: var(--fs-label); }
+.df { font-size: var(--fs-control); padding: 0 8px; border-left: 2px solid transparent; white-space: pre-wrap; overflow-wrap: anywhere; }
+.df.add { color: var(--ink); font-weight: 600; background: var(--fold); border-left-color: var(--key-edge); }
+.df.del { color: var(--sec); text-decoration: line-through; text-decoration-thickness: 1px; }
+.df.ctx { color: var(--ink2); }
+.df.fold { color: var(--sec); font-size: var(--fs-label); font-style: italic; }
+.df-file { font-size: var(--fs-label); color: var(--sec); margin: 6px 0 2px; }
+.lt-wrap { position: absolute; inset: 0; z-index: 12; overflow-y: auto; padding: 14px 20px 20px; background: var(--ground); }
+.lt-wrap .card { max-width: 96ch; margin: 0 auto; }
+.lt-wrap .card-title { white-space: normal; }
+.lt-sec { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--rule); }
+.lt-sec > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); font-weight: 500; }
+.lt-sec > h3 .key { text-transform: none; letter-spacing: 0; margin-left: auto; }
+.lt-sec.done > h3 { color: var(--ink); }
+.lt-sec.done > h3::before { content: "✓"; color: var(--ink); font-weight: 600; }
+.lt-sec.closed > :not(h3) { display: none; }
+.lt-foot { position: static; margin: 12px -12px -10px -14px; padding: 10px 12px 10px 14px; background: var(--sheet); border-top: 1px solid var(--rule); }
+.lt-presence { font-size: var(--fs-label); color: var(--sec); margin-top: 4px; }
+.why-off { font-size: var(--fs-label); color: var(--sec); }
+.card.trusted { opacity: .92; }
+.card.kind-loop { --edge: var(--key-edge); }
+.card.loop-choice { --edge: var(--key-edge); }
+.card .k-line { display: block; font-size: var(--fs-label); color: var(--sec); }
+.card .path { font-size: var(--fs-control); color: var(--ink2); margin: 2px 0; }
+.card .path .x { color: var(--fail); font-weight: 600; }
+.card .path .u { color: var(--warn-ink); font-weight: 600; }
+.card .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; font-size: var(--fs-control); color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
+.card .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
+.card.long .card-details[open] { max-height: none; }
+.card.long .lt-scroll { max-height: 360px; overflow-y: auto; padding-right: 4px; }
+.card.long .lst > li { grid-template-columns: 14px 14px minmax(0, 1fr); }
+.wt-slip { margin-top: 16px; padding: 6px 10px 8px; border: 1px dashed var(--key-edge); border-radius: var(--radius); background: transparent; font-size: var(--fs-control); color: var(--ink2); }
+.wt-slip .tab { font-size: var(--fs-label); color: var(--sec); border-bottom: 1px dashed var(--rule); padding-bottom: 2px; margin-bottom: 4px; }
+.wt-slip .row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.wt-slip .row span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .fam { color: var(--ink); font-weight: 600; letter-spacing: .04em; }
+.card.alert { box-shadow: none; padding-top: 8px; padding-bottom: 8px; }
+[data-theme="day"] .card.alert { border: 1px solid var(--rule); border-left: var(--edge-w) solid var(--edge, var(--key-edge)); }
+.card.alert .card-title { font-size: var(--fs-control); }
+.card.alert.fail { --edge: var(--fail-edge); }
+.card.alert.fail .card-title { color: var(--fail); }
+.card.alert.kpause { --edge: var(--warn-edge); border-left-style: dashed; }
+.card.alert .card-keys .key { text-transform: none; }
+.pile .card.alert + .card.alert, .pile .card + .card.alert { margin-top: 8px; }
+.pile .card.alert { --r: 0deg; }
+.g-frame { border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); }
+.g-tools { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-bottom: 1px dashed var(--rule); }
+.g-tools .meta { font-size: var(--fs-label); }
+.g-view { overflow: auto; padding: 6px; }
+.g-frame .g-v { display: none; }
+.g-frame.vert .g-h { display: none; }
+.g-frame.vert .g-v { display: block; }
+.g-svg { display: block; }
+.g-box { fill: var(--sheet); stroke: var(--key-edge); stroke-width: 1; }
+.g-box.never { stroke: var(--sec); stroke-dasharray: 3 2; }
+.g-box.wait { stroke: var(--key-edge); stroke-dasharray: 1 2; stroke-width: 1.5; }
+.g-box.fail { stroke: var(--fail-edge); stroke-width: 2.5; }
+.g-term { fill: var(--sheet); stroke: var(--sec); stroke-width: 1; }
+.g-id { font-family: var(--mono); font-weight: 600; font-size: var(--fs-control); fill: var(--ink); }
+.g-ty, .g-vis, .g-t { font-family: var(--mono); font-weight: 400; font-size: var(--fs-label); fill: var(--sec); }
+.g-mk { font-family: var(--mono); font-weight: 600; font-size: var(--fs-control); fill: var(--ink); }
+.g-e { fill: none; stroke: var(--sec); stroke-width: 1; stroke-dasharray: 4 3; }
+.g-e.taken { stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: none; }
+.g-l { font-family: var(--mono); font-weight: 400; font-size: var(--fs-label); fill: var(--sec); paint-order: stroke; stroke: var(--sheet); stroke-width: 4px; }
+.g-l.taken { fill: var(--ink); font-weight: 600; }
+.g-ar { fill: var(--sec); }
+.g-ar.taken { fill: var(--ink); }
+g[tabindex]:focus-visible { outline: none; }
+g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
+.g-key { font-size: var(--fs-label); color: var(--sec); margin: 0; padding: 2px 8px 4px; }
+.leaf-split { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); height: 100%; min-height: 0; }
+.leaf-split > .lp { border-right: 1px solid var(--rule); }
+.leaf-split .lp-detail { background: var(--sheet); }
+.leaf-split .lp-back { display: none; }
+.lp-dhead .key { white-space: nowrap; }
+.bud .field { width: 8ch; padding: 2px 6px; min-height: 24px; }
+.bud .key { white-space: nowrap; }
+.dis-why { font-size: var(--fs-label); color: var(--sec); }
+.tr { list-style: none; margin: 0; padding: 0; font-size: var(--fs-control); }
+.tr > li { display: grid; grid-template-columns: 8ch 20px minmax(0, 1fr) auto; column-gap: 8px; padding: 4px 0; border-top: 1px dashed var(--rule); align-items: baseline; }
+.tr .tm, .tr .dur { color: var(--sec); font-size: var(--fs-label); white-space: nowrap; }
+.tr .m { text-align: center; font-weight: 600; }
+.tr .m.fail { color: var(--fail); }
+.tr .m.unsure { color: var(--warn-ink); }
+.tr .agent-claimed { display: block; margin-top: 2px; padding: 2px 8px; color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
+.tr .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
+.chip.ink { color: var(--ink); }
+/* LP8 rework (Mika 2026-10-22): the name is its own cell (never eaten by the facts; a long id is middle-ellipsed in
+   code, the full id in title=); budgets sit on one line with one note; ids are identifiers, never uppercased */
+.lp-row .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-control); font-weight: 600; color: var(--ink); white-space: nowrap; line-height: 20px; }
+/* the facts give way first (1fr, ellipsis); the name keeps its width unless the row cannot hold it, then it ellipsizes in its own cell */
+.lp-row { grid-template-columns: 18px minmax(min(30ch, max-content), max-content) minmax(0, 1fr) minmax(0, max-content); }
+.lp-row .nx { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lp-head .title, .lp-dhead .title { text-transform: none; letter-spacing: 0; }
+.bud { display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 6px; font-size: var(--fs-control); }
+.bud-f { display: inline-flex; align-items: center; gap: 6px; }
+.bud-l { color: var(--sec); font-size: var(--fs-label); white-space: nowrap; }
+.bud .bud-note { flex-basis: 100%; margin-top: 0; }
+
+/* #gui-local-model (session 2026-10-22-gnomon-local-model; moved from the specimen's local-model-bridge.css by the build):
+   component settings-form (.set-form .sf-*), the kernel-owned section heading, the section-focused rule, the loop
+   detail's can't-start line (.lp-refusal) and the root card's signed lines (.card-root-rows) with the loop-diff marks. */
+.settings-row > .set-form, .settings-row > .sf-request, .settings-row > .sf-result, .settings-row > .sf-keys { grid-column: 2; }
+.set-form { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 2px; padding: 2px 0 2px 12px; border-left: 2px solid var(--ink); }
+.set-form > p { margin: 0; }
+.sf-lead { font-size: var(--fs-control); color: var(--ink2); }
+.sf-field { display: flex; flex-direction: column; gap: 2px; margin: 0; border: 0; padding: 0; min-width: 0; }
+.sf-label { font-size: var(--fs-label); color: var(--sec); padding: 0; }
+.sf-field .field { font-size: var(--fs-control); min-height: 28px; max-width: 100%; }
+.sf-field .w-addr { width: 34ch; } .sf-field .w-model { width: min(100%, 60ch); } .sf-field .w-name { width: 16ch; } .sf-field .w-path { width: 100%; }
+.sf-note { margin: 0; font-size: var(--fs-label); color: var(--sec); }
+.sf-note code, .settings-how code, .sf-lead code, .sf-err code { font-size: inherit; background: var(--fold); padding: 0 4px; border-radius: var(--radius); }
+.sf-err { margin: 0; font-size: var(--fs-label); color: var(--fail); font-weight: 600; }
+.sf-field .field[aria-invalid="true"] { border-color: var(--fail-edge); box-shadow: inset 0 0 0 1px var(--fail-edge); }
+.sf-adv > summary { list-style: none; cursor: pointer; display: inline-flex; width: max-content; }
+.sf-adv > summary::-webkit-details-marker { display: none; }
+.sf-adv[open] > summary { margin-bottom: 8px; }
+.sf-adv > div { display: flex; flex-direction: column; gap: 10px; }
+.sf-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sf-request { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-control); color: var(--ink2); margin: 4px 0 0; }
+.sf-result { margin: 4px 0 0; font-size: var(--fs-label); color: var(--ink2); }
+.sf-result.fail { color: var(--fail); }
+.sf-result strong, .sf-note strong { font-weight: 600; }
+.settings-intro { margin: 0 0 4px; font-size: var(--fs-label); color: var(--sec); max-width: 80ch; }
+.settings-value .mk { font-weight: 600; }
+.settings-row.settings-form { align-items: start; }
+.settings-row.settings-form > .settings-label { padding-top: 6px; }
+.settings-row[data-grp="start"] { margin-top: 8px; }
+.settings-sec[data-kernel-owned] .settings-readonly .settings-label::after { content: none; }
+.settings-h .sec-owner { font-family: var(--mono); font-size: var(--fs-label); font-weight: 400; color: var(--sec); text-transform: none; letter-spacing: 0; }
+.settings-value { overflow-wrap: anywhere; }
+.settings-sec.focused { box-shadow: inset 2px 0 0 var(--key-edge); padding-left: 10px; margin-left: -12px; }
+/* the section heading takes focus (tabindex -1): in a section-focused open the key-edge rule is its indicator; any
+   other programmatic focus (a busy key went disabled under it) shows the system ring, never the browser's blue one */
+.settings-h:focus { outline: none; }
+.settings-h:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.settings-sec.focused .settings-h:focus-visible { outline: none; }
+/* a kernel-owned section's label sits on its value's first line when the value wraps (Last fallback) */
+.settings-sec[data-kernel-owned] .settings-row.settings-readonly { align-items: first baseline; }
+
+/* ── the loop detail's start-refusal line (loop-detail anatomy) ─────────────── */
+.lp-refusal { margin: 0 20px 6px; padding: 6px 10px; border: 1px solid var(--key-edge); border-left: var(--edge-w) solid var(--key-edge); border-radius: var(--radius); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: var(--fs-control); color: var(--ink2); background: var(--sheet); }
+.lp-refusal .rf-h { font-weight: 600; color: var(--ink); }
+.lp-refusal .key { margin-top: 4px; }
+
+/* ── the root card's signed lines for gnomon-root-local:v1 ─────────────────── */
+.card-root-rows { margin: 6px 0 0; padding: 4px 0 0; border-top: 1px dashed var(--rule); }
+.card-root-rows .root-rows-title { margin: 0; font-size: var(--fs-label); color: var(--sec); }
+.card-root-rows ul { margin: 2px 0 0; padding: 0; list-style: none; font-size: var(--fs-label); color: var(--ink2); }
+.card-root-rows li { padding-left: 12px; text-indent: -12px; overflow-wrap: anywhere; }
+.card-root-rows li::before { content: "· "; color: var(--sec); }
+.card-root-rows li.add { color: var(--ink); font-weight: 600; background: var(--fold); border-left: 2px solid var(--key-edge); padding-left: 12px; margin-left: -2px; }
+/* the marks are said by the sr-only "new:" / "was:"; the plain content first, so an engine without the alt-text
+   syntax (an older WKWebView) keeps the visible mark instead of dropping the declaration */
+.card-root-rows li.add::before { content: "+ "; content: "+ " / ""; }
+.card-root-rows li.del { color: var(--sec); text-decoration: line-through 1px; }
+.card-root-rows li.del::before { content: "− "; content: "− " / ""; }
+.card-head .fam { color: var(--ink); font-weight: 600; letter-spacing: .04em; }

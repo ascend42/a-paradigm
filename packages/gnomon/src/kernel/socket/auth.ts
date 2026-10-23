@@ -124,6 +124,11 @@ export interface ConnAuthState {
   tokenId?: string;
   tokenExpiresAt?: string;
   tokenExpiresAtMs?: number;
+  /**
+   * The kernel-spawned session this connection speaks for (#loop-agent-ops stamps it on an agent's loop.request,
+   * never from params). Bound only by the session-key auth form, which is not built yet: absent on every connection.
+   */
+  hsid?: string;
 }
 
 /** serverSig message (after the signer's `gnomon:auth-server:v2\n` domain prefix) — the contracts definition. */

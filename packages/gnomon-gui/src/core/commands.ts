@@ -17,6 +17,8 @@
  *     signed by the device key) is still slice 2.
  */
 
+import { localPaletteTitle } from './local-model.js';
+
 export interface Command {
   id: string;
   title: string;
@@ -35,7 +37,12 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   // #gui-settings: the sheet that gathers every setting (also in the Gnomon menu)
   { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
   // #gui-mods-panel: which mods are on, what else ships, add one from a folder (also in the Gnomon menu and the Workshop)
+  // #gui-local-model: Settings at the Local model section (section-focused); the title follows status.local
+  { id: 'local.setup', title: 'Set up local model…', keys: 'Settings · Local model' },
   { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
+  // #gui-loops (gnomon-loops.md §6; Atelier 2026-10-22-gnomon-loops-ui): the Loops leaf and the kill switch
+  { id: 'loops.open', title: 'Loops… (the Loops view: list, graph, keys)' },
+  { id: 'loops.pause-all', title: 'Loops: pause all (no presence; resuming needs it)' },
   { id: 'view.kernel-feed', title: 'Kernel feed: every raw log row (S2.3: a view, never the default centre)' },
   { id: 'theme.day', title: 'Theme: Day (papercraft)' },
   { id: 'theme.night', title: 'Theme: Night (phosphor)' },
@@ -102,7 +109,9 @@ export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
   // #gui-settings: nor settings.* (a block must not open the permissions sheet under the human's pointer); nor mods.*
   // #gui-session-rename: nor session.rename (it opens an edit that writes request.session.rename on blur)
   // #gui-wordmark-menu: nor menu.* (the Gnomon menu holds Settings… and the pane toggles)
-  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.')),
+  // #gui-loops: nor loops.* (loops.pause-all is the kill switch; a block must never press it)
+  // #gui-local-model: nor local.* (it opens the root-card form of Settings)
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect' && id !== 'session.rename' && !id.startsWith('mode.') && !id.startsWith('voice.') && !id.startsWith('pane.') && !id.startsWith('workshop.') && !id.startsWith('settings.') && !id.startsWith('mods.') && !id.startsWith('menu.') && !id.startsWith('loops.') && !id.startsWith('local.')),
 );
 
 export type Pane = 'sessions' | 'transcript' | 'stack' | 'workshop';
@@ -164,7 +173,9 @@ export function paletteEntries(status: { verbs?: Array<{ verb: string; access?: 
   const verbs = (status?.verbs ?? [])
     .filter((v) => v.access !== false)
     .map((v): Command => ({ id: `verb.${v.verb}`, title: `kernel verb ${v.verb}`, verb: true, available: v.available === true, ...(v.available ? {} : { why: v.milestone ? `lands ${v.milestone}` : 'not served' }) }));
-  return [...GUI_COMMANDS, ...verbs];
+  // #gui-local-model (design palette): "Set up local model…" until one is set, then "Local model settings…"
+  const gui = GUI_COMMANDS.map((c) => (c.id === 'local.setup' ? { ...c, title: localPaletteTitle(status) } : c));
+  return [...gui, ...verbs];
 }
 
 /** Subsequence match, ranked: id prefix, then title substring, then subsequence. */

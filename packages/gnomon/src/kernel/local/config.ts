@@ -35,10 +35,11 @@
  * The per-session file the kernel hands the child is written as JSON (the
  * JSON subset of YAML 1.2).
  */
+import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { canonicalJson, hex, refuse, RefusedError, sha256 } from '@a-company/gnomon-contracts';
-import { classifyEndpoint, type EndpointVerdict } from './endpoint.js';
+import { classifyEndpoint, loopbackPort, type EndpointVerdict } from './endpoint.js';
 import type { RootAuthority } from '../identity/root-authority.js';
 import type { LocalRunnerPin } from './runner-pin.js';
 
@@ -56,6 +57,8 @@ export interface LocalEndpointConfig {
   surface?: ToolSurface;
   /** opt this model into the text-tool fallback when the probe finds no native tool calls (§13.1) */
   textTools?: boolean;
+  /** loops step 8 (Aegis): unattended loop steps may use this endpoint (opt-in; absent ⇒ never for loops) */
+  loops?: boolean;
 }
 
 export interface LocalRunnerCommand {
@@ -91,6 +94,8 @@ export function validateLocalEndpoints(cfg: LocalLaneConfig, forbiddenPorts: rea
     const v = classifyEndpoint(ep.base, forbiddenPorts);
     if (!v.ok) throw refused('BILLING_REFUSED', `local endpoint ${ep.id} refused: ${v.why} (loopback/LAN only, law 7)`, { dimension: 'local-endpoint', endpoint: ep.id, why: v.why });
     if (!LOCAL_COMPAT_NAMES.includes(ep.compat)) throw refused('BILLING_REFUSED', `compat ${String(ep.compat).slice(0, 32)} is not a local transport`, { dimension: 'local-compat', endpoint: ep.id, why: 'compat' });
+    // Aegis L3 (TD-2026-10-22-769): 8.0 serves loopback endpoints only, whoever signed the config; LAN lands in 8.1
+    if (loopbackPort(v.base) === null) throw refused('BILLING_REFUSED', `local endpoint ${ep.id} is not on this machine: loopback only in 8.0; LAN endpoints land in 8.1`, { dimension: 'local-endpoint', endpoint: ep.id, why: 'lan-8.1' });
     out.push({ ep, v });
   }
   return out;
@@ -126,7 +131,8 @@ export const LOCAL_CONFIG_SCHEMA = 'gnomon-root-local:v1' as const;
 /** The highest local-config `version` this home has applied (rollback detection). */
 export const LOCAL_SEEN_FILE = 'local.seen.json';
 const MAX_ENDPOINTS = 16;
-const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+/** An endpoint id (also the loop node's model.profile). */
+export const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const SURFACES: readonly string[] = ['none', 'compact', 'full'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -144,12 +150,13 @@ export function parseLocalLaneConfig(raw: unknown): LocalLaneConfig | null {
   const endpoints: LocalEndpointConfig[] = [];
   const ids = new Set<string>();
   for (const e of raw.endpoints as unknown[]) {
-    if (!isObj(e) || !onlyKeys(e, ['id', 'base', 'model', 'compat', 'surface', 'textTools'])) return null;
+    if (!isObj(e) || !onlyKeys(e, ['id', 'base', 'model', 'compat', 'surface', 'textTools', 'loops'])) return null;
     if (!str(e.id, 64) || !ID_RE.test(e.id) || ids.has(e.id) || !str(e.base, 2048) || !str(e.model, 128) || !str(e.compat, 32)) return null;
     if (e.surface !== undefined && (typeof e.surface !== 'string' || !SURFACES.includes(e.surface))) return null;
     if (e.textTools !== undefined && typeof e.textTools !== 'boolean') return null;
+    if (e.loops !== undefined && typeof e.loops !== 'boolean') return null;
     ids.add(e.id);
-    endpoints.push({ id: e.id, base: e.base, model: e.model, compat: e.compat, ...(e.surface !== undefined ? { surface: e.surface as ToolSurface } : {}), ...(e.textTools !== undefined ? { textTools: e.textTools } : {}) });
+    endpoints.push({ id: e.id, base: e.base, model: e.model, compat: e.compat, ...(e.surface !== undefined ? { surface: e.surface as ToolSurface } : {}), ...(e.textTools !== undefined ? { textTools: e.textTools } : {}), ...(e.loops === true ? { loops: true } : {}) });
   }
   let runner: LocalRunnerPin | undefined;
   if (raw.runner !== undefined) {
@@ -185,19 +192,31 @@ export interface LoadedLocalConfig {
   fellBack: boolean;
   hash: string | null;
   version: number | null;
+  /** the applied row's signer key id and its createdAt (a card-signed row carries one; a dev-local row none) */
+  signer?: string;
+  signedAt?: string | null;
 }
 
-/** Load `<home>/local.signed.json`: only a row signed by `root` is applied; anything else is NO config, logged. */
-export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyRow'>, emit: LocalConfigEvent = () => undefined, opts: { chainHighWater?: number } = {}): LoadedLocalConfig {
+/**
+ * Load `<home>/local.signed.json`: only a row signed by `root` is applied; anything else is NO config, logged.
+ * `opts.missing: 'removed'` (the human's request.local.config{op:'remove'}) logs the missing file as
+ * config.loaded{fallback:'none', why:'removed'} even on a home that never applied a version.
+ */
+export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyRow'>, emit: LocalConfigEvent = () => undefined, opts: { chainHighWater?: number; chainRemoved?: number; missing?: 'removed'; removedVersion?: number } = {}): LoadedLocalConfig {
   const file = path.join(home, LOCAL_CONFIG_FILE);
   const seenFile = path.join(home, LOCAL_SEEN_FILE);
   let sidecar = 0;
+  let tombstone = -1;
   try {
-    sidecar = Number((JSON.parse(fs.readFileSync(seenFile, 'utf8')) as { version?: unknown }).version ?? 0) || 0;
+    const j = JSON.parse(fs.readFileSync(seenFile, 'utf8')) as { version?: unknown; removed?: unknown };
+    sidecar = Number(j.version ?? 0) || 0;
+    if (j.removed === true) tombstone = sidecar;
   } catch {
     sidecar = 0;
   }
   const seen = Math.max(sidecar, opts.chainHighWater ?? 0);
+  // Aegis M3: a removed config's version is a floor no file may equal (the tombstone sidecar and the chain's removed rows)
+  const removedFloor = Math.max(tombstone, opts.chainRemoved ?? -1);
   const none = (signed: boolean, hash: string | null, version: number | null): LoadedLocalConfig => ({ config: undefined, signed, fellBack: true, hash, version });
   const fallBack = (why: string, hash: string | null, version: unknown, signed = false): LoadedLocalConfig => {
     emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash, signed, fallback: 'none', version: typeof version === 'number' ? version : null, highWater: seen, why });
@@ -207,6 +226,10 @@ export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyR
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch {
+    if (opts.missing === 'removed') {
+      emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash: null, signed: false, removed: true, fallback: 'none', version: opts.removedVersion ?? seen, highWater: seen, why: 'removed' });
+      return none(false, null, null);
+    }
     if (seen > 0) return fallBack('missing', null, null);
     return { config: undefined, signed: false, fellBack: false, hash: null, version: null };
   }
@@ -227,22 +250,117 @@ export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyR
   const hash = `sha256:${hex(sha256(canonicalJson(doc.row)))}`;
   const version = doc.row!.version ?? 0;
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) return fallBack('older', hash, version, true);
+  if (version <= removedFloor) return fallBack('removed-older', hash, version, true);
   const config = parseLocalLaneConfig(doc.row!.local);
   if (!config) return fallBack('invalid', hash, version, true);
   if (version > sidecar) {
     try {
-      fs.writeFileSync(seenFile, `${JSON.stringify({ version })}\n`, { mode: 0o600 });
+      writeHomeFileAtomic(home, LOCAL_SEEN_FILE, `${JSON.stringify({ version })}\n`);
     } catch (err) {
       emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash, signed: true, version, sidecarWrite: 'failed', error: err instanceof Error ? err.message.slice(0, 200) : 'write failed' });
     }
   }
   emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash, signed: true, version, highWater: seen, endpoints: config.endpoints.map((e) => e.id), runner: config.runner ? { node: config.runner.node, dir: config.runner.dir, treeSha256: config.runner.treeSha256 } : null });
-  return { config, signed: true, fellBack: false, hash, version };
+  const createdAt = (doc.row as { createdAt?: unknown }).createdAt;
+  return { config, signed: true, fellBack: false, hash, version, signer: doc.signer as string, signedAt: typeof createdAt === 'string' ? createdAt.slice(0, 40) : null };
 }
 
-/** Write a root-signed local config (the root act; tests). Throws RootUnavailableError without a root. */
+/**
+ * THE one writer of `<home>/local.signed.json` (TD-2026-10-22-769): `{row, signer, sig}` written to a private temp
+ * file (0600, exclusive create), fsynced, then renamed over the target. A target that is a symlink (or anything but a
+ * regular file) is refused, never followed or replaced. Used by the root act of `gnomon dev local`, the allow effect
+ * of a real home's local.config card (config-request.ts) and tests.
+ */
+export function writeLocalConfigDoc(home: string, doc: { row: Record<string, unknown>; signer: string; sig: string }): void {
+  writeHomeFileAtomic(home, LOCAL_CONFIG_FILE, `${JSON.stringify(doc)}\n`);
+}
+
+/**
+ * Write `<home>/<name>` (local.signed.json, local.seen.json): a private temp file (0600, exclusive create), fsynced,
+ * renamed over the target. A target that is a symlink or anything but a regular file is refused, never followed.
+ */
+export function writeHomeFileAtomic(home: string, name: string, text: string): void {
+  const file = path.join(home, name);
+  const refuseTarget = (): void => {
+    let st: fs.Stats;
+    try {
+      st = fs.lstatSync(file);
+    } catch {
+      return; // no file yet
+    }
+    if (!st.isFile()) throw new RefusedError(refuse({ code: 'BAD_REQUEST', data: { reason: 'bad-params', why: 'local-config-target' } }), `#local-config-request: ${name} is not a regular file (a symlink is never followed): remove it first`);
+  };
+  refuseTarget();
+  const tmp = path.join(home, `.${name}.tmp-${process.pid}-${randomBytes(6).toString('hex')}`);
+  const fd = fs.openSync(tmp, 'wx', 0o600);
+  try {
+    fs.writeSync(fd, text);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  try {
+    refuseTarget(); // again, right before the rename
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
+/** Aegis M3: a remove leaves a tombstone sidecar {version, removed: true}; no file at or below that version applies again. */
+export function writeLocalTombstone(home: string, version: number): void {
+  writeHomeFileAtomic(home, LOCAL_SEEN_FILE, `${JSON.stringify({ version, removed: true })}\n`);
+}
+
+/** Write a root-signed local config (the dev root act; tests). Throws RootUnavailableError without a root. */
 export function writeSignedLocalConfig(home: string, root: Pick<RootAuthority, 'signRow'>, local: Record<string, unknown>, version = 0): void {
   const row = { schemaVersion: LOCAL_CONFIG_SCHEMA, version, local };
   const { signer, sig } = root.signRow(row);
-  fs.writeFileSync(path.join(home, LOCAL_CONFIG_FILE), `${JSON.stringify({ row, signer, sig })}\n`, { mode: 0o600 });
+  writeLocalConfigDoc(home, { row, signer, sig });
+}
+
+/**
+ * The chain's rollback high-water mark for local.signed.json: the highest version of a SIGNED config.loaded row
+ * naming the file (kernel rows only: the caller reads the log as the kernel principal's rows).
+ */
+export function localChainHighWater(payloads: Iterable<unknown>): number {
+  let hw = 0;
+  for (const raw of payloads) {
+    const p = raw as { file?: unknown; signed?: unknown; removed?: unknown; version?: unknown } | null | undefined;
+    if (p?.file === LOCAL_CONFIG_FILE && (p.signed === true || p.removed === true) && typeof p.version === 'number' && Number.isInteger(p.version) && p.version > hw) hw = p.version;
+  }
+  return hw;
+}
+
+/** Aegis M3: the highest version a config.loaded{removed:true} row names (-1 = none): no file at or below it applies. */
+export function localChainRemoved(payloads: Iterable<unknown>): number {
+  let hw = -1;
+  for (const raw of payloads) {
+    const p = raw as { file?: unknown; removed?: unknown; version?: unknown } | null | undefined;
+    if (p?.file === LOCAL_CONFIG_FILE && p.removed === true && typeof p.version === 'number' && Number.isInteger(p.version) && p.version > hw) hw = p.version;
+  }
+  return hw;
+}
+
+/**
+ * The version the next local config takes: one above the highest of the file's row, the sidecar and the chain
+ * (so the loader never refuses it as older). `previous` is that highest version, or null for a first config.
+ */
+export function nextLocalVersion(home: string, chainHighWater: number, verify?: Pick<RootAuthority, 'verifyRow'>): { version: number; previous: number | null } {
+  const read = (f: string, pick: (j: Record<string, unknown>) => unknown): number | null => {
+    try {
+      const v = pick(JSON.parse(fs.readFileSync(path.join(home, f), 'utf8')) as Record<string, unknown>);
+      return Number.isSafeInteger(v) && (v as number) >= 0 ? (v as number) : null;
+    } catch {
+      return null;
+    }
+  };
+  // Aegis L8: the file's version counts only when its signature verifies (a planted file cannot push the version up)
+  const fileV = read(LOCAL_CONFIG_FILE, (j) => (isObj(j.row) && (!verify || (typeof j.signer === 'string' && typeof j.sig === 'string' && verify.verifyRow(j.signer, j.row, j.sig))) ? j.row.version : undefined));
+  const seenV = read(LOCAL_SEEN_FILE, (j) => j.version);
+  const known = [fileV, seenV, chainHighWater > 0 ? chainHighWater : null].filter((x): x is number => x !== null);
+  if (!known.length) return { version: 1, previous: null };
+  const top = Math.max(...known);
+  return { version: top + 1, previous: top };
 }
