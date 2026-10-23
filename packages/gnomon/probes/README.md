@@ -36,7 +36,7 @@ Unattended, on a Windows machine with the repo-built helper
 |---|---|
 | `p01-claude-cli` | resolves `claude.exe` from the kernel's win32 `knownBinaries` row (read from `src/platform/claude-code.ts`, never PATH), surveys WinGet/native/npm locations, records native PE vs npm shim and each version |
 | `p-log-fsync` | the same arms (default `A,D,G,H1,H3`, N=20k) plus a raw `fs.fsyncSync`/`fdatasyncSync` bench; FlushFileBuffers semantics, `fullfsync` is a no-op off Apple |
-| `p11-ws-framing` | judged on the child's private bytes (PowerShell sampler, ~10 ms) |
+| `p11-ws-framing` | judged on the child's private bytes, sampled by a PowerShell `Get-Process` poller |
 | `p14b-web-handoff`, `p14b-link-fdpass` | P14b-w (`_shared/win32-handoff.mjs`): node spawned directly, confined by `process.confine {pid}` from the same process, then handed sockets |
 | `p10w-wfp` | read-only: can the non-elevated user add a WFP filter (`wfp-access.ps1`)? Adds nothing |
 

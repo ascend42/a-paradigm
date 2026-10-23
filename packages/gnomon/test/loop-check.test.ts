@@ -21,6 +21,7 @@ import { loopCheckProfileSbpl, LoopCheckSbplError } from '../src/platform/darwin
 import { CheckCopyRefusal, checkRunDir, makeCheckCopy, pinParadigmCli, runCheck, sweepCheckCopies } from '../src/kernel/loops/check-exec.js';
 import { resolveShebangInterpreter, shebangProgram } from '../src/kernel/loops/shebang.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
+import { ownerOnlyFile } from '../src/platform/owner-only.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -251,12 +252,35 @@ describe('the check copy', () => {
 
 describe('TD-2026-10-23-268: a loop names the variables its check child gets, read from env files', () => {
   const from = { PATH: '/usr/bin', HOME: '/Users/me', STRIPE_KEY: 'from-daemon', GITHUB_TOKEN: 'ghp_1', NODE_OPTIONS: '--require x', GNOMON_SOCK: '/s' };
+  // owner-only by capability, never by a platform test: on a DACL platform (icacls present) a mode is not enough, so
+  // tighten also applies the owner-only DACL (ownerOnlyFile) and loosen grants Everyone read; POSIX is the mode alone
+  const ICACLS = path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'icacls.exe');
+  const tighten = (p: string, mode: number): void => {
+    ownerOnlyFile(p);
+    fs.chmodSync(p, mode);
+  };
+  const loosen = (p: string): void => {
+    fs.chmodSync(p, 0o644);
+    if (fs.existsSync(ICACLS)) expect(spawnSync(ICACLS, [p, '/grant', '*S-1-1-0:R']).status).toBe(0);
+  };
   const envFile = (dir: string, name: string, body: string, mode = 0o600): string => {
     const p = path.join(dir, name);
     fs.writeFileSync(p, body, { mode });
-    fs.chmodSync(p, mode);
+    if ((mode & 0o077) === 0) tighten(p, mode);
+    else loosen(p);
     return p;
   };
+  // Aegis M2 needs a real FIFO (mkfifo, POSIX): capability, not platform
+  const CAN_FIFO = ((): boolean => {
+    const f = path.join(os.tmpdir(), `gnomon-fifo-probe-${process.pid}`);
+    try {
+      return spawnSync('mkfifo', [f]).status === 0 && fs.statSync(f).isFIFO();
+    } catch {
+      return false;
+    } finally {
+      fs.rmSync(f, { force: true });
+    }
+  })();
   it('dotenv: export, quotes, comments, CRLF and multi-line quotes; no expansion and no command substitution', () => {
     const m = parseDotenv('\uFEFF# c\r\nexport A=1\r\nB = "two words" # c\nC=\'$HOME and $(rm -rf /)\'\nD=plain # tail\nE="a\\nb \\"q\\""\nF="line1\nline2"\nG=$A\n  H=x#y\nnot a line\nB=last\n');
     expect(Object.fromEntries(m)).toEqual({ A: '1', B: 'last', C: '$HOME and $(rm -rf /)', D: 'plain', E: 'a\nb "q"', F: 'line1\nline2', G: '$A', H: 'x#y' });
@@ -280,7 +304,7 @@ describe('TD-2026-10-23-268: a loop names the variables its check child gets, re
     const { env, envKeys } = buildCheckEnv({ from, identity: null, path: '/usr/bin', home: '/c/home', tmpdir: '/c/tmp', named: named.ok ? named.env : {} });
     expect(env.STRIPE_KEY).toBe('from-a');
     for (const k of ['OTHER', 'DATABASE_URL', 'GITHUB_TOKEN', 'NODE_OPTIONS', 'GNOMON_SOCK']) expect(envKeys, k).not.toContain(k);
-    expect(loopEnvFilesOf(['.env.local', '~/s/app.env', '/abs/x.env'], '/repo', '/Users/me')).toEqual([{ shown: '.env.local', path: '/repo/.env.local', repoRoot: '/repo' }, { shown: '~/s/app.env', path: '/Users/me/s/app.env' }, { shown: '/abs/x.env', path: '/abs/x.env' }]);
+    expect(loopEnvFilesOf(['.env.local', '~/s/app.env', '/abs/x.env'], '/repo', '/Users/me')).toEqual([{ shown: '.env.local', path: path.join('/repo', '.env.local'), repoRoot: '/repo' }, { shown: '~/s/app.env', path: path.join('/Users/me', 's', 'app.env') }, { shown: '/abs/x.env', path: '/abs/x.env' }]);
     expect(repoEnvFiles(['./.env.local', '~/s/app.env', '/abs/x.env', 'cfg/app.env'])).toEqual(['.env.local', 'cfg/app.env']);
   });
   it('failures: a repo file names itself; a file outside the repo says only "cannot be used: <path>" (L3); a name found nowhere names the files tried; a loose home file is refused', () => {
@@ -298,15 +322,15 @@ describe('TD-2026-10-23-268: a loop names the variables its check child gets, re
     const empty = envFile(d, 'e.env', 'STRIPE_KEY=\n', 0o644);
     expect(resolveLoopEnvFiles(['STRIPE_KEY'], { files: [{ path: empty, shown: 'e.env', repoRoot: d }], home: path.join(tmp(), 'loop-env') })).toEqual({ ok: false, code: 'env-missing', reason: 'env STRIPE_KEY was not found in ~/.gnomon/loop-env, e.env' });
     const loose = envFile(d, 'loop-env', 'STRIPE_KEY=sk\n', 0o644);
-    expect(resolveLoopEnvFiles(['STRIPE_KEY'], { files: [], home: loose })).toMatchObject({ ok: false, code: 'env-file', reason: expect.stringContaining('~/.gnomon/loop-env must be owner-only (chmod 600') });
-    fs.chmodSync(loose, 0o400);
+    expect(resolveLoopEnvFiles(['STRIPE_KEY'], { files: [], home: loose })).toMatchObject({ ok: false, code: 'env-file', reason: expect.stringContaining('~/.gnomon/loop-env must be owner-only (') });
+    tighten(loose, 0o400);
     expect(resolveLoopEnvFiles(['STRIPE_KEY'], { files: [], home: loose })).toEqual({ ok: true, env: { STRIPE_KEY: 'sk' } });
     expect(readEnvFile(d, 'dir').ok).toBe(false);
     expect(resolveLoopEnvFiles(['STRIPE_KEY', 'NODE_OPTIONS'], { files: [] })).toMatchObject({ ok: false, code: 'env-refused', reason: expect.stringContaining('NODE_OPTIONS') });
     expect(() => buildCheckEnv({ from, identity: null, path: null, home: '/h', tmpdir: '/t', named: { GNOMON_SOCK: '/evil' } })).toThrow(/GNOMON_SOCK is refused/);
     expect(buildSessionEnv({ from, hsid: 'h', sock: '/s', sessionKeyPath: '/k', identity: null, path: null }).envKeys).not.toContain('STRIPE_KEY');
   });
-  it('Aegis M2: a FIFO is refused at once, never blocking the kernel', () => {
+  it.skipIf(!CAN_FIFO)('Aegis M2: a FIFO is refused at once, never blocking the kernel', () => {
     const d = tmp();
     const fifo = path.join(d, 'pipe.env');
     expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
@@ -327,7 +351,7 @@ describe('TD-2026-10-23-268: a loop names the variables its check child gets, re
     expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(gh, 'other.env'), shown: '~/.gnomon/other.env' }], home: homeFile })).toEqual({ ok: false, code: 'env-file', reason: 'the env file cannot be used: ~/.gnomon/other.env (inside the Gnomon home)' });
     // loop-env itself may be linked; it keeps the owner-only rule
     expect(resolveLoopEnvFiles(['X'], { files: [{ path: homeFile, shown: '~/.gnomon/loop-env' }], home: homeFile })).toEqual({ ok: true, env: { X: 'home' } });
-    fs.chmodSync(homeFile, 0o644);
+    loosen(homeFile);
     expect(resolveLoopEnvFiles(['X'], { files: [{ path: homeFile, shown: '~/.gnomon/loop-env' }], home: homeFile })).toMatchObject({ ok: false, reason: expect.stringContaining('must be owner-only') });
     // founder: no gatekeeping: a credential-store path is the human's to link (the card shows it)
     const fakeHome = tmp();
