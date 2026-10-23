@@ -34,9 +34,10 @@ import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type
 import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
-import { chatItems, derivedTitle, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
+import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
-import { changedBefore, hasLive, LiveTicker, liveText } from '../core/live-turn.js';
+import { changedBefore, hasLive, LiveTicker, liveText, stepClockText, workParts } from '../core/live-turn.js';
+import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '../core/turn-steps.js';
 import { mountStandingFeed } from './standing-feed.js';
 import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringSheet } from './card-focus.js';
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
@@ -228,7 +229,8 @@ function currentItems(): { items: ChatItem[]; hidden: number } {
   const base2 = chatItems(rows, { raw, live });
   // S2.5: tool and auto rows fold into one activity line (raw mode and the kernel feed never fold)
   // raw rows fold the same way: an expanded one shows its whole line under it
-  const out = raw ? { items: foldRaw(base2.items, expandedActs), hidden: base2.hidden } : { items: foldActivity(base2.items, expandedActs), hidden: base2.hidden };
+  // #gui-turn-steps: the working key's list unfolds (and a step to its rows, rowDetail: the raw fold's redaction)
+  const out = raw ? { items: foldRaw(base2.items, expandedActs), hidden: base2.hidden } : { items: foldActivity(withStepFolds(base2.items, rows, expandedActs, rowDetail), expandedActs), hidden: base2.hidden };
   memo = { key, out };
   return out;
 }
@@ -366,6 +368,69 @@ function onChoice(e: Event, b: HTMLElement): void {
   paintTranscript();
   if (out === 'confirm') ($('viewport').querySelector(`.choices.live [data-choice-item="${CSS.escape(itemKey)}"][data-choice="${CSS.escape(pick)}"]`) as HTMLElement | null)?.focus();
 }
+/** #gui-turn-steps: the unfolded list's scroll per working key; a remount (a new step) keeps it, and follows the end while it was there. */
+const stepsScroll = new Map<string, { top: number; atEnd: boolean }>();
+function restoreSteps(el: HTMLElement): void {
+  const ol = el.querySelector('ol.steps') as HTMLElement | null;
+  if (!ol) return;
+  const k = ol.dataset.item ?? '';
+  const was = stepsScroll.get(k);
+  ol.scrollTop = !was || was.atEnd ? ol.scrollHeight : was.top;
+  ol.addEventListener('scroll', () => {
+    stepsScroll.set(k, { top: ol.scrollTop, atEnd: ol.scrollTop + ol.clientHeight >= ol.scrollHeight - 4 });
+    if (stepsScroll.size > 8) stepsScroll.delete(stepsScroll.keys().next().value!);
+  });
+}
+/**
+ * #gui-turn-steps: the working key names what the turn does now with its clock; its words ellipsize and the clock
+ * never does (Mika: at 1024 a long Bash command cut the clock off). The full words are its title. The ticker
+ * rewrites the words and the clock (a hook takes the key only after HOOK_DWELL_MS, so the words can change on a
+ * tick). Enter, Space or a click unfolds this turn's steps under it. Mika (a11y): this row is no live region — it
+ * remounts on every step, and a remounted live region announces unreliably, all of it or nothing — the page's one
+ * persistent #turn-say says what the turn does once it has held 2 s (sayWork).
+ */
+function workingEl(it: FoldedItem): HTMLElement {
+  const open = it.open === true;
+  const k = stepsFoldKey(it.key);
+  const w = it.live ? workParts(it.live, Date.now()) : { label: 'working…', clock: '', aria: 'working' };
+  const key = h(doc, 'div', { class: 'work-key', role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': k, 'data-item': it.key, title: w.label }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'caret', 'aria-hidden': 'true' }, open ? '▾ ' : '▸ '), h(doc, 'span', { class: 'work-label' }, w.label), h(doc, 'span', { class: 'live-clock' }, w.clock));
+  const list = open
+    ? h(doc, 'ol', { class: 'steps', 'data-item': it.key, 'aria-label': "This turn's steps" }, ...(it.steps ?? []).length ? (it.steps ?? []).flatMap((st) => {
+        const sk = stepFoldKey(it.key, st.key);
+        const p = stepParts(st);
+        const full = stepText(st);
+        const tone = st.outcome === 'blocked' || st.outcome === 'failed' || st.outcome === 'timed out' ? ' warn' : '';
+        if (st.until === undefined) return [h(doc, 'li', { class: 'step live', title: full }, h(doc, 'span', { class: 'caret blank', 'aria-hidden': 'true' }, '▸ '), h(doc, 'span', { class: 'step-label' }, p.label), h(doc, 'span', { class: 'step-tail' }, ' · ', h(doc, 'span', { class: 'step-clock', 'data-since': st.since, 'aria-hidden': 'true' }, stepClockText(st.since, Date.now()))))];
+        const sOpen = st.detail !== undefined;
+        const row = h(doc, 'li', { class: `step fold${tone}${sOpen ? ' open' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(sOpen), 'data-act': sk, 'data-item': it.key, title: full }, h(doc, 'span', { class: 'caret', 'aria-hidden': 'true' }, sOpen ? '▾ ' : '▸ '), h(doc, 'span', { class: 'step-label' }, p.label), h(doc, 'span', { class: 'step-tail' }, p.tail));
+        return sOpen ? [row, h(doc, 'li', { class: 'step-detail' }, h(doc, 'pre', { class: 'raw-line', tabindex: '0', 'aria-label': 'its lines' }, st.detail!))] : [row];
+      }) : [h(doc, 'li', { class: 'step' }, 'nothing yet')])
+    : null;
+  return h(doc, 'div', { class: `trow role-working${open ? ' open' : ''}` }, key, list) as unknown as HTMLElement;
+}
+/**
+ * #gui-turn-steps (Mika, a11y): the focused transcript's running turn, said once in #turn-say ("Claude is waiting on
+ * a Stop hook") when what it does has held SAY_HOLD_MS — the long steps a person waits on, never each 50 ms Read.
+ */
+const SAY_HOLD_MS = 2000;
+let sayCand: { text: string; at: number } | null = null;
+let saidWork: string | null = null;
+function sayWork(now: number): void {
+  const w = items.find((x) => x.role === 'working' && x.live);
+  if (!w?.live) {
+    sayCand = null;
+    saidWork = null;
+    return;
+  }
+  const who = agentLabel() === 'local model' ? 'The local model is' : 'Claude is';
+  const text = `${who} ${workParts(w.live, now).aria}`;
+  if (sayCand?.text !== text) sayCand = { text, at: now };
+  if (text !== saidWork && now - sayCand.at >= SAY_HOLD_MS) {
+    saidWork = text;
+    const say = document.getElementById('turn-say');
+    if (say) say.textContent = text;
+  }
+}
 function itemEl(it: FoldedItem): HTMLElement {
   if (it.role === 'activity') {
     const open = expandedActs.has(it.key);
@@ -373,10 +438,7 @@ function itemEl(it: FoldedItem): HTMLElement {
     const clock = it.live ? h(doc, 'span', { class: 'live-clock' }, liveText(it, Date.now())) : null;
     return h(doc, 'div', { class: `trow role-activity${open ? ' open' : ''}${it.live ? ' live' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': it.key, title: open ? 'Hide the steps' : 'Show the steps' }, `${open ? '▾' : '▸'} ${it.text}`, clock) as unknown as HTMLElement;
   }
-  if (it.role === 'working') {
-    // a11y: one status ("Claude is working"); the ticking clock is not announced every second (aria-live off)
-    return h(doc, 'div', { class: 'trow role-working', role: 'status', 'aria-label': agentLabel() === 'local model' ? 'The local model is working' : 'Claude is working' }, h(doc, 'span', { class: 'spin', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'live-clock', 'aria-live': 'off' }, liveText(it, Date.now()))) as unknown as HTMLElement;
-  }
+  if (it.role === 'working') return workingEl(it);
   // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
   const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
@@ -399,7 +461,7 @@ function itemEl(it: FoldedItem): HTMLElement {
     return h(doc, 'div', { class: 'trow role-raw-detail' }, h(doc, 'pre', { class: 'raw-line', tabindex: '0', 'aria-label': 'the whole line' }, it.text)) as unknown as HTMLElement;
   }
   const slips = slipsAt.get(it.key) ?? [];
-  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}` }, ...body, ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : ''}` }, ...body, ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
 }
 
 /* ── #gui-offer-slip (TD-2026-10-20-812 O1): the margin slips under the reply that offered (core/offers.ts) ── */
@@ -498,8 +560,19 @@ const liveTicker = new LiveTicker(() => {
     const it = items[i];
     if (!it?.live) continue;
     const c = el.querySelector('.live-clock') as HTMLElement | null;
-    if (c) put(c, liveText(it, now));
+    if (it.role === 'working') {
+      // #gui-turn-steps: the words can change on a tick too (a hook takes the key after HOOK_DWELL_MS)
+      const w = workParts(it.live, now);
+      const lb = el.querySelector('.work-label') as HTMLElement | null;
+      if (lb) put(lb, w.label);
+      const wk = el.querySelector('.work-key') as HTMLElement | null;
+      if (wk && wk.title !== w.label) wk.title = w.label;
+      if (c) put(c, w.clock);
+    } else if (c) put(c, liveText(it, now));
+    // #gui-turn-steps: the unfolded list's live step counts too
+    for (const sc of el.querySelectorAll<HTMLElement>('.step-clock[data-since]')) put(sc, stepClockText(sc.dataset.since!, now));
   }
+  sayWork(now);
 });
 
 /**
@@ -557,6 +630,7 @@ function paintTranscript(remeasure = false): void {
   }
   syncSlips(items);
   liveTicker.sync(hasLive(items));
+  sayWork(Date.now()); // #gui-turn-steps: a turn that ended clears what was said
   follow.onAppend(appended);
   for (let pass = 0; pass < 4; pass++) {
     $('spacer').style.height = `${heights.total()}px`;
@@ -586,6 +660,7 @@ function paintTranscript(remeasure = false): void {
         el.style.top = `${heights.offsetOf(i)}px`;
         vp.appendChild(el);
         mounted.set(i, el);
+        restoreSteps(el);
       }
       const hgt = el.offsetHeight || heights.estimate;
       if (hgt !== heights.height(i)) {
@@ -2976,7 +3051,7 @@ function wire(): void {
     else expandedActs.add(k);
     // the line keeps its key and text: remount it so its ▸ / ▾ and aria-expanded follow, and keep the focus on it
     const had = document.activeElement === a;
-    remountItem(k.startsWith('raw:') ? k.slice(4) : k);
+    remountItem(a.dataset.item ?? (k.startsWith('raw:') ? k.slice(4) : k));
     paintTranscript();
     if (had) ($('viewport').querySelector(`[data-act="${CSS.escape(k)}"]`) as HTMLElement | null)?.focus();
   };

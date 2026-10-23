@@ -27,6 +27,7 @@
  *     re-reads from the start.
  */
 import { sentLabel } from './voice-presets.js';
+import { StepTracker, type StepNow, type TurnStep } from './turn-steps.js';
 import { projectHue, sha256Tagged, validateKindPayload } from '@a-company/gnomon-contracts';
 import { MODE_ROW_KINDS } from './modes.js';
 import { rootRowsOf, rowsDigestCheck } from './render.js';
@@ -658,7 +659,7 @@ export function rowDetail(r: Row): string | null {
  * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
  * the 🔊 marker under a reply the voice app spoke aloud.
  */
-export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'raw-detail' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working';
+export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'raw-detail' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working' | 'hook' | 'claude-note';
 
 /**
  * T-2026-10-21-007: the clock of a turn still running. `since` is when the turn (or, on an activity line, its first
@@ -668,6 +669,8 @@ export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'au
 export interface LiveClock {
   since: string;
   progress?: { at: string; secs: number; tool?: string };
+  /** #gui-turn-steps: on the working key: what the turn is doing now and when that began (its clock counts from it) */
+  now?: StepNow;
 }
 
 export interface ChatItem {
@@ -693,6 +696,11 @@ export interface ChatItem {
   live?: LiveClock;
   /** raw rows: the whole row (rowDetail), shown by the row's fold */
   detail?: string;
+  /** #gui-turn-steps: the hook-result line draws attention (a hook blocked, failed or timed out) */
+  tone?: 'warn';
+  /** #gui-turn-steps: the working key's steps so far, and whether its list is unfolded (the page sets it) */
+  steps?: TurnStep[];
+  open?: boolean;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -881,6 +889,14 @@ function lineItems(line: string, guidanceHash: string | null = null): Array<Pick
   // the user's own message as claude replays it (--replay-user-messages): the only row that carries its text
   // (session.inject / turn.sent log a hash and a byte count, never the text — G-LOG-03)
   if (m.type === 'user' && msg) {
+    // #gui-turn-steps: a synthetic user line is Claude's, never the human's ("Stop hook feedback: …" is the hook's
+    // reason fed back to the model): a hook's feedback folds into the turn's hook-result line, any other is a quiet note
+    // Aegis M1: never role 'system' (that is the kernel's own notes: run mode, session ended), so a repo hook cannot
+    // forge one; it is Claude's note, said as Claude's ("Claude · <text>")
+    if (m.isSynthetic === true) {
+      const t = textOf(msg.content);
+      return !t.trim() || /^[\w:]+ hook feedback:/.test(t) ? [] : [{ role: 'claude-note', text: `Claude · ${cap(oneLine(t), TOOL_SUMMARY_MAX)}` }];
+    }
     const text = humanTextOf(msg.content, guidanceHash);
     return text.trim() ? [{ role: 'user', text: cap(text, CHAT_TEXT_MAX) }] : [];
   }
@@ -1161,6 +1177,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   let turnSince: string | undefined;
   let turnKey = '';
   let progress: LiveClock['progress'] | undefined;
+  // #gui-turn-steps: the running turn's steps (the working key names the current one; the result gets the summary)
+  const steps = new StepTracker();
   const insertAt = (): number => (waiting.length ? waiting[0]!.idx[0]! : items.length);
   let placedTurn: string | undefined; // review M1: the stamp of the composer echo being placed
   const place = (item: ChatItem, how: Place): void => {
@@ -1205,6 +1223,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     activeUnsent = false;
     activeTurn = undefined;
     progress = undefined;
+    steps.reset();
   };
   const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy']; sentLabel?: string; asksFirst?: boolean }, how: Place = 'turn'): ChatItem => {
     if (it.role === 'assistant') spoken = null; // a new reply closes the previous reply's 🔊 marker
@@ -1291,6 +1310,7 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
         turnSince = r.at;
         turnKey = String(r.seq);
         progress = undefined;
+        steps.reset();
       }
     }
     if (r.kind === 'session.exited' || r.kind === 'session.orphaned' || r.kind === 'session.drained' || r.kind === 'session.open') settle();
@@ -1302,6 +1322,14 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       const at = typeof p?.turn === 'string' ? openTurns.indexOf(p.turn) : -1;
       const closed = openTurns.splice(0, at >= 0 ? at + 1 : Math.min(1, openTurns.length));
       progress = undefined;
+      // #gui-turn-steps: the turn's one quiet summary under its reply (hooks that blocked, failed, timed out or were
+      // slow; failed tool calls), before its result line
+      const sum = steps.summary();
+      if (sum) {
+        const line = push(r, 1, { role: 'hook', text: sum.text });
+        if (sum.warn) line.tone = 'warn';
+      }
+      steps.reset();
       const it = kernelItem(r);
       if (it) push(r, 0, it);
       else hidden++;
@@ -1320,6 +1348,9 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       // the running step's clock: a tool_progress heartbeat (its elapsed seconds) or a task start; a new message ends it
       if (p.type === 'tool_progress' || p.type === 'system.task_started') progress = progressOf(p.line, r.at, p.type === 'system.task_started') ?? progress;
       else if (p.type === 'assistant' || p.type === 'user') progress = undefined;
+      // Aegis M2: the kernel's hook facts (from the FULL line) end a hook step even when the line is stored by hash
+      const facts = p.hook !== undefined && (r.principal === undefined || /^p:[0-9a-z]{8}\/kernel$/.test(r.principal)) ? p.hook : undefined;
+      if (typeof p.line === 'string' || facts !== undefined) steps.push(r.seq, r.at, typeof p.line === 'string' ? p.line : null, facts, typeof p.type === 'string' ? p.type : undefined);
     }
     if (r.kind === 'turn.event' && r.view === 'full' && p && typeof p.line === 'string') {
       const its = lineItems(p.line, turnGuidance).map((it) => (it.role === 'assistant' ? withKernelSaid(it, kernelReply.get(r.seq)) : it)).filter((it) => {
@@ -1413,7 +1444,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   // T-2026-10-21-007: the running turn shows a `working` row under its output until its turn.result (live sessions only)
   if (opts.live && !opts.raw && openTurns.length > 0 && turnSince) {
     const last = rows[rows.length - 1];
-    place({ key: `work:${turnKey}`, seq: last ? last.seq : 0, role: 'working', text: 'working…', at: turnSince, live: { since: turnSince, ...(progress ? { progress } : {}) } }, 'turn');
+    const now = steps.now();
+    place({ key: `work:${turnKey}`, seq: last ? last.seq : 0, role: 'working', text: 'working…', at: turnSince, live: { since: turnSince, ...(progress ? { progress } : {}), ...(now ? { now } : {}) }, steps: steps.steps.map((x) => ({ ...x, seqs: [...x.seqs], ...(x.hook ? { hook: { ...x.hook } } : {}) })) }, 'turn');
   }
   // #gui-offer-slip: a reply's ```offer block is hidden only under a kernel offer.shown row for that reply
   return { items: opts.raw ? items : stripOfferBlocks(items, rows), hidden };

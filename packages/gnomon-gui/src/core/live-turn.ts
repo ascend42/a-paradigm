@@ -13,6 +13,7 @@
  * turn.result lands the live fields go away and the summary freezes at the real duration ("Ns of work").
  */
 import { durationText, type ChatItem, type LiveClock } from './store.js';
+import { HOOK_DWELL_MS } from './turn-steps.js';
 
 const secsSince = (at: string, now: number): number | null => {
   const t = Date.parse(at);
@@ -31,11 +32,34 @@ export function liveSecs(l: LiveClock, now: number): number {
   return Math.max(secsSince(l.since, now) ?? 0, toolSecs(l, now) ?? 0);
 }
 
+/**
+ * #gui-turn-steps (Mika, flicker): what the working key names at `now`. A running hook takes it only once it has
+ * run HOOK_DWELL_MS; before that the key keeps naming what it named before the hook (`under`). null: plain working….
+ */
+export function workNow(l: LiveClock, now: number): { label: string; since: string; aria: string } | null {
+  const n = l.now;
+  if (!n) return null;
+  const t = Date.parse(n.since);
+  if (n.under && Number.isFinite(t) && now - t < HOOK_DWELL_MS) return n.under;
+  return { label: n.label, since: n.since, aria: n.aria };
+}
+
+/** The working key in two parts: its words (they ellipsize) and its clock (` · 12s`, never cut). */
+export function workParts(l: LiveClock, now: number): { label: string; clock: string; aria: string } {
+  const w = workNow(l, now);
+  if (!w) return { label: 'working…', clock: ` · ${durationText(liveSecs(l, now))}`, aria: 'working' };
+  return { label: w.label, clock: ` · ${durationText(secsSince(w.since, now) ?? 0)}`, aria: w.aria };
+}
+
 /** The ticking text of a live item: the `working…` row, or the suffix of a live activity line. */
 export function liveText(it: Pick<ChatItem, 'role' | 'live'>, now: number): string {
   if (!it.live) return '';
   const total = durationText(liveSecs(it.live, now));
-  if (it.role === 'working') return `working… · ${total}`;
+  // #gui-turn-steps: the working key names what the turn does now, its clock from when that began
+  if (it.role === 'working') {
+    const w = workParts(it.live, now);
+    return `${w.label}${w.clock}`;
+  }
   const t = toolSecs(it.live, now);
   return ` · running ${total}${t !== null ? ` · ${it.live.progress?.tool ?? 'tool'} ${durationText(t)}` : ''}`;
 }
@@ -44,8 +68,15 @@ export function liveText(it: Pick<ChatItem, 'role' | 'live'>, now: number): stri
  * The rendered signature of a transcript item: everything itemEl paints from it (role, text, liveness, "took", the
  * said-aloud line and the voice marks). A card's decided state is its text ("needs you" / "decided · …").
  */
-export function itemSig(it: Pick<ChatItem, 'role' | 'text' | 'live' | 'said' | 'voice' | 'speaker'> & { took?: number }): string {
-  return JSON.stringify([it.role, it.text, it.live !== undefined, it.took ?? null, it.said ?? null, it.voice ?? null, it.speaker ?? null]);
+export function itemSig(it: Pick<ChatItem, 'role' | 'text' | 'live' | 'said' | 'voice' | 'speaker'> & Partial<Pick<ChatItem, 'tone' | 'steps' | 'open'>> & { took?: number }): string {
+  // #gui-turn-steps: the working key repaints when what it names, its fold or a step changes (never per tick)
+  const steps = it.steps?.map((s) => [s.key, s.label, s.until ?? null, s.outcome ?? null, s.note ?? null, s.hook?.name ?? null, s.detail !== undefined]) ?? null;
+  return JSON.stringify([it.role, it.text, it.live !== undefined, it.took ?? null, it.said ?? null, it.voice ?? null, it.speaker ?? null, it.tone ?? null, it.live?.now?.label ?? null, it.live?.now?.since ?? null, it.open ?? null, steps]);
+}
+
+/** #gui-turn-steps: the live step's own clock in the unfolded list (from its start). */
+export function stepClockText(since: string, now: number): string {
+  return durationText(secsSince(since, now) ?? 0);
 }
 
 /**

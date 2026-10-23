@@ -912,6 +912,66 @@ components:
       - test/loop-cards.test.ts
       - test/desk.test.ts
 
+  gui-turn-steps:
+    description: >-
+      Founder 2026-10-23 ("with gnomon seeing what the stop hooks are doing
+      … in that little chip label and then after the result of it"; then
+      "just right there where that 'working label' area is just a little
+      bit of labeling on what is being called … clicking on it to expand
+      out to see what is being done"). core/turn-steps.ts (PURE):
+      StepTracker folds the running turn's full turn.event lines (main
+      chain only) into steps: thinking / writing (content blocks), a tool
+      call (calling <Tool>, then toolSummary's '<Tool> · <target>' until its
+      tool_result: ok | error), a hook (hook_started to hook_response under
+      #claude-adapter's --include-hook-events: '<Event> hook[ · matcher]',
+      outcome ok | blocked (exit 2 or stdout JSON decision block, the
+      reason's first line) | timed out (cancelled) | failed (exit N); Claude's
+      synthetic 'Stop hook feedback' line names a blocking hook's command
+      by its script basename), a status (compacting). now() is the working
+      key's words and clock start (running hooks first, else the latest open
+      step, else 'finishing' after the main-chain end_turn, else working…);
+      a running hook carries `under` (what the key named before it), and
+      live-turn.ts workNow shows it until the hook has run HOOK_DWELL_MS
+      (1 s), so a fast PreToolUse hook never flicks the key;
+      summary() is the turn's one hook-result line (notable hook groups:
+      not ok, or 2 s or more; failed tool calls; warn only when a hook
+      blocked, failed or timed out), placed by store.ts chatItems before the
+      turn's result line. withStepFolds attaches rowDetail (the raw fold's
+      redaction) to unfolded steps. store.ts lineItems never shows a
+      synthetic user line as the human's (hook feedback folds into the
+      hook-result line, other synthetic lines are a quiet system line).
+      ui/app.ts workingEl: the working row is a key (role=button,
+      aria-expanded, Enter / Space / click; data-act steps:<key>; its full
+      words in title) whose words ellipsize and whose clock never does
+      (live-turn.ts workParts); it unfolds an ol.steps (a labelled list,
+      clocks aria-hidden, 24px rows, max 40vh, scrolls inside itself, keeps
+      its scroll across remounts); each step's words ellipsize before its
+      time and outcome (stepParts); a finished step folds to its lines. The
+      row is no live region (it remounts per step): sayWork writes the
+      persistent #turn-say status ("Claude is waiting on a Stop hook") once
+      what the turn does has held 2 s. The ticker rewrites the key's words
+      and clocks; itemSig repaints on a step change, never per tick.
+      Preview fixtures turn-hook, turn-hooks, turn-steps replay the 2026-10-23
+      hook probes' lines. Design: .atelier/systems/gnomon transcript-row
+      variants working, step-list, hook-result (reviewed: atelier-mika
+      2026-10-23, amended), claude-note (Aegis M1).
+      Aegis review 2026-10-23: M1 a synthetic user line that is not
+      "<event>[:matcher] hook feedback:" is role claude-note ("Claude ·
+      <text>"), never 'system' (the kernel's notes); L1 Claude's feedback
+      names a blocked hook only when that step's own reason first line is
+      the same text (no reason, no name); M2 StepTracker.push takes the
+      kernel's turn.event.hook facts (kernel principal only) so a line
+      stored by hash still opens and ends its step, and hookOutcome takes
+      the outcome from them (a {bytes, sha256} field has no reason text).
+      Mika: a hook Claude cancelled reads "timed out" unless the turn was
+      interrupted ("[Request interrupted by user]" within 2 s after it,
+      measured on claude 2.1.309): then "cancelled", quiet (no warn).
+    tags: [gui, transcript, hooks]
+    signals: []
+    tests:
+      - test/turn-steps.test.ts
+      - test/live-turn.test.ts
+
   gui-offer-slip:
     description: >-
       The Desk's margin slip (TD-2026-10-20-812 O1, Luna's comp

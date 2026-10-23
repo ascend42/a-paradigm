@@ -75,6 +75,11 @@ async function boot(): Promise<void> {
       await frames(5);
     }
   }
+  // #gui-turn-steps: unfolding the working key's list needs no trust
+  if (fx.open === 'steps') {
+    for (let i = 0; i < 200 && !document.querySelector('#viewport .work-key'); i++) await frames(1);
+    (document.querySelector('#viewport .work-key') as HTMLElement | null)?.click();
+  }
   await frames(3);
   document.documentElement.dataset.preview = 'ready';
 }

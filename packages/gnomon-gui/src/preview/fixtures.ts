@@ -44,7 +44,7 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust';
+  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps';
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -532,6 +532,87 @@ function loopChoiceCard(): Record<string, unknown> {
   const detail = { loopId: 'green-typecheck-gnomon', scope: 'repo', repoKey: LOOP_REPO_KEY, repo: '/Users/matt/code/gnomon-web', runId: 'run:01JLOOPLIVE000000000000GT', nodeId: 'ask', origin: 'loop', authoredBy: 'arky' };
   return cardOf({ name: 'loop choice gt', kind: 'loop-choice', hsid: null, lines: ['Raised by loop green-typecheck-gnomon (claimed by arky)', 'Run run:01JLOOPLIVE000000000000GT', 'fix is unsure after 3 rounds: tsc still fails on src/kernel/loops/runner.ts:812 (a narrowed union). Continue for 3 more rounds?', 'Continue lets the loop go on (Touch ID); stop ends this run'], detail, decisions: ['continue', 'stop'] });
 }
+/* ── #gui-turn-steps: the working key, its step list and the hook-result line, from real claude 2.1.309 lines ──
+ * The hook lines are the shapes `claude -p --output-format stream-json --verbose --include-hook-events` wrote in
+ * three probes (2026-10-23): a PreToolUse:Bash + PostToolUse:Bash + a 2 s Stop hook (probe 1); three Stop hooks
+ * at once, one blocking with exit 2, one timing out, one failing with exit 1, then Claude's synthetic "Stop hook
+ * feedback" line (probe 2); a Stop hook blocking with stdout JSON {decision:'block'} (probe 3). Ids, names, outcomes,
+ * exit codes and output are the probes'; the times are placed in the billing afternoon and the assistant text is the
+ * billing chat's. */
+/** a time with milliseconds (T takes hh:mm or hh:mm:ss) */
+const Tm = (hhmmss: string, ms: number): string => T(hhmmss).replace(/\.000Z$/, `.${String(ms).padStart(3, '0')}Z`);
+type StepsKind = 'hook' | 'hooks' | 'bash';
+const J = (o: Record<string, unknown>): string => JSON.stringify(o);
+const hookStart = (id: string, name: string): string => J({ type: 'system', subtype: 'hook_started', hook_id: id, hook_name: name, hook_event: name.split(':')[0] });
+const hookResp = (id: string, name: string, r: { stdout?: string; stderr?: string; exit_code: number; outcome: 'success' | 'error' | 'cancelled' }): string =>
+  J({ type: 'system', subtype: 'hook_response', hook_id: id, hook_name: name, hook_event: name.split(':')[0], output: `${r.stdout ?? ''}${r.stderr ?? ''}`, stdout: r.stdout ?? '', stderr: r.stderr ?? '', exit_code: r.exit_code, outcome: r.outcome });
+const feedbackLine = (text: string): string => J({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] }, parent_tool_use_id: null, isSynthetic: true });
+const toolResult = (id: string, content: string, isError = false): string => J({ type: 'user', message: { role: 'user', content: [{ tool_use_id: id, type: 'tool_result', content, is_error: isError }] }, parent_tool_use_id: null });
+const bashUse = (id: string, command: string, description: string): string => J({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Bash', input: { command, description } }] }, parent_tool_use_id: null });
+const LONG_BASH = 'pnpm -C packages/billing vitest run test/totals.test.ts test/discount.test.ts test/rounding.test.ts --reporter=verbose --coverage.enabled=true --coverage.include=src/totals.ts';
+
+function stepsChain(kind: StepsKind): Chain {
+  const c = deskChain();
+  const a = A('billing');
+  const ev = (at: string, line: string): void => c.add(at, 'turn.event', { hsid: a.hsid, type: (JSON.parse(line) as { type: string }).type, line }, { session: a.hsid, repo: a.repo, principal: SESSION_PRINCIPAL });
+  const on = (at: string, k: string, payload: Record<string, unknown>): void => c.add(at, k, { hsid: a.hsid, ...payload }, { session: a.hsid, repo: a.repo });
+  // turn 1 (the reply above, 14:05:46) ends through its Stop hooks
+  if (kind === 'bash') {
+    // probe 3: a JSON block, the reply again, then the hook passes
+    ev(T('14:05:47'), hookStart('7f0dc5ae-a2ec-4540-8801-4cff8987990e', 'Stop'));
+    ev(Tm('14:05:48', 300), hookResp('7f0dc5ae-a2ec-4540-8801-4cff8987990e', 'Stop', { stdout: '{"decision":"block","reason":"JSON reason first line\\nmore"}\n', exit_code: 0, outcome: 'success' }));
+    ev(Tm('14:05:48', 310), feedbackLine('Stop hook feedback:\nJSON reason first line\nmore'));
+    ev(T('14:05:52'), textLine('The stop hook asked for the test plan: I will run the three totals suites once you allow the run.'));
+    ev(Tm('14:05:52', 500), hookStart('5ac214ce-439a-41a6-a183-16f4dd7b3d98', 'Stop'));
+    ev(Tm('14:05:52', 700), hookResp('5ac214ce-439a-41a6-a183-16f4dd7b3d98', 'Stop', { exit_code: 0, outcome: 'success' }));
+  } else if (kind === 'hooks') {
+    // probe 1: the 2 s Stop hook that passes (the quiet line)
+    ev(T('14:05:47'), hookStart('7dd63f79-87a8-4b0d-8e0e-999f654a02f6', 'Stop'));
+    ev(Tm('14:05:49', 100), hookResp('7dd63f79-87a8-4b0d-8e0e-999f654a02f6', 'Stop', { stdout: 'stop hook stdout line\n', stderr: 'stop hook stderr line\n', exit_code: 0, outcome: 'success' }));
+  } else {
+    // probe 2, round 1: three Stop hooks at once; exit 1, exit 2 (the block, fed back), the 2 s timeout
+    for (const id of ['da043192-5357-4ee4-b1bc-6d1fb70e4d3c', '8cf8128b-13b9-478b-8417-7f47a66e2f57', '4b5d6c2f-43c4-44c0-a032-eb577585b17b']) ev(T('14:05:47'), hookStart(id, 'Stop'));
+    ev(Tm('14:05:47', 50), hookResp('4b5d6c2f-43c4-44c0-a032-eb577585b17b', 'Stop', { stderr: 'fail stderr\n', exit_code: 1, outcome: 'error' }));
+    ev(Tm('14:05:47', 60), hookResp('da043192-5357-4ee4-b1bc-6d1fb70e4d3c', 'Stop', { stderr: 'Please also say the word banana.\nsecond line of reason\n', exit_code: 2, outcome: 'error' }));
+    ev(Tm('14:05:47', 70), feedbackLine('Stop hook feedback:\n[sh .claude/block.sh]: Please also say the word banana.\nsecond line of reason\n'));
+    ev(Tm('14:05:49', 50), hookResp('8cf8128b-13b9-478b-8417-7f47a66e2f57', 'Stop', { exit_code: 1, outcome: 'cancelled' }));
+    ev(T('14:05:51'), textLine('Banana, as the hook asked. The rounding fix is still waiting on the test run.'));
+    // round 2: the block has passed; the failing and the slow hook again
+    for (const id of ['f341e547-6a0a-4064-a797-8109eba516ff', '6d6ce571-7669-4247-88a5-c6929b9ae671', 'c986518d-47f1-4c01-afaa-33185aeae3ca']) ev(Tm('14:05:51', 200), hookStart(id, 'Stop'));
+    ev(Tm('14:05:51', 250), hookResp('f341e547-6a0a-4064-a797-8109eba516ff', 'Stop', { exit_code: 0, outcome: 'success' }));
+    ev(Tm('14:05:51', 260), hookResp('c986518d-47f1-4c01-afaa-33185aeae3ca', 'Stop', { stderr: 'fail stderr\n', exit_code: 1, outcome: 'error' }));
+    ev(Tm('14:05:53', 250), hookResp('6d6ce571-7669-4247-88a5-c6929b9ae671', 'Stop', { exit_code: 1, outcome: 'cancelled' }));
+  }
+  on(T('14:05:54'), 'turn.result', { subtype: 'success', cost: 0.0412, usage: { tokens: 9310 } });
+  // turn 2: running now (the preview clock reads 14:07:10)
+  const ask = 'Run the totals tests and tell me what fails.';
+  on(T('14:06:30'), 'turn.sent', { bytes: ask.length, contentHash: sha256Tagged(ask), source: 'gui' });
+  ev(Tm('14:06:30', 400), userLine(ask));
+  if (kind === 'bash') {
+    // fifty earlier steps (the list must scroll inside itself), then the long command still running
+    for (let i = 0; i < 48; i++) {
+      const id = `toolu_r${i}`;
+      ev(Tm(`14:06:${String(31 + Math.floor(i / 4)).padStart(2, '0')}`, (i % 4) * 200 + 100), J({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Read', input: { file_path: `src/billing/very/deeply/nested/module-${i}/a-file-name-that-is-long-${i}.ts` } }] }, parent_tool_use_id: null }));
+      ev(Tm(`14:06:${String(31 + Math.floor(i / 4)).padStart(2, '0')}`, (i % 4) * 200 + 180), toolResult(id, `file ${i}`, i === 7));
+    }
+    ev(T('14:06:50'), bashUse('toolu_01W8iN7i7pVVh1YQQBT4NEY6', LONG_BASH, 'Run the totals suites with coverage'));
+    ev(Tm('14:06:50', 100), hookStart('7d498be5-bd2c-46c4-868a-b0cc593b6b3d', 'PreToolUse:Bash'));
+    ev(Tm('14:06:50', 180), hookResp('7d498be5-bd2c-46c4-868a-b0cc593b6b3d', 'PreToolUse:Bash', { stdout: 'pre hook says hi\n', exit_code: 0, outcome: 'success' }));
+    return c;
+  }
+  // probe 1: Bash with its Pre and Post hooks, the reply, then the Stop hook(s)
+  ev(T('14:06:40'), bashUse('toolu_01W8iN7i7pVVh1YQQBT4NEY6', 'pnpm test totals', 'Run the totals tests'));
+  ev(Tm('14:06:40', 100), hookStart('7d498be5-bd2c-46c4-868a-b0cc593b6b3d', 'PreToolUse:Bash'));
+  ev(Tm('14:06:40', 180), hookResp('7d498be5-bd2c-46c4-868a-b0cc593b6b3d', 'PreToolUse:Bash', { stdout: 'pre hook says hi\n', exit_code: 0, outcome: 'success' }));
+  ev(Tm('14:06:52', 300), hookStart('6d22a08e-042b-4775-9684-ffff288d8597', 'PostToolUse:Bash'));
+  ev(Tm('14:06:52', 340), hookResp('6d22a08e-042b-4775-9684-ffff288d8597', 'PostToolUse:Bash', { stdout: 'post-done\n', exit_code: 0, outcome: 'success' }));
+  ev(Tm('14:06:52', 400), toolResult('toolu_01W8iN7i7pVVh1YQQBT4NEY6', '12 passed (3.1s)'));
+  ev(T('14:06:57'), J({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'All twelve totals tests pass with the rounding fix.' }], stop_reason: 'end_turn' }, parent_tool_use_id: null }));
+  if (kind === 'hook') ev(T('14:06:58'), hookStart('7dd63f79-87a8-4b0d-8e0e-999f654a02f6', 'Stop'));
+  else for (const id of ['da043192-5357-4ee4-b1bc-6d1fb70e4d3c', '8cf8128b-13b9-478b-8417-7f47a66e2f57', '4b5d6c2f-43c4-44c0-a032-eb577585b17b']) ev(T('14:06:58'), hookStart(id, 'Stop'));
+  return c;
+}
+
 function loopsChain(cards: boolean): Chain {
   const c = deskChain();
   if (cards) {
@@ -569,6 +650,9 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'loops-trust': { ...loopsFx('loops-trust', 'A loop-trust card unfolded over the centre (Read)', 'desk'), open: 'loops-trust' },
   'loops-paused': loopsFx('loops-paused', 'Loops after Pause all (kill switch)', 'paused', false),
   'loops-many': loopsFx('loops-many', 'Loops: 60 loops across five projects', 'many', false),
+  'turn-hook': fixture('turn-hook', 'Billing running: one Stop hook (Stop hook · 12s); the turn before blocked, failed and timed out (hook-result, warn)', stepsChain('hook'), statusOf(VOICE_RUNNING), BILLING),
+  'turn-hooks': fixture('turn-hooks', 'Billing running: three Stop hooks at once; the turn before had one slow OK hook (hook-result, quiet)', stepsChain('hooks'), statusOf(VOICE_RUNNING), BILLING),
+  'turn-steps': fixture('turn-steps', 'Billing running a long Bash command, its step list unfolded (fifty steps, scrolls inside); a JSON-blocked Stop hook before', stepsChain('bash'), statusOf(VOICE_RUNNING), BILLING, false, { open: 'steps' }),
   'loops-none': loopsFx('loops-none', 'Loops served, none written yet', 'none', false),
 });
 

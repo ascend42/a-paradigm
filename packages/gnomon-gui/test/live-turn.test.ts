@@ -123,9 +123,10 @@ describe('T-2026-10-21-007 the running clock ticks and freezes', () => {
     expect(ticker.running).toBe(true);
     vi.advanceTimersByTime(1000);
     vi.advanceTimersByTime(29_000);
-    // 01:59:31: 2m 10s since turn 3's message (01:57:20.8), Bash 90s + 3s since its last heartbeat, 1m 48s since the turn began
-    expect(texts[0]).toBe('01:57 · ran 1 command · running 2m 10s · Bash 1m 33s | working… · 1m 48s');
-    expect(texts[texts.length - 1]).toBe('01:57 · ran 1 command · running 2m 39s · Bash 2m 2s | working… · 2m 17s');
+    // 01:59:31: 2m 10s since turn 3's message (01:57:20.8), Bash 90s + 3s since its last heartbeat; #gui-turn-steps:
+    // the working key names the running call and counts from its tool_use (01:57:50.322)
+    expect(texts[0]).toBe('01:57 · ran 1 command · running 2m 10s · Bash 1m 33s | Bash · paradigm doctor 2>&1 | tail -40 · 1m 40s');
+    expect(texts[texts.length - 1]).toBe('01:57 · ran 1 command · running 2m 39s · Bash 2m 2s | Bash · paradigm doctor 2>&1 | tail -40 · 2m 9s');
     expect(texts).toHaveLength(30);
     // one interval only, however often the page re-syncs while the turn runs
     ticker.sync(true);
@@ -363,12 +364,21 @@ describe('review M2: a result pairs with the turn it names; a folded queued turn
 });
 
 describe('review a11y: the working row', () => {
-  it('is a status labelled "Claude is working" (a local-model session: "The local model is working") and its clock span is aria-live off', () => {
+  it('Mika (a11y): the working row is no live region (it remounts per step); one persistent #turn-say says what the turn does once it held 2 s', () => {
     const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
-    expect(app).toMatch(/\{ class: 'trow role-working', role: 'status', 'aria-label': agentLabel\(\) === 'local model' \? 'The local model is working' : 'Claude is working' \}/);
+    const html = readFileSync(path.join(ROOT, 'static/index.html'), 'utf8');
+    expect(html).toMatch(/<span id="turn-say" class="sr-only" role="status" aria-live="polite"><\/span>/);
+    expect(app).toMatch(/return h\(doc, 'div', \{ class: `trow role-working\$\{open \? ' open' : ''\}` \}, key, list\)/);
+    expect(app).toMatch(/const who = agentLabel\(\) === 'local model' \? 'The local model is' : 'Claude is';\s*const text = `\$\{who\} \$\{workParts\(w\.live, now\)\.aria\}`;/);
+    expect(app).toMatch(/const SAY_HOLD_MS = 2000;/);
+    // the key: a button with aria-expanded, its words in title; the list is a plain labelled list, step clocks aria-hidden
+    expect(app).toMatch(/class: 'work-key', role: 'button', tabindex: '0', 'aria-expanded': String\(open\), 'data-act': k, 'data-item': it\.key, title: w\.label/);
+    expect(app).toMatch(/h\(doc, 'ol', \{ class: 'steps', 'data-item': it\.key, 'aria-label': "This turn's steps" \}/);
+    expect(app).not.toMatch(/role: 'log'/);
+    expect(app).toMatch(/class: 'step-clock', 'data-since': st\.since, 'aria-hidden': 'true'/);
     expect(app).toMatch(/b === 'local' \? 'local model'/);
     // Mika #4: a row drawn before the session's backend arrived is remounted when the speaker label changes
     expect(app).toMatch(/if \(agent !== mountedAgent\) \{\s*for \(const el of mounted\.values\(\)\) el\.remove\(\);\s*mounted\.clear\(\);/);
-    expect(app).toMatch(/h\(doc, 'span', \{ class: 'live-clock', 'aria-live': 'off' \}, liveText\(it, Date\.now\(\)\)\)/);
+    expect(app).toMatch(/h\(doc, 'span', \{ class: 'work-label' \}, w\.label\), h\(doc, 'span', \{ class: 'live-clock' \}, w\.clock\)/);
   });
 });

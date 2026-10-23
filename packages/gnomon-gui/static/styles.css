@@ -879,6 +879,32 @@ html, body {
 @keyframes turn-spin { to { transform: rotate(360deg); } }
 [data-motion="reduced"] .trow.role-working .spin { animation: none; }
 @media (prefers-reduced-motion: reduce) { .trow.role-working .spin { animation: none; } }
+/* #gui-turn-steps (founder 2026-10-23): the working row is a KEY naming what the turn does now (a tool and its target,
+   a hook, thinking, finishing) with its clock; it unfolds this turn's steps under it like the activity fold. The list
+   scrolls inside itself (max 40vh, never sideways); a finished step folds to its whole lines (the raw fold). */
+.trow.role-working { flex-direction: column; align-items: stretch; gap: 2px; }
+/* Mika: the words ellipsize, the clock never does (it is the one thing that says the turn is alive); 24px tall
+   at least (WCAG 2.5.8: the key and the step rows are stacked targets) */
+.trow.role-working .work-key { display: flex; align-items: center; gap: 0; min-height: 24px; cursor: pointer; white-space: nowrap; min-width: 0; max-width: calc(80ch + 22px); }
+.trow.role-working .work-key .spin { margin-right: 8px; }
+.trow.role-working .caret { flex: none; white-space: pre; }
+.trow.role-working .caret.blank { visibility: hidden; }
+.trow.role-working .work-label, .trow.role-working .step-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow.role-working .work-key .live-clock, .trow.role-working .step-tail { flex: none; white-space: pre; font-variant-numeric: tabular-nums; }
+.trow.role-working .work-key .caret, .trow.role-working .step .caret { color: var(--sec); }
+.trow.role-working .work-key:focus-visible, .trow.role-working .step.fold:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.trow.role-working .steps { list-style: none; margin: 2px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--rule); max-height: 40vh; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; max-width: calc(80ch + 22px); }
+.trow.role-working .step { display: flex; align-items: center; min-height: 24px; font-size: var(--fs-label); color: var(--sec); white-space: nowrap; }
+.trow.role-working .step.fold { cursor: pointer; }
+.trow.role-working .step.live { color: var(--ink2); }
+.trow.role-working .step.warn { color: var(--warn-ink); }
+.trow.role-working .step-detail { display: block; }
+.trow.role-working .step-detail .raw-line { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; }
+/* hook-result: the turn's one quiet summary under its reply; warn only when a hook blocked, failed or timed out */
+.trow.role-hook { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; }
+.trow.role-hook.warn { color: var(--warn-ink); border-left: 2px solid var(--warn-edge); }
+/* Aegis M1: Claude's own synthetic note ("Claude · …"), never styled as a kernel note (role-system) */
+.trow.role-claude-note { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; border-left: 2px solid var(--rule); }
 .trow .who .took { color: var(--sec); }
 .trow .body.md { white-space: normal; }
 .md-p { margin: 0 0 6px; white-space: pre-wrap; }
