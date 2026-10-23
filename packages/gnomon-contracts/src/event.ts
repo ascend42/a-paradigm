@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939', '8.0:rules-view'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -75,6 +75,8 @@ const D98 = '8.0:P8-D98' as const;
 const PREFIX_RULES = '8.0:TD-2026-10-20-294' as const;
 /** TD-2026-10-23-939 follow-up (Aegis 2026-10-23): scoped edit always rules (file / repo-edits), a deliberate clientApiId move. */
 const EDIT_RULES = '8.0:TD-2026-10-23-939' as const;
+/** The Rules view (session 2026-10-23-gnomon-rules-view; Aegis M2/L1/L2): turn an always rule off (for a time) and back on, one clientApiId move. */
+const RULES_VIEW = '8.0:rules-view' as const;
 /** TD-2026-10-20-086 F6 (the daily standing grant) + T-2026-10-20-007 (approval.auto.miss, anchoredInputHash): one clientApiId move. */
 const STANDING = '8.0:TD-2026-10-20-086' as const;
 /** The mid-session Claude model switch (founder ask 2026-10-20; probe p-set-model): one clientApiId move. */
@@ -134,6 +136,13 @@ const TABLE: Row[] = [
   // revoked a standing `always` rule (rules.revoke). approval.effect.failed{cardId, decision, effect, reason} — a
   // decided card whose effect could not be applied (never a silent success).
   ['approval', 'kernel', 'rule.revoked effect.failed', D98],
+  // 8.0:rules-view (Aegis M2/L2): approval.rule.disabled{ruleId, repoKey, tool, until, batch, connId} — the human turned a
+  // standing always rule off (until an ISO time on the kernel clock, ≤ RULE_OFF_MAX_MS ahead, or null = until turned
+  // back on); a narrowing, written at once. approval.rule.enabled{ruleId, repoKey, tool, cause, batch?, connId?, cardId?,
+  // until?} — cause 'human': the batch's ONE strictness card (detail.op 'rules.apply') was allowed with fresh presence;
+  // cause 'expired': the kernel's sweep saw the off time pass (the feed shows it). Enabled only clears a disabled flag
+  // on a STANDING rule: it never creates a rule and never undoes a revoke.
+  ['approval', 'kernel', 'rule.disabled rule.enabled', RULES_VIEW],
   // TD-2026-10-20-086 F6: grant.standing{grantId, cardId, tuples, repos, device, expiresAt, by} — minted by ONE root-class
   // `grant` card; grant.standing.used{grantId, cardId, tuple, decision, repo, hsid} — the notify row of each use
   // (beside approval.decide{presence:'standing:<grantId>'}); grant.standing.revoked{grantId, by, reason} — a tighten,
@@ -475,6 +484,9 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   // renewedByDrain + expiresAt: the founder ruling on carry-over (§2.4 rule 11) — a permit live at the drain gets a fresh window.
   'permit.reattributed': Object.freeze(['permitId', 'hsid', 'drainedEventId', 'renewedByDrain', 'expiresAt']),
   'approval.rule.revoked': Object.freeze(['ruleId', 'repoKey', 'tool', 'connId']),
+  // 8.0:rules-view: the off / back-on rows of a standing always rule (validateKindPayload)
+  'approval.rule.disabled': Object.freeze(['ruleId', 'repoKey', 'tool', 'until', 'batch', 'connId']),
+  'approval.rule.enabled': Object.freeze(['ruleId', 'repoKey', 'tool', 'cause', 'batch', 'connId', 'cardId', 'until']),
   'approval.effect.failed': Object.freeze(['cardId', 'decision', 'effect', 'reason']),
   // model switch (8.0:model-switch): the human's ask and its closing row (validateKindPayload)
   'request.session.model': Object.freeze(['hsid', 'model']),
@@ -506,6 +518,8 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'request.mod.install': Object.freeze(['url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['checkpointRef']),
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
+  // 8.0:rules-view: cause 'human' carries batch, connId and cardId; cause 'expired' carries until (validateKindPayload)
+  'approval.rule.enabled': Object.freeze(['batch', 'connId', 'cardId', 'until']),
 });
 
 /**
@@ -691,6 +705,45 @@ export interface ApprovalRuleRevokedPayload {
   /** The verified human device connection that revoked it. */
   connId: string;
 }
+/** 8.0:rules-view: the most changes one request.rules.apply batch may carry (one per rule). */
+export const RULES_APPLY_MAX = 64;
+/** 8.0:rules-view (Aegis L2): an "off for a time" ends at most this far ahead of the kernel clock. */
+export const RULE_OFF_MAX_MS = 7 * 24 * 60 * 60_000;
+/** 8.0:rules-view: what a request.rules.apply change does (CLOSED). remove and off narrow (at once); on loosens (one card). */
+export const RULE_CHANGE_OPS = ['remove', 'off', 'on'] as const;
+export type RuleChangeOp = (typeof RULE_CHANGE_OPS)[number];
+/** 8.0:rules-view: approval.rule.enabled{cause} (CLOSED). */
+export const RULE_ENABLE_CAUSES = ['human', 'expired'] as const;
+export type RuleEnableCause = (typeof RULE_ENABLE_CAUSES)[number];
+/** 8.0:rules-view: the id of one request.rules.apply batch (every row it writes names it). */
+export const RULES_BATCH_PATTERN = /^batch:[0-9A-HJKMNP-TV-Z]{26}$/;
+/** 8.0:rules-view: request.rules.apply{changes}: `until` (off only) is an ISO time or 'manual' (until turned back on). */
+export interface RulesApplyChange {
+  ruleId: string;
+  op: RuleChangeOp;
+  until?: string;
+}
+export interface ApprovalRuleDisabledPayload {
+  ruleId: string;
+  repoKey: string;
+  tool: string;
+  /** ISO date-time on the kernel clock, or null: off until the human turns it back on */
+  until: string | null;
+  batch: string;
+  connId: string;
+}
+export interface ApprovalRuleEnabledPayload {
+  ruleId: string;
+  repoKey: string;
+  tool: string;
+  cause: RuleEnableCause;
+  /** cause 'human' */
+  batch?: string;
+  connId?: string;
+  cardId?: string;
+  /** cause 'expired': the disabled row's until (the flag it clears) */
+  until?: string;
+}
 export interface ApprovalEffectFailedPayload {
   cardId: string;
   decision: string;
@@ -728,6 +781,31 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key of #always-rules)');
       if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a tool name');
       if ('connId' in v) c.str('connId', v.connId, ID_PATTERNS.conn, 'conn:<ULID>');
+      break;
+    case 'approval.rule.disabled':
+      if ('ruleId' in v) c.str('ruleId', v.ruleId, RULE_ID_PATTERN, 'card:<ULID> (the learning card)');
+      if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key of #always-rules)');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a tool name');
+      if ('until' in v && v.until !== null) c.str('until', v.until, ISO_DATE_TIME, 'an ISO date-time or null (until turned back on)');
+      if ('batch' in v) c.str('batch', v.batch, RULES_BATCH_PATTERN, 'batch:<ULID>');
+      if ('connId' in v) c.str('connId', v.connId, ID_PATTERNS.conn, 'conn:<ULID>');
+      break;
+    case 'approval.rule.enabled':
+      if ('ruleId' in v) c.str('ruleId', v.ruleId, RULE_ID_PATTERN, 'card:<ULID> (the learning card)');
+      if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key of #always-rules)');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a tool name');
+      if ('cause' in v) c.closedEnum('cause', v.cause, RULE_ENABLE_CAUSES);
+      if ('batch' in v) c.str('batch', v.batch, RULES_BATCH_PATTERN, 'batch:<ULID>');
+      if ('connId' in v) c.str('connId', v.connId, ID_PATTERNS.conn, 'conn:<ULID>');
+      if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID> (the rules.apply card)');
+      if ('until' in v) c.str('until', v.until, ISO_DATE_TIME, 'an ISO date-time');
+      if (v.cause === 'human') {
+        for (const k of ['batch', 'connId', 'cardId']) if (!(k in v)) c.fail(k, "is required when cause is 'human' (the allowed card)");
+        if ('until' in v) c.fail('until', "is only for cause 'expired'");
+      } else if (v.cause === 'expired') {
+        if (!('until' in v)) c.fail('until', "is required when cause is 'expired' (the off time that passed)");
+        for (const k of ['batch', 'connId', 'cardId']) if (k in v) c.fail(k, "is only for cause 'human'");
+      }
       break;
     case 'request.session.model':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');

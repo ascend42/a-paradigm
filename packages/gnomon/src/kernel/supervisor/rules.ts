@@ -66,6 +66,14 @@
  * not-flagged check auto-edits uses): a file rule when that path is the rule's path, a repo-edits rule for any edit
  * in the rule's repo. Never in manual mode (`ctx.prefixRules` false), never without the pass. Bash file writes never
  * match them (a Bash card stays a card).
+ *
+ * OFF AND BACK ON (8.0:rules-view, Aegis M2/L2; socket/rules-apply.ts writes the rows): a kernel-signed
+ * `approval.rule.disabled{ruleId, until}` marks a STANDING rule off, until `until` passes on the KERNEL clock (the
+ * book's `clock`, never a page's), or until turned back on when `until` is null. An off rule never matches, is never
+ * the repo's repoEditsRule (the mode chip) and lists as off. `approval.rule.enabled{cause:'human'}` (the batch card's
+ * allowed effect) clears the flag; `{cause:'expired', until}` (the kernel sweep's feed row) clears it only while it is
+ * still the flag that `until` names. Enabled ONLY clears a flag on a rule that stands: it never creates a rule, and a
+ * revoke (or the repo brake) drops the flag with the rule, so nothing brings a revoked rule back.
  */
 import path from 'node:path';
 import type { KernelLog } from '../log/index.js';
@@ -124,7 +132,9 @@ export const MAX_RULES = 1024;
 export const MAX_TRACKED_REQUESTS = 4096;
 // approval.mode.set (Aegis H1, TD-2026-10-23-939 follow-up): a REPO tightened (the emergency brake) stops its repo-edits rules
 // grant.standing / grant.standing.revoked (TD-2026-10-23-815): a standing-covered always is verified against the grant's own rows
-export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned', 'approval.rule.revoked', 'approval.mode.set', 'grant.standing', 'grant.standing.revoked'] as const);
+// approval.rule.disabled / approval.rule.enabled (8.0:rules-view): off for a time, and back on
+export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned', 'approval.rule.revoked', 'approval.mode.set', 'grant.standing', 'grant.standing.revoked', 'approval.rule.disabled', 'approval.rule.enabled'] as const);
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 const STANDING_PREFIX = 'standing:';
 const GRANT_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
 const RULE_MODE_RANK: Readonly<Record<string, number>> = Object.freeze({ manual: 0, ask: 1, 'auto-edits': 2 });
@@ -137,6 +147,8 @@ export interface RuleRow {
   principal: string;
   keyId?: unknown;
   payload?: unknown;
+  /** the row's session (an approval.request names the session that asked; the Rules view shows it) */
+  session?: string;
 }
 
 export interface AlwaysRule {
@@ -156,7 +168,45 @@ export interface AlwaysRule {
   /** seq of the approval.rule.learned row (when the reader knows it) */
   seq: number | null;
   presence: string;
+  /** the learned row's kernel time (the Rules view's "since"), when the reader knows it */
+  learnedAt?: string;
+  /** the session whose card learned it, when the request row named one */
+  hsid?: string;
+  /** exact Bash rules: the command text (at most RULE_COMMAND_TEXT_MAX characters kept) and its full length */
+  command?: string;
+  commandChars?: number;
 }
+
+/** The most command text a rule keeps for its plain words (a longer command is described by its length, never cut silently). */
+export const RULE_COMMAND_TEXT_MAX = 4096;
+
+function commandTextOf(tool: unknown, input: unknown): { command?: string; commandChars?: number } {
+  const o = obj(input);
+  if (tool !== 'Bash' || !o || typeof o.command !== 'string') return {};
+  return { command: o.command.slice(0, RULE_COMMAND_TEXT_MAX), commandChars: o.command.length };
+}
+
+/**
+ * 8.0:rules-view (Aegis L1): what a rule allows, in plain words the KERNEL composes from its own RuleBook (never page
+ * text). The Rules view lists them and the batch card's lines name each re-enabled rule with them.
+ */
+export function ruleWords(r: AlwaysRule): string {
+  if (r.match === 'prefix') return `Bash commands starting ${(r.prefix ?? []).join(' ')} …`;
+  if (r.match === 'file') return `edits to ${r.path ?? '?'}`;
+  if (r.match === 'repo-edits') return 'edits in this repo (same as auto-edits)';
+  if (r.tool === 'Bash') {
+    if (r.command === undefined) return 'this exact Bash command';
+    const n = r.commandChars ?? r.command.length;
+    return n > r.command.length ? `this exact command (${n} characters), starting: ${r.command}` : `this exact command: ${r.command}`;
+  }
+  return EDIT_RULE_TOOLS.includes(r.tool) ? `this exact edit (${r.tool})` : `this exact ${r.tool} call`;
+}
+
+/** 8.0:rules-view: a rule's state on the kernel clock. `until` null = off until turned back on. */
+export type RuleState = { state: 'on' } | { state: 'off'; until: string | null; since: string | null };
+
+/** A clock in epoch ms (the kernel's: Date.now or the daemon's seam). */
+export type KernelClock = () => number;
 
 export interface KernelTrust {
   principal: string;
@@ -173,7 +223,7 @@ function bump<V>(m: Map<string, V>, k: string, v: V, cap: number): void {
 
 export class RuleBook {
   readonly #trust: KernelTrust;
-  readonly #requests = new Map<string, { tool: string; inputHash: string; commandHash: string | null; argv: string[] | null }>();
+  readonly #requests = new Map<string, { tool: string; inputHash: string; commandHash: string | null; argv: string[] | null; hsid?: string; command?: string; commandChars?: number }>();
   /** cardId → the decide row's scope key ('exact' or the canonical prefix JSON) */
   readonly #always = new Map<string, string>();
   readonly #rules = new Map<string, AlwaysRule>();
@@ -181,11 +231,15 @@ export class RuleBook {
   readonly #grants = new Map<string, { always: boolean; repos: string[]; device: string; expiresAt: number; revoked: boolean }>();
   /** cardId → the standing grant that covered its always decide row, verified valid AT that row (else absent) */
   readonly #standingDecides = new Map<string, { grantId: string; repos: string[] }>();
+  /** 8.0:rules-view: ruleId → its off flag (until: epoch ms, or null = until turned back on) */
+  readonly #off = new Map<string, { until: number | null; untilIso: string | null; since: string | null }>();
+  readonly #clock: KernelClock;
   /** the last seq folded (incremental readers resume after it) */
   lastSeq = 0;
 
-  constructor(trust: KernelTrust) {
+  constructor(trust: KernelTrust, opts: { clock?: KernelClock } = {}) {
     this.#trust = trust;
+    this.#clock = opts.clock ?? Date.now;
   }
 
   /** Fold one chain row. Rows not signed by the kernel are ignored. */
@@ -197,7 +251,7 @@ export class RuleBook {
     if (r.kind === 'approval.request') {
       const card = obj(p.card);
       if (!card || card.kind !== 'permission' || typeof card.cardId !== 'string' || typeof p.tool !== 'string' || !('tool_input' in p)) return;
-      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null }, MAX_TRACKED_REQUESTS);
+      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null, ...(typeof r.session === 'string' ? { hsid: r.session } : {}), ...commandTextOf(p.tool, p.tool_input) }, MAX_TRACKED_REQUESTS);
     } else if (r.kind === 'grant.standing') {
       // TD-2026-10-23-815: the grant as minted (kernel-signed; a malformed row covers nothing)
       const exp = typeof p.expiresAt === 'string' ? Date.parse(p.expiresAt) : NaN;
@@ -248,10 +302,10 @@ export class RuleBook {
       const req = this.#requests.get(cardId);
       const decided = this.#always.get(cardId);
       if (!req || req.tool !== p.tool || decided === undefined) return;
-      const base = { ruleId: cardId, repoKey: p.repoKey, tool: p.tool, inputHash: req.inputHash, seq: typeof r.seq === 'number' ? r.seq : null, presence: String(p.presence ?? 'fresh') };
+      const base = { ruleId: cardId, repoKey: p.repoKey, tool: p.tool, inputHash: req.inputHash, seq: typeof r.seq === 'number' ? r.seq : null, presence: String(p.presence ?? 'fresh'), ...(typeof r.at === 'string' ? { learnedAt: r.at } : {}), ...(req.hsid ? { hsid: req.hsid } : {}) };
       if (exact) {
         if (decided !== 'exact') return; // a scoped decision never learns a different rule
-        bump(this.#rules, cardId, { ...base, match: 'exact', ...(p.tool === 'Bash' ? { commandHash: req.commandHash } : {}) }, MAX_RULES);
+        bump(this.#rules, cardId, { ...base, match: 'exact', ...(p.tool === 'Bash' ? { commandHash: req.commandHash, ...(req.command !== undefined ? { command: req.command, commandChars: req.commandChars ?? req.command.length } : {}) } : {}) }, MAX_RULES);
         return;
       }
       if (isEdit) {
@@ -280,12 +334,59 @@ export class RuleBook {
         if (rule.match !== 'repo-edits' || rule.repoKey !== sc.repo) continue;
         this.#rules.delete(id);
         this.#always.delete(id);
+        this.#off.delete(id);
       }
     } else if (r.kind === 'approval.rule.revoked') {
       if (typeof p.ruleId !== 'string') return;
       this.#rules.delete(p.ruleId);
       this.#always.delete(p.ruleId);
+      this.#off.delete(p.ruleId);
+    } else if (r.kind === 'approval.rule.disabled') {
+      // 8.0:rules-view: off, on a rule that STANDS (an off row for an unknown or revoked rule marks nothing)
+      if (typeof p.ruleId !== 'string' || !this.#rules.has(p.ruleId)) return;
+      let until: number | null = null;
+      if (p.until !== null) {
+        if (typeof p.until !== 'string' || !ISO_TIME.test(p.until)) return;
+        until = Date.parse(p.until);
+        if (!Number.isFinite(until)) return;
+      }
+      this.#off.set(p.ruleId, { until, untilIso: until === null ? null : (p.until as string), since: typeof r.at === 'string' ? r.at : null });
+    } else if (r.kind === 'approval.rule.enabled') {
+      // Aegis M2: enabled only clears a flag on a standing rule; it never creates one and never undoes a revoke
+      if (typeof p.ruleId !== 'string' || !this.#rules.has(p.ruleId)) return;
+      const cur = this.#off.get(p.ruleId);
+      if (!cur) return;
+      if (p.cause === 'human') this.#off.delete(p.ruleId);
+      // the sweep's row clears only the flag it names (an old expiry never undoes a later off with a new time)
+      else if (p.cause === 'expired' && typeof p.until === 'string' && cur.untilIso === p.until) this.#off.delete(p.ruleId);
     }
+  }
+
+  /** 8.0:rules-view: the rule's state at `now` (the kernel clock): an off whose time has passed reads on. */
+  stateOf(ruleId: string, now: number = this.#clock()): RuleState {
+    const f = this.#off.get(ruleId);
+    if (!f || !this.#rules.has(ruleId) || (f.until !== null && f.until <= now)) return { state: 'on' };
+    return { state: 'off', until: f.untilIso, since: f.since };
+  }
+
+  /** The rule stands and no live off flag covers it at `now`. */
+  isOn(ruleId: string, now: number = this.#clock()): boolean {
+    return this.#rules.has(ruleId) && this.stateOf(ruleId, now).state === 'on';
+  }
+
+  /** The kernel clock this book reads (status shows it; the apply handler validates `until` against it). */
+  now(): number {
+    return this.#clock();
+  }
+
+  /** The off flags whose time has passed (the sweep writes approval.rule.enabled{cause:'expired'} for each). */
+  dueExpiries(now: number = this.#clock()): Array<{ rule: AlwaysRule; until: string }> {
+    const out: Array<{ rule: AlwaysRule; until: string }> = [];
+    for (const [id, f] of this.#off) {
+      const rule = this.#rules.get(id);
+      if (rule && f.until !== null && f.untilIso !== null && f.until <= now) out.push({ rule, until: f.untilIso });
+    }
+    return out;
   }
 
   /** The standing rule with this id, or null (revoked or never learned). */
@@ -299,26 +400,29 @@ export class RuleBook {
    * rules (not manual mode) and #prefix-policy passes the argv against the session roots.
    */
   match(repoKey: string, tool: string, hash: string, toolInput?: unknown, ctx?: PrefixMatchContext): AlwaysRule | null {
-    for (const r of this.#rules.values()) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.inputHash === hash) return r;
+    // 8.0:rules-view: an off rule never matches (one clock reading for the whole match)
+    const now = this.#clock();
+    const live = [...this.#rules.values()].filter((r) => this.isOn(r.ruleId, now));
+    for (const r of live) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.inputHash === hash) return r;
     // RC5: an exact Bash rule also matches the same command text with another description/timeout (both hashes fold)
     if (tool === 'Bash' && toolInput !== undefined) {
       const ch = bashCommandHash(toolInput);
-      if (ch !== null) for (const r of this.#rules.values()) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.commandHash === ch) return r;
+      if (ch !== null) for (const r of live) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.commandHash === ch) return r;
     }
     // scoped edits: only through the supervisor's auto-edits pass for this request, never in manual mode
     if (EDIT_RULE_TOOLS.includes(tool)) {
       if (!ctx || !ctx.prefixRules || typeof ctx.editPath !== 'string' || !ctx.roots.length) return null;
       // Aegis L4: a file rule covers ANY edit tool on that path ("edits to this file, any content"), by design
-      for (const r of this.#rules.values()) if (r.repoKey === repoKey && r.match === 'file' && r.path === ctx.editPath) return r;
+      for (const r of live) if (r.repoKey === repoKey && r.match === 'file' && r.path === ctx.editPath) return r;
       // Aegis H1: a repo-edits rule is auto-edits by another name: only where the ceiling allows auto-edits
       if (ctx.repoEdits !== true) return null;
-      for (const r of this.#rules.values()) if (r.repoKey === repoKey && r.match === 'repo-edits') return r;
+      for (const r of live) if (r.repoKey === repoKey && r.match === 'repo-edits') return r;
       return null;
     }
     // Aegis M2/M3: prefix rules need the session context (roots) and never apply in manual mode
     if (tool !== 'Bash' || toolInput === undefined || !ctx || !ctx.prefixRules || !ctx.roots.length) return null;
     let argv: string[] | null = null;
-    for (const r of this.#rules.values()) {
+    for (const r of live) {
       if (r.match !== 'prefix' || r.repoKey !== repoKey || r.tool !== tool || !r.prefix) continue;
       argv ??= bashArgvOfInput(toolInput);
       if (!argv) return null;
@@ -329,8 +433,10 @@ export class RuleBook {
 
   /** The repo's standing "edits in this repo" rule (the newest), or null: the mode chip says "ask · edits allowed by rule". */
   repoEditsRule(repoKey: string): AlwaysRule | null {
+    // 8.0:rules-view (Aegis L2): an off rule is not "edits allowed by rule"
+    const now = this.#clock();
     let last: AlwaysRule | null = null;
-    for (const r of this.#rules.values()) if (r.match === 'repo-edits' && r.repoKey === repoKey) last = r;
+    for (const r of this.#rules.values()) if (r.match === 'repo-edits' && r.repoKey === repoKey && this.isOn(r.ruleId, now)) last = r;
     return last;
   }
 
@@ -364,7 +470,7 @@ export function ruleSourceOf(log: Pick<KernelLog, 'releasedHead' | 'read'>): Rul
     head: () => log.releasedHead(),
     read: function* (fromSeq, toSeq) {
       for (const v of log.read({ reader: { class: 'human' }, fromSeq, toSeq, kinds: RULE_KINDS })) {
-        if (v.view === 'full') yield { seq: v.event.seq, at: v.event.at, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
+        if (v.view === 'full') yield { seq: v.event.seq, at: v.event.at, kind: v.event.kind, principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload, ...(typeof v.event.session === 'string' ? { session: v.event.session } : {}) };
       }
     },
   };

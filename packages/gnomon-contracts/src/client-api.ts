@@ -52,7 +52,7 @@ import {
 import { APPROVE_SCOPE_KINDS, APPROVE_SCOPE_PREFIX_MAX_WORDS, APPROVE_SIG_DOMAIN, DECISION_SIG_V2_DECISIONS, DECISION_SIG_V2_MARKER, DECISION_SIG_V2_SCOPED_DECISIONS, decisionMessageV2, scopeDigest } from './card.js';
 import { JSON_RPC_CODES, MODEL_SWITCH_REASON_ROUTES } from './refusal.js';
 import { CONTEXT_SOURCES, OFFER_BLOCK_KEYS, OFFER_BLOCK_MAX, OFFER_DECISIONS, OFFER_LIMITS, OFFER_PHASES, OFFER_QUESTION_MAX, OFFER_REACHES, OFFER_SUPPRESS_REASONS, OFFER_SUPPRESS_UNNAMED, OFFER_TEXT_MAX, OFFERS_PER_MOD_MAX } from './offer.js';
-import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES, TURN_RESULT_PAIRING, OFFER_RETIRE_REASONS, SESSION_ANOMALY_REASONS, SESSION_NAME_MAX, SESSION_NAME_INPUT_MAX } from './event.js';
+import { CHECKPOINT_REF_PATTERN, KIND_PAYLOAD_OPTIONAL, MOD_INSTALL_LIMITS, MOD_INSTALL_SOURCES, MOD_INSTALL_URL_PATTERN, OFFER_MUTE_SCOPES, MODEL_SWITCH_CONTEXT_GUARD, SESSION_MODEL_OUTCOMES, STANDING_GRANT_MAX_MS, STANDING_PRESENCE_PREFIX, STANDING_REPO_TUPLES, STANDING_REVOKE_REASONS, STANDING_TUPLES, TURN_RESULT_PAIRING, OFFER_RETIRE_REASONS, SESSION_ANOMALY_REASONS, SESSION_NAME_MAX, SESSION_NAME_INPUT_MAX, RULES_APPLY_MAX, RULE_OFF_MAX_MS, RULE_CHANGE_OPS, RULE_ENABLE_CAUSES, RULES_BATCH_PATTERN } from './event.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 import { LOOP_AUTONOMY, LOOP_CLOSURE_BY, LOOP_LAND_WAIT_REASONS, LOOP_PAUSE_REASONS, LOOP_REQUEST_OPS, LOOP_RUN_END_REASONS, LOOP_SCOPES, LOOP_SESSION_ORIGIN, LOOP_VERDICTS } from './event.js';
 import { LOOP_CHOICE_ONLY_DECISIONS } from './card.js';
@@ -173,6 +173,11 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   sessionAnomaly: { reasons: [...SESSION_ANOMALY_REASONS] },
   // 8.0:session-rename: request.session.rename{hsid, name} → session.renamed{hsid, name}; the name's limits ('' resets)
   sessionRename: { nameMax: SESSION_NAME_MAX, inputMax: SESSION_NAME_INPUT_MAX, reset: '' },
+  // 8.0:rules-view (Aegis M2/L1/L2): request.rules.apply{changes:[{ruleId, op, until?}]} (dispatcher-only, the human on a
+  // gui or device connection): remove/off narrow at once; every `on` of a batch rides ONE strictness card (detail.op
+  // cardOp, fresh presence, never standing, never voice); `until` is an ISO time ≤ offMaxMs ahead of the kernel clock or
+  // 'manual'. approval.rule.disabled / approval.rule.enabled ride the event schema.
+  rulesView: { request: 'request.rules.apply', max: RULES_APPLY_MAX, ops: [...RULE_CHANGE_OPS], offMaxMs: RULE_OFF_MAX_MS, untilManual: 'manual', enableCauses: [...RULE_ENABLE_CAUSES], batchPattern: RULES_BATCH_PATTERN.source, cardOp: 'rules.apply' },
   // 8.0:TD-2026-10-20-812 (the Desk + the context meter, one batched move): the offer block grammar and limits, the
   // closed offer phases/decisions/reach, the mute scope, the install sources and their url/path rule, the restart's
   // checkpoint id and which KIND_PAYLOADS keys may be absent. The kinds and their payload keys ride the event schema;

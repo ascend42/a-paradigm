@@ -12,6 +12,29 @@ description: >-
   still run it alone). Ships to users as the signed Gnomon.app (§18.1).
 
 components:
+  rules-apply:
+    description: >-
+      8.0:rules-view (session 2026-10-23-gnomon-rules-view; Aegis M2/L1/L2).
+      socket/rules-apply.ts: request.rules.apply{changes:[{ruleId, op,
+      until?}]} from the human on a gui or device connection (dispatcher-only,
+      no row of its own). Validates every change against the RuleBook before
+      any write (1..64, one per rule, rule stands, off takes an ISO until in the
+      future and <= 7 days ahead of the kernel clock or 'manual', an off of an
+      off rule only lengthens, on needs an off rule, the card measured against
+      MAX_CARD_CHARS and refused rather than cut). remove/off write
+      approval.rule.revoked / approval.rule.disabled at once under the rules
+      lock (shared with #rules-revoke and the expiry sweep); every `on` rides
+      ONE strictness card (detail.op rules.apply, detail.changes in
+      contentHash, lines = the kernel's ruleWords, handOnly, never standing)
+      whose fresh-presence allow re-validates each rule and writes
+      approval.rule.enabled{cause:'human'}. expireDue() writes
+      approval.rule.enabled{cause:'expired', until} for each passed off time
+      (the GUI feed shows it). status.rules (human class): every rule, its
+      words, state, until, and the kernel-clock presets. #always-rules folds
+      the rows: an off rule never matches, is not repoEditsRule (the mode
+      chip) and `gnomon rules list` says off. Tests: test/rules-view.test.ts,
+      test/socket-abi.test.ts (8.0:rules-view request.rules.apply).
+    signals: ["!approval.rule.disabled", "!approval.rule.enabled"]
   gnomon-kernel:
     description: >-
       The kernel package. ZERO runtime deps (G-SEC-01): package.json has no

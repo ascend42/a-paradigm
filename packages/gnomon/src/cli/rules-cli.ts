@@ -19,6 +19,10 @@
  * the kernel-signed `approval.rule.revoked`; no presence prompt (revoking only
  * narrows). The kernel's refusals (NOT_FOUND, BAD_REQUEST, FORBIDDEN) are
  * printed as they come.
+ *
+ * 8.0:rules-view (Aegis L2): LIST honours an off rule: each rule says `state` on (or off, off until <time>) on this
+ * machine's clock, folded by the same RuleBook the daemon uses (approval.rule.disabled / approval.rule.enabled).
+ * Turning a rule off or back on is the GUI's Rules view (Settings › Permissions › Rules).
  */
 import * as path from 'node:path';
 import { RefusedError, refusalOf } from '@a-company/gnomon-contracts';
@@ -28,7 +32,7 @@ import { connectGnomon, ServerAuthError, type DeviceCredential } from '../kernel
 import { kernelPinOf } from './daemon-cli.js';
 import { homeTrust } from './mod-cli.js';
 import { KeyRing, verifyLog } from '../kernel/log/index.js';
-import { RuleBook, RULE_KINDS, type AlwaysRule } from '../kernel/supervisor/rules.js';
+import { RuleBook, RULE_KINDS, ruleWords, type AlwaysRule, type RuleState } from '../kernel/supervisor/rules.js';
 import { GNOMON_VERSION } from '../version.js';
 import { heading, readout, refused, type Out } from './readout.js';
 
@@ -48,7 +52,7 @@ export const RULES_USAGE = `usage: gnomon rules list [<home>] [--json]
 `;
 
 /** The rules a verified log yields (rows parsed from the verified envelopes; kernel-signed only). */
-export function rulesOfHome(home: string): { ok: true; rules: AlwaysRule[]; rows: number } | { ok: false; why: string } {
+export function rulesOfHome(home: string, now: number = Date.now()): { ok: true; rules: Array<AlwaysRule & { state: RuleState }>; rows: number } | { ok: false; why: string } {
   const pubs = readKernelPubs(home);
   const ring = new KeyRing();
   for (const k of pubs) ring.addEd25519(k.publicKeyPem);
@@ -56,21 +60,21 @@ export function rulesOfHome(home: string): { ok: true; rules: AlwaysRule[]; rows
   // unprovisioned home has none and keeps the unprovisioned namespace
   const kernelPrincipal = kernelPrincipalOf(homeTrust(home));
   const ids = new Set(pubs.map((k) => k.keyId));
-  const book = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k) => ids.has(k) });
+  const book = new RuleBook({ principal: kernelPrincipal, isKernelKey: (k) => ids.has(k) }, { clock: () => now });
   const want = new Set<string>(RULE_KINDS);
   const seen: Array<{ seq: number; envelope: string; kind: string }> = [];
   const report = verifyLog(home, { keyRing: ring, kernelPrincipal, kernelKeyIds: [...ids], onRow: (r) => void (want.has(r.kind) && seen.push(r)) });
   if (!report.ok) return { ok: false, why: `${report.failures.length} verify failure(s); first: ${report.failures[0]?.code ?? '?'}` };
   for (const r of seen) {
-    let e: { principal?: unknown; keyId?: unknown; payload?: unknown; at?: unknown };
+    let e: { principal?: unknown; keyId?: unknown; payload?: unknown; at?: unknown; session?: unknown };
     try {
       e = JSON.parse(r.envelope) as typeof e;
     } catch {
       continue;
     }
-    book.fold({ seq: r.seq, ...(typeof e.at === 'string' ? { at: e.at } : {}), kind: r.kind, principal: typeof e.principal === 'string' ? e.principal : '', keyId: e.keyId, payload: e.payload });
+    book.fold({ seq: r.seq, ...(typeof e.at === 'string' ? { at: e.at } : {}), ...(typeof e.session === 'string' ? { session: e.session } : {}), kind: r.kind, principal: typeof e.principal === 'string' ? e.principal : '', keyId: e.keyId, payload: e.payload });
   }
-  return { ok: true, rules: book.list(), rows: report.rows };
+  return { ok: true, rules: book.list().map((x) => ({ ...x, state: book.stateOf(x.ruleId, now) })), rows: report.rows };
 }
 
 export async function runRulesCommand(argv: readonly string[], io: { stdout: Out; stderr: Out }): Promise<number> {
@@ -115,9 +119,16 @@ export async function runRulesCommand(argv: readonly string[], io: { stdout: Out
     io.stdout.write(`${JSON.stringify({ rules: r.rules })}\n`);
     return RULES_EXIT_OK;
   }
-  heading(io.stdout, 'rules', `${r.rules.length} standing always-allow rule(s) · ${r.rows} rows verified`);
-  for (const x of r.rules) readout(io.stdout, [['id', x.ruleId], ['tool', x.tool], ['repoKey', x.repoKey], ['match', x.match === 'prefix' ? `prefix: ${(x.prefix ?? []).join(' ')} …` : x.match === 'file' ? `edits to ${x.path ?? '?'}` : x.match === 'repo-edits' ? 'edits in this repo (same as auto-edits)' : 'exact'], ...(x.match === 'exact' ? [['inputHash', x.inputHash] as [string, string]] : []), ['presence', x.presence]]);
+  const off = r.rules.filter((x) => x.state.state === 'off').length;
+  heading(io.stdout, 'rules', `${r.rules.length} standing always-allow rule(s)${off ? ` (${off} off)` : ''} · ${r.rows} rows verified`);
+  for (const x of r.rules) readout(io.stdout, [['id', x.ruleId], ['state', stateWords(x.state)], ['allows', ruleWords(x)], ['tool', x.tool], ['repoKey', x.repoKey], ['match', x.match === 'prefix' ? `prefix: ${(x.prefix ?? []).join(' ')} …` : x.match === 'file' ? `edits to ${x.path ?? '?'}` : x.match === 'repo-edits' ? 'edits in this repo (same as auto-edits)' : 'exact'], ...(x.match === 'exact' ? [['inputHash', x.inputHash] as [string, string]] : []), ['presence', x.presence]]);
   return RULES_EXIT_OK;
+}
+
+/** on · off (until you turn it back on) · off until <ISO time> */
+export function stateWords(st: RuleState): string {
+  if (st.state === 'on') return 'on';
+  return st.until ? `off until ${st.until}` : 'off (until you turn it back on)';
 }
 
 /** This home's human device credential: device.key and its root-signed human registry row (fail closed). */

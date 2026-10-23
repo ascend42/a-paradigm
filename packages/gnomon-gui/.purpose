@@ -22,6 +22,23 @@ description: >-
   red and marks Deny as the default (focused) key.
 
 components:
+  gui-rules-view:
+    description: >-
+      8.0:rules-view (founder: see the list of rules, revert a bad call,
+      toggle one for a time, one save; session 2026-10-23-gnomon-rules-view,
+      Mika C1-C3). core/rules.ts (PURE): rulesStatusOf (status.rules,
+      fail-safe), the staging reducers (stageOff with a kernel-clock preset,
+      stageOn, stageRemove, unstage, discard, reconcile), saveCost / saveLabel
+      ("Save · no Touch ID" when the batch only tightens, "Save · asks Touch ID
+      or your Mac password once" when any rule turns back on), beforeClose and
+      closePromptText ("3 changes not saved · Save · Discard"), applyRequest
+      (ONE request.rules.apply), refusedResult (plain words + next:, every
+      change stays staged), afterSave ("card waiting · Decide in the stack"
+      when the same press could not decide the card), rulesBlock (grouped by
+      repo with counts, newest first, filter above 12 rules, the empty state)
+      and expiryToastOf ("rule back on: <rule>", 6 s). Staged rows are marked
+      by word and weight, never amber; a removed row is struck with a keep
+      key. Test: test/rules-view.test.ts.
   gui-session-rename:
     description: >-
       8.0:session-rename (founder ask: rename a session). core/rename.ts
