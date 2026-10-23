@@ -28,6 +28,15 @@ components:
       64 runs and deterministically at SessionStart. Fail open: no stdout,
       exit code preserved, every write best-effort; PARADIGM_HOOK_MONITOR_OFF=1
       disables it. Ring + marker are in the #session-markers-gitignore block.
+      Per-section timing (8.0): _pm_mark <section> closes the open section and
+      opens the next; _pm_count <name> <int> adds a counter. At exit ONE record
+      per Stop run goes to .paradigm/events/stop-timing.jsonl (total ms,
+      outcome, "inflight" = the section still open when the hook ended, so a
+      killed run names where it was stuck, every section's ms, counters
+      modified/source/purpose_files/anchors/pending_review/generated_only).
+      Capped to PARADIGM_STOP_TIMING_MAX (200) lines on the ring's trim cadence.
+      Cost: one date(1) per mark (~22 per Stop). paradigm-common.sh defines
+      no-op fallbacks, so the Cursor hook (no monitor) is unaffected.
     type: utility
     file: scripts/paradigm-hook-monitor.sh
     tags:
@@ -58,9 +67,15 @@ components:
       (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
       --exclude-standard` (nested agent worktrees and node_modules are skipped)
       and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
-      Check 4 anchors); (3) no network (npx --no-install). Enforced by
+      Check 4 anchors); (3) no network (npx --no-install); (4) generated-state
+      scope (8.0): when every modified file is .paradigm/* or .warpline/* (the
+      hooks, post-commit and MCP tools write these on every turn) no code
+      changed, so purpose discovery (Checks 4/6) and the compliance-check CLI
+      are skipped (~0.35 s instead of ~1.2-1.9 s); remediations, purpose-required
+      patterns and the memory nudge still run. .warpline/* never counts as a
+      source file (it inflated the orchestration magnitude). Enforced by
       tests/hooks-timing.test.ts (each hook under 2 s through a pipe, plus a
-      lint check on background jobs).
+      lint check on background jobs) and tests/hooks-monitor.test.ts.
     type: utility
     file: scripts/paradigm-common.sh
     tags:

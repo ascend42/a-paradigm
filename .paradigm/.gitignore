@@ -16,5 +16,6 @@
 /.graduation-failures/
 /.memory-last-review
 /events/hook-timings.jsonl
+/events/stop-timing.jsonl
 /.hook-health-warned
 # <<< paradigm session markers <<<

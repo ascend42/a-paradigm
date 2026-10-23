@@ -12,7 +12,13 @@
  *  3. Is the plugin that runs the hooks stale? The installed user-scope
  *     version vs the marketplace (and, in the Paradigm repo, the repo) version,
  *     and project-scope pins older than the user install
- *     (~/.claude/plugins/installed_plugins.json).
+ *     (~/.claude/plugins/installed_plugins.json). A session keeps the plugin
+ *     version it started with, so a long-running session can still run old
+ *     hooks after an update: a fresh .paradigm/.purpose-paths (written only by
+ *     the pre-7.15.2 Stop hook) is the evidence.
+ *  4. Where did the slow Stop runs spend their time? The per-section record
+ *     (.paradigm/events/stop-timing.jsonl, #hook-monitor) of the latest slow or
+ *     killed run: its top sections and the one still open when it ended.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -279,11 +285,88 @@ export function pluginCacheChecks(rootDir: string, homeDir: string): HookHealthC
   return out;
 }
 
+/** Section names the Stop hook writes (paradigm-common.sh `_pm_mark`); anything else in the file is dropped (Aegis M-A). */
+const SECTION_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+export interface StopTimingRun {
+  t: number;
+  ms: number;
+  killed: boolean;
+  inflight?: string;
+  sections: Array<[string, number]>;
+}
+
+/** Parse .paradigm/events/stop-timing.jsonl; only allowlisted-shape names and finite numbers survive. */
+export function readStopTiming(file: string): StopTimingRun[] {
+  if (!fs.existsSync(file)) return [];
+  const out: StopTimingRun[] = [];
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const o = JSON.parse(line) as Record<string, unknown>;
+      const t = num(o.t);
+      const ms = num(o.ms);
+      if (o.hook !== 'Stop' || t === undefined || ms === undefined) continue;
+      const raw = o.sections && typeof o.sections === 'object' ? (o.sections as Record<string, unknown>) : {};
+      const sections: Array<[string, number]> = [];
+      for (const [k, v] of Object.entries(raw)) {
+        const n = num(v);
+        if (SECTION_NAME.test(k) && n !== undefined) sections.push([k, n]);
+      }
+      const inflight = typeof o.inflight === 'string' && SECTION_NAME.test(o.inflight) ? o.inflight : undefined;
+      out.push({ t, ms, killed: o.outcome === 'killed', ...(inflight ? { inflight } : {}), sections });
+    } catch {
+      // torn line
+    }
+  }
+  return out;
+}
+
+/** The latest Stop run that was killed or over budget, explained by its slowest sections. */
+export function stopSectionChecks(runs: StopTimingRun[], budgetMs = 10_000): HookHealthCheck[] {
+  if (runs.length === 0) return [];
+  const slow = runs.filter((r) => r.killed || r.ms > budgetMs);
+  if (slow.length === 0) {
+    const last = runs[runs.length - 1];
+    const top = [...last.sections].sort((a, b) => b[1] - a[1])[0];
+    return [{ name: 'Stop sections', status: 'ok', message: `${runs.length} run(s) recorded, none slow; last ${secs(last.ms)}${top ? ` (slowest section ${top[0]} ${secs(top[1])})` : ''}` }];
+  }
+  const r = slow[slow.length - 1];
+  const top = [...r.sections].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${secs(v)}`).join(', ');
+  return [{
+    name: 'Stop sections', status: 'warn',
+    message: `${slow.length} slow run(s); latest ${new Date(r.t).toISOString()} took ${secs(r.ms)}${r.killed ? ' (killed)' : ''}: ${top}${r.killed && r.inflight ? `; still in ${r.inflight} when killed` : ''}`,
+    fix: 'The named section is where the time went (.paradigm/events/stop-timing.jsonl); compliance-check-cli is the node CLI, check4/purpose-discovery scale with .purpose files and anchors',
+  }];
+}
+
+/**
+ * The pre-7.15.2 Stop hook persisted .paradigm/.purpose-paths; 7.15.2+ never writes it and deletes it on a passing run.
+ * A recent one means a Claude Code session that started before the plugin update is still running the old hook here.
+ */
+export function staleSessionHookChecks(rootDir: string, nowMs: number, windowMs = 24 * 3600_000): HookHealthCheck[] {
+  let mtime: number;
+  try {
+    mtime = fs.statSync(path.join(rootDir, '.paradigm', '.purpose-paths')).mtimeMs;
+  } catch {
+    return [];
+  }
+  if (nowMs - mtime > windowMs) return [];
+  return [{
+    name: 'Hook version in running sessions', status: 'warn',
+    message: `A pre-7.15.2 Paradigm Stop hook ran here at ${new Date(mtime).toISOString()} (it wrote .paradigm/.purpose-paths). A Claude Code session that started before the plugin update keeps running the old hook scripts, which scan .claude/worktrees and hit the 30s Stop timeout`,
+    fix: 'Restart the Claude Code sessions that were open before the update (exit, then `claude --resume`), then delete .paradigm/.purpose-paths',
+  }];
+}
+
 export function hookHealthChecks(opts: { rootDir: string; homeDir: string; nowMs?: number }): HookHealthCheck[] {
-  const ring = path.join(opts.rootDir, '.paradigm', 'events', 'hook-timings.jsonl');
+  const events = path.join(opts.rootDir, '.paradigm', 'events');
+  const nowMs = opts.nowMs ?? Date.now();
   return [
-    ...hookTimingChecks(summarizeHookRing(readHookRing(ring), opts.nowMs ?? Date.now())),
+    ...hookTimingChecks(summarizeHookRing(readHookRing(path.join(events, 'hook-timings.jsonl')), nowMs)),
+    ...stopSectionChecks(readStopTiming(path.join(events, 'stop-timing.jsonl'))),
     ...repoTraitChecks(repoTraits(opts.rootDir)),
     ...pluginCacheChecks(opts.rootDir, opts.homeDir),
+    ...staleSessionHookChecks(opts.rootDir, nowMs),
   ];
 }
