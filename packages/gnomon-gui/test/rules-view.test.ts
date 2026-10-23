@@ -13,6 +13,7 @@ import {
   emptyRulesUi,
   expiryToastOf,
   FILTER_AT,
+  FOLD_AT,
   presetLabel,
   reconcile,
   refusedResult,
@@ -25,10 +26,12 @@ import {
   stageOff,
   stageOn,
   stageRemove,
+  toggleFold,
   toggleOffMenu,
   unstage,
   type RulesStatus,
 } from '../src/core/rules.js';
+import { rulesBlockEl } from '../src/ui/rules-block.js';
 
 const NOW = '2026-10-23T14:07:00';
 const at = (s: string) => new Date(s).toISOString();
@@ -163,12 +166,51 @@ describe('#gui-rules-view: the list at 0, 1, 5, 50 and 200 rules', () => {
       const r = rs(n);
       const all = rulesBlock(r, emptyRulesUi());
       expect(all.filter.shown).toBe(true);
-      expect(all.groups.reduce((k, g) => k + g.rows.length, 0)).toBe(n);
+      // folded at FOLD_AT and up: every group shows its heading and count, no rows
+      expect(all.groups.every((g) => g.folded && g.foldable && g.rows.length === 0)).toBe(true);
+      expect(all.groups.reduce((k, g) => k + g.count, 0)).toBe(n);
       const ui = { ...stageRemove(emptyRulesUi(), id(2)), filter: 'task-17' };
       const f = rulesBlock(r, ui);
       expect(f.groups.flatMap((g) => g.rows.map((x) => x.ruleId)).sort()).toEqual([...r.rules.filter((x) => x.words.includes('task-17')).map((x) => x.ruleId), id(2)].sort());
       expect(rulesBlock(r, { ...emptyRulesUi(), filter: 'zzz' }).noMatch).toBe('No rule matches “zzz”.');
     }
+  });
+  it(`folded at ${FOLD_AT} rules (founder: "folded works"): groups start folded with their count; the heading unfolds; the filter unfolds what it matches; staged rows never hide`, () => {
+    // under the threshold nothing folds
+    const few = rulesBlock(rs(FOLD_AT - 1), emptyRulesUi());
+    expect(few.groups.every((g) => !g.folded && !g.foldable)).toBe(true);
+    const r = rs(FOLD_AT);
+    const v = rulesBlock(r, emptyRulesUi());
+    expect(v.groups.length).toBeGreaterThan(1);
+    expect(v.groups.map((g) => [g.folded, g.rows.length])).toEqual(v.groups.map(() => [true, 0]));
+    expect(v.summary).toContain(`${FOLD_AT} rules`);
+    // the heading unfolds its group, and folds it again
+    const g0 = v.groups[0]!;
+    const open = toggleFold(emptyRulesUi(), g0.repoKey, false);
+    const v2 = rulesBlock(r, open);
+    expect(v2.groups[0]).toMatchObject({ folded: false, foldable: true });
+    expect(v2.groups[0]!.rows.length).toBe(g0.count);
+    expect(v2.groups[1]!.folded).toBe(true);
+    expect(rulesBlock(r, toggleFold(open, g0.repoKey, true)).groups[0]!.folded).toBe(true);
+    // the filter unfolds the matching groups (and only lists what matches)
+    const f = rulesBlock(r, { ...emptyRulesUi(), filter: 'task-17' });
+    expect(f.groups.length).toBeGreaterThan(0);
+    expect(f.groups.every((g) => !g.folded && !g.foldable && g.rows.every((x) => x.what.includes('task-17')))).toBe(true);
+    // a group holding a staged change stays unfolded; the others stay folded
+    const st = rulesBlock(r, stageRemove(emptyRulesUi(), id(2)));
+    const withStaged = st.groups.find((g) => g.rows.some((x) => x.ruleId === id(2)))!;
+    expect(withStaged).toMatchObject({ folded: false, foldable: false });
+    expect(st.groups.filter((g) => g !== withStaged).every((g) => g.folded)).toBe(true);
+  });
+  it('the fold key in the DOM: a button inside the heading with aria-expanded, the count visible, no list when folded', () => {
+    const els: Array<{ tag: string; className: string; attrs: Map<string, string>; kids: unknown[] }> = [];
+    const doc = { createElement: (tag: string) => { const e = { tag, className: '', attrs: new Map<string, string>(), kids: [] as unknown[], appendChild(c: unknown) { this.kids.push(c); return c; }, setAttribute(n: string, val: string) { this.attrs.set(n, val); } }; els.push(e); return e; }, createTextNode: (t: string) => t };
+    rulesBlockEl(doc as never, rulesBlock(rs(FOLD_AT), emptyRulesUi()));
+    const keys = els.filter((e) => e.className === 'rules-fold');
+    expect(keys.length).toBeGreaterThan(1);
+    expect(keys.every((k) => k.attrs.get('aria-expanded') === 'false' && k.attrs.get('data-rule-act') === 'fold')).toBe(true);
+    expect(els.filter((e) => e.className === 'rules-list')).toHaveLength(0);
+    expect(els.filter((e) => e.className === 'rules-count').length).toBe(keys.length);
   });
   it('since: today 12:53 · yesterday · Oct 19 (against the kernel now)', () => {
     expect(sinceText(at('2026-10-23T12:53:00'), at(NOW))).toBe('today 12:53');

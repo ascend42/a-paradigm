@@ -18,6 +18,14 @@
  *              or a new problem refuses "the server changed while the card was open". Allow writes the entry.
  *              A project server (the repo's own .mcp.json) and a local one (~/.claude.json projects) take scope
  *              'repo' for their own repo only: never `all`, never automatic.
+ *   batch      request.mcp.enable{servers:[{id, scope, repo?}, …]} (#batch-card; founder 2026-10-23 "grouped cards
+ *              of related things, one password"): 1..MCP_ENABLE_MAX servers, each with its own scope, on ONE grant card
+ *              (detail.servers[], rootRows: []), each server its own field block (what runs, env names, network host,
+ *              auto-allow rules). Validate everything first (any refusal names servers[i] and raises nothing); over
+ *              MCP_ENABLE_MAX or MAX_CARD_CHARS (measured after wrapping) refused, never cut. A server already on is
+ *              left out (unchanged); a server on a waiting card refuses the batch (card-pending). At allow each launch
+ *              hash is checked again: a changed server is skipped and reported (status.mcp.skips by cardId); when all changed,
+ *              prepare refuses before the presence prompt. A single {id, scope} is a batch of one with its own card.
  *   disable    request.mcp.disable{id[, scope, repo]}: a narrowing, so notify-and-proceed with no card.
  *   first party  the Paradigm MCP is on by default in every session; {id:'first-party:paradigm'} turns it off or
  *              back on (back to the default) with no card.
@@ -27,9 +35,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { mintId } from '@a-company/gnomon-contracts';
+import { batchCardBlock } from '../broker/batch-card.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import type { PolicyPath } from '../manifest/policy.js';
 import { RpcRefusal } from '../socket/rpc.js';
+import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
 import { allowRuleWords, autoAllowRules, composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
 
 export const MCP_SERVERS_SCHEMA = 'gnomon-mcp-servers:v1' as const;
@@ -38,6 +48,22 @@ export const MCP_DISABLE_REQUEST = 'request.mcp.disable' as const;
 export const MCP_REQUESTS: readonly string[] = Object.freeze([MCP_ENABLE_REQUEST, MCP_DISABLE_REQUEST]);
 export const MCP_ENABLE_CARD_TTL_MS = 24 * 3600 * 1000;
 export const MCP_CHANGED_WHILE_OPEN = 'the server changed while the card was open: ask again';
+export const MCP_ALL_CHANGED_WHILE_OPEN = 'every server on the card changed while it was open: ask again';
+/** #batch-card: at most this many servers on one enable card (more is refused, never cut). */
+export const MCP_ENABLE_MAX = 16;
+/** Aegis L1: how many cards' skip reports status.mcp.skips keeps (oldest dropped first). */
+export const MCP_SKIPS_KEPT = 16;
+/** The servers one allowed card skipped (changed while it waited), and who decided it. */
+export interface McpSkip {
+  cardId: string;
+  ids: string[];
+  names: string[];
+  /** the servers the same card turned on */
+  on: string[];
+  /** the deciding connection */
+  connId: string | null;
+  at: string;
+}
 const STORE_MAX_BYTES = 512 * 1024;
 const MAX_ENTRIES = 512;
 
@@ -63,6 +89,8 @@ const realOr = (p: string): string => {
   }
 };
 const sameScope = (a: McpScope, b: McpScope): boolean => (a === 'all' ? b === 'all' : b !== 'all' && a.repo === b.repo);
+const keyOf = (id: string, scope: McpScope): string => `${id}|${scope === 'all' ? 'all' : scope.repo}`;
+const windowsRefusal = (): RpcRefusal => new RpcRefusal('UNSUPPORTED', 'presence', '#mcp-servers: turning a server on takes the root key, which lives in the Mac helper in 8.0: not on Windows yet', { why: 'platform' });
 
 export function mcpServersPath(home: string): string {
   return path.join(home, 'desk', 'mcp-servers.json');
@@ -123,13 +151,22 @@ export const SOURCE_TEXT: Readonly<Record<McpServerRow['source'], string>> = Obj
   plugin: 'a Claude Code plugin you enabled',
 });
 
-/** The enable card's lines: title, the kernel line, then what turns on. Names only, never a value. */
-export function mcpEnableCardLines(r: McpServerRow, f: { scope: McpScope; via: 'settings' | 'terminal'; at: number; launchHash: string; pluginRoot?: string | null; autoAllowed?: readonly string[] }): string[] {
-  const where = f.scope === 'all' ? 'for all your repos' : `in ${path.basename(f.scope.repo)}`;
+export interface McpCardFacts {
+  scope: McpScope;
+  via: 'settings' | 'terminal';
+  at: number;
+  launchHash: string;
+  pluginRoot?: string | null;
+  autoAllowed?: readonly string[];
+}
+
+const whereWords = (scope: McpScope): string => (scope === 'all' ? 'for all your repos' : `in ${path.basename(scope.repo)}`);
+const askedLine = (via: 'settings' | 'terminal', at: number): string => `asked from ${via === 'settings' ? 'Settings' : 'the terminal'} · ${hhmm(at)} · applies to new sessions`;
+
+/** What turns on with one server: where it comes from, what it runs or where it connects, env names, auto-allow rules. Names only, never a value. */
+export function mcpServerFactLines(r: McpServerRow, f: McpCardFacts): string[] {
   const anyValue = r.envNames.length + r.headerNames.length + r.needs.length > 0;
   return [
-    `Turn on MCP server ${r.name} ${where}`,
-    `asked from ${f.via === 'settings' ? 'Settings' : 'the terminal'} · ${hhmm(f.at)} · applies to new sessions`,
     `from ${SOURCE_TEXT[r.source]}${r.plugin ? ` · ${r.plugin.id}${r.plugin.version ? ` ${r.plugin.version}` : ''}${f.pluginRoot ? ` at ${f.pluginRoot}` : ''}` : ''}`,
     ...(f.scope !== 'all' ? [`folder ${f.scope.repo}`] : []),
     ...(r.transport === 'stdio'
@@ -147,7 +184,31 @@ export function mcpEnableCardLines(r: McpServerRow, f: { scope: McpScope; via: '
     `its other tools ask like any tool (cards and Always rules); Gnomon adds no allow rule, and its tool descriptions are the server's words, not Gnomon's`,
     ...(r.source === 'project' ? ["this repo's .mcp.json is the repo's code: allow only if you trust this repo"] : []),
     `launch ${f.launchHash}`,
+  ];
+}
+
+/** The enable card's lines for ONE server: title, the kernel line, then what turns on. Names only, never a value. */
+export function mcpEnableCardLines(r: McpServerRow, f: McpCardFacts): string[] {
+  return [
+    `Turn on MCP server ${r.name} ${whereWords(f.scope)}`,
+    askedLine(f.via, f.at),
+    ...mcpServerFactLines(r, f),
     'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice; deny changes nothing',
+  ];
+}
+
+/**
+ * #batch-card (founder 2026-10-23: "grouped cards of related things, one password"): the lines of ONE card turning
+ * several servers on. Each server is its own field block (permission.ts fieldLines: a kernel label line, every fact
+ * fenced, an end marker), so no server's words can read as the next server's.
+ */
+export function mcpBatchCardLines(items: ReadonlyArray<{ row: McpServerRow; f: McpCardFacts }>, o: { via: 'settings' | 'terminal'; at: number }): string[] {
+  const n = items.length;
+  return [
+    `Turn on ${n} MCP servers`,
+    askedLine(o.via, o.at),
+    ...items.flatMap((it, i) => fieldLines(`server ${i + 1} of ${n}: ${it.row.name} ${whereWords(it.f.scope)}`, mcpServerFactLines(it.row, it.f).join('\n'))),
+    `Allow takes the root key and your presence (Touch ID or your Mac password), once for all ${n} · never standing, never by voice; a server that changes before you allow is skipped and named; deny changes nothing`,
   ];
 }
 
@@ -172,6 +233,8 @@ export interface McpServersOptions {
   clock?: () => number;
   /** daemon events (names, never values) */
   emit?: (e: Record<string, unknown>) => void;
+  /** the card size cap (tests lower it); default MAX_CARD_CHARS */
+  maxCardChars?: number;
 }
 
 const bad = (field: string, msg: string, data: Record<string, unknown> = {}): RpcRefusal => new RpcRefusal('BAD_REQUEST', 'bad-params', `#mcp-servers: ${msg}`, { field, ...data });
@@ -181,6 +244,8 @@ export class McpServers {
   readonly #o: McpServersOptions;
   /** `${id}|${scope}` → pending cardId */
   readonly #pending = new Map<string, { cardId: string; id: string; scope: McpScope }>();
+  /** Aegis L1: per card (newest last, at most MCP_SKIPS_KEPT), so the next card never overwrites another's report */
+  readonly #skips = new Map<string, McpSkip>();
 
   constructor(o: McpServersOptions) {
     this.#o = o;
@@ -297,7 +362,12 @@ export class McpServers {
       firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }) },
       servers: all.filter((d) => d.source === 'user' || d.source === 'plugin').map(state),
       repos: [...live].map(([repo, hsids]) => ({ repo, folder: path.basename(repo), hsids, servers: all.filter((d) => d.repo === repo).map(state) })),
+      // one entry per server; the servers of one batch card share its cardId
       pending: this.#pendingList().map((p) => ({ cardId: p.cardId, id: p.id, scope: p.scope === 'all' ? 'all' : 'repo', repo: p.scope === 'all' ? null : p.scope.repo })),
+      max: MCP_ENABLE_MAX,
+      // Aegis L1: every recent card's skips by cardId (bounded); `skipped` stays the newest (the GUI's old read)
+      skips: [...this.#skips.values()],
+      ...(this.#skips.size ? { skipped: [...this.#skips.values()].at(-1) } : {}),
     };
   }
 
@@ -307,32 +377,60 @@ export class McpServers {
     }
   }
 
-  #parse(kind: string, payload: unknown): { id: string; scope: McpScope | null } {
-    if (!isObj(payload)) throw bad('id', `${kind} takes {id, scope?: 'all' | 'repo', repo?}`);
-    for (const k of Object.keys(payload)) if (!['id', 'scope', 'repo'].includes(k)) throw bad(k, `unknown field ${k.slice(0, 32)}`);
-    if (typeof payload.id !== 'string' || payload.id.length === 0 || payload.id.length > 2048) throw bad('id', 'id names one server (status.mcp)');
+  /** One {id, scope?, repo?}. `at` names the item inside a batch ("servers[2]: ") in the field and the message. */
+  #parse(kind: string, payload: unknown, at = ''): { id: string; scope: McpScope | null } {
+    const f = (k: string): string => (at ? `servers[${at}].${k}` : k);
+    const w = at ? `servers[${at}]: ` : '';
+    if (!isObj(payload)) throw bad(f('id'), `${w}${kind} takes {id, scope?: 'all' | 'repo', repo?}`);
+    for (const k of Object.keys(payload)) if (!['id', 'scope', 'repo'].includes(k)) throw bad(f(k), `${w}unknown field ${k.slice(0, 32)}`);
+    if (typeof payload.id !== 'string' || payload.id.length === 0 || payload.id.length > 2048) throw bad(f('id'), `${w}id names one server (status.mcp)`);
     if (payload.scope === undefined) return { id: payload.id, scope: null };
     if (payload.scope === 'all') return { id: payload.id, scope: 'all' };
-    if (payload.scope !== 'repo') throw bad('scope', "scope is 'all' or 'repo'");
-    if (typeof payload.repo !== 'string' || !path.isAbsolute(payload.repo)) throw bad('repo', 'a repo scope names the folder (an absolute path)');
+    if (payload.scope !== 'repo') throw bad(f('scope'), `${w}scope is 'all' or 'repo'`);
+    if (typeof payload.repo !== 'string' || !path.isAbsolute(payload.repo)) throw bad(f('repo'), `${w}a repo scope names the folder (an absolute path)`);
     const repo = realOr(payload.repo);
     try {
       if (!fs.statSync(repo).isDirectory()) throw new Error('not a dir');
     } catch {
-      throw bad('repo', 'the folder does not exist');
+      throw bad(f('repo'), `${w}the folder does not exist`);
     }
     return { id: payload.id, scope: { repo } };
   }
 
+  /** request.mcp.enable{servers:[…]}: 1..MCP_ENABLE_MAX items, each with its scope, one per server and scope. */
+  #parseBatch(payload: Record<string, unknown>): Array<{ id: string; scope: McpScope }> {
+    const extra = Object.keys(payload).filter((k) => k !== 'servers');
+    if (extra.length) throw bad(extra[0]!.slice(0, 32), `a batch takes only {servers} (unknown: ${extra.slice(0, 4).join(', ').slice(0, 80)})`);
+    const list = payload.servers;
+    if (!Array.isArray(list) || list.length === 0) throw bad('servers', 'servers is a non-empty list of {id, scope, repo?}');
+    if (list.length > MCP_ENABLE_MAX) throw bad('servers', `at most ${MCP_ENABLE_MAX} servers on one card (asked: ${list.length})`, { why: 'too-many', max: MCP_ENABLE_MAX, hint: `turn them on in parts of ${MCP_ENABLE_MAX} or fewer` });
+    const seen = new Set<string>();
+    return list.map((raw, i) => {
+      const p = this.#parse(MCP_ENABLE_REQUEST, raw, String(i));
+      if (p.id === FIRST_PARTY_PARADIGM) throw bad(`servers[${i}].id`, `servers[${i}]: the Paradigm MCP turns on with no card: use its own key`, { why: 'first-party' });
+      if (p.scope === null) throw bad(`servers[${i}].scope`, `servers[${i}]: each server names its scope: 'all' or 'repo'`);
+      const k = keyOf(p.id, p.scope);
+      if (seen.has(k)) throw bad(`servers[${i}]`, `servers[${i}]: ${p.id.slice(0, 80)} is named twice for the same scope`, { why: 'twice' });
+      seen.add(k);
+      return { id: p.id, scope: p.scope };
+    });
+  }
+
   async request(asker: McpAsker, kind: string, payload: unknown): Promise<unknown> {
     this.#human(asker, kind);
+    // #batch-card: several servers, each with its scope, on ONE card (one presence decides them all)
+    if (kind === MCP_ENABLE_REQUEST && isObj(payload) && 'servers' in payload) {
+      const items = this.#parseBatch(payload);
+      if (this.#platform() === 'win32') throw windowsRefusal();
+      return this.#raise(asker, items, true);
+    }
     const p = this.#parse(kind, payload);
     if (kind === MCP_DISABLE_REQUEST) return this.#disable(p.id, p.scope);
     if (kind !== MCP_ENABLE_REQUEST) throw bad('kind', `unknown request ${kind.slice(0, 40)}`);
     if (p.id === FIRST_PARTY_PARADIGM) return this.#firstParty('on');
     if (p.scope === null) throw bad('scope', "an enable names its scope: 'all' or 'repo'");
-    if (this.#platform() === 'win32') throw new RpcRefusal('UNSUPPORTED', 'presence', '#mcp-servers: turning a server on takes the root key, which lives in the Mac helper in 8.0: not on Windows yet', { why: 'platform' });
-    return this.#raise(asker, p.id, p.scope);
+    if (this.#platform() === 'win32') throw windowsRefusal();
+    return this.#raise(asker, [{ id: p.id, scope: p.scope }], false);
   }
 
   #firstParty(to: 'on' | 'off'): unknown {
@@ -362,54 +460,108 @@ export class McpServers {
     return this.#discover(repos).find((d) => d.id === id) ?? null;
   }
 
-  async #raise(asker: McpAsker, id: string, scope: McpScope): Promise<unknown> {
+  /** Validate one item now: it exists, has no problem, and a repo-bound server takes its own repo only. */
+  #check(id: string, scope: McpScope, at: string): McpServerDecl {
+    const w = at ? `servers[${at}]: ` : '';
+    const field = at ? `servers[${at}].id` : 'id';
     const d = this.#find(id);
-    if (!d) throw bad('id', 'no such server in your Claude Code config now (status.mcp lists them)', { why: 'not-found' });
-    if (d.problems.length) throw bad('id', `${d.name} cannot be turned on: ${d.problems[0]!.text}`, { why: d.problems[0]!.code });
+    if (!d) throw bad(field, `${w}no such server in your Claude Code config now (status.mcp lists them)`, { why: 'not-found', id });
+    if (d.problems.length) throw bad(field, `${w}${d.name} cannot be turned on: ${d.problems[0]!.text}`, { why: d.problems[0]!.code, id });
     if ((d.source === 'project' || d.source === 'local') && (scope === 'all' || scope.repo !== d.repo)) {
-      throw bad('scope', `${d.name} comes from ${d.source === 'project' ? "a repo's .mcp.json" : 'one folder in your ~/.claude.json'}: it is turned on for that repo only, never for all`, { why: 'repo-only' });
+      throw bad(at ? `servers[${at}].scope` : 'scope', `${w}${d.name} comes from ${d.source === 'project' ? "a repo's .mcp.json" : 'one folder in your ~/.claude.json'}: it is turned on for that repo only, never for all`, { why: 'repo-only', id });
     }
-    const hash = declHash(d, this.#o.launchKey);
+    return d;
+  }
+
+  /**
+   * #batch-card: ONE grant card for every server of the batch (a single enable is a batch of one, with the card it
+   * always had). VALIDATE EVERYTHING FIRST: any refusal names its item and raises nothing. Over MCP_ENABLE_MAX servers
+   * or MAX_CARD_CHARS (measured after wrapping) the batch is refused, never cut. A server already on at its current
+   * launch hash is left out (`unchanged`). At allow, each server's launch hash is checked again: a changed one is
+   * skipped and reported (status.mcp.skips by cardId, bounded; event mcp.user.skipped-changed with the deciding connId); only when every one changed does the
+   * card refuse, in prepare, before the presence prompt.
+   */
+  async #raise(asker: McpAsker, items: ReadonlyArray<{ id: string; scope: McpScope }>, batch: boolean): Promise<unknown> {
+    const checked = items.map((it, i) => {
+      const d = this.#check(it.id, it.scope, batch ? String(i) : '');
+      return { ...it, d, hash: declHash(d, this.#o.launchKey), row: mcpServerRow(d) };
+    });
+    type Item = (typeof checked)[number];
     const store = readMcpServersStore(this.#o.home);
-    if (store.enabled.some((e) => e.id === id && sameScope(e.scope, scope) && e.launchHash === hash)) return { id, on: true, unchanged: true };
-    const pkey = `${id}|${scope === 'all' ? 'all' : scope.repo}`;
-    const open = this.#pendingList().find((x) => `${x.id}|${x.scope === 'all' ? 'all' : x.scope.repo}` === pkey);
-    if (open) return { pending: true, cardId: open.cardId, id };
-    const row = mcpServerRow(d);
+    const isOn = (c: Item): boolean => store.enabled.some((e) => e.id === c.id && sameScope(e.scope, c.scope) && e.launchHash === c.hash);
+    const unchanged = checked.filter(isOn).map((c) => c.id);
+    const want = checked.filter((c) => !isOn(c));
+    if (!want.length) return batch ? { on: true, unchanged, cardId: null } : { id: checked[0]!.id, on: true, unchanged: true };
+    // a card already waiting: the same servers and scopes again return it (one at a time); a batch overlapping it is refused
+    const open = this.#pendingList();
+    const waiting = want.map((c) => open.find((x) => x.id === c.id && sameScope(x.scope, c.scope)) ?? null);
+    if (waiting.every((x) => x !== null) && new Set(waiting.map((x) => x!.cardId)).size === 1) return { pending: true, cardId: waiting[0]!.cardId, id: want[0]!.id, ...(batch ? { ids: want.map((c) => c.id) } : {}) };
+    const clash = waiting.find((x) => x !== null);
+    if (clash) throw bad('servers', `${want.find((c) => c.id === clash.id)?.d.name ?? 'a server'} is already on a card that is waiting: decide it first`, { why: 'card-pending', cardId: clash.cardId, hint: 'Decide in the stack' });
     const now = this.#o.clock ?? Date.now;
+    const via = asker.credential === 'gui' ? ('settings' as const) : ('terminal' as const);
+    const at = now();
+    const facts = (c: Item): McpCardFacts => ({ scope: c.scope, via, at, launchHash: c.hash, pluginRoot: c.d.plugin?.root ?? null, autoAllowed: autoAllowRules(this.#o.userHome, c.d.sessionName) });
+    const lines = want.length === 1 ? mcpEnableCardLines(want[0]!.row, facts(want[0]!)) : mcpBatchCardLines(want.map((c) => ({ row: c.row, f: facts(c) })), { via, at });
+    const shown = batchCardBlock(lines);
+    const max = this.#o.maxCardChars ?? MAX_CARD_CHARS;
+    if (shown.size > max) throw bad('servers', `the card that turns ${want.length === 1 ? 'this server' : `these ${want.length} servers`} on would be ${shown.size} characters, over the ${max} a card shows in full`, { why: 'too-large', hint: 'turn fewer servers on in one card' });
+    const one = (c: Item): Record<string, unknown> => ({ id: c.id, name: c.d.name, server: c.d.sessionName, source: c.d.source, scope: c.scope === 'all' ? 'all' : 'repo', repo: c.scope === 'all' ? null : c.scope.repo, transport: c.d.transport, host: c.row.host, envNames: c.row.envNames, headerNames: c.row.headerNames, needs: c.row.needs, shell: c.d.shell, fetches: c.d.fetches, launchHash: c.hash });
+    const detail = want.length === 1 ? { action: 'mcp.enable', ...one(want[0]!), rootRows: [] } : { action: 'mcp.enable', servers: want.map(one), rootRows: [] };
     const cardId = mintId('card');
     const home = this.#o.home;
-    this.#pending.set(pkey, { cardId, id, scope });
+    const keys = want.map((c) => keyOf(c.id, c.scope));
+    for (const c of want) this.#pending.set(keyOf(c.id, c.scope), { cardId, id: c.id, scope: c.scope });
+    const stillSame = (c: Item): boolean => {
+      const again = this.#find(c.id);
+      return !!again && !again.problems.length && declHash(again, this.#o.launchKey) === c.hash;
+    };
     try {
       const card = await this.#o.broker.raise({
         kind: 'grant',
         cardId,
         requestedBy: asker.principal!,
         attended: true,
-        detail: { action: 'mcp.enable', id, name: d.name, server: d.sessionName, source: d.source, scope: scope === 'all' ? 'all' : 'repo', repo: scope === 'all' ? null : scope.repo, transport: d.transport, host: row.host, envNames: row.envNames, headerNames: row.headerNames, needs: row.needs, shell: d.shell, fetches: d.fetches, launchHash: hash, rootRows: [] },
-        lines: mcpEnableCardLines(row, { scope, via: asker.credential === 'gui' ? 'settings' : 'terminal', at: now(), launchHash: hash, pluginRoot: d.plugin?.root ?? null, autoAllowed: autoAllowRules(this.#o.userHome, d.sessionName) }),
+        detail,
+        lines,
+        // a batch card's field blocks are wrapped, never cut (one server keeps the card it always had)
+        // Aegis L3: the wrapped block on every enable card (one server too), so no line is ever cut
+        block: shown.block,
         decisions: ['allow', 'deny'],
         handOnly: true,
         timeoutMs: MCP_ENABLE_CARD_TTL_MS,
         prepare: (decision: string) => {
           if (decision !== 'allow') return null;
-          // TOCTOU: the declaration must still be the one the card shows (checked inside the one touch)
-          const again = this.#find(id);
-          if (!again || again.problems.length || declHash(again, this.#o.launchKey) !== hash) throw bad('id', MCP_CHANGED_WHILE_OPEN, { why: 'changed' });
+          // TOCTOU, inside the one touch and BEFORE the presence prompt: when every server changed there is nothing
+          // left to allow (no password for nothing)
+          if (!want.some(stillSame)) throw bad('id', want.length === 1 ? MCP_CHANGED_WHILE_OPEN : MCP_ALL_CHANGED_WHILE_OPEN, { why: 'changed' });
           return null;
         },
-        effect: async (decision) => {
-          this.#pending.delete(pkey);
+        effect: async (decision, ctx) => {
+          for (const k of keys) this.#pending.delete(k);
           if (decision !== 'allow') return;
-          const s = readMcpServersStore(home);
-          s.enabled = [...s.enabled.filter((e) => !(e.id === id && sameScope(e.scope, scope))), { id, scope, launchHash: hash, at: new Date(now()).toISOString(), cardId }];
-          writeMcpServersStore(home, s);
-          this.#o.emit?.({ event: 'mcp.user.enabled', id, server: d.sessionName, scope: scope === 'all' ? 'all' : 'repo', launchHash: hash });
+          // re-check each server at allow: a changed one is skipped and reported, the rest turn on
+          const ok = want.filter(stillSame);
+          const skipped = want.filter((c) => !ok.includes(c));
+          if (ok.length) {
+            const s = readMcpServersStore(home);
+            const stamp = new Date(now()).toISOString();
+            s.enabled = [...s.enabled.filter((e) => !ok.some((c) => e.id === c.id && sameScope(e.scope, c.scope))), ...ok.map((c) => ({ id: c.id, scope: c.scope, launchHash: c.hash, at: stamp, cardId }))];
+            writeMcpServersStore(home, s);
+          }
+          for (const c of ok) this.#o.emit?.({ event: 'mcp.user.enabled', id: c.id, server: c.d.sessionName, scope: c.scope === 'all' ? 'all' : 'repo', launchHash: c.hash, cardId });
+          const connId = typeof ctx?.connId === 'string' ? ctx.connId : null;
+          for (const c of skipped) this.#o.emit?.({ event: 'mcp.user.skipped-changed', id: c.id, server: c.d.sessionName, cardId, connId });
+          if (skipped.length) {
+            this.#skips.delete(cardId);
+            this.#skips.set(cardId, { cardId, ids: skipped.map((c) => c.id), names: skipped.map((c) => c.d.name), on: ok.map((c) => c.id), connId, at: new Date(now()).toISOString() });
+            while (this.#skips.size > MCP_SKIPS_KEPT) this.#skips.delete(this.#skips.keys().next().value!);
+          }
         },
       });
-      return { pending: true, cardId: card.cardId, id };
+      return { pending: true, cardId: card.cardId, id: want[0]!.id, ...(batch ? { ids: want.map((c) => c.id), unchanged } : {}) };
     } catch (err) {
-      this.#pending.delete(pkey);
+      for (const k of keys) this.#pending.delete(k);
       throw err;
     }
   }

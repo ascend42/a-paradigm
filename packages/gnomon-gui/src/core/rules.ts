@@ -16,12 +16,17 @@
  *     decide (refused or waiting check) reads "card waiting · Decide in the stack".
  *   - Closing Settings with unsaved changes asks inline: "3 changes not saved · Save · Discard".
  *   - Grouped by repo with counts, newest first; a filter field above FILTER_AT rules. Planned for 0, 1, 5, 50, 200.
+ *   - Folded (founder 2026-10-23: "folded works"): at FOLD_AT rules or more every repo group starts folded, showing its
+ *     heading and count; the heading is the fold key (aria-expanded). A filter unfolds every group it matches; a group
+ *     holding a staged change, an open Turn off ▾ or a rule waiting on a card stays unfolded (nothing staged hides).
  */
 import type { ShownRefusal } from './client.js';
 
 export const RULES_EMPTY = 'No Always rules yet. When you choose Always on a card, the rule shows here.';
 /** Mika C1: the filter field shows above this many rules. */
 export const FILTER_AT = 12;
+/** Founder 2026-10-23 ("folded works"): at this many rules or more, each repo group starts folded. */
+export const FOLD_AT = 50;
 export const SAVE_LABEL = Object.freeze({ none: 'Save · no Touch ID', presence: 'Save · asks Touch ID or your Mac password once' });
 export const CARD_WAITING = 'card waiting · Decide in the stack';
 /** The waiting line: the narrowing is saved; the rules turning back on wait on the card (the key says where). */
@@ -101,10 +106,12 @@ export interface RulesUi {
   waiting: { cardId: string; ruleIds: string[] } | null;
   /** closing Settings was asked with changes staged: the inline "N changes not saved · Save · Discard" */
   closePrompt: boolean;
+  /** FOLD_AT and up: the repo groups the human unfolded (true) or folded again (false); absent = the default */
+  folds: ReadonlyMap<string, boolean>;
 }
 
 export function emptyRulesUi(): RulesUi {
-  return { staged: new Map(), offOpen: null, filter: '', saving: false, result: null, waiting: null, closePrompt: false };
+  return { staged: new Map(), offOpen: null, filter: '', saving: false, result: null, waiting: null, closePrompt: false, folds: new Map() };
 }
 
 const withStaged = (ui: RulesUi, f: (m: Map<string, Staged>) => void): RulesUi => {
@@ -128,6 +135,12 @@ export function stageRemove(ui: RulesUi, ruleId: string): RulesUi {
 /** "keep" (a removed row) and "undo" (any staged row): the rule goes back to what the kernel says. */
 export function unstage(ui: RulesUi, ruleId: string): RulesUi {
   return withStaged(ui, (m) => m.delete(ruleId));
+}
+/** The fold key of a repo group: open a folded group, fold an open one. */
+export function toggleFold(ui: RulesUi, repoKey: string, wasOpen: boolean): RulesUi {
+  const m = new Map(ui.folds);
+  m.set(repoKey, !wasOpen);
+  return { ...ui, folds: m };
 }
 export function toggleOffMenu(ui: RulesUi, ruleId: string): RulesUi {
   return { ...ui, offOpen: ui.offOpen === ruleId ? null : ruleId };
@@ -283,6 +296,10 @@ export interface RuleGroupView {
   label: string;
   count: number;
   off: number;
+  /** FOLD_AT and up: the heading is a fold key */
+  foldable: boolean;
+  /** folded: the heading and its count only, no rows */
+  folded: boolean;
   rows: RuleRowView[];
 }
 
@@ -355,9 +372,14 @@ export function rulesBlock(rs: RulesStatus, ui: RulesUi, sessionName?: (hsid: st
     g.push(r);
     by.set(r.repoKey, g);
   }
+  // founder 2026-10-23 ("folded works"): at FOLD_AT rules or more each group starts folded; a filter unfolds what it
+  // matches; a group holding anything staged, open or waiting stays unfolded (nothing staged hides behind a fold)
+  const foldable = total >= FOLD_AT;
   const groups = [...by].map(([repoKey, list]) => {
     const all = rs.rules.filter((r) => r.repoKey === repoKey);
-    return { repoKey, label: all.find((r) => r.repoName)?.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, rows: list.map((r) => rowView(r, ui, rs, sessionName)) };
+    const busy = list.some((r) => ui.staged.has(r.ruleId) || ui.offOpen === r.ruleId || !!ui.waiting?.ruleIds.includes(r.ruleId));
+    const open = !foldable || !!q || busy || ui.folds.get(repoKey) === true;
+    return { repoKey, label: all.find((r) => r.repoName)?.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, foldable: foldable && !q && !busy, folded: !open, rows: open ? list.map((r) => rowView(r, ui, rs, sessionName)) : [] };
   });
   const n = ui.staged.size;
   return {

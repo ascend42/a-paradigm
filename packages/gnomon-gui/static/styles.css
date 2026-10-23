@@ -374,6 +374,17 @@ html, body {
 .card.kind-knot .card-title { color: var(--knot); }
 .card.failed .card-title { color: var(--fail); }
 .card-body { margin: 4px 0 6px; font-size: var(--fs-control); color: var(--ink2); }
+/* design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
+   large that's fine"): a body taller than its cap (lines and field blocks: the MCP batch card, the Rules batch card,
+   the git push card) scrolls INSIDE the card; the title, the keys and the presence line stay in view, so Allow never
+   needs a scroll. The body is a named tab stop (render.ts CARD_BODY_LABEL): arrow keys scroll it, Tab moves on. */
+.card-body { --card-body-max: min(42vh, 26em); max-height: var(--card-body-max); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.card-body:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+/* Mika 2026-10-23: macOS hides scrollbars at rest, so a body that scrolls says so: a rule at its cut edge and the cue
+   under it ("↓ more below: scroll the card text", then "end of the card text"; words, never only a fade or a hue) */
+.card-body.scrolls { border-bottom: 1px dashed var(--rule); padding-bottom: 2px; }
+.card-more { margin: -4px 0 6px; font-size: var(--fs-label); color: var(--sec); }
+.card-more.is-off { display: none; }
 .card-raised { display: block; font-size: var(--fs-label); }
 .card .bar { height: 3px; margin-top: 6px; border-radius: var(--radius); overflow: hidden; background: var(--rule); display: none; }
 .card.held .bar { display: block; }
@@ -1557,6 +1568,13 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .rules-group { margin: 0 0 10px; }
 .rules-repo { margin: 6px 0 2px; font-size: var(--fs-control); font-weight: 600; color: var(--ink); }
 .rules-count { font-weight: 400; font-size: var(--fs-label); color: var(--sec); }
+/* founder 2026-10-23 ("folded works"): at 50 rules or more the repo heading is the group's fold key; it reads as the
+   heading (same size and weight), ▸ folded / ▾ open by glyph, never by hue; the count stays visible when folded */
+.rules-fold { all: unset; cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.5ch; min-height: 24px; border-radius: var(--radius); }
+.rules-fold:hover .rules-fold-mark { color: var(--ink); }
+.rules-fold:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.rules-fold-mark { display: inline-block; width: 1em; color: var(--sec); }
+.rules-group.is-folded { margin-bottom: 2px; }
 .rules-list { list-style: none; margin: 0; padding: 0; }
 .rule-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 6px 0; border-top: 1px solid var(--rule); }
 .rule-row:first-child { border-top: 0; }

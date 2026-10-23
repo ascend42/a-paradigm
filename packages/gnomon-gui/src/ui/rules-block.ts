@@ -58,9 +58,14 @@ export function rulesBlockEl(doc: MiniDoc, v: RulesBlockView): MiniEl {
   if (v.empty) box.appendChild(h(doc, 'p', { class: 'rules-empty' }, v.empty));
   if (v.noMatch) box.appendChild(h(doc, 'p', { class: 'rules-empty' }, v.noMatch));
   for (const g of v.groups) {
-    const head = h(doc, 'p', { class: 'rules-repo', role: 'heading', 'aria-level': '4' }, g.label, ' ', h(doc, 'span', { class: 'rules-count' }, `${g.count} rule${g.count === 1 ? '' : 's'}${g.off ? ` · ${g.off} off` : ''}`));
-    const list = h(doc, 'ul', { class: 'rules-list', role: 'list' }, ...g.rows.map((r) => ruleRowEl(doc, r)));
-    box.appendChild(h(doc, 'section', { class: 'rules-group', 'aria-label': `${g.label}, ${g.count} rules` }, head, list));
+    const count = h(doc, 'span', { class: 'rules-count' }, `${g.count} rule${g.count === 1 ? '' : 's'}${g.off ? ` · ${g.off} off` : ''}`);
+    // founder 2026-10-23 ("folded works"): at 50 rules or more the heading is the group's fold key (▸ folded, ▾ open);
+    // the heading role stays on the <p>, the key inside it carries aria-expanded and the count
+    const head = g.foldable
+      ? h(doc, 'p', { class: 'rules-repo', role: 'heading', 'aria-level': '4' }, h(doc, 'button', { class: 'rules-fold', type: 'button', 'data-rule-act': 'fold', 'data-rule-id': g.repoKey, 'aria-expanded': String(!g.folded), title: `${g.folded ? 'Show' : 'Fold'} the rules for ${g.label}` }, h(doc, 'span', { class: 'rules-fold-mark', 'aria-hidden': 'true' }, g.folded ? '▸' : '▾'), ' ', g.label, ' ', count))
+      : h(doc, 'p', { class: 'rules-repo', role: 'heading', 'aria-level': '4' }, g.label, ' ', count);
+    const list = g.folded ? null : h(doc, 'ul', { class: 'rules-list', role: 'list' }, ...g.rows.map((r) => ruleRowEl(doc, r)));
+    box.appendChild(h(doc, 'section', { class: `rules-group${g.folded ? ' is-folded' : ''}`, 'aria-label': `${g.label}, ${g.count} rules` }, head, list));
   }
   if (v.saveBar || v.result) {
     const bar = h(doc, 'div', { class: `rules-save-bar${v.saveBar ? ' has-changes' : ''}`, role: 'group', 'aria-label': 'Rule changes' });

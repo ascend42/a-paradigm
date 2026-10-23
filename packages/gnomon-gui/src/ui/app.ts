@@ -26,7 +26,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl, type ScrollBodyEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
@@ -43,7 +43,7 @@ import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringShee
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
 import type { ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
-import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
+import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
 import { McpServersController } from './mcp-servers.js';
 import { MCP_SECTION } from '../core/mcp-servers.js';
@@ -895,6 +895,23 @@ function fadeOff(cardId: string, decision: string): void {
 const lastState = new Map<string, string>();
 const drooped = new Set<string>();
 
+/**
+ * design-system card.body-scroll (Mika 2026-10-23): a card body is a tab stop, and shows its "more below" cue, only
+ * while it overflows its cap: measured after mount and on every box change (a resize, a details opening) and scroll.
+ * paintStack rebuilds every card, so it disconnects the observer before it clears the stack (no detached bodies kept).
+ */
+const markBodyOf = (b: HTMLElement): void => {
+  const cue = b.nextElementSibling;
+  markCardBody(b as unknown as ScrollBodyEl, cue && cue.classList.contains('card-more') ? (cue as HTMLElement) : null);
+};
+const bodyWatch = typeof ResizeObserver === 'function' ? new ResizeObserver((es) => es.forEach((e) => markBodyOf(e.target as HTMLElement))) : null;
+function watchCardBody(card: HTMLElement): void {
+  const b = card.querySelector<HTMLElement>('.card-body');
+  if (!b) return;
+  b.addEventListener('scroll', () => markBodyOf(b), { passive: true });
+  bodyWatch?.observe(b);
+}
+
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
   const cards = (stackScoped && focused ? store.stack(focusRepo) : store.stack()).filter((c) => !departing.has(c.cardId));
@@ -945,6 +962,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
       c.card.block,
     ) as unknown as HTMLElement;
     if (c.kind === 'loop-trust' || c.kind === 'loop-choice') decorateLoopCard(el, c.kind, c.card, c.cardId);
+    watchCardBody(el);
     const r = refusals.get(c.cardId);
     if (r) el.appendChild(h(doc, 'p', { class: 'refusal' }, refusalText(r)) as unknown as Node);
     if (arrived.has(`card-in:${c.cardId}`)) {
@@ -959,6 +977,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   };
   const pile = $('stack');
   const refocus = alwaysFocusOf(); // a repaint keeps focus on an Always fold or choice (Mika 2026-10-23)
+  bodyWatch?.disconnect(); // every card is rebuilt below (card.body-scroll)
   clear(pile);
   stackLaidOutAt = performance.now();
   // S3: a paper pile; more than PILE_MAX cards ⇒ the first PILE_MAX piled plus "+n more" (it opens the fanned pile)
@@ -1299,6 +1318,7 @@ const mcpServers = new McpServersController({
     focusCardGroup(cardId);
   },
   focus: (sel) => (document.querySelector(`#settings-body [data-section="${MCP_SECTION}"] ${sel}`) as HTMLElement | null)?.focus(),
+  connId: () => session?.connId ?? null, // a card's skips are shown only to the connection that decided it
 });
 const settings = mountSettings(document, {
   local: localModel,
@@ -1328,6 +1348,13 @@ const settings = mountSettings(document, {
     press: (act, ruleId, value) => {
       if (!ruleId) return;
       const rs = rulesStatusOf(status);
+      // founder 2026-10-23 ("folded works"): a repo group's heading folds and unfolds it (ruleId is the repoKey here)
+      if (act === 'fold') {
+        const g = rulesBlock(rs, rulesUi).groups.find((x) => x.repoKey === ruleId);
+        if (!g?.foldable) return;
+        rulesUi = toggleFold(rulesUi, ruleId, !g.folded);
+        return settings.repaint(); // focus stays on the same heading key (the sheet restores it by act and id)
+      }
       if (act === 'off-menu') rulesUi = toggleOffMenu(rulesUi, ruleId);
       else if (act === 'off' && (value === 'hour' || value === 'tomorrow' || value === 'manual')) rulesUi = stageOff(rulesUi, ruleId, value as RulePreset, rs);
       else if (act === 'on') rulesUi = stageOn(rulesUi, ruleId);
@@ -2434,6 +2461,7 @@ async function refreshStatus(): Promise<void> {
   standingFeed.repaint(); // F6: today's grant (status.standing)
   localModel.statusChanged(); // #gui-local-model: a card waiting from an earlier load; the check after an Allow
   rulesUi = rulesReconcile(rulesUi, rulesStatusOf(status), (cardId) => store.cards.has(cardId)); // #gui-rules-view
+  mcpServers.reconcile(); // #gui-mcp-servers: marks for servers gone, broken or already on drop
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
   modPanelsStatus(status); // a mod installed, paused or removed: its views (and the Workshop key) follow

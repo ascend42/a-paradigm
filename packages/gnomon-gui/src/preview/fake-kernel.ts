@@ -195,6 +195,9 @@ export class FakeKernel implements Transport {
             Object.assign(r.data.data as Record<string, unknown>, m.refuse[3] ?? {});
             throw r;
           }
+          // #batch-card: request.mcp.enable{servers} raises ONE card for every server (the kernel names them in ids)
+          const servers = (p.payload as { servers?: Array<{ id?: unknown }> } | undefined)?.servers;
+          if (p.kind === 'request.mcp.enable' && Array.isArray(servers)) return { pending: true, cardId: 'card:01JPREVIEWMCPCARD0000000001', id: servers[0]?.id, ids: servers.map((s) => s.id) };
           return p.kind === 'request.mcp.enable' && (p.payload as { id?: unknown } | undefined)?.id !== 'first-party:paradigm' ? { pending: true, cardId: 'card:01JPREVIEWMCPCARD0000000001', id: (p.payload as { id?: unknown }).id } : { ok: true };
         }
         // founder report 2026-10-23 (input selection): a shot may refuse the input change (__vxPreview.input)

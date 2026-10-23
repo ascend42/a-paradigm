@@ -34,7 +34,24 @@ components:
       the rows: an off rule never matches, is not repoEditsRule (the mode
       chip) and `gnomon rules list` says off. Tests: test/rules-view.test.ts,
       test/socket-abi.test.ts (8.0:rules-view request.rules.apply).
+      The card block is the shared #batch-card helper (rulesOnBlock ->
+      batchCardBlock), the same batch semantics as #mcp-servers.
     signals: ["!approval.rule.disabled", "!approval.rule.enabled"]
+  batch-card:
+    description: >-
+      #batch-card (founder 2026-10-23: "grouped cards of related things, one
+      password"). src/kernel/broker/batch-card.ts batchCardBlock: a batch
+      card's lines wrapped under MAX_LINE (never cut) and measured after
+      wrapping. Shared by #rules-apply and #mcp-servers so both batch cards
+      follow ONE set of semantics: validate every item before any write or
+      card; over the caller's cap refuse, never cut; at allow re-check each
+      item and skip, and report, any that changed while the card waited.
+      The GUI scrolls a long body inside the card (design-system
+      card.body_scroll). Tests: test/mcp-servers.test.ts (#batch-card),
+      test/rules-view.test.ts.
+    path: src/kernel/broker/batch-card.ts
+    type: module
+    tags: [gnomon, kernel, broker, cards, paradigm-8]
   gnomon-kernel:
     description: >-
       The kernel package. ZERO runtime deps (G-SEC-01): package.json has no
@@ -2789,6 +2806,28 @@ components:
       symlink / hard link / outside-repo refused. L2 secret NAME=value and
       short-flag values hidden. L3 inline code flagged. L5 mcp.user.added
       after the merge (noteMerged).
+      #batch-card (founder 2026-10-23: "grouped cards of related things,
+      one password"): request.mcp.enable{servers:[{id, scope, repo?}]}
+      turns 1..MCP_ENABLE_MAX (16) servers on with ONE grant card
+      (detail.servers[], rootRows []) and one fresh presence; each server is
+      its own fenced field block (mcpBatchCardLines: what runs or where it
+      connects, env and header names, takes-from, auto-allow rules, launch
+      hash). Everything is validated first (servers[i] named in the
+      refusal; nothing raised); over the count cap or MAX_CARD_CHARS
+      (measured after wrapping, maxCardChars for tests) refused, never cut.
+      A server already on is left out (unchanged); a batch overlapping a
+      waiting card is refused (card-pending), the same batch again returns
+      its card. At allow each launch hash is checked again: a changed server
+      is skipped and reported (status.mcp.skipped, mcp.user.skipped-changed);
+      when every server changed, prepare refuses before the presence prompt.
+      A single {id, scope} is a batch of one with its one-server card.
+      Turning off stays immediate with no card. status.mcp.max names the cap.
+      Aegis Lows (2026-10-23): L1 skips kept per cardId (status.mcp.skips,
+      newest last, at most MCP_SKIPS_KEPT 16, each with on[] and the deciding
+      connId; status.mcp.skipped stays the newest), the event carries connId;
+      L2 permission.ts fieldLines splits on every line break (\r\n, \n, \r,
+      \v, \f, U+0085, U+2028, U+2029) so no line escapes a fence; L3 every
+      enable card, one server too, carries the wrapped block (never cut).
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
