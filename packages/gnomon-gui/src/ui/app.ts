@@ -1340,6 +1340,14 @@ const settings = mountSettings(document, {
       rulesUi = c.ui;
       return c.close;
     },
+    escape: () => {
+      const id = rulesUi.offOpen;
+      if (!id) return false;
+      rulesUi = toggleOffMenu(rulesUi, id);
+      settings.repaint();
+      (document.querySelector(`#settings-body .rule-row[data-rule-id="${CSS.escape(id)}"] [data-rule-act="off-menu"]`) as HTMLElement | null)?.focus();
+      return true;
+    },
   },
 });
 /**

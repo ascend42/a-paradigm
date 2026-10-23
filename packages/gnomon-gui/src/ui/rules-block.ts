@@ -19,9 +19,10 @@ function keyEl(doc: MiniDoc, k: RuleKey, ruleId: string): MiniEl {
 
 export function ruleRowEl(doc: MiniDoc, r: RuleRowView): MiniEl {
   const cls = `rule-row${r.staged ? ' is-staged' : ''}${r.removed ? ' is-removed' : ''}${r.off ? ' is-off' : ''}`;
-  const li = h(doc, 'li', { class: cls, 'data-rule-id': r.ruleId, ...(r.from ? { title: `${r.from} (${r.ruleId})` } : { title: r.ruleId }) });
+  const li = h(doc, 'li', { class: cls, 'data-rule-id': r.ruleId, title: `${r.where}${r.from ? ` · ${r.from}` : ''} (${r.ruleId})` });
   li.appendChild(h(doc, 'span', { class: `rule-what${r.removed ? ' struck' : ''}` }, r.what));
-  li.appendChild(h(doc, 'span', { class: 'rule-meta' }, `${r.where} · ${r.since} · `, h(doc, 'span', { class: 'rule-state' }, r.state)));
+  // the group heading names the repo: the meta line doesn't repeat it (it stays in the title and the group's label)
+  li.appendChild(h(doc, 'span', { class: 'rule-meta' }, `${r.since} · `, h(doc, 'span', { class: 'rule-state' }, r.state)));
   if (r.staged) li.appendChild(h(doc, 'span', { class: 'rule-staged' }, r.staged));
   li.appendChild(h(doc, 'span', { class: 'rule-keys' }, ...r.keys.map((k) => keyEl(doc, k, r.ruleId))));
   // C2: Turn off ▾ opens inline, under the row (like the card's Always ▾), never a popover
@@ -35,7 +36,7 @@ function resultEl(doc: MiniDoc, r: RulesResult): MiniEl {
     doc,
     'p',
     { class: `sf-result rules-result${fail ? ' fail' : ''}`, role: fail ? 'alert' : 'status' },
-    h(doc, 'strong', null, r.kind === 'saved' ? 'saved' : r.kind === 'waiting' ? 'waiting' : 'not saved'),
+    h(doc, 'strong', null, r.kind === 'saved' ? 'saved' : r.kind === 'waiting' ? 'card waiting' : 'not saved'),
     ` ${r.text}`,
     r.next ? h(doc, 'span', { class: 'rules-next' }, `next: ${r.next}`) : null,
   );
@@ -43,10 +44,10 @@ function resultEl(doc: MiniDoc, r: RulesResult): MiniEl {
 
 export function rulesBlockEl(doc: MiniDoc, v: RulesBlockView): MiniEl {
   const box = h(doc, 'div', { class: 'settings-row rules-block', 'data-row': 'rules' });
-  box.appendChild(h(doc, 'p', { class: 'meta rules-sum', 'aria-live': 'polite' }, v.summary));
+  if (v.summary) box.appendChild(h(doc, 'p', { class: 'meta rules-sum', 'aria-live': 'polite' }, v.summary));
   if (v.closePrompt) {
     // Mika: closing Settings with unsaved changes asks inline
-    box.appendChild(h(doc, 'div', { class: 'rules-close-prompt', role: 'group', 'aria-label': 'Unsaved rule changes' }, h(doc, 'span', { class: 'rcp-text' }, v.closePrompt), h(doc, 'button', { class: 'key pri', type: 'button', 'data-rules-save': 'prompt' }, 'Save'), h(doc, 'button', { class: 'key quiet', type: 'button', 'data-rules-discard': 'prompt' }, 'Discard')));
+    box.appendChild(h(doc, 'div', { class: 'rules-close-prompt', role: 'group', 'aria-label': 'Unsaved rule changes' }, h(doc, 'span', { class: 'rcp-text' }, v.closePrompt), h(doc, 'button', { class: 'key pri', type: 'button', 'data-rules-save': 'prompt' }, v.closeSave), h(doc, 'button', { class: 'key quiet', type: 'button', 'data-rules-discard': 'prompt' }, 'Discard changes')));
   }
   if (v.filter.shown) {
     const input = h(doc, 'input', { class: 'field w-name', type: 'search', name: 'rule-filter', value: v.filter.value, 'data-rule-filter': '', placeholder: 'words, repo or tool', 'aria-label': 'Filter rules' });

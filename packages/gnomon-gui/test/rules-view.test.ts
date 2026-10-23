@@ -8,7 +8,7 @@ import {
   afterSave,
   applyRequest,
   beforeClose,
-  CARD_WAITING,
+  waitingText,
   discard,
   emptyRulesUi,
   expiryToastOf,
@@ -106,21 +106,26 @@ describe('#gui-rules-view: staging and the save bar', () => {
     const res = refusedResult({ code: 'NOT_FOUND', reason: 'not-found', message: '#approval-broker: no standing always rule card:x', next: [], data: { hint: 'the list has changed: look again, then save' } });
     const after = { ...ui, saving: false, result: res };
     expect(after.staged.size).toBe(2);
-    expect(res).toEqual({ kind: 'refused', text: 'A rule changed while you were editing; nothing was saved. no standing always rule card:x', next: 'the list has changed: look again, then save' });
+    expect(res).toEqual({ kind: 'refused', text: 'A rule changed while you were editing; nothing was saved.', next: 'the list has changed: look again, then save' });
+    // principle 5: no rule or card id, no symbol, no wire code in the line
+    expect(refusedResult({ code: 'BAD_REQUEST', reason: null, message: '#approval-broker: card:01J…', next: [], data: {} }).text).toBe('Gnomon refused the change; nothing was saved.');
   });
 
-  it('a card the same press could not decide: "card waiting · Decide in the stack"; then the card resolves', () => {
+  it('a card the same press could not decide: card waiting, what was saved, the waiting row has no second Turn on; then the card resolves', () => {
     const r = rs(2, { offAt: [2] });
     const ui = stageOn(stageOff(emptyRulesUi(), id(1), 'manual', r), id(2));
     const w = afterSave(ui, { cardId: id(900), decided: false });
-    expect(w.result).toEqual({ kind: 'waiting', text: CARD_WAITING });
+    expect(w.result).toEqual({ kind: 'waiting', text: waitingText(1, 1) });
+    expect(waitingText(1, 1)).toBe('1 change saved; 1 rule comes back on when you allow its card.');
+    const row = rulesBlock(r, w).groups.flatMap((g) => g.rows).find((x) => x.ruleId === id(2))!;
+    expect(row).toMatchObject({ staged: '→ on again when you allow its card', keys: [] });
     expect(w.staged.size).toBe(0);
     expect(w.waiting).toEqual({ cardId: id(900), ruleIds: [id(2)] });
     expect(reconcile(w, r, () => true)).toBe(w); // still pending: nothing changes
     const on = rulesStatusOf({ rules: { ...(status(2).rules as object) } });
     expect(reconcile(w, on, () => false).result?.kind).toBe('saved');
     expect(reconcile(w, r, () => false).result?.kind).toBe('refused');
-    expect(afterSave(ui, { cardId: null, decided: null }).result).toEqual({ kind: 'saved', text: 'Saved: 2 changes' });
+    expect(afterSave(ui, { cardId: null, decided: null }).result).toEqual({ kind: 'saved', text: '2 changes.' });
   });
 
   it('closing with unsaved changes asks inline: "3 changes not saved · Save · Discard"', () => {
@@ -129,6 +134,7 @@ describe('#gui-rules-view: staging and the save bar', () => {
     const c = beforeClose(ui);
     expect(c.close).toBe(false);
     expect(rulesBlock(r, c.ui).closePrompt).toBe('3 changes not saved');
+    expect(rulesBlock(r, c.ui).closeSave).toBe(SAVE_LABEL.none); // the prompt's Save names the same cost as the bar's
     expect(beforeClose(discard(c.ui)).close).toBe(true);
     expect(beforeClose(emptyRulesUi()).close).toBe(true);
   });
@@ -136,7 +142,7 @@ describe('#gui-rules-view: staging and the save bar', () => {
 
 describe('#gui-rules-view: the list at 0, 1, 5, 50 and 200 rules', () => {
   it('0: the empty state words', () => {
-    expect(rulesBlock(rs(0), emptyRulesUi())).toMatchObject({ empty: RULES_EMPTY, groups: [], saveBar: null });
+    expect(rulesBlock(rs(0), emptyRulesUi())).toMatchObject({ empty: RULES_EMPTY, groups: [], saveBar: null, summary: '' }); // said once, not '0 rules' too
     expect(RULES_EMPTY).toBe('No Always rules yet. When you choose Always on a card, the rule shows here.');
   });
   it('1 and 5: grouped by repo with counts, newest first, no filter', () => {

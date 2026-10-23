@@ -47,7 +47,13 @@ components:
       "see Rules"), the expiry toast and a status re-read on rule rows.
       Preview fixtures rules-0/1/5/50/200, rules-off-open, rules-tighten,
       rules-staged, rules-close, rules-refused, rules-waiting (DEV hook
-      devRulesState, dropped from the served bundle). Test:
+      devRulesState, dropped from the served bundle). Mika's review
+      (2026-10-23): a refusal line never carries the kernel's message, ids or
+      codes; the waiting line says what was saved and the waiting row offers
+      no second Turn on; the close prompt's Save names the bar's cost; Esc
+      folds an open Turn off ▾ first; the meta line drops the repo its group
+      heading names; the settings sheet keeps its scroll on a repaint (the
+      filter no longer scrolls away while typing). Test:
       test/rules-view.test.ts.
   gui-session-rename:
     description: >-

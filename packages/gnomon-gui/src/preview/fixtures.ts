@@ -419,7 +419,7 @@ function rulesOf(n: number, offEvery = 0): Record<string, unknown> {
   const rules = Array.from({ length: n }, (_, i) => {
     const [repoKey, repoName] = repos[i % 3]!;
     const off = offEvery > 0 && i % offEvery === offEvery - 1;
-    return { ruleId: `card:01JPREVIEWRULE${String(i + 1).padStart(12, '0')}`, match: 'exact', tool: 'Bash', repoKey, ...(i % 7 === 6 ? {} : { repoName }), words: words[i % words.length]!.replace('npm run build', i < 7 ? 'npm run build' : `npm run build:${i}`), learnedAt: at(Math.floor(i / 4), 12 - (i % 4), 53 - (i % 50)), hsid: 'hsid:v1:01JPREVIEWSESSION000000001', state: off ? 'off' : 'on', ...(off ? { until: i % 2 ? new Date(2026, 9, 20, 15, 7).toISOString() : null } : {}) };
+    return { ruleId: `card:01JPREVIEWRULE${String(i + 1).padStart(12, '0')}`, match: 'exact', tool: 'Bash', repoKey, ...(i % 7 === 6 ? {} : { repoName }), words: words[i % words.length]!.replace('/billing/', `/${repoName}/`).replace('npm run build', i < 7 ? 'npm run build' : `npm run build:${i}`), learnedAt: at(Math.floor(i / 4), 12 - (i % 4), 53 - (i % 50)), hsid: 'hsid:v1:01JPREVIEWSESSION000000001', state: off ? 'off' : 'on', ...(off ? { until: i % 2 ? new Date(2026, 9, 20, 15, 7).toISOString() : null } : {}) };
   });
   return { rules: { built: true, now: new Date(2026, 9, 20, 14, 7).toISOString(), presets: { hour: new Date(2026, 9, 20, 15, 7).toISOString(), tomorrow: new Date(2026, 9, 21, 6, 0).toISOString(), manual: 'manual' }, rules } };
 }

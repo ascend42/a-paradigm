@@ -24,6 +24,10 @@ export const RULES_EMPTY = 'No Always rules yet. When you choose Always on a car
 export const FILTER_AT = 12;
 export const SAVE_LABEL = Object.freeze({ none: 'Save · no Touch ID', presence: 'Save · asks Touch ID or your Mac password once' });
 export const CARD_WAITING = 'card waiting · Decide in the stack';
+/** The waiting line: the narrowing is saved; the rules turning back on wait on the card (the key says where). */
+export const waitingText = (saved: number, ons: number): string => `${saved ? `${changesWord(saved)} saved; ` : ''}${ons === 1 ? '1 rule comes' : `${ons} rules come`} back on when you allow its card.`;
+/** A row whose turn-back-on waits on the card (no key: deciding the card is the next move). */
+export const WAITING_ROW = '→ on again when you allow its card';
 export const REMOVED_WORD = 'removed on save';
 /** The request kind (dispatcher-only; contracts CLIENT_API_DESCRIPTOR.rulesView.request). */
 export const RULES_APPLY_REQUEST = 'request.rules.apply';
@@ -147,7 +151,7 @@ export function reconcile(ui: RulesUi, rs: RulesStatus, cardPending: (cardId: st
   let result = ui.result;
   if (waiting && !cardPending(waiting.cardId)) {
     const allOn = waiting.ruleIds.every((id) => by.get(id)?.state === 'on' || !by.has(id));
-    result = allOn ? { kind: 'saved', text: 'Saved: the rules are back on' } : { kind: 'refused', text: 'The card was not allowed: those rules stay off', next: 'turn them on again and save' };
+    result = allOn ? { kind: 'saved', text: 'the rules are back on.' } : { kind: 'refused', text: 'The card was not allowed: those rules stay off', next: 'turn them on again and save' };
     waiting = null;
     changed = true;
   }
@@ -179,7 +183,6 @@ export function applyRequest(ui: RulesUi): { kind: string; payload: { changes: A
 
 /** A kernel refusal, in plain words with next: (every change stays staged). */
 export function refusedResult(r: ShownRefusal): RulesResult {
-  const msg = r.message.replace(/^#[a-z-]+:\s*/, '');
   const words: Record<string, string> = {
     'not-found': 'A rule changed while you were editing; nothing was saved.',
     'too-large': 'Too many rules to turn back on in one card; nothing was saved.',
@@ -188,17 +191,19 @@ export function refusedResult(r: ShownRefusal): RulesResult {
     'card-pending': 'A card turning rules back on is still waiting; nothing was saved.',
     partial: 'Some changes were saved, then Gnomon stopped.',
   };
-  const lead = (r.reason && words[r.reason]) || 'Nothing was saved.';
+  // principle 5: what didn't happen and why, in plain words; the kernel's message (rule and card ids, the symbol) stays
+  // in the raw view and the kernel log, never in this line (Mika 2026-10-23)
+  const lead = (r.reason && words[r.reason]) || 'Gnomon refused the change; nothing was saved.';
   const hint = r.data && typeof r.data.hint === 'string' ? r.data.hint : r.next[0] ?? 'look at the list, then save again';
-  return { kind: 'refused', text: `${lead} ${msg}`.trim(), next: hint };
+  return { kind: 'refused', text: lead, next: hint };
 }
 
 /** After Save: what the bar says and what stays staged (narrowing applied at once; ons wait on the card). */
 export function afterSave(ui: RulesUi, out: { cardId: string | null; decided: boolean | null }): RulesUi {
   const n = ui.staged.size;
-  if (!out.cardId || out.decided === true) return { ...ui, staged: new Map(), offOpen: null, saving: false, closePrompt: false, waiting: null, result: { kind: 'saved', text: `Saved: ${changesWord(n)}` } };
+  if (!out.cardId || out.decided === true) return { ...ui, staged: new Map(), offOpen: null, saving: false, closePrompt: false, waiting: null, result: { kind: 'saved', text: `${changesWord(n)}.` } };
   const ons = [...ui.staged].filter(([, s]) => s.op === 'on').map(([id]) => id);
-  return { ...ui, staged: new Map(), offOpen: null, saving: false, closePrompt: false, waiting: { cardId: out.cardId, ruleIds: ons }, result: { kind: 'waiting', text: CARD_WAITING } };
+  return { ...ui, staged: new Map(), offOpen: null, saving: false, closePrompt: false, waiting: { cardId: out.cardId, ruleIds: ons }, result: { kind: 'waiting', text: waitingText(n - ons.length, ons.length) } };
 }
 
 /* ── words ───────────────────────────────────────────────────────── */
@@ -299,6 +304,8 @@ export interface RulesBlockView {
   saveBar: SaveBarView | null;
   result: RulesResult | null;
   closePrompt: string | null;
+  /** the close prompt's Save names the same cost as the bar's */
+  closeSave: string;
 }
 
 const newestFirst = (a: RuleItem, b: RuleItem): number => (b.learnedAt ?? '').localeCompare(a.learnedAt ?? '');
@@ -306,8 +313,10 @@ const newestFirst = (a: RuleItem, b: RuleItem): number => (b.learnedAt ?? '').lo
 export function rowView(r: RuleItem, ui: RulesUi, rs: RulesStatus, sessionName?: (hsid: string) => string | null): RuleRowView {
   const st = ui.staged.get(r.ruleId) ?? null;
   const offOpen = ui.offOpen === r.ruleId && !st;
+  const waits = !st && r.state === 'off' && !!ui.waiting?.ruleIds.includes(r.ruleId);
   let keys: RuleKey[];
-  if (st) keys = [st.op === 'remove' ? { act: 'keep', label: 'keep' } : { act: 'undo', label: 'undo' }];
+  if (waits) keys = [];
+  else if (st) keys = [st.op === 'remove' ? { act: 'keep', label: 'keep' } : { act: 'undo', label: 'undo' }];
   else if (r.state === 'off') keys = [{ act: 'on', label: 'Turn on' }, { act: 'remove', label: 'Remove', quiet: true }];
   else keys = [{ act: 'off-menu', label: `Turn off ${offOpen ? '▴' : '▾'}`, expanded: offOpen }, { act: 'remove', label: 'Remove', quiet: true }];
   const name = r.hsid ? (sessionName?.(r.hsid) ?? null) : null;
@@ -319,7 +328,7 @@ export function rowView(r: RuleItem, ui: RulesUi, rs: RulesStatus, sessionName?:
     from: name ? `from the card asked in ${name}` : r.hsid ? `from a card in session ${r.hsid.slice(-10)}` : null,
     state: stateText(r, rs.now),
     off: r.state === 'off',
-    staged: st ? stagedText(st) : null,
+    staged: st ? stagedText(st) : waits ? WAITING_ROW : null,
     removed: st?.op === 'remove',
     offOpen,
     presets: offOpen ? RULE_PRESETS.map((p) => ({ act: 'off' as const, label: presetLabel(p, rs), value: p })) : [],
@@ -348,19 +357,20 @@ export function rulesBlock(rs: RulesStatus, ui: RulesUi, sessionName?: (hsid: st
   }
   const groups = [...by].map(([repoKey, list]) => {
     const all = rs.rules.filter((r) => r.repoKey === repoKey);
-    return { repoKey, label: list[0]!.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, rows: list.map((r) => rowView(r, ui, rs, sessionName)) };
+    return { repoKey, label: all.find((r) => r.repoName)?.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, rows: list.map((r) => rowView(r, ui, rs, sessionName)) };
   });
   const n = ui.staged.size;
   return {
     built: rs.built,
     empty: rs.built && total === 0 ? RULES_EMPTY : null,
-    summary: !rs.built ? 'not offered by this kernel' : `${total} rule${total === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}${groups.length > 1 ? ` · ${groups.length} repos` : ''}`,
+    summary: !rs.built ? 'not offered by this kernel' : total === 0 ? '' : `${total} rule${total === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}${groups.length > 1 ? ` · ${groups.length} repos` : ''}`,
     filter: { value: ui.filter, shown },
     groups,
     noMatch: total > 0 && groups.length === 0 ? `No rule matches “${q}”.` : null,
     saveBar: n > 0 ? { count: changesWord(n), save: saveLabel(ui), cost: saveCost(ui), busy: ui.saving } : null,
     result: ui.result,
     closePrompt: ui.closePrompt && n > 0 ? closePromptText(n) : null,
+    closeSave: saveLabel(ui),
   };
 }
 

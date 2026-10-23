@@ -52,6 +52,8 @@ export interface RulesPress {
   filter(text: string): void;
   /** may the sheet close? false = changes are staged: the inline prompt shows instead */
   beforeClose(): boolean;
+  /** Esc: fold an open Turn off ▾ back to its key (true = handled; the sheet stays open) */
+  escape(): boolean;
 }
 
 export interface SettingsDeps {
@@ -236,9 +238,13 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const ruleKey = inBody && a!.dataset.ruleAct ? `[data-rule-act="${CSS.escape(a!.dataset.ruleAct)}"][data-rule-id="${CSS.escape(a!.dataset.ruleId ?? '')}"]${a!.dataset.ruleValue ? `[data-rule-value="${CSS.escape(a!.dataset.ruleValue)}"]` : ''}` : inBody && a!.dataset.ruleFilter !== undefined ? '[data-rule-filter]' : null;
     const sel = field || a?.dataset.ffTyped !== undefined || a?.dataset.ruleFilter !== undefined ? [(a as HTMLInputElement).selectionStart, (a as HTMLInputElement).selectionEnd] : null;
     const keep = !inBody ? null : ruleKey ? ruleKey : field ? `[data-lm-field="${CSS.escape(field)}"]` : a!.dataset.ffTyped !== undefined ? '[data-ff-typed]' : a!.dataset.ffAct ? `[data-ff-act="${CSS.escape(a!.dataset.ffAct)}"]` : a!.dataset.lmAct ? `[data-lm-act="${CSS.escape(a!.dataset.lmAct)}"]${a!.dataset.lmValue !== undefined ? `[data-lm-value="${CSS.escape(a!.dataset.lmValue)}"]` : ''}` : a!.dataset.settingsRun ? `[data-settings-run="${CSS.escape(a!.dataset.settingsRun)}"]` : a!.id ? `#${CSS.escape(a!.id)}` : a!.tagName === 'SUMMARY' ? '.sf-adv > summary' : null;
+    // a repaint keeps the reader where they were: emptying the body clamps its scroll to the top (the Rules filter
+    // re-paints on every key, and the field being typed in must not scroll away; Mika 2026-10-23)
+    const top = body.scrollTop;
     painting = true;
     paintSettings(document as unknown as MiniDoc, body, d.model(), focused);
     painting = false;
+    body.scrollTop = top;
     const el = keep ? (body.querySelector(keep) as HTMLElement | null) : null;
     if (el && !(el as HTMLButtonElement).disabled) {
       el.focus({ preventScroll: true });
@@ -370,6 +376,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     isOpen: () => !overlay.hidden,
     repaint,
     escape: () => {
+      if (d.rules?.escape()) return; // #gui-rules-view: an open Turn off ▾ folds first, focus back on its key
       if (!d.local?.escape()) close();
     },
     focusLocal,
