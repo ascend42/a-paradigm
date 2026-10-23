@@ -656,7 +656,14 @@ components:
       in its title) while status.runModes carries editsByRule; ask's menu
       line says edits pass by the rule, and the menu's "stop edits by rule"
       entry sends request.rules.revoke, returning focus to the run mode key
-      (TD-2026-10-23-939 follow-up);
+      (TD-2026-10-23-939 follow-up); a kernel verb card (T-2026-10-23-002)
+      with a verified {type:'git-verb'} node (gitVerbOf) shows the kernel's
+      host line under its title (gitVerbLine: "github.com · owner/repo ·
+      private · branch main"), and a push card folds ONE Always choice
+      "push to <host>/<owner>/<repo>" (data-scope exact; noted "this remote
+      from this repo, any branch, never a force push"); a force push or a
+      lookalike host (claim-mismatch) offers none (design-system variant
+      git-push);
       refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,
       papercraft day / phosphor night / auto themes and reduced motion.
@@ -666,6 +673,7 @@ components:
     tests:
       - test/gui.test.ts
       - test/edit-scope.test.ts
+      - test/git-verb-card.test.ts
       - test/modes.test.ts
       - test/voice.test.ts
       - test/voice-client.test.ts

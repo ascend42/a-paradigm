@@ -26,7 +26,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, gitVerbOf, askDetailOf, askNote, localNsOf, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
@@ -925,6 +925,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
         prefixOptions: c.kind === 'permission' ? prefixOptionsOf(c.card) : null,
         editScopes: c.kind === 'permission' ? editScopesOf(c.card) : null, // TD-2026-10-23-939 follow-up: scoped edit always
+        gitVerb: c.kind === 'permission' ? gitVerbOf(c.card) : null, // #git-verbs: push/create facts + the remote's Always
         alwaysOpen: alwaysOpen.has(`${zone}|${c.cardId}`), // Mika 2026-10-23: the "Always ▾" fold survives a repaint
         project: projectOfCard(c),
         raisedAt: c.raisedAt ?? null,

@@ -331,6 +331,9 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
     case 'edit-scope':
       // the kernel's structured edit-scope choices (TD-2026-10-23-939 follow-up): the card's always keys render them (editScopesOf)
       return h(doc, 'span', { class: 'blk blk-edit-scope' });
+    case 'git-verb':
+      // #git-verbs (T-2026-10-23-002): the kernel's structured verb detail; the card's k-line and always key render it (gitVerbOf)
+      return h(doc, 'span', { class: 'blk blk-git-verb' });
     case 'bash-prefix':
       // the kernel's structured prefix choices: the card's always keys render them (prefixOptionsOf)
       return h(doc, 'span', { class: 'blk blk-bash-prefix' });
@@ -365,6 +368,8 @@ export interface CardView {
   prefixOptions?: string[][] | null;
   /** Edit/Write permission: the scoped always choices from the contentHash-verified detail (editScopesOf); null ⇒ exact only */
   editScopes?: ('file' | 'repo-edits')[] | null;
+  /** #git-verbs: a kernel git verb card's facts from the contentHash-verified git-verb node (gitVerbOf); null ⇒ none */
+  gitVerb?: GitVerbView | null;
   /** Mika 2026-10-23: the scoped always choices are unfolded under the keys (the page keeps it per card and zone across repaints) */
   alwaysOpen?: boolean;
   /** S3: the card's project (repo basename) and its ONE project hue (groupHue / projectHue); null ⇒ no project line */
@@ -603,6 +608,48 @@ export const EDIT_SCOPE_KEYS: Readonly<Record<'file' | 'repo-edits', { label: st
   file: { label: 'Always: edits to this file', short: 'edits to this file', note: 'any change to this file', title: 'always allow edits to this file, any content, in this repo (not in manual run mode)' },
   'repo-edits': { label: 'Always: edits in this repo', short: 'edits in this repo', note: 'same as auto-edits for this repo', title: 'same as auto-edits for this repo: every edit inside the repo, except protected paths (not in manual run mode)' },
 });
+
+/** #git-verbs (T-2026-10-23-002): what a kernel git verb card shows beside its title, from the kernel's own detail. */
+export interface GitVerbView {
+  verb: 'git.init' | 'git.push' | 'repo.create' | 'git.worktree.add' | 'git.worktree.remove';
+  host: string | null;
+  /** host/owner/repo */
+  slug: string | null;
+  branch: string | null;
+  visibility: 'private' | 'public' | null;
+  force: boolean;
+}
+
+/**
+ * #git-verbs: a kernel git verb card's facts come ONLY from the block's `{type:'git-verb', detail}` node whose detail
+ * hashes to the card's contentHash (display only; the kernel holds the remote it pushes to and re-reads it).
+ */
+export function gitVerbOf(card: Record<string, unknown>): GitVerbView | null {
+  if (card.kind !== 'permission') return null;
+  const block = card.block;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'git-verb');
+  if (nodes.length !== 1) return null;
+  const detail = (nodes[0] as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  if (typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
+  const d = detail as Record<string, unknown>;
+  const verbs = ['git.init', 'git.push', 'repo.create', 'git.worktree.add', 'git.worktree.remove'] as const;
+  if (!verbs.includes(d.verb as never)) return null;
+  const s = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 && v.length <= 300 ? v : null);
+  return { verb: d.verb as GitVerbView['verb'], host: s(d.host), slug: s(d.slug) ?? (s(d.host) && s(d.owner) && s(d.repo) ? `${String(d.host)}/${String(d.owner)}/${String(d.repo)}` : null), branch: s(d.branch), visibility: d.visibility === 'private' || d.visibility === 'public' ? d.visibility : null, force: d.force === true };
+}
+
+/** #git-verbs: the k-line under a push or create card's title: host · owner/repo · visibility · branch (plain words). */
+export function gitVerbLine(g: GitVerbView): string | null {
+  if (g.verb !== 'git.push' && g.verb !== 'repo.create') return null;
+  if (!g.host || !g.slug) return null;
+  const rest = g.slug.startsWith(`${g.host}/`) ? g.slug.slice(g.host.length + 1) : g.slug;
+  return [g.host, rest, ...(g.visibility ? [g.visibility] : []), ...(g.branch ? [`branch ${g.branch}`] : []), ...(g.force ? ['force push'] : [])].join(' · ');
+}
+
+/** #git-verbs: the push card's one Always choice, in plain words (Mika: shown beside the key, never only on hover). */
+export const ALWAYS_REMOTE_NOTE = 'this remote from this repo, any branch, never a force push';
 
 /** The exact and prefix always choices' notes (Mika 2026-10-23), shown beside each key. */
 export const ALWAYS_EXACT_NOTE: Readonly<Record<'edit' | 'command', string>> = Object.freeze({ edit: 'only this same change', command: 'only this same command text' });
@@ -1077,7 +1124,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // S1 ink keys: the first non-deny decision is the filled primary key (.key.pri); never on a claim-mismatch card,
   // where Deny stays the default focus and nothing is filled
   const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
-  const scoped: 'command' | 'edit' | null = v.prefixOptions?.length ? 'command' : v.editScopes?.length ? 'edit' : null;
+  const scoped: 'command' | 'edit' | 'remote' | null = v.prefixOptions?.length ? 'command' : v.editScopes?.length ? 'edit' : v.gitVerb?.verb === 'git.push' && v.gitVerb.slug ? 'remote' : null;
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
   // design-system card.family ⊙ gnomon (C3): a root configuration card about Gnomon itself (local.config)
@@ -1085,7 +1132,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const tag0 = voiceTagOf(v.voice ?? null);
   const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
   // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title
-  const kLine = gnomonFam ? (kernelTextLines(block).find((l) => /^asked from (Settings|the terminal) · /.test(l)) ?? null) : null;
+  const kLine = gnomonFam ? (kernelTextLines(block).find((l) => /^asked from (Settings|the terminal) · /.test(l)) ?? null) : v.gitVerb ? gitVerbLine(v.gitVerb) : null;
   const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
   const failed = v.kind === 'incident' || v.flags.includes('failed');
   const who = `requested by ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`;
@@ -1158,9 +1205,14 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
  * decision key (data-decision="always" + its scope, exactly as before) and its note in plain words beside it. The
  * accessible name of each key starts "Always:" and contains its visible words (WCAG 2.5.3).
  */
-function alwaysChoices(doc: MiniDoc, v: CardView, scoped: 'command' | 'edit'): MiniEl {
+function alwaysChoices(doc: MiniDoc, v: CardView, scoped: 'command' | 'edit' | 'remote'): MiniEl {
   const row = (attrs: Record<string, string>, label: string, shown: string, note: string): MiniEl =>
     h(doc, 'div', { class: 'always-row' }, h(doc, 'button', { class: `key key-always${attrs['data-scope'] === 'prefix' ? ' key-prefix' : attrs['data-scope'] === 'exact' ? '' : ' key-scope'}`, type: 'button', 'data-decision': 'always', 'data-card-id': v.cardId, 'aria-label': label, ...attrs }, shown), h(doc, 'span', { class: 'always-note' }, note));
+  if (scoped === 'remote') {
+    // #git-verbs: one choice, the exact remote the kernel resolved (its rule is keyed to that URL and host)
+    const shown = `push to ${v.gitVerb?.slug ?? 'this remote'}`;
+    return h(doc, 'div', { class: `always-choices${v.alwaysOpen ? ' open' : ''}`, role: 'group', 'aria-label': 'Always allow, no card next time', 'data-always-for': v.cardId }, h(doc, 'span', { class: 'always-h' }, 'always allow, no card next time:'), row({ 'data-scope': 'exact' }, `Always: ${shown}`, shown, ALWAYS_REMOTE_NOTE));
+  }
   const exact = scoped === 'command' ? 'this exact command' : 'this exact edit';
   return h(
     doc,
