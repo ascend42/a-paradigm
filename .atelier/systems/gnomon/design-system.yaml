@@ -916,6 +916,41 @@ components:
     status: clear
     from: { session: 2026-10-22-gnomon-loops-ui, board: trust-card, choice: card-unfolds, decided_by: creator, note: "the trust card keeps the listing although the detail draws a graph (board loop-detail)" }
 
+  rule-row:
+    role: "One saved Always rule in Settings › Permissions › Rules: what it allows, where, since when, from which card, and whether it is on. Changes are staged in the page and applied by ONE save (rules-save-bar)."
+    anatomy:
+      - "what (11.5, 500 --ink, wraps anywhere): the KERNEL's plain words (status.rules words, rules.ts ruleWords), never page text: 'this exact command: npm run build' · 'Bash commands starting paradigm lore record …' · 'edits to <path>' · 'edits in this repo (same as auto-edits)' · 'this exact edit (Edit)'"
+      - "meta (10.5 --sec): since ('today 12:53' · 'yesterday' · 'Oct 19', by the kernel's now) · state ('on' · 'off' · 'off until 15:07' · 'off until tomorrow 06:00'; off in 600 --ink2). The group heading names the repo, so the meta line doesn't repeat it; the title= says where ('a repo not open now' when no session names it), 'from the card asked in <session>' and the rule id (Mika 2026-10-23)"
+      - "staged line (10.5, 600 --ink): '→ off for 1 hour' · '→ off until tomorrow' · '→ off until you turn it back on' · '→ on again' · 'removed on save'; a rule whose turn-on rides a waiting card: '→ on again when you allow its card' and no key"
+      - "keys (right, --key-h): on: 'Turn off ▾' + Remove (quiet); off: 'Turn on' + Remove (quiet); staged: 'undo'; removed: 'keep'. Esc in the open presets folds them back to 'Turn off ▾'"
+      - "Turn off ▾ opens INLINE under the row (like the card's Always ▾: a left rule, keys in a row), never a popover: 'for 1 hour · until 15:07', 'until tomorrow · 06:00', 'until I turn it back on' (each end named by the kernel clock, status.rules.presets)"
+    grouping: "grouped by repo (heading 11.5 600 + '3 rules · 1 off' 10.5 --sec), newest first, groups by their newest rule; a filter field (words, repo or tool) above 12 rules; a staged row never hides behind the filter. Planned for 0, 1, 5, 50 and 200 rules."
+    states: [on, off, off-until, off-open, staged-off, staged-on, staged-remove, filtered-out, empty]
+    never: ["a hue for on/off or staged (words and weight carry it)", "the amber ◆ for a staged change", "Remove that hides the row before Save (it stays, struck through, with keep)"]
+    copy:
+      empty: "No Always rules yet. When you choose Always on a card, the rule shows here. (no '0 rules' summary above it: said once)"
+      no-match: "No rule matches “<filter>”."
+      summary: "5 rules · 1 off · 3 repos"
+    entry_points: ["palette 'Rules…' (rules.open: Settings opened section-focused at Permissions › Rules)", "the mode menu's last entry 'Always rules…'", "the toast after an Always decision: 'Always rule saved: no card next time' with the key 'see Rules'"]
+    status: clear
+    from: { session: 2026-10-23-gnomon-rules-view, choice: "C1 Settings › Permissions › Rules; C2 three kernel-clock presets inline", decided_by: "Mika (design review), Aegis (security review)" }
+  rules-save-bar:
+    role: "The staged Rules batch: one line and its keys, sticky at the foot of the Rules block while anything is staged; the cost is named before the press."
+    anatomy:
+      - "count (11.5, 600): '3 changes'"
+      - "Save (default key): 'Save · no Touch ID' when the batch only tightens; 'Save · asks Touch ID or your Mac password once' when any rule turns back on; busy 'Saving…'"
+      - "Discard changes (quiet)"
+      - "result line above the keys (.sf-result; role=status, or alert when it fails): 'saved 3 changes.' · 'card waiting 2 changes saved; 1 rule comes back on when you allow its card.' (+ key 'Decide in the stack') · 'not saved <plain words>' + 'next: <what to do>'; never the kernel's message, a rule or card id, or a code (principle 5)"
+    behaviour:
+      - "Save sends ONE request.rules.apply{changes}. remove and off apply at once (no presence); every rule turning back on rides ONE strictness card the same press decides allow (Touch ID or the Mac password, once)"
+      - "A refusal leaves every change staged and says it in plain words with next:"
+      - "A refused or waiting check: the narrowing is saved, the card stays in the stack: 'card waiting · Decide in the stack'"
+      - "Closing Settings with changes staged asks inline at the top of the block: '3 changes not saved' + the bar's own Save label (its cost named the same way) + 'Discard changes' (the sheet stays open; focus on Save)"
+      - "A rule that comes back on by itself when its time ends: a 6 s info toast 'rule back on: <rule>' (key 'see Rules')"
+    states: [hidden, tighten-only, loosen, saving, saved, waiting, refused, close-prompt]
+    status: clear
+    from: { session: 2026-10-23-gnomon-rules-view, choice: "C3 the save bar names its cost", decided_by: "Mika (design review), Aegis (security review)" }
+
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # Zones (the desk). Main surface: the GUI window (packages/gnomon-gui/static/index.html). Desktop widths only.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1260,6 +1295,7 @@ decisions:
   - { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, choice: desk }
   - { session: 2026-10-20-gnomon-gui-fidelity, boards: [s1-tokens-themes, s2-desk-structure, s3-card-and-pile, s4-motion, s5-workshop-footer], choice: per-brief, decided_by: "builders on the default; the founder's re-opens (live mic amber, stamp sea-grey ink) are settled by board gnomon-status-colour (ink)" }
   - { session: 2026-10-21-gnomon-voice, board: mode-model, choice: trust-ladder }
+  - { session: 2026-10-23-gnomon-rules-view, boards: [C1-placement, C2-off-for-a-time, C3-save-cost], choice: "Settings › Permissions › Rules; three kernel-clock presets inline; the save bar names its cost", decided_by: "Mika (design), Aegis (security)" }
   - { session: 2026-10-21-gnomon-voice, board: setup-home, choice: ladder-plus-settings-sheet }
   - { session: 2026-10-21-gnomon-voice, board: pill, choice: mode-plus-live-fact }
   - { session: 2026-10-21-gnomon-voice, board: composer, choice: autogrow-12-tall-24 }

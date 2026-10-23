@@ -36,6 +36,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'composer.focus', title: 'Focus the composer', keys: '/' },
   // #gui-settings: the sheet that gathers every setting (also in the Gnomon menu)
   { id: 'settings.open', title: 'Settings…', keys: '⌘, / Ctrl+,' },
+  // #gui-rules-view (8.0:rules-view): Settings › Permissions › Rules, section-focused
+  { id: 'rules.open', title: 'Rules…', keys: 'Settings · Permissions › Rules' },
   // #gui-mods-panel: which mods are on, what else ships, add one from a folder (also in the Gnomon menu and the Workshop)
   // #gui-local-model: Settings at the Local model section (section-focused); the title follows status.local
   { id: 'local.setup', title: 'Set up local model…', keys: 'Settings · Local model' },

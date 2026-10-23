@@ -44,7 +44,9 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps';
+  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps' | 'rules';
+  /** #gui-rules-view: the Rules block's staged state for the shot (none, off-open, staged, tighten, close, refused, waiting) */
+  rulesState?: string;
 }
 
 /* ── the chain builder ───────────────────────────────────────────── */
@@ -391,7 +393,7 @@ const MIC_FIXTURES = {
 /** S5: the Workshop's declared view as #mod-host status reports a running mod's views. */
 const WORKSHOP_VIEW = { name: 'gnomon.workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
 
-function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false, extra: Pick<Fixture, 'choice' | 'open'> = {}): Fixture {
+function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false, extra: Pick<Fixture, 'choice' | 'open' | 'rulesState'> = {}): Fixture {
   return { name, title, rows: c.rows(), status, focus, workshop, ...extra };
 }
 
@@ -401,6 +403,28 @@ const SETTINGS_STATUS = {
   web: { listening: true, port: 7311, bundleHash: 'sha256:53b2cd7a8d74c94306f388e48249f176d37de86a1246995c905d3486db63fc81' },
   kernelKeyId: 'kk:7k2m9q4xa1b2c3d4',
 };
+/** #gui-rules-view: status.rules with `n` rules over three repos (real words, long ones too), some off. */
+function rulesOf(n: number, offEvery = 0): Record<string, unknown> {
+  const at = (d: number, h: number, m: number): string => new Date(2026, 9, 20 - d, h, m).toISOString();
+  const repos: Array<[string, string]> = [[`sha256:${'1'.repeat(64)}`, 'billing'], [`sha256:${'2'.repeat(64)}`, 'atelier'], [`sha256:${'3'.repeat(64)}`, 'gnomon-web']];
+  const words = [
+    'this exact command: npm run build',
+    'Bash commands starting paradigm lore record …',
+    'edits to ~/Documents/GitHub/billing/src/reconcile/eu-subsidiaries/ledger-adjustments.ts',
+    'edits in this repo (same as auto-edits)',
+    'this exact command: pnpm vitest run test/ledger.test.ts --reporter=dot',
+    'Bash commands starting git log …',
+    'this exact edit (Edit)',
+  ];
+  const rules = Array.from({ length: n }, (_, i) => {
+    const [repoKey, repoName] = repos[i % 3]!;
+    const off = offEvery > 0 && i % offEvery === offEvery - 1;
+    return { ruleId: `card:01JPREVIEWRULE${String(i + 1).padStart(12, '0')}`, match: 'exact', tool: 'Bash', repoKey, ...(i % 7 === 6 ? {} : { repoName }), words: words[i % words.length]!.replace('/billing/', `/${repoName}/`).replace('npm run build', i < 7 ? 'npm run build' : `npm run build:${i}`), learnedAt: at(Math.floor(i / 4), 12 - (i % 4), 53 - (i % 50)), hsid: 'hsid:v1:01JPREVIEWSESSION000000001', state: off ? 'off' : 'on', ...(off ? { until: i % 2 ? new Date(2026, 9, 20, 15, 7).toISOString() : null } : {}) };
+  });
+  return { rules: { built: true, now: new Date(2026, 9, 20, 14, 7).toISOString(), presets: { hour: new Date(2026, 9, 20, 15, 7).toISOString(), tomorrow: new Date(2026, 9, 21, 6, 0).toISOString(), manual: 'manual' }, rules } };
+}
+const rulesFx = (name: string, title: string, n: number, offEvery: number, rulesState = 'none'): Fixture => fixture(name, title, deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...rulesOf(n, offEvery) }, BILLING, false, { open: 'rules', rulesState });
+
 /** The talk fixtures: the kernel's speakable row cites its reply's seq (known once the chain is ordered). */
 function talkFixture(name: string, title: string, talk: 'spoken' | 'choices'): Fixture {
   const fx = fixture(name, title, deskChain({ voice: 'talk', talk }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING);
@@ -673,6 +697,17 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
   'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'gnomon.workshop', why: 'user', cardId: null }] } }, BILLING, true),
   'app-menu': fixture('app-menu', 'The Gnomon menu open: layout, theme, mods, voice settings, settings, who is connected', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'app-menu' }),
+  'rules-0': rulesFx('rules-0', 'Settings › Rules: no Always rules yet (the empty state)', 0, 0),
+  'rules-1': rulesFx('rules-1', 'Settings › Rules: one rule', 1, 0),
+  'rules-5': rulesFx('rules-5', 'Settings › Rules: five rules over three repos, one off until 15:07', 5, 4),
+  'rules-50': rulesFx('rules-50', 'Settings › Rules: fifty rules, the filter field shows', 50, 6),
+  'rules-200': rulesFx('rules-200', 'Settings › Rules: two hundred rules', 200, 9),
+  'rules-off-open': rulesFx('rules-off-open', 'Settings › Rules: Turn off ▾ open inline, three kernel-clock presets', 5, 4, 'off-open'),
+  'rules-tighten': rulesFx('rules-tighten', 'Settings › Rules: two staged changes that only tighten (Save · no Touch ID)', 5, 0, 'tighten'),
+  'rules-staged': rulesFx('rules-staged', 'Settings › Rules: off, removed (struck, keep) and back on staged (Save asks once)', 5, 4, 'staged'),
+  'rules-close': rulesFx('rules-close', 'Settings › Rules: closing with 3 changes not saved asks inline', 5, 4, 'close'),
+  'rules-refused': rulesFx('rules-refused', 'Settings › Rules: the kernel refused; every change stays staged, next: says what to do', 5, 4, 'refused'),
+  'rules-waiting': rulesFx('rules-waiting', 'Settings › Rules: the card turning a rule back on is waiting in the stack', 5, 4, 'waiting'),
   settings: fixture('settings', 'The Settings sheet open (theme auto, today\'s grant on)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings' }),
   'settings-day': fixture('settings-day', 'Day chosen in Settings: papercraft even when the Mac is dark', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings', choice: 'day' }),
   spoken: talkFixture('spoken', 'Table talk: one reply spoken sentence by sentence, the last cut off (one spoken-aloud marker)', 'spoken'),

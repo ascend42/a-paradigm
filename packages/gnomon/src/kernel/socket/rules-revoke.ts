@@ -17,12 +17,15 @@
  *     (kernel-signed; connId is THIS connection, never a param), then folds
  *     the chain again so the next permission check sees the rule gone;
  *   - revokes run one at a time, so two concurrent revokes of one rule write
- *     one row (the second is NOT_FOUND).
+ *     one row (the second is NOT_FOUND). 8.0:rules-view: the queue is the
+ *     RULES LOCK the Rules view's batch save (#rules-apply) and its expiry
+ *     sweep share, so a revoke never interleaves with a batch.
  * The result is `{ruleId, revoked: true}`.
  */
 import { RULE_ID_PATTERN, type ApprovalRuleRevokedPayload, type RulesRevokeResult } from '@a-company/gnomon-contracts';
 import type { AlwaysRule } from '../supervisor/rules.js';
 import type { HumanDeviceVerbHandler } from './dispatch.js';
+import { createRulesLock, type RulesLock } from './rules-apply.js';
 import { RpcRefusal } from './rpc.js';
 
 export interface RulesRevokeDeps {
@@ -30,15 +33,13 @@ export interface RulesRevokeDeps {
   lookup: (ruleId: string) => AlwaysRule | null;
   /** Append the kernel-signed approval.rule.revoked row; must reject if the row was not written. */
   append: (payload: ApprovalRuleRevokedPayload, ids: { connId: string }) => Promise<unknown>;
+  /** 8.0:rules-view: the rules lock shared with #rules-apply (absent: a queue of its own) */
+  lock?: RulesLock;
 }
 
 export function createRulesRevokeHandler(d: RulesRevokeDeps): HumanDeviceVerbHandler {
-  let queue: Promise<unknown> = Promise.resolve();
-  return (ctx, params) => {
-    const run = queue.then(() => revokeOne(d, ctx.connId, params));
-    queue = run.catch(() => undefined);
-    return run;
-  };
+  const lock = d.lock ?? createRulesLock();
+  return (ctx, params) => lock(() => revokeOne(d, ctx.connId, params));
 }
 
 async function revokeOne(d: RulesRevokeDeps, connId: string, params: unknown): Promise<RulesRevokeResult> {

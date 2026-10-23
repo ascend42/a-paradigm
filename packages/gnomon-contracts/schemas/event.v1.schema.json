@@ -12,6 +12,8 @@
     "approval.mode.set",
     "approval.presence.denied",
     "approval.request",
+    "approval.rule.disabled",
+    "approval.rule.enabled",
     "approval.rule.learned",
     "approval.rule.revoked",
     "approval.strictness.held",
@@ -287,6 +289,8 @@
     "approval.auto.miss": "8.0:TD-2026-10-20-086",
     "approval.effect.failed": "8.0:P8-D98",
     "approval.mode.set": "M1.1:P8-D86-D88",
+    "approval.rule.disabled": "8.0:rules-view",
+    "approval.rule.enabled": "8.0:rules-view",
     "approval.rule.revoked": "8.0:P8-D98",
     "approval.strictness.held": "M1.1:P8-D86-D88",
     "approval.strictness.lowered": "M1.1:P8-D86-D88",
@@ -799,6 +803,24 @@
       "repoKey",
       "tool",
       "connId"
+    ],
+    "approval.rule.disabled": [
+      "ruleId",
+      "repoKey",
+      "tool",
+      "until",
+      "batch",
+      "connId"
+    ],
+    "approval.rule.enabled": [
+      "ruleId",
+      "repoKey",
+      "tool",
+      "cause",
+      "batch",
+      "connId",
+      "cardId",
+      "until"
     ],
     "approval.effect.failed": [
       "cardId",

@@ -131,6 +131,7 @@ import { claudeCodePlatform } from '../../platform/claude-code.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { catchUp, RuleBook, ruleSourceOf } from '../supervisor/rules.js';
 import { createRulesRevokeHandler } from '../socket/rules-revoke.js';
+import { createRulesApply, createRulesLock, rulesStatus } from '../socket/rules-apply.js';
 import { loadLocalConfig, localChainHighWater, localChainRemoved, type LoadedLocalConfig } from '../local/config.js';
 import { LocalConfigCards } from '../local/config-request.js';
 import { defaultLocalRunner, nodeVersionOf, runnerVersionOf } from '../local/bundled-runner.js';
@@ -847,8 +848,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // TD-2026-10-22-769: status.local (the applied local-model config, the default runner, a pending card); bound below
   let localStatus: () => Record<string, unknown> = () => ({ configured: false });
   const approvals = createApprovalPort({ broker, fuse, kernelPrincipal, extraStatus: () => ({ billing: apiTokens.status(), ...(broker.helperBatch() ? { helper: { batch: broker.helperBatch() } } : {}) }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
+  // 8.0:rules-view (Aegis L2): late-bound below; writes approval.rule.enabled{cause:'expired'} for each off time that passed
+  let rulesSweep: () => Promise<unknown> = async () => 0;
   const brokerTimer = setInterval(() => {
     void broker.expireDue().catch(() => undefined);
+    void rulesSweep().catch(() => undefined);
     void apiTokens.sweep().catch(() => undefined);
   }, 5_000);
   brokerTimer.unref();
@@ -1373,10 +1377,27 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     };
   };
   // #rules-revoke: ONE handler (one queue) for the unix-only rules.revoke verb and the GUI's request.rules.revoke
+  // 8.0:rules-view: that queue is the RULES LOCK, shared with the Rules view's batch save and its expiry sweep
+  const rulesLock = createRulesLock();
   const rulesRevoke = createRulesRevokeHandler({
     lookup: (ruleId) => syncRuleBook().get(ruleId),
     append: (payload, ids) => log.append({ kind: 'approval.rule.revoked', principal: kernelPrincipal, payload: { ...payload }, connId: ids.connId }),
+    lock: rulesLock,
   });
+  // the repo's folder name, from a live session in it (the Rules view and the batch card say where a rule applies)
+  const repoName = (repoKey: string): string | null => {
+    const s = supervisor.liveScopes().find((x) => x.repoKey === repoKey);
+    return s ? path.basename(s.cwd) : null;
+  };
+  const rulesApply = createRulesApply({
+    book: syncRuleBook,
+    append: (kind, payload, ids) => log.append({ kind, principal: kernelPrincipal, payload: { ...payload }, ...(ids.connId ? { connId: ids.connId } : {}) }),
+    broker,
+    lock: rulesLock,
+    repoName,
+    onChange: () => supervisor.noteModeChange(),
+  });
+  rulesSweep = () => rulesApply.expireDue();
   const dispatcherCommon = {
     voice,
     voiceClient: {
@@ -1431,7 +1452,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       offer: { decide: (asker: Parameters<OfferRouter['decide']>[0], payload: unknown) => router.decide(asker, payload), mute: (asker: Parameters<OfferRouter['mute']>[0], payload: unknown) => router.mute(asker, payload) },
       mods: { request: (asker: ModAsker, kind: string, payload: unknown) => modsAdmin.request(asker, kind, payload), status: () => modsAdmin.status() as unknown as Record<string, unknown> },
       // TD-2026-10-23-939 follow-up: the GUI's revoke, the SAME handler (and queue) as the unix-only rules.revoke verb
-      rules: { revoke: (ctx: Parameters<typeof rulesRevoke>[0], payload: unknown) => rulesRevoke(ctx, payload) },
+      rules: {
+        revoke: (ctx: Parameters<typeof rulesRevoke>[0], payload: unknown) => rulesRevoke(ctx, payload),
+        // 8.0:rules-view (#rules-apply): the Rules view's one save, and status.rules (human class only)
+        apply: (asker: Parameters<typeof rulesApply.apply>[0], payload: unknown) => rulesApply.apply(asker, payload),
+        status: () => rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName, skipped: rulesApply.lastSkipped() }),
+      },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,
       // Aegis M2: status.local is the human's (dispatch.ts gives other classes only configured / loopbackOnly / offered)

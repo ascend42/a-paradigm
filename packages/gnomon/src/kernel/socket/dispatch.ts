@@ -424,6 +424,13 @@ export interface HumanRequestPort {
    */
   rules?: {
     revoke(ctx: { connId: string; principal: string; surface: string | null; isLive: () => boolean }, payload: unknown): Promise<unknown>;
+    /**
+     * 8.0:rules-view (#rules-apply): request.rules.apply{changes} from the human on a gui or device connection ONLY (the
+     * asker stamped here). Narrowing applies at once; every `on` rides ONE fresh-presence card. Dispatcher-only.
+     */
+    apply?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    /** status.rules (the human class only): every standing rule, its state on the kernel clock, the presets */
+    status?(): Record<string, unknown>;
   };
   sessionNames?: {
     rename(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
@@ -599,6 +606,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // 8.0:session-rename: the names of THIS human's sessions (display text; the GUI folds session.renamed rows too)
       ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
       ...(o.requests?.loops && cls === 'human' ? { loops: o.requests.loops.status() } : {}),
+      // 8.0:rules-view: status.rules to the human class only (rule words and file paths are project detail)
+      ...(o.requests?.rules?.status && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') ? { rules: o.requests.rules.status() } : {}), // Aegis L-3, like status.folders
       // TD-2026-10-23-162 (#folder-picker): whether request.folder.choose is offered (the GUI's no-chooser state); the human's
       ...(o.requests?.folders && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') ? { folders: o.requests.folders.status() } : {}), // Aegis L4
       // Aegis M2 (TD-2026-10-22-769): status.local in full to the human only; any other class sees three facts
@@ -955,6 +964,16 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
           return await o.requests.rules.revoke({ connId: s.connId, principal: s.principal, surface: s.client?.surface ?? null, isLive: () => !ctx.closed && conns.get(s.connId) === s }, pa.payload);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+      // 8.0:rules-view (#rules-apply): the Rules view's one save (gui/device human only, stamped by connId)
+      if (pa?.kind === 'request.rules.apply' && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.rules?.apply) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        try {
+          return await o.requests.rules.apply({ connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential }, pa.payload);
         } catch (err) {
           throw asRpcRefusal(err);
         }

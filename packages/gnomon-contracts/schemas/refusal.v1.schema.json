@@ -328,7 +328,15 @@
             "local-session",
             "context-too-large",
             "model-switch-failed",
-            "model-switch-timeout"
+            "model-switch-timeout",
+            "already-on",
+            "would-loosen",
+            "until-past",
+            "until-too-far",
+            "too-many",
+            "too-large",
+            "card-pending",
+            "partial"
           ],
           "x-gnomon-additive": true
         },

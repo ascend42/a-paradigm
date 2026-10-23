@@ -628,7 +628,8 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
   const PEER_INJECT = { origin: 'peer', hash: sha256Tagged('peer-bytes'), bytes: 10 };
   /** Every registered critical kind, plus session.inject{origin:'peer'}. */
   const CRITICAL: Array<{ kind: string; payload: unknown }> = [
-    ...EVENT_KIND_NAMES.filter((k) => isCriticalKind(k)).map((kind) => ({ kind, payload: { t: kind } })),
+    // 8.0:rules-view: approval.rule.disabled is checked at append, so it carries a valid closed payload
+    ...EVENT_KIND_NAMES.filter((k) => isCriticalKind(k)).map((kind) => ({ kind, payload: kind === 'approval.rule.disabled' ? { ruleId: 'card:01J9Z8Y7X6W5V4T3S2R1Q0P9N8', repoKey: `sha256:${'b'.repeat(64)}`, tool: 'Bash', until: null, batch: 'batch:01J9Z8Y7X6W5V4T3S2R1Q0P9N8', connId: 'conn:01J9Z8Y7X6W5V4T3S2R1Q0P9N8' } : { t: kind } })),
     { kind: 'session.inject', payload: PEER_INJECT },
   ];
 
@@ -640,6 +641,7 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
       'approval.presence.denied',
       'approval.rule.learned',
       'approval.rule.revoked',
+      'approval.rule.disabled',
       'approval.voice.arm',
       'approval.voice.disarm',
       'key.mint',
