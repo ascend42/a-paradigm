@@ -490,9 +490,12 @@ components:
       renderCard's .card-body (lines and field blocks) caps at
       --card-body-max (min(42vh, 26em)) and scrolls inside the card; the
       title, k-line, root rows, keys, presence line and contentHash stay
-      outside it, so Allow shows without scrolling. The body is one named
-      tab stop (tabindex 0, role group, CARD_BODY_LABEL); Tab moves on to
-      the keys. Covers the MCP enable and batch cards, the Rules batch card
+      outside it, so Allow shows without scrolling. Only while it overflows
+      (markCardBody, measured by a ResizeObserver in app.ts paintStack and
+      on scroll) is the body one named tab stop (tabindex 0, role group,
+      CARD_BODY_LABEL) with the worded cue .card-more under it (CARD_MORE:
+      "↓ more below: scroll the card text" / "end of the card text"); Tab
+      moves on to the keys; a body that fits adds no stop. Covers the MCP enable and batch cards, the Rules batch card
       and the git push card. Test: test/card-scroll.test.ts.
     card-sheet-pile-s3: >-
       S3 card sheet and stack pile (critique 2026-10-20 §2 S3). renderCard
@@ -1598,9 +1601,15 @@ components:
       fixtures mcp-servers, mcp-waiting, mcp-none, mcp-fp-missing,
       mcp-windows, mcp-not-offered.
       #batch-card (founder 2026-10-23: "grouped cards of related things,
-      one password"): Mark for all repos / Mark in <folder> (acts
-      mcp:on-all / mcp:on-repo) STAGE a server in the page (markMcp,
-      unmarkMcp, clearMcp, reconcileMcp; value "marked: …", key Unmark; at
+      one password"): one server keeps one press (On for all repos / On in
+      <folder>, acts mcp:on-all / mcp:on-repo, its own card, its request
+      row under its row; Mika 2026-10-23, founder: fewer hurdles). "Mark
+      several" (act mcp:marking, the "Several at once" row after the list;
+      startMarking) turns the keys into Mark for all repos / Mark in
+      <folder> (acts mcp:mark-all / mcp:mark-repo), which STAGE a server in
+      the page (markMcp, unmarkMcp, clearMcp, reconcileMcp; value "marked
+      to turn on …", key Unmark; "none yet" + Stop marking before the
+      first mark; Mark keys also while a card waits; at
       status.mcp.max marks the keys disable and say why); the "Marked to
       turn on" row after the servers names them and the cost ("Turn on N
       servers · asks Touch ID or your Mac password once") and sends ONE

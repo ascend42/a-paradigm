@@ -76,7 +76,8 @@ describe('#gui-mcp-servers section', () => {
     // #batch-card: the waiting card sits with the batch, after the last server; the others can be marked meanwhile
     const ids = rs.map((r) => r.id);
     expect(ids.indexOf('mcp-request')).toBeGreaterThan(ids.indexOf(byLabel(rs, 'tool · app (repo)')!.id));
-    expect(keysOf(byLabel(rs, 'linear'))).toEqual(['mcp:on-all=user::linear', 'mcp:on-repo=user::linear']);
+    // one card at a time: while it waits the other rows offer Mark keys (they go on the next card), no one-press On
+    expect(keysOf(byLabel(rs, 'linear'))).toEqual(['mcp:mark-all=user::linear', 'mcp:mark-repo=user::linear']);
     expect((req as { how: string }).how).toContain('mark the next servers');
     const win = rows(status({ platform: 'win32', unsupported: 'platform' }));
     expect(keysOf(byLabel(win, 'neurons'))).toEqual([]);
@@ -93,8 +94,11 @@ describe('#gui-mcp-servers section', () => {
   });
 
   it('each press sends exactly its request; marking sends nothing (it is staged in the page)', () => {
-    expect(mcpRequestOf('mcp:on-all', 'i')).toBeNull();
+    // one server, one press: its own card (Mika 2026-10-23, founder: fewer hurdles)
+    expect(mcpRequestOf('mcp:on-all', 'i')).toEqual({ kind: 'request.mcp.enable', payload: { id: 'i', scope: 'all' } });
+    expect(mcpRequestOf('mcp:on-repo', 'i', '/r/app')).toEqual({ kind: 'request.mcp.enable', payload: { id: 'i', scope: 'repo', repo: '/r/app' } });
     expect(mcpRequestOf('mcp:on-repo', 'i')).toBeNull();
+    expect(mcpRequestOf('mcp:mark-all', 'i')).toBeNull();
     expect(mcpRequestOf('mcp:off', 'i')).toEqual({ kind: 'request.mcp.disable', payload: { id: 'i' } });
     expect(mcpRequestOf('mcp:fp-off', MCP_FIRST_PARTY)).toEqual({ kind: 'request.mcp.disable', payload: { id: MCP_FIRST_PARTY } });
     const ui = markMcp(markMcp(emptyMcpUi(), { id: 'a', name: 'a', scope: 'all', repo: null, folder: null }), { id: 'b', name: 'b', scope: 'repo', repo: '/r/app', folder: 'app' });
@@ -114,15 +118,15 @@ describe('#gui-mcp-servers press path', () => {
 
   it('an untrusted press sends nothing; marking stages in the page; Turn on sends ONE request for every mark; allow says On', async () => {
     const { c, calls, decided } = ctl(async () => ({ pending: true, cardId: 'card:B', ids: ['user::neurons', 'project:/r/app:tool'] }));
-    c.press('mcp:on-all', 'user::neurons', false);
+    c.press('mcp:mark-all', 'user::neurons', false);
     expect(c.ui().staged).toEqual([]);
-    c.press('mcp:on-all', 'user::neurons', true);
-    c.press('mcp:on-repo', 'project:/r/app:tool', true);
+    c.press('mcp:mark-all', 'user::neurons', true);
+    c.press('mcp:mark-repo', 'project:/r/app:tool', true);
     expect(calls).toEqual([]); // marking sends nothing
     expect(c.ui().staged.map((m) => [m.id, m.scope, m.folder])).toEqual([['user::neurons', 'all', null], ['project:/r/app:tool', 'repo', 'app']]);
     // the section: marked rows say so by word, Unmark; the marked row names its cost before the press
     const rs = rows(status(), 'h1', c.ui());
-    expect(byLabel(rs, 'neurons')).toMatchObject({ value: 'marked: on for all repos' });
+    expect(byLabel(rs, 'neurons')).toMatchObject({ value: 'marked to turn on for all repos' });
     expect(keysOf(byLabel(rs, 'neurons'))).toEqual(['mcp:unmark=user::neurons']);
     const bar = rs.find((r) => r.id === 'mcp-batch')!;
     expect(bar).toMatchObject({ label: 'Marked to turn on', value: '2 servers: neurons (all repos), tool (app)' });
@@ -132,8 +136,9 @@ describe('#gui-mcp-servers press path', () => {
     expect(calls).toEqual([{ kind: 'request.mcp.enable', payload: { servers: [{ id: 'user::neurons', scope: 'all' }, { id: 'project:/r/app:tool', scope: 'repo', repo: '/r/app' }] } }]);
     expect(c.ui().request).toEqual({ cardId: 'card:B', line: '10:00 · turn on neurons · all repos, tool · app', ids: ['user::neurons', 'project:/r/app:tool'] });
     expect(c.ui().staged).toEqual([]); // the marks moved onto the card
+    expect(c.ui().marking).toBe(false); // no empty 'none yet' bar under the waiting card
     // while it waits: the next batch can be marked, but Turn on waits and says why
-    c.press('mcp:on-all', 'user::linear', true);
+    c.press('mcp:mark-all', 'user::linear', true);
     const rs2 = rows(status(), 'h1', c.ui());
     expect(keysOf(byLabel(rs2, 'neurons'))).toEqual([]);
     const bar2 = rs2.find((r) => r.id === 'mcp-batch')! as { how: string; keys: Array<{ disabled?: boolean }> };
@@ -151,7 +156,7 @@ describe('#gui-mcp-servers press path', () => {
 
   it('turning off applies at once with no card, even while a card waits; marks stop at the cap; Clear marks', async () => {
     const { c, calls } = ctl(async (r) => ((r as { kind: string }).kind === 'request.mcp.disable' ? { disabled: true } : { pending: true, cardId: 'card:W', ids: ['user::linear'] }));
-    c.press('mcp:on-all', 'user::linear', true);
+    c.press('mcp:mark-all', 'user::linear', true);
     c.press('mcp:enable', 'batch', true);
     await flush();
     c.press('mcp:off', 'user::neurons', true);
@@ -174,7 +179,7 @@ describe('#gui-mcp-servers press path', () => {
 
   it('deny says Not changed; a refusal keeps every mark and shows the kernel line; a skipped server is named', async () => {
     const a = ctl(async () => ({ pending: true, cardId: 'card:C', ids: ['project:/r/app:tool'] }));
-    a.c.press('mcp:on-repo', 'project:/r/app:tool', true);
+    a.c.press('mcp:mark-repo', 'project:/r/app:tool', true);
     a.c.press('mcp:enable', 'batch', true);
     await flush();
     expect(a.calls[0]).toEqual({ kind: 'request.mcp.enable', payload: { servers: [{ id: 'project:/r/app:tool', scope: 'repo', repo: '/r/app' }] } });
@@ -183,7 +188,7 @@ describe('#gui-mcp-servers press path', () => {
     const b = ctl(async () => {
       throw new RpcError({ code: 'BAD_REQUEST', reason: 'bad-params', message: '#mcp-servers: servers[0]: tool comes from a repo: that repo only', next: [], data: null } as never);
     });
-    b.c.press('mcp:on-all', 'user::neurons', true);
+    b.c.press('mcp:mark-all', 'user::neurons', true);
     b.c.press('mcp:enable', 'batch', true);
     await flush();
     expect(b.c.ui().result).toMatchObject({ fail: true });
@@ -198,14 +203,71 @@ describe('#gui-mcp-servers press path', () => {
     let st: unknown = status();
     const calls: unknown[] = [];
     const c = new McpServersController({ call: async (r) => (calls.push(r), { pending: true, cardId: 'card:S', ids: ['user::neurons', 'user::linear'] }), status: () => st, hsid: () => 'h1', now: () => 0, time: () => '10:00', refreshStatus: async () => undefined, repaint: () => undefined, decide: () => undefined });
-    c.press('mcp:on-all', 'user::neurons', true);
-    c.press('mcp:on-all', 'user::linear', true);
+    c.press('mcp:mark-all', 'user::neurons', true);
+    c.press('mcp:mark-all', 'user::linear', true);
     c.press('mcp:enable', 'batch', true);
     await flush();
     st = status({ skipped: { cardId: 'card:S', ids: ['user::neurons'], names: ['neurons'] } });
     c.row({ kind: 'approval.decide', payload: { cardId: 'card:S', decision: 'allow' } });
     await flush();
-    expect(c.ui().result).toMatchObject({ lead: 'On', text: ' linear at 10:00. neurons changed while the card waited, so it stays off. next: look at it again, then mark and turn on.' });
+    expect(c.ui().result).toMatchObject({ lead: 'On', text: ' linear at 10:00. neurons changed while the card waited, so it stays off. next: look at it again, then turn it on again.' });
+  });
+});
+
+describe('#gui-mcp-servers one press, or several on one card (Mika 2026-10-23)', () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  function ctl(answer: (req: unknown) => Promise<unknown>) {
+    const calls: unknown[] = [];
+    const focused: string[] = [];
+    const c = new McpServersController({ call: (r) => (calls.push(r), answer(r)), status: () => status(), hsid: () => 'h1', now: () => 0, time: () => '10:00', refreshStatus: async () => undefined, repaint: () => undefined, decide: () => undefined, focus: (sel) => focused.push(sel) });
+    return { c, calls, focused };
+  }
+
+  it('one server takes one press: On raises its card at once; the request and its outcome show under that row', async () => {
+    const { c, calls, focused } = ctl(async () => ({ pending: true, cardId: 'card:O' }));
+    c.press('mcp:on-repo', 'user::neurons', true);
+    await flush();
+    expect(calls).toEqual([{ kind: 'request.mcp.enable', payload: { id: 'user::neurons', scope: 'repo', repo: '/r/app' } }]);
+    expect(c.ui().request).toEqual({ cardId: 'card:O', line: '10:00 · turn on neurons · app', ids: ['user::neurons'] });
+    expect(focused.at(-1)).toBe('[data-lm-act="mcp:decide"]');
+    const rs = rows(status(), 'h1', c.ui());
+    const ids = rs.map((r) => r.id);
+    expect(ids.indexOf('mcp-request')).toBe(ids.indexOf(byLabel(rs, 'neurons')!.id) + 1);
+    expect(byLabel(rs, 'neurons')).toMatchObject({ value: 'off until you allow its card' });
+    expect((rs.find((r) => r.id === 'mcp-request') as { how: string }).how).toContain('Deny keeps the server off');
+    expect(keysOf(byLabel(rs, 'linear'))).toEqual(['mcp:mark-all=user::linear', 'mcp:mark-repo=user::linear']);
+    c.row({ kind: 'approval.decide', payload: { cardId: 'card:O', decision: 'allow' } });
+    expect(c.ui()).toMatchObject({ at: 'user::neurons', result: { lead: 'On', text: ' neurons at 10:00. New sessions start it.' } });
+    // a second one-press while a card waits sends nothing (one card at a time)
+    const b = ctl(async () => ({ pending: true, cardId: 'card:P' }));
+    b.c.press('mcp:on-all', 'user::neurons', true);
+    await flush();
+    b.c.press('mcp:on-all', 'user::linear', true);
+    await flush();
+    expect(b.calls).toHaveLength(1);
+  });
+
+  it('Mark several after the list turns the keys into Mark keys; none marked says so; Stop marking brings On back', () => {
+    const { c, focused } = ctl(async () => null);
+    const rs = rows(status(), 'h1', c.ui());
+    expect(keysOf(byLabel(rs, 'neurons'))).toEqual(['mcp:on-all=user::neurons', 'mcp:on-repo=user::neurons']);
+    const entry = rs.find((r) => r.id === 'mcp-batch')!;
+    expect(entry).toMatchObject({ label: 'Several at once', value: MCP_COPY.several.value });
+    expect(keysOf(entry)).toEqual(['mcp:marking=batch']);
+    expect(rs.map((r) => r.id).indexOf('mcp-batch')).toBeGreaterThan(rs.map((r) => r.id).indexOf(byLabel(rs, 'tool · app (repo)')!.id));
+    c.press('mcp:marking', 'batch', true);
+    expect(focused.at(-1)).toBe('[data-lm-act^="mcp:mark-"]:not([disabled])');
+    const rs2 = rows(status(), 'h1', c.ui());
+    expect(keysOf(byLabel(rs2, 'neurons'))).toEqual(['mcp:mark-all=user::neurons', 'mcp:mark-repo=user::neurons']);
+    expect(rs2.find((r) => r.id === 'mcp-batch')).toMatchObject({ label: 'Marked to turn on', value: 'none yet' });
+    expect(keysOf(rs2.find((r) => r.id === 'mcp-batch'))).toEqual(['mcp:clear=batch']);
+    c.press('mcp:clear', 'batch', true);
+    expect(c.ui().marking).toBe(false);
+    expect(focused.at(-1)).toBe('[data-lm-act="mcp:marking"]');
+    expect(keysOf(byLabel(rows(status(), 'h1', c.ui()), 'neurons'))).toEqual(['mcp:on-all=user::neurons', 'mcp:on-repo=user::neurons']);
+    // a batch card names them all: one presence, "keeps them off"
+    const many = rows(status({ pending: [{ cardId: 'card:M', id: 'user::neurons', scope: 'all', repo: null }, { cardId: 'card:M', id: 'user::linear', scope: 'all', repo: null }] }));
+    expect((many.find((r) => r.id === 'mcp-request') as { how: string }).how).toContain('once for all of them. Deny keeps them off.');
   });
 });
 

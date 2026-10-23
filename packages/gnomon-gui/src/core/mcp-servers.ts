@@ -7,10 +7,14 @@
  * the request row while a card waits).
  *
  *   - Every row is the kernel's status.mcp (names only: env and header NAMES, never a value).
- *   - #batch-card (founder 2026-10-23: "grouped cards of related things, one password"): Mark for all repos / Mark in
- *     <folder> STAGES a server in the page (word and weight: "marked: on for all repos", Unmark); the marked row names
- *     the servers and the cost, "Turn on N servers · asks Touch ID or your Mac password once", and sends ONE
- *     request.mcp.enable{servers}. The kernel raises ONE root card (the ⊙ gnomon grant family) for them all.
+ *   - One server, one press (Mika 2026-10-23, founder: fewer hurdles): On for all repos / On in <folder> raises its root
+ *     card at once (request.mcp.enable{id, scope}); its request row shows under that server's row.
+ *   - #batch-card (founder 2026-10-23: "grouped cards of related things, one password"): "Mark several" (the row after
+ *     the last server) turns the keys into Mark for all repos / Mark in <folder>, which STAGE a server in the page (word
+ *     and weight: "marked to turn on for all repos", Unmark); the marked row names the servers and the cost, "Turn on N
+ *     servers · asks Touch ID or your Mac password once", and sends ONE request.mcp.enable{servers}. The kernel raises
+ *     ONE root card (the ⊙ gnomon grant family) for them all. Clear marks (or Stop marking) brings the one-press keys
+ *     back.
  *   - While a card waits, its servers show "off until you allow its card" and the request line with Decide in the
  *     stack (rule form-says-where-the-card-is); the other servers can be marked for the NEXT card; Turn on waits, and
  *     says so. Turning one off takes no card and applies at once, even while a card waits.
@@ -37,7 +41,7 @@ export const MCP_BATCH = 'batch';
 export const MCP_COPY = Object.freeze({
   title: 'MCP servers',
   owner: '· kernel-owned',
-  intro: 'The MCP servers your Claude Code uses in your other projects. Gnomon runs the Paradigm MCP in every session; each of yours runs only after you turn it on, inside the session’s sandbox. Mark the servers you want, then turn them on together: one root card, one Touch ID. Turning one off takes no card. New sessions pick up a change.',
+  intro: 'The MCP servers your Claude Code uses in your other projects. Gnomon runs the Paradigm MCP in every session; each of yours runs only after you turn it on, inside the session’s sandbox. Turning one on raises a root card; to turn several on with one card and one Touch ID, use Mark several after the list. Turning one off takes no card. New sessions pick up a change.',
   notConnected: { value: 'not connected', how: 'Reconnect (⌘K, then “Reconnect”) to see your MCP servers.' },
   notOffered: { value: 'not offered by this kernel', how: 'Update Gnomon to bring your MCP servers into sessions.' },
   windows: 'Turning a server on takes the root key, which lives in the Mac helper in 8.0: not on Windows yet. The Paradigm MCP still runs.',
@@ -45,9 +49,16 @@ export const MCP_COPY = Object.freeze({
   fpHow: 'First-party: Gnomon runs it as `node <paradigm-mcp> <folder>` inside the session’s sandbox; its install folder is write-protected from sessions.',
   fpMissing: 'Install Paradigm (`npm install -g @a-company/paradigm`) and open a new session.',
   requestHow: 'Allow takes the root key and your presence. Deny keeps the server off.',
+  /** a batch card: one presence for all of them (Mika: never "the server" for four) */
+  requestHowMany: 'Allow takes the root key and your presence once for all of them. Deny keeps them off.',
   /** #batch-card: while a card waits, the other servers can be marked for the next card */
   markMeanwhile: ' Meanwhile you can mark the next servers; they go on the next card.',
-  markedWord: 'marked:',
+  /** Mika: "marked: on" read as already on; the words say it is not on yet */
+  markedWord: 'marked to turn on',
+  /** the entry to marking, after the last server (one-press keys stay the default) */
+  several: { label: 'Several at once', value: 'one card, one Touch ID or password', how: 'Mark the servers you want, then turn them all on with one root card.', key: 'Mark several' },
+  noneMarked: { value: 'none yet', how: 'Press Mark on each server you want; Turn on shows here once one is marked.' },
+  stopMarking: 'Stop marking',
   waitingWord: 'off until you allow its card',
   batchHow: 'One card lists every marked server, each with what it runs, its env names, its network host and your auto-allow rules. Allow takes the root key and your presence once.',
   batchWaits: 'Turn on waits until you decide the card above: one card at a time.',
@@ -192,13 +203,15 @@ export interface McpUi {
   at?: string | null;
   /** #batch-card: the servers marked for the next card, in the order marked (staged in the page until Turn on) */
   staged: readonly McpMarked[];
+  /** "Mark several" was pressed: the rows offer Mark keys (also while anything is marked or a card waits) */
+  marking?: boolean;
   /** the card this page asked for and is waiting on (ids: the servers on it) */
   request: { cardId: string; line: string; ids?: string[] } | null;
   /** a press in flight (its key shows busy) */
   busy: string | null;
   result: ResultView | null;
 }
-export const emptyMcpUi = (): McpUi => ({ at: null, staged: [], request: null, busy: null, result: null });
+export const emptyMcpUi = (): McpUi => ({ at: null, staged: [], marking: false, request: null, busy: null, result: null });
 
 /**
  * TD-2026-10-23-361 (H1, founder: honour their rules, show them): the human's own Claude Code allow rules that let a
@@ -237,7 +250,7 @@ function stateOf(r: McpRowView, repo: string | null, marked: McpMarked | null, w
   if (r.problems[0]?.code === 'first-party') return { value: MCP_COPY.covered };
   if (r.problems.length) return { mark: '✕', value: r.problems[0]!.text };
   // staged rows are marked by word and weight, never by a hue (the Rules view's rule)
-  if (marked) return { value: `${MCP_COPY.markedWord} ${marked.scope === 'all' ? 'on for all repos' : `on in ${marked.folder ?? 'this folder'}`}` };
+  if (marked) return { value: `${MCP_COPY.markedWord} ${marked.scope === 'all' ? 'for all repos' : `in ${marked.folder ?? 'this folder'}`}` };
   if (waiting) return { value: MCP_COPY.waitingWord };
   if (r.changed && !r.on.all && !(repo && r.on.repos.includes(repo))) return { mark: '?', value: 'changed since you turned it on: off until you turn it on again' };
   if (r.on.all) return { mark: '✓', value: 'on in every repo' };
@@ -246,7 +259,7 @@ function stateOf(r: McpRowView, repo: string | null, marked: McpMarked | null, w
   return { value: 'off' };
 }
 
-function keysOf(r: McpRowView, repo: { repo: string; folder: string } | null, ui: McpUi, windows: boolean, waiting: boolean, full: boolean): FormKey[] {
+function keysOf(r: McpRowView, repo: { repo: string; folder: string } | null, ui: McpUi, windows: boolean, waiting: boolean, full: boolean, batching: boolean): FormKey[] {
   if (windows || r.problems.length) return [];
   const busy = (act: string): Partial<FormKey> => (ui.busy === `${act}|${r.id}` ? { busy: true, disabled: true } : ui.busy ? { disabled: true } : {});
   const keys: FormKey[] = [];
@@ -256,13 +269,15 @@ function keysOf(r: McpRowView, repo: { repo: string; folder: string } | null, ui
   if (r.on.all || onHere) keys.push({ act: 'mcp:off', value: r.id, label: 'Turn off', quiet: true, ...busy('mcp:off') });
   if (ui.staged.some((m) => m.id === r.id)) keys.push({ act: 'mcp:unmark', value: r.id, label: 'Unmark', quiet: true, ...busy('mcp:unmark') });
   else if (!waiting) {
-    // #batch-card: marking stages the server for the next card; the cap says why it is reached (disabled-says-why)
-    const cap: Partial<FormKey> = full ? { disabled: true } : {};
-    if (!r.on.all && !repoBound) keys.push({ act: 'mcp:on-all', value: r.id, label: 'Mark for all repos', pri: !repo, ...busy('mcp:on-all'), ...cap });
-    if (!r.on.all && !onHere && repo && (!repoBound || r.repo === repo.repo)) keys.push({ act: 'mcp:on-repo', value: r.id, label: `Mark in ${repo.folder}`, pri: repoBound, ...busy('mcp:on-repo'), ...cap });
+    // one server, one press (On …) unless the human is marking several for one card (Mark …); marking stages the
+    // server for the next card and the cap says why it is reached (disabled-says-why)
+    const cap: Partial<FormKey> = batching && full ? { disabled: true } : {};
+    const [all, here, verb] = batching ? ['mcp:mark-all', 'mcp:mark-repo', 'Mark'] : ['mcp:on-all', 'mcp:on-repo', 'On'];
+    if (!r.on.all && !repoBound) keys.push({ act: all, value: r.id, label: `${verb} for all repos`, pri: !repo, ...busy(all), ...cap });
+    if (!r.on.all && !onHere && repo && (!repoBound || r.repo === repo.repo)) keys.push({ act: here, value: r.id, label: `${verb} in ${repo.folder}`, pri: repoBound, ...busy(here), ...cap });
   }
-  // Mika: ten rows of "Turn off" and "Mark for all repos" read the same out of context; the key names its server
-  return keys.map((k) => ({ ...k, title: `${k.label} · ${r.name}${full && (k.act === 'mcp:on-all' || k.act === 'mcp:on-repo') ? ` · ${MCP_COPY.full}` : ''}` }));
+  // Mika: ten rows of "Turn off" and "On for all repos" read the same out of context; the key names its server
+  return keys.map((k) => ({ ...k, title: `${k.label} · ${r.name}${batching && full && k.act.startsWith('mcp:mark-') ? ` · ${MCP_COPY.full}` : ''}` }));
 }
 
 export interface McpSectionInput {
@@ -297,6 +312,17 @@ export function mcpSection(i: McpSectionInput): SettingsSection {
   const pendingIds = new Set(v.pending.map((p) => p.id));
   if (i.ui.request) for (const id of i.ui.request.ids ?? []) pendingIds.add(id);
   const full = i.ui.staged.length >= v.max;
+  // #batch-card: the waiting card(s) (the kernel's, and the one this page asked for)
+  const cards = waitingCards(v);
+  const mine = i.ui.request;
+  const shownCards = mine && !cards.some((c) => c.cardId === mine.cardId) ? [{ cardId: mine.cardId, ids: mine.ids ?? [], line: mine.line }, ...cards] : cards.map((c) => (mine && c.cardId === mine.cardId ? { ...c, line: mine.line } : c));
+  // the rows offer Mark keys while the human marks several, anything is marked, or a card waits (one card at a time:
+  // the next servers go on the next card); else each server turns on with one press
+  const batching = !!i.ui.marking || i.ui.staged.length > 0 || shownCards.length > 0;
+  // a one-server card this page asked for shows under that server's row (Delta 7: the outcome sits where you pressed)
+  const under = mine && (mine.ids ?? []).length === 1 && i.ui.at === mine.ids![0] ? mine.ids![0]! : null;
+  const requestRow = (c: { cardId: string; ids: string[]; line: string }, id: string, first: boolean): SettingRow => ({ kind: 'request', id, label: 'Asked', chip: 'card waiting', line: c.line, keys: [{ act: 'mcp:decide', value: c.cardId, label: MCP_COPY.decide }], how: (c.ids.length > 1 ? MCP_COPY.requestHowMany : MCP_COPY.requestHow) + (i.ui.staged.length || first ? MCP_COPY.markMeanwhile : '') });
+  let offerable = 0;
   // Mika 2026-10-23: on Windows the reason no row has a key comes first, not after the last server
   if (v.windows) rows.push({ kind: 'readonly', id: 'mcp-windows', label: 'On this PC', value: 'rows only', how: MCP_COPY.windows, grp: true });
   // a press's result shows under the row that was pressed (else it lands a screen below the press, out of sight); the
@@ -310,23 +336,21 @@ export function mcpSection(i: McpSectionInput): SettingsSection {
     const marked = i.ui.staged.find((m) => m.id === r.id) ?? null;
     const waiting = pendingIds.has(r.id);
     const st = stateOf(r, repo?.repo ?? null, marked, waiting);
-    const keys = keysOf(r, repo, i.ui, v.windows, waiting, full);
+    const keys = keysOf(r, repo, i.ui, v.windows, waiting, full, batching);
+    if (keys.some((k) => /^mcp:(on|mark)-/.test(k.act))) offerable += 1;
     const p0 = r.problems[0];
     const how = p0 && p0.code !== 'first-party' ? `${howWords(r, v.envFile)} · ${problemNext(p0.code, r)}` : howWords(r, v.envFile);
     rows.push({ kind: 'readonly', id: `mcp-${r.source}-${n}`, label, value: st.value, how, ...(st.mark ? { mark: st.mark } : {}), ...(grp ? { grp: true } : {}), ...(keys.length ? { keys } : {}), title: `${r.sessionName} · tools mcp__${r.sessionName}__*` });
     if (r.id === at) outcome();
+    if (r.id === under && mine) rows.push(requestRow({ cardId: mine.cardId, ids: mine.ids ?? [], line: mine.line }, 'mcp-request', true));
   };
   v.servers.forEach((r, n) => add(r, n, r.plugin ? `${r.name} · plugin` : r.name, n === 0));
   // the focused folder's own servers start their own group (Mika: space between groups, not only between rows)
   if (repo) repo.servers.forEach((r, n) => add(r, n + v.servers.length, `${r.name} · ${repo.folder}${r.source === 'project' ? ' (repo)' : ''}`, n === 0));
   if (!v.servers.length && !(repo?.servers.length)) rows.push({ kind: 'readonly', id: 'mcp-none', label: 'Your servers', value: MCP_COPY.none.value, how: MCP_COPY.none.how, grp: true });
-  // #batch-card: the waiting card(s), then what is marked for the next card, then the batch's outcome
-  const cards = waitingCards(v);
-  const mine = i.ui.request;
-  const shownCards = mine && !cards.some((c) => c.cardId === mine.cardId) ? [{ cardId: mine.cardId, ids: mine.ids ?? [], line: mine.line }, ...cards] : cards.map((c) => (mine && c.cardId === mine.cardId ? { ...c, line: mine.line } : c));
-  shownCards.forEach((c, n) =>
-    rows.push({ kind: 'request', id: n === 0 ? 'mcp-request' : `mcp-request-${n}`, label: 'Asked', chip: 'card waiting', line: c.line, keys: [{ act: 'mcp:decide', value: c.cardId, label: MCP_COPY.decide }], how: MCP_COPY.requestHow + (i.ui.staged.length || n === 0 ? MCP_COPY.markMeanwhile : '') }),
-  );
+  // #batch-card: the waiting card(s) (with the batch: a card for several servers belongs to no one row; each of its
+  // rows says "off until you allow its card"), then what is marked for the next card, then the batch's outcome
+  shownCards.filter((c) => !(under && mine && c.cardId === mine.cardId)).forEach((c, n) => rows.push(requestRow(c, n === 0 && !under ? 'mcp-request' : `mcp-request-${n + 1}`, n === 0)));
   if (i.ui.staged.length) {
     const n = i.ui.staged.length;
     const blocked = !!mine || shownCards.length > 0;
@@ -343,6 +367,12 @@ export function mcpSection(i: McpSectionInput): SettingsSection {
         { act: 'mcp:clear', value: 'batch', label: 'Clear marks', quiet: true, ...(i.ui.busy ? { disabled: true } : {}) },
       ],
     });
+  } else if (i.ui.marking && !v.windows) {
+    // marking, nothing marked yet: say what to do; Stop marking brings the one-press keys back
+    rows.push({ kind: 'readonly', id: 'mcp-batch', label: 'Marked to turn on', value: MCP_COPY.noneMarked.value, how: MCP_COPY.noneMarked.how, grp: true, live: true, keys: [{ act: 'mcp:clear', value: 'batch', label: MCP_COPY.stopMarking, quiet: true, ...(i.ui.busy ? { disabled: true } : {}) }] });
+  } else if (!batching && !v.windows && offerable >= 2) {
+    // the entry to one card for several (the one-press keys stay the default: founder, fewer hurdles)
+    rows.push({ kind: 'readonly', id: 'mcp-batch', label: MCP_COPY.several.label, value: MCP_COPY.several.value, how: MCP_COPY.several.how, grp: true, keys: [{ act: 'mcp:marking', value: 'batch', label: MCP_COPY.several.key, quiet: true, ...(i.ui.busy ? { disabled: true } : {}) }] });
   }
   if (at === MCP_BATCH) outcome();
   return sec(rows);
@@ -357,13 +387,17 @@ export const batchKeyLabel = (n: number): string => `Turn on ${n === 1 ? '1 serv
 export function markMcp(ui: McpUi, m: McpMarked, max: number = MCP_ENABLE_MAX): McpUi {
   const rest = ui.staged.filter((x) => x.id !== m.id);
   if (rest.length >= max) return ui;
-  return { ...ui, staged: [...rest, m], result: null, at: m.id };
+  return { ...ui, staged: [...rest, m], marking: true, result: null, at: m.id };
+}
+/** "Mark several": the rows offer Mark keys until the marks are sent or cleared. */
+export function startMarking(ui: McpUi): McpUi {
+  return { ...ui, marking: true, result: null };
 }
 export function unmarkMcp(ui: McpUi, id: string): McpUi {
   return { ...ui, staged: ui.staged.filter((x) => x.id !== id), result: null, at: id };
 }
 export function clearMcp(ui: McpUi): McpUi {
-  return { ...ui, staged: [], result: null };
+  return { ...ui, staged: [], marking: false, result: null };
 }
 
 /** Drop marks for servers the kernel no longer lists, that cannot run, or that are already on at that scope. */
@@ -385,8 +419,13 @@ export function mcpBatchRequest(ui: McpUi): { kind: string; payload: { servers: 
 }
 
 /** The request a press sends (log.append), or null for a press that sends nothing (marking is staged in the page). */
-export function mcpRequestOf(act: string, id: string): { kind: string; payload: Record<string, unknown> } | null {
+export function mcpRequestOf(act: string, id: string, repo: string | null = null): { kind: string; payload: Record<string, unknown> } | null {
   switch (act) {
+    // one server, one press: its own root card (the kernel's batch of one)
+    case 'mcp:on-all':
+      return { kind: MCP_ENABLE_REQUEST, payload: { id, scope: 'all' } };
+    case 'mcp:on-repo':
+      return repo ? { kind: MCP_ENABLE_REQUEST, payload: { id, scope: 'repo', repo } } : null;
     case 'mcp:off':
       return { kind: MCP_DISABLE_REQUEST, payload: { id } };
     case 'mcp:fp-on':
@@ -418,7 +457,7 @@ export const turnedOnResult = (name: string, at: string): ResultView => ({ lead:
 /** #batch-card: an allowed card that skipped servers which changed while it waited (kernel status.mcp.skipped). */
 export const skippedResult = (on: readonly string[], skipped: readonly string[], at: string): ResultView => ({
   lead: on.length ? 'On' : 'Not changed:',
-  text: `${on.length ? ` ${on.join(', ')} at ${at}.` : ''} ${skipped.join(', ')} changed while the card waited, so ${skipped.length === 1 ? 'it stays' : 'they stay'} off. next: look at ${skipped.length === 1 ? 'it' : 'them'} again, then mark and turn on.`,
+  text: `${on.length ? ` ${on.join(', ')} at ${at}.` : ''} ${skipped.join(', ')} changed while the card waited, so ${skipped.length === 1 ? 'it stays' : 'they stay'} off. next: look at ${skipped.length === 1 ? 'it' : 'them'} again, then turn ${skipped.length === 1 ? 'it' : 'them'} on again.`,
   ...(on.length ? {} : { fail: true }),
 });
 export const notChangedResult = (name: string, at: string, why: 'denied' | 'expired'): ResultView => ({ lead: 'Not changed:', text: ` ${name} ${name.includes(', ') ? 'stay' : 'stays'} off; the card was ${why} at ${at}.` });
