@@ -350,7 +350,7 @@ export function hostWarning(host: string): string | null {
   for (const k of KNOWN_FORGE_HOSTS) {
     const name = k.split('.')[0]!;
     if (editDistance(h, k) <= 2) return `the host ${h} looks like ${k} but is a different host`;
-    if (h.replace(/-/g, '.') === k || h.startsWith(`${k}.`) || h.startsWith(`${k}-`) || (name.length >= 6 && h.split('.').some((l) => l !== name && editDistance(l, name) <= 1))) return `the host ${h} looks like ${k} but is a different host`;
+    if (`.${h.replace(/-/g, '.')}.`.includes(`.${k}.`) || h.startsWith(`${k}.`) || h.startsWith(`${k}-`) || (name.length >= 6 && h.split('.').some((l) => l !== name && editDistance(l, name) <= 1))) return `the host ${h} looks like ${k} but is a different host`;
   }
   return null;
 }
