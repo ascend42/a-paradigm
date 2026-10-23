@@ -2748,6 +2748,56 @@ components:
       - test/mcp-passthrough.test.ts
     oracles: [G-DSK-05]
 
+  mcp-servers:
+    description: >-
+      #mcp-servers (T-2026-10-23-003): the human's own MCP servers and the
+      first-party Paradigm MCP in Gnomon sessions, still under
+      --strict-mcp-config. src/kernel/desk/mcp-servers.ts discovers the
+      servers Claude Code would load (~/.claude.json user + projects map,
+      the repo .mcp.json, enabled user-scope plugins' plugin.json/.mcp.json
+      with the root realpath'd inside ~/.claude/plugins), classifies each
+      (problems: name, law-7, env-name, remote, command, plugin-path, args,
+      transport, first-party; flags: shell wrapper, fetch-at-launch), shows
+      rows with NAMES only (env, header, ${NAME} refs; secret-looking args
+      hidden; URL without query), hashes each declaration with an HMAC under
+      the kernel launch key, resolves the first-party @a-company/paradigm
+      (paradigm-mcp bin inside the package) and composes a session's set
+      (first party, then enabled servers whose hash still matches; ${NAME}
+      values from ~/.gnomon/loop-env; missing ⇒ skipped env-missing).
+      src/kernel/desk/mcp-server-cards.ts McpServers: the store
+      <home>/desk/mcp-servers.json (0600), request.mcp.enable raising ONE
+      grant card (detail.action mcp.enable; root class, hand-only, never
+      standing; prepare refuses a changed declaration), request.mcp.disable
+      and the first-party on/off with no card, status.mcp (names only),
+      the per-session compose and the first-party write-denies
+      (SupervisorOptions.mcpDenyWrite). A repo .mcp.json or local server is
+      turned on for its own repo only. Windows: rows yes, enabling refused
+      (root key). Every server runs inside the session sandbox (no nested
+      SBPL, measured); the card names the host and says it has the
+      session's network.
+      TD-2026-10-23-361 (Aegis review, founder rulings): H1 the human's own
+      ~/.claude/settings*.json allow rules for a server's mcp__ tools are
+      honoured and NAMED (autoAllowRules) on the card, the row and the
+      Paradigm row; Gnomon adds none. M3 the first party runs live from its
+      resolved path, unpinned, linked shown (accepted residual: a session in
+      a linked checkout can change the next session's Paradigm MCP, which
+      runs under the same profile); every enabled `all` server's command and
+      absolute args are write-denied in sessions, inside-roots exempt and
+      logged (mcp.deny.skipped). M1 ${NAME} only in URL path and query (a
+      loopback port excepted), placeholders shown, the expanded URL
+      re-checked at compose. M2 law-7 references refused. L1 repo .mcp.json
+      symlink / hard link / outside-repo refused. L2 secret NAME=value and
+      short-flag values hidden. L3 inline code flagged. L5 mcp.user.added
+      after the merge (noteMerged).
+    path: src/kernel/desk/
+    type: module
+    tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
+    signals: ['!mcp-server-enabled', '!mcp-server-disabled']
+    gates: ['^mcp-server-enable']
+    tests:
+      - test/mcp-servers.test.ts
+      - test/mcp-servers-sandbox.test.ts
+
   budget-fuse:
     description: >-
       #budget-fuse as a METER (spec §3.4, §4.8, §10 laws 1/7; §19.1 M1.6;

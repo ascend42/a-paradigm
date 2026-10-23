@@ -62,6 +62,8 @@ export interface SettingsDeps {
   revoke: (grantId: string) => void;
   local?: LocalPress;
   rules?: RulesPress;
+  /** #gui-mcp-servers: a press on an `mcp:` key (ui/mcp-servers.ts) */
+  mcp?: { press(act: string, value: string | null, trusted: boolean): void };
 }
 
 /** Where focus goes after a Local model press: a field, a key, or the section's heading. */
@@ -180,7 +182,8 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     if (r.live) row.setAttribute('aria-live', 'polite');
     row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value));
     if (r.how) row.appendChild(rich(doc, 'p', { class: 'meta settings-how' }, r.how));
-    if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys' }, ...r.keys.map((k) => keyEl(doc, k))));
+    // the keys are a group named by their row, so "Turn off" is heard with what it turns off (Mika 2026-10-23)
+    if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys', role: 'group', 'aria-label': r.label }, ...r.keys.map((k) => keyEl(doc, k))));
   }
   return row;
 }
@@ -324,6 +327,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     if (lm) {
       // the submit key presses through the form's submit (Enter in a field presses it too)
       if (lm.disabled || lm.type === 'submit') return;
+      if (lm.dataset.lmAct!.startsWith('mcp:')) return d.mcp?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
       return d.local?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
     }
     const b = t.closest('[data-settings-run]') as HTMLButtonElement | null;

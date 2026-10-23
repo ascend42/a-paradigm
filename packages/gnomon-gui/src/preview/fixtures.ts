@@ -44,7 +44,7 @@ export interface Fixture {
   /** #gui-settings: the theme CHOICE stored before load (absent: none stored, so auto follows ?theme=) */
   choice?: 'day' | 'night' | 'auto';
   /** #gui-settings: open the Settings sheet once painted; #gui-model-picker: open the model-switch confirm sheet */
-  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps' | 'rules';
+  open?: 'settings' | 'app-menu' | 'model-switch' | 'offer-armed' | 'voice-ladder' | 'voice-settings' | 'loops-waiting' | 'loops-trust' | 'steps' | 'rules' | 'mcp';
   /** #gui-rules-view: the Rules block's staged state for the shot (none, off-open, staged, tighten, close, refused, waiting) */
   rulesState?: string;
 }
@@ -234,11 +234,34 @@ const EXTRA_CARDS: Record<string, unknown>[] = [
   cardOf({ name: 'billing loosen', kind: 'strictness', hsid: BILLING, lines: ['Loosen billing to auto-edits', 'the session would edit files without a card; Bash still asks'], detail: { op: 'mode.loosen', from: 'ask', to: 'auto-edits' }, decisions: ['allow', 'deny'], strictness: { level: 'L1', mode: 'auto-edits', reason: 'requested from the GUI' } }),
 ];
 
+/** #gui-mcp-servers: the root card turning pencil on for all repos, with the kernel's lines (mcp-server-cards.ts mcpEnableCardLines). */
+const MCP_CARD_DETAIL = { action: 'mcp.enable', id: 'user::pencil', name: 'pencil', server: 'pencil', source: 'user', scope: 'all', repo: null, transport: 'stdio', host: null, envNames: [], headerNames: [], needs: [], shell: null, fetches: 'npx', launchHash: 'sha256:5d0c41e2b7a98f3c', rootRows: [], rootDecisions: ['allow'] };
+const MCP_CARD = cardOf({
+  name: 'mcp pencil',
+  kind: 'grant',
+  hsid: null,
+  requestedBy: HUMAN_PRINCIPAL,
+  lines: [
+    'Turn on MCP server pencil for all your repos',
+    'asked from Settings · 14:07 · applies to new sessions',
+    'from ~/.claude.json',
+    'runs /opt/homebrew/bin/npx -y @pencil-dev/mcp-server@latest',
+    "inside the session's sandbox: the same files and network as the session, nothing more",
+    'downloads what it runs at every launch (npx): what runs can change without a new card',
+    "its tools ask like any tool: cards and Always rules apply; nothing is allowed automatically, and its tool descriptions are the server's words, not Gnomon's",
+    'launch sha256:5d0c41e2b7a98f3c',
+    'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice; deny changes nothing',
+  ],
+  extra: [{ type: 'root-rows', rootDecisions: ['allow'], detail: MCP_CARD_DETAIL }],
+  detail: MCP_CARD_DETAIL,
+  decisions: ['allow', 'deny'],
+}) as Record<string, unknown> & { cardId: string };
+
 export const OFFER_ID = `offer:${ulid('offer constellation')}`;
 const OFFER_MUTED_ID = `offer:${ulid('offer neurons 1')}`;
 const OFFER_QUIET_ID = `offer:${ulid('offer neurons 2')}`;
 
-function deskChain(o: { always?: boolean; extraCards?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
+function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -321,6 +344,8 @@ function deskChain(o: { always?: boolean; extraCards?: boolean; voice?: 'armed' 
   // TD-2026-10-23-939 follow-up: the scoped always choices on an Edit card and a Bash card, pinned in billing (Mika's shots)
   if (o.always)
     ALWAYS_CARDS.forEach((card, i) => c.add(T(`14:07:3${i}`), 'approval.request', { card, flags: [], ...(i === 0 ? { tool: 'Edit', tool_input: ALWAYS_EDIT_INPUT } : { tool: 'Bash', tool_input: ALWAYS_BASH_INPUT }) }, { session: BILLING, repo: 'billing' }));
+  // #gui-mcp-servers: the root card Settings › MCP servers raised (⊙ gnomon family), waiting in the stack (Mika's shots)
+  if (o.mcpCard) c.add(T('14:07:40'), 'approval.request', { card: MCP_CARD, flags: [] }, {});
   if (o.extraCards)
     EXTRA_CARDS.forEach((card, i) => {
       const hsid = typeof card.hsid === 'string' ? card.hsid : null;
@@ -398,6 +423,44 @@ function fixture(name: string, title: string, c: Chain, status: Record<string, u
 }
 
 /** #gui-settings: what the sheet reads beyond the desk (today's grant, the served bundle, the kernel key). */
+/**
+ * #gui-mcp-servers (Mika's review): status.mcp as the kernel builds it (mcp-server-cards.ts status, mcpServerRow), with
+ * the servers a Paradigm user carries between projects: one on everywhere, a plugin over https with a header, npx that
+ * downloads at launch, a shell wrapper changed since it was turned on, a long sse name, one not on the session PATH,
+ * the Paradigm plugin copy the first-party server covers, and billing's own .mcp.json and local servers.
+ * (Remote URLs are left out: src/ carries no remote address, test/gui.test.ts; the row then shows its host.)
+ */
+const MCP_BILLING = '/Users/matt/code/billing';
+const mcpRow = (o: Record<string, unknown>): Record<string, unknown> => ({ source: 'user', repo: null, plugin: null, transport: 'stdio', command: null, args: [], url: null, host: null, envNames: [], headerNames: [], needs: [], shell: null, fetches: null, inline: null, autoAllowed: [], problems: [], on: { all: false, repos: [] }, changed: false, sessionName: o.name, ...o });
+const MCP_SERVERS = [
+  mcpRow({ id: 'user::neurons', name: 'neurons', command: '/Users/matt/.npm-global/bin/neurons-mcp', args: ['--vault', '/Users/matt/neurons'], envNames: ['NEURONS_VAULT'], autoAllowed: ['mcp__neurons__*'], on: { all: true, repos: [] } }),
+  mcpRow({ id: 'user::pencil', name: 'pencil', command: '/opt/homebrew/bin/npx', args: ['-y', '@pencil-dev/mcp-server@latest'], fetches: 'npx' }),
+  mcpRow({ id: 'plugin:neon@claude-plugins-official:neon', name: 'neon', sessionName: 'plugin_neon_neon', source: 'plugin', plugin: { id: 'neon@claude-plugins-official', version: '1.4.2' }, transport: 'http', url: null, host: 'mcp.neon.tech', headerNames: ['Authorization'], on: { all: false, repos: ['/Users/matt/code/warpline'] } }),
+  mcpRow({ id: 'user::github', name: 'github', command: '/bin/sh', args: ['-c', 'GITHUB_PERSONAL_ACCESS_TOKEN=$(gh auth token) exec github-mcp-server stdio'], shell: 'sh -c', needs: ['GITHUB_PERSONAL_ACCESS_TOKEN'], changed: true }),
+  mcpRow({ id: 'user::linear-issues-and-projects-for-the-atelier-team', name: 'linear-issues-and-projects-for-the-atelier-team', transport: 'sse', url: null, host: 'mcp.linear.app', headerNames: ['Authorization', 'X-Linear-Workspace'] }),
+  mcpRow({ id: 'user::sentry', name: 'sentry', command: 'sentry-mcp', problems: [{ code: 'command', text: 'sentry-mcp is not on the session PATH (/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/Users/matt/.npm-global/bin)' }] }),
+  mcpRow({ id: 'plugin:paradigm@a-company:paradigm', name: 'paradigm', sessionName: 'plugin_paradigm_paradigm', source: 'plugin', plugin: { id: 'paradigm@a-company', version: '7.9.0' }, command: '/Users/matt/.claude/plugins/cache/a-company/paradigm/7.9.0/bin/paradigm-mcp', problems: [{ code: 'first-party', text: 'Gnomon runs the Paradigm MCP itself in every session (first-party), so this plugin copy stays off' }] }),
+];
+const MCP_REPO_SERVERS = [
+  mcpRow({ id: `project:${MCP_BILLING}:stripe-mock`, name: 'stripe-mock', source: 'project', repo: MCP_BILLING, command: `${MCP_BILLING}/tools/stripe-mock/server.js`, needs: ['STRIPE_TEST_KEY'] }),
+  mcpRow({ id: `local:${MCP_BILLING}:postgres`, name: 'postgres', source: 'local', repo: MCP_BILLING, command: '/opt/homebrew/bin/pg-mcp', args: ['postgres://localhost/billing_dev'], on: { all: false, repos: [MCP_BILLING] } }),
+];
+function mcpStatus(o: { servers?: boolean; repo?: boolean; fp?: 'on' | 'off' | 'missing'; windows?: boolean; pending?: boolean } = {}): Record<string, unknown> {
+  const fp = o.fp ?? 'on';
+  return {
+    mcp: {
+      offered: true,
+      platform: o.windows ? 'win32' : 'darwin',
+      unsupported: o.windows ? 'platform' : null,
+      envFile: '~/.gnomon/loop-env',
+      firstParty: { id: 'first-party:paradigm', name: 'paradigm', on: fp === 'on', available: fp !== 'missing', ...(fp === 'missing' ? { why: 'paradigm-mcp is not installed (npm install -g @a-company/paradigm)' } : { version: '7.9.0', dir: '/Users/matt/code/a-paradigm/packages/paradigm', linked: true, autoAllowed: ['mcp__paradigm'] }) },
+      servers: o.servers === false ? [] : MCP_SERVERS,
+      repos: [{ repo: MCP_BILLING, folder: 'billing', hsids: [BILLING], servers: o.repo === false ? [] : MCP_REPO_SERVERS }],
+      pending: o.pending ? [{ cardId: MCP_CARD.cardId, id: 'user::pencil', scope: 'all', repo: null }] : [],
+    },
+  };
+}
+
 const SETTINGS_STATUS = {
   standing: { built: true, tuples: ['mode.loosen:auto-edits', 'permission:always', 'voice.widen', 'voice-arm:allow', 'daemon-stop:restart'], active: [{ grantId: 'sg:01JPREVIEWGRANT0000000001', tuples: ['mode.loosen:auto-edits', 'permission:always', 'voice.widen'], repos: ['billing'], expiresAt: '2026-10-20T22:00:00.000Z', uses: 3 }] },
   web: { listening: true, port: 7311, bundleHash: 'sha256:53b2cd7a8d74c94306f388e48249f176d37de86a1246995c905d3486db63fc81' },
@@ -709,6 +772,13 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'rules-refused': rulesFx('rules-refused', 'Settings › Rules: the kernel refused; every change stays staged, next: says what to do', 5, 4, 'refused'),
   'rules-waiting': rulesFx('rules-waiting', 'Settings › Rules: the card turning a rule back on is waiting in the stack', 5, 4, 'waiting'),
   settings: fixture('settings', 'The Settings sheet open (theme auto, today\'s grant on)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings' }),
+  // #gui-mcp-servers (Mika's review): Settings › MCP servers in every state, at the section (open 'mcp')
+  'mcp-servers': fixture('mcp-servers', 'Settings › MCP servers: nine servers (on everywhere, plugin over https, npx, changed, long name, not on PATH, the Paradigm plugin copy, billing’s own)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus() }, BILLING, false, { open: 'mcp' }),
+  'mcp-waiting': fixture('mcp-waiting', 'Settings › MCP servers: turning pencil on waits on its root card (⊙ gnomon) in the stack', deskChain({ mcpCard: true }), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ pending: true }) }, BILLING, false, { open: 'mcp' }),
+  'mcp-none': fixture('mcp-none', 'Settings › MCP servers: none found (only the first-party Paradigm MCP)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ servers: false, repo: false }) }, BILLING, false, { open: 'mcp' }),
+  'mcp-fp-missing': fixture('mcp-fp-missing', 'Settings › MCP servers: Paradigm is not installed', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ fp: 'missing' }) }, BILLING, false, { open: 'mcp' }),
+  'mcp-windows': fixture('mcp-windows', 'Settings › MCP servers on Windows: rows only, no keys', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ windows: true }) }, BILLING, false, { open: 'mcp' }),
+  'mcp-not-offered': fixture('mcp-not-offered', 'Settings › MCP servers: a kernel without status.mcp', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'mcp' }),
   'settings-day': fixture('settings-day', 'Day chosen in Settings: papercraft even when the Mac is dark', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings', choice: 'day' }),
   spoken: talkFixture('spoken', 'Table talk: one reply spoken sentence by sentence, the last cut off (one spoken-aloud marker)', 'spoken'),
   choices: talkFixture('choices', 'Table talk: a reply that ends with lettered options (clickable choices)', 'choices'),

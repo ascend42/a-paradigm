@@ -125,7 +125,7 @@ import { processControlFor, processStartMs } from './process-control.js';
 import { SessionSupervisor, createSessionPort, lateVoicePort, SessionNames, SESSION_NAME_SEED_KINDS, type NameRow } from '../supervisor/index.js';
 import { ClaudeRepinCards, REPIN_POLL_MS } from '../runner/repin-card.js';
 import { resolveClaudeSource } from '../runner/preflight.js';
-import { osUserHome } from '../runner/env.js';
+import { osUserHome, sessionNodeDir, sessionPathFor } from '../runner/env.js';
 import { claudeVerifierFor } from '../../platform/claude-verifier.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
@@ -157,6 +157,8 @@ import { readInputChoice, writeInputChoice } from '../voice/input-choice-store.j
 import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
+import { McpServers } from '../desk/mcp-server-cards.js';
+import { resolveFirstPartyParadigm, type FirstPartyResolution } from '../desk/mcp-servers.js';
 import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
 import { ModsAdmin, type ModAsker } from '../modhost/mods-admin.js';
@@ -949,20 +951,48 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const deskMods = new DeskMods(home, authority);
   let offerRouter: OfferRouter | null = null;
   const deskAdded = new Map<string, Set<string>>();
+  // #mcp-servers (T-2026-10-23-003): the first-party Paradigm MCP (on by default) and the human's own Claude Code
+  // servers they turned on, composed into every session's mcp.json (still --strict-mcp-config); names in events only
+  const mcpUserHome = seams.supervisor?.userHome ?? osUserHome();
+  const mcpPathDirs = (): string[] => {
+    const nodeDir = sessionNodeDir(process.execPath);
+    const joined = sessionPathFor(fuseCfg.sessions.path, { ...(nodeDir ? { nodeDir } : {}), home: mcpUserHome });
+    return joined ? joined.split(process.platform === 'win32' ? ';' : ':').filter(Boolean) : [];
+  };
+  let mcpFirstParty: { at: number; r: FirstPartyResolution } | null = null;
+  const mcpServers = new McpServers({
+    home,
+    broker,
+    userHome: mcpUserHome,
+    pathDirs: mcpPathDirs,
+    launchKey: deskLaunchKey(home),
+    // resolved at most every 30 s (an install or upgrade of @a-company/paradigm is picked up by the next session)
+    firstParty: () => {
+      const now = Date.now();
+      if (!mcpFirstParty || now - mcpFirstParty.at > 30_000) mcpFirstParty = { at: now, r: resolveFirstPartyParadigm({ execPath: process.execPath, userHome: mcpUserHome, ...(process.env.APPDATA ? { appData: process.env.APPDATA } : {}) }) };
+      return mcpFirstParty.r;
+    },
+    liveRepos: () => supervisor.liveScopes().map((x) => ({ cwd: x.cwd, hsid: x.hsid })),
+    emit: (e) => emit({ kind: 'daemon.desk', ...e } as DaemonEvent),
+  });
   const supervisor: SessionSupervisor = new SessionSupervisor({
+    mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
     deskMcp: (distroServers, ctx) => {
       const router = offerRouter;
       if (!router) {
         // L3: fail closed until the router is bound (no desk server, reserved repo names still dropped)
-        const only = repoServersOnly({}, distroServers);
+        const mine = mcpServers.compose(ctx);
+        const only = repoServersOnly(mine.servers, distroServers);
+        mcpServers.noteMerged(ctx.hsid, mine, only.servers); // Aegis L5: after the merge
         for (const server of only.dropped) emit({ kind: 'daemon.desk', event: 'mcp.reserved', hsid: ctx.hsid, server });
         emit({ kind: 'daemon.desk', event: 'mcp.unbound', hsid: ctx.hsid });
         return only.servers;
       }
       const repo = deskRepoScope(repoKeyOf([ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])]));
-      const r = mergeDeskMcp({}, deskMods.list(), { distro: distroServers, overrides: readMcpOverrides(home), repoMuted: (mod) => router.repoMuted(repo, mod), launchKey: deskLaunchKey(home) });
+      const mine = mcpServers.compose(ctx);
+      const r = mergeDeskMcp(mine.servers, deskMods.list(), { distro: distroServers, overrides: readMcpOverrides(home), repoMuted: (mod) => router.repoMuted(repo, mod), launchKey: deskLaunchKey(home) });
       // H1b: the servers actually added to THIS session (offers and kept go only through them)
       if (deskAdded.size >= 512) deskAdded.delete(deskAdded.keys().next().value!);
       deskAdded.set(ctx.hsid, new Set(r.added.map((a) => a.server)));
@@ -971,6 +1001,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       for (const a of r.added) emit({ kind: 'daemon.desk', event: 'mcp.added', hsid: ctx.hsid, name: a.mod, server: a.server, launchHash: a.launchHash, overridden: a.overridden });
       // Aegis (S2): a non-absolute command is never launched; the server is reported needs-config
       for (const sk of r.skipped) if (sk.why === 'needs-config') emit({ kind: 'daemon.desk', event: 'mcp.needs-config', hsid: ctx.hsid, name: sk.mod, server: sk.server ?? null, next: UNCONFIGURED_HINT.replace('<mod>', sk.mod) });
+      mcpServers.noteMerged(ctx.hsid, mine, r.servers); // Aegis L5: only what reaches the session
       return r.servers;
     },
     onClaudeBinaryChanged: (real, found) => repin.onRefused(real, found),
@@ -1463,6 +1494,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       // Aegis M2: status.local is the human's (dispatch.ts gives other classes only configured / loopbackOnly / offered)
       // TD-2026-10-23-162 (#folder-picker): the folder field's three read-only asks (status.folders is the human's)
       folders: { choose: (asker: FolderAsker, payload: unknown) => folderPicker.choose(asker, payload), check: (asker: FolderAsker, payload: unknown) => folderPicker.check(asker, payload), recent: (asker: FolderAsker, payload: unknown) => folderPicker.recent(asker, payload), status: () => folderPicker.status(), connectionClosed: (connId: string) => folderPicker.connectionClosed(connId) },
+      mcp: { request: (asker: Parameters<McpServers['request']>[0], kind: string, payload: unknown) => mcpServers.request(asker, kind, payload), status: () => mcpServers.status() },
       local: { request: (asker: Parameters<LocalConfigCards['request']>[0], payload: unknown) => localCards.request(asker, payload), probe: (asker: Parameters<LocalConfigCards['probe']>[0], payload: unknown) => localCards.probe(asker, payload), status: () => localStatus() },
     },
     reads: { log, hub },

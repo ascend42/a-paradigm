@@ -82,6 +82,14 @@ async function boot(): Promise<void> {
     for (let i = 0; i < 200 && !document.querySelector('#viewport .work-key'); i++) await frames(1);
     (document.querySelector('#viewport .work-key') as HTMLElement | null)?.click();
   }
+  // #gui-mcp-servers: Settings at the MCP servers section (opening needs no trust; its keys do)
+  if (fx.open === 'mcp') {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ',', metaKey: true }));
+    await frames(2);
+    const hd = document.getElementById('settings-h-mcp-servers');
+    hd?.scrollIntoView({ block: 'start' });
+    hd?.focus({ preventScroll: true });
+  }
   await frames(3);
   document.documentElement.dataset.preview = 'ready';
 }

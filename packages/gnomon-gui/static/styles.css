@@ -352,6 +352,8 @@ html, body {
 /* Aegis H1: a composed permission title never hides a command's tail: it WRAPS (no ellipsis, no one-line clip), each
    line of the command is its own line with a visible ⏎, and the shell separators are marked */
 .card-title.composed { white-space: normal; overflow: visible; text-overflow: clip; }
+/* #gui-mcp-servers (Mika): the MCP enable card's title carries its scope ("for all your repos"): it wraps, never cut */
+.card-title.wraps { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .card-title.composed .card-arg { white-space: pre-wrap; overflow-wrap: anywhere; }
 .card-title.composed .card-arg-line { white-space: pre-wrap; }
 .card-title.composed .card-nl { color: var(--warn-ink); font-weight: 600; }
@@ -1461,6 +1463,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .settings-sec.focused .settings-h:focus-visible { outline: none; }
 /* a kernel-owned section's label sits on its value's first line when the value wraps (Last fallback) */
 .settings-sec[data-kernel-owned] .settings-row.settings-readonly { align-items: first baseline; }
+/* #gui-mcp-servers (Mika 2026-10-23): a long server name wraps in the label column without opening a gap between the
+   value and its how line (the label spans the row's value, how and keys) */
+.settings-sec[data-section="mcp-servers"] .settings-row[data-readonly] > .settings-label { grid-row: span 3; align-self: start; overflow-wrap: anywhere; }
 
 /* ── the loop detail's start-refusal line (loop-detail anatomy) ─────────────── */
 .lp-refusal { margin: 0 20px 6px; padding: 6px 10px; border: 1px solid var(--key-edge); border-left: var(--edge-w) solid var(--key-edge); border-radius: var(--radius); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: var(--fs-control); color: var(--ink2); background: var(--sheet); }
