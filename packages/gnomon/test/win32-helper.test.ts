@@ -22,6 +22,7 @@ import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { clearVerifiedRootsForTests, isOwnerOnly } from '../src/platform/owner-only.js';
 import { defaultWin32HelperPath, helperOpSync, jobLaunch, pinWin32Helper, Win32HelperError } from '../src/platform/win32/helper-client.js';
 import { secureKernelPipe } from '../src/platform/win32/pipe.js';
+import { readRegistryKey } from '../src/platform/win32/registry.js';
 import { PKG_ROOT } from './helpers.js';
 
 const exe = path.resolve(PKG_ROOT, '..', 'gnomon-helper', 'bin', 'win32', 'gnomon-helper.exe');
@@ -69,6 +70,16 @@ describeHelper('win32 helper (W2/W3)', () => {
     expect(() => helperOpSync(pin(), 'key.create', { key: 'root', gen: 'g1' })).toThrow(/unsupported-op/);
     expect(() => helperOpSync(pin(), 'key.public', { key: 'approvals', gen: 'Bad Gen' })).toThrow(/bad-request/);
     expect(() => helperOpSync(pin(), 'arm.open')).toThrow(/unsupported-op/);
+  });
+
+  it('W3: registry.read reads a key by API (existing, missing by code, refused shapes); never reg.exe text', () => {
+    const read = (key: string) => readRegistryKey(key, (k) => helperOpSync(pin(), 'registry.read', { key: k }));
+    const env = read('HKCU\\Environment');
+    expect(env.exists).toBe(true);
+    if (env.exists === true) expect(env.values.some((v) => v.type === 'REG_SZ' || v.type === 'REG_EXPAND_SZ')).toBe(true);
+    expect(read('HKLM\\SOFTWARE\\Policies\\GnomonNoSuchKey')).toEqual({ exists: false });
+    expect(() => helperOpSync(pin(), 'registry.read', { key: 'HKCR\\x' })).toThrow(/bad-request/);
+    expect(() => helperOpSync(pin(), 'registry.read', { key: 'HKCU\\a\\\\b' })).toThrow(/bad-request/);
   });
 
   it('G-WIN-02: the home gets a protected owner-only DACL, read back; files below inherit it', () => {

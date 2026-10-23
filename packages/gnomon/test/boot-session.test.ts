@@ -39,12 +39,15 @@ describe('#kernel-log boot session (S33-10, P8-D83)', () => {
     await log.close();
   });
 
-  it.runIf(process.platform === 'win32')('win32 reads `unknown` until the helper boot id (P8-D78), and the open report says so', async () => {
-    expect(readBootSession()).toBe(BOOT_UNKNOWN);
+  it.runIf(process.platform === 'win32')('win32 reads the helper boot id (W3) once per process, and the open report says so', async () => {
+    const boot = readBootSession();
+    expect(boot).toMatch(/^win:\d+$/);
+    expect(boot).not.toBe(BOOT_UNKNOWN);
+    expect(readBootSession()).toBe(boot);
     const home = mkdtempSync(path.join(os.tmpdir(), 'gnomon-boot-'));
     homes.push(home);
     const log = KernelLog.open({ home, kernelPrincipal: KERNEL, signer: SoftwareEd25519Signer.generate() });
-    expect(log.report.boot).toBe(BOOT_UNKNOWN);
+    expect(log.report.boot).toBe(boot);
     await log.close();
   });
 });

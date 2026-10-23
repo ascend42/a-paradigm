@@ -20,7 +20,7 @@
 //         are all EPERM;
 //   (v)   an unsandboxed control run of the same child code reaches every
 //         target, so an EPERM above is the sandbox's answer.
-// Non-darwin: partial (the Windows transport profile is the parity phase, P8-D78).
+// win32: P14b-w (inbound) in _shared/win32-handoff.mjs, under gnomon-helper process.confine.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
@@ -28,6 +28,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { NODE, lanAddress, profileFor } from '../p14-link-outbound/probe.mjs';
+import { win32Handoff } from '../_shared/win32-handoff.mjs';
 
 export const specRefs = ['§15.5 transport', '§11.2 rule 1', '§A.7', '§19.1 M1.0 P14b-web', 'research paradigm-8/37 P14b', 'T-2026-10-18-020', 'T-2026-10-18-017'];
 
@@ -114,6 +115,7 @@ function harness(child) {
 }
 
 export default async function probe(ctx) {
+  if (ctx.platform === 'win32') return win32Handoff('inbound'); // P14b-w (inbound), _shared/win32-handoff.mjs
   if (ctx.platform !== 'darwin') return { verdict: 'partial', evidence: { skipped: `${ctx.platform}: the Windows transport profile (AppContainer without internetClientServer/privateNetworkClientServer) is the Windows parity phase (P8-D78)` } };
   const other = net.createServer((s) => s.destroy());
   const Q = await listen(other, 0, '127.0.0.1');

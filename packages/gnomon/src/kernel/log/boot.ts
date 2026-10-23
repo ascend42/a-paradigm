@@ -16,8 +16,11 @@
  *   - macOS: `kern.bootsessionuuid`, read by spawning `/usr/sbin/sysctl -n
  *     kern.bootsessionuuid` (node exposes no sysctl binding).
  *   - Linux: `/proc/sys/kernel/random/boot_id`.
- *   - Windows: the parity phase (P8-D78) supplies a helper boot id; until then
- *     `unknown`.
+ *   - Windows: gnomon-helper `boot.id` (W3), the boot counter Windows keeps in
+ *     HKLM\...\PrefetchParameters\BootId, as `win:<n>` (admin-writable only). It
+ *     never changes on a running system; whether a fast-startup (hybrid) boot
+ *     bumps it is unprobed, and a counter that did NOT change only classifies
+ *     as `tamper` (fail closed), never the other way.
  * Any failure yields `unknown`. `unknown` on either side never proves a
  * reboot, so classification falls closed to `tamper`.
  *
@@ -26,27 +29,35 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { helperOpSync, kernelWin32Helper } from '../../platform/win32/helper-client.js';
 
 export const BOOT_UNKNOWN = 'unknown' as const;
 
-/** A boot id is a UUID on both sources; anything else (garbage, an injected env) is `unknown` (S34-09). */
+/** A boot id is a UUID (macOS, Linux) or the helper's `win:<n>` (Windows); anything else (garbage, an injected env) is `unknown` (S34-09). */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const WIN_BOOT = /^win:\d{1,10}$/;
 
 let cached: string | undefined;
 
 /** Validate a raw boot id: trimmed UUID, else `unknown`. */
 export function normalizeBootId(raw: string): string {
   const v = raw.trim();
-  return UUID.test(v) ? v.toUpperCase() : BOOT_UNKNOWN;
+  if (UUID.test(v)) return v.toUpperCase();
+  return WIN_BOOT.test(v) ? v : BOOT_UNKNOWN;
 }
 
+/** Platform registry of boot-id sources (G-WIN-05: no inline platform branch); a platform without one is `unknown`. */
+const BOOT_SOURCES: Readonly<Partial<Record<NodeJS.Platform, () => string>>> = Object.freeze({
+  // absolute path, empty environment (S34-09): nothing from the caller's env reaches the child
+  darwin: () => execFileSync('/usr/sbin/sysctl', ['-n', 'kern.bootsessionuuid'], { encoding: 'utf8', timeout: 2000, env: {}, stdio: ['ignore', 'pipe', 'ignore'] }),
+  linux: () => readFileSync('/proc/sys/kernel/random/boot_id', 'utf8'),
+  win32: () => String(helperOpSync(kernelWin32Helper(), 'boot.id').bootId ?? ''),
+});
+
 function readBootSessionUncached(): string {
+  const source = BOOT_SOURCES[process.platform];
   try {
-    if (process.platform === 'darwin') {
-      // absolute path, empty environment (S34-09): nothing from the caller's env reaches the child
-      return normalizeBootId(execFileSync('/usr/sbin/sysctl', ['-n', 'kern.bootsessionuuid'], { encoding: 'utf8', timeout: 2000, env: {}, stdio: ['ignore', 'pipe', 'ignore'] }));
-    }
-    if (process.platform === 'linux') return normalizeBootId(readFileSync('/proc/sys/kernel/random/boot_id', 'utf8'));
+    if (source) return normalizeBootId(source());
   } catch {
     /* fall through: unknown never proves a reboot */
   }

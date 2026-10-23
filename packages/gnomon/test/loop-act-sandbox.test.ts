@@ -14,11 +14,14 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
 import { loopActLaunchPlan } from '../src/kernel/sandbox/loop-act.js';
+import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { createScratch, GitRefusal, parkScratch, removeScratch, scratchChanges } from '../src/kernel/git/scratch.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { PKG_ROOT } from './helpers.js';
 
 const darwin = process.platform === 'darwin';
+/** capability, not platform (as test/session-sandbox.test.ts): below macOS 15 or with SIP off the backend refuses first */
+const SANDBOX_OK = darwin && darwinFloor().ok;
 const tmps: string[] = [];
 const kids: ChildProcess[] = [];
 const closers: Array<() => void> = [];
@@ -47,7 +50,7 @@ const listen = async (srv: net.Server, host = '127.0.0.1'): Promise<number> => {
 };
 const lanIp = (): string => Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address ?? '10.255.255.1';
 
-describe.skipIf(!darwin)('the loop-act profile under sandbox-exec (Aegis escape suite)', () => {
+describe.skipIf(!SANDBOX_OK)('the loop-act profile under sandbox-exec (Aegis escape suite; macOS 15+, SIP enabled)', () => {
   it('every escape is denied; the scratch, tmp, node_modules reads and the endpoint port are allowed', async () => {
     const home = tmp('gnomon-home-');
     const userHome = tmp('gnomon-user-');

@@ -4,6 +4,25 @@ Gnomon changes on `feat/gnomon` before they reach a Paradigm release. Format: [K
 
 ## [Unreleased]
 
+### Windows (PR #52 and its release blockers; spec §16 "Windows as built")
+
+- **Gnomon runs on Windows from the repo** (`#session-sandbox`, `#gnomon-helper`, `#approval-broker`, docs/plans/gnomon-windows.md W0–W5).
+  - **Sessions:** Low integrity under a restricted token with a per-session SID, on a private Low desktop, in a kill-on-close job. Claude Code uses its PowerShell tool; Bash is denied. A local-model session runs through `gnomon dev local`.
+  - **Approvals:** routine cards are a click; sensitive ones take Windows Hello.
+  - **Kernel:** it runs on a named pipe owned by the user. Its home and pipe pass the owner-only read-back on an elevated administrator too: the owner is set to the user and compared in its SDDL spelling.
+- **Sessions cannot reach each other** (Aegis H1). A session's objects admit that session only, with owner rights limited to READ_CONTROL, and `--low` requires a session SID. A session also cannot see, message or focus a Medium window.
+- **The GUI transport is confined only if it is the kernel's own child** (Aegis M3). The job is set before the integrity drop, and an exited child is refused.
+- **The kernel log is durable on Windows** (W3). Durable renames are written through by the helper, and the boot id is real (`win:<n>`).
+- **Process control on Windows** (W3). Launcher-job groups and creation-time witnesses. A pid is terminated only while the witness the caller recorded still matches. The graceful stop closes stdin.
+- **The session PATH on Windows** drops the entries a session could plant into, and `NoDefaultCurrentDirectoryInExePath` is set.
+- **Policy registry keys are read by API**, not reg.exe's localized text, so a missing key reads as missing on any display language.
+- **Windows probes** P01, log-fsync, P11, P14b-w and P10w have results in `probes/results/*.win32.json`. P10w shows per-session network denies need an elevated service.
+- **Still partial or open on Windows:**
+  - network egress, the microphone and camera, and the process list are not denied;
+  - Hello-minted standing grants wait on screen-lock events (T-2026-10-23-002);
+  - the shared transcripts carve-back is the same on darwin (T-2026-10-23-001);
+  - the desktop wrapper (W6) and signing and packaging (W7–W9) are not built.
+
 ### Added
 
 - **The header is four things: the Gnomon menu, the palette, quiet kernel status and the voice pill** (board header-5b, Atelier 2026-10-21-gnomon-voice option C; `#gui-wordmark-menu`, spec §11.4). The rare tools (Layout presets with panes and Workshop placement, Day / Night / Auto, Mods…, Voice settings…, Settings… ⌘,) moved from header keys into "Gnomon ▾" and ⌘K, with a who's-connected line; the menu has hover, pressed and focus states and full keyboard support (Enter / Space, arrows, Home / End, Esc returns focus). Every header control is 28px and nowrap, and the row no longer wraps at 900px. The kernel link is a dot that gains a word only when not connected; the browser-risk badge is an outlined amber chip at key height ("browser" below 1040px). When the voice app can't run, the pill is the action ("○ Start voice · app not running") instead of a separate Start key; attached, the action is the ladder's first row. The idle auto-off is a 6-second toast in ladder words ("Dictate turned off after 10 min idle") instead of an "Ambient" note that never cleared; a draft waiting on another session is the pill's fact.

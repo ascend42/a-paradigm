@@ -58,9 +58,10 @@ const q = (p: string): string => {
 
 function ancestors(p: string): string[] {
   const out: string[] = [];
-  for (let d = path.dirname(p); ; d = path.dirname(d)) {
+  // darwin SBPL: POSIX path rules on every host (the profile is generated in tests on Windows too)
+  for (let d = path.posix.dirname(p); ; d = path.posix.dirname(d)) {
     out.push(d);
-    if (d === path.dirname(d)) break;
+    if (d === path.posix.dirname(d)) break;
   }
   return out;
 }

@@ -305,15 +305,25 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
 
 /** Is a human session whose cwd is inside `repo` (realpath) mid-turn? */
 export function humanBusyIn(repo: string, sessions: ReadonlyArray<{ cwd: string; busy: boolean }>): boolean {
+  // both sides resolved the same way (a Windows cwd resolves to a drive path; the repo must too), compared in the
+  // filesystem's case (case-insensitive on win32 and darwin, as paradigm-slice FOLD)
+  const resolved = (p: string): string => {
+    let r: string;
+    try {
+      r = fs.realpathSync.native(p);
+    } catch {
+      r = path.resolve(p);
+    }
+    return CASE_INSENSITIVE_FS ? r.toLowerCase() : r;
+  };
+  const root = resolved(repo);
   for (const x of sessions) {
     if (!x.busy) continue;
-    let cwd: string;
-    try {
-      cwd = fs.realpathSync.native(x.cwd);
-    } catch {
-      cwd = path.resolve(x.cwd);
-    }
-    if (cwd === repo || cwd.startsWith(repo.endsWith(path.sep) ? repo : repo + path.sep)) return true;
+    const cwd = resolved(x.cwd);
+    if (cwd === root || cwd.startsWith(root.endsWith(path.sep) ? root : root + path.sep)) return true;
   }
   return false;
 }
+
+/** Platform data (G-WIN-05: a registry, not a branch): the default filesystems that ignore case. */
+const CASE_INSENSITIVE_FS = (['darwin', 'win32'] as readonly string[]).includes(process.platform);

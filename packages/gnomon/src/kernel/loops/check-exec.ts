@@ -527,7 +527,7 @@ class TreeTracker {
     let n = 0;
     for (const r of rows) {
       const start = this.tracked.get(r.pid);
-      if (start !== undefined && start === r.start && this.pc.signalPid?.(r.pid, 'SIGKILL')) n++;
+      if (start !== undefined && start === r.start && this.pc.signalPid?.(r.pid, 'SIGKILL', r.start)) n++;
     }
     return n;
   }
@@ -686,7 +686,10 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
   const pathDirs = defaultSessionPath({ platform: platform as NodeJS.Platform, ...(nodeDir ? { nodeDir } : {}) });
   const pathValue = pathDirs ? pathDirs.join(path.delimiter) : null;
   const identity = i.identity === undefined ? sessionIdentity() : i.identity;
-  const kernelEnv = buildCheckEnv({ from: i.envFrom ?? process.env, identity, path: pathValue, home: '/nonexistent', tmpdir: '/nonexistent' }).env;
+  // the kernel's OWN spawns (git ls-files for the copy) run on this host: its PATH, whatever platform the check names
+  const hostNodeDir = sessionNodeDir(nodePath);
+  const hostDirs = defaultSessionPath(hostNodeDir ? { nodeDir: hostNodeDir } : {});
+  const kernelEnv = buildCheckEnv({ from: i.envFrom ?? process.env, identity, path: hostDirs ? hostDirs.join(path.delimiter) : null, home: '/nonexistent', tmpdir: '/nonexistent' }).env;
 
   let copy: CheckCopy;
   try {

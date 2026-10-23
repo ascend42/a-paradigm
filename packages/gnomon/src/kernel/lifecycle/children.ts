@@ -121,6 +121,8 @@ interface Tracked {
   treeDetail?: string;
   /** The exit-row write (sessions). */
   row?: Promise<void>;
+  /** The leader's start witness read at track() (Aegis W3 M1: every signal to its group carries it). */
+  start?: string;
 }
 
 export const DEFAULT_CHILD_GRACE_MS = 2_000;
@@ -139,13 +141,13 @@ function within(p: Promise<void>, ms: number): Promise<boolean> {
   });
 }
 
-async function groupGone(control: ProcessControl, pgid: number, ms: number, pollMs = 25): Promise<boolean> {
+async function groupGone(control: ProcessControl, pgid: number, ms: number, pollMs = 25, start?: string): Promise<boolean> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
-    if (control.probeGroup(pgid) !== 'alive') return true;
+    if (control.probeGroup(pgid, start) !== 'alive') return true;
     await new Promise((r) => setTimeout(r, pollMs));
   }
-  return control.probeGroup(pgid) !== 'alive';
+  return control.probeGroup(pgid, start) !== 'alive';
 }
 
 const isLive = (c: ChildProcess): boolean => c.exitCode === null && c.signalCode === null;
@@ -197,7 +199,7 @@ export class DaemonChildren {
     const startTime = session ? this.#o.control.startTime(pid) : null;
     let spawnId: string | null = null;
     if (session) spawnId = (input.intent ?? (await this.intend({ kind: input.kind as SessionChildKind, ...(input.hsid ? { hsid: input.hsid } : {}) }))).spawnId;
-    const t: Tracked = { input, pid, exited: exitedPromise(input.child) };
+    const t: Tracked = { input, pid, exited: exitedPromise(input.child), ...(startTime ? { start: startTime } : {}) };
     this.#live.add(t);
     const release = session ? this.#o.holdIdle?.() : undefined;
     if (session) {
@@ -283,21 +285,26 @@ export class DaemonChildren {
         : null;
     const outside = (desc ?? []).filter((d) => d.pgid !== t.pid);
     const signal = (s: 'SIGTERM' | 'SIGKILL'): void => {
-      if (!control.signalGroup(t.pid, s)) child.kill(s);
+      // a platform with no SIGTERM (win32: node's would be TerminateProcess) stops gracefully by closing stdin
+      if (s === 'SIGTERM' && control.gracefulStop === 'stdin') {
+        child.stdin?.end();
+        return;
+      }
+      if (!control.signalGroup(t.pid, s, t.start)) child.kill(s);
     };
     if (isLive(child)) {
       signal('SIGTERM');
-      for (const d of outside) control.signalPid?.(d.pid, 'SIGTERM');
+      for (const d of outside) control.signalPid?.(d.pid, 'SIGTERM', d.start);
       if (!(await within(t.exited, this.#graceMs))) {
         signal('SIGKILL');
         await within(t.exited, this.#graceMs);
       }
-    } else for (const d of outside) control.signalPid?.(d.pid, 'SIGTERM');
+    } else for (const d of outside) control.signalPid?.(d.pid, 'SIGTERM', d.start);
     // members that outlive the leader (e.g. a SIGTERM-ignoring grandchild): kill the group, poll until gone
     let survivor = false;
-    if (control.probeGroup(t.pid) === 'alive') {
-      control.signalGroup(t.pid, 'SIGKILL');
-      survivor = !(await groupGone(control, t.pid, this.#graceMs));
+    if (control.probeGroup(t.pid, t.start) === 'alive') {
+      control.signalGroup(t.pid, 'SIGKILL', t.start);
+      survivor = !(await groupGone(control, t.pid, this.#graceMs, undefined, t.start));
     }
     if (session) {
       const verdict: TreeVerdict = desc === null ? 'unverifiable' : await this.#sweepTree(desc);
@@ -325,7 +332,7 @@ export class DaemonChildren {
     const afterTerm = await until(this.#graceMs);
     if (afterTerm === null) return 'unverifiable';
     if (afterTerm.length === 0) return 'exited';
-    for (const d of afterTerm) control.signalPid?.(d.pid, 'SIGKILL');
+    for (const d of afterTerm) control.signalPid?.(d.pid, 'SIGKILL', d.start);
     const afterKill = await until(this.#graceMs);
     if (afterKill === null) return 'unverifiable';
     return afterKill.length === 0 ? 'exited' : 'alive';
@@ -405,7 +412,7 @@ export async function sweepOrphans(opts: {
       } else if (o.boot === null || o.boot === 'unknown' || o.boot !== opts.boot) {
         probe = 'stale-boot';
       } else {
-        probe = opts.control.probeGroup(o.pgid);
+        probe = opts.control.probeGroup(o.pgid, o.startTime ?? undefined);
         if (probe === 'alive') {
           const witness = opts.control.startTime(o.pgid);
           if (o.startTime === null || witness === null || witness !== o.startTime) {
@@ -434,10 +441,11 @@ export async function sweepOrphans(opts: {
         return stopped;
       };
       if (action !== 'stop' || o.pgid === null) return after(false);
-      opts.control.signalGroup(o.pgid, 'SIGTERM');
-      if (await groupGone(opts.control, o.pgid, grace, opts.pollMs)) return after(true);
-      opts.control.signalGroup(o.pgid, 'SIGKILL');
-      return after(await groupGone(opts.control, o.pgid, grace, opts.pollMs));
+      const w = o.startTime ?? undefined; // checked equal to the live witness above
+      opts.control.signalGroup(o.pgid, 'SIGTERM', w);
+      if (await groupGone(opts.control, o.pgid, grace, opts.pollMs, w)) return after(true);
+      opts.control.signalGroup(o.pgid, 'SIGKILL', w);
+      return after(await groupGone(opts.control, o.pgid, grace, opts.pollMs, w));
     }),
   );
   return { orphans: open.size, stopped: results.filter(Boolean).length };

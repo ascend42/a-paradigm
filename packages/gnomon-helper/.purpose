@@ -99,7 +99,11 @@ components:
       acl.owner-only (file or dir, OICI on a dir) and acl.read (owner-only
       verdicts from the read-back SDDL: owner = user SID, every ACE an allow for
       it), fs.rename-durable (MoveFileExW REPLACE_EXISTING|WRITE_THROUGH),
-      boot.id (win:<PrefetchParameters BootId>), shell.open (loopback http(s)
+      boot.id (win:<PrefetchParameters BootId>), process.start / process.list
+      (creation-time witnesses `ft:<ticks>`, the process table with ppids),
+      process.terminate {pid,start} (only while the witness matches, through one
+      handle), registry.read {key} (HKLM/HKCU values by API, a missing key by
+      error code: never reg.exe's localized text), shell.open (loopback http(s)
       only, never a URL carrying a launch token). exec -- <abs .exe> args is the
       job-object launcher: it joins a fresh KILL_ON_JOB_CLOSE |
       DIE_ON_UNHANDLED_EXCEPTION job BEFORE spawning, so every descendant is
@@ -125,8 +129,11 @@ components:
       [--low] [--session-sid <S-1-9-4174-2026-1022-n>] runs a session under a
       restricted token (restricting SIDs = the user's enabled groups + user +
       GNOMON_SESSION_SID S-1-9-4174-2026-1022 + this session's own SID), Low
-      integrity, an explicit user+SYSTEM default DACL (the launcher itself keeps the
-      shielded kernel's), a private Low-labelled desktop created with an explicit DACL,
+      integrity, an explicit default DACL (the launcher itself keeps the shielded
+      kernel's) that admits THIS session only (Aegis H1, PR #52 release blocker):
+      (A own SID)(D GNOMON_SESSION_SID)(A user)(A SY)(A;;RC;;;OW), in that order, so
+      another session cannot open, signal or re-ACL its processes, threads or pipes;
+      --low requires --session-sid. A private Low-labelled desktop with the same DACL,
       in a job with UI limits. acl.session places per path the ACEs naming the Gnomon
       SID (an allow may name the session's own SID: `sid`), replacing every explicit
       Gnomon-SID ACE there: deny-read/write/all, deny-replace (no delete/rename/

@@ -73,6 +73,27 @@ process.on('message', async (m) => {
     expect(r).toEqual({ bundle: 'ok', secret: 'EPERM', exec: 'denied', write: 'EPERM', out: 'CONNECTED' });
   });
 
+  it('Aegis M3: confine lowers only a direct child of the asking process (a reused pid or a stranger is refused)', async () => {
+    const stranger = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true });
+    cleanups.push(() => stranger.kill());
+    // another process (not the stranger's parent) asks the helper to confine the stranger
+    const asker = spawn(process.execPath, ['-e', `
+const r = require('child_process').spawnSync(process.argv[1], ['once'], { input: JSON.stringify({ id: 1, op: 'process.confine', pid: Number(process.argv[2]) }) + '\\n', encoding: 'utf8' });
+process.stdout.write(r.stdout);`, HELPER, String(stranger.pid)], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    let out = '';
+    asker.stdout!.on('data', (b: Buffer) => (out += b.toString()));
+    await new Promise((r) => asker.once('exit', r));
+    expect(JSON.parse(out.trim().split('\n').pop()!)).toMatchObject({ ok: false, error: 'not-a-child' });
+    // its own child is still confined
+    const own = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true });
+    cleanups.push(() => own.kill());
+    const t = tempHome('gw-');
+    cleanups.push(t.cleanup);
+    ensureGnomonHome(t.home);
+    const plan = transportLaunchPlan({ scriptPath: CHILD, bundleDir: materializePlaceholderBundle(t.home) });
+    await expect(plan.confine!(own.pid!)).resolves.toBeUndefined();
+  });
+
   it('the confined child serves a handed socket (HTTP)', async () => {
     const t = tempHome('gw-');
     cleanups.push(t.cleanup);

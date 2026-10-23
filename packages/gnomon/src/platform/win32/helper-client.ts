@@ -8,7 +8,9 @@
  *
  * TRUST BEFORE SPAWN, as identity/helper.ts: the path is resolved once (realpathSync.native, never PATH), must be a
  * regular file named *.exe, is hashed, and is RE-HASHED before every spawn, so a binary swapped after the pin is
- * refused. Signature: a RELEASE kernel requires the Authenticode-signed helper its release manifest pins; until W7
+ * refused. Kept on purpose (PR #52 review asked): measured 0.36 ms per hash against ~16 ms per helper spawn on the
+ * dev laptop (a 340 KB binary), so the re-hash is ~2% of an op and closes the swap window a cached hash would open.
+ * Signature: a RELEASE kernel requires the Authenticode-signed helper its release manifest pins; until W7
  * (Trusted Signing) no Windows release pins one, so a release kernel refuses (`unsigned`). A DEV kernel (no release
  * manifest: the repo build, `gnomon dev …`) runs the repo-built helper pinned by sha256 only, and says so
  * (`pin.signed === false`, surfaced by status). Fail closed: a missing or changed helper throws Win32HelperError.

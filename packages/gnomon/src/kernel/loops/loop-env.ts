@@ -27,6 +27,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { loopEnvHazard } from '../runner/env.js';
+import { isOwnerOnly } from '../../platform/owner-only.js';
 import { isConfigNamedEnvFile } from '../manifest/layers.js';
 import type { CompiledLoop } from '../../loops/index.js';
 
@@ -130,10 +131,34 @@ const NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 // Aegis M2: a FIFO (or a device) opens without blocking, then fstat refuses it
 const NONBLOCK = fs.constants.O_NONBLOCK ?? 0;
 
-/** Read one env file in the kernel: O_NOFOLLOW, a regular file, ≤ 1 MiB; `owner` also needs this user and 0600/0400. */
+/**
+ * Why `p` is not owner-only, or null. Platform registry (G-WIN-05): POSIX needs this user and mode 0600/0400; win32 (W3,
+ * PR #52 release blockers: before this the check was skipped there, a fail-open) needs the STRICT DACL read-back
+ * (platform/owner-only.ts isOwnerOnly: owner = the user, every ACE the user's, one link).
+ */
+const OWNER_ONLY_CHECKS: Readonly<Partial<Record<NodeJS.Platform, (p: string, st: fs.Stats, shown: string) => string | null>>> = Object.freeze({
+  win32: (p: string, st: fs.Stats, shown: string): string | null =>
+    isOwnerOnly(p, st, { strict: true }) ? null : `${shown} must be owner-only (owned by you, only you in its Security tab, one link); it is not`,
+});
+
+function posixOwnerOnly(_p: string, st: fs.Stats, shown: string): string | null {
+  const uid = process.getuid?.();
+  const mode = st.mode & 0o777;
+  if ((uid === undefined || st.uid === uid) && (mode === 0o600 || mode === 0o400)) return null;
+  return `${shown} must be owner-only (chmod 600 ${shown}); it is ${mode.toString(8).padStart(4, '0')}${uid !== undefined && st.uid !== uid ? ' and owned by another user' : ''}`;
+}
+
+function ownerOnlyFailure(p: string, st: fs.Stats, shown: string): string | null {
+  return (OWNER_ONLY_CHECKS[process.platform] ?? posixOwnerOnly)(p, st, shown);
+}
+
+/** Read one env file in the kernel: O_NOFOLLOW, a regular file, ≤ 1 MiB; `owner` also needs it owner-only (ownerOnlyFailure). */
 export function readEnvFile(p: string, shown: string, o: { owner?: boolean } = {}): { ok: true; vars: Map<string, string> } | { ok: false; absent: boolean; reason: string } {
   let fd: number;
   try {
+    // where the platform has no O_NOFOLLOW (win32), a link is refused by lstat first (a swap between the two is the
+    // same-user residual §15.1 accepts); the fstat below still refuses anything that is not a regular file
+    if (!NOFOLLOW && fs.lstatSync(p).isSymbolicLink()) return { ok: false, absent: false, reason: `the env file ${shown} is a symlink (env files are read without following links)` };
     fd = fs.openSync(p, fs.constants.O_RDONLY | NOFOLLOW | NONBLOCK);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
@@ -145,12 +170,9 @@ export function readEnvFile(p: string, shown: string, o: { owner?: boolean } = {
     const st = fs.fstatSync(fd);
     if (!st.isFile()) return { ok: false, absent: false, reason: `the env file ${shown} is not a regular file` };
     if (st.size > LOOP_ENV_FILE_MAX_BYTES) return { ok: false, absent: false, reason: `the env file ${shown} is larger than 1 MiB` };
-    if (o.owner && process.platform !== 'win32') {
-      const uid = process.getuid?.();
-      const mode = st.mode & 0o777;
-      if ((uid !== undefined && st.uid !== uid) || (mode !== 0o600 && mode !== 0o400)) {
-        return { ok: false, absent: false, reason: `${shown} must be owner-only (chmod 600 ${shown}); it is ${mode.toString(8).padStart(4, '0')}${uid !== undefined && st.uid !== uid ? ' and owned by another user' : ''}` };
-      }
+    if (o.owner) {
+      const why = ownerOnlyFailure(p, st, shown);
+      if (why) return { ok: false, absent: false, reason: why };
     }
     const buf = Buffer.alloc(st.size);
     let off = 0;

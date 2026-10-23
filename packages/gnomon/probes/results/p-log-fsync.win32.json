@@ -1,0 +1,527 @@
+{
+  "probe": "p-log-fsync",
+  "os": "win32",
+  "osVersion": "Windows 11 Home (10.0.26200)",
+  "arch": "x64",
+  "toolVersions": {
+    "sqlite": "3.50.4",
+    "node": "v24.13.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "n": 20000,
+    "budgetMs": 5,
+    "tmpRoot": "<tmp>\\p-log-fsync-iLpZpC",
+    "dataVolume": {
+      "volume": {
+        "DriveLetter": "C",
+        "FileSystem": "NTFS",
+        "DriveType": "Fixed",
+        "Size": 509722226688
+      },
+      "disk": {
+        "FriendlyName": "Micron MTFDKCD512QGN-1BN1AABLA",
+        "BusType": "NVMe"
+      },
+      "defenderRealTime": true
+    },
+    "cpus": "AMD Ryzen 5 7235HS",
+    "syncSemantics": {
+      "nodeFsync": "fs.fsyncSync -> libuv uv_fs_fsync -> FlushFileBuffers (flushes the drive write cache)",
+      "nodeFdatasync": "fs.fdatasyncSync -> NtFlushBuffersFileEx(FLUSH_FLAGS_FILE_DATA_SYNC_ONLY)",
+      "sqliteFull": "os_win.c winSync -> FlushFileBuffers on each WAL commit at synchronous=FULL",
+      "fullfsyncPragma": "no-op off Apple: H1 and H3 issue the same syscalls (a replicate pair)"
+    },
+    "rawFsync": {
+      "fsyncSync": {
+        "iters": 1000,
+        "p50": 0.368,
+        "p90": 0.567,
+        "p99": 0.878,
+        "p999": 1.577,
+        "max": 1.577,
+        "over5ms": 0
+      },
+      "fdatasyncSync": {
+        "iters": 1000,
+        "p50": 0.41,
+        "p90": 0.722,
+        "p99": 0.953,
+        "p999": 1.166,
+        "max": 1.166,
+        "over5ms": 0
+      }
+    },
+    "armsMeetingBudget": [
+      "A",
+      "D",
+      "G",
+      "H1",
+      "H3"
+    ],
+    "sqliteCompileOptions": [
+      "ATOMIC_INTRINSICS=1",
+      "COMPILER=clang-19.1.5",
+      "DEFAULT_AUTOVACUUM",
+      "DEFAULT_CACHE_SIZE=-2000",
+      "DEFAULT_FILE_FORMAT=4",
+      "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+      "DEFAULT_MEMSTATUS=0",
+      "DEFAULT_MMAP_SIZE=0",
+      "DEFAULT_PAGE_SIZE=4096",
+      "DEFAULT_PCACHE_INITSZ=20",
+      "DEFAULT_RECURSIVE_TRIGGERS",
+      "DEFAULT_SECTOR_SIZE=4096",
+      "DEFAULT_SYNCHRONOUS=2",
+      "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+      "DEFAULT_WAL_SYNCHRONOUS=2",
+      "DEFAULT_WORKER_THREADS=0",
+      "DIRECT_OVERFLOW_READ",
+      "ENABLE_COLUMN_METADATA",
+      "ENABLE_DBSTAT_VTAB",
+      "ENABLE_FTS3",
+      "ENABLE_FTS3_PARENTHESIS",
+      "ENABLE_FTS5",
+      "ENABLE_GEOPOLY",
+      "ENABLE_MATH_FUNCTIONS",
+      "ENABLE_PREUPDATE_HOOK",
+      "ENABLE_RBU",
+      "ENABLE_RTREE",
+      "ENABLE_SESSION",
+      "MALLOC_SOFT_LIMIT=1024",
+      "MAX_ATTACHED=10",
+      "MAX_COLUMN=2000",
+      "MAX_COMPOUND_SELECT=500",
+      "MAX_DEFAULT_PAGE_SIZE=8192",
+      "MAX_EXPR_DEPTH=1000",
+      "MAX_FUNCTION_ARG=1000",
+      "MAX_LENGTH=1000000000",
+      "MAX_LIKE_PATTERN_LENGTH=50000",
+      "MAX_MMAP_SIZE=0x7fff0000",
+      "MAX_PAGE_COUNT=0xfffffffe",
+      "MAX_PAGE_SIZE=65536",
+      "MAX_SQL_LENGTH=1000000000",
+      "MAX_TRIGGER_DEPTH=1000",
+      "MAX_VARIABLE_NUMBER=32766",
+      "MAX_VDBE_OP=250000000",
+      "MAX_WORKER_THREADS=8",
+      "MUTEX_W32",
+      "SYSTEM_MALLOC",
+      "TEMP_STORE=1",
+      "THREADSAFE=1"
+    ],
+    "arms": {
+      "A": {
+        "arm": "A",
+        "desc": "raw SQLite (kernel-log pragmas) only",
+        "n": 20000,
+        "wallS": 10.991,
+        "checkpoints": 1,
+        "total": {
+          "p50": 0.462,
+          "p90": 0.677,
+          "p99": 1.125,
+          "p999": 5.731,
+          "max": 82.379,
+          "over5ms": 23
+        },
+        "commit": {
+          "p50": 0.462,
+          "p90": 0.676,
+          "p99": 1.124,
+          "p999": 5.637,
+          "max": 23.604,
+          "over5ms": 22
+        },
+        "anchor": {
+          "p50": 0.001,
+          "p90": 0.001,
+          "p99": 0.003,
+          "p999": 0.006,
+          "max": 81.795,
+          "over5ms": 1
+        },
+        "slowPer50k": [
+          23
+        ],
+        "firstSlowAt": 2009,
+        "slowDominatedBy": {
+          "commit": 22,
+          "anchor": 1
+        }
+      },
+      "D": {
+        "arm": "D",
+        "desc": "A + head tmp+rename every 64 commits",
+        "n": 20000,
+        "wallS": 13.239,
+        "checkpoints": 1,
+        "total": {
+          "p50": 0.55,
+          "p90": 0.829,
+          "p99": 1.954,
+          "p999": 3.59,
+          "max": 71.902,
+          "over5ms": 10
+        },
+        "commit": {
+          "p50": 0.547,
+          "p90": 0.802,
+          "p99": 1.328,
+          "p999": 3.421,
+          "max": 48.866,
+          "over5ms": 9
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0.001,
+          "p99": 1.107,
+          "p999": 1.822,
+          "max": 71.176,
+          "over5ms": 1
+        },
+        "slowPer50k": [
+          10
+        ],
+        "firstSlowAt": 3363,
+        "slowDominatedBy": {
+          "commit": 9,
+          "anchor": 1
+        }
+      },
+      "G": {
+        "arm": "G",
+        "desc": "D+E coalesced anchor + forced fullfsync commit and anchor rename at 1/64 (research 33 policy)",
+        "n": 20000,
+        "wallS": 11.58,
+        "checkpoints": 1,
+        "total": {
+          "p50": 0.488,
+          "p90": 0.731,
+          "p99": 1.635,
+          "p999": 2.693,
+          "max": 58.09,
+          "over5ms": 6
+        },
+        "commit": {
+          "p50": 0.486,
+          "p90": 0.711,
+          "p99": 1.078,
+          "p999": 2.284,
+          "max": 11.096,
+          "over5ms": 5
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0.001,
+          "p99": 0.981,
+          "p999": 1.415,
+          "max": 57.667,
+          "over5ms": 1
+        },
+        "slowPer50k": [
+          6
+        ],
+        "firstSlowAt": 4742,
+        "slowDominatedBy": {
+          "commit": 5,
+          "anchor": 1
+        },
+        "bulk": {
+          "p50": 0.486,
+          "p90": 0.711,
+          "p99": 1.088,
+          "p999": 2.469,
+          "max": 58.09,
+          "over5ms": 6,
+          "n": 19688,
+          "over5Frac": 0.000304754164973588
+        },
+        "critical": {
+          "p50": 1.591,
+          "p90": 2.062,
+          "p99": 2.693,
+          "p999": 4.018,
+          "max": 4.018,
+          "over5ms": 0,
+          "n": 312
+        },
+        "gLog04": {
+          "bulkP99Ok": true,
+          "bulkOver5Ok": true,
+          "criticalP99Ok": true
+        }
+      },
+      "H1": {
+        "arm": "H1",
+        "desc": "human cadence: D+E coalesced bulk + 1 critical/1000 ms wall: PRAGMA fullfsync=ON (F_FULLFSYNC) + sync anchor rename",
+        "n": 20000,
+        "wallS": 10.97,
+        "checkpoints": 1,
+        "total": {
+          "p50": 0.471,
+          "p90": 0.663,
+          "p99": 1.438,
+          "p999": 2.095,
+          "max": 57.6,
+          "over5ms": 3
+        },
+        "commit": {
+          "p50": 0.468,
+          "p90": 0.646,
+          "p99": 0.913,
+          "p999": 1.558,
+          "max": 5.808,
+          "over5ms": 2
+        },
+        "anchor": {
+          "p50": 0.001,
+          "p90": 0.002,
+          "p99": 0.953,
+          "p999": 1.318,
+          "max": 57.221,
+          "over5ms": 1
+        },
+        "slowPer50k": [
+          3
+        ],
+        "firstSlowAt": 3911,
+        "slowDominatedBy": {
+          "commit": 2,
+          "anchor": 1
+        },
+        "bulk": {
+          "p50": 0.471,
+          "p90": 0.662,
+          "p99": 1.423,
+          "p999": 2.095,
+          "max": 57.6,
+          "over5ms": 3,
+          "n": 19990,
+          "over5Frac": 0.00015007503751875937
+        },
+        "critical": {
+          "p50": 1.615,
+          "p90": 2.071,
+          "p99": 2.071,
+          "p999": 2.071,
+          "max": 2.071,
+          "over5ms": 0,
+          "n": 10
+        },
+        "criticalCommit": {
+          "p50": 0.632,
+          "p90": 0.78,
+          "p99": 0.78,
+          "p999": 0.78,
+          "max": 0.78,
+          "over5ms": 0
+        },
+        "criticalAnchor": {
+          "p50": 0.973,
+          "p90": 1.369,
+          "p99": 1.369,
+          "p999": 1.369,
+          "max": 1.369,
+          "over5ms": 0
+        },
+        "cadence": {
+          "criticalPerWallS": 0.9115770282588879
+        },
+        "criticalSeries": [
+          [
+            1955,
+            1.507
+          ],
+          [
+            3799,
+            1.36
+          ],
+          [
+            5643,
+            2.024
+          ],
+          [
+            7459,
+            1.484
+          ],
+          [
+            9302,
+            1.487
+          ],
+          [
+            11114,
+            1.615
+          ],
+          [
+            12891,
+            2.071
+          ],
+          [
+            14688,
+            1.481
+          ],
+          [
+            16599,
+            1.628
+          ],
+          [
+            18366,
+            1.797
+          ]
+        ],
+        "gLog04": {
+          "bulkP99Ok": true,
+          "bulkOver5Ok": true,
+          "criticalP99Ok": true
+        }
+      },
+      "H3": {
+        "arm": "H3",
+        "desc": "human cadence: critical = no extra flush (synchronous=FULL default) + sync anchor rename (baseline)",
+        "n": 20000,
+        "wallS": 14.166,
+        "checkpoints": 1,
+        "total": {
+          "p50": 0.596,
+          "p90": 0.896,
+          "p99": 2.025,
+          "p999": 3.452,
+          "max": 99.401,
+          "over5ms": 4
+        },
+        "commit": {
+          "p50": 0.593,
+          "p90": 0.869,
+          "p99": 1.333,
+          "p999": 3.089,
+          "max": 7.241,
+          "over5ms": 3
+        },
+        "anchor": {
+          "p50": 0.001,
+          "p90": 0.002,
+          "p99": 1.288,
+          "p999": 1.888,
+          "max": 98.747,
+          "over5ms": 1
+        },
+        "slowPer50k": [
+          4
+        ],
+        "firstSlowAt": 2223,
+        "slowDominatedBy": {
+          "commit": 3,
+          "anchor": 1
+        },
+        "bulk": {
+          "p50": 0.596,
+          "p90": 0.894,
+          "p99": 2.021,
+          "p999": 3.4,
+          "max": 99.401,
+          "over5ms": 4,
+          "n": 19986,
+          "over5Frac": 0.00020014009806864806
+        },
+        "critical": {
+          "p50": 1.955,
+          "p90": 2.718,
+          "p99": 4.365,
+          "p999": 4.365,
+          "max": 4.365,
+          "over5ms": 0,
+          "n": 14
+        },
+        "criticalCommit": {
+          "p50": 0.588,
+          "p90": 0.727,
+          "p99": 1.51,
+          "p999": 1.51,
+          "max": 1.51,
+          "over5ms": 0
+        },
+        "criticalAnchor": {
+          "p50": 1.401,
+          "p90": 2.122,
+          "p99": 2.855,
+          "p999": 2.855,
+          "max": 2.855,
+          "over5ms": 0
+        },
+        "cadence": {
+          "criticalPerWallS": 0.988281801496541
+        },
+        "criticalSeries": [
+          [
+            1913,
+            1.438
+          ],
+          [
+            3643,
+            1.581
+          ],
+          [
+            5218,
+            1.704
+          ],
+          [
+            6720,
+            1.857
+          ],
+          [
+            7967,
+            4.365
+          ],
+          [
+            9181,
+            2.064
+          ],
+          [
+            10448,
+            2.718
+          ],
+          [
+            11729,
+            1.932
+          ],
+          [
+            13027,
+            1.594
+          ],
+          [
+            14365,
+            1.999
+          ],
+          [
+            15802,
+            1.947
+          ],
+          [
+            17165,
+            2.012
+          ],
+          [
+            18551,
+            1.955
+          ],
+          [
+            19914,
+            2.176
+          ]
+        ],
+        "gLog04": {
+          "bulkP99Ok": true,
+          "bulkOver5Ok": true,
+          "criticalP99Ok": true
+        }
+      }
+    }
+  },
+  "specRefs": [
+    "§3.2",
+    "G-LOG-06",
+    "M1.2 append p99 <= 5 ms"
+  ],
+  "at": "2026-10-23T02:28:44.656Z"
+}

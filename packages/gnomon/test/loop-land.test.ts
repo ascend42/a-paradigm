@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
+import * as path from 'node:path';
 import { indexTrailerOk, landMessage, trailerValue, type LandCommitInput, type LandResult } from '../src/kernel/git/land.js';
 import { LoopLander, type LandJob } from '../src/kernel/loops/land.js';
 import { effectiveAutonomy, landDecision, type RepoCap } from '../src/kernel/loops/strictness-cap.js';
@@ -84,7 +85,7 @@ describe('#loop-land: landing, waiting and parking', () => {
     expect(r.kinds()).toEqual(['loop.landed', 'loop.landed', 'loop.notified']);
     expect(r.rows[0]!.payload).toMatchObject({ loopId: 'fixer', runId: 'lr-1', sha: LAND, parkedSha: SHA, ref: 'refs/heads/main', paths: ['src/a.ts'], how: 'auto', phase: 'intent' });
     expect(r.rows[1]!.payload).toMatchObject({ sha: LAND, phase: 'done' });
-    expect(r.calls[0]!.recoverDir).toBe('/home/loop-work/recovered');
+    expect(r.calls[0]!.recoverDir).toBe(path.join('/home', 'loop-work', 'recovered'));
     expect(r.calls[0]!.trailers).toEqual({ onBehalfOf: 'p:abcdefgh/matt', trustedBy: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', loop: 'fixer@cccccccc', authoredBy: 'file' });
     expect(r.toasts).toEqual(['fixer: landed bbbbbbbbbbbb on main (1 file)']);
     expect(r.lander.landedBy(LAND)).toEqual({ loopId: 'fixer', runId: 'lr-1' });

@@ -34,6 +34,7 @@
  */
 import { execFile, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { helperOp, helperOpSync, kernelWin32Helper } from '../../platform/win32/helper-client.js';
 
 export type GroupProbe = 'alive' | 'gone' | 'foreign' | 'unsupported';
 
@@ -47,15 +48,21 @@ export interface ProcRow {
 
 export interface ProcessControl {
   fidelity: 'full' | 'partial';
-  probeGroup(pgid: number): GroupProbe;
-  /** Signal the group; false when it is already gone (or cannot be signalled). */
-  signalGroup(pgid: number, signal: 'SIGTERM' | 'SIGKILL'): boolean;
+  /** `start` (the leader's recorded witness): where a pid alone cannot name the group (win32), alive only while it matches. */
+  probeGroup(pgid: number, start?: string): GroupProbe;
+  /** Signal the group; false when it is already gone (or cannot be signalled). win32 never terminates without `start`. */
+  signalGroup(pgid: number, signal: 'SIGTERM' | 'SIGKILL', start?: string): boolean;
   /** Start-time witness of `pid`, or null when it cannot be read. */
   startTime(pid: number): string | null;
   /** Async process-table snapshot (POSIX), or null when none can be taken. Absent ⇒ tree verdict `unverifiable`. */
   snapshot?(): Promise<ProcRow[] | null>;
   /** Signal ONE pid (a descendant outside the group); false when gone or not signallable. */
-  signalPid?(pid: number, signal: 'SIGTERM' | 'SIGKILL'): boolean;
+  signalPid?(pid: number, signal: 'SIGTERM' | 'SIGKILL', start?: string): boolean;
+  /**
+   * The graceful step of a stop. 'signal' (default): SIGTERM to the group. 'stdin' (win32, which has no SIGTERM): the
+   * caller closes the child's stdin and signals nothing until the SIGKILL step.
+   */
+  gracefulStop?: 'signal' | 'stdin';
 }
 
 function errno(err: unknown): string | undefined {
@@ -176,6 +183,80 @@ const POSIX_BASE = {
   },
 } satisfies Omit<ProcessControl, 'startTime'>;
 
+/**
+ * win32 (W3): there are no process groups, so the "group" is the session's LAUNCHER pid (gnomon-helper sandbox / exec):
+ * it holds a KILL_ON_JOB_CLOSE job with no breakaway that every descendant is in, so terminating it ends the whole tree
+ * and nothing can leave it (no setsid on Windows). Witnesses are creation times from the helper (`ft:<ticks>`);
+ * the snapshot is the helper's process table with parent pids, and a parent link whose child predates its parent (a
+ * recycled parent pid) is cut so descendantsOf never adopts a stranger.
+ *
+ * Aegis W3 review:
+ *   M1 a pid is terminated ONLY by the helper's `process.terminate {pid, start}`, which checks the creation time and
+ *      terminates through one handle, and ONLY with the witness the CALLER recorded (the leader's at track(), a
+ *      descendant's from its snapshot row, an orphan's from its session.spawned row). Nothing here remembers witnesses
+ *      (a snapshot taken after a pid was recycled would otherwise name the stranger). No witness ⇒ no terminate (the
+ *      caller falls back to node's own handle on its tracked child). With a witness, probeGroup is `alive` only while
+ *      it matches.
+ *   M2 Windows has no SIGTERM (node maps it to TerminateProcess), so the graceful step is the staged stop of exec.rs:
+ *      `gracefulStop: 'stdin'` — the caller closes the child's stdin; a SIGTERM here signals nothing.
+ */
+function win32Start(pid: number): string | null {
+  if (!Number.isInteger(pid) || pid <= 4) return null;
+  try {
+    const s = helperOpSync(kernelWin32Helper(), 'process.start', { pid }).start;
+    return typeof s === 'string' && /^ft:\d+$/.test(s) ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+async function win32Snapshot(): Promise<ProcRow[] | null> {
+  try {
+    const raw = (await helperOp(kernelWin32Helper(), 'process.list', {})).rows;
+    if (!Array.isArray(raw)) return null;
+    const rows = raw.flatMap((r: { pid?: unknown; ppid?: unknown; start?: unknown }) =>
+      typeof r.pid === 'number' && typeof r.ppid === 'number' && typeof r.start === 'string' && /^ft:\d+$/.test(r.start) ? [{ pid: r.pid, ppid: r.ppid, pgid: r.pid, start: r.start }] : [],
+    );
+    const ticks = (s: string): bigint => BigInt(s.slice(3));
+    const startOf = new Map(rows.map((r) => [r.pid, r.start]));
+    for (const r of rows) {
+      const p = startOf.get(r.ppid);
+      if (p === undefined || ticks(r.start) < ticks(p)) r.ppid = 0; // a recycled (or unreadable) parent: no link
+    }
+    return rows.length > 0 ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+/** SIGKILL `pid` only while its creation time is still `start` (helper process.terminate); false otherwise. */
+function win32Terminate(pid: number, signal: 'SIGTERM' | 'SIGKILL', start: string | undefined): boolean {
+  if (signal !== 'SIGKILL') return false; // M2: the graceful step is the caller's stdin close
+  if (!Number.isInteger(pid) || pid <= 4 || pid === process.pid || !start || !/^ft:\d+$/.test(start)) return false;
+  try {
+    return helperOpSync(kernelWin32Helper(), 'process.terminate', { pid, start }).terminated === true;
+  } catch {
+    return false;
+  }
+}
+
+const WIN32_CONTROL: ProcessControl = {
+  fidelity: 'full',
+  gracefulStop: 'stdin',
+  probeGroup(pid: number, start?: string): GroupProbe {
+    if (!Number.isInteger(pid) || pid <= 4 || pid === process.pid) return 'foreign';
+    const now = win32Start(pid);
+    if (now === null) return 'gone';
+    // no witness: a pid alone does not name our process on Windows (Aegis L1: never a false survivor)
+    if (start === undefined) return 'unsupported';
+    return now === start ? 'alive' : 'gone'; // a recycled pid: our process is gone
+  },
+  signalGroup: (pid, signal, start) => win32Terminate(pid, signal, start),
+  startTime: win32Start,
+  snapshot: win32Snapshot,
+  signalPid: (pid, signal, start) => win32Terminate(pid, signal, start),
+};
+
 const PARITY_PHASE: ProcessControl = {
   fidelity: 'partial',
   probeGroup: () => 'unsupported',
@@ -186,7 +267,7 @@ const PARITY_PHASE: ProcessControl = {
 export const PROCESS_CONTROL: Readonly<Record<'darwin' | 'linux' | 'win32', ProcessControl>> = Object.freeze({
   darwin: { ...POSIX_BASE, startTime: darwinStartTime },
   linux: { ...POSIX_BASE, startTime: linuxStartTime },
-  win32: PARITY_PHASE,
+  win32: WIN32_CONTROL,
 });
 
 /** The row for `platform`; an unlisted platform gets the fail-closed parity row. */

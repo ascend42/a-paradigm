@@ -42,7 +42,7 @@ export const SESSION_DENY_REALISATION: Readonly<Record<DenyPlatform, Readonly<Re
     'service-manager': { mechanism: 'Low integrity cannot write HKCU Run keys or the Startup folder; schtasks / WMI not denied', fidelity: 'partial' },
     'media:microphone': { mechanism: 'none: no capability restriction on a restricted Low token', fidelity: 'none' },
     'media:camera': { mechanism: 'none: no capability restriction on a restricted Low token', fidelity: 'none' },
-    launchers: { mechanism: 'kill-on-close job (no breakaway); ShellExecute of other apps not denied', fidelity: 'partial' },
+    launchers: { mechanism: 'kill-on-close job (no breakaway); the session PATH drops every entry a session can write and cmd\'s cwd search is off (NoDefaultCurrentDirectoryInExePath), but libuv still searches the cwd first; ShellExecute of other apps not denied', fidelity: 'partial' },
     'process-info:others': { mechanism: 'Low integrity: no VM read/write, thread or handle access to Medium processes; limited query still allowed', fidelity: 'partial' },
     'loopback:endpoint-port': { mechanism: 'none yet: no WFP filter (probe P10w)', fidelity: 'none' },
   },

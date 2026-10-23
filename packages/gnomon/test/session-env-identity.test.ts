@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildSessionEnv, defaultSessionPath, ENV_ALLOWLIST, IDENTITY_KEYS, missingIdentity, planSessionPath, resolveSessionIdentity, sessionNodeDir, sessionPathFor, validTempDir, WINDOWS_EXTRA } from '../src/kernel/runner/env.js';
+import { buildSessionEnv, defaultSessionPath, ENV_ALLOWLIST, IDENTITY_KEYS, missingIdentity, planSessionPath, resolveSessionIdentity, sessionNodeDir, sessionPathFor, validTempDir, win32SessionPath, WINDOWS_EXTRA } from '../src/kernel/runner/env.js';
 import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
 
 /** capabilities, not platforms: POSIX uid + mode bits; darwin's per-user temp dir via getconf */
@@ -215,5 +215,36 @@ describe('TD-2026-10-21-162 / Aegis M: every user-writable dir on the session PA
     for (const d of ['home', 'gh', 'repo']) fs.mkdirSync(path.join(root, d));
     const pol = buildSessionPolicy({ home: path.join(root, 'gh'), cwd: path.join(root, 'repo'), userClaudeDir: path.join(root, 'home', '.claude'), userHome: path.join(root, 'home'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null });
     expect(pol.denyWrite).toEqual(expect.arrayContaining([expect.objectContaining({ path: path.join(rp(path.join(root, 'home')), '.local', 'bin'), match: 'subpath' })]));
+  });
+});
+
+describe('W3 (PR #52 release blocker): the PATH a sandboxed win32 session gets (pure, every platform)', () => {
+  const B = String.fromCharCode(92); // a backslash
+  const P = (...xs: string[]) => xs.join(';');
+  it('drops what a session could plant into or resolve against the cwd; keeps the rest in order, once', () => {
+    const repo = `C:${B}work${B}repo`;
+    const tmp = `C:${B}Users${B}me${B}AppData${B}Local${B}Temp${B}gnomon-sessions${B}abc`;
+    const value = P(
+      `C:${B}Windows${B}system32`, '', '.', `bin`, `C:bin`, `${B}${B}server${B}share${B}bin`, `%USERPROFILE%${B}bin`,
+      `C:${B}Users${B}me${B}AppData${B}LocalLow${B}x`, `${repo}${B}node_modules${B}.bin`, repo, `${tmp}${B}bin`,
+      `"C:${B}Program Files${B}Git${B}cmd"`, `c:${B}windows${B}SYSTEM32${B}`, `C:${B}Users${B}me${B}AppData${B}Local${B}Microsoft${B}WinGet${B}Links`, `C:${B}work${B}repo2`,
+    );
+    expect(win32SessionPath(value, { writable: [tmp, repo] }).split(';')).toEqual([
+      `C:${B}Windows${B}system32`, `C:${B}Program Files${B}Git${B}cmd`, `C:${B}Users${B}me${B}AppData${B}Local${B}Microsoft${B}WinGet${B}Links`, `C:${B}work${B}repo2`,
+    ]);
+    expect(win32SessionPath(undefined, { writable: [] })).toBe('');
+  });
+  it('buildSessionEnv applies it to a sandboxed win32 session (configured PATH too), never elsewhere', () => {
+    const from = { Path: P(`C:${B}Windows`, '.', `C:${B}r${B}bin`) };
+    const base = { from, hsid: 'h', sock: 's', sessionKeyPath: 'k', identity: null, platform: 'win32' as const };
+    expect(buildSessionEnv({ ...base, path: null, tempDir: `C:${B}t`, writableRoots: [`C:${B}r`] }).env.PATH).toBe(`C:${B}Windows`);
+    expect(buildSessionEnv({ ...base, path: P(`C:${B}x`, ''), tempDir: `C:${B}t` }).env.PATH).toBe(`C:${B}x`);
+    expect(buildSessionEnv({ ...base, path: null }).env.PATH).toBe(from.Path); // not a sandboxed session: untouched
+  });
+  it('W3: the WebView2, compat-layer and Node loader knobs never reach a win32 child (allowlist, any case)', () => {
+    const from = { WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9222', webview2_user_data_folder: 'x', WEBVIEW2_BROWSER_EXECUTABLE_FOLDER: 'y', __COMPAT_LAYER: 'RunAsInvoker', NODE_OPTIONS: '--require=evil', node_options: '--inspect', SystemRoot: `C:${B}Windows` };
+    const { env } = buildSessionEnv({ from, hsid: 'h', sock: 's', sessionKeyPath: 'k', identity: null, path: null, platform: 'win32', tempDir: `C:${B}t` });
+    for (const k of Object.keys(env)) expect(k, k).not.toMatch(/^(webview2_|__compat_layer$|node_options$)/i);
+    expect(env.SYSTEMROOT).toBe(`C:${B}Windows`);
   });
 });

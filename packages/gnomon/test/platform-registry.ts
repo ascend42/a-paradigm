@@ -76,6 +76,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/win32-approvals.test.ts', platforms: ['win32'], na: 'the W4 phase A approvals key lives in the Windows Software KSP via the win32 helper; the darwin Secure Enclave key is test/identity-hw.test.ts (founder hardware) and the broker logic for both is platform-independent in test/identity-hardware.test.ts' },
   { test: 'test/win32-helper.test.ts', platforms: ['win32'], na:'Windows-only mechanisms (DACL, job object, MoveFileExW); the POSIX equivalents are covered by test/socket-server.test.ts, test/daemon-lifecycle.test.ts and test/kernel-log-posix.test.ts' },
   { test: 'test/web-sandbox-win32.test.ts', platforms: ['win32'], sibling: 'test/web-sandbox.test.ts' },
+  // W3: the win32 process-control row (launcher job, helper witnesses); the POSIX rows are in daemon-children.test.ts
+  { test: 'test/process-control-win32.test.ts', platforms: ['win32'], sibling: 'test/daemon-children.test.ts' },
   // PR-5 $daemon-lifecycle core + #socket, macOS-first (P8-D78).
   { test: 'test/daemon-lifecycle.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   { test: 'test/socket-server.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },

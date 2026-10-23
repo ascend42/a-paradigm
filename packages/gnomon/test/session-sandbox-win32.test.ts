@@ -206,6 +206,90 @@ console.log(JSON.stringify(r));`, [f.home, f.claude, f.repo]);
     expect(await lowWriter()).toEqual({ writeRepo: 'EPERM', writeClaudeMd: 'EPERM', listHome: 'EPERM' });
   });
 
+  it('Aegis H1 (PR #52 release blocker): a session cannot open another session\'s process; it still can its own', async () => {
+    const p = pin();
+    // session A: kills a child of its own (own-SID allow), reports its pid, then waits to be targeted
+    const a = spawn(p.exe, ['sandbox', '--low', '--desktop', '--session-sid', OWN, '--', process.execPath, '-e', `
+const { spawn } = require('child_process');
+const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+let own; try { process.kill(c.pid); own = 'ok'; } catch (e) { own = e.code; }
+console.log(JSON.stringify({ pid: process.pid, own }));
+setTimeout(() => {}, 60000);`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    cleanups.push(() => a.kill());
+    const first = await new Promise<{ pid: number; own: string }>((res, rej) => {
+      let buf = '';
+      a.stdout!.on('data', (b: Buffer) => {
+        buf += b.toString();
+        const nl = buf.indexOf('\n');
+        if (nl >= 0) res(JSON.parse(buf.slice(0, nl)));
+      });
+      a.once('exit', (c) => rej(new Error(`session A exited ${c}`)));
+    });
+    expect(first.own).toBe('ok');
+    // session B (another own SID, same user, same Low integrity) probes session A's node process
+    const b = asSession(p.exe, OTHER, `
+const r = {}; const t = (k, fn) => { try { fn(); r[k] = 'ok'; } catch (e) { r[k] = e.code || e.message; } };
+t('probe', () => process.kill(Number(process.argv[1]), 0));
+t('kill', () => process.kill(Number(process.argv[1])));
+// the owner-rights path (Aegis re-review): the helper's process.shield opens the target READ_CONTROL | WRITE_DAC; the
+// session objects are owned by the user, a restricting SID, so without an OWNER RIGHTS ACE this would be granted and
+// session B could rewrite A's DACL and reopen it with full access
+const h = require('child_process').spawnSync(process.argv[2], ['once'], { input: JSON.stringify({ id: 1, op: 'process.shield', pid: Number(process.argv[1]) }) + '\\n', encoding: 'utf8' });
+let reply = {}; try { reply = JSON.parse(h.stdout.trim().split('\\n').pop()); } catch {}
+// denied AT THE OPEN (OpenProcess for READ_CONTROL | WRITE_DAC), not at a later step of the op
+r.rewriteDacl = /OpenProcess\\b/.test(String(reply.message)) && /\\b5\\b|denied/i.test(String(reply.message)) ? 'denied' : 'reply:' + h.stdout.slice(0, 200);
+console.log(JSON.stringify(r));`, [String(first.pid), p.exe]);
+    expect(b).toEqual({ probe: 'EPERM', kill: 'EPERM', rewriteDacl: 'denied' });
+    expect(a.exitCode).toBeNull(); // session A is still running
+  });
+
+  it('W5 acceptance (PR #52 release blocker): a session cannot reach a Medium window — not found, not messaged, not focused', async () => {
+    const p = pin();
+    const ps = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    // the stand-in for the wrapper (W6 is not built): a Medium window owned by this user, reporting its HWND
+    const target = spawn(ps, ['-NoProfile', '-Command', `
+Add-Type -AssemblyName System.Windows.Forms
+$f = New-Object System.Windows.Forms.Form; $f.Text = 'gnomon-uipi-target'; $f.ShowInTaskbar = $false; $f.Opacity = 0
+$f.Add_Shown({ [Console]::Out.WriteLine([int64]$f.Handle); [Console]::Out.Flush() })
+[System.Windows.Forms.Application]::Run($f)`], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    cleanups.push(() => target.kill());
+    const hwnd = await new Promise<string>((res, rej) => {
+      target.stdout!.once('data', (b: Buffer) => res(String(b).trim()));
+      target.once('exit', (c) => rej(new Error(`target exited ${c}`)));
+    });
+    expect(hwnd).toMatch(/^\d+$/);
+    // the session: Low, restricted, on its private desktop, in a job with UI limits; Add-Type needs a Low temp dir
+    const lowTemp = path.join(os.homedir(), 'AppData', 'LocalLow', `gnomon-uipi-${process.pid}`);
+    fs.mkdirSync(lowTemp, { recursive: true });
+    cleanups.push(() => fs.rmSync(lowTemp, { recursive: true, force: true }));
+    // the user32 shim is compiled HERE, unsandboxed: Add-Type's compiler needs a privilege a restricted token from an
+    // elevated user (the CI runner) does not hold; the session only loads the built assembly
+    const dll = path.join(lowTemp, 'gnomon-uipi.dll');
+    const build = spawnSync(ps, ['-NoProfile', '-Command', `Add-Type -Name U -Namespace W -OutputAssembly '${dll}' -OutputType Library -MemberDefinition '
+[DllImport("user32.dll", SetLastError=true)] public static extern System.IntPtr FindWindow(string c, string n);
+[DllImport("user32.dll", SetLastError=true)] public static extern bool IsWindow(System.IntPtr h);
+[DllImport("user32.dll", SetLastError=true)] public static extern bool PostMessage(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll", SetLastError=true)] public static extern bool SetForegroundWindow(System.IntPtr h);'`], { encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+    expect(fs.existsSync(dll), build.stderr).toBe(true);
+    const probe = `
+[void][System.Reflection.Assembly]::Load([System.IO.File]::ReadAllBytes('${dll}'))
+$h = [System.IntPtr][int64]${hwnd}
+$r = @{ is = [W.U]::IsWindow($h); tray = [int64][W.U]::FindWindow('Shell_TrayWnd', $null) }
+$r.post = [W.U]::PostMessage($h, 0x0010, [System.IntPtr]::Zero, [System.IntPtr]::Zero)
+$r.focus = [W.U]::SetForegroundWindow($h)
+$r | ConvertTo-Json -Compress`;
+    const out = spawnSync(p.exe, ['sandbox', '--low', '--desktop', '--session-sid', OWN, '--', ps, '-NoProfile', '-Command', probe], { encoding: 'utf8', input: '', windowsHide: true, timeout: 90_000, env: { ...process.env, TEMP: lowTemp, TMP: lowTemp } });
+    const last = out.stdout.trim().split('\n').pop() ?? '';
+    if (!last.startsWith('{')) throw new Error(`sandboxed probe gave no result: status ${out.status} signal ${out.signal} error ${out.error?.message}\nstdout: ${out.stdout.slice(0, 500)}\nstderr: ${out.stderr.slice(0, 1500)}`);
+    const r = JSON.parse(last) as Record<string, unknown>;
+    expect(r).toEqual({ is: false, tray: 0, post: false, focus: false });
+    // the control: unsandboxed, the same handle is a live window (the falsifier is not vacuous)
+    const ctl = spawnSync(ps, ['-NoProfile', '-Command', `${probe.split('$r = ')[0]}[W.U]::IsWindow($h)`], { encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+    expect(ctl.stdout.trim().split('\n').pop()?.trim()).toBe('True');
+    await new Promise((res) => setTimeout(res, 500));
+    expect(target.exitCode).toBeNull(); // WM_CLOSE never arrived: the Medium window is still up
+  }, 120_000);
+
   it('a session launched by a SHIELDED kernel runs, and cannot open its launcher (Aegis M1)', async () => {
     const p = pin();
     // a stand-in kernel: shielded (its default DACL denies the session SID), then it launches a session that tries to

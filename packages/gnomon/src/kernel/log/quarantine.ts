@@ -84,7 +84,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { FileAnchorStore, fsyncDir, fsyncFile, KeystoreAnchorStore } from './anchor.js';
+import { FileAnchorStore, fsyncDir, fsyncFile, KeystoreAnchorStore, renameWriteThrough } from './anchor.js';
 import { genesisPrev, logRefusal, sha256TaggedFast } from './chain.js';
 import { ACTIVE_DB, KernelLog, listSealedSegments, QUARANTINE_GENESIS_KIND, type QuarantinedPayload } from './kernel-log.js';
 import { KeyRing, SoftwareEd25519Signer, type Signer } from './signer.js';
@@ -295,7 +295,12 @@ export function completePendingQuarantine(home: string): PendingQuarantine {
       continue;
     }
     if (!fs.existsSync(h) && !out.completed) {
-      fs.renameSync(staging, h);
+      try {
+        renameWriteThrough(staging, h);
+      } catch (err) {
+        // a write-through rename that landed but whose reply was lost (a helper timeout) is still the install
+        if (!(fs.existsSync(h) && !fs.existsSync(staging))) throw err;
+      }
       fsyncDir(parent);
       out.completed = { staging, evidence: path.resolve(j.evidence), newLog: j.newLog };
       const pf = readPidfile(j.evidence);

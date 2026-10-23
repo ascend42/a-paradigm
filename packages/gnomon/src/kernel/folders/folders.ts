@@ -159,9 +159,40 @@ const defaultRunner: ChooserRunner = (args, timeoutMs, signal) =>
     });
   });
 
-/** The path module and case rule of a platform (the warning must match run-mode.ts isHomeOrAbove: folded on darwin and win32). */
+/**
+ * A platform's folder rules (G-WIN-05: a registry, not inline branches): the path module, the case rule (the warning
+ * must match run-mode.ts isHomeOrAbove: folded on darwin and win32), the home separator and ~-prefix, the
+ * before-any-fs refusal (Aegis M1/M3), and whether the native chooser is offered (macOS only in 8.0).
+ */
+interface FolderPlatform {
+  P: typeof path.posix;
+  fold: (s: string) => string;
+  homeSep: string;
+  tilde: RegExp;
+  refusal: (p: string) => 'network' | 'device' | null;
+  chooser: boolean;
+}
+const lower = (x: string): string => x.toLowerCase();
+const posixRefusal = (p: string): 'network' | null => (/^\/+(net|network)(\/|$)/i.test(p) ? 'network' : null);
+const POSIX_FOLDERS: FolderPlatform = { P: path.posix, fold: (x) => x, homeSep: '/', tilde: /^~\//, refusal: posixRefusal, chooser: false };
+const FOLDER_PLATFORMS: Partial<Record<NodeJS.Platform, FolderPlatform>> = {
+  darwin: { ...POSIX_FOLDERS, fold: lower, chooser: true },
+  win32: {
+    P: path.win32,
+    fold: lower,
+    homeSep: '\\',
+    tilde: /^~[\\/]/,
+    // device paths (\\?\, \\.\) first, then UNC (\\server, //server)
+    refusal: (p) => (/^[\\/][\\/][?.][\\/]/.test(p) ? 'device' : /^[\\/][\\/]/.test(p) ? 'network' : null),
+    chooser: false,
+  },
+};
+Object.freeze(POSIX_FOLDERS);
+Object.freeze(FOLDER_PLATFORMS);
+const folderPlatform = (platform: NodeJS.Platform): FolderPlatform => (Object.hasOwn(FOLDER_PLATFORMS, platform) ? FOLDER_PLATFORMS[platform]! : POSIX_FOLDERS);
 function pathsOf(platform: NodeJS.Platform): { P: typeof path.posix; fold: (s: string) => string } {
-  return { P: platform === 'win32' ? path.win32 : path.posix, fold: platform === 'darwin' || platform === 'win32' ? (x: string) => x.toLowerCase() : (x: string) => x };
+  const { P, fold } = folderPlatform(platform);
+  return { P, fold };
 }
 const inside = (P: typeof path.posix, parent: string, child: string): boolean => {
   const rel = P.relative(parent, child);
@@ -172,7 +203,7 @@ const inside = (P: typeof path.posix, parent: string, child: string): boolean =>
 export function displayOf(real: string, home: string, platform: NodeJS.Platform = process.platform): string {
   const { P, fold } = pathsOf(platform);
   if (home && fold(P.resolve(real)) === fold(P.resolve(home))) return '~';
-  if (home && inside(P, fold(P.resolve(home)), fold(P.resolve(real)))) return displayPath(`~${platform === 'win32' ? '\\' : '/'}${P.relative(P.resolve(home), P.resolve(real))}`);
+  if (home && inside(P, fold(P.resolve(home)), fold(P.resolve(real)))) return displayPath(`~${folderPlatform(platform).homeSep}${P.relative(P.resolve(home), P.resolve(real))}`);
   return displayPath(real);
 }
 
@@ -190,12 +221,7 @@ export function homePlace(real: string, home: string, platform: NodeJS.Platform 
  * (/net, /Network) and, on win32, UNC (\\server, //server) and device paths (\\?\, \\.\).
  */
 export function pathRefusal(p: string, platform: NodeJS.Platform): 'network' | 'device' | null {
-  if (platform === 'win32') {
-    if (/^[\\/][\\/][?.][\\/]/.test(p)) return 'device';
-    if (/^[\\/][\\/]/.test(p)) return 'network';
-    return null;
-  }
-  return /^\/+(net|network)(\/|$)/i.test(p) ? 'network' : null;
+  return folderPlatform(platform).refusal(p);
 }
 
 const TIMED_OUT = Symbol('timeout');
@@ -222,7 +248,7 @@ export async function checkFolder(input: string, o: { home: string; kind?: Choos
   const { P } = pathsOf(platform);
   const kind = o.kind ?? 'folder';
   const deadline = Date.now() + (o.deadlineMs ?? FS_DEADLINE_MS);
-  const sep = platform === 'win32' ? /^~[\\/]/ : /^~\//;
+  const sep = folderPlatform(platform).tilde;
   const raw = input === '~' ? home : sep.test(input) ? P.join(home, input.slice(2)) : input;
   const shown = (p: string): string => displayOf(p, home, platform);
   const name = (p: string): string => displayPath(P.basename(p) || p);
@@ -316,7 +342,7 @@ export class FolderPicker {
 
   /** Is request.folder.choose offered here (status.folders.chooser)? macOS only in 8.0. */
   chooserOffered(): boolean {
-    return this.#platform === 'darwin';
+    return folderPlatform(this.#platform).chooser;
   }
 
   status(): { chooser: boolean } {

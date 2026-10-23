@@ -27,6 +27,19 @@ The Windows halves belong to the Windows parity phase (P8-D78).
 Engines are driven by "open this URL" only. Each page POSTs its report to the
 probe's own loopback server, so the probes need no CDP and no Playwright.
 
+## Windows (W1, docs/plans/gnomon-windows.md)
+
+Unattended, on a Windows machine with the repo-built helper
+(`packages/gnomon-helper/bin/win32/gnomon-helper.exe`):
+
+| id | win32 arm |
+|---|---|
+| `p01-claude-cli` | resolves `claude.exe` from the kernel's win32 `knownBinaries` row (read from `src/platform/claude-code.ts`, never PATH), surveys WinGet/native/npm locations, records native PE vs npm shim and each version |
+| `p-log-fsync` | the same arms (default `A,D,G,H1,H3`, N=20k) plus a raw `fs.fsyncSync`/`fdatasyncSync` bench; FlushFileBuffers semantics, `fullfsync` is a no-op off Apple |
+| `p11-ws-framing` | judged on the child's private bytes, sampled by a PowerShell `Get-Process` poller |
+| `p14b-web-handoff`, `p14b-link-fdpass` | P14b-w (`_shared/win32-handoff.mjs`): node spawned directly, confined by `process.confine {pid}` from the same process, then handed sockets |
+| `p10w-wfp` | read-only: can the non-elevated user add a WFP filter (`wfp-access.ps1`)? Adds nothing |
+
 ## Founder-run
 
 Run these in a terminal (a TTY). Each one prints what to do at every step.

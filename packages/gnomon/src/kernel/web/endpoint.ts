@@ -625,6 +625,9 @@ export class WebEndpoint {
       try {
         if (child.pid === undefined) throw new Error('no pid');
         await plan.confine(child.pid);
+        // Aegis M3: libuv holds the process handle until `exit` is handled, so while the child has not exited its
+        // pid cannot have been reused: confirming that AFTER the confine makes the confined pid this child's
+        if (child.exitCode !== null || child.signalCode !== null) throw new Error('the transport child exited before it was confined');
       } catch (e) {
         readyP.catch(() => undefined); // nobody awaits it now: the exit below must not become an unhandled rejection
         child.kill('SIGKILL');
