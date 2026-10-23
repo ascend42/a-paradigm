@@ -1,0 +1,179 @@
+{
+  "probe": "p14b-web-handoff",
+  "os": "win32",
+  "osVersion": "Windows 11 Home (10.0.26200)",
+  "arch": "x64",
+  "toolVersions": {
+    "node": "v24.13.0"
+  },
+  "verdict": "partial",
+  "evidence": {
+    "mode": "inbound",
+    "design": "kernel listens on 127.0.0.1 (pauseOnConnect), hands each accepted socket to the confined child via child.send('conn', socket)",
+    "confinement": "gnomon-helper process.confine {pid}: Low integrity + job (ACTIVE_PROCESS=1, DIE_ON_UNHANDLED_EXCEPTION, UI limits); the win32Transport profile",
+    "appContainer": {
+      "built": false,
+      "note": "no AppContainer/LPAC profile exists yet (W5 open item); nothing below is an AppContainer measurement"
+    },
+    "helper": {
+      "path": "packages/gnomon-helper/bin/win32/gnomon-helper.exe",
+      "sha256": "8779ea6d1d5ce8c03d120c395f50aa064c1b7b666472246edb15c4c71aab6213"
+    },
+    "lan": "Wi-Fi",
+    "v_unconfinedControl": {
+      "results": {
+        "listen_0000": "listening",
+        "listen_v6any": "listening",
+        "listen_lan": "listening",
+        "listen_loop4": "listening",
+        "listen_loop6": "listening",
+        "listen_nohost": "listening",
+        "udpbind_0000": "bound",
+        "udpbind_v6any": "bound",
+        "udpbind_lan": "bound",
+        "udpbind_loop4": "bound",
+        "connect_kernelPort": "connected",
+        "connect_otherLoopbackPort": "connected",
+        "connect_lan": "connected",
+        "connect_internet": "connected",
+        "namedPipe": "connected",
+        "spawn": "spawned(status 0)",
+        "writeMediumDir": "written",
+        "readMediumFile": "read"
+      },
+      "acceptedDuringControl": 1,
+      "everyTargetReachable": true
+    },
+    "childStarted": true,
+    "confine": {
+      "reply": {
+        "id": 1,
+        "integrity": "0x1000",
+        "ok": true,
+        "ms": 57
+      },
+      "integrityReadBack": "0x1000",
+      "low": true
+    },
+    "i_fullDuplex": {
+      "farReceived": 4194304,
+      "farShaOk": true,
+      "childReceived": 4194304,
+      "childShaOk": true,
+      "childSawRemote": "127.0.0.1:60623",
+      "childSawLocal": "127.0.0.1:60806",
+      "wallMs": 19,
+      "ok": true
+    },
+    "ii_peerCloseSeen": true,
+    "iii_repeatedHandoffs": {
+      "count": 5,
+      "reps": [
+        {
+          "i": 0,
+          "reply": "pong:ping0",
+          "childGot": "ping0",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 1,
+          "reply": "pong:ping1",
+          "childGot": "ping1",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 2,
+          "reply": "pong:ping2",
+          "childGot": "ping2",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 3,
+          "reply": "pong:ping3",
+          "childGot": "ping3",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 4,
+          "reply": "pong:ping4",
+          "childGot": "ping4",
+          "peerClose": true,
+          "ok": true
+        }
+      ],
+      "ok": true
+    },
+    "iv_confinedChild": {
+      "results": {
+        "listen_0000": "listening",
+        "listen_v6any": "listening",
+        "listen_lan": "listening",
+        "listen_loop4": "listening",
+        "listen_loop6": "listening",
+        "listen_nohost": "listening",
+        "udpbind_0000": "bound",
+        "udpbind_v6any": "bound",
+        "udpbind_lan": "bound",
+        "udpbind_loop4": "bound",
+        "connect_kernelPort": "connected",
+        "connect_otherLoopbackPort": "connected",
+        "connect_lan": "connected",
+        "connect_internet": "connected",
+        "namedPipe": "EPERM",
+        "spawn": "UNKNOWN errno -4094",
+        "writeMediumDir": "EPERM",
+        "readMediumFile": "read"
+      },
+      "stillAllowed": [
+        "listen_0000",
+        "listen_v6any",
+        "listen_lan",
+        "listen_loop4",
+        "listen_loop6",
+        "listen_nohost",
+        "udpbind_0000",
+        "udpbind_v6any",
+        "udpbind_lan",
+        "udpbind_loop4",
+        "connect_kernelPort",
+        "connect_otherLoopbackPort",
+        "connect_lan",
+        "connect_internet",
+        "readMediumFile"
+      ],
+      "denied": [
+        "namedPipe:EPERM",
+        "spawn:UNKNOWN errno -4094",
+        "writeMediumDir:EPERM"
+      ],
+      "newListenSocketDenied": false,
+      "outboundDenied": false,
+      "spawnDenied": true,
+      "writeMediumDenied": true
+    },
+    "kernelAccepted": 6,
+    "childStderr": "",
+    "summary": {
+      "handoffWorksUnderConfine": true,
+      "confinedLow": true,
+      "networkContained": false,
+      "spawnDenied": true,
+      "controlReachedEveryTarget": true,
+      "verdictRule": "pass needs the hand-off under confine AND the child unable to open its own sockets; Low integrity + job does not deny the network (that is WFP, P10w, or an AppContainer), so a working hand-off is partial"
+    }
+  },
+  "specRefs": [
+    "§15.5 transport",
+    "§11.2 rule 1",
+    "§A.7",
+    "§19.1 M1.0 P14b-web",
+    "research paradigm-8/37 P14b",
+    "T-2026-10-18-020",
+    "T-2026-10-18-017"
+  ],
+  "at": "2026-10-23T02:43:23.730Z"
+}

@@ -9,7 +9,7 @@
 //
 // Pass criteria (Arky): the frame cases pass; 4 MiB frames >= 100 MB/s;
 // transport-child RSS < 60 MB.
-import { execFile, fork } from 'node:child_process';
+import { execFile, fork, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import net from 'node:net';
@@ -349,7 +349,55 @@ function parseFootprintMB(text) {
   return m[2] === 'KB' ? (v * 1024) / MB : m[2] === 'MB' ? (v * MiB) / MB : (v * 1024 * MiB) / MB;
 }
 
+// Windows (W1): there is no `ps`. One long-lived PowerShell samples the child
+// every ~10 ms through System.Diagnostics.Process: WorkingSet64 (what node's
+// process.memoryUsage().rss reports on Windows) and PrivateMemorySize64
+// (PROCESS_MEMORY_COUNTERS_EX.PrivateUsage, "private bytes": the commit charge
+// the child owns). Private bytes is the criterion W1 names for Windows.
+function win32Sampler(pid) {
+  const script = `$p = Get-Process -Id ${Number(pid)}; while (-not $p.HasExited) { $p.Refresh(); [Console]::Out.WriteLine("$($p.WorkingSet64) $($p.PrivateMemorySize64) $($p.PeakWorkingSet64)"); [Console]::Out.Flush(); Start-Sleep -Milliseconds 10 }`;
+  const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+  let peakWs = 0;
+  let peakPrivate = 0;
+  let peakWsOs = 0;
+  let samples = 0;
+  let buf = '';
+  let readyResolve;
+  const ready = new Promise((r) => (readyResolve = r));
+  ps.stdout.on('data', (d) => {
+    buf += d;
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const [ws, priv, pws] = buf.slice(0, i).trim().split(' ').map(Number);
+      buf = buf.slice(i + 1);
+      if (!Number.isFinite(priv)) continue;
+      samples++;
+      peakWs = Math.max(peakWs, ws);
+      peakPrivate = Math.max(peakPrivate, priv);
+      peakWsOs = Math.max(peakWsOs, pws);
+      readyResolve();
+    }
+  });
+  ps.on('exit', () => readyResolve());
+  const stop = async () => {
+    const exited = new Promise((r) => (ps.exitCode !== null ? r() : ps.once('exit', r)));
+    ps.kill();
+    await exited;
+    return {
+      peakRssMB: Number((peakWs / MB).toFixed(1)),
+      samples,
+      peakPhysFootprintMB: null,
+      footprintSamples: 0,
+      peakPrivateBytesMB: Number((peakPrivate / MB).toFixed(1)),
+      osPeakWorkingSetMB: Number((peakWsOs / MB).toFixed(1)),
+    };
+  };
+  stop.ready = withTimeout(ready, 15_000, 'win32 memory sampler start');
+  return stop;
+}
+
 function rssSampler(pid) {
+  if (process.platform === 'win32') return win32Sampler(pid);
   let peakKiB = 0;
   let peakFootprintMB = 0;
   let samples = 0;
@@ -408,14 +456,23 @@ async function runServer(ctx, { execArgv = [], env = {}, frameCases = true } = {
   try {
     const { port } = await nextMsg();
     const rssIdle = await stats();
+    let sampledIdle;
+    if (process.platform === 'win32') {
+      const stopIdle = rssSampler(child.pid);
+      await stopIdle.ready;
+      await sleep(300);
+      sampledIdle = await stopIdle();
+    }
     const api = frameCases ? await apiCases(port) : undefined;
     const raw = frameCases ? await rawCases(port) : undefined;
     const rssAfterCases = await stats();
     const stopSeq = rssSampler(child.pid);
+    await stopSeq.ready;
     const sequential = await throughput(port, 32, false);
     const sampledSequential = await stopSeq();
     const rssAfterSequential = await stats();
     const stopPipe = rssSampler(child.pid);
+    await stopPipe.ready;
     const pipelined = await throughput(port, 32, true);
     await sleep(300);
     const sampledPipelined = await stopPipe();
@@ -432,6 +489,7 @@ async function runServer(ctx, { execArgv = [], env = {}, frameCases = true } = {
         afterPipelined: rssAfterPipelined,
         sampledPeakDuringSequential: sampledSequential,
         sampledPeakDuringPipelined: sampledPipelined,
+        ...(sampledIdle ? { sampledIdle } : {}),
       },
       stderr: stderr.slice(0, 500),
     };
@@ -493,6 +551,24 @@ export default async function probe(ctx) {
       ],
       childStderr: stderr.slice(0, 500),
     };
+    if (ctx.platform === 'win32') {
+      const r = base.rss;
+      const peakPrivateMB = Math.max(r.sampledPeakDuringSequential.peakPrivateBytesMB, r.sampledPeakDuringPipelined.peakPrivateBytesMB);
+      const gcPeakPrivateMB = Math.max(gcVariant.rss.sampledPeakDuringSequential.peakPrivateBytesMB, gcVariant.rss.sampledPeakDuringPipelined.peakPrivateBytesMB);
+      const sampled = r.sampledPeakDuringSequential.samples + r.sampledPeakDuringPipelined.samples;
+      const privatePass = sampled > 0 && peakPrivateMB < 60;
+      evidence.transportChildRss.judgedOn = 'win32: peak private bytes (PrivateMemorySize64) from an external ~10 ms PowerShell sampler under load; working set (= node rss on Windows) and getrusage maxRSS (= PeakWorkingSetSize) reported alongside';
+      Object.assign(evidence.summary, {
+        idlePrivateBytesMB: r.sampledIdle?.peakPrivateBytesMB ?? null,
+        peakPrivateBytesUnderLoadMB: peakPrivateMB,
+        privateBytesPass: privatePass,
+        privateBytesSamples: sampled,
+        forcedGcVariantPeakPrivateBytesMB: gcPeakPrivateMB,
+      });
+      evidence.notes[3] = 'win32: node process.memoryUsage().rss is the working set and resourceUsage().maxRSS is PeakWorkingSetSize; private bytes (PrivateUsage) is the committed memory the child owns, the Windows criterion W1 names. The working-set criterion is reported (peakRssPass) but the verdict is judged on private bytes. The forced-GC variant shows how much of the peak is collectable ArrayBuffer garbage.';
+      const verdict = !apiPass || !rawPass ? 'fail' : throughputPass && privatePass ? 'pass' : 'partial';
+      return { verdict, evidence };
+    }
     const verdict = !apiPass || !rawPass ? 'fail' : throughputPass && rssPass ? 'pass' : 'partial';
     return { verdict, evidence };
   }

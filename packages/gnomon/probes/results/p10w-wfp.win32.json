@@ -1,0 +1,95 @@
+{
+  "probe": "p10w-wfp",
+  "os": "win32",
+  "osVersion": "Windows 11 Home (10.0.26200)",
+  "arch": "x64",
+  "toolVersions": {
+    "node": "v24.13.0"
+  },
+  "verdict": "fail",
+  "evidence": {
+    "question": "can the non-elevated kernel add a per-session WFP filter (no service)?",
+    "token": {
+      "integrity": "Mandatory Label\\Medium Mandatory Level",
+      "isInAdministratorsRole": false,
+      "administratorsGroup": "Group used for deny only",
+      "enableLUA": 1,
+      "consentPromptBehaviorAdmin": 5
+    },
+    "services": [
+      {
+        "name": "BFE",
+        "status": "Running",
+        "startType": "Automatic"
+      },
+      {
+        "name": "MpsSvc",
+        "status": "Running",
+        "startType": "Automatic"
+      }
+    ],
+    "wfpEngine": {
+      "engineOpen": "ok",
+      "filterContainer": {
+        "read": false,
+        "error": "0x00000005"
+      },
+      "engine": {
+        "read": false,
+        "error": "0x00000005"
+      },
+      "layerAleAuthConnectV4": {
+        "read": false,
+        "error": "0x00000005"
+      },
+      "layerAleAuthRecvAcceptV4": {
+        "read": false,
+        "error": "0x00000005"
+      },
+      "readTxnBegin": "0x00000005",
+      "filterEnum": {
+        "rc": "0x00000005"
+      },
+      "emptyWriteTxnBegin": "0x00000005"
+    },
+    "netshShowState": {
+      "exitCode": 1,
+      "output": [
+        "Unable to write output to the XML file; error = 5 (ERROR_ACCESS_DENIED)",
+        "The requested operation requires elevation (Run as administrator)."
+      ]
+    },
+    "firewallRuleStore": {
+      "key": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\FirewallRules",
+      "openRead": "ok",
+      "ruleCount": 551,
+      "openWrite": "SecurityException",
+      "openWriteMessage": "Requested registry access is not allowed.",
+      "fwPolicy2Read": "ok",
+      "currentProfileTypes": 4
+    },
+    "summary": {
+      "requiresAdmin": true,
+      "wfpEngineOpensUnelevated": true,
+      "wfpWriteTransactionDenied": true,
+      "wfpReadTransactionDenied": true,
+      "wfpFilterEnumDenied": true,
+      "wfpSecurityDescriptorsUnreadable": true,
+      "firewallRuleStoreWriteDenied": true,
+      "userIsFilteredAdmin": true,
+      "decision": "WFP per-session denies need an elevated principal: a service (W11 broker, one UAC prompt at install) or LocalSystem helper must own the filters. The non-elevated kernel cannot add them, nor even read WFP state."
+    },
+    "notMeasured": [
+      "no filter was added (not even a dynamic-session one): a filter add would change system state, so the empty aborted write transaction stands in as the access check",
+      "per-app filtering by AppContainer SID or by the session SID (W5) is a question for the service-side follow-up once a principal can add filters"
+    ]
+  },
+  "specRefs": [
+    "docs/plans/gnomon-windows.md W1 P10w",
+    "W5 WFP per P10w",
+    "W11 broker service",
+    "G-SBX-08",
+    "G-WIN-06"
+  ],
+  "at": "2026-10-23T02:46:07.030Z"
+}

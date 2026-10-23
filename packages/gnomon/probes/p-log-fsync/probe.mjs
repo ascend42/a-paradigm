@@ -214,9 +214,49 @@ async function child(arm, dir, n) {
   return out;
 }
 
-export default async function probe() {
-  const n = Number(process.env.P_LOG_FSYNC_N ?? 300_000);
-  const spec = process.env.P_LOG_FSYNC_ARMS ?? 'ABCDEF';
+// Windows arm (W1): node fs.fsyncSync -> libuv uv_fs_fsync -> FlushFileBuffers;
+// fs.fdatasyncSync -> NtFlushBuffersFileEx(FLUSH_FLAGS_FILE_DATA_SYNC_ONLY).
+// SQLite os_win.c winSync() calls FlushFileBuffers for synchronous=FULL and
+// ignores PRAGMA fullfsync (a no-op off Apple), so H1 and H3 run the same
+// syscalls there: the pair is a replicate, not a contrast. FlushFileBuffers
+// already asks the drive to flush its cache (unlike fsync(2) on macOS). The
+// default N (20k) is smaller because each commit pays a FlushFileBuffers.
+function fsyncBench(dir, iters) {
+  const out = {};
+  for (const [name, sync] of [['fsyncSync', fs.fsyncSync], ['fdatasyncSync', fs.fdatasyncSync]]) {
+    const fd = fs.openSync(path.join(dir, `bench-${name}`), 'a');
+    const t = new Float64Array(iters);
+    const buf = Buffer.alloc(256, 120);
+    try {
+      for (let i = 0; i < iters; i++) {
+        fs.writeSync(fd, buf);
+        const a = process.hrtime.bigint();
+        sync(fd);
+        t[i] = Number(process.hrtime.bigint() - a) / 1e6;
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+    out[name] = { iters, ...stats(t) };
+  }
+  return out;
+}
+
+function win32Volume(dir) {
+  const ps = (cmd) => execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], { encoding: 'utf8', timeout: 30_000 }).trim();
+  const drive = path.parse(dir).root.slice(0, 1);
+  const first = (e) => String(e?.message ?? e).split(/\r?\n/)[0];
+  const ev = {};
+  try { ev.volume = JSON.parse(ps(`Get-Volume -DriveLetter ${drive} | Select-Object DriveLetter,FileSystem,DriveType,Size | ConvertTo-Json -Compress`)); } catch (e) { ev.volume = `unreadable: ${first(e)}`; }
+  try { ev.disk = JSON.parse(ps(`Get-Partition -DriveLetter ${drive} | Get-Disk | Select-Object FriendlyName,BusType | ConvertTo-Json -Compress`)); } catch (e) { ev.disk = `unreadable: ${first(e)}`; }
+  try { ev.defenderRealTime = JSON.parse(ps('(Get-MpComputerStatus).RealTimeProtectionEnabled | ConvertTo-Json')); } catch (e) { ev.defenderRealTime = `unreadable: ${first(e)}`; }
+  return ev;
+}
+
+export default async function probe(ctx = {}) {
+  const win = (ctx.platform ?? process.platform) === 'win32';
+  const n = Number(process.env.P_LOG_FSYNC_N ?? (win ? 20_000 : 300_000));
+  const spec = process.env.P_LOG_FSYNC_ARMS ?? (win ? 'A,D,G,H1,H3' : 'ABCDEF');
   const arms = (spec.includes(',') ? spec.split(',').map((a) => a.trim()) : /^[A-G]+$/.test(spec) ? spec.split('') : [spec.trim()]).filter((a) => a in ARMS);
   const { DatabaseSync } = await import('node:sqlite');
   const mem = new DatabaseSync(':memory:');
@@ -224,7 +264,14 @@ export default async function probe() {
   mem.close();
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'p-log-fsync-')));
   const results = {};
+  let rawFsync;
   try {
+    if (win) {
+      const bdir = path.join(root, 'bench');
+      fs.mkdirSync(bdir);
+      rawFsync = JSON.parse(execFileSync(process.execPath, ['--no-warnings', SELF, '--fsync-bench', bdir, '1000'], { encoding: 'utf8', timeout: 10 * 60_000 }));
+      process.stderr.write(`p-log-fsync raw fsyncSync p50 ${rawFsync.fsyncSync.p50} ms p99 ${rawFsync.fsyncSync.p99} ms\n`);
+    }
     for (const arm of arms) {
       if (arm === 'H2') { results.H2 = H2_UNREACHABLE; process.stderr.write('p-log-fsync arm H2: not reachable from node:sqlite (recorded, not run)\n'); continue; }
       const dir = path.join(root, `arm-${arm}`);
@@ -243,6 +290,29 @@ export default async function probe() {
     .filter((r) => r.reachable !== false)
     .filter((r) => (r.gLog04 ? r.gLog04.bulkP99Ok && r.gLog04.bulkOver5Ok && r.gLog04.criticalP99Ok : r.total.p99 < BUDGET_MS))
     .map((r) => r.arm);
+  if (win) {
+    return {
+      verdict: meets.length ? 'pass' : 'fail',
+      evidence: {
+        n,
+        budgetMs: BUDGET_MS,
+        tmpRoot: root.replace(fs.realpathSync(os.tmpdir()), '<tmp>'),
+        dataVolume: win32Volume(root),
+        cpus: os.cpus()[0]?.model?.trim(),
+        syncSemantics: {
+          nodeFsync: 'fs.fsyncSync -> libuv uv_fs_fsync -> FlushFileBuffers (flushes the drive write cache)',
+          nodeFdatasync: 'fs.fdatasyncSync -> NtFlushBuffersFileEx(FLUSH_FLAGS_FILE_DATA_SYNC_ONLY)',
+          sqliteFull: 'os_win.c winSync -> FlushFileBuffers on each WAL commit at synchronous=FULL',
+          fullfsyncPragma: 'no-op off Apple: H1 and H3 issue the same syscalls (a replicate pair)',
+        },
+        rawFsync,
+        armsMeetingBudget: meets,
+        sqliteCompileOptions,
+        arms: results,
+      },
+      toolVersions: { sqlite: process.versions.sqlite ?? 'unknown' },
+    };
+  }
   let fsType = 'unknown';
   try { fsType = execFileSync('/sbin/mount', [], { encoding: 'utf8' }).split('\n').find((l) => / on \/System\/Volumes\/Data /.test(l)) ?? fsType; } catch {}
   return {
@@ -252,6 +322,9 @@ export default async function probe() {
   };
 }
 
+if (process.argv[2] === '--fsync-bench') {
+  process.stdout.write(JSON.stringify(fsyncBench(process.argv[3], Number(process.argv[4]))));
+}
 if (process.argv[2] === '--child') {
   const [, , , arm, dir, n] = process.argv;
   child(arm, dir, Number(n)).then((r) => process.stdout.write(JSON.stringify(r)));

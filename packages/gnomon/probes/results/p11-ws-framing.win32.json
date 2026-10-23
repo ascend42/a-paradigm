@@ -1,0 +1,540 @@
+{
+  "probe": "p11-ws-framing",
+  "os": "win32",
+  "osVersion": "Windows 11 Home (10.0.26200)",
+  "arch": "x64",
+  "toolVersions": {
+    "node": "v24.13.0"
+  },
+  "verdict": "partial",
+  "evidence": {
+    "apiCases": {
+      "text-roundtrip-unicode": {
+        "pass": true
+      },
+      "binary-roundtrip-1KiB": {
+        "pass": true
+      },
+      "empty-text-and-binary": {
+        "pass": true
+      },
+      "length-encoding-boundaries": {
+        "pass": true,
+        "sizes": {
+          "125": true,
+          "126": true,
+          "127": true,
+          "65535": true,
+          "65536": true,
+          "65537": true
+        }
+      },
+      "server-fragmented-text-reassembled": {
+        "pass": true,
+        "got": "fragmented hello world ✓"
+      },
+      "server-ping-client-auto-pong": {
+        "pass": true,
+        "got": "pong:abc"
+      },
+      "client-close-4001": {
+        "pass": true,
+        "code": 4001,
+        "reason": "bye",
+        "wasClean": true
+      },
+      "server-close-1000": {
+        "pass": true,
+        "code": 1000,
+        "reason": "server-close",
+        "wasClean": true
+      },
+      "server-close-4002": {
+        "pass": true,
+        "code": 4002,
+        "reason": "server-close",
+        "wasClean": true
+      }
+    },
+    "rawFrameCases": {
+      "1.1 masked text echo": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 1,
+            "fin": true,
+            "len": 5
+          }
+        ]
+      },
+      "2.2 ping 125 bytes -> pong": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 10,
+            "fin": true,
+            "len": 125
+          }
+        ]
+      },
+      "2.5 ping 126 bytes -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "3.1 RSV1 set -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "4.1 reserved opcode 3 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "unmasked client frame -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "5.3 fragmented text (3 frames) -> one echo": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 1,
+            "fin": true,
+            "len": 5
+          }
+        ]
+      },
+      "5.6 ping interleaved in fragments -> pong then echo": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 10,
+            "fin": true,
+            "len": 1
+          },
+          {
+            "op": 1,
+            "fin": true,
+            "len": 8
+          }
+        ]
+      },
+      "5.1 fragmented ping -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "5.9 continuation without start -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "5.18 new text frame inside fragmented message -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "6.2 valid UTF-8 split mid code point across fragments": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 1,
+            "fin": true,
+            "len": 10
+          }
+        ]
+      },
+      "6.3 invalid UTF-8 text -> 1007": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1007
+          }
+        ]
+      },
+      "7.1 close 1000 -> echoed 1000": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1000
+          }
+        ]
+      },
+      "7.3 close with 1-byte payload -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.5 close with invalid UTF-8 reason -> 1007": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1007
+          }
+        ]
+      },
+      "7.9 invalid close code 0 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.9 invalid close code 999 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.9 invalid close code 1004 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.9 invalid close code 1005 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.9 invalid close code 1006 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.9 invalid close code 1016 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.9 invalid close code 2999 -> 1002": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1002
+          }
+        ]
+      },
+      "7.7 valid close code 1001 -> echoed": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1001
+          }
+        ]
+      },
+      "7.7 valid close code 1011 -> echoed": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 1011
+          }
+        ]
+      },
+      "7.7 valid close code 3000 -> echoed": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 3000
+          }
+        ]
+      },
+      "7.7 valid close code 4999 -> echoed": {
+        "pass": true,
+        "serverFrames": [
+          {
+            "op": 8,
+            "fin": true,
+            "len": 2,
+            "close": 4999
+          }
+        ]
+      }
+    },
+    "throughput": {
+      "sequentialEcho": {
+        "frames": 32,
+        "frameBytes": 4194304,
+        "seconds": 1.1779,
+        "allEchoedIntact": true,
+        "oneWayMBps": 114,
+        "bothWaysMBps": 227.9,
+        "oneWayMiBps": 108.7
+      },
+      "pipelinedEcho": {
+        "frames": 32,
+        "frameBytes": 4194304,
+        "seconds": 0.8521,
+        "allEchoedIntact": true,
+        "oneWayMBps": 157.5,
+        "bothWaysMBps": 315,
+        "oneWayMiBps": 150.2
+      },
+      "criterionMBps": 100,
+      "metric": "one-way payload MB/s (MB = 1e6) of a full echo round trip; client (undici) cost is included, so this is conservative"
+    },
+    "transportChildRss": {
+      "idle": {
+        "rssMB": 57.6,
+        "peakRssMB": 59.3,
+        "heapUsedMB": 8.1,
+        "arrayBuffersMB": 0
+      },
+      "afterFrameCases": {
+        "rssMB": 57.7,
+        "peakRssMB": 60.7,
+        "heapUsedMB": 7.7,
+        "arrayBuffersMB": 0
+      },
+      "afterSequential": {
+        "rssMB": 113.6,
+        "peakRssMB": 131.2,
+        "heapUsedMB": 6.9,
+        "arrayBuffersMB": 54.6
+      },
+      "afterPipelined": {
+        "rssMB": 72.6,
+        "peakRssMB": 156.1,
+        "heapUsedMB": 6.4,
+        "arrayBuffersMB": 13.1
+      },
+      "sampledPeakDuringSequential": {
+        "peakRssMB": 127.8,
+        "samples": 57,
+        "peakPhysFootprintMB": null,
+        "footprintSamples": 0,
+        "peakPrivateBytesMB": 99.1,
+        "osPeakWorkingSetMB": 131.2
+      },
+      "sampledPeakDuringPipelined": {
+        "peakRssMB": 155.2,
+        "samples": 57,
+        "peakPhysFootprintMB": null,
+        "footprintSamples": 0,
+        "peakPrivateBytesMB": 125.9,
+        "osPeakWorkingSetMB": 156.1
+      },
+      "sampledIdle": {
+        "peakRssMB": 57.7,
+        "samples": 12,
+        "peakPhysFootprintMB": null,
+        "footprintSamples": 0,
+        "peakPrivateBytesMB": 28.8,
+        "osPeakWorkingSetMB": 59.3
+      },
+      "criterionMB": 60,
+      "judgedOn": "win32: peak private bytes (PrivateMemorySize64) from an external ~10 ms PowerShell sampler under load; working set (= node rss on Windows) and getrusage maxRSS (= PeakWorkingSetSize) reported alongside"
+    },
+    "forcedGcVariant": {
+      "what": "same server, --expose-gc, gc() after every 16 MB received (frame cases skipped) — shows what bounding external ArrayBuffer memory buys",
+      "sequential": {
+        "frames": 32,
+        "frameBytes": 4194304,
+        "seconds": 1.0427,
+        "allEchoedIntact": true,
+        "oneWayMBps": 128.7,
+        "bothWaysMBps": 257.4,
+        "oneWayMiBps": 122.8
+      },
+      "pipelined": {
+        "frames": 32,
+        "frameBytes": 4194304,
+        "seconds": 0.7968,
+        "allEchoedIntact": true,
+        "oneWayMBps": 168.4,
+        "bothWaysMBps": 336.9,
+        "oneWayMiBps": 160.6
+      },
+      "rss": {
+        "idle": {
+          "rssMB": 60.8,
+          "peakRssMB": 62.3,
+          "heapUsedMB": 8,
+          "arrayBuffersMB": 0
+        },
+        "afterFrameCases": {
+          "rssMB": 60.8,
+          "peakRssMB": 62.3,
+          "heapUsedMB": 8,
+          "arrayBuffersMB": 0
+        },
+        "afterSequential": {
+          "rssMB": 71.3,
+          "peakRssMB": 97,
+          "heapUsedMB": 7.6,
+          "arrayBuffersMB": 8.4
+        },
+        "afterPipelined": {
+          "rssMB": 77.2,
+          "peakRssMB": 105.3,
+          "heapUsedMB": 7.6,
+          "arrayBuffersMB": 14.3
+        },
+        "sampledPeakDuringSequential": {
+          "peakRssMB": 96.8,
+          "samples": 48,
+          "peakPhysFootprintMB": null,
+          "footprintSamples": 0,
+          "peakPrivateBytesMB": 65.5,
+          "osPeakWorkingSetMB": 97
+        },
+        "sampledPeakDuringPipelined": {
+          "peakRssMB": 103.7,
+          "samples": 47,
+          "peakPhysFootprintMB": null,
+          "footprintSamples": 0,
+          "peakPrivateBytesMB": 73.2,
+          "osPeakWorkingSetMB": 105.3
+        },
+        "sampledIdle": {
+          "peakRssMB": 60.8,
+          "samples": 17,
+          "peakPhysFootprintMB": null,
+          "footprintSamples": 0,
+          "peakPrivateBytesMB": 30.2,
+          "osPeakWorkingSetMB": 62.3
+        }
+      }
+    },
+    "summary": {
+      "apiCasesPass": true,
+      "rawFrameCasesPass": true,
+      "rawCaseCount": 27,
+      "bestOneWayMBps": 157.5,
+      "throughputPass": true,
+      "idleRssMB": 57.6,
+      "idleRssPass": true,
+      "peakRssMB": 156.1,
+      "peakRssPass": false,
+      "sampledLoadPeakMB": 155.2,
+      "peakPhysFootprintUnderLoadMB": 0,
+      "physFootprintPass": null,
+      "forcedGcVariantLoadPeakMB": 103.7,
+      "forcedGcVariantOneWayMBps": 168.4,
+      "idlePrivateBytesMB": 28.8,
+      "peakPrivateBytesUnderLoadMB": 125.9,
+      "privateBytesPass": false,
+      "privateBytesSamples": 114,
+      "forcedGcVariantPeakPrivateBytesMB": 73.2
+    },
+    "notes": [
+      "Not the Autobahn suite itself (that needs Python/Docker); the raw cases mirror Autobahn sections 1-7 numbering where they apply.",
+      "Client-to-server fragmentation is exercised by the raw client; the built-in WebSocket never fragments outgoing messages.",
+      "Server is Node with no flags.",
+      "win32: node process.memoryUsage().rss is the working set and resourceUsage().maxRSS is PeakWorkingSetSize; private bytes (PrivateUsage) is the committed memory the child owns, the Windows criterion W1 names. The working-set criterion is reported (peakRssPass) but the verdict is judged on private bytes. The forced-GC variant shows how much of the peak is collectable ArrayBuffer garbage."
+    ],
+    "childStderr": ""
+  },
+  "specRefs": [
+    "§2.1 transport child",
+    "§4.9 gnomon-rpc:v1",
+    "§11.2",
+    "§19.1 M1.0 P11",
+    "research 29 §2 P11"
+  ],
+  "at": "2026-10-23T02:29:14.444Z"
+}

@@ -14,7 +14,7 @@
 //         unix-socket connect are all EPERM;
 //   (v)   file read, home listing and exec are EPERM (as P14).
 // Stand-in: the "LAN peer" is a listener this probe starts on 0.0.0.0:P.
-// Non-darwin: partial (P14b-w is the Windows parity phase, P8-D78).
+// win32: P14b-w (outbound) in _shared/win32-handoff.mjs, under gnomon-helper process.confine.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -22,6 +22,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { NODE, lanAddress, profileFor } from '../p14-link-outbound/probe.mjs';
+import { win32Handoff } from '../_shared/win32-handoff.mjs';
 
 export const specRefs = ['§15.5 link', '§16 link row', '§3.9', '§19.1 M1.0 P14', 'research paradigm-8/37 P14b', 'G-LNK-11', 'P8-D74'];
 
@@ -72,6 +73,7 @@ const listen = (srv, port, host) => new Promise((r, j) => srv.once('error', j).l
 const dial = (port) => new Promise((r, j) => { const s = net.connect({ host: '127.0.0.1', port }); s.once('connect', () => r(s)); s.once('error', j); });
 
 export default async function probe(ctx) {
+  if (ctx.platform === 'win32') return win32Handoff('outbound'); // P14b-w (outbound), _shared/win32-handoff.mjs
   if (ctx.platform !== 'darwin') return { verdict: 'partial', evidence: { skipped: `${ctx.platform}: P14b-w (libuv duplication into a restricted-token child, then an AppContainer) is the Windows parity phase (P8-D78)` } };
   const expectBack = sha(Buffer.alloc(SIZE, 0x62));
   const expectFromChild = sha(Buffer.alloc(SIZE, 0x61));
