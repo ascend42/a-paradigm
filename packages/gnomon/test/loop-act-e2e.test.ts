@@ -82,6 +82,9 @@ function snapshot(root: string): Record<string, string> {
 function gitRepo(def?: Def, o: { attributes?: boolean } = {}): string {
   const root = tmp('gnomon-actrepo-');
   git(root, 'init', '-q', '-b', 'main');
+  // no background auto-maintenance: a detached `git maintenance` would drop .git/objects/maintenance.lock mid-snapshot
+  git(root, 'config', 'maintenance.auto', 'false');
+  git(root, 'config', 'gc.auto', '0');
   fs.mkdirSync(path.join(root, 'src'));
   fs.mkdirSync(path.join(root, 'bin'));
   fs.writeFileSync(path.join(root, 'src', 'a.ts'), "export const x: number = 'oops';\n");

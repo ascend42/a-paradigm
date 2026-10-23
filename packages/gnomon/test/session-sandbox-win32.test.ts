@@ -274,7 +274,9 @@ $r.post = [W.U]::PostMessage($h, 0x0010, [System.IntPtr]::Zero, [System.IntPtr]:
 $r.focus = [W.U]::SetForegroundWindow($h)
 $r | ConvertTo-Json -Compress`;
     const out = spawnSync(p.exe, ['sandbox', '--low', '--desktop', '--session-sid', OWN, '--', ps, '-NoProfile', '-Command', probe], { encoding: 'utf8', input: '', windowsHide: true, timeout: 90_000, env: { ...process.env, TEMP: lowTemp, TMP: lowTemp } });
-    const r = JSON.parse(out.stdout.trim().split('\n').pop() ?? '{}') as Record<string, unknown>;
+    const last = out.stdout.trim().split('\n').pop() ?? '';
+    if (!last.startsWith('{')) throw new Error(`sandboxed probe gave no result: status ${out.status} signal ${out.signal} error ${out.error?.message}\nstdout: ${out.stdout.slice(0, 500)}\nstderr: ${out.stderr.slice(0, 1500)}`);
+    const r = JSON.parse(last) as Record<string, unknown>;
     expect(r).toEqual({ is: false, tray: 0, post: false, focus: false });
     // the control: unsandboxed, the same handle is a live window (the falsifier is not vacuous)
     const ctl = spawnSync(ps, ['-NoProfile', '-Command', `${probe.split('$r = ')[0]}[W.U]::IsWindow($h)`], { encoding: 'utf8', windowsHide: true, timeout: 60_000 });
