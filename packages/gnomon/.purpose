@@ -2720,7 +2720,18 @@ components:
       worktree as its root (#editRoots). Claude Code's own worktree
       isolation (.claude/worktrees) and `git worktree add` stay refused by
       the sandbox (measured); the session guidance names the verbs.
-      Darwin-first (win32: parity phase).
+      Darwin-first (win32: parity phase; no verb is served on win32).
+      Aegis review 2026-10-23: push/create run under a kernel config
+      snapshot (credential.* + core.sshCommand only, ssh -F a copied
+      ~/.ssh/config; GIT_CONFIG_NOSYSTEM, GIT_COMMON_DIR pinned); each root's
+      .git, commondir, remotes/ and branches/ are session-denied; legacy
+      remotes refuse; a worktree base with different steering files forces
+      the card (M1); gh only from fixed trusted locations (M4); pushed
+      commits are secret-scanned and a hit always takes a card (M5); an
+      explicit force-with-lease sha (L3); at most four verb calls in flight
+      per session (L5); gh api user is a `lookup` row (L6). Session file
+      writes are deny-by-default (T-2026-10-23-004, policy.writeAllow,
+      probe p10m-write-allow, test/write-allow-sandbox.test.ts).
     path: src/kernel/git/
     type: module
     tags: [gnomon, kernel, git, security, paradigm-8]
@@ -2728,6 +2739,7 @@ components:
     tests:
       - test/git-verbs.test.ts
       - test/git-verbs-sandbox.test.ts
+      - test/write-allow-sandbox.test.ts
 
   kernel-mcp:
     description: >-
