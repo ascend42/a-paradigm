@@ -1,0 +1,66 @@
+id: L-2026-10-23-ascend42-031412-001
+type: agent-session
+timestamp: '2026-10-23T03:14:12.216Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Windows release blockers from PR #52 worked through (draft PR #53)'
+summary: |-
+  On feat/gnomon-windows-release (draft PR #53 → feat/gnomon) the PR #52 release blockers were closed, each Aegis-reviewed before commit:
+  - **Aegis H1:** a session's objects admit that session only. Its default DACL is own-SID allow, then a Gnomon-SID deny, then user/SY, then OW RC; --low requires --session-sid. Falsifier: kill, probe and WRITE_DAC are all EPERM.
+  - **Aegis M3:** process.confine lowers only a direct child of the asking process, created after it, never the helper itself. The job comes before the integrity drop, and the endpoint refuses an exited child.
+  - **W1 probes:** P01 partial, log-fsync pass, P11 partial, P14b-w partial, P10w fail. Non-elevated WFP is denied, so network denies need the W11 service.
+  - **W3:** write-through durable renames and a real boot id (win:<n>). Windows process control uses launcher-job groups and creation-time witnesses, with process.terminate {pid,start}; the graceful stop closes stdin. A filtered session PATH plus NoDefaultCurrentDirectoryInExePath. Policy registry keys are read by API (registry.read), not localized reg.exe text.
+  - **W5 acceptance:** a session cannot see, message or focus a Medium window.
+  - **Hygiene:** one WIN32_HELPER_PROTOCOL; the per-op re-hash kept on measurement (0.36 ms vs 16 ms per spawn); a G-WIN-05 ratchet on inline platform branches in src/kernel.
+  - **Spec and CHANGELOG:** §15.5/§16 "Windows as built" and a CHANGELOG Windows section.
+  - **Loops-on-Windows fixes:** two env-file fail-opens (a followed symlink; the owner check skipped on win32), humanBusyIn never matching on Windows, and host-path issues.
+
+  Deferred: standing grants wait on helper screen-lock events (T-2026-10-23-002); shared ~/.claude/projects and named-object squatting (T-2026-10-23-001); W6 wrapper (SendInput test, browser-surface refusal); W7–W9 packaging.
+symbols_touched:
+  - '#gnomon-helper'
+  - '#session-sandbox'
+  - '#daemon-lifecycle'
+  - '#kernel-log'
+  - '#web-endpoint'
+  - '#session-runner'
+  - '#probes'
+  - '#loop-check'
+  - '#loop-land'
+symbols_created: []
+decisions:
+  - id: win-group-is-launcher
+    decision: On Windows the process 'group' is the session launcher pid whose kill-on-close job holds the tree; terminate only through the helper with the caller's recorded creation-time witness
+    rationale: Windows has no process groups; a bare pid can be recycled during the grace window (Aegis M1/H1); a snapshot must never become the witness
+  - id: win-graceful-stdin
+    decision: Windows graceful stop closes stdin instead of SIGTERM
+    rationale: node maps SIGTERM to TerminateProcess; exec.rs's staged stop is control message, stdin close, kill
+  - id: keep-rehash
+    decision: Keep re-hashing the helper before every op
+    rationale: measured 0.36 ms vs ~16 ms per spawn; a cached hash would reopen the swap window
+  - id: standing-needs-lock-events
+    decision: Do not enable Windows standing grants until the helper reports screen lock
+    rationale: grants must end at lock; signing their uses in click mode without lock events would let a grant outlive a locked screen
+learnings:
+  - SDDL alias spelling, elevated BA ownership and token default owner all bit owner-only checks on the GitHub Windows runner
+  - 'A snapshot that writes witness state lets a recycled pid inherit trust: pass witnesses explicitly from the recording site'
+  - 'On Windows O_NOFOLLOW is 0: any open-without-follow code needs an lstat refusal there'
+  - Git Bash collapses \\ in heredocs; write backslash-bearing TS with the Edit tool or String.fromCharCode(92)
+verification:
+  status: partial
+  details:
+    local: Windows suites green except symlink-privilege tests
+    ci: 'PR #53 run pending after loops fixes'
+tags:
+  - windows
+  - pr-52
+  - release-blockers
+linked_tasks:
+  - T-2026-10-22-011
+  - T-2026-10-23-001
+  - T-2026-10-23-002
+git_context:
+  ref: 483f18bff2035186118c47722a0b1423bd0b36e0
+  branch: feat/gnomon-windows-release
+  dirty: true

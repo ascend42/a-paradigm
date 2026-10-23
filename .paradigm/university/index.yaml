@@ -1,24 +1,7 @@
 version: '1.0'
-generatedAt: '2026-10-22T23:14:15.896Z'
-totalContent: 3
+generatedAt: '2026-10-23T03:14:07.260Z'
+totalContent: 2
 entries:
-  - id: N-paradigm-docs-overview
-    title: 'Paradigm Docs: Auto-Generated Documentation'
-    type: note
-    author: paradigm
-    created: '2026-03-17'
-    updated: '2026-03-17'
-    tags:
-      - docs
-      - paradigm
-      - documentation
-    symbols:
-      - '#DocsLoader'
-      - '#DocsCommands'
-      - '#DocsSection'
-    difficulty: beginner
-    file: content/notes/N-paradigm-docs-overview.md
-    category: paradigm-docs
   - id: Q-paradigm-docs-basics
     title: Paradigm Docs Basics
     type: quiz
