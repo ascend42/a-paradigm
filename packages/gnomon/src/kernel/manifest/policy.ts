@@ -247,8 +247,12 @@ export interface SessionPolicyInput {
    * dir's hooks, config and info stay denied as for any root.
    */
   kernelWorktrees?: boolean;
-  /** T-2026-10-23-004: the session's TMPDIR (the OS one); its per-user /private/var/folders/<a>/<b> dir is writable */
+  /** T-2026-10-23-004 / Aegis round 2 M1: the session's TMPDIR — only its own realpath is writable (a Gnomon-made dir for a Claude session) */
   tmpdir?: string;
+  /** Aegis round 2 H: the session's Gnomon-made tool cache dir (SESSION_CACHE_ENV); writable */
+  sessionCache?: string;
+  /** TEST RIG ONLY (the supervisor passes it only with allowScripts): the fake claude's own dir, where it writes its trace */
+  testWriteAllow?: readonly string[];
 }
 
 /**
@@ -256,15 +260,34 @@ export interface SessionPolicyInput {
  * guessed: what Claude Code and an `npm install` in a root wrote under the profile (test/session-sandbox.test.ts,
  * probes/p10m-write-allow). Anything else under the home stays denied; add one only when measured, narrowly.
  */
-export const WRITE_CACHE_PATHS: readonly string[] = Object.freeze(['.npm', 'Library/Caches/claude-cli-nodejs']);
+export const WRITE_CACHE_PATHS: readonly string[] = Object.freeze([]);
+/**
+ * Aegis round 2 H (T-2026-10-23-004): a session never writes the human's own tool caches (~/.npm/_npx is run unsandboxed
+ * by the human's npx). Each session gets a Gnomon-made cache per repo (SESSION_CACHE_ENV points the tools at it,
+ * `sessionCache` is its write allow) and a Gnomon-made 0700 TMPDIR (`tmpdir`), both made by the supervisor.
+ */
+export const SESSION_CACHE_ENV: Readonly<Record<string, string>> = Object.freeze({ npm_config_cache: 'npm', XDG_CACHE_HOME: 'xdg', PIP_CACHE_DIR: 'pip', GOCACHE: 'go-build', GOMODCACHE: 'go-mod', BUN_INSTALL_CACHE_DIR: 'bun' });
+/** Aegis round 2 M6: credential stores a session can neither read nor write (subpath / literal / prefix, under the user home). */
+export const CREDENTIAL_READ_DENY: ReadonlyArray<{ rel: string; match: PathMatch }> = Object.freeze([
+  { rel: '.ssh', match: 'subpath' },
+  { rel: '.aws', match: 'subpath' },
+  { rel: '.config/gh', match: 'subpath' },
+  { rel: '.netrc', match: 'literal' },
+  { rel: '.git-credentials', match: 'literal' },
+  { rel: '.docker/config.json', match: 'literal' },
+  { rel: '.kube', match: 'subpath' },
+  { rel: '.gnupg', match: 'subpath' },
+  { rel: '.config/gcloud', match: 'subpath' },
+  { rel: '.azure', match: 'subpath' },
+  { rel: '.pypirc', match: 'literal' },
+  { rel: '.cargo/credentials', match: 'prefix' },
+]);
 /** T-2026-10-23-004: the shared temp dirs every session may write. */
 export const WRITE_TEMP_PATHS: readonly string[] = Object.freeze(['/private/tmp', '/private/var/tmp']);
 
-/** The per-user /private/var/folders/<a>/<b> dir holding a darwin TMPDIR (…/T), else the TMPDIR itself. */
+/** Aegis round 2 M1: the TMPDIR a session may write is exactly its realpath (never the per-user /private/var/folders parent). */
 export function userTempRoot(tmpdir: string): string {
-  const real = realpathLoose(tmpdir);
-  const m = /^(\/private\/var\/folders\/[^/]+\/[^/]+)(\/T)?\/?$/.exec(real);
-  return m ? m[1]! : real.replace(/\/+$/, '');
+  return realpathLoose(tmpdir).replace(/\/+$/, '') || '/';
 }
 
 /** The one write carve-back (TD-2026-10-19-814): Claude Code's transcript dir, relative to the user Claude dir. */
@@ -499,6 +522,8 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     ...WRITE_TEMP_PATHS.map((t) => P(t, 'subpath', 'temp')),
     ...(inp.tmpdir ? [{ path: userTempRoot(inp.tmpdir), match: 'subpath' as const, class: 'temp' as const }] : []),
     ...(inp.userHome ? WRITE_CACHE_PATHS.map((c) => P(path.join(inp.userHome!, ...c.split('/')), 'subpath', 'cache')) : []),
+    ...(inp.sessionCache ? [P(inp.sessionCache, 'subpath', 'cache')] : []),
+    ...(inp.testWriteAllow ?? []).map((t) => P(t, 'subpath', 'temp')),
   ]);
   // TD-2026-10-19-814 item 1: the transcript carve-back. Fail closed (no allow) when ~/.claude/projects is a link
   // elsewhere, or any write deny other than the user Claude dir's own subpath (and the steering regexes, which match
@@ -545,7 +570,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   return {
     schemaVersion: SESSION_POLICY_SCHEMA,
     profile: 'session',
-    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home'), ...(inp.memorySubtree ? [P(inp.memorySubtree, 'dep-steering', 'settings')] : [])]),
+    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home'), ...(inp.userHome ? CREDENTIAL_READ_DENY.map((c) => P(path.join(inp.userHome!, ...c.rel.split('/')), c.match, 'keys')) : []), ...(inp.memorySubtree ? [P(inp.memorySubtree, 'dep-steering', 'settings')] : [])]),
     allowRead: uniq(allowRead),
     allowReadMetadata: uniq([...meta].map((m) => ({ path: m, match: 'literal' as const, class: 'gnomon-home' as const }))),
     denyReadAlways: uniq([...keys.filter((k) => k.class === 'keys'), ...kernelLog]),

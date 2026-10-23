@@ -11,7 +11,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { darwinFloor, sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
-import { buildSessionPolicy, userTempRoot, WRITE_CACHE_PATHS } from '../src/kernel/manifest/policy.js';
+import { buildSessionPolicy, SESSION_CACHE_ENV, userTempRoot, WRITE_CACHE_PATHS } from '../src/kernel/manifest/policy.js';
+import { sessionScratchDirs } from '../src/kernel/supervisor/supervisor.js';
 import { sessionWorld, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld | null = null;
@@ -35,7 +36,13 @@ describe.runIf(darwinFloor().ok)('deny-by-default session writes', () => {
     // the world itself lives under the OS temp dir, so the session's TMPDIR here is a separate dir beside the repo
     const tmpdir = path.join(x.root, 'session-tmp');
     fs.mkdirSync(tmpdir);
-    const policy = buildSessionPolicy({ home: x.home, cwd: x.cwd, userClaudeDir: path.join(x.userHome, '.claude'), userHome: x.userHome, managedSettingsPaths: [], linkedFolders: [x.linked], endpointPort: null, tmpdir, memorySubtree: x.cwd });
+    const cache = path.join(x.root, 'session-cache');
+    fs.mkdirSync(cache);
+    fs.mkdirSync(path.join(x.userHome, '.ssh'), { recursive: true });
+    fs.writeFileSync(path.join(x.userHome, '.ssh', 'id_ed25519'), 'PRIVATE\n');
+    fs.mkdirSync(path.join(x.userHome, '.aws'), { recursive: true });
+    fs.writeFileSync(path.join(x.userHome, '.aws', 'credentials'), 'SECRET\n');
+    const policy = buildSessionPolicy({ home: x.home, cwd: x.cwd, userClaudeDir: path.join(x.userHome, '.claude'), userHome: x.userHome, managedSettingsPaths: [], linkedFolders: [x.linked], endpointPort: null, tmpdir, sessionCache: cache, memorySubtree: x.cwd });
     const t = (n: string, cmd: string): string => `(${cmd}) >/dev/null 2>&1 && echo "${n}=allowed" || echo "${n}=blocked"`;
     const script = path.join(x.cwd, 'check.sh');
     fs.writeFileSync(script, `#!/bin/bash\ncd "${x.cwd}"\n${[
@@ -51,12 +58,19 @@ describe.runIf(darwinFloor().ok)('deny-by-default session writes', () => {
       t('tmp', 'echo x > /tmp/gnomon-wa-$$ && rm /tmp/gnomon-wa-$$'),
       t('tmpdir', `echo x > "${tmpdir}/gnomon-wa-$$" && rm "${tmpdir}/gnomon-wa-$$"`),
       t('dev_null', 'echo x > /dev/null'),
-      ...(NPM ? [t('npm_install', `HOME="${x.userHome}" "${NPM}" install --no-audit --no-fund --offline ./dep && test -e node_modules/dep/package.json`)] : []),
+      t('dev_urandom', 'exec 3>/dev/urandom'), // opening for write (libraries open it O_RDWR); macOS refuses the write itself everywhere
+      t('home_npm', `mkdir -p "${x.userHome}/.npm/_npx"`),
+      t('read_ssh_key', `cat "${x.userHome}/.ssh/id_ed25519"`),
+      t('read_aws', `cat "${x.userHome}/.aws/credentials"`),
+      t('tmux_dir', `mkdir -p /private/tmp/tmux-${process.getuid!()}/planted`),
+      t('bind_shared_tmp', `"${process.execPath}" -e "const s=require('net').createServer();s.on('error',()=>process.exit(1));s.listen('/private/tmp/gnomon-wa-'+process.pid+'.sock',()=>{s.close();process.exit(0)})"`),
+      t('bind_session_tmp', `"${process.execPath}" -e "const s=require('net').createServer();s.on('error',()=>process.exit(1));s.listen('${tmpdir}/s.sock',()=>{s.close();process.exit(0)})"`),
+      ...(NPM ? [t('npm_install', `HOME="${x.userHome}" npm_config_cache="${cache}/npm" "${NPM}" install --no-audit --no-fund --offline ./dep && test -e node_modules/dep/package.json`)] : []),
     ].join('\n')}\n`, { mode: 0o755 });
     const plan = sessionLaunchPlan({ policy, binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir, home: x.userHome, roots: [x.cwd] } }, 'darwin');
     const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: x.userHome, PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin`, TMPDIR: tmpdir }, timeout: 120_000 });
     const out = Object.fromEntries(r.stdout.split('\n').filter((l) => /^[a-z_]+=/.test(l)).map((l) => l.split('=') as [string, string]));
-    expect(out).toMatchObject({ other_repo_hook: 'blocked', gh_hosts: 'blocked', home_file: 'blocked', home_dir: 'blocked', users_shared: 'blocked', root_write: 'allowed', git_config: 'blocked', git_hook: 'blocked', claude_md: 'blocked', tmp: 'allowed', tmpdir: 'allowed', dev_null: 'allowed' });
+    expect(out).toMatchObject({ other_repo_hook: 'blocked', gh_hosts: 'blocked', home_file: 'blocked', home_dir: 'blocked', users_shared: 'blocked', root_write: 'allowed', git_config: 'blocked', git_hook: 'blocked', claude_md: 'blocked', tmp: 'allowed', tmpdir: 'allowed', dev_null: 'allowed', dev_urandom: 'allowed', home_npm: 'blocked', read_ssh_key: 'blocked', read_aws: 'blocked', tmux_dir: 'blocked', bind_shared_tmp: 'blocked', bind_session_tmp: 'allowed' });
     if (NPM) expect(out.npm_install, r.stderr).toBe('allowed');
     expect(fs.existsSync(path.join(other, 'pre-commit'))).toBe(false);
   }, 120_000);
@@ -64,13 +78,24 @@ describe.runIf(darwinFloor().ok)('deny-by-default session writes', () => {
   it('policy data: the allowlist is exactly the roots, the temp dirs and the measured caches', () => {
     w = sessionWorld();
     const p = buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: path.join(w.userHome, '.claude'), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, tmpdir: os.tmpdir() });
-    expect((p.writeAllow ?? []).map((a) => `${a.class}:${a.path}`).sort()).toEqual([
-      `root:${w.cwd}`,
-      'temp:/private/tmp',
-      'temp:/private/var/tmp',
-      `temp:${userTempRoot(os.tmpdir())}`,
-      ...WRITE_CACHE_PATHS.map((c) => `cache:${path.join(w!.userHome, c)}`),
-    ].sort());
-    expect(userTempRoot('/var/folders/ab/cdef/T/')).toMatch(/^\/private\/var\/folders\/ab\/cdef$/);
+    // Aegis round 2: no shared home cache (WRITE_CACHE_PATHS is empty), the TMPDIR's own realpath only (never its parent)
+    expect(WRITE_CACHE_PATHS).toEqual([]);
+    expect((p.writeAllow ?? []).map((a) => `${a.class}:${a.path}`).sort()).toEqual([`root:${w.cwd}`, 'temp:/private/tmp', 'temp:/private/var/tmp', `temp:${userTempRoot(os.tmpdir())}`].sort());
+    expect(userTempRoot(os.tmpdir())).toBe(fs.realpathSync(os.tmpdir()).replace(/\/+$/, ''));
+    const sc = buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: path.join(w.userHome, '.claude'), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, sessionCache: path.join(w.root, 'cache') });
+    expect((sc.writeAllow ?? []).some((a) => a.class === 'cache' && a.path === path.join(w!.root, 'cache'))).toBe(true);
+    // M6: the credential stores are read-denied
+    for (const rel of ['.ssh', '.aws', '.config/gh', '.netrc', '.git-credentials', '.docker/config.json', '.kube', '.gnupg', '.config/gcloud', '.azure', '.pypirc', '.cargo/credentials']) expect(p.denyRead.some((d) => d.path === path.join(w!.userHome, rel)), rel).toBe(true);
+  });
+
+  it('Aegis round 2: the session gets a private TMPDIR and a per-repo cache (0700, this uid); the env points the tools there', () => {
+    w = sessionWorld();
+    const d = sessionScratchDirs('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', 'sha256:' + 'ab'.repeat(32), w.root);
+    expect(d.tmp).toBe(path.join(w.root, 'gnomon-tmp', 's-01JAAAAA'.slice(2) === '01JAAAAA' ? fs.readdirSync(path.join(w.root, 'gnomon-tmp'))[0]! : ''));
+    expect(d.cache).toBe(path.join(w.root, 'gnomon-cache', 'ab'.repeat(8)));
+    for (const x of [d.tmp, d.cache]) expect(fs.statSync(x).mode & 0o077).toBe(0);
+    fs.chmodSync(d.cache, 0o755);
+    expect(() => sessionScratchDirs('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', 'sha256:' + 'ab'.repeat(32), w!.root)).toThrow(/not a private directory/);
+    expect(Object.keys(SESSION_CACHE_ENV).sort()).toEqual(['BUN_INSTALL_CACHE_DIR', 'GOCACHE', 'GOMODCACHE', 'PIP_CACHE_DIR', 'XDG_CACHE_HOME', 'npm_config_cache']);
   });
 });

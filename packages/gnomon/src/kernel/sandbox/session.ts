@@ -90,12 +90,16 @@ function darwinSession(i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe
   return {
     command: SANDBOX_EXEC,
     args: ['-p', profile, i.binaryReal, ...i.argv],
-    // ipc:helper-service has no mechanism until the helper exists (M1.3): the rest is full
-    sandbox: 'full',
+    // Aegis round 2 M6: network egress is open (only the endpoint port is denied) until the 8.1 egress proxy: partial, said so
+    sandbox: 'partial',
+    partial: [NETWORK_EGRESS_PARTIAL],
     profile,
     profileHash: `sha256:${createHash('sha256').update(profile).digest('hex')}`,
   };
 }
+
+/** Aegis round 2 M6: what the darwin session profile does not deny yet (the egress proxy is 8.1, spec §6.6). */
+export const NETWORK_EGRESS_PARTIAL = 'network:egress open (outbound connections are not limited to localhost; only the Gnomon endpoint port is denied; the egress proxy is 8.1)';
 
 /** win32 (W5): Low integrity + a restricted token + session-SID ACEs + a private desktop (platform/win32/session-sandbox.ts). */
 function win32Session(i: SessionLaunchInput): SessionLaunchPlan {

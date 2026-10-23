@@ -92,7 +92,7 @@ export const SESSION_SANDBOX_MIN_MACOS = 15;
 export const APPLEEVENT_MACH_SERVICES = Object.freeze(['com.apple.coreservices.appleevents']);
 
 /** T-2026-10-23-004: the device files every process writes (the null device, the terminal, fds, ptys, dtrace helper). */
-export const DEVICE_WRITE_ALLOW: readonly string[] = Object.freeze(['(literal "/dev/null")', '(literal "/dev/zero")', '(literal "/dev/tty")', '(literal "/dev/dtracehelper")', '(literal "/dev/ptmx")', '(regex #"^/dev/fd/[0-9]+$")', '(regex #"^/dev/ttys[0-9]+$")']);
+export const DEVICE_WRITE_ALLOW: readonly string[] = Object.freeze(['(literal "/dev/null")', '(literal "/dev/zero")', '(literal "/dev/tty")', '(literal "/dev/dtracehelper")', '(literal "/dev/ptmx")', '(literal "/dev/urandom")', '(literal "/dev/random")', '(regex #"^/dev/fd/[0-9]+$")', '(regex #"^/dev/ttys[0-9]+$")']);
 
 export const DARWIN_LAUNCHERS = Object.freeze([
   '/usr/bin/open',
@@ -235,6 +235,10 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
   }
   const classes = new Set(policy.denyClasses);
   if (classes.has('unix-socket:tmux')) lines.push(`(deny network-outbound (remote unix-socket (subpath ${q(realpathLoose(`/private/tmp/tmux-${x.uid}`))})))`);
+  // Aegis round 2 M2: the multiplexer socket dirs are write-denied too (no planted socket or renamed dir), and no unix
+  // socket may be BOUND in the shared temp dirs (only in the roots and the session's own TMPDIR)
+  lines.push(`(deny file-write* (subpath ${q(realpathLoose(`/private/tmp/tmux-${x.uid}`))}) ${screenDirs.map((d) => `(subpath ${q(d)})`).join(' ')})`);
+  lines.push(`(deny network-bind (local unix-socket (subpath "/private/tmp")) (local unix-socket (subpath "/private/var/tmp")))`);
   if (classes.has('unix-socket:screen')) lines.push(`(deny network-outbound ${screenDirs.map((d) => `(remote unix-socket (subpath ${q(d)}))`).join(' ')})`);
   if (classes.has('automation:apple-events')) lines.push('(deny appleevent-send)', `(deny mach-lookup ${APPLEEVENT_MACH_SERVICES.map((n) => `(global-name ${q(n)})`).join(' ')})`);
   if (classes.has('media:microphone')) lines.push('(deny device-microphone)');

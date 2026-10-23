@@ -106,7 +106,7 @@ import { claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MO
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { ALWAYS_ASK_TOOLS, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, SESSION_UUID_RE, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { ALWAYS_ASK_TOOLS, SESSION_CACHE_ENV, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, SESSION_UUID_RE, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { releaseSession, releaseSessionGrants, sessionSidFor } from '../../platform/win32/session-sandbox.js';
 import { privateToUser } from '../../platform/owner-only.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
@@ -420,6 +420,27 @@ interface Session {
    * it. While set, only the loop's own trust-card modeRefs auto-pass and every card carries the loop origin.
    */
   loopOrigin?: { loopId: string; runId: string; authoredBy: string; trustCard?: string };
+}
+
+/**
+ * Aegis round 2 (H, M2): the session's Gnomon-made dirs under the kernel's own temp dir (realpath'd): a 0700 TMPDIR per
+ * session (`gnomon-tmp/<hsid-short>`) and a 0700 tool cache per repo key (`gnomon-cache/<16 hex>`). Each level must be
+ * a real directory owned by this uid with no group/other bits (a link or a foreign dir is replaced only if absent; else thrown).
+ */
+export function sessionScratchDirs(hsid: string, repoKey: string, base: string = fs.realpathSync.native(os.tmpdir())): { tmp: string; cache: string } {
+  const mk = (p: string): string => {
+    try {
+      fs.mkdirSync(p, { mode: 0o700 });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    }
+    const st = fs.lstatSync(p);
+    if (st.isSymbolicLink() || !st.isDirectory() || (typeof process.getuid === 'function' && st.uid !== process.getuid()) || (st.mode & 0o077) !== 0) throw new Error(`#session-runner: ${p} is not a private directory of this user`);
+    return p;
+  };
+  const tmp = mk(path.join(mk(path.join(base, 'gnomon-tmp')), hsidShort(hsid)));
+  const cache = mk(path.join(mk(path.join(base, 'gnomon-cache')), repoKey.replace(/^sha256:/, '').slice(0, 16)));
+  return { tmp, cache };
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -822,6 +843,16 @@ export class SessionSupervisor {
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     // reviewer 9: the child's HOME IS the user home whose layers were scanned
     const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath, ...(this.#platform === 'win32' ? { tempDir: win32SessionTempDir(hsid) } : {}), ...(repoContextFor(this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS) ? { inject: REPO_CONTEXT_ENV } : {}) });
+    // Aegis round 2 (H, M1, M2, M6): a darwin Claude session gets a Gnomon-made 0700 TMPDIR of its own and a Gnomon-made
+    // tool cache per repo (never the human's ~/.npm, ~/.cache…), and Claude Code's non-essential traffic is off. The OS
+    // TMPDIR is kept for the screen-socket deny (osTmp).
+    const osTmp = env.TMPDIR;
+    const scratch = this.#platform === 'darwin' ? sessionScratchDirs(hsid, repoKeyOf([req.cwd, ...(req.worktree ? [req.worktree] : [])])) : null;
+    if (scratch) {
+      env.TMPDIR = scratch.tmp;
+      for (const [k, sub] of Object.entries(SESSION_CACHE_ENV)) env[k] = path.join(scratch.cache, sub);
+    }
+    if (this.#platform !== 'win32') env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
     let tracked = false;
@@ -875,6 +906,9 @@ export class SessionSupervisor {
         claudeSessionEnv: uuid, // Aegis H1: only THIS session's ~/.claude/session-env/<uuid> (Claude Code mkdirs it before any command hook)
         // T-2026-10-23-004: deny-by-default writes — the session's own TMPDIR (its per-user /private/var/folders dir) is writable
         ...(this.#platform !== 'win32' && env.TMPDIR ? { tmpdir: env.TMPDIR } : {}),
+        ...(scratch ? { sessionCache: scratch.cache } : {}),
+        // TEST RIG ONLY (allowScripts; the daemon never sets it): the fake claude writes its trace one level above its bin dir
+        ...(this.#o.allowScripts && this.#o.claudePath ? { testWriteAllow: [path.dirname(path.dirname(this.#o.claudePath))] } : {}),
       });
       // fail closed, reported: no transcript carve-back means this session cannot be resumed
       if (policy.allowWriteRefused) await this.#o.log('session.sandbox', { hsid, phase: 'transcripts-withheld', reason: policy.allowWriteRefused }, { session: hsid });
@@ -906,7 +940,7 @@ export class SessionSupervisor {
       const mcpServers = this.#gitVerbs ? { ...desk, [KERNEL_MCP_SERVER]: { ...KERNEL_MCP_ENTRY } } : desk;
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
       // the screen-socket deny follows the TMPDIR the session actually gets (the OS one), not the daemon's inherited one
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : (osTmp ?? env.TMPDIR)) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {
