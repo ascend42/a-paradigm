@@ -481,13 +481,17 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     expect(r.idx('session.open')).toBeLessThan(r.idx('permit.grant'));
     expect(r.idx('permit.grant')).toBeLessThan(r.idx('session.spawned'));
     const sb = r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload;
-    expect(sb).toMatchObject({ sandbox: 'full', profile: 'session' });
+    // Aegis round 2 M6: partial while network egress is open, and the session.sandbox row says why
+    expect(sb).toMatchObject({ sandbox: 'partial', profile: 'session' });
+    expect(JSON.stringify(sb)).toContain('network:egress open');
     expect(String(sb.profileHash)).toMatch(/^sha256:/);
     // the session's policy.json mirrors the denies (Claude's own rules, defence in depth)
     const pol = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', s.hsid.slice(18).toLowerCase(), 'policy.json'), 'utf8'));
     expect(pol.permissions.deny.length).toBeGreaterThan(5);
     // F7 (TD-2026-10-20-086): Claude returns to the project dir after each Bash command (matches the K1 anchor)
-    expect(pol.env).toEqual({ CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' });
+    expect(pol.env).toMatchObject({ CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' });
+    // Aegis round 2 H: the session's own cache, never the human's (the settings env block every tool process gets)
+    expect(String(pol.env.npm_config_cache)).toMatch(/\/gnomon-cache\/[0-9a-f]{16}\/npm$/);
   });
   it('T-2026-10-18-010 L4: the hooks switch reaches the argv — default audited ⇒ user; all ⇒ user,project,local; user-only ⇒ user; none ⇒ empty; logged on session.sandbox', async () => {
     for (const [mode, want] of [[undefined, 'user'], ['all', 'user,project,local'], ['user-only', 'user'], ['none', '']] as const) {

@@ -933,7 +933,11 @@ export class SessionSupervisor {
       // P8-D94: in `audited` mode only the repo hooks the human approved reach Claude, through policy.json
       const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req, repoCtx ? repoContextLines(repoCtx) : []) : [];
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
-      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy, this.#platform), ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
+      // Aegis round 2 H: the session cache vars also ride the settings env block Claude Code applies to every tool process,
+      // so a tool sees them even where Claude Code does not pass its own env through (belt and braces; p10m-write-allow)
+      const perms = claudePermissions(policy, this.#platform);
+      const cacheEnv = scratch ? Object.fromEntries(Object.keys(SESSION_CACHE_ENV).map((k) => [k, env[k]!])) : {};
+      fs.writeFileSync(policyPath, `${JSON.stringify({ ...perms, env: { ...perms.env, ...cacheEnv }, ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
       const distroServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {}; // verified generated (kernel output)
       const desk = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
       // #kernel-mcp: the kernel's own SDK server, last, so no distro or mod server can take its name

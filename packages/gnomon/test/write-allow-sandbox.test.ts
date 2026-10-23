@@ -96,6 +96,6 @@ describe.runIf(darwinFloor().ok)('deny-by-default session writes', () => {
     for (const x of [d.tmp, d.cache]) expect(fs.statSync(x).mode & 0o077).toBe(0);
     fs.chmodSync(d.cache, 0o755);
     expect(() => sessionScratchDirs('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', 'sha256:' + 'ab'.repeat(32), w!.root)).toThrow(/not a private directory/);
-    expect(Object.keys(SESSION_CACHE_ENV).sort()).toEqual(['BUN_INSTALL_CACHE_DIR', 'GOCACHE', 'GOMODCACHE', 'PIP_CACHE_DIR', 'XDG_CACHE_HOME', 'npm_config_cache']);
+    expect(Object.keys(SESSION_CACHE_ENV).sort()).toEqual(['BUN_INSTALL_CACHE_DIR', 'GOCACHE', 'GOMODCACHE', 'NPM_CONFIG_CACHE', 'PIP_CACHE_DIR', 'XDG_CACHE_HOME', 'npm_config_cache']);
   });
 });

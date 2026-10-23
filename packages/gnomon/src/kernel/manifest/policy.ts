@@ -271,7 +271,7 @@ export const WRITE_CACHE_PATHS: readonly string[] = Object.freeze([]);
  * by the human's npx). Each session gets a Gnomon-made cache per repo (SESSION_CACHE_ENV points the tools at it,
  * `sessionCache` is its write allow) and a Gnomon-made 0700 TMPDIR (`tmpdir`), both made by the supervisor.
  */
-export const SESSION_CACHE_ENV: Readonly<Record<string, string>> = Object.freeze({ npm_config_cache: 'npm', XDG_CACHE_HOME: 'xdg', PIP_CACHE_DIR: 'pip', GOCACHE: 'go-build', GOMODCACHE: 'go-mod', BUN_INSTALL_CACHE_DIR: 'bun' });
+export const SESSION_CACHE_ENV: Readonly<Record<string, string>> = Object.freeze({ npm_config_cache: 'npm', NPM_CONFIG_CACHE: 'npm', XDG_CACHE_HOME: 'xdg', PIP_CACHE_DIR: 'pip', GOCACHE: 'go-build', GOMODCACHE: 'go-mod', BUN_INSTALL_CACHE_DIR: 'bun' });
 /** Aegis round 2 M6: credential stores a session can neither read nor write (subpath / literal / prefix, under the user home). */
 export const CREDENTIAL_READ_DENY: ReadonlyArray<{ rel: string; match: PathMatch }> = Object.freeze([
   { rel: '.ssh', match: 'subpath' },

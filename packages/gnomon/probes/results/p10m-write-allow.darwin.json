@@ -10,37 +10,67 @@
   "evidence": {
     "claude": "2.1.309",
     "audit": {
-      "exit": 0,
-      "result": {
+      "exit": [
+        0,
+        0
+      ],
+      "first": {
         "isError": false,
-        "text": "ok",
-        "numTurns": 2
+        "text": "ok"
       },
+      "resumed": {
+        "isError": false,
+        "text": "ok"
+      },
+      "mcp": [
+        "probe:connected"
+      ],
+      "hookRan": true,
       "transcript": true,
       "controlWritten": true,
       "written": [
+        "~/.claude/skills/synced/<uuid>_<uuid>/.last-complete-round",
+        "~/.claude/skills/synced/<uuid>_<uuid>/manifest.json",
+        "~/.npm/_logs/2026-10-23T23_23_09_411Z-debug-0.log",
+        "~/.npm/_logs/2026-10-23T23_23_11_746Z-debug-0.log",
+        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-12-358Z.jsonl",
+        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-16-597Z.jsonl",
         "~/gnomon-probe-denied.txt"
       ],
       "stderr": ""
     },
     "enforce": {
-      "exit": 0,
-      "result": {
+      "exit": [
+        0,
+        0
+      ],
+      "first": {
         "isError": false,
-        "text": "ok",
-        "numTurns": 2
+        "text": "ok"
       },
+      "resumed": {
+        "isError": false,
+        "text": "ok"
+      },
+      "mcp": [
+        "probe:connected"
+      ],
+      "hookRan": true,
       "transcript": true,
       "controlWritten": false,
       "written": [],
       "stderr": ""
     },
-    "unexplained": [],
-    "note": "41 other files written in the same window by other processes on the host (browser, desktop apps, a shell, another repo fetch) were dropped from this record: they are not the session (the probe pid tree), and their paths are private."
+    "unexplained": [
+      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-12-358Z.jsonl",
+      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-16-597Z.jsonl"
+    ],
+    "note": "~/.npm/_logs entries are the probe runner's own npx tsx logs (their argv names npm exec tsx probes/run.mjs), not the session. The claude-cli-nodejs mcp-logs writes are Claude Code's MCP server logs: denied in the enforce run, and the MCP server still connected."
   },
   "specRefs": [
     "\u00a715.5 session profile",
-    "T-2026-10-23-004 deny-by-default writes"
+    "T-2026-10-23-004 deny-by-default writes",
+    "Aegis round 2 L4"
   ],
-  "at": "2026-10-23T22:43:12.018Z"
+  "at": "2026-10-23T23:25:18.816Z"
 }
