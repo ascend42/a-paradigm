@@ -140,6 +140,9 @@ export function credentialUseDenySbpl(x: Pick<DarwinSessionExtras, 'home' | 'age
     `(deny network-outbound (remote unix-socket (regex #"^/private/tmp/com\\.apple\\.launchd\\.[^/]+/")) (remote unix-socket (regex #"^${h}/Library/Group Containers/[^/]+/(t/)?agent\\.sock$")) ${lits.map((l) => `(remote unix-socket (path-literal ${q(l)}))`).join(' ')})`,
     `(deny file-write* (regex #"^/private/tmp/com\\.apple\\.launchd\\."))`,
     `(deny process-exec (regex #"/git-credential-osxkeychain$"))`,
+    // Aegis final H: the helper cannot be READ either (so never copied under another name and run: the copy keeps its
+    // signature and the keychain trusts it). The kernel's own pushes run unsandboxed and are not affected
+    `(deny file-read* (regex #"/git-credential-osxkeychain$"))`,
   ];
 }
 

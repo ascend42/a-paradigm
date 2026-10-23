@@ -63,7 +63,7 @@ ${conn('named', agentSock)}
 ${conn('onepassword', opSock)}
 ${conn('control', control)}
 (echo x > "${launchdDir}/planted") 2>/dev/null && echo "launchd_write=allowed" || echo "launchd_write=blocked"
-if [ -e "${helper}" ]; then (printf 'protocol=https\\nhost=github.com\\n\\n' | "${helper}" get) >/dev/null 2>&1; echo "keychain_helper_exit=$?"; cp "${helper}" ./git-credential-osxkeychain 2>/dev/null && (./git-credential-osxkeychain get </dev/null >/dev/null 2>&1; echo "keychain_copy_exit=$?"); fi
+${helper ? 'if true' : 'if false'}; then (printf 'protocol=https\\nhost=github.com\\n\\n' | "${helper}" get) >/dev/null 2>&1; echo "keychain_helper_exit=$?"; (cat "${helper}" >/dev/null 2>&1) && echo "keychain_read=allowed" || echo "keychain_read=blocked"; (cp "${helper}" ./x 2>/dev/null) && echo "keychain_cp=allowed" || echo "keychain_cp=blocked"; if [ -e ./x ]; then (./x get </dev/null >/dev/null 2>&1; echo "keychain_renamed_exit=$?"); else echo "keychain_renamed_exit=none"; fi; fi
 ${hostSock ? `SSH_AUTH_SOCK="${hostSock}" /usr/bin/ssh-add -l >/dev/null 2>&1; echo "host_agent_exit=$?"` : ''}
 `, { mode: 0o755 });
     const plan = sessionLaunchPlan({ policy, binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd], agentSockets: [agentSock] } }, 'darwin');
@@ -78,7 +78,10 @@ ${hostSock ? `SSH_AUTH_SOCK="${hostSock}" /usr/bin/ssh-add -l >/dev/null 2>&1; e
     // exec denied: the shell reports 126 (permission) — never a run that could reach the keychain
     if (helper) {
       expect(out.keychain_helper_exit).toBe('126');
-      expect(out.keychain_copy_exit).toBe('126');
+      // Aegis final H: unreadable, so no copy exists to run under another name
+      expect(out.keychain_read).toBe('blocked');
+      expect(out.keychain_cp).toBe('blocked');
+      expect(out.keychain_renamed_exit).toBe('none');
     }
     // the real host agent: ssh-add cannot reach it (2 = could not connect)
     if (hostSock) expect(out.host_agent_exit).toBe('2');
