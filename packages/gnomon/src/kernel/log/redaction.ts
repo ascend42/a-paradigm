@@ -117,11 +117,26 @@ function limitedView(e: EventV1): ProjectedEvent {
 
 /**
  * §9.3 cells a SESSION reader never sees in its own rows (T-2026-10-18-010):
- * `voice.turn.*.audioRef`. Such a row is projected as a limited view (the
+ * `voice.turn.*.audioRef`; a hook_response turn.event's `line` (Aegis L3). Such a row is projected as a limited view (the
  * field `{redacted: true}`, no hash/sig/prev/idem/refHash — no confirmation
  * oracle). Every other own-hsid row is full.
  */
-export const SESSION_NEVER_FIELDS: ReadonlyArray<{ kind: (k: string) => boolean; field: string }> = Object.freeze([{ kind: (k: string) => k.startsWith('voice.turn.'), field: 'audioRef' }]);
+/** A turn.event row holding hook output: a hook_response line, or Claude's synthetic user line (kernel-set `synthetic`). */
+function hookOutputRow(p: Record<string, unknown>): boolean {
+  // an older row has no kernel flag: a cheap, conservative look at the line (over-hiding only ever narrows a session's view)
+  return p.type === 'system.hook_response' || (p.type === 'user' && (p.synthetic === true || (typeof p.line === 'string' && p.line.includes('"isSynthetic":true'))));
+}
+
+export const SESSION_NEVER_FIELDS: ReadonlyArray<{ kind: (k: string) => boolean; field: string; when?: (p: Record<string, unknown>) => boolean }> = Object.freeze([
+  { kind: (k: string) => k.startsWith('voice.turn.'), field: 'audioRef' },
+  // Aegis L3 (2026-10-23, --include-hook-events): a hook_response line carries the hook's stdout / stderr / output (project
+  // context, hook messages). A session never reads them back, even in its own hsid: the row's `line` is redacted; the
+  // kernel-set `hook` facts (id, event, name, exit, outcome, blocked) stay
+  // Claude's synthetic user line (Stop hook feedback, `synthetic: true` set by the kernel) carries the same output
+  { kind: (k: string) => k === 'turn.event', field: 'line', when: hookOutputRow },
+  // …and the received line's digest with it (no confirmation oracle over the hidden output)
+  { kind: (k: string) => k === 'turn.event', field: 'lineHash', when: hookOutputRow },
+]);
 
 function hasField(p: unknown, f: string): boolean {
   return !!p && typeof p === 'object' && Object.hasOwn(p, f) && (p as Record<string, unknown>)[f] !== undefined;
@@ -178,7 +193,7 @@ export function projectForReader(e: EventV1, reader: ReaderClass, storedLabel?: 
     case 'session': {
       if (e.session !== reader.hsid) return undefined;
       // §9.3 session row: voice.turn.*.audioRef is `never`, even in its own hsid (T-2026-10-18-010) — a limited view of that row
-      const never = SESSION_NEVER_FIELDS.filter((f) => f.kind(e.kind) && hasField(e.payload, f.field));
+      const never = SESSION_NEVER_FIELDS.filter((f) => f.kind(e.kind) && hasField(e.payload, f.field) && (!f.when || f.when(e.payload as Record<string, unknown>)));
       if (never.length) {
         const v = limitedView(e);
         const payload = { ...(v.payload as Record<string, unknown>) };

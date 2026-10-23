@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { assertArgv, assertNoForbiddenFlags, buildClaudeArgv, cardKindOfTool, repoContextFor, SESSION_HOOKS_MODES, controlInterruptLine, FORBIDDEN_FLAGS, ForbiddenFlagError, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../src/adapters/claude-code/adapter.js';
+import { assertArgv, assertNoForbiddenFlags, buildClaudeArgv, HOOK_OUTPUT_INLINE_CAP, hookFactsOf, hookStoredLine, stopHookBlocked, syntheticStoredLine, cardKindOfTool, repoContextFor, SESSION_HOOKS_MODES, controlInterruptLine, FORBIDDEN_FLAGS, ForbiddenFlagError, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../src/adapters/claude-code/adapter.js';
 import { buildSessionEnv, ENV_ALLOWLIST } from '../src/kernel/runner/env.js';
 import { PKG_ROOT } from './helpers.js';
 
@@ -27,6 +27,50 @@ describe('G-RUN-01 argv and forbidden flags', () => {
     expect(a[a.indexOf('--setting-sources') + 1]).toBe('user,project,local');
     expect(a[a.indexOf('--settings') + 1]).toBe('/s/policy.json');
     expect(buildClaudeArgv({ ...base, resume: true })).toContain('--resume');
+  });
+  it('Aegis M2: hookFactsOf reads a hook line (claude 2.1.309 shapes); stopHookBlocked is exact', () => {
+    const r = (o: Record<string, unknown>) => JSON.stringify({ type: 'system', subtype: 'hook_response', hook_id: 'h1', hook_name: 'PreToolUse:Bash', hook_event: 'PreToolUse', output: '', stdout: '', stderr: '', exit_code: 0, outcome: 'success', ...o });
+    expect(hookFactsOf(r({}))).toEqual({ id: 'h1', event: 'PreToolUse', name: 'PreToolUse:Bash', exit: 0, outcome: 'success', blocked: false });
+    expect(hookFactsOf(r({ exit_code: 2, outcome: 'error', stderr: 'x'.repeat(100_000) }))?.blocked).toBe(true);
+    expect(hookFactsOf(r({ stdout: JSON.stringify({ decision: 'block', pad: 'p'.repeat(100_000) }) }))?.blocked).toBe(true);
+    expect(hookFactsOf(r({ exit_code: 1, outcome: 'cancelled' }))).toMatchObject({ exit: 1, outcome: 'cancelled', blocked: false });
+    expect(hookFactsOf(JSON.stringify({ type: 'system', subtype: 'hook_started', hook_id: 'h1', hook_name: 'Stop', hook_event: 'Stop' }))).toEqual({ id: 'h1', event: 'Stop', name: 'Stop', exit: null, outcome: null, blocked: false });
+    // a hostile name is dropped, never stored as a fact
+    expect(hookFactsOf(r({ hook_name: 'a\u202eb', hook_id: 'x'.repeat(200) }))).toMatchObject({ id: null, name: null });
+    expect(hookFactsOf('{"type":"assistant"}')).toBeNull();
+    expect(hookFactsOf('not json')).toBeNull();
+    expect(stopHookBlocked({ exit_code: 1, stdout: '{"decision":"block"}' })).toBe(false);
+    expect(stopHookBlocked({ exit_code: 0, stdout: '{"decision":"approve"}' })).toBe(false);
+  });
+  it('Aegis L2: hookStoredLine keeps hook output inline up to the cap, else {bytes, sha256}; drops output = stdout + stderr', () => {
+    const at = HOOK_OUTPUT_INLINE_CAP;
+    const line = JSON.stringify({ type: 'system', subtype: 'hook_response', hook_id: 'h', stdout: 's'.repeat(at), stderr: 'e'.repeat(at + 1), output: 'other', exit_code: 0 });
+    const k = hookStoredLine(line, (t) => ({ text: t.replace('other', 'OTHER'), count: t.includes('other') ? 1 : 0 }))!;
+    const o = JSON.parse(k.line);
+    expect(o.stdout).toBe('s'.repeat(at));
+    expect(o.stderr).toEqual({ bytes: at + 1, sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) });
+    expect(o.output).toBe('OTHER');
+    expect(k).toMatchObject({ hashed: ['stderr'], dropped: [], redacted: 1 });
+    expect(hookStoredLine(JSON.stringify({ type: 'system', subtype: 'hook_response', stdout: 'a', stderr: 'b', output: 'ab' }))!.dropped).toEqual(['output']);
+    expect(hookStoredLine(JSON.stringify({ type: 'system', subtype: 'hook_started' }))).toBeNull();
+  });
+  it('Aegis 2026-10-23: syntheticStoredLine keeps only a synthetic user line like hook output', () => {
+    const syn = JSON.stringify({ type: 'user', message: { role: 'user', content: 'Stop hook feedback:\nr' }, isSynthetic: true });
+    expect(JSON.parse(syntheticStoredLine(syn, (t) => ({ text: t.toUpperCase(), count: 1 }))!.line).message.content).toBe('STOP HOOK FEEDBACK:\nR');
+    const big = JSON.stringify({ type: 'user', message: { role: 'user', content: 'x'.repeat(HOOK_OUTPUT_INLINE_CAP + 1) }, isSynthetic: true });
+    expect(JSON.parse(syntheticStoredLine(big)!.line).message.content).toMatchObject({ bytes: HOOK_OUTPUT_INLINE_CAP + 1 });
+    expect(syntheticStoredLine(JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' }, isReplay: true }))).toBeNull();
+    expect(syntheticStoredLine(JSON.stringify({ type: 'user', message: { content: 'hi' }, isSynthetic: 'yes' }))).toBeNull();
+  });
+  it('founder 2026-10-23: --include-hook-events is passed exactly once (the GUI names the hook a turn waits on)', () => {
+    const a = buildClaudeArgv({ ...base });
+    expect(a.filter((x) => x === '--include-hook-events')).toHaveLength(1);
+    expect(a.indexOf('--include-hook-events')).toBe(a.indexOf('--include-partial-messages') + 1);
+    // the grammar requires it and refuses a second copy (it is kernel-owned, never an extra)
+    expect(() => assertArgv(a.filter((x) => x !== '--include-hook-events'))).toThrow(TypeError);
+    expect(() => buildClaudeArgv({ ...base, extra: ['--include-hook-events'] })).toThrow(TypeError);
+    // a hook line is an unknown system subtype to the adapter: logged as a turn.event, never acted on
+    expect(parseStreamLine(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_id: 'h', hook_name: 'Stop', hook_event: 'Stop', output: 'x', stdout: 'x', stderr: '', exit_code: 0, outcome: 'success' }))).toEqual({ kind: 'unknown', type: 'system.hook_response' });
   });
   it.each([...FORBIDDEN_FLAGS])('%s throws (also in --flag=value form, also as an extra)', (flag) => {
     expect(() => buildClaudeArgv({ ...base, extra: [flag] })).toThrow(ForbiddenFlagError);

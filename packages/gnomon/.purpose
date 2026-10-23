@@ -2549,9 +2549,13 @@ components:
       evaluated); turn.result keeps the text of a newer turn's message.
       Review R2: a message_delta end_turn is evaluated at its message_stop; a
       new main-chain message in an evaluated turn before its turn.result (a
-      Stop-hook continuation) or a blocking Stop hook_response (re-review
-      M-4: exact match outcome blocked | decision block | exit_code 2;
-      speculative, hook_response needs --include-hook-events) retires the
+      Stop-hook continuation) or a blocking Stop hook_response
+      (stopHookBlocked, founder 2026-10-23: buildClaudeArgv passes
+      --include-hook-events, so the lines arrive; measured on claude 2.1.309
+      the block is exit_code 2 or exit 0 with stdout JSON decision block,
+      never a top-level decision or outcome 'blocked'; cancelled = a timeout
+      and exit 1 never block; Aegis M2: the kernel row's hook facts decide
+      first, the line is parsed only for a row without them) retires the
       shown offer and re-opens the turn; replay lines (isReplay) mark turns
       started, so the stream's turn is exact and a turn folded into a later
       one settles without a row. Re-review L-1: with replay lines an
@@ -4585,7 +4589,29 @@ components:
       and the result only its remainder; 4 MiB line cap; the stdin user and
       control_request interrupt lines. fixtures/2.1.302-turn.jsonl replays
       the shapes p10m-claude-compat-generated observed (G-ADP-01, synthetic;
-      recorded nightly replay is slice 2).
+      recorded nightly replay is slice 2). Founder 2026-10-23:
+      --include-hook-events (kernel-owned, exactly once, never an extra):
+      system.hook_started{hook_id, hook_name, hook_event} and
+      system.hook_response{…, output, stdout, stderr, exit_code, outcome}
+      (claude 2.1.309; no command, no duration) parse as `unknown` and are
+      turn.event rows like every line (the sensitive kind's redaction, big
+      lines by hash); #gui-turn-steps reads them, the kernel acts only on a
+      blocking Stop response (#offer-router). Aegis 2026-10-23: M2
+      hookFactsOf reads {id, event, name, exit, outcome, blocked} from the
+      FULL line and #supervisor logs it as turn.event.hook (kernel-set, also
+      when the line goes by hash); stopHookBlocked lives here. L2
+      hookStoredLine: a hook_response's stdout / stderr / output stay inline
+      only up to HOOK_OUTPUT_INLINE_CAP (4 KB) each, redacted by trace's
+      redactText, else {bytes, sha256}; output = stdout + stderr is dropped;
+      the row adds lineHash, bytes and lineKept{hashed, dropped, redacted}.
+      L3 (#kernel-log redaction.ts): SESSION_NEVER_FIELDS hides a
+      hook_response row's line and lineHash from a session reader, even its
+      own (the hook facts stay). Claude's synthetic user line (Stop hook
+      feedback, isSynthetic) is hook output too: syntheticStoredLine caps
+      and redacts each text block the same way, the row says
+      `synthetic: true`, and the session-reader rule hides its line and
+      lineHash (an older row is matched by "isSynthetic":true in the line);
+      a real user line is stored as received.
     path: src/adapters/claude-code/
     type: module
     tags: [gnomon, adapter, stream-json, paradigm-8, m1.7]

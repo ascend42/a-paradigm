@@ -14,7 +14,7 @@
  *      fallback only for a turn whose end was not seen (no partial messages, max_tokens). Review R2: a message_delta
  *      end_turn is evaluated at that message's message_stop (an assistant line carrying end_turn, with no partial
  *      stream, at once); a new main-chain message in the same turn before its turn.result (a Stop-hook continuation),
- *      or a Stop hook_response that blocked (speculative: emitted only under --include-hook-events, re-review M-4), retires the turn's shown offer and the continuation's own end is
+ *      or a Stop hook_response that blocked (exit 2 or stdout JSON decision block; claude 2.1.309 under --include-hook-events), retires the turn's shown offer and the continuation's own end is
  *      evaluated instead. Review R1: the end belongs to the turn the stream is in (with replay lines, the newest turn
  *      Claude Code consumed; else the oldest outstanding turn not yet evaluated); a turn folded into a later one
  *      (its replay came first) settles without a row. turn.result{turn} closes every turn up to it. The text of the FINAL
@@ -58,7 +58,7 @@ import {
   type OfferSuppressReason,
   type OfferSpecV1,
 } from '@a-company/gnomon-contracts';
-import { parseStreamLine } from '../../adapters/claude-code/adapter.js';
+import { parseStreamLine, stopHookBlocked } from '../../adapters/claude-code/adapter.js';
 import { RpcRefusal } from '../socket/rpc.js';
 import { deskGuidance } from './desk-guidance.js';
 import { serverNameOf, type DeskMod } from './mcp-passthrough.js';
@@ -218,13 +218,12 @@ function chainLine(line: string): ChainLine | null {
   }
   if (o.type === 'system' && o.subtype === 'init') return { msgId: null, start: false, text: null, stop: null, init: true };
   if (o.type === 'system' && o.subtype === 'hook_response' && o.hook_event === 'Stop') {
-    // re-review M-4: SPECULATIVE with today's argv. Probe p-replay-order (claude 2.1.305): Claude Code writes
-    // hook_response lines only under --include-hook-events, which buildClaudeArgv does not pass; a blocking Stop hook
-    // shows as a non-replay user line (the hook's feedback) and a new main-chain message_start, which the new-message
-    // path below retires. Under the flag a block is {exit_code: 2, outcome: 'error'}. The match is exact: a loose
-    // /block/i matched 'non-blocking'.
-    const blocked = o.outcome === 'blocked' || o.decision === 'block' || o.exit_code === 2;
-    return blocked ? { msgId: null, start: false, text: null, stop: null, hookBlock: true } : null;
+    // founder 2026-10-23: buildClaudeArgv passes --include-hook-events, so these lines arrive. Measured on claude
+    // 2.1.309 (scratch session, read only): the line has NO top-level decision and the outcome is success | error |
+    // cancelled, never 'blocked'. A block is exit_code 2 (outcome error, the reason on stderr) or exit 0 with stdout a
+    // JSON object whose decision is 'block' (outcome success). A timeout is outcome cancelled (exit_code 1) and does not
+    // block; exit 1 is a non-blocking error. The match stays exact: a loose /block/i matched 'non-blocking'.
+    return stopHookBlocked(o) ? { msgId: null, start: false, text: null, stop: null, hookBlock: true } : null;
   }
   if (o.type === 'assistant') {
     const m = isObj(o.message) ? o.message : {};
@@ -400,6 +399,14 @@ export class OfferRouter {
       return [];
     }
     if (e.kind === 'turn.event') {
+      // Aegis M2: the kernel's hook facts (taken from the FULL line, set even when the line is stored by hash) decide a
+      // Stop hook block first; the line is parsed only for a row without them (an older log)
+      const hook = this.#kernel(e) && p.type === 'system.hook_response' && isObj(p.hook) ? p.hook : null;
+      if (hook) {
+        if (hook.event !== 'Stop' || hook.blocked !== true) return [];
+        const retired = this.#reopen(s, s.turns.find((t) => t.id === s.msgTurn));
+        return retired ? [retired] : [];
+      }
       if (typeof p.line !== 'string') return [];
       const out = this.#kept(hsid, s, p.line);
       const c = chainLine(p.line);

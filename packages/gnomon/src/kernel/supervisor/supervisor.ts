@@ -117,7 +117,7 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, planSessionPath, sessionIdentity, sessionNodeDir, sessionPathFor, type SessionIdentity } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
+import { buildClaudeArgv, hookFactsOf, hookStoredLine, syntheticStoredLine, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
 import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, inputHash, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
@@ -126,7 +126,7 @@ import type { LocalProbeSink } from '../local/config-request.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
-import { openTraceStream, redactArgv, TRACE_DRAIN_FLUSH_MS, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
+import { openTraceStream, redactArgv, redactText, TRACE_DRAIN_FLUSH_MS, TraceRefused, type TraceOpenOptions, type TraceStream } from '../trace/capture.js';
 import { traceModeOf } from '../trace/mode.js';
 import { autoBashReadOnly, autoEditPass, READ_ONLY_ASK_MODE_REF, READ_ONLY_MODE_REF } from './auto-edits.js';
 import { manualHolds } from '../broker/run-mode.js';
@@ -1151,11 +1151,25 @@ export class SessionSupervisor {
   async #onLine(s: Session, line: string): Promise<void> {
     const ev = parseStreamLine(line);
     const bytes = Buffer.byteLength(line);
+    // Aegis M2: a hook line's facts (id, event, name, exit, outcome, blocked) come from the FULL line, before it is
+    // stored by hash or rewritten, and ride as kernel-set fields: a hook printing past EVENT_LINE_CAP cannot hide a block
+    const hook = ev.type === 'system.hook_started' || ev.type === 'system.hook_response' ? hookFactsOf(line) : null;
+    // Aegis L2: a hook_response keeps its stdout / stderr / output inline only up to HOOK_OUTPUT_INLINE_CAP each,
+    // secret-shaped spans redacted (trace's redactText), else {bytes, sha256}; output dropped when it is stdout + stderr.
+    // The row then carries the received line's hash and size too (S2 evidence; a traced session has the raw line)
+    // Aegis 2026-10-23: Claude's synthetic user line (Stop hook feedback: the hook's reason fed back to the model) is
+    // hook output too: the same cap and redaction, and the row says `synthetic: true` (the session-reader rule keys on it)
+    const kept = ev.type === 'system.hook_response' ? hookStoredLine(line, (t) => redactText(t)) : ev.kind === 'user' ? syntheticStoredLine(line, (t) => redactText(t)) : null;
+    const synthetic = ev.kind === 'user' && kept !== null;
+    const stored = kept?.line ?? line;
     // S2: every driver event is a turn.event before anything acts on it; big lines by hash (Aegis M3)
     await this.#o.log('turn.event', {
       hsid: s.hsid, type: ev.type, seq: ++s.seq,
       // Aegis A4: a control_request line (can_use_tool carries the tool input) is logged by hash only, never its text
-      ...(bytes > EVENT_LINE_CAP || ev.type.startsWith('control_request') ? { lineHash: sha(line), bytes } : { line }),
+      ...(Buffer.byteLength(stored) > EVENT_LINE_CAP || ev.type.startsWith('control_request') ? { lineHash: sha(line), bytes } : { line: stored }),
+      ...(kept ? { lineHash: sha(line), bytes, lineKept: { ...(kept.hashed.length ? { hashed: kept.hashed } : {}), ...(kept.dropped.length ? { dropped: kept.dropped } : {}), ...(kept.redacted ? { redacted: kept.redacted } : {}) } } : {}),
+      ...(hook ? { hook } : {}),
+      ...(synthetic ? { synthetic: true } : {}),
       ...(ev.kind === 'init' ? { apiKeySource: ev.apiKeySource ?? 'absent' } : {}),
     }, { session: s.hsid });
     const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {

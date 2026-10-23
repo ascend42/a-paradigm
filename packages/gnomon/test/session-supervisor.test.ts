@@ -677,6 +677,59 @@ describe.skipIf(!SANDBOX_OK)('round 2: reviewer + Aegis conditions', () => {
     expect(big.line).toBeUndefined();
     expect(big.bytes as number).toBeGreaterThan(70_000);
   });
+  it('Aegis M2 + L2 (--include-hook-events): hook facts come from the FULL line; hook output is capped, hashed, redacted', async () => {
+    const r = rig();
+    const big = 'reason line one\n' + 'x'.repeat(70_000);
+    const hr = (id: string, o: Record<string, unknown>) => ({ type: 'system', subtype: 'hook_response', hook_id: id, hook_name: 'Stop', hook_event: 'Stop', output: '', stdout: '', stderr: '', exit_code: 0, outcome: 'success', session_id: 's', ...o });
+    const key = 'sk-ant-' + 'a'.repeat(24);
+    setMode(w, {
+      extraLines: [
+        { type: 'system', subtype: 'hook_started', hook_id: 'h1', hook_name: 'Stop', hook_event: 'Stop', session_id: 's' },
+        // a Stop hook that blocks with 70 KB of stderr: the line is over EVENT_LINE_CAP before the cap, the block still reaches the row
+        hr('h1', { output: big, stderr: big, exit_code: 2, outcome: 'error' }),
+        // a JSON block padded past the cap: stdout is hashed, the block is still seen
+        hr('h2', { stdout: JSON.stringify({ decision: 'block', reason: 'r', pad: 'y'.repeat(70_000) }) }),
+        // small output: inline, secret-shaped spans redacted, output (= stdout + stderr) dropped
+        hr('h3', { stdout: `token ${key}\n`, stderr: 'warn\n', output: `token ${key}\nwarn\n` }),
+        // Claude's synthetic feedback line: kept like hook output (one small block redacted, one big block hashed)
+        { type: 'user', message: { role: 'user', content: [{ type: 'text', text: `Stop hook feedback:\n[sh b.sh]: use ${key}` }, { type: 'text', text: 'z'.repeat(5000) }] }, isSynthetic: true },
+        // a real (non-synthetic) user line is stored as received
+        { type: 'user', message: { role: 'user', content: [{ type: 'text', text: `mine ${key}` }] } },
+      ],
+    });
+    await open(r.sup);
+    const rows = (): Array<Record<string, unknown>> => r.kinds('turn.event').map((x) => x.payload).filter((p) => p.type === 'system.hook_response');
+    expect(await waitFor(() => rows().length === 3)).toBe(true);
+    const [h1, h2, h3] = rows() as Array<Record<string, any>>;
+    expect(h1!.hook).toEqual({ id: 'h1', event: 'Stop', name: 'Stop', exit: 2, outcome: 'error', blocked: true });
+    expect(h1!.lineHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(h1!.bytes).toBeGreaterThan(140_000);
+    // the kept line is small: stderr is {bytes, sha256}, output (= stdout + stderr) dropped
+    const k1 = JSON.parse(h1!.line);
+    expect(k1.stderr).toEqual({ bytes: Buffer.byteLength(big), sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) });
+    expect(k1).not.toHaveProperty('output');
+    expect(h1!.lineKept).toEqual({ hashed: ['stderr'], dropped: ['output'] });
+    expect(h2!.hook).toMatchObject({ id: 'h2', exit: 0, blocked: true });
+    expect(JSON.parse(h2!.line).stdout).toMatchObject({ bytes: expect.any(Number) });
+    expect(h3!.hook).toMatchObject({ id: 'h3', blocked: false });
+    expect(h3!.line).not.toContain(key);
+    expect(JSON.parse(h3!.line)).toMatchObject({ stdout: 'token [redacted:anthropic-key]\n', stderr: 'warn\n' });
+    expect(h3!.lineKept).toEqual({ dropped: ['output'], redacted: 1 });
+    const users = (): Array<Record<string, any>> => r.kinds('turn.event').map((x) => x.payload as Record<string, any>).filter((p) => p.type === 'user' && typeof p.line === 'string' && /Stop hook feedback|mine /.test(p.line));
+    expect(await waitFor(() => users().length === 2)).toBe(true);
+    const [syn, mine] = users();
+    expect(syn!.synthetic).toBe(true);
+    const content = JSON.parse(syn!.line).message.content;
+    expect(content[0].text).toBe('Stop hook feedback:\n[sh b.sh]: use [redacted:anthropic-key]');
+    expect(content[1].text).toEqual({ bytes: 5000, sha256: expect.stringMatching(/^sha256:/) });
+    expect(syn!.lineKept).toEqual({ hashed: ['content.1'], redacted: 1 });
+    expect(syn!.lineHash).toMatch(/^sha256:/);
+    expect(mine!).not.toHaveProperty('synthetic');
+    expect(mine!).not.toHaveProperty('lineKept');
+    expect(mine!.line).toContain(`mine ${key}`);
+    // a hook_started row carries its facts too
+    expect(r.kinds('turn.event').find((x) => x.payload.type === 'system.hook_started' && (x.payload.hook as Record<string, unknown> | undefined)?.id === 'h1')!.payload.hook).toEqual({ id: 'h1', event: 'Stop', name: 'Stop', exit: null, outcome: null, blocked: false });
+  });
   it('reviewer 7: turn permits are FIFO — each result releases the head only', async () => {
     const r = rig();
     const s = await open(r.sup);

@@ -6,7 +6,8 @@
  * stream-json (it is not a published contract, §2.2).
  *
  *   buildClaudeArgv — the §3.3 argv: `-p`, stream-json in and out, verbose,
- *     replayed user messages, partial messages, `--permission-mode default`,
+ *     replayed user messages, partial messages, hook events (`--include-hook-events`:
+ *     hook_started / hook_response lines, probed on claude 2.1.309), `--permission-mode default`,
  *     `--permission-prompts host --permission-prompt-tool stdio` (P8-D96: the
  *     tool-permission channel; probe p01b found `host` ALONE delivers no
  *     request, and `none` wins over `stdio`; any other value or a second copy
@@ -50,7 +51,7 @@
  *     ever carries `updatedPermissions`, and Claude's `permission_suggestions`
  *     are never read: every rule lives in the kernel log.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { claudeModelProblem, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 
 export const FORBIDDEN_FLAGS = Object.freeze(['--dangerously-skip-permissions', '--allowedTools', '--allowed-tools', '--bare']);
@@ -166,6 +167,7 @@ export const ARGV_GRAMMAR: Readonly<Record<string, FlagSpec>> = Object.freeze({
   '--verbose': { arity: 0, min: 1, max: 1 },
   '--replay-user-messages': { arity: 0, min: 1, max: 1 },
   '--include-partial-messages': { arity: 0, min: 1, max: 1 },
+  '--include-hook-events': { arity: 0, min: 1, max: 1 },
   '--permission-mode': { arity: 1, min: 1, max: 1 },
   '--permission-prompts': { arity: 1, min: 1, max: 1 },
   '--permission-prompt-tool': { arity: 1, min: 1, max: 1 },
@@ -238,6 +240,10 @@ export function buildClaudeArgv(i: ClaudeArgvInput): string[] {
     '--verbose',
     '--replay-user-messages',
     '--include-partial-messages',
+    // founder 2026-10-23: hook_started / hook_response lines (hook_id, hook_name, hook_event; the response adds output,
+    // stdout, stderr, exit_code, outcome), so the GUI can say a Stop hook is what the turn waits on. They are turn.event
+    // rows like every line (sensitive kind, big lines by hash); nothing else reads their output
+    '--include-hook-events',
     '--permission-mode', 'default',
     '--permission-prompts', PERMISSION_PROMPTS,
     '--permission-prompt-tool', PERMISSION_PROMPT_TOOL,
@@ -456,6 +462,126 @@ export function parseStreamLine(line: string): AdapterEvent {
     default:
       return { kind: 'unknown', type };
   }
+}
+
+/* ── hook lines (--include-hook-events; shapes measured on claude 2.1.309) ───────────────────────────────── */
+
+/**
+ * The kernel's facts about one hook line, read from the FULL line before the line is stored (Aegis M2: a hook that
+ * prints past EVENT_LINE_CAP pushes its line to hash-only storage, so a reader of the stored row could not see a block).
+ * The supervisor logs them as `turn.event.hook`; readers use them first and parse the line only as a fallback.
+ */
+export interface HookFacts {
+  id: string | null;
+  event: string | null;
+  name: string | null;
+  /** hook_response only: the exit code and Claude's outcome (success | error | cancelled) */
+  exit: number | null;
+  outcome: string | null;
+  /** hook_response only: the hook blocked (exit 2, or exit 0 with stdout JSON `{decision: 'block'}`) */
+  blocked: boolean;
+}
+
+/** Per hook output field (stdout, stderr, output): kept inline up to this many bytes, above it `{bytes, sha256}` (Aegis L2). */
+export const HOOK_OUTPUT_INLINE_CAP = 4096;
+
+/** A hook_response that blocked (claude 2.1.309): exit 2, or exit 0 (or none) with stdout a JSON object whose decision is 'block'. */
+export function stopHookBlocked(o: Record<string, unknown>): boolean {
+  if (o.exit_code === 2) return true;
+  if (o.exit_code !== 0 && o.exit_code !== undefined) return false;
+  const out = typeof o.stdout === 'string' ? o.stdout.trim() : '';
+  if (!out.startsWith('{')) return false; // the line itself is bounded by the splitter's cap
+  try {
+    return obj(JSON.parse(out))?.decision === 'block';
+  } catch {
+    return false;
+  }
+}
+
+const factStr = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length > 0 && v.length <= max && /^[\x20-\x7e]+$/.test(v) ? v : null);
+
+/** The facts of a system.hook_started / hook_response line, or null for any other line. */
+export function hookFactsOf(line: string): HookFacts | null {
+  let o: Record<string, unknown> | null;
+  try {
+    o = obj(JSON.parse(line));
+  } catch {
+    return null;
+  }
+  if (!o || o.type !== 'system' || (o.subtype !== 'hook_started' && o.subtype !== 'hook_response')) return null;
+  const resp = o.subtype === 'hook_response';
+  const exit = resp && typeof o.exit_code === 'number' && Number.isSafeInteger(o.exit_code) ? o.exit_code : null;
+  return { id: factStr(o.hook_id, 128), event: factStr(o.hook_event, 64), name: factStr(o.hook_name, 128), exit, outcome: resp ? factStr(o.outcome, 32) : null, blocked: resp && stopHookBlocked(o) };
+}
+
+/**
+ * Aegis L2: the hook_response line as the log keeps it. stdout, stderr and output stay inline up to
+ * HOOK_OUTPUT_INLINE_CAP bytes each (after `redact`), above it `{bytes, sha256}`; `output` is dropped when it is exactly
+ * stdout + stderr (Claude writes both). Null for any other line (it is stored as received).
+ */
+export function hookStoredLine(line: string, redact: (s: string) => { text: string; count: number } = (t) => ({ text: t, count: 0 })): { line: string; redacted: number; hashed: string[]; dropped: string[] } | null {
+  let o: Record<string, unknown> | null;
+  try {
+    o = obj(JSON.parse(line));
+  } catch {
+    return null;
+  }
+  if (!o || o.type !== 'system' || o.subtype !== 'hook_response') return null;
+  const out = { ...o };
+  let redacted = 0;
+  const hashed: string[] = [];
+  const dropped: string[] = [];
+  if (typeof o.output === 'string' && typeof o.stdout === 'string' && typeof o.stderr === 'string' && o.output === o.stdout + o.stderr) {
+    delete out.output;
+    dropped.push('output');
+  }
+  for (const f of ['stdout', 'stderr', 'output'] as const) {
+    const v = out[f];
+    if (typeof v !== 'string') continue;
+    const bytes = Buffer.byteLength(v);
+    if (bytes > HOOK_OUTPUT_INLINE_CAP) {
+      out[f] = { bytes, sha256: `sha256:${createHash('sha256').update(v).digest('hex')}` };
+      hashed.push(f);
+    } else {
+      const r = redact(v);
+      redacted += r.count;
+      out[f] = r.text;
+    }
+  }
+  return { line: JSON.stringify(out), redacted, hashed, dropped };
+}
+
+/**
+ * Aegis 2026-10-23: Claude's SYNTHETIC user line (`isSynthetic: true`, e.g. "Stop hook feedback:\n[<command>]: <reason>")
+ * carries hook output fed back to the model, so it is kept like hook output: each text block's text inline up to
+ * HOOK_OUTPUT_INLINE_CAP bytes (after `redact`), above it `{bytes, sha256}`. Null for any other line: a real user line
+ * (the human's replay, tool results) is stored as received.
+ */
+export function syntheticStoredLine(line: string, redact: (s: string) => { text: string; count: number } = (t) => ({ text: t, count: 0 })): { line: string; redacted: number; hashed: string[]; dropped: string[] } | null {
+  let o: Record<string, unknown> | null;
+  try {
+    o = obj(JSON.parse(line));
+  } catch {
+    return null;
+  }
+  if (!o || o.type !== 'user' || o.isSynthetic !== true) return null;
+  const m = obj(o.message);
+  if (!m) return null;
+  let redacted = 0;
+  const hashed: string[] = [];
+  const keep = (t: string, where: string): unknown => {
+    const bytes = Buffer.byteLength(t);
+    if (bytes > HOOK_OUTPUT_INLINE_CAP) {
+      hashed.push(where);
+      return { bytes, sha256: `sha256:${createHash('sha256').update(t).digest('hex')}` };
+    }
+    const r = redact(t);
+    redacted += r.count;
+    return r.text;
+  };
+  const c = m.content;
+  const content = typeof c === 'string' ? keep(c, 'content') : Array.isArray(c) ? c.map((b, i) => (obj(b)?.type === 'text' && typeof obj(b)!.text === 'string' ? { ...obj(b)!, text: keep(obj(b)!.text as string, `content.${i}`) } : b)) : c;
+  return { line: JSON.stringify({ ...o, message: { ...m, content } }), redacted, hashed, dropped: [] };
 }
 
 /** A control_response error made safe to show: sanitised (§4.5), one line, at most 256 characters. */

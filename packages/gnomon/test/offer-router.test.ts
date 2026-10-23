@@ -680,22 +680,58 @@ describe('#offer-router: a Stop-hook continuation replaces the evaluation (revie
     u.commit(sent(2));
     expect(reply(u, 'msg_1', offerReply('a', BLOCK)).map((r) => r.kind)).toEqual(['offer.shown']);
   });
-  it('re-review M-4: the Stop hook block match is exact (outcome blocked, decision block or exit_code 2)', () => {
-    const hook = (o: Record<string, unknown>) => ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', ...o }));
+  it('founder 2026-10-23: the Stop hook block match is exact, on the shapes claude 2.1.309 writes under --include-hook-events', () => {
+    const hook = (o: Record<string, unknown>) => ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_id: 'h1', hook_name: 'Stop', hook_event: 'Stop', output: '', stdout: '', stderr: '', ...o }));
+    const block = '{"decision":"block","reason":"JSON reason first line\\nmore"}\n';
     for (const [o, retires] of [
-      [{ outcome: 'blocked' }, true],
-      [{ decision: 'block' }, true],
-      [{ exit_code: 2, outcome: 'error' }, true],
-      [{ outcome: 'non-blocking' }, false],
-      [{ outcome: 'Blocked by policy' }, false],
+      // exit 2: the reason on stderr (measured)
+      [{ exit_code: 2, outcome: 'error', stderr: 'Please also say banana.\n' }, true],
+      // exit 0 with a JSON decision on stdout (measured: outcome success)
+      [{ exit_code: 0, outcome: 'success', stdout: block, output: block }, true],
+      // never blocks: success, a non-blocking error (exit 1), a timeout (cancelled), an approve decision, bad JSON
       [{ exit_code: 0, outcome: 'success' }, false],
-      [{ exit_code: 1, outcome: 'error' }, false],
+      [{ exit_code: 1, outcome: 'error', stderr: 'fail stderr\n' }, false],
+      [{ exit_code: 1, outcome: 'cancelled' }, false],
+      [{ exit_code: 0, outcome: 'success', stdout: '{"decision":"approve"}' }, false],
+      [{ exit_code: 0, outcome: 'error', stdout: '{"decision":"block","reason":"unterminated' }, false],
+      [{ exit_code: 1, outcome: 'error', stdout: '{"decision":"block"}' }, false],
+      // the old speculative shapes are not Claude's: a top-level decision or outcome word alone does not retire
+      [{ outcome: 'blocked' }, false],
+      [{ decision: 'block' }, false],
+      [{ outcome: 'non-blocking' }, false],
     ] as const) {
       const t = rig();
       t.commit(sent(1));
       reply(t, 'msg_1', offerReply('a', BLOCK));
-      expect(t.commit(hook(o)).map((r) => r.kind)).toEqual(retires ? ['offer.retired'] : []);
+      expect(t.commit(hook(o)).map((r) => r.kind), JSON.stringify(o)).toEqual(retires ? ['offer.retired'] : []);
     }
+  });
+  it('Aegis M2: the kernel hook facts decide a Stop block, also for a line stored by hash (a hook that printed 70 KB)', () => {
+    const hashed = (hook: Record<string, unknown>, principal: string | undefined = KERNEL): CommittedRow => ({ kind: 'turn.event', session: HSID, ...(principal ? { principal } : {}), payload: { hsid: HSID, type: 'system.hook_response', seq: 9, lineHash: `sha256:${'a'.repeat(64)}`, bytes: 140_000, hook } });
+    const facts = { id: 'h1', event: 'Stop', name: 'Stop', exit: 2, outcome: 'error', blocked: true };
+    const t = rig();
+    t.commit(sent(1));
+    reply(t, 'msg_1', offerReply('a', BLOCK));
+    expect(t.commit(hashed(facts)).map((r) => r.kind)).toEqual(['offer.retired']);
+    // not a block, not a Stop hook, or not the kernel's row: nothing
+    for (const [h, who] of [[{ ...facts, blocked: false }, KERNEL], [{ ...facts, event: 'PreToolUse' }, KERNEL], [facts, HUMAN]] as const) {
+      const u = rig();
+      u.commit(sent(1));
+      reply(u, 'msg_1', offerReply('a', BLOCK));
+      expect(u.commit(hashed(h, who)), JSON.stringify([h, who])).toEqual([]);
+    }
+    // the facts win over the line: a kernel row saying blocked:false is not re-read from a block-looking line
+    const v = rig();
+    v.commit(sent(1));
+    reply(v, 'msg_1', offerReply('a', BLOCK));
+    const line = JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: 'Stop', exit_code: 2, outcome: 'error' });
+    expect(v.commit({ kind: 'turn.event', session: HSID, principal: KERNEL, payload: { hsid: HSID, type: 'system.hook_response', line, hook: { ...facts, blocked: false } } })).toEqual([]);
+  });
+  it('founder 2026-10-23: a PreToolUse / PostToolUse hook response never retires an offer', () => {
+    const t = rig();
+    t.commit(sent(1));
+    reply(t, 'msg_1', offerReply('a', BLOCK));
+    for (const e of ['PreToolUse', 'PostToolUse', 'SessionStart']) expect(t.commit(ev(JSON.stringify({ type: 'system', subtype: 'hook_response', hook_event: e, hook_name: `${e}:Bash`, exit_code: 2, outcome: 'error' })))).toEqual([]);
   });
   it('re-review M-2: a decided offer is not retired by a continuation; seed() replays offer.retired after a restart', async () => {
     const t = rig();

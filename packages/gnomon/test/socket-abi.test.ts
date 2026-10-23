@@ -688,6 +688,38 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
     expect(JSON.stringify(own)).not.toContain('blob:abc');
   });
 
+  it('Aegis L3 (--include-hook-events): a session never reads a hook_response line (stdout, stderr, output) or its hash back; the kernel hook facts stay', () => {
+    const mk = (payload: Res): EventV1 => ({ ...base, id: 'ev:1', seq: 1, kind: 'turn.event', session: HSID, sensitivity: 'sensitive', payload }) as unknown as EventV1;
+    const me = { class: 'session', hsid: HSID } as const;
+    const line = JSON.stringify({ type: 'system', subtype: 'hook_response', hook_id: 'h1', hook_name: 'Stop', hook_event: 'Stop', stdout: 'PROJECT-CONTEXT', stderr: 'HOOK-MESSAGE', exit_code: 2, outcome: 'error' });
+    const hook = { id: 'h1', event: 'Stop', name: 'Stop', exit: 2, outcome: 'error', blocked: true };
+    const v = projectForReader(mk({ hsid: HSID, type: 'system.hook_response', seq: 3, line, lineHash: 'sha256:abc', bytes: line.length, hook }), me) as { view: string; event: Res };
+    expect(v.view).toBe('full');
+    const p = v.event.payload as Res;
+    expect(p.line).toEqual({ redacted: true });
+    expect(p.lineHash).toEqual({ redacted: true });
+    expect(p.hook).toEqual(hook);
+    for (const k of ['hash', 'sig', 'prev', 'idem', 'refHash']) expect(v.event).not.toHaveProperty(k);
+    expect(JSON.stringify(v)).not.toMatch(/PROJECT-CONTEXT|HOOK-MESSAGE|sha256:abc/);
+    // a hook_started line, any other stream line and the human: unchanged
+    expect((projectForReader(mk({ hsid: HSID, type: 'system.hook_started', line: '{"type":"system"}' }), me) as { event: Res }).event.payload).toMatchObject({ line: '{"type":"system"}' });
+    expect((projectForReader(mk({ hsid: HSID, type: 'assistant', line: 'x' }), me) as { event: Res }).event).toHaveProperty('hash');
+    expect(((projectForReader(mk({ hsid: HSID, type: 'system.hook_response', line }), { class: 'human' }) as { event: Res }).event.payload as Res).line).toBe(line);
+  });
+
+  it("Aegis 2026-10-23: Claude's synthetic user line (Stop hook feedback) is hidden from a session like hook output; a real user line is not", () => {
+    const mk = (payload: Res): EventV1 => ({ ...base, id: 'ev:1', seq: 1, kind: 'turn.event', session: HSID, sensitivity: 'sensitive', payload }) as unknown as EventV1;
+    const me = { class: 'session', hsid: HSID } as const;
+    const fb = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'Stop hook feedback:\n[sh x.sh]: HOOK-REASON' }] }, isSynthetic: true });
+    for (const payload of [{ hsid: HSID, type: 'user', line: fb, lineHash: 'sha256:abc', synthetic: true }, { hsid: HSID, type: 'user', line: fb }]) {
+      const v = projectForReader(mk(payload), me) as { event: Res };
+      expect((v.event.payload as Res).line).toEqual({ redacted: true });
+      expect(JSON.stringify(v)).not.toMatch(/HOOK-REASON|sha256:abc/);
+    }
+    const real = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'hi' }] }, isReplay: true });
+    expect(((projectForReader(mk({ hsid: HSID, type: 'user', line: real }), me) as { event: Res }).event.payload as Res).line).toBe(real);
+  });
+
   it('the named §9.3 columns are registry columns: session.inject, turn.event, voice.turn.* kinds; tool_input, evidence, audioRef fields', () => {
     for (const k of ['session.inject', 'turn.event', 'voice.turn.user', 'voice.turn.agent']) expect(RANK[EVENT_KINDS[k]!.sensitivity], k).toBeGreaterThanOrEqual(1);
     expect(EVENT_KINDS['approval.request']!.fieldLabels).toHaveProperty('tool_input');
