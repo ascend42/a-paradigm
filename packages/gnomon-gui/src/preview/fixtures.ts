@@ -257,11 +257,40 @@ const MCP_CARD = cardOf({
   decisions: ['allow', 'deny'],
 }) as Record<string, unknown> & { cardId: string };
 
+/**
+ * #batch-card (founder 2026-10-23: "grouped cards of related things, one password"): ONE root card turning four servers
+ * on, each its own field block (mcp-server-cards.ts mcpBatchCardLines). Taller than the card cap: its body scrolls
+ * inside the card while the title, the keys and the presence line stay in view (design-system card.body-scroll).
+ */
+const fence = (label: string, facts: string[]): string[] => [`${label}:`, ...facts.map((f) => `  │ ${f}`), `  └ end of ${label}`];
+const MCP_BATCH_SERVERS = [
+  { id: 'user::pencil', name: 'pencil', scope: 'all', facts: ['from your ~/.claude.json (every project)', 'runs /opt/homebrew/bin/npx -y @pencil-dev/mcp-server@latest', "inside the session's sandbox: the same files and network as the session, nothing more", 'downloads what it runs at every launch (npx): what runs can change without a new card'] },
+  { id: 'user::linear-issues-and-projects-for-the-atelier-team', name: 'linear-issues-and-projects-for-the-atelier-team', scope: 'all', facts: ['from your ~/.claude.json (every project)', 'connects to mcp.linear.app (sse) from the session: tool calls send data there', 'header names Authorization, X-Linear-Workspace (values not shown)', "env and header values are written to this session's mcp.json and readable by the session"] },
+  { id: 'user::github', name: 'github', scope: 'all', facts: ['from your ~/.claude.json (every project)', 'runs /bin/sh -c GITHUB_PERSONAL_ACCESS_TOKEN=$(gh auth token) exec github-mcp-server stdio', 'runs a shell (sh -c): Gnomon cannot see what that command line starts', 'takes GITHUB_PERSONAL_ACCESS_TOKEN from ~/.gnomon/loop-env', 'your Claude Code settings auto-allow: mcp__github__* (all tools); those tools run with no card'] },
+  { id: 'project:/Users/matt/code/billing:stripe-mock', name: 'stripe-mock', scope: 'repo', facts: ["from this repo's .mcp.json (written by the repo, not by you)", 'folder /Users/matt/code/billing', 'runs /Users/matt/code/billing/tools/stripe-mock/server.js', 'takes STRIPE_TEST_KEY from ~/.gnomon/loop-env', "this repo's .mcp.json is the repo's code: allow only if you trust this repo"] },
+];
+const MCP_BATCH_DETAIL = { action: 'mcp.enable', servers: MCP_BATCH_SERVERS.map((x, i) => ({ id: x.id, name: x.name, scope: x.scope, repo: x.scope === 'all' ? null : '/Users/matt/code/billing', launchHash: `sha256:${'5d0c41e2b7a98f3c'.slice(i)}${i}` })), rootRows: [], rootDecisions: ['allow'] };
+const MCP_BATCH_CARD = cardOf({
+  name: 'mcp batch',
+  kind: 'grant',
+  hsid: null,
+  requestedBy: HUMAN_PRINCIPAL,
+  lines: [
+    'Turn on 4 MCP servers',
+    'asked from Settings · 14:08 · applies to new sessions',
+    ...MCP_BATCH_SERVERS.flatMap((x, i) => fence(`server ${i + 1} of 4: ${x.name} ${x.scope === 'all' ? 'for all your repos' : 'in billing'}`, [...x.facts, "its other tools ask like any tool (cards and Always rules); Gnomon adds no allow rule, and its tool descriptions are the server's words, not Gnomon's", `launch sha256:5d0c41e2b7a98f3c${i}`])),
+    'Allow takes the root key and your presence (Touch ID or your Mac password), once for all 4 · never standing, never by voice; a server that changes before you allow is skipped and named; deny changes nothing',
+  ],
+  extra: [{ type: 'root-rows', rootDecisions: ['allow'], detail: MCP_BATCH_DETAIL }],
+  detail: MCP_BATCH_DETAIL,
+  decisions: ['allow', 'deny'],
+}) as Record<string, unknown> & { cardId: string };
+
 export const OFFER_ID = `offer:${ulid('offer constellation')}`;
 const OFFER_MUTED_ID = `offer:${ulid('offer neurons 1')}`;
 const OFFER_QUIET_ID = `offer:${ulid('offer neurons 2')}`;
 
-function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
+function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolean; mcpBatch?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -346,6 +375,8 @@ function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolea
     ALWAYS_CARDS.forEach((card, i) => c.add(T(`14:07:3${i}`), 'approval.request', { card, flags: [], ...(i === 0 ? { tool: 'Edit', tool_input: ALWAYS_EDIT_INPUT } : { tool: 'Bash', tool_input: ALWAYS_BASH_INPUT }) }, { session: BILLING, repo: 'billing' }));
   // #gui-mcp-servers: the root card Settings › MCP servers raised (⊙ gnomon family), waiting in the stack (Mika's shots)
   if (o.mcpCard) c.add(T('14:07:40'), 'approval.request', { card: MCP_CARD, flags: [] }, {});
+  // #batch-card: one root card for four servers, its body scrolls inside the card (Mika's shots)
+  if (o.mcpBatch) c.add(T('14:08:10'), 'approval.request', { card: MCP_BATCH_CARD, flags: [] }, {});
   if (o.extraCards)
     EXTRA_CARDS.forEach((card, i) => {
       const hsid = typeof card.hsid === 'string' ? card.hsid : null;
@@ -445,7 +476,7 @@ const MCP_REPO_SERVERS = [
   mcpRow({ id: `project:${MCP_BILLING}:stripe-mock`, name: 'stripe-mock', source: 'project', repo: MCP_BILLING, command: `${MCP_BILLING}/tools/stripe-mock/server.js`, needs: ['STRIPE_TEST_KEY'] }),
   mcpRow({ id: `local:${MCP_BILLING}:postgres`, name: 'postgres', source: 'local', repo: MCP_BILLING, command: '/opt/homebrew/bin/pg-mcp', args: ['postgres://localhost/billing_dev'], on: { all: false, repos: [MCP_BILLING] } }),
 ];
-function mcpStatus(o: { servers?: boolean; repo?: boolean; fp?: 'on' | 'off' | 'missing'; windows?: boolean; pending?: boolean } = {}): Record<string, unknown> {
+function mcpStatus(o: { servers?: boolean; repo?: boolean; fp?: 'on' | 'off' | 'missing'; windows?: boolean; pending?: boolean; batch?: boolean } = {}): Record<string, unknown> {
   const fp = o.fp ?? 'on';
   return {
     mcp: {
@@ -456,7 +487,8 @@ function mcpStatus(o: { servers?: boolean; repo?: boolean; fp?: 'on' | 'off' | '
       firstParty: { id: 'first-party:paradigm', name: 'paradigm', on: fp === 'on', available: fp !== 'missing', ...(fp === 'missing' ? { why: 'paradigm-mcp is not installed (npm install -g @a-company/paradigm)' } : { version: '7.9.0', dir: '/Users/matt/code/a-paradigm/packages/paradigm', linked: true, autoAllowed: ['mcp__paradigm'] }) },
       servers: o.servers === false ? [] : MCP_SERVERS,
       repos: [{ repo: MCP_BILLING, folder: 'billing', hsids: [BILLING], servers: o.repo === false ? [] : MCP_REPO_SERVERS }],
-      pending: o.pending ? [{ cardId: MCP_CARD.cardId, id: 'user::pencil', scope: 'all', repo: null }] : [],
+      pending: o.batch ? MCP_BATCH_DETAIL.servers.map((x) => ({ cardId: MCP_BATCH_CARD.cardId, id: x.id, scope: x.scope, repo: x.repo })) : o.pending ? [{ cardId: MCP_CARD.cardId, id: 'user::pencil', scope: 'all', repo: null }] : [],
+      max: 16,
     },
   };
 }
@@ -775,6 +807,9 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   // #gui-mcp-servers (Mika's review): Settings › MCP servers in every state, at the section (open 'mcp')
   'mcp-servers': fixture('mcp-servers', 'Settings › MCP servers: nine servers (on everywhere, plugin over https, npx, changed, long name, not on PATH, the Paradigm plugin copy, billing’s own)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus() }, BILLING, false, { open: 'mcp' }),
   'mcp-waiting': fixture('mcp-waiting', 'Settings › MCP servers: turning pencil on waits on its root card (⊙ gnomon) in the stack', deskChain({ mcpCard: true }), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ pending: true }) }, BILLING, false, { open: 'mcp' }),
+  // #batch-card: four servers on ONE root card; the card in the stack (its body scrolls) and the section while it waits
+  'mcp-batch-card': fixture('mcp-batch-card', 'MCP servers: ONE root card turning four servers on, each its own field block; the body scrolls inside the card, Allow stays in view', deskChain({ mcpBatch: true }), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ batch: true }) }, BILLING),
+  'mcp-batch-waiting': fixture('mcp-batch-waiting', 'Settings › MCP servers: a batch card waits; its four servers say so; the others can be marked for the next card', deskChain({ mcpBatch: true }), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ batch: true }) }, BILLING, false, { open: 'mcp' }),
   'mcp-none': fixture('mcp-none', 'Settings › MCP servers: none found (only the first-party Paradigm MCP)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ servers: false, repo: false }) }, BILLING, false, { open: 'mcp' }),
   'mcp-fp-missing': fixture('mcp-fp-missing', 'Settings › MCP servers: Paradigm is not installed', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ fp: 'missing' }) }, BILLING, false, { open: 'mcp' }),
   'mcp-windows': fixture('mcp-windows', 'Settings › MCP servers on Windows: rows only, no keys', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...mcpStatus({ windows: true }) }, BILLING, false, { open: 'mcp' }),

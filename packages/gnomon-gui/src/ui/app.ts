@@ -2434,6 +2434,7 @@ async function refreshStatus(): Promise<void> {
   standingFeed.repaint(); // F6: today's grant (status.standing)
   localModel.statusChanged(); // #gui-local-model: a card waiting from an earlier load; the check after an Allow
   rulesUi = rulesReconcile(rulesUi, rulesStatusOf(status), (cardId) => store.cards.has(cardId)); // #gui-rules-view
+  mcpServers.reconcile(); // #gui-mcp-servers: marks for servers gone, broken or already on drop
   settings.repaint(); // #gui-settings: the sheet re-reads the same status
   modsPanel.repaint(); // #gui-mods-panel: installed / available / pending
   modPanelsStatus(status); // a mod installed, paused or removed: its views (and the Workshop key) follow
