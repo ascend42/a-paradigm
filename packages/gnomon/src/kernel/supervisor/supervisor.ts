@@ -471,6 +471,35 @@ export function sessionScratchDirs(hsid: string, repoKey: string, base: string =
   return { tmp, cache };
 }
 
+/**
+ * Aegis round 3 M: make /private/tmp/claude-<uid>/<encoded cwd>/<uuid> (and its parents) before the spawn, so the session
+ * never creates them under the write-denied tree. Each level must be a real directory of this uid (a link or a foreign
+ * dir ⇒ false: no carve-back, the whole tree stays denied — Claude Code's background task output then fails closed).
+ */
+export function claudeTmpDirs(uid: number, uuid: string, cwds: readonly string[]): boolean {
+  if (!SESSION_UUID_RE.test(uuid)) return false;
+  const ok = (p: string): boolean => {
+    try {
+      fs.mkdirSync(p, { mode: 0o700 });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') return false;
+    }
+    try {
+      const st = fs.lstatSync(p);
+      return st.isDirectory() && !st.isSymbolicLink() && st.uid === uid;
+    } catch {
+      return false;
+    }
+  };
+  const base = `/private/tmp/claude-${uid}`;
+  if (!ok(base)) return false;
+  for (const c of new Set(cwds)) {
+    const enc = path.join(base, c.replace(/[^A-Za-z0-9]/g, '-'));
+    if (!ok(enc) || !ok(path.join(enc, uuid))) return false;
+  }
+  return true;
+}
+
 /** Aegis round 3 M: the kernel-held record of the session scratch dirs it made (path → inode), under the Gnomon home. */
 export interface ScratchOwnership {
   has(p: string, ino: number): boolean;
@@ -966,6 +995,13 @@ export class SessionSupervisor {
         // T-2026-10-23-004: deny-by-default writes — the session's own TMPDIR (its per-user /private/var/folders dir) is writable
         ...(this.#platform !== 'win32' && env.TMPDIR ? { tmpdir: env.TMPDIR } : {}),
         ...(scratch ? { sessionCache: scratch.cache } : {}),
+        // Aegis round 3 M: only this session's subtree of /private/tmp/claude-<uid> (its parents made here, never by the session)
+        ...((): { claudeTmp?: { uid: number; uuid: string; cwds: string[] } } => {
+          const uid = process.getuid?.();
+          if (this.#platform !== 'darwin' || uid === undefined) return {};
+          const cwds = [...new Set([req.cwd, realLoose(req.cwd)])];
+          return claudeTmpDirs(uid, uuid, cwds) ? { claudeTmp: { uid, uuid, cwds } } : {};
+        })(),
         // TEST RIG ONLY (allowScripts; the daemon never sets it): the fake claude writes its trace one level above its bin dir
         ...(this.#o.allowScripts && this.#o.claudePath ? { testWriteAllow: [path.dirname(path.dirname(this.#o.claudePath))] } : {}),
       });

@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { mintHsid } from '@a-company/gnomon-contracts';
 import { buildSessionPolicy, claudePermissions, SESSION_CACHE_ENV } from '../../src/kernel/manifest/policy.ts';
 import { sessionLaunchPlan } from '../../src/kernel/sandbox/session.ts';
-import { ensureSessionEnvDir, ensureTranscriptDir, sessionScratchDirs } from '../../src/kernel/supervisor/supervisor.ts';
+import { claudeTmpDirs, ensureSessionEnvDir, ensureTranscriptDir, sessionScratchDirs } from '../../src/kernel/supervisor/supervisor.ts';
 import { repoKeyOf } from '../../src/kernel/supervisor/repo-hooks.ts';
 
 export const specRefs = ['§15.5 session profile', 'T-2026-10-23-004 deny-by-default writes', 'Aegis round 2 L4'];
@@ -54,7 +54,9 @@ async function runOnce(mode) {
   ensureTranscriptDir(userClaudeDir);
   ensureSessionEnvDir(userClaudeDir, uuid);
   const scratch = sessionScratchDirs(hsid, repoKeyOf([cwd]));
-  const policy = buildSessionPolicy({ home: ghome, cwd, userClaudeDir, userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, claudeTranscripts: true, claudeSessionEnv: uuid, tmpdir: scratch.tmp, sessionCache: scratch.cache, memorySubtree: cwd });
+  // Aegis round 3 M: as the supervisor builds it — only this session's subtree of /private/tmp/claude-<uid> is writable
+  const claudeTmp = claudeTmpDirs(process.getuid(), uuid, [cwd]) ? { claudeTmp: { uid: process.getuid(), uuid, cwds: [cwd] } } : {};
+  const policy = buildSessionPolicy({ home: ghome, cwd, userClaudeDir, userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, claudeTranscripts: true, claudeSessionEnv: uuid, tmpdir: scratch.tmp, sessionCache: scratch.cache, memorySubtree: cwd, ...claudeTmp });
   const settings = path.join(root, 'policy.json');
   const hookOut = path.join(scratch.tmp, 'hook-ran.txt');
   // the deny mirror only (no `ask` list): this probe measures the SANDBOX, so its Bash command runs with no host
@@ -66,7 +68,7 @@ async function runOnce(mode) {
   const mcp = path.join(root, 'mcp.json');
   writeFileSync(mcp, JSON.stringify({ mcpServers: { probe: { type: 'stdio', command: process.execPath, args: [server] } } }));
   const common = ['--model', 'haiku', '--output-format', 'stream-json', '--verbose', '--settings', settings, '--setting-sources', 'user', '--mcp-config', mcp, '--strict-mcp-config', '--dangerously-skip-permissions', '--max-turns', '4'];
-  const first = ['-p', 'Run this exact Bash command once: `npm --version; (echo x > ~/gnomon-probe-denied.txt) 2>/dev/null; echo done`. Then reply with only the word ok.', '--session-id', uuid, ...common];
+  const first = ['-p', 'Run this exact Bash command once: `npm --version; (echo x > ~/gnomon-probe-denied.txt) 2>/dev/null; echo done`. Then run the Bash command `sleep 1; echo bg` with run_in_background true, read its output once, and reply with only the word ok.', '--session-id', uuid, ...common];
   const env = { HOME: userHome, PATH: `${path.dirname(process.execPath)}:/opt/homebrew/bin:/usr/bin:/bin`, TMPDIR: scratch.tmp, USER: os.userInfo().username, LANG: 'en_US.UTF-8', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', ...Object.fromEntries(Object.entries(SESSION_CACHE_ENV).map(([k, sub]) => [k, path.join(scratch.cache, sub)])) };
   const plan = sessionLaunchPlan({ policy, binaryReal: bin, argv: first, extras: { uid: process.getuid(), tmpdir: os.tmpdir(), home: userHome, roots: [cwd] } }, 'darwin');
   const strip = (a) => (mode === 'audit' ? a.split('\n').filter((l) => l !== '(deny file-write*)' && !l.startsWith('(allow file-write* (literal "/dev/null")')).join('\n') : a);
@@ -87,6 +89,8 @@ async function runOnce(mode) {
   const res1 = lines(r1.out).find((m) => m.type === 'result');
   const res2 = lines(r2.out).find((m) => m.type === 'result');
   let written = [];
+  // Aegis round 3 M: what Claude Code writes under /private/tmp itself (shared with the human's own Claude Code), measured whole
+  const tmpClaude = spawnSync('/usr/bin/find', ['/private/tmp', '-maxdepth', '6', '-newer', marker, '-path', '*claude*', '-print'], { encoding: 'utf8' }).stdout.split('\n').filter(Boolean).map((p) => p.replace(uuid, '<uuid>').replace(cwd.replace(/[^A-Za-z0-9]/g, '-'), '<enc-cwd>')).sort();
   if (mode === 'audit') {
     const prune = PRUNE.flatMap((p) => ['-path', path.join(userHome, p), '-prune', '-o']);
     const f = spawnSync('/usr/bin/find', [userHome, '-xdev', ...prune, '-newer', marker, '-type', 'f', '-print'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: 300_000 });
@@ -105,6 +109,7 @@ async function runOnce(mode) {
   rmSync(path.join(userClaudeDir, 'projects', enc), { recursive: true, force: true });
   rmSync(path.join(userClaudeDir, 'session-env', uuid), { recursive: true, force: true });
   rmSync(scratch.tmp, { recursive: true, force: true });
+  rmSync(path.join(`/private/tmp/claude-${process.getuid()}`, cwd.replace(/[^A-Za-z0-9]/g, '-')), { recursive: true, force: true });
   rmSync(scratch.cache, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
   return {
@@ -116,6 +121,7 @@ async function runOnce(mode) {
     transcript,
     controlWritten: control,
     written,
+    tmpClaude,
     stderr: `${r1.err}${r2.err}`.slice(0, 800),
   };
 }

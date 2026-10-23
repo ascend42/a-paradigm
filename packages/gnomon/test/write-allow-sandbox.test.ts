@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { darwinFloor, sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
 import { buildSessionPolicy, SESSION_CACHE_ENV, userTempRoot, WRITE_CACHE_PATHS } from '../src/kernel/manifest/policy.js';
-import { scratchOwnershipFile, sessionScratchDirs } from '../src/kernel/supervisor/supervisor.js';
+import { claudeTmpDirs, scratchOwnershipFile, sessionScratchDirs } from '../src/kernel/supervisor/supervisor.js';
 import { sessionWorld, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld | null = null;
@@ -74,6 +74,24 @@ describe.runIf(darwinFloor().ok)('deny-by-default session writes', () => {
     if (NPM) expect(out.npm_install, r.stderr).toBe('allowed');
     expect(fs.existsSync(path.join(other, 'pre-commit'))).toBe(false);
   }, 120_000);
+
+  it('Aegis round 3 M: /private/tmp/claude-<uid> is denied except this session\'s own subtree (made by the kernel, never removed)', () => {
+    w = sessionWorld();
+    const uid = process.getuid!();
+    const uuid = '0b1c2d3e-4f50-4617-8899-aabbccddeeff';
+    expect(claudeTmpDirs(uid, uuid, [w.cwd])).toBe(true);
+    const mine = path.join(`/private/tmp/claude-${uid}`, w.cwd.replace(/[^A-Za-z0-9]/g, '-'), uuid);
+    const other = path.join(`/private/tmp/claude-${uid}`, w.cwd.replace(/[^A-Za-z0-9]/g, '-'), 'ffffffff-4f50-4617-8899-aabbccddeeff');
+    const policy = buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: path.join(w.userHome, '.claude'), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [], endpointPort: null, claudeTmp: { uid, uuid, cwds: [w.cwd] } });
+    const t = (n: string, cmd: string): string => `(${cmd}) >/dev/null 2>&1 && echo "${n}=allowed" || echo "${n}=blocked"`;
+    const script = path.join(w.cwd, 'ct.sh');
+    fs.writeFileSync(script, `#!/bin/bash\n${[t('own_task', `mkdir -p "${mine}/tasks" && echo x > "${mine}/tasks/a.output"`), t('other_session', `mkdir -p "${other}"`), t('shared_root', `echo x > "/private/tmp/claude-${uid}/planted"`), t('remove_own', `rmdir "${mine}/tasks" && rmdir "${mine}" ; test ! -d "${mine}"`), t('top_tmp', 'echo x > /private/tmp/claude-gnomon-wa-$$ && rm /private/tmp/claude-gnomon-wa-$$')].join('\n')}\n`, { mode: 0o755 });
+    const plan = sessionLaunchPlan({ policy, binaryReal: '/bin/bash', argv: [script], extras: { uid, tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd] } }, 'darwin');
+    const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: w.userHome, PATH: '/usr/bin:/bin' }, timeout: 60_000 });
+    const out = Object.fromEntries(r.stdout.split('\n').filter((l) => /^[a-z_]+=/.test(l)).map((l) => l.split('=') as [string, string]));
+    fs.rmSync(path.dirname(mine), { recursive: true, force: true });
+    expect(out).toEqual({ own_task: 'allowed', other_session: 'blocked', shared_root: 'blocked', remove_own: 'blocked', top_tmp: 'allowed' });
+  });
 
   it('policy data: the allowlist is exactly the roots, the temp dirs and the measured caches', () => {
     w = sessionWorld();

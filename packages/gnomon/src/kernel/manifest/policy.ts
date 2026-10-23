@@ -256,6 +256,13 @@ export interface SessionPolicyInput {
   tmpdir?: string;
   /** Aegis round 2 H: the session's Gnomon-made tool cache dir (SESSION_CACHE_ENV); writable */
   sessionCache?: string;
+  /**
+   * Aegis round 3 M (measured, probe p10m-write-allow): Claude Code writes its task outputs under
+   * /private/tmp/claude-<uid>/<encoded cwd>/<session uuid>/, a tree the human's own unsandboxed Claude Code shares. The
+   * whole /private/tmp/claude-<uid> is write-denied and only this session's subtree is carved back (literal re-denied,
+   * so it is never removed or swapped); the supervisor makes its parents first. Absent ⇒ the whole tree stays denied.
+   */
+  claudeTmp?: { uid: number; uuid: string; cwds: readonly string[] };
   /** TEST RIG ONLY (the supervisor passes it only with allowScripts): the fake claude's own dir, where it writes its trace */
   testWriteAllow?: readonly string[];
 }
@@ -522,7 +529,9 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
         }),
         ...gitDirs.flatMap((g) => [P(path.join(g, 'worktrees'), 'literal', 'git'), P(path.join(g, 'worktrees'), 'worktree-gitdir', 'git')]),
       ];
-  const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...worktrees, ...persistence, ...extra]);
+  // Aegis round 3 M: the shared Claude Code temp tree, denied whole (this session's own subtree is carved back below)
+  const claudeTmpRoot = inp.claudeTmp && Number.isInteger(inp.claudeTmp.uid) && inp.claudeTmp.uid >= 0 ? `/private/tmp/claude-${inp.claudeTmp.uid}` : null;
+  const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...worktrees, ...persistence, ...extra, ...(claudeTmpRoot ? [{ path: claudeTmpRoot, match: 'subpath' as const, class: 'temp' as const }] : [])]);
   // T-2026-10-23-004: the deny-by-default write allowlist (every deny above is rendered AFTER it)
   const writeAllow = uniq([
     ...roots.map((r) => P(r, 'subpath', 'root')),
@@ -548,6 +557,10 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     return undefined;
   };
   const allowWriteRefused = inp.claudeTranscripts ? carve(CLAUDE_TRANSCRIPTS_REL, 'transcripts', 'transcript') : undefined;
+  // Aegis round 3 M: this session's own Claude Code temp subtree (a strict uuid; each cwd as Claude Code encodes it)
+  if (claudeTmpRoot && SESSION_UUID_RE.test(inp.claudeTmp!.uuid)) {
+    for (const c of new Set(inp.claudeTmp!.cwds)) allowWrite.push({ path: path.join(claudeTmpRoot, c.replace(/[^A-Za-z0-9]/g, '-'), inp.claudeTmp!.uuid), match: 'subpath', class: 'temp' });
+  }
   // the session-env carve-back follows the transcript one (same fail-closed rules, same literal re-deny of the allowed
   // dir below) but is scoped to THIS session's uuid (Aegis H1): never session-env itself, never a sibling
   const sessionEnvUuid = inp.claudeSessionEnv;

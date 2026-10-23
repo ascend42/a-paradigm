@@ -29,13 +29,21 @@
       "transcript": true,
       "controlWritten": true,
       "written": [
-        "~/.claude/skills/synced/<uuid>_<uuid>/.last-complete-round",
-        "~/.claude/skills/synced/<uuid>_<uuid>/manifest.json",
-        "~/.npm/_logs/2026-10-23T23_23_09_411Z-debug-0.log",
-        "~/.npm/_logs/2026-10-23T23_23_11_746Z-debug-0.log",
-        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-12-358Z.jsonl",
-        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-16-597Z.jsonl",
+        "~/.claude.json",
+        "~/.npm/_logs/2026-10-23T23_46_47_552Z-debug-0.log",
+        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-48-341Z.jsonl",
+        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-58-576Z.jsonl",
         "~/gnomon-probe-denied.txt"
+      ],
+      "tmpClaude": [
+        "/private/tmp/claude-501",
+        "/private/tmp/claude-501/-Users-ascend-Documents-GitHub-a-paradigm/044e2c72-aeaf-42a5-b5f6-f37cf2b959eb/tasks",
+        "/private/tmp/claude-501/-Users-ascend-Documents-GitHub-a-paradigm/044e2c72-aeaf-42a5-b5f6-f37cf2b959eb/tasks/b6nmzqrz2.output",
+        "/private/tmp/claude-501/<enc-cwd>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks/bvf5xgti3.output",
+        "/private/tmp/claude-501/bash-edit-diff/9227558431963848980-14151642351115288804-ce3ee96a7fae12a6"
       ],
       "stderr": ""
     },
@@ -59,18 +67,24 @@
       "transcript": true,
       "controlWritten": false,
       "written": [],
+      "tmpClaude": [
+        "/private/tmp/claude-501",
+        "/private/tmp/claude-501/<enc-cwd>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks/bgsa6z236.output"
+      ],
       "stderr": ""
     },
     "unexplained": [
-      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-12-358Z.jsonl",
-      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-xEwRBB-repo/mcp-logs-probe/2026-10-23T23-23-16-597Z.jsonl"
-    ],
-    "note": "~/.npm/_logs entries are the probe runner's own npx tsx logs (their argv names npm exec tsx probes/run.mjs), not the session. The claude-cli-nodejs mcp-logs writes are Claude Code's MCP server logs: denied in the enforce run, and the MCP server still connected."
+      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-48-341Z.jsonl",
+      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-58-576Z.jsonl"
+    ]
   },
   "specRefs": [
-    "\u00a715.5 session profile",
+    "§15.5 session profile",
     "T-2026-10-23-004 deny-by-default writes",
     "Aegis round 2 L4"
   ],
-  "at": "2026-10-23T23:25:18.816Z"
+  "at": "2026-10-23T23:49:06.325Z"
 }
