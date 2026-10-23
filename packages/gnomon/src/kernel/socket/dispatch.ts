@@ -607,7 +607,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
       ...(o.requests?.loops && cls === 'human' ? { loops: o.requests.loops.status() } : {}),
       // 8.0:rules-view: status.rules to the human class only (rule words and file paths are project detail)
-      ...(o.requests?.rules?.status && cls === 'human' ? { rules: o.requests.rules.status() } : {}),
+      ...(o.requests?.rules?.status && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') ? { rules: o.requests.rules.status() } : {}), // Aegis L-3, like status.folders
       // TD-2026-10-23-162 (#folder-picker): whether request.folder.choose is offered (the GUI's no-chooser state); the human's
       ...(o.requests?.folders && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') ? { folders: o.requests.folders.status() } : {}), // Aegis L4
       // Aegis M2 (TD-2026-10-22-769): status.local in full to the human only; any other class sees three facts

@@ -16,7 +16,8 @@ import type { CardV1 } from '@a-company/gnomon-contracts';
 import { RefusedError } from '@a-company/gnomon-contracts';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 import { RuleBook, ruleWords, type RuleRow } from '../src/kernel/supervisor/rules.js';
-import { createRulesApply, createRulesLock, parseRulesApply, rulesStatus, RULES_APPLY_OP } from '../src/kernel/socket/rules-apply.js';
+import { createRulesApply, createRulesLock, parseRulesApply, rulesStatus, RULES_APPLY_OP, STATUS_WORDS_MAX } from '../src/kernel/socket/rules-apply.js';
+import { MAX_LINE } from '../src/kernel/broker/card.js';
 import { createRulesRevokeHandler } from '../src/kernel/socket/rules-revoke.js';
 import { standingTupleOf } from '../src/kernel/broker/standing-grant.js';
 import type { RaiseInput } from '../src/kernel/broker/broker.js';
@@ -38,7 +39,7 @@ function learnRows(cardId: string, o: { input?: unknown; tool?: string; scope?: 
   ];
 }
 const off = (ruleId: string, until: string | null, by: Partial<RuleRow> = {}): RuleRow => ({ principal: K, keyId: KEY, at: new Date(T0).toISOString(), kind: 'approval.rule.disabled', payload: { ruleId, repoKey: REPO, tool: 'Bash', until, batch: 'batch:01J9Z8Y7X6W5V4T3S2R1Q0P9N8', connId: CONN }, ...by });
-const on = (ruleId: string, p: Record<string, unknown> = { cause: 'human' }): RuleRow => ({ principal: K, keyId: KEY, kind: 'approval.rule.enabled', payload: { ruleId, repoKey: REPO, tool: 'Bash', ...p } });
+const on = (ruleId: string, p: Record<string, unknown> = { cause: 'human', until: null }): RuleRow => ({ principal: K, keyId: KEY, kind: 'approval.rule.enabled', payload: { ruleId, repoKey: REPO, tool: 'Bash', ...p } });
 const revoked = (ruleId: string): RuleRow => ({ principal: K, keyId: KEY, kind: 'approval.rule.revoked', payload: { ruleId, repoKey: REPO, tool: 'Bash', connId: CONN } });
 
 function clockBook(t = { now: T0 }): { b: RuleBook; t: { now: number } } {
@@ -125,7 +126,7 @@ describe('8.0:rules-view fold and match: disabled, timed, re-enabled', () => {
 
 const HUMAN = { connId: CONN, principal: 'p:abcdefgh/founder', principalClass: 'human', credential: 'gui' };
 
-function harness(n: number, o: { maxCardChars?: number } = {}) {
+function harness(n: number, o: { maxCardChars?: number; failAt?: number } = {}) {
   const { b, t } = clockBook();
   for (let i = 1; i <= n; i++) for (const r of learnRows(card(i))) b.fold(r);
   const written: RuleRow[] = [];
@@ -135,6 +136,7 @@ function harness(n: number, o: { maxCardChars?: number } = {}) {
   const deps = {
     book: () => b,
     append: async (kind: string, payload: Record<string, unknown>) => {
+      if (o.failAt !== undefined && written.length === o.failAt) throw new Error('disk full');
       const row: RuleRow = { principal: K, keyId: KEY, seq: ++seq, at: new Date(t.now).toISOString(), kind, payload };
       written.push(row);
       b.fold(row);
@@ -149,7 +151,7 @@ function harness(n: number, o: { maxCardChars?: number } = {}) {
       card: (id: string) => cards.get(id) as never,
     },
     lock: createRulesLock(),
-    ...o,
+    ...(o.maxCardChars !== undefined ? { maxCardChars: o.maxCardChars } : {}),
   };
   const apply = createRulesApply(deps);
   return { b, t, written, raised, apply, deps };
@@ -187,7 +189,8 @@ describe('#rules-apply: narrow at once, one card for loosening', () => {
     expect(c.kind).toBe('strictness');
     expect(c.handOnly).toBe(true); // never by voice
     expect(c.decisions).toEqual(['allow', 'deny']);
-    expect(c.detail).toEqual({ op: RULES_APPLY_OP, batch: r.batch, changes: [card(1), card(2), card(3)].map((ruleId) => ({ ruleId, op: 'on' })), connId: CONN });
+    // L-1: each change carries the repo, the kernel's words and (M-2) the off flag it clears, all inside the contentHash
+    expect(c.detail).toEqual({ op: RULES_APPLY_OP, batch: r.batch, changes: [card(1), card(2), card(3)].map((ruleId) => ({ ruleId, op: 'on', repoKey: REPO, words: ruleWords(h.b.get(ruleId)!), until: null })), connId: CONN });
     // L1: the lines are the kernel's words for each rule, never page text
     for (const id of [card(1), card(2), card(3)]) expect(c.lines.some((l) => l.includes(ruleWords(h.b.get(id)!)))).toBe(true);
     // never standing: no standing tuple names a rules.apply card, whatever the repo
@@ -283,5 +286,75 @@ describe('#rules-apply: narrow at once, one card for loosening', () => {
       [card(2), 'off', new Date(T0 + HOUR).toISOString(), 'a-paradigm'],
     ]);
     expect(s.rules[0]!.words).toBe(ruleWords(h.b.get(card(1))!));
+  });
+
+  it('Aegis M-1: a 1000-character command and a multi-line command are shown in full on the card (wrapped, never cut)', async () => {
+    const long = `echo ${'x'.repeat(995)}`;
+    const multi = 'cat <<EOF > notes.txt\nfirst line\nsecond line\nEOF';
+    const { b } = clockBook();
+    for (const [i, cmd] of [[1, long], [2, multi]] as const) for (const r of learnRows(card(i), { input: { command: cmd } })) b.fold(r);
+    for (const id of [card(1), card(2)]) b.fold(off(id, null));
+    const raised: RaiseInput[] = [];
+    const apply = createRulesApply({ book: () => b, append: async () => undefined, broker: { raise: async (i: RaiseInput) => (raised.push(i), { cardId: card(9100) } as unknown as CardV1), card: () => ({ state: 'pending' }) as never }, lock: createRulesLock() });
+    await apply.apply(HUMAN, { changes: [{ ruleId: card(1), op: 'on' }, { ruleId: card(2), op: 'on' }] });
+    const block = raised[0]!.block as { children: Array<{ text: string }> };
+    expect(block).toBeDefined();
+    const texts = block.children.map((c) => c.text);
+    for (const t of texts) expect([...t].length).toBeLessThanOrEqual(MAX_LINE);
+    expect(texts.some((t) => t.endsWith('…'))).toBe(false);
+    const shown = texts.join('').replace(/\s*↳ /g, '');
+    expect(shown).toContain(long);
+    for (const line of multi.split('\n')) expect(texts.some((t) => t.endsWith(line))).toBe(true);
+  });
+
+  it('Aegis M-2: a card raised for an off rule never undoes a newer off with another time (skipped and reported)', async () => {
+    const h = harness(1);
+    const until = new Date(T0 + HOUR).toISOString();
+    await h.apply.apply(HUMAN, { changes: [{ ruleId: card(1), op: 'off', until }] });
+    await h.apply.apply(HUMAN, { changes: [{ ruleId: card(1), op: 'on' }] }); // the card waits
+    await h.apply.apply(HUMAN, { changes: [{ ruleId: card(1), op: 'off', until: 'manual' }] }); // narrowing never waits
+    await h.raised[0]!.effect!('allow', { token: null, rootSig: null, connId: CONN, presence: 'fresh' });
+    expect(h.written.filter((w) => w.kind === 'approval.rule.enabled')).toEqual([]);
+    expect(h.b.stateOf(card(1))).toMatchObject({ state: 'off', until: null });
+    expect(h.apply.lastSkipped()).toEqual({ cardId: card(9001), ruleIds: [card(1)] });
+    // and the fold refuses a stale row too: an enabled{human} naming the old time clears nothing
+    h.b.fold(on(card(1), { cause: 'human', until, batch: 'batch:01J9Z8Y7X6W5V4T3S2R1Q0P9N8', connId: CONN, cardId: card(9001) }));
+    expect(h.b.stateOf(card(1)).state).toBe('off');
+  });
+
+  it('a partial log failure mid-batch: the rows written stand, the refusal names them, and no card is raised', async () => {
+    const h = harness(3, { failAt: 1 });
+    h.b.fold(off(card(3), null));
+    const r = await refusalOf(h.apply.apply(HUMAN, { changes: [{ ruleId: card(1), op: 'off', until: 'manual' }, { ruleId: card(2), op: 'remove' }, { ruleId: card(3), op: 'on' }] }));
+    expect(r).toMatchObject({ code: 'ENGINE', reason: 'partial' });
+    expect(h.written.map((w) => w.kind)).toEqual(['approval.rule.disabled']);
+    expect(h.b.stateOf(card(1)).state).toBe('off');
+    expect(h.b.get(card(2))).not.toBeNull();
+    expect(h.raised).toEqual([]);
+  });
+
+  it('the repo brake landing while a re-enable card waits: the repo-edits rule is gone and the allow brings nothing back', async () => {
+    const { b } = clockBook();
+    for (const r of learnRows(card(1), { scope: 'repo-edits', input: { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' } })) b.fold(r);
+    b.fold({ ...off(card(1), null), payload: { ...(off(card(1), null).payload as object), tool: 'Edit' } });
+    const written: RuleRow[] = [];
+    const raised: RaiseInput[] = [];
+    const apply = createRulesApply({ book: () => b, append: async (kind, payload) => void written.push({ principal: K, keyId: KEY, kind, payload }), broker: { raise: async (i: RaiseInput) => (raised.push(i), { cardId: card(9200) } as unknown as CardV1), card: () => ({ state: 'pending' }) as never }, lock: createRulesLock() });
+    await apply.apply(HUMAN, { changes: [{ ruleId: card(1), op: 'on' }] });
+    b.fold({ principal: K, keyId: KEY, kind: 'approval.mode.set', payload: { scope: { repo: REPO }, from: 'auto-edits', to: 'ask' } });
+    await raised[0]!.effect!('allow', { token: null, rootSig: null, connId: CONN, presence: 'fresh' });
+    expect(written).toEqual([]);
+    expect(b.get(card(1))).toBeNull();
+    expect(b.repoEditsRule(REPO)).toBeNull();
+    expect(apply.lastSkipped()?.ruleIds).toEqual([card(1)]);
+  });
+
+  it('Aegis L-2: status.rules caps the words (the card shows them in full); L-3: until must be an ISO time', () => {
+    const { b } = clockBook();
+    for (const r of learnRows(card(1), { input: { command: `echo ${'y'.repeat(2000)}` } })) b.fold(r);
+    const row = (rulesStatus(b) as { rules: Array<{ words: string; wordsChars?: number }> }).rules[0]!;
+    expect([...row.words].length).toBe(STATUS_WORDS_MAX);
+    expect(row.wordsChars).toBe(ruleWords(b.get(card(1))!).length);
+    expect(() => parseRulesApply({ changes: [{ ruleId: card(1), op: 'off', until: 'Fri Oct 24 2026' }] }, T0)).toThrow();
   });
 });

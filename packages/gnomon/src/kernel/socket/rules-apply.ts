@@ -29,8 +29,9 @@
 import { RULE_CHANGE_OPS, RULE_ID_PATTERN, RULE_OFF_MAX_MS, RULES_APPLY_MAX, ulid, type CardV1, type RuleChangeOp } from '@a-company/gnomon-contracts';
 import { fail, type ApprovalBroker } from '../broker/broker.js';
 import type { ModeAsker } from '../broker/run-mode.js';
-import { MAX_CARD_CHARS } from '../supervisor/permission.js';
-import { ruleWords, type AlwaysRule, type RuleBook } from '../supervisor/rules.js';
+import { wrappedBlock } from '../manifest/install.js';
+import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
+import { RULE_ISO_TIME, ruleWords, type AlwaysRule, type RuleBook } from '../supervisor/rules.js';
 
 /** The request kind the dispatcher routes here (dispatcher-only: no row of this kind is ever written). */
 export const RULES_APPLY_REQUEST = 'request.rules.apply' as const;
@@ -110,8 +111,8 @@ export function parseRulesApply(payload: unknown, now: number): ParsedChange[] {
       return { ruleId: c.ruleId, op };
     }
     if (c.until === 'manual') return { ruleId: c.ruleId, op, until: null };
-    // Aegis L2: until is on the KERNEL clock, in the future, and at most seven days ahead
-    const t = typeof c.until === 'string' ? Date.parse(c.until) : NaN;
+    // Aegis L2: until is on the KERNEL clock, in the future, and at most seven days ahead (L-3: an ISO time first)
+    const t = typeof c.until === 'string' && RULE_ISO_TIME.test(c.until) ? Date.parse(c.until) : NaN;
     if (!Number.isFinite(t)) throw fail('BAD_REQUEST', 'bad-params', `changes[${i}].until is an ISO time or 'manual'`, { ruleId: c.ruleId, hint: PRESET_HINT });
     if (t <= now) throw fail('BAD_REQUEST', 'until-past', `the off time ${new Date(t).toISOString()} has already passed on the kernel clock (${new Date(now).toISOString()})`, { ruleId: c.ruleId, hint: 'choose the time again: the presets follow the kernel clock' });
     if (t - now > RULE_OFF_MAX_MS) throw fail('BAD_REQUEST', 'until-too-far', `an off time is at most 7 days ahead (asked: ${new Date(t).toISOString()})`, { ruleId: c.ruleId, hint: "choose 'until I turn it back on' for longer" });
@@ -119,23 +120,41 @@ export function parseRulesApply(payload: unknown, now: number): ParsedChange[] {
   });
 }
 
-/** The card's lines for the `on` changes: the kernel's words for each rule (Aegis L1), never cut. */
+/**
+ * The card's logical lines for the `on` changes: the kernel's words for each rule (Aegis L1) as a fenced field
+ * (permission.ts fieldLines: a multi-line command keeps every line, fenced), never cut. Aegis M-1: the card shows
+ * them through wrappedBlock (each line wrapped under MAX_LINE, never cut); the size is measured AFTER wrapping.
+ */
 export function rulesOnLines(rules: readonly AlwaysRule[], repoName?: (repoKey: string) => string | null): string[] {
   const n = rules.length;
   return [
     `Turn ${n === 1 ? 'a rule' : `${n} rules`} back on (no card next time)`,
-    ...rules.map((r) => `on again: ${ruleWords(r)} · in ${repoName?.(r.repoKey) ?? `repo ${SHORT(r.repoKey)}`}`),
+    ...rules.flatMap((r, i) => fieldLines(`rule ${i + 1} of ${n}, in ${repoName?.(r.repoKey) ?? `repo ${SHORT(r.repoKey)}`}`, ruleWords(r))),
     `Allow needs Touch ID or your Mac password, once for ${n === 1 ? 'it' : `all ${n}`}; deny or no answer leaves ${n === 1 ? 'it' : 'them'} off`,
   ];
 }
+
+/** The wrapped card block for those lines, and its size in characters (what the card really shows). */
+export function rulesOnBlock(lines: readonly string[]): { block: Record<string, unknown>; size: number } {
+  const w = wrappedBlock(lines);
+  const kids = (w.block as { children: Array<{ text: string }> }).children;
+  return { block: w.block, size: kids.reduce((k, c) => k + c.text.length + 1, 0) };
+}
+
+/** status.rules: the words a row shows are capped (Aegis L-2); the card always shows them in full. */
+export const STATUS_WORDS_MAX = 512;
 
 export function createRulesApply(d: RulesApplyDeps): {
   apply(asker: ModeAsker, payload: unknown): Promise<RulesApplyResult>;
   expireDue(): Promise<number>;
   /** the card id of a pending batch card, if any (status.rules.pendingCardId) */
   pendingCardId(): string | null;
+  /** the rules the last allowed card skipped because they changed while it waited, or null */
+  lastSkipped(): { cardId: string; ruleIds: string[] } | null;
 } {
   let pending: string | null = null;
+  /** Aegis M-2: the rules an allowed card did NOT turn on (changed while it waited), reported in status.rules */
+  let lastSkipped: { cardId: string; ruleIds: string[] } | null = null;
   const changed = (): void => {
     try {
       d.onChange?.();
@@ -167,12 +186,15 @@ export function createRulesApply(d: RulesApplyDeps): {
           const cur = st.until === null ? null : Date.parse(st.until);
           const shorter = cur === null ? c.until !== null : c.until !== null && c.until! < cur;
           if (shorter) throw fail('BAD_REQUEST', 'would-loosen', `${ruleWords(rule)} is already off${st.until ? ` until ${st.until}` : ' until you turn it back on'}; a shorter time would turn it on sooner`, { ruleId: c.ruleId, hint: 'turn it on instead (that asks Touch ID once), or keep it off' });
+          // the same time again changes nothing: no row (so an off flag is named by its `until` alone, Aegis M-2)
+          if (cur === (c.until ?? null)) continue;
         }
         if (c.op !== 'on') rows.push({ rule, c });
       }
       const lines = ons.length ? rulesOnLines(ons, d.repoName) : [];
       const max = d.maxCardChars ?? MAX_CARD_CHARS;
-      const size = lines.reduce((n, l) => n + l.length + 1, 0);
+      const shown = rulesOnBlock(lines); // Aegis M-1: measured after wrapping, against the real limit
+      const size = ons.length ? shown.size : 0;
       if (size > max) throw fail('BAD_REQUEST', 'too-large', `the card that turns these ${ons.length} rules back on would be ${size} characters, over the ${max} a card shows in full`, { hint: 'turn fewer rules back on in one save' });
       if (ons.length && pending && d.broker.card(pending)?.state === 'pending') throw fail('BAD_REQUEST', 'card-pending', 'a card turning rules back on is waiting; decide it first', { cardId: pending, hint: 'Decide in the stack' });
 
@@ -201,12 +223,20 @@ export function createRulesApply(d: RulesApplyDeps): {
 
       let cardId = '';
       const want = ons.map((r) => r.ruleId);
+      // Aegis M-2: the off flag each rule had at raise (its `until`, null = until turned back on); the effect turns on
+      // only a rule whose flag is still that one. L-1: the kernel's words and the repo, inside the contentHash too.
+      const onChanges = ons.map((r) => {
+        const st = book.stateOf(r.ruleId, now);
+        return { ruleId: r.ruleId, op: 'on' as const, repoKey: r.repoKey, words: ruleWords(r), until: st.state === 'off' ? st.until : null };
+      });
+      const flagAtRaise = new Map(onChanges.map((c) => [c.ruleId, c.until]));
       const card: CardV1 = await d.broker.raise({
         kind: 'strictness',
         requestedBy: asker.principal,
         attended: true,
-        detail: { op: RULES_APPLY_OP, batch, changes: want.map((ruleId) => ({ ruleId, op: 'on' })), connId: asker.connId },
+        detail: { op: RULES_APPLY_OP, batch, changes: onChanges, connId: asker.connId },
         lines,
+        block: shown.block,
         decisions: ['allow', 'deny'],
         handOnly: true,
         timeoutMs: d.timeoutMs ?? RULES_APPLY_TIMEOUT_MS,
@@ -214,21 +244,28 @@ export function createRulesApply(d: RulesApplyDeps): {
           if (decision !== 'allow') return;
           // Aegis: fresh presence only (never a standing grant, a cached unlock or voice)
           if (ctx.presence !== 'fresh') throw fail('FORBIDDEN', 'presence', `turning rules back on takes fresh presence (got ${String(ctx.presence ?? 'none').slice(0, 40)})`);
+          const skipped: string[] = [];
           await d.lock(async () => {
             const b = d.book();
             const t = b.now();
             let n = 0;
             for (const id of want) {
-              // re-validate at allow time: a rule revoked (or already on) while the card waited is skipped
+              // re-validate at allow time: a rule revoked, already on, or turned off AGAIN with another time while the
+              // card waited (Aegis M-2) is skipped and reported; the row names the flag it clears
               const rule = b.get(id);
-              if (!rule || b.stateOf(id, t).state !== 'off') continue;
-              await d.append('approval.rule.enabled', { ruleId: id, repoKey: rule.repoKey, tool: rule.tool, cause: 'human', batch, connId: ctx.connId, cardId }, { connId: ctx.connId });
+              const st = b.stateOf(id, t);
+              if (!rule || st.state !== 'off' || st.until !== flagAtRaise.get(id)) {
+                skipped.push(id);
+                continue;
+              }
+              await d.append('approval.rule.enabled', { ruleId: id, repoKey: rule.repoKey, tool: rule.tool, cause: 'human', batch, connId: ctx.connId, cardId, until: st.until }, { connId: ctx.connId });
               n++;
             }
             d.book();
             if (pending === cardId) pending = null;
             if (n) changed();
           });
+          if (skipped.length) lastSkipped = { cardId, ruleIds: skipped };
         },
       });
       cardId = card.cardId;
@@ -251,11 +288,11 @@ export function createRulesApply(d: RulesApplyDeps): {
       return n;
     });
 
-  return { apply, expireDue, pendingCardId: () => (pending && d.broker.card(pending)?.state === 'pending' ? pending : null) };
+  return { apply, expireDue, lastSkipped: () => lastSkipped, pendingCardId: () => (pending && d.broker.card(pending)?.state === 'pending' ? pending : null) };
 }
 
 /** status.rules (the human class only): every standing rule in the kernel's words, its state on the kernel clock, the presets. */
-export function rulesStatus(book: RuleBook, o: { pendingCardId?: string | null; repoName?: (repoKey: string) => string | null } = {}): Record<string, unknown> {
+export function rulesStatus(book: RuleBook, o: { pendingCardId?: string | null; repoName?: (repoKey: string) => string | null; skipped?: { cardId: string; ruleIds: string[] } | null } = {}): Record<string, unknown> {
   const now = book.now();
   const t = new Date(now);
   const tomorrow = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1, 6, 0, 0, 0).getTime();
@@ -265,6 +302,7 @@ export function rulesStatus(book: RuleBook, o: { pendingCardId?: string | null; 
     // C2: the presets' ends, named by the KERNEL clock (the page shows these, never its own clock)
     presets: { hour: new Date(now + 3_600_000).toISOString(), tomorrow: new Date(tomorrow).toISOString(), manual: 'manual' },
     ...(o.pendingCardId ? { pendingCardId: o.pendingCardId } : {}),
+    ...(o.skipped ? { skipped: o.skipped } : {}),
     rules: book.list().map((r) => {
       const st = book.stateOf(r.ruleId, now);
       const name = o.repoName?.(r.repoKey) ?? null;
@@ -274,7 +312,8 @@ export function rulesStatus(book: RuleBook, o: { pendingCardId?: string | null; 
         tool: r.tool,
         repoKey: r.repoKey,
         ...(name ? { repoName: name } : {}),
-        words: ruleWords(r),
+        // Aegis L-2: capped here (the full words are on the card); wordsChars names the full length when cut
+        ...((w) => ([...w].length > STATUS_WORDS_MAX ? { words: `${[...w].slice(0, STATUS_WORDS_MAX - 1).join('')}…`, wordsChars: [...w].length } : { words: w }))(ruleWords(r)),
         ...(r.prefix ? { prefix: [...r.prefix] } : {}),
         ...(r.path ? { path: r.path } : {}),
         ...(r.learnedAt ? { learnedAt: r.learnedAt } : {}),

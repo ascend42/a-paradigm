@@ -40,12 +40,16 @@ describe('8.0:rules-view kinds', () => {
     expect(validateKindPayload('approval.rule.disabled', noBatch).length).toBeGreaterThan(0);
     expect(validateKindPayload('approval.rule.disabled', { ...ok, extra: 1 }).length).toBeGreaterThan(0);
   });
-  it("approval.rule.enabled: cause 'human' names batch, connId and the card; cause 'expired' names only until", () => {
-    const human = { ...base, cause: 'human', batch: `batch:${ULID}`, connId: `conn:${ULID}`, cardId: `card:${ULID}` };
+  it("approval.rule.enabled: cause 'human' names batch, connId, the card and the until it clears; cause 'expired' names only until", () => {
+    // Aegis M-2: the allowed card names the off flag it clears (an ISO until, or null = the off had no end)
+    const human = { ...base, cause: 'human', batch: `batch:${ULID}`, connId: `conn:${ULID}`, cardId: `card:${ULID}`, until: null };
     const expired = { ...base, cause: 'expired', until: '2026-10-23T15:07:00.000Z' };
     expect(validateKindPayload('approval.rule.enabled', human)).toEqual([]);
     expect(validateKindPayload('approval.rule.enabled', expired)).toEqual([]);
-    expect(validateKindPayload('approval.rule.enabled', { ...human, until: expired.until }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('approval.rule.enabled', { ...human, until: expired.until })).toEqual([]);
+    const { until: _u, ...noUntil } = human;
+    expect(validateKindPayload('approval.rule.enabled', noUntil).length).toBeGreaterThan(0);
+    expect(validateKindPayload('approval.rule.enabled', { ...expired, until: null }).length).toBeGreaterThan(0);
     const { cardId: _c, ...noCard } = human;
     expect(validateKindPayload('approval.rule.enabled', noCard).length).toBeGreaterThan(0);
     expect(validateKindPayload('approval.rule.enabled', { ...expired, batch: `batch:${ULID}` }).length).toBeGreaterThan(0);

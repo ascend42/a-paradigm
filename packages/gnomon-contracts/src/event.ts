@@ -741,8 +741,8 @@ export interface ApprovalRuleEnabledPayload {
   batch?: string;
   connId?: string;
   cardId?: string;
-  /** cause 'expired': the disabled row's until (the flag it clears) */
-  until?: string;
+  /** the disabled row's until: the flag it clears (cause 'human': null when the off had no end) */
+  until?: string | null;
 }
 export interface ApprovalEffectFailedPayload {
   cardId: string;
@@ -798,10 +798,10 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('batch' in v) c.str('batch', v.batch, RULES_BATCH_PATTERN, 'batch:<ULID>');
       if ('connId' in v) c.str('connId', v.connId, ID_PATTERNS.conn, 'conn:<ULID>');
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID> (the rules.apply card)');
-      if ('until' in v) c.str('until', v.until, ISO_DATE_TIME, 'an ISO date-time');
+      if ('until' in v && !(v.cause === 'human' && v.until === null)) c.str('until', v.until, ISO_DATE_TIME, "an ISO date-time (null only for cause 'human': the off had no end)");
       if (v.cause === 'human') {
-        for (const k of ['batch', 'connId', 'cardId']) if (!(k in v)) c.fail(k, "is required when cause is 'human' (the allowed card)");
-        if ('until' in v) c.fail('until', "is only for cause 'expired'");
+        // Aegis M-2: the allowed card names the off flag it clears (its until, null = until turned back on)
+        for (const k of ['batch', 'connId', 'cardId', 'until']) if (!(k in v)) c.fail(k, "is required when cause is 'human' (the allowed card and the off it clears)");
       } else if (v.cause === 'expired') {
         if (!('until' in v)) c.fail('until', "is required when cause is 'expired' (the off time that passed)");
         for (const k of ['batch', 'connId', 'cardId']) if (k in v) c.fail(k, "is only for cause 'human'");

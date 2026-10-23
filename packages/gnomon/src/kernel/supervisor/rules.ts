@@ -71,8 +71,8 @@
  * `approval.rule.disabled{ruleId, until}` marks a STANDING rule off, until `until` passes on the KERNEL clock (the
  * book's `clock`, never a page's), or until turned back on when `until` is null. An off rule never matches, is never
  * the repo's repoEditsRule (the mode chip) and lists as off. `approval.rule.enabled{cause:'human'}` (the batch card's
- * allowed effect) clears the flag; `{cause:'expired', until}` (the kernel sweep's feed row) clears it only while it is
- * still the flag that `until` names. Enabled ONLY clears a flag on a rule that stands: it never creates a rule, and a
+ * allowed effect, carrying the `until` it saw at raise) and `{cause:'expired', until}` (the kernel sweep's feed row) clear
+ * it only while it is still the flag that `until` names (Aegis M-2: a stale card never undoes a newer off). Enabled ONLY clears a flag on a rule that stands: it never creates a rule, and a
  * revoke (or the repo brake) drops the flag with the rule, so nothing brings a revoked rule back.
  */
 import path from 'node:path';
@@ -134,7 +134,7 @@ export const MAX_TRACKED_REQUESTS = 4096;
 // grant.standing / grant.standing.revoked (TD-2026-10-23-815): a standing-covered always is verified against the grant's own rows
 // approval.rule.disabled / approval.rule.enabled (8.0:rules-view): off for a time, and back on
 export const RULE_KINDS = Object.freeze(['approval.request', 'approval.decide', 'approval.rule.learned', 'approval.rule.revoked', 'approval.mode.set', 'grant.standing', 'grant.standing.revoked', 'approval.rule.disabled', 'approval.rule.enabled'] as const);
-const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+export const RULE_ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 const STANDING_PREFIX = 'standing:';
 const GRANT_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
 const RULE_MODE_RANK: Readonly<Record<string, number>> = Object.freeze({ manual: 0, ask: 1, 'auto-edits': 2 });
@@ -346,7 +346,7 @@ export class RuleBook {
       if (typeof p.ruleId !== 'string' || !this.#rules.has(p.ruleId)) return;
       let until: number | null = null;
       if (p.until !== null) {
-        if (typeof p.until !== 'string' || !ISO_TIME.test(p.until)) return;
+        if (typeof p.until !== 'string' || !RULE_ISO_TIME.test(p.until)) return;
         until = Date.parse(p.until);
         if (!Number.isFinite(until)) return;
       }
@@ -356,9 +356,9 @@ export class RuleBook {
       if (typeof p.ruleId !== 'string' || !this.#rules.has(p.ruleId)) return;
       const cur = this.#off.get(p.ruleId);
       if (!cur) return;
-      if (p.cause === 'human') this.#off.delete(p.ruleId);
-      // the sweep's row clears only the flag it names (an old expiry never undoes a later off with a new time)
-      else if (p.cause === 'expired' && typeof p.until === 'string' && cur.untilIso === p.until) this.#off.delete(p.ruleId);
+      // Aegis M-2 (review 2026-10-23): BOTH causes clear only the flag they name (`until`, null = until turned back on),
+      // so a stale card's allow, or an old expiry, never undoes a later off with another time
+      if ((p.cause === 'human' && 'until' in p && (p.until === null || typeof p.until === 'string') && cur.untilIso === p.until) || (p.cause === 'expired' && typeof p.until === 'string' && cur.untilIso === p.until)) this.#off.delete(p.ruleId);
     }
   }
 

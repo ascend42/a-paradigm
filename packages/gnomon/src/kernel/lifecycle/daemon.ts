@@ -1456,7 +1456,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         revoke: (ctx: Parameters<typeof rulesRevoke>[0], payload: unknown) => rulesRevoke(ctx, payload),
         // 8.0:rules-view (#rules-apply): the Rules view's one save, and status.rules (human class only)
         apply: (asker: Parameters<typeof rulesApply.apply>[0], payload: unknown) => rulesApply.apply(asker, payload),
-        status: () => rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName }),
+        status: () => rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName, skipped: rulesApply.lastSkipped() }),
       },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,
