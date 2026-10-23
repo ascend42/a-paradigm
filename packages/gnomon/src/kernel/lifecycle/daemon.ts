@@ -137,6 +137,7 @@ import { defaultLocalRunner, nodeVersionOf, runnerVersionOf } from '../local/bun
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { StagedCardPickup } from '../modhost/control.js';
+import { FeedBacklog, FEED_BACKLOG_KINDS, type FeedSourceRow } from '../modhost/feed.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 import type { BillingScanSource } from '../budget/billing.js';
 import { registerSeams } from '../internal-seams.js';
@@ -1014,6 +1015,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     originFor: (connId, human, hsid, attr) => voice.originFor(connId, human, hsid, attr ?? null),
     peekAttribution: (human, hsid, parts) => voice.peekAttribution(human, hsid, parts),
   });
+  // #mod-host feed backlog (founder report 2026-10-23): ONE incremental fold of this boot's released rows (feed.ts
+  // FeedBacklog; requireBoot: nothing counts until this boot's daemon.start is released, Aegis L)
+  const feedFold = new FeedBacklog({ requireBoot: true });
   // #mod-host (M1.11 slice 2): kernel.call → the real dispatcher as the mod principal; own-modns appends clamped (C2)
   const mods = new ModHost({
     home,
@@ -1034,6 +1038,23 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     focusCwd: (hsid) => supervisor.scopeOf(hsid)?.cwd ?? null,
     // Aegis M1: an agent/session caller is joined only to the session whose principal it is
     focusPrincipal: (hsid) => supervisor.principalOf(hsid),
+    // founder report 2026-10-23: a mod started after a session opened is primed with this boot's state in force.
+    // Aegis M: the fold below is fed as rows are released (flushFeed), so a prime is O(state) with no disk read; only a
+    // fold that missed rows (queue overflow) re-reads, bounded to this boot (fromSeq = its daemon.start seq).
+    feedBacklog: () => {
+      if (feedFold.stale) {
+        const from = feedFold.bootSeq;
+        if (from === null) return []; // Aegis L: this boot's daemon.start is not released yet: prime nothing
+        const head = log.releasedHead();
+        feedFold.resync(
+          (function* (): Generator<FeedSourceRow> {
+            for (const v of log.read({ reader: { class: 'human' }, fromSeq: from, toSeq: head, kinds: FEED_BACKLOG_KINDS })) if (v.view === 'full') yield { kind: v.event.kind, seq: v.seq, at: v.event.at, payload: v.event.payload };
+          })(),
+          head,
+        );
+      }
+      return feedFold.snapshot();
+    },
     ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}),
   });
   // M1.11 slice 3 (#mod-cli): what `gnomon mod install|link` staged on disk reaches the human only through the broker
@@ -1047,6 +1068,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     while (feedQueue.length && feedQueue[0]!.seq <= head) {
       const { e } = feedQueue.shift()!;
       try {
+        feedFold.observe(e); // BEFORE the feed: a mod still priming skips this row live and gets it in its backlog
+      } catch {
+        feedFold.markStale();
+      }
+      try {
         mods.feed(e);
       } catch {
         /* a mod's feed never breaks a release */
@@ -1055,7 +1081,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   };
   // commit listeners run BEFORE the release (kernel-log.ts onCommit): deliver on the next turn, up to the released head
   log.onCommit((e) => {
-    if (feedQueue.length >= 4096) feedQueue.shift();
+    if (feedQueue.length >= 4096) {
+      feedQueue.shift();
+      feedFold.markStale(); // the fold missed a row: the next prime re-folds this boot from the log
+    }
     feedQueue.push({ seq: e.seq, e });
     if (feedScheduled) return;
     feedScheduled = true;

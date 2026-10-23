@@ -4677,7 +4677,23 @@ components:
       droppedNotifications) forwards a fixed projection of session.open/exited,
       turn.partial/result, approval.request/decide/expire and warpline.knot
       (kernel fields only; project = a hue index from sha256(cwd)) to running
-      mods requiring log.read - the #workshop-mod input. Projection v2
+      mods requiring log.read - the #workshop-mod input. The feed starts
+      from the state in force (founder report 2026-10-23, "working 0 of 0"
+      beside "1 live"): ModHostOptions.feedBacklog, after a log.read mod's
+      init, replays through the same projection, to that mod only, the
+      rows feed.ts FeedBacklog folds from this boot (FEED_BACKLOG_KINDS
+      from this boot's daemon.start: each live session's session.open,
+      warpline.knot and open turn.partial, each pending approval.request,
+      each mod.paused not cleared by mod.health ok; bounded 256/256/64).
+      Aegis review 2026-10-23: startDaemon keeps ONE FeedBacklog
+      (requireBoot) that flushFeed feeds as rows are released, before
+      mods.feed, so a prime is O(state) with no disk read; nothing is primed
+      until this boot's daemon.start is released; a queue overflow marks it
+      stale and the next prime resyncs with a log.read bounded to
+      fromSeq = bootSeq. feed() skips a mod until its prime is done
+      (Running.primed), so rows released during init arrive once, inside the
+      backlog, in order; #primeFeed refuses a stopping or replaced runner.
+      Tests: test/workshop-mod.test.ts. Projection v2
       (#ledger-mod input; Aegis M1: ONLY to mods granted the narrower
       log.read:usage capability, named on the install card; log.read alone
       gets v1 and turn.result as {hsid}; feedAccessOf/feedReaches; a

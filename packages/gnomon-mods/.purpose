@@ -26,7 +26,9 @@ components:
       mod-abi:v1 directly (no SDK import, so the pinned packageHash never
       depends on an SDK build) and echoes MOD_ABI_ID. State comes ONLY from
       the host's projected kernel-event feed (#mod-host feed.ts, granted by
-      the log.read capability); a host-initiated fixture render may replay
+      the log.read capability), primed at every start with the state in force
+      (#mod-host feedBacklog: live sessions, pending cards, paused mods), so a
+      Workshop started after a session opened still counts it; a host-initiated fixture render may replay
       input.fixtureEvents, a relayed render never can. Declared effects:
       none beyond idle read; tier first-party; installs with
       `gnomon mod install packages/gnomon-mods/workshop` + the root-key card.

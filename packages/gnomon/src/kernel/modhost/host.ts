@@ -71,7 +71,9 @@
  * (`gnomon mod pause`) makes every start return paused{why:'user'}.
  *
  * FEED (slice 3, feed.ts): feed() forwards a fixed projection of kernel
- * kinds to running mods requiring log.read (the Workshop's only input).
+ * kinds to running mods requiring log.read (the Workshop's only input). A
+ * starting log.read mod is first primed with feedBacklog (the state in force:
+ * live sessions, pending cards, paused mods), through the same projection.
  *
  * STILL NAMED, NOT BUILT: dev-mode cards/expiry scheduling/cwd exclusion and
  * the dev re-pin (`mod.repinned`), the `gnomon-mods` MCP bridge, Tier 0
@@ -174,6 +176,13 @@ export interface ModHostOptions {
    * caller is joined only to its OWN session. Absent ⇒ agent/session callers are never joined (unfocused).
    */
   focusPrincipal?: (hsid: string) => string | null;
+  /**
+   * The state in force when a log.read mod starts (feed.ts FeedBacklog; daemon: snapshot() of the ONE fold it feeds as
+   * rows are released, O(state), no disk read). Replayed through the same projection as the live feed, to that mod
+   * only, right after its init; the live feed reaches the mod only after it. Absent ⇒ a mod's feed starts empty and
+   * flows from its spawn (tests).
+   */
+  feedBacklog?: () => Iterable<{ kind?: unknown; seq?: unknown; at?: unknown; payload?: unknown }>;
   /** the user home the K1 projector never walks into (tests); default os.homedir() */
   userHome?: string;
   platform?: string;
@@ -212,6 +221,11 @@ interface Running {
   /** the callId of the host → mod call in force (null while idle) */
   callId: string | null;
   stopping: boolean;
+  /**
+   * Aegis L (2026-10-23): the live feed reaches this mod only once its backlog prime is done, so a row released during
+   * init reaches it once, in order (inside the backlog, never also live before it). True at once without a backlog.
+   */
+  primed: boolean;
 }
 
 export interface RenderResult {
@@ -560,7 +574,7 @@ export class ModHost {
         await this.#o.children.stop(child, 'shutdown');
         throw new ModRefusal('NOT_RUNNING', 'the mod host is stopping', { name });
       }
-      running = { name, child, channel, manifest: m, packageHash: loaded.packageHash, publisherDisplay: publisherDisplayOf(m.publisher, loaded.source), dev, effects, proxy, state: new ModState(this.#o.home, name), sandbox: plan.sandbox, profileHash: plan.profileHash, ctx: { kind: 'idle' }, callId: null, stopping: false };
+      running = { name, child, channel, manifest: m, packageHash: loaded.packageHash, publisherDisplay: publisherDisplayOf(m.publisher, loaded.source), dev, effects, proxy, state: new ModState(this.#o.home, name), sandbox: plan.sandbox, profileHash: plan.profileHash, ctx: { kind: 'idle' }, callId: null, stopping: false, primed: !this.#o.feedBacklog };
       const r = running;
       this.#running.set(name, r);
       child.once('exit', (code, signal) => void this.#onExit(r, code, signal));
@@ -575,6 +589,7 @@ export class ModHost {
         await this.stop(name, 'abi-mismatch');
         throw new ModRefusal('ABI', `${name} answered abi ${String(init?.abi)} / modAbiId ${String(init?.modAbiId)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
       }
+      this.#primeFeed(r);
       this.#emit('mod.health', { name, ok: true });
       if (linked.length) this.#watch(name, linked[0]!); // re-armed on every successful start
       return this.#runningResult(r);
@@ -856,13 +871,35 @@ export class ModHost {
     } else if (hsid && (projected.kind === 'turn.result' || projected.kind === 'session.exited')) this.#streaming.delete(hsid);
     let n = 0;
     for (const r of this.#running.values()) {
-      if (r.stopping) continue;
+      if (r.stopping || !r.primed) continue;
       const access = feedAccessOf(r.manifest.requires?.capabilities);
       if (!feedReaches(access, projected.kind)) continue;
       const ev = access.usage ? projected : base;
       if (ev && r.channel.notify('event', { event: ev })) n++;
     }
     return n;
+  }
+
+  /**
+   * A log.read mod's feed starts from the state in force (founder report 2026-10-23, "working 0 of 0" beside "1 live"):
+   * the backlog rows, projected exactly as feed() projects them, to this mod only. feed() skips the mod until this is
+   * done (Running.primed), so a row released during init arrives once, inside the backlog, in fold order.
+   */
+  #primeFeed(r: Running): void {
+    // Aegis L: a runner stopped (or replaced) while it initialised is never primed, and never fed
+    if (r.stopping || this.#closed || this.#running.get(r.name) !== r) return;
+    try {
+      const access = feedAccessOf(r.manifest.requires?.capabilities);
+      if ((!access.base && !access.usage) || !this.#o.feedBacklog) return;
+      for (const e of this.#o.feedBacklog()) {
+        const ev = projectFeedEvent(e, { usage: access.usage });
+        if (ev && feedReaches(access, ev.kind)) r.channel.notify('event', { event: ev });
+      }
+    } catch {
+      /* an unreadable backlog primes nothing: the live feed still flows */
+    } finally {
+      r.primed = true; // the live feed carries on from the fold's head (feed() skipped it until now)
+    }
   }
 
   /** The call a mod → host request is bound to: its echoed callId must name the call in force; none ⇒ idle. */

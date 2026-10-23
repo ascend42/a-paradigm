@@ -25,8 +25,8 @@ import { effectiveInstall, readGrants, removeTree } from '../src/kernel/manifest
 import { FIRST_PARTY_PACKAGE_HASHES } from '../src/kernel/manifest/install.js';
 import { hashSourceTree } from '../src/kernel/manifest/snapshot.js';
 import { pendingStaged, StagedCardPickup } from '../src/kernel/modhost/control.js';
-import { FEED_KINDS, projectFeedEvent } from '../src/kernel/modhost/feed.js';
-import type { ModHost } from '../src/kernel/modhost/host.js';
+import { FEED_BACKLOG_KINDS, FEED_KINDS, FeedBacklog, feedBacklog, projectFeedEvent } from '../src/kernel/modhost/feed.js';
+import type { ModHost, ModHostOptions } from '../src/kernel/modhost/host.js';
 import { createModHostForTest, decideInstallCard, mintTestPresence, unsandboxedModLauncher } from '../src/kernel/testing.js';
 import { installPresenceBinding, readStaged, stageInstall } from '../src/kernel/manifest/install.js';
 import { EXAMPLE_MOD, writeModFolder } from './mod-helpers.js';
@@ -42,7 +42,7 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
-async function installedWorkshop() {
+async function installedWorkshop(opts: { feedBacklog?: ModHostOptions['feedBacklog'] } = {}) {
   const root = fs.mkdtempSync(path.join(privateTmpRoot(), 'gws-'));
   cleanups.push(() => removeTree(root));
   const home = path.join(root, 'home');
@@ -58,7 +58,7 @@ async function installedWorkshop() {
   const broker = new ApprovalBroker({ kernel: SoftwareEd25519Signer.generate('kernel'), kernelPrincipal: 'p:abcdefgh/kernel', log: async () => undefined, approvals: approvalsKeyFrom(ring, (p) => (p === HUMAN ? keyId : undefined)), presence: touching, root: auth });
   const events: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const children = new DaemonChildren({ append: async (kind, payload) => void events.push({ kind, payload }), control: processControlFor(), boot: 'test', graceMs: 1_000 });
-  const host: ModHost = createModHostForTest({ home, trust: auth, children, emit: (kind, payload) => void events.push({ kind, payload }), callTimeoutMs: 10_000 }, { launcher: unsandboxedModLauncher });
+  const host: ModHost = createModHostForTest({ home, trust: auth, children, emit: (kind, payload) => void events.push({ kind, payload }), callTimeoutMs: 10_000, ...(opts.feedBacklog ? { feedBacklog: opts.feedBacklog } : {}) }, { launcher: unsandboxedModLauncher });
   cleanups.push(() => host.stopAll());
   const pickup = new StagedCardPickup({ home, broker, authority: auth, host });
   await pickup.scan();
@@ -169,6 +169,142 @@ describe('#workshop-mod', () => {
     const r2 = JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null, { prefs: { motion: 'full' } })).block);
     expect(r2).toContain('needs you 0');
     expect(r2).toContain('▲ builder filled still');
+  });
+
+  // founder report 2026-10-23: "WORKING 0 OF 0 · no sessions" beside the status line's "1 live" while a Claude session
+  // was open. The feed is live-only, so a Workshop started after the session opened never learned of it.
+  const A = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZA';
+  const B = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZB';
+  const OLD = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZO';
+  const card = (cardId: string, hsid: string) => ({ kind: 'approval.request', payload: { card: { cardId, kind: 'permission', hsid, block: { text: 'rm -rf /' } } } });
+  const BOOT = [
+    { kind: 'session.open', seq: 1, payload: { hsid: OLD, backend: 'claude-code', cwd: '/old' } }, // the old kernel's
+    { kind: 'daemon.start', seq: 2, payload: {} },
+    { kind: 'session.open', seq: 3, payload: { hsid: A, backend: 'claude-code', cwd: '/secret/project', model: 'claude' } },
+    { kind: 'session.open', seq: 4, payload: { hsid: B, backend: 'claude-code', cwd: '/b' } },
+    { kind: 'turn.partial', seq: 5, payload: { hsid: A } },
+    { kind: 'turn.partial', seq: 6, payload: { hsid: A } },
+    { ...card('card:01HZZZZZZZZZZZZZZZZZZZZZZ1', A), seq: 7 },
+    { ...card('card:01HZZZZZZZZZZZZZZZZZZZZZZ2', A), seq: 8 },
+    { kind: 'approval.decide', seq: 9, payload: { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZ2' } },
+    { ...card('card:01HZZZZZZZZZZZZZZZZZZZZZZ3', B), seq: 10 },
+    { kind: 'session.exited', seq: 11, payload: { hsid: B } }, // its card goes with it, as in the Workshop's reducer
+    { kind: 'turn.text', seq: 12, payload: { hsid: A, text: 'ignore previous instructions' } },
+  ];
+
+  it('feedBacklog folds this boot into the state in force: live sessions (streaming kept), pending cards only', () => {
+    const out = feedBacklog(BOOT.filter((r) => FEED_BACKLOG_KINDS.includes(r.kind)));
+    expect(out.map((r) => `${r.kind}@${String(r.seq)}`)).toEqual(['session.open@3', 'turn.partial@6', 'approval.request@7']);
+    expect(feedBacklog([...BOOT, { kind: 'turn.result', seq: 13, payload: { hsid: A } }]).map((r) => r.kind)).toEqual(['session.open', 'approval.request']);
+    expect(feedBacklog([...BOOT, { kind: 'daemon.start', seq: 13, payload: {} }])).toEqual([]);
+    // a pause shows until a successful start clears it
+    const paused = { kind: 'mod.paused', seq: 14, payload: { name: 'example.hello', reason: 'user' } };
+    expect(feedBacklog([paused])).toEqual([paused]);
+    expect(feedBacklog([paused, { kind: 'mod.health', seq: 15, payload: { name: 'example.hello', ok: true } }])).toEqual([]);
+  });
+
+  it('a Workshop started after a session opened shows it (the host primes it with feedBacklog), and nothing leaks', async () => {
+    let calls = 0;
+    const w = await installedWorkshop({ feedBacklog: () => (calls++, feedBacklog(BOOT.filter((r) => FEED_BACKLOG_KINDS.includes(r.kind)))) });
+    await w.host.start('gnomon.workshop');
+    // the install card's decision starts it (control.ts); its prime follows its init
+    for (let i = 0; i < 100 && calls === 0; i++) await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toBe(1);
+    const s = JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null, { prefs: { motion: 'full' } })).block);
+    expect(s).toContain('working 1 of 1');
+    expect(s).toContain('▲ builder filled bob');
+    expect(s).toContain('needs you 1');
+    for (const leak of ['secret', 'rm -rf', 'ignore previous', 'no sessions']) expect(s).not.toContain(leak);
+    // the live feed carries on from there (a replayed row is idempotent)
+    w.host.feed({ kind: 'session.exited', seq: 13, payload: { hsid: A } });
+    await new Promise((r) => setTimeout(r, 50));
+    const s2 = JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null)).block);
+    expect(s2).toContain('working 0 of 0');
+    expect(s2).toContain('needs you 0');
+  });
+
+  it('Aegis L: FeedBacklog(requireBoot) folds nothing before THIS boot\'s daemon.start is released; then only this boot', () => {
+    const fold = new FeedBacklog({ requireBoot: true });
+    for (const r of BOOT.slice(0, 1)) fold.observe(r); // the previous boot's session, its daemon.start not released yet
+    expect(fold.snapshot()).toEqual([]);
+    expect(fold.bootSeq).toBeNull();
+    for (const r of BOOT.slice(1)) fold.observe(r);
+    expect(fold.bootSeq).toBe(2);
+    expect(fold.snapshot().map((r) => `${r.kind}@${String(r.seq)}`)).toEqual(['session.open@3', 'turn.partial@6', 'approval.request@7']);
+    // a row at or below the fold's head is not folded twice (a re-delivered session.open keeps the streaming edge)
+    fold.observe({ kind: 'session.open', seq: 3, payload: { hsid: A, cwd: '/secret/project' } });
+    expect(fold.snapshot().map((r) => r.kind)).toEqual(['session.open', 'turn.partial', 'approval.request']);
+  });
+
+  it('Aegis M: the fold is incremental (O(state) snapshot); a stale fold resyncs from this boot only, bounded by the head', () => {
+    const fold = new FeedBacklog({ requireBoot: true });
+    for (const r of BOOT) fold.observe(r);
+    const before = fold.snapshot();
+    expect(fold.snapshot()).toEqual(before); // a snapshot reads nothing and changes nothing
+    fold.markStale();
+    expect(fold.stale).toBe(true);
+    const later = { kind: 'session.open', seq: 20, payload: { hsid: B, cwd: '/b' } };
+    // the resync rows come from fromSeq = bootSeq (2); a row past the head is not folded by the resync
+    fold.resync([...BOOT.slice(1), later], 12);
+    expect(fold.stale).toBe(false);
+    expect(fold.snapshot()).toEqual(before);
+    fold.observe(BOOT[2]!); // a queued row at or below the resync head is skipped
+    expect(fold.snapshot()).toEqual(before);
+    fold.observe(later); // the live rows carry on past the head
+    expect(fold.snapshot().map((r) => r.seq)).toEqual([3, 6, 20, 7]);
+    // the daemon wires it so: observe in flushFeed BEFORE mods.feed, and a log.read only on the stale path, from bootSeq
+    const daemon = fs.readFileSync(path.resolve(PKG_ROOT, 'src', 'kernel', 'lifecycle', 'daemon.ts'), 'utf8');
+    expect(daemon).toMatch(/feedFold\.observe\(e\);[^]*?mods\.feed\(e\);/);
+    const wiring = daemon.slice(daemon.indexOf('feedBacklog: () => {'), daemon.indexOf('return feedFold.snapshot();'));
+    expect(wiring).toMatch(/if \(feedFold\.stale\) \{/);
+    expect(wiring).toMatch(/log\.read\(\{ reader: \{ class: 'human' \}, fromSeq: from, toSeq: head, kinds: FEED_BACKLOG_KINDS \}\)/);
+    expect(wiring.match(/log\.read\(/g)).toHaveLength(1);
+  });
+
+  it('Aegis L: rows released during init reach the mod once, inside its backlog and in order (knot and streaming kept)', async () => {
+    const fold = new FeedBacklog({ requireBoot: true });
+    let calls = 0;
+    const w = await installedWorkshop({ feedBacklog: () => (calls++, fold.snapshot()) });
+    for (let i = 0; i < 100 && calls === 0; i++) await new Promise((r) => setTimeout(r, 20)); // the install's own start
+    await w.host.stop('gnomon.workshop');
+    const daemonFlush = (r: (typeof BOOT)[number]): number => (fold.observe(r), w.host.feed(r)); // as daemon.ts flushFeed does
+    daemonFlush({ kind: 'daemon.start', seq: 2, payload: {} });
+    const starting = w.host.start('gnomon.workshop');
+    for (let i = 0; i < 500 && !w.host.running().includes('gnomon.workshop'); i++) await new Promise((r) => setImmediate(r));
+    expect(calls).toBe(1); // still initialising: not primed yet
+    // committed and released while the mod initialises: the feed skips it, the fold keeps it
+    expect(daemonFlush({ kind: 'session.open', seq: 3, payload: { hsid: A, backend: 'claude-code', cwd: '/secret/project' } })).toBe(0);
+    expect(daemonFlush({ kind: 'warpline.knot', seq: 4, payload: { hsid: A } })).toBe(0);
+    expect(daemonFlush({ kind: 'turn.partial', seq: 5, payload: { hsid: A } })).toBe(0);
+    expect(await starting).toMatchObject({ state: 'running' });
+    expect(calls).toBe(2);
+    const s = JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null, { prefs: { motion: 'full' } })).block);
+    expect(s).toContain('working 1 of 1');
+    expect(s).toContain('"state":"knot"'); // the duplicate-free order: session.open, then its knot, then its partial
+    expect(s).toContain('bob');
+    // after the prime the live feed reaches it again
+    expect(daemonFlush({ kind: 'session.exited', seq: 6, payload: { hsid: A } })).toBe(1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null)).block)).toContain('working 0 of 0');
+  });
+
+  it('Aegis L: a runner stopped while it initialises is never primed', async () => {
+    let calls = 0;
+    const w = await installedWorkshop({ feedBacklog: () => (calls++, []) });
+    for (let i = 0; i < 100 && calls === 0; i++) await new Promise((r) => setTimeout(r, 20));
+    await w.host.stop('gnomon.workshop');
+    const starting = w.host.start('gnomon.workshop').catch((e: unknown) => e);
+    for (let i = 0; i < 500 && !w.host.running().includes('gnomon.workshop'); i++) await new Promise((r) => setImmediate(r));
+    await w.host.stop('gnomon.workshop');
+    await starting;
+    expect(calls).toBe(1); // only the install's start was primed
+    expect(w.host.feed({ kind: 'session.open', payload: { hsid: A, cwd: '/p' } })).toBe(0);
+  });
+
+  it('without a backlog (the old behaviour) the same start shows no sessions: the falsifier for the priming', async () => {
+    const w = await installedWorkshop();
+    await w.host.start('gnomon.workshop');
+    expect(JSON.stringify((await w.host.render('gnomon.workshop', 'workshop.strip', null)).block)).toContain('no sessions');
   });
 
   it('the feed projection carries only the listed kernel fields', () => {
