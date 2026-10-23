@@ -243,6 +243,46 @@ console.log(JSON.stringify(r));`, [String(first.pid), p.exe]);
     expect(a.exitCode).toBeNull(); // session A is still running
   });
 
+  it('W5 acceptance (PR #52 release blocker): a session cannot reach a Medium window — not found, not messaged, not focused', async () => {
+    const p = pin();
+    const ps = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    // the stand-in for the wrapper (W6 is not built): a Medium window owned by this user, reporting its HWND
+    const target = spawn(ps, ['-NoProfile', '-Command', `
+Add-Type -AssemblyName System.Windows.Forms
+$f = New-Object System.Windows.Forms.Form; $f.Text = 'gnomon-uipi-target'; $f.ShowInTaskbar = $false; $f.Opacity = 0
+$f.Add_Shown({ [Console]::Out.WriteLine([int64]$f.Handle); [Console]::Out.Flush() })
+[System.Windows.Forms.Application]::Run($f)`], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    cleanups.push(() => target.kill());
+    const hwnd = await new Promise<string>((res, rej) => {
+      target.stdout!.once('data', (b: Buffer) => res(String(b).trim()));
+      target.once('exit', (c) => rej(new Error(`target exited ${c}`)));
+    });
+    expect(hwnd).toMatch(/^\d+$/);
+    // the session: Low, restricted, on its private desktop, in a job with UI limits; Add-Type needs a Low temp dir
+    const lowTemp = path.join(os.homedir(), 'AppData', 'LocalLow', `gnomon-uipi-${process.pid}`);
+    fs.mkdirSync(lowTemp, { recursive: true });
+    cleanups.push(() => fs.rmSync(lowTemp, { recursive: true, force: true }));
+    const probe = `
+Add-Type -Name U -Namespace W -MemberDefinition '
+[DllImport("user32.dll", SetLastError=true)] public static extern System.IntPtr FindWindow(string c, string n);
+[DllImport("user32.dll", SetLastError=true)] public static extern bool IsWindow(System.IntPtr h);
+[DllImport("user32.dll", SetLastError=true)] public static extern bool PostMessage(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll", SetLastError=true)] public static extern bool SetForegroundWindow(System.IntPtr h);'
+$h = [System.IntPtr][int64]${hwnd}
+$r = @{ is = [W.U]::IsWindow($h); tray = [int64][W.U]::FindWindow('Shell_TrayWnd', $null) }
+$r.post = [W.U]::PostMessage($h, 0x0010, [System.IntPtr]::Zero, [System.IntPtr]::Zero)
+$r.focus = [W.U]::SetForegroundWindow($h)
+$r | ConvertTo-Json -Compress`;
+    const out = spawnSync(p.exe, ['sandbox', '--low', '--desktop', '--session-sid', OWN, '--', ps, '-NoProfile', '-Command', probe], { encoding: 'utf8', input: '', windowsHide: true, timeout: 90_000, env: { ...process.env, TEMP: lowTemp, TMP: lowTemp } });
+    const r = JSON.parse(out.stdout.trim().split('\n').pop() ?? '{}') as Record<string, unknown>;
+    expect(r).toEqual({ is: false, tray: 0, post: false, focus: false });
+    // the control: unsandboxed, the same handle is a live window (the falsifier is not vacuous)
+    const ctl = spawnSync(ps, ['-NoProfile', '-Command', `${probe.split('$r = ')[0]}[W.U]::IsWindow($h)`], { encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+    expect(ctl.stdout.trim().split('\n').pop()?.trim()).toBe('True');
+    await new Promise((res) => setTimeout(res, 500));
+    expect(target.exitCode).toBeNull(); // WM_CLOSE never arrived: the Medium window is still up
+  }, 120_000);
+
   it('a session launched by a SHIELDED kernel runs, and cannot open its launcher (Aegis M1)', async () => {
     const p = pin();
     // a stand-in kernel: shielded (its default DACL denies the session SID), then it launches a session that tries to
