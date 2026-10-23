@@ -43,7 +43,7 @@ import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringShee
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
 import type { ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
-import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
+import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
 import { McpServersController } from './mcp-servers.js';
 import { MCP_SECTION } from '../core/mcp-servers.js';
@@ -1328,6 +1328,13 @@ const settings = mountSettings(document, {
     press: (act, ruleId, value) => {
       if (!ruleId) return;
       const rs = rulesStatusOf(status);
+      // founder 2026-10-23 ("folded works"): a repo group's heading folds and unfolds it (ruleId is the repoKey here)
+      if (act === 'fold') {
+        const g = rulesBlock(rs, rulesUi).groups.find((x) => x.repoKey === ruleId);
+        if (!g?.foldable) return;
+        rulesUi = toggleFold(rulesUi, ruleId, !g.folded);
+        return settings.repaint(); // focus stays on the same heading key (the sheet restores it by act and id)
+      }
       if (act === 'off-menu') rulesUi = toggleOffMenu(rulesUi, ruleId);
       else if (act === 'off' && (value === 'hour' || value === 'tomorrow' || value === 'manual')) rulesUi = stageOff(rulesUi, ruleId, value as RulePreset, rs);
       else if (act === 'on') rulesUi = stageOn(rulesUi, ruleId);

@@ -432,6 +432,8 @@ const PATH_FIELDS: Readonly<Record<string, string>> = Object.freeze({ Edit: 'fil
  * line, and is capped only for huge commands; a capped arg says so and the card then shows the kernel's body VISIBLY.
  */
 export const TITLE_ARG_MAX = 4000;
+/** design-system card.body-scroll: the accessible name of a card's body (a focusable area that scrolls when long). */
+export const CARD_BODY_LABEL = 'what the card says (scrolls when long)';
 /** Every line break a command can carry (the sanitizer already maps U+2028/2029 to \n): each is its own visible line. */
 const ARG_LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
 /** The shell's command separators and substitutions, marked visibly inside a line (quotes are not parsed: over-marking is safe). */
@@ -1107,7 +1109,11 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const bodyShown = loud || capped || mcpFace;
   const shownBody = mcpFace ? withoutLines(body, (l) => l === kLine || l.startsWith('Allow takes the root key')) : body;
   // a kind whose lines the kernel does not compose: its words are labelled as the requester's (never the kernel's)
-  const bodyEl = h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, quoted ? h(doc, 'span', { class: 'meta card-quote-label' }, `the requester's words (${v.requestedBy}):`) : null, renderBlock(ctx, shownBody));
+  // design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
+  // large that's fine"): a body taller than its cap scrolls INSIDE the card (styles.css .card-body), so the title, the
+  // keys and the presence line stay in view. It is one tab stop (tabindex 0, named), so the keyboard can scroll it
+  // with the arrow keys; Tab moves on to the keys, so it never traps focus.
+  const bodyEl = h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}`, tabindex: '0', role: 'group', 'aria-label': CARD_BODY_LABEL }, quoted ? h(doc, 'span', { class: 'meta card-quote-label' }, `the requester's words (${v.requestedBy}):`) : null, renderBlock(ctx, shownBody));
   return h(
     doc,
     'section',
