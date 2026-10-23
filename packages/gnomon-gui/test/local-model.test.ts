@@ -12,10 +12,10 @@ import { RpcError } from '../src/core/client.js';
 import { paletteEntries } from '../src/core/commands.js';
 import { addressError, changeForm, emptyLocalUi, formErrors, localSection, localStatusOf, probeVerdict, setupForm, type LocalUi } from '../src/core/local-model.js';
 import { cantStart, detailKeys, loopAlerts, loopGroups, loopsOf, runRefusalOf, startLine } from '../src/core/loops.js';
-import { cardContentHash, helperLineLength, localRowOf, rootRowsOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { cardContentHash, helperLineLength, localRowOf, renderCard, rootRowsOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import type { SettingRow } from '../src/core/settings.js';
 import { LocalModelController, type LocalDeps } from '../src/ui/local-model.js';
-import { paintSettings } from '../src/ui/settings-sheet.js';
+import { compositionGate, paintSettings } from '../src/ui/settings-sheet.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const time = (iso: string): string => iso.slice(11, 16);
@@ -55,7 +55,12 @@ describe('#gui-local-model: the section in every state', () => {
     expect(row(r, 'local-form')).toMatchObject({ keys: [{ act: 'change', label: 'Change…' }, { act: 'turn-off', label: 'Turn off', quiet: true }] });
   });
   it('checking, check failed (Check again), no tools, short context, unknown context, no runner', () => {
-    expect(valueOf(row(sec(local({ lastProbe: null })).rows, 'local-check'))).toBe('checking… started 23:23');
+    // the kernel says a probe is in flight (status.local.probing), never inferred from an empty lastProbe
+    expect(valueOf(row(sec(local({ lastProbe: null, probing: true, probingSince: '2026-10-22T23:23:00.000Z', probingEndpoint: 'ollama' })).rows, 'local-check'))).toBe('checking… started 23:23');
+    expect(valueOf(row(sec(local({ probing: true, probingSince: '2026-10-22T23:25:00.000Z' })).rows, 'local-check'))).toBe('checking… started 23:25');
+    const never = row(sec(local({ lastProbe: null, probing: false })).rows, 'local-check');
+    expect(valueOf(never)).toBe('not checked yet');
+    expect(never).toMatchObject({ keys: [{ act: 'check', label: 'Check now' }] });
     const failed = row(sec(local({ lastProbe: { at: '2026-10-22T23:24:00.000Z', ok: false, why: 'probe-failed', error: 'unreachable:ECONNREFUSED', tools: false, contextSize: null } })).rows, 'local-check');
     expect(valueOf(failed)).toBe('✕ no answer: connection refused · 23:24');
     expect(failed).toMatchObject({ keys: [{ act: 'check', label: 'Check again' }] });
@@ -163,6 +168,7 @@ function rig(status: unknown = NONE, answers: Record<string, Array<unknown | (()
   const focus: unknown[] = [];
   const decided: string[] = [];
   const toasts: string[] = [];
+  const refreshed: number[] = [];
   let open = true;
   const d: LocalDeps = {
     call: async (req) => {
@@ -175,7 +181,7 @@ function rig(status: unknown = NONE, answers: Record<string, Array<unknown | (()
     loopsUsing: () => ['evening-tidy'],
     now: () => Date.parse('2026-10-22T23:20:00.000Z'),
     time,
-    refreshStatus: async () => undefined,
+    refreshStatus: async () => void refreshed.push(calls.length),
     repaint: () => undefined,
     focus: (t) => void focus.push(t),
     decide: (id) => {
@@ -186,11 +192,31 @@ function rig(status: unknown = NONE, answers: Record<string, Array<unknown | (()
     toast: (t) => void toasts.push(t),
     wait: async () => undefined,
   };
-  return { c: new LocalModelController(d), calls, focus, decided, toasts };
+  return { c: new LocalModelController(d), calls, focus, decided, toasts, refreshed };
 }
 const refusal = (data: Record<string, unknown>, reason = 'bad-params') => () => {
   throw new RpcError({ code: 'BAD_REQUEST', reason, message: '#local-config-request: a check is already running', next: [], data });
 };
+
+describe('#gui-local-model: IME composition (Mika)', () => {
+  it('a repaint asked for while composing is skipped and owed once, then runs when the composition ends', () => {
+    const g = compositionGate();
+    expect(g.hold()).toBe(false);
+    g.start();
+    expect(g.hold()).toBe(true);
+    expect(g.hold()).toBe(true);
+    expect(g.end()).toBe(true);
+    expect(g.hold()).toBe(false);
+    g.start();
+    expect(g.end()).toBe(false); // nothing asked meanwhile: nothing owed
+  });
+  it('the sheet gates its repaint and listens for compositionstart/end', () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'ui', 'settings-sheet.ts'), 'utf8');
+    expect(src).toMatch(/if \(ime\.hold\(\)\) return;/);
+    expect(src).toMatch(/addEventListener\('compositionstart'/);
+    expect(src).toMatch(/addEventListener\('compositionend'/);
+  });
+});
 
 describe('#gui-local-model: keyboard, focus and one request at a time', () => {
   it('a script-made press changes nothing (G-GUI-04)', async () => {
@@ -304,7 +330,7 @@ describe('#gui-local-model: keyboard, focus and one request at a time', () => {
     c.press('decide', null, true); // closes the sheet
     c.row({ kind: 'approval.decide', payload: { cardId: 'card:L1', decision: 'allow' } });
     expect(c.ui().request).toBeNull();
-    st = local({ lastProbe: null });
+    st = local({ lastProbe: null, probing: true, probingSince: '2026-10-22T23:20:30.000Z' });
     c.statusChanged();
     expect(toasts).toEqual([]);
     expect(valueOf(row(sec(st).rows, 'local-check'))).toMatch(/^checking… started/);
@@ -312,6 +338,32 @@ describe('#gui-local-model: keyboard, focus and one request at a time', () => {
     c.statusChanged();
     c.statusChanged();
     expect(toasts).toEqual(['set · qwen2.5-coder:14b on 127.0.0.1:11434 · ✓ answers · tools native · context 32 768']);
+  });
+  it('Check again: the kernel records it in status.local.lastProbe, so the row reads the refreshed status (no newer-of-two)', async () => {
+    let st: unknown = local({ lastProbe: { endpoint: 'ollama', at: '2026-10-22T23:10:00.000Z', ok: false, why: 'probe-failed', error: 'unreachable', tools: false, contextSize: null } });
+    const { c, calls, refreshed } = rig(() => st);
+    const pressed = new Promise<void>((res) => {
+      c.press('check', null, true);
+      setTimeout(res, 0);
+    });
+    expect(valueOf(row(sec(st, c.ui()).rows, 'local-check'))).toMatch(/^checking… started 23:20/);
+    st = local({ lastProbe: { endpoint: 'ollama', at: '2026-10-22T23:20:01.000Z', ok: true, why: 'capable', tools: true, contextSize: 32768 } });
+    await pressed;
+    expect(calls.map((x) => x.kind)).toEqual(['request.local.probe']);
+    expect(refreshed).toEqual([1]);
+    expect(c.ui().check).toBeNull();
+    expect(valueOf(row(sec(st, c.ui()).rows, 'local-check'))).toBe('✓ answers · tools native · context 32 768 · 23:20');
+  });
+  it('Check again whose call fails is held until the kernel checks again', async () => {
+    let st: unknown = local();
+    const { c } = rig(() => st, { 'request.local.probe': [() => { throw new RpcError({ code: 'FORBIDDEN', reason: 'matrix', message: 'not on this connection', next: [], data: null }); }] });
+    c.press('check', null, true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(valueOf(row(sec(st, c.ui()).rows, 'local-check'))).toMatch(/^✕ no answer/);
+    st = local({ probing: true, probingSince: '2026-10-22T23:21:00.000Z' });
+    c.statusChanged();
+    expect(c.ui().check).toBeNull();
+    expect(valueOf(row(sec(st, c.ui()).rows, 'local-check'))).toBe('checking… started 23:21');
   });
   it('Turn off: confirm only when loops use it; keep it and Esc return to the Turn off key', async () => {
     const { c, calls, focus } = rig(local());
@@ -420,6 +472,27 @@ describe('Aegis L4: GUI-only row cases', () => {
       { text: 'runner · bundled · tree bbbbbbbb…bbbb · sha aaaaaaaa… · unchanged' },
       { text: `runner folder ${RUNNER.dir}/cli.js · node ${RUNNER.node}` },
     ]);
+  });
+});
+
+describe('Mika: the signed lines say their diff mark in visually hidden text, never an aria-label', () => {
+  it('an added line reads "new: …", a removed one "was: …"; no aria-label on a list item', () => {
+    type El = { tag: string; className: string; attrs: Map<string, string>; kids: unknown[]; appendChild(c: unknown): unknown; setAttribute(n: string, v: string): void };
+    const els: El[] = [];
+    const doc: MiniDoc = {
+      createElement: (tag: string) => {
+        const e: El = { tag, className: '', attrs: new Map(), kids: [], appendChild(c) { this.kids.push(c); return c; }, setAttribute(n, v) { this.attrs.set(n, v); } };
+        els.push(e);
+        return e as unknown as MiniEl;
+      },
+      createTextNode: (t) => t,
+    };
+    const textOf = (e: unknown): string => (typeof e === 'string' ? e : (e as El).kids.map(textOf).join(''));
+    renderCard({ doc }, { cardId: 'card:L1', kind: 'grant', requestedBy: 'p:abcdefgh/matt', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags: [], decisions: ['allow', 'deny'], decidable: true, rootRows: { lines: [], items: [{ text: 'model a', mark: 'del' }, { text: 'model b', mark: 'add' }, { text: 'loops may use it · unchanged' }] } } as never, { type: 'Box', children: [] });
+    const lis = els.filter((e) => e.tag === 'li');
+    expect(lis.map(textOf)).toEqual(['was: model a', 'new: model b', 'loops may use it · unchanged']);
+    expect(lis.some((e) => e.attrs.has('aria-label'))).toBe(false);
+    expect(lis.slice(0, 2).map((e) => (e.kids[0] as El).className)).toEqual(['sr-only', 'sr-only']);
   });
 });
 

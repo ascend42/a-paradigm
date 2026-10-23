@@ -291,6 +291,10 @@ export class LocalLane {
   #config: LocalLaneConfig | undefined;
   /** status.local.lastProbe / lastFallback (Mika: the Settings section's health rows) */
   #lastProbe: LocalProbeState | null = null;
+  /** status.local.probing: the probes of a configured endpoint in flight (the automatic one and Check again) */
+  readonly #probing = new Map<symbol, { endpoint: string; since: string }>();
+  /** bumped by setConfig: a probe that started under an older config records nothing */
+  #gen = 0;
   #lastFallback: { at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string } | null = null;
 
   constructor(o: LocalLaneOptions) {
@@ -317,8 +321,54 @@ export class LocalLane {
    */
   setConfig(config: LocalLaneConfig | undefined): void {
     this.#config = config;
+    this.#gen++;
     this.#probes.clear();
     this.#lastProbe = null;
+  }
+
+  /** status.local.probing: the oldest probe of a configured endpoint in flight (its endpoint and start), or null. */
+  probing(): { endpoint: string; since: string } | null {
+    let first: { endpoint: string; since: string } | null = null;
+    for (const p of this.#probing.values()) if (!first || p.since < first.since) first = p;
+    return first;
+  }
+
+  /**
+   * A probe of the configured endpoint whose base, model and compat these are (Check again, request.local.probe): its
+   * id, or null when no configured endpoint matches (a check of an unsaved address records nothing here).
+   */
+  configuredEndpoint(ep: { base: string; model: string; compat: string }): string | null {
+    const norm = (b: string): string => b.replace(/\/+$/, '');
+    return this.#config?.endpoints.find((e) => norm(e.base) === norm(ep.base) && e.model === ep.model && e.compat === ep.compat)?.id ?? null;
+  }
+
+  /** Mark a probe of configured endpoint `id` in flight (status.local.probing); the returned function ends it. */
+  beginProbe(id: string): () => void {
+    const token = Symbol(id);
+    this.#probing.set(token, { endpoint: id, since: new Date().toISOString() });
+    return () => void this.#probing.delete(token);
+  }
+
+  /**
+   * A fresh probe of configured endpoint `id` landed outside the open path (Check again): it refreshes the probe cache
+   * and status.local.lastProbe, as the automatic probe does. `why` overrides the capability reason (model-missing).
+   * A probe begun under an older config (`gen`, from probeGen) records nothing.
+   */
+  recordProbe(id: string, caps: LocalCapabilities, o: { why?: string; gen?: number } = {}): void {
+    if (o.gen !== undefined && o.gen !== this.#gen) return;
+    if (!this.#config?.endpoints.some((e) => e.id === id)) return;
+    this.#probes.set(id, { at: Date.now(), caps });
+    this.#setLastProbe(id, caps, o.why);
+  }
+
+  /** The config generation (recordProbe's `gen`: read it before the probe starts). */
+  probeGen(): number {
+    return this.#gen;
+  }
+
+  #setLastProbe(id: string, caps: LocalCapabilities, why?: string): void {
+    const k = capability(caps, this.#config?.ctxFloor ?? DEFAULT_CTX_FLOOR, false);
+    this.#lastProbe = { endpoint: id, at: new Date().toISOString(), ok: k.capable && why === undefined, why: why ?? k.reason, ...(caps.error ? { error: caps.error.slice(0, 200) } : {}), tools: caps.tools, contextSize: caps.nCtx };
   }
 
   /** The last probe of any endpoint (state for Settings: ok, why, tools, context), or null since the config applied. */
@@ -344,12 +394,21 @@ export class LocalLane {
   async #probe(ep: { id: string; base: string; model: string }): Promise<LocalCapabilities> {
     const hit = this.#probes.get(ep.id);
     if (hit && Date.now() - hit.at < (this.#o.probeTtlMs ?? 60_000)) return hit.caps;
-    const caps = await probeLocalEndpoint(ep, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+    const gen = this.#gen;
+    const end = this.beginProbe(ep.id);
+    let caps: LocalCapabilities;
+    try {
+      caps = await probeLocalEndpoint(ep, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+    } finally {
+      end();
+    }
     await this.#o.log('model.probe', { endpoint: ep.id, ok: caps.ok, ...(caps.error ? { error: caps.error } : {}) });
     if (caps.ok) await this.#o.log('model.capabilities', { backend: 'local', endpoint: ep.id, model: caps.model, tools: caps.tools, ctx: caps.nCtx, ctxSource: caps.nCtxSource, templateTools: caps.templateTools });
-    this.#probes.set(ep.id, { at: Date.now(), caps });
-    const k = capability(caps, this.#config?.ctxFloor ?? DEFAULT_CTX_FLOOR, false);
-    this.#lastProbe = { endpoint: ep.id, at: new Date().toISOString(), ok: k.capable, why: k.reason, ...(caps.error ? { error: caps.error.slice(0, 200) } : {}), tools: caps.tools, contextSize: caps.nCtx };
+    if (gen === this.#gen) {
+      // a probe begun under an older config neither caches nor shows (setConfig cleared both)
+      this.#probes.set(ep.id, { at: Date.now(), caps });
+      this.#setLastProbe(ep.id, caps);
+    }
     return caps;
   }
 

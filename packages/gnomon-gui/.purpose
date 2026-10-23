@@ -1263,7 +1263,17 @@ components:
       cantStart / runRefusalOf: the loop detail's can't-start line per kernel
       why (none, sessions-only, no-runner, no-profile), Run now's reason, the
       needs-you pin and the refused-start alert key. Palette local.setup.
-      Tests: test/local-model.test.ts, test/root-rows.test.ts.
+      Follow-ups: the Check row says "checking…" only from the kernel's
+      status.local.probing (or a Check again in flight), "not checked yet"
+      with Check again otherwise; Check again reads the refreshed
+      status.local.lastProbe (the kernel records it), ui.check holds only a
+      call that failed. A never-fired start refusal (count 0) is the same
+      one alert, worded "■ <id> can’t start". settings-sheet.ts
+      compositionGate: no repaint while an IME composition is active (owed,
+      run at compositionend). The card's signed lines say their diff mark in
+      sr-only "new: " / "was: " text (no aria-label on a list item).
+      Tests: test/local-model.test.ts, test/root-rows.test.ts,
+      test/loops-view.test.ts.
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto

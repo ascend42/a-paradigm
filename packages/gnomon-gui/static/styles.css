@@ -1325,7 +1325,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .card-root-rows li { padding-left: 12px; text-indent: -12px; overflow-wrap: anywhere; }
 .card-root-rows li::before { content: "· "; color: var(--sec); }
 .card-root-rows li.add { color: var(--ink); font-weight: 600; background: var(--fold); border-left: 2px solid var(--key-edge); padding-left: 12px; margin-left: -2px; }
-.card-root-rows li.add::before { content: "+ "; }
+/* the marks are said by the sr-only "new:" / "was:"; the plain content first, so an engine without the alt-text
+   syntax (an older WKWebView) keeps the visible mark instead of dropping the declaration */
+.card-root-rows li.add::before { content: "+ "; content: "+ " / ""; }
 .card-root-rows li.del { color: var(--sec); text-decoration: line-through 1px; }
-.card-root-rows li.del::before { content: "− "; }
+.card-root-rows li.del::before { content: "− "; content: "− " / ""; }
 .card-head .fam { color: var(--ink); font-weight: 600; letter-spacing: .04em; }

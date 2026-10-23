@@ -28,7 +28,7 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { LOCAL_CONFIG_FILE, LOCAL_SEEN_FILE, loadLocalConfig, localChainHighWater, localChainRemoved, nextLocalVersion, validateLocalEndpoints, writeHomeFileAtomic, writeSignedLocalConfig, type LocalLaneConfig } from '../src/kernel/local/config.js';
 import { localStatusFor } from '../src/kernel/socket/dispatch.js';
-import { CHANGED_WHILE_OPEN, LocalConfigCards, validateLocalConfigInput, type LocalAsker } from '../src/kernel/local/config-request.js';
+import { CHANGED_WHILE_OPEN, LocalConfigCards, validateLocalConfigInput, type LocalAsker, type LocalProbeSink } from '../src/kernel/local/config-request.js';
 import { compiledLocalRunnerPin, defaultLocalRunner } from '../src/kernel/local/bundled-runner.js';
 import { pinOf, treeHash } from '../src/kernel/local/runner-pin.js';
 import { compileLoop, loopFileJson } from '../src/loops/index.js';
@@ -83,7 +83,7 @@ class UnknownVersionKey extends HelperApprovalsKey {
   }
 }
 
-function rig(o: { version?: string; unknownVersion?: boolean; runner?: string; fetch?: (u: string, i: RequestInit) => Promise<Response> } = {}) {
+function rig(o: { version?: string; unknownVersion?: boolean; runner?: string; fetch?: (u: string, i: RequestInit) => Promise<Response>; lane?: LocalProbeSink } = {}) {
   const home = tmp('gnomon-home-');
   const helper = new CountingFakeHelper(GEN, { version: o.version ?? '1.9.0', bounds: { idleSeconds: 12 * 3600, absoluteSeconds: 12 * 3600, maxSignatures: 512 } });
   const approvals = new (o.unknownVersion ? UnknownVersionKey : HelperApprovalsKey)({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper);
@@ -111,6 +111,7 @@ function rig(o: { version?: string; unknownVersion?: boolean; runner?: string; f
     platform: 'darwin',
     probeGapMs: 50,
     ...(o.fetch ? { probeFetch: o.fetch } : {}),
+    ...(o.lane ? { lane: o.lane } : {}),
   });
   return { home, helper, broker, root, logged, events, state, applied, runner, cards };
 }
@@ -417,6 +418,51 @@ describe('request.local.probe: the read-only check before a card', () => {
     await r.cards.probe(gui(), { model: 'qwen3.5:9b' });
     expect((await refusal(r.cards.probe(gui(), { model: 'qwen3.5:9b' }))).data).toMatchObject({ why: 'rate-limited' });
   });
+  it('Check again on a CONFIGURED endpoint shows as probing, then refreshes lastProbe and the probe cache; an unsaved address does not', async () => {
+    const { LocalLane } = await import('../src/kernel/supervisor/local-session.js');
+    let laneFetches = 0;
+    const lane = new LocalLane({ log: async () => undefined, children: { intend: () => undefined, track: () => undefined, stop: async () => false } as never, fuse: {} as never, home: tmp('h-'), kernelPrincipal: KERNEL, sock: '/tmp/x', sessionPath: null, pathDenies: [], identity: null, probeFetch: async () => { laneFetches++; throw new Error('the lane never probes here'); } });
+    lane.setConfig({ endpoints: [{ id: 'llama', base: 'http://127.0.0.1:8080', model: 'qwen3.5:9b', compat: 'llama.cpp' }] });
+    const s = server({ nCtx: 4096 });
+    let seenProbing: unknown = 'never asked';
+    const fetch = async (u: string, i: RequestInit): Promise<Response> => {
+      if (seenProbing === 'never asked') seenProbing = lane.probing();
+      return s.fetch(u);
+    };
+    const r = rig({ fetch, lane });
+    expect(lane.probing()).toBeNull();
+    // an unsaved address: no probing, no lastProbe
+    await r.cards.probe(gui(), { model: 'other-model', base: 'http://127.0.0.1:8080', compat: 'llama.cpp' });
+    expect(seenProbing).toBeNull();
+    expect(lane.lastProbe()).toBeNull();
+    await new Promise((res) => setTimeout(res, 60)); // the rig's 50 ms rate limit
+    seenProbing = 'never asked';
+    const got = await r.cards.probe(gui(), { model: 'qwen3.5:9b', base: 'http://127.0.0.1:8080/', compat: 'llama.cpp' });
+    expect(got).toMatchObject({ ok: false, why: 'ctx-below-floor' });
+    expect(seenProbing).toMatchObject({ endpoint: 'llama', since: expect.any(String) });
+    expect(lane.probing()).toBeNull();
+    expect(lane.lastProbe()).toMatchObject({ endpoint: 'llama', ok: false, why: 'ctx-below-floor', contextSize: 4096 });
+    // the cache took it: probeAll within the TTL asks the server nothing
+    expect(await lane.probeAll()).toEqual([{ endpoint: 'llama', ok: true }]);
+    expect(laneFetches).toBe(0);
+    // model-missing is said as such on the health row
+    await new Promise((res) => setTimeout(res, 60));
+    const r2 = rig({ fetch: server({ models: ['other'] }).fetch, lane });
+    await r2.cards.probe(gui(), { model: 'qwen3.5:9b', base: 'http://127.0.0.1:8080', compat: 'llama.cpp' });
+    expect(lane.lastProbe()).toMatchObject({ endpoint: 'llama', ok: false, why: 'model-missing' });
+  });
+  it('a check begun under an older config records nothing', async () => {
+    const { LocalLane } = await import('../src/kernel/supervisor/local-session.js');
+    const lane = new LocalLane({ log: async () => undefined, children: { intend: () => undefined, track: () => undefined, stop: async () => false } as never, fuse: {} as never, home: tmp('h-'), kernelPrincipal: KERNEL, sock: '/tmp/x', sessionPath: null, pathDenies: [], identity: null });
+    const cfg: LocalLaneConfig = { endpoints: [{ id: 'llama', base: 'http://127.0.0.1:8080', model: 'qwen3.5:9b', compat: 'llama.cpp' }] };
+    lane.setConfig(cfg);
+    const fetch = async (u: string): Promise<Response> => {
+      lane.setConfig(cfg); // a config applied while the check ran
+      return server().fetch(u);
+    };
+    await rig({ fetch, lane }).cards.probe(gui(), { model: 'qwen3.5:9b', base: 'http://127.0.0.1:8080', compat: 'llama.cpp' });
+    expect(lane.lastProbe()).toBeNull();
+  });
 });
 
 describe('the bundled gnomon-local runner', () => {
@@ -481,10 +527,13 @@ describe('end to end: a loop with a model node waits on the card, then reaches i
     registry.observe({ kind: 'loop.trusted', principal: KERNEL, payload: { loopId: e.loopId, scope: e.scope, repoKey: e.repoKey, contentHash: e.hash!.contentHash, coreHash: e.hash!.coreHash, by: HUMAN } });
     const pass: CheckResult = { verdict: 'pass', exitCode: 0, signal: null, durationMs: 1, evidence: { stdoutTail: 'ok', stderrTail: '', stdoutTruncated: false, stderrTruncated: false, redactions: [], label: 'private', sensitive: true }, profileHash: null, envKeys: [], copy: { dir: '', files: 0, bytes: 0, kept: false } };
     const runner = new LoopRunner({ home: r.home, kernelPrincipal: KERNEL, registry, ledger, append, platform: 'darwin', broker: { raise: async (i: any) => ({ cardId: i.cardId }) as any }, check: async () => pass, model: port, caps: { modelBackoffMs: [1] } });
+    // 0. never fired: refused right now from the config and its trust (count 0, trigger none), one per loop
+    expect(runner.status().startRefused).toEqual([expect.objectContaining({ key, code: 'no-local-model', why: 'none', count: 0, trigger: 'none', modelNodes: ['digest'] })]);
+    const firstSeen = (runner.status().startRefused as Array<{ since: string }>)[0]!.since;
     // 1. no config: the scheduled fire is refused before any step, recorded for the GUI's stack alert
     expect(() => runner.start(key, { type: 'schedule', dueAt: '2026-10-22T18:30:00.000Z' })).toThrow(/no local model is configured/);
     expect(() => runner.start(key, { type: 'schedule', dueAt: '2026-10-23T18:30:00.000Z' })).toThrow(/no-local-model|no local model/);
-    expect((runner.status().startRefused as unknown[])).toEqual([expect.objectContaining({ key, loopId: 'tidy', code: 'no-local-model', why: 'none', count: 2, trigger: 'schedule', modelNodes: ['digest'] })]);
+    expect((runner.status().startRefused as unknown[])).toEqual([expect.objectContaining({ key, loopId: 'tidy', code: 'no-local-model', why: 'none', count: 2, trigger: 'schedule', modelNodes: ['digest'], since: firstSeen })]);
     await Promise.resolve();
     expect(rows.filter((x) => x.kind === 'loop.trigger.fired').map((x) => x.payload.refused)).toEqual([{ code: 'no-local-model', why: 'none' }, { code: 'no-local-model', why: 'none' }]);
     // 2. a sessions-only config: still refused, why sessions-only
@@ -516,5 +565,17 @@ describe('LocalLane hot apply', () => {
     lane.setConfig(undefined);
     expect(lane.config()).toBeUndefined();
     expect(lane.lastProbe()).toBeNull();
+  });
+  it('the automatic probe shows as probing (endpoint and since) while it runs, then lands in lastProbe', async () => {
+    const { LocalLane } = await import('../src/kernel/supervisor/local-session.js');
+    const during: unknown[] = [];
+    const lane: InstanceType<typeof LocalLane> = new LocalLane({ log: async () => undefined, children: { intend: () => undefined, track: () => undefined, stop: async () => false } as never, fuse: {} as never, home: tmp('h-'), kernelPrincipal: KERNEL, sock: '/tmp/x', sessionPath: null, pathDenies: [], identity: null, probeFetch: async () => { during.push(lane.probing()); throw new Error('connect ECONNREFUSED'); } });
+    lane.setConfig({ endpoints: [{ id: 'ollama', base: 'http://127.0.0.1:11434', model: 'm', compat: 'ollama' }] });
+    const p = lane.probeAll();
+    expect(lane.probing()).toMatchObject({ endpoint: 'ollama', since: expect.any(String) });
+    await p;
+    expect(during[0]).toMatchObject({ endpoint: 'ollama' });
+    expect(lane.probing()).toBeNull();
+    expect(lane.lastProbe()).toMatchObject({ endpoint: 'ollama', ok: false });
   });
 });

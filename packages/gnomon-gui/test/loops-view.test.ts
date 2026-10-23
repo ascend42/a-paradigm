@@ -203,6 +203,19 @@ describe('LP8 loops model', () => {
     expect(loopAlerts(loopsOf(status({ startRefused: [] }))!, new Set()).filter((x) => x.kind === 'refused-start')).toEqual([]);
   });
 
+  it('a loop the kernel would refuse right now, though it never fired (count 0), is the same one alert, worded as can’t start', () => {
+    const now = { key: KEY('flow-health-checkout'), loopId: 'flow-health-checkout', code: 'no-local-model', why: 'none', at: '2026-10-22T18:00:00.000Z', since: '2026-10-22T18:00:00.000Z', count: 0, trigger: 'none', modelNodes: ['digest'] };
+    const m = loopsOf(status({ startRefused: [now] }))!;
+    expect(m.loops[0]!.startRefused).toMatchObject({ count: 0, trigger: 'none' });
+    const a = loopAlerts(m, new Set()).filter((x) => x.kind === 'refused-start');
+    expect(a).toHaveLength(1);
+    expect(a[0]!.title).toBe('■ flow-health-checkout can’t start');
+    expect(a[0]!.path).toBe('no local model · nothing has fired yet · a fire is refused before any step');
+    // its first fire keeps the streak (same since): the dismissed alert stays dismissed
+    const fired = loopAlerts(loopsOf(status({ startRefused: [{ ...now, count: 1, trigger: 'schedule', at: '2026-10-22T18:30:00.000Z' }] }))!, new Set([a[0]!.id])).filter((x) => x.kind === 'refused-start');
+    expect(fired).toEqual([]);
+  });
+
   it('alerts: a kernel pause; a stop by a limit; dismissed ones stay gone; the slip lists loops with no card', () => {
     const m = loopsOf(status())!;
     const a = loopAlerts(m, new Set());

@@ -114,11 +114,13 @@ export interface LoopStartRefusal {
   loopId: string;
   code: 'no-local-model';
   why: LoopStartRefusalWhy;
-  /** the last refused fire */
+  /** the last refused fire (or, while nothing has fired, when the kernel first saw it would be refused) */
   at: string;
-  /** the first refused fire of this streak */
+  /** the first refused fire of this streak (or when it was first seen refusable) */
   since: string;
+  /** refused fires; 0 = never fired, refused NOW from the current config and its trust (a manual Run now would be too) */
   count: number;
+  /** the refused fire's trigger type; 'none' while nothing has fired */
   trigger: string;
   dueAt?: string;
   modelNodes: string[];
@@ -533,13 +535,25 @@ export class LoopRunner {
       .catch(() => undefined);
   }
 
-  /** A local config applied: drop every start refusal whose loop could start now (its stack alert clears). */
+  /**
+   * A local config applied (and every status build): drop every start refusal whose loop could start now (its stack
+   * alert clears), keep the rest with today's why, and add one (count 0, trigger 'none') for every trusted loop that
+   * would be refused right now though it never fired. Still one per loop.
+   */
   recheckStartRefusals(): void {
+    const at = new Date(this.#now()).toISOString();
     for (const key of [...this.#startRefused.keys()]) {
       const e = this.#o.registry.entry(key);
-      if (!e?.compiled || this.#modelRefusal(e.compiled) === null) {
-        this.#startRefused.delete(key);
-      }
+      const no = e?.compiled && this.#o.registry.canRun(key).ok ? this.#modelRefusal(e.compiled) : null;
+      if (!no) this.#startRefused.delete(key);
+      else this.#startRefused.set(key, { ...this.#startRefused.get(key)!, why: no.why });
+    }
+    for (const e of this.#o.registry.entries()) {
+      if (this.#startRefused.has(e.key) || this.#killHeld.has(e.key) || !e.compiled || !e.hash || !this.#o.registry.canRun(e.key).ok || unsupportedNodes(e.compiled).length) continue;
+      const no = this.#modelRefusal(e.compiled);
+      if (!no) continue;
+      const modelNodes = e.compiled.nodes.filter((n) => n.type === 'model').map((n) => n.id);
+      this.#startRefused.set(e.key, { key: e.key, loopId: e.loopId, code: 'no-local-model', why: no.why, at, since: at, count: 0, trigger: 'none', modelNodes });
     }
   }
 
@@ -1217,6 +1231,7 @@ export class LoopRunner {
 
   /** For status.loops: running and queued runs and the recent ledger (no evidence: that stays on the rows). */
   status(): Record<string, unknown> {
+    this.recheckStartRefusals(); // TD-2026-10-22-769: a loop refused right now shows before it ever fires
     return {
       running: this.running(),
       queued: this.#queue.map((q) => q.key),

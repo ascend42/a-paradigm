@@ -237,11 +237,14 @@ export class LocalModelController implements LocalPress {
     const e = localStatusOf(this.#d.status()).endpoints[0];
     if (!e) return;
     ui.checking = this.#d.now();
+    ui.check = null;
     this.#paint();
     const r = await this.#probe(probeRequest(e));
     const a = r.ok ? probeAnswerOf(r.v) : null;
-    const at = iso(this.#d.now());
-    ui.check = a ? { at, ok: a.ok, why: a.why, ...(a.error ? { error: a.error } : {}), tools: a.toolsNative, contextSize: a.contextSize } : { at, ok: false, why: 'probe-failed', error: r.ok ? 'no answer' : r.text, tools: false, contextSize: null };
+    // the kernel records a check of the configured endpoint in status.local.lastProbe: read it back; only a call that
+    // failed (refused, nothing sent) is held here
+    if (!a) ui.check = { at: iso(this.#d.now()), ok: false, why: 'probe-failed', error: r.ok ? 'no answer' : r.text, tools: false, contextSize: null };
+    else await this.#d.refreshStatus();
     ui.checking = null;
     this.#paint({ act: a?.ok ? 'change' : 'check' });
   }
@@ -341,6 +344,7 @@ export class LocalModelController implements LocalPress {
         ui.open = false;
       }
     }
+    if (v.probing) ui.check = null; // a new kernel check supersedes a failed call
     if (this.#applied !== null && v.lastProbe && Date.parse(v.lastProbe.at) >= this.#applied - 1000) {
       this.#applied = null;
       if (!this.#d.sheetOpen()) {

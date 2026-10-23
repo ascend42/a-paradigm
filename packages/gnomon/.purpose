@@ -4426,6 +4426,18 @@ components:
       a bundled runner must match the compiled pin and a release build fails
       without it; an override runner must identify as gnomon-local; an
       unknown helper version on a hardware root counts as too old.
+      Follow-ups: a request.local.probe of a CONFIGURED endpoint (Check
+      again; base, model and compat match) reports to the LocalLane
+      (LocalProbeSink: configuredEndpoint, probeGen, beginProbe,
+      recordProbe): it shows as status.local.probing{probingSince,
+      probingEndpoint} while it runs and refreshes status.local.lastProbe
+      and the probe cache like the automatic probe (model-missing kept as
+      the why); a probe begun under an older config records nothing. The
+      automatic probe (probeAll) shows as probing too. LoopRunner
+      status.loops.startRefused also lists every trusted loop that would be
+      refused NOW (count 0, trigger 'none'), recomputed at every status
+      build and config apply; still one per loop, the first fire keeps its
+      since.
     path: src/kernel/local/config-request.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, td-2026-10-22-769]

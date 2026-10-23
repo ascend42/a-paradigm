@@ -106,7 +106,9 @@ export interface LoopStartRefused {
   why: 'none' | 'sessions-only' | 'no-runner' | 'no-profile';
   at: string;
   since: string;
+  /** refused fires; 0 = nothing has fired yet, but the kernel would refuse it now (the config and its trust) */
   count: number;
+  /** the refused fire's trigger type ('none' while nothing has fired) */
   trigger: string;
   modelNodes: string[];
 }
@@ -114,7 +116,7 @@ export interface LoopStartRefused {
 const START_REFUSED_WHYS: readonly string[] = ['none', 'sessions-only', 'no-runner', 'no-profile'];
 function parseStartRefused(v: unknown): LoopStartRefused | null {
   if (!isObj(v) || v.code !== 'no-local-model' || typeof v.why !== 'string' || !START_REFUSED_WHYS.includes(v.why) || typeof v.at !== 'string' || typeof v.since !== 'string') return null;
-  return { code: 'no-local-model', why: v.why as LoopStartRefused['why'], at: v.at, since: v.since, count: Math.max(1, Math.floor(num(v.count, 1))), trigger: str(v.trigger) ?? 'schedule', modelNodes: Array.isArray(v.modelNodes) ? v.modelNodes.filter((x): x is string => typeof x === 'string') : [] };
+  return { code: 'no-local-model', why: v.why as LoopStartRefused['why'], at: v.at, since: v.since, count: Math.max(0, Math.floor(num(v.count, 1))), trigger: str(v.trigger) ?? 'schedule', modelNodes: Array.isArray(v.modelNodes) ? v.modelNodes.filter((x): x is string => typeof x === 'string') : [] };
 }
 
 export interface LoopsModel {
@@ -642,7 +644,9 @@ export function loopAlerts(m: LoopsModel | null, dismissed: ReadonlySet<string>,
       if (!dismissed.has(id)) {
         const sl = startLine(sr, null);
         const when = sr.trigger === 'schedule' ? `scheduled ${hhmm(sr.at)}` : `${sr.trigger} ${hhmm(sr.at)}`;
-        out.push({ id, kind: 'refused-start', key: x.key, loopId: x.loopId, project, repo: x.repo, at: hhmm(sr.at), title: `■ ${x.loopId} didn’t start`, path: `${sl.what} · ${when} · refused before any step${sr.count > 1 ? ` · ×${sr.count} since ${sinceText(sr.since, now)}` : ''}`, fix: sl.key });
+        // count 0: nothing has fired yet, but the kernel would refuse it now
+        if (sr.count === 0) out.push({ id, kind: 'refused-start', key: x.key, loopId: x.loopId, project, repo: x.repo, at: hhmm(sr.since), title: `■ ${x.loopId} can’t start`, path: `${sl.what} · nothing has fired yet · a fire is refused before any step`, fix: sl.key });
+        else out.push({ id, kind: 'refused-start', key: x.key, loopId: x.loopId, project, repo: x.repo, at: hhmm(sr.at), title: `■ ${x.loopId} didn’t start`, path: `${sl.what} · ${when} · refused before any step${sr.count > 1 ? ` · ×${sr.count} since ${sinceText(sr.since, now)}` : ''}`, fix: sl.key });
       }
     }
     if (x.state === 'kernel-paused') {

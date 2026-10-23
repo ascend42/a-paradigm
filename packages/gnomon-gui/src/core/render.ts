@@ -970,7 +970,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
     ask ? askPicker(ctx, v.cardId, ask) : null,
     v.rootRows
-      ? h(doc, 'div', { class: 'card-root-rows kernel-owned' }, h(doc, 'p', { class: 'meta root-rows-title' }, 'This decision signs'), h(doc, 'ul', null, ...(v.rootRows.items ? v.rootRows.items.map((i) => h(doc, 'li', i.mark ? { class: i.mark, 'aria-label': `${i.mark === 'add' ? 'new' : 'was'}: ${i.text}` } : null, i.text)) : v.rootRows.lines.length ? v.rootRows.lines.map((l) => h(doc, 'li', null, l)) : [h(doc, 'li', null, 'its decision row only (no other row)')])))
+      ? h(doc, 'div', { class: 'card-root-rows kernel-owned' }, h(doc, 'p', { class: 'meta root-rows-title' }, 'This decision signs'), h(doc, 'ul', null, ...(v.rootRows.items ? v.rootRows.items.map((i) => h(doc, 'li', i.mark ? { class: i.mark } : null, i.mark ? h(doc, 'span', { class: 'sr-only' }, i.mark === 'add' ? 'new: ' : 'was: ') : null, i.text)) : v.rootRows.lines.length ? v.rootRows.lines.map((l) => h(doc, 'li', null, l)) : [h(doc, 'li', null, 'its decision row only (no other row)')])))
       : rootGated
         ? h(doc, 'p', { class: 'refusal root-rows-missing' }, 'This card does not show what its approval signs: there is no Approve here. Raise it again from the kernel.')
         : null,

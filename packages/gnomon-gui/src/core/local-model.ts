@@ -104,6 +104,8 @@ export interface LocalStatusView {
   runner: { dir: string; entry: string; node: string; nodeSha256: string; treeSha256: string; version: string | null; source: string } | null;
   bundled: { dir: string; version: string | null } | null;
   lastProbe: LocalProbeView | null;
+  /** status.local.probing: a probe of a configured endpoint in flight (the automatic one after a set, or Check again) */
+  probing: { since: string; endpoint?: string } | null;
   lastFallback: { at: string; cwd: string; title: string | null; reason: string } | null;
   pendingCardId: string | null;
 }
@@ -113,7 +115,7 @@ const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
 /** status.local as the section reads it; the GUI never guesses the platform or a config it was not told. */
 export function localStatusOf(status: unknown): LocalStatusView {
-  const empty: LocalStatusView = { state: 'not-connected', endpoints: [], version: null, signedAt: null, signer: null, runner: null, bundled: null, lastProbe: null, lastFallback: null, pendingCardId: null };
+  const empty: LocalStatusView = { state: 'not-connected', endpoints: [], version: null, signedAt: null, signer: null, runner: null, bundled: null, lastProbe: null, probing: null, lastFallback: null, pendingCardId: null };
   if (!isObj(status)) return empty;
   const l = isObj(status.local) ? status.local : null;
   if (!l || l.offered !== true) return { ...empty, state: 'not-offered' };
@@ -131,6 +133,7 @@ export function localStatusOf(status: unknown): LocalStatusView {
     runner: r && str(r.dir) && str(r.treeSha256) ? { dir: r.dir as string, entry: str(r.entry) ?? 'cli.js', node: str(r.node) ?? '', nodeSha256: str(r.nodeSha256) ?? '', treeSha256: r.treeSha256 as string, version: str(r.version), source: str(r.source) ?? 'override' } : null,
     bundled: d && d.source === 'bundled' && str(d.dir) ? { dir: d.dir as string, version: str(d.version) } : null,
     lastProbe: p && str(p.at) ? { ...(str(p.endpoint) ? { endpoint: p.endpoint as string } : {}), at: p.at as string, ok: p.ok === true, why: str(p.why) ?? (p.ok === true ? 'capable' : 'probe-failed'), ...(str(p.error) ? { error: p.error as string } : {}), tools: p.tools === true, contextSize: typeof p.contextSize === 'number' ? p.contextSize : null } : null,
+    probing: l.probing === true ? { since: str(l.probingSince) ?? isoOf(Date.now()), ...(str(l.probingEndpoint) ? { endpoint: l.probingEndpoint as string } : {}) } : null,
     lastFallback: f && str(f.at) ? { at: f.at as string, cwd: str(f.cwd) ?? '', title: str(f.title), reason: str(f.reason) ?? 'no capable local model' } : null,
     pendingCardId: str(l.pendingCardId),
   };
@@ -318,8 +321,9 @@ export interface LocalUi {
   confirmOff: boolean;
   request: LocalRequestSeen | null;
   result: ResultView | null;
-  /** a Check again in flight (ms it started) and the last answer it got */
+  /** a Check again in flight (ms it started) */
   checking: number | null;
+  /** a Check again whose call failed (refused, or nothing sent): the kernel's lastProbe does not hold it */
   check: LocalProbeView | null;
 }
 export const emptyLocalUi = (): LocalUi => ({ form: null, open: false, errors: {}, advanced: false, busy: null, confirmOff: false, request: null, result: null, checking: null, check: null });
@@ -342,9 +346,10 @@ const FALLBACK_WHY: Readonly<Record<string, string>> = { 'probe-failed': 'no ans
 export const andList = (xs: readonly string[]): string => (xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
 /** The Check row's words for a probe (design check.*), with how and Check again where a check can help. */
-export function checkRowOf(p: LocalProbeView | null, v: LocalStatusView, checking: number | null, time: (iso: string) => string): { value: string; mark?: string; how: string; key: boolean } {
+export function checkRowOf(p: LocalProbeView | null, v: LocalStatusView, checking: number | null, time: (iso: string) => string): { value: string; mark?: string; how: string; key: boolean; keyLabel?: string } {
   if (!v.runner) return { value: 'runner not pinned', mark: '✕', how: 'Change… and Save to pin the bundled runner.', key: false };
-  if (checking !== null || !p) return { value: `checking… started ${time(checking !== null ? isoOf(checking) : (v.signedAt ?? isoOf(Date.now())))}`, how: LOCAL_COPY.checkingHow, key: false };
+  if (checking !== null || v.probing) return { value: `checking… started ${time(v.probing?.since ?? isoOf(checking!))}`, how: LOCAL_COPY.checkingHow, key: false };
+  if (!p) return { value: 'not checked yet', how: '', key: true, keyLabel: 'Check now' };
   const at = time(p.at);
   const e = v.endpoints[0];
   const server = e ? serverOf(e.compat).label : 'the server';
@@ -425,11 +430,12 @@ export function localSection(i: LocalSectionInput): SettingsSection {
       rows.push({ kind: 'readonly', id: `local-model-${n}`, label: 'Model', value: e.model, how: '' });
       rows.push({ kind: 'readonly', id: `local-used-${n}`, label: 'Used by', value: usedWords(e.loops), how: '' });
     });
-    const probe = ui.check && (!v.lastProbe || ui.check.at >= v.lastProbe.at) ? ui.check : v.lastProbe;
+    // the kernel's lastProbe holds every check (the automatic one and Check again); ui.check only a call that failed
+    const probe = ui.check ?? v.lastProbe;
     const c = checkRowOf(probe, v, ui.checking, i.time);
     // with several endpoints the one check names the endpoint it is about (Check again checks the first)
-    const which = v.endpoints.length > 1 ? `${(ui.checking === null && probe?.endpoint) || v.endpoints[0]!.id} · ` : '';
-    rows.push({ kind: 'readonly', id: 'local-check', label: 'Check', value: `${which}${c.value}`, how: c.how, grp: true, live: true, ...(c.mark ? { mark: c.mark } : {}), ...(c.key ? { keys: [{ act: 'check', label: 'Check again', quiet: true }] } : {}), ...(probe?.contextSize !== null && probe ? { title: `context ${probe.contextSize} tokens, as the server reports it` } : {}) });
+    const which = v.endpoints.length > 1 ? `${v.probing?.endpoint ?? ((ui.checking === null && probe?.endpoint) || v.endpoints[0]!.id)} · ` : '';
+    rows.push({ kind: 'readonly', id: 'local-check', label: 'Check', value: `${which}${c.value}`, how: c.how, grp: true, live: true, ...(c.mark ? { mark: c.mark } : {}), ...(c.key ? { keys: [{ act: 'check', label: c.keyLabel ?? 'Check again', quiet: true }] } : {}), ...(probe?.contextSize !== null && probe ? { title: `context ${probe.contextSize} tokens, as the server reports it` } : {}) });
     const r = v.runner;
     if (r) rows.push({ kind: 'readonly', id: 'local-runner', label: 'Runner', value: `gnomon-local${r.version ? ` ${r.version}` : ''} · ${r.source === 'bundled' ? 'bundled' : 'your folder'} · tree ${r.treeSha256.slice(0, 8)}`, how: '', grp: true, title: `${r.dir}/${r.entry} · node ${r.node}` });
     rows.push({ kind: 'readonly', id: 'local-signed', label: 'Signed', value: `config v${v.version ?? '?'}${v.signedAt ? ` · ${i.time(v.signedAt)}` : ''} · root key`, how: '', ...(r ? {} : { grp: true }) });

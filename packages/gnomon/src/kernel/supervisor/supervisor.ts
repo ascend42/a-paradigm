@@ -122,6 +122,7 @@ import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, inputHash, MAX_ATTAC
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle } from './local-session.js';
+import type { LocalProbeSink } from '../local/config-request.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
 import type { LocalLaneConfig } from '../local/config.js';
@@ -1890,9 +1891,14 @@ export class SessionSupervisor {
     this.#local.setConfig(config);
   }
 
-  /** status.local's health rows: the last probe and the last fallback card (Mika's Settings section). */
-  localHealth(): { lastProbe: unknown; lastFallback: unknown } {
-    return { lastProbe: this.#local.lastProbe(), lastFallback: this.#local.lastFallback() };
+  /** status.local's health rows: the last probe, the probe in flight and the last fallback card (Mika's Settings section). */
+  localHealth(): { lastProbe: unknown; probing: { endpoint: string; since: string } | null; lastFallback: unknown } {
+    return { lastProbe: this.#local.lastProbe(), probing: this.#local.probing(), lastFallback: this.#local.lastFallback() };
+  }
+
+  /** The lane's probe state for request.local.probe (a Check again of a configured endpoint refreshes it). */
+  localProbeSink(): LocalProbeSink {
+    return this.#local;
   }
 
   /** The local lane config new opens use (undefined = none). */

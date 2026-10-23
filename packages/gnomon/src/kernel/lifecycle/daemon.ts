@@ -1272,7 +1272,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     const st = web?.status() as { listening?: boolean; port?: number } | undefined;
     return [...(st?.listening && typeof st.port === 'number' ? [st.port] : []), ...mods.loopbackPorts()];
   };
-  const localCards = new LocalConfigCards({ home, broker, forbiddenPorts: kernelPorts, chainHighWater: localHighWater, verify: authority, current: () => localCfg.config, onApplied: (why, removedVersion) => reloadLocalConfig(why, removedVersion) });
+  const localCards = new LocalConfigCards({ home, broker, forbiddenPorts: kernelPorts, chainHighWater: localHighWater, verify: authority, current: () => localCfg.config, lane: supervisor.localProbeSink(), onApplied: (why, removedVersion) => reloadLocalConfig(why, removedVersion) });
   localStatus = () => {
     const c = localCfg.config;
     const d = defaultLocalRunner();
@@ -1300,6 +1300,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         : null,
       defaultRunner: d.ok ? { source: d.source, dir: d.dir, version: runnerVersionOf(d.dir, d.treeSha256) } : { source: null, why: d.why },
       lastProbe: health.lastProbe,
+      // a probe of a configured endpoint in flight (the automatic one after a set, or Check again): the GUI's "checking…"
+      probing: health.probing !== null,
+      ...(health.probing ? { probingSince: health.probing.since, probingEndpoint: health.probing.endpoint } : {}),
       lastFallback: health.lastFallback,
       pendingCardId: localCards.pendingCardId(),
       loopbackOnly: true,

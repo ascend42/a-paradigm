@@ -173,14 +173,37 @@ export function sectionEl(doc: MiniDoc, s: SettingsSection, focused = false): Mi
   return sec;
 }
 
+/**
+ * Mika: no repaint while an IME composition is active in the sheet (a repaint replaces the field and ends the
+ * composition mid-word). A repaint asked for meanwhile is owed and runs once the composition ends.
+ */
+export function compositionGate(): { start(): void; end(): boolean; hold(): boolean } {
+  let composing = false;
+  let owed = false;
+  return {
+    start: () => void (composing = true),
+    /** the composition ended: true when a repaint was held meanwhile (the caller runs it now) */
+    end: () => {
+      composing = false;
+      const o = owed;
+      owed = false;
+      return o;
+    },
+    /** true while composing (the repaint is skipped and owed) */
+    hold: () => (composing ? (owed = true) : false),
+  };
+}
+
 export function mountSettings(document: Document, d: SettingsDeps): SettingsSheet {
   const overlay = document.getElementById('settings')!;
   const body = document.getElementById('settings-body')!;
   let back: HTMLElement | null = null;
   let focused: SectionId | null = null;
   let painting = false;
+  const ime = compositionGate();
   const repaint = (): void => {
     if (overlay.hidden) return;
+    if (ime.hold()) return; // an IME composition is active: repaint once it ends
     // a repaint keeps focus (and the caret in a field) on the same control
     const a = document.activeElement as HTMLElement | null;
     const inBody = !!a && body.contains(a);
@@ -263,6 +286,15 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const f = e.target as HTMLInputElement;
     const name = f.dataset?.lmField;
     if (name) d.local?.input(name, f.value);
+  });
+  body.addEventListener('compositionstart', () => ime.start());
+  body.addEventListener('compositionend', (e) => {
+    // the composed text (some engines send their last input before this event, some after)
+    const f = e.target as HTMLInputElement;
+    const name = f.dataset?.lmField;
+    const owed = ime.end();
+    if (name) d.local?.input(name, f.value);
+    if (owed) repaint();
   });
   // <details> toggle does not bubble: listen in the capture phase
   body.addEventListener(

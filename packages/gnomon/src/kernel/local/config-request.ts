@@ -46,7 +46,7 @@ import { assertNotClaude, DEFAULT_CTX_FLOOR, ID_RE, LOCAL_COMPAT_NAMES, LOCAL_CO
 import { loopbackPort } from './endpoint.js';
 import { BUNDLED_RUNNER_ENTRY, compiledLocalRunnerPin, defaultLocalRunner, nodeVersionOf, runnerVersionOf, type DefaultRunner } from './bundled-runner.js';
 import type { RootAuthority } from '../identity/root-authority.js';
-import { probeLocalEndpoint, type ProbeFetch } from './probe.js';
+import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from './probe.js';
 import { capability } from './routing.js';
 import { LOCAL_ROW_MAX_ENDPOINTS } from '../identity/decision-batch.js';
 import { pinOf, type LocalRunnerPin } from './runner-pin.js';
@@ -269,6 +269,20 @@ export interface LocalConfigOptions {
   probeFetch?: ProbeFetch;
   /** the check's rate limit: at most one in flight, and this long between two (default 2 s) */
   probeGapMs?: number;
+  /**
+   * The lane's probe state (the supervisor's LocalLane): a check of a CONFIGURED endpoint (Check again) shows as
+   * status.local.probing while it runs, and its answer refreshes status.local.lastProbe and the probe cache, the same as
+   * the automatic probe after a set. A check of an unsaved address records nothing there.
+   */
+  lane?: LocalProbeSink;
+}
+
+/** The part of LocalLane a request.local.probe of a configured endpoint reports to. */
+export interface LocalProbeSink {
+  configuredEndpoint(ep: { base: string; model: string; compat: string }): string | null;
+  probeGen(): number;
+  beginProbe(id: string): () => void;
+  recordProbe(id: string, caps: LocalCapabilities, o?: { why?: string; gen?: number }): void;
 }
 
 /** The kernel half of request.local.config and request.local.probe. */
@@ -311,6 +325,10 @@ export class LocalConfigCards {
     if (this.#probing || now - this.#lastProbeAt < gap) throw bad('base', 'a check is already running or just ran: try again in a moment', { why: 'rate-limited', retryAfterMs: Math.max(0, Math.ceil(gap - (now - this.#lastProbeAt))) });
     this.#probing = true;
     this.#lastProbeAt = now;
+    const lane = this.#o.lane;
+    const id = lane?.configuredEndpoint({ base: v.endpoint.base, model: v.endpoint.model, compat: v.endpoint.compat }) ?? null;
+    const gen = lane?.probeGen();
+    const end = id !== null ? lane!.beginProbe(id) : null;
     try {
       const caps = await probeLocalEndpoint({ id: v.endpoint.id, base: v.endpoint.base, model: v.endpoint.model }, { forbiddenPorts: this.#o.forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
       const k = capability(caps, DEFAULT_CTX_FLOOR, false);
@@ -318,8 +336,10 @@ export class LocalConfigCards {
       // server lists it (never another id the server named), and one error word (never the server's text)
       const listed = caps.ok && caps.model === v.endpoint.model;
       const missing = caps.ok && !listed;
+      if (id !== null) lane!.recordProbe(id, caps, { gen: gen!, ...(missing ? { why: 'model-missing' } : {}) });
       return { ok: k.capable && !missing, why: missing ? 'model-missing' : k.reason, ...(caps.ok ? {} : { error: 'unreachable' }), toolsNative: caps.tools, contextSize: caps.nCtx, model: v.endpoint.model, listed, endpoint: { base: v.endpoint.base, model: v.endpoint.model, compat: v.endpoint.compat } };
     } finally {
+      end?.();
       this.#probing = false;
     }
   }
