@@ -4988,7 +4988,11 @@ flows:
       row's boot session (log/boot.ts) equals this boot AND the live
       leader's start-time witness (process-control.ts: macOS ps lstart,
       Linux /proc stat field 22, read with TZ=UTC before any await at track;
-      ps forks — never on a hot path; win32 = parity phase, never signalled)
+      ps forks — never on a hot path; win32 (W3) = the helper's creation time
+      `ft:<ticks>`, the "group" is the launcher pid whose kill-on-close job holds
+      the tree, and a pid is terminated ONLY through helper process.terminate
+      with the witness the caller recorded; no SIGTERM: the graceful step closes
+      stdin, gracefulStop 'stdin')
       equals the recorded one — else probe stale-boot | unattributable,
       action none; orphans stopped in parallel, counted only when gone
       (G-DMN-04); (7) supervised children (DaemonChildren: session,

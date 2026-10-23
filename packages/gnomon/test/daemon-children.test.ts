@@ -227,13 +227,19 @@ describe('G-DMN-04 orphan sweep (fake process control)', () => {
     expect(control.signals).toEqual(['301:SIGTERM', '301:SIGKILL']);
   });
 
-  it('the win32 row is the parity phase: groups are unprobeable and never signalled (fail closed, partial)', () => {
-    expect(PROCESS_CONTROL.win32.fidelity).toBe('partial');
-    expect(PROCESS_CONTROL.win32.probeGroup(1234)).toBe('unsupported');
-    expect(PROCESS_CONTROL.win32.signalGroup(1234, 'SIGKILL')).toBe(false);
-    expect(PROCESS_CONTROL.win32.startTime(1234)).toBeNull();
-    expect(processControlFor('aix')).toBe(PROCESS_CONTROL.win32);
+  it('an unlisted platform gets the parity row: groups are unprobeable and never signalled (fail closed, partial)', () => {
+    const parity = processControlFor('aix');
+    expect(parity.fidelity).toBe('partial');
+    expect(parity.probeGroup(1234)).toBe('unsupported');
+    expect(parity.signalGroup(1234, 'SIGKILL')).toBe(false);
+    expect(parity.startTime(1234)).toBeNull();
     expect(PROCESS_CONTROL.darwin.probeGroup(1)).toBe('foreign'); // never init / ourselves
+    // the win32 row (W3; real behaviour in test/process-control-win32.test.ts) never touches System, Idle or itself
+    for (const pid of [0, 4, process.pid]) {
+      expect(PROCESS_CONTROL.win32.probeGroup(pid)).toBe('foreign');
+      expect(PROCESS_CONTROL.win32.signalGroup(pid, 'SIGKILL')).toBe(false);
+      expect(PROCESS_CONTROL.win32.signalPid!(pid, 'SIGKILL')).toBe(false);
+    }
   });
 });
 

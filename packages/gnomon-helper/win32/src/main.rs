@@ -27,6 +27,10 @@ mod exec;
 #[cfg(windows)]
 mod sandbox;
 #[cfg(windows)]
+mod proc;
+#[cfg(windows)]
+mod registry;
+#[cfg(windows)]
 mod session_acl;
 #[cfg(windows)]
 mod shield;

@@ -2,44 +2,51 @@
  * @symbol #session-runner
  *
  * Read a Claude Code policy registry key for the law-7 scan (spec §16 "Claude Code preflight paths": HKLM/HKCU
- * `SOFTWARE\Policies\ClaudeCode`). `reg.exe` runs by absolute path (never PATH) with an empty-ish env. A key that does
- * not exist is ABSENT (no layer); a key that exists yields one layer per value: a string value holding JSON is
- * parsed and scanned like a settings file, anything else is `undefined` (unreadable), which the scan treats as a
- * hit (fail closed, law 7). W3 of docs/plans/gnomon-windows.md.
+ * `SOFTWARE\Policies\ClaudeCode`). Read through the kernel's pinned helper (`registry.read`: RegOpenKeyExW +
+ * RegEnumValueW), never reg.exe: reg.exe's messages are localized, so on a non-English Windows a missing key could
+ * not be told from an error and every key read as unreadable (PR #52 release blocker). A key that does not exist is
+ * ABSENT (no layer, by its error CODE); a key that exists yields one layer per value: a string value holding JSON is
+ * parsed and scanned like a settings file, anything else is `undefined` (unreadable), which the scan treats as a hit
+ * (fail closed, law 7). W3 of docs/plans/gnomon-windows.md.
  */
-import { spawnSync } from 'node:child_process';
-import * as path from 'node:path';
-import { win32SystemRoot } from './system-root.js';
+import { helperOpSync, kernelWin32Helper } from './helper-client.js';
 
 export type RegistryRead = { exists: false } | { exists: true; values: Array<{ name: string; type: string; data: string }> } | { exists: 'unknown'; why: string };
 
-const SYSTEM_ROOT = win32SystemRoot();
+/** The helper call (a seam for tests): the `registry.read` reply. */
+export type RegistryReader = (key: string) => Record<string, unknown>;
 
-/** `reg query <key>` (values only, no subkeys); exit 1 with "unable to find" = the key does not exist. */
-export function readRegistryKey(key: string, run: typeof spawnSync = spawnSync): RegistryRead {
+const helperReader: RegistryReader = (key) => helperOpSync(kernelWin32Helper(), 'registry.read', { key });
+
+/** One key's values; a missing key is `exists: false`; anything the helper could not read is `unknown` (fail closed). */
+export function readRegistryKey(key: string, read: RegistryReader = helperReader): RegistryRead {
   if (!/^(HKLM|HKCU)\\[A-Za-z0-9_\\ .-]+$/.test(key)) return { exists: 'unknown', why: 'not a policy key' };
-  const reg = path.join(SYSTEM_ROOT, 'System32', 'reg.exe');
-  const r = run(reg, ['query', key], { encoding: 'utf8', timeout: 10_000, windowsHide: true, env: { SystemRoot: SYSTEM_ROOT } });
-  if (r.error) return { exists: 'unknown', why: r.error.message };
-  const out = String(r.stdout ?? '');
-  if (r.status === 1) return /unable to find|not find|ERROR:/i.test(`${out}${String(r.stderr ?? '')}`) ? { exists: false } : { exists: 'unknown', why: `reg exit 1` };
-  if (r.status !== 0) return { exists: 'unknown', why: `reg exit ${String(r.status)}` };
+  let r: Record<string, unknown>;
+  try {
+    r = read(key);
+  } catch (e) {
+    return { exists: 'unknown', why: e instanceof Error ? e.message.slice(0, 200) : 'helper error' };
+  }
+  if (r.exists === false) return { exists: false };
+  if (r.exists !== true || !Array.isArray(r.values)) return { exists: 'unknown', why: 'malformed reply' };
   const values: Array<{ name: string; type: string; data: string }> = [];
-  for (const line of out.split(/\r?\n/)) {
-    const m = /^\s{4}(.+?)\s{4}(REG_[A-Z_]+)\s{4}(.*)$/.exec(line);
-    if (m) values.push({ name: m[1]!, type: m[2]!, data: m[3]! });
+  for (const v of r.values as Array<Record<string, unknown>>) {
+    if (typeof v.name !== 'string' || typeof v.type !== 'string') return { exists: 'unknown', why: 'malformed value' };
+    values.push({ name: v.name, type: v.type, data: typeof v.data === 'string' ? v.data : '' });
   }
   return { exists: true, values };
 }
 
 /** The law-7 layers for one managed registry source (see the module doc). */
-export function registryLayers(key: string, run?: typeof spawnSync): Array<{ where: string; json: unknown }> {
-  const r = readRegistryKey(key, run);
+export function registryLayers(key: string, read?: RegistryReader): Array<{ where: string; json: unknown }> {
+  const r = readRegistryKey(key, read);
   if (r.exists === false) return [];
   if (r.exists === 'unknown') return [{ where: `managed:${key}`, json: undefined }];
   return r.values.map((v) => {
     let json: unknown;
-    if (v.type === 'REG_SZ' || v.type === 'REG_EXPAND_SZ') {
+    // REG_SZ only: a REG_EXPAND_SZ is never expanded with the kernel's env (a %VAR% could redirect policy), so it is
+    // unreadable like every other non-string type (Aegis W3 L2, fail closed)
+    if (v.type === 'REG_SZ') {
       try {
         json = JSON.parse(v.data);
       } catch {

@@ -342,8 +342,50 @@ export interface SessionEnvInput {
    * REPLACES TEMP and TMP. Absent: the allowlisted ones.
    */
   tempDir?: string;
+  /** win32 (W3): the dirs this session can write (its roots); a PATH entry inside one is dropped (win32SessionPath) */
+  writableRoots?: readonly string[];
   /** the platform whose env rules apply (default: this process's) */
   platform?: NodeJS.Platform;
+}
+
+/**
+ * W3 (PR #52 release blocker, "a Windows PATH for sessions"): the PATH a sandboxed win32 session gets. Windows has no
+ * fixed system PATH (it lives in the registry), so the source is the allowlisted one; what a session could PLANT a
+ * binary into, for itself or a later session (the TD-2026-10-21-162 threat), is dropped. A Low-integrity session can
+ * write only Low-labelled dirs, so the Medium-labelled user dirs on the PATH (WinGet Links, npm, WindowsApps) are
+ * already safe; dropped are:
+ *   - an empty or relative entry (resolved against the cwd), a UNC share (other machines' writers), an unexpanded
+ *     %VAR% entry;
+ *   - anything under AppData\LocalLow (Low-writable by every Low process on the machine, sandboxed browsers included);
+ *   - anything inside this session's writable roots or temp dir (the session itself could write there).
+ * Order kept; duplicates (case-insensitive) dropped. Residual (reported partial in the win32 table): a dir another
+ * program labelled Low elsewhere is not detected.
+ */
+export function win32SessionPath(value: string | undefined, o: { writable: readonly string[] }): string {
+  // Aegis W3 L-a: compared by realpath (8.3 short names, junctions), the spelling when it does not resolve
+  const real = (p: string): string => {
+    try {
+      return fs.realpathSync.native(p);
+    } catch {
+      return p;
+    }
+  };
+  const fold = (p: string): string => path.win32.resolve(real(p)).replace(/[\\/]+$/, '').toLowerCase();
+  const inside = (p: string, root: string): boolean => p === root || p.startsWith(`${root}\\`);
+  const writable = o.writable.filter((w) => path.win32.isAbsolute(w)).map(fold);
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const raw of (value ?? '').split(';')) {
+    const e = raw.trim().replace(/^"(.*)"$/, '$1');
+    if (!/^[A-Za-z]:[\\/]/.test(e) || e.includes('%')) continue; // empty, relative, drive-relative, UNC, unexpanded
+    const f = fold(e);
+    if (/\\appdata\\locallow(\\|$)/.test(f)) continue;
+    if (writable.some((w) => inside(f, w))) continue;
+    if (seen.has(f)) continue;
+    seen.add(f);
+    kept.push(e);
+  }
+  return kept.join(';');
 }
 
 /**
@@ -386,6 +428,10 @@ export function buildSessionEnv(i: SessionEnvInput): { env: Record<string, strin
     // a sandboxed win32 session (the supervisors pass tempDir for one and only then)
     env.TEMP = i.tempDir;
     env.TMP = i.tempDir;
+    env.PATH = win32SessionPath(env.PATH, { writable: [i.tempDir, ...(i.writableRoots ?? [])] }); // the configured one too
+    // Aegis W3 M-a: cmd and SearchPath look in the cwd (the repo) before PATH unless this is set; libuv's own search
+    // ignores it (a residual, stated in the win32 deny table)
+    env.NoDefaultCurrentDirectoryInExePath = '1';
     // schannel refuses its restricted token (AcquireCredentialsHandle: SEC_E_NO_CREDENTIALS), so git over https uses
     // Git for Windows' OpenSSL backend (W5)
     env.GIT_CONFIG_COUNT = '1';

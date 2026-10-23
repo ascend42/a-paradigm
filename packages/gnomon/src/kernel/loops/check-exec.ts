@@ -527,7 +527,7 @@ class TreeTracker {
     let n = 0;
     for (const r of rows) {
       const start = this.tracked.get(r.pid);
-      if (start !== undefined && start === r.start && this.pc.signalPid?.(r.pid, 'SIGKILL')) n++;
+      if (start !== undefined && start === r.start && this.pc.signalPid?.(r.pid, 'SIGKILL', r.start)) n++;
     }
     return n;
   }

@@ -179,7 +179,7 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
     match op {
         "info" => Ok(json!({
             "version": crate::VERSION, "protocol": crate::PROTOCOL, "platform": "win32",
-            "ops": ["info", "pipe.secure", "pipe.read", "acl.owner-only", "acl.read", "acl.session", "process.confine", "process.shield", "process.owner-default", "fs.rename-durable", "boot.id", "shell.open"],
+            "ops": ["info", "pipe.secure", "pipe.read", "acl.owner-only", "acl.read", "acl.session", "process.confine", "process.shield", "process.owner-default", "process.start", "process.list", "process.terminate", "registry.read", "fs.rename-durable", "boot.id", "shell.open"],
             "sessionSid": crate::sandbox::GNOMON_SESSION_SID,
             "userSid": win::current_user_sid()?,
             // the same SID as read-back SDDL spells it (an alias such as LA for a well-known account): compare SDDL to this
@@ -282,6 +282,33 @@ fn dispatch(op: &str, req: &Map<String, Value>) -> Result<Value, HelperError> {
             let pid = req.get("pid").and_then(Value::as_u64).filter(|p| *p > 4 && *p <= u32::MAX as u64).ok_or_else(|| bad("pid must be a process id"))?;
             let r = crate::shield::shield(pid as u32)?;
             Ok(json!({ "sddl": r.sddl, "sessionDenied": true, "threads": r.threads }))
+        }
+        "process.start" => {
+            // W3 process control: the creation-time witness of one pid (proc.rs); null when it cannot be read
+            let pid = req.get("pid").and_then(Value::as_u64).filter(|p| *p > 4 && *p <= u32::MAX as u64).ok_or_else(|| bad("pid must be a process id"))?;
+            Ok(json!({ "start": crate::proc::start(pid as u32) }))
+        }
+        "registry.read" => {
+            // W3: a policy key's values by API, never reg.exe's localized text (registry.rs)
+            let key = str_arg(req, "key")?;
+            Ok(match crate::registry::read(key)? {
+                None => json!({ "exists": false }),
+                Some(vs) => json!({ "exists": true, "values": vs.into_iter().map(|v| json!({ "name": v.name, "type": v.kind, "data": v.data })).collect::<Vec<_>>() }),
+            })
+        }
+        "process.terminate" => {
+            // W3: terminate a pid only while its creation-time witness still matches (proc.rs)
+            let pid = req.get("pid").and_then(Value::as_u64).filter(|p| *p > 4 && *p <= u32::MAX as u64).ok_or_else(|| bad("pid must be a process id"))?;
+            let start = str_arg(req, "start")?;
+            if !start.strip_prefix("ft:").is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit())) {
+                return Err(bad("start must be ft:<ticks>"));
+            }
+            Ok(json!({ "terminated": crate::proc::terminate(pid as u32, start)? }))
+        }
+        "process.list" => {
+            // W3 process control: the process table with parent pids and start witnesses (proc.rs)
+            let rows: Vec<Value> = crate::proc::list()?.into_iter().map(|r| json!({ "pid": r.pid, "ppid": r.ppid, "start": r.start })).collect();
+            Ok(json!({ "rows": rows }))
         }
         "process.owner-default" => {
             // the token's default owner becomes its own user (shield.rs owner_default; an elevated admin defaults to BA)

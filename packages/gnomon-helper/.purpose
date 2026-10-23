@@ -99,7 +99,11 @@ components:
       acl.owner-only (file or dir, OICI on a dir) and acl.read (owner-only
       verdicts from the read-back SDDL: owner = user SID, every ACE an allow for
       it), fs.rename-durable (MoveFileExW REPLACE_EXISTING|WRITE_THROUGH),
-      boot.id (win:<PrefetchParameters BootId>), shell.open (loopback http(s)
+      boot.id (win:<PrefetchParameters BootId>), process.start / process.list
+      (creation-time witnesses `ft:<ticks>`, the process table with ppids),
+      process.terminate {pid,start} (only while the witness matches, through one
+      handle), registry.read {key} (HKLM/HKCU values by API, a missing key by
+      error code: never reg.exe's localized text), shell.open (loopback http(s)
       only, never a URL carrying a launch token). exec -- <abs .exe> args is the
       job-object launcher: it joins a fresh KILL_ON_JOB_CLOSE |
       DIE_ON_UNHANDLED_EXCEPTION job BEFORE spawning, so every descendant is
