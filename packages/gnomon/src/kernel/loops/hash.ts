@@ -27,9 +27,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { argvPathWords, type CompiledLoop } from '../../loops/index.js';
-import { gateClassPathRule } from '../manifest/layers.js';
 import { defaultSessionPath, sessionNodeDir } from '../runner/env.js';
 import { readShebang, resolveShebangInterpreter } from './shebang.js';
+import { repoEnvFiles } from './loop-env.js';
+import { isClosureName } from '../manifest/layers.js';
 
 export { readShebang, shebangProgram } from './shebang.js';
 
@@ -277,13 +278,7 @@ export function argvFileDigests(run: readonly string[], ctx: HashContext): FileD
   return out;
 }
 
-/** A gate-class file a check may read (the config closure): never a directory rule, a memory file or an alias. */
-export function isClosureName(name: string): boolean {
-  if (/^[tj]sconfig([.-][^/\\]*)?\.json$/i.test(name)) return true;
-  const rule = gateClassPathRule(name);
-  if (rule === null) return false;
-  return rule.startsWith('file:') || rule === 'test-config' || rule === 'code-config' || rule === 'env-file';
-}
+export { isClosureName };
 
 const inside = (root: string, p: string): boolean => {
   const rel = path.relative(root, p);
@@ -326,6 +321,9 @@ export function closureOf(compiled: CompiledLoop, ctx: HashContext): Closure {
   }
   if (!anyRun) return { digest: tagged(shaHex(canonicalJson({ files: [] }))), files: [], truncated: 0, all: [] };
   dirs.add(root);
+  // TD-2026-10-23-268: the loop's own repo env files are not closure: the kernel reads only the names the loop declares
+  // and the check copy never carries them, so editing a value needs no re-trust (the file NAMES are in the definition)
+  const ownEnv = new Set(repoEnvFiles(compiled.envFiles));
   const files: ClosureFile[] = [];
   for (const d of [...dirs].sort()) {
     let names: string[];
@@ -337,6 +335,7 @@ export function closureOf(compiled: CompiledLoop, ctx: HashContext): Closure {
     for (const name of names.sort()) {
       if (!isClosureName(name)) continue;
       const abs = path.join(d, name);
+      if (ownEnv.has(path.relative(root, abs).split(path.sep).join('/'))) continue;
       let st: fs.Stats;
       try {
         st = fs.lstatSync(abs);

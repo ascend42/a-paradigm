@@ -253,7 +253,9 @@ export interface ModelStepInput {
   backoff?: (ms: number, signal: AbortSignal) => Promise<void>;
   diag?: (event: string, data: Record<string, unknown>) => void;
   /** role act: the node's declared tools, the run's protected globs and the turn cap (step 10) */
-  act?: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number };
+  act?: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number; env?: Readonly<Record<string, string>> };
+  /** TD-2026-10-23-268 (Aegis F2): the values the loop hands out (re-resolved, never stored): redacted by value in replies */
+  literals?: ReadonlyArray<{ name: string; value: string }>;
 }
 
 export interface ModelStepResult {
@@ -290,9 +292,9 @@ export function abortableBackoff(ms: number, signal: AbortSignal): Promise<void>
   });
 }
 
-const scanned = (texts: Array<string | null>): { text: string; redactions: number } => {
+const scanned = (texts: Array<string | null>, lits: ReadonlyArray<{ name: string; value: string }> = []): { text: string; redactions: number } => {
   const joined = texts.filter((x): x is string => typeof x === 'string').join('\n\n----- repair -----\n\n');
-  const s = scanSecrets(joined);
+  const s = scanSecrets(joined, lits);
   return { text: s.text.length > LOOP_REPLY_EVIDENCE_CHARS ? s.text.slice(0, LOOP_REPLY_EVIDENCE_CHARS) : s.text, redactions: s.redactions.reduce((a, r) => a + r.count, 0) };
 };
 
@@ -350,11 +352,11 @@ export async function runModelStep(i: ModelStepInput): Promise<ModelStepResult> 
         for (const x of second.protectedHits ?? []) hits.add(x);
         parsed = second.error === null ? parseVerdict(second.text, spec) : { ok: false, why: `the repair turn failed: ${second.error.slice(0, 120)}` };
       }
-      const reply = scanned(texts);
+      const reply = scanned(texts, i.literals);
       // G-LOOP-22: a refused write to a protected goal input fails the act step, whatever the model answered (no card)
       if (hits.size) return { verdict: 'fail', detail: `protected-input: ${[...hits].slice(0, 8).join(', ').slice(0, 240)}`, tokens, attempts: attempt + 1, receipt: prompt.receipt, reply, protectedHits: [...hits], ...ids };
       if (!parsed.ok) return { verdict: 'unsure', detail: `no valid verdict after one repair (${parsed.why})`, tokens, attempts: attempt + 1, receipt: prompt.receipt, reply, ...ids };
-      const summary = parsed.summary !== undefined ? scanSecrets(parsed.summary).text : undefined;
+      const summary = parsed.summary !== undefined ? scanSecrets(parsed.summary, i.literals).text : undefined;
       return {
         verdict: parsed.verdict, ...(parsed.why ? { detail: parsed.why } : {}), class: parsed.class, confidence: parsed.confidence,
         tokens, attempts: attempt + 1, receipt: prompt.receipt, reply, ...(summary !== undefined ? { summary } : {}), ...ids,

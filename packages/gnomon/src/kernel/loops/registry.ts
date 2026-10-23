@@ -31,6 +31,7 @@ import { randomBytes } from 'node:crypto';
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { formatLoopIssue, LOOP_CALL_DEPTH_MAX, validateCompiledLoop, type CompiledLoop, type LoopIssue } from '../../loops/index.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
+import { loopEnvNames } from './loop-env.js';
 import { computeLoopHash, createFileHashCache, runPathWords, type ClosureFile, type FileHashCache, type HashContext, type LoopHash } from './hash.js';
 
 export type LoopScopeName = 'repo' | 'personal';
@@ -83,6 +84,8 @@ export interface LoopRunRefInfo {
   /** the human who trusted it */
   trustedBy?: string;
   trustCard?: string;
+  /** TD-2026-10-23-268 (Aegis F4): the env names the trusted node declares at contentHash (an act step gets no other) */
+  nodeEnv: readonly string[];
   released: boolean;
   /** still trusted at the run's hash and runnable now? */
   live(): { ok: true } | { ok: false; reason: string };
@@ -929,6 +932,15 @@ export class LoopRegistry {
     return r.ok ? { ok: true, calleeKey: r.callee.key, contentHash: r.contentHash } : r;
   }
 
+  /** Aegis F6: what a call node's callee hands its children (its current definition), or null (no callee). */
+  calleeEnv(callerKey: string, nodeId: string): { names: string[]; envFiles: string[]; network: boolean } | null {
+    const e = this.#entries.get(callerKey);
+    const n = e?.compiled?.nodes.find((x) => x.id === nodeId);
+    if (!e || !n || n.type !== 'call') return null;
+    const c = this.#calleeOf(e, n.callee);
+    return c?.compiled ? { names: loopEnvNames(c.compiled), envFiles: [...(c.compiled.envFiles ?? [])], network: c.compiled.network === 'on' } : null;
+  }
+
   #minterIssued = false;
 
   /**
@@ -968,6 +980,7 @@ export class LoopRegistry {
       key, loopId: e.loopId, scope: e.scope, repoKey: e.repoKey, repoRoot: e.repoRoot, runId: p.runId, nodeId: p.nodeId, rootKey: p.rootKey, contentHash,
       // attribution comes from the kernel's request rows (step 12); until then a definition with no request row is `file` (§3.1)
       authoredBy: authorLabel(this.authoredBy(e)), ...(t?.by ? { trustedBy: t.by } : {}), ...(t?.cardId ? { trustCard: t.cardId } : {}),
+      nodeEnv: Object.freeze([...(node.env ?? [])]),
       released: false,
       live: () => {
         const now = this.verify(key);

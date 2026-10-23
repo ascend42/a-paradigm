@@ -590,3 +590,97 @@ describe('diffLines', () => {
   });
 });
 
+
+// ── TD-2026-10-23-268: env names and redact are on the card and in the hash ──────────────────────────────────────
+
+describe('TD-2026-10-23-268: env and redact on the loop-trust card and in its hash', () => {
+  const envLoop = (id: string, env?: string[], redact?: 'on' | 'off', more: Def = {}): Def => {
+    const d = { ...checkLoop(id), ...more };
+    if (env) d.nodes[0].env = env;
+    if (redact) d.redact = redact;
+    return d;
+  };
+  it('adding an env name, changing it, or turning redact off moves the content hash and pauses a trusted loop', () => {
+    const root = repo([envLoop('one')]);
+    const r = rig();
+    r.reg.addRepo(root);
+    r.reg.scan();
+    const key = keyIn(root, 'one');
+    const hashes = [r.reg.verify(key)!.hash!.contentHash];
+    r.trustNow(key);
+    for (const d of [envLoop('one', ['STRIPE_KEY']), envLoop('one', ['STRIPE_KEY', 'DATABASE_URL']), envLoop('one', ['STRIPE_KEY', 'DATABASE_URL'], 'off'), envLoop('one', ['STRIPE_KEY', 'DATABASE_URL'], 'off', { envFiles: ['.env.local'] }), envLoop('one', ['STRIPE_KEY', 'DATABASE_URL'], 'off', { envFiles: ['.env.local'], network: 'on' })]) {
+      putLoop(root, d);
+      r.reg.scan();
+      hashes.push(r.reg.verify(key)!.hash!.contentHash);
+      expect(r.reg.canRun(key).ok).toBe(false);
+      r.trustNow(key);
+      expect(r.reg.canRun(key)).toEqual({ ok: true });
+    }
+    expect(new Set(hashes).size).toBe(6);
+    // redact: on is the default: the same hash as no redact key at all
+    putLoop(root, envLoop('one', ['STRIPE_KEY', 'DATABASE_URL'], 'on'));
+    r.reg.scan();
+    putLoop(root, envLoop('one', ['STRIPE_KEY', 'DATABASE_URL']));
+    r.reg.scan();
+    expect(r.reg.verify(key)!.hash!.contentHash).toBe(hashes[2]);
+  });
+  it('editing a VALUE in the loop\'s own env file needs no re-trust (not closure); the same name as a stray .env is closure', () => {
+    const root = repo([envLoop('one', ['STRIPE_KEY'], undefined, { envFiles: ['.env.local'] })]);
+    write(path.join(root, '.env.local'), 'STRIPE_KEY=one\n');
+    write(path.join(root, '.env'), 'X=1\n');
+    const r = rig();
+    r.reg.addRepo(root);
+    r.reg.scan();
+    const key = keyIn(root, 'one');
+    r.trustNow(key);
+    const h0 = r.reg.verify(key)!.hash!;
+    expect(h0.closure.all.map((f) => f.rel)).toContain('.env');
+    expect(h0.closure.all.map((f) => f.rel)).not.toContain('.env.local');
+    write(path.join(root, '.env.local'), 'STRIPE_KEY=two\n');
+    r.reg.scan();
+    expect(r.reg.verify(key)!.hash!.contentHash).toBe(h0.contentHash);
+    expect(r.reg.canRun(key)).toEqual({ ok: true });
+  });
+  it('Aegis F6: a caller\'s card says what its callee hands out', async () => {
+    const callee = envLoop('green', ['STRIPE_KEY'], undefined, { envFiles: ['.env.green'], network: 'on' });
+    const root = repo([callee]);
+    const pin = compileLoop(callee, { scope: 'repo' }).compiled!.compiled.sourceHash!.slice(0, 8);
+    const caller: Def = { schema: 'loop:v2', id: 'caller', start: 'go', nodes: [{ id: 'go', type: 'call', loop: `green@${pin}`, on: { pass: '@stop' } }] };
+    putLoop(root, caller, { green: callee });
+    const c = cardRig();
+    c.reg.addRepo(root);
+    c.reg.scan();
+    const res = (await c.trust.request(gui(), 'request.loop.trust', { loopId: 'caller', scope: 'repo', repo: root })) as { cardId: string };
+    const text = JSON.stringify(c.broker.card(res.cardId)!.block);
+    for (const want of ['  callee uses your env: STRIPE_KEY', '  callee reads env from: .env.green', '  callee checks can reach the network']) expect(text).toContain(want);
+  });
+  it('the card says plainly which of your variables the loop uses (names, never values) and that output is unredacted', async () => {
+    const prev = process.env.STRIPE_KEY;
+    process.env.STRIPE_KEY = 'sk_live_never_on_a_card';
+    try {
+      const root = repo([envLoop('one', ['STRIPE_KEY', 'DATABASE_URL'], 'off', { envFiles: ['.env.local', '~/secrets/app.env'], network: 'on' })]);
+      write(path.join(root, '.env.local'), 'STRIPE_KEY=sk_live_never_on_a_card\n');
+      const c = cardRig();
+      c.reg.addRepo(root);
+      c.reg.scan();
+      const res = (await c.trust.request(gui(), 'request.loop.trust', { loopId: 'one', scope: 'repo', repo: root })) as { cardId: string };
+      const card = c.broker.card(res.cardId)!;
+      const text = JSON.stringify(card.block);
+      for (const want of ['uses your env: STRIPE_KEY, DATABASE_URL', 'reads env from: ~/.gnomon/loop-env (read first), then .env.local (repo) → ', '~/secrets/app.env (outside this repo)', 'STRIPE_KEY ← .env.local (repo)', 'DATABASE_URL ← not set yet (looks in ~/.gnomon/loop-env, then .env.local (repo), then ~/secrets/app.env (outside this repo))', "this loop runs this repo's code with STRIPE_KEY, DATABASE_URL and network access: anyone who can change the repo's code can read and send them.", 'shows check output unredacted', 'checks can reach the network', '  uses your env: STRIPE_KEY, DATABASE_URL', 'Protected (act nodes may not edit): **/node_modules/**, .env.local,']) expect(text).toContain(JSON.stringify(want).slice(1, -1));
+      expect(JSON.stringify(card)).not.toContain('sk_live_never_on_a_card');
+      // the default loop's card has neither line
+      const plain = repo([envLoop('two')]);
+      c.reg.addRepo(plain);
+      c.reg.scan();
+      const res2 = (await c.trust.request(gui(), 'request.loop.trust', { loopId: 'two', scope: 'repo', repo: plain })) as { cardId: string };
+      const text2 = JSON.stringify(c.broker.card(res2.cardId)!.block);
+      expect(text2).not.toContain('uses your env');
+      expect(text2).not.toContain('unredacted');
+      expect(text2).not.toContain('reads env from');
+      expect(text2).not.toContain('reach the network');
+    } finally {
+      if (prev === undefined) delete process.env.STRIPE_KEY;
+      else process.env.STRIPE_KEY = prev;
+    }
+  });
+});

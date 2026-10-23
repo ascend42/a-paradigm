@@ -3011,6 +3011,15 @@ components:
       card is voice-hand-only (broker, §14.7); binaryKind runs on the copy; a
       denied sha's refusal says "re-pin denied; restart Gnomon to re-offer";
       the offline CLI prints the codesign signer (loud on a mismatch).
+      TD-2026-10-23-268: runner/env.ts owns the loop env split (shrunk after
+      the Aegis review, TD-2026-10-23-448). loopEnvHazard refuses only
+      GNOMON_*, NODE_OPTIONS, NODE_PATH, DYLD_*, LD_* and the kernel-set names
+      (allowlist, Windows names, NO_COLOR); every secret and tool setting
+      (ANTHROPIC_*, CLAUDE_CODE_*, *_BASE_URL, BASH_ENV, PYTHON*, GIT_CONFIG*
+      …) is allowed when a trusted loop names it. applyLoopEnv and
+      buildCheckEnv{named} apply resolved values; buildSessionEnv is unchanged
+      for sessions. Values never come from the daemon env (cleanReexecEnv,
+      S-H3).
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]
@@ -3453,10 +3462,19 @@ components:
       kernel's re-validation of a .loop.json (decompile, validateLoop, compile
       again with the file's own budgets/flowPaths/interpreters, byte compare;
       protected and callsResolved are the kernel's own).
+      TD-2026-10-23-268/448: `env: [NAME, ...]` on check and act nodes (<= 32
+      names matching ^[A-Z_][A-Z0-9_]*$, no duplicates, never a hazard per
+      runner/env.ts loopEnvHazard: ENV_REFUSED; judge/summarize:
+      ENV_NOT_ALLOWED); loop-level `envFiles` (<= 8; repo-relative without ..,
+      ~/ or absolute; BAD_ENV_FILE, ENV_FILE_DUPLICATE, ENV_FILES_TOO_MANY),
+      `redact: on|off` and `network: on|off` (YAML 1.1 booleans accepted). All
+      compile only when used, so existing loops hash as before;
+      validateCompiledLoop keeps them.
     path: src/loops/schema.ts
     type: module
     tags: [gnomon, loops, paradigm-8, security]
     tests:
+      - test/loop-compiled.test.ts
       - test/loop-schema.test.ts
 
   loop-registry:
@@ -3506,6 +3524,16 @@ components:
       the human. CLI: gnomon loop list|show|trust|untrust|trust-status
       (run|pause|resume|runs|logs are #loop-runner's). trust.ts exports
       parseLoopTarget, the one request.loop.* target parser.
+      TD-2026-10-23-268/448: the trust card (envCardLines) says "uses your
+      env", "reads env from:" every source in lookup order with its real path
+      and place (repo, tracked by git, outside this repo), one "NAME ← source"
+      line per name (or its candidates), the network warning when env and
+      network are both on, "shows check output unredacted", "checks can reach
+      the network", and under a call node the callee's env names, files and
+      network (calleeEnv). All but the sources are in the compiled definition
+      and the content hash. Repo env files a loop links leave its config
+      closure and join its protected set; editing a value needs no re-trust.
+      LoopRunRefInfo.nodeEnv carries the trusted node's env names (Aegis F4).
     path: src/kernel/loops/registry.ts
     type: module
     tags: [gnomon, loops, paradigm-8, security]
@@ -3570,10 +3598,27 @@ components:
       check is error `killed`. Falsifiers: G-SBX-07, G-SBX-04..06 and G-SEC-02 against
       this profile (test/loop-check-sandbox.test.ts, darwin); parsers,
       scanner, env, registry and copy everywhere (test/loop-check.test.ts).
+      TD-2026-10-23-268/448: kernel/loops/loop-env.ts reads a node's `env`
+      values in the kernel: <home>/loop-env FIRST (owner-only 0600/0400, never
+      a symlink), then the loop's envFiles; every open O_NOFOLLOW|O_NONBLOCK,
+      regular files <= 1 MiB, dotenv without expansion. A repo file must
+      realpath inside the repo, nothing inside the Gnomon home but loop-env,
+      no config-named file (isConfigNamedEnvFile); credential paths allowed.
+      Errors env-refused, env-file (outside the repo: only "cannot be used:
+      <path>") and env-missing (naming the files tried), all before any copy
+      or spawn; the runner passes pre-read envValues and keeps them in memory
+      for the run's redaction. The kernel's own git/copy spawns never get
+      values; linked repo env files are never copied (skipFiles). redact:false
+      keeps output raw; with redaction on values redact by literal
+      ([REDACTED:env:NAME], URL-encoded too). network:on allows outbound IP
+      and the mDNSResponder socket in the loop-check SBPL, and denies every
+      kernel listener (web, mod proxies, local-model endpoints) on every
+      address (remote ip "*:PORT").
     path: src/kernel/loops/check-exec.ts
     type: module
     tags: [gnomon, loops, sandbox, paradigm-8, security]
     tests:
+      - test/loop-env-kernel.test.ts
       - test/loop-check.test.ts
       - test/loop-check-sandbox.test.ts
     anchors:
@@ -3753,6 +3798,14 @@ components:
       .gitattributes, .gitmodules, package.json) always proposes. The runner
       awaits model.settled(runId) before parking. Escape suite:
       test/loop-act-sandbox.test.ts (darwin).
+      TD-2026-10-23-268/448: the runner resolves an act node's `env` values
+      from the loop's env files (a failure is the node's error, nothing opens)
+      and hands them to LocalLane.openLoop, which refuses any name the trusted
+      node does not declare (LoopRunRefInfo.nodeEnv, Aegis F4) and applies
+      them after the dropped kernel names (applyLoopEnv). Model replies and
+      summaries are redacted by literal (Aegis F2); loop.node.detail is always
+      scanned (F5); a parked diff whose added lines carry a handed-out value
+      is an env-value land hazard and the card diff shows it redacted (F3).
     path: src/kernel/loops/propose.ts
     type: module
     tags: [gnomon, loops, sandbox, paradigm-8, security]

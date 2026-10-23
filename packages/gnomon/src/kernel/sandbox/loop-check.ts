@@ -32,7 +32,7 @@ export const LOOP_CHECK_PROFILE = Object.freeze({
   allow: Object.freeze({
     read: Object.freeze(['the check copy', "the repo's node_modules (read only)", 'the Node runtime', 'the hashed argv0 and its interpreter', 'the pinned paradigm CLI package (builtins)']),
     write: Object.freeze(['the check copy (its private HOME and TMPDIR inside it)']),
-    network: 'none',
+    network: 'none; a loop with network: on (TD-2026-10-23-268) gets outbound IP and DNS, never the kernel loopback ports',
     exec: 'the kernel node, the hashed argv0 and its shebang interpreter',
   }),
   deny: Object.freeze(['every other file', 'the Gnomon home', 'credential stores', 'network (loopback included)', 'mach-lookup', 'every other exec', 'home']),
@@ -68,6 +68,10 @@ export interface LoopCheckLaunchInput {
   env: Record<string, string>;
   /** the kernel's node (default process.execPath) */
   nodePath?: string;
+  /** TD-2026-10-23-268: the loop's `network: on`: outbound IP connects allowed (default: no network at all) */
+  network?: boolean;
+  /** with network on: loopback ports never reachable (the kernel's own transport) */
+  denyLoopbackPorts?: readonly number[];
 }
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
@@ -104,7 +108,7 @@ function darwinLoopCheck(i: LoopCheckLaunchInput, probe?: MacosProbe, sip?: SipP
   }
   let profile: string;
   try {
-    profile = loopCheckProfileSbpl({ nodeReal, copyReal, nodeModulesReal, execReal, readReal, homeReal, denyReal: [keys, ...creds] });
+    profile = loopCheckProfileSbpl({ nodeReal, copyReal, nodeModulesReal, execReal, readReal, homeReal, denyReal: [keys, ...creds], ...(i.network ? { network: { denyLoopbackPorts: [...(i.denyLoopbackPorts ?? [])] } } : {}) });
   } catch (err) {
     if (err instanceof LoopCheckSbplError) throw new LifecycleRefusal('sandbox-unavailable', err.message, { profile: 'loop-check' });
     throw err;

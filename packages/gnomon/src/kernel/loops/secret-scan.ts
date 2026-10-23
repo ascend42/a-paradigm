@@ -7,7 +7,14 @@
  * PEM private key blocks (also a block cut by the tail window), JWTs, npm, Stripe (sk_/rk_/pk_ live|test), GitLab
  * (glpat-), Slack, Anthropic, OpenAI and Google keys, passwords in URLs (scheme://user:pass@), bearer headers and generic `api_key=` / `secret:` / `token=` / `password=` assignments. A match is replaced by
  * `[REDACTED:<kind>]`; only kinds and counts are reported, never the matched text. Over-redaction is accepted.
+ *
+ * TD-2026-10-23-268 (Aegis F2): `literals` are the values a loop handed its children (from its env files, re-resolved
+ * by the kernel, never stored). Each value of LITERAL_MIN_CHARS or more, and its URL-encoded form, is replaced FIRST by
+ * `[REDACTED:env:<NAME>]` (kind `env:<NAME>`), whatever its shape.
  */
+
+/** A literal shorter than this is not redacted (it would shred ordinary text). */
+export const LITERAL_MIN_CHARS = 6;
 
 export interface Redaction {
   kind: string;
@@ -46,10 +53,31 @@ const RULES: readonly Rule[] = [
   { kind: 'generic-secret', re: /(\b[A-Za-z0-9_.-]*(?:api[_-]?key|apikey|secret|token|passw(?:or)?d|passwd|credential)[A-Za-z0-9_.-]*)(["']?\s*[:=]\s*["']?)([^\s"',;]{8,})/gi, group: 3 },
 ];
 
-/** Redact every secret-shaped match in `text`. */
-export function scanSecrets(text: string): ScanResult {
-  const counts = new Map<string, number>();
+/** Replace every literal value (and its URL-encoded form) by `[REDACTED:env:NAME]`; counts per kind. */
+export function redactLiterals(text: string, literals: ReadonlyArray<{ name: string; value: string }>, counts: Map<string, number> = new Map()): { text: string; counts: Map<string, number> } {
+  const forms: Array<{ kind: string; form: string }> = [];
+  for (const l of literals) {
+    if (typeof l.value !== 'string' || l.value.length < LITERAL_MIN_CHARS) continue;
+    forms.push({ kind: `env:${l.name}`, form: l.value });
+    const enc = encodeURIComponent(l.value);
+    if (enc !== l.value) forms.push({ kind: `env:${l.name}`, form: enc });
+  }
+  forms.sort((a, b) => b.form.length - a.form.length);
   let out = text;
+  for (const f of forms) {
+    const parts = out.split(f.form);
+    if (parts.length > 1) {
+      counts.set(f.kind, (counts.get(f.kind) ?? 0) + parts.length - 1);
+      out = parts.join(`[REDACTED:${f.kind}]`);
+    }
+  }
+  return { text: out, counts };
+}
+
+/** Redact the loop's literal values (when given), then every secret-shaped match in `text`. */
+export function scanSecrets(text: string, literals: ReadonlyArray<{ name: string; value: string }> = []): ScanResult {
+  const counts = new Map<string, number>();
+  let out = literals.length ? redactLiterals(text, literals, counts).text : text;
   for (const rule of RULES) {
     out = out.replace(rule.re, (...m: unknown[]) => {
       const whole = m[0] as string;

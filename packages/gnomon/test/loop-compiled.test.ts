@@ -91,3 +91,17 @@ describe('validateCompiledLoop: the kernel never trusts the file', () => {
     expect(validateCompiledLoop(null, { scope: 'repo' }).ok).toBe(false);
   });
 });
+
+describe('TD-2026-10-23-268: env and redact survive the kernel re-check', () => {
+  it('a compiled loop with node env and redact off re-validates; a hand-added hazard name is refused', () => {
+    const def = {
+      schema: 'loop:v2', id: 'envy', redact: 'off', envFiles: ['.env.local', '~/s/app.env'], network: 'on', start: 't',
+      nodes: [{ id: 't', type: 'check', run: ['bin/check'], env: ['STRIPE_KEY'], on: { pass: '@stop' } }],
+    };
+    const c = compileLoop(def).compiled!;
+    const file = JSON.parse(loopFileJson(c));
+    expect(validateCompiledLoop(file, { scope: 'repo', fileId: 'envy' })).toMatchObject({ ok: true });
+    file.nodes[0].env = ['NODE_OPTIONS'];
+    expect(validateCompiledLoop(file, { scope: 'repo', fileId: 'envy' }).errors.map((e) => e.code)).toEqual(['ENV_REFUSED']);
+  });
+});

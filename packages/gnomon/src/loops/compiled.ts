@@ -35,7 +35,7 @@ export interface CompiledValidation {
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 const SHA_HEX = /^[0-9a-f]{64}$/;
-const COMPILED_KEYS = ['schema', 'compiled', 'id', 'title', 'scope', 'repo', 'flows', 'flowPaths', 'triggers', 'autonomy', 'notify', 'decide', 'budgets', 'goal', 'land', 'start', 'nodes', 'protected'];
+const COMPILED_KEYS = ['schema', 'compiled', 'id', 'title', 'scope', 'repo', 'flows', 'flowPaths', 'triggers', 'autonomy', 'notify', 'decide', 'budgets', 'goal', 'land', 'redact', 'envFiles', 'network', 'start', 'nodes', 'protected'];
 
 const fail = (path: string, code: string, message: string): CompiledValidation => ({ ok: false, errors: [{ path, code, message }] });
 
@@ -62,7 +62,7 @@ function decompile(c: Obj): Obj {
       return t;
     });
   }
-  for (const k of ['autonomy', 'notify', 'decide', 'budgets', 'land', 'start']) if (c[k] !== undefined) d[k] = c[k];
+  for (const k of ['autonomy', 'notify', 'decide', 'budgets', 'land', 'redact', 'envFiles', 'network', 'start']) if (c[k] !== undefined) d[k] = c[k];
   if (isObj(c.goal)) {
     const g: Obj = { node: c.goal.node, verdict: c.goal.verdict };
     if (!(Array.isArray(c.goal.inputs) && c.goal.inputs.length === 0)) g.inputs = c.goal.inputs;

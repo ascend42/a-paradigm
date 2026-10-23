@@ -61,6 +61,51 @@ export function isScrubbed(name: string): boolean {
   return SCRUB.some((r) => r.test(name));
 }
 
+/**
+ * TD-2026-10-23-268 (#loop-check, #loop-act): the names a loop may hand a node's child (`env: [NAME, ...]` on a
+ * check or act node, shown on the loop-trust card and bound in its hash). The VALUES come from env files the kernel
+ * reads (kernel/loops/loop-env.ts: the loop's envFiles, then ~/.gnomon/loop-env), never from the daemon's env (the
+ * daemon re-execs clean, lifecycle/env.ts). The split (Aegis review, founder ruling):
+ *
+ *   - ALLOWED when named: every secret and every tool setting the human chooses to hand their own loop: API keys and
+ *     tokens (STRIPE_KEY, DATABASE_URL, GITHUB_TOKEN, AWS_*, ANTHROPIC_API_KEY …), interpreter and tool settings
+ *     (BASH_ENV, ENV, PYTHON*, PERL5*, RUBY*, JAVA_TOOL_OPTIONS, GIT_CONFIG*, GIT_EXEC_PATH, GIT_SSH_COMMAND), and the
+ *     isScrubbed names (ANTHROPIC_*, CLAUDE_CODE_USE_*, CLAUDE_CODE_OAUTH*, CLAUDE_CONFIG_DIR, *_BASE_URL): they stay
+ *     scrubbed from every child unless a trusted loop names them. Naming ANTHROPIC_API_KEY never routes a loop model
+ *     step (law 7: Gnomon's own model use is unchanged).
+ *   - REFUSED at validate and again in the kernel (loopEnvHazard), whatever the loop says:
+ *       · GNOMON_* (a child that talks to the kernel, LL5);
+ *       · NODE_OPTIONS, NODE_PATH, DYLD_*, LD_* (code loaded into the child's runtime before anything the trust card
+ *         pinned runs);
+ *       · the names the kernel itself sets for a child (the allowlist, the Windows names, NO_COLOR): HOME, PATH,
+ *         TMPDIR, USER … are the kernel's (private dirs, the pinned PATH, the OS identity), never the loop's.
+ */
+export const LOOP_ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
+export const LOOP_ENV_MAX = 32;
+const LOOP_ENV_HAZARDS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^GNOMON_/i, 'a kernel name (a loop child never talks to the kernel)'],
+  [/^(NODE_OPTIONS|NODE_PATH)$/i, 'it loads code into the child\'s runtime'],
+  [/^(DYLD_|LD_)/i, 'it loads code into the child\'s runtime'],
+];
+const KERNEL_SET = new Set([...ENV_ALLOWLIST, ...WINDOWS_EXTRA, 'NO_COLOR'].map((k) => k.toUpperCase()));
+
+/** Why a loop may never name `name` (a hazard), or null when it may (secrets included). */
+export function loopEnvHazard(name: string): string | null {
+  if (!LOOP_ENV_NAME.test(name)) return 'not an environment name (A-Z, 0-9 and _, not starting with a digit)';
+  if (KERNEL_SET.has(name.toUpperCase())) return 'the kernel sets it for every child';
+  for (const [re, why] of LOOP_ENV_HAZARDS) if (re.test(name)) return why;
+  return null;
+}
+
+/** Apply a loop's named variables (already resolved) on top of a built child env; a hazard name throws, never applied. */
+export function applyLoopEnv(env: Record<string, string>, named: Readonly<Record<string, string>> | undefined): void {
+  for (const [k, v] of Object.entries(named ?? {})) {
+    const why = loopEnvHazard(k);
+    if (why) throw new Error(`#loop-check: env ${k.slice(0, 64)} is refused: ${why}`);
+    env[k] = v;
+  }
+}
+
 export interface SessionIdentity {
   /** os.userInfo().username: becomes USER and LOGNAME */
   user?: string;
@@ -367,18 +412,26 @@ export interface CheckEnvInput {
   inject?: Readonly<Record<string, string>>;
   /** the platform whose env rules apply (default: this process's) */
   platform?: NodeJS.Platform;
+  /**
+   * TD-2026-10-23-268: the check node's named variables (kernel/loops/loop-env.ts resolveLoopEnvFiles), applied after
+   * the scrub: a variable the human trusted the loop with reaches this child even when isScrubbed would drop it; a
+   * hazard throws
+   */
+  named?: Readonly<Record<string, string>>;
 }
 
 /**
  * #loop-check (docs/specs/gnomon-loops.md §4 "Sandboxes", G-SEC-02): a loop check child's env. The same allowlist,
  * scrub and OS identity as a session, HOME and TMPDIR replaced by the check's private dirs, and NO kernel names at
  * all (no GNOMON_HSID / GNOMON_SOCK / GNOMON_SESSION_KEY: a check talks to nothing). `inject` never re-adds a
- * scrubbed name (NODE_OPTIONS, ANTHROPIC_*, GNOMON_* …).
+ * scrubbed name (NODE_OPTIONS, ANTHROPIC_*, GNOMON_* …). `named` (TD-2026-10-23-268) adds exactly the variables the
+ * trusted check node names, never a hazard (loopEnvHazard).
  */
 export function buildCheckEnv(i: CheckEnvInput): { env: Record<string, string>; envKeys: string[] } {
   const env = scrubbedChildEnv(i.from, i.identity, i.path, i.platform ?? process.platform);
   env.HOME = i.home;
   env.TMPDIR = i.tmpdir;
   for (const [k, v] of Object.entries(i.inject ?? {})) if (!isScrubbed(k)) env[k] = v;
+  applyLoopEnv(env, i.named);
   return { env, envKeys: Object.keys(env).sort() };
 }

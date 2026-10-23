@@ -110,6 +110,7 @@ import { createDaemonStopHandler } from '../socket/daemon-stop-verb.js';
 import { spkiBase64Url, WebEndpoint, type LaunchGrant } from '../web/endpoint.js';
 import type { LaunchAsker } from '../web/launch-cap.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
+import { loopbackPort } from '../local/endpoint.js';
 import { secureKernelPipe } from '../../platform/win32/pipe.js';
 import { shieldProcess } from '../../platform/win32/shield.js';
 import { ensureGnomonHome } from './home.js';
@@ -1245,6 +1246,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // 8.0:loops (#loop-registry): the registry, trust cards and the human's request.loop.* (kernel/loops/wire.ts)
   // step 6 (#loop-timers): loop triggers become scheduler timers; the `loop` idle holder keeps the daemon up (D1)
   // step 9 (#loop-strictness): each loop's repo cap is its level and its repo's effective run mode
+  // Aegis L1: the kernel's own loopback listeners are never a model endpoint: the web endpoint (when listening; every
+  // open re-validates with the live port) and every mod egress proxy
+  const kernelPorts = (): number[] => {
+    const st = web?.status() as { listening?: boolean; port?: number } | undefined;
+    return [...(st?.listening && typeof st.port === 'number' ? [st.port] : []), ...mods.loopbackPorts()];
+  };
   const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop'),
     // step 8 (#loop-runner): judge/summarize steps open unattended local sessions only through supervisor.openLoop
     model: { openLoop: (ref, req) => supervisor.openLoop(ref, req), configured: () => ({ endpoints: (localCfg.config?.endpoints ?? []).filter((e) => e.loops === true).map((e) => e.id), runner: localCfg.config?.runner !== undefined, any: localCfg.config?.endpoints.length ?? 0 }), settled: (runId) => supervisor.loopSessionsSettled(runId) },
@@ -1252,7 +1259,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // step 12 (#loop-agent-ops, LL5): a loop session's hsid is refused every loop.request
     isLoopSession: (hsid) => supervisor.isLoopSession(hsid),
     // step 11 (#loop-land): a land waits while a human session in the repo has a turn in flight
-    humanTurns: () => supervisor.humanTurns() });
+    humanTurns: () => supervisor.humanTurns(),
+    // TD-2026-10-23-268: a `network: on` check never reaches the kernel's own web transport
+    // Aegis M1: every kernel listener (the web endpoint, every mod egress proxy) and the configured local-model
+    // endpoints, read live at each check
+    kernelPorts: () => [...new Set([...kernelPorts(), ...(localCfg.config?.endpoints ?? []).map((e) => loopbackPort(e.base)).filter((p): p is number => p !== null)])] });
   loopsBrake = (repoKey) => loops.brake(repoKey);
   // TD-2026-10-22-769 (#local-config-request, $local-config-flow): a real home's local-model config. The human's
   // request.local.config raises a root-class card; its allow writes local.signed.json and reloads it HOT (the
@@ -1265,12 +1276,6 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // a loop refused at start for want of a local model clears once the cause clears (its stack alert goes with it)
     loops.localConfigApplied();
     return localCfg;
-  };
-  // Aegis L1: the kernel's own loopback listeners are never a model endpoint: the web endpoint (when listening; every
-  // open re-validates with the live port) and every mod egress proxy
-  const kernelPorts = (): number[] => {
-    const st = web?.status() as { listening?: boolean; port?: number } | undefined;
-    return [...(st?.listening && typeof st.port === 'number' ? [st.port] : []), ...mods.loopbackPorts()];
   };
   const localCards = new LocalConfigCards({ home, broker, forbiddenPorts: kernelPorts, chainHighWater: localHighWater, verify: authority, current: () => localCfg.config, lane: supervisor.localProbeSink(), onApplied: (why, removedVersion) => reloadLocalConfig(why, removedVersion) });
   localStatus = () => {

@@ -34,6 +34,9 @@ import { RpcRefusal } from '../socket/rpc.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
 import type { LoopHash } from './hash.js';
 import { loopKeyOf, repoRootOf, type LoopEntry, type LoopRegistry, type LoopScopeName } from './registry.js';
+import { envCardLines, LOOP_HOME_ENV_SHOWN, loopEnvNames, type EnvCardContext } from './loop-env.js';
+import { hardenedGit } from '../git/scratch.js';
+import { osUserHome } from '../runner/env.js';
 
 export const LOOP_REQUEST_KINDS: readonly string[] = Object.freeze(['request.loop.trust', 'request.loop.untrust', 'request.loop.pause', 'request.loop.resume', 'request.loop.run', 'request.loop.delete', 'request.loop.budget']);
 /** A loop-trust card waits this long for the human (then it expires; nothing is trusted). */
@@ -81,8 +84,31 @@ function wrap(raw: string, indent = '    '): string[] {
 const edges = (on: Record<string, string>): string => Object.entries(on).map(([k, v]) => `${k}→${v}`).join(' ');
 const list = (xs: readonly string[] | undefined, none = 'none'): string => (xs && xs.length ? xs.join(', ') : none);
 
+export { loopEnvNames };
+
+/** What a call node's callee hands its children (Aegis F6): env names, env files, network. */
+export interface CalleeEnvView {
+  names: string[];
+  envFiles: string[];
+  network: boolean;
+}
+
+/** The kernel's card context: the repo, the OS home, the Gnomon home and a git-tracked check (hardened git). */
+export function envCardContext(repoRoot: string, gnomonHome: string): EnvCardContext {
+  return {
+    repoRoot, gnomonHome, userHome: osUserHome(),
+    tracked: (rel) => {
+      try {
+        return hardenedGit(['ls-files', '--error-unmatch', '--', rel], { cwd: repoRoot, allowFail: true }).status === 0;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
 /** The definition as the card shows it (no hash header: these lines are the diff base). */
-export function renderDefinition(c: CompiledLoop, h: LoopHash): string[] {
+export function renderDefinition(c: CompiledLoop, h: LoopHash, calleeEnv?: (nodeId: string) => CalleeEnvView | null, envCtx?: EnvCardContext): string[] {
   const out: string[] = [];
   const push = (l: string): void => void out.push(...wrap(l));
   push(`Title: ${c.title ?? '(none)'}`);
@@ -104,6 +130,15 @@ export function renderDefinition(c: CompiledLoop, h: LoopHash): string[] {
   push(c.land ? `Land paths: ${list(c.land.paths)}; message "${c.land.message}"; max wait ${c.land.maxWaitMin} min (gate-class paths never land without a card)` : 'Land: none (nothing lands)');
   // 8.0 approve-to-land (founder decision, build plan step 11; Aegis M6): said plainly on the card that trusts it
   if (c.land && c.nodes.some((n) => n.type === 'model' && n.role === 'act')) push('Proposes changes to your current branch; nothing lands until you accept the card.');
+  // TD-2026-10-23-268: the human's variables this loop's children get (names, never values) and whether check output
+  // is scrubbed; both are in the hash, so a change to either takes a new trust
+  const envNames = loopEnvNames(c);
+  if (envNames.length) push(`uses your env: ${envNames.join(', ')}`);
+  // Aegis M3/M4: every source with its real path and place, and each name's source (the context is the kernel's)
+  if (envCtx) for (const l of envCardLines(c, envCtx)) push(l);
+  else if (c.envFiles?.length) push(`reads env from: ${LOOP_HOME_ENV_SHOWN} (read first), then ${c.envFiles.join(', then ')}`);
+  if (c.redact === 'off') push('shows check output unredacted');
+  if (c.network === 'on') push('checks can reach the network');
   push(`Start: ${c.start}`);
   const argvOf = new Map(h.argv.map((a) => [a.node, a]));
   const callOf = new Map(h.calls.map((x) => [x.node, x]));
@@ -122,14 +157,21 @@ export function renderDefinition(c: CompiledLoop, h: LoopHash): string[] {
         }
         for (const f of a.files) push(`  file ${f.word}: ${f.kind}${f.real ? ` ${f.real}` : ''}${f.sha256 ? ` sha256:${f.sha256.slice(0, 16)}` : ''}`);
       }
+      if (n.env?.length) push(`  uses your env: ${n.env.join(', ')}`);
     } else if (n.type === 'model') {
       push(`Node ${n.id} (model, ${n.role}): local${n.model.profile ? ` profile ${n.model.profile}` : ''}, min confidence ${n.model.minConfidence}; tools ${n.tools.length ? n.tools.map((t) => (typeof t === 'string' ? t : `paradigm:${t.paradigm.join('|')}`)).join(', ') : 'none'}; inputs ${list(n.inputs)}${n.verdict ? `; classes ${n.verdict.classes.join(', ')}` : ''}; limits ${n.limits.turns} turns, ${n.limits.tokens} tokens${exit}; on ${edges(n.on)}`);
+      if (n.env?.length) push(`  uses your env: ${n.env.join(', ')}`);
       if (n.prompt !== undefined) push(`  prompt: ${n.prompt}`);
     } else if (n.type === 'notify') {
       push(`Node ${n.id} (notify, ${n.as}): ${n.text !== undefined ? `"${n.text}"` : '(no text)'}${n.choices ? `; choices ${n.choices.join(', ')}` : ''}${n.attach.length ? `; attach ${n.attach.join(', ')}` : ''}${exit}; on ${edges(n.on)}`);
     } else {
       const x = callOf.get(n.id);
       push(`Node ${n.id} (call): ${n.loop} → callee hash ${x?.calleeHash ? short(x.calleeHash) : 'UNRESOLVED'}${exit}; on ${edges(n.on)}`);
+      // Aegis F6: what the callee hands its children is part of what this card trusts
+      const ce = calleeEnv?.(n.id);
+      if (ce?.names.length) push(`  callee uses your env: ${ce.names.join(', ')}`);
+      if (ce?.envFiles.length) push(`  callee reads env from: ${ce.envFiles.join(', ')}`);
+      if (ce?.network) push('  callee checks can reach the network');
     }
   }
   push(`Config closure (${h.closure.all.length} file${h.closure.all.length === 1 ? '' : 's'}${h.closure.truncated ? `, ${h.closure.truncated} more not listed` : ''}): ${h.closure.files.map((f) => `${f.rel} sha256:${f.sha256.slice(0, 12)}`).join(', ') || 'none'}`);
@@ -261,7 +303,7 @@ export class LoopTrust {
     const reg = this.#o.registry;
     const prior = reg.trustOf(e.key) ?? null;
     const lastTrusted = prior?.contentHash ?? [...reg.history()].reverse().find((x) => x.event === 'trusted' && loopKeyOf(x.scope, x.repoKey, x.loopId) === e.key)?.contentHash;
-    const body = renderDefinition(e.compiled, h);
+    const body = renderDefinition(e.compiled, h, (nodeId) => reg.calleeEnv(e.key, nodeId), envCardContext(e.repoRoot, this.#o.home));
     const base = lastTrusted ? reg.snapshots.read(lastTrusted) : null;
     // Aegis LP2 #1: a closure-only change (definition, argv and callees as trusted) takes a short re-render: just the
     // closure diff, still the root-class card with fresh presence

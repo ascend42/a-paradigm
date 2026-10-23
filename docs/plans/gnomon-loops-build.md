@@ -213,3 +213,33 @@ YAML in a zero-dep kernel (hash and show only the compiled JSON); shebang argv0 
 - **Helper 1.9.0** (unsigned until the founder's release): the `local.config` row table, and `requestedBy` in the `loop-trust` field set (an agent-raised trust card could not be allowed on a real 1.8.0 helper). A card whose row table is newer than the running helper is refused when it is raised ("update the Gnomon app"), which also closes the latent loop-trust path where a 1.8.0 helper's decision.sign error never fell back (Aegis C6 is kept: no fallback; the refusal moves to raise).
 - **Example D's write check lands in 8.1**: the validator now refuses `effect: write` with `LANDS_IN_8_1`, so a definition the runner cannot run fails at validate; the runner keeps its backstop (`ACT_NODES_LATER`, milestone 8.1). This answers the step-14 open question.
 - **A refused start is not silent**: a schedule/event/continuous fire refused `no-local-model` writes `loop.trigger.fired{refused:{code, why}}` (why ∈ none | sessions-only | no-runner | no-profile) and one `startRefused` entry per loop in `status.loops`; the GUI shows one stack alert per loop ("■ <id> didn't start", ×n since), cleared when a config that serves it applies.
+
+## Notes from loop secrets (TD-2026-10-23-268)
+
+- **`env: [NAME, …]` on check and act nodes.** The kernel passes exactly those variables into that node's child (values from env files since TD-2026-10-23-448, below), on top of the scrubbed env (`buildCheckEnv{named}`; an act session through `applyLoopEnv` after the loop drops). Judge and summarize take none (`ENV_NOT_ALLOWED`).
+- **The split** lives in `runner/env.ts` `loopEnvHazard` (shrunk after review, below). A name found nowhere is `env-missing`, before any copy or spawn.
+- **`redact: off`** at the loop level keeps check output raw (tails, json value, builtin error); model replies stay scanned.
+- **Hash and card.** Both compile only when used (`env` when non-empty, `redact: 'off'`), so existing loops hash as before. The card shows "uses your env: …" (names only) and "shows check output unredacted". The `loop.trusted` row is unchanged: its `contentHash` binds both, so the helper row table (decision-batch.ts, Protocol.swift, render.ts) needed no new field and no helper bump.
+
+## Notes from the loop secrets review (Aegis "merge after fixes", TD-2026-10-23-448)
+
+- **F1: values come from env files, not the daemon env.** The daemon re-execs through `cleanReexecEnv` (S-H3), so named vars never reached it; that stays. `envFiles` (≤ 8, loop level) then `~/.gnomon/loop-env` (owner-only, never a symlink) are read by the kernel with O_NOFOLLOW at resolve time (`kernel/loops/loop-env.ts`). Linked repo env files leave the config closure and the check copy, so editing a value needs no re-trust and a tool cannot auto-load the rest of the file.
+- **`network: on`** opens outbound IP and DNS for that loop's checks (darwin SBPL); the kernel's web port (daemon `kernelPorts`) stays denied, unix sockets too. Act nodes stay loopback-only.
+- **Refusal list shrunk** to GNOMON_*, NODE_OPTIONS, NODE_PATH, DYLD_*, LD_* and kernel-set names.
+- **F2–F6 applied:** literal redaction (`[REDACTED:env:NAME]`, URL-encoded too), the parked-diff `env-value` hazard, act env bounded by the trusted node (`LoopRunRefInfo.nodeEnv`), `loop.node.detail` always scanned, "callee uses your env" under call nodes.
+- **F7, 8.1 guards (open):** envelope auto-trust excludes loops with env, envFiles or network; Claude nodes refuse the Claude routing names; bash tools and write checks reopen F3 (scan their edits for handed-out values).
+
+## Notes from the loop secrets re-check (Aegis round 3, "merge after fixes")
+
+- **M1:** a `network: on` check is denied every kernel listener on every address (`remote ip "*:PORT"`): the web endpoint, every mod egress proxy (`kernelPorts`, now defined above `wireLoops` in daemon.ts) and every configured local-model endpoint. The darwin test proves 127.0.0.1, 0.0.0.0, ::ffff:127.0.0.1 and the LAN IP. **Residual:** a mod proxy started mid-check is not in that check's profile; a per-mod proxy token is 8.1.
+- **M2–M4, L1–L4:**
+  - env files open with O_NONBLOCK (a FIFO is refused at once);
+  - a repo file must realpath inside the repo, and nothing inside the Gnomon home but `loop-env`;
+  - credential paths are allowed, and the card shows real paths, "(outside this repo)" and "(tracked by git)", one `NAME ← source` line per name and the network warning;
+  - `~/.gnomon/loop-env` is read first;
+  - repo env files join the protected set;
+  - config-named env files are refused (`.env*` allowed: see the L1 note in the report);
+  - DNS needs only the mDNSResponder socket and `/var` metadata (tested; no `system-socket`);
+  - outside-repo reasons say only "cannot be used";
+  - a run keeps its handed-out values in memory for redaction.
+- **F6 gap:** a caller's card also shows the callee's env files and network.

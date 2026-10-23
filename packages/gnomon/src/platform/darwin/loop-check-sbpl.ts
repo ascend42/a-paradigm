@@ -16,7 +16,11 @@
  *     Gnomon home, `<home>/loop-work/check-<runId>`, disposable and removed after the run) and /dev/null;
  *   - the Gnomon home is denied as a whole, then the run dir (and its ancestors' metadata) re-allowed after it:
  *     SBPL's last matching rule wins;
- *   - network: NO network-* rule at all (G-SBX-07; checks get no network and no keys, §7);
+ *   - network: by default NO network-* rule at all (G-SBX-07). TD-2026-10-23-268: a loop with `network: on` (on its
+ *     trust card) gets outbound IP connects (`remote ip "*:*"`) and DNS (the mDNSResponder socket), then
+ *     the kernel's listener ports (web, mod proxies, local-model endpoints) are denied again on every address
+ *     (`remote ip "*:PORT"`); every other unix socket (the kernel socket included) stays unreachable, and nothing may
+ *     listen;
  *   - last, an explicit `file-read*`/`file-write*` DENY of the Gnomon home and the user's credential stores
  *     (~/.ssh, ~/.aws, ~/.gnupg, keychains, browser profiles, ~/.claude …): SBPL's later rule wins, so no
  *     granted path can re-open them.
@@ -41,6 +45,8 @@ export interface LoopCheckProfileInput {
   homeReal: string;
   /** credential stores and the Gnomon keys dir: read and write denied last */
   denyReal: readonly string[];
+  /** TD-2026-10-23-268: the loop's `network: on`; absent: no network rule at all */
+  network?: { denyLoopbackPorts: readonly number[] };
 }
 
 export class LoopCheckSbplError extends Error {}
@@ -60,6 +66,23 @@ function ancestors(p: string): string[] {
 }
 
 const uniq = (xs: readonly string[]): string[] => [...new Set(xs)];
+
+/**
+ * `network: on`: outbound IP and DNS only; the kernel's listener ports denied after on every address (the later rule
+ * wins). DNS is the mDNSResponder socket alone. Aegis L2: no `system-socket`, no mach-lookup and no /etc read: the
+ * darwin sandbox test resolves a name and connects without them (each was tried and dropped).
+ */
+function networkRules(denyPorts: readonly number[]): string[] {
+  for (const p of denyPorts) if (!Number.isInteger(p) || p <= 0 || p > 65535) throw new LoopCheckSbplError(`not a port: ${p}`);
+  return [
+    '(allow network-outbound (remote ip "*:*"))',
+    '(allow network-outbound (remote unix-socket (path-literal "/private/var/run/mDNSResponder")))',
+    // getaddrinfo asks mDNSResponder over its socket; reaching it resolves the /var link (metadata only)
+    '(allow file-read-metadata (literal "/var"))',
+    // Aegis M1: a kernel listener's port is denied on EVERY address (127.0.0.1, 0.0.0.0, ::ffff:127.0.0.1, the LAN IP)
+    ...[...new Set(denyPorts)].map((p) => `(deny network-outbound (remote ip "*:${p}"))`),
+  ];
+}
 
 export function loopCheckProfileSbpl(i: LoopCheckProfileInput): string {
   const exec = uniq([i.nodeReal, ...i.execReal]);
@@ -91,7 +114,8 @@ export function loopCheckProfileSbpl(i: LoopCheckProfileInput): string {
     '(allow sysctl-read)',
     `(allow file-write* (subpath ${q(i.copyReal)}) (literal "/dev/null"))`,
     '(allow file-ioctl (literal "/dev/null"))',
-    // NO network-* rule: a check reaches no host, loopback included (G-SBX-07)
+    // by default NO network-* rule: a check reaches no host, loopback included (G-SBX-07)
+    ...(i.network ? networkRules(i.network.denyLoopbackPorts) : []),
     `(deny file-read* file-write* (subpath ${q(i.homeReal)}))`,
     `(allow file-read* file-write* (subpath ${q(i.copyReal)}))`,
     `(allow file-read-metadata ${ancestors(i.copyReal).map((d) => `(literal ${q(d)})`).join(' ')})`,

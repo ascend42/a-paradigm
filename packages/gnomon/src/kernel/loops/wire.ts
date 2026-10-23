@@ -67,6 +67,8 @@ export interface WireLoopsOptions {
   start?: boolean;
   rescanMs?: number;
   /** #loop-runner seams: the check executor, the builtins' pinned paradigm CLI, the GUI toast, caps, clock */
+  /** TD-2026-10-23-268: the kernel's own loopback ports (its web transport), denied to `network: on` checks */
+  kernelPorts?: () => readonly number[];
   check?: (i: CheckExecInput) => Promise<CheckResult>;
   paradigmCli?: () => FilePin | null;
   toast?: (t: LoopToast) => void;
@@ -173,6 +175,7 @@ export function wireLoops(o: WireLoopsOptions): WiredLoops {
   const runner = new LoopRunner({
     home: o.home, kernelPrincipal: o.kernelPrincipal, registry, ledger, broker: o.broker,
     append: (kind, payload, ids) => append(kind, payload, ids?.connId),
+    ...(o.kernelPorts ? { kernelPorts: o.kernelPorts } : {}),
     ...(o.check ? { check: o.check } : {}), ...(o.paradigmCli ? { paradigmCli: o.paradigmCli } : {}), ...(o.toast ? { toast: o.toast } : {}),
     ...(o.caps ? { caps: o.caps } : {}), ...(o.clock ? { clock: o.clock } : {}), ...(o.platform ? { platform: o.platform } : {}), ...(o.diag ? { diag: o.diag } : {}),
     ...(o.strictness ? { strictness: o.strictness } : {}),

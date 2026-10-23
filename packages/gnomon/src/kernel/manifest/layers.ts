@@ -295,3 +295,16 @@ export function gateClassPathRule(relPath: string): string | null {
   if (GATE_CODE_CONFIG.test(base)) return 'code-config';
   return null;
 }
+
+/** A gate-class file a loop check may read (the loop config closure): never a directory rule, a memory file or an alias. */
+export function isClosureName(name: string): boolean {
+  if (/^[tj]sconfig([.-][^/\\]*)?\.json$/i.test(name)) return true;
+  const rule = gateClassPathRule(name);
+  if (rule === null) return false;
+  return rule.startsWith('file:') || rule === 'test-config' || rule === 'code-config' || rule === 'env-file';
+}
+
+/** TD-2026-10-23-268 (Aegis L1): a loop env file may not be named like a config tools run (a `.env*` dotenv is fine). */
+export function isConfigNamedEnvFile(name: string): boolean {
+  return isClosureName(name) && gateClassPathRule(name) !== 'env-file';
+}

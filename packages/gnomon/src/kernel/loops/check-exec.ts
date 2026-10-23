@@ -17,7 +17,12 @@
  *    the repo (a link to ~/Documents would widen the reads): the profile grants it read and never write.
  * 2. ENVIRONMENT. #session-runner's allowlist and scrub (runner/env.ts buildCheckEnv): NODE_OPTIONS, GNOMON_*,
  *    ANTHROPIC_* and every non-allowlisted secret never reach the child (G-SEC-02); HOME and TMPDIR are the
- *    run's private dirs; PATH is the kernel node's dir + the system dirs (no ~/.local/bin).
+ *    run's private dirs; PATH is the kernel node's dir + the system dirs (no ~/.local/bin). TD-2026-10-23-268: on
+ *    top, exactly the variables the trusted node names in `env`, read by the kernel from the loop's env files then
+ *    ~/.gnomon/loop-env (loop-env.ts resolveLoopEnvFiles: a hazard is `env-refused`, a bad or missing linked file
+ *    `env-file`, a name found nowhere `env-missing`; all before anything is copied or run; never an empty variable).
+ *    The kernel's own git and copy spawns never get them. With the loop's `network: on` the profile allows outbound
+ *    IP connects (never the kernel's loopback ports, never a unix socket but DNS).
  * 3. RUN. argv is exec'd directly (no shell) under the `loop-check` profile (kernel/sandbox/loop-check.ts), in
  *    its own process group; at `timeoutSec` the group gets SIGTERM, then SIGKILL after CHECK_KILL_GRACE_MS, and
  *    after any exit the group is SIGKILLed. The tree is listed every CHECK_TREE_POLL_MS through the
@@ -30,7 +35,9 @@
  *    pin mismatch, sandbox refusal or unparseable report is `error`; a builtin also needs its JSON verdict (exit 2
  *    or no valid verdict is `error`). A json rule's value is bounded and secret-scanned before it is returned.
  * 5. EVIDENCE. stdout and stderr tails (CHECK_EVIDENCE_TAIL_BYTES each), parsed counts and duration, run through
- *    the secret scanner (secret-scan.ts) before they are returned, and labelled `private` (sensitive).
+ *    the secret scanner (secret-scan.ts) before they are returned, and labelled `private` (sensitive). A loop with
+ *    `redact: off` (TD-2026-10-23-268, on its trust card) gets its tails, json value and builtin error raw. With
+ *    redaction on, the node's own resolved values are redacted by value first ([REDACTED:env:NAME], Aegis F2).
  * 6. CLEANUP. The run dir is removed after a pass or fail; on `error` it is kept for debugging with a retention
  *    note, and sweepCheckCopies removes kept dirs past the retention window (`loops.retentionDays`).
  * Residual (8.0): a check's node_modules dependencies are not pinned (only the lockfile, via the config closure);
@@ -43,13 +50,14 @@ import * as path from 'node:path';
 import type { CheckPass } from '../../loops/schema.js';
 import { isLifecycleRefusal } from '../lifecycle/refusal.js';
 import { processControlFor } from '../lifecycle/process-control.js';
-import { buildCheckEnv, defaultSessionPath, sessionIdentity, sessionNodeDir, type SessionIdentity } from '../runner/env.js';
+import { buildCheckEnv, loopEnvHazard, defaultSessionPath, sessionIdentity, sessionNodeDir, type SessionIdentity } from '../runner/env.js';
 import { LOOP_WORK_DIR, loopCheckLaunchPlan, type LoopCheckLaunchInput } from '../sandbox/loop-check.js';
 import { readShebang, resolveShebangInterpreter } from './shebang.js';
 import type { ChildLaunchPlan } from '../sandbox/transport.js';
 import type { MacosProbe, SipProbe } from '../../platform/darwin/macos.js';
 import { applyPassRule, type ParsedCounts } from './check-parse.js';
 import { scanSecrets, type Redaction } from './secret-scan.js';
+import { literalsOf, resolveLoopEnvFiles, type LoopEnvSource, type LoopLiteral } from './loop-env.js';
 
 export const CHECK_COPY_LIMITS = Object.freeze({ maxFiles: 50_000, maxBytes: 500 * 1024 * 1024, maxNodeModules: 500 });
 export const CHECK_EVIDENCE_TAIL_BYTES = 64 * 1024;
@@ -61,15 +69,18 @@ export const CHECK_RUN_ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** repo-relative paths never copied (the session profile's Warpline token denies, the repo's own Gnomon dir) */
 const NEVER_COPY = [/^\.gnomon(\/|$)/, /(^|\/)node_modules(\/|$)/, /^\.warpline\/keys(\/|$)/, /^\.warpline\/daemon-tokens\.jsonl$/, /^\.warpline\/daemon\/mcp-tokens\.json$/, /^\.warpline\/daemon\/mcp\.token$/, /(^|\/)\.git(\/|$)/];
 
-export type CheckErrorReason = 'sandbox-unavailable' | 'sandbox-refused' | 'copy-too-large' | 'copy-failed' | 'pin-mismatch' | 'spawn-failed' | 'timeout' | 'crash' | 'output-too-large' | 'unparseable' | 'builtin-error' | 'bad-input' | 'killed';
+export type CheckErrorReason = 'sandbox-unavailable' | 'sandbox-refused' | 'copy-too-large' | 'copy-failed' | 'pin-mismatch' | 'spawn-failed' | 'timeout' | 'crash' | 'output-too-large' | 'unparseable' | 'builtin-error' | 'bad-input' | 'killed' | 'env-missing' | 'env-refused' | 'env-file';
 
 /** `paradigm loop builtin` exit codes: 0 pass, 1 fail, 2 the builtin could not judge (error) */
 export const BUILTIN_ERROR_EXIT = 2;
 
-function builtinError(stdout: Buffer): string {
+function builtinError(stdout: Buffer, redact = true, lits: readonly LoopLiteral[] = []): string {
   try {
     const e = (JSON.parse(stdout.toString('utf8')) as { error?: unknown }).error;
-    if (typeof e === 'string') return scanSecrets(`the builtin could not judge: ${e}`.slice(0, 300)).text;
+    if (typeof e === 'string') {
+      const text = `the builtin could not judge: ${e}`.slice(0, 300);
+      return redact ? scanSecrets(text, lits).text : text;
+    }
   } catch {
     /* not JSON */
   }
@@ -83,6 +94,8 @@ export interface CheckNodeSpec {
   args?: Record<string, unknown>;
   pass: CheckPass;
   timeoutSec: number;
+  /** TD-2026-10-23-268: the variables from the human's environment (envFrom) this child gets */
+  env?: readonly string[];
 }
 
 export interface FilePin {
@@ -122,6 +135,18 @@ export interface CheckExecInput {
    * (SIGKILL, then the setsid sweep) and the check is `error` `killed`. Aborted before the spawn, nothing runs.
    */
   abort?: AbortSignal;
+  /** TD-2026-10-23-268: false when the loop says `redact: off` (evidence, json value and builtin error raw); default true */
+  redact?: boolean;
+  /** TD-2026-10-23-268: where the node's `env` values are read (~/.gnomon/loop-env, then the loop's env files) */
+  envSource?: LoopEnvSource;
+  /** TD-2026-10-23-268: the node's values already read by the runner (it keeps them for the run's redaction, L4) */
+  envValues?: Readonly<Record<string, string>>;
+  /** TD-2026-10-23-268: repo-relative files never copied (the loop's env files: a tool must not auto-load them) */
+  skipFiles?: readonly string[];
+  /** TD-2026-10-23-268: the loop's `network: on` (outbound IP connects allowed for this check) */
+  network?: boolean;
+  /** with network on: loopback ports the check may never reach (the kernel's own transport) */
+  denyLoopbackPorts?: readonly number[];
   /** step 10 (#loop-act): copy this scratch worktree (its kernel-walked file list) instead of the repo's files */
   scratch?: { tree: string; files: readonly string[] };
 }
@@ -274,7 +299,7 @@ function copyFileContained(repoReal: string, rel: string, dst: string, size: num
  * never inside the repo (the kernel never writes through a repo path). Throws CheckCopyRefusal past the limits
  * or on any path that resolves outside the repo; a partial copy is removed.
  */
-export function makeCheckCopy(repo: string, runId: string, env: Record<string, string>, limits: typeof CHECK_COPY_LIMITS = CHECK_COPY_LIMITS, gnomonHome?: string, from?: { tree: string; files: readonly string[] }): CheckCopy {
+export function makeCheckCopy(repo: string, runId: string, env: Record<string, string>, limits: typeof CHECK_COPY_LIMITS = CHECK_COPY_LIMITS, gnomonHome?: string, from?: { tree: string; files: readonly string[] }, skip: readonly string[] = []): CheckCopy {
   if (!CHECK_RUN_ID.test(runId)) throw new CheckCopyRefusal('bad-input', `runId must match ${CHECK_RUN_ID}`);
   if (!gnomonHome) throw new CheckCopyRefusal('bad-input', 'the check copy lives under the Gnomon home');
   const repoReal = fs.realpathSync.native(repo);
@@ -288,7 +313,8 @@ export function makeCheckCopy(repo: string, runId: string, env: Record<string, s
     srcReal = fs.realpathSync.native(from.tree);
     if (path.dirname(path.dirname(srcReal)) !== path.join(homeReal, LOOP_WORK_DIR) || !/^act-[A-Za-z0-9_-]{1,64}$/.test(path.basename(path.dirname(srcReal))) || path.basename(srcReal) !== 'tree') throw new CheckCopyRefusal('bad-input', 'a scratch check copy reads only a kernel scratch worktree');
   }
-  const files = from ? from.files.filter((f) => !NEVER_COPY.some((re) => re.test(f))) : listRepoFiles(repoReal, env);
+  // TD-2026-10-23-268: the loop's own env files are never copied (only the names it declares reach the child)
+  const files = (from ? from.files.filter((f) => !NEVER_COPY.some((re) => re.test(f))) : listRepoFiles(repoReal, env)).filter((f) => !skip.includes(f));
   if (files.length > limits.maxFiles) throw new CheckCopyRefusal('copy-too-large', `the repo copy would hold ${files.length} files, over the ${limits.maxFiles}-file cap for a loop check`);
   const entries: Array<{ rel: string; kind: 'file' | 'link'; size: number }> = [];
   let bytes = 0;
@@ -413,11 +439,12 @@ function tail(buf: Buffer, n: number): { text: string; truncated: boolean } {
   return { text: buf.subarray(buf.length - n).toString('utf8').replace(/^[�]+/, ''), truncated: true };
 }
 
-function evidenceOf(stdout: Buffer, stderr: Buffer, outDropped: boolean): CheckEvidence {
+function evidenceOf(stdout: Buffer, stderr: Buffer, outDropped: boolean, redact = true, lits: readonly LoopLiteral[] = []): CheckEvidence {
   const o = tail(stdout, CHECK_EVIDENCE_TAIL_BYTES);
   const e = tail(stderr, CHECK_EVIDENCE_TAIL_BYTES);
-  const so = scanSecrets(o.text);
-  const se = scanSecrets(e.text);
+  if (!redact) return { stdoutTail: o.text, stderrTail: e.text, stdoutTruncated: o.truncated || outDropped, stderrTruncated: e.truncated, redactions: [], label: 'private', sensitive: true };
+  const so = scanSecrets(o.text, lits);
+  const se = scanSecrets(e.text, lits);
   const kinds = new Map<string, number>();
   for (const r of [...so.redactions, ...se.redactions]) kinds.set(r.kind, (kinds.get(r.kind) ?? 0) + r.count);
   return { stdoutTail: so.text, stderrTail: se.text, stdoutTruncated: o.truncated || outDropped, stderrTruncated: e.truncated, redactions: [...kinds].map(([kind, count]) => ({ kind, count })), label: 'private', sensitive: true };
@@ -599,11 +626,12 @@ function runPlan(plan: ChildLaunchPlan, cwd: string, timeoutSec: number, platfor
 
 /** A json rule's value as stored: bounded (CHECK_VALUE_MAX_CHARS) and secret-scanned; numbers, booleans and null as is. */
 export const CHECK_VALUE_MAX_CHARS = 256;
-function boundedValue(v: unknown): unknown {
+function boundedValue(v: unknown, redact = true, lits: readonly LoopLiteral[] = []): unknown {
   if (v === null || typeof v === 'number' || typeof v === 'boolean') return v;
   const text = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v);
+  if (!redact) return text.length > CHECK_VALUE_MAX_CHARS ? `${text.slice(0, CHECK_VALUE_MAX_CHARS)}…` : text;
   // scan a window wider than the bound (a secret straddling the cut is still seen), then cut to the bound
-  const scanned = scanSecrets(text.slice(0, CHECK_VALUE_MAX_CHARS * 4)).text;
+  const scanned = scanSecrets(text.slice(0, CHECK_VALUE_MAX_CHARS * 4), lits).text;
   return scanned.length > CHECK_VALUE_MAX_CHARS || text.length > CHECK_VALUE_MAX_CHARS * 4 ? `${scanned.slice(0, CHECK_VALUE_MAX_CHARS)}…` : scanned;
 }
 
@@ -620,6 +648,20 @@ function builtinVerdict(stdout: Buffer, name: string): string | null {
   return null;
 }
 
+/** Pre-read values: exactly the node's names, each present and non-empty (else the same reasons as a file read). */
+function valuesFor(names: readonly string[] | undefined, v: Readonly<Record<string, string>>): ReturnType<typeof resolveLoopEnvFiles> {
+  const want = names ?? [];
+  const extra = Object.keys(v).filter((k) => !want.includes(k));
+  if (extra.length) return { ok: false, code: 'env-refused', reason: `env ${extra.join(', ')} is not declared by this node` };
+  const missing = want.filter((k) => !v[k]);
+  if (missing.length) return { ok: false, code: 'env-missing', reason: `env ${missing.join(', ')} was not resolved` };
+  for (const k of want) {
+    const why = loopEnvHazard(k);
+    if (why) return { ok: false, code: 'env-refused', reason: `env ${k.slice(0, 64)} is refused: ${why}` };
+  }
+  return { ok: true, env: Object.fromEntries(want.map((k) => [k, v[k]!])) };
+}
+
 /** Run one `effect: read` check node under the loop-check profile on a fresh copy of the repo. */
 export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
   const t0 = Date.now();
@@ -634,6 +676,11 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
   if (!CHECK_RUN_ID.test(i.runId)) return fail('bad-input', `runId must match ${CHECK_RUN_ID}`);
   if (!!n.run === !!n.builtin) return fail('bad-input', 'a check has exactly one of run or builtin');
   if (!(Number.isFinite(n.timeoutSec) && n.timeoutSec > 0)) return fail('bad-input', 'timeoutSec must be positive');
+  const redact = i.redact !== false;
+  // TD-2026-10-23-268: the named variables, read by the kernel from the env files, before anything is copied or run
+  const named = i.envValues ? valuesFor(n.env, i.envValues) : resolveLoopEnvFiles(n.env, i.envSource ?? { files: [] });
+  if (!named.ok) return fail(named.code, named.reason);
+  const lits = literalsOf(named.env);
 
   const nodeDir = sessionNodeDir(nodePath, { platform: platform as NodeJS.Platform });
   const pathDirs = defaultSessionPath({ platform: platform as NodeJS.Platform, ...(nodeDir ? { nodeDir } : {}) });
@@ -643,7 +690,7 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
 
   let copy: CheckCopy;
   try {
-    copy = makeCheckCopy(i.repo, i.runId, kernelEnv, limits, i.home, i.scratch);
+    copy = makeCheckCopy(i.repo, i.runId, kernelEnv, limits, i.home, i.scratch, i.skipFiles);
   } catch (err) {
     if (err instanceof CheckCopyRefusal) return fail(err.reason, err.message);
     throw err;
@@ -654,7 +701,7 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
     if (!keep) fs.rmSync(copy.runDir, { recursive: true, force: true });
     return { ...r, copy: copyInfo(keep) };
   };
-  const { env, envKeys } = buildCheckEnv({ from: i.envFrom ?? process.env, identity, path: pathValue, home: copy.home, tmpdir: copy.tmp, inject: { NO_COLOR: '1' } });
+  const { env, envKeys } = buildCheckEnv({ from: i.envFrom ?? process.env, identity, path: pathValue, home: copy.home, tmpdir: copy.tmp, inject: { NO_COLOR: '1' }, named: named.env });
 
   // argv + the exec and read grants
   let argv: string[];
@@ -693,7 +740,7 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
 
   let plan: ChildLaunchPlan;
   try {
-    const li: LoopCheckLaunchInput = { home: i.home, copyDir: copy.runDir, nodeModules: copy.nodeModules, argv, exec, readPaths, env, nodePath, ...(i.userHome ? { userHome: i.userHome } : {}) };
+    const li: LoopCheckLaunchInput = { home: i.home, copyDir: copy.runDir, nodeModules: copy.nodeModules, argv, exec, readPaths, env, nodePath, ...(i.userHome ? { userHome: i.userHome } : {}), ...(i.network ? { network: true, denyLoopbackPorts: [...(i.denyLoopbackPorts ?? [])] } : {}) };
     plan = loopCheckLaunchPlan(li, platform, i.probe, i.sip);
   } catch (err) {
     if (isLifecycleRefusal(err)) return done(fail('sandbox-unavailable', err.message, { envKeys }));
@@ -702,22 +749,22 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
 
   if (i.abort?.aborted) return done(fail('killed', 'the run was stopped (pause or kill switch) before the check started'));
   const s = await runPlan(plan, copy.tree, n.timeoutSec, platform, i.abort);
-  const base = { exitCode: s.exitCode, signal: s.signal, durationMs: Date.now() - t0, evidence: evidenceOf(s.stdout, s.stderr, s.outDropped), profileHash: plan.profileHash, envKeys, escapedKilled: s.escaped, copy: copyInfo(false) };
+  const base = { exitCode: s.exitCode, signal: s.signal, durationMs: Date.now() - t0, evidence: evidenceOf(s.stdout, s.stderr, s.outDropped, redact, lits), profileHash: plan.profileHash, envKeys, escapedKilled: s.escaped, copy: copyInfo(false) };
   if (s.spawnError) return done({ ...base, verdict: 'error', reason: 'spawn-failed', detail: s.spawnError });
   if (s.killed) return done({ ...base, verdict: 'error', reason: 'killed', detail: 'the run was stopped (pause or kill switch): the check process group was killed' });
   if (s.timedOut) return done({ ...base, verdict: 'error', reason: 'timeout', detail: `the check ran past its ${n.timeoutSec}s timeout; its process group was killed` });
-  if (/^sandbox-exec: /m.test(s.stderrHead)) return done({ ...base, verdict: 'error', reason: 'sandbox-refused', detail: scanSecrets(s.stderrHead.split('\n')[0]!.slice(0, 300)).text });
+  if (/^sandbox-exec: /m.test(s.stderrHead)) return done({ ...base, verdict: 'error', reason: 'sandbox-refused', detail: scanSecrets(s.stderrHead.split('\n')[0]!.slice(0, 300), lits).text });
   if (s.signal !== null || s.exitCode === null) return done({ ...base, verdict: 'error', reason: 'crash', detail: `the check was killed by ${s.signal ?? 'an unknown signal'}` });
   if (s.outDropped && !('exit' in n.pass)) return done({ ...base, verdict: 'error', reason: 'output-too-large', detail: `the check printed more than ${CHECK_PARSE_MAX_BYTES} bytes; its report cannot be parsed whole` });
   if (n.builtin) {
     // a builtin judges only through its JSON verdict: exit 2 (could not judge) or no valid verdict is error
-    if (s.exitCode === BUILTIN_ERROR_EXIT) return done({ ...base, verdict: 'error', reason: 'builtin-error', detail: builtinError(s.stdout) });
+    if (s.exitCode === BUILTIN_ERROR_EXIT) return done({ ...base, verdict: 'error', reason: 'builtin-error', detail: builtinError(s.stdout, redact, lits) });
     const bad = builtinVerdict(s.stdout, n.builtin);
     if (bad) return done({ ...base, verdict: 'error', reason: 'builtin-error', detail: bad });
   }
   const r = applyPassRule(n.pass, { exitCode: s.exitCode, stdout: s.stdout.toString('utf8') });
   if (r.verdict === 'error') return done({ ...base, verdict: 'error', reason: r.reason, detail: r.detail });
-  return done({ ...base, verdict: r.verdict, ...(r.counts ? { counts: r.counts } : {}), ...(r.value !== undefined ? { value: boundedValue(r.value) } : {}) });
+  return done({ ...base, verdict: r.verdict, ...(r.counts ? { counts: r.counts } : {}), ...(r.value !== undefined ? { value: boundedValue(r.value, redact, lits) } : {}) });
 }
 
 /** Pin a file for a check (the registry pins at trust; tests and `gnomon loop show` use it too). */

@@ -20,6 +20,7 @@
  * the card: its lines are kernel fields, file paths and the diff (repo bytes the loop wrote, shown as data).
  */
 import { globToRegExp } from './events.js';
+import { LITERAL_MIN_CHARS } from './secret-scan.js';
 import type { Parked, ScratchChange } from '../git/scratch.js';
 import type { EffectiveAutonomy } from './strictness-cap.js';
 
@@ -62,15 +63,17 @@ export function addedLines(diff: string): Array<{ path: string | undefined; line
 }
 
 export interface LandHazard {
-  kind: 'protected-input' | 'tracked-deletion' | 'suppression-marker' | 'execution-surface' | 'symlink' | 'diff-unscanned';
+  kind: 'protected-input' | 'tracked-deletion' | 'suppression-marker' | 'execution-surface' | 'symlink' | 'diff-unscanned' | 'env-value';
   path?: string;
   marker?: string;
+  /** env-value (TD-2026-10-23-268, Aegis F3): the NAME whose value the change contains (never the value) */
+  name?: string;
 }
 
 const isNodeModules = (p: string): boolean => p.split('/').some((c) => c.toLowerCase() === 'node_modules');
 
 /** The land hazards in a parked diff (each one forces propose, G-LOOP-23). */
-export function landHazards(parked: Pick<Parked, 'changes' | 'scanDiff' | 'scanComplete'> & { changes: ReadonlyArray<Pick<ScratchChange, 'path' | 'status'> & { mode?: ScratchChange['mode'] }> }, protectedGlobs: readonly string[]): LandHazard[] {
+export function landHazards(parked: Pick<Parked, 'changes' | 'scanDiff' | 'scanComplete'> & { changes: ReadonlyArray<Pick<ScratchChange, 'path' | 'status'> & { mode?: ScratchChange['mode'] }> }, protectedGlobs: readonly string[], literals: ReadonlyArray<{ name: string; value: string }> = []): LandHazard[] {
   const out: LandHazard[] = [];
   const res = protectedGlobs.map((g) => new RegExp(globToRegExp(g).source, 'i'));
   for (const c of parked.changes) {
@@ -80,7 +83,11 @@ export function landHazards(parked: Pick<Parked, 'changes' | 'scanDiff' | 'scanC
     // Aegis L4: a land that creates or changes a symlink (it can point anywhere; the card shows its target)
     if (c.status !== 'deleted' && c.mode === '120000') out.push({ kind: 'symlink', path: c.path });
   }
+  const lits = literals.filter((l) => l.value.length >= LITERAL_MIN_CHARS).flatMap((l) => [{ name: l.name, form: l.value }, ...(encodeURIComponent(l.value) !== l.value ? [{ name: l.name, form: encodeURIComponent(l.value) }] : [])]);
   for (const { path: file, line } of addedLines(parked.scanDiff)) {
+    for (const l of lits) {
+      if (line.includes(l.form) && !out.some((h) => h.kind === 'env-value' && h.path === file && h.name === l.name)) out.push({ kind: 'env-value', ...(file ? { path: file } : {}), name: l.name });
+    }
     for (const re of SUPPRESSION_MARKERS) {
       const m = re.exec(line);
       if (m && !out.some((h) => h.kind === 'suppression-marker' && h.path === file && h.marker === m[0])) out.push({ kind: 'suppression-marker', ...(file ? { path: file } : {}), marker: m[0] });
@@ -101,6 +108,7 @@ export function proposeReasons(eff: Pick<EffectiveAutonomy, 'declared' | 'autono
     else if (h.kind === 'suppression-marker') out.push(`it adds a suppression marker ${h.marker}${h.path ? ` in ${h.path}` : ''}`);
     else if (h.kind === 'execution-surface') out.push(`it touches a file that runs code (hooks, CI, editor tasks, scripts): ${h.path}`);
     else if (h.kind === 'symlink') out.push(`it creates or changes a symlink: ${h.path}`);
+    else if (h.kind === 'env-value') out.push(`the change contains the value of ${h.name}${h.path ? ` in ${h.path}` : ''}`);
     else out.push('the diff is too large to scan for land hazards');
   }
   return out.map(visible);

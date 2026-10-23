@@ -31,7 +31,7 @@ import { RefusedError, refusalOf } from '@a-company/gnomon-contracts';
 import { resolveGnomonHome, selectSocketPath } from '../kernel/lifecycle/index.js';
 import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
 import { LoopRegistry, repoRootOf, type LoopView, type TrustEvent } from '../kernel/loops/registry.js';
-import { renderDefinition } from '../kernel/loops/trust.js';
+import { envCardContext, renderDefinition } from '../kernel/loops/trust.js';
 import { kernelPinOf } from './daemon-cli.js';
 import { humanDeviceOf } from './rules-cli.js';
 import { GNOMON_VERSION } from '../version.js';
@@ -357,7 +357,10 @@ function renderLocal(home: string, v: LoopView): string[] {
   if (v.scope === 'repo') reg.addRepo(v.repo);
   reg.scan();
   const e = reg.find(v.loopId, v.scope, v.repoKey);
-  reg.close();
-  if (!e?.compiled || !e.hash) return [`(the definition cannot be rendered here: ${v.errors[0] ?? 'refused'})`];
-  return renderDefinition(e.compiled, e.hash);
+  try {
+    if (!e?.compiled || !e.hash) return [`(the definition cannot be rendered here: ${v.errors[0] ?? 'refused'})`];
+    return renderDefinition(e.compiled, e.hash, (nodeId) => reg.calleeEnv(e.key, nodeId), envCardContext(e.repoRoot, home));
+  } finally {
+    reg.close();
+  }
 }

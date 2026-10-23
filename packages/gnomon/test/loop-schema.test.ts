@@ -507,3 +507,83 @@ describe('#loop-schema: canonical compile', () => {
     expect(parseCount(0)).toBeNull();
   });
 });
+
+// ── TD-2026-10-23-268: env on check and act nodes, redact at the loop level ──────────────────────────────────────
+
+describe('TD-2026-10-23-268: env and redact', () => {
+  const withEnv = (envTsc: unknown, envFix?: unknown, redact?: unknown): Def => {
+    const d = clone(EXAMPLE_B);
+    const nodes = d.nodes as any[];
+    nodes[0].env = envTsc;
+    if (envFix !== undefined) nodes[1].env = envFix;
+    if (redact !== undefined) d.redact = redact;
+    return d;
+  };
+  it('a check and an act node may name secrets; they compile as names, redact off compiles, on and absent do not', () => {
+    const r = compileLoop(withEnv(['STRIPE_KEY', 'DATABASE_URL', 'ANTHROPIC_API_KEY', 'AWS_SECRET_ACCESS_KEY'], ['GITHUB_TOKEN'], 'off'));
+    expect(r.errors).toEqual([]);
+    const [tsc, fix] = r.compiled!.nodes as any[];
+    expect(tsc.env).toEqual(['STRIPE_KEY', 'DATABASE_URL', 'ANTHROPIC_API_KEY', 'AWS_SECRET_ACCESS_KEY']);
+    expect(fix.env).toEqual(['GITHUB_TOKEN']);
+    expect(r.compiled!.redact).toBe('off');
+    expect(compileLoop(withEnv([], undefined, 'on')).compiled).not.toHaveProperty('redact');
+    expect((compileLoop(withEnv([])).compiled!.nodes[0] as any).env).toBeUndefined();
+    // a loop that uses neither compiles exactly as before (its hash does not move)
+    const noSource = (c: any): string => canonicalLoopJson({ ...c, compiled: { ...c.compiled, sourceHash: undefined } });
+    expect(noSource(compileLoop(withEnv([], undefined, 'on')).compiled!)).toBe(noSource(compileLoop(EXAMPLE_B).compiled!));
+    // a YAML 1.1 boolean is accepted
+    expect(compileLoop(withEnv([], undefined, false)).compiled!.redact).toBe('off');
+  });
+  it('hazard names are refused at validate: GNOMON_*, NODE_OPTIONS, NODE_PATH, DYLD_*, LD_* and kernel-set names; tool settings are not', () => {
+    for (const n of ['GNOMON_SOCK', 'GNOMON_HOME', 'NODE_OPTIONS', 'NODE_PATH', 'DYLD_INSERT_LIBRARIES', 'LD_PRELOAD', 'HOME', 'PATH', 'TMPDIR', 'USER']) {
+      const v = validateLoop(withEnv([n]));
+      expect(v.errors.map((e) => [e.path, e.code]), n).toEqual([['nodes[0].env[0]', 'ENV_REFUSED']]);
+    }
+    expect(validateLoop(withEnv(['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CONFIG_DIR', 'ANTHROPIC_BASE_URL', 'BASH_ENV', 'GIT_CONFIG_GLOBAL', 'PYTHONPATH'])).ok).toBe(true);
+  });
+  it('envFiles (<= 8, repo-relative without .., ~/ or absolute) and network on|off compile only when used', () => {
+    const d = withEnv(['STRIPE_KEY']);
+    d.envFiles = ['.env.local', '~/secrets/app.env', '/etc/app.env'];
+    d.network = 'on';
+    const c = compileLoop(d).compiled!;
+    expect(c.envFiles).toEqual(['.env.local', '~/secrets/app.env', '/etc/app.env']);
+    expect(c.network).toBe('on');
+    const off = withEnv([]);
+    off.network = 'off';
+    off.envFiles = [];
+    expect(compileLoop(off).compiled).not.toHaveProperty('network');
+    expect(compileLoop(off).compiled).not.toHaveProperty('envFiles');
+    const bad = (files: unknown): string[] => validateLoop({ ...withEnv([]), envFiles: files }).errors.map((e) => e.code);
+    expect(bad(['../up.env'])).toEqual(['BAD_ENV_FILE']);
+    expect(bad(['~x/a.env'])).toEqual(['BAD_ENV_FILE']);
+    expect(bad(['a\\b.env'])).toEqual(['BAD_ENV_FILE']);
+    expect(bad(['a.env', 'a.env'])).toEqual(['ENV_FILE_DUPLICATE']);
+    expect(bad(Array.from({ length: 9 }, (_, i) => `e${i}.env`))).toEqual(['ENV_FILES_TOO_MANY']);
+    expect(bad('a.env')).toEqual(['BAD_TYPE']);
+    expect(validateLoop({ ...withEnv([]), network: 'maybe' }).errors.map((e) => e.code)).toEqual(['BAD_ENUM']);
+    // Aegis L1: a config tools run is never an env file; a .env* dotenv is
+    expect(bad(['package.json'])).toEqual(['ENV_FILE_CONFIG']);
+    expect(bad(['cfg/tsconfig.json'])).toEqual(['ENV_FILE_CONFIG']);
+    expect(bad(['vitest.config.ts'])).toEqual(['ENV_FILE_CONFIG']);
+    expect(bad(['.env.loop', '.env.local', 'cfg/app.env'])).toEqual([]);
+    // Aegis M4 (G-LOOP-22): the loop's repo env files are protected from act edits; out-of-repo ones are not repo paths
+    const prot = compileLoop({ ...withEnv(['STRIPE_KEY']), envFiles: ['./.env.loop', 'cfg/app.env', '~/s.env', '/etc/x.env'] }).compiled!.protected;
+    expect(prot).toEqual(expect.arrayContaining(['.env.loop', 'cfg/app.env']));
+    expect(prot.some((x) => x.includes('s.env') || x.includes('/etc'))).toBe(false);
+  });
+  it('the shape: names match ^[A-Z_][A-Z0-9_]*$, at most 32, no duplicates; judge and summarize take no env; redact is on|off', () => {
+    expect(validateLoop(withEnv(['stripe_key'])).errors.map((e) => e.code)).toEqual(['BAD_ENV_NAME']);
+    expect(validateLoop(withEnv(['1KEY'])).errors.map((e) => e.code)).toEqual(['BAD_ENV_NAME']);
+    expect(validateLoop(withEnv('STRIPE_KEY')).errors.map((e) => e.code)).toEqual(['BAD_TYPE']);
+    expect(validateLoop(withEnv(['A', 'A'])).errors.map((e) => e.code)).toEqual(['ENV_DUPLICATE']);
+    expect(validateLoop(withEnv(Array.from({ length: 33 }, (_, i) => `K${i}`))).errors.map((e) => e.code)).toEqual(['ENV_TOO_MANY']);
+    expect(validateLoop(withEnv(Array.from({ length: 32 }, (_, i) => `K${i}`))).ok).toBe(true);
+    expect(validateLoop(withEnv([], undefined, 'maybe')).errors.map((e) => [e.path, e.code])).toEqual([['redact', 'BAD_ENUM']]);
+    const a = clone(EXAMPLE_A);
+    (a.nodes as any[])[4].env = ['STRIPE_KEY'];
+    expect(validateLoop(a).errors.map((e) => [e.path, e.code])).toEqual([['nodes[4].env', 'ENV_NOT_ALLOWED']]);
+    const n = clone(EXAMPLE_A);
+    (n.nodes as any[])[5].env = ['STRIPE_KEY'];
+    expect(validateLoop(n).errors.map((e) => e.code)).toEqual(['UNKNOWN_KEY']);
+  });
+});

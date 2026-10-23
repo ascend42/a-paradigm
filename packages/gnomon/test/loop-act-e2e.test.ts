@@ -195,7 +195,7 @@ function result(verdict: 'pass' | 'fail', stdout: string): CheckResult {
   return { verdict, exitCode: verdict === 'pass' ? 0 : 1, signal: null, durationMs: 5, evidence: { stdoutTail: stdout, stderrTail: '', stdoutTruncated: false, stderrTruncated: false, redactions: [], label: 'private', sensitive: true }, profileHash: null, envKeys: [], copy: { dir: '', files: 0, bytes: 0, kept: false } };
 }
 
-function rig(root: string, base: string) {
+function rig(root: string, base: string, o: { wrapAct?: (req: any) => any; check?: (i: CheckExecInput) => CheckResult | null } = {}) {
   const home = tmp('gnomon-home-');
   const rows: Array<{ kind: string; principal: string; payload: Record<string, unknown> }> = [];
   const cards: any[] = [];
@@ -225,6 +225,8 @@ function rig(root: string, base: string) {
   // the goal check judges the tree it is handed: the SCRATCH (never the founder's checkout)
   const check = async (i: CheckExecInput): Promise<CheckResult> => {
     checked.push(i);
+    const over = o.check?.(i);
+    if (over) return over;
     const t = fs.readFileSync(path.join(i.scratch!.tree, 'src', 'a.ts'), 'utf8');
     return t.includes("'oops'") ? result('fail', "src/a.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.") : result('pass', '');
   };
@@ -232,7 +234,7 @@ function rig(root: string, base: string) {
   const runner = new LoopRunner({
     home, kernelPrincipal: KERNEL, registry, ledger, append, platform: 'darwin', toast: (t) => toasts.push(t.text),
     broker: { raise: async (i: any) => { cards.push(i); return { cardId: i.cardId } as any; } },
-    check, model: { openLoop: (ref, req) => lane.openLoop(ref, req), configured: () => ({ endpoints: ['qwen'], runner: true }), settled: (runId) => lane.loopSessionsSettled(runId) },
+    check, model: { openLoop: (ref, req) => lane.openLoop(ref, o.wrapAct ? o.wrapAct(req) : req), configured: () => ({ endpoints: ['qwen'], runner: true }), settled: (runId) => lane.loopSessionsSettled(runId) },
     caps: { modelBackoffMs: [1, 1, 1] },
   });
   const key = (id: string): string => `repo/${repoKeyOf([root])}/${id}`;
@@ -417,5 +419,85 @@ describe('Example B lands only through its card in 8.0 (build plan step 11, G-LO
     expect(git(root, 'rev-parse', 'HEAD^').trim()).toBe(base);
     expect(fs.readFileSync(path.join(root, 'src', 'a.ts'), 'utf8')).toBe('export const x: number = 1;\n');
     expect(r.runner.lander.waiting()).toEqual([]);
+  }, 60_000);
+});
+
+describe('TD-2026-10-23-268: an act node and a check node get the variables the trusted loop names, from its env files', () => {
+  const named = (id: string): Def => {
+    const d = greenTypecheck(id, { redact: 'off', envFiles: ['.env.local'] });
+    d.nodes[0].env = ['DATABASE_URL'];
+    d.nodes[1].env = ['STRIPE_KEY'];
+    return d;
+  };
+  it('the act session env carries the named value, never an unnamed one; checks get their env source and redact off', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1;\n'), done('pass')] });
+    const root = gitRepo(named('secretive'));
+    fs.writeFileSync(path.join(root, '.env.local'), 'STRIPE_KEY=sk_live_act_value\nDATABASE_URL=postgres://x\nGITHUB_TOKEN=ghp_unnamed\n');
+    let seenEnv: Record<string, string> | undefined;
+    const r = rig(root, srv.base, { wrapAct: (req) => ((seenEnv = req.act?.env), req) });
+    r.trust('secretive');
+    const { runId, end } = await r.run('secretive');
+    expect(end).toMatchObject({ reason: 'goal' });
+    expect(seenEnv).toEqual({ STRIPE_KEY: 'sk_live_act_value' });
+    const fix = r.of(runId, 'loop.node').find((n) => n.nodeId === 'fix')!;
+    const keys = r.rows.find((x) => x.kind === 'session.sandbox' && x.payload.hsid === fix.hsid)!.payload.envKeys as string[];
+    expect(keys).toContain('STRIPE_KEY');
+    for (const k of ['GITHUB_TOKEN', 'DATABASE_URL', 'GNOMON_SOCK', 'GNOMON_SESSION_KEY']) expect(keys, k).not.toContain(k);
+    expect(JSON.stringify(r.rows)).not.toContain('sk_live_act_value');
+    expect(r.checked.map((c) => [c.node.env, c.redact, c.envValues, c.skipFiles])).toEqual([[['DATABASE_URL'], false, { DATABASE_URL: 'postgres://x' }, ['.env.local']], [['DATABASE_URL'], false, { DATABASE_URL: 'postgres://x' }, ['.env.local']]]);
+  }, 60_000);
+  it('a named variable found in no file fails the act node with a clear reason, and nothing opens', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1;\n'), done('pass')] });
+    const root = gitRepo(named('unset'));
+    fs.writeFileSync(path.join(root, '.env.local'), 'DATABASE_URL=postgres://x\n');
+    const r = rig(root, srv.base);
+    r.trust('unset');
+    const { runId } = await r.run('unset');
+    const fix = r.of(runId, 'loop.node').find((n) => n.nodeId === 'fix')!;
+    expect(fix).toMatchObject({ verdict: 'error', detail: expect.stringContaining('STRIPE_KEY was not found in ~/.gnomon/loop-env, .env.local') });
+    expect(r.rows.some((x) => x.kind === 'session.open')).toBe(false);
+  }, 60_000);
+  it('Aegis F4: an act env name the trusted node does not declare is refused and nothing spawns', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1;\n'), done('pass')] });
+    const root = gitRepo(named('widened'));
+    fs.writeFileSync(path.join(root, '.env.local'), 'STRIPE_KEY=sk_live_act_value\nDATABASE_URL=postgres://x\n');
+    const r = rig(root, srv.base, { wrapAct: (req) => ({ ...req, act: { ...req.act, env: { ...req.act.env, AWS_SECRET_ACCESS_KEY: 'smuggled' } } }) });
+    r.trust('widened');
+    const { runId } = await r.run('widened');
+    const fix = r.of(runId, 'loop.node').find((n) => n.nodeId === 'fix')!;
+    expect(fix).toMatchObject({ verdict: 'error', detail: expect.stringContaining('AWS_SECRET_ACCESS_KEY is not one the trusted act node declares') });
+    expect(r.rows.some((x) => x.kind === 'session.open')).toBe(false);
+  }, 60_000);
+  it('Aegis L4: a value handed out and then edited in its file mid-run is still caught (the run keeps it in memory)', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1; // sk_live_first_value\n'), done('pass')] });
+    const root = gitRepo(named('rotated'));
+    const envPath = path.join(root, '.env.local');
+    fs.writeFileSync(envPath, 'STRIPE_KEY=sk_live_first_value\nDATABASE_URL=postgres://x\n');
+    // the human rotates the key right after the act step got it
+    const r = rig(root, srv.base, { wrapAct: (req) => (fs.writeFileSync(envPath, 'STRIPE_KEY=sk_live_rotated\nDATABASE_URL=postgres://x\n'), req) });
+    r.trust('rotated');
+    await r.run('rotated');
+    expect(r.cards).toHaveLength(1);
+    expect(r.cards[0].detail.hazards).toEqual([{ kind: 'env-value', path: 'src/a.ts', name: 'STRIPE_KEY' }]);
+    expect(JSON.stringify(r.cards[0])).not.toContain('sk_live_first_value');
+  }, 60_000);
+  it('Aegis F3 and F5: a parked change carrying a handed-out value is a hazard (the card never shows the value); a node detail is scanned even with redact off', async () => {
+    srv = await fakeOpenAI({ tools: true, script: [writeCall('src/a.ts', 'export const x: number = 1; // sk_live_act_value\n'), { content: JSON.stringify({ verdict: 'pass', confidence: 0.9, summary: 'pasted sk_live_act_value in' }) }] });
+    const root = gitRepo(named('leaky'));
+    fs.writeFileSync(path.join(root, '.env.local'), 'STRIPE_KEY=sk_live_act_value\nDATABASE_URL=postgres://x\n');
+    let first = true;
+    const r = rig(root, srv.base, { check: () => (first ? ((first = false), { ...result('fail', "src/a.ts(1,14): error TS2322"), detail: 'the builtin could not judge: postgres://x is down' }) : null) });
+    r.trust('leaky');
+    const { runId } = await r.run('leaky');
+    const tsc = r.of(runId, 'loop.node').find((n) => n.nodeId === 'tsc')!;
+    expect(tsc.detail).toBe('the builtin could not judge: [REDACTED:env:DATABASE_URL] is down');
+    expect(r.cards).toHaveLength(1);
+    expect(r.cards[0].detail.hazards).toEqual([{ kind: 'env-value', path: 'src/a.ts', name: 'STRIPE_KEY' }]);
+    expect(r.cards[0].lines).toContain('Proposed because the change contains the value of STRIPE_KEY in src/a.ts');
+    expect(JSON.stringify(r.cards[0])).not.toContain('sk_live_act_value');
+    // Aegis F2: the model's reply and summary are redacted by value
+    const fix = r.of(runId, 'loop.node').find((n) => n.nodeId === 'fix')!;
+    expect(JSON.stringify(fix)).toContain('[REDACTED:env:STRIPE_KEY]');
+    expect(JSON.stringify(r.rows)).not.toContain('sk_live_act_value');
   }, 60_000);
 });

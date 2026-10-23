@@ -81,7 +81,7 @@ import { buildSessionPolicy, policyHash, type PolicyPath, type SessionPolicy } f
 import { defaultClaudeJson } from '../manifest/layers.js';
 import { sessionLaunchPlan, type SessionLaunchInput, type SessionLaunchPlan } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
-import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, sessionIdentity, type SessionIdentity } from '../runner/env.js';
+import { applyLoopEnv, buildSessionEnv, loopEnvHazard, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, sessionIdentity, type SessionIdentity } from '../runner/env.js';
 import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
@@ -159,7 +159,12 @@ export interface LocalProbeState {
 export interface LoopOpenRequest {
   role: 'judge' | 'summarize' | 'act';
   /** role act only: the node's declared tools (the clamp admits them), its protected globs and its turn cap */
-  act?: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number };
+  /**
+   * role act only: the node's declared tools (the clamp admits them), its protected globs, its turn cap and (TD-2026-10-23-268)
+   * the values of its `env` names, read by the runner from the loop's env files (never stored; refused unless every
+   * name is one the trusted node declares)
+   */
+  act?: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number; env?: Readonly<Record<string, string>> };
   /** a configured endpoint id (model.profile); absent: the first capable endpoint in root-signed config order */
   profile?: string;
   systemPrompt: string;
@@ -498,14 +503,22 @@ export class LocalLane {
     if (!live.ok) throw refused('FORBIDDEN', `the loop cannot run: ${live.reason}`, { reason: 'loop-not-runnable' });
     if (req.role !== 'judge' && req.role !== 'summarize' && req.role !== 'act') throw refused('BAD_REQUEST', 'only judge, summarize and act steps open here', { reason: 'bad-params' });
     // step 10: an act step works ONLY in its run's live scratch, with only the tools its trust card admits (the clamp)
-    let act: { scratch: Readonly<Scratch>; tools: string[]; protect: string[]; maxSteps: number } | null = null;
+    let act: { scratch: Readonly<Scratch>; tools: string[]; protect: string[]; maxSteps: number; named?: Record<string, string> } | null = null;
     if (req.role === 'act') {
       const scratch = liveScratch(info.runId);
       if (!req.act || !scratch || scratch.loopId !== info.loopId) throw refused('FORBIDDEN', 'an act step works only in its run\'s scratch worktree', { reason: 'no-scratch' });
       const tools = loopActTools(req.act.tools, info.trustCard);
       if (!tools.length) throw refused('FORBIDDEN', 'the loop\'s trust card admits no tools for this act step', { reason: 'no-trusted-tools' });
       const protect = req.act.protect.filter((g): g is string => typeof g === 'string' && g.length > 0 && g.length <= 512);
-      act = { scratch, tools, protect, maxSteps: Math.max(1, Math.min(128, Math.floor(req.act.maxSteps) || 1)) };
+      // TD-2026-10-23-268 (Aegis F4): the act env is bounded by the TRUSTED node (the registry's run reference, at the
+      // run's content hash): a name it does not declare, or a hazard, is refused and nothing spawns
+      const named: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.act.env ?? {})) {
+        const why = loopEnvHazard(k);
+        if (why || !info.nodeEnv.includes(k) || typeof v !== 'string' || v.length === 0) throw refused('FORBIDDEN', `env ${k.slice(0, 64)} is not one the trusted act node declares${why ? ` (${why})` : ''}`, { reason: 'env-not-declared' });
+        named[k] = v;
+      }
+      act = { scratch, tools, protect, maxSteps: Math.max(1, Math.min(128, Math.floor(req.act.maxSteps) || 1)), ...(Object.keys(named).length ? { named } : {}) };
     } else if (req.act) throw refused('BAD_REQUEST', 'act options are for act steps', { reason: 'bad-params' });
     if (req.signal?.aborted) throw new LoopModelUnavailable('aborted');
     const cfg: LocalLaneConfig = this.#config ?? { endpoints: [] };
@@ -644,7 +657,7 @@ export class LocalLane {
     if (Date.parse(permit.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the spawn permit expired', {});
   }
 
-  async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig, loop?: { info: Readonly<LoopRunRefInfo>; maxTokens: number; act?: { scratch: Readonly<Scratch>; tools: string[]; protect: string[]; maxSteps: number; endpointPort: number } }): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
+  async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig, loop?: { info: Readonly<LoopRunRefInfo>; maxTokens: number; act?: { scratch: Readonly<Scratch>; tools: string[]; protect: string[]; maxSteps: number; endpointPort: number; named?: Record<string, string> } }): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
     const pin = cfg.runner!;
     // before any row: claude never runs under a local permit (source paths), then the MANDATORY pin (round 2, Aegis H1):
     // the tree is copied into <home>/runners/<treeSha256>/ and the COPY is hashed; node is verified; we exec the copy
@@ -715,6 +728,11 @@ export class LocalLane {
       envKeys = envKeys.filter((k) => !LOOP_SESSION_ENV_DROPPED.includes(k));
       // an act session's TMPDIR is its run's private tmp (the only other place the loop-act profile lets it write)
       if (loop.act) env.TMPDIR = loop.act.scratch.tmp;
+      // TD-2026-10-23-268: exactly the variables the trusted act node names (bounded and hazard-checked in openLoop)
+      if (loop.act?.named) {
+        applyLoopEnv(env, loop.act.named);
+        envKeys = [...new Set([...envKeys, ...Object.keys(loop.act.named)])].sort();
+      }
     }
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;

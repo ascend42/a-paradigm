@@ -286,3 +286,70 @@ describe.skipIf(!floor.ok)('the copy refuses paths that resolve outside the repo
     expect(fs.existsSync(checkRunDir(h, 'swap'))).toBe(false);
   });
 });
+
+describe.skipIf(!floor.ok)('TD-2026-10-23-268: named secrets, redact: off and network: on through a real check child', () => {
+  const script = (name: string, body: string): string => file(name, `#!/usr/bin/env node\n${body}\n`, 0o755);
+  const envDir = (): string => {
+    const d = tmp();
+    fs.writeFileSync(path.join(d, 'app.env'), 'STRIPE_KEY=sk_live_51HxYz\nANTHROPIC_API_KEY="sk-ant-api03-named"\nGITHUB_TOKEN=ghp_unnamedtoken0000000000000000000000\n');
+    return d;
+  };
+
+  it('a named secret (from the env file) reaches the check child; an unnamed one in the same file, or in the daemon env, does not', async () => {
+    const d = envDir();
+    const p = script('env-probe.mjs', "process.stdout.write(JSON.stringify({ stripe: process.env.STRIPE_KEY ?? null, ant: process.env.ANTHROPIC_API_KEY ?? null, gh: process.env.GITHUB_TOKEN ?? null, nodeOptions: process.env.NODE_OPTIONS ?? null }));");
+    const r = await runCheck(base({ runId: 'envp', node: { id: 'e', run: ['./env-probe.mjs'], pass: { exit: 0 }, timeoutSec: 30, env: ['STRIPE_KEY', 'ANTHROPIC_API_KEY'] }, argv0: pinFile(p), envFrom: { ...gitEnv, GITHUB_TOKEN: 'ghp_daemon', NODE_OPTIONS: '--require /nonexistent/hook.js' }, envSource: { files: [{ path: path.join(d, 'app.env'), shown: '~/app.env' }] }, redact: false }));
+    expect(r.verdict, JSON.stringify(r)).toBe('pass');
+    expect(JSON.parse(r.evidence.stdoutTail)).toEqual({ stripe: 'sk_live_51HxYz', ant: 'sk-ant-api03-named', gh: null, nodeOptions: null });
+    expect(r.envKeys).toEqual(expect.arrayContaining(['STRIPE_KEY', 'ANTHROPIC_API_KEY']));
+    expect(r.envKeys).not.toContain('GITHUB_TOKEN');
+  }, 30_000);
+
+  it('redact: off leaves the check output raw; the default redacts it, a handed-out value by literal too', async () => {
+    const d = envDir();
+    const p = script('leak.mjs', "console.error('leaked AKIAIOSFODNN7EXAMPLE and api_key=supersecretvalue1 and ' + process.env.STRIPE_KEY);");
+    const node = { id: 'l', run: ['./leak.mjs'], pass: { exit: 0 as const }, timeoutSec: 30, env: ['STRIPE_KEY'] };
+    const envSource = { files: [{ path: path.join(d, 'app.env'), shown: 'app.env' }] };
+    const raw = await runCheck(base({ runId: 'raw', node, argv0: pinFile(p), envSource, redact: false }));
+    expect(raw.evidence.stderrTail).toContain('AKIAIOSFODNN7EXAMPLE');
+    expect(raw.evidence.stderrTail).toContain('sk_live_51HxYz');
+    expect(raw.evidence.redactions).toEqual([]);
+    const scrubbed = await runCheck(base({ runId: 'scrub', node, argv0: pinFile(p), envSource }));
+    expect(scrubbed.evidence.stderrTail).not.toContain('AKIAIOSFODNN7EXAMPLE');
+    expect(scrubbed.evidence.stderrTail).not.toContain('supersecretvalue1');
+    expect(scrubbed.evidence.stderrTail).toContain('[REDACTED:env:STRIPE_KEY]');
+  }, 30_000);
+
+  it('Aegis M1: a kernel listener port is denied on every address (127.0.0.1, 0.0.0.0, ::ffff:127.0.0.1, the LAN IP); L2: DNS works without system-socket', async () => {
+    const lan = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address ?? null;
+    const addrs = ['127.0.0.1', '0.0.0.0', '::ffff:127.0.0.1', ...(lan ? [lan] : [])];
+    const p = script('net-many.mjs', "import net from 'node:net'; import dns from 'node:dns'; const [port, ...addrs] = process.argv.slice(2); const one = (a) => new Promise((res) => { const s = net.connect({ port: Number(port), host: a }); const t = setTimeout(() => { s.destroy(); res('timeout'); }, 3000); s.on('connect', () => { clearTimeout(t); s.destroy(); res('connected'); }); s.on('error', (e) => { clearTimeout(t); res(e.code); }); }); const out = {}; for (const a of addrs) out[a] = await one(a); out.dns = await new Promise((res) => dns.lookup('localhost', (e) => res(e ? e.code : 'ok'))); out.dnsReal = await new Promise((res) => dns.lookup('example.com', (e) => res(e ? e.code : 'ok'))); process.stdout.write(JSON.stringify(out));");
+    const node = { id: 'm', run: ['./net-many.mjs', String(port), ...addrs], pass: { exit: 0 as const }, timeoutSec: 60 };
+    const before = hits;
+    const denied = await runCheck(base({ runId: 'netm', node, argv0: pinFile(p), network: true, denyLoopbackPorts: [port] }));
+    const out = JSON.parse(denied.evidence.stdoutTail);
+    for (const a of addrs) expect(out[a], a).toBe('EPERM');
+    expect(out.dns).toBe('ok');
+    // a real name too, when this machine can resolve one at all (CI may have no DNS)
+    const realDns = spawnSync(process.execPath, ['-e', "require('dns').lookup('example.com', (e) => process.exit(e ? 1 : 0))"], { timeout: 10_000 }).status === 0;
+    if (realDns) expect(out.dnsReal).toBe('ok');
+    expect(hits).toBe(before);
+    // the control: the same probe with no deny reaches the server on 127.0.0.1 (the rule, not the address, refused it)
+    const open = await runCheck(base({ runId: 'netn', node, argv0: pinFile(p), network: true }));
+    expect(JSON.parse(open.evidence.stdoutTail)['127.0.0.1']).toBe('connected');
+  }, 90_000);
+
+  it('network: off denies a loopback connect; on reaches the loopback test server; the kernel\'s own port stays denied', async () => {
+    const p = script('net.mjs', "import net from 'node:net'; const [port] = process.argv.slice(2); const s = net.connect(Number(port), '127.0.0.1'); s.on('connect', () => { process.stdout.write('connected'); s.destroy(); }); s.on('error', (e) => process.stdout.write(e.code));");
+    const node = { id: 'n', run: ['./net.mjs', String(port)], pass: { exit: 0 as const }, timeoutSec: 30 };
+    const before = hits;
+    const off = await runCheck(base({ runId: 'netoff', node, argv0: pinFile(p) }));
+    expect(off.evidence.stdoutTail).toBe('EPERM');
+    const on = await runCheck(base({ runId: 'neton', node, argv0: pinFile(p), network: true }));
+    expect(on.evidence.stdoutTail, JSON.stringify(on)).toBe('connected');
+    expect(hits).toBe(before + 1);
+    const kernel = await runCheck(base({ runId: 'netk', node, argv0: pinFile(p), network: true, denyLoopbackPorts: [port] }));
+    expect(kernel.evidence.stdoutTail).toBe('EPERM');
+    expect(hits).toBe(before + 1);
+  }, 60_000);
+});

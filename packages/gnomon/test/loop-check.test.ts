@@ -13,7 +13,9 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyPassRule, compareJson, jsonPathGet, parseJunit, parseTap, parseTsc } from '../src/kernel/loops/check-parse.js';
 import { scanSecrets } from '../src/kernel/loops/secret-scan.js';
-import { buildCheckEnv } from '../src/kernel/runner/env.js';
+import { buildCheckEnv, buildSessionEnv, isScrubbed, loopEnvHazard } from '../src/kernel/runner/env.js';
+import { envCardLines, loopEnvFilesOf, loopLiterals, parseDotenv, readEnvFile, repoEnvFiles, resolveLoopEnvFiles } from '../src/kernel/loops/loop-env.js';
+import { landHazards, proposeReasons } from '../src/kernel/loops/propose.js';
 import { LOOP_CHECK_BACKENDS, loopCheckLaunchPlan } from '../src/kernel/sandbox/loop-check.js';
 import { loopCheckProfileSbpl, LoopCheckSbplError } from '../src/platform/darwin/loop-check-sbpl.js';
 import { CheckCopyRefusal, checkRunDir, makeCheckCopy, pinParadigmCli, runCheck, sweepCheckCopies } from '../src/kernel/loops/check-exec.js';
@@ -244,5 +246,140 @@ describe('the check copy', () => {
     const res = await runCheck({ runId: 'p1', repo: r, home: h, node: { id: 'c', builtin: 'paradigm.drift', pass: { exit: 0 }, timeoutSec: 5 }, paradigmCli: pin, platform: 'win32', envFrom: gitEnv, keepOnError: false });
     expect(res).toMatchObject({ verdict: 'error', reason: 'pin-mismatch', copy: { kept: false } });
     expect(fs.existsSync(checkRunDir(h, 'p1'))).toBe(false);
+  });
+});
+
+describe('TD-2026-10-23-268: a loop names the variables its check child gets, read from env files', () => {
+  const from = { PATH: '/usr/bin', HOME: '/Users/me', STRIPE_KEY: 'from-daemon', GITHUB_TOKEN: 'ghp_1', NODE_OPTIONS: '--require x', GNOMON_SOCK: '/s' };
+  const envFile = (dir: string, name: string, body: string, mode = 0o600): string => {
+    const p = path.join(dir, name);
+    fs.writeFileSync(p, body, { mode });
+    fs.chmodSync(p, mode);
+    return p;
+  };
+  it('dotenv: export, quotes, comments, CRLF and multi-line quotes; no expansion and no command substitution', () => {
+    const m = parseDotenv('\uFEFF# c\r\nexport A=1\r\nB = "two words" # c\nC=\'$HOME and $(rm -rf /)\'\nD=plain # tail\nE="a\\nb \\"q\\""\nF="line1\nline2"\nG=$A\n  H=x#y\nnot a line\nB=last\n');
+    expect(Object.fromEntries(m)).toEqual({ A: '1', B: 'last', C: '$HOME and $(rm -rf /)', D: 'plain', E: 'a\nb "q"', F: 'line1\nline2', G: '$A', H: 'x#y' });
+  });
+  it('the split: secrets and tool settings are allowed when named; GNOMON_*, the runtime loaders and kernel-set names never are', () => {
+    for (const n of ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CONFIG_DIR', 'ANTHROPIC_BASE_URL']) {
+      expect(isScrubbed(n), n).toBe(true);
+      expect(loopEnvHazard(n), n).toBeNull();
+    }
+    for (const n of ['STRIPE_SECRET_KEY', 'AWS_ACCESS_KEY_ID', 'GITHUB_TOKEN', 'DATABASE_URL', 'BASH_ENV', 'ENV', 'PYTHONPATH', 'PERL5LIB', 'RUBYOPT', 'JAVA_TOOL_OPTIONS', 'GIT_CONFIG_GLOBAL', 'GIT_EXEC_PATH', 'GIT_SSH_COMMAND']) expect(loopEnvHazard(n), n).toBeNull();
+    for (const n of ['GNOMON_SOCK', 'GNOMON_SESSION_KEY', 'NODE_OPTIONS', 'NODE_PATH', 'DYLD_INSERT_LIBRARIES', 'LD_PRELOAD', 'HOME', 'PATH', 'TMPDIR', 'USER', 'NO_COLOR']) expect(loopEnvHazard(n), n).not.toBeNull();
+  });
+  it('lookup order: ~/.gnomon/loop-env FIRST, then the loop\'s files in order; only declared names; never the daemon env', () => {
+    const d = tmp();
+    const a = envFile(d, 'a.env', 'STRIPE_KEY=from-a\nOTHER=x\n', 0o644);
+    const b = envFile(d, 'b.env', 'STRIPE_KEY=from-b\nDATABASE_URL=postgres://b\nGITHUB_TOKEN=ghp_b\n', 0o644);
+    const home = envFile(tmp(), 'loop-env', 'DATABASE_URL=from-home\n');
+    const src = { files: [{ path: a, shown: 'a.env', repoRoot: d }, { path: b, shown: 'b.env', repoRoot: d }], home };
+    expect(resolveLoopEnvFiles(['STRIPE_KEY', 'DATABASE_URL', 'GITHUB_TOKEN'], src)).toEqual({ ok: true, env: { STRIPE_KEY: 'from-a', DATABASE_URL: 'from-home', GITHUB_TOKEN: 'ghp_b' } });
+    const named = resolveLoopEnvFiles(['STRIPE_KEY'], src);
+    const { env, envKeys } = buildCheckEnv({ from, identity: null, path: '/usr/bin', home: '/c/home', tmpdir: '/c/tmp', named: named.ok ? named.env : {} });
+    expect(env.STRIPE_KEY).toBe('from-a');
+    for (const k of ['OTHER', 'DATABASE_URL', 'GITHUB_TOKEN', 'NODE_OPTIONS', 'GNOMON_SOCK']) expect(envKeys, k).not.toContain(k);
+    expect(loopEnvFilesOf(['.env.local', '~/s/app.env', '/abs/x.env'], '/repo', '/Users/me')).toEqual([{ shown: '.env.local', path: '/repo/.env.local', repoRoot: '/repo' }, { shown: '~/s/app.env', path: '/Users/me/s/app.env' }, { shown: '/abs/x.env', path: '/abs/x.env' }]);
+    expect(repoEnvFiles(['./.env.local', '~/s/app.env', '/abs/x.env', 'cfg/app.env'])).toEqual(['.env.local', 'cfg/app.env']);
+  });
+  it('failures: a repo file names itself; a file outside the repo says only "cannot be used: <path>" (L3); a name found nowhere names the files tried; a loose home file is refused', () => {
+    const d = tmp();
+    const repoF = (shown: string) => ({ path: path.join(d, shown), shown, repoRoot: d });
+    envFile(d, 'a.env', 'X=1\n', 0o644);
+    expect(resolveLoopEnvFiles(['X'], { files: [repoF('.env.gone')] })).toEqual({ ok: false, code: 'env-file', reason: 'the env file .env.gone does not exist' });
+    fs.symlinkSync(path.join(d, 'a.env'), path.join(d, 'link.env'));
+    expect(resolveLoopEnvFiles(['X'], { files: [repoF('link.env')] })).toMatchObject({ ok: false, code: 'env-file', reason: expect.stringContaining('link.env is a symlink') });
+    envFile(d, 'big.env', `X=${'a'.repeat(1024 * 1024)}\n`, 0o644);
+    expect(resolveLoopEnvFiles(['X'], { files: [repoF('big.env')] })).toMatchObject({ ok: false, reason: 'the env file big.env is larger than 1 MiB' });
+    // outside the repo: short, whatever went wrong
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(d, 'big.env'), shown: '~/big.env' }] })).toEqual({ ok: false, code: 'env-file', reason: 'the env file cannot be used: ~/big.env' });
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(d, 'nope.env'), shown: '/x/nope.env' }] })).toEqual({ ok: false, code: 'env-file', reason: 'the env file cannot be used: /x/nope.env' });
+    const empty = envFile(d, 'e.env', 'STRIPE_KEY=\n', 0o644);
+    expect(resolveLoopEnvFiles(['STRIPE_KEY'], { files: [{ path: empty, shown: 'e.env', repoRoot: d }], home: path.join(tmp(), 'loop-env') })).toEqual({ ok: false, code: 'env-missing', reason: 'env STRIPE_KEY was not found in ~/.gnomon/loop-env, e.env' });
+    const loose = envFile(d, 'loop-env', 'STRIPE_KEY=sk\n', 0o644);
+    expect(resolveLoopEnvFiles(['STRIPE_KEY'], { files: [], home: loose })).toMatchObject({ ok: false, code: 'env-file', reason: expect.stringContaining('~/.gnomon/loop-env must be owner-only (chmod 600') });
+    fs.chmodSync(loose, 0o400);
+    expect(resolveLoopEnvFiles(['STRIPE_KEY'], { files: [], home: loose })).toEqual({ ok: true, env: { STRIPE_KEY: 'sk' } });
+    expect(readEnvFile(d, 'dir').ok).toBe(false);
+    expect(resolveLoopEnvFiles(['STRIPE_KEY', 'NODE_OPTIONS'], { files: [] })).toMatchObject({ ok: false, code: 'env-refused', reason: expect.stringContaining('NODE_OPTIONS') });
+    expect(() => buildCheckEnv({ from, identity: null, path: null, home: '/h', tmpdir: '/t', named: { GNOMON_SOCK: '/evil' } })).toThrow(/GNOMON_SOCK is refused/);
+    expect(buildSessionEnv({ from, hsid: 'h', sock: '/s', sessionKeyPath: '/k', identity: null, path: null }).envKeys).not.toContain('STRIPE_KEY');
+  });
+  it('Aegis M2: a FIFO is refused at once, never blocking the kernel', () => {
+    const d = tmp();
+    const fifo = path.join(d, 'pipe.env');
+    expect(spawnSync('mkfifo', [fifo]).status).toBe(0);
+    const t0 = Date.now();
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: fifo, shown: 'pipe.env', repoRoot: d }] })).toEqual({ ok: false, code: 'env-file', reason: 'the env file pipe.env is not a regular file' });
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+  it('Aegis M3: a repo file behind a directory link cannot leave the repo; nothing in the Gnomon home but loop-env; a credential path is allowed', () => {
+    const repoDir = tmp();
+    const outside = tmp();
+    envFile(outside, 'app.env', 'X=outside\n', 0o644);
+    fs.symlinkSync(outside, path.join(repoDir, 'cfg'), 'dir');
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(repoDir, 'cfg', 'app.env'), shown: 'cfg/app.env', repoRoot: repoDir }] })).toMatchObject({ ok: false, code: 'env-file', reason: expect.stringContaining('cfg/app.env resolves outside this repo') });
+    const gh = tmp();
+    const homeFile = envFile(gh, 'loop-env', 'X=home\n');
+    envFile(gh, 'other.env', 'X=kernel\n', 0o644);
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(gh, 'other.env'), shown: '~/.gnomon/other.env' }], home: path.join(tmp(), 'loop-env') })).toMatchObject({ ok: true });
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(gh, 'other.env'), shown: '~/.gnomon/other.env' }], home: homeFile })).toEqual({ ok: false, code: 'env-file', reason: 'the env file cannot be used: ~/.gnomon/other.env (inside the Gnomon home)' });
+    // loop-env itself may be linked; it keeps the owner-only rule
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: homeFile, shown: '~/.gnomon/loop-env' }], home: homeFile })).toEqual({ ok: true, env: { X: 'home' } });
+    fs.chmodSync(homeFile, 0o644);
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: homeFile, shown: '~/.gnomon/loop-env' }], home: homeFile })).toMatchObject({ ok: false, reason: expect.stringContaining('must be owner-only') });
+    // founder: no gatekeeping: a credential-store path is the human's to link (the card shows it)
+    const fakeHome = tmp();
+    fs.mkdirSync(path.join(fakeHome, '.aws'));
+    envFile(path.join(fakeHome, '.aws'), 'credentials', 'AWS_SECRET_ACCESS_KEY=abc123def\n', 0o600);
+    expect(resolveLoopEnvFiles(['AWS_SECRET_ACCESS_KEY'], { files: loopEnvFilesOf(['~/.aws/credentials'], repoDir, fakeHome) })).toEqual({ ok: true, env: { AWS_SECRET_ACCESS_KEY: 'abc123def' } });
+  });
+  it('L1: an env file named like a config tools run is refused in the kernel; a .env* dotenv is fine', () => {
+    const d = tmp();
+    envFile(d, 'package.json', 'X=1\n', 0o644);
+    envFile(d, '.env.loop', 'X=1\n', 0o644);
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(d, 'package.json'), shown: 'package.json', repoRoot: d }] })).toMatchObject({ ok: false, reason: expect.stringContaining('named like a config file tools run') });
+    expect(resolveLoopEnvFiles(['X'], { files: [{ path: path.join(d, '.env.loop'), shown: '.env.loop', repoRoot: d }] })).toEqual({ ok: true, env: { X: '1' } });
+  });
+  it('Aegis M4: the card names each variable\'s source and each file\'s real path and place; with network on, the plain warning', () => {
+    const repoDir = tmp();
+    const gh = tmp();
+    const userHome = tmp();
+    envFile(gh, 'loop-env', 'STRIPE_KEY=sk_home_value\n');
+    envFile(repoDir, '.env.loop', 'API_BASE_URL=http://x\nSTRIPE_KEY=shadowed\n', 0o644);
+    fs.mkdirSync(path.join(userHome, 'secrets'));
+    envFile(path.join(userHome, 'secrets'), 'app.env', 'DATABASE_URL=postgres://u\n', 0o600);
+    const c = { nodes: [{ id: 't', type: 'check', env: ['STRIPE_KEY', 'API_BASE_URL', 'DATABASE_URL', 'NOT_YET'] }], envFiles: ['.env.loop', '~/secrets/app.env'], network: 'on' as const } as any;
+    const lines = envCardLines(c, { repoRoot: repoDir, userHome, gnomonHome: gh, tracked: (rel) => rel === '.env.loop' });
+    expect(lines).toEqual([
+      `reads env from: ~/.gnomon/loop-env (read first), then .env.loop (repo, tracked by git) → ${path.join(repoDir, '.env.loop')}, then ~/secrets/app.env (outside this repo) → ${path.join(userHome, 'secrets', 'app.env')}`,
+      'STRIPE_KEY ← ~/.gnomon/loop-env',
+      'API_BASE_URL ← .env.loop (repo, tracked by git)',
+      'DATABASE_URL ← ~/secrets/app.env (outside this repo)',
+      'NOT_YET ← not set yet (looks in ~/.gnomon/loop-env, then .env.loop (repo, tracked by git), then ~/secrets/app.env (outside this repo))',
+      "this loop runs this repo's code with STRIPE_KEY, API_BASE_URL, DATABASE_URL, NOT_YET and network access: anyone who can change the repo's code can read and send them.",
+    ]);
+    expect(JSON.stringify(lines)).not.toMatch(/sk_home_value|shadowed|postgres:\/\/u/);
+    expect(envCardLines({ ...c, network: undefined }, { repoRoot: repoDir, userHome, gnomonHome: gh }).some((l) => l.includes('anyone who can change'))).toBe(false);
+  });
+  it('Aegis F2: literal values (6+ chars) and their URL-encoded form redact as [REDACTED:env:NAME]; short ones never', () => {
+    const lits = [{ name: 'DB_PASS', value: 'p@ss w0rd!' }, { name: 'SHORT', value: 'abc' }];
+    const out = scanSecrets('pw=p@ss w0rd! url=postgres://u:p%40ss%20w0rd!@h abc', lits);
+    expect(out.text).not.toContain('p@ss w0rd!');
+    expect(out.text).not.toContain('p%40ss%20w0rd!');
+    expect(out.text).toContain('[REDACTED:env:DB_PASS]');
+    expect(out.text).toContain(' abc');
+    expect(out.redactions.find((x) => x.kind === 'env:DB_PASS')!.count).toBe(2);
+  });
+  it('Aegis F3: an added line carrying a handed-out value is a land hazard naming the variable and file, never the value', () => {
+    const parked = { changes: [{ path: 'src/config.ts', status: 'modified' as const }], scanComplete: true, scanDiff: 'diff --git a/src/config.ts b/src/config.ts\n--- a/src/config.ts\n+++ b/src/config.ts\n@@ -1 +1 @@\n-const k = "";\n+const k = "sk_live_handed_out";\n' };
+    const hz = landHazards(parked, [], [{ name: 'STRIPE_KEY', value: 'sk_live_handed_out' }]);
+    expect(hz).toEqual([{ kind: 'env-value', path: 'src/config.ts', name: 'STRIPE_KEY' }]);
+    expect(proposeReasons({ declared: 'act', autonomy: 'act', level: 'L0' } as any, hz)).toContain('the change contains the value of STRIPE_KEY in src/config.ts');
+    expect(landHazards(parked, [], [])).toEqual([]);
+    const d = tmp();
+    const f = envFile(d, 'a.env', 'STRIPE_KEY=sk_live_handed_out\n', 0o644);
+    expect(loopLiterals(['STRIPE_KEY', 'NOPE'], { files: [{ path: f, shown: 'a.env' }, { path: path.join(d, 'gone'), shown: 'gone' }] })).toEqual([{ name: 'STRIPE_KEY', value: 'sk_live_handed_out' }]);
   });
 });

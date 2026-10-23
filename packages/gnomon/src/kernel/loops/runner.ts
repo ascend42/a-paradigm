@@ -79,6 +79,11 @@ import { globToRegExp } from './events.js';
 import { parseLoopTarget, type LoopAsker } from './trust.js';
 import { effectiveAutonomy, FAIL_SAFE_CAP, landDecision, OPEN_CAP, type EffectiveAutonomy, type RepoCap } from './strictness-cap.js';
 import type { Parked } from '../git/scratch.js';
+import * as path from 'node:path';
+import { LOOP_HOME_ENV_FILE, loopEnvFilesOf, repoEnvFiles, loopLiterals, resolveLoopEnvFiles, type LoopEnvSource, type LoopLiteral } from './loop-env.js';
+import { loopEnvNames } from './loop-env.js';
+import { osUserHome } from '../runner/env.js';
+import { redactLiterals, scanSecrets } from './secret-scan.js';
 
 /** Global caps and defaults (root-signed `~/.gnomon/config.yaml` `loops:` replaces these once it is read). */
 export interface LoopGlobalCaps {
@@ -187,6 +192,10 @@ export interface LoopRunnerOptions {
   autoLand?: boolean;
   /** only rows signed by a kernel key fold (the lander's landed set, L6) */
   isKernelKey?: (keyId: string) => boolean;
+  /** TD-2026-10-23-268: the kernel's own loopback ports (its web transport), never reachable from a `network: on` check */
+  kernelPorts?: () => readonly number[];
+  /** TEST seam: the OS user home `~/` env files resolve under (default osUserHome()) */
+  userHome?: string;
 }
 
 interface Active {
@@ -197,6 +206,8 @@ interface Active {
   /** why the run is being stopped from outside (pause, kill switch) */
   stopping?: string;
   rerun: boolean;
+  /** Aegis L4: every env value this run handed a child, kept in memory for redaction (never written, gone with the run) */
+  handed?: LoopLiteral[];
   done: Promise<LoopRunEnd>;
 }
 
@@ -784,7 +795,8 @@ export class LoopRunner {
       await this.#o.append('loop.node', {
         runId, loopId: entry.loopId, nodeId: at, type: node.type, visit, round, verdict: r.verdict, edge: edgeKey, next,
         durationMs: r.durationMs, evidenceRef: `loop-evidence:${runId}/${at}/${visit}`, effectiveAutonomy: eff.autonomy, ...(eff.capReason ? { capReason: eff.capReason } : {}),
-        ...(r.detail ? { detail: r.detail } : {}), ...(r.choice ? { choice: r.choice } : {}), ...(r.evidence ? { evidence: r.evidence } : {}), ...(r.extra ?? {}),
+        // Aegis F5: a node's detail is scanned whatever the loop's redact says (the values by literal too)
+        ...(r.detail ? { detail: scanSecrets(r.detail, this.#literals(ctx)).text } : {}), ...(r.choice ? { choice: r.choice } : {}), ...(r.evidence ? { evidence: r.evidence } : {}), ...(r.extra ?? {}),
       });
       last = { nodeId: at, verdict: r.verdict === 'error' && edgeKey === 'timeout' ? 'timeout' : r.verdict, failed: r.verdict === 'fail' || r.verdict === 'error' ? at : last.failed };
       if (edgeKey === 'timeout') last.verdict = 'timeout';
@@ -811,10 +823,25 @@ export class LoopRunner {
         const cli = node.builtin ? (this.#o.paradigmCli?.() ?? null) : null;
         if (node.builtin && !cli) return { verdict: 'error', edge: 'error', durationMs: 0, detail: 'no pinned paradigm CLI for loop builtins on this kernel' };
         const left = Math.max(1, Math.floor(ctx.meter.remainingMs() / 1000));
+        // TD-2026-10-23-268: the node's values, read by the kernel now (a bad file or a name found nowhere is the
+        // node's error, nothing copied or run); kept in memory for this run's redaction only (L4)
+        let envValues: Record<string, string> | undefined;
+        if (node.env?.length) {
+          const er = resolveLoopEnvFiles(node.env, this.#envSource(entry));
+          if (!er.ok) return { verdict: 'error', edge: 'error', durationMs: 0, detail: er.reason.slice(0, 300) };
+          envValues = er.env;
+          this.#hand(ctx, er.env);
+        }
         const input: CheckExecInput = {
           runId: `${runId}-${node.id}-${visit}`.slice(0, 64).replace(/[^A-Za-z0-9_-]/g, '_'),
           repo: entry.repoRoot, home: this.#o.home,
-          node: { id: node.id, ...(node.run ? { run: node.run } : {}), ...(node.builtin ? { builtin: node.builtin } : {}), ...(node.args ? { args: node.args } : {}), pass: node.pass, timeoutSec: Math.min(node.timeoutSec, left) },
+          node: { id: node.id, ...(node.run ? { run: node.run } : {}), ...(node.builtin ? { builtin: node.builtin } : {}), ...(node.args ? { args: node.args } : {}), pass: node.pass, timeoutSec: Math.min(node.timeoutSec, left), ...(node.env?.length ? { env: node.env } : {}) },
+          // TD-2026-10-23-268: `redact: off` (on the trust card) keeps this loop's check output raw; the node's `env`
+          // values are read by the kernel from the loop's env files then ~/.gnomon/loop-env; `network: on` opens IP
+          ...(entry.compiled?.redact === 'off' ? { redact: false } : {}),
+          ...(envValues ? { envValues } : {}),
+          ...(entry.compiled?.envFiles?.length ? { skipFiles: repoEnvFiles(entry.compiled.envFiles) } : {}),
+          ...(entry.compiled?.network === 'on' ? { network: true, denyLoopbackPorts: [...(this.#o.kernelPorts?.() ?? [])] } : {}),
           ...(argv0 ? { argv0 } : {}), ...(interpreter ? { interpreter } : {}), ...(cli ? { paradigmCli: cli } : {}),
           abort: ctx.abort.signal, keepOnError: true,
           ...(this.#o.platform ? { platform: this.#o.platform } : {}),
@@ -875,14 +902,23 @@ export class LoopRunner {
   async #model(ctx: WalkCtx, node: Extract<CompiledNode, { type: 'model' }>, fields: Record<string, string | number | undefined>, refs: { last?: string | undefined; failed?: string | undefined }): Promise<NodeResult> {
     const port = this.#o.model;
     if (!port) return { verdict: 'unavailable', edge: 'unavailable', durationMs: 0, detail: NO_LOCAL_MODEL };
-    let act: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number } | undefined;
+    let act: { tools: readonly unknown[]; protect: readonly string[]; maxSteps: number; env?: Readonly<Record<string, string>> } | undefined;
     if (node.role === 'act') {
       if (!ctx.scratch) return { verdict: 'error', edge: 'error', durationMs: 0, detail: 'an act step needs its run\'s scratch worktree' };
       // an observe loop edits nothing (§2 autonomy): the act step does not run
       if (this.effective(ctx.entry).autonomy === 'observe') return { verdict: 'fail', edge: 'fail', durationMs: 0, detail: 'autonomy observe: act steps do not edit' };
       // Aegis H2: the kernel's protected set (goal.inputs, the config closure, argv-named paths, the callees') plus
       // node_modules and the loop definitions, refused at the tool layer with no card (G-LOOP-22)
-      act = { tools: node.tools, protect: [...new Set([...ctx.entry.compiled!.protected, ...ACT_ALWAYS_PROTECTED])], maxSteps: node.limits.turns };
+      // TD-2026-10-23-268: the act node's values, read by the kernel now (never stored); a bad file or a name found
+      // nowhere fails the node with the reason, and nothing opens
+      let env: Record<string, string> | undefined;
+      if (node.env?.length) {
+        const r = resolveLoopEnvFiles(node.env, this.#envSource(ctx.entry));
+        if (!r.ok) return { verdict: 'error', edge: 'error', durationMs: 0, detail: r.reason.slice(0, 300) };
+        env = r.env;
+        this.#hand(ctx, r.env);
+      }
+      act = { tools: node.tools, protect: [...new Set([...ctx.entry.compiled!.protected, ...ACT_ALWAYS_PROTECTED])], maxSteps: node.limits.turns, ...(env ? { env } : {}) };
     }
     const blocks = resolveInputs(node.inputs, { notes: ctx.notes, ...(refs.last ? { last: refs.last } : {}), ...(refs.failed ? { failed: refs.failed } : {}), trigger: ctx.trigger, fields });
     const left = ctx.meter.remainingTokens();
@@ -899,6 +935,7 @@ export class LoopRunner {
       retries: this.#caps.modelRetries, backoffMs: this.#caps.modelBackoffMs,
       ...(this.#o.diag ? { diag: this.#o.diag } : {}),
       ...(act ? { act } : {}),
+      literals: this.#literals(ctx),
     });
     const durationMs = Math.max(0, Math.round(this.#now() - t0));
     ctx.meter.add(durationMs);
@@ -929,6 +966,29 @@ export class LoopRunner {
    * land alone: autoLandBlockers is empty) or raise ONE `verdict` card whose accept lands it (§3.2, §3.3, §3.4,
    * G-LOOP-23). A run stopped from outside (pause, kill switch, untrust) parks its work and raises no card (§3.3).
    */
+  /** TD-2026-10-23-268: where a loop's `env` values are read: its env files, then <home>/loop-env. */
+  #envSource(entry: Pick<LoopEntry, 'compiled' | 'repoRoot'>): LoopEnvSource {
+    return { files: loopEnvFilesOf(entry.compiled?.envFiles, entry.repoRoot, this.#o.userHome ?? osUserHome()), home: path.join(this.#o.home, LOOP_HOME_ENV_FILE) };
+  }
+
+  /** Aegis L4: remember (in memory, for this run only) the values just handed to a child. */
+  #hand(ctx: WalkCtx, env: Readonly<Record<string, string>>): void {
+    const h = (ctx.top.handed ??= []);
+    for (const [name, value] of Object.entries(env)) if (!h.some((x) => x.name === name && x.value === value)) h.push({ name, value });
+  }
+
+  /**
+   * Aegis F2/F3/F5 + L4: the values to redact: every value this run handed out (in memory) plus a fresh read of this
+   * loop's names (a value edited mid-run is caught either way). Never stored; [] when the run handed nothing out.
+   */
+  #literals(ctx: Pick<WalkCtx, 'entry' | 'top'>): LoopLiteral[] {
+    const names = ctx.entry.compiled ? loopEnvNames(ctx.entry.compiled) : [];
+    const fresh = names.length ? loopLiterals(names, this.#envSource(ctx.entry)) : [];
+    const out = [...(ctx.top.handed ?? [])];
+    for (const l of fresh) if (!out.some((x) => x.name === l.name && x.value === l.value)) out.push(l);
+    return out;
+  }
+
   async #propose(ctx: WalkCtx, end: LoopRunEnd): Promise<void> {
     const s = ctx.scratch!;
     const { entry, runId } = ctx;
@@ -943,7 +1003,11 @@ export class LoopRunner {
     if (!parked) return;
     const stopped = !!ctx.top.stopping || ctx.abort.signal.aborted;
     const eff = this.effective(entry);
-    const hazards = landHazards(parked, [...(entry.compiled?.protected ?? []), ...ACT_ALWAYS_PROTECTED]);
+    // Aegis F3: the parked diff's added lines carrying a value the run handed out is a land hazard, whatever redact says
+    const lits = this.#literals(ctx);
+    const hazards = landHazards(parked, [...(entry.compiled?.protected ?? []), ...ACT_ALWAYS_PROTECTED], lits);
+    // the card never shows a value: the parked ref keeps the real bytes, the card's diff has them redacted
+    if (lits.length) parked = { ...parked, diff: redactLiterals(parked.diff, lits).text, scanDiff: redactLiterals(parked.scanDiff, lits).text };
     const blockers = stopped ? [] : this.#autoLandBlockers(ctx, end, parked, eff);
     const auto = !stopped && eff.autonomy === 'act' && !hazards.length && !blockers.length;
     await this.#o.append('loop.parked', { ...ids, ref: parked.ref, sha: parked.sha, baseSha: s.headSha, reason: stopped ? (ctx.top.stopping ?? 'paused') : auto ? 'land' : 'propose' });

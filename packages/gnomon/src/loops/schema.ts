@@ -26,6 +26,16 @@
  *     the `claude` opt-in block, `cron` triggers, `sentinel.incident.opened` events, `bash` tools, the
  *     envelope fields and (TD-2026-10-22-769) write checks (`effect: write`) are refused with code LANDS_IN_8_1
  *     ("lands in 8.1").
+ *   - TD-2026-10-23-268: `env: [NAME, ...]` on a check or an act node (≤ LOOP_ENV_MAX names matching
+ *     ^[A-Z_][A-Z0-9_]*$, no duplicates, never a hazard: loopEnvHazard in runner/env.ts) passes exactly those
+ *     variables to that node's child; judge and summarize nodes run no tools and take none (ENV_NOT_ALLOWED). The
+ *     values come from the loop's `envFiles` (≤ LOOP_ENV_FILES_MAX paths: repo-relative without `..`, `~/…` or
+ *     absolute), then ~/.gnomon/loop-env, read by the kernel (kernel/loops/loop-env.ts). Refused names are only the
+ *     kernel and runtime-loader names (GNOMON_*, NODE_OPTIONS, NODE_PATH, DYLD_*, LD_*) and the names the kernel
+ *     sets; every secret and tool setting is the human's to hand over. `redact: on|off` (default on) turns
+ *     check-output scrubbing off; `network: on|off` (default off) lets the loop's checks reach the network. All four
+ *     compile only when used (`env`/`envFiles` when non-empty, `redact: 'off'`, `network: 'on'`), so a loop that uses
+ *     none hashes as before; all are on the trust card and in its hash.
  *
  * Aegis LP1 review: an @goal edge comes only from goal.node or a call node, and any @goal edge needs a goal
  * block; a call pin must equal the callee's content hash (loopContentHash: sha256 of canonicalJson(parsed) —
@@ -33,7 +43,7 @@
  * needs a callee with a goal; argv0 is never a build tool or package manager (BUILD_TOOLS) except the direct
  * checkers in LOOP_ARGV0_CHECKER_ALLOW; land paths never touch node_modules; non-finite numbers are refused.
  * The compiled `protected` list is the union over the whole call chain of goal.inputs, the repo-relative argv
- * words of run checks and node_modules (the config closure joins it in LP2); the kernel denies act edits there.
+ * words of run checks, the repo-relative envFiles (TD-2026-10-23-268) and node_modules (the config closure joins it in LP2); the kernel denies act edits there.
  *
  * Compiled form: the normalized definition with every default filled, durations as integer SECONDS and token
  * counts as integers, edges expanded to every verdict of the node, and `flowPaths` when a flow index is given
@@ -44,6 +54,11 @@ import { createHash } from 'node:crypto';
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { BUILD_TOOLS, INTERPRETER_DENYLIST } from '../kernel/supervisor/prefix-policy.js';
 import { MIN_AUTOMATION_PERIOD_MS } from '../kernel/scheduler/automation.js';
+import { LOOP_ENV_MAX, LOOP_ENV_NAME, loopEnvHazard } from '../kernel/runner/env.js';
+import { isConfigNamedEnvFile } from '../kernel/manifest/layers.js';
+
+/** TD-2026-10-23-268: at most this many env files per loop (mirrored in kernel/loops/loop-env.ts). */
+export const LOOP_ENV_FILES_MAX = 8;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -157,6 +172,8 @@ export interface CheckNode {
   effect?: 'read' | 'write';
   pass?: CheckPass;
   timeoutSec?: number;
+  /** TD-2026-10-23-268: variables from the human's environment this check's child gets (names only here) */
+  env?: string[];
   exit?: NodeExit;
   on?: EdgeMap;
 }
@@ -172,6 +189,8 @@ export interface ModelNode {
   tools?: 'none' | ModelTool[];
   verdict?: { classes: string[] };
   limits?: { turns?: number; tokens?: Count };
+  /** TD-2026-10-23-268: role act only: variables from the human's environment the act session gets */
+  env?: string[];
   exit?: NodeExit;
   on?: EdgeMap;
 }
@@ -214,6 +233,12 @@ export interface LoopDefinition {
   };
   goal?: { node: string; verdict?: 'pass'; inputs?: string[] };
   land?: { paths: string[]; message: string; maxWaitMin?: number };
+  /** TD-2026-10-23-268: `off` shows check output unredacted (no secret scrubbing) for this loop; default on */
+  redact?: 'on' | 'off' | boolean;
+  /** TD-2026-10-23-268: where the nodes' `env` values are read, in order (then ~/.gnomon/loop-env) */
+  envFiles?: string[];
+  /** TD-2026-10-23-268: `on` lets this loop's checks reach the network; default off */
+  network?: 'on' | 'off' | boolean;
   start: string;
   nodes: LoopNode[];
 }
@@ -226,8 +251,8 @@ export type CompiledTrigger =
   | { type: 'continuous'; cooldownSec: number };
 
 export type CompiledNode =
-  | { id: string; type: 'check'; run?: string[]; argv0Interpreter?: string; builtin?: string; args?: Record<string, unknown>; effect: 'read' | 'write'; pass: CheckPass; timeoutSec: number; exit?: NodeExit; on: Record<string, string> }
-  | { id: string; type: 'model'; role: string; model: { use: 'local'; profile?: string; escalate: 'never'; minConfidence: number }; prompt?: string; inputs: string[]; tools: ModelTool[]; verdict?: { classes: string[] }; limits: { turns: number; tokens: number }; exit?: NodeExit; on: Record<string, string> }
+  | { id: string; type: 'check'; run?: string[]; argv0Interpreter?: string; builtin?: string; args?: Record<string, unknown>; effect: 'read' | 'write'; pass: CheckPass; timeoutSec: number; env?: string[]; exit?: NodeExit; on: Record<string, string> }
+  | { id: string; type: 'model'; role: string; model: { use: 'local'; profile?: string; escalate: 'never'; minConfidence: number }; prompt?: string; inputs: string[]; tools: ModelTool[]; verdict?: { classes: string[] }; limits: { turns: number; tokens: number }; env?: string[]; exit?: NodeExit; on: Record<string, string> }
   | { id: string; type: 'notify'; as: 'toast' | 'card'; text?: string; attach: string[]; choices?: string[]; exit?: NodeExit; on: Record<string, string> }
   | { id: string; type: 'call'; loop: string; callee: string; hash8: string; exit?: NodeExit; on: Record<string, string> };
 
@@ -251,6 +276,12 @@ export interface CompiledLoop {
   budgets: LoopBudgets;
   goal?: { node: string; verdict: 'pass'; inputs: string[] };
   land?: { paths: string[]; message: string; maxWaitMin: number };
+  /** TD-2026-10-23-268: present only when off (check output unredacted); absent = on */
+  redact?: 'off';
+  /** TD-2026-10-23-268: the env files, as written (present only when non-empty) */
+  envFiles?: string[];
+  /** TD-2026-10-23-268: present only when on (checks can reach the network) */
+  network?: 'on';
   start: string;
   nodes: CompiledNode[];
   /**
@@ -477,6 +508,52 @@ class Checker {
     if (n === null) this.err(path, 'BAD_BUDGET', `${what} must be a positive count like 80000, 400k or 2M`);
     return n;
   }
+  /** TD-2026-10-23-268: a node's `env` list: ≤ LOOP_ENV_MAX distinct names, none a hazard (loopEnvHazard). */
+  envList(v: unknown, path: string): void {
+    if (!Array.isArray(v)) {
+      this.err(path, 'BAD_TYPE', 'env is a list of environment variable names');
+      return;
+    }
+    if (v.length > LOOP_ENV_MAX) this.err(path, 'ENV_TOO_MANY', `env names at most ${LOOP_ENV_MAX} variables`);
+    const seen = new Set<string>();
+    v.forEach((n, i) => {
+      const p = join(path, i);
+      if (typeof n !== 'string' || !LOOP_ENV_NAME.test(n) || n.length > 128) {
+        this.err(p, 'BAD_ENV_NAME', 'an env name matches ^[A-Z_][A-Z0-9_]*$ (≤ 128 characters)');
+        return;
+      }
+      if (seen.has(n)) this.err(p, 'ENV_DUPLICATE', `${n} is named twice`);
+      seen.add(n);
+      const why = loopEnvHazard(n);
+      if (why) this.err(p, 'ENV_REFUSED', `${n} is refused: ${why}`);
+    });
+  }
+  /** TD-2026-10-23-268: the loop's env files: ≤ LOOP_ENV_FILES_MAX distinct paths, repo-relative (no ..), ~/… or absolute. */
+  envFiles(v: unknown, path: string): void {
+    if (!Array.isArray(v)) {
+      this.err(path, 'BAD_TYPE', 'envFiles is a list of paths');
+      return;
+    }
+    if (v.length > LOOP_ENV_FILES_MAX) this.err(path, 'ENV_FILES_TOO_MANY', `envFiles names at most ${LOOP_ENV_FILES_MAX} files`);
+    const seen = new Set<string>();
+    v.forEach((f, i) => {
+      const p = join(path, i);
+      if (typeof f !== 'string' || f.length === 0 || f.length > 1024 || /[\0\r\n]/.test(f)) {
+        this.err(p, 'BAD_ENV_FILE', 'an env file is a non-empty path (≤ 1024 characters, one line)');
+        return;
+      }
+      const abs = f.startsWith('/') || /^[A-Za-z]:[\\/]/.test(f);
+      const home = f.startsWith('~/');
+      if (!abs && !home && (f.startsWith('~') || f.includes('\\') || f.split('/').includes('..'))) {
+        this.err(p, 'BAD_ENV_FILE', 'an env file is repo-relative (no .. segment or \\), ~/… or absolute');
+        return;
+      }
+      const base = f.split(/[\\/]/).pop() ?? f;
+      if (isConfigNamedEnvFile(base)) this.err(p, 'ENV_FILE_CONFIG', `${base} is a config file tools run; name a dotenv file (such as .env.loop) instead`);
+      if (seen.has(f)) this.err(p, 'ENV_FILE_DUPLICATE', `${f} is named twice`);
+      seen.add(f);
+    });
+  }
   literalArgs(v: unknown, path: string): void {
     if (typeof v === 'string') {
       if (v.includes('{{')) this.err(path, 'ARGV_TEMPLATED', 'builtin args are literal: templates ({{…}}) are never expanded');
@@ -521,6 +598,14 @@ function ownProtected(def: unknown): string[] {
   const out: string[] = [];
   if (isObj(def.goal) && Array.isArray(def.goal.inputs)) for (const x of def.goal.inputs) if (typeof x === 'string') out.push(x);
   if (Array.isArray(def.nodes)) for (const n of def.nodes) if (isObj(n) && n.type === 'check' && Array.isArray(n.run)) out.push(...argvPathWords(n.run));
+  // TD-2026-10-23-268 (Aegis M4, G-LOOP-22): an act node never edits the loop's own repo env files
+  if (Array.isArray(def.envFiles)) {
+    for (const f of def.envFiles) {
+      if (typeof f !== 'string' || f.startsWith('/') || f.startsWith('~') || /^[A-Za-z]:[\\/]/.test(f) || f.includes('\\')) continue;
+      const rel = f.split('/').filter((x) => x !== '' && x !== '.').join('/');
+      if (rel && !rel.split('/').includes('..')) out.push(rel);
+    }
+  }
   return out;
 }
 
@@ -540,7 +625,7 @@ function validateInto(c: Checker, input: unknown, opts: LoopValidateOptions): vo
   const d = input;
   nonFinite(c, d, '');
   const scope = opts.scope ?? 'repo';
-  c.closed(d, '', ['schema', 'id', 'title', 'repo', 'flows', 'triggers', 'autonomy', 'notify', 'decide', 'budgets', 'goal', 'land', 'start', 'nodes'], {
+  c.closed(d, '', ['schema', 'id', 'title', 'repo', 'flows', 'triggers', 'autonomy', 'notify', 'decide', 'budgets', 'goal', 'land', 'redact', 'envFiles', 'network', 'start', 'nodes'], {
     claude: 'the Claude subscription opt-in (claude:)',
     envelope: 'the loop envelope',
     envelopeId: 'the loop envelope',
@@ -568,6 +653,10 @@ function validateInto(c: Checker, input: unknown, opts: LoopValidateOptions): vo
   }
 
   if (has(d, 'autonomy')) c.oneOf(d.autonomy, 'autonomy', 'autonomy', LOOP_AUTONOMY);
+  // TD-2026-10-23-268: on | off (a YAML 1.1 parser's booleans are accepted too)
+  if (has(d, 'redact') && typeof d.redact !== 'boolean') c.oneOf(d.redact, 'redact', 'redact', ['on', 'off'] as const);
+  if (has(d, 'network') && typeof d.network !== 'boolean') c.oneOf(d.network, 'network', 'network', ['on', 'off'] as const);
+  if (has(d, 'envFiles')) c.envFiles(d.envFiles, 'envFiles');
   if (has(d, 'decide')) c.oneOf(d.decide, 'decide', 'decide', LOOP_DECIDE);
   if (has(d, 'notify') && c.obj(d.notify, 'notify', 'notify')) {
     c.closed(d.notify, 'notify', ['on', 'as']);
@@ -907,7 +996,8 @@ function validateNode(
   validateExit(c, n, p);
 
   if (n.type === 'check') {
-    c.closed(n, p, ['id', 'type', 'run', 'builtin', 'args', 'effect', 'pass', 'timeoutSec', 'exit', 'on']);
+    c.closed(n, p, ['id', 'type', 'run', 'builtin', 'args', 'effect', 'pass', 'timeoutSec', 'env', 'exit', 'on']);
+    if (has(n, 'env')) c.envList(n.env, join(p, 'env'));
     const hasRun = has(n, 'run');
     const hasBuiltin = has(n, 'builtin');
     if (hasRun === hasBuiltin) c.err(p, 'CHECK_RUN_XOR_BUILTIN', 'a check has exactly one of run or builtin');
@@ -948,8 +1038,12 @@ function validateNode(
   }
 
   if (n.type === 'model') {
-    c.closed(n, p, ['id', 'type', 'role', 'model', 'prompt', 'inputs', 'tools', 'verdict', 'limits', 'exit', 'on']);
+    c.closed(n, p, ['id', 'type', 'role', 'model', 'prompt', 'inputs', 'tools', 'verdict', 'limits', 'env', 'exit', 'on']);
     const role = c.oneOf(n.role, join(p, 'role'), 'role', LOOP_MODEL_ROLES) ? n.role : undefined;
+    if (has(n, 'env')) {
+      if (role === 'judge' || role === 'summarize') c.err(join(p, 'env'), 'ENV_NOT_ALLOWED', `a ${role} node runs no tools, so it takes no env; only check and act nodes do`);
+      else c.envList(n.env, join(p, 'env'));
+    }
     if (has(n, 'model') && c.obj(n.model, join(p, 'model'), 'model')) {
       const m = n.model;
       const mp = join(p, 'model');
@@ -1088,6 +1182,7 @@ function compileNode(n: LoopNode, readShebang?: LoopCompileOptions['readShebang'
         effect: n.effect ?? (LOOP_DEFAULTS.effect as 'read'),
         pass: structuredClone(n.pass ?? { exit: 0 }),
         timeoutSec: n.timeoutSec ?? LOOP_DEFAULTS.timeoutSec,
+        ...(n.env?.length ? { env: [...n.env] } : {}),
         ...(exit ? { exit } : {}),
         on: expandEdges(n.on, CHECK_VERDICTS, () => '@stop'),
       };
@@ -1109,6 +1204,7 @@ function compileNode(n: LoopNode, readShebang?: LoopCompileOptions['readShebang'
           turns: n.limits?.turns ?? LOOP_DEFAULTS.modelLimits.turns,
           tokens: n.limits?.tokens !== undefined ? parseCount(n.limits.tokens)! : LOOP_DEFAULTS.modelLimits.tokens,
         },
+        ...(n.env?.length ? { env: [...n.env] } : {}),
         ...(exit ? { exit } : {}),
         on: expandEdges(n.on, MODEL_VERDICTS, (k) => (k === 'unavailable' ? '@pause' : '@stop')),
       };
@@ -1220,6 +1316,9 @@ export function compileLoop(input: unknown, opts: LoopCompileOptions = {}): Loop
     },
     ...(d.goal ? { goal: { node: d.goal.node, verdict: 'pass' as const, inputs: [...(d.goal.inputs ?? [])] } } : {}),
     ...(d.land ? { land: { paths: [...d.land.paths], message: d.land.message, maxWaitMin: d.land.maxWaitMin ?? LOOP_DEFAULTS.landMaxWaitMin } } : {}),
+    ...(d.redact === 'off' || d.redact === false ? { redact: 'off' as const } : {}),
+    ...(d.envFiles?.length ? { envFiles: [...d.envFiles] } : {}),
+    ...(d.network === 'on' || d.network === true ? { network: 'on' as const } : {}),
     start: d.start,
     nodes: d.nodes.map((n) => compileNode(n, opts.readShebang)),
     protected: [...prot].sort(),
