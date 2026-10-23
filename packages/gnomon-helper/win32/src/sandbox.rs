@@ -160,7 +160,7 @@ fn restricted_token(low: bool, session_sid: Option<&str>) -> Result<Owned, Strin
         // the session's default DACL, explicitly: the launcher was spawned by the shielded kernel, whose default DACL
         // denies GNOMON_SESSION_SID (shield.rs), and the restricted token would inherit that (the session could not
         // open its own threads). Set on the SESSION token only; the launcher keeps the shielded default (Aegis M1).
-        set_default_dacl(rt.0)?;
+        set_default_dacl(rt.0, session_sid)?;
         if low {
             // Low integrity (S-1-16-4096): no write up (only Low-labelled roots are writable), and NO_READ_UP |
             // NO_WRITE_UP on every Medium process object, so a session cannot open, read or inject into the kernel,
@@ -181,16 +181,33 @@ fn restricted_token(low: bool, session_sid: Option<&str>) -> Result<Owned, Strin
     }
 }
 
-/// User + SYSTEM full access, as an SDDL DACL string.
-fn user_system_sddl() -> Result<String, String> {
-    let user = crate::win::current_user_sid().map_err(|e| format!("current_user_sid: {}", e.message))?;
-    Ok(format!("D:(A;;GA;;;{user})(A;;GA;;;SY)"))
+/// The DACL of what a session creates (its processes, threads, pipes, sections; its private desktop), as SDDL.
+///
+/// Aegis H1 (PR #52): every session token carries the user SID in BOTH access checks and every session runs at Low,
+/// so a plain user + SYSTEM default let one session open, signal or inject into another's processes. With a session
+/// SID the DACL is, IN THIS ORDER (deliberately non-canonical; nothing reorders a default DACL):
+///   (A own session SID)    this session: its restricted check grants here, before the deny
+///   (D GNOMON_SESSION_SID) every OTHER session: its restricted check stops here
+///   (A user)(A SYSTEM)     the kernel and the user's unrestricted processes, and every session's normal check
+///   (A;;RC;;;OW)           OWNER RIGHTS: the owner (the user, a restricting SID) gets READ_CONTROL only, never the
+///                          implicit WRITE_DAC another session could use to rewrite this DACL (Aegis re-review)
+/// The kernel's token holds no session SID, so neither session ACE applies to it.
+pub fn session_object_sddl(user: &str, session_sid: Option<&str>) -> String {
+    match session_sid {
+        Some(own) => format!("D:(A;;GA;;;{own})(D;;GA;;;{GNOMON_SESSION_SID})(A;;GA;;;{user})(A;;GA;;;SY)(A;;RC;;;OW)"),
+        None => format!("D:(A;;GA;;;{user})(A;;GA;;;SY)"),
+    }
 }
 
-/// `tok`'s default DACL → user + SYSTEM full access.
-fn set_default_dacl(tok: HANDLE) -> Result<(), String> {
+fn user_system_sddl(session_sid: Option<&str>) -> Result<String, String> {
+    let user = crate::win::current_user_sid().map_err(|e| format!("current_user_sid: {}", e.message))?;
+    Ok(session_object_sddl(&user, session_sid))
+}
+
+/// `tok`'s default DACL → `session_object_sddl`.
+fn set_default_dacl(tok: HANDLE, session_sid: Option<&str>) -> Result<(), String> {
     unsafe {
-        let w = crate::win::wide(&user_system_sddl()?);
+        let w = crate::win::wide(&user_system_sddl(session_sid)?);
         let mut sd: PSECURITY_DESCRIPTOR = null_mut();
         if ConvertStringSecurityDescriptorToSecurityDescriptorW(w.as_ptr(), 1, &mut sd, null_mut()) == 0 {
             return Err(last("ConvertStringSecurityDescriptorToSecurityDescriptorW(default dacl)"));
@@ -286,6 +303,10 @@ pub fn run(args: &[String]) -> i32 {
     if i >= args.len() {
         return fail("usage: sandbox [--desktop] [--low] [--session-sid <sid>] -- <absolute exe> [args…]");
     }
+    if low && session_sid.is_none() {
+        // every Low session has its own SID: its objects admit it alone (H1); never the shared user + SYSTEM default
+        return fail("--low requires --session-sid");
+    }
     let rest = &args[i + 1..];
     let Some(exe) = rest.first() else { return fail("missing <exe>") };
     if crate::protocol::check_local_path(exe).is_err() || !exe.to_ascii_lowercase().ends_with(".exe") {
@@ -300,8 +321,8 @@ pub fn run(args: &[String]) -> i32 {
         let name = format!("gnomon-session-{}", std::process::id());
         let w = crate::win::wide(&name);
         // READ_CONTROL | WRITE_OWNER (0x20000 | 0x80000): needed to set the desktop's mandatory label below
-        // an explicit DACL (user + SYSTEM): the launcher's own default denies the session SID (Aegis M1)
-        let sddl = match user_system_sddl() {
+        // an explicit DACL: the launcher's own default denies the session SID (Aegis M1); this session only (H1)
+        let sddl = match user_system_sddl(session_sid.as_deref()) {
             Ok(x) => crate::win::wide(&x),
             Err(e) => return fail(&e),
         };
@@ -400,7 +421,16 @@ pub fn run(args: &[String]) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::quote_arg;
+    use super::{quote_arg, session_object_sddl, GNOMON_SESSION_SID};
+    #[test]
+    fn session_objects_admit_their_own_session_before_denying_the_rest() {
+        let own = "S-1-9-4174-2026-1022-7";
+        let s = session_object_sddl("S-1-5-21-1-2-3-1001", Some(own));
+        let aces = [format!("(A;;GA;;;{own})"), format!("(D;;GA;;;{GNOMON_SESSION_SID})"), "(A;;GA;;;S-1-5-21-1-2-3-1001)".to_string(), "(A;;GA;;;SY)".to_string(), "(A;;RC;;;OW)".to_string()];
+        let at: Vec<usize> = aces.iter().map(|a| s.find(a.as_str()).expect(a)).collect();
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{s}");
+        assert_eq!(session_object_sddl("U", None), "D:(A;;GA;;;U)(A;;GA;;;SY)");
+    }
     #[test]
     fn quoting_matches_commandlinetoargvw() {
         assert_eq!(quote_arg("plain"), "plain");

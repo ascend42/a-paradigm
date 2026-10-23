@@ -206,6 +206,43 @@ console.log(JSON.stringify(r));`, [f.home, f.claude, f.repo]);
     expect(await lowWriter()).toEqual({ writeRepo: 'EPERM', writeClaudeMd: 'EPERM', listHome: 'EPERM' });
   });
 
+  it('Aegis H1 (PR #52 release blocker): a session cannot open another session\'s process; it still can its own', async () => {
+    const p = pin();
+    // session A: kills a child of its own (own-SID allow), reports its pid, then waits to be targeted
+    const a = spawn(p.exe, ['sandbox', '--low', '--desktop', '--session-sid', OWN, '--', process.execPath, '-e', `
+const { spawn } = require('child_process');
+const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+let own; try { process.kill(c.pid); own = 'ok'; } catch (e) { own = e.code; }
+console.log(JSON.stringify({ pid: process.pid, own }));
+setTimeout(() => {}, 60000);`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    cleanups.push(() => a.kill());
+    const first = await new Promise<{ pid: number; own: string }>((res, rej) => {
+      let buf = '';
+      a.stdout!.on('data', (b: Buffer) => {
+        buf += b.toString();
+        const nl = buf.indexOf('\n');
+        if (nl >= 0) res(JSON.parse(buf.slice(0, nl)));
+      });
+      a.once('exit', (c) => rej(new Error(`session A exited ${c}`)));
+    });
+    expect(first.own).toBe('ok');
+    // session B (another own SID, same user, same Low integrity) probes session A's node process
+    const b = asSession(p.exe, OTHER, `
+const r = {}; const t = (k, fn) => { try { fn(); r[k] = 'ok'; } catch (e) { r[k] = e.code || e.message; } };
+t('probe', () => process.kill(Number(process.argv[1]), 0));
+t('kill', () => process.kill(Number(process.argv[1])));
+// the owner-rights path (Aegis re-review): the helper's process.shield opens the target READ_CONTROL | WRITE_DAC; the
+// session objects are owned by the user, a restricting SID, so without an OWNER RIGHTS ACE this would be granted and
+// session B could rewrite A's DACL and reopen it with full access
+const h = require('child_process').spawnSync(process.argv[2], ['once'], { input: JSON.stringify({ id: 1, op: 'process.shield', pid: Number(process.argv[1]) }) + '\\n', encoding: 'utf8' });
+let reply = {}; try { reply = JSON.parse(h.stdout.trim().split('\\n').pop()); } catch {}
+// denied AT THE OPEN (OpenProcess for READ_CONTROL | WRITE_DAC), not at a later step of the op
+r.rewriteDacl = /OpenProcess\\b/.test(String(reply.message)) && /\\b5\\b|denied/i.test(String(reply.message)) ? 'denied' : 'reply:' + h.stdout.slice(0, 200);
+console.log(JSON.stringify(r));`, [String(first.pid), p.exe]);
+    expect(b).toEqual({ probe: 'EPERM', kill: 'EPERM', rewriteDacl: 'denied' });
+    expect(a.exitCode).toBeNull(); // session A is still running
+  });
+
   it('a session launched by a SHIELDED kernel runs, and cannot open its launcher (Aegis M1)', async () => {
     const p = pin();
     // a stand-in kernel: shielded (its default DACL denies the session SID), then it launches a session that tries to
