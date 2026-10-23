@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { recordTrialTake, startSendWordTrial, trialTakeNumber, type SendWordTrialState } from '@a-company/gnomon-contracts';
 import { chooseRung, clientFactOf, crashCauseOf, dropFact, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, PIECES_TIMING, presetOfRung, rungOf, sendOfRung, sheetRows, stateOfRung, voicePillOf, type PillInput } from '../src/core/voice-ladder.js';
-import { COMPOSER_LINES, COMPOSER_TALL_LINES, composerFit, lineCountLabel, parseTall, serializeTall } from '../src/core/composer.js';
+import { COMPOSER_LINES, COMPOSER_TALL_LINES, composerFit, fitTallRoom, lineCountLabel, lineCountShown, parseTall, serializeTall, TALL_FEED_MIN_PX } from '../src/core/composer.js';
 import { initialTeach, reduceTeach, type TeachEvent, type TeachState } from '../src/core/send-word-teach.js';
 import { enrolStart } from '../src/core/voice-client.js';
 import { ACK_TEXT, CARD_VOICE_LINE, cardVoiceOrigin, CLAMP_CHIP, sentLabel } from '../src/core/voice-presets.js';
@@ -382,6 +382,25 @@ describe('the composer grows, caps, and has a tall view; ONE send control (gnomo
     expect(composerFit(0, lh, 4, false).lines).toBe(1); // empty still shows one line
     expect(lineCountLabel(1)).toBe('1 line');
     expect(lineCountLabel(14)).toBe('14 lines');
+    // founder report 2026-10-23: at 1 line the count says nothing; from 2 lines up it shows
+    expect(lineCountShown(0)).toBe(false);
+    expect(lineCountShown(1)).toBe(false);
+    expect(lineCountShown(2)).toBe(true);
+    expect(APP).toMatch(/lines\.hidden = !lineCountShown\(f\.lines\);/);
+  });
+  it('empty is one line whatever the placeholder; the tall view gives back room it would take (Mika 2026-10-23)', () => {
+    // a long "Reply to <title>…" wrapped at 1024 and made the empty composer two lines with a "2 lines" count
+    expect(APP).toMatch(/const content = ta\.value === '' \? px\(cs\.lineHeight\) \+ edge :/);
+    expect(CSS).toMatch(/\.composer-main > textarea:placeholder-shown \{ white-space: nowrap;/);
+    const lh = 21.6;
+    const tall = composerFit(lh * 30 + 4, lh, 4, true);
+    expect(fitTallRoom(tall, lh, 4, 0)).toBe(tall); // room enough: unchanged
+    expect(fitTallRoom(tall, lh, 4, lh * 5)).toMatchObject({ heightPx: Math.round(lh * 19 + 4), lines: 30, scrolls: true, cap: 19 });
+    expect(fitTallRoom(tall, lh, 4, 10_000)).toMatchObject({ cap: COMPOSER_LINES, heightPx: Math.round(lh * 12 + 4) }); // never below the normal cap
+    const short = composerFit(lh * 8 + 4, lh, 4, true);
+    expect(fitTallRoom(short, lh, 4, 500)).toBe(short); // 12 lines or fewer: the tall view takes nothing extra
+    expect(TALL_FEED_MIN_PX).toBe(120);
+    expect(APP).toMatch(/f = fitTallRoom\(f, px\(cs\.lineHeight\), edge, TALL_FEED_MIN_PX - /);
   });
   it('the tall view persists per viewer', () => {
     expect(parseTall(serializeTall(true))).toBe(true);
@@ -396,7 +415,10 @@ describe('the composer grows, caps, and has a tall view; ONE send control (gnomo
     expect(composer.match(/type="submit"/g)).toHaveLength(1);
     expect(composer.match(/>\s*send\s*</gi)).toHaveLength(1);
     expect(composer).toMatch(/<button id="composer-tall" class="key quiet composer-tall" type="button" aria-pressed="false" aria-controls="composer-text"[^>]*>⤢<\/button>/);
-    expect(composer).toContain('<span id="composer-lines" class="meta composer-lines">1 line</span>');
+    // one row at the bottom right, in the order line count, ⤢, send (founder report 2026-10-23); the count starts hidden
+    expect(composer).toMatch(/<div class="composer-ctrls"><span id="composer-lines" class="meta composer-lines" hidden><\/span><button id="composer-tall"[^]*?<button id="composer-send"/);
+    expect(CSS).toMatch(/\.composer-ctrls \{ display: flex; flex-direction: row; align-items: center; gap: 8px; \}/);
+    expect(CSS).not.toMatch(/\.composer-ctrls \{[^}]*flex-direction: column/);
     expect(CSS).not.toMatch(/\.composer textarea \{[^}]*max-height: 40vh/);
     // Luna #4: the tall view has a pressed state in both themes; #8: the send key on the 2px grid (a key's 4px 10px)
     expect(CSS).toMatch(/\.composer-tall\[aria-pressed="true"\] \{ background: var\(--ink\); color: var\(--on-ink\)/);

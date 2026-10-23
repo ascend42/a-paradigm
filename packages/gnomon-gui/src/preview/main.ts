@@ -62,7 +62,7 @@ async function boot(): Promise<void> {
   if (fx.open === 'model-switch') {
     // #gui-model-picker: the header ▾ and a menu item only DISPLAY the confirm sheet; the switch is its trusted submit
     (document.querySelector('#chead-meta .model-btn') as HTMLElement | null)?.click();
-    (document.querySelector('#chead-meta .model-menu [data-model="opus"]') as HTMLElement | null)?.click();
+    (document.querySelector('.chead .model-menu [data-model="opus"]') as HTMLElement | null)?.click();
   }
   // #gui-loops: opening the leaf and unfolding a card need no trust; Trust and Review do
   if (fx.open === 'loops-waiting') (document.querySelector('[data-loop-review-all]') as HTMLElement | null)?.click();

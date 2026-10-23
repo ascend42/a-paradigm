@@ -195,7 +195,7 @@ export class FakeKernel implements Transport {
         // S5: the Workshop strip from the REAL mod model over these rows; every cap must pass the contracts check the
         // kernel gate runs (modhost/block.ts), else the preview refuses like the kernel would
         const views = ((this.#status.mods as { views?: Array<{ name: string; viewId: string }> } | undefined)?.views ?? []);
-        if (!views.some((v) => v.name === p.name && v.viewId === p.viewId) || p.name !== 'workshop') throw refusal('NOT_FOUND', 'not-running', `mod ${String(p.name)} is not running (preview)`);
+        if (!views.some((v) => v.name === p.name && v.viewId === p.viewId) || p.name !== 'gnomon.workshop') throw refusal('NOT_FOUND', 'not-running', `mod ${String(p.name)} is not running (preview)`);
         const block = workshopBlock(this.rows, { motion: 'full', theme: 'day' });
         const bad = capsOf(block).map(checkCap).find((c) => !c.ok);
         if (bad && !bad.ok) throw refusal('BAD_REQUEST', 'block', bad.why);

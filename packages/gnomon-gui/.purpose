@@ -13,9 +13,12 @@ description: >-
   gnomon-local's lines (a message_end reply, a tool_execution_start tool
   line); a local-model session's replies are labelled "local model"
   (ui/app.ts agentLabel/backendWord; rows remount when the label changes).
-  TD-2026-10-19-063: a session.open refused claude_binary_changed shows a
-  fail toast (#gui-toast) with a Re-pin key that focuses the kernel's pre-staged
-  re-pin card (never decides); a claim-mismatch card renders its first line
+  TD-2026-10-19-063: a session.open refused claude_binary_changed shows in
+  the New session sheet (#gui-folder-field open-failed) in plain words with
+  ONE key, Review re-pin card, that closes the sheet and focuses the kernel's
+  pre-staged re-pin card (never decides); that card's allow reopens the sheet
+  on the same folder and model with Open focused (founder field test
+  2026-10-23); a claim-mismatch card renders its first line
   red and marks Deny as the default (focused) key.
 
 components:
@@ -53,7 +56,14 @@ components:
       the plan faster; never says context is lost). ui/model-picker.ts (DOM,
       mounted once by app.ts): the "claude model" select + custom id field
       injected after #ns-model (hidden for the local route), the header chip
-      (model + ▾ menu) after the backend in #chead-meta, the confirm sheet
+      (model + ▾ menu) after the backend in #chead-meta (founder 2026-10-23
+      "default button when pressed does nothing": the menu opened inside
+      .chead-l, whose overflow: hidden clips it, and every streamed row's
+      header paint rebuilt the chip; now the same session's chip nodes carry
+      data-model-chip and paintChatHead keeps them in place, rebuilding the
+      parts around them, and the menu hangs from .pane-head.chead under the
+      key, right after .chead-l in the DOM so Tab goes key → items → the next
+      header key (Mika 2026-10-23); Esc or a click elsewhere closes it), the confirm sheet
       #model-switch-dialog that sends only once armed by a trusted click on
       its Switch key or a trusted Enter in its id field, recorded before the
       submit (Aegis L1; never the submit event's isTrusted), and the
@@ -144,7 +154,13 @@ components:
       localStorage; always the footer under 900 px). workshopAbsence shows
       one quiet line when the Workshop is not running. The old shuttle
       readout is #status-line at the footer's right end (opens
-      view.kernel-feed). Tests: test/workshop.test.ts.
+      view.kernel-feed). The strip's line (founder report 2026-10-23): in the
+      footer every word (mod label, zone titles, quiet notes, the paused line,
+      the status line) sits in one --key-h line box at the strip's floor, so
+      all baselines agree with each other and with the Install Workshop key;
+      hats stand on that floor; nothing wraps. The preview's workshop fixtures
+      name the mod gnomon.workshop (the S0b id the region routes on).
+      Tests: test/workshop.test.ts.
     mod-panels: >-
       K0 mod panels (#ledger-mod host slice). core/mod-panels.ts (PURE):
       modPanelsOf(status) reads status.mods.views (the #mod-host declared
@@ -497,7 +513,18 @@ components:
       turn.result (subtype, cost, tokens) and lifecycle notes; hooks,
       stream_event partials, rate limits, status, control frames, tool
       results and bookkeeping rows are hidden and counted, and "show raw
-      events" shows every row. A composer echo hides the matching replay so
+      events" shows every row. RAW VIEW (founder 2026-10-23 "is there a way
+      to know what is being shown here"): turnEventSummary says what each
+      claude-code line is (system lines by subtype and identifying fields:
+      hooks by hook_event/hook_name, short hook_id and outcome/exit code,
+      init by model and cwd; tool results by id, outcome and size; rate
+      limits; stream partials; control frames; results with turns, time and
+      cost); hook and tool output never enter the summary. Each raw row folds
+      (transcript-row variant raw, the activity fold's expanded set, foldRaw
+      + rawFoldKey) to its whole row (rowDetail: the line pretty-printed,
+      nested {redacted} values kept redacted, withheld/redacted/oversize rows
+      have no fold, capped at 20k) in a <pre class="raw-line"> text node that
+      scrolls inside itself. A composer echo hides the matching replay so
       the list only grows at the end. STICKINESS: core/follow.ts
       (isAtBottom, Follow) — at the bottom it stays stuck through new rows
       and sends; scrolled up nothing moves it (not even a send), a
@@ -1180,7 +1207,10 @@ components:
       quick toasts are both read. A key focuses only its own card
       (ui/card-focus.ts cardIn: the exact cardId, never another gate card);
       when it has not arrived a warn names it (upgrade, grant, re-pin, voice,
-      Touch ID card) and clears when it does.
+      Touch ID card) and clears when it does. Every card focus (focusCard,
+      focusCardGroup) first closes the modal New session sheet
+      (ui/card-focus.ts uncoverStack): a focus behind an aria-modal sheet
+      landed nowhere (founder field test 2026-10-23).
       Known gap: at 1024 a 720px sheet leaves no room, so a toast can cover
       the sheet's close key (tracked separately).
       The band keeps #repin and #voice-dev only. core/toasts.ts (PURE) holds
@@ -1220,8 +1250,15 @@ components:
       #gui-composer (Atelier 2026-10-21, gnomon.voice.composer) - the
       composer wraps and grows with its text to 12 lines, then scrolls; the ⤢
       key toggles a tall view capped at 24 lines (persisted per viewer,
-      gnomon.composer.tall); a line count sits beside it; exactly one send
-      control in the composer region. PURE core/composer.ts composerFit.
+      gnomon.composer.tall); exactly one send control in the composer
+      region. The controls sit in ONE row at the bottom right (line count,
+      ⤢, send); the line count shows only from 2 lines up (lineCountShown),
+      so the empty composer is one key tall (founder report 2026-10-23).
+      Empty counts as one line whatever the placeholder (it stays on one
+      line with an ellipsis), and the tall view gives back room the window
+      lacks (fitTallRoom: send stays on screen, the conversation keeps 120 px,
+      never under 12 lines) (Mika 2026-10-23).
+      PURE core/composer.ts composerFit.
     path: src/core/composer.ts
     type: module
     tags: [gnomon, gui, composer]
@@ -1250,7 +1287,17 @@ components:
       h2, stays open (Opening…) until session.open answers and shows a
       refusal in place; every choice restores the folder's claude model
       (#gui-model-picker onFolder). styles.css carries the folder-field
-      classes and --key-h (one key height, 28).
+      classes and --key-h (one key height, 28). Open-failed (setOpenFailed)
+      may carry ONE key (data-ff-act error-key, trusted presses only; dropped
+      with its error line). A changed claude binary (refusal.data.session
+      claude_binary_changed, binaryChangedLine) says "Claude Code updated
+      itself, so its binary no longer matches the one Gnomon pinned. next:
+      review the re-pin card." with the key Review re-pin card when the
+      refusal names its card, else the kernel's next and no key. The key
+      holds the choice (keep) against THAT cardId (RepinReturn), closes the
+      sheet and focuses the card; the store's card-outcome key for an allow
+      reopens the sheet on the kept choice (restore) with Open focused, never
+      opening the session; deny or expiry drops it.
     path: src/core/folder-field.ts
     type: module
     tags: [gnomon, gui, atelier, paradigm-8, td-2026-10-23-162]

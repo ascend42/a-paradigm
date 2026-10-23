@@ -5,7 +5,7 @@
  *
  * The textarea wraps and grows with its text up to COMPOSER_LINES (12), then scrolls; the ⤢ key toggles a tall view
  * that raises the cap to COMPOSER_TALL_LINES (24) and back. The choice persists per viewer (localStorage, TALL_KEY).
- * A line count (visual lines, wraps included) sits beside it. There is exactly ONE send control in the composer
+ * A line count (visual lines, wraps included) sits beside it, from 2 lines up (lineCountShown: at 1 line it says nothing). There is exactly ONE send control in the composer
  * region (the form's submit).
  */
 
@@ -40,6 +40,28 @@ export function composerFit(contentPx: number, linePx: number, padPx: number, ta
   const shown = Math.min(lines, cap);
   return { heightPx: Math.round(shown * lh + pad), lines, scrolls: lines > cap, cap };
 }
+
+/** The conversation keeps at least this much height when the tall view would take it (fitTallRoom). */
+export const TALL_FEED_MIN_PX = 120;
+
+/**
+ * The tall view gives back the room it would take from the window: `shortPx` is how far the conversation falls below
+ * TALL_FEED_MIN_PX plus how far the composer runs past its pane at this height. The shown lines drop by that many
+ * lines, never below the normal cap (12), and the textarea scrolls (Mika 2026-10-23: at 1024×768, 24 lines pushed
+ * send and ⤢ off the window; at 1440×900 the conversation was 9 px tall).
+ */
+export function fitTallRoom(f: ComposerFit, linePx: number, padPx: number, shortPx: number): ComposerFit {
+  const shownNow = Math.min(f.lines, f.cap);
+  if (!(shortPx > 0) || shownNow <= COMPOSER_LINES) return f;
+  const lh = Number.isFinite(linePx) && linePx > 0 ? linePx : 21.6;
+  const pad = Number.isFinite(padPx) && padPx > 0 ? padPx : 0;
+  const cap = Math.max(COMPOSER_LINES, shownNow - Math.ceil(shortPx / lh));
+  const shown = Math.min(f.lines, cap);
+  return { heightPx: Math.round(shown * lh + pad), lines: f.lines, scrolls: f.lines > cap, cap };
+}
+
+/** The count shows from 2 lines up; an empty or one-line composer says nothing (founder report 2026-10-23). */
+export const lineCountShown = (n: number): boolean => n >= 2;
 
 /** "1 line" · "14 lines". */
 export const lineCountLabel = (n: number): string => `${n} line${n === 1 ? '' : 's'}`;

@@ -6,9 +6,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { checkLine, chooseRequest, checkRequest, fieldView, FolderField, FF_COPY, folderCheckOf, foldersStatusOf, recentsOf, whenText, type FolderCheck, type FolderRequest } from '../src/core/folder-field.js';
+import { binaryChangedLine, cardOutcomeOf, RepinReturn, type KeptChoice, checkLine, chooseRequest, REPIN_COPY, checkRequest, fieldView, FolderField, FF_COPY, folderCheckOf, foldersStatusOf, recentsOf, whenText, type FolderCheck, type FolderRequest } from '../src/core/folder-field.js';
 import type { MiniDoc, MiniEl } from '../src/core/render.js';
-import { folderFieldEl } from '../src/ui/folder-field.js';
+import { GuiStore } from '../src/core/store.js';
+import { folderFieldEl, routeFolderPress } from '../src/ui/folder-field.js';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -427,5 +428,134 @@ describe('review fixes (Mika, built review 2026-10-23)', () => {
     expect(css).toMatch(/\.ff-opens strong \{ font-weight: 600; color: var\(--ink\); \}/);
     expect(css).toMatch(/\.ff-warn strong \{ font-weight: 600; \}/);
     expect(css).toMatch(/\.ns-card \{[^}]*max-height: calc\(86vh - 16px\); overflow-y: auto;/);
+  });
+});
+
+describe('open-failed with one key: a changed claude binary (TD-2026-10-19-063, founder field test 2026-10-23)', () => {
+  const kernel = (req: FolderRequest) => (req.kind === 'request.folder.recent' ? { recent: RECENTS } : req.kind === 'request.folder.check' ? ok(String(req.payload.path)) : { cancelled: true });
+  const repinData = { session: 'claude_binary_changed', cardId: 'card:repin-1', next: 'approve the re-pin card', expected: 'aa', found: 'bb' };
+  it('the words are plain: no code, no symbol prefix, no offline CLI hint; the key only when the refusal names its card', () => {
+    const withCard = binaryChangedLine(repinData)!;
+    expect(withCard).toEqual({ text: 'Claude Code updated itself, so its binary no longer matches the one Gnomon pinned. next: review the re-pin card.', cardId: 'card:repin-1' });
+    expect(withCard.text).not.toMatch(/UNSUPPORTED|#supervisor|#session-runner|sha256|gnomon session repin-claude/);
+    const denied = binaryChangedLine({ session: 'claude_binary_changed', next: 're-pin denied; restart Gnomon to re-offer' })!;
+    expect(denied).toEqual({ text: 'Claude Code updated itself, so its binary no longer matches the one Gnomon pinned. next: re-pin denied; restart Gnomon to re-offer.', cardId: null });
+    expect(binaryChangedLine({ session: 'claude_binary_changed' })!.text).toMatch(/next: restart Gnomon to be offered the re-pin card again\.$/);
+    expect(binaryChangedLine({ session: 'claude_version' })).toBeNull();
+    expect(binaryChangedLine(null)).toBeNull();
+  });
+  it('the keyed open-failed line keeps the folder chosen, Open enabled, and draws one key that runs only on a trusted press', async () => {
+    const r = rig('session', kernel);
+    await r.f.loadRecents(null);
+    await r.f.settled();
+    const line = binaryChangedLine(repinData)!;
+    const pressed: string[] = [];
+    r.f.setOpenFailed(line.text, { label: REPIN_COPY.key, title: REPIN_COPY.keyTitle, press: () => pressed.push(line.cardId!) });
+    expect(r.view().rows[0]).toMatchObject({ checked: true, failed: false });
+    expect(r.f.value()).toBe(`${HOME}/code/a-paradigm`);
+    expect(r.f.whyOff()).toBeNull();
+    expect(r.view().errorKey).toEqual({ label: 'Review re-pin card', title: REPIN_COPY.keyTitle });
+    const el = folderFieldEl(fdoc, r.view(), 'ns-ff', { text: 'folder', cls: 'meta' }) as unknown as FEl;
+    const err = el.all().find((e) => e.className === 'sf-err')!;
+    expect(err.attrs.get('role')).toBe('alert');
+    expect(err.text).toBe(`✕ ${line.text} Review re-pin card`);
+    const keys = el.all().filter((e) => e.attrs.get('data-ff-act') === 'error-key');
+    expect(keys).toHaveLength(1);
+    expect(keys[0]!.className).toBe('key');
+    expect(routeFolderPress(r.f, 'error-key', null, false)).toBe(true); // G-GUI-04: a script-made press does nothing
+    expect(pressed).toEqual([]);
+    routeFolderPress(r.f, 'error-key', null, true);
+    expect(pressed).toEqual(['card:repin-1']);
+  });
+  it('no card: the words show with no key; a new attempt or another error drops the key with its line', async () => {
+    const r = rig('session', kernel);
+    await r.f.loadRecents(null);
+    await r.f.settled();
+    r.f.setOpenFailed(binaryChangedLine({ session: 'claude_binary_changed', next: 're-pin denied; restart Gnomon to re-offer' })!.text);
+    expect(r.view().errorKey).toBeNull();
+    const el = folderFieldEl(fdoc, r.view(), 'ns-ff', { text: 'folder', cls: 'meta' }) as unknown as FEl;
+    expect(el.all().some((e) => e.attrs.get('data-ff-act') === 'error-key')).toBe(false);
+    let pressed = 0;
+    r.f.setOpenFailed('x', { label: 'K', title: 't', press: () => void pressed++ });
+    r.f.setRefused(null); // the next Open attempt
+    expect(r.view().error).toBeNull();
+    expect(r.view().errorKey).toBeNull();
+    r.f.pressErrorKey();
+    expect(pressed).toBe(0);
+    r.f.setOpenFailed('x', { label: 'K', title: 't', press: () => void pressed++ });
+    r.f.setOpenFailed('UNAVAILABLE preview: there is no kernel');
+    expect(r.view().errorKey).toBeNull();
+    r.f.pressErrorKey();
+    expect(pressed).toBe(0);
+  });
+  it('the sheet shows the plain line for a changed binary, and its key closes the sheet before it focuses the card', () => {
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    const sub = app.slice(app.indexOf('async function submitNewSession('), app.indexOf('/** Modal sheets that hide the stack'));
+    expect(sub).toContain('binaryChangedLine(refused.refusal?.data)');
+    expect(sub).toContain('press: () => reviewRepinCard(cardId)');
+    const review = app.slice(app.indexOf('function reviewRepinCard('), app.indexOf('function reviewRepinCard(') + 260);
+    expect(review.indexOf('repinReturn.hold(cardId, k)')).toBeLessThan(review.indexOf('closeNewSessionSheet()'));
+    expect(review.indexOf('closeNewSessionSheet()')).toBeLessThan(review.indexOf("focusCard(cardId, 're-pin card')"));
+  });
+});
+
+describe('the way back from the re-pin card (founder field test 2026-10-23: no starting over)', () => {
+  const kernel = (req: FolderRequest) => (req.kind === 'request.folder.recent' ? { recent: RECENTS } : req.kind === 'request.folder.check' ? ok(String(req.payload.path)) : { cancelled: true });
+  it('only THAT card decided allow returns the held choice; deny, expiry and another card do not', () => {
+    const rr = new RepinReturn<string>();
+    expect(rr.outcome('card:repin-1', 'allow')).toBeNull(); // nothing held
+    rr.hold('card:repin-1', 'choice');
+    expect(rr.outcome('card:other', 'allow')).toBeNull();
+    expect(rr.cardId).toBe('card:repin-1');
+    expect(rr.outcome('card:repin-1', 'allow')).toBe('choice');
+    expect(rr.cardId).toBeNull(); // once
+    expect(rr.outcome('card:repin-1', 'allow')).toBeNull();
+    rr.hold('card:repin-1', 'choice');
+    expect(rr.outcome('card:repin-1', 'deny')).toBeNull();
+    expect(rr.cardId).toBeNull();
+    rr.hold('card:repin-1', 'choice');
+    expect(rr.outcome('card:repin-1', 'expire')).toBeNull();
+    rr.hold('card:repin-1', 'a');
+    rr.hold('card:repin-2', 'b'); // the newest card only
+    expect(rr.outcome('card:repin-1', 'allow')).toBeNull();
+    expect(rr.outcome('card:repin-2', 'allow')).toBe('b');
+  });
+  it('the store names each outcome, and the key reads back (a cardId with colons kept whole)', () => {
+    const st = new GuiStore();
+    const a = st.apply([{ seq: 1, kind: 'approval.decide', payload: { cardId: 'card:repin-1', decision: 'allow' } }]);
+    expect(a.has('card-outcome:allow:card:repin-1')).toBe(true);
+    const e = st.apply([{ seq: 2, kind: 'approval.expire', payload: { cardId: 'card:repin-2' } }]);
+    expect(e.has('card-outcome:expire:card:repin-2')).toBe(true);
+    expect(cardOutcomeOf('card-outcome:allow:card:repin-1')).toEqual({ decision: 'allow', cardId: 'card:repin-1' });
+    expect(cardOutcomeOf('card-out:card:repin-1')).toBeNull();
+    expect(cardOutcomeOf('card-outcome:allow:')).toBeNull();
+  });
+  it('the kept folder comes back chosen after a reset, checked again, its model restored, and Open usable', async () => {
+    const r = rig('session', kernel);
+    await r.f.loadRecents(null);
+    await r.f.settled();
+    r.f.pickRecent(`${HOME}/code/a-atelier`, 'chosen');
+    await r.f.settled();
+    const kept = r.f.keep() as KeptChoice;
+    expect(kept.chosen.real).toBe(`${HOME}/code/a-atelier`);
+    r.f.reset(); // the sheet closed and opened again
+    expect(r.f.value()).toBeNull();
+    const chose = r.chose.length;
+    r.f.restore(kept);
+    await r.f.loadRecents(null); // recents load after: the kept choice wins over the most recent
+    await r.f.settled();
+    expect(r.f.value()).toBe(`${HOME}/code/a-atelier`);
+    expect(r.f.whyOff()).toBeNull();
+    expect(r.view().rows.find((x) => x.checked)?.real).toBe(`${HOME}/code/a-atelier`);
+    expect(r.chose.slice(chose)).toEqual([`${HOME}/code/a-atelier`]); // the folder's remembered model follows
+    expect(r.view().error).toBeNull();
+  });
+  it('the sheet reopens on allow with Open focused, never opens the session itself', () => {
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    const on = app.slice(app.indexOf('store.onChange((what) => {\n  if (repinReturn.cardId'), app.indexOf('/** Modal sheets that hide the stack'));
+    expect(on).toContain("if (kept && $('new-session-dialog').hidden) openNewSessionSheet(kept);");
+    expect(on).not.toMatch(/submitNewSession|openSession\(/);
+    const open = app.slice(app.indexOf('function openNewSessionSheet('), app.indexOf('function closeNewSessionSheet('));
+    expect(open).toContain("$<HTMLButtonElement>('ns-open').focus()");
   });
 });

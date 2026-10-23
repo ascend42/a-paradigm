@@ -17,7 +17,7 @@ import { applyCwdHint, clearCwdHint, cwdHintOf, CWD_DISPLAY_CAP, decidePin, host
 import { approveParamsOf, askDetailOf, askNote, prefixOptionsOf, shownPrefixWords, cardContentHash, cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { Follow, isAtBottom } from '../src/core/follow.js';
-import { chatItems, GuiStore, rowOf, rowSummary, toolSummary, turnEventSummary, type Row } from '../src/core/store.js';
+import { chatItems, foldRaw, GuiStore, rawFoldKey, rowDetail, rowOf, rowSummary, toolSummary, turnEventSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -386,6 +386,66 @@ describe('store: sessions, transcript, decision stack (G-GUI-09)', () => {
     expect(turnEventSummary('{not json', null)).toBe('turn.event · line');
     expect(turnEventSummary(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'x'.repeat(5000) }] } }), null).length).toBeLessThanOrEqual(4000 + 'assistant · '.length);
   });
+  // founder: "is there a way to know what is being shown here. i turned on raw responses" (rows read
+  // "turn.event · system.hook_started" and nothing else). Shapes from claude-code 2.1.306 stream-json lines.
+  const L = (o: Record<string, unknown>): string => JSON.stringify({ session_id: 's', uuid: 'u', ...o });
+  it('a system line says its subtype and which one it is: hooks by name, short id and outcome, never their output', () => {
+    const hook = { type: 'system', hook_id: '6156c889-4769-49ef-936a-77aefc99f023', hook_name: 'SessionStart:startup', hook_event: 'SessionStart' };
+    expect(turnEventSummary(L({ ...hook, subtype: 'hook_started' }), 'system.hook_started')).toBe('system · hook started · SessionStart:startup · id 6156c889');
+    const ok = turnEventSummary(L({ ...hook, subtype: 'hook_response', output: 'PROJECT CONTEXT', stdout: 'PROJECT CONTEXT', stderr: '', exit_code: 0, outcome: 'success' }), 'system.hook_response');
+    expect(ok).toBe('system · hook response · SessionStart:startup · id 6156c889 · success · stdout 15 chars');
+    expect(ok).not.toContain('PROJECT');
+    const bad = turnEventSummary(L({ ...hook, hook_id: 'e6a59205-dc00', subtype: 'hook_response', output: 'boom', stdout: '', stderr: 'boom', exit_code: 1, outcome: 'error' }), null);
+    expect(bad).toBe('system · hook response · SessionStart:startup · id e6a59205 · error · exit 1 · stderr 4 chars');
+    // a hook name that doesn't carry its event shows both; five identical hooks differ by id
+    expect(turnEventSummary(L({ type: 'system', subtype: 'hook_started', hook_event: 'Stop', hook_name: 'notify', hook_id: 'abcdef0123' }), null)).toBe('system · hook started · Stop · notify · id abcdef01');
+    expect(turnEventSummary(L({ type: 'system', subtype: 'init', model: 'claude-opus-5-5', cwd: '/Users/me/proj', permissionMode: 'default', tools: ['Bash', 'Read'], mcp_servers: [{ name: 'a', status: 'connected' }], claude_code_version: '2.1.306', apiKeySource: 'none' }), 'system.init')).toBe('system · init · model claude-opus-5-5 · cwd /Users/me/proj · mode default · 2 tools · 1 MCP server · claude-code 2.1.306');
+    expect(turnEventSummary(L({ type: 'system', subtype: 'status', status: 'requesting' }), null)).toBe('system · status · requesting');
+    expect(turnEventSummary(L({ type: 'system', subtype: 'thinking_tokens', estimated_tokens: 260, estimated_tokens_delta: 210 }), null)).toBe('system · thinking · ~260 tokens (+210)');
+    expect(turnEventSummary(L({ type: 'system', subtype: 'something_new', level: 'info', count: 3, blob: { x: 1 } }), null)).toBe('system · something_new · level info · count 3');
+  });
+  it('tool results, rate limits, stream partials, control messages and results say what they are', () => {
+    expect(turnEventSummary(L({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_01KMUkLJBQBaLTUaKuuTdsqK', is_error: true, content: 'denied: outside the sandbox' }] } }), 'user')).toBe('user · tool result · for KuuTdsqK · error · 27 chars');
+    expect(turnEventSummary(L({ type: 'user', isReplay: true, message: { role: 'user', content: [{ type: 'text', text: 'fix the\ntotals' }] } }), 'user')).toBe('user · message (replay) · fix the totals');
+    expect(turnEventSummary(L({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', resetsAt: 1792561800, rateLimitType: 'five_hour', isUsingOverage: false } }), null)).toBe('rate limit · allowed · five_hour · resets 05:50 UTC');
+    const se = (event: unknown): string => turnEventSummary(L({ type: 'stream_event', event }), null);
+    expect(se({ type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'voice path.' } })).toBe('stream · block 1 · text · “voice path.”');
+    expect(se({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'private', estimated_tokens: 12 } })).toBe('stream · block 0 · thinking · ~12 tokens');
+    expect(se({ type: 'content_block_start', index: 2, content_block: { type: 'tool_use', name: 'Bash' } })).toBe('stream · block 2 · start · tool_use · Bash');
+    expect(se({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 308 } })).toBe('stream · message delta · stop end_turn · 308 tokens out');
+    expect(se({ type: 'message_stop' })).toBe('stream · message stop');
+    expect(turnEventSummary(L({ type: 'control_response', response: { subtype: 'success', request_id: 'r', response: { behavior: 'deny', message: 'Gnomon sessions never run commands outside the sandbox' } } }), null)).toBe('control response · success · deny · Gnomon sessions never run commands outside the sandbox');
+    expect(turnEventSummary(L({ type: 'control_request', request_id: 'r', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'rm -rf x' } } }), null)).toBe('control request · can_use_tool · Bash');
+    expect(turnEventSummary(L({ type: 'result', subtype: 'success', num_turns: 5, duration_ms: 553498, total_cost_usd: 0.5437 }), 'result')).toBe('result · success · 5 turns · 553s · $0.54');
+    expect(turnEventSummary(L({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'secret-ish' }] } }), null)).toBe('assistant · thinking');
+  });
+  it('a raw row folds open to its whole line, pretty-printed; withheld, redacted and oversize rows have no fold', () => {
+    const line = L({ type: 'system', subtype: 'hook_response', hook_name: 'SessionStart:startup', stdout: 'ctx' });
+    const row: Row = { seq: 7, kind: 'turn.event', session: 'h', payload: { hsid: 'h', type: 'system.hook_response', line } };
+    expect(rowDetail(row)).toBe(JSON.stringify(JSON.parse(line), null, 2));
+    expect(rowDetail({ seq: 1, kind: 'turn.event', payload: { line: '{not json' } })).toBe('{not json');
+    expect(rowDetail({ seq: 1, kind: 'turn.event' })).toBeNull();
+    expect(rowDetail({ seq: 1, kind: 'turn.event', view: 'oversize' })).toBeNull();
+    expect(rowDetail({ seq: 1, kind: 'turn.event', payload: { redacted: true } })).toBeNull();
+    expect(rowDetail({ seq: 1, kind: 'grant.issue', payload: { token: { redacted: true }, by: 'me' } })).toBe('{\n  "token": "⟨redacted⟩",\n  "by": "me"\n}');
+    const long = rowDetail({ seq: 1, kind: 'turn.event', payload: { line: 'x'.repeat(30_000) } })!;
+    expect(long.length).toBeLessThan(20_100);
+    expect(long).toMatch(/more characters not shown\)$/);
+    const { items } = chatItems([row, { seq: 8, kind: 'turn.event', session: 'h' }], { raw: true });
+    expect(items.map((i) => [i.role, i.detail !== undefined])).toEqual([['raw', true], ['raw', false]]);
+    expect(foldRaw(items).map((i) => i.role)).toEqual(['raw', 'raw']);
+    const open = foldRaw(items, new Set([rawFoldKey(items[0]!)]));
+    expect(open.map((i) => [i.key, i.role])).toEqual([['7', 'raw'], ['7:detail', 'raw-detail'], ['8', 'raw']]);
+    expect(open[1]!.text).toBe(rowDetail(row));
+  });
+  it('the page draws the raw fold as text (h(), a <pre>), never markup, and the fold scrolls inside itself', () => {
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+    expect(app).toMatch(/foldRaw\(base2\.items, expandedActs\)/);
+    expect(app).toMatch(/h\(doc, 'pre', \{ class: 'raw-line'[^)]*\}, it\.text\)/);
+    expect(app).not.toMatch(/innerHTML/);
+    expect(css).toMatch(/\.raw-line \{[^}]*max-height: 40vh; overflow: auto; white-space: pre;/);
+  });
 });
 
 describe('virtualized transcript (G-GUI-01 unit proxy)', () => {
@@ -481,6 +541,24 @@ describe('chrome: palette, presets, themes (G-GUI-08, §11.3)', () => {
   it('theme auto follows the OS; reduced motion from the OS or in-app', () => {
     expect([resolveTheme('auto', true), resolveTheme('auto', false), resolveTheme('day', true)]).toEqual(['night', 'day', 'day']);
     expect([resolveMotion('system', true), resolveMotion('reduce', false), resolveMotion('system', false)]).toEqual(['reduced', 'reduced', 'full']);
+  });
+  it('the ⌘K palette closes on Esc wherever focus is inside it and on a press on its scrim, focus back to its opener (founder 2026-10-23)', () => {
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    const close = app.slice(app.indexOf('function closePalette('), app.indexOf('function paintPalette('));
+    expect(close).toContain("$('palette').hidden = true;");
+    expect(close).toMatch(/if \(back\?\.isConnected\) back\.focus\(\);/);
+    expect(app).toMatch(/if \(\$\('palette'\)\.hidden\) palOpener = document\.activeElement/);
+    expect(app).toMatch(/\$\('palette'\)\.addEventListener\('click', \(e\) => \{\s*if \(e\.target === \$\('palette'\)\) closePalette\(\);/);
+    expect(app).toMatch(/else if \(e\.key === 'Escape'\) \{\s*if \(dict\.grace\) return;[^\n]*\n\s*e\.stopPropagation\(\);[^\n]*\n\s*return closePalette\(\);/);
+    // Mika 2026-10-23: during "Sending… Esc keeps it" the first Esc keeps the draft (the palette stays); the next closes it
+    const grace = app.indexOf("e.key === 'Escape' && !$('palette').hidden && dict.grace");
+    expect(grace).toBeGreaterThan(0);
+    expect(grace).toBeLessThan(app.indexOf("e.key === 'Escape' && !$('palette').hidden) {"));
+    expect(app.slice(grace, grace + 600)).toContain("dispatchDictation({ type: 'graceCancel', now: Date.now() });");
+    // the document Esc: the palette before the New session sheet, so one Esc closes the top sheet only
+    const doc = app.indexOf("e.key === 'Escape' && !$('palette').hidden");
+    expect(doc).toBeGreaterThan(0);
+    expect(doc).toBeLessThan(app.indexOf("e.key === 'Escape' && !$('new-session-dialog').hidden"));
   });
   it.todo('M1.10 slice 2: theme choice and layout presets round-trip through the kernel per device (config.prefs, signed by the device key); mod commands in the palette (M1.11 relays)');
 });

@@ -121,13 +121,13 @@ describe('#gui-preview fake kernel (the real client over it)', () => {
 
   it('S5: mod.view answers the Workshop from the real model, every cap passing checkCap; absent when not running', async () => {
     const { client } = await connected('workshop');
-    const r = await client.call<{ label: string; block: { children: Array<{ children: Array<{ cap?: unknown }> }> } }>('mod.view', { name: 'workshop', viewId: 'workshop.strip', input: {} });
+    const r = await client.call<{ label: string; block: { children: Array<{ children: Array<{ cap?: unknown }> }> } }>('mod.view', { name: 'gnomon.workshop', viewId: 'workshop.strip', input: {} });
     expect(r.label).toBe('mod:workshop');
     const caps = r.block.children.flatMap((z) => z.children).map((c) => c.cap).filter(Boolean);
     expect(caps.length).toBeGreaterThan(4);
     for (const c of caps) expect(checkCap(c).ok).toBe(true);
     const { client: c2 } = await connected('workshop-absent');
-    await expect(c2.call('mod.view', { name: 'workshop', viewId: 'workshop.strip', input: {} })).rejects.toThrow(/not running/);
+    await expect(c2.call('mod.view', { name: 'gnomon.workshop', viewId: 'workshop.strip', input: {} })).rejects.toThrow(/not running/);
   });
 });
 

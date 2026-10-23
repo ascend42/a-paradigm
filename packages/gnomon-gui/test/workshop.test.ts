@@ -186,4 +186,19 @@ describe('S5 Workshop region and placement', () => {
     const mount = readFileSync(path.join(ROOT, 'src', 'ui', 'mod-panels-mount.ts'), 'utf8');
     expect(mount).toContain("workshop: { id: 'mod-slot-workshop', parent: 'workshop-host' }");
   });
+
+  it('the strip\'s line (founder report 2026-10-23): every footer word sits in one --key-h line box at the floor, unwrapped', () => {
+    // label, zone titles, quiet notes, the paused line and the status line share one line box, so their baselines agree
+    expect(css).toContain('.workshop .mod-region-workshop > .mod-fence-head, .workshop .mod-region-workshop .blk-title, .workshop .mod-region-workshop .blk-text, .workshop .workshop-absent, .workshop .status-line { height: var(--key-h); line-height: var(--key-h); white-space: nowrap; }');
+    expect(css).toContain('.workshop .mod-slot-workshop { display: flex; align-items: center; min-height: var(--key-h); white-space: nowrap; }');
+    // everything stands on the floor: no title pinned to the top while its note sits at the bottom, no centred status line
+    expect(css).toMatch(/\.status-line \{[^}]*align-self: flex-end;/);
+    expect(css).toMatch(/\.mod-region-workshop \.blk-title \{[^}]*align-self: flex-end;/);
+    expect(css).toContain('.mod-region-workshop > .mod-fence-head { align-self: flex-end; }');
+    const footer = css.slice(css.indexOf('/* ── S5 the Workshop'), css.indexOf('/* the column: zones stack'));
+    expect(footer).not.toMatch(/align-self: (flex-start|center)/);
+    expect(footer).not.toMatch(/padding-top: 4px/);
+    // Mika 2026-10-23: the reduced-motion "working" word stands above its hat (with the questions), never below the floor
+    expect(css).toContain('.workshop .cap.bob .cap-word { order: -1; }');
+  });
 });

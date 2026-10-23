@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { splitToastText, TOAST_INFO_MS, TOAST_MAX, TOAST_WARN_MS, toastClass, toastClosable, toastLive, toastMayClip, toastOverflow, toastTag, toastTtl } from '../src/core/toasts.js';
 import { mountToasts, noticeChannel } from '../src/ui/toasts.js';
-import { cardIn, notArrivedText } from '../src/ui/card-focus.js';
+import { cardIn, notArrivedText, uncoverStack } from '../src/ui/card-focus.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p: string[]): string => readFileSync(path.join(ROOT, ...p), 'utf8');
@@ -385,5 +385,18 @@ describe('a toast key focuses its own card or none (ui/card-focus.ts, Mika #1)',
     expect(notArrivedText('grant card')).toBe('the grant card has not arrived yet; it shows in the stack when it does');
     expect(notArrivedText('upgrade card')).toBe('the upgrade card has not arrived yet; it shows in the stack when it does');
     expect(notArrivedText('re-pin card')).toMatch(/^the re-pin card /);
+  });
+  it('a card focus closes the open modal sheet first (founder field test: Re-pin "did nothing" behind New session)', () => {
+    const log: string[] = [];
+    const sheet = (name: string, open: boolean) => ({ open: () => open, close: () => void log.push(name) });
+    expect(uncoverStack([sheet('new-session', true), sheet('other', false)])).toBe(1);
+    expect(log).toEqual(['new-session']);
+    expect(uncoverStack([sheet('new-session', false)])).toBe(0);
+    const app = readFileSync(path.join(ROOT, 'src/ui/app.ts'), 'utf8');
+    const fc = app.slice(app.indexOf('function focusCard('), app.indexOf('function focusCard(') + 120);
+    expect(fc).toContain('uncoverStack(stackCovers)');
+    const fg = app.slice(app.indexOf('function focusCardGroup('), app.indexOf('function focusCardGroup(') + 120);
+    expect(fg).toContain('uncoverStack(stackCovers)');
+    expect(app).toMatch(/const stackCovers: CoveringSheet\[\] = \[\{ open: \(\) => !\$\('new-session-dialog'\)\.hidden, close: \(\) => closeNewSessionSheet\(\) \}\]/);
   });
 });

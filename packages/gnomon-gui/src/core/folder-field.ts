@@ -89,6 +89,26 @@ export const FF_COPY = Object.freeze({
   none: Object.freeze({ session: 'none', runner: 'none · the bundled runner is used', mod: 'none · choose the folder that holds gnomon-manifest.json', command: 'none · it launches as it does today' }),
 });
 
+/** The open-failed words and key for a changed claude binary (TD-2026-10-19-063; refusal.data.session). */
+export const REPIN_COPY = Object.freeze({
+  what: 'Claude Code updated itself, so its binary no longer matches the one Gnomon pinned.',
+  next: 'review the re-pin card',
+  key: 'Review re-pin card',
+  keyTitle: 'Close this sheet and focus the re-pin card in the stack (it decides nothing)',
+});
+
+/**
+ * session.open refused `claude_binary_changed`: the sheet's words in the system's voice (no code, no symbol prefix,
+ * no offline CLI hint: the daemon is running), and the card to focus. The key only when the refusal names its card:
+ * with no card (a human denied this binary), the kernel's own `next` shows and there is no key. null: another refusal.
+ */
+export function binaryChangedLine(data: Record<string, unknown> | null | undefined): { text: string; cardId: string | null } | null {
+  if (data?.session !== 'claude_binary_changed') return null;
+  const cardId = typeof data.cardId === 'string' && data.cardId ? data.cardId : null;
+  const kernelNext = typeof data.next === 'string' && data.next.trim() ? data.next.trim().replace(/\.$/, '') : 'restart Gnomon to be offered the re-pin card again';
+  return { text: `${REPIN_COPY.what} next: ${cardId ? REPIN_COPY.next : kernelNext}.`, cardId };
+}
+
 /** What the kernel's chooser is asked for, per purpose (the prompt itself is the kernel's fixed copy). */
 const KIND_OF: Readonly<Record<FolderPurpose, FolderKind>> = Object.freeze({ session: 'folder', runner: 'folder', mod: 'folder', command: 'file' });
 const EXPECT_OF: Readonly<Record<FolderPurpose, string | null>> = Object.freeze({ session: null, runner: 'cli.js', mod: 'gnomon-manifest.json', command: null });
@@ -220,9 +240,64 @@ export interface FolderFieldState {
   refused: string | null;
   /** a failed request (refusal words), shown as the error line */
   error: string | null;
+  /** the one key the open-failed line carries (setOpenFailed), or null; cleared with its error */
+  errorKey: { label: string; title: string } | null;
   opening: boolean;
   /** where focus should go after the next paint (consumed by the DOM layer) */
   focus: 'chosen' | 'choose' | 'typed' | null;
+}
+
+/** A New session choice kept while the sheet is closed (FolderField.keep / restore). */
+export interface KeptChoice {
+  chosen: FolderChoice;
+  extra: FolderChoice[];
+}
+
+/**
+ * The way back from the re-pin card (founder field test 2026-10-23: after allowing it, they had to start the New
+ * session over). Review re-pin card holds the sheet's choice (folder and model) against THAT cardId; when that card is
+ * decided allow, the sheet reopens on it with Open focused, and one Enter opens the session (never opened for them).
+ * Deny or expiry drops it; so does a second hold (only the newest card returns). A decision of another card changes nothing.
+ */
+export class RepinReturn<T> {
+  #held: { cardId: string; choice: T } | null = null;
+
+  hold(cardId: string, choice: T): void {
+    this.#held = { cardId, choice };
+  }
+
+  /** The held cardId, or null. */
+  get cardId(): string | null {
+    return this.#held?.cardId ?? null;
+  }
+
+  /** A card was decided (`allow`, `deny`, …) or expired (`expire`): the choice to reopen on, or null. */
+  outcome(cardId: string, decision: string): T | null {
+    if (!this.#held || this.#held.cardId !== cardId) return null;
+    const choice = this.#held.choice;
+    this.#held = null;
+    return decision === 'allow' ? choice : null;
+  }
+
+  clear(): void {
+    this.#held = null;
+  }
+}
+
+/** The store's change key for a decided or expired card (store.ts): `card-outcome:<decision|expire>:<cardId>`. */
+export function cardOutcomeOf(key: string): { cardId: string; decision: string } | null {
+  if (!key.startsWith('card-outcome:')) return null;
+  const rest = key.slice('card-outcome:'.length);
+  const i = rest.indexOf(':');
+  return i > 0 && i < rest.length - 1 ? { decision: rest.slice(0, i), cardId: rest.slice(i + 1) } : null;
+}
+
+/** The one key an open-failed line may carry (design-system folder-field: open-failed). */
+export interface OpenFailedKey {
+  label: string;
+  title: string;
+  /** runs on a trusted press only (routeFolderPress) */
+  press: () => void;
 }
 
 export interface FolderFieldOptions {
@@ -264,6 +339,8 @@ export class FolderField {
   #pending: Promise<void> | null = null;
   /** the human toggled Type a path: a later status read no longer opens or folds it */
   #typedTouched = false;
+  /** the open-failed key's press (setOpenFailed); kept out of the state, which stays plain data */
+  #errorKeyPress: (() => void) | null = null;
 
   constructor(o: FolderFieldOptions) {
     this.#o = o;
@@ -271,7 +348,7 @@ export class FolderField {
   }
 
   static blank(purpose: FolderPurpose): FolderFieldState {
-    return { purpose, offered: false, chooser: false, recents: [], extra: [], chosen: null, check: null, checking: false, showChecking: false, choosing: false, typedOpen: false, typed: '', sr: null, hint: null, refused: null, error: null, opening: false, focus: null };
+    return { purpose, offered: false, chooser: false, recents: [], extra: [], chosen: null, check: null, checking: false, showChecking: false, choosing: false, typedOpen: false, typed: '', sr: null, hint: null, refused: null, error: null, errorKey: null, opening: false, focus: null };
   }
 
   state(): Readonly<FolderFieldState> {
@@ -279,6 +356,11 @@ export class FolderField {
   }
 
   #set(p: Partial<FolderFieldState>): void {
+    // an error line's key belongs to that error: any new error (or none) drops it unless it names its own
+    if ('error' in p && !('errorKey' in p)) {
+      p = { ...p, errorKey: null };
+      this.#errorKeyPress = null;
+    }
     this.#s = { ...this.#s, ...p };
     this.#o.changed();
   }
@@ -306,6 +388,7 @@ export class FolderField {
     this.#typedTimer = this.#checkTimer = null;
     const { offered, chooser } = this.#s;
     this.#typedTouched = false;
+    this.#errorKeyPress = null;
     this.#s = { ...FolderField.blank(this.#o.purpose), offered, chooser, typedOpen: !chooser };
     this.#o.changed();
   }
@@ -352,6 +435,22 @@ export class FolderField {
     this.#set({ chosen: row, typed: '', refused: null, error: null, sr: null, focus });
     void this.#check(row.real, false);
     this.#o.chose?.(row.real);
+  }
+
+  /** The choice to keep while the sheet is closed for a card (the re-pin card): the chosen folder and the rows above the recents. */
+  keep(): KeptChoice | null {
+    const c = this.#s.chosen;
+    return c ? { chosen: { ...c }, extra: this.#s.extra.map((e) => ({ ...e })) } : null;
+  }
+
+  /**
+   * The sheet reopens on a kept choice (after reset): the same folder chosen, checked again by the kernel, and the
+   * folder's remembered model restored (the `chose` hook). loadRecents then leaves the choice alone.
+   */
+  restore(k: KeptChoice): void {
+    this.#set({ extra: k.extra.map((e) => ({ ...e })), chosen: { ...k.chosen }, typed: '', refused: null, error: null, sr: null, focus: null });
+    void this.#check(k.chosen.real, false);
+    this.#o.chose?.(k.chosen.real);
   }
 
   /** Compact: show a value the page already holds (the runner the form carries), checked by the kernel. */
@@ -548,8 +647,14 @@ export class FolderField {
    * session.open was refused for a reason that is NOT the folder (the kernel, the binary, a limit): the words show in
    * place as the error line, the folder stays chosen and unmarked, and Open stays enabled for a retry.
    */
-  setOpenFailed(text: string): void {
-    this.#set({ error: text, refused: null, opening: false, focus: null });
+  setOpenFailed(text: string, key?: OpenFailedKey): void {
+    this.#set({ error: text, errorKey: key ? { label: key.label, title: key.title } : null, refused: null, opening: false, focus: null });
+    this.#errorKeyPress = key?.press ?? null;
+  }
+
+  /** The open-failed line's key was pressed (a trusted press: routeFolderPress checks). */
+  pressErrorKey(): void {
+    if (this.#s.error !== null && this.#s.errorKey) this.#errorKeyPress?.();
   }
 
   setOpening(on: boolean): void {
@@ -600,6 +705,8 @@ export interface FolderFieldView {
   hint: string | null;
   noChooser: string | null;
   error: string | null;
+  /** the error line's one key (open-failed), or null */
+  errorKey: { label: string; title: string } | null;
 }
 
 /** The field as drawn (recents for New session, compact for the others). */
@@ -640,5 +747,6 @@ export function fieldView(f: FolderField, variant: 'recents' | 'compact'): Folde
     hint: s.hint,
     noChooser: s.offered && !s.chooser ? FF_COPY.noChooser : null,
     error: s.error,
+    errorKey: s.error !== null ? s.errorKey : null,
   };
 }

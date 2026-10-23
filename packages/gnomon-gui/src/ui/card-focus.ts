@@ -22,3 +22,24 @@ export function cardIn<T extends { getAttribute(name: string): string | null }>(
 export type CardLabel = 'upgrade card' | 'grant card' | 're-pin card' | 'voice card' | 'Touch ID card' | 'card';
 
 export const notArrivedText = (what: CardLabel): string => `the ${what} has not arrived yet; it shows in the stack when it does`;
+
+/** A modal sheet that can hide the stack (the New session sheet): whether it is open, and how to close it. */
+export interface CoveringSheet {
+  open(): boolean;
+  close(): void;
+}
+
+/**
+ * Close every open modal sheet that would hide the stack, before a card is focused: a focus (or scroll) behind an
+ * aria-modal sheet lands nowhere the human can see (founder field test 2026-10-23: the Re-pin toast key "did nothing"
+ * with the New session sheet open). Returns how many it closed.
+ */
+export function uncoverStack(sheets: readonly CoveringSheet[]): number {
+  let n = 0;
+  for (const s of sheets)
+    if (s.open()) {
+      s.close();
+      n++;
+    }
+  return n;
+}

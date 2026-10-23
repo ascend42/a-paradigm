@@ -247,7 +247,11 @@ components:
       current: '<button class="mode-item app-item current" type="button" role="menuitemradio" aria-checked="true"><span class="mode-name">Desk</span></button>'
       disabled: '<button class="mode-item app-item" type="button" role="menuitem" disabled><span class="mode-name">Workshop</span><span class="mode-note">not installed</span></button>'
     status: clear
+    rules:
+      - "A menu is never clipped by its trigger's row: when the trigger sits in a part that clips its overflow (the chat header's left part, where the title and meta ellipsize), the menu hangs from the row itself (.pane-head), placed under its key, and sits in the DOM right after the clipped part so Tab goes key → its items → the next key."
+      - "A repaint of the row a menu hangs from keeps the trigger and the open menu (the chat header repaints on every row a streaming session adds)."
     from: { session: 2026-10-21-gnomon-voice, board: header-5b, note: "the .mode-menu / .mode-item idiom is the menu", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+    amended_by: [{ date: 2026-10-23, what: "rules not-clipped and survives-repaint (founder: the header model key 'default ▾' did nothing when pressed: its menu opened inside the clipped header part and every streamed row rebuilt it)", reviewed: { by: atelier-mika, date: 2026-10-23, verdict: accepted, amended: "Tab order: the hung menu follows its key in the DOM" } }]
   voice-pill:
     role: "Kernel-owned header indicator and the ladder's trigger: mic dot + rung name + one live fact; never only a glyph."
     anatomy: [dot, rung, fact, "meter (only while hearing)", "progress (setup)"]
@@ -477,7 +481,7 @@ components:
       - "keys: Choose folder… (default key; busy 'Choosing…') and Type a path ▸ (quiet, aria-expanded)"
       - "typed field (folded): label 'path', no placeholder, note 'a full path, or one starting with ~/ · checked as you type'"
       - "one check line: ✓ note, ✕ error (.sf-err, role=alert) or ◆ warning (10.5 --warn-ink, role=status)"
-    states: [empty, recents, chosen, chooser-open, chooser-cancelled, typed-open, checking, found, not-absolute, missing, not-a-folder, unreadable, wrong-contents, home-or-above, outside-home, terminal-hint, no-chooser, opening, refused]
+    states: [empty, recents, chosen, chooser-open, chooser-cancelled, typed-open, checking, found, not-absolute, missing, not-a-folder, unreadable, wrong-contents, home-or-above, outside-home, terminal-hint, no-chooser, opening, refused, open-failed, open-failed-keyed]
     behaviour:
       - "Sheet opens: the chosen row is the centre session's folder, else the most recent (C2); focus on it, so ⌘N then Enter opens. No recents: focus on Choose folder…"
       - "Arrows move and choose within the list; Home/End jump; Tab leaves the list; Enter anywhere submits the sheet"
@@ -510,6 +514,8 @@ components:
       hint: "Suggested by `gnomon` in a terminal: check it, then Open."
       no-chooser: "This kernel can't open the macOS folder chooser here. Type a full path, or pick a recent folder."
       refused: "<CODE>  <path> is no longer there · next: choose the folder again"
+      open-failed: "✕ <the refusal, CODE + reason + next:>; a refusal that is not the folder keeps it chosen and Open enabled. At most ONE key after the words (.key, data-ff-act error-key), the way to the fix; the words stand without it"   # founder field test 2026-10-23
+      binary-changed: { line: "✕ Claude Code updated itself, so its binary no longer matches the one Gnomon pinned. next: review the re-pin card.", key: "Review re-pin card (closes the sheet, focuses exactly that card; its allow reopens the sheet on the same folder and model with Open focused, never opens the session)", no-card: "✕ Claude Code updated itself, so its binary no longer matches the one Gnomon pinned. next: <the kernel's next>. (no key)" }   # founder field test 2026-10-23: no code, symbol prefix or offline CLI hint in a sheet
       open-disabled: { none: "choose a folder first", chooser: "waiting for the chooser", invalid: "fix the path first", unreadable: "Gnomon can't read this folder", refused: "choose another folder", mod-wrong-contents: "choose a folder with gnomon-manifest.json" }   # Mods › Add (Mika 2026-10-23)
       runner-none: "none · the bundled runner is used"
     tokens:
@@ -569,23 +575,34 @@ components:
     amended_by: [{ session: 2026-10-22-gnomon-loops-ui, board: notify-decide, what: "variants loop-done and loop-pause-all; placement recorded at the chat column's edge" }]
   transcript-row:
     role: "One row of the chat: user and claude blocks; tool, result, activity and working lines as quiet single lines."
-    variants: { user: "right-aligned sheet bubble", assistant: "plain prose, measure 80ch", labelled-part: ".reply-part (renamed from .chip): a left rule and a bold label", activity: "collapsible fold with a rule", working: "spinner + live clock", tool: "↳ line", voice-heard: "secondary line", voice-refused: "vermilion left rule + reason", said: "a spoken reply (ink2 rule)" }
+    variants: { user: "right-aligned sheet bubble", assistant: "plain prose, measure 80ch", labelled-part: ".reply-part (renamed from .chip): a left rule and a bold label", activity: "collapsible fold with a rule", raw: "the raw view's one-line summary that says what the line is (a system line's subtype and identifying fields, a hook by name, short id and outcome); it folds like activity (▸ / ▾, Enter or Space) to its whole line pretty-printed, text only, in a box that scrolls inside itself (max 40vh, both ways), never the page; hook and tool output only ever in the fold", working: "spinner + live clock", tool: "↳ line", voice-heard: "secondary line", voice-refused: "vermilion left rule + reason", said: "a spoken reply (ink2 rule)" }
     states: [default, live, collapsed, expanded, error]
     source: packages/gnomon-gui/static/styles.css:246-296,834-859
     examples:
       user: '<div class="trow role-user"><div class="who"><span class="t">14:05</span>you</div><div class="body">Totals are off by a cent on 3-line orders. Find out why.</div></div>'
       activity: '<div class="trow role-activity" tabindex="0">▸ 14:05 · read 6 files · ran 2 commands · 41s of work</div>'
       working: '<div class="trow role-working"><span class="spin"></span>working… · <span class="live-clock">2m 10s</span></div>'
+      raw: '<div class="trow role-raw fold" role="button" tabindex="0" aria-expanded="false"><span class="caret">▸ </span><span class="t">14:05</span>system · hook response · SessionStart:startup · id 6156c889 · success · stdout 214 chars</div>'
+      raw-open: '<div class="trow role-raw-detail"><pre class="raw-line" tabindex="0">{ "type": "system", "subtype": "hook_response", … }</pre></div>'
     status: clear
     from: { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, note: "chat with timestamps, took Ns, collapsible activity", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+    amended_by: [{ date: 2026-10-23, what: "variant raw: the activity fold reused for raw rows (founder: 'is there a way to know what is being shown here. i turned on raw responses'); reviewed: atelier-mika 2026-10-23, accepted as proposed" }]
   composer:
     role: "The one place to write: grows to 12 lines then scrolls; ⤢ toggles 24; exactly one send key."
+    anatomy:
+      - "textarea (one line when empty, centred on send; grows to 12, ⤢ 24)"
+      - "placeholder 'Reply to <title>…' stays on one line and ends in an ellipsis; it never makes the empty composer taller"   # Mika 2026-10-23: it wrapped to 2 lines at 1024
+      - "tall view (⤢) takes only the room the window has: never past the pane (send and ⤢ stay on screen), never the conversation below 120 px, never fewer lines than 12"   # Mika 2026-10-23: at 1024x768 send fell off the window
+      - "controls: ONE row at the bottom right, in the order line count, ⤢, send (gap 8); they stay pinned bottom right as the text grows"   # founder report 2026-10-23: a column of them made the empty composer about 3 keys tall
+      - "line count (10.5 --sec) only from 2 lines up; at 1 line it says nothing"   # founder report 2026-10-23
+    tokens: { empty-height: "one --key-h key plus the composer's padding" }
     states: [empty, typing, focus, tall, dictating (ghost words + ring), held, disabled (no session)]
     source: packages/gnomon-gui/static/styles.css:865-871,976-992; packages/gnomon-gui/static/index.html:51-58
     examples:
-      default: '<form id="composer" class="composer"><div class="composer-main"><textarea id="composer-text" class="field" rows="1" placeholder="Reply…" aria-label="composer"></textarea></div><div class="composer-ctrls"><button class="key quiet composer-tall" type="button" aria-pressed="false" aria-label="Tall view">⤢</button><span class="meta composer-lines">1 line</span><button class="key pri" type="submit">send</button></div></form>'
+      default: '<form id="composer" class="composer"><div class="composer-main"><textarea id="composer-text" class="field" rows="1" placeholder="Reply…" aria-label="composer"></textarea></div><div class="composer-ctrls"><span class="meta composer-lines" hidden></span><button class="key quiet composer-tall" type="button" aria-pressed="false" aria-label="Tall view">⤢</button><button class="key pri" type="submit">send</button></div></form>'
+      grown: '<div class="composer-ctrls"><span class="meta composer-lines">7 lines</span><button class="key quiet composer-tall" type="button" aria-pressed="false" aria-label="Tall view">⤢</button><button class="key pri" type="submit">send</button></div>'
     status: clear
-    from: { session: 2026-10-21-gnomon-voice, board: composer, choice: autogrow-12-tall-24, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+    from: { session: 2026-10-21-gnomon-voice, board: composer, choice: autogrow-12-tall-24, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm }, amended: { date: 2026-10-23, by: "founder report 2026-10-23 (why is the text area default this size)", what: "controls in one row at the bottom right (line count, ⤢, send); line count only from 2 lines up" } }
   session-row:
     role: "A session in the left rail: swatch, name, state note (needs you / failed / KNOT / with mod:<name>)."
     states: [default, hover, active, needs-you, failed (droops once), gone, renaming]
@@ -917,9 +934,10 @@ zones:
     surface: desk, footer strip (default, 64px) or a 76px column left/right
     holds: ["Workshop mod caps: Needs you | Working", "Install Workshop when absent", "one quiet status line (live · waiting · log · rpc), right end"]
     never: ["kit.Button (Aegis M2)", "a per-mod hue", "type under 10.5"]
-    overflow: "Under 900px it is always the footer; in the 76px column cap questions truncate at about 9 characters with the full text in title=."
+    overflow: "Under 900px it is always the footer; in the 76px column cap questions truncate at about 9 characters with the full text in title=. In the footer every word (mod label, zone title, quiet note, paused line, status line) sits in ONE line box of --key-h at the strip's floor, so all baselines agree with each other and with a key there; hats stand on the floor, a waiting cap's question above its hat, and the reduced-motion word of a working cap ('working') above its hat too, never below the floor (Mika 2026-10-23). Nothing wraps from 1024 to 2560: the host and the status line clip."
     status: clear
     from: { session: 2026-10-15-gnomon-aesthetic, board: iconography, note: "founder 2026-10-17 placement: footer default, vertical edges as presets", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+    amended_by: [{ session: 2026-10-23-gnomon-folder-picker, decided_by: creator, what: "the strip's line: one --key-h line box at the floor for every footer word (titles were pinned to the top and notes to the bottom, the status line centred)", founder_words: "even the bottom workshop area has strange alignment" }]
   overlays:
     surface: over the desk
     holds: ["command palette", "new session", "Settings sheet", "Mods sheet", "Voice settings drawer (teaching inline under its row)", "reconnect"]

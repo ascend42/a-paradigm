@@ -373,6 +373,8 @@ export class GuiStore {
         what.add('cards');
         what.add(`card-out:${p.cardId}`);
       }
+      // the outcome, for a page waiting on that card (core/folder-field.ts RepinReturn: the New session sheet's way back)
+      if (typeof p.cardId === 'string' && p.cardId) what.add(`card-outcome:${r.kind === 'approval.expire' ? 'expire' : typeof p.decision === 'string' ? p.decision : '?'}:${p.cardId}`);
     }
   }
 
@@ -433,11 +435,137 @@ export function rowSummary(r: Row): string {
 }
 
 const TURN_TEXT_MAX = 4000;
+const RAW_FIELD_MAX = 120;
+const RAW_DETAIL_MAX = 20_000;
+
+const word = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+/** one field of a raw line, one line, capped */
+const field = (v: unknown, n = RAW_FIELD_MAX): string | null => {
+  const s = typeof v === 'number' || typeof v === 'boolean' ? String(v) : word(v);
+  return s === null ? null : cap(oneLine(s), n);
+};
+/** "125 chars" / "3.4k chars": how much a field holds, never what (hook output can carry project context) */
+const sizeOf = (v: unknown): string | null => {
+  const n = typeof v === 'string' ? v.length : 0;
+  return n ? `${n < 1000 ? n : `${(n / 1000).toFixed(1)}k`} chars` : null;
+};
+/** a uuid-ish id's short form, so identical rows (five SessionStart hooks) tell apart */
+const shortId = (v: unknown): string | null => {
+  const s = word(v);
+  return s ? (s.startsWith('toolu_') ? s.slice(-8) : s.slice(0, 8)) : null;
+};
+const join = (...parts: Array<string | null | undefined | false>): string => parts.filter((x): x is string => !!x).join(' · ');
+/** the fields every stream line carries, which say nothing about this line */
+const ROUTINE = new Set(['type', 'subtype', 'session_id', 'uuid', 'parent_tool_use_id', 'timestamp', 'request_id', 'api_message_id']);
+/** the first few short scalar fields of an unknown line ("key value") */
+const scalars = (o: Record<string, unknown>, max = 4): string[] => {
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(o)) {
+    if (ROUTINE.has(k)) continue;
+    const s = typeof v === 'number' || typeof v === 'boolean' ? String(v) : typeof v === 'string' && v.length <= 60 ? oneLine(v) : null;
+    if (s) out.push(`${k} ${s}`);
+    if (out.length >= max) break;
+  }
+  return out;
+};
+const hhmmUtc = (epochSec: number): string | null => {
+  const d = new Date(epochSec * 1000);
+  return Number.isNaN(d.getTime()) ? null : `${d.toISOString().slice(11, 16)} UTC`;
+};
+
+/** a claude-code `system` line: its subtype and the fields that say which one it is */
+function systemSummary(m: Record<string, unknown>): string {
+  const sub = word(m.subtype) ?? 'system';
+  if (sub === 'hook_started' || sub === 'hook_response') {
+    const ev = field(m.hook_event ?? m.hook_event_name, 40);
+    const name = field(m.hook_name, 60);
+    // "SessionStart:startup" already names its event; the id tells identical hooks apart
+    const which = name && ev && name.startsWith(`${ev}:`) ? name : join(ev, name);
+    const id = shortId(m.hook_id);
+    if (sub === 'hook_started') return join('system', 'hook started', which, id && `id ${id}`);
+    const code = num(m.exit_code);
+    const outcome = field(m.outcome, 30);
+    const res = join(outcome, code !== null && (code !== 0 || outcome !== 'success') ? `exit ${code}` : null);
+    // how much it printed, never what (the fold shows it): `output` is stdout and stderr together
+    const out = sizeOf(m.stdout);
+    const err = sizeOf(m.stderr);
+    const all = !out && !err ? sizeOf(m.output) : null;
+    return join('system', 'hook response', which, id && `id ${id}`, res, out && `stdout ${out}`, err && `stderr ${err}`, all && `output ${all}`);
+  }
+  if (sub === 'init') {
+    const tools = Array.isArray(m.tools) ? m.tools.length : null;
+    const mcp = Array.isArray(m.mcp_servers) ? m.mcp_servers.length : null;
+    return join('system', 'init', field(m.model, 60) && `model ${field(m.model, 60)}`, field(m.cwd) && `cwd ${field(m.cwd)}`, field(m.permissionMode, 30) && `mode ${field(m.permissionMode, 30)}`, tools !== null && `${tools} tools`, mcp ? `${mcp} MCP server${mcp === 1 ? '' : 's'}` : null, field(m.claude_code_version, 20) && `claude-code ${field(m.claude_code_version, 20)}`);
+  }
+  if (sub === 'status') return join('system', 'status', field(m.status, 60) ?? 'cleared');
+  if (sub === 'thinking_tokens') {
+    const n = num(m.estimated_tokens);
+    const d = num(m.estimated_tokens_delta);
+    return join('system', 'thinking', n !== null && `~${n} tokens${d ? ` (+${d})` : ''}`);
+  }
+  if (sub === 'compact_boundary') {
+    const meta = objOf(m.compact_metadata);
+    return join('system', 'compacted', field(meta?.trigger, 20), num(meta?.pre_tokens) !== null && `${num(meta?.pre_tokens)} tokens before`);
+  }
+  return join('system', sub, ...scalars(m));
+}
+
+/** a claude-code `user` line: the human's words (a replay) or the tool results going back to the model */
+function userSummary(m: Record<string, unknown>): string {
+  const msg = objOf(m.message);
+  const c = msg?.content;
+  if (typeof c === 'string') return join('user', m.isReplay === true ? 'message (replay)' : 'message', field(c, 140));
+  const parts = Array.isArray(c) ? c.map(objOf).filter((x): x is Record<string, unknown> => !!x) : [];
+  const results = parts.filter((x) => x.type === 'tool_result');
+  if (results.length) {
+    return join('user', results.length === 1 ? 'tool result' : `${results.length} tool results`, ...results.slice(0, 3).map((r) => {
+      const body = typeof r.content === 'string' ? r.content : Array.isArray(r.content) ? r.content.map((y) => word(objOf(y)?.text) ?? '').join('') : '';
+      return join(shortId(r.tool_use_id) && `for ${shortId(r.tool_use_id)}`, r.is_error === true ? 'error' : 'ok', sizeOf(body));
+    }));
+  }
+  const text = parts.map((x) => (x.type === 'text' ? word(x.text) ?? '' : '')).join(' ');
+  return join('user', m.isReplay === true ? 'message (replay)' : 'message', field(text, 140));
+}
+
+/** a claude-code `stream_event` partial: which part of the message it is, with a short look at a text delta */
+function streamSummary(m: Record<string, unknown>): string | null {
+  const ev = objOf(m.event);
+  const et = word(ev?.type);
+  if (!ev || !et) return null;
+  const idx = num(ev.index);
+  const block = idx !== null ? `block ${idx}` : null;
+  if (et === 'content_block_delta') {
+    const d = objOf(ev.delta);
+    const dt = word(d?.type);
+    if (dt === 'text_delta') return join('stream', block, 'text', `“${field(d?.text, 80) ?? ''}”`);
+    if (dt === 'input_json_delta') return join('stream', block, 'tool input', field(d?.partial_json, 80));
+    if (dt === 'thinking_delta') return join('stream', block, 'thinking', num(d?.estimated_tokens) !== null ? `~${num(d?.estimated_tokens)} tokens` : sizeOf(d?.thinking));
+    if (dt === 'signature_delta') return join('stream', block, 'signature');
+    return join('stream', block, dt ?? 'delta');
+  }
+  if (et === 'content_block_start') {
+    const cb = objOf(ev.content_block);
+    return join('stream', block, 'start', field(cb?.type, 30), field(cb?.name, 60));
+  }
+  if (et === 'content_block_stop') return join('stream', block, 'stop');
+  if (et === 'message_start') return join('stream', 'message start', field(objOf(ev.message)?.model, 60));
+  if (et === 'message_delta') {
+    const d = objOf(ev.delta);
+    const out = num(objOf(ev.usage)?.output_tokens);
+    return join('stream', 'message delta', field(d?.stop_reason, 30) && `stop ${field(d?.stop_reason, 30)}`, out !== null && `${out} tokens out`);
+  }
+  if (et === 'message_stop') return 'stream · message stop';
+  return join('stream', et);
+}
 
 /**
- * A backend stream line (turn.event `line`, claude-code stream-json) as one transcript line: the assistant's text,
- * the tools it called, the result's subtype; every other line is its type only. Never throws on a line it cannot
- * parse (an opaque `turn.event · <type>`); the text still reaches the DOM only through the sanitizer.
+ * A backend stream line (turn.event `line`, claude-code stream-json) as one transcript line that says what the line is:
+ * the assistant's text and tools; a system line's subtype and identifying fields (hooks by event, name, short id and
+ * outcome; init by model and cwd); tool results by id, outcome and size; rate limits; stream partials; control
+ * messages; the result. Hook output and tool output stay out of the line (they can carry project context): the raw
+ * row's fold shows the whole line. Never throws on a line it cannot parse (an opaque `turn.event · <type>`); the text
+ * still reaches the DOM only through the sanitizer.
  */
 export function turnEventSummary(line: string, type: string | null): string {
   let m: Record<string, unknown> | null = null;
@@ -453,17 +581,73 @@ export function turnEventSummary(line: string, type: string | null): string {
     const parts = Array.isArray(msg.content) ? msg.content : [];
     const text: string[] = [];
     const tools: string[] = [];
+    let thinking = false;
     for (const c of parts) {
       const x = (c && typeof c === 'object' ? c : {}) as { type?: unknown; text?: unknown; name?: unknown };
       if (x.type === 'text' && typeof x.text === 'string' && x.text.trim()) text.push(x.text);
       else if (x.type === 'tool_use') tools.push(typeof x.name === 'string' ? x.name : '?');
+      else if (x.type === 'thinking' || x.type === 'redacted_thinking') thinking = true;
     }
     const out = [text.length ? text.join('\n') : '', tools.length ? `tool ${tools.join(', ')}` : ''].filter(Boolean).join(' · ');
-    if (!out) return 'assistant';
+    if (!out) return thinking ? 'assistant · thinking' : 'assistant';
     return `assistant · ${out.length > TURN_TEXT_MAX ? `${out.slice(0, TURN_TEXT_MAX - 1)}…` : out}`;
   }
-  if (m && t === 'result') return `result · ${typeof m.subtype === 'string' ? m.subtype : m.is_error === true ? 'error' : 'done'}`;
+  if (m && t === 'result') {
+    const turns = num(m.num_turns);
+    const ms = num(m.duration_ms);
+    const cost = num(m.total_cost_usd);
+    return join('result', typeof m.subtype === 'string' ? m.subtype : m.is_error === true ? 'error' : 'done', turns !== null && `${turns} turn${turns === 1 ? '' : 's'}`, ms !== null && `${Math.round(ms / 1000)}s`, cost !== null && `$${cost.toFixed(2)}`);
+  }
+  if (m && t === 'system') return systemSummary(m);
+  if (m && t === 'user') return userSummary(m);
+  if (m && t === 'rate_limit_event') {
+    const i = objOf(m.rate_limit_info) ?? {};
+    const at = num(i.resetsAt);
+    return join('rate limit', field(i.status, 30), field(i.rateLimitType, 30), at !== null && hhmmUtc(at) && `resets ${hhmmUtc(at)}`, i.isUsingOverage === true && 'using overage');
+  }
+  if (m && t === 'stream_event') {
+    const s = streamSummary(m);
+    if (s) return s;
+  }
+  if (m && (t === 'control_request' || t === 'control_response')) {
+    const r = objOf(m.request) ?? objOf(m.response);
+    const inner = objOf(r?.response);
+    const word = t === 'control_request' ? 'control request' : 'control response';
+    const queued = Array.isArray(inner?.still_queued) ? `${inner.still_queued.length} still queued` : null;
+    return join(word, field(r?.subtype, 40), field(r?.tool_name, 60), field(inner?.behavior, 20), field(inner?.message), queued, field(r?.error));
+  }
+  if (m && t !== 'line') {
+    const rest = scalars(m);
+    if (rest.length) return join(t, field(m.subtype, 40), ...rest);
+  }
   return `turn.event · ${type ?? t}`;
+}
+
+/**
+ * The whole of a raw row for its fold: a turn.event's backend line pretty-printed (or as it came when it isn't JSON),
+ * any other row's payload. Null when the view withheld, redacted or oversized it: the fold never shows more than the
+ * summary was allowed to. Nested `{redacted: true}` values stay `⟨redacted⟩`; capped; the renderer sanitizes it.
+ */
+export function rowDetail(r: Row): string | null {
+  if (r.view === 'oversize') return null;
+  const p = r.payload;
+  if (p === undefined || p === null) return null;
+  const o = objOf(p);
+  if (o?.redacted === true) return null;
+  const redact = (_k: string, v: unknown): unknown => (objOf(v)?.redacted === true ? '⟨redacted⟩' : v);
+  let out: string;
+  if (r.kind === 'turn.event' && typeof o?.line === 'string') {
+    try {
+      out = JSON.stringify(JSON.parse(o.line), redact, 2);
+    } catch {
+      out = o.line;
+    }
+  } else if (o) {
+    out = JSON.stringify(o, redact, 2);
+  } else {
+    out = String(p);
+  }
+  return out.length > RAW_DETAIL_MAX ? `${out.slice(0, RAW_DETAIL_MAX - 1)}…\n(${out.length - RAW_DETAIL_MAX + 1} more characters not shown)` : out;
 }
 
 /* ── chat transcript (dogfood 2026-10-19: the focused session showed 16 rows of hook noise, not the conversation) ── */
@@ -474,7 +658,7 @@ export function turnEventSummary(line: string, type: string | null): string {
  * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
  * the 🔊 marker under a reply the voice app spoke aloud.
  */
-export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working';
+export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'raw-detail' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working';
 
 /**
  * T-2026-10-21-007: the clock of a turn still running. `since` is when the turn (or, on an activity line, its first
@@ -507,6 +691,8 @@ export interface ChatItem {
   saidBy?: 'kernel' | 'reply';
   /** T-2026-10-21-007: on the `working` row of the running turn and its live activity line only */
   live?: LiveClock;
+  /** raw rows: the whole row (rowDetail), shown by the row's fold */
+  detail?: string;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -1079,7 +1265,9 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       continue;
     }
     if (opts.raw) {
-      push(r, 0, { role: 'raw', text: rowSummary(r) });
+      const raw = push(r, 0, { role: 'raw', text: rowSummary(r) });
+      const detail = rowDetail(r);
+      if (detail !== null) raw.detail = detail;
       continue;
     }
     const p = objOf(r.payload);
@@ -1332,6 +1520,21 @@ export interface FoldedItem extends ChatItem {
   children?: ChatItem[];
   /** S2.5: seconds from the user's message to this reply ("took Ns"). */
   took?: number;
+}
+
+/** The fold key of a raw row (the activity fold's expanded set holds it). */
+export const rawFoldKey = (it: Pick<ChatItem, 'key'>): string => `raw:${it.key}`;
+/**
+ * Raw view (PURE): a raw row with a detail folds like the activity line; an expanded one is followed by one
+ * `raw-detail` item, its whole row pretty-printed (key = its key + `:detail`).
+ */
+export function foldRaw(items: readonly ChatItem[], expanded: ReadonlySet<string> = new Set()): ChatItem[] {
+  const out: ChatItem[] = [];
+  for (const it of items) {
+    out.push(it);
+    if (it.role === 'raw' && it.detail !== undefined && expanded.has(rawFoldKey(it))) out.push({ key: `${it.key}:detail`, seq: it.seq, role: 'raw-detail', text: it.detail });
+  }
+  return out;
 }
 
 /**

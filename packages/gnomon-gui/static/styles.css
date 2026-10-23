@@ -301,6 +301,14 @@ html, body {
 .trow.role-auto::before { content: "✓ "; color: var(--sec); }
 .trow.role-error { color: var(--fail); }
 .trow.role-raw { font-size: var(--fs-control); color: var(--ink2); }
+/* the raw view's fold (transcript-row variant raw, the activity fold's idiom): ▸ a row, ▾ its whole line below it,
+   pretty-printed; a long line scrolls inside the fold (both ways), never the page */
+.trow.role-raw.fold { cursor: pointer; }
+.trow.role-raw.fold .caret { color: var(--sec); }
+.trow.role-raw.fold:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.trow.role-raw-detail { padding: 0 14px 6px 28px; white-space: normal; }
+.raw-line { margin: 0; max-height: 40vh; overflow: auto; white-space: pre; overflow-wrap: normal; font-size: var(--fs-label); color: var(--ink2); border-left: 2px solid var(--rule); padding: 4px 10px; }
+.raw-line:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
 .trow .t { color: var(--sec); font-size: var(--fs-label); margin-right: 8px; }
 .pinned { border-top: 1px solid var(--rule); max-height: 30vh; overflow-y: auto; }
 .composer { border-top: 1px solid var(--rule); padding: 8px 14px; background: var(--sheet); }
@@ -441,13 +449,17 @@ html, body {
 @media (prefers-reduced-motion: reduce) { .card .stamp.on { opacity: 1; transform: rotate(-8deg); } }
 
 /* ── S5 the Workshop (critique 2026-10-20 §2 S5; comp workshop-placement.html): a 64 px footer strip (default) or a
-   76 px column on either edge (Layout). The fence label stays; the status line sits at the footer's right end. ── */
+   76 px column on either edge (Layout). The fence label stays; the status line sits at the footer's right end.
+   The strip's line (founder report 2026-10-23, "strange alignment"): in the footer every word (the mod label, each
+   zone's title and quiet note, the status line) is set in ONE line box of --key-h at the strip's floor, so their
+   baselines agree with each other and with a key there (Install Workshop); the hats stand on that floor, a waiting
+   cap's question above its hat. Nothing in the strip wraps (1024 to 2560); the host clips, the status line clips. ── */
 .workshop { display: flex; align-items: flex-end; gap: 16px; min-height: 64px; padding: 6px 16px 8px; border-top: 1px solid var(--rule); }
 .workshop[hidden] { display: none; }
 .workshop.slim { min-height: 0; padding: 4px 16px; }
 .workshop-host { flex: 0 0 auto; max-width: 75%; overflow: hidden; }
 .workshop-col .workshop-host { max-width: none; }
-.status-line { flex: 1 1 0; min-width: 0; overflow: hidden; justify-content: flex-end; margin-left: auto; align-self: center; font: inherit; font-size: var(--fs-label); color: var(--sec); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; display: flex; gap: 12px; }
+.status-line { flex: 1 1 0; min-width: 0; overflow: hidden; justify-content: flex-end; margin-left: auto; align-self: flex-end; font: inherit; font-size: var(--fs-label); color: var(--sec); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; display: flex; gap: 12px; }
 .status-line .v { color: var(--ink2); }
 .status-line:hover, .status-line:focus-visible { text-decoration: underline; }
 .desk.ws-left { padding-left: 76px; }
@@ -459,14 +471,19 @@ html, body {
 .mod-slot-workshop { padding: 0; }
 .mod-slot.mod-slot-workshop { padding: 0; }
 .mod-fence.mod-region-workshop { border: 0; background: transparent; padding: 0; display: flex; align-items: flex-end; gap: 12px; }
-.mod-region-workshop > .mod-fence-head { align-self: flex-start; padding-top: 4px; }
+.mod-region-workshop > .mod-fence-head { align-self: flex-end; }
 .mod-region-workshop .mod-fence-body > .blk-box { display: flex; align-items: flex-end; gap: 18px; }
 .mod-region-workshop .mod-fence-body > .blk-box > .blk-title { display: none; }
-.mod-region-workshop .mod-fence-body > .blk-box > .blk-box { display: flex; align-items: flex-end; gap: 10px; min-height: 40px; }
+.mod-region-workshop .mod-fence-body > .blk-box > .blk-box { display: flex; align-items: flex-end; gap: 10px; }
 .mod-region-workshop .mod-fence-body > .blk-box > .blk-box:first-of-type { padding-right: 18px; border-right: 1px dashed var(--rule); }
-.mod-region-workshop .blk-title { font-size: var(--fs-label); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); align-self: flex-start; padding-top: 4px; white-space: nowrap; }
+.mod-region-workshop .blk-title { font-size: var(--fs-label); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); align-self: flex-end; white-space: nowrap; }
 .mod-region-workshop .blk-text { margin: 0; font-size: var(--fs-label); }
 .workshop-absent { color: var(--sec); font-size: var(--fs-label); }
+/* the strip's line (footer only; the column keeps its own stacked rules below) */
+.workshop .mod-region-workshop > .mod-fence-head, .workshop .mod-region-workshop .blk-title, .workshop .mod-region-workshop .blk-text, .workshop .workshop-absent, .workshop .status-line { height: var(--key-h); line-height: var(--key-h); white-space: nowrap; }
+.workshop .mod-region-workshop .blk-text { overflow: hidden; text-overflow: ellipsis; }
+.workshop .mod-slot-workshop { display: flex; align-items: center; min-height: var(--key-h); white-space: nowrap; }
+.workshop .workshop-absent { margin: 0; }
 /* the column: zones stack, centred; the need zone is ruled off below */
 .workshop-col .mod-fence.mod-region-workshop, .workshop-col .mod-region-workshop .mod-fence-body > .blk-box, .workshop-col .mod-region-workshop .mod-fence-body > .blk-box > .blk-box { flex-direction: column; align-items: center; gap: 14px; min-height: 0; }
 .workshop-col .mod-region-workshop > .mod-fence-head { align-self: center; padding-top: 0; }
@@ -523,6 +540,9 @@ html, body {
 [data-motion="reduced"] .cap.bob .cap-word { display: block; }
 [data-motion="reduced"] .cap.bob { height: 46px; }
 @media (prefers-reduced-motion: reduce) { .cap.bob .cap-word { display: block; } .cap.bob { height: 46px; } }
+/* the strip's line (Mika 2026-10-23): in the footer the reduced-motion word stands ABOVE its hat, where a waiting cap's
+   question stands, so the hat keeps the floor and no word hangs below the strip's line */
+.workshop .cap.bob .cap-word { order: -1; }
 
 .overlay { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh; background: var(--scrim); }
 .sheet-card { min-width: 380px; max-width: 640px; padding: 14px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
@@ -920,6 +940,9 @@ html, body {
 .model-wrap { vertical-align: baseline; }
 .model-btn { white-space: nowrap; padding: 0 6px; font-size: var(--fs-control); }
 .model-menu { left: 0; right: auto; min-width: 240px; }
+/* the header's left part clips (its title and meta ellipsize), so the model menu hangs from the header row itself,
+   under the key (ui/model-picker.ts sets its left); nothing in the row clips it */
+.pane-head.chead { position: relative; }
 .model-switch-lines p { margin: 0 0 4px; }
 
 /* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
@@ -1039,13 +1062,21 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .more-menu { min-width: 200px; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
 
 /* #gui-composer (Atelier 2026-10-21 direction): the text wraps and grows to 12 lines, then scrolls; ⤢ raises the cap
-   to 24 (core/composer.ts fits the height, per viewer); the line count and the ONE send key stack on the right. Who it
-   goes to and the run mode are in the textarea's title= (and the sr-only #composer-mode line). */
+   to 24 (core/composer.ts fits the height, per viewer). The controls sit in ONE row at the bottom right: line count
+   (from 2 lines up; at 1 line it says nothing), ⤢, the ONE send key (founder report 2026-10-23: a column of them made
+   the empty composer about 3 keys tall). Empty, the composer is one key tall and its one line is centred on send; as it
+   grows the row stays pinned bottom right. Who it goes to and the run mode are in the textarea's title= (and the
+   sr-only #composer-mode line). */
 .composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 10px; }
-.composer-main { min-width: 0; display: flex; flex-direction: column; }
+.composer-main { min-width: 0; min-height: var(--key-h); display: flex; flex-direction: column; justify-content: center; }
 .composer-main > textarea { resize: none; min-height: 21px; line-height: 1.6; overflow-y: hidden; }
+/* empty: the placeholder ("Reply to <title>…") stays on its one line and ends in an ellipsis; it never makes the empty
+   composer taller (Mika 2026-10-23: it wrapped to two lines at 1024; fitComposer counts an empty composer as one line) */
+.composer-main > textarea:placeholder-shown { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer-main > textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .composer-main > .composer-foot { margin-top: 0; justify-content: flex-start; }
-.composer-ctrls { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.composer-ctrls { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.composer-lines[hidden] { display: none; }
 .composer-tall { padding: 0 8px; line-height: 18px; }
 /* Luna #4: the tall view is ON: an ink key by day; [bracketed] with the glow by night */
 .composer-tall[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }

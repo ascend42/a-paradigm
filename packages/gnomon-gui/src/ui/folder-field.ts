@@ -7,7 +7,8 @@
  * than one field (Mods: Add from folder and Configure command):
  *
  *   - choose (Choose folder… / Choose another… / Choose file…), typed (Type a path ▸), clear, use (the runner's
- *     "Use …/dist"), row (a recent folder; data-ff-real names it);
+ *     "Use …/dist"), row (a recent folder; data-ff-real names it), error-key (the open-failed line's one key, e.g.
+ *     Review re-pin card);
  *   - the typed path is the input `[data-ff-typed]`.
  *
  * mountFolderField wires one field into a host that it owns (the New session sheet): roving tabindex on the recents
@@ -26,7 +27,12 @@ function rich(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, t
 }
 
 function lineEl(doc: MiniDoc, v: FolderFieldView, id: string, inLabel: boolean): MiniEl | null {
-  if (v.error) return setId(h(doc, inLabel ? 'span' : 'p', { class: 'sf-err', role: 'alert' }, `✕ ${v.error}`), `${id}-err`);
+  if (v.error) {
+    const err = setId(h(doc, inLabel ? 'span' : 'p', { class: 'sf-err', role: 'alert' }, `✕ ${v.error}`), `${id}-err`);
+    // open-failed: at most one key, the way to the fix (the re-pin card); the words stand without it
+    if (v.errorKey) err.appendChild(h(doc, 'span', null, ' ', h(doc, 'button', { class: 'key', type: 'button', 'data-ff-act': 'error-key', title: v.errorKey.title }, v.errorKey.label)));
+    return err;
+  }
   if (v.checking) return h(doc, inLabel ? 'span' : 'p', { class: 'sf-note', role: 'status' }, FF_COPY.checking);
   const l = v.line;
   if (!l) return null;
@@ -106,6 +112,7 @@ export function routeFolderPress(field: FolderField, act: string, real: string |
   else if (act === 'typed') field.toggleTyped();
   else if (act === 'clear') field.clear();
   else if (act === 'use') field.useSuggestion();
+  else if (act === 'error-key') field.pressErrorKey();
   else if (act === 'row' && real) field.pickRecent(real, 'chosen');
   else return false;
   return true;

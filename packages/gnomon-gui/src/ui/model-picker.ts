@@ -9,6 +9,8 @@
  *     onFolder with the kernel's real path); checked before the open is sent.
  *   - Session header: the model the KERNEL says the session runs (its rows), next to the backend, with a ▾ menu to
  *     switch. A switch needs the human's trusted click on the confirm sheet, which says truthfully what happens.
+ *     The chip is reused across header repaints for the same session (a streaming session repaints per row), and its
+ *     menu hangs from the header row (.pane-head), not inside the clipped left part where the title ellipsizes.
  *   - Settings → Session (read-only): any element with `data-gnomon-slot="session-model"` shows the focused
  *     session's model (the Settings sheet is another module; it only needs to carry the slot).
  * Every request is sent only on a trusted user event (G-GUI-04).
@@ -44,7 +46,8 @@ export interface ModelPicker {
   openModel(route: string): string | null;
   /** remember the sheet's choice for the folder (after a trusted submit) */
   remember(cwd: string, model: string): void;
-  /** the header chip for a session, appended to `into` (nothing for a local or unknown session) */
+  /** the header chip for a session, appended to `into` (nothing for a local or unknown session; null removes it). The
+   * same session's chip is reused across repaints (its nodes carry data-model-chip; the caller keeps them in place). */
   headChip(into: HTMLElement, hsid: string | null): void;
   /** repaint the chip and the Settings slots (store change) */
   repaint(): void;
@@ -89,7 +92,18 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
   const restore = (): void => restoreFor(d.folder?.() ?? null);
 
   /* ── header chip + switch ───────────────────────────────────────── */
-  let chip: { hsid: string; btn: HTMLButtonElement; menu: HTMLElement } | null = null;
+  let chip: { hsid: string; sep: HTMLElement; wrap: HTMLElement; btn: HTMLButtonElement; menu: HTMLElement } | null = null;
+  const closeMenu = (): void => {
+    if (!chip) return;
+    chip.menu.hidden = true;
+    chip.btn.setAttribute('aria-expanded', 'false');
+  };
+  const dropChip = (): void => {
+    chip?.sep.remove();
+    chip?.wrap.remove();
+    chip?.menu.remove();
+    chip = null;
+  };
   const sheet = el(doc, 'div', { id: 'model-switch-dialog', class: 'overlay', role: 'dialog', 'aria-label': 'switch model' });
   sheet.hidden = true;
   const card = el(doc, 'form', { class: 'sheet-card', autocomplete: 'off' });
@@ -160,7 +174,13 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     );
   });
   doc.addEventListener('click', (e) => {
-    if (chip && !chip.menu.hidden && !(e.target as HTMLElement).closest('.model-wrap')) chip.menu.hidden = true;
+    if (chip && !chip.menu.hidden && !(e.target as HTMLElement).closest('.model-wrap, .model-menu')) closeMenu();
+  });
+  doc.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && chip && !chip.menu.hidden) {
+      closeMenu();
+      chip.btn.focus();
+    }
   });
 
   const current = (hsid: string): ReturnType<typeof sessionModelOf> => sessionModelOf(d.rows(hsid));
@@ -170,6 +190,7 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     const live = d.live(chip.hsid);
     chip.btn.textContent = `${modelChipText(m)}${live && !m?.uncertain && !m?.pending ? ' ▾' : ''}`;
     chip.btn.disabled = !live || !!m?.pending || !!m?.uncertain;
+    if (chip.btn.disabled) closeMenu();
     chip.btn.title = m?.uncertain ? `Claude did not confirm the switch to ${modelLabel(m.uncertain)}; the next reply shows which model answered (${modelLabel(m.model)} on record).` : live ? `Model of this session (kernel): ${modelLabel(m?.model)}. Switch it; the conversation continues.` : `Model: ${modelLabel(m?.model)}`;
   };
   const paintSlots = (): void => {
@@ -196,32 +217,55 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
       if (model !== 'local' && model !== 'any') rememberChoice(st, cwd.trim() || null, model);
     },
     headChip(into: HTMLElement, hsid: string | null): void {
-      chip = null;
-      if (!hsid) return;
-      const m = current(hsid);
-      if (!m || m.backend === 'local') return;
-      const w = el(doc, 'span', { class: 'model-wrap mode-wrap' });
+      const m = hsid ? current(hsid) : null;
+      if (!hsid || !m || m.backend === 'local') {
+        dropChip();
+        return;
+      }
+      // a streaming session repaints the header on every row: the same session keeps its chip, its open menu and focus
+      if (chip?.hsid === hsid) {
+        if (chip.wrap.parentNode !== into) into.append(chip.sep, chip.wrap);
+        paintChip();
+        return;
+      }
+      dropChip();
+      const sep = el(doc, 'span', { class: 'chead-sep', 'data-model-chip': '' }, ' · ');
+      const w = el(doc, 'span', { class: 'model-wrap mode-wrap', 'data-model-chip': '' });
       const btn = el(doc, 'button', { class: 'key quiet model-btn kernel-owned', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
       const menu = el(doc, 'span', { class: 'mode-menu model-menu', role: 'menu' });
       menu.hidden = true;
       // opening the menu and the sheet only DISPLAYS (the preview harness clicks them); the send needs the armed gesture
       btn.addEventListener('click', () => {
+        if (!menu.hidden) return closeMenu();
         const cur = current(hsid)?.model ?? 'claude';
         menu.replaceChildren(...switchChoices(cur).map((to) => {
           const b = el(doc, 'button', { class: 'mode-item', type: 'button', role: 'menuitem', 'data-model': to });
           b.append(el(doc, 'span', { class: 'mode-name' }, to === CUSTOM ? 'custom id…' : to), el(doc, 'span', { class: 'mode-note' }, to === 'default' ? "Claude Code's default" : to === CUSTOM ? 'a full model id' : 'switch, keep the conversation'));
           b.addEventListener('click', () => {
-            menu.hidden = true;
+            closeMenu();
             openSheet(hsid, cur, to);
           });
           return b;
         }));
-        menu.hidden = !menu.hidden;
-        btn.setAttribute('aria-expanded', String(!menu.hidden));
+        // the header's left part clips its overflow (the title and meta ellipsize), so the menu hangs from the
+        // header row itself, under the key, where nothing clips it
+        const host = (btn.closest('.pane-head') as HTMLElement | null) ?? into;
+        // right after the clipped part, so Tab goes key → its items → the next header key (Mika 2026-10-23: appended
+        // last, the items came after ask and ⋯ in the Tab order)
+        const part = btn.closest('.chead-l') as HTMLElement | null;
+        if (menu.parentNode !== host) {
+          if (part && part.parentNode === host) part.after(menu);
+          else host.append(menu);
+        }
+        menu.hidden = false;
+        const hr = host.getBoundingClientRect();
+        const left = btn.getBoundingClientRect().left - hr.left;
+        menu.style.left = `${Math.max(0, Math.min(left, hr.width - menu.offsetWidth))}px`;
+        btn.setAttribute('aria-expanded', 'true');
       });
-      w.append(btn, menu);
-      into.append(doc.createTextNode(' · '), w);
-      chip = { hsid, btn, menu };
+      w.append(btn);
+      into.append(sep, w);
+      chip = { hsid, sep, wrap: w, btn, menu };
       paintChip();
     },
     repaint(): void {

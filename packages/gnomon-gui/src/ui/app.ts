@@ -19,7 +19,7 @@ import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH } from '
 import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
 import { chooseRung, clientFactOf, crashCauseOf, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungNameOf, rungOf, rungOfPresetCommand, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, trapNext, type FlowView, type SheetView } from './voice-settings.js';
-import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from '../core/composer.js';
+import { COMPOSER_LINES, composerFit, fitTallRoom, lineCountLabel, lineCountShown, parseTall, serializeTall, TALL_FEED_MIN_PX, TALL_KEY } from '../core/composer.js';
 import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
 import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting, RESTART_GUIDANCE, RESTART_KEY_REFUSED, resumeRepinText, takeRestart, upgradeBannerOf, waitForOrigin } from '../core/restart.js';
@@ -34,12 +34,12 @@ import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type
 import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
 import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
-import { chatItems, derivedTitle, durationText, foldActivity, groupHue, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
+import { chatItems, derivedTitle, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 import { changedBefore, hasLive, LiveTicker, liveText } from '../core/live-turn.js';
 import { mountStandingFeed } from './standing-feed.js';
-import { cardIn, notArrivedText, type CardLabel } from './card-focus.js';
-import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type ToastKey, type Toasts } from './toasts.js';
+import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringSheet } from './card-focus.js';
+import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
 import type { ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { LocalModelController } from './local-model.js';
@@ -54,7 +54,7 @@ import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatu
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
-import { FolderField, FF_COPY } from '../core/folder-field.js';
+import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, RepinReturn, type KeptChoice } from '../core/folder-field.js';
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
@@ -227,7 +227,8 @@ function currentItems(): { items: ChatItem[]; hidden: number } {
   const raw = rawMode || !focused;
   const base2 = chatItems(rows, { raw, live });
   // S2.5: tool and auto rows fold into one activity line (raw mode and the kernel feed never fold)
-  const out = raw ? base2 : { items: foldActivity(base2.items, expandedActs), hidden: base2.hidden };
+  // raw rows fold the same way: an expanded one shows its whole line under it
+  const out = raw ? { items: foldRaw(base2.items, expandedActs), hidden: base2.hidden } : { items: foldActivity(base2.items, expandedActs), hidden: base2.hidden };
   memo = { key, out };
   return out;
 }
@@ -263,7 +264,10 @@ function paintChatHead(): void {
   $('transcript-title').title = s ? `${sessionFullTitle(s)}\n${s.hsid}${s.name ? '' : '\n(double-click to rename)'}` : (focused ?? '');
   if (renaming?.where !== 'head') $('rename-btn').hidden = !s;
   const meta = $('chead-meta');
-  clear(meta);
+  // #gui-model-picker: a streaming session repaints this header on every row; the model key stays put (its open
+  // menu, its focus) and the parts around it are rebuilt before and after it
+  for (const n of Array.from(meta.childNodes)) if (!(n instanceof HTMLElement && n.hasAttribute('data-model-chip'))) meta.removeChild(n);
+  if (!s) modelPicker?.headChip(meta, null);
   if (s) {
     const g = store.groups().find((x) => x.sessions.some((y) => y.hsid === s.hsid));
     const hue = groupHue(s.repo ?? UNSCOPED, g?.sessions ?? [s]);
@@ -271,8 +275,7 @@ function paintChatHead(): void {
     const mins = s.openedAt ? Math.max(0, Math.round((Date.now() - Date.parse(s.openedAt)) / 60_000)) : null;
     const proj = s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped';
     // Mika (2026-10-23 delta): the project name ellipsizes last and keeps its whole name in the title
-    meta.appendChild(h(doc, 'span', { class: `pink h${hue}`, title: proj }, '■ ', h(doc, 'span', { class: 'chead-proj' }, proj)) as unknown as Node);
-    meta.appendChild(h(doc, 'span', { class: 'chead-backend' }, ` · ${backendWord(s.backend)}`) as unknown as Node);
+    meta.prepend(h(doc, 'span', { class: `pink h${hue}`, title: proj }, '■ ', h(doc, 'span', { class: 'chead-proj' }, proj)) as unknown as Node, h(doc, 'span', { class: 'chead-backend' }, ` · ${backendWord(s.backend)}`) as unknown as Node);
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
     // TD-2026-10-21-514: while a voice-origin turn is open, the header says edits ask first (the kernel clamps it)
     if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'chip warn clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
@@ -385,6 +388,16 @@ function itemEl(it: FoldedItem): HTMLElement {
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
+  if (it.role === 'raw' && it.detail !== undefined) {
+    // the raw view: a row folds open to its whole line (the activity fold: ▸ / ▾, Enter or Space, the same expanded set)
+    const k = rawFoldKey(it);
+    const open = expandedActs.has(k);
+    return h(doc, 'div', { class: `trow role-raw fold${open ? ' open' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': k, title: open ? 'Hide the whole line' : 'Show the whole line' }, h(doc, 'span', { class: 'caret', 'aria-hidden': 'true' }, open ? '▾ ' : '▸ '), ...body) as unknown as HTMLElement;
+  }
+  if (it.role === 'raw-detail') {
+    // text only, sanitized by h(); long lines scroll inside the fold, never the page
+    return h(doc, 'div', { class: 'trow role-raw-detail' }, h(doc, 'pre', { class: 'raw-line', tabindex: '0', 'aria-label': 'the whole line' }, it.text)) as unknown as HTMLElement;
+  }
   const slips = slipsAt.get(it.key) ?? [];
   return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}` }, ...body, ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
 }
@@ -1428,32 +1441,16 @@ function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = e
   schedule(new Set([`transcript:${hsid}`]));
 }
 
-/** session.open; null when it opened, else the refusal in words (the New session sheet shows it in place). */
-async function openSession(cwd: string, model: string): Promise<string | null> {
-  if (!client) return 'not connected: nothing was sent';
+/** session.open; null when it opened, else the refusal (the New session sheet shows it in place). */
+async function openSession(cwd: string, model: string): Promise<{ why: string; refusal: ShownRefusal | null } | null> {
+  if (!client) return { why: 'not connected: nothing was sent', refusal: null };
   try {
     const r = await client.call<{ hsid: string }>('session.open', { cwd, model, attended: true });
     focus(r.hsid);
     return null;
   } catch (err) {
-    // TD-2026-10-19-063: a changed claude binary — the kernel pre-staged a re-pin card; the toast's Re-pin key focuses it
-    const d = err instanceof RpcError ? ((err.refusal.data ?? {}) as Record<string, unknown>) : {};
-    // the key only when the refusal names its card: it focuses that card or none, never another gate card
-    const repinId = typeof d.cardId === 'string' ? d.cardId : null;
-    const repin: ToastKey | undefined =
-      d.session === 'claude_binary_changed' && repinId
-        ? {
-            label: 'Re-pin',
-            title: 'Focus the re-pin card in the stack (it decides nothing)',
-            onPress: (e) => {
-              if (e.isTrusted) focusCard(repinId, 're-pin card');
-            },
-          }
-        : undefined;
-    const why = err instanceof RpcError ? refusalText(err.refusal) : 'session.open failed';
-    // the sheet keeps the choice and shows the refusal in place; the re-pin case keeps its toast with the Re-pin key
-    if (repin) notice(why, 'fail', { key: repin });
-    return why;
+    // the sheet keeps the choice and shows the refusal in place (a changed claude binary: with its Review re-pin card key)
+    return err instanceof RpcError ? { why: refusalText(err.refusal), refusal: err.refusal } : { why: 'session.open failed', refusal: null };
   }
 }
 
@@ -1482,14 +1479,19 @@ function paintNewSession(): void {
   put($('ns-why'), why ?? '');
 }
 
-/** ⌘N, + New session, the palette, or a verified terminal hint: the sheet opens on the centre session's folder (C2). */
-function openNewSessionSheet(): void {
+/**
+ * ⌘N, + New session, the palette, or a verified terminal hint: the sheet opens on the centre session's folder (C2).
+ * `kept`: it reopens on the choice Review re-pin card held (the folder; its remembered model follows), Open focused.
+ */
+function openNewSessionSheet(kept: KeptChoice | null = null): void {
   nsField.reset();
   nsField.setStatus(status);
   nsOpening = false;
   $('new-session-dialog').hidden = false;
   if (!hintBox.note.hidden) nsField.setHint(hintBox.note.textContent ?? '', hintBox.input.value || null);
+  if (kept) nsField.restore(kept);
   paintNewSession();
+  if (kept) void nsField.settled().then(() => (paintNewSession(), $<HTMLButtonElement>('ns-open').focus()));
   modelPicker?.onDialogOpen();
   const centre = focused ? (store.sessions.get(focused)?.cwd ?? null) : null;
   void nsField.loadRecents(centre).then(() => paintNewSession());
@@ -1515,9 +1517,9 @@ async function submitNewSession(trusted: boolean): Promise<void> {
   modelPicker?.remember(cwd, model);
   nsOpening = true;
   nsField.setRefused(null);
-  const why = await openSession(cwd, model);
+  const refused = await openSession(cwd, model);
   nsOpening = false;
-  if (why === null) {
+  if (refused === null) {
     closeNewSessionSheet();
     clearCwdHint(hintTarget());
     return;
@@ -1525,11 +1527,43 @@ async function submitNewSession(trusted: boolean): Promise<void> {
   // a refusal shows in place and keeps the choice (design-system folder-field never: a refusal that closes the sheet)
   // only a refusal of the FOLDER marks it ✕ and asks for another one (Open off, focus on the chosen row); any other
   // refusal (no kernel, a changed binary, a limit) keeps the folder as it was and Open enabled, focused for a retry
-  if (/\bcwd\b/i.test(why)) nsField.setRefused(`${why.split(':')[0]}  ${nsField.state().chosen?.display || 'the folder'} is no longer there · next: choose the folder again`);
+  const why = refused.why;
+  // TD-2026-10-19-063: a changed claude binary is said in plain words; the kernel pre-staged a re-pin card, and the
+  // line's one key closes this modal sheet and focuses exactly that card (never another; none when it names none)
+  const repin = binaryChangedLine(refused.refusal?.data);
+  if (repin) {
+    const cardId = repin.cardId;
+    nsField.setOpenFailed(repin.text, cardId ? { label: REPIN_COPY.key, title: REPIN_COPY.keyTitle, press: () => reviewRepinCard(cardId) } : undefined);
+  } else if (/\bcwd\b/i.test(why)) nsField.setRefused(`${why.split(':')[0]}  ${nsField.state().chosen?.display || 'the folder'} is no longer there · next: choose the folder again`);
   else nsField.setOpenFailed(why);
-  if (nsField.state().refused) (($('ns-folder').querySelector('.ff-row[aria-checked="true"]') ?? $('ns-folder').querySelector('[data-ff-act="choose"]')) as HTMLElement | null)?.focus();
+  if (nsField.state().errorKey) ($('ns-folder').querySelector('[data-ff-act="error-key"]') as HTMLElement | null)?.focus();
+  else if (nsField.state().refused) (($('ns-folder').querySelector('.ff-row[aria-checked="true"]') ?? $('ns-folder').querySelector('[data-ff-act="choose"]')) as HTMLElement | null)?.focus();
   else ($('ns-open') as HTMLButtonElement).focus();
 }
+
+/**
+ * Review re-pin card: hold the sheet's choice against THAT card, close the sheet (it is modal: the stack is behind it)
+ * and focus the card. Its allow reopens the sheet on the choice (repinReturn); deny or expiry does not.
+ */
+const repinReturn = new RepinReturn<KeptChoice>();
+function reviewRepinCard(cardId: string): void {
+  const k = nsField.keep();
+  if (k) repinReturn.hold(cardId, k);
+  closeNewSessionSheet();
+  focusCard(cardId, 're-pin card');
+}
+store.onChange((what) => {
+  if (repinReturn.cardId === null) return;
+  for (const key of what) {
+    const o = cardOutcomeOf(key);
+    const kept = o ? repinReturn.outcome(o.cardId, o.decision) : null;
+    // one Enter opens it: never opened for the human; a sheet they already reopened is left as it is
+    if (kept && $('new-session-dialog').hidden) openNewSessionSheet(kept);
+  }
+});
+
+/** Modal sheets that hide the stack: a card focus closes them first (ui/card-focus.ts uncoverStack). */
+const stackCovers: CoveringSheet[] = [{ open: () => !$('new-session-dialog').hidden, close: () => closeNewSessionSheet() }];
 
 /** The card with exactly this cardId in the stack, or null: never another card (ui/card-focus.ts). */
 const cardInPile = (cardId: string): Element | null => cardIn($('stack'), cardId);
@@ -1540,6 +1574,7 @@ const cardInPile = (cardId: string): Element | null => cardIn($('stack'), cardId
  * clears when it arrives (checkCardWait).
  */
 function focusCard(cardId: string, what: CardLabel = 'card'): void {
+  uncoverStack(stackCovers);
   const el = cardInPile(cardId);
   if (!el) {
     notice(notArrivedText(what), 'warn');
@@ -1555,6 +1590,7 @@ function focusCard(cardId: string, what: CardLabel = 'card'): void {
  * so a second Enter cannot allow it.
  */
 function focusCardGroup(cardId: string): void {
+  uncoverStack(stackCovers);
   const el = cardInPile(cardId) as HTMLElement | null;
   if (!el) {
     notice(notArrivedText('grant card'), 'warn');
@@ -1612,10 +1648,25 @@ function fitComposer(): void {
   const px = (v: string): number => parseFloat(v) || 0;
   const edge = px(cs.paddingTop) + px(cs.paddingBottom) + px(cs.borderTopWidth) + px(cs.borderBottomWidth);
   ta.style.height = 'auto';
-  const f = composerFit(ta.scrollHeight + px(cs.borderTopWidth) + px(cs.borderBottomWidth), px(cs.lineHeight), edge, composerTall);
+  // empty, it is one line whatever the placeholder: a long "Reply to <title>…" wrapped at 1024 and made the empty
+  // composer two lines tall with a "2 lines" count (Mika 2026-10-23; the placeholder stays on one line in styles.css)
+  const content = ta.value === '' ? px(cs.lineHeight) + edge : ta.scrollHeight + px(cs.borderTopWidth) + px(cs.borderBottomWidth);
+  let f = composerFit(content, px(cs.lineHeight), edge, composerTall);
   ta.style.height = `${f.heightPx}px`;
+  if (composerTall && Math.min(f.lines, f.cap) > COMPOSER_LINES) {
+    // the tall view never pushes send off the pane nor squeezes the conversation below TALL_FEED_MIN_PX (fitTallRoom)
+    const pane = $('pane-transcript');
+    const feed = pane.querySelector('.feed') as HTMLElement | null;
+    const form = $('composer');
+    const over = Math.max(0, form.getBoundingClientRect().bottom + px(getComputedStyle(form).marginBottom) - pane.getBoundingClientRect().bottom);
+    f = fitTallRoom(f, px(cs.lineHeight), edge, TALL_FEED_MIN_PX - (feed?.clientHeight ?? TALL_FEED_MIN_PX) + over);
+    ta.style.height = `${f.heightPx}px`;
+  }
   ta.style.overflowY = f.scrolls ? 'auto' : 'hidden';
-  put($('composer-lines'), lineCountLabel(f.lines));
+  // one row at the bottom right: the count only from 2 lines up (design-system composer)
+  const lines = $('composer-lines');
+  lines.hidden = !lineCountShown(f.lines);
+  put(lines, lines.hidden ? '' : lineCountLabel(f.lines));
   $('composer').classList.toggle('tall', composerTall);
   const k = $('composer-tall');
   k.setAttribute('aria-pressed', String(composerTall));
@@ -2756,13 +2807,24 @@ function closeAppMenu(focusTrigger = false): void {
 
 let palSel = 0;
 let palItems: Command[] = [];
+/** what had focus before ⌘K: Esc and a press on the scrim hand focus back to it (design-system sheet: Esc returns focus to whatever opened it) */
+let palOpener: HTMLElement | null = null;
 function openPalette(prefix = ''): void {
   closeAppMenu();
+  if ($('palette').hidden) palOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   $('palette').hidden = false;
   const i = $<HTMLInputElement>('palette-input');
   i.value = prefix;
   paintPalette();
   i.focus();
+}
+/** founder 2026-10-23: Esc (wherever focus is inside it) and a press on the scrim close the palette, like every other sheet */
+function closePalette(): void {
+  if ($('palette').hidden) return;
+  $('palette').hidden = true;
+  const back = palOpener;
+  palOpener = null;
+  if (back?.isConnected) back.focus();
 }
 function paintPalette(): void {
   palItems = filterCommands(paletteEntries(status as never), $<HTMLInputElement>('palette-input').value);
@@ -2773,7 +2835,8 @@ function paintPalette(): void {
 }
 /** Run a command; `trusted` is the gesture's browser trust flag (Event.isTrusted; Aegis L2/L3): a request-making command needs it. */
 function run(id: string, trusted: boolean): void {
-  $('palette').hidden = true;
+  // focus goes back to the opener first, so a sheet the command opens records that (not the hidden palette field) as its own opener
+  closePalette();
   if (id.startsWith('theme.')) keep(THEME_KEY, (theme = parseTheme(id.slice(6))));
   else if (id === 'motion.reduce' || id === 'motion.system') keep(MOTION_KEY, (motion = parseMotion(id.slice(7))));
   else if (id.startsWith('voice.preset.')) void chooseRungUi(rungOfPresetCommand(id) ?? RUNG_OF_PRESET[parsePreset(id.slice('voice.preset.'.length))], trusted);
@@ -2911,7 +2974,11 @@ function wire(): void {
     const k = a.dataset.act!;
     if (expandedActs.has(k)) expandedActs.delete(k);
     else expandedActs.add(k);
+    // the line keeps its key and text: remount it so its ▸ / ▾ and aria-expanded follow, and keep the focus on it
+    const had = document.activeElement === a;
+    remountItem(k.startsWith('raw:') ? k.slice(4) : k);
     paintTranscript();
+    if (had) ($('viewport').querySelector(`[data-act="${CSS.escape(k)}"]`) as HTMLElement | null)?.focus();
   };
   wireOfferSlips($('viewport'), onOfferAct); // #gui-offer-slip: trusted Open (two-step) / not now
   $('viewport').addEventListener('click', (e) => {
@@ -3078,6 +3145,7 @@ function wire(): void {
     if (b.dataset.modeScope) {
       // the secondary scope (F2): the same three choices in the palette — mode.* for this session only, mode.repo.* for the folder
       closeModeMenu();
+      $('mode-btn').focus(); // the menu row is hidden now: the palette's opener (Esc returns there) is the mode key
       return openPalette(b.dataset.modeScope === 'repo' ? 'mode.repo.' : 'mode.');
     }
     void setMode(b.dataset.mode as RunMode, defaultScope(currentMode()), e.isTrusted);
@@ -3173,7 +3241,11 @@ function wire(): void {
     if (e.key === 'ArrowDown') palSel = Math.min(palSel + 1, palItems.length - 1);
     else if (e.key === 'ArrowUp') palSel = Math.max(palSel - 1, 0);
     else if (e.key === 'Enter' && palItems[palSel]) return run(palItems[palSel]!.id, e.isTrusted);
-    else if (e.key === 'Escape') return void ($('palette').hidden = true);
+    else if (e.key === 'Escape') {
+      if (dict.grace) return; // "Sending… Esc keeps it" wins: the document handler keeps the draft, the palette stays
+      e.stopPropagation(); // the document handler would close it a second time
+      return closePalette();
+    }
     else return;
     e.preventDefault();
     paintPalette();
@@ -3181,6 +3253,9 @@ function wire(): void {
   $('palette-list').addEventListener('click', (e) => {
     const r = (e.target as HTMLElement).closest('[data-id]') as HTMLElement | null;
     if (r) run(r.dataset.id!, e.isTrusted);
+  });
+  $('palette').addEventListener('click', (e) => {
+    if (e.target === $('palette')) closePalette(); // a press on the scrim closes it
   });
   // TD-2026-10-21-514: a hidden page never counts toward the send word's visibility
   document.addEventListener('visibilitychange', () => dispatchDictation({ type: 'pageVisible', visible: document.visibilityState === 'visible', now: Date.now() }));
@@ -3195,8 +3270,16 @@ function wire(): void {
       openPalette();
     } else if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key === ',') {
       e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
-      $('palette').hidden = true;
+      closePalette();
       settings.open();
+    } else if (e.key === 'Escape' && !$('palette').hidden && dict.grace) {
+      // TD-2026-10-21-514 over the palette (Mika 2026-10-23): the countdown is about to send, a promise on screen; a
+      // missed close costs one more Esc, a missed keep sends the draft. The first Esc keeps it, the next closes the palette
+      e.preventDefault();
+      dispatchDictation({ type: 'graceCancel', now: Date.now() });
+    } else if (e.key === 'Escape' && !$('palette').hidden) {
+      e.preventDefault(); // focus left the field (a row, the scrim): Esc still closes the palette
+      closePalette();
     } else if (e.key === 'Escape' && !$('new-session-dialog').hidden) {
       e.preventDefault(); // #gui-folder-field: Esc closes the New session sheet (and the macOS chooser, if it is open)
       closeNewSessionSheet();

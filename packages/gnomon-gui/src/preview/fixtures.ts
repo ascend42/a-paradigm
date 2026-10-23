@@ -353,7 +353,7 @@ const VOICE_RUNNING = { attached: false, clientConnected: true, client: { phase:
 const attached = (since: string): Record<string, unknown> => ({ attached: true, hsid: BILLING, ceiling: 'conversation', since, idleAt: null, voiceSessionId: `vs:${ulid('voice session')}`, turns: 2, echoTailMs: 400, ambientIdleMs: 600_000, maxMode: 'conversation', ambientConfirmed: true, enrolled: [{ name: 'matt' }] });
 
 /** S5: the Workshop's declared view as #mod-host status reports a running mod's views. */
-const WORKSHOP_VIEW = { name: 'workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
+const WORKSHOP_VIEW = { name: 'gnomon.workshop', viewId: 'workshop.strip', slot: 'sidebar', placement: 'append', dev: false };
 
 function fixture(name: string, title: string, c: Chain, status: Record<string, unknown>, focus: string | null, workshop = false, extra: Pick<Fixture, 'choice' | 'open'> = {}): Fixture {
   return { name, title, rows: c.rows(), status, focus, workshop, ...extra };
@@ -551,7 +551,7 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'voice-settings': fixture('voice-settings', 'The Voice settings sheet (your voice, send word, keys, listen, timing, risk)', deskChain({ voice: 'armed' }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING, false, { open: 'voice-settings' }),
   'stack-heavy': fixture('stack-heavy', 'Twelve cards waiting', deskChain({ extraCards: true }), statusOf(VOICE_RUNNING), BILLING),
   workshop: fixture('workshop', 'Desk with the Workshop mod strip (needs you / working)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [WORKSHOP_VIEW], paused: [] } }, BILLING, true),
-  'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'workshop', why: 'user', cardId: null }] } }, BILLING, true),
+  'workshop-paused': fixture('workshop-paused', 'Desk with the Workshop paused (one quiet line)', deskChain(), { ...statusOf(VOICE_RUNNING), mods: { views: [], paused: [{ name: 'gnomon.workshop', why: 'user', cardId: null }] } }, BILLING, true),
   'app-menu': fixture('app-menu', 'The Gnomon menu open: layout, theme, mods, voice settings, settings, who is connected', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'app-menu' }),
   settings: fixture('settings', 'The Settings sheet open (theme auto, today\'s grant on)', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings' }),
   'settings-day': fixture('settings-day', 'Day chosen in Settings: papercraft even when the Mac is dark', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings', choice: 'day' }),
