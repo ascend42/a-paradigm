@@ -24,11 +24,11 @@ import { HelperApprovalsKey, p256FromX963, p256KeyIdOfPem, pemOf } from '../../k
 import { HelperProcess, HelperUnavailableError, SupervisedHelper, versionAtLeast, type HelperReply, type HelperTransport, type PinnedHelper } from '../../kernel/identity/helper.js';
 import { APPROVALS_ROW_SCHEMA, helperPublicKey, type ApprovalsRow } from '../../kernel/identity/provision.js';
 import type { RootAuthority } from '../../kernel/identity/root-authority.js';
-import { kernelWin32Helper, type Win32HelperPin } from './helper-client.js';
+import { kernelWin32Helper, WIN32_HELPER_PROTOCOL, type Win32HelperPin } from './helper-client.js';
 import { isOwnerOnly } from '../owner-only.js';
 
-/** The win32 helper's protocol and the first version with the approvals key ops. */
-export const WIN32_HELPER_PROTOCOL = 'gnomon-helper:v2';
+/** The win32 helper's protocol (ONE definition, helper-client.ts; PR #52 review) and the first version with the approvals key ops. */
+export { WIN32_HELPER_PROTOCOL };
 export const WIN32_APPROVALS_HELPER_VERSION = '0.3.0'; // 0.3.0: the Windows Hello presence key (W4 phase B)
 export const DEV_APPROVALS_FILE = 'DEV-ONLY-approvals.json';
 
