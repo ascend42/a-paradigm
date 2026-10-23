@@ -41,6 +41,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { helperOpSync, kernelWin32Helper } from '../../platform/win32/helper-client.js';
 
 export const HEAD_SCHEMA = 'gnomonHead:v1' as const;
 
@@ -116,8 +117,10 @@ export class FileAnchorStore implements AnchorStore {
     } finally {
       fs.closeSync(fd);
     }
-    fs.renameSync(tmp, this.path);
-    if (durable) fsyncDir(path.dirname(this.path));
+    if (durable) {
+      renameWriteThrough(tmp, this.path);
+      fsyncDir(path.dirname(this.path));
+    } else fs.renameSync(tmp, this.path);
   }
 }
 
@@ -149,11 +152,12 @@ export class KeystoreAnchorStore implements AnchorStore {
  * surfaced as `EPERM: operation not permitted, fsync`. So a file is opened
  * 'r+' there (the flush itself is unchanged). A DIRECTORY cannot be opened
  * for a flush on Windows, so the directory fsync is skipped on win32 by
- * design, not swallowed. STATED RESIDUAL (spec §16, S34-27): on win32 a
- * rename is atomic but NOT durable when it returns — node's renameSync
- * (MoveFileEx) does not pass MOVEFILE_WRITE_THROUGH, so a power cut can undo
- * a rename that already returned. A durable rename on Windows is
- * parity-phase work (P8-D78).
+ * design, not swallowed. node's renameSync (MoveFileEx) does not pass
+ * MOVEFILE_WRITE_THROUGH, so on win32 a rename that must be durable goes
+ * through renameWriteThrough: gnomon-helper `fs.rename-durable`
+ * (MoveFileExW with MOVEFILE_WRITE_THROUGH | MOVEFILE_REPLACE_EXISTING), which
+ * returns only once the rename is on disk (W3; closes the S34-27 residual for
+ * the log's own renames).
  *
  * macOS / Linux: a file is opened 'r' and fsync(2)ed (unchanged), and the
  * directory is opened 'r' and fsync(2)ed so a rename inside it is durable.
@@ -171,6 +175,26 @@ export function fsyncFile(file: string): void {
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/**
+ * Rename `from` over `to` so that, together with the caller's fsyncDir of the
+ * parent(s), the rename is durable. Platform registry (G-WIN-05: no inline
+ * branch): win32 asks the kernel's pinned helper for a write-through rename
+ * (a failure throws, as an fsync EIO does: never a silent non-durable rename);
+ * everywhere else renameSync, made durable by the caller's fsyncDir.
+ */
+export const RENAME_WRITE_THROUGH_TIMEOUT_MS = 3_000;
+
+const WRITE_THROUGH_RENAMES: Readonly<Partial<Record<NodeJS.Platform, (from: string, to: string) => void>>> = Object.freeze({
+  win32: (from: string, to: string): void => {
+    // a short bound (Aegis W3 review): this blocks the event loop, and a rotation makes up to three of these
+    helperOpSync(kernelWin32Helper(), 'fs.rename-durable', { from: path.resolve(from), to: path.resolve(to) }, RENAME_WRITE_THROUGH_TIMEOUT_MS);
+  },
+});
+
+export function renameWriteThrough(from: string, to: string): void {
+  (WRITE_THROUGH_RENAMES[process.platform] ?? fs.renameSync)(from, to);
 }
 
 /**

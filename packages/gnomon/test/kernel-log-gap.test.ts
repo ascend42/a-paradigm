@@ -454,6 +454,9 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   it('S34-09: a boot id is accepted only as a UUID; anything else is unknown (which never proves a reboot)', () => {
     expect(normalizeBootId(' 0e4f6a2b-1c3d-4e5f-8a9b-0c1d2e3f4a5b\n')).toBe('0E4F6A2B-1C3D-4E5F-8A9B-0C1D2E3F4A5B');
     for (const bad of ['', 'unknown', 'not-a-uuid', '0e4f6a2b-1c3d-4e5f-8a9b-0c1d2e3f4a5b; rm -rf', '{"boot":"x"}']) expect(normalizeBootId(bad), bad).toBe('unknown');
+    // the Windows helper's boot counter (W3)
+    expect(normalizeBootId('win:1234\n')).toBe('win:1234');
+    for (const bad of ['win:', 'win:-1', 'win:12345678901', 'win:1;x', 'WIN:12']) expect(normalizeBootId(bad), bad).toBe('unknown');
   });
 
   it('openForRecovery on a healthy log is a plain open; acknowledgeGap then has nothing to acknowledge', async () => {
