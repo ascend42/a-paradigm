@@ -22,7 +22,7 @@
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { gitBinary, hardenedGitEnv } from './scratch.js';
+import { EMPTY_HOOKS_PATH, gitBinary, hardenedGitEnv } from './scratch.js';
 import { redactText } from '../trace/capture.js';
 
 export const EXEC_OUTPUT_CAP = 256 * 1024;
@@ -74,7 +74,7 @@ export const execTool: Exec = (bin, args, o) =>
 
 /** Flags on every network git call (push, remote reads that resolve URLs). */
 export const PUSH_GIT_FLAGS: readonly string[] = Object.freeze([
-  '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.pager=cat',
+  '-c', `core.hooksPath=${EMPTY_HOOKS_PATH}`, '-c', 'core.fsmonitor=false', '-c', 'core.pager=cat',
   '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', '-c', 'protocol.ssh.allow=always',
   '-c', 'http.followRedirects=false', '-c', 'push.recurseSubmodules=no', '-c', 'submodule.recurse=false', '-c', 'push.followTags=false',
 ]);
@@ -126,20 +126,38 @@ export function gitPath(): string | null {
   }
 }
 
-/** gh's absolute path: the kernel PATH, then the known install folders; realpath'd; null when absent. */
-export function ghPath(from: Readonly<Record<string, string | undefined>> = process.env): string | null {
-  const dirs = [...(from.PATH ?? '').split(path.delimiter), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin'];
-  for (const d of dirs) {
-    if (!d || !path.isAbsolute(d)) continue;
-    const c = path.join(d, 'gh');
+/** Aegis M4: gh is looked for ONLY here (never PATH), in this order. */
+export const GH_LOCATIONS: readonly string[] = Object.freeze(['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh']);
+/** Aegis M4: a gh realpath must be root-owned, or sit under one of these install prefixes (never session-writable: T-2026-10-23-004). */
+export const GH_TRUSTED_PREFIXES: readonly string[] = Object.freeze(['/opt/homebrew/', '/usr/local/', '/usr/bin/']);
+
+/** Is this resolved binary one the kernel may run with the human's credentials? (root-owned or a trusted prefix; never group/world-writable) */
+export function trustedToolPath(real: string, st: { uid: number; mode: number }): boolean {
+  if ((st.mode & 0o022) !== 0) return false;
+  return st.uid === 0 || GH_TRUSTED_PREFIXES.some((p) => real.startsWith(p));
+}
+
+let GH_RESOLVED: { path: string | null } | null = null;
+
+/** gh's realpath from GH_LOCATIONS, resolved ONCE per daemon; null when absent or untrusted. */
+export function ghPath(): string | null {
+  if (GH_RESOLVED) return GH_RESOLVED.path;
+  let found: string | null = null;
+  for (const c of GH_LOCATIONS) {
     try {
       fs.accessSync(c, fs.constants.X_OK);
-      if (fs.statSync(c).isFile()) return fs.realpathSync.native(c);
+      const real = fs.realpathSync.native(c);
+      const st = fs.statSync(real);
+      if (st.isFile() && trustedToolPath(real, st)) {
+        found = real;
+        break;
+      }
     } catch {
       /* next */
     }
   }
-  return null;
+  GH_RESOLVED = { path: found };
+  return found;
 }
 
 /**
@@ -192,8 +210,7 @@ export async function capturePushConfig(o: { dir: string; git: string; userHome:
 /** A command's output as the agent may see it: URL userinfo and secret shapes redacted, the last `max` characters. */
 export function redactOutput(s: string, max = 1200): string {
   const noUserinfo = s.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@\s/]+@/gi, '$1[redacted]@');
-  // gh's own OAuth / user / server tokens (gho_, ghu_, ghs_, ghr_) beside the shared shapes (ghp_, github_pat_)
-  const { text } = redactText(noUserinfo.replace(/\bgh[ousr]_[A-Za-z0-9]{20,}/g, '[redacted:github-token]'));
+  const { text } = redactText(noUserinfo);
   const t = text.trim();
   return t.length > max ? `…${t.slice(t.length - max)}` : t;
 }

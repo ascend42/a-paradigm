@@ -38,7 +38,7 @@ export default async function probe() {
   const rows = [];
   const autos = [];
   const verbs = new GitVerbs({ log: async (kind, payload) => void rows.push({ kind, phase: payload.phase, why: payload.why ?? null }), broker: { raise: async () => { throw new Error('no card expected'); }, decisionOf: async () => 'deny', auto: async (p) => void autos.push(p.modeRef) }, gnomonHome: path.join(root, 'gnomon'), userHome: () => os.homedir() });
-  const session = { hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:probe/s-x', cwd, repoKey: 'sha256:00', mode: 'auto-edits', planApproved: false, loop: false };
+  const session = { hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:probe/s-x', cwd, repoKey: 'sha256:00', mode: 'auto-edits', planApproved: false, loop: false, worktreesGuarded: true };
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'default', '--permission-prompts', 'host', '--permission-prompt-tool', 'stdio', '--mcp-config', mcp, '--strict-mcp-config', '--setting-sources', '', '--model', 'haiku', '--max-turns', '3'];
   const ev = { claude: version, init: null, mcpServers: null, handshake: [], parsedAs: [], permissionFor: [], toolCall: null, toolAnswer: null, result: null, repoHead: null, verbRows: rows, autos, stderr: '' };
   const child = spawn(CLAUDE, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });

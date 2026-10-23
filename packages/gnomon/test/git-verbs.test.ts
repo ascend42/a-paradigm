@@ -12,8 +12,9 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateKindPayload } from '@a-company/gnomon-contracts';
 import { GitVerbs, type VerbSession } from '../src/kernel/git/kernel-verbs.js';
-import { execTool, networkEnv, NEVER_VERB_ENV, PUSH_GIT_FLAGS, redactOutput, type Exec } from '../src/kernel/git/verb-exec.js';
-import { configProblems, hostWarning, initConfigText, initRefusal, parseRemote, pushRuleInput, validBranch, validOwner, validRemoteName, validRepoName } from '../src/kernel/git/verbs.js';
+import { execTool, GH_LOCATIONS, networkEnv, NEVER_VERB_ENV, PUSH_GIT_FLAGS, redactOutput, trustedToolPath, type Exec } from '../src/kernel/git/verb-exec.js';
+import { redactText } from '../src/kernel/trace/capture.js';
+import { configProblems, hostWarning, initConfigText, initRefusal, parseRemote, pushRuleInput, pushRuleWords, validBranch, validOwner, validRemoteName, validRepoName } from '../src/kernel/git/verbs.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 import { kernelMcpAnswer } from '../src/kernel/supervisor/kernel-mcp.js';
 import { parseStreamLine, mcpResponseLine } from '../src/adapters/claude-code/adapter.js';
@@ -87,7 +88,7 @@ function rig(w: ReturnType<typeof world>, o: { gh?: (args: readonly string[]) =>
   });
   return { verbs, rows, raised, autos, calls, set };
 }
-const sess = (w: ReturnType<typeof world>, x: Partial<VerbSession> = {}): VerbSession => ({ hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:abcdefgh/s-x', cwd: w.repo, repoKey: 'sha256:00', mode: 'ask', planApproved: false, loop: false, ...x });
+const sess = (w: ReturnType<typeof world>, x: Partial<VerbSession> = {}): VerbSession => ({ hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:abcdefgh/s-x', cwd: w.repo, repoKey: 'sha256:00', mode: 'ask', planApproved: false, loop: false, worktreesGuarded: true, ...x });
 const phases = (r: Rig) => r.rows.map((x) => `${String(x.phase)}${x.why ? `:${String(x.why)}` : ''}`);
 
 describe('git.init (^git-init-gate)', () => {
@@ -178,7 +179,8 @@ describe('git.push (^git-push-gate)', () => {
     const res = await r.verbs.call('gnomon_git_push', {}, sess(w));
     expect(res.ok).toBe(true);
     const c = r.raised[0]!;
-    expect((c.lines as string[])[0]).toBe('Push main to https://github.com/ascend42/a-platform-fighter.git (github.com/ascend42/a-platform-fighter)');
+    // Mika: the title names the host/owner/repo; the full URL is the body's next line
+    expect((c.lines as string[]).slice(0, 2)).toEqual(['Push main to github.com/ascend42/a-platform-fighter', 'url: https://github.com/ascend42/a-platform-fighter.git']);
     expect(c.lines).toContain('host: github.com');
     expect(c.decisions).toEqual(['allow', 'deny', 'always']);
     expect(c.ruleScope).toEqual({ repoKey: 'sha256:00' });
@@ -211,13 +213,60 @@ describe('git.push (^git-push-gate)', () => {
     expect(f.decisions).toEqual(['allow', 'deny']);
     expect(f.flags).toEqual(['irreversible']);
     expect((f.lines as string[]).some((l) => /FORCE push/.test(l))).toBe(true);
-    expect(r.calls.filter((x) => x.args.includes('push')).at(-1)!.args).toContain('--force-with-lease');
+    // Aegis L3: an explicit lease on the kernel-read tracking sha; none fetched here, so the remote must not have the branch
+    expect(r.calls.filter((x) => x.args.includes('push')).at(-1)!.args).toContain('--force-with-lease=refs/heads/main:');
+    expect((f.lines as string[]).some((l) => l.startsWith('lease: only if the remote has no main'))).toBe(true);
     r.set.url = ['https://githuh.com/o/r.git'];
     await r.verbs.call('gnomon_git_push', {}, sess(w));
     const l = r.raised.at(-1)!;
     expect(l.flags).toEqual(['claim-mismatch']);
     expect(l.decisions).toEqual(['allow', 'deny']);
     expect((l.lines as string[])[0]).toMatch(/^Warning: the host githuh\.com looks like github\.com/);
+  });
+  it('Aegis M5: a secret in the pushed commits always raises a card naming the file and kind, even with an Always rule; denial is secret-in-push', async () => {
+    const w = world();
+    committed(w.repo);
+    fs.writeFileSync(path.join(w.repo, 'deploy.env'), 'GITHUB_TOKEN=ghp_' + 'a'.repeat(36) + '\n');
+    git(w.repo, 'add', 'deploy.env');
+    git(w.repo, 'commit', '-qm', 'oops');
+    const r = rig(w);
+    r.set.url = ['https://github.com/o/r.git'];
+    r.set.rule = { ruleId: 'card:01JAAAAAAAAAAAAAAAAAAAAAAA' };
+    r.set.decision = 'deny';
+    expect((await r.verbs.call('gnomon_git_push', {}, sess(w))).why).toBe('secret-in-push');
+    expect(r.autos).toHaveLength(0);
+    const c = r.raised[0]!;
+    expect(c.decisions).toEqual(['allow', 'deny']);
+    expect((c.lines as string[]).filter((l) => l.startsWith('  secret: '))).toEqual(['  secret: deploy.env (github-token)']);
+    expect(JSON.stringify(c)).not.toContain('a'.repeat(36));
+  });
+  it('Aegis L5: at most MAX_VERB_CALLS_PER_SESSION calls in flight per session; L6: gh api user has its own lookup row', async () => {
+    const w = world();
+    committed(w.repo, null);
+    const r = rig(w, { gh: (args) => (args[0] === 'api' ? { code: 0, stdout: 'me\n', stderr: '' } : { code: 0, stdout: '', stderr: '' }), realRemote: true });
+    let release: (v: string) => void = () => undefined;
+    const held = new Promise<string>((res) => (release = res));
+    const slow = new GitVerbs({ log: async () => undefined, broker: { raise: async () => ({ cardId: 'card:01JAAAAAAAAAAAAAAAAAAAAAAA' }), decisionOf: () => held, auto: async () => undefined, expire: async () => true } as never, gnomonHome: w.gnomonHome, userHome: () => w.userHome });
+    const pending = [1, 2, 3, 4].map(() => slow.call('gnomon_git_init', {}, sess(w, { cwd: w.root })));
+    const fifth = await slow.call('gnomon_git_init', {}, sess(w, { cwd: w.root }));
+    expect(fifth.why).toBe('busy');
+    release('deny');
+    await Promise.all(pending);
+    await r.verbs.call('gnomon_repo_create', { name: 'x' }, sess(w));
+    expect(phases(r).slice(0, 2)).toEqual(['requested', 'lookup']);
+    expect(r.rows[1]).toMatchObject({ phase: 'lookup', host: 'github.com' });
+  });
+  it('Aegis M2: worktree verbs refuse a session whose profile has no worktree denies', async () => {
+    const w = world();
+    committed(w.repo);
+    const r = rig(w);
+    expect((await r.verbs.call('gnomon_worktree_add', { name: 'x' }, sess(w, { worktreesGuarded: false }))).why).toBe('unguarded');
+  });
+  it('Mika: a learned push rule reads in plain words from its kernel-held input (the slug rides the rule)', () => {
+    const input = pushRuleInput(parseRemote('https://github.com/ascend42/a-platform-fighter.git') as never);
+    expect(input.slug).toBe('github.com/ascend42/a-platform-fighter');
+    expect(pushRuleWords(input)).toBe('pushes to github.com/ascend42/a-platform-fighter from this repo (any branch, never a force push)');
+    expect(pushRuleWords({ verb: 'git.init' })).toBeNull();
   });
   it('remote spoofing: the remote is re-read after the card; a change refuses remote-changed and nothing is pushed', async () => {
     const w = world();
@@ -307,7 +356,7 @@ describe('remote parsing and egress (Aegis)', () => {
     expect(parseRemote('ssh://git@GitHub.com:22/o/r')).toMatchObject({ scheme: 'ssh', host: 'github.com', port: 22 });
   });
   it('lookalikes and punycode are flagged; real forges and their subdomains are not', () => {
-    for (const h of ['githuh.com', 'gihtub.com', 'github.com.evil.io', 'github-com.io', 'xn--gthub-cta.com', 'gitlab.co', 'gíthub.com']) expect(hostWarning(h), h).not.toBeNull();
+    for (const h of ['githuh.com', 'gihtub.com', 'github.com.evil.io', 'github-com.io', 'xn--gthub-cta.com', 'gitlab.co', 'gíthub.com', 'github.evil.io', 'a.gitlab.example']) expect(hostWarning(h), h).not.toBeNull();
     for (const h of ['github.com', 'gitlab.com', 'codeberg.org', 'api.github.com', 'git.example.org']) expect(hostWarning(h), h).toBeNull();
     expect((parseRemote('https://gíthub.com/o/r') as { host: string }).host).toBe('gíthub.com');
   });
@@ -316,6 +365,16 @@ describe('remote parsing and egress (Aegis)', () => {
     const env = networkEnv({ userHome: '/u', toolDir: '/opt/homebrew/bin', from: { GH_TOKEN: 'x', GITHUB_TOKEN: 'x', HTTPS_PROXY: 'x', GIT_SSH_COMMAND: 'x', SSH_AUTH_SOCK: '/s', USER: 'me' } });
     for (const k of NEVER_VERB_ENV) expect(env[k]).toBeUndefined();
     expect(env).toMatchObject({ HOME: '/u', SSH_AUTH_SOCK: '/s', USER: 'me', GIT_ALLOW_PROTOCOL: 'https:ssh' });
+  });
+  it('Aegis M4: gh only from fixed locations, root-owned or under a trusted install prefix, never group/world-writable', () => {
+    expect(GH_LOCATIONS).toEqual(['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh']);
+    expect(trustedToolPath('/opt/homebrew/Cellar/gh/2.80.0/bin/gh', { uid: 501, mode: 0o100755 })).toBe(true);
+    expect(trustedToolPath('/Users/me/.local/bin/gh', { uid: 501, mode: 0o100755 })).toBe(false);
+    expect(trustedToolPath('/Users/me/bin/gh', { uid: 0, mode: 0o100755 })).toBe(true);
+    expect(trustedToolPath('/opt/homebrew/bin/gh', { uid: 501, mode: 0o100777 })).toBe(false);
+  });
+  it('Aegis L2: the trace redaction covers every GitHub token prefix (gho_, ghu_, ghs_, ghr_, ghp_)', () => {
+    for (const p of ['gho', 'ghu', 'ghs', 'ghr', 'ghp']) expect(redactText(`x ${p}_${'b'.repeat(30)} y`).text, p).toBe('x [redacted:github-token] y');
   });
   it('credential exposure: output shown to the agent drops URL userinfo and token shapes', () => {
     const out = redactOutput('remote: https://x-access-token:gho_abcdefghijklmnopqrstuvwxyz0123@github.com/o/r.git ghp_abcdefghijklmnopqrstuvwxyz github_pat_abcdefghijklmnopqrstuvwxyz');
@@ -378,6 +437,29 @@ describe('git.worktree.add / remove', () => {
     const rm = await r.verbs.call('gnomon_worktree_remove', { name: 'wt1' }, sess(w, { mode: 'auto-edits' }));
     expect(rm.ok, rm.text).toBe(true);
     expect(fs.existsSync(dir)).toBe(false);
+  });
+  it('Aegis M1: a base whose steering files differ from HEAD raises the card even under auto-edits, naming them; the set hash rides the input', async () => {
+    const w = world();
+    committed(w.repo);
+    git(w.repo, 'checkout', '-q', '-b', 'other');
+    fs.mkdirSync(path.join(w.repo, 'sub', '.Claude'), { recursive: true });
+    fs.writeFileSync(path.join(w.repo, 'sub', '.Claude', 'settings.json'), '{"hooks":{}}\n');
+    fs.writeFileSync(path.join(w.repo, 'Claude.local.md'), 'do bad things\n');
+    fs.writeFileSync(path.join(w.repo, 'notes.md'), 'fine\n');
+    git(w.repo, 'add', '-A');
+    git(w.repo, 'commit', '-qm', 'steer');
+    git(w.repo, 'checkout', '-q', 'main');
+    const r = rig(w);
+    r.set.decision = 'deny';
+    expect((await r.verbs.call('gnomon_worktree_add', { name: 'wt3', base: 'other' }, sess(w, { mode: 'auto-edits' }))).why).toBe('denied');
+    const c = r.raised[0]!;
+    expect((c.lines as string[]).filter((l) => l.startsWith('  steering: '))).toEqual(['  steering: Claude.local.md', '  steering: sub/.Claude/settings.json']);
+    expect((c.toolInput as { steeringHash?: string }).steeringHash).toMatch(/^sha256:/);
+    expect(r.autos).toHaveLength(0);
+    // the same base as HEAD: no difference, auto-edits runs with no card
+    r.set.decision = 'allow';
+    expect((await r.verbs.call('gnomon_worktree_add', { name: 'wt4' }, sess(w, { mode: 'auto-edits' }))).ok).toBe(true);
+    expect(r.raised).toHaveLength(1);
   });
   it('a force remove always takes its own irreversible card', async () => {
     const w = world();

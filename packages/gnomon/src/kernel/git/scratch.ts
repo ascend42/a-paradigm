@@ -61,9 +61,22 @@ export class GitRefusal extends Error {
  * M4): createScratch checks instead that the repo and its common dir belong to the kernel's uid, and the park repo is
  * the kernel's own.
  */
+/**
+ * Aegis L4 (T-2026-10-23-002): the hooks path every kernel git call pins. POSIX: /dev/null (not a directory: no hook
+ * is found). win32 has no /dev/null: a kernel-owned EMPTY directory under the user's local app data (made at load).
+ */
+export const EMPTY_HOOKS_PATH: string = process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA ?? path.join(process.env.USERPROFILE ?? 'C:\\', 'AppData', 'Local'), 'Gnomon', 'empty-hooks') : '/dev/null';
+if (process.platform === 'win32') {
+  try {
+    fs.mkdirSync(EMPTY_HOOKS_PATH, { recursive: true });
+  } catch {
+    /* git finds no hooks in a missing dir either */
+  }
+}
+
 export const HARDENED_GIT_FLAGS: readonly string[] = Object.freeze([
   '--no-optional-locks',
-  '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.sshCommand=false', '-c', 'protocol.allow=never',
+  '-c', `core.hooksPath=${EMPTY_HOOKS_PATH}`, '-c', 'core.fsmonitor=false', '-c', 'core.sshCommand=false', '-c', 'protocol.allow=never',
   '-c', 'core.pager=cat', '-c', 'credential.helper=', '-c', 'core.quotepath=off', '-c', 'core.longpaths=true', '-c', 'gc.auto=0',
 ]);
 

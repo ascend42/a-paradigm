@@ -33,7 +33,8 @@ const fdoc: MiniDoc = { createElement: (t) => new FEl(t), createTextNode: (s) =>
 
 const detail = { verb: 'git.push', tool: 'gnomon_git_push', host: 'github.com', owner: 'ascend42', repo: 'a-platform-fighter', slug: 'github.com/ascend42/a-platform-fighter', url: 'https://github.com/ascend42/a-platform-fighter.git', remote: 'origin', branch: 'main', force: false, root: '/r', inputHash: 'sha256:' + 'a'.repeat(64) };
 const base = { kind: 'permission', requestedBy: 'p:x/s-1', hsid: 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0' };
-const title = 'Push main to https://github.com/ascend42/a-platform-fighter.git (github.com/ascend42/a-platform-fighter)';
+// Mika: the title names host/owner/repo (the host stays in the title: the spoofing defence); the full URL is the body's next line
+const title = 'Push main to github.com/ascend42/a-platform-fighter';
 const blockOf = (d: Record<string, unknown>, first = title) => ({ schemaVersion: 'display-block:v1', type: 'Box', children: [{ type: 'Text', text: first }, { type: 'Text', text: 'host: github.com' }, { type: 'git-verb', detail: d }] });
 const cardOf = (d: Record<string, unknown>, extra: Record<string, unknown> = {}, first = title) => ({ ...base, ...extra, block: blockOf(d, first), contentHash: cardContentHash({ ...base, ...extra }, d) });
 const view = (card: Record<string, unknown>, decisions: string[], flags: string[] = [], alwaysOpen = false) => ({ cardId: 'card:01J', kind: 'permission', requestedBy: base.requestedBy, hsid: null, repo: null, state: 'pending', contentHash: String(card.contentHash), flags, decisions, decidable: true, gitVerb: gitVerbOf(card), alwaysOpen });

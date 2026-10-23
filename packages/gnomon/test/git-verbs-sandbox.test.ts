@@ -41,7 +41,7 @@ const t = (name: string, cmd: string): string => `(${cmd}) >/dev/null 2>&1 && ec
 function verbsFor(x: SessionWorld) {
   return new GitVerbs({ log: async () => undefined, broker: { raise: async () => ({ cardId: 'card:01JAAAAAAAAAAAAAAAAAAAAAAA' }) as never, decisionOf: async () => 'allow', auto: async () => undefined } as never, gnomonHome: x.home, userHome: () => x.userHome });
 }
-const sess = (x: SessionWorld): VerbSession => ({ hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:abcdefgh/s-x', cwd: x.cwd, repoKey: 'sha256:00', mode: 'auto-edits', planApproved: false, loop: false });
+const sess = (x: SessionWorld): VerbSession => ({ hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:abcdefgh/s-x', cwd: x.cwd, repoKey: 'sha256:00', mode: 'auto-edits', planApproved: false, loop: false, worktreesGuarded: true });
 
 describe.runIf(OK)('git verbs under the session profile', () => {
   it('a fresh folder: git init is refused in the sandbox; the kernel makes the repo; the session commits; config and hooks stay denied', async () => {

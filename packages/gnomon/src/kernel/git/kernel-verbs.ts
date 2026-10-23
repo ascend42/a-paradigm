@@ -35,10 +35,11 @@ import type { ApprovalBroker } from '../broker/broker.js';
 import { wrappedBlock } from '../manifest/install.js';
 import { inputHash } from '../supervisor/permission.js';
 import { HARDENED_GIT_FLAGS } from './scratch.js';
-import { capturePushConfig, execTool, ghPath, gitPath, localGitEnv, networkEnv, PUSH_GIT_FLAGS, redactOutput, VERB_TIMEOUTS, type Exec } from './verb-exec.js';
+import { scanSecrets } from '../loops/secret-scan.js';
+import { capturePushConfig, EXEC_OUTPUT_CAP, execTool, ghPath, gitPath, localGitEnv, networkEnv, PUSH_GIT_FLAGS, redactOutput, VERB_TIMEOUTS, type Exec } from './verb-exec.js';
 import {
   configProblems, createCard, dotGitOf, GIT_VERB_TOOLS, hostWarning, INIT_BRANCH, initCard, initConfigText, initRefusal, parseRemote, pushCard, pushRuleInput,
-  readConfigEntries, validBranch, validOwner, validRemoteName, validRepoName, kernelWorktreeDirs, validWorktreeName, worktreeCard, WORKTREES_REL, type RemoteInfo, type VerbCard,
+  readConfigEntries, validBranch, validOwner, validRemoteName, validRepoName, kernelWorktreeDirs, isSteeringPath, validWorktreeName, worktreeCard, WORKTREES_REL, type RemoteInfo, type VerbCard,
 } from './verbs.js';
 
 export interface VerbSession {
@@ -53,7 +54,12 @@ export interface VerbSession {
   planApproved: boolean;
   /** a loop session (^loop-origin-clamp): never runs a verb */
   loop: boolean;
+  /** Aegis M2: this session's profile carries the kernel-worktree denies (darwin kernelWorktrees); else no worktree verb */
+  worktreesGuarded: boolean;
 }
+
+/** Aegis L5: verb calls one session may have in flight (queued or waiting on a card); past it, refused busy. */
+export const MAX_VERB_CALLS_PER_SESSION = 4;
 
 export interface VerbResult {
   ok: boolean;
@@ -197,9 +203,29 @@ export class GitVerbs {
   }
 
   /** Run one kernel MCP tool call for a session. Never throws: every outcome is a VerbResult. */
+  /** Aegis L5: verb calls in flight per hsid */
+  readonly #inflight = new Map<string, number>();
+
   async call(tool: string, args: unknown, s: VerbSession): Promise<VerbResult> {
     const verb = GIT_VERB_TOOLS[tool];
     if (!verb) return { ok: false, text: `unknown tool ${tool.slice(0, 64)}` };
+    const n = this.#inflight.get(s.hsid) ?? 0;
+    if (n >= MAX_VERB_CALLS_PER_SESSION) {
+      const h = inputHash({ verb, busy: true });
+      await this.#row(s, verb, 'requested', h);
+      return this.#refuse(s, verb, h, 'busy', `This session already has ${n} git verbs in flight: wait for them.`);
+    }
+    this.#inflight.set(s.hsid, n + 1);
+    try {
+      return await this.#queued(verb, args, s);
+    } finally {
+      const m = (this.#inflight.get(s.hsid) ?? 1) - 1;
+      if (m <= 0) this.#inflight.delete(s.hsid);
+      else this.#inflight.set(s.hsid, m);
+    }
+  }
+
+  async #queued(verb: GitVerb, args: unknown, s: VerbSession): Promise<VerbResult> {
     const root = real(verb === 'git.init' ? s.cwd : (s.worktree ?? s.cwd));
     const prev = this.#queue.get(root) ?? Promise.resolve();
     const run = prev.catch(() => undefined).then(() => this.#run(verb, args, s, root));
@@ -240,7 +266,7 @@ export class GitVerbs {
     }
   }
 
-  async #row(s: VerbSession, verb: GitVerb, phase: 'requested' | 'refused' | 'ran' | 'failed', hash: string, extra: { why?: GitVerbReason; cardId?: string; host?: string; exitCode?: number } = {}): Promise<void> {
+  async #row(s: VerbSession, verb: GitVerb, phase: 'requested' | 'refused' | 'ran' | 'failed' | 'lookup', hash: string, extra: { why?: GitVerbReason; cardId?: string; host?: string; exitCode?: number } = {}): Promise<void> {
     const host = extra.host !== undefined && /^[a-z0-9.-]{1,253}$/.test(extra.host) ? extra.host : undefined;
     await this.#o.log('git.verb', { hsid: s.hsid, verb, phase, inputHash: hash, ...(extra.why ? { why: extra.why } : {}), ...(extra.cardId ? { cardId: extra.cardId } : {}), ...(host ? { host } : {}), ...(extra.exitCode !== undefined ? { exitCode: Math.max(-1, Math.min(255, extra.exitCode)) } : {}) }, { session: s.hsid });
   }
@@ -444,10 +470,14 @@ export class GitVerbs {
     const warning = hostWarning(info.host);
     const rule = pushRuleInput(info);
     const ruleHash = inputHash(rule);
+    // Aegis M5: the commits this push sends, scanned for secrets; a hit (or a diff too large to scan) always takes the card
+    const scan = await this.#scanPush(st, remote);
+    // Aegis L3: a force push leases on the kernel-read remote-tracking sha (or on the remote having no such branch)
+    const lease = force ? await this.#trackingSha(st, remote) : null;
     const b = this.#o.broker;
     let cardId: string | undefined;
     let viaRule = false;
-    if (!force && !warning && b && typeof b.auto === 'function') {
+    if (!force && !warning && !scan.secrets.length && !scan.incomplete && b && typeof b.auto === 'function') {
       let m: { ruleId: string } | null = null;
       try {
         m = this.#o.alwaysRule?.(s.repoKey, 'gnomon_git_push', ruleHash, rule, { prefixRules: s.mode !== 'manual', roots: this.#roots(s) }) ?? null;
@@ -464,16 +494,38 @@ export class GitVerbs {
       }
     }
     if (!viaRule) {
-      const d = await this.#decide(s, pushCard({ root, branch: st.branch, remote, remoteInfo: info, force, warning }), 'gnomon_git_push', rule, ruleHash);
+      const d = await this.#decide(s, pushCard({ root, branch: st.branch, remote, remoteInfo: info, force, warning, lease, secrets: scan.secrets, scanIncomplete: scan.incomplete }), 'gnomon_git_push', rule, ruleHash);
       cardId = d.cardId ?? undefined;
       if (d.decision === 'none') return this.#refuse(s, verb, hash, 'no-approval-surface', 'No approval surface could take the card: not pushed.', { host: info.host });
-      if (d.decision !== 'allow' && d.decision !== 'always') return this.#refuse(s, verb, hash, 'denied', 'The human did not approve this push.', { host: info.host, ...(cardId ? { cardId } : {}) });
+      if (d.decision !== 'allow' && d.decision !== 'always') return this.#refuse(s, verb, hash, scan.secrets.length ? 'secret-in-push' : 'denied', scan.secrets.length ? 'The human did not approve pushing commits that look like they hold a secret.' : 'The human did not approve this push.', { host: info.host, ...(cardId ? { cardId } : {}) });
     }
-    return this.#doPush(s, verb, hash, { st, remote, info, force, upstream: false, ...(cardId ? { cardId } : {}) }, a.branch);
+    return this.#doPush(s, verb, hash, { st, remote, info, force, lease, upstream: false, ...(cardId ? { cardId } : {}) }, a.branch);
+  }
+
+  /** Aegis M5: added lines of `<branch> --not --remotes=<remote>` scanned with #loop-check's scanSecrets (kinds only, per file). */
+  async #scanPush(st: RepoState, remote: string): Promise<{ secrets: Array<{ file: string; kinds: string[] }>; incomplete: boolean }> {
+    const git = (this.#o.git ?? gitPath)()!;
+    const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'log', '-p', '--no-color', '--no-ext-diff', '--no-textconv', '--format=', `refs/heads/${st.branch}`, '--not', `--remotes=${remote}`], { cwd: st.root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.push });
+    const added = new Map<string, string>();
+    let file: string | null = null;
+    for (const line of r.stdout.split('\n')) {
+      if (line.startsWith('+++ ')) file = line === '+++ /dev/null' ? null : line.slice(4).replace(/^b\//, '');
+      else if (file && line.startsWith('+')) added.set(file, `${added.get(file) ?? ''}${line.slice(1)}\n`);
+    }
+    const secrets = [...added].map(([f, text]) => ({ file: f, kinds: scanSecrets(text).redactions.map((x) => x.kind) })).filter((x) => x.kinds.length > 0).sort((x, y) => (x.file < y.file ? -1 : 1));
+    return { secrets, incomplete: r.stdout.length >= EXEC_OUTPUT_CAP || r.timedOut };
+  }
+
+  /** Aegis L3: the remote-tracking sha of the pushed branch (the last fetch), or null when there is none. */
+  async #trackingSha(st: RepoState, remote: string): Promise<string | null> {
+    const git = (this.#o.git ?? gitPath)()!;
+    const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'rev-parse', '--verify', '--quiet', `refs/remotes/${remote}/${st.branch}`], { cwd: st.root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.read });
+    const sha = r.stdout.trim();
+    return r.code === 0 && /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha) ? sha : null;
   }
 
   /** Re-read the repo and the remote (they must match the card), then push by remote name. */
-  async #doPush(s: VerbSession, verb: GitVerb, hash: string, p: { st: RepoState; remote: string; info: RemoteInfo; force: boolean; upstream: boolean; cardId?: string }, branchArg: unknown): Promise<VerbResult> {
+  async #doPush(s: VerbSession, verb: GitVerb, hash: string, p: { st: RepoState; remote: string; info: RemoteInfo; force: boolean; lease?: string | null; upstream: boolean; cardId?: string }, branchArg: unknown): Promise<VerbResult> {
     const ids = { host: p.info.host, ...(p.cardId ? { cardId: p.cardId } : {}) };
     const st2 = await this.#repoState(p.st.root, branchArg ?? p.st.branch);
     if (isRefused(st2)) return this.#refuse(s, verb, hash, st2.refused, st2.text, ids);
@@ -481,12 +533,12 @@ export class GitVerbs {
     if (isRefused(info2) || info2.url !== p.info.url || st2.branch !== p.st.branch) return this.#refuse(s, verb, hash, 'remote-changed', 'The remote or the branch changed after the card: not pushed. Ask again.', ids);
     const git = (this.#o.git ?? gitPath)()!;
     const ref = `refs/heads/${p.st.branch}`;
-    const args = [...PUSH_GIT_FLAGS, '--git-dir', p.st.gitDir, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no', ...(p.upstream ? ['--set-upstream'] : []), ...(p.force ? ['--force-with-lease'] : []), '--', p.remote, `${ref}:${ref}`];
+    const args = [...PUSH_GIT_FLAGS, '--git-dir', p.st.gitDir, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no', ...(p.upstream ? ['--set-upstream'] : []), ...(p.force ? [`--force-with-lease=${ref}:${p.lease ?? ''}`] : []), '--', p.remote, `${ref}:${ref}`];
     const r = await this.#exec()(git, args, { cwd: p.st.root, env: await this.#netEnv(path.dirname(git), p.st.gitDir), timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git push ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git push to ${p.info.slug} failed: ${redactOutput(`${r.stderr}\n${r.stdout}`, 800)}`, { ...ids, exitCode: r.code });
     await this.#row(s, verb, 'ran', hash, ids);
-    return { ok: true, text: `Pushed ${p.st.branch} to ${p.info.url} (${p.info.slug})${p.force ? ' with force (lease)' : ''}.` };
+    return { ok: true, text: `Pushed ${p.st.branch} to ${p.info.url} (${p.info.slug})${p.force ? ` with force (leased on ${p.lease ? p.lease.slice(0, 12) : 'no remote branch'})` : ''}.` };
   }
 
   /* ── repo.create ──────────────────────────────────────────────────────── */
@@ -507,12 +559,14 @@ export class GitVerbs {
     const git = (this.#o.git ?? gitPath)()!;
     const exists = async (): Promise<boolean> => (await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'remote', 'get-url', '--', remote], { cwd: root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.read })).code === 0;
     if (await exists()) return this.#refuse(s, verb, hash, 'remote-exists', `This repo already has a remote named ${remote}: use gnomon_git_push, or pick another remote name.`);
-    const gh = (this.#o.gh ?? (() => ghPath(this.#env())))();
+    const gh = (this.#o.gh ?? ghPath)();
     if (!gh) return this.#refuse(s, verb, hash, 'tool-missing', 'gh (GitHub CLI) is not installed: the human installs it and runs `gh auth login`.');
     const host = 'github.com';
     const ghEnv = await this.#netEnv(path.dirname(gh));
     let owner = a.owner as string | undefined;
     if (owner === undefined) {
+      // Aegis L6: a read with the human's credentials before the card has its own row
+      await this.#row(s, verb, 'lookup', hash, { host });
       const who = await this.#exec()(gh, ['api', 'user', '--jq', '.login'], { cwd: this.#o.userHome(), env: ghEnv, timeoutMs: VERB_TIMEOUTS.read });
       const login = who.stdout.trim();
       if (who.code !== 0 || !validOwner(login)) return this.#refuse(s, verb, hash, 'not-authenticated', 'gh is not signed in to github.com: the human runs `gh auth login`.', { host });
@@ -562,6 +616,26 @@ export class GitVerbs {
 
   /* ── git.worktree.add / git.worktree.remove ───────────────────────────── */
 
+  /** Aegis M1: steering paths of `ref` vs HEAD (paths whose blob differs or exists on one side only), and the hash of ref's steering set. */
+  async #steering(gitDir: string, ref: string, local: { cwd: string; env: Record<string, string>; timeoutMs: number }): Promise<{ diff: string[]; hash: string | null }> {
+    const git = (this.#o.git ?? gitPath)()!;
+    const tree = async (r: string): Promise<Map<string, string>> => {
+      const out = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', gitDir, 'ls-tree', '-r', '-z', '--full-tree', r], local);
+      const m = new Map<string, string>();
+      for (const e of out.stdout.split('\0')) {
+        const tab = e.indexOf('\t');
+        if (tab < 0) continue;
+        const p = e.slice(tab + 1);
+        if (isSteeringPath(p)) m.set(p, e.slice(0, tab).split(' ')[2] ?? '');
+      }
+      return m;
+    };
+    const b = await tree(ref);
+    const h = await tree('HEAD');
+    const diff = [...new Set([...b.keys(), ...h.keys()])].filter((p) => b.get(p) !== h.get(p)).sort();
+    return { diff, hash: inputHash([...b].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) };
+  }
+
   /** `<root>/.gnomon` and `<root>/.gnomon/worktrees`: absent or real folders (never a link); made when `make`. */
   #worktreesDir(root: string, make: boolean): string | Refused {
     let d = root;
@@ -584,6 +658,7 @@ export class GitVerbs {
 
   async #worktree(verb: GitVerb, a: Record<string, unknown> | null, s: VerbSession, root: string, hash: string): Promise<VerbResult> {
     const remove = verb === 'git.worktree.remove';
+    if (!s.worktreesGuarded) return this.#refuse(s, verb, hash, 'unguarded', 'Kernel worktrees need the session profile\'s worktree denies, which this platform does not have yet.');
     const keys = remove ? ['name', 'force'] : ['name', 'branch', 'base'];
     if (!a || Object.keys(a).some((k) => !keys.includes(k))) return this.#refuse(s, verb, hash, 'bad-input', `${remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add'} takes ${keys.join(', ')} only.`);
     if (!validWorktreeName(a.name)) return this.#refuse(s, verb, hash, 'bad-input', 'name must be letters, digits, ".", "_" or "-" (at most 64, not starting with "." or "-").');
@@ -613,8 +688,12 @@ export class GitVerbs {
       if (a.base !== undefined && (await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'rev-parse', '--verify', '--quiet', `refs/heads/${a.base}^{commit}`], local)).code !== 0) return this.#refuse(s, verb, hash, 'no-branch', `Branch ${a.base} does not exist.`);
     }
     const base = a.base === undefined ? st.branch : a.base;
-    const card = worktreeCard({ root, name: a.name, dir, branch, base, remove, force });
-    const gate = await this.#editGate(s, verb, hash, card, remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add', { verb, root, name: a.name, branch, base, force }, dir, force);
+    // Aegis M1: the steering files the base would check out (CLAUDE*.md, .claude/**, .mcp.json, any case) against this
+    // checkout's HEAD; any difference raises the card even under auto-edits. The set's hash rides the verb's input
+    // (approval.auto / approval.request tool_input), so the log names exactly what was checked out
+    const steer = remove ? { diff: [] as string[], hash: null as string | null } : await this.#steering(st.gitDir, `refs/heads/${base}`, local);
+    const card = worktreeCard({ root, name: a.name, dir, branch, base, remove, force, steeringDiff: steer.diff });
+    const gate = await this.#editGate(s, verb, hash, card, remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add', { verb, root, name: a.name, branch, base, force, ...(steer.hash ? { steeringHash: steer.hash } : {}) }, dir, force || steer.diff.length > 0);
     if ('ok' in gate) return gate;
     const ids = gate.cardId ? { cardId: gate.cardId } : {};
     if (remove) {

@@ -347,6 +347,11 @@ export function hostWarning(host: string): string | null {
   if (/[^\x00-\x7f]/.test(h)) return `the host ${h} has non-ASCII characters (it can imitate another host)`;
   if (h.split('.').some((l) => l.startsWith('xn--'))) return `the host ${h} is punycode (xn--): it can imitate another host`;
   if (KNOWN_FORGE_HOSTS.some((k) => h === k || h.endsWith(`.${k}`))) return null;
+  // Aegis L1: a forge's name as a whole label of another domain (github.evil.io, a.gitlab.example) is flagged too
+  for (const k of KNOWN_FORGE_HOSTS) {
+    const name = k.split('.')[0]!;
+    if (name.length >= 6 && h.split('.').includes(name)) return `the host ${h} uses the name ${name} but is not ${k}`;
+  }
   for (const k of KNOWN_FORGE_HOSTS) {
     const name = k.split('.')[0]!;
     if (editDistance(h, k) <= 2) return `the host ${h} looks like ${k} but is a different host`;
@@ -365,11 +370,24 @@ export interface PushPlan {
   force: boolean;
   /** set ⇒ the card is flagged claim-mismatch and offers no Always */
   warning: string | null;
+  /** L3: a force push's explicit lease — the remote branch must still be at this sha (the last fetched), or absent (null) */
+  lease?: string | null;
+  /** M5: what the kernel's secret scan found in the pushed commits ({file, kinds}); any ⇒ a card even with an Always rule */
+  secrets?: ReadonlyArray<{ file: string; kinds: readonly string[] }>;
+  /** M5: the pushed diff was larger than the scan reads (the card says so) */
+  scanIncomplete?: boolean;
+}
+
+/** Mika (Rules view): how a learned push rule reads, from its kernel-held input (the slug stays on the rule). */
+export function pushRuleWords(input: unknown): string | null {
+  const o = input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : null;
+  if (!o || o.verb !== 'git.push' || typeof o.host !== 'string' || typeof o.owner !== 'string' || typeof o.repo !== 'string') return null;
+  return `pushes to ${o.host}/${o.owner}/${o.repo} from this repo (any branch, never a force push)`;
 }
 
 /** The input an Always rule is keyed by: the exact remote URL and host (and, through repoKey, this repo). Never the branch. */
 export function pushRuleInput(r: RemoteInfo): Record<string, unknown> {
-  return { verb: 'git.push', host: r.host, owner: r.owner, repo: r.repo, url: r.url };
+  return { verb: 'git.push', host: r.host, owner: r.owner, repo: r.repo, slug: r.slug, url: r.url };
 }
 
 export interface VerbCard {
@@ -384,18 +402,21 @@ export function pushCard(p: PushPlan): VerbCard {
   const r = p.remoteInfo;
   const lines = [
     ...(p.warning ? [`Warning: ${p.warning}. Deny unless you meant this host.`] : []),
-    `Push ${p.branch} to ${r.url} (${r.slug})`,
+    `Push ${p.branch} to ${r.slug}`,
+    `url: ${r.url}`,
     `host: ${r.host}${r.port ? ` port ${r.port}` : ''}`,
     `remote: ${p.remote} → ${r.url} (the push URL git resolves for it: this repo's .git/config under Gnomon's own credential-only global config)`,
     `branch: ${p.branch} (refs/heads/${p.branch} → refs/heads/${p.branch})`,
     `repo: ${p.root}`,
-    ...(p.force ? ['Warning: FORCE push (with lease): it can overwrite commits on the remote that your branch does not have.'] : []),
+    ...(p.secrets?.length ? [`Warning: the pushed commits add text that looks like a secret (${p.secrets.length} file${p.secrets.length === 1 ? '' : 's'}):`, ...p.secrets.slice(0, 12).map((x) => `  secret: ${x.file} (${x.kinds.join(', ')})`)] : []),
+    ...(p.scanIncomplete ? ['Warning: the pushed diff is larger than Gnomon scans for secrets; only its start was scanned.'] : []),
+    ...(p.force ? ['Warning: FORCE push: it can overwrite commits on the remote that your branch does not have.', p.lease ? `lease: only if the remote ${p.branch} is still at ${p.lease.slice(0, 12)} (your last fetch); else nothing is pushed` : `lease: only if the remote has no ${p.branch} yet (nothing fetched); else nothing is pushed`] : []),
     `Runs with your own git credentials, outside the session sandbox. Never tags, never a mirror${p.force ? '' : ', never a force push'}.`,
-    ...(!p.force && !p.warning ? [`always: pushes to ${r.slug} from this repo with no card next time (any branch, never a force push).`] : []),
+    ...(!p.force && !p.warning && !p.secrets?.length ? [`always: pushes to ${r.slug} from this repo with no card next time (any branch, never a force push).`] : []),
   ];
-  const detail = { verb: 'git.push', tool: 'gnomon_git_push', host: r.host, owner: r.owner, repo: r.repo, slug: r.slug, url: r.url, remote: p.remote, branch: p.branch, force: p.force, root: p.root, ...(p.warning ? { hostWarning: p.warning } : {}) };
+  const detail = { verb: 'git.push', tool: 'gnomon_git_push', host: r.host, owner: r.owner, repo: r.repo, slug: r.slug, url: r.url, remote: p.remote, branch: p.branch, force: p.force, root: p.root, ...(p.warning ? { hostWarning: p.warning } : {}), ...(p.force ? { lease: p.lease ?? null } : {}), ...(p.secrets?.length ? { secrets: p.secrets.map((x) => ({ file: x.file, kinds: [...x.kinds] })) } : {}) };
   const flags: VerbCard['flags'] = [...(p.warning ? (['claim-mismatch'] as const) : []), ...(p.force ? (['irreversible'] as const) : [])];
-  return { lines, detail, decisions: p.force || p.warning ? ['allow', 'deny'] : ['allow', 'deny', 'always'], flags };
+  return { lines, detail, decisions: p.force || p.warning || p.secrets?.length || p.scanIncomplete ? ['allow', 'deny'] : ['allow', 'deny', 'always'], flags };
 }
 
 export interface CreatePlan {
@@ -423,7 +444,14 @@ export function createCard(p: CreatePlan): VerbCard {
   return { lines, detail: { verb: 'repo.create', tool: 'gnomon_repo_create', host: p.host, owner: p.owner, repo: p.name, slug, url: p.url, remote: p.remote, branch: p.branch, visibility: p.visibility, root: p.root }, decisions: ['allow', 'deny'], flags: p.visibility === 'public' ? ['irreversible'] : [] };
 }
 
-export function worktreeCard(p: { root: string; name: string; dir: string; branch: string; base: string; remove: boolean; force: boolean }): VerbCard {
+/** Aegis M1: a path that steers Claude Code in a checkout (any case): any `.claude` component, a CLAUDE*.md file, `.mcp.json`. */
+export function isSteeringPath(p: string): boolean {
+  const parts = p.split('/').map((x) => x.toLowerCase());
+  const last = parts.at(-1) ?? '';
+  return parts.slice(0, -1).includes('.claude') || last === '.claude' || /^claude[^/]*\.md$/.test(last) || last === '.mcp.json';
+}
+
+export function worktreeCard(p: { root: string; name: string; dir: string; branch: string; base: string; remove: boolean; force: boolean; steeringDiff?: readonly string[] }): VerbCard {
   const lines = p.remove
     ? [
         `Remove the worktree ${p.name}`,
@@ -437,9 +465,10 @@ export function worktreeCard(p: { root: string; name: string; dir: string; branc
         `worktree: ${p.dir}`,
         `branch: ${p.branch} from ${p.base}`,
         `repo: ${p.root}`,
+        ...(p.steeringDiff?.length ? [`Warning: ${p.base} checks out ${p.steeringDiff.length} steering file(s) that differ from this checkout (Claude reads them in the worktree):`, ...p.steeringDiff.slice(0, 12).map((f) => `  steering: ${f}`), ...(p.steeringDiff.length > 12 ? [`  … and ${p.steeringDiff.length - 12} more`] : [])] : []),
         'Runs git worktree add outside the session sandbox (no hooks). The session can edit its files; its CLAUDE.md, .claude, .mcp.json and .git pointer stay as checked out.',
       ];
-  return { lines, detail: { verb: p.remove ? 'git.worktree.remove' : 'git.worktree.add', tool: p.remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add', root: p.root, name: p.name, dir: p.dir, branch: p.branch, base: p.base, force: p.force }, decisions: ['allow', 'deny'], flags: p.force ? ['irreversible'] : [] };
+  return { lines, detail: { verb: p.remove ? 'git.worktree.remove' : 'git.worktree.add', tool: p.remove ? 'gnomon_worktree_remove' : 'gnomon_worktree_add', root: p.root, name: p.name, dir: p.dir, branch: p.branch, base: p.base, force: p.force, ...(p.steeringDiff?.length ? { steeringDiff: [...p.steeringDiff] } : {}) }, decisions: ['allow', 'deny'], flags: p.force ? ['irreversible'] : [] };
 }
 
 export function initCard(root: string, remnant: boolean): VerbCard {

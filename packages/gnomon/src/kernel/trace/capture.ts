@@ -271,7 +271,8 @@ const SECRET_SHAPES: ReadonlyArray<{ kind: string; re: RegExp }> = [
   { kind: 'private-key', re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[A-Za-z0-9+/=\s]{0,16384}(?:-----END [A-Z0-9 ]*PRIVATE KEY-----)?/g },
   { kind: 'gnomon-read-token', re: /grt:v1:[0-9A-Za-z]{1,26}(?:\.[A-Za-z0-9_-]{1,43})?/g },
   { kind: 'anthropic-key', re: /sk-ant-[A-Za-z0-9_-]{8,}/g },
-  { kind: 'github-token', re: /\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g },
+  // Aegis L2 (T-2026-10-23-002): every GitHub token prefix (personal, OAuth, user, server, refresh), as #loop-check's scan
+  { kind: 'github-token', re: /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g },
   { kind: 'aws-key', re: /\bAKIA[0-9A-Z]{16}\b/g },
   { kind: 'slack-token', re: /\bxox[bp]-[A-Za-z0-9-]{10,}/g },
 ];

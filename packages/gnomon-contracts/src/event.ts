@@ -523,8 +523,11 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
 /** git.verb{verb} (CLOSED, 8.0:git-verbs): the kernel-run git verbs a session may ask for. */
 export const GIT_VERBS = ['git.init', 'git.push', 'repo.create', 'git.worktree.add', 'git.worktree.remove'] as const;
 export type GitVerb = (typeof GIT_VERBS)[number];
-/** git.verb{phase} (CLOSED): requested (before any card or effect), then one of refused | ran | failed. */
-export const GIT_VERB_PHASES = ['requested', 'refused', 'ran', 'failed'] as const;
+/**
+ * git.verb{phase} (CLOSED): requested (before any card or effect), then one of refused | ran | failed. `lookup` (Aegis
+ * L6) is a read the kernel made with the human's credentials before the card (repo.create's `gh api user`), host only.
+ */
+export const GIT_VERB_PHASES = ['requested', 'refused', 'ran', 'failed', 'lookup'] as const;
 export type GitVerbPhase = (typeof GIT_VERB_PHASES)[number];
 /**
  * git.verb{why} (CLOSED): why a verb was refused (phase refused) or did not finish (phase failed).
@@ -550,6 +553,9 @@ export type GitVerbPhase = (typeof GIT_VERB_PHASES)[number];
  *   timeout             git or gh ran past the kernel's limit
  *   worktree-exists     worktree add: a worktree (or anything) of that name, or that branch, already exists
  *   no-worktree         worktree remove: no kernel worktree of that name
+ *   busy                the session already has the most verb calls in flight (Aegis L5)
+ *   unguarded           worktree verbs: this session's profile has no kernel-worktree denies (win32/linux)
+ *   secret-in-push      push: the kernel's secret scan hit in the pushed commits and the human denied the card
  */
 export const GIT_VERB_REASONS = [
   'not-a-root',
@@ -574,6 +580,9 @@ export const GIT_VERB_REASONS = [
   'timeout',
   'worktree-exists',
   'no-worktree',
+  'busy',
+  'unguarded',
+  'secret-in-push',
 ] as const;
 export type GitVerbReason = (typeof GIT_VERB_REASONS)[number];
 /** git.verb{host}: a lowercase DNS name (LDH labels; punycode stays visible as xn--), at most 253 characters. */
@@ -854,7 +863,7 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('host' in v) c.str('host', v.host, GIT_VERB_HOST_PATTERN, 'a lowercase DNS host');
       if ('exitCode' in v && (typeof v.exitCode !== 'number' || !Number.isInteger(v.exitCode) || v.exitCode < -1 || v.exitCode > 255)) c.fail('exitCode', 'must be an integer exit code (-1 = killed)');
       if ((v.phase === 'refused' || v.phase === 'failed') && !('why' in v)) c.fail('why', 'names why a refused or failed verb stopped');
-      if ((v.phase === 'requested' || v.phase === 'ran') && 'why' in v) c.fail('why', 'only a refused or failed verb names a why');
+      if ((v.phase === 'requested' || v.phase === 'ran' || v.phase === 'lookup') && 'why' in v) c.fail('why', 'only a refused or failed verb names a why');
       break;
     case 'offer.suppressed': {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
