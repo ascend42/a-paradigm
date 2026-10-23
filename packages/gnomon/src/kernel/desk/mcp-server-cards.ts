@@ -30,7 +30,7 @@ import { mintId } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker } from '../broker/broker.js';
 import type { PolicyPath } from '../manifest/policy.js';
 import { RpcRefusal } from '../socket/rpc.js';
-import { composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
+import { allowRuleWords, autoAllowRules, composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
 
 export const MCP_SERVERS_SCHEMA = 'gnomon-mcp-servers:v1' as const;
 export const MCP_ENABLE_REQUEST = 'request.mcp.enable' as const;
@@ -124,7 +124,7 @@ export const SOURCE_TEXT: Readonly<Record<McpServerRow['source'], string>> = Obj
 });
 
 /** The enable card's lines: title, the kernel line, then what turns on. Names only, never a value. */
-export function mcpEnableCardLines(r: McpServerRow, f: { scope: McpScope; via: 'settings' | 'terminal'; at: number; launchHash: string; pluginRoot?: string | null }): string[] {
+export function mcpEnableCardLines(r: McpServerRow, f: { scope: McpScope; via: 'settings' | 'terminal'; at: number; launchHash: string; pluginRoot?: string | null; autoAllowed?: readonly string[] }): string[] {
   const where = f.scope === 'all' ? 'for all your repos' : `in ${path.basename(f.scope.repo)}`;
   const anyValue = r.envNames.length + r.headerNames.length + r.needs.length > 0;
   return [
@@ -137,11 +137,14 @@ export function mcpEnableCardLines(r: McpServerRow, f: { scope: McpScope; via: '
       : [`connects to ${r.host ?? '?'} (${r.url ?? r.transport}) from the session: tool calls send data there`]),
     ...(r.shell ? [`runs a shell (${r.shell}): Gnomon cannot see what that command line starts`] : []),
     ...(r.fetches ? [`downloads what it runs at every launch (${r.fetches}): what runs can change without a new card`] : []),
+    ...(r.inline ? [`runs inline code (${r.inline}): the program is the args above`] : []),
     ...(r.envNames.length ? [`env names ${r.envNames.join(', ')} (values not shown)`] : []),
     ...(r.headerNames.length ? [`header names ${r.headerNames.join(', ')} (values not shown)`] : []),
     ...(r.needs.length ? [`takes ${r.needs.join(', ')} from ${LOOP_ENV_SHOWN}`] : []),
     ...(anyValue ? ["env and header values are written to this session's mcp.json and readable by the session"] : []),
-    "its tools ask like any tool: cards and Always rules apply; nothing is allowed automatically, and its tool descriptions are the server's words, not Gnomon's",
+    // TD-2026-10-23-361 (H1, founder): the human's own Claude Code allow rules are honoured, and named here
+    ...(f.autoAllowed?.length ? [`your Claude Code settings auto-allow: ${allowRuleWords(f.autoAllowed)}; those tools run with no card`] : []),
+    `its other tools ask like any tool (cards and Always rules); Gnomon adds no allow rule, and its tool descriptions are the server's words, not Gnomon's`,
     ...(r.source === 'project' ? ["this repo's .mcp.json is the repo's code: allow only if you trust this repo"] : []),
     `launch ${f.launchHash}`,
     'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice; deny changes nothing',
@@ -207,15 +210,53 @@ export class McpServers {
    * then runs under the same session profile (no escalation).
    */
   sessionDenies(ctx?: { cwd: string; worktree?: string }): PolicyPath[] {
-    const fp = this.#o.firstParty();
-    if (!fp.available || readMcpServersStore(this.#o.home).firstParty.paradigm === 'off') return [];
     const roots = ctx ? [ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])].map(realOr) : [];
-    const overlaps = roots.some((r) => {
-      const a = path.relative(r, fp.dir);
-      const b = path.relative(fp.dir, r);
-      return a === '' || (!a.startsWith('..') && !path.isAbsolute(a)) || (!b.startsWith('..') && !path.isAbsolute(b));
-    });
-    return [...(overlaps ? [] : [{ path: fp.dir, match: 'subpath' as const, class: 'binary' as const }]), { path: fp.node, match: 'literal', class: 'binary' }];
+    const overlaps = (p: string): boolean =>
+      roots.some((r) => {
+        const a = path.relative(r, p);
+        const b = path.relative(p, r);
+        return a === '' || (!a.startsWith('..') && !path.isAbsolute(a)) || (!b.startsWith('..') && !path.isAbsolute(b));
+      });
+    const out: PolicyPath[] = [];
+    const add = (p: string, match: 'literal' | 'subpath', id: string): void => {
+      if (overlaps(p)) {
+        this.#o.emit?.({ event: 'mcp.deny.skipped', id, path: p, why: 'inside-session-roots' }); // logged (Aegis M3)
+        return;
+      }
+      if (!out.some((x) => x.path === p)) out.push({ path: p, match, class: 'binary' });
+    };
+    const fp = this.#o.firstParty();
+    if (fp.available && readMcpServersStore(this.#o.home).firstParty.paradigm === 'on') {
+      add(fp.dir, 'subpath', FIRST_PARTY_PARADIGM);
+      add(fp.node, 'literal', FIRST_PARTY_PARADIGM);
+    }
+    // TD-2026-10-23-361 (M3): every enabled `all` server's resolved command and absolute-path args are write-denied in
+    // every session, so no session can swap what the next session's server runs (a repo-scoped one runs only there)
+    const store = readMcpServersStore(this.#o.home);
+    const all = store.enabled.filter((e) => e.scope === 'all');
+    if (all.length) {
+      for (const d of this.#discover([])) {
+        if (d.transport !== 'stdio' || !d.resolved || d.problems.length) continue;
+        const hash = declHash(d, this.#o.launchKey);
+        if (!all.some((e) => e.id === d.id && e.launchHash === hash)) continue;
+        add(realOr(d.resolved), 'literal', d.id);
+        for (const a of d.args) {
+          if (!path.isAbsolute(a) || a.includes('${')) continue;
+          try {
+            const st = fs.statSync(a);
+            add(realOr(a), st.isDirectory() ? 'subpath' : 'literal', d.id);
+          } catch {
+            /* not a path on disk: nothing to protect */
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Aegis L5: `mcp.user.added` only for servers that made it into the session's FINAL mcpServers (after the merge). */
+  noteMerged(hsid: string, r: ComposeResult, finalServers: Record<string, unknown>): void {
+    for (const a of r.added) if (finalServers[a.server] !== undefined && finalServers[a.server] === r.servers[a.server]) this.#o.emit?.({ event: 'mcp.user.added', hsid, id: a.id, server: a.server, source: a.source, launchHash: a.launchHash });
   }
 
   /** The session's own servers (first-party + enabled) for a session opened in `cwd`. */
@@ -229,7 +270,6 @@ export class McpServers {
     if (env.refused) this.#o.emit?.({ event: 'mcp.user.env-refused', hsid: ctx.hsid, reason: env.refused });
     const r = composeSessionMcp({ decls, enabled: (d, hash) => enabledState(store, d, hash, repo), launchKey: this.#o.launchKey, cwd: ctx.cwd, firstParty: fp && fp.available ? fp : null, envValue: (n) => env.values.get(n) });
     if (fp && !fp.available) this.#o.emit?.({ event: 'mcp.first-party.unavailable', hsid: ctx.hsid, why: fp.why });
-    for (const a of r.added) this.#o.emit?.({ event: 'mcp.user.added', hsid: ctx.hsid, id: a.id, server: a.server, source: a.source, launchHash: a.launchHash });
     for (const s of r.skipped) this.#o.emit?.({ event: 'mcp.user.skipped', hsid: ctx.hsid, id: s.id, server: s.server, why: s.why, ...(s.names ? { names: s.names } : {}) });
     return r;
   }
@@ -241,7 +281,7 @@ export class McpServers {
     const state = (d: McpServerDecl) => {
       const hash = declHash(d, key);
       const mine = store.enabled.filter((e) => e.id === d.id);
-      return { ...mcpServerRow(d), on: { all: mine.some((e) => e.scope === 'all' && e.launchHash === hash), repos: mine.filter((e) => e.scope !== 'all' && e.launchHash === hash).map((e) => (e.scope as { repo: string }).repo) }, changed: mine.some((e) => e.launchHash !== hash) };
+      return { ...mcpServerRow(d), autoAllowed: autoAllowRules(this.#o.userHome, d.sessionName), on: { all: mine.some((e) => e.scope === 'all' && e.launchHash === hash), repos: mine.filter((e) => e.scope !== 'all' && e.launchHash === hash).map((e) => (e.scope as { repo: string }).repo) }, changed: mine.some((e) => e.launchHash !== hash) };
     };
     const live = new Map<string, string[]>();
     for (const l of this.#o.liveRepos?.() ?? []) {
@@ -254,7 +294,7 @@ export class McpServers {
       platform: this.#platform(),
       unsupported: this.#platform() === 'win32' ? 'platform' : null,
       envFile: LOOP_ENV_SHOWN,
-      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, on: store.firstParty.paradigm === 'on', available: fp.available, ...(fp.available ? { version: fp.version, dir: fp.dir } : { why: fp.why }) },
+      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }) },
       servers: all.filter((d) => d.source === 'user' || d.source === 'plugin').map(state),
       repos: [...live].map(([repo, hsids]) => ({ repo, folder: path.basename(repo), hsids, servers: all.filter((d) => d.repo === repo).map(state) })),
       pending: this.#pendingList().map((p) => ({ cardId: p.cardId, id: p.id, scope: p.scope === 'all' ? 'all' : 'repo', repo: p.scope === 'all' ? null : p.scope.repo })),
@@ -347,7 +387,7 @@ export class McpServers {
         requestedBy: asker.principal!,
         attended: true,
         detail: { action: 'mcp.enable', id, name: d.name, server: d.sessionName, source: d.source, scope: scope === 'all' ? 'all' : 'repo', repo: scope === 'all' ? null : scope.repo, transport: d.transport, host: row.host, envNames: row.envNames, headerNames: row.headerNames, needs: row.needs, shell: d.shell, fetches: d.fetches, launchHash: hash, rootRows: [] },
-        lines: mcpEnableCardLines(row, { scope, via: asker.credential === 'gui' ? 'settings' : 'terminal', at: now(), launchHash: hash, pluginRoot: d.plugin?.root ?? null }),
+        lines: mcpEnableCardLines(row, { scope, via: asker.credential === 'gui' ? 'settings' : 'terminal', at: now(), launchHash: hash, pluginRoot: d.plugin?.root ?? null, autoAllowed: autoAllowRules(this.#o.userHome, d.sessionName) }),
         decisions: ['allow', 'deny'],
         handOnly: true,
         timeoutMs: MCP_ENABLE_CARD_TTL_MS,

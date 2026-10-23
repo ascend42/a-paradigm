@@ -979,13 +979,16 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       const router = offerRouter;
       if (!router) {
         // L3: fail closed until the router is bound (no desk server, reserved repo names still dropped)
-        const only = repoServersOnly(mcpServers.compose(ctx).servers, distroServers);
+        const mine = mcpServers.compose(ctx);
+        const only = repoServersOnly(mine.servers, distroServers);
+        mcpServers.noteMerged(ctx.hsid, mine, only.servers); // Aegis L5: after the merge
         for (const server of only.dropped) emit({ kind: 'daemon.desk', event: 'mcp.reserved', hsid: ctx.hsid, server });
         emit({ kind: 'daemon.desk', event: 'mcp.unbound', hsid: ctx.hsid });
         return only.servers;
       }
       const repo = deskRepoScope(repoKeyOf([ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])]));
-      const r = mergeDeskMcp(mcpServers.compose(ctx).servers, deskMods.list(), { distro: distroServers, overrides: readMcpOverrides(home), repoMuted: (mod) => router.repoMuted(repo, mod), launchKey: deskLaunchKey(home) });
+      const mine = mcpServers.compose(ctx);
+      const r = mergeDeskMcp(mine.servers, deskMods.list(), { distro: distroServers, overrides: readMcpOverrides(home), repoMuted: (mod) => router.repoMuted(repo, mod), launchKey: deskLaunchKey(home) });
       // H1b: the servers actually added to THIS session (offers and kept go only through them)
       if (deskAdded.size >= 512) deskAdded.delete(deskAdded.keys().next().value!);
       deskAdded.set(ctx.hsid, new Set(r.added.map((a) => a.server)));
@@ -994,6 +997,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       for (const a of r.added) emit({ kind: 'daemon.desk', event: 'mcp.added', hsid: ctx.hsid, name: a.mod, server: a.server, launchHash: a.launchHash, overridden: a.overridden });
       // Aegis (S2): a non-absolute command is never launched; the server is reported needs-config
       for (const sk of r.skipped) if (sk.why === 'needs-config') emit({ kind: 'daemon.desk', event: 'mcp.needs-config', hsid: ctx.hsid, name: sk.mod, server: sk.server ?? null, next: UNCONFIGURED_HINT.replace('<mod>', sk.mod) });
+      mcpServers.noteMerged(ctx.hsid, mine, r.servers); // Aegis L5: only what reaches the session
       return r.servers;
     },
     onClaudeBinaryChanged: (real, found) => repin.onRefused(real, found),

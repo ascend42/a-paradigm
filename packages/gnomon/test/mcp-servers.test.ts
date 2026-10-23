@@ -10,6 +10,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  allowRuleWords,
+  autoAllowRules,
+  checkRemoteUrl,
+  inlineOf,
+  readRepoMcpJson,
   composeSessionMcp,
   declHash,
   declOf,
@@ -144,7 +149,11 @@ describe('#mcp-servers problems (Aegis: law 7, env names, shell wrappers, remote
     expect(codes('a', { command: '/bin/x', env: { NODE_OPTIONS: '--require x' } })).toContain('law-7'); // scrubbed
     expect(codes('a', { command: '/bin/x', env: { DYLD_INSERT_LIBRARIES: 'x' } })).toContain('env-name');
     expect(codes('a', { command: '/bin/x', env: { PATH: '/x' } })).toContain('env-name');
-    expect(codes('a', { command: '/bin/x', args: ['${GNOMON_KEY}'] })).toContain('env-name');
+    expect(codes('a', { command: '/bin/x', args: ['${GNOMON_KEY}'] })).toContain('law-7'); // a scrubbed name
+    expect(codes('a', { command: '/bin/x', args: ['${DYLD_LIBRARY_PATH}'] })).toContain('env-name');
+    // Aegis M2: a REFERENCE to a law-7 name is refused like setting it
+    expect(codes('a', { command: '/bin/x', env: { FOO: '${ANTHROPIC_API_KEY}' } })).toContain('law-7');
+    expect(codes('r', { type: 'http', url: 'https://mcp.example.com/${OPENAI_BASE_URL}' })).toContain('law-7');
   });
   it('remote URLs: https public hosts only; plain http, Anthropic, IP literals and private names are refused; loopback is allowed', () => {
     expect(codes('r', { type: 'http', url: 'https://mcp.example.com/mcp' })).toEqual([]);
@@ -267,7 +276,8 @@ describe('#mcp-servers the enable card and requests', () => {
     const text = c.lines.join('\n');
     expect(text).not.toContain(SECRET);
     expect(text).toContain('env names NEURONS_TOKEN, NEURONS_VAULT (values not shown)');
-    expect(text).toContain('nothing is allowed automatically');
+    expect(text).toContain('Gnomon adds no allow rule');
+    expect(text).not.toContain('nothing is allowed automatically');
     expect(c.lines[1]).toMatch(/^asked from Settings · \d\d:\d\d · applies to new sessions$/);
     // never standing: grant is a never-standing kind and no tuple maps an mcp.enable card
     expect(NEVER_STANDING_KINDS.has('grant')).toBe(true);
@@ -331,5 +341,100 @@ describe('#mcp-servers the enable card and requests', () => {
     expect(m.sessionDenies({ cwd: '/elsewhere' }).map((d) => d.path)).toEqual(['/p', '/n/node']);
     expect(raised).toHaveLength(0);
     expect(JSON.stringify(m.status())).not.toContain(SECRET);
+  });
+});
+
+describe('Aegis review of #mcp-servers (TD-2026-10-23-361)', () => {
+  const c = { source: 'user' as const, owner: '', pathDirs: ['/usr/bin', '/bin'], platform: 'darwin' };
+  it('M1: ${NAME} only in the path and query; a loopback port placeholder works; rows show placeholders, never x', () => {
+    for (const bad of ['https://${HOST}/mcp', 'https://mcp.example.com:${PORT}/mcp', 'https://${U}@mcp.example.com/', 'https://u:p@mcp.example.com/', '${SCHEME}://mcp.example.com/', 'http${S}://mcp.example.com/'])
+      expect(checkRemoteUrl(bad).problem, bad).not.toBeNull();
+    expect(checkRemoteUrl('https://mcp.example.com/${TENANT}/mcp?k=${KEY}')).toEqual({ problem: null, host: 'mcp.example.com', shown: 'https://mcp.example.com/${TENANT}/mcp' });
+    expect(checkRemoteUrl('http://127.0.0.1:${PORT}/').problem).toBeNull();
+    expect(checkRemoteUrl('http://127.0.0.1:${PORT:-7777}/mcp').shown).toBe('http://127.0.0.1:${PORT:-7777}/mcp');
+    const d = declOf('r', { type: 'http', url: 'https://mcp.example.com/${TENANT}/mcp' }, c);
+    expect(mcpServerRow(d).url).toBe('https://mcp.example.com/${TENANT}/mcp');
+    // after expansion: a value can never move the host; the expanded URL is checked again
+    expect(checkRemoteUrl('http://127.0.0.1:8080/', { expanded: true }).problem).toBeNull();
+    expect(checkRemoteUrl('http://127.0.0.1:${PORT}/', { expanded: true }).problem).not.toBeNull();
+    const loop = declOf('l', { type: 'http', url: 'http://127.0.0.1:${PORT}/mcp' }, c);
+    const on = () => 'on' as const;
+    expect(composeSessionMcp({ decls: [loop], enabled: on, launchKey: KEY, cwd: '/r', envValue: (n) => (n === 'PORT' ? '7777' : undefined) }).servers.l).toEqual({ type: 'http', url: 'http://127.0.0.1:7777/mcp' });
+    // a port value that is not a port fails the expanded check: skipped, never launched
+    const bad = composeSessionMcp({ decls: [loop], enabled: on, launchKey: KEY, cwd: '/r', envValue: () => '80@evil.example.com' });
+    expect(bad.servers.l).toBeUndefined();
+    expect(bad.skipped).toEqual([{ id: loop.id, server: 'l', why: 'remote' }]);
+  });
+
+  it('L1: a repo .mcp.json that is a symlink, a hard link or outside the repo is refused, shown as a row', () => {
+    const repo = tmp('mcp-l1-');
+    const other = tmp('mcp-l1o-');
+    write(path.join(other, 'x.json'), { mcpServers: { evil: { command: '/bin/echo' } } });
+    fs.symlinkSync(path.join(other, 'x.json'), path.join(repo, '.mcp.json'));
+    expect(readRepoMcpJson(repo).problem).toMatch(/symlink/);
+    fs.rmSync(path.join(repo, '.mcp.json'));
+    fs.linkSync(path.join(other, 'x.json'), path.join(repo, '.mcp.json'));
+    expect(readRepoMcpJson(repo).problem).toMatch(/hard link/);
+    const ds = discoverMcpServers({ userHome: tmp('mcp-l1u-'), repos: [repo], pathDirs: [] });
+    expect(ds).toHaveLength(1);
+    expect(ds[0]!.problems).toEqual([{ code: 'repo-file', text: expect.stringMatching(/hard link/) }]);
+    fs.rmSync(path.join(repo, '.mcp.json'));
+    write(path.join(repo, '.mcp.json'), { mcpServers: { ok: { command: '/bin/echo' } } });
+    expect(readRepoMcpJson(repo).problem).toBeNull();
+  });
+
+  it('L2: NAME=value and short-flag values that look secret are hidden; L3: inline code is flagged', () => {
+    expect(shownArgs(['API_KEY=abc', 'MODE=fast', '-k', 'abc', '-v', 'x'])).toEqual([`API_KEY=${HIDDEN_ARG}`, 'MODE=fast', '-k', HIDDEN_ARG, '-v', 'x']);
+    expect(inlineOf('/usr/bin/node', ['-e', 'require("x")'])).toBe('node -e');
+    expect(inlineOf('/usr/bin/python3', ['-c', 'print(1)'])).toBe('python3 -c');
+    expect(inlineOf('/opt/homebrew/bin/deno', ['eval', 'x'])).toBe('deno eval');
+    expect(inlineOf('/usr/bin/node', ['/x.js'])).toBeNull();
+    expect(declOf('i', { command: '/usr/bin/node', args: ['-e', 'x'] }, c).inline).toBe('node -e');
+  });
+
+  it("H1: the human's own Claude Code allow rules for a server are named, never overridden", () => {
+    const u = tmp('mcp-h1-');
+    write(path.join(u, '.claude', 'settings.json'), { permissions: { allow: ['mcp__github__*', 'mcp__neurons__search', 'Bash(ls)', 'mcp__githubx__a'] } });
+    write(path.join(u, '.claude', 'settings.local.json'), { permissions: { allow: ['mcp__github'] } });
+    expect(autoAllowRules(u, 'github')).toEqual(['mcp__github', 'mcp__github__*']);
+    expect(autoAllowRules(u, 'neurons')).toEqual(['mcp__neurons__search']);
+    expect(autoAllowRules(u, 'none')).toEqual([]);
+    expect(allowRuleWords(['mcp__github__*', 'mcp__neurons__search', 'mcp__*'])).toBe('mcp__github__* (all tools), mcp__neurons__search, mcp__* (every MCP tool)');
+  });
+});
+
+describe('Aegis review: the card, the denies and the events', () => {
+  const human = { connId: 'c1', principal: 'p:abcdefgh/founder', principalClass: 'human', credential: 'gui' };
+  it('H1 card line, M3 denies for enabled `all` servers (overlap exempt and logged), L5 added only after the merge, linked first party', async () => {
+    const w = world();
+    write(path.join(w.userHome, '.claude', 'settings.json'), { enabledPlugins: {}, permissions: { allow: ['mcp__neurons__*'] } });
+    // neurons runs node with an absolute script path on disk
+    const script = path.join(w.userHome, 'neurons', 'main.js');
+    write(script, '');
+    const cfg = JSON.parse(fs.readFileSync(path.join(w.userHome, '.claude.json'), 'utf8'));
+    cfg.mcpServers.neurons.args = [script, 'mcp'];
+    write(path.join(w.userHome, '.claude.json'), cfg);
+    const home = tmp('mcp-home-');
+    const raised: Array<{ lines: string[]; effect: (d: string) => Promise<void>; cardId: string }> = [];
+    const events: Array<Record<string, unknown>> = [];
+    const m = new McpServers({ home, broker: { raise: async (i: never) => (raised.push(i), { cardId: (i as { cardId: string }).cardId }) as never, card: () => ({ state: 'pending' }) as never } as never, userHome: w.userHome, pathDirs: () => w.pathDirs, launchKey: KEY, firstParty: () => ({ available: true, node: '/n/node', dir: '/p', entry: '/p/mcp.js', version: '8.0.0', linked: true }), liveRepos: () => [], emit: (e) => events.push(e) });
+    const st = m.status() as { servers: Array<{ id: string; name: string; autoAllowed: string[] }>; firstParty: Record<string, unknown> };
+    expect(st.firstParty).toMatchObject({ linked: true, dir: '/p', autoAllowed: [] });
+    const n = st.servers.find((s) => s.name === 'neurons')!;
+    expect(n.autoAllowed).toEqual(['mcp__neurons__*']);
+    await m.request(human, MCP_ENABLE_REQUEST, { id: n.id, scope: 'all' });
+    expect(raised[0]!.lines).toContain('your Claude Code settings auto-allow: mcp__neurons__* (all tools); those tools run with no card');
+    await raised[0]!.effect('allow');
+    const denies = m.sessionDenies({ cwd: w.repo }).map((d) => `${d.match}:${d.path}`);
+    expect(denies).toEqual(['subpath:/p', 'literal:/n/node', `literal:${path.join(w.bin, 'node')}`, `literal:${script}`]);
+    // a session inside the server's own folder keeps it editable; the skip is logged
+    expect(m.sessionDenies({ cwd: path.dirname(script) }).map((d) => d.path)).not.toContain(script);
+    expect(events).toContainEqual({ event: 'mcp.deny.skipped', id: n.id, path: script, why: 'inside-session-roots' });
+    // L5: compose emits no added; noteMerged emits only what reached the final set
+    events.length = 0;
+    const r = m.compose({ hsid: 'h', cwd: w.repo });
+    expect(events.filter((e) => e.event === 'mcp.user.added')).toEqual([]);
+    m.noteMerged('h', r, { paradigm: r.servers.paradigm });
+    expect(events.filter((e) => e.event === 'mcp.user.added').map((e) => e.server)).toEqual(['paradigm']);
   });
 });

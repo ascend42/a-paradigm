@@ -74,7 +74,7 @@ export const BUILTIN_REFS = Object.freeze(['CLAUDE_PLUGIN_ROOT', 'CLAUDE_PROJECT
 
 export type McpSource = 'user' | 'local' | 'project' | 'plugin';
 export type McpTransport = 'stdio' | 'http' | 'sse';
-export type McpProblemCode = 'name' | 'law-7' | 'env-name' | 'remote' | 'command' | 'plugin-path' | 'args' | 'transport' | 'first-party';
+export type McpProblemCode = 'name' | 'law-7' | 'env-name' | 'remote' | 'command' | 'plugin-path' | 'repo-file' | 'args' | 'transport' | 'first-party';
 export interface McpProblem {
   code: McpProblemCode;
   text: string;
@@ -103,6 +103,8 @@ export interface McpServerDecl {
   refs: Record<string, string | null>;
   shell: string | null;
   fetches: string | null;
+  /** inline code on the command line (node -e, python -c …; Aegis L3) */
+  inline: string | null;
   problems: McpProblem[];
 }
 
@@ -126,6 +128,7 @@ export interface McpServerRow {
   needs: string[];
   shell: string | null;
   fetches: string | null;
+  inline: string | null;
   problems: McpProblem[];
 }
 
@@ -160,18 +163,90 @@ const SECRET_FLAG = /(key|token|secret|passw(or)?d|auth|bearer|credential|cookie
 const SECRET_SHAPE = /^(sk-|sk_|pk_|rk_|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|AKIA|ya29\.|eyJ)[A-Za-z0-9._-]{8,}/;
 export const HIDDEN_ARG = '(hidden: looks like a secret)';
 
-/** Args as a row shows them: a value that looks like a secret (after a secret-named flag, or by its shape) is hidden. */
+/** Short flags whose value is often a key, token or password (`-k value`, `-t value`, `-p value`; Aegis L2). */
+const SECRET_SHORT = /^-[ktpPa]$/;
+
+/**
+ * Args as a row shows them: a value that looks like a secret is hidden — after a secret-named flag (`--api-key x`,
+ * `--token=x`), a secret-named assignment (`API_KEY=x`, Aegis L2), a short flag that often takes one (`-k x`), or by
+ * its shape (sk-…, ghp_…, a Bearer value, a URL with a password).
+ */
 export function shownArgs(args: readonly string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    const eq = /^(--?[A-Za-z0-9_.-]+)=(.*)$/s.exec(a);
+    const eq = /^(--?[A-Za-z0-9_.-]+|[A-Za-z_][A-Za-z0-9_.-]*)=(.*)$/s.exec(a);
+    const prev = i > 0 ? args[i - 1]! : '';
     if (eq && SECRET_FLAG.test(eq[1]!) && eq[2]!.length > 0) out.push(`${eq[1]}=${HIDDEN_ARG}`);
     else if (SECRET_SHAPE.test(a) || /^(Bearer|Basic)\s+\S+/i.test(a) || /:\/\/[^/@\s]+:[^/@\s]+@/.test(a)) out.push(HIDDEN_ARG);
-    else if (i > 0 && /^--?[A-Za-z0-9_.-]+$/.test(args[i - 1]!) && SECRET_FLAG.test(args[i - 1]!) && !a.startsWith('-')) out.push(HIDDEN_ARG);
+    else if (!a.startsWith('-') && ((/^--?[A-Za-z0-9_.-]+$/.test(prev) && SECRET_FLAG.test(prev)) || SECRET_SHORT.test(prev))) out.push(HIDDEN_ARG);
     else out.push(a);
   }
   return out;
+}
+
+/**
+ * Inline code on the command line (Aegis L3): `node -e`, `python -c`, `deno eval` … run a program written in the args,
+ * so the card says what kind it is (the args are shown in full).
+ */
+export function inlineOf(command: string, args: readonly string[]): string | null {
+  const bare = path.basename(command.replace(/\\/g, '/')).toLowerCase().replace(/\.exe$/, '');
+  const has = (...f: string[]) => args.some((a) => f.includes(a) || f.some((x) => x.startsWith('--') && a.startsWith(`${x}=`)));
+  if ((bare === 'node' || bare === 'bun') && has('-e', '--eval', '-p', '--print')) return `${bare} -e`;
+  if (/^python(\d+(\.\d+)?)?$/.test(bare) && has('-c')) return `${bare} -c`;
+  if (bare === 'deno' && args.find((a) => !a.startsWith('-')) === 'eval') return 'deno eval';
+  if ((bare === 'ruby' || bare === 'perl') && has('-e')) return `${bare} -e`;
+  return null;
+}
+
+/* ── remote URLs (Aegis M1) ──────────────────────────────────────────────── */
+
+const URL_PARTS = /^(https?):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/i;
+const LOOPBACK_HOST = /^(localhost|127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|\[::1\])$/i;
+const PORT_REF = /^\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[0-9]{1,5})?\}$/;
+
+export interface RemoteCheck {
+  problem: string | null;
+  host: string | null;
+  /** scheme://host[:port]/path as shown: `${NAME}` placeholders kept, never the query, fragment or userinfo */
+  shown: string | null;
+}
+
+/**
+ * The remote URL rule. `${NAME}` may appear only in the path and query (never the scheme, userinfo, host or port),
+ * except a loopback host's port (`http://127.0.0.1:${PORT}/`). A URL with userinfo is refused (put a credential in a
+ * header). https to a public host name (checkEgressHost), or http(s) to loopback. Run on the DECLARED URL at
+ * discovery and again on the EXPANDED URL at compose (`expanded: true`: no placeholder may remain).
+ */
+export function checkRemoteUrl(url: string, o: { expanded?: boolean } = {}): RemoteCheck {
+  const m = URL_PARTS.exec(url);
+  if (!m) return { problem: 'its URL is not an http(s) URL', host: null, shown: null };
+  const scheme = m[1]!.toLowerCase();
+  const auth = m[2]!;
+  const pathPart = m[3] ?? '';
+  if (auth.includes('@')) return { problem: 'its URL carries a user name or password; put a credential in a header', host: null, shown: null };
+  // the FIRST colon after the host (a `${PORT:-7777}` default holds one too; only a bracketed IPv6 host holds others)
+  const colon = auth.startsWith('[') ? auth.indexOf(':', auth.indexOf(']')) : auth.indexOf(':');
+  const hostPart = (colon >= 0 ? auth.slice(0, colon) : auth).toLowerCase();
+  const portPart = colon >= 0 ? auth.slice(colon + 1) : '';
+  const loop = LOOPBACK_HOST.test(hostPart);
+  if (hostPart.includes('${')) return { problem: 'its URL takes a variable in the host; Gnomon connects only to a host it can show', host: null, shown: null };
+  if (portPart.includes('${') && (o.expanded || !loop || !PORT_REF.test(portPart))) return { problem: 'its URL takes a variable in the port; only a loopback port may (http://127.0.0.1:${PORT}/)', host: null, shown: null };
+  if (o.expanded && url.includes('${')) return { problem: 'its URL still holds a variable', host: null, shown: null };
+  const shown = `${scheme}://${auth}${pathPart === '/' ? '' : pathPart}`;
+  let u: URL;
+  try {
+    u = new URL(`${scheme}://${hostPart}${portPart && !portPart.includes('${') ? `:${portPart}` : ''}${pathPart.replace(REF_RE, 'v')}`);
+  } catch {
+    return { problem: 'its URL is not an http(s) URL', host: null, shown: null };
+  }
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!loop) {
+    const v = checkEgressHost(host);
+    if (!v.ok) return { problem: v.why === 'anthropic' ? `${host} is an Anthropic host (law 7: the subscription path is the kernel's)` : `${host.slice(0, 80)} is not a public host name (${v.why})`, host, shown };
+    if (scheme !== 'https') return { problem: `${host.slice(0, 80)} is reached over plain http; Gnomon connects remote servers over https only`, host, shown };
+  }
+  return { problem: null, host, shown };
 }
 
 /* ── launchers ───────────────────────────────────────────────────────────── */
@@ -260,6 +335,9 @@ const strMap = (v: unknown): Record<string, string> => {
   return out;
 };
 
+/** A name that bills API credits or reroutes Claude (law 7): the billing names, *_BASE_URL and the scrubbed names. */
+export const law7 = (k: string): boolean => API_BILLING_ENV.includes(k.toUpperCase()) || /_BASE_URL$/i.test(k) || isScrubbed(k);
+
 /** Read and classify one server entry. Never throws: anything odd is a problem on the row. */
 export function declOf(name: string, raw: unknown, c: DeclContext): McpServerDecl {
   const platform = c.platform ?? process.platform;
@@ -277,8 +355,7 @@ export function declOf(name: string, raw: unknown, c: DeclContext): McpServerDec
   const args = Array.isArray(e.args) ? e.args.filter((a): a is string => typeof a === 'string').map(withRoot) : [];
   const env = Object.fromEntries(Object.entries(strMap(e.env)).map(([k, v]) => [k, withRoot(v)]));
   const headers = strMap(e.headers);
-  const d: McpServerDecl = { id: `${c.source}:${c.owner}:${name}`, name, sessionName, source: c.source, ...(c.repo ? { repo: c.repo } : {}), ...(c.plugin ? { plugin: c.plugin } : {}), transport, args, env, headers, refs: {}, shell: null, fetches: null, problems };
-  const law7 = (k: string): boolean => API_BILLING_ENV.includes(k.toUpperCase()) || /_BASE_URL$/i.test(k) || isScrubbed(k);
+  const d: McpServerDecl = { id: `${c.source}:${c.owner}:${name}`, name, sessionName, source: c.source, ...(c.repo ? { repo: c.repo } : {}), ...(c.plugin ? { plugin: c.plugin } : {}), transport, args, env, headers, refs: {}, shell: null, fetches: null, inline: null, problems };
   for (const k of [...Object.keys(env), ...Object.keys(headers)]) {
     if (law7(k)) problems.push({ code: 'law-7', text: `it sets ${k.slice(0, 64)}, a name that bills API credits or reroutes Claude (law 7: every session would be refused)` });
   }
@@ -301,32 +378,24 @@ export function declOf(name: string, raw: unknown, c: DeclContext): McpServerDec
       if (found) d.resolved = found;
       else problems.push({ code: 'command', text: `${cmd0.slice(0, 64)} is not on the session PATH (${c.pathDirs.join(platform === 'win32' ? ';' : ':').slice(0, 200)})` });
     }
-    if (d.resolved && root && d.resolved.startsWith(root) && !within(realOr(d.resolved) ?? d.resolved, root)) problems.push({ code: 'plugin-path', text: 'its command resolves outside the plugin' });
+    if (d.resolved && root && within(d.resolved, root) && !within(realOr(d.resolved) ?? d.resolved, root)) problems.push({ code: 'plugin-path', text: 'its command resolves outside the plugin' });
     d.shell = cmd0 ? shellOf(d.resolved ?? cmd0) : null;
     d.fetches = cmd0 ? fetchesOf(d.resolved ?? cmd0, args) : null;
+    d.inline = cmd0 ? inlineOf(d.resolved ?? cmd0, args) : null;
     if (shownArgs(args).join(' ').length > MCP_CARD_ARGS_MAX) problems.push({ code: 'args', text: `its args are longer than the card can show (${MCP_CARD_ARGS_MAX} characters)` });
   } else {
     const url = typeof e.url === 'string' ? e.url : '';
     d.url = url;
-    let u: URL | null = null;
-    try {
-      u = new URL(url.replace(REF_RE, 'x'));
-    } catch {
-      u = null;
-    }
-    if (!u || (u.protocol !== 'https:' && u.protocol !== 'http:')) problems.push({ code: 'remote', text: 'its URL is not an http(s) URL' });
-    else {
-      const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-      const loop = host === 'localhost' || host === '::1' || /^127\./.test(host);
-      if (!loop) {
-        const v = checkEgressHost(host);
-        if (!v.ok) problems.push({ code: 'remote', text: v.why === 'anthropic' ? `${host} is an Anthropic host (law 7: the subscription path is the kernel's)` : `${host.slice(0, 80)} is not a public host name (${v.why})` });
-        else if (u.protocol !== 'https:') problems.push({ code: 'remote', text: `${host.slice(0, 80)} is reached over plain http; Gnomon connects remote servers over https only` });
-      }
-    }
+    const rc = checkRemoteUrl(url);
+    if (rc.problem) problems.push({ code: 'remote', text: rc.problem });
   }
   collectRefs([...(d.command ? [d.command] : []), ...args, ...(d.url ? [d.url] : []), ...Object.values(env), ...Object.values(headers)], d.refs);
   for (const n of Object.keys(d.refs)) {
+    // Aegis M2: a reference to a law-7 name is refused like setting it (`{FOO: "${ANTHROPIC_API_KEY}"}`)
+    if (law7(n)) {
+      problems.push({ code: 'law-7', text: `it takes ${n.slice(0, 64)}, a name that bills API credits or reroutes Claude (law 7)` });
+      continue;
+    }
     const why = loopEnvHazard(n);
     if (why) problems.push({ code: 'env-name', text: `it takes ${n.slice(0, 64)}, which is refused: ${why}` });
   }
@@ -338,17 +407,9 @@ export function declOf(name: string, raw: unknown, c: DeclContext): McpServerDec
 
 /** The row a declaration may show (names only). */
 export function mcpServerRow(d: McpServerDecl): McpServerRow {
-  let url: string | null = null;
-  let host: string | null = null;
-  if (d.url !== undefined) {
-    try {
-      const u = new URL(d.url.replace(REF_RE, 'x'));
-      host = u.hostname;
-      url = `${u.protocol}//${u.host}${u.pathname === '/' ? '' : u.pathname}`;
-    } catch {
-      url = null;
-    }
-  }
+  const rc = d.url !== undefined ? checkRemoteUrl(d.url) : null;
+  const url = rc?.shown ?? null;
+  const host = rc?.host ?? null;
   return {
     id: d.id,
     name: d.name,
@@ -366,6 +427,7 @@ export function mcpServerRow(d: McpServerDecl): McpServerRow {
     needs: Object.keys(d.refs).sort(),
     shell: d.shell,
     fetches: d.fetches,
+    inline: d.inline,
     problems: d.problems.map((p) => ({ ...p })),
   };
 }
@@ -445,6 +507,27 @@ export function pluginServers(userHome: string, pathDirs: readonly string[], pla
 }
 
 /**
+ * The repo's own .mcp.json (Aegis L1): never a symlink, its realpath inside the repo, one link only (a hard link
+ * could make another file's bytes the repo's server list). Absent ⇒ {json: null}; refused ⇒ the reason, shown as a row.
+ */
+export function readRepoMcpJson(repo: string): { json: unknown; problem: string | null } {
+  const p = path.join(repo, '.mcp.json');
+  let st: fs.Stats;
+  try {
+    st = fs.lstatSync(p);
+  } catch {
+    return { json: null, problem: null };
+  }
+  if (st.isSymbolicLink()) return { json: null, problem: "the repo's .mcp.json is a symlink; Gnomon reads only the repo's own file" };
+  if (!st.isFile()) return { json: null, problem: "the repo's .mcp.json is not a regular file" };
+  if (st.nlink !== 1) return { json: null, problem: "the repo's .mcp.json has more than one hard link; Gnomon reads only a file the repo alone holds" };
+  const real = realOr(p);
+  const repoReal = realOr(repo) ?? repo;
+  if (!real || !within(real, repoReal)) return { json: null, problem: "the repo's .mcp.json resolves outside the repo" };
+  return { json: readJsonFile(p), problem: null };
+}
+
+/**
  * Every server the human's Claude Code would load for these repos: user, plugin, then for each repo its local
  * (~/.claude.json projects) and project (.mcp.json) servers. Fail-soft: an unreadable file contributes nothing.
  */
@@ -464,7 +547,12 @@ export function discoverMcpServers(i: DiscoverInput): McpServerDecl[] {
       if ((realOr(key) ?? path.resolve(key)) !== repo) continue;
       for (const [name, raw] of serversOf(p)) out.push(declOf(name, raw, { source: 'local', owner: repo, repo, pathDirs: i.pathDirs, platform }));
     }
-    for (const [name, raw] of serversOf(readJsonFile(path.join(repo, '.mcp.json')))) out.push(declOf(name, raw, { source: 'project', owner: repo, repo, pathDirs: i.pathDirs, platform }));
+    const rf = readRepoMcpJson(repo);
+    if (rf.problem) {
+      const d = declOf('.mcp.json', {}, { source: 'project', owner: repo, repo, pathDirs: i.pathDirs, platform });
+      d.problems.splice(0, d.problems.length, { code: 'repo-file', text: rf.problem });
+      out.push(d);
+    } else for (const [name, raw] of serversOf(rf.json)) out.push(declOf(name, raw, { source: 'project', owner: repo, repo, pathDirs: i.pathDirs, platform }));
   }
   return out;
 }
@@ -479,6 +567,8 @@ export interface FirstPartyLaunch {
   dir: string;
   entry: string;
   version: string | null;
+  /** TD-2026-10-23-361 (M3): the install is a link (npm link into a checkout): it runs live from `dir`, unpinned */
+  linked: boolean;
 }
 export type FirstPartyResolution = FirstPartyLaunch | { available: false; why: string };
 
@@ -506,7 +596,13 @@ export function resolveFirstPartyParadigm(o: { execPath: string; userHome: strin
     if (!isObj(pkg) || pkg.name !== '@a-company/paradigm' || !isObj(pkg.bin) || typeof pkg.bin['paradigm-mcp'] !== 'string') continue;
     const entry = realOr(path.resolve(dir, pkg.bin['paradigm-mcp']));
     if (!entry || !within(entry, dir)) continue;
-    return { available: true, node, dir, entry, version: typeof pkg.version === 'string' ? pkg.version : null };
+    let linked = false;
+    try {
+      linked = fs.lstatSync(c).isSymbolicLink() || path.resolve(c) !== dir;
+    } catch {
+      linked = path.resolve(c) !== dir;
+    }
+    return { available: true, node, dir, entry, version: typeof pkg.version === 'string' ? pkg.version : null, linked };
   }
   return { available: false, why: `no @a-company/paradigm found: ${PARADIGM_INSTALL_HINT}` };
 }
@@ -529,7 +625,7 @@ export interface ComposeInput {
 export interface ComposeResult {
   servers: Record<string, unknown>;
   added: Array<{ id: string; server: string; source: McpSource | 'first-party'; launchHash: string | null }>;
-  skipped: Array<{ id: string; server: string; why: 'changed' | 'env-missing' | 'problem' | 'name-taken'; names?: string[] }>;
+  skipped: Array<{ id: string; server: string; why: 'changed' | 'env-missing' | 'problem' | 'name-taken' | 'remote'; names?: string[] }>;
 }
 
 /** The session's own servers: the first-party Paradigm MCP, then every enabled server whose launch still matches. */
@@ -568,6 +664,11 @@ export function composeSessionMcp(i: ComposeInput): ComposeResult {
       d.transport === 'stdio'
         ? { type: 'stdio', command: d.resolved!, args: d.args.map(x), ...(Object.keys(env).length ? { env } : {}) }
         : { type: d.transport, url: x(d.url!), ...(Object.keys(headers).length ? { headers } : {}) };
+    // Aegis M1: the remote rule again on the EXPANDED URL (a value can never move the host, the scheme or a port)
+    if (d.transport !== 'stdio' && !missing.size && checkRemoteUrl(String(entry.url), { expanded: true }).problem) {
+      skipped.push({ id: d.id, server: d.sessionName, why: 'remote' });
+      continue;
+    }
     if (missing.size) {
       skipped.push({ id: d.id, server: d.sessionName, why: 'env-missing', names: [...missing].sort() });
       continue;
@@ -583,4 +684,37 @@ export function loopEnvValues(home: string): { values: Map<string, string>; refu
   const r = readEnvFile(path.join(home, 'loop-env'), LOOP_ENV_SHOWN, { owner: true });
   if (r.ok) return { values: r.vars, refused: null };
   return { values: new Map(), refused: r.absent ? null : r.reason };
+}
+
+/* ── the human's own allow rules (TD-2026-10-23-361, H1: honour them, show them) ── */
+
+/**
+ * The user-layer `permissions.allow` rules Claude Code applies in a Gnomon session (`--setting-sources user`:
+ * `~/.claude/settings*.json`, the same files the law-7 scan reads) that auto-allow tools of the server named
+ * `server` in the session: `mcp__<server>`, `mcp__<server>__*`, `mcp__<server>__<tool>` and `mcp__*`. Gnomon never
+ * adds or overrides one; the card and the row say which apply.
+ */
+export function autoAllowRules(userHome: string, server: string): string[] {
+  const dir = path.join(userHome, '.claude');
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(dir).filter((n) => /^settings.*\.json$/i.test(n)).sort();
+  } catch {
+    names = [];
+  }
+  const out = new Set<string>();
+  for (const n of names) {
+    const j = readJsonFile(path.join(dir, n));
+    const allow = isObj(j) && isObj(j.permissions) && Array.isArray(j.permissions.allow) ? j.permissions.allow : [];
+    for (const r of allow) {
+      if (typeof r !== 'string') continue;
+      if (r === 'mcp__*' || r === `mcp__${server}` || r === `mcp__${server}__*` || r.startsWith(`mcp__${server}__`)) out.add(r);
+    }
+  }
+  return [...out].sort();
+}
+
+/** How the card and the row say one allow rule: `mcp__x__*` (all tools). */
+export function allowRuleWords(rules: readonly string[]): string {
+  return rules.map((r) => (r === 'mcp__*' ? `${r} (every MCP tool)` : r.endsWith('__*') || !r.slice(5).includes('__') ? `${r} (all tools)` : r)).join(', ');
 }
