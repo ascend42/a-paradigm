@@ -1003,7 +1003,7 @@ export class SessionSupervisor {
       const mcpServers = this.#gitVerbs ? { ...desk, [KERNEL_MCP_SERVER]: { ...KERNEL_MCP_ENTRY } } : desk;
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
       // the screen-socket deny follows the TMPDIR the session actually gets (the OS one), not the daemon's inherited one
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : (osTmp ?? env.TMPDIR)) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : (osTmp ?? env.TMPDIR)) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])], agentSockets: [...new Set([process.env.SSH_AUTH_SOCK, this.#o.env?.().SSH_AUTH_SOCK].filter((x): x is string => typeof x === 'string' && path.isAbsolute(x)))] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {

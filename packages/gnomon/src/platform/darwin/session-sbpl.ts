@@ -121,6 +121,26 @@ export interface DarwinSessionExtras {
   home: string;
   /** cwd + worktree: their git pointer files / config.worktree / modules are denied */
   roots: readonly string[];
+  /** Aegis round 3 H: the ssh-agent sockets the daemon's env names (SSH_AUTH_SOCK), denied by path beside the known ones */
+  agentSockets?: readonly string[];
+}
+
+/**
+ * Aegis round 3 H: a session must not USE the human's credentials without reading a file — the ssh agents (launchd's
+ * per-user Listeners socket, 1Password, Secretive, any SSH_AUTH_SOCK the daemon names) cannot be connected to, the
+ * launchd socket dirs cannot be written, and the macOS keychain credential helper cannot be run (any copy: by name).
+ * Residual, documented (spec §6.6, the session.sandbox partial list): `security find-generic-password` reads a token
+ * the human's gh stored in the login keychain; `security` itself is not denied (Claude Code and others use it).
+ */
+export function credentialUseDenySbpl(x: Pick<DarwinSessionExtras, 'home' | 'agentSockets'>): string[] {
+  const h = reEscape(realpathLoose(x.home));
+  q(x.home);
+  const lits = [...new Set([path.join(x.home, 'Library', 'Containers', 'com.maxgoedjen.Secretive.SecretAgent', 'Data', 'socket.ssh'), path.join(x.home, '.1password', 'agent.sock'), ...(x.agentSockets ?? [])].map(realpathLoose))];
+  return [
+    `(deny network-outbound (remote unix-socket (regex #"^/private/tmp/com\\.apple\\.launchd\\.[^/]+/")) (remote unix-socket (regex #"^${h}/Library/Group Containers/[^/]+/(t/)?agent\\.sock$")) ${lits.map((l) => `(remote unix-socket (path-literal ${q(l)}))`).join(' ')})`,
+    `(deny file-write* (regex #"^/private/tmp/com\\.apple\\.launchd\\."))`,
+    `(deny process-exec (regex #"/git-credential-osxkeychain$"))`,
+  ];
 }
 
 export class SbplError extends Error {}
@@ -249,6 +269,8 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
   if (classes.has('media:microphone')) lines.push('(deny device-microphone)');
   if (classes.has('media:camera')) lines.push('(deny device-camera)');
   if (policy.launchers === 'deny' || classes.has('launchers') || classes.has('service-manager')) lines.push(`(deny process-exec ${launchers.map((l) => `(literal ${q(l)})`).join(' ')})`);
+  // Aegis round 3 H: no use of the human's ssh agents or keychain helper
+  lines.push(...credentialUseDenySbpl(x));
   // M5: last, so no later allow can re-open it
   lines.push(...helperDenySbpl());
   lines.push('');

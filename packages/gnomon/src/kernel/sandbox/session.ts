@@ -92,7 +92,7 @@ function darwinSession(i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe
     args: ['-p', profile, i.binaryReal, ...i.argv],
     // Aegis round 2 M6: network egress is open (only the endpoint port is denied) until the 8.1 egress proxy: partial, said so
     sandbox: 'partial',
-    partial: [NETWORK_EGRESS_PARTIAL],
+    partial: [NETWORK_EGRESS_PARTIAL, KEYCHAIN_TOKEN_PARTIAL],
     profile,
     profileHash: `sha256:${createHash('sha256').update(profile).digest('hex')}`,
   };
@@ -100,6 +100,9 @@ function darwinSession(i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe
 
 /** Aegis round 2 M6: what the darwin session profile does not deny yet (the egress proxy is 8.1, spec §6.6). */
 export const NETWORK_EGRESS_PARTIAL = 'network:egress open (outbound connections are not limited to localhost; only the Gnomon endpoint port is denied; the egress proxy is 8.1)';
+
+/** Aegis round 3 H: what the profile cannot stop — a gh token stored in the login keychain is readable with `security`. */
+export const KEYCHAIN_TOKEN_PARTIAL = 'credentials:keychain a gh token in the login keychain is readable with security find-generic-password -s gh:github.com (security is not denied); use gh auth login --insecure-storage (its file is read-denied)';
 
 /** win32 (W5): Low integrity + a restricted token + session-SID ACEs + a private desktop (platform/win32/session-sandbox.ts). */
 function win32Session(i: SessionLaunchInput): SessionLaunchPlan {
