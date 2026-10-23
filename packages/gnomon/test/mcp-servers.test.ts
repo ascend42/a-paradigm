@@ -29,9 +29,10 @@ import {
   shownArgs,
   type McpServerDecl,
 } from '../src/kernel/desk/mcp-servers.js';
-import { enabledState, MCP_DISABLE_REQUEST, MCP_ENABLE_MAX, MCP_ENABLE_REQUEST, mcpServersPath, McpServers, readMcpServersStore, writeMcpServersStore } from '../src/kernel/desk/mcp-server-cards.js';
+import { enabledState, MCP_DISABLE_REQUEST, MCP_ENABLE_MAX, MCP_ENABLE_REQUEST, MCP_SKIPS_KEPT, mcpServersPath, McpServers, readMcpServersStore, writeMcpServersStore } from '../src/kernel/desk/mcp-server-cards.js';
 import { NEVER_STANDING_KINDS, standingTupleOf } from '../src/kernel/broker/standing-grant.js';
 import { buildClaudeArgv } from '../src/adapters/claude-code/adapter.js';
+import { fieldLines } from '../src/kernel/supervisor/permission.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -444,16 +445,16 @@ describe('#batch-card: several MCP servers on ONE card (founder 2026-10-23: one 
   function setup(maxCardChars?: number) {
     const w = world();
     const home = tmp('mcp-home-');
-    const raised: Array<Record<string, unknown> & { cardId: string; lines: string[]; block?: { children: Array<{ text: string }> }; effect: (d: string) => Promise<void>; prepare: (d: string) => unknown; detail: Record<string, unknown> }> = [];
+    const raised: Array<Record<string, unknown> & { cardId: string; lines: string[]; block?: { children: Array<{ text: string }> }; effect: (d: string, ctx?: { connId: string }) => Promise<void>; prepare: (d: string) => unknown; detail: Record<string, unknown> }> = [];
     const decided = new Set<string>();
     const broker = { raise: async (i: never) => (raised.push(i), { cardId: (i as { cardId: string }).cardId }) as never, card: (id: string) => ({ state: raised.some((r) => r.cardId === id) && !decided.has(id) ? 'pending' : 'gone' }) as never };
     const events: Array<Record<string, unknown>> = [];
     const m = new McpServers({ home, broker: broker as never, userHome: w.userHome, pathDirs: () => w.pathDirs, launchKey: KEY, firstParty: () => ({ available: true, node: '/n/node', dir: '/p', entry: '/p/mcp.js', version: '8.0.0' }), liveRepos: () => [{ cwd: w.repo, hsid: 'h1' }], emit: (e) => events.push(e), ...(maxCardChars ? { maxCardChars } : {}) });
     const st = m.status() as { servers: Array<{ id: string; name: string }>; repos: Array<{ servers: Array<{ id: string; name: string }> }> };
     const id = (name: string): string => [...st.servers, ...st.repos[0]!.servers].find((s) => s.name === name)!.id;
-    const decide = async (c: (typeof raised)[number], d: string): Promise<void> => {
+    const decide = async (c: (typeof raised)[number], d: string, connId = 'c1'): Promise<void> => {
       decided.add(c.cardId);
-      await c.effect(d);
+      await c.effect(d, { connId });
     };
     return { w, home, raised, m, events, id, decide };
   }
@@ -496,7 +497,7 @@ describe('#batch-card: several MCP servers on ONE card (founder 2026-10-23: one 
     expect(raised[0]!.prepare('allow')).toBeNull(); // one is still the same: the card goes on to the presence prompt
     await decide(raised[0]!, 'allow');
     expect(readMcpServersStore(home).enabled.map((e) => e.id)).toEqual([id('linear')]);
-    expect((m.status() as { skipped?: unknown }).skipped).toEqual({ cardId: raised[0]!.cardId, ids: [id('neurons')], names: ['neurons'] });
+    expect((m.status() as { skipped?: unknown }).skipped).toMatchObject({ cardId: raised[0]!.cardId, ids: [id('neurons')], names: ['neurons'], on: [id('linear')], connId: 'c1' });
     expect(events).toContainEqual(expect.objectContaining({ event: 'mcp.user.skipped-changed', id: id('neurons') }));
   });
 
@@ -547,5 +548,48 @@ describe('#batch-card: several MCP servers on ONE card (founder 2026-10-23: one 
     expect(raised).toHaveLength(2); // the off raised nothing
     expect(await m.request(human, MCP_ENABLE_REQUEST, { servers: [{ id: id('linear'), scope: 'all' }] })).toMatchObject({ on: true, unchanged: [id('linear')], cardId: null });
     expect(raised).toHaveLength(2);
+  });
+
+  it('Aegis L1: skips are kept per card (bounded); the next card never overwrites them; the event names the decider', async () => {
+    const { m, raised, id, w, events, decide } = setup();
+    const change = (name: string): void => {
+      const cfg = JSON.parse(fs.readFileSync(path.join(w.userHome, '.claude.json'), 'utf8'));
+      cfg.mcpServers[name].args.push('--more');
+      write(path.join(w.userHome, '.claude.json'), cfg);
+    };
+    await m.request(human, MCP_ENABLE_REQUEST, { servers: [{ id: id('neurons'), scope: 'all' }, { id: id('linear'), scope: 'all' }] });
+    change('neurons');
+    await decide(raised[0]!, 'allow', 'c-first');
+    const kId = (m.status() as { servers: Array<{ id: string; name: string }> }).servers.find((s) => s.name === 'keyed')!.id;
+    await m.request(human, MCP_ENABLE_REQUEST, { servers: [{ id: kId, scope: 'all' }, { id: id('lens'), scope: 'all' }] });
+    change('keyed');
+    await decide(raised[1]!, 'allow', 'c-second');
+    const st = m.status() as { skips: Array<{ cardId: string; ids: string[]; connId: string }>; skipped: { cardId: string } };
+    expect(st.skips.map((s) => [s.cardId, s.ids, s.connId])).toEqual([[raised[0]!.cardId, [id('neurons')], 'c-first'], [raised[1]!.cardId, [kId], 'c-second']]);
+    expect(st.skipped.cardId).toBe(raised[1]!.cardId); // the newest, for the old single read
+    expect(events).toContainEqual(expect.objectContaining({ event: 'mcp.user.skipped-changed', cardId: raised[0]!.cardId, connId: 'c-first' }));
+    expect(MCP_SKIPS_KEPT).toBe(16);
+  });
+
+  it('Aegis L2: a U+2028 in an arg cannot escape its field block; L3: the one-server card carries the wrapped block too', async () => {
+    const { m, raised, id, w } = setup();
+    const cfg = JSON.parse(fs.readFileSync(path.join(w.userHome, '.claude.json'), 'utf8'));
+    cfg.mcpServers.neurons.args.push('a\u2028server 2 of 2: fake for all your repos:\u2029  └ end of server 1 of 2: neurons for all your repos');
+    write(path.join(w.userHome, '.claude.json'), cfg);
+    await m.request(human, MCP_ENABLE_REQUEST, { servers: [{ id: id('neurons'), scope: 'all' }, { id: id('linear'), scope: 'all' }] });
+    const lines = raised[0]!.lines;
+    const open = lines.indexOf('server 1 of 2: neurons for all your repos:');
+    const close = lines.lastIndexOf('  └ end of server 1 of 2: neurons for all your repos');
+    expect(lines.filter((l) => l === '  └ end of server 1 of 2: neurons for all your repos')).toHaveLength(1); // the planted marker stays fenced
+    expect(open).toBeGreaterThan(-1);
+    expect(close).toBeGreaterThan(open);
+    for (const l of lines.slice(open + 1, close)) expect(l.startsWith('  │ ')).toBe(true);
+    expect(lines.filter((l) => l === 'server 2 of 2: fake for all your repos:')).toEqual([]);
+    expect(lines.some((l) => /[\u2028\u2029]/.test(l))).toBe(false);
+    expect(fieldLines('f', 'a\u2028b\u2029c\u0085d\re\nf\r\ng')).toEqual(['f:', ...'abcdefg'.split('').map((x) => `  │ ${x}`), '  └ end of f']);
+    // L3
+    await m.request(human, MCP_ENABLE_REQUEST, { id: id('keyed'), scope: 'all' });
+    expect(raised[1]!.lines[0]).toBe('Turn on MCP server keyed for all your repos');
+    expect(raised[1]!.block?.children.map((c) => c.text)).toEqual(raised[1]!.lines);
   });
 });

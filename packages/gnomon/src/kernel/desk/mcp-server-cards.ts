@@ -24,7 +24,7 @@
  *              auto-allow rules). Validate everything first (any refusal names servers[i] and raises nothing); over
  *              MCP_ENABLE_MAX or MAX_CARD_CHARS (measured after wrapping) refused, never cut. A server already on is
  *              left out (unchanged); a server on a waiting card refuses the batch (card-pending). At allow each launch
- *              hash is checked again: a changed server is skipped and reported (status.mcp.skipped); when all changed,
+ *              hash is checked again: a changed server is skipped and reported (status.mcp.skips by cardId); when all changed,
  *              prepare refuses before the presence prompt. A single {id, scope} is a batch of one with its own card.
  *   disable    request.mcp.disable{id[, scope, repo]}: a narrowing, so notify-and-proceed with no card.
  *   first party  the Paradigm MCP is on by default in every session; {id:'first-party:paradigm'} turns it off or
@@ -51,6 +51,19 @@ export const MCP_CHANGED_WHILE_OPEN = 'the server changed while the card was ope
 export const MCP_ALL_CHANGED_WHILE_OPEN = 'every server on the card changed while it was open: ask again';
 /** #batch-card: at most this many servers on one enable card (more is refused, never cut). */
 export const MCP_ENABLE_MAX = 16;
+/** Aegis L1: how many cards' skip reports status.mcp.skips keeps (oldest dropped first). */
+export const MCP_SKIPS_KEPT = 16;
+/** The servers one allowed card skipped (changed while it waited), and who decided it. */
+export interface McpSkip {
+  cardId: string;
+  ids: string[];
+  names: string[];
+  /** the servers the same card turned on */
+  on: string[];
+  /** the deciding connection */
+  connId: string | null;
+  at: string;
+}
 const STORE_MAX_BYTES = 512 * 1024;
 const MAX_ENTRIES = 512;
 
@@ -231,8 +244,8 @@ export class McpServers {
   readonly #o: McpServersOptions;
   /** `${id}|${scope}` → pending cardId */
   readonly #pending = new Map<string, { cardId: string; id: string; scope: McpScope }>();
-  /** the servers the last allowed card skipped because they changed while it waited (status.mcp.skipped) */
-  #skipped: { cardId: string; ids: string[]; names: string[] } | null = null;
+  /** Aegis L1: per card (newest last, at most MCP_SKIPS_KEPT), so the next card never overwrites another's report */
+  readonly #skips = new Map<string, McpSkip>();
 
   constructor(o: McpServersOptions) {
     this.#o = o;
@@ -352,7 +365,9 @@ export class McpServers {
       // one entry per server; the servers of one batch card share its cardId
       pending: this.#pendingList().map((p) => ({ cardId: p.cardId, id: p.id, scope: p.scope === 'all' ? 'all' : 'repo', repo: p.scope === 'all' ? null : p.scope.repo })),
       max: MCP_ENABLE_MAX,
-      ...(this.#skipped ? { skipped: this.#skipped } : {}),
+      // Aegis L1: every recent card's skips by cardId (bounded); `skipped` stays the newest (the GUI's old read)
+      skips: [...this.#skips.values()],
+      ...(this.#skips.size ? { skipped: [...this.#skips.values()].at(-1) } : {}),
     };
   }
 
@@ -463,7 +478,7 @@ export class McpServers {
    * always had). VALIDATE EVERYTHING FIRST: any refusal names its item and raises nothing. Over MCP_ENABLE_MAX servers
    * or MAX_CARD_CHARS (measured after wrapping) the batch is refused, never cut. A server already on at its current
    * launch hash is left out (`unchanged`). At allow, each server's launch hash is checked again: a changed one is
-   * skipped and reported (status.mcp.skipped, event mcp.user.skipped-changed); only when every one changed does the
+   * skipped and reported (status.mcp.skips by cardId, bounded; event mcp.user.skipped-changed with the deciding connId); only when every one changed does the
    * card refuse, in prepare, before the presence prompt.
    */
   async #raise(asker: McpAsker, items: ReadonlyArray<{ id: string; scope: McpScope }>, batch: boolean): Promise<unknown> {
@@ -510,7 +525,8 @@ export class McpServers {
         detail,
         lines,
         // a batch card's field blocks are wrapped, never cut (one server keeps the card it always had)
-        ...(want.length > 1 ? { block: shown.block } : {}),
+        // Aegis L3: the wrapped block on every enable card (one server too), so no line is ever cut
+        block: shown.block,
         decisions: ['allow', 'deny'],
         handOnly: true,
         timeoutMs: MCP_ENABLE_CARD_TTL_MS,
@@ -521,7 +537,7 @@ export class McpServers {
           if (!want.some(stillSame)) throw bad('id', want.length === 1 ? MCP_CHANGED_WHILE_OPEN : MCP_ALL_CHANGED_WHILE_OPEN, { why: 'changed' });
           return null;
         },
-        effect: async (decision) => {
+        effect: async (decision, ctx) => {
           for (const k of keys) this.#pending.delete(k);
           if (decision !== 'allow') return;
           // re-check each server at allow: a changed one is skipped and reported, the rest turn on
@@ -534,8 +550,13 @@ export class McpServers {
             writeMcpServersStore(home, s);
           }
           for (const c of ok) this.#o.emit?.({ event: 'mcp.user.enabled', id: c.id, server: c.d.sessionName, scope: c.scope === 'all' ? 'all' : 'repo', launchHash: c.hash, cardId });
-          for (const c of skipped) this.#o.emit?.({ event: 'mcp.user.skipped-changed', id: c.id, server: c.d.sessionName, cardId });
-          this.#skipped = skipped.length ? { cardId, ids: skipped.map((c) => c.id), names: skipped.map((c) => c.d.name) } : null;
+          const connId = typeof ctx?.connId === 'string' ? ctx.connId : null;
+          for (const c of skipped) this.#o.emit?.({ event: 'mcp.user.skipped-changed', id: c.id, server: c.d.sessionName, cardId, connId });
+          if (skipped.length) {
+            this.#skips.delete(cardId);
+            this.#skips.set(cardId, { cardId, ids: skipped.map((c) => c.id), names: skipped.map((c) => c.d.name), on: ok.map((c) => c.id), connId, at: new Date(now()).toISOString() });
+            while (this.#skips.size > MCP_SKIPS_KEPT) this.#skips.delete(this.#skips.keys().next().value!);
+          }
         },
       });
       return { pending: true, cardId: card.cardId, id: want[0]!.id, ...(batch ? { ids: want.map((c) => c.id), unchanged } : {}) };

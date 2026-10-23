@@ -2822,6 +2822,12 @@ components:
       when every server changed, prepare refuses before the presence prompt.
       A single {id, scope} is a batch of one with its one-server card.
       Turning off stays immediate with no card. status.mcp.max names the cap.
+      Aegis Lows (2026-10-23): L1 skips kept per cardId (status.mcp.skips,
+      newest last, at most MCP_SKIPS_KEPT 16, each with on[] and the deciding
+      connId; status.mcp.skipped stays the newest), the event carries connId;
+      L2 permission.ts fieldLines splits on every line break (\r\n, \n, \r,
+      \v, \f, U+0085, U+2028, U+2029) so no line escapes a fence; L3 every
+      enable card, one server too, carries the wrapped block (never cut).
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
