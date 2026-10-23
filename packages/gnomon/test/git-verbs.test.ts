@@ -33,7 +33,7 @@ function world() {
   for (const d of [repo, userHome, gnomonHome]) fs.mkdirSync(d);
   return { root, repo, userHome, gnomonHome };
 }
-function committed(repo: string, remoteUrl?: string) {
+function committed(repo: string, remoteUrl: string | null = 'https://github.com/o/r.git') {
   git(repo, 'init', '-q', '-b', 'main');
   fs.writeFileSync(path.join(repo, 'a.txt'), 'a\n');
   git(repo, 'add', 'a.txt');
@@ -241,6 +241,35 @@ describe('git.push (^git-push-gate)', () => {
     git(w.repo, 'checkout', '-q', '--detach');
     expect((await r.verbs.call('gnomon_git_push', {}, sess(w))).why).toBe('no-branch');
   });
+  it('Aegis H1: the push runs under the kernel config snapshot (credential + ssh only), the common dir pinned, no system config', async () => {
+    const w = world();
+    committed(w.repo);
+    fs.writeFileSync(path.join(w.userHome, '.gitconfig'), '[core]\n\thooksPath = /tmp/evil\n\tfsmonitor = /tmp/evil\n[url "https://evil.example/"]\n\tinsteadOf = https://github.com/\n[credential]\n\thelper = store\n[include]\n\tpath = /tmp/evil.inc\n');
+    fs.mkdirSync(path.join(w.userHome, '.ssh'));
+    fs.writeFileSync(path.join(w.userHome, '.ssh', 'config'), 'Host github.com\n\tUser git\n');
+    const r = rig(w);
+    r.set.url = ['https://github.com/o/r.git'];
+    expect((await r.verbs.call('gnomon_git_push', {}, sess(w))).ok).toBe(true);
+    const push = r.calls.find((x) => x.args.includes('push'))!;
+    const snap = path.join(w.gnomonHome, 'git-verbs', 'gitconfig');
+    expect(push.env).toMatchObject({ GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: snap, GIT_COMMON_DIR: path.join(w.repo, '.git') });
+    const keys = git(w.root, 'config', '--file', snap, '--list', '--name-only').stdout.split('\n').filter(Boolean);
+    expect(keys.every((k) => /^credential\.|^core\.sshcommand$/.test(k)), keys.join(',')).toBe(true);
+    expect(keys).toContain('credential.helper');
+    expect(git(w.root, 'config', '--file', snap, 'core.sshCommand').stdout.trim()).toBe(`ssh -F '${path.join(w.gnomonHome, 'git-verbs', 'ssh_config')}'`);
+    expect(fs.readFileSync(path.join(w.gnomonHome, 'git-verbs', 'ssh_config'), 'utf8')).toContain('Host github.com');
+  });
+  it('Aegis M3: remotes defined outside .git/config refuse; the remote must be named in .git/config', async () => {
+    const w = world();
+    committed(w.repo, null);
+    const r = rig(w);
+    r.set.url = ['https://github.com/o/r.git'];
+    expect((await r.verbs.call('gnomon_git_push', {}, sess(w))).why).toBe('no-remote');
+    git(w.repo, 'remote', 'add', 'origin', 'https://github.com/o/r.git');
+    fs.mkdirSync(path.join(w.repo, '.git', 'remotes'));
+    fs.writeFileSync(path.join(w.repo, '.git', 'remotes', 'origin'), 'URL: https://evil.example/o/r.git\n');
+    expect((await r.verbs.call('gnomon_git_push', {}, sess(w))).why).toBe('unsafe-config');
+  });
   it('config injection: a repo config with hooks, helpers, includes or URL rewrites refuses unsafe-config', async () => {
     const w = world();
     committed(w.repo);
@@ -298,7 +327,7 @@ describe('repo.create', () => {
   const gh = (owner = 'ascend42') => (args: readonly string[]) => (args[0] === 'api' ? { code: 0, stdout: `${owner}\n`, stderr: '' } : { code: 0, stdout: 'https://github.com/x\n', stderr: '' });
   it('private by default: one card (no Always), gh creates, the kernel adds the remote and pushes with --set-upstream', async () => {
     const w = world();
-    committed(w.repo);
+    committed(w.repo, null);
     const r = rig(w, { gh: gh(), realRemote: true });
     const res = await r.verbs.call('gnomon_repo_create', { name: 'a-platform-fighter' }, sess(w));
     expect(res.ok, res.text).toBe(true);
@@ -314,7 +343,7 @@ describe('repo.create', () => {
   });
   it('public is explicit and irreversible-flagged; an existing remote, gh signed out and a bad name refuse', async () => {
     const w = world();
-    committed(w.repo);
+    committed(w.repo, null);
     const r = rig(w, { gh: gh(), realRemote: true });
     r.set.decision = 'deny';
     await r.verbs.call('gnomon_repo_create', { name: 'x', visibility: 'public' }, sess(w));

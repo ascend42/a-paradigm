@@ -35,7 +35,7 @@ import type { ApprovalBroker } from '../broker/broker.js';
 import { wrappedBlock } from '../manifest/install.js';
 import { inputHash } from '../supervisor/permission.js';
 import { HARDENED_GIT_FLAGS } from './scratch.js';
-import { execTool, ghPath, gitPath, localGitEnv, networkEnv, PUSH_GIT_FLAGS, redactOutput, VERB_TIMEOUTS, type Exec } from './verb-exec.js';
+import { capturePushConfig, execTool, ghPath, gitPath, localGitEnv, networkEnv, PUSH_GIT_FLAGS, redactOutput, VERB_TIMEOUTS, type Exec } from './verb-exec.js';
 import {
   configProblems, createCard, dotGitOf, GIT_VERB_TOOLS, hostWarning, INIT_BRANCH, initCard, initConfigText, initRefusal, parseRemote, pushCard, pushRuleInput,
   readConfigEntries, validBranch, validOwner, validRemoteName, validRepoName, kernelWorktreeDirs, validWorktreeName, worktreeCard, WORKTREES_REL, type RemoteInfo, type VerbCard,
@@ -167,8 +167,29 @@ export class GitVerbs {
   /** one verb at a time per repo root */
   readonly #queue = new Map<string, Promise<unknown>>();
 
+  /** Aegis H1: the kernel's push config snapshot (verb-exec.ts capturePushConfig); null until captured */
+  #pushConfig: string | null = null;
+
   constructor(o: GitVerbsOptions) {
     this.#o = o;
+  }
+
+  /** Aegis H1: (re)capture the push config snapshot from the human's credential and ssh settings (daemon start). */
+  async refreshPushConfig(): Promise<string | null> {
+    const git = (this.#o.git ?? gitPath)();
+    if (!git) return null;
+    try {
+      this.#pushConfig = await capturePushConfig({ dir: path.join(this.#o.gnomonHome, 'git-verbs'), git, userHome: this.#o.userHome(), exec: this.#exec(), from: this.#env() });
+    } catch {
+      this.#pushConfig = null;
+    }
+    return this.#pushConfig;
+  }
+
+  /** The env of a network git/gh call: scrubbed, under the kernel's config snapshot, the common dir pinned to the repo's own. */
+  async #netEnv(toolDir: string, commonDir?: string): Promise<Record<string, string>> {
+    if (this.#pushConfig === null || !fs.existsSync(this.#pushConfig)) await this.refreshPushConfig();
+    return networkEnv({ userHome: this.#o.userHome(), toolDir, from: this.#env(), gitConfig: this.#pushConfig, ...(commonDir ? { commonDir } : {}) });
   }
 
   tools(): readonly McpToolSpec[] {
@@ -347,6 +368,16 @@ export class GitVerbs {
     if (g !== 'dir') return { refused: 'no-repo', text: `${root} is not a git repo: use gnomon_git_init first.` };
     const gitDir = path.join(root, '.git');
     if (fs.existsSync(path.join(gitDir, 'commondir'))) return { refused: 'unsafe-config', text: 'This .git reads its config from another folder (commondir): Gnomon does not push from it.' };
+    // Aegis M3: legacy remote definitions git reads BESIDE the config (.git/remotes/<name>, .git/branches/<name>)
+    for (const legacy of ['remotes', 'branches']) {
+      let entries: string[] = [];
+      try {
+        entries = fs.readdirSync(path.join(gitDir, legacy));
+      } catch {
+        entries = [];
+      }
+      if (entries.length) return { refused: 'unsafe-config', text: `This repo defines remotes outside its config (.git/${legacy}/${entries[0]!.slice(0, 64)}): Gnomon pushes only to remotes named in .git/config.` };
+    }
     let cfg: fs.Stats;
     try {
       cfg = fs.lstatSync(path.join(gitDir, 'config'));
@@ -384,8 +415,10 @@ export class GitVerbs {
   async #resolveRemote(st: RepoState, remote: string): Promise<RemoteInfo | Refused> {
     const git = (this.#o.git ?? gitPath)();
     if (!git) return { refused: 'tool-missing', text: 'git is not installed where Gnomon looks for it.' };
-    const r = await this.#exec()(git, [...PUSH_GIT_FLAGS, '--git-dir', st.gitDir, 'remote', 'get-url', '--push', '--', remote], { cwd: st.root, env: networkEnv({ userHome: this.#o.userHome(), toolDir: path.dirname(git), from: this.#env() }), timeoutMs: VERB_TIMEOUTS.read });
-    if (r.code !== 0) return { refused: 'no-remote', text: `No remote named ${remote} in this repo. Use gnomon_repo_create to create one on GitHub.` };
+    const r = await this.#exec()(git, [...PUSH_GIT_FLAGS, '--git-dir', st.gitDir, 'remote', 'get-url', '--push', '--', remote], { cwd: st.root, env: await this.#netEnv(path.dirname(git), st.gitDir), timeoutMs: VERB_TIMEOUTS.read });
+    // Aegis M3: the remote must be named in the repo's own .git/config (never only a legacy remotes/branches file)
+    const named = (readConfigEntries(fs.readFileSync(path.join(st.gitDir, 'config'), 'utf8')) ?? []).some((e) => e.key === `remote.${remote}.url`);
+    if (r.code !== 0 || !named) return { refused: 'no-remote', text: `No remote named ${remote} in this repo's .git/config. Use gnomon_repo_create to create one on GitHub.` };
     const urls = r.stdout.split('\n').map((x) => x.trim()).filter(Boolean);
     if (urls.length !== 1) return { refused: 'bad-remote', text: `Remote ${remote} has ${urls.length} push URLs: Gnomon pushes to exactly one.` };
     const info = parseRemote(urls[0]!);
@@ -449,7 +482,7 @@ export class GitVerbs {
     const git = (this.#o.git ?? gitPath)()!;
     const ref = `refs/heads/${p.st.branch}`;
     const args = [...PUSH_GIT_FLAGS, '--git-dir', p.st.gitDir, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no', ...(p.upstream ? ['--set-upstream'] : []), ...(p.force ? ['--force-with-lease'] : []), '--', p.remote, `${ref}:${ref}`];
-    const r = await this.#exec()(git, args, { cwd: p.st.root, env: networkEnv({ userHome: this.#o.userHome(), toolDir: path.dirname(git), from: this.#env() }), timeoutMs: VERB_TIMEOUTS.push });
+    const r = await this.#exec()(git, args, { cwd: p.st.root, env: await this.#netEnv(path.dirname(git), p.st.gitDir), timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git push ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git push to ${p.info.slug} failed: ${redactOutput(`${r.stderr}\n${r.stdout}`, 800)}`, { ...ids, exitCode: r.code });
     await this.#row(s, verb, 'ran', hash, ids);
@@ -477,7 +510,7 @@ export class GitVerbs {
     const gh = (this.#o.gh ?? (() => ghPath(this.#env())))();
     if (!gh) return this.#refuse(s, verb, hash, 'tool-missing', 'gh (GitHub CLI) is not installed: the human installs it and runs `gh auth login`.');
     const host = 'github.com';
-    const ghEnv = networkEnv({ userHome: this.#o.userHome(), toolDir: path.dirname(gh), from: this.#env() });
+    const ghEnv = await this.#netEnv(path.dirname(gh));
     let owner = a.owner as string | undefined;
     if (owner === undefined) {
       const who = await this.#exec()(gh, ['api', 'user', '--jq', '.login'], { cwd: this.#o.userHome(), env: ghEnv, timeoutMs: VERB_TIMEOUTS.read });

@@ -475,7 +475,13 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     const d = resolveGitDirs(r);
     return [...new Set([path.join(r, '.git'), ...(d ? [d.gitDir, d.commonDir] : [])])];
   });
-  const git = gitDirs.flatMap((g) => [P(path.join(g, 'hooks'), 'subpath', 'git'), P(path.join(g, 'config'), 'literal', 'git'), P(path.join(g, 'info'), 'subpath', 'git')]);
+  // Aegis H1/M3 (T-2026-10-23-002): also each git dir's commondir (where its config lives), remotes/ and branches/ (legacy
+  // remote definitions git reads beside the config), and every root's own `.git` entry as a literal, existing or not
+  // (never renamed, replaced or created by the session: `mv .git .git2`, a planted gitfile)
+  const git = [
+    ...gitDirs.flatMap((g) => [P(path.join(g, 'hooks'), 'subpath', 'git'), P(path.join(g, 'config'), 'literal', 'git'), P(path.join(g, 'info'), 'subpath', 'git'), P(path.join(g, 'commondir'), 'literal', 'git'), P(path.join(g, 'remotes'), 'subpath', 'git'), P(path.join(g, 'branches'), 'subpath', 'git')]),
+    ...roots.map((r) => P(path.join(r, '.git'), 'literal', 'git')),
+  ];
   // #git-verbs: kernel worktrees under each root (only the kernel creates or removes one; their steering stays denied)
   const worktrees: PolicyPath[] = !inp.kernelWorktrees
     ? []

@@ -48,7 +48,8 @@ describe.runIf(OK)('git verbs under the session profile', () => {
     w = sessionWorld();
     fs.rmSync(path.join(w.cwd, '.git'), { recursive: true });
     const policy = policyFor(w);
-    expect(inSandbox(w, policy, t('sandbox_init', 'git init -q -b main'))).toMatchObject({ sandbox_init: 'blocked' });
+    // Aegis H1: no repo yet — the session can neither run git init nor plant a `.git` gitfile or dir at the root
+    expect(inSandbox(w, policy, [t('sandbox_init', 'git init -q -b main'), t('plant_gitfile', 'echo "gitdir: /tmp/evil" > .git'), t('plant_gitdir', 'mkdir .git')].join('\n'))).toMatchObject({ sandbox_init: 'blocked', plant_gitfile: 'blocked', plant_gitdir: 'blocked' });
     const res = await verbsFor(w).call('gnomon_git_init', {}, sess(w));
     expect(res.ok, res.text).toBe(true);
     const out = inSandbox(w, policy, [
@@ -56,8 +57,14 @@ describe.runIf(OK)('git verbs under the session profile', () => {
       t('write_config', 'echo x >> .git/config'),
       t('write_hook', 'echo x > .git/hooks/pre-commit'),
       t('write_info', 'echo x > .git/info/attributes'),
+      t('mv_dotgit', 'mv .git .git2'),
+      t('commondir', 'echo /tmp/evil > .git/commondir'),
+      t('remotes', 'mkdir -p .git/remotes && echo "URL: https://evil.example/r" > .git/remotes/origin'),
+      t('branches', 'mkdir -p .git/branches && echo https://evil.example/r > .git/branches/origin'),
+      t('nested_gitfile', 'mkdir -p sub && echo "gitdir: /tmp/evil" > sub/.git'),
     ].join('\n'));
-    expect(out).toEqual({ commit: 'allowed', write_config: 'blocked', write_hook: 'blocked', write_info: 'blocked' });
+    // a nested `.git` below the root stays an ordinary file the session may write (git in the ROOT never reads it)
+    expect(out).toEqual({ commit: 'allowed', write_config: 'blocked', write_hook: 'blocked', write_info: 'blocked', mv_dotgit: 'blocked', commondir: 'blocked', remotes: 'blocked', branches: 'blocked', nested_gitfile: 'allowed' });
   });
 
   it('worktrees: Claude Code\'s own flow is refused; the kernel worktree is editable and its steering and pointers are not', async () => {

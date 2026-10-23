@@ -386,7 +386,7 @@ export function pushCard(p: PushPlan): VerbCard {
     ...(p.warning ? [`Warning: ${p.warning}. Deny unless you meant this host.`] : []),
     `Push ${p.branch} to ${r.url} (${r.slug})`,
     `host: ${r.host}${r.port ? ` port ${r.port}` : ''}`,
-    `remote: ${p.remote} → ${r.url} (read by Gnomon from this repo's git config)`,
+    `remote: ${p.remote} → ${r.url} (the push URL git resolves for it: this repo's .git/config under Gnomon's own credential-only global config)`,
     `branch: ${p.branch} (refs/heads/${p.branch} → refs/heads/${p.branch})`,
     `repo: ${p.root}`,
     ...(p.force ? ['Warning: FORCE push (with lease): it can overwrite commits on the remote that your branch does not have.'] : []),

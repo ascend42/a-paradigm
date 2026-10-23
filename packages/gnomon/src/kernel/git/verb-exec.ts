@@ -87,7 +87,7 @@ export function localGitEnv(from: Readonly<Record<string, string | undefined>> =
 }
 
 /** The scrubbed env of a push / create (the human's own HOME so their credential helper and gh sign-in apply). */
-export function networkEnv(o: { userHome: string; toolDir: string; from?: Readonly<Record<string, string | undefined>> }): Record<string, string> {
+export function networkEnv(o: { userHome: string; toolDir: string; from?: Readonly<Record<string, string | undefined>>; gitConfig?: string | null; commonDir?: string }): Record<string, string> {
   const from = o.from ?? process.env;
   const keep = (k: string): Record<string, string> => (typeof from[k] === 'string' && from[k] !== '' ? { [k]: from[k]! } : {});
   return {
@@ -100,6 +100,10 @@ export function networkEnv(o: { userHome: string; toolDir: string; from?: Readon
     ...keep('SSH_AUTH_SOCK'),
     GIT_TERMINAL_PROMPT: '0',
     GIT_ALLOW_PROTOCOL: 'https:ssh',
+    // Aegis H1: the kernel's config snapshot only (credential helper, ssh command), never the live system/global files
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: o.gitConfig ?? '/dev/null',
+    ...(o.commonDir ? { GIT_COMMON_DIR: o.commonDir } : {}),
     GIT_PAGER: 'cat',
     GCM_INTERACTIVE: 'never',
     SSH_ASKPASS_REQUIRE: 'never',
@@ -136,6 +140,53 @@ export function ghPath(from: Readonly<Record<string, string | undefined>> = proc
     }
   }
   return null;
+}
+
+/**
+ * Aegis H1 (T-2026-10-23-002): the git config a push or a create runs under is a KERNEL SNAPSHOT, never the live
+ * global or system files: only the human's credential settings (credential.*) and ssh command (core.sshCommand), read
+ * once with `git config --list --show-scope` from the system, global and git's built-in (unknown) scopes and written
+ * with `git config --file` to `<dir>/gitconfig` (0600, inside the Gnomon home, which sessions can neither read nor
+ * write). Their ~/.ssh/config is copied beside it and, when they set no ssh command, `core.sshCommand = ssh -F <copy>`
+ * (or -F /dev/null) pins it, so the system ssh config and a later edit of either file never reach a push. Captured
+ * at daemon start (a human action) and when missing; the push env is GIT_CONFIG_NOSYSTEM=1 + GIT_CONFIG_GLOBAL=<it>.
+ */
+export const PUSH_CONFIG_KEYS = /^(credential\..+|core\.sshcommand)$/i;
+export const PUSH_CONFIG_SCOPES: readonly string[] = Object.freeze(['system', 'global', 'unknown']);
+
+export async function capturePushConfig(o: { dir: string; git: string; userHome: string; exec?: Exec; from?: Readonly<Record<string, string | undefined>> }): Promise<string> {
+  const exec = o.exec ?? execTool;
+  fs.mkdirSync(o.dir, { recursive: true, mode: 0o700 });
+  const env = { PATH: [path.dirname(o.git), '/usr/bin', '/bin'].join(path.delimiter), HOME: o.userHome, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', ...(o.from?.XDG_CONFIG_HOME ? { XDG_CONFIG_HOME: o.from.XDG_CONFIG_HOME } : {}) };
+  const r = await exec(o.git, ['config', '--list', '--show-scope', '-z'], { cwd: o.userHome, env, timeoutMs: VERB_TIMEOUTS.read });
+  const tmp = path.join(o.dir, `gitconfig.${process.pid}.${Date.now()}`);
+  fs.writeFileSync(tmp, '', { mode: 0o600 });
+  const fields = r.code === 0 ? r.stdout.split('\0') : [];
+  let ssh = false;
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    const scope = fields[i]!;
+    const nl = fields[i + 1]!.indexOf('\n');
+    const key = nl < 0 ? fields[i + 1]! : fields[i + 1]!.slice(0, nl);
+    const value = nl < 0 ? 'true' : fields[i + 1]!.slice(nl + 1);
+    if (!PUSH_CONFIG_SCOPES.includes(scope) || !PUSH_CONFIG_KEYS.test(key)) continue;
+    if (/^core\.sshcommand$/i.test(key)) ssh = true;
+    await exec(o.git, ['config', '--file', tmp, '--add', key, value], { cwd: o.dir, env, timeoutMs: VERB_TIMEOUTS.read });
+  }
+  if (!ssh) {
+    const src = path.join(o.userHome, '.ssh', 'config');
+    const copy = path.join(o.dir, 'ssh_config');
+    let pinned = '/dev/null';
+    try {
+      fs.writeFileSync(copy, fs.readFileSync(src), { mode: 0o600 });
+      pinned = copy;
+    } catch {
+      fs.rmSync(copy, { force: true });
+    }
+    await exec(o.git, ['config', '--file', tmp, 'core.sshCommand', `ssh -F '${pinned.replace(/'/g, `'\\''`)}'`], { cwd: o.dir, env, timeoutMs: VERB_TIMEOUTS.read });
+  }
+  const out = path.join(o.dir, 'gitconfig');
+  fs.renameSync(tmp, out);
+  return out;
 }
 
 /** A command's output as the agent may see it: URL userinfo and secret shapes redacted, the last `max` characters. */

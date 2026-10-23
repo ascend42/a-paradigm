@@ -955,6 +955,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     gnomonHome: home,
     userHome: () => supSeams.userHome ?? osUserHome(),
   });
+  // Aegis H1: the push config snapshot (the human's credential helper and ssh settings only), taken at daemon start
+  void gitVerbs.refreshPushConfig().catch(() => undefined);
   const supervisor: SessionSupervisor = new SessionSupervisor({
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
