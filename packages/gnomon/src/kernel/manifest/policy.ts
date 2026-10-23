@@ -100,7 +100,12 @@ export type SessionDenyClass = (typeof SESSION_DENY_CLASSES)[number];
  * `worktree-gitdir`: `path` is `<commonDir>/worktrees`. Write-deny of each worktree's private git dir entry and its
  * `commondir`, `gitdir` and `config.worktree` (what tells git where the config lives); HEAD, index and logs stay writable.
  */
-export type PathMatch = 'subpath' | 'literal' | 'prefix' | 'steering' | 'dep-steering' | 'worktree-guard' | 'worktree-gitdir';
+/**
+ * `dotgit-any` (Aegis round 2 M5): under `path` (a session root), at ANY depth and in any case, an entry named `.git`
+ * (a planted nested repo or gitfile the human's git would later read). Only the entry itself: an existing nested repo's
+ * contents stay as they were. The kernel worktrees' pointers are below it too (and guarded by worktree-guard).
+ */
+export type PathMatch = 'subpath' | 'literal' | 'prefix' | 'steering' | 'dep-steering' | 'worktree-guard' | 'worktree-gitdir' | 'dotgit-any';
 /** Where the kernel makes a session's worktrees, relative to a session root (#git-verbs git.worktree.add). */
 export const KERNEL_WORKTREES_REL = '.gnomon/worktrees';
 export interface PolicyPath {
@@ -504,6 +509,8 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   const git = [
     ...gitDirs.flatMap((g) => [P(path.join(g, 'hooks'), 'subpath', 'git'), P(path.join(g, 'config'), 'literal', 'git'), P(path.join(g, 'info'), 'subpath', 'git'), P(path.join(g, 'commondir'), 'literal', 'git'), P(path.join(g, 'remotes'), 'subpath', 'git'), P(path.join(g, 'branches'), 'subpath', 'git')]),
     ...roots.map((r) => P(path.join(r, '.git'), 'literal', 'git')),
+    // Aegis round 2 M5: no `.git` entry may be created, replaced or renamed anywhere below a root
+    ...roots.map((r) => P(r, 'dotgit-any', 'git')),
   ];
   // #git-verbs: kernel worktrees under each root (only the kernel creates or removes one; their steering stays denied)
   const worktrees: PolicyPath[] = !inp.kernelWorktrees

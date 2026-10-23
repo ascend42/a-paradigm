@@ -155,6 +155,11 @@ function filter(p: PolicyPath): string {
     const r = reEscape(p.path);
     return `(regex #"^${r}/[^/]+$") (regex #"^${r}/[^/]+/\\.${ci('git')}$") (regex #"^${r}/[^/]+/\\.${ci('mcp')}\\.${ci('json')}$")`;
   }
+  if (p.match === 'dotgit-any') {
+    // Aegis round 2 M5: an entry named .git at any depth below the root, any case
+    q(p.path);
+    return `(regex #"^${reEscape(p.path)}/(.+/)?\\.${ci('git')}$")`;
+  }
   if (p.match === 'worktree-gitdir') {
     // #git-verbs: each worktree git dir's entry and the files that say where its config lives
     q(p.path);

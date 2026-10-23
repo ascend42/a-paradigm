@@ -91,6 +91,8 @@ export const KNOWN_FORGE_HOSTS: readonly string[] = Object.freeze(['github.com',
 export const GIT_VERBS_GUIDANCE = [
   'Gnomon runs git verbs that need to write repo config or use the human\'s credentials for you: the sandbox refuses `git init`, `git push` and `gh repo create` in Bash ("Operation not permitted" on .git/config, no credentials).',
   'Use the gnomon MCP tools instead: gnomon_git_init (make this folder a repo), gnomon_git_push (push the current branch; the human approves a card), gnomon_repo_create (create a GitHub repo, private by default, add it as a remote and push).',
+  'Cloning: never clone (or `git init`) into a folder of this project — a nested .git is refused by the sandbox; clone into $TMPDIR instead.',
+  'Sandbox: writes outside this project, $TMPDIR and the session\'s own cache fail with "Operation not permitted". That is the sandbox, not a bug: do not retry the write somewhere else or with sudo; tell the human the path you needed and why.',
   'Worktrees: Claude Code\'s own worktree isolation (EnterWorktree, an Agent with isolation "worktree") and `git worktree add` are refused by the sandbox here. Use gnomon_worktree_add (it returns the worktree\'s absolute path under .gnomon/worktrees; work and point subagents there) and gnomon_worktree_remove when done.',
 ].join(' ');
 

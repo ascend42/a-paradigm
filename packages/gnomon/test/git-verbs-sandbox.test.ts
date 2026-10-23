@@ -62,9 +62,12 @@ describe.runIf(OK)('git verbs under the session profile', () => {
       t('remotes', 'mkdir -p .git/remotes && echo "URL: https://evil.example/r" > .git/remotes/origin'),
       t('branches', 'mkdir -p .git/branches && echo https://evil.example/r > .git/branches/origin'),
       t('nested_gitfile', 'mkdir -p sub && echo "gitdir: /tmp/evil" > sub/.git'),
+      t('nested_gitdir_case', 'mkdir -p sub/deep/.GIT'),
+      t('nested_clone', 'git init -q sub2'),
+      t('plain_file', 'mkdir -p sub && echo ok > sub/notes.txt'),
     ].join('\n'));
-    // a nested `.git` below the root stays an ordinary file the session may write (git in the ROOT never reads it)
-    expect(out).toEqual({ commit: 'allowed', write_config: 'blocked', write_hook: 'blocked', write_info: 'blocked', mv_dotgit: 'blocked', commondir: 'blocked', remotes: 'blocked', branches: 'blocked', nested_gitfile: 'allowed' });
+    // Aegis round 2 M5: no `.git` entry anywhere below the root (any case), so no nested repo or gitfile is planted
+    expect(out).toEqual({ commit: 'allowed', write_config: 'blocked', write_hook: 'blocked', write_info: 'blocked', mv_dotgit: 'blocked', commondir: 'blocked', remotes: 'blocked', branches: 'blocked', nested_gitfile: 'blocked', nested_gitdir_case: 'blocked', nested_clone: 'blocked', plain_file: 'allowed' });
   });
 
   it('worktrees: Claude Code\'s own flow is refused; the kernel worktree is editable and its steering and pointers are not', async () => {
