@@ -199,14 +199,23 @@ export class McpServers {
     return [...this.#pending.values()];
   }
 
-  /** The write-denies every session gets for the first-party server (its package dir and node). */
-  sessionDenies(): PolicyPath[] {
+  /**
+   * The write-denies a session gets for the first-party server: its node, and its package dir unless that dir lies
+   * inside the session's own roots. A developer's global install is often an `npm link` into a Paradigm checkout
+   * (measured on the founder's Mac: the global package realpaths into a-paradigm/packages/paradigm); a session working
+   * in that checkout must still edit it. Residual: such a session can change the server the next session runs, which
+   * then runs under the same session profile (no escalation).
+   */
+  sessionDenies(ctx?: { cwd: string; worktree?: string }): PolicyPath[] {
     const fp = this.#o.firstParty();
     if (!fp.available || readMcpServersStore(this.#o.home).firstParty.paradigm === 'off') return [];
-    return [
-      { path: fp.dir, match: 'subpath', class: 'binary' },
-      { path: fp.node, match: 'literal', class: 'binary' },
-    ];
+    const roots = ctx ? [ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])].map(realOr) : [];
+    const overlaps = roots.some((r) => {
+      const a = path.relative(r, fp.dir);
+      const b = path.relative(fp.dir, r);
+      return a === '' || (!a.startsWith('..') && !path.isAbsolute(a)) || (!b.startsWith('..') && !path.isAbsolute(b));
+    });
+    return [...(overlaps ? [] : [{ path: fp.dir, match: 'subpath' as const, class: 'binary' as const }]), { path: fp.node, match: 'literal', class: 'binary' }];
   }
 
   /** The session's own servers (first-party + enabled) for a session opened in `cwd`. */

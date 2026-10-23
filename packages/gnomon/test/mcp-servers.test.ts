@@ -325,6 +325,10 @@ describe('#mcp-servers the enable card and requests', () => {
     expect(Object.keys(m.compose({ hsid: 'h', cwd: '/tmp' }).servers)).toEqual([]);
     expect(await m.request(human, MCP_ENABLE_REQUEST, { id: FIRST_PARTY_PARADIGM })).toMatchObject({ on: true });
     expect(m.sessionDenies().map((d) => d.path)).toEqual(['/p', '/n/node']);
+    // a linked dev install inside the session's own repo stays editable (the founder's npm link into a-paradigm)
+    expect(m.sessionDenies({ cwd: '/p' }).map((d) => d.path)).toEqual(['/n/node']);
+    expect(m.sessionDenies({ cwd: '/elsewhere', worktree: '/p/packages' }).map((d) => d.path)).toEqual(['/n/node']);
+    expect(m.sessionDenies({ cwd: '/elsewhere' }).map((d) => d.path)).toEqual(['/p', '/n/node']);
     expect(raised).toHaveLength(0);
     expect(JSON.stringify(m.status())).not.toContain(SECRET);
   });

@@ -972,7 +972,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     emit: (e) => emit({ kind: 'daemon.desk', ...e } as DaemonEvent),
   });
   const supervisor: SessionSupervisor = new SessionSupervisor({
-    mcpDenyWrite: () => mcpServers.sessionDenies(),
+    mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
     deskMcp: (distroServers, ctx) => {
