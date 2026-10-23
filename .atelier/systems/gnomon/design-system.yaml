@@ -34,7 +34,7 @@
 # New: component settings-form (the sheets' form row; row kinds form and request); card family ⊙ gnomon and variant
 # local-config; alert variant refused-start; loop-detail's can't-start line; the sheet's section-focused open defined;
 # vocabulary local model, card waiting, presence (amended); rules form-says-where-the-card-is, no-password-for-a-typo;
-# migration batch settings-form (pending). Bridge CSS until the build: .atelier/systems/gnomon/local-model-bridge.css.
+# migration batch settings-form (pending; the bridge CSS item is done: styles.css carries the classes since the build).
 
 version: 2
 product: gnomon
@@ -444,7 +444,7 @@ components:
       expired: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><p class="sf-result" role="status"><b>Not changed:</b> the card expired at 23:50 (Gnomon restarted). Your entries are below.</p><div class="sf-keys"><button class="key pri" type="submit">Save · root card</button><button class="key quiet" type="button">cancel</button></div></form></div>'
       refused: '<div class="settings-row settings-form"><span class="settings-label">Set up</span><form class="set-form" aria-label="Set up a local model" novalidate><p class="sf-result fail" role="alert">BILLING_REFUSED  192.168.1.20 is not on this Mac · next: use 127.0.0.1 or localhost</p><div class="sf-keys"><button class="key pri" type="submit">Save · root card</button><button class="key quiet" type="button">cancel</button></div></form></div>'
       applied: '<div class="settings-row settings-readonly" data-readonly="true" aria-live="polite"><span class="settings-label">Check</span><span class="settings-value kernel-owned"><span class="mk">✓</span> answers · tools native · context 32 768 · 23:24</span></div>'
-    source: ".atelier/sessions/2026-10-22-gnomon-local-model/refs/local-model.html (classes .set-form .sf-*); CSS bridge .atelier/systems/gnomon/local-model-bridge.css; shipped precedent packages/gnomon-gui/src/ui/mods-panel.ts:80-95"
+    source: ".atelier/sessions/2026-10-22-gnomon-local-model/refs/local-model.html (classes .set-form .sf-*); shipped precedent packages/gnomon-gui/src/ui/mods-panel.ts:80-95"
     build_requirements:
       - "core/settings.ts: SectionId 'local-model' between voice and permissions; row kinds form and request; values from status.local only, never the form's copy"
       - "ui/settings-sheet.ts: open(section?) (sheet section-focused); Esc closes an open form first; press paths for request.local.config, the read-only check and the remove request, trusted events only"
@@ -923,9 +923,9 @@ content:
   from: { session: 2026-10-15-gnomon-aesthetic, board: cli-voice, choice: instrument-readout, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
 
 specimen:
-  stylesheets: [packages/gnomon-gui/static/styles.css, .atelier/systems/gnomon/local-model-bridge.css]
-  # local-model-bridge.css is a bridge: the settings-form, .lp-refusal and .card-root-rows CSS from session
-  # 2026-10-22-gnomon-local-model until the build moves it into styles.css (migration batch settings-form)
+  stylesheets: [packages/gnomon-gui/static/styles.css]
+  # the local-model-bridge.css bridge was dropped by the Local model build (2026-10-22): styles.css carries the
+  # settings-form, .lp-refusal and .card-root-rows classes (migration batch settings-form)
   # the loops-direction.css bridge was dropped by the LP8 build: styles.css carries the loop classes
   themes:
     day: { html_attrs: 'data-theme="day" data-motion="full"' }
@@ -1206,7 +1206,7 @@ migration:
   - { batch: settings-form, status: pending, from: "daemon-stop and api-token cards with no family in the head", to: "'⊙ gnomon' family head", uses: 2, files: ["packages/gnomon-gui/src/core/render.ts:770-776"], from_decision: { session: 2026-10-22-gnomon-local-model, board: C3, decided_by: creator } }
   - { batch: settings-form, status: pending, from: "the Settings sheet's per-row '· kernel-owned' suffix in a section the kernel owns", to: "once in the section heading", uses: 1, files: ["packages/gnomon-gui/static/styles.css:940"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
   - { batch: settings-form, status: pending, from: ".key.pri[disabled]: --sec text on the ink fill (about 2.6:1 by day; Run now, a busy Allow)", to: "sheet fill, --rule edge, --sec text (as .seg-key[disabled], styles.css:924)", uses: 1, files: ["packages/gnomon-gui/static/styles.css:183,192"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
-  - { batch: settings-form, status: pending, from: "local-model-bridge.css in specimen.stylesheets", to: "the classes moved into styles.css by the build; drop the bridge", uses: 1, files: [".atelier/systems/gnomon/local-model-bridge.css"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
+  - { batch: settings-form, status: done, done: { date: 2026-10-22, by: "the Local model build (packages/gnomon-gui)", note: "classes moved into styles.css; bridge file and its specimen link removed" }, from: "local-model-bridge.css in specimen.stylesheets", to: "the classes moved into styles.css by the build; drop the bridge", uses: 1, files: [".atelier/systems/gnomon/local-model-bridge.css"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
   # batch tokens
   - { batch: tokens, from: "--t-walk defined, unused (cap walk not built)", to: "build the walk or drop the token", uses: 0, files: ["packages/gnomon-gui/static/styles.css:122"], from_decision: { extract: 2026-10-21, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } } }
 

@@ -191,6 +191,10 @@ html, body {
 .key:active { transform: translate(2px, 2px); box-shadow: none; }
 .key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .key[disabled] { color: var(--sec); cursor: not-allowed; }
+/* design-system migration keys (session 2026-10-22-gnomon-local-model F10): a disabled pri key (Run now, a busy Allow,
+   Checking…) draws as a default key with --sec text, as .seg-key[disabled]; --sec on the ink fill was about 2.6:1 */
+.key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
+[data-theme="night"] .key.pri[disabled]::before, [data-theme="night"] .key.pri[disabled]::after { color: var(--sec); }
 
 .field {
   font: inherit; color: var(--ink);
@@ -1267,3 +1271,61 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .bud-f { display: inline-flex; align-items: center; gap: 6px; }
 .bud-l { color: var(--sec); font-size: var(--fs-label); white-space: nowrap; }
 .bud .bud-note { flex-basis: 100%; margin-top: 0; }
+
+/* #gui-local-model (session 2026-10-22-gnomon-local-model; moved from the specimen's local-model-bridge.css by the build):
+   component settings-form (.set-form .sf-*), the kernel-owned section heading, the section-focused rule, the loop
+   detail's can't-start line (.lp-refusal) and the root card's signed lines (.card-root-rows) with the loop-diff marks. */
+.settings-row > .set-form, .settings-row > .sf-request, .settings-row > .sf-result, .settings-row > .sf-keys { grid-column: 2; }
+.set-form { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 2px; padding: 2px 0 2px 12px; border-left: 2px solid var(--ink); }
+.set-form > p { margin: 0; }
+.sf-lead { font-size: var(--fs-control); color: var(--ink2); }
+.sf-field { display: flex; flex-direction: column; gap: 2px; margin: 0; border: 0; padding: 0; min-width: 0; }
+.sf-label { font-size: var(--fs-label); color: var(--sec); padding: 0; }
+.sf-field .field { font-size: var(--fs-control); min-height: 28px; max-width: 100%; }
+.sf-field .w-addr { width: 34ch; } .sf-field .w-model { width: min(100%, 60ch); } .sf-field .w-name { width: 16ch; } .sf-field .w-path { width: 100%; }
+.sf-note { margin: 0; font-size: var(--fs-label); color: var(--sec); }
+.sf-note code, .settings-how code, .sf-lead code, .sf-err code { font-size: inherit; background: var(--fold); padding: 0 4px; border-radius: var(--radius); }
+.sf-err { margin: 0; font-size: var(--fs-label); color: var(--fail); font-weight: 600; }
+.sf-field .field[aria-invalid="true"] { border-color: var(--fail-edge); box-shadow: inset 0 0 0 1px var(--fail-edge); }
+.sf-adv > summary { list-style: none; cursor: pointer; display: inline-flex; width: max-content; }
+.sf-adv > summary::-webkit-details-marker { display: none; }
+.sf-adv[open] > summary { margin-bottom: 8px; }
+.sf-adv > div { display: flex; flex-direction: column; gap: 10px; }
+.sf-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sf-request { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-control); color: var(--ink2); margin: 4px 0 0; }
+.sf-result { margin: 4px 0 0; font-size: var(--fs-label); color: var(--ink2); }
+.sf-result.fail { color: var(--fail); }
+.sf-result strong, .sf-note strong { font-weight: 600; }
+.settings-intro { margin: 0 0 4px; font-size: var(--fs-label); color: var(--sec); max-width: 80ch; }
+.settings-value .mk { font-weight: 600; }
+.settings-row.settings-form { align-items: start; }
+.settings-row.settings-form > .settings-label { padding-top: 6px; }
+.settings-row[data-grp="start"] { margin-top: 8px; }
+.settings-sec[data-kernel-owned] .settings-readonly .settings-label::after { content: none; }
+.settings-h .sec-owner { font-family: var(--mono); font-size: var(--fs-label); font-weight: 400; color: var(--sec); text-transform: none; letter-spacing: 0; }
+.settings-value { overflow-wrap: anywhere; }
+.settings-sec.focused { box-shadow: inset 2px 0 0 var(--key-edge); padding-left: 10px; margin-left: -12px; }
+/* the section heading takes focus (tabindex -1): in a section-focused open the key-edge rule is its indicator; any
+   other programmatic focus (a busy key went disabled under it) shows the system ring, never the browser's blue one */
+.settings-h:focus { outline: none; }
+.settings-h:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.settings-sec.focused .settings-h:focus-visible { outline: none; }
+/* a kernel-owned section's label sits on its value's first line when the value wraps (Last fallback) */
+.settings-sec[data-kernel-owned] .settings-row.settings-readonly { align-items: first baseline; }
+
+/* ── the loop detail's start-refusal line (loop-detail anatomy) ─────────────── */
+.lp-refusal { margin: 0 20px 6px; padding: 6px 10px; border: 1px solid var(--key-edge); border-left: var(--edge-w) solid var(--key-edge); border-radius: var(--radius); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: var(--fs-control); color: var(--ink2); background: var(--sheet); }
+.lp-refusal .rf-h { font-weight: 600; color: var(--ink); }
+.lp-refusal .key { margin-top: 4px; }
+
+/* ── the root card's signed lines for gnomon-root-local:v1 ─────────────────── */
+.card-root-rows { margin: 6px 0 0; padding: 4px 0 0; border-top: 1px dashed var(--rule); }
+.card-root-rows .root-rows-title { margin: 0; font-size: var(--fs-label); color: var(--sec); }
+.card-root-rows ul { margin: 2px 0 0; padding: 0; list-style: none; font-size: var(--fs-label); color: var(--ink2); }
+.card-root-rows li { padding-left: 12px; text-indent: -12px; overflow-wrap: anywhere; }
+.card-root-rows li::before { content: "· "; color: var(--sec); }
+.card-root-rows li.add { color: var(--ink); font-weight: 600; background: var(--fold); border-left: 2px solid var(--key-edge); padding-left: 12px; margin-left: -2px; }
+.card-root-rows li.add::before { content: "+ "; }
+.card-root-rows li.del { color: var(--sec); text-decoration: line-through 1px; }
+.card-root-rows li.del::before { content: "− "; }
+.card-head .fam { color: var(--ink); font-weight: 600; letter-spacing: .04em; }

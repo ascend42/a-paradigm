@@ -321,7 +321,50 @@ export function edgeTab(m: LoopsModel): string {
 // ── the list (loop-list, loop-row) ──────────────────────────────────────────────────────────────────────────────
 
 const NEEDS_YOU: ReadonlySet<LoopRowState> = new Set(['waiting-trust', 'kernel-paused', 'waiting-land', 'parked']);
-export const needsYou = (x: LoopItem): boolean => NEEDS_YOU.has(x.state);
+/** A loop needs you when it waits on you, or (TD-2026-10-22-769) when the kernel refuses its start for want of a local model. */
+export const needsYou = (x: LoopItem): boolean => NEEDS_YOU.has(x.state) || cantStart(x);
+/** The kernel refused this loop's start (status.loops.startRefused, or a Run now refused no-local-model). */
+export const cantStart = (x: LoopItem): boolean => !!x.startRefused && x.state !== 'running' && x.state !== 'waiting-trust' && x.state !== 'invalid';
+
+/** The local model words of a start refusal (design-system loop-detail.cant_start; the kernel's why, never inferred). */
+export interface StartLine {
+  head: string;
+  text: string;
+  /** the key to the fix: Settings at the Local model section */
+  key: string;
+  /** Run now's reason, beside the disabled key */
+  runWhy: string;
+  /** the refused-start alert's path start */
+  what: string;
+}
+const nodesText = (nodes: readonly string[]): string => (nodes.length ? nodes.join(', ') : 'a model step');
+export function startLine(sr: LoopStartRefused, model: string | null): StartLine {
+  const head = `✕ can’t start · ${sr.code}`;
+  switch (sr.why) {
+    case 'sessions-only':
+      return { head, text: `${model ?? 'The local model'} is set up for sessions only. Let loops use it in Settings.`, key: 'Local model settings…', runWhy: 'Run now needs a local model loops may use', what: 'the local model is for sessions only' };
+    case 'no-runner':
+      return { head, text: 'The local model has no runner pinned. Change it in Settings and Save to pin the bundled one.', key: 'Local model settings…', runWhy: 'Run now needs the local model’s runner pinned', what: 'the local model has no runner pinned' };
+    case 'no-profile':
+      return { head, text: `This loop’s model step (${nodesText(sr.modelNodes)}) names a local endpoint that loops can’t use. Check its name in Settings.`, key: 'Local model settings…', runWhy: 'Run now needs the local endpoint its model step names', what: 'no local endpoint matches its model step' };
+    default:
+      return { head, text: `No local model is set up, and this loop has a model step (${nodesText(sr.modelNodes)}).`, key: 'Set up local model…', runWhy: 'Run now needs a local model', what: 'no local model' };
+  }
+}
+
+/** A Run now the kernel refused for want of a local model (ENGINE no-local-model {why}), as a start refusal; else null. */
+export function runRefusalOf(r: { code: string; reason: string | null; data: Record<string, unknown> | null }, x: Pick<LoopItem, 'shape'>, at: string): LoopStartRefused | null {
+  const why = r.data?.why;
+  if (r.reason !== 'no-local-model' || typeof why !== 'string' || !START_REFUSED_WHYS.includes(why)) return null;
+  return { code: 'no-local-model', why: why as LoopStartRefused['why'], at, since: at, count: 1, trigger: 'manual', modelNodes: (x.shape?.nodes ?? []).filter((n) => n.type === 'model').map((n) => n.id) };
+}
+
+/** "18:30" today, else the weekday ("Monday"), for "×3 since Monday". */
+export function sinceText(iso: string, now: number): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toDateString() === new Date(now).toDateString() ? hhmm(iso) : d.toLocaleDateString('en-GB', { weekday: 'long' });
+}
 
 export const projectOf = (x: Pick<LoopItem, 'repo' | 'scope'>): string => (x.repo ? x.repo.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || x.repo : x.scope === 'personal' ? 'personal' : 'unknown');
 
@@ -402,6 +445,14 @@ export interface LoopRowView {
 }
 export function loopRow(x: LoopItem, pinned: boolean, now: number): LoopRowView {
   const state = x.state === 'kill-switch' ? 'paused · kill switch' : x.state === 'kernel-paused' ? `kernel-paused · ${x.reason ?? ''}`.replace(/ · $/, '') : x.state === 'paused' && x.reason ? `paused · ${x.reason}` : STATE_WORD[x.state];
+  if (cantStart(x)) {
+    const sr = x.startRefused!;
+    const project = projectOf(x);
+    const l1c = 'can’t start';
+    const l2c = `${pinned ? `${project} · ` : ''}needs a local model (${nodesText(sr.modelNodes)}) · ${autonomyText(x)} · ${x.shape ? authorPhrase(x) : 'from the loop file'}`;
+    const nxc = `since ${hhmm(sr.since)}`;
+    return { key: x.key, mark: pinned ? '◆' : '✕', name: middleEllipsis(x.loopId), l1: l1c, nx: nxc, l2: l2c, title: `${x.loopId} · ${l1c} · ${startLine(sr, null).what} · ${nxc}\n${l2c}`, swatch: pinned, project };
+  }
   const l1 = x.state === 'waiting-trust' ? `waiting for trust${x.shape ? ` · ${authorPhrase(x)}` : ''} · ${x.changed ? 'changed' : 'new'}` : `${state} · ${lastOutcome(x)}`;
   const facts: string[] = [];
   if (x.state === 'waiting-trust') facts.push(x.changed ? 'change waits for trust' : 'new · inert until trusted');
@@ -469,12 +520,16 @@ export function detailKeys(x: LoopItem): { chip: string; keys: LoopKey[]; why: s
     keys.push({ act: 'resume', label: 'Resume' });
   } else if (x.state === 'invalid') {
     why = 'this loop does not compile: paradigm loop validate';
+  } else if (cantStart(x)) {
+    // TD-2026-10-22-769: Run now says why in words (the kernel's why), and the can't-start line holds the fix
+    why = startLine(x.startRefused!, null).runWhy;
+    keys.push({ act: 'run', label: 'Run now', pri: true, disabled: why }, { act: 'pause', label: 'Pause' });
   } else {
     keys.push({ act: 'run', label: 'Run now', pri: true }, { act: 'pause', label: 'Pause' });
   }
   if (trusted) keys.push({ act: 'untrust', label: 'Untrust', quiet: true });
   keys.push({ act: 'delete', label: 'Delete', quiet: true, more: true });
-  const chip = x.state === 'running' ? `running · ${lastOutcome(x)}` : x.state === 'waiting-trust' ? (x.changed ? 'waiting for trust · change' : 'waiting for trust · new') : loopRow(x, false, Date.now()).l1.split(' · ').slice(0, 2).join(' · ');
+  const chip = cantStart(x) && x.state === 'idle' ? 'idle · can’t start' : x.state === 'running' ? `running · ${lastOutcome(x)}` : x.state === 'waiting-trust' ? (x.changed ? 'waiting for trust · change' : 'waiting for trust · new') : loopRow(x, false, Date.now()).l1.split(' · ').slice(0, 2).join(' · ');
   return { chip, keys, why };
 }
 
@@ -570,9 +625,11 @@ export interface LoopAlert {
   title: string;
   path: string;
   runId?: string;
+  /** refused-start: the key to the fix (Settings at the Local model section) instead of Open run */
+  fix?: string;
 }
 /** Loops stuck and still needing you: the latest loop run failed or was stopped by a limit, or the kernel paused it. */
-export function loopAlerts(m: LoopsModel | null, dismissed: ReadonlySet<string>): LoopAlert[] {
+export function loopAlerts(m: LoopsModel | null, dismissed: ReadonlySet<string>, now: number = Date.now()): LoopAlert[] {
   if (!m) return [];
   const out: LoopAlert[] = [];
   for (const x of m.loops) {
@@ -583,9 +640,9 @@ export function loopAlerts(m: LoopsModel | null, dismissed: ReadonlySet<string>)
     if (sr) {
       const id = `refused:${x.key}:${sr.since}`;
       if (!dismissed.has(id)) {
-        const what = sr.why === 'sessions-only' ? 'the local model is for sessions only' : sr.why === 'no-runner' ? 'the local model has no runner pinned' : sr.why === 'no-profile' ? 'no local endpoint matches its model profile' : 'no local model';
+        const sl = startLine(sr, null);
         const when = sr.trigger === 'schedule' ? `scheduled ${hhmm(sr.at)}` : `${sr.trigger} ${hhmm(sr.at)}`;
-        out.push({ id, kind: 'refused-start', key: x.key, loopId: x.loopId, project, repo: x.repo, at: hhmm(sr.at), title: `■ ${x.loopId} didn’t start`, path: `${what} · ${when} · refused before any step${sr.count > 1 ? ` · ×${sr.count} since ${hhmm(sr.since)}` : ''}` });
+        out.push({ id, kind: 'refused-start', key: x.key, loopId: x.loopId, project, repo: x.repo, at: hhmm(sr.at), title: `■ ${x.loopId} didn’t start`, path: `${sl.what} · ${when} · refused before any step${sr.count > 1 ? ` · ×${sr.count} since ${sinceText(sr.since, now)}` : ''}`, fix: sl.key });
       }
     }
     if (x.state === 'kernel-paused') {

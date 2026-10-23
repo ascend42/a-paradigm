@@ -1228,6 +1228,42 @@ components:
     tests:
       - test/voice-ladder.test.ts
       - test/dictation.test.ts
+  gui-local-model:
+    description: >-
+      #gui-local-model (TD-2026-10-22-769; Atelier session
+      2026-10-22-gnomon-local-model, design-system settings-form, sheet
+      section-focused, card family gnomon, alert refused-start, loop-detail
+      cant_start). The Settings sheet's "Local model · kernel-owned" section
+      between Voice and Permissions. core/local-model.ts (PURE): localStatusOf
+      (status.local: not-connected | not-offered | windows | none | set),
+      the form (setupForm, changeForm, pickServer fills the address only until
+      typed), the page's checks (addressError: scheme, loopback host in lower
+      case, port 1..65535, no path; model; endpoint name; runner path),
+      probeRequest / setRequest / REMOVE_REQUEST, probeVerdict (C1 check-first:
+      only an answer with the model listed raises the card), checkRowOf, the
+      results (denied, expired, turned off) and toasts, localSection (every
+      state, rows kinds readonly, form, request, term). ui/local-model.ts
+      LocalModelController (no DOM): trusted presses only; one request at a
+      time; Save = page checks (focus the first invalid field), then
+      request.local.probe (rate-limited retry once), then request.local.config
+      {op:'set'} (the card; focus Decide in the stack, which closes the sheet
+      and focuses the card group, never Allow); the outcome from rows
+      (approval.decide allow -> checking until status.local.lastProbe, a toast
+      only when no sheet is open; deny / approval.expire / daemon.start -> the
+      form returns with the entries and a "Not changed" line); Turn off =
+      {op:'remove'}, an inline confirm only when loops use it (C2); Esc closes
+      the confirm or form first. ui/settings-sheet.ts paints the section
+      (heading "· kernel-owned" once, open(section) section-focused) and routes
+      data-lm-act / data-lm-field / submit. core/render.ts localRowOf mirrors
+      the kernel's and helper's gnomon-root-local:v1 row table (Aegis L4:
+      runnerSource, port 1..65535, paths <= 256, no control or bidi characters,
+      never compacted: a row whose helper line exceeds 1200 is refused) and
+      localRootItems renders one line per signed field with the loop-diff marks
+      on a change; the card head reads "⊙ gnomon". core/loops.ts startLine /
+      cantStart / runRefusalOf: the loop detail's can't-start line per kernel
+      why (none, sessions-only, no-runner, no-profile), Run now's reason, the
+      needs-you pin and the refused-start alert key. Palette local.setup.
+      Tests: test/local-model.test.ts, test/root-rows.test.ts.
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto

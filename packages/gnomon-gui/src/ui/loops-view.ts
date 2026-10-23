@@ -13,7 +13,9 @@
  *   - Stack pieces (alerts and the trust slip) are built here and placed by app.ts under the decision cards.
  */
 import { h, type MiniDoc } from '../core/render.js';
-import { authorPhrase, budgetFields, budgetKey, budgetRequest, detailKeys, edgeTab, hhmm, keepLine, leafMeta, loopGroups, loopRequest, loopsOf, projectOf, runPath, runTrace, trustSections, type LoopAct, type LoopAlert, type LoopItem, type LoopsModel, type SlipLine } from '../core/loops.js';
+import type { ShownRefusal } from '../core/client.js';
+import { localStatusOf } from '../core/local-model.js';
+import { cantStart, runRefusalOf, startLine, authorPhrase, budgetFields, budgetKey, budgetRequest, detailKeys, edgeTab, hhmm, keepLine, leafMeta, loopGroups, loopRequest, loopsOf, projectOf, runPath, runTrace, trustSections, type LoopAct, type LoopAlert, type LoopItem, type LoopsModel, type SlipLine } from '../core/loops.js';
 import { graphScale, layoutGraph, ZOOM_STEP, type GraphLayout } from '../core/loop-graph.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -24,7 +26,9 @@ export interface LoopsViewDeps {
   host: HTMLElement;
   status: () => unknown;
   hue: (repo: string) => number;
-  request: (req: { kind: string; payload: Record<string, unknown> }, trusted: boolean, done: string) => Promise<boolean>;
+  request: (req: { kind: string; payload: Record<string, unknown> }, trusted: boolean, done: string, onRefused?: (r: ShownRefusal) => void) => Promise<boolean>;
+  /** #gui-local-model: open Settings at the Local model section (section-focused; closing returns focus here) */
+  openLocal: () => void;
   pauseAll: (trusted: boolean) => void;
   /** say something as a toast (a GUI outcome) */
   say: (text: string, kind?: 'info' | 'warn' | 'fail') => void;
@@ -112,7 +116,7 @@ export function alertEl(doc: Document, a: LoopAlert, hue: number): HTMLElement {
     el(doc, 'header', { class: 'card-head k' }, el(doc, 'span', { class: 'fam' }, '↻ loop'), ' · ', el(doc, 'span', { class: `card-project pink h${hue}` }, `■ ${a.project}`), ' · ', el(doc, 'span', { class: 'card-kind' }, `alert${a.at ? ` · ${a.at}` : ''}`)),
     el(doc, 'p', { class: 'card-title', title: a.title }, a.title),
     a.path ? path : null,
-    el(doc, 'div', { class: 'card-keys' }, el(doc, 'button', { class: 'key quiet', type: 'button', 'data-loop-open': a.key, ...(a.runId ? { 'data-run-id': a.runId } : {}) }, 'Open run'), el(doc, 'button', { class: 'key quiet', type: 'button', 'data-loop-dismiss': a.id, 'aria-label': `Dismiss the ${a.loopId} alert` }, 'Dismiss')),
+    el(doc, 'div', { class: 'card-keys' }, a.fix ? el(doc, 'button', { class: 'key quiet', type: 'button', 'data-local-open': a.key }, a.fix) : el(doc, 'button', { class: 'key quiet', type: 'button', 'data-loop-open': a.key, ...(a.runId ? { 'data-run-id': a.runId } : {}) }, 'Open run'), el(doc, 'button', { class: 'key quiet', type: 'button', 'data-loop-dismiss': a.id, 'aria-label': `Dismiss the ${a.loopId} alert` }, 'Dismiss')),
   );
 }
 
@@ -141,6 +145,14 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
   const budgetTyped = new Map<string, string>();
   let waitingOnly = false;
   let model: LoopsModel | null = null;
+  /** #gui-local-model: a Run now the kernel refused no-local-model, per loop, until the local config version moves */
+  const runRefused = new Map<string, { sr: NonNullable<LoopItem['startRefused']>; version: number | null }>();
+  const withRunRefusals = (m: LoopsModel | null): LoopsModel | null => {
+    if (!m || !runRefused.size) return m;
+    const version = localStatusOf(d.status()).version;
+    for (const [k, v] of [...runRefused]) if (v.version !== version) runRefused.delete(k);
+    return { ...m, loops: m.loops.map((x) => (x.startRefused || !runRefused.has(x.key) ? x : { ...x, startRefused: runRefused.get(x.key)!.sr })) };
+  };
 
   const leaf = el(doc, 'div', { class: 'lp-leaf', role: 'region', 'aria-label': 'Loops' });
   leaf.hidden = true;
@@ -220,6 +232,9 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
     const auto = x.effective?.autonomy && x.effective.autonomy !== (x.effective.declared ?? x.shape?.autonomy) ? `${x.effective.declared ?? x.shape?.autonomy} → ${x.effective.autonomy}${x.effective.capReason ? ` (${x.effective.capReason})` : ''}` : (x.shape?.autonomy ?? '');
     const meta = [`■ ${projectOf(x)}`, x.shape?.triggers.join(' + ') || 'manual', auto, 'local only', x.trustedHash ? `trusted ${x.trustedHash.replace(/^sha256:/, '').slice(0, 8)}` : '', x.changed && x.contentHash ? `change ${x.contentHash.replace(/^sha256:/, '').slice(0, 8)} waits for trust` : '', x.reason && x.state !== 'running' ? `paused: ${x.reason}` : ''].filter(Boolean).join(' · ');
     const run = x.runs[0];
+    // TD-2026-10-22-769 (design-system loop-detail.cant_start): the kernel's why in words, one key to the fix
+    const sl = cantStart(x) ? startLine(x.startRefused!, localStatusOf(d.status()).endpoints[0]?.model ?? null) : null;
+    const refusal = sl ? el(doc, 'div', { class: 'lp-refusal', role: 'status' }, el(doc, 'span', { class: 'rf-h' }, sl.head), el(doc, 'span', { class: 'rf-t' }, sl.text), el(doc, 'button', { class: 'key', type: 'button', 'data-lp-local': '1' }, sl.key)) : null;
     const frame = el(doc, 'div', { class: 'g-frame' }, el(doc, 'div', { class: 'g-tools' }, el(doc, 'span', { class: 'g-ori meta' }), el(doc, 'span', { class: 'spacer' }), el(doc, 'button', { class: 'key quiet', type: 'button', 'data-zoom': '-1', 'aria-label': 'Zoom out' }, '−'), el(doc, 'button', { class: 'key quiet', type: 'button', 'data-zoom': '0' }, 'fit'), el(doc, 'button', { class: 'key quiet', type: 'button', 'data-zoom': '1', 'aria-label': 'Zoom in' }, '+')), el(doc, 'div', { class: 'g-view' }), el(doc, 'p', { class: 'g-key' }, '✓ pass · ✕ fail (heavy edge) · ? unsure · … waiting · · not reached (dashed) · solid edges: the last loop run\'s path · ×n visits'));
     // budgets on one line (label, field, its key); the one note names the cost of the field being edited
     const buds = el(doc, 'div', { class: 'bud' });
@@ -242,6 +257,7 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
       { class: 'lp-detail', 'data-detail': x.key },
       head,
       el(doc, 'div', { class: 'lp-dmeta' }, meta, why ? ' · ' : null, why ? el(doc, 'span', { class: 'dis-why' }, why) : null),
+      refusal,
       el(doc, 'div', { class: 'lp-sec' }, el(doc, 'h3', null, run ? `graph · loop run ${run.runId.slice(-4)} · ${hhmm(run.startedAt)} · ${run.endedAt ? run.reason ?? 'ended' : 'in flight'}` : 'graph · no loop run yet'), frame),
       budgetFields(x).length ? el(doc, 'div', { class: 'lp-sec' }, el(doc, 'h3', null, 'budgets'), buds) : null,
       el(doc, 'div', { class: 'lp-sec' }, el(doc, 'h3', null, 'last loop run'), run ? trace : el(doc, 'p', { class: 'meta' }, 'no loop run yet')),
@@ -252,7 +268,7 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
   }
 
   function repaint(): void {
-    model = loopsOf(d.status());
+    model = withRunRefusals(loopsOf(d.status()));
     tab.hidden = open || !model || !model.loops.length;
     if (model) tab.textContent = edgeTab(model);
     d.host.classList.toggle('lp-tab-on', !tab.hidden);
@@ -338,7 +354,11 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
   async function act(a: LoopAct, x: LoopItem, trusted: boolean): Promise<void> {
     if (a === 'trust') return void (await d.request(loopRequest(x, 'trust'), trusted, `a loop-trust card for ${x.loopId} is in the stack: Read, then Trust`));
     const done: Record<LoopAct, string> = { trust: '', run: `loop run of ${x.loopId} started`, pause: `${x.loopId} paused`, resume: `${x.loopId} resumed`, untrust: `${x.loopId} is untrusted: it will not run until you trust it again`, delete: `${x.loopId} deleted` };
-    await d.request(loopRequest(x, a), trusted, done[a]);
+    await d.request(loopRequest(x, a), trusted, done[a], (r) => {
+      // a Run now refused for want of a local model shows the can't-start line (the kernel's why)
+      const sr = a === 'run' ? runRefusalOf(r, x, new Date().toISOString()) : null;
+      if (sr) runRefused.set(x.key, { sr, version: localStatusOf(d.status()).version });
+    });
   }
 
   leaf.addEventListener('click', (e) => {
@@ -350,6 +370,7 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
       return repaint();
     }
     if (lp === 'pause-all') return d.pauseAll(e.isTrusted);
+    if (t.closest('[data-lp-local]')) return d.openLocal();
     if (lp === 'show-all') {
       waitingOnly = false;
       return repaint();
@@ -432,6 +453,6 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
       if (unfolded && !d.hasCard(unfolded)) foldTrust();
     },
     unfoldTrust,
-    model: () => model ?? loopsOf(d.status()),
+    model: () => model ?? withRunRefusals(loopsOf(d.status())),
   };
 }

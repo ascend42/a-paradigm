@@ -197,7 +197,7 @@ describe('LP8 loops model', () => {
     const a = loopAlerts(m, new Set()).filter((x) => x.kind === 'refused-start');
     expect(a).toHaveLength(1);
     expect(a[0]!.title).toBe('■ flow-health-checkout didn’t start');
-    expect(a[0]!.path).toMatch(/^no local model · scheduled \d\d:\d\d · refused before any step · ×3 since \d\d:\d\d$/);
+    expect(a[0]!.path).toMatch(/^no local model · scheduled \d\d:\d\d · refused before any step · ×3 since (\d\d:\d\d|[A-Z][a-z]+day)$/);
     expect(loopAlerts(loopsOf(status({ startRefused: [{ ...refused, why: 'sessions-only', count: 1 }] }))!, new Set()).find((x) => x.kind === 'refused-start')!.path).toMatch(/^the local model is for sessions only · scheduled/);
     expect(loopAlerts(m, new Set([a[0]!.id])).filter((x) => x.kind === 'refused-start')).toEqual([]);
     expect(loopAlerts(loopsOf(status({ startRefused: [] }))!, new Set()).filter((x) => x.kind === 'refused-start')).toEqual([]);
