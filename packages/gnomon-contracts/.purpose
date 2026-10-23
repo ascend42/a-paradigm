@@ -86,6 +86,16 @@ components:
       folds whitespace; trims; refuses > SESSION_NAME_MAX = 80 code points
       and kept format characters); '' resets. Descriptor sessionRename.
       Test: test/session-name.test.ts.
+    git-verbs-contract: >-
+      8.0:git-verbs (T-2026-10-23-002; one clientApiId move,
+      sha256:aa537e4c...79d4 -> sha256:7b0fa9181ecfcf0105673b77ec110255fab41170cb4732bb02102f61e17de00f):
+      the kernel-owned, sensitive kind git.verb{hsid, verb, phase, inputHash,
+      why?, cardId?, host?, exitCode?} with a closed payload
+      (validateKindPayload): GIT_VERBS (git.init, git.push, repo.create,
+      git.worktree.add, git.worktree.remove), GIT_VERB_PHASES (requested,
+      refused, ran, failed; why only on refused/failed), GIT_VERB_REASONS,
+      GIT_VERB_HOST_PATTERN (a lowercase DNS host, never a URL). Descriptor
+      gitVerbs. Tests: gnomon test/git-verbs.test.ts (every row validates).
     edit-rules-contract: >-
       TD-2026-10-23-939 follow-up (Aegis 2026-10-23; one clientApiId move,
       sha256:a23b2c75...a1ce -> sha256:aa537e4c9af0efee02ebd5d03a734c4de915c5e02a58021d71a6fd892bf379d4):

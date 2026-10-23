@@ -187,8 +187,8 @@ describe('G-VOX-18: no voice override is left in the supervisor; the origin is s
   it('every b.auto call in the supervisor still sits behind a mayAuto gate (the loop clamp needs it)', () => {
     const autos = src.split('await b.auto(').length - 1;
     const gates = [...src.matchAll(/^\s+if \(.*mayAuto\(/gm)].length;
-    expect(autos).toBe(3);
-    expect(gates).toBe(3);
+    expect(autos).toBe(4); // mode, read-only, rule, and #kernel-mcp's kernel-verb pass (T-2026-10-23-002)
+    expect(gates).toBe(4);
   });
 });
 

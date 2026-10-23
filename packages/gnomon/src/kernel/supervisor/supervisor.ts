@@ -1389,7 +1389,7 @@ export class SessionSupervisor {
     const kernelTool = this.#o.gitVerbs ? Object.keys(GIT_VERB_TOOLS).find((t) => kernelToolName(t) === ev.toolName) : undefined;
     if (kernelTool !== undefined) {
       let logged = false;
-      if (loopBy === null && b && typeof b.auto === 'function') {
+      if (mayAuto('kernel-verb') && b && typeof b.auto === 'function') {
         try {
           await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: 'kernel-verb' });
           logged = true;
@@ -1397,7 +1397,7 @@ export class SessionSupervisor {
           logged = false;
         }
       }
-      await this.#write(s, logged ? permissionAllowLine(requestId, structuredClone(ev.input)) : permissionDenyLine(requestId, loopBy !== null ? 'Denied: loop sessions never run git verbs.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'kernel-verb' });
+      await this.#write(s, logged ? permissionAllowLine(requestId, structuredClone(ev.input)) : permissionDenyLine(requestId, loopBy !== null ? 'Denied: loop sessions never run kernel verbs.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'kernel-verb' });
       return;
     }
     // the auto-edits pass for an edit request, outside manual mode: auto-edits uses it, and (TD-2026-10-23-939 follow-up,
