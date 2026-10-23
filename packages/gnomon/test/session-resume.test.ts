@@ -55,8 +55,10 @@ afterEach(async () => {
 type Row = ResumeRow & { payload: Record<string, unknown> };
 
 /** One kernel (supervisor + broker + fuse + children) writing into the shared, kernel-signed `rows`. */
-function kernel(rows: Row[], opts: { clock?: () => number } = {}) {
+function kernel(rows: Row[], opts: { clock?: () => number; slowKinds?: { kinds: readonly string[]; ms: number } } = {}) {
   const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
+    // a slow chain write (fault injection): widens the window between the child's close and the exit path's rows
+    if (opts.slowKinds?.kinds.includes(kind)) await new Promise((res) => setTimeout(res, opts.slowKinds!.ms));
     rows.push({ id: mintId('ev'), kind, principal: KERNEL, keyId: 'key:kernel', at: new Date((opts.clock ?? Date.now)()).toISOString(), payload, ...(ids.session ? { session: ids.session } : {}) });
   };
   const signer = SoftwareEd25519Signer.generate('kernel');
@@ -72,10 +74,10 @@ function kernel(rows: Row[], opts: { clock?: () => number } = {}) {
   return { broker, sup, fuse };
 }
 
-function world() {
+function world(oldOpts: Parameters<typeof kernel>[1] = {}) {
   w = sessionWorld();
   const rows: Row[] = [];
-  const old = kernel(rows);
+  const old = kernel(rows, oldOpts);
   const open = async (mode: Record<string, unknown>) => {
     setMode(w, mode);
     return old.sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd });
@@ -178,6 +180,16 @@ describe.skipIf(!SANDBOX_OK)('§2.4 rule 11: resume after an upgrade (T-2026-10-
     expect(r.rows.slice(boot).filter((x) => x.kind === 'turn.sent')).toEqual([]);
     await port.send({ principal: HUMAN, principalClass: 'human', features: ['journal.cursor', 'session.resume'] }, { hsid: idle.hsid, content: [{ text: 'hi' }] });
     expect(r.of('turn.sent', idle.hsid, boot)).toHaveLength(1);
+  });
+
+  it('drain resolves only after each drained session\'s exit path ran: its permit.release rows precede any resume (a late release once landed after the new kernel booted)', async () => {
+    const r = world({ slowKinds: { kinds: ['permit.release'], ms: 250 } });
+    const { idle, busy } = await drained(r);
+    for (const s of [idle, busy]) {
+      expect(r.old.sup.stateOf(s.hsid)).toBe('exited');
+      const permitId = r.of('session.sandbox', s.hsid).find((x) => typeof x.payload.permitId === 'string')!.payload.permitId;
+      expect(r.rows.some((x) => x.kind === 'permit.release' && x.payload.permitId === permitId)).toBe(true);
+    }
   });
 
   it('the layers changed between drain and resume ⇒ stopped with the refusal; nothing re-attributed', async () => {
