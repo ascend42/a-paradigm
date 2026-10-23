@@ -2755,6 +2755,7 @@ components:
     signals: []
     tests:
       - test/git-verbs.test.ts
+      - test/kernel-mcp-session.test.ts
 
   mcp-passthrough:
     description: >-

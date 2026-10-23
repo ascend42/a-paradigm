@@ -149,6 +149,8 @@ process.stdin.on('data', (c) => {
     if (m.type === 'control_response') {
       const id = m.response?.request_id;
       const req = perm.open.get(id);
+      // #kernel-mcp: an SDK mcp_message answer carries response.mcp_response (traced whole: it is the kernel's JSON-RPC answer)
+      if (m.response?.response?.mcp_response !== undefined || m.response?.subtype === 'error') trace({ t: 'mcp-answer', id, subtype: m.response?.subtype, mcp: m.response?.response?.mcp_response ?? null, error: m.response?.error ?? null });
       trace({ t: 'perm-answer', id, known: !!req, subtype: m.response?.subtype, behavior: m.response?.response?.behavior ?? null, updatedInput: m.response?.response?.updatedInput, message: m.response?.response?.message, keys: Object.keys(m.response?.response ?? {}).sort() });
       if (!req) continue;
       perm.open.delete(id);
