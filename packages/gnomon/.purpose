@@ -2747,8 +2747,12 @@ components:
       approval.auto{modeRef:'kernel-verb'} row behind mayAuto (loop sessions
       denied), never a second card: the verb carries its own gate. Present
       only when SupervisorOptions.gitVerbs is set (the daemon sets it). The
-      sdk server type over --mcp-config is the Agent SDK's shape; a real
-      claude probe of it is still owed (no claude on the build host).
+      sdk server type over --mcp-config with --strict-mcp-config is MEASURED
+      on claude 2.1.309 (probe p-kernel-mcp-sdk, pass, driven by this
+      module, the adapter and GitVerbs): init lists mcp__gnomon__* with
+      gnomon connected (source sdk); initialize (id 0),
+      notifications/initialized (no id), tools/list, then can_use_tool and
+      tools/call arrive as mcp_message; git.init made the fresh folder a repo.
     path: src/kernel/supervisor/kernel-mcp.ts
     type: module
     tags: [gnomon, kernel, mcp, paradigm-8]

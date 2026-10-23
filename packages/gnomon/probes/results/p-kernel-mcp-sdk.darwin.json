@@ -1,0 +1,90 @@
+{
+  "probe": "p-kernel-mcp-sdk",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "checks": {
+      "c1": true,
+      "c2": true,
+      "c3": true,
+      "c4": true
+    },
+    "claude": "2.1.309 (Claude Code)",
+    "init": [
+      "mcp__gnomon__gnomon_git_init",
+      "mcp__gnomon__gnomon_git_push",
+      "mcp__gnomon__gnomon_repo_create",
+      "mcp__gnomon__gnomon_worktree_add",
+      "mcp__gnomon__gnomon_worktree_remove"
+    ],
+    "mcpServers": [
+      {
+        "name": "gnomon",
+        "status": "connected",
+        "source": "sdk"
+      }
+    ],
+    "handshake": [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "tools/call"
+    ],
+    "parsedAs": [
+      "mcp-message",
+      "mcp-message",
+      "mcp-message",
+      "permission-request",
+      "mcp-message"
+    ],
+    "permissionFor": [
+      "mcp__gnomon__gnomon_git_init"
+    ],
+    "toolCall": {
+      "name": "gnomon_git_init",
+      "arguments": {}
+    },
+    "toolAnswer": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Made /private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-pkmcp-NLSlXv/fresh a git repo on branch main (a minimal config, no hooks). Commit as usual; use gnomon_repo_create or gnomon_git_push to publish."
+        }
+      ],
+      "isError": false
+    },
+    "result": {
+      "subtype": "success",
+      "isError": false,
+      "text": "Made /private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-pkmcp-NLSlXv/fresh a git repo on branch main (a minimal config, no hooks). Commit as usual; use gnomon_repo_create or gnomon_git_push to publish."
+    },
+    "repoHead": "ref: refs/heads/main",
+    "verbRows": [
+      {
+        "kind": "git.verb",
+        "phase": "requested",
+        "why": null
+      },
+      {
+        "kind": "git.verb",
+        "phase": "ran",
+        "why": null
+      }
+    ],
+    "autos": [
+      "mode:auto-edits"
+    ],
+    "stderr": "",
+    "exit": 0
+  },
+  "specRefs": [
+    "§6.6 kernel-run git verbs",
+    "#kernel-mcp"
+  ],
+  "at": "2026-10-23T22:15:35.629Z"
+}

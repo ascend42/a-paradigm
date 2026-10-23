@@ -387,6 +387,28 @@ describe('#kernel-mcp', () => {
     expect(await kernelMcpAnswer({ jsonrpc: '2.0', method: 'notifications/initialized' }, r.verbs, s)).toEqual({ jsonrpc: '2.0', id: 0, result: {} });
     expect(await kernelMcpAnswer('nope', r.verbs, s)).toMatchObject({ error: { code: -32600 } });
   });
+  it('probe p-kernel-mcp-sdk (claude 2.1.309, probes/results/p-kernel-mcp-sdk.darwin.json): the real lines parse and are answered', async () => {
+    const w = world();
+    const r = rig(w);
+    const s = () => sess(w, { mode: 'auto-edits' });
+    // verbatim from the probe transcript: initialize (id 0, jsonrpc after method), the id-less notification, tools/call with _meta
+    const lines = [
+      '{"type":"control_request","request_id":"8c65f84a-4368-4576-a4ad-b999ca44b440","request":{"subtype":"mcp_message","server_name":"gnomon","message":{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-code","title":"Claude Code","description":"Anthropic\'s agentic coding tool","websiteUrl":"https://claude.com/claude-code","version":"2.1.309"}},"jsonrpc":"2.0","id":0}}}',
+      '{"type":"control_request","request_id":"fb56e912-6a9b-41fb-a549-43d56ebfe308","request":{"subtype":"mcp_message","server_name":"gnomon","message":{"jsonrpc":"2.0","method":"notifications/initialized"}}}',
+      '{"type":"control_request","request_id":"a089ac91-a0bc-4344-b05e-f932f4fa23f9","request":{"subtype":"mcp_message","server_name":"gnomon","message":{"method":"tools/list","jsonrpc":"2.0","id":1}}}',
+      '{"type":"control_request","request_id":"853a80d5-3c73-499f-b088-b9817834e75e","request":{"subtype":"mcp_message","server_name":"gnomon","message":{"method":"tools/call","params":{"name":"gnomon_git_init","arguments":{},"_meta":{"claudecode/toolUseId":"toolu_016zcHf8GnnQ6RBGJewUJYcA","progressToken":2}},"jsonrpc":"2.0","id":2}}}',
+    ];
+    const answers = [];
+    for (const l of lines) {
+      const ev = parseStreamLine(l);
+      expect(ev.kind).toBe('mcp-message');
+      answers.push(await kernelMcpAnswer((ev as { message: unknown }).message, r.verbs, s));
+    }
+    expect(answers[0]).toMatchObject({ jsonrpc: '2.0', id: 0, result: { protocolVersion: '2025-11-25', capabilities: { tools: {} } } });
+    expect(answers[1]).toEqual({ jsonrpc: '2.0', id: 0, result: {} });
+    expect(answers[2]).toMatchObject({ id: 1 });
+    expect(answers[3]).toMatchObject({ id: 2, result: { isError: false } });
+  });
   it('the adapter reads an mcp_message control request and writes the SDK answer shape', () => {
     const ev = parseStreamLine(JSON.stringify({ type: 'control_request', request_id: 'r-1', request: { subtype: 'mcp_message', server_name: 'gnomon', message: { jsonrpc: '2.0', id: 1, method: 'tools/list' } } }));
     expect(ev).toMatchObject({ kind: 'mcp-message', requestId: 'r-1', serverName: 'gnomon' });
