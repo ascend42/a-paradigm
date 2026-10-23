@@ -5,7 +5,8 @@
  * and calls three hooks) so the chrome can be restyled without touching it:
  *
  *   - New session: a compact "claude model" select (+ a full-id field for "custom") injected after the route
- *     select; hidden for the local route; restored per folder; checked before the open is sent.
+ *     select; hidden for the local route; restored per folder (every folder choice: #gui-folder-field calls
+ *     onFolder with the kernel's real path); checked before the open is sent.
  *   - Session header: the model the KERNEL says the session runs (its rows), next to the backend, with a ▾ menu to
  *     switch. A switch needs the human's trusted click on the confirm sheet, which says truthfully what happens.
  *   - Settings → Session (read-only): any element with `data-gnomon-slot="session-model"` shows the focused
@@ -31,10 +32,14 @@ export interface ModelPickerDeps {
   focused: () => string | null;
   notice: (msg: string | null, kind?: ToastKind) => void;
   storage?: StorageLike;
+  /** the New session sheet's chosen folder (the kernel's real path), or null */
+  folder?: () => string | null;
 }
 export interface ModelPicker {
   /** the New-session sheet opened (restore the folder's choice) */
   onDialogOpen(): void;
+  /** a folder was chosen in the sheet: restore the claude model remembered for it */
+  onFolder(cwd: string): void;
   /** the session.open `model` for the sheet's route, or null when the custom id is invalid (the reason is shown) */
   openModel(route: string): string | null;
   /** remember the sheet's choice for the folder (after a trusted submit) */
@@ -56,7 +61,6 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
   const st: StorageLike = d.storage ?? doc.defaultView!.localStorage;
   /* ── New-session sheet ─────────────────────────────────────────── */
   const route = doc.getElementById('ns-model') as HTMLSelectElement | null;
-  const cwdIn = doc.getElementById('ns-cwd') as HTMLInputElement | null;
   const wrap = el(doc, 'span', { id: 'ns-claude-wrap', class: 'ns-claude' });
   const label = el(doc, 'label', { class: 'meta' }, 'claude model ');
   const sel = el(doc, 'select', { id: 'ns-claude-model', class: 'field', title: 'Which Claude model the session runs (claude --model). Remembered per folder.' });
@@ -76,13 +80,13 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
   };
   sel.addEventListener('change', syncSheet);
   route?.addEventListener('change', syncSheet);
-  const restore = (): void => {
-    const r = rememberedChoice(st, cwdIn?.value.trim() || null);
+  const restoreFor = (cwd: string | null): void => {
+    const r = rememberedChoice(st, cwd);
     sel.value = r.choice;
     custom.value = r.custom;
     syncSheet();
   };
-  cwdIn?.addEventListener('change', restore);
+  const restore = (): void => restoreFor(d.folder?.() ?? null);
 
   /* ── header chip + switch ───────────────────────────────────────── */
   let chip: { hsid: string; btn: HTMLButtonElement; menu: HTMLElement } | null = null;
@@ -176,6 +180,7 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
 
   return {
     onDialogOpen: restore,
+    onFolder: (cwd: string) => restoreFor(cwd || null),
     openModel(r: string): string | null {
       if (r === 'local') return 'local';
       const bad = pickerProblem(sel.value, custom.value);

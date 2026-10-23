@@ -524,7 +524,8 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
     const key = /\n\.key \{([^}]*)\}/.exec(css)![1]!;
     expect(key).toMatch(/border: 1px solid var\(--key-edge\);/);
     expect(key).toMatch(/box-shadow: var\(--key-shadow\);/);
-    expect(key).toMatch(/min-height: 28px;/);
+    expect(key).toMatch(/min-height: var\(--key-h\);/); // migration key-height: one key height
+    expect(css).toMatch(/--key-h: 28px;/);
     expect(css).toMatch(/\.key\.pri \{ background: var\(--ink\); color: var\(--on-ink\); \}/);
     expect(css).not.toMatch(/--glow\b/);
     expect(css).toMatch(/\[data-theme="night"\] \.wordmark \{[^}]*text-shadow: var\(--wm-glow\);/);
@@ -659,8 +660,7 @@ describe('#bare-entry folder hint (spec §2.4 rule 8): prefilled and shown as te
     const t = target();
     applyCwdHint(t, cwdHintOf(b64('/Users/matt/my "repo"'))!);
     expect(t.input.value).toBe('/Users/matt/my "repo"');
-    expect(t.note.textContent).toContain('not verified');
-    expect(t.note.textContent).toContain('/Users/matt/my "repo"');
+    expect(t.note.textContent).toBe('Suggested by `gnomon` in a terminal: check it, then Open.'); // the path shows as the checked "from terminal" row
     expect(t.note.hidden).toBe(false);
     expect(t.dialog.hidden).toBe(false);
     expect(t.submits).toEqual([]);
@@ -704,7 +704,10 @@ describe('#bare-entry folder hint (spec §2.4 rule 8): prefilled and shown as te
     expect(block).not.toMatch(/openSession|session\.open|requestSubmit|\.submit\(|attended/);
     const lib = readFileSync(path.join(ROOT, 'src', 'core', 'launch.ts'), 'utf8');
     expect(lib.slice(lib.indexOf('export function applyCwdHint'))).not.toMatch(/requestSubmit|\.submit\(|innerHTML|session\.open/);
-    expect(readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8')).toContain('<p id="ns-hint" class="meta" hidden></p>');
+    // #gui-folder-field: the note and the prefill go to the folder field (checked by the kernel), never to a submit
+    const open = src.slice(src.indexOf('function openNewSessionSheet('), src.indexOf('function closeNewSessionSheet('));
+    expect(open).toContain('nsField.setHint(');
+    expect(open).not.toMatch(/openSession\(|session\.open|requestSubmit|\.submit\(|submitNewSession/);
   });
 });
 
@@ -747,7 +750,10 @@ describe('#bare-entry hint after Aegis review (M1, L1, L2, L3)', () => {
     const cancel = app.slice(app.indexOf("$('ns-cancel')"), app.indexOf("$('new-session-form')"));
     expect(cancel).toContain('clearCwdHint(hintTarget())');
     const submit = app.slice(app.indexOf("$('new-session-form')"), app.indexOf("$('reconnect-btn')"));
-    expect(submit).toMatch(/if \(!e\.isTrusted\) return;[\s\S]*clearCwdHint\(hintTarget\(\)\)[\s\S]*openSession\(/);
+    expect(submit).toMatch(/if \(!e\.isTrusted\) return;[\s\S]*submitNewSession\(true\)/);
+    // #gui-folder-field: the sheet stays open until session.open answers; the hint is cleared when it opened
+    const sub = app.slice(app.indexOf('async function submitNewSession('), app.indexOf('\n}', app.indexOf('async function submitNewSession(')));
+    expect(sub).toMatch(/if \(!trusted[\s\S]*openSession\([\s\S]*clearCwdHint\(hintTarget\(\)\)/);
     const neu = app.slice(app.indexOf("id === 'session.new'"), app.indexOf("id === 'composer.focus'"));
     expect(neu).toContain('clearCwdHint(hintTarget())');
   });

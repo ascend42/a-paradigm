@@ -481,14 +481,14 @@ describe('board gnomon-chip (batch chips-and-small-keys): a chip is a status lab
     expect(src).not.toMatch(/class: [`'"][^`'"]*\bchip\b[^}]*tabindex/);
     expect(html).not.toMatch(/<button[^>]*class="[^"]*\bchip\b/);
   });
-  it('✎ rename, run mode ▾ and the stack filter are 24px quiet keys with the --key-edge and 11.5 type', () => {
+  it('✎ rename, run mode ▾ and the stack filter are var(--key-h) quiet keys with the --key-edge and 11.5 type (migration key-height)', () => {
     const k = rule('.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope');
-    for (const d of ['height: 24px', 'min-height: 24px', 'min-width: 24px', 'font-size: var(--fs-control)', 'border-color: var(--key-edge)']) expect(k).toContain(d);
+    for (const d of ['height: var(--key-h)', 'min-height: var(--key-h)', 'min-width: var(--key-h)', 'font-size: var(--fs-control)', 'border-color: var(--key-edge)']) expect(k).toContain(d);
     expect(css).not.toMatch(/(rename-btn|mode-btn|stack-scope)[^{]*\{[^}]*border-color: var\(--rule\)/);
     for (const id of ['rename-btn', 'mode-btn', 'stack-scope']) expect(html).toMatch(new RegExp(`<button id="${id}" class="key quiet [^"]*${id}`));
   });
   it('hover (menus-and-hover, pulled forward): keys and session rows fill --fold; filled keys keep a distinct ink hover', () => {
-    expect(css).toContain('.key:hover:not([disabled]) { background: var(--fold); }');
+    expect(css).toContain('.key:hover:not([disabled]):not([aria-disabled="true"]) { background: var(--fold); }'); // a busy key (aria-disabled, #gui-folder-field Choosing…) takes no hover
     expect(css).toContain('.session-row:hover { background: var(--fold); }');
     expect(css).toContain('.key.pri:hover:not([disabled]) { background: var(--ink2); }');
     expect(css).toMatch(/\.seg-key\.current:hover:not\(\[disabled\]\)[^{]*\{ background: var\(--ink2\); \}/);
@@ -498,8 +498,8 @@ describe('board gnomon-chip (batch chips-and-small-keys): a chip is a status lab
     expect(css.indexOf('.seg-key.current:hover')).toBeGreaterThan(css.indexOf('.key:hover:not'));
     expect(css).toContain('.voice-pill:hover { background: var(--fold); }');
   });
-  it('every quiet key (⋯, ⤢, Hold, Stop speaking, close) is at least 24 × 24 and keeps the focus ring', () => {
-    expect(rule('.key.quiet')).toMatch(/min-height: 24px; min-width: 24px/);
+  it('every quiet key (⋯, ⤢, Hold, Stop speaking, close) is var(--key-h) square at least (quiet is a look, not a size) and keeps the focus ring', () => {
+    expect(rule('.key.quiet')).toMatch(/min-height: var\(--key-h\); min-width: var\(--key-h\); padding: 0 8px/);
     expect(css).not.toMatch(/\.(composer-tall|more-btn|key\.quiet)[^{]*\{[^}]*min-height: 0/);
     expect(css).toMatch(/\.key:focus-visible[^{]*\{ outline: 2px solid var\(--key-edge\)/);
     expect(css).not.toMatch(/(rename-btn|mode-btn|stack-scope|more-btn|composer-tall)[^{]*:focus-visible[^{]*\{[^}]*outline: (none|0)/);
@@ -562,9 +562,11 @@ describe('board gnomon-spacing and the radius batch: a strict 2px grid, radius 3
       expect(d, d).not.toMatch(/[0-9.]+rem/);
     }
   });
-  it('a key is 4px 10px with an 18px line: 28px tall', () => {
+  it('a key is var(--key-h) (28) tall from min-height and inline-flex centring, padding 0 10 (migration key-height)', () => {
     const key = css.slice(css.indexOf('\n.key {'), css.indexOf('}', css.indexOf('\n.key {')));
-    expect(key).toMatch(/padding: 4px 10px;\s*line-height: 18px;[^}]*min-height: 28px;/);
+    expect(key).toMatch(/display: inline-flex; align-items: center; justify-content: center;[^}]*padding: 0 10px;\s*line-height: 18px;[^}]*min-height: var\(--key-h\);/);
+    expect(key).not.toMatch(/(^|[\s;])height: /); // min-height, never height: a key whose label wraps still grows
+    expect(css).toContain('--key-h: 28px;');
   });
   it('radius is the --radius token (3), the --radius-pill token (999), 0 or a 50% dot; never 2 / 4 / 8 / 9 / 14', () => {
     expect(css).toContain('--radius: 3px;');

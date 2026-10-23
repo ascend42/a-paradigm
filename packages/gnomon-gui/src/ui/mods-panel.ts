@@ -12,10 +12,15 @@
  *     refusal (code, reason, message, next steps) on failure. Nothing fails silently.
  *   - "Decide" on a pending card scrolls the stack to that card and focuses its default key (never decides).
  *   - Esc closes the sheet and focus returns to where it was.
+ *   - #gui-folder-field (TD-2026-10-23-162, rule paths-are-chosen): Add from folder is the compact folder field (the
+ *     kernel checks it holds gnomon-manifest.json; Add is disabled, with its reason, until it does) and Configure's
+ *     command is the file variant (Choose file…; the kernel checks it is an executable file). No placeholder paths.
  */
 import { RpcError, type GnomonClient, type ShownRefusal } from '../core/client.js';
 import { configRequest, configurable, deskText, folderPathError, installRequest, linkRequest, mcpText, modsViewOf, pauseRequest, resultText, startRequest, stateText, uninstallRequest, type ConfigForm, type InstalledMod, type ModPending, type ModRequest, type ModsView } from '../core/mods.js';
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
+import { FolderField, fieldView, type FolderFieldView } from '../core/folder-field.js';
+import { focusFolder, folderFieldEl, routeFolderPress } from './folder-field.js';
 import type { StackCard } from '../core/store.js';
 
 export interface ModsDeps {
@@ -59,11 +64,15 @@ export interface ModsUi {
   results: ReadonlyMap<string, ModResult>;
   configOpen: string | null;
   configError: string | null;
-  folder: string;
-  folderError: string | null;
+  /** Add from folder: the compact folder field as drawn, and why Add is disabled (null: enabled) */
+  addView: FolderFieldView;
+  addWhy: string | null;
+  /** Configure: the command as the file variant of the folder field */
+  cmdView: FolderFieldView;
 }
 
-export const emptyUi = (): ModsUi => ({ busy: new Set(), results: new Map(), configOpen: null, configError: null, folder: '', folderError: null });
+const blankView = (purpose: 'mod' | 'command'): FolderFieldView => fieldView(new FolderField({ purpose, call: () => Promise.reject(new Error('not connected')), changed: () => undefined }), 'compact');
+export const emptyUi = (): ModsUi => ({ busy: new Set(), results: new Map(), configOpen: null, configError: null, addView: blankView('mod'), addWhy: 'choose a folder first', cmdView: blankView('command') });
 
 const key = (doc: MiniDoc, act: string, label: string, attrs: Record<string, string>, ui: ModsUi, busyKey: string): MiniEl => {
   const busy = ui.busy.has(busyKey);
@@ -86,7 +95,7 @@ function configForm(doc: MiniDoc, m: InstalledMod, ui: ModsUi): MiniEl {
   const c = m.mcp!.configurable;
   const f = h(doc, 'div', { class: 'mod-config', role: 'group', 'aria-label': `Configure ${m.name}`, 'data-config-for': m.name });
   f.appendChild(h(doc, 'p', { class: 'meta' }, `How ${m.mcp!.server} launches today: ${m.mcp!.command}${m.mcp!.args.length ? ` ${m.mcp!.args.join(' ')}` : ''}. Leave a field empty to keep it. The change takes effect only when you allow its card.`));
-  if (c.command) f.appendChild(h(doc, 'label', { class: 'meta mod-field' }, 'command (an absolute path)', h(doc, 'input', { class: 'field', type: 'text', name: 'command', placeholder: '/opt/homebrew/bin/…', 'aria-label': 'command', maxlength: '1024' })));
+  if (c.command) f.appendChild(folderFieldEl(doc, ui.cmdView, 'mod-cmd', { text: 'command (the program it runs)', cls: 'meta' }));
   if (c.args) f.appendChild(h(doc, 'label', { class: 'meta mod-field' }, 'arguments (separate with spaces; quote one that holds a space)', h(doc, 'input', { class: 'field', type: 'text', name: 'args', 'aria-label': 'arguments', maxlength: '4096' })));
   for (const e of c.env.filter((x) => !c.secret.includes(x))) f.appendChild(h(doc, 'label', { class: 'meta mod-field' }, `env ${e}`, h(doc, 'input', { class: 'field', type: 'text', name: `env:${e}`, 'data-env': e, 'aria-label': `env ${e}`, maxlength: '4096' })));
   if (c.secret.length) f.appendChild(h(doc, 'p', { class: 'meta' }, `${c.secret.join(', ')} hold secrets and cannot be set here until Gnomon has a secret store.`));
@@ -161,9 +170,10 @@ export function paintMods(doc: MiniDoc, body: { firstChild: unknown; removeChild
     for (const p of v.otherPending) s.appendChild(h(doc, 'div', { class: 'mod-row', 'data-mod': p.name }, h(doc, 'p', { class: 'mod-head' }, h(doc, 'strong', { class: 'mod-name' }, p.name)), ...pendingEls(doc, [p])));
   }
   const add = sec('add', 'Add from folder', 'A mod you are writing or were given: the folder that holds its gnomon-manifest.json. It installs as a linked folder (tier local); edits re-pin through a card. Installing from a git URL lands later.');
-  const field = h(doc, 'div', { class: 'mod-folder' }, h(doc, 'input', { class: 'field', type: 'text', name: 'folder', value: ui.folder, placeholder: '/Users/you/code/my-mod', 'aria-label': 'mod folder (absolute path)', ...(ui.folderError ? { 'aria-invalid': 'true' } : {}), maxlength: '1024' }), key(doc, 'link', 'Add', {}, ui, 'link'));
-  add.appendChild(field);
-  if (ui.folderError) add.appendChild(h(doc, 'p', { class: 'meta mod-result fail', role: 'alert' }, ui.folderError));
+  add.appendChild(folderFieldEl(doc, ui.addView, 'mod-add', { text: 'folder', cls: 'meta' }));
+  const addKey = key(doc, 'link', 'Add', {}, ui, 'link');
+  if (ui.addWhy !== null) (addKey as unknown as { disabled: boolean }).disabled = true;
+  add.appendChild(h(doc, 'div', { class: 'mod-keys' }, addKey, ui.addWhy !== null && !ui.busy.has('link') ? h(doc, 'span', { class: 'why-off' }, ui.addWhy) : null));
   const r = resultEl(doc, ui.results.get('link'));
   if (r) add.appendChild(r);
   add.appendChild(h(doc, 'p', { class: 'meta settings-how' }, 'The terminal form of every key here: gnomon mod install | link | pause | start | uninstall | config.'));
@@ -210,28 +220,54 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
   overlay.appendChild(card);
   document.body.appendChild(overlay);
 
-  const ui = emptyUi() as { busy: Set<string>; results: Map<string, ModResult>; configOpen: string | null; configError: string | null; folder: string; folderError: string | null };
+  const ui = emptyUi() as { busy: Set<string>; results: Map<string, ModResult>; configOpen: string | null; configError: string | null; addView: FolderFieldView; addWhy: string | null; cmdView: FolderFieldView };
   let back: HTMLElement | null = null;
+  const call = (req: { kind: string; payload: Record<string, unknown> }): Promise<unknown> => {
+    const c = d.client();
+    return c ? c.call('log.append', req) : Promise.reject(new Error('not connected'));
+  };
+  // #gui-folder-field: the two chosen paths (Add from folder; Configure's command)
+  const addField = new FolderField({ purpose: 'mod', call, changed: () => repaint() });
+  const cmdField = new FolderField({ purpose: 'command', call, changed: () => repaint() });
+  const fieldOf = (el: Element): FolderField | null => {
+    const host = el.closest('[data-ff]') as HTMLElement | null;
+    return host?.dataset.ff === 'mod-add' ? addField : host?.dataset.ff === 'mod-cmd' ? cmdField : null;
+  };
   const repaint = (): void => {
     if (overlay.hidden) return;
     const active = document.activeElement as HTMLElement | null;
-    const keep = active && body.contains(active) ? { name: active.getAttribute('name'), act: active.dataset?.modAct, mod: active.dataset?.modName } : null;
+    const ffHost = active && body.contains(active) ? (active.closest('[data-ff]') as HTMLElement | null)?.dataset.ff : undefined;
+    const keep = active && body.contains(active) ? { name: active.getAttribute('name'), act: active.dataset?.modAct, mod: active.dataset?.modName, ff: ffHost, ffAct: active.dataset?.ffAct, ffTyped: active.dataset?.ffTyped !== undefined } : null;
+    ui.addView = fieldView(addField, 'compact');
+    ui.addWhy = addField.whyOff();
+    ui.cmdView = fieldView(cmdField, 'compact');
     paintMods(document as unknown as MiniDoc, body, modsViewOf(d.status(), d.cards()), ui);
     // keyboard: a repaint keeps focus on the same control
-    if (keep) {
+    if (keep?.ff) {
+      const host = body.querySelector(`[data-ff="${CSS.escape(keep.ff)}"]`);
+      (host?.querySelector(keep.ffTyped ? '[data-ff-typed]' : keep.ffAct ? `[data-ff-act="${CSS.escape(keep.ffAct)}"]` : '[data-ff-act]') as HTMLElement | null)?.focus();
+    } else if (keep) {
       const sel = keep.name ? `[name="${CSS.escape(keep.name)}"]` : keep.act ? `[data-mod-act="${CSS.escape(keep.act)}"]${keep.mod ? `[data-mod-name="${CSS.escape(keep.mod)}"]` : ''}` : null;
       const el = sel ? (body.querySelector(sel) as HTMLElement | null) : null;
       el?.focus();
+    }
+    for (const [id, f] of [['mod-add', addField], ['mod-cmd', cmdField]] as const) {
+      const host = body.querySelector(`[data-ff="${id}"]`);
+      if (host) focusFolder(host, f);
     }
   };
   const close = (): void => {
     if (overlay.hidden) return;
     overlay.hidden = true;
+    addField.closed();
+    cmdField.closed();
     back?.focus();
     back = null;
   };
   const open = (): void => {
     back = document.activeElement as HTMLElement | null;
+    addField.setStatus(d.status());
+    cmdField.setStatus(d.status());
     overlay.hidden = false;
     repaint();
     closeBtn.focus();
@@ -246,26 +282,26 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     ui.busy.delete(busyKey);
     ui.results.set(resultKey, r);
     if (!r.fail && req.kind === 'request.mod.config') ui.configOpen = null;
-    if (!r.fail && req.kind === 'request.mod.link') ui.folder = '';
+    if (!r.fail && req.kind === 'request.mod.link') addField.clear();
     await d.refreshStatus().catch(() => undefined);
     repaint();
   };
   body.addEventListener('input', (e) => {
     const t = e.target as HTMLInputElement;
-    if (t.name === 'folder') {
-      ui.folder = t.value;
-      ui.folderError = null;
-    }
+    if (t.dataset.ffTyped !== undefined) fieldOf(t)?.typedInput(t.value);
   });
   body.addEventListener('keydown', (e) => {
     const t = e.target as HTMLInputElement;
-    if (e.key === 'Enter' && t.name === 'folder' && e.isTrusted) {
-      e.preventDefault();
-      (body.querySelector('[data-mod-act="link"]') as HTMLButtonElement | null)?.click();
-    }
+    if (e.key === 'Enter' && t.dataset.ffTyped === 'mod-add') e.preventDefault(); // Add is its own key, enabled once checked
   });
   body.addEventListener('click', (e) => {
     if (!e.isTrusted) return; // G-GUI-04: only the human's own press
+    const fb = (e.target as HTMLElement).closest('[data-ff-act]') as HTMLButtonElement | null;
+    if (fb) {
+      const f = fieldOf(fb);
+      if (f && !fb.disabled) routeFolderPress(f, fb.dataset.ffAct!, fb.dataset.ffReal ?? null, e.isTrusted);
+      return;
+    }
     const b = (e.target as HTMLElement).closest('[data-mod-act]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
     const act = b.dataset.modAct!;
@@ -281,8 +317,10 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
     if (act === 'configure') {
       ui.configOpen = name;
       ui.configError = null;
+      cmdField.reset();
+      cmdField.setStatus(d.status());
       repaint();
-      return void (body.querySelector(`[data-config-for="${CSS.escape(name)}"] input`) as HTMLElement | null)?.focus();
+      return void (body.querySelector(`[data-config-for="${CSS.escape(name)}"] [data-ff-act], [data-config-for="${CSS.escape(name)}"] input`) as HTMLElement | null)?.focus();
     }
     if (act === 'config-cancel') {
       ui.configOpen = null;
@@ -295,7 +333,13 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
       if (!m?.mcp || !form) return;
       const val = (n: string): string => (form.querySelector(`[name="${CSS.escape(n)}"]`) as HTMLInputElement | null)?.value ?? '';
       const env = [...form.querySelectorAll<HTMLInputElement>('[data-env]')].filter((i) => i.value !== '').map((i) => `${i.dataset.env}=${i.value}`);
-      const f: ConfigForm = { command: val('command'), args: splitArgs(val('args')).join('\n'), env: env.join('\n') };
+      const cs = cmdField.state();
+      const cmdOff = cs.chosen || cs.typed.trim() ? cmdField.whyOff() : null;
+      if (cmdOff) {
+        ui.configError = `the command: ${cmdOff}`;
+        return repaint();
+      }
+      const f: ConfigForm = { command: cmdField.value() ?? '', args: splitArgs(val('args')).join('\n'), env: env.join('\n') };
       const r = configRequest(name, m.mcp, f);
       if ('error' in r) {
         ui.configError = r.error;
@@ -305,10 +349,10 @@ export function mountMods(document: Document, d: ModsDeps): ModsPanel {
       return void send(`config:${name}`, name, r.request);
     }
     if (act === 'link') {
-      const err = folderPathError(ui.folder);
-      ui.folderError = err;
-      if (err) return repaint();
-      return void send('link', 'link', linkRequest(ui.folder));
+      // #gui-folder-field: the kernel's checked real path (it holds gnomon-manifest.json); the same page check after
+      const folder = addField.value();
+      if (folder === null || folderPathError(folder)) return repaint();
+      return void send('link', 'link', linkRequest(folder));
     }
   });
   closeBtn.addEventListener('click', close);

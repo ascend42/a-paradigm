@@ -1228,6 +1228,37 @@ components:
     tests:
       - test/voice-ladder.test.ts
       - test/dictation.test.ts
+  gui-folder-field:
+    description: >-
+      #gui-folder-field (TD-2026-10-23-162; Atelier session
+      2026-10-23-gnomon-folder-picker, design-system component folder-field,
+      rule paths-are-chosen, migration batches folder-field and key-height).
+      A folder or file on this Mac is CHOSEN, not typed. core/folder-field.ts
+      (no DOM): FolderField controls one field over the kernel's
+      request.folder.choose | check | recent (the kernel opens the macOS
+      chooser, founder C1); every choice is checked before the key that uses
+      it is enabled; the value sent is the kernel's real path and every path
+      shown is the kernel's escaped display; the design copy (FF_COPY);
+      fieldView draws recents (New session: up to six, the centre session's
+      folder chosen else the most recent, C2, so cmd-N then Enter opens) or
+      compact (Settings › Local model runner with "Use …/dist"; Mods › Add
+      from folder; the file variant for Mods › Configure command). No drag
+      from Finder (C3); the home folder is allowed with the amber warning
+      (C4). ui/folder-field.ts draws it with h() (roving radios, arrows move
+      and choose, Home/End, Enter submits the sheet) and routes data-ff-act
+      presses (trusted only). The New session sheet is role=dialog with an
+      h2, stays open (Opening…) until session.open answers and shows a
+      refusal in place; every choice restores the folder's claude model
+      (#gui-model-picker onFolder). styles.css carries the folder-field
+      classes and --key-h (one key height, 28).
+    path: src/core/folder-field.ts
+    type: module
+    tags: [gnomon, gui, atelier, paradigm-8, td-2026-10-23-162]
+    tests:
+      - test/folder-field.test.ts
+      - test/mods.test.ts
+      - test/desk.test.ts
+
   gui-local-model:
     description: >-
       #gui-local-model (TD-2026-10-22-769; Atelier session

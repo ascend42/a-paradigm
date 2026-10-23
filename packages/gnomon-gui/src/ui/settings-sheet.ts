@@ -20,6 +20,7 @@
  * A repaint keeps focus, and the caret in a field, on the same control.
  */
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
+import { folderFieldEl } from './folder-field.js';
 import { SETTINGS_RUNS, type FieldView, type FormKey, type FormView, type ResultView, type SectionId, type SettingRow, type SettingsSection } from '../core/settings.js';
 
 /** The Local model section's press path (ui/local-model.ts LocalModelController). */
@@ -30,6 +31,11 @@ export interface LocalPress {
   advanced(open: boolean): void;
   /** Esc inside the sheet: close an open form or confirm; false when there is none */
   escape(): boolean;
+  /** #gui-folder-field: a press in the runner's folder field (data-ff-act), and its typed path */
+  folder?(act: string, real: string | null, trusted: boolean): void;
+  folderInput?(value: string): void;
+  /** after a paint: move focus where the folder field asked */
+  afterPaint?(body: HTMLElement): void;
   sheetClosed(): void;
 }
 
@@ -84,6 +90,8 @@ function fieldEl(doc: MiniDoc, f: FieldView): MiniEl {
     return h(doc, 'div', { class: 'sf-field', role: 'group', 'aria-labelledby': lid }, setId(h(doc, 'span', { class: 'sf-label' }, f.label), lid), seg, rich(doc, 'p', { class: 'sf-note' }, f.note));
   }
   if (f.kind === 'value') return h(doc, 'div', { class: 'sf-field' }, h(doc, 'span', { class: 'sf-label' }, f.label), h(doc, 'span', { class: 'settings-value' }, f.value));
+  // #gui-folder-field compact: the legend is the field's label; the note says what the folder must hold
+  if (f.kind === 'folder') return h(doc, 'div', { class: 'sf-field' }, folderFieldEl(doc, f.view, `lm-${f.name}`, { text: f.label, cls: 'sf-label' }), rich(doc, 'p', { class: 'sf-note' }, f.note));
   const err = `lm-err-${f.name}`;
   const input = h(doc, 'input', { class: `field ${f.width}`, type: 'text', name: `lm-${f.name}`, value: f.value, 'data-lm-field': f.name, maxlength: f.name === 'model' ? '128' : f.name === 'id' ? '64' : '256', ...(f.placeholder ? { placeholder: f.placeholder } : {}), ...(f.error ? { 'aria-invalid': 'true', 'aria-describedby': err } : {}) });
   input.setAttribute('spellcheck', 'false');
@@ -208,8 +216,8 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const a = document.activeElement as HTMLElement | null;
     const inBody = !!a && body.contains(a);
     const field = inBody ? a!.getAttribute('data-lm-field') : null;
-    const sel = field ? [(a as HTMLInputElement).selectionStart, (a as HTMLInputElement).selectionEnd] : null;
-    const keep = !inBody ? null : field ? `[data-lm-field="${CSS.escape(field)}"]` : a!.dataset.lmAct ? `[data-lm-act="${CSS.escape(a!.dataset.lmAct)}"]${a!.dataset.lmValue !== undefined ? `[data-lm-value="${CSS.escape(a!.dataset.lmValue)}"]` : ''}` : a!.dataset.settingsRun ? `[data-settings-run="${CSS.escape(a!.dataset.settingsRun)}"]` : a!.id ? `#${CSS.escape(a!.id)}` : a!.tagName === 'SUMMARY' ? '.sf-adv > summary' : null;
+    const sel = field || a?.dataset.ffTyped !== undefined ? [(a as HTMLInputElement).selectionStart, (a as HTMLInputElement).selectionEnd] : null;
+    const keep = !inBody ? null : field ? `[data-lm-field="${CSS.escape(field)}"]` : a!.dataset.ffTyped !== undefined ? '[data-ff-typed]' : a!.dataset.ffAct ? `[data-ff-act="${CSS.escape(a!.dataset.ffAct)}"]` : a!.dataset.lmAct ? `[data-lm-act="${CSS.escape(a!.dataset.lmAct)}"]${a!.dataset.lmValue !== undefined ? `[data-lm-value="${CSS.escape(a!.dataset.lmValue)}"]` : ''}` : a!.dataset.settingsRun ? `[data-settings-run="${CSS.escape(a!.dataset.settingsRun)}"]` : a!.id ? `#${CSS.escape(a!.id)}` : a!.tagName === 'SUMMARY' ? '.sf-adv > summary' : null;
     painting = true;
     paintSettings(document as unknown as MiniDoc, body, d.model(), focused);
     painting = false;
@@ -223,6 +231,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
       const sec = (el ?? body).closest?.('[data-section]') ?? body.querySelector('[data-section="local-model"]');
       (sec?.querySelector('h3') as HTMLElement | null)?.focus({ preventScroll: true });
     }
+    d.local?.afterPaint?.(body);
   };
   const close = (): void => {
     if (overlay.hidden) return;
@@ -246,7 +255,8 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
   const focusLocal = (t: LocalFocus): void => {
     if (overlay.hidden) return;
     const sec = body.querySelector('[data-section="local-model"]');
-    const el = !sec ? null : 'field' in t ? sec.querySelector(`[data-lm-field="${CSS.escape(t.field)}"]`) : 'act' in t ? ([...sec.querySelectorAll(`[data-lm-act="${CSS.escape(t.act)}"]`)].find((b) => !(b as HTMLButtonElement).disabled) ?? null) : sec.querySelector('h3');
+    // #gui-folder-field: the runner has no text field; its first key (or its typed path, when open) takes the focus
+    const el = !sec ? null : 'field' in t ? (sec.querySelector(`[data-lm-field="${CSS.escape(t.field)}"]`) ?? sec.querySelector(`[data-ff="lm-${CSS.escape(t.field)}"] [data-ff-typed], [data-ff="lm-${CSS.escape(t.field)}"] [data-ff-act]`)) : 'act' in t ? ([...sec.querySelectorAll(`[data-lm-act="${CSS.escape(t.act)}"]`)].find((b) => !(b as HTMLButtonElement).disabled) ?? null) : sec.querySelector('h3');
     (el as HTMLElement | null)?.focus();
   };
   // section-focused: the key-edge rule stays until focus leaves the section
@@ -264,6 +274,11 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const t = e.target as HTMLElement;
     const rv = t.closest('[data-standing-revoke]') as HTMLElement | null;
     if (rv) return d.revoke(rv.dataset.standingRevoke!);
+    const ff = t.closest('[data-ff-act]') as HTMLButtonElement | null;
+    if (ff) {
+      if (!ff.disabled) d.local?.folder?.(ff.dataset.ffAct!, ff.dataset.ffReal ?? null, e.isTrusted);
+      return;
+    }
     const lm = t.closest('[data-lm-act]') as HTMLButtonElement | null;
     if (lm) {
       // the submit key presses through the form's submit (Enter in a field presses it too)
@@ -286,6 +301,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const f = e.target as HTMLInputElement;
     const name = f.dataset?.lmField;
     if (name) d.local?.input(name, f.value);
+    if (f.dataset?.ffTyped !== undefined) d.local?.folderInput?.(f.value);
   });
   body.addEventListener('compositionstart', () => ime.start());
   body.addEventListener('compositionend', (e) => {

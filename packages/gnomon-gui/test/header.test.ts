@@ -52,10 +52,22 @@ describe('the header row is four things (board header-5b)', () => {
 });
 
 describe('every header control is 28px and never wraps', () => {
+  it('Mika 2026-10-23: at 1024 the "started · 9m" text ellipsizes before the model key is clipped', () => {
+    expect(CSS).toContain('.chead-meta { display: contents; white-space: pre; }');
+    expect(CSS).toContain('.chead-meta > * { flex: none; white-space: pre; }');
+    expect(CSS).toContain('.chead-meta > .chead-when { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }');
+    const app = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/h\(doc, 'span', \{ class: 'chead-when' \}/);
+    expect(CSS).toContain('.chead-meta > .pink { flex: none;'); // the project never shrinks: its name is capped instead
+    expect(CSS).toMatch(/@media \(max-width: 1279px\) \{ \.chead-proj \{ max-width: 10ch; \} \}/);
+    expect(CSS).toContain('@container chead-l (max-width: 339px) { .chead-meta > .chead-backend { display: none; } }'); // the backend word gives way before the project
+    expect(app).toMatch(/class: 'chead-backend'/); // the project name gives way before the model key
+    expect(CSS).toContain('.chead #transcript-title { min-width: 5ch; flex-shrink: 100; }'); // the title gives way before the project
+  });
   it('one height and nowrap on each control; the row itself does not wrap, even under 900px', () => {
     for (const sel of ['.wordmark-btn', '.palfield', '.link-dot', '.risk-chip', '.chrome .key']) {
       const r = rule(sel);
-      expect(r, sel).toMatch(/height: 28px/);
+      expect(r, sel).toMatch(/height: (28px|var\(--key-h\))/); // header-control = key-h (28)
       expect(r, sel).toMatch(/white-space: nowrap/);
     }
     expect(CSS).toMatch(/\n\.voice-pill \{[^}]*height: 28px;[^}]*white-space: nowrap;/);
@@ -64,7 +76,7 @@ describe('every header control is 28px and never wraps', () => {
     expect(CSS).not.toMatch(/\.chrome \{[^}]*flex-wrap: wrap/);
     // the old wrapping combos: .seg wraps (fine in the Settings sheet), so the menu's theme row overrides it
     expect(rule('.menu-theme')).toMatch(/flex-wrap: nowrap/);
-    expect(rule('.menu-theme .seg-key')).toMatch(/height: 28px;[^}]*white-space: nowrap/);
+    expect(rule('.menu-theme .seg-key')).toMatch(/height: var\(--key-h\);[^}]*white-space: nowrap/);
     // one edge style for the pill: the app's trouble is in its words, never a dashed edge
     expect(CSS).not.toMatch(/\.voice-pill\.voice-trouble \{ border-style: dashed/);
   });

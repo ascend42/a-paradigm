@@ -17,6 +17,7 @@
  *   - The cached unlock has no status field today, so its state is folded from the kernel-signed rows the page
  *     already reads (`approval.unlock`, `approval.unlock.dropped`, `daemon.start`), read-only.
  */
+import type { FolderFieldView } from './folder-field.js';
 import { CLIENT_API_ID, type VoicePreset } from '@a-company/gnomon-contracts';
 import { GUI_COMMANDS, PRESETS, WORKSHOP_PLACES, resolveMotion, resolveTheme, type Layout, type ThemeChoice } from './commands.js';
 import { defaultScope, MODE_HELP, planFor, RUN_MODES, type SessionModeView } from './modes.js';
@@ -95,7 +96,9 @@ export interface ResultView {
 export type FieldView =
   | { kind: 'seg'; name: string; label: string; options: FormKey[]; note: string }
   | { kind: 'text'; name: string; label: string; value: string; width: 'w-addr' | 'w-model' | 'w-name' | 'w-path'; note: string; error?: string; placeholder?: string }
-  | { kind: 'value'; name: string; label: string; value: string };
+  | { kind: 'value'; name: string; label: string; value: string }
+  /** #gui-folder-field compact (the Local model runner): chosen, not typed (rule paths-are-chosen) */
+  | { kind: 'folder'; name: string; label: string; view: FolderFieldView; note: string };
 export interface FormView {
   /** the form's accessible name ("Set up a local model" | "Change the local model") */
   label: string;

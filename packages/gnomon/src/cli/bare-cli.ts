@@ -33,6 +33,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { GNOMON_VERSION } from '../version.js';
+import { displayPath, needsEscape, DISPLAY_CAP } from '../kernel/folders/display-path.js';
+export { DISPLAY_CAP };
 import { readout, refused } from './readout.js';
 import type { LaunchTtyIo } from './launch-tty.js';
 import { requestRunningLaunch, runUp, upOpener, UpRefusal, type KernelCall, type UpDeps } from './up-cli.js';
@@ -47,8 +49,7 @@ export const BARE_EXIT_ALREADY_RUNNING = 3;
 export const BARE_EXIT_USAGE = 64;
 /** A path longer than this (UTF-8 bytes; macOS PATH_MAX) is not carried as a hint. */
 export const HINT_MAX_BYTES = 1024;
-/** Display cap, in code points, for a folder path in a terminal line. */
-export const DISPLAY_CAP = 240;
+/* DISPLAY_CAP (code points, for a folder path in a terminal line) lives in kernel/folders/display-path.ts. */
 
 export const GNOMON_HELP = `gnomon ${GNOMON_VERSION} — supervise Claude Code sessions with signed, attended approvals
 usage: gnomon [<command>] [options]     (every command takes --help)
@@ -76,29 +77,8 @@ usage: gnomon [<command>] [options]     (every command takes --help)
 first run: \`gnomon\` in a repo (it runs \`gnomon setup\` the first time); scripted: gnomon identity init
 `;
 
-/**
- * The ONE prefill/escape rule (Aegis L3), identical in packages/gnomon-gui/src/core/launch.ts and checked by the
- * shared vectors test/fixtures/cwd-hint.v1.json: a code point is shown as itself only when it is a letter, number,
- * punctuation, symbol or a plain space, is not a format character (Cf) or default-ignorable (fillers, variation
- * selectors, tags), is not U+FFFD (invalid UTF-8) and is not a backslash; anything else is escaped as \\u{hex}.
- */
-const SAFE_CP = /^[\p{L}\p{N}\p{P}\p{S} ]$/u;
-const HIDDEN_CP = /[\p{Cf}\p{Default_Ignorable_Code_Point}\ufffd\\]/u;
-const ESCAPE = { test: (c: string): boolean => !SAFE_CP.test(c) || HIDDEN_CP.test(c) };
-
-/** Escape what a terminal or a page could interpret or hide, then cap. Pure; the same rule the GUI applies. */
-export function displayPath(p: string, cap: number = DISPLAY_CAP): string {
-  // Aegis round 3: checked and shown as q = NFC(p) (a decomposed name composes, an orphan or uncomposable mark
-  // stays and is escaped); the code-point cap is counted on the ORIGINAL p; the prefill (GUI) is p byte for byte
-  const n = [...p].length;
-  const shown = [...p.normalize('NFC')].slice(0, Math.min(cap, n)).map((c) => (c === '\\' ? '\\\\' : ESCAPE.test(c) ? `\\u{${c.codePointAt(0)!.toString(16)}}` : c));
-  return shown.join('') + (n > cap ? `… (+${n - cap} chars)` : '');
-}
-
-/** True when a path needs escaping to be shown (checked on NFC(p)): such a path is shown, never prefilled. */
-export function needsEscape(p: string): boolean {
-  return [...p.normalize('NFC')].some((c) => ESCAPE.test(c));
-}
+/** The ONE prefill/escape rule lives in kernel/folders/display-path.ts (shared with the folder verbs). */
+export { displayPath, needsEscape };
 
 /** The folder a session would open in: the nearest ancestor holding `.git` (dir or file), else the cwd itself. */
 export function folderOf(cwd: string): { folder: string; inGit: boolean } {
