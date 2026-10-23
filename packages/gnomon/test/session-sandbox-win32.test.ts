@@ -262,12 +262,17 @@ $f.Add_Shown({ [Console]::Out.WriteLine([int64]$f.Handle); [Console]::Out.Flush(
     const lowTemp = path.join(os.homedir(), 'AppData', 'LocalLow', `gnomon-uipi-${process.pid}`);
     fs.mkdirSync(lowTemp, { recursive: true });
     cleanups.push(() => fs.rmSync(lowTemp, { recursive: true, force: true }));
-    const probe = `
-Add-Type -Name U -Namespace W -MemberDefinition '
+    // the user32 shim is compiled HERE, unsandboxed: Add-Type's compiler needs a privilege a restricted token from an
+    // elevated user (the CI runner) does not hold; the session only loads the built assembly
+    const dll = path.join(lowTemp, 'gnomon-uipi.dll');
+    const build = spawnSync(ps, ['-NoProfile', '-Command', `Add-Type -Name U -Namespace W -OutputAssembly '${dll}' -OutputType Library -MemberDefinition '
 [DllImport("user32.dll", SetLastError=true)] public static extern System.IntPtr FindWindow(string c, string n);
 [DllImport("user32.dll", SetLastError=true)] public static extern bool IsWindow(System.IntPtr h);
 [DllImport("user32.dll", SetLastError=true)] public static extern bool PostMessage(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
-[DllImport("user32.dll", SetLastError=true)] public static extern bool SetForegroundWindow(System.IntPtr h);'
+[DllImport("user32.dll", SetLastError=true)] public static extern bool SetForegroundWindow(System.IntPtr h);'`], { encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+    expect(fs.existsSync(dll), build.stderr).toBe(true);
+    const probe = `
+[void][System.Reflection.Assembly]::Load([System.IO.File]::ReadAllBytes('${dll}'))
 $h = [System.IntPtr][int64]${hwnd}
 $r = @{ is = [W.U]::IsWindow($h); tray = [int64][W.U]::FindWindow('Shell_TrayWnd', $null) }
 $r.post = [W.U]::PostMessage($h, 0x0010, [System.IntPtr]::Zero, [System.IntPtr]::Zero)
