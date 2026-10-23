@@ -117,7 +117,7 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, planSessionPath, sessionIdentity, sessionNodeDir, sessionPathFor, type SessionIdentity } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, hookFactsOf, hookStoredLine, syntheticStoredLine, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
+import { buildClaudeArgv, hookFactsOf, hookStoredLine, syntheticStoredLine, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, mcpResponseLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
 import { EDIT_RULE_TOOLS as EDIT_SCOPE_TOOLS } from './rules.js';
 import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCOPE_KINDS, inputHash, withEditScopes, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
@@ -137,6 +137,9 @@ import { pieceGuidance, VoicePieceCounter } from './voice-origin.js';
 import type { LoopRunRef } from '../loops/registry.js';
 import { loopClampAllows, withLoopOrigin } from './loop-clamp.js';
 import { guidanceHashOf } from '../voice/table-talk.js';
+import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
+import { GIT_VERB_TOOLS, GIT_VERBS_GUIDANCE, KERNEL_MCP_SERVER, kernelToolName, kernelWorktreeDirs } from '../git/verbs.js';
+import { KERNEL_MCP_ENTRY, kernelMcpAnswer } from './kernel-mcp.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 export const STDERR_CAP = 64 * 1024;
@@ -297,6 +300,12 @@ export interface SupervisorOptions {
    * row for (e.g. a permit release that failed). The kernel takes no logger dependency (G-SEC-01); omitted ⇒ silent.
    */
   logger?: SupervisorLogger;
+  /**
+   * #git-verbs / #kernel-mcp (T-2026-10-23-002): the kernel-run git verbs. Present ⇒ every Claude session gets the
+   * kernel's own SDK MCP server `gnomon` (gnomon_git_init, gnomon_git_push, gnomon_repo_create) in its mcp.json, the
+   * GIT_VERBS_GUIDANCE line in its appended system prompt, and its mcp_message control requests answered here.
+   */
+  gitVerbs?: GitVerbs;
 }
 
 /** Paradigm-logger shaped (the kernel injects it; it never imports the logger package, G-SEC-01). */
@@ -855,6 +864,8 @@ export class SessionSupervisor {
         ...((r) => (r ? { localRunner: { node: r.node, dir: r.dir } } : {}))(this.#local.config()?.runner),
         // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
+        // #git-verbs: kernel worktrees under the roots (darwin; the win32 backend has no regex deny yet)
+        ...(this.#o.gitVerbs && this.#platform === 'darwin' ? { kernelWorktrees: true } : {}),
         ...((m) => ({ memoryDirs: m.chain, memorySubtree: m.top }))(memoryChainOf(req.cwd, userHome)), // P8-D97 (M1, R1): no session plants steering a later one loads
         memoryImports: repoCtx?.importTargets ?? [], // P8-D97 (F3)
         claudeTranscripts: true, // TD-2026-10-19-814 item 1: Claude Code saves transcripts under ~/.claude/projects (--resume)
@@ -885,7 +896,9 @@ export class SessionSupervisor {
       const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
       fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy, this.#platform), ...(repoCtx ? REPO_CONTEXT_SETTINGS : {}), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
       const distroServers = (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {}; // verified generated (kernel output)
-      const mcpServers = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
+      const desk = this.#o.deskMcp ? this.#o.deskMcp(distroServers, { hsid, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}) }) : distroServers;
+      // #kernel-mcp: the kernel's own SDK server, last, so no distro or mod server can take its name
+      const mcpServers = this.#o.gitVerbs ? { ...desk, [KERNEL_MCP_SERVER]: { ...KERNEL_MCP_ENTRY } } : desk;
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers }, null, 2)}\n`, { mode: 0o600 });
       // the screen-socket deny follows the TMPDIR the session actually gets (the OS one), not the daemon's inherited one
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
@@ -944,7 +957,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
-      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
+      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...((): { appendSystemPrompt?: string } => { const sp = [req.systemPrompt, this.#o.gitVerbs ? GIT_VERBS_GUIDANCE : undefined].filter((x): x is string => typeof x === 'string' && x.length > 0); return sp.length ? { appendSystemPrompt: sp.join('\n\n') } : {}; })(), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -1297,12 +1310,43 @@ export class SessionSupervisor {
         }
         return;
       }
+      case 'mcp-message':
+        // #kernel-mcp: answered OUTSIDE the stdout queue (a push waits on its card); exactly one answer per request
+        void this.#onMcp(s, ev).catch(() => undefined);
+        return;
       case 'control-request-unknown':
         if (ev.requestId !== null) await this.#write(s, controlErrorLine(ev.requestId, `unsupported control request: ${ev.subtype.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId });
         return;
       default:
         return; // user replays, control responses, unknown types and malformed lines: logged above, never acted on
     }
+  }
+
+  /** #kernel-mcp: one JSON-RPC message to the kernel's own `gnomon` SDK server (any other server name: a control error). */
+  async #onMcp(s: Session, ev: Extract<AdapterEvent, { kind: 'mcp-message' }>): Promise<void> {
+    const verbs = this.#o.gitVerbs;
+    if (!verbs || ev.serverName !== KERNEL_MCP_SERVER) {
+      await this.#write(s, controlErrorLine(ev.requestId, `no sdk mcp server named ${ev.serverName.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId, channel: 'kernel-mcp' });
+      return;
+    }
+    const answer = await kernelMcpAnswer(ev.message, verbs, () => (s.state === 'running' ? this.#verbSession(s) : null));
+    await this.#write(s, mcpResponseLine(ev.requestId, answer), { answer: 'mcp', requestId: ev.requestId, channel: 'kernel-mcp' });
+  }
+
+  /**
+   * The roots an edit is judged against (auto-edits, scoped edit rules): each kernel worktree under the session roots
+   * FIRST (so a path inside `.gnomon/worktrees/<name>` is relative to that worktree, its own gate-class files still
+   * cards), then the cwd and the worktree root. Worktrees are listed only when this session can have them (#git-verbs).
+   */
+  #editRoots(s: Session): string[] {
+    const roots = [s.cwd, ...(s.worktree ? [s.worktree] : [])];
+    return this.#o.gitVerbs ? [...roots.flatMap((r) => kernelWorktreeDirs(r)), ...roots] : roots;
+  }
+
+  /** #git-verbs: what a verb needs to know about the session, read now (the effective mode at this call). */
+  #verbSession(s: Session): VerbSession {
+    const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);
+    return { hsid: s.hsid, principalId: s.principalId, cwd: s.cwd, ...(s.worktree ? { worktree: s.worktree } : {}), repoKey, mode: this.#modeTransition(s, repoKey), planApproved: s.planApproved, loop: s.loopOrigin !== undefined };
   }
 
   /** P8-D96: one can_use_tool request (inside the stdout queue; the decision is awaited OUTSIDE it). */
@@ -1340,14 +1384,30 @@ export class SessionSupervisor {
       await this.#write(s, permissionDenyLine(requestId, 'Denied: this session is in manual mode. Writes and commands wait on an approved plan: propose one with ExitPlanMode and the human approves it.'), { answer: 'deny', requestId, why: 'mode-manual' });
       return;
     }
+    // #kernel-mcp: the kernel's own verb tools carry their own gate (^git-init-gate / ^git-push-gate: run mode, card,
+    // Always rules), so their tool permission passes with an approval.auto row (log before effect) and never a second card
+    const kernelTool = this.#o.gitVerbs ? Object.keys(GIT_VERB_TOOLS).find((t) => kernelToolName(t) === ev.toolName) : undefined;
+    if (kernelTool !== undefined) {
+      let logged = false;
+      if (loopBy === null && b && typeof b.auto === 'function') {
+        try {
+          await b.auto({ hsid: s.hsid, tool: ev.toolName, inputHash: plan.inputHash, modeRef: 'kernel-verb' });
+          logged = true;
+        } catch {
+          logged = false;
+        }
+      }
+      await this.#write(s, logged ? permissionAllowLine(requestId, structuredClone(ev.input)) : permissionDenyLine(requestId, loopBy !== null ? 'Denied: loop sessions never run git verbs.' : 'Denied: no approval surface could take this request.'), { answer: logged ? 'allow' : 'deny', requestId, why: 'kernel-verb' });
+      return;
+    }
     // the auto-edits pass for an edit request, outside manual mode: auto-edits uses it, and (TD-2026-10-23-939 follow-up,
     // Aegis) it is the ONLY way a scoped edit rule (file / repo-edits) matches or is offered on the card
     // Aegis H1: "edits in this repo" is auto-edits by another name, so it is offered and matched only where the
     // strictness ceiling allows auto-edits (never at L2/L3) and never in manual mode; file rules need only mode ≠ manual
     const repoEdits = mode !== 'manual' && this.#ceilingAllowsAutoEdits(s, repoKey);
-    const editPass = mode !== 'manual' && plan.cardKind === 'permission' && EDIT_SCOPE_TOOLS.includes(ev.toolName) ? autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.platform ?? process.platform, this.#userHome()) : null;
+    const editPass = mode !== 'manual' && plan.cardKind === 'permission' && EDIT_SCOPE_TOOLS.includes(ev.toolName) ? autoEditPass(ev.toolName, ev.input, this.#editRoots(s), plan.lines, this.#o.platform ?? process.platform, this.#userHome()) : null;
     if (mode === 'auto-edits' && mayAuto('mode:auto-edits') && plan.cardKind === 'permission' && b && typeof b.auto === 'function') {
-      const pass = editPass ?? autoEditPass(ev.toolName, ev.input, [s.cwd, ...(s.worktree ? [s.worktree] : [])], plan.lines, this.#o.platform ?? process.platform, this.#userHome());
+      const pass = editPass ?? autoEditPass(ev.toolName, ev.input, this.#editRoots(s), plan.lines, this.#o.platform ?? process.platform, this.#userHome());
       if (pass.ok) {
         // log-before-effect: no approval.auto row ⇒ no auto-allow; the request falls through to the card (never unanswered)
         let logged = false;
@@ -1495,6 +1555,7 @@ export class SessionSupervisor {
 
   /** Session exit or stop: every pending card expires into deny; nothing is written. */
   async #expirePending(s: Session, why: string): Promise<void> {
+    await this.#o.gitVerbs?.closeSession(s.hsid).catch(() => undefined);
     const all = [...s.pending.values()];
     s.pending.clear();
     for (const e of all) e.closedWhy = why;

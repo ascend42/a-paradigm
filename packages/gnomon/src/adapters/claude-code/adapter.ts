@@ -50,6 +50,8 @@
  *     permissionAllowLine / permissionDenyLine / controlErrorLine. None of them
  *     ever carries `updatedPermissions`, and Claude's `permission_suggestions`
  *     are never read: every rule lives in the kernel log.
+ *   #kernel-mcp (T-2026-10-23-002): `control_request{subtype:'mcp_message', server_name, message}` (the SDK MCP
+ *     server channel) ⇒ `mcp-message`; answered with mcpResponseLine (`response:{mcp_response}`).
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { claudeModelProblem, sanitizeDisplayText } from '@a-company/gnomon-contracts';
@@ -300,6 +302,11 @@ export function permissionDenyLine(requestId: string, message: string, interrupt
 }
 
 /** The answer to a control_request subtype the kernel does not serve. */
+/** #kernel-mcp: the answer to an `mcp_message` control request (the SDK server shape: response.mcp_response). */
+export function mcpResponseLine(requestId: string, mcpResponse: unknown): string {
+  return `${JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response: { mcp_response: mcpResponse } } })}\n`;
+}
+
 export function controlErrorLine(requestId: string, error: string): string {
   return `${JSON.stringify({ type: 'control_response', response: { subtype: 'error', request_id: requestId, error } })}\n`;
 }
@@ -326,6 +333,7 @@ export type AdapterEvent =
   | { kind: 'control-cancel'; type: 'control_cancel_request'; requestId: string }
   | { kind: 'permission-malformed'; type: 'control_request.can_use_tool'; requestId: string }
   | { kind: 'control-request-unknown'; type: string; subtype: string; requestId: string | null }
+  | { kind: 'mcp-message'; type: 'control_request.mcp_message'; requestId: string; serverName: string; message: unknown }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: string; bytes: number };
 
@@ -442,6 +450,11 @@ export function parseStreamLine(line: string): AdapterEvent {
           return { kind: 'permission-malformed', type: 'control_request.can_use_tool', requestId };
         }
         return { kind: 'permission-request', type: 'control_request.can_use_tool', requestId, toolName, toolUseId, input };
+      }
+      // #kernel-mcp (T-2026-10-23-002): an SDK MCP server's JSON-RPC message, the kernel's own `gnomon` server
+      if (subtype === 'mcp_message' && requestId !== null && REQUEST_ID.test(requestId)) {
+        const serverName = str(r?.server_name);
+        if (serverName !== null && serverName.length <= 64) return { kind: 'mcp-message', type: 'control_request.mcp_message', requestId, serverName, message: r?.message };
       }
       return { kind: 'control-request-unknown', type: `control_request.${subtype}`, subtype, requestId: requestId !== null && REQUEST_ID.test(requestId) ? requestId : null };
     }

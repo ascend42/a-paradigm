@@ -146,6 +146,18 @@ function filter(p: PolicyPath): string {
     const nm = '(.+/)?node_modules/(.+/)?';
     return `(regex #"^${r}/${nm}${ci('claude')}[^/]*\\.${ci('md')}$") (regex #"^${r}/${nm}\\.${ci('claude')}(/.*)?$")`;
   }
+  if (p.match === 'worktree-guard') {
+    // #git-verbs: each kernel worktree's own entry, its .git pointer and its .mcp.json (any case)
+    q(p.path);
+    const r = reEscape(p.path);
+    return `(regex #"^${r}/[^/]+$") (regex #"^${r}/[^/]+/\\.${ci('git')}$") (regex #"^${r}/[^/]+/\\.${ci('mcp')}\\.${ci('json')}$")`;
+  }
+  if (p.match === 'worktree-gitdir') {
+    // #git-verbs: each worktree git dir's entry and the files that say where its config lives
+    q(p.path);
+    const r = reEscape(p.path);
+    return `(regex #"^${r}/[^/]+$") (regex #"^${r}/[^/]+/(${ci('commondir')}|${ci('gitdir')}|${ci('config')}\\.${ci('worktree')})$")`;
+  }
   return `(${p.match === 'subpath' ? 'subpath' : p.match === 'prefix' ? 'prefix' : 'literal'} ${q(p.path)})`;
 }
 

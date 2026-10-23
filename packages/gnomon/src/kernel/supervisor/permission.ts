@@ -194,6 +194,12 @@ export function deniedWrite(p: string, deny: readonly PolicyPath[], platform: st
       if (d.match === 'prefix' && cand.startsWith(dp)) return d;
       // P8-D97 F3: the steering subtree (CLAUDE*.md files, anything in a .claude dir, any case) is auto-denied like the rest
       if (d.match === 'steering' && cand.startsWith(dp.endsWith(path.sep) ? dp : dp + path.sep) && isSteering(cand.slice(dp.length))) return d;
+      // #git-verbs: a kernel worktree's entry, .git pointer and .mcp.json; a worktree git dir's entry and config pointers
+      if ((d.match === 'worktree-guard' || d.match === 'worktree-gitdir') && cand.startsWith(dp.endsWith(path.sep) ? dp : dp + path.sep)) {
+        const parts = cand.slice(dp.length).split(/[\\/]/).filter(Boolean).map((x) => x.toLowerCase());
+        if (parts.length === 1) return d;
+        if (parts.length === 2 && (d.match === 'worktree-guard' ? ['.git', '.mcp.json'] : ['commondir', 'gitdir', 'config.worktree']).includes(parts[1]!)) return d;
+      }
     }
   }
   return null;

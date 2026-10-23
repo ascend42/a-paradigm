@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939', '8.0:git-verbs'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -89,6 +89,8 @@ const REREVIEW = '8.0:T-2026-10-21-008' as const;
 const SESSION_RENAME = '8.0:session-rename' as const;
 /** Gnomon loops (docs/specs/gnomon-loops.md §3–§5; TD-2026-10-22-213/-129): every loop kind of steps 2–12, ONE clientApiId move. */
 const LOOPS = '8.0:loops' as const;
+/** Kernel-run git verbs (T-2026-10-23-002: git.init, git.push, repo.create outside the session sandbox): one clientApiId move. */
+const GIT_VERB_TAG = '8.0:git-verbs' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -262,6 +264,11 @@ const TABLE: Row[] = [
   ['request', 'kernel', 'loop.trust loop.untrust loop.pause loop.resume loop.run loop.delete loop.budget', LOOPS],
   // The agent's ask (§5): a userland kind bound in the paradigm grant; the kernel pre-gates it (build step 12).
   ['loop', 'userland', 'request', LOOPS],
+  // 8.0:git-verbs (T-2026-10-23-002): git.verb{hsid, verb, phase, inputHash, why?, cardId?, host?, exitCode?} — a
+  // kernel-run git verb a session asked for through the kernel's own MCP server (gnomon_git_init / gnomon_git_push /
+  // gnomon_repo_create): `requested` before any card or effect, then exactly one of `refused` (why), `ran` or `failed`
+  // (exitCode). Never a URL, path, token or command output: the host is the kernel-resolved remote host only.
+  ['git', 'kernel', 'verb', GIT_VERB_TAG],
 ];
 
 /** Per-kind sensitivity overrides from §9.1's last column. */
@@ -274,6 +281,8 @@ const SENSITIVE_KINDS: Record<string, Sensitivity> = {
   'voice.enrol': 'secret',
   // T-2026-10-20-007: why the read-only pass refused names command structure (paths, words)
   'approval.auto.miss': 'sensitive',
+  // 8.0:git-verbs: the remote host and the verb's input digest are project detail
+  'git.verb': 'sensitive',
 };
 
 /** Field-level labels stricter than the event's (§9.1 / §9.3 redaction matrix). */
@@ -499,6 +508,8 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'request.session.rename': Object.freeze(['hsid', 'name']),
   'session.renamed': Object.freeze(['hsid', 'name']),
   'session.context.threshold': Object.freeze(['hsid', 'usedTokens', 'windowTokens', 'ratio']),
+  // 8.0:git-verbs: closed, ids and closed values only (host is a validated DNS name, never a URL)
+  'git.verb': Object.freeze(['hsid', 'verb', 'phase', 'inputHash', 'why', 'cardId', 'host', 'exitCode']),
 });
 
 /** Keys of a KIND_PAYLOADS entry that may be absent (every other key is required). */
@@ -506,7 +517,67 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'request.mod.install': Object.freeze(['url', 'path', 'commit']),
   'request.session.restart': Object.freeze(['checkpointRef']),
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
+  'git.verb': Object.freeze(['why', 'cardId', 'host', 'exitCode']),
 });
+
+/** git.verb{verb} (CLOSED, 8.0:git-verbs): the kernel-run git verbs a session may ask for. */
+export const GIT_VERBS = ['git.init', 'git.push', 'repo.create', 'git.worktree.add', 'git.worktree.remove'] as const;
+export type GitVerb = (typeof GIT_VERBS)[number];
+/** git.verb{phase} (CLOSED): requested (before any card or effect), then one of refused | ran | failed. */
+export const GIT_VERB_PHASES = ['requested', 'refused', 'ran', 'failed'] as const;
+export type GitVerbPhase = (typeof GIT_VERB_PHASES)[number];
+/**
+ * git.verb{why} (CLOSED): why a verb was refused (phase refused) or did not finish (phase failed).
+ *   not-a-root          the folder is not this session's root
+ *   in-repo             init: the folder (or a folder above it) is already in a git repo
+ *   protected-folder    init: the home folder, a system folder or the Gnomon home
+ *   no-repo             push/create: the session root is not a repo whose .git is a real folder at the root
+ *   dotgit-link         .git is a symlink or a gitfile pointer (never followed)
+ *   unsafe-config       push/create: the repo config has a key outside the plain allowlist (hooks, helpers, includes, rewrites…)
+ *   bad-input           an argument failed validation (repo name, owner, branch, remote, visibility)
+ *   no-branch           push: detached HEAD, or the branch does not exist
+ *   no-remote           push: the remote is not configured
+ *   bad-remote          push: the remote URL is not https/ssh to a plain host (file, ext::, git://, http, userinfo, local paths)
+ *   remote-exists       create: the remote name is already configured
+ *   remote-changed      push: the remote resolved differently after the card (re-read before the push)
+ *   mode-manual         the session is in manual run mode (no approved plan)
+ *   loop-session        a loop session never runs a git verb
+ *   denied              the human denied the card (or it expired)
+ *   no-approval-surface no broker could take the card
+ *   tool-missing        git or gh is not installed where the kernel looks
+ *   not-authenticated   gh is not signed in (repo create)
+ *   command-failed      git or gh exited non-zero (exitCode carried)
+ *   timeout             git or gh ran past the kernel's limit
+ *   worktree-exists     worktree add: a worktree (or anything) of that name, or that branch, already exists
+ *   no-worktree         worktree remove: no kernel worktree of that name
+ */
+export const GIT_VERB_REASONS = [
+  'not-a-root',
+  'in-repo',
+  'protected-folder',
+  'no-repo',
+  'dotgit-link',
+  'unsafe-config',
+  'bad-input',
+  'no-branch',
+  'no-remote',
+  'bad-remote',
+  'remote-exists',
+  'remote-changed',
+  'mode-manual',
+  'loop-session',
+  'denied',
+  'no-approval-surface',
+  'tool-missing',
+  'not-authenticated',
+  'command-failed',
+  'timeout',
+  'worktree-exists',
+  'no-worktree',
+] as const;
+export type GitVerbReason = (typeof GIT_VERB_REASONS)[number];
+/** git.verb{host}: a lowercase DNS name (LDH labels; punycode stays visible as xn--), at most 253 characters. */
+export const GIT_VERB_HOST_PATTERN = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
 
 /**
  * turn.result{turn} (review M2, a deliberate clientApiId move): the id of the LATEST turn the result closes. The
@@ -772,6 +843,18 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
     case 'session.anomaly':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('why' in v) c.closedEnum('why', v.why, SESSION_ANOMALY_REASONS);
+      break;
+    case 'git.verb':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('verb' in v) c.closedEnum('verb', v.verb, GIT_VERBS);
+      if ('phase' in v) c.closedEnum('phase', v.phase, GIT_VERB_PHASES);
+      if ('inputHash' in v) c.str('inputHash', v.inputHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('why' in v) c.closedEnum('why', v.why, GIT_VERB_REASONS);
+      if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
+      if ('host' in v) c.str('host', v.host, GIT_VERB_HOST_PATTERN, 'a lowercase DNS host');
+      if ('exitCode' in v && (typeof v.exitCode !== 'number' || !Number.isInteger(v.exitCode) || v.exitCode < -1 || v.exitCode > 255)) c.fail('exitCode', 'must be an integer exit code (-1 = killed)');
+      if ((v.phase === 'refused' || v.phase === 'failed') && !('why' in v)) c.fail('why', 'names why a refused or failed verb stopped');
+      if ((v.phase === 'requested' || v.phase === 'ran') && 'why' in v) c.fail('why', 'only a refused or failed verb names a why');
       break;
     case 'offer.suppressed': {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');

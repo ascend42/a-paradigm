@@ -75,6 +75,7 @@
     "flow.event",
     "gate-class.decided",
     "gate-class.detected",
+    "git.verb",
     "grant.standing",
     "grant.standing.revoked",
     "grant.standing.used",
@@ -306,6 +307,7 @@
     "contract.review.restarted": "M1.1:P8-D86-D88",
     "contract.review.returned": "M1.1:P8-D86-D88",
     "daemon.log.quarantined": "M1.4:P8-D89",
+    "git.verb": "8.0:git-verbs",
     "grant.standing": "8.0:TD-2026-10-20-086",
     "grant.standing.revoked": "8.0:TD-2026-10-20-086",
     "grant.standing.used": "8.0:TD-2026-10-20-086",
@@ -894,6 +896,16 @@
       "usedTokens",
       "windowTokens",
       "ratio"
+    ],
+    "git.verb": [
+      "hsid",
+      "verb",
+      "phase",
+      "inputHash",
+      "why",
+      "cardId",
+      "host",
+      "exitCode"
     ]
   },
   "x-gnomon-compaction-reasons": [

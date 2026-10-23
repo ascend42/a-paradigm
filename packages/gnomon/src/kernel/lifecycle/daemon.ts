@@ -130,6 +130,7 @@ import { claudeVerifierFor } from '../../platform/claude-verifier.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { catchUp, RuleBook, ruleSourceOf } from '../supervisor/rules.js';
+import { GitVerbs } from '../git/kernel-verbs.js';
 import { createRulesRevokeHandler } from '../socket/rules-revoke.js';
 import { loadLocalConfig, localChainHighWater, localChainRemoved, type LoadedLocalConfig } from '../local/config.js';
 import { LocalConfigCards } from '../local/config-request.js';
@@ -945,6 +946,15 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const deskMods = new DeskMods(home, authority);
   let offerRouter: OfferRouter | null = null;
   const deskAdded = new Map<string, Set<string>>();
+  // #git-verbs (T-2026-10-23-002): git init / push / repo create run by the kernel for a session, outside its sandbox,
+  // behind ^git-init-gate / ^git-push-gate (run mode, the card, Always rules from the same RuleBook)
+  const gitVerbs = new GitVerbs({
+    log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
+    broker,
+    alwaysRule: (repoKey, tool, hash, input, ctx) => syncRuleBook().match(repoKey, tool, hash, input, ctx),
+    gnomonHome: home,
+    userHome: () => supSeams.userHome ?? osUserHome(),
+  });
   const supervisor: SessionSupervisor = new SessionSupervisor({
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
@@ -989,6 +999,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     alwaysRule: (repoKey, tool, hash, input, ctx) => syncRuleBook().match(repoKey, tool, hash, input, ctx),
     // P8-D87: the effective run mode at each permission request
     runMode: (hsid, repoKey) => runModes.view(hsid, repoKey),
+    gitVerbs,
     ...(seams.supervisor ?? {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,

@@ -93,12 +93,21 @@ export type SessionDenyClass = (typeof SESSION_DENY_CLASSES)[number];
  * `dep-steering` (P8-D97 F2): under `path`, inside ANY `node_modules` at any depth, in any case, a `CLAUDE*.md` file or
  * anything in a `.claude` dir — dependency-shipped memory the subtree audit does not walk. Read-deny only.
  */
-export type PathMatch = 'subpath' | 'literal' | 'prefix' | 'steering' | 'dep-steering';
+/**
+ * `worktree-guard` (#git-verbs, T-2026-10-23-002): `path` is a kernel worktrees dir W (`<root>/.gnomon/worktrees`).
+ * Write-deny of each worktree's own entry `W/<name>` (no create, remove or rename: only the kernel adds or removes a
+ * worktree), its `.git` pointer file `W/<name>/.git` and its `W/<name>/.mcp.json` (any case).
+ * `worktree-gitdir`: `path` is `<commonDir>/worktrees`. Write-deny of each worktree's private git dir entry and its
+ * `commondir`, `gitdir` and `config.worktree` (what tells git where the config lives); HEAD, index and logs stay writable.
+ */
+export type PathMatch = 'subpath' | 'literal' | 'prefix' | 'steering' | 'dep-steering' | 'worktree-guard' | 'worktree-gitdir';
+/** Where the kernel makes a session's worktrees, relative to a session root (#git-verbs git.worktree.add). */
+export const KERNEL_WORKTREES_REL = '.gnomon/worktrees';
 export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts' | 'session-env';
+  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts' | 'session-env' | 'worktrees';
 }
 
 export interface SessionPolicy {
@@ -220,6 +229,15 @@ export interface SessionPolicyInput {
    * realpath is not exactly `realpath(userClaudeDir)/session-env/<uuid>`, or another write deny covers it.
    */
   claudeSessionEnv?: string;
+  /**
+   * #git-verbs (T-2026-10-23-002): the session may work in kernel-made worktrees under `<root>/.gnomon/worktrees/<name>`
+   * (git.worktree.add runs outside the sandbox). Ordinary files there stay writable (they are under the root); what
+   * steers Claude or git there is write-denied: `<root>/.gnomon` and W as literals (never renamed or removed), each
+   * worktree's own entry, `.git` pointer and `.mcp.json` (worktree-guard), every CLAUDE*.md and `.claude/**` below W
+   * (steering), and each worktree git dir's entry, commondir, gitdir and config.worktree (worktree-gitdir). The common
+   * dir's hooks, config and info stay denied as for any root.
+   */
+  kernelWorktrees?: boolean;
 }
 
 /** The one write carve-back (TD-2026-10-19-814): Claude Code's transcript dir, relative to the user Claude dir. */
@@ -429,7 +447,17 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     return [...new Set([path.join(r, '.git'), ...(d ? [d.gitDir, d.commonDir] : [])])];
   });
   const git = gitDirs.flatMap((g) => [P(path.join(g, 'hooks'), 'subpath', 'git'), P(path.join(g, 'config'), 'literal', 'git'), P(path.join(g, 'info'), 'subpath', 'git')]);
-  const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...persistence, ...extra]);
+  // #git-verbs: kernel worktrees under each root (only the kernel creates or removes one; their steering stays denied)
+  const worktrees: PolicyPath[] = !inp.kernelWorktrees
+    ? []
+    : [
+        ...roots.flatMap((r) => {
+          const w = path.join(r, ...KERNEL_WORKTREES_REL.split('/'));
+          return [P(path.join(r, '.gnomon'), 'literal', 'worktrees'), P(w, 'literal', 'worktrees'), P(w, 'worktree-guard', 'worktrees'), P(w, 'steering', 'settings')];
+        }),
+        ...gitDirs.flatMap((g) => [P(path.join(g, 'worktrees'), 'literal', 'git'), P(path.join(g, 'worktrees'), 'worktree-gitdir', 'git')]),
+      ];
+  const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...worktrees, ...persistence, ...extra]);
   // TD-2026-10-19-814 item 1: the transcript carve-back. Fail closed (no allow) when ~/.claude/projects is a link
   // elsewhere, or any write deny other than the user Claude dir's own subpath (and the steering regexes, which match
   // `.claude` dirs anywhere) covers it — the allow must reopen exactly ~/.claude/projects and nothing else.
