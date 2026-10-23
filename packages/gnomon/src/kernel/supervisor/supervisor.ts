@@ -106,7 +106,7 @@ import { claudeModelProblem, hsidShort, mintHsid, MODEL_SWITCH_CONTEXT_GUARD, MO
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { ALWAYS_ASK_TOOLS, SESSION_CACHE_ENV, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, SESSION_UUID_RE, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
+import { ALWAYS_ASK_TOOLS, SESSION_CACHE_ENV, WRITE_TEMP_PATHS, buildSessionPolicy, CLAUDE_SESSION_ENV_REL, CLAUDE_TRANSCRIPTS_REL, SESSION_UUID_RE, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { releaseSession, releaseSessionGrants, sessionSidFor } from '../../platform/win32/session-sandbox.js';
 import { privateToUser } from '../../platform/owner-only.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
@@ -317,6 +317,8 @@ export interface SupervisorOptions {
    * GIT_VERBS_GUIDANCE line in its appended system prompt, and its mcp_message control requests answered here.
    */
   gitVerbs?: GitVerbs;
+  /** TEST RIG ONLY: the session scratch base (default the identity's DARWIN_USER_TEMP_DIR) */
+  scratchBase?: string;
 }
 
 /** Paradigm-logger shaped (the kernel injects it; it never imports the logger package, G-SEC-01). */
@@ -438,20 +440,65 @@ interface Session {
  * session (`gnomon-tmp/<hsid-short>`) and a 0700 tool cache per repo key (`gnomon-cache/<16 hex>`). Each level must be
  * a real directory owned by this uid with no group/other bits (a link or a foreign dir is replaced only if absent; else thrown).
  */
-export function sessionScratchDirs(hsid: string, repoKey: string, base: string = fs.realpathSync.native(os.tmpdir())): { tmp: string; cache: string } {
-  const mk = (p: string): string => {
+export function sessionScratchDirs(hsid: string, repoKey: string, base: string = fs.realpathSync.native(os.tmpdir()), owned?: ScratchOwnership): { tmp: string; cache: string } {
+  const real = (() => {
+    try {
+      return fs.realpathSync.native(base);
+    } catch {
+      return path.resolve(base);
+    }
+  })();
+  // Aegis round 3 M: the base is never under a shared temp dir every session may write (/private/tmp, /private/var/tmp)
+  if (WRITE_TEMP_PATHS.some((t) => real === t || real.startsWith(`${t}/`)) || real === '/tmp' || real.startsWith('/tmp/')) throw new Error(`#session-runner: the scratch base ${real} is a shared temp dir`);
+  const mk = (p: string, fresh: boolean): string => {
+    let made = false;
     try {
       fs.mkdirSync(p, { mode: 0o700 });
+      made = true;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
     }
     const st = fs.lstatSync(p);
     if (st.isSymbolicLink() || !st.isDirectory() || (typeof process.getuid === 'function' && st.uid !== process.getuid()) || (st.mode & 0o077) !== 0) throw new Error(`#session-runner: ${p} is not a private directory of this user`);
+    // Aegis round 3 M: a session's own dir (its TMPDIR, its cache) must be one this kernel made: made now, or in the
+    // kernel-held record with the same inode (a resumed session's TMPDIR, a repo's cache from an earlier session)
+    if (fresh && !made && (!owned || !owned.has(p, st.ino))) throw new Error(`#session-runner: ${p} already exists and was not made by this kernel`);
+    if (made) owned?.add(p, st.ino);
     return p;
   };
-  const tmp = mk(path.join(mk(path.join(base, 'gnomon-tmp')), hsidShort(hsid)));
-  const cache = mk(path.join(mk(path.join(base, 'gnomon-cache')), repoKey.replace(/^sha256:/, '').slice(0, 16)));
+  const tmp = mk(path.join(mk(path.join(real, 'gnomon-tmp'), false), hsidShort(hsid)), true);
+  const cache = mk(path.join(mk(path.join(real, 'gnomon-cache'), false), repoKey.replace(/^sha256:/, '').slice(0, 16)), true);
   return { tmp, cache };
+}
+
+/** Aegis round 3 M: the kernel-held record of the session scratch dirs it made (path → inode), under the Gnomon home. */
+export interface ScratchOwnership {
+  has(p: string, ino: number): boolean;
+  add(p: string, ino: number): void;
+}
+
+/** The record as a 0600 JSON file the kernel alone writes (the Gnomon home is session read- and write-denied). */
+export function scratchOwnershipFile(file: string): ScratchOwnership {
+  const read = (): Record<string, number> => {
+    try {
+      const v = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown;
+      return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number>) : {};
+    } catch {
+      return {};
+    }
+  };
+  return {
+    has: (p, ino) => read()[p] === ino,
+    add: (p, ino) => {
+      const m = read();
+      m[p] = ino;
+      const keys = Object.keys(m);
+      for (const k of keys.slice(0, Math.max(0, keys.length - 4096))) delete m[k];
+      const tmp = `${file}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(m), { mode: 0o600 });
+      fs.renameSync(tmp, file);
+    },
+  };
 }
 
 /** Env names whose VALUES the trace asserts never appear in a record (#trace-capture). */
@@ -858,7 +905,8 @@ export class SessionSupervisor {
     // tool cache per repo (never the human's ~/.npm, ~/.cache…), and Claude Code's non-essential traffic is off. The OS
     // TMPDIR is kept for the screen-socket deny (osTmp).
     const osTmp = env.TMPDIR;
-    const scratch = this.#platform === 'darwin' ? sessionScratchDirs(hsid, repoKeyOf([req.cwd, ...(req.worktree ? [req.worktree] : [])])) : null;
+    // Aegis round 3 M: the base is the per-user DARWIN_USER_TEMP_DIR the identity resolved (never os.tmpdir()'s /tmp fallback)
+    const scratch = this.#platform === 'darwin' ? sessionScratchDirs(hsid, repoKeyOf([req.cwd, ...(req.worktree ? [req.worktree] : [])]), this.#o.scratchBase ?? this.#identity?.tmpdir ?? os.tmpdir(), scratchOwnershipFile(path.join(this.#o.home, 'scratch-owned.json'))) : null;
     if (scratch) {
       env.TMPDIR = scratch.tmp;
       for (const [k, sub] of Object.entries(SESSION_CACHE_ENV)) env[k] = path.join(scratch.cache, sub);

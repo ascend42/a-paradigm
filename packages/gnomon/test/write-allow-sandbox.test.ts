@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { darwinFloor, sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
 import { buildSessionPolicy, SESSION_CACHE_ENV, userTempRoot, WRITE_CACHE_PATHS } from '../src/kernel/manifest/policy.js';
-import { sessionScratchDirs } from '../src/kernel/supervisor/supervisor.js';
+import { scratchOwnershipFile, sessionScratchDirs } from '../src/kernel/supervisor/supervisor.js';
 import { sessionWorld, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld | null = null;
@@ -94,8 +94,19 @@ describe.runIf(darwinFloor().ok)('deny-by-default session writes', () => {
     expect(d.tmp).toBe(path.join(w.root, 'gnomon-tmp', 's-01JAAAAA'.slice(2) === '01JAAAAA' ? fs.readdirSync(path.join(w.root, 'gnomon-tmp'))[0]! : ''));
     expect(d.cache).toBe(path.join(w.root, 'gnomon-cache', 'ab'.repeat(8)));
     for (const x of [d.tmp, d.cache]) expect(fs.statSync(x).mode & 0o077).toBe(0);
+    // Aegis round 3 M: a pre-existing TMPDIR or cache is refused unless the kernel's own record made it (same inode)
+    expect(() => sessionScratchDirs('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', 'sha256:' + 'ab'.repeat(32), w!.root)).toThrow(/already exists and was not made by this kernel/);
+    const owned = scratchOwnershipFile(path.join(w.root, 'owned.json'));
+    const d2 = sessionScratchDirs('hsid:v1:01JBBBBBBBBBBBBBBBBBBBBBBB', 'sha256:' + 'cd'.repeat(32), w.root, owned);
+    expect(sessionScratchDirs('hsid:v1:01JBBBBBBBBBBBBBBBBBBBBBBB', 'sha256:' + 'cd'.repeat(32), w.root, owned)).toEqual(d2); // a resume: recorded
+    fs.rmSync(d2.cache, { recursive: true });
+    fs.mkdirSync(d2.cache, { mode: 0o700 }); // planted: a new inode the record does not hold
+    expect(() => sessionScratchDirs('hsid:v1:01JBBBBBBBBBBBBBBBBBBBBBBB', 'sha256:' + 'cd'.repeat(32), w!.root, owned)).toThrow(/not made by this kernel/);
     fs.chmodSync(d.cache, 0o755);
-    expect(() => sessionScratchDirs('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', 'sha256:' + 'ab'.repeat(32), w!.root)).toThrow(/not a private directory/);
+    expect(() => sessionScratchDirs('hsid:v1:01JCCCCCCCCCCCCCCCCCCCCCCC', 'sha256:' + 'ab'.repeat(32), w!.root, owned)).toThrow(/not a private directory/);
+    // the base is never a shared temp dir
+    expect(() => sessionScratchDirs('hsid:v1:01JDDDDDDDDDDDDDDDDDDDDDDD', 'sha256:' + 'ef'.repeat(32), '/private/tmp')).toThrow(/shared temp dir/);
+    expect(() => sessionScratchDirs('hsid:v1:01JDDDDDDDDDDDDDDDDDDDDDDD', 'sha256:' + 'ef'.repeat(32), '/tmp')).toThrow(/shared temp dir/);
     expect(Object.keys(SESSION_CACHE_ENV).sort()).toEqual(['BUN_INSTALL_CACHE_DIR', 'GOCACHE', 'GOMODCACHE', 'NPM_CONFIG_CACHE', 'PIP_CACHE_DIR', 'XDG_CACHE_HOME', 'npm_config_cache']);
   });
 });
