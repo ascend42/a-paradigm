@@ -75,6 +75,18 @@ gates:
     location: packages/gnomon/src/cli/setup-cli.ts + src/cli/up-cli.ts + src/kernel/setup/setup-endpoint.ts (#first-run, #setup-endpoint)
     check: ~/.gnomon is missing, or a real non-dev directory with no keys/identity.json; else only setup.complete of a missing registry row for the existing identity, or setup.purge of a listed non-live leftover generation
     prizes: []
+  git-init-gate:
+    description: 'Gnomon kernel-run git.init and git.worktree.add/remove (T-2026-10-23-002, #git-verbs; MCP tools gnomon_git_init, gnomon_worktree_add, gnomon_worktree_remove on the kernel''s own SDK server, never a socket or port). Run under the session''s run mode like an edit: manual refuses until a plan is approved, auto-edits runs after an approval.auto{modeRef:mode:auto-edits} row (no row, no run), ask raises a permission card (allow / deny, no Always); a force worktree remove always takes its own irreversible card; loop sessions refuse. init refuses a folder already in a repo (an ancestor''s .git included), the home folder, a system folder, the Gnomon home, a non-root, a symlinked .git or a gitfile; the repo gets the kernel''s [core]-only config and an empty hooks dir.'
+    type: access
+    location: packages/gnomon/src/kernel/git/kernel-verbs.ts (#git-verbs) + src/kernel/supervisor/kernel-mcp.ts (#kernel-mcp)
+    check: session not a loop AND (mode = auto-edits with an approval.auto row OR an allowed permission card) AND initRefusal(root) = null re-checked after the decision
+    prizes: []
+  git-push-gate:
+    description: 'Gnomon kernel-run git.push and repo.create (T-2026-10-23-002, #git-verbs; MCP tools gnomon_git_push, gnomon_repo_create). Always attended: a permission card composed from the kernel''s own reading (the remote URL git resolves with the push''s own env and flags, the host shown plainly; a lookalike or punycode host flagged claim-mismatch with no Always), never agent text. git.push honours Always rules from the same RuleBook keyed to (repoKey, gnomon_git_push, the exact URL and host); a force push (force: true) is its own irreversible card; a public repo is irreversible-flagged; repo.create offers no Always. The remote and branch are re-read after the decision. Runs with the human''s own credentials (credential helper or gh sign-in) in a scrubbed env, https/ssh only, no redirects, no hooks, never tags or a mirror; the repo config must hold plain keys only.'
+    type: access
+    location: packages/gnomon/src/kernel/git/kernel-verbs.ts (#git-verbs)
+    check: session not a loop and not manual without a plan AND configProblems(.git/config) = [] AND (an allowed or always card OR a kernel-derived Always rule for that exact remote, not force, not flagged) AND the re-read remote URL and branch equal the card's
+    prizes: []
   gate-check:
     description: Internal gate used by the @a-company/portal SDK for validating gate definitions and checks (see packages/portal/sdk/.purpose).
     type: internal

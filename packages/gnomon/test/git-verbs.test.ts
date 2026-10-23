@@ -361,6 +361,18 @@ describe('git.worktree.add / remove', () => {
   });
 });
 
+describe('git.verb rows (contracts, 8.0:git-verbs)', () => {
+  it('are closed: no URL, path or output field; why only on refused/failed; host a DNS name', () => {
+    const ok = { hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', verb: 'git.push', phase: 'refused', inputHash: `sha256:${'a'.repeat(64)}`, why: 'denied', host: 'github.com' };
+    expect(validateKindPayload('git.verb', ok)).toEqual([]);
+    expect(validateKindPayload('git.verb', { ...ok, url: 'https://x' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('git.verb', { ...ok, host: 'https://github.com/o/r' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('git.verb', { ...ok, phase: 'ran' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('git.verb', { ...ok, why: 'because' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('git.verb', { ...ok, phase: 'failed', why: 'command-failed', exitCode: 128 })).toEqual([]);
+  });
+});
+
 describe('#kernel-mcp', () => {
   it('serves initialize, tools/list and tools/call; never routes another server or method', async () => {
     const w = world();
