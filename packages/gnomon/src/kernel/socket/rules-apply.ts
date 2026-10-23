@@ -29,7 +29,7 @@
 import { RULE_CHANGE_OPS, RULE_ID_PATTERN, RULE_OFF_MAX_MS, RULES_APPLY_MAX, ulid, type CardV1, type RuleChangeOp } from '@a-company/gnomon-contracts';
 import { fail, type ApprovalBroker } from '../broker/broker.js';
 import type { ModeAsker } from '../broker/run-mode.js';
-import { wrappedBlock } from '../manifest/install.js';
+import { batchCardBlock } from '../broker/batch-card.js';
 import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
 import { RULE_ISO_TIME, ruleWords, type AlwaysRule, type RuleBook } from '../supervisor/rules.js';
 
@@ -136,9 +136,7 @@ export function rulesOnLines(rules: readonly AlwaysRule[], repoName?: (repoKey: 
 
 /** The wrapped card block for those lines, and its size in characters (what the card really shows). */
 export function rulesOnBlock(lines: readonly string[]): { block: Record<string, unknown>; size: number } {
-  const w = wrappedBlock(lines);
-  const kids = (w.block as { children: Array<{ text: string }> }).children;
-  return { block: w.block, size: kids.reduce((k, c) => k + c.text.length + 1, 0) };
+  return batchCardBlock(lines); // #batch-card: the one batch-card block, shared with #mcp-servers
 }
 
 /** status.rules: the words a row shows are capped (Aegis L-2); the card always shows them in full. */
