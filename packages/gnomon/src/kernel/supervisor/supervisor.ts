@@ -870,6 +870,8 @@ export class SessionSupervisor {
         memoryImports: repoCtx?.importTargets ?? [], // P8-D97 (F3)
         claudeTranscripts: true, // TD-2026-10-19-814 item 1: Claude Code saves transcripts under ~/.claude/projects (--resume)
         claudeSessionEnv: uuid, // Aegis H1: only THIS session's ~/.claude/session-env/<uuid> (Claude Code mkdirs it before any command hook)
+        // T-2026-10-23-004: deny-by-default writes — the session's own TMPDIR (its per-user /private/var/folders dir) is writable
+        ...(this.#platform !== 'win32' && env.TMPDIR ? { tmpdir: env.TMPDIR } : {}),
       });
       // fail closed, reported: no transcript carve-back means this session cannot be resumed
       if (policy.allowWriteRefused) await this.#o.log('session.sandbox', { hsid, phase: 'transcripts-withheld', reason: policy.allowWriteRefused }, { session: hsid });

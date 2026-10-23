@@ -107,7 +107,7 @@ export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts' | 'session-env' | 'worktrees';
+  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence' | 'transcripts' | 'session-env' | 'worktrees' | 'root' | 'temp' | 'cache';
 }
 
 export interface SessionPolicy {
@@ -134,6 +134,15 @@ export interface SessionPolicy {
    * manifest or caller can name one.
    */
   allowWrite: PolicyPath[];
+  /**
+   * T-2026-10-23-004 (Aegis, the root fix): session file writes are DENY BY DEFAULT. The profile opens with
+   * `(deny file-write*)` and allows ONLY these (rendered before denyWrite, so every deny still wins inside them): the
+   * session roots (subpath; the kernel worktrees live under them), the session's temp (its TMPDIR's per-user
+   * /private/var/folders/<a>/<b> dir, /private/tmp, /private/var/tmp) and the measured tool caches
+   * (WRITE_CACHE_PATHS under the user home). The transcript and session-env carve-backs stay allowWrite. A policy
+   * object without the field allows nothing but those carve-backs and the device files (fail closed).
+   */
+  writeAllow?: PolicyPath[];
   /**
    * re-denied AFTER allowWrite so the carve-back reopens nothing else: each allowWrite root itself (literal — it can
    * be neither removed, renamed nor replaced; Aegis M1), the denyWrite entries inside it, and the steering regexes
@@ -238,6 +247,24 @@ export interface SessionPolicyInput {
    * dir's hooks, config and info stay denied as for any root.
    */
   kernelWorktrees?: boolean;
+  /** T-2026-10-23-004: the session's TMPDIR (the OS one); its per-user /private/var/folders/<a>/<b> dir is writable */
+  tmpdir?: string;
+}
+
+/**
+ * T-2026-10-23-004: the tool caches under the user home a session may write (deny-by-default writes). MEASURED, not
+ * guessed: what Claude Code and an `npm install` in a root wrote under the profile (test/session-sandbox.test.ts,
+ * probes/p10m-write-allow). Anything else under the home stays denied; add one only when measured, narrowly.
+ */
+export const WRITE_CACHE_PATHS: readonly string[] = Object.freeze(['.npm', 'Library/Caches/claude-cli-nodejs']);
+/** T-2026-10-23-004: the shared temp dirs every session may write. */
+export const WRITE_TEMP_PATHS: readonly string[] = Object.freeze(['/private/tmp', '/private/var/tmp']);
+
+/** The per-user /private/var/folders/<a>/<b> dir holding a darwin TMPDIR (…/T), else the TMPDIR itself. */
+export function userTempRoot(tmpdir: string): string {
+  const real = realpathLoose(tmpdir);
+  const m = /^(\/private\/var\/folders\/[^/]+\/[^/]+)(\/T)?\/?$/.exec(real);
+  return m ? m[1]! : real.replace(/\/+$/, '');
 }
 
 /** The one write carve-back (TD-2026-10-19-814): Claude Code's transcript dir, relative to the user Claude dir. */
@@ -309,6 +336,8 @@ export const PERSISTENCE_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }>
   { rel: '.gitconfig', match: 'literal' },
   { rel: '.config/git', match: 'subpath' },
   { rel: '.ssh', match: 'subpath' },
+  // Aegis M4 (T-2026-10-23-002): gh's sign-in and config (hosts.yml) — the kernel's repo.create runs gh with them
+  { rel: '.config/gh', match: 'subpath' },
   // Aegis M (TD-2026-10-21-077): ~/.local/bin is on every session's PATH ahead of /usr/bin — a planted `ls`/`git`
   // there would run in a later session's auto-passed read-only command with no card
   { rel: '.local/bin', match: 'subpath' },
@@ -458,6 +487,13 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
         ...gitDirs.flatMap((g) => [P(path.join(g, 'worktrees'), 'literal', 'git'), P(path.join(g, 'worktrees'), 'worktree-gitdir', 'git')]),
       ];
   const denyWrite = uniq([...keys, ...settings, ...linked, ...git, ...worktrees, ...persistence, ...extra]);
+  // T-2026-10-23-004: the deny-by-default write allowlist (every deny above is rendered AFTER it)
+  const writeAllow = uniq([
+    ...roots.map((r) => P(r, 'subpath', 'root')),
+    ...WRITE_TEMP_PATHS.map((t) => P(t, 'subpath', 'temp')),
+    ...(inp.tmpdir ? [{ path: userTempRoot(inp.tmpdir), match: 'subpath' as const, class: 'temp' as const }] : []),
+    ...(inp.userHome ? WRITE_CACHE_PATHS.map((c) => P(path.join(inp.userHome!, ...c.split('/')), 'subpath', 'cache')) : []),
+  ]);
   // TD-2026-10-19-814 item 1: the transcript carve-back. Fail closed (no allow) when ~/.claude/projects is a link
   // elsewhere, or any write deny other than the user Claude dir's own subpath (and the steering regexes, which match
   // `.claude` dirs anywhere) covers it — the allow must reopen exactly ~/.claude/projects and nothing else.
@@ -510,6 +546,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     denyWrite,
     allowWrite,
     denyWriteAlways,
+    writeAllow,
     ...(allowWriteRefused ? { allowWriteRefused } : {}),
     ...(sessionEnvRefused ? { sessionEnvRefused } : {}),
     denyLoopbackPorts: inp.endpointPort === null ? [] : [inp.endpointPort],

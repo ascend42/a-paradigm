@@ -1,0 +1,46 @@
+{
+  "probe": "p10m-write-allow",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "claude": "2.1.309",
+    "audit": {
+      "exit": 0,
+      "result": {
+        "isError": false,
+        "text": "ok",
+        "numTurns": 2
+      },
+      "transcript": true,
+      "controlWritten": true,
+      "written": [
+        "~/gnomon-probe-denied.txt"
+      ],
+      "stderr": ""
+    },
+    "enforce": {
+      "exit": 0,
+      "result": {
+        "isError": false,
+        "text": "ok",
+        "numTurns": 2
+      },
+      "transcript": true,
+      "controlWritten": false,
+      "written": [],
+      "stderr": ""
+    },
+    "unexplained": [],
+    "note": "41 other files written in the same window by other processes on the host (browser, desktop apps, a shell, another repo fetch) were dropped from this record: they are not the session (the probe pid tree), and their paths are private."
+  },
+  "specRefs": [
+    "\u00a715.5 session profile",
+    "T-2026-10-23-004 deny-by-default writes"
+  ],
+  "at": "2026-10-23T22:43:12.018Z"
+}

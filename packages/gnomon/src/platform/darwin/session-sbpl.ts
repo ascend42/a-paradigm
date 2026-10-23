@@ -69,7 +69,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
-export const SESSION_PROFILE_VERSION = 8; // 8: Aegis H1/M1 — the session-env carve-back is scoped to session-env/<uuid> (both dirs literal-denied); 7: ~/.claude/session-env write carve-back; 4: T-2026-10-18-028 M5 helper exec/read denies; 5: TD-2026-10-19-814 transcript write carve-back; 6: its root literal-denied (Aegis M1) and the steering regex re-rooted inside it (Aegis L3)
+export const SESSION_PROFILE_VERSION = 9; // 9: T-2026-10-23-004 deny-by-default writes (policy.writeAllow); 8: 8: Aegis H1/M1 — the session-env carve-back is scoped to session-env/<uuid> (both dirs literal-denied); 7: ~/.claude/session-env write carve-back; 4: T-2026-10-18-028 M5 helper exec/read denies; 5: TD-2026-10-19-814 transcript write carve-back; 6: its root literal-denied (Aegis M1) and the steering regex re-rooted inside it (Aegis L3)
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
@@ -90,6 +90,9 @@ export const SESSION_SANDBOX_MIN_MACOS = 15;
  * name`, which AppleScript answers without sending an event (see spec §A.2(iv)).
  */
 export const APPLEEVENT_MACH_SERVICES = Object.freeze(['com.apple.coreservices.appleevents']);
+
+/** T-2026-10-23-004: the device files every process writes (the null device, the terminal, fds, ptys, dtrace helper). */
+export const DEVICE_WRITE_ALLOW: readonly string[] = Object.freeze(['(literal "/dev/null")', '(literal "/dev/zero")', '(literal "/dev/tty")', '(literal "/dev/dtracehelper")', '(literal "/dev/ptmx")', '(regex #"^/dev/fd/[0-9]+$")', '(regex #"^/dev/ttys[0-9]+$")']);
 
 export const DARWIN_LAUNCHERS = Object.freeze([
   '/usr/bin/open',
@@ -211,6 +214,10 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
   if (policy.allowRead.length) lines.push(`(allow file-read* ${policy.allowRead.map(filter).join(' ')})`);
   if (policy.allowReadMetadata.length) lines.push(`(allow file-read-metadata ${policy.allowReadMetadata.map(filter).join(' ')})`);
   if (policy.denyReadAlways.length) lines.push(`(deny file-read* ${policy.denyReadAlways.map(filter).join(' ')})`);
+  // T-2026-10-23-004: writes are DENY BY DEFAULT — only the device files, the roots, the session temp and the measured
+  // caches are opened, and every deny below is rendered AFTER them (last match wins), so none of them reopens a deny
+  lines.push('(deny file-write*)');
+  lines.push(`(allow file-write* ${[...DEVICE_WRITE_ALLOW, ...(policy.writeAllow ?? []).map(filter)].join(' ')})`);
   lines.push(`(deny file-write* ${[...policy.denyWrite.map(filter), ...git.filters].join(' ')})`);
   // TD-2026-10-19-814 item 1 (probe p-resume): the transcript carve-back AFTER the ~/.claude deny (last match wins),
   // then its root (literal), every deny inside it and the re-rooted steering regex again (and the T-008 git denies,

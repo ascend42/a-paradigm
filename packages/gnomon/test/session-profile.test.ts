@@ -125,7 +125,8 @@ describe('TD-2026-10-19-814 item 1: ~/.claude/projects (Claude Code transcripts)
     expect(iAllow).toBeGreaterThan(iDeny);
     expect(lines[iDeny]).toContain(`(literal "${path.join(w.userHome, '.claude.json')}")`);
     // the ONLY write allow in the profile, and no file-write deny after it names the projects dir or an ancestor of it
-    expect(lines.filter((l) => l.startsWith('(allow file-write*'))).toEqual([`(allow file-write* (subpath "${projects(w)}"))`]);
+    // T-2026-10-23-004: besides the deny-by-default allowlist (device files, roots, temp, caches), the projects carve-back is the only write allow
+    expect(lines.filter((l) => l.startsWith('(allow file-write*') && !l.includes('(literal "/dev/null")'))).toEqual([`(allow file-write* (subpath "${projects(w)}"))`]);
     for (const l of lines.slice(iAllow + 1).filter((x) => x.startsWith('(deny file-write*'))) {
       expect(l).not.toContain(`(subpath "${claudeDir(w)}")`);
       expect(l).not.toContain(`(subpath "${projects(w)}")`);
@@ -145,7 +146,7 @@ describe('TD-2026-10-19-814 item 1: ~/.claude/projects (Claude Code transcripts)
     expect(on.denyWrite.some((d) => d.path === claudeDir(w) && d.match === 'subpath')).toBe(true);
     const off = worldPolicy(w);
     expect(off.allowWrite).toEqual([]);
-    expect(sessionProfileSbpl(off, extras(w))).not.toContain('(allow file-write*');
+    expect(sessionProfileSbpl(off, extras(w))).not.toContain(`(subpath "${projects(w)}")`);
   });
   it('a project cannot widen it: the input has no allow path, and an injected one is ignored', () => {
     w = sessionWorld();
@@ -232,7 +233,7 @@ describe('TD-2026-10-19-814 item 1: ~/.claude/projects (Claude Code transcripts)
       const p = worldPolicy(w, null, [], [], { claudeTranscripts: true });
       expect(p.allowWrite).toEqual([]);
       expect(p.allowWriteRefused).toMatch(/resolves outside the user Claude dir/);
-      expect(sessionProfileSbpl(p, extras(w))).not.toContain('(allow file-write*');
+      expect(sessionProfileSbpl(p, extras(w))).not.toMatch(/\.claude\/projects"\)\)/);
       w.cleanup();
     }
   });

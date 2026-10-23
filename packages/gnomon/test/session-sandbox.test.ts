@@ -136,9 +136,9 @@ mkdir -p "${w.userHome}/.claude/projects/-enc-dir" 2>/dev/null && echo '{"a":1}'
 (echo x > "${brew}/bin/git") 2>/dev/null && echo "write_brew_bin=allowed" || echo "write_brew_bin=blocked"
 (echo x > "${brew}/Cellar/tool/1/bin/tool") 2>/dev/null && echo "write_brew_cellar=allowed" || echo "write_brew_cellar=blocked"
 "${brew}/bin/tool" 2>/dev/null | /usr/bin/grep -q tool_ran && echo "exec_brew=ok" || echo "exec_brew=fail"
-/bin/cp /bin/launchctl "${w.root}/lc" 2>/dev/null; "${w.root}/lc" submit -l "${LABEL}" -- /usr/bin/touch "${MARKER}" >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
-${copiedOsascript(w.root)}
-/bin/cp /usr/bin/open "${w.root}/op" 2>/dev/null; "${w.root}/op" -h >/dev/null 2>&1; echo "copied_open_exit=$?"
+/bin/cp /bin/launchctl "${w.cwd}/lc" 2>/dev/null; "${w.cwd}/lc" submit -l "${LABEL}" -- /usr/bin/touch "${MARKER}" >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
+${copiedOsascript(w.cwd)}
+/bin/cp /usr/bin/open "${w.cwd}/op" 2>/dev/null; "${w.cwd}/op" -h >/dev/null 2>&1; echo "copied_open_exit=$?"
 n=$(pgrep -fl . 2>/dev/null | wc -l | tr -d ' '); echo "pgrep_lines=$n"
 sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_spawn_kill=ok"; else echo "child_spawn_kill=fail"; fi
 /usr/bin/open -h >/dev/null 2>&1; echo "open_exit=$?"
@@ -198,7 +198,7 @@ describe.runIf(MACOS_OK)('copied-osascript record under the generated profile (m
     const x = sessionWorld();
     try {
       const script = path.join(x.root, 'osa.sh');
-      fs.writeFileSync(script, `#!/bin/bash\n${copiedOsascript(x.root)}\n`, { mode: 0o755 });
+      fs.writeFileSync(script, `#!/bin/bash\n${copiedOsascript(x.cwd)}\n`, { mode: 0o755 });
       // SIP seam `() => true`: the exact profile a SIP host gets
       const plan = sessionLaunchPlan({ policy: worldPolicy(x), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: x.userHome, roots: [x.cwd] } }, 'darwin', undefined, () => true);
       const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: x.userHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 60_000 });

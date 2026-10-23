@@ -759,6 +759,8 @@ export class LocalLane {
         localRunner: { node: pin.node, dir: pin.dir },
         // T-2026-10-18-010: the home is read-denied; only this session's dir (local.yaml) and the staged runner copy are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: runner.copy, match: 'subpath' }],
+        // T-2026-10-23-004: deny-by-default writes — the OS temp dir stays writable
+        ...(this.#platform !== 'win32' ? { tmpdir: os.tmpdir() } : {}),
       });
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const configPath = path.join(dir, 'local.yaml');
