@@ -89,13 +89,15 @@ export interface CwdHintTarget {
 }
 
 /**
- * Show a folder hint: open the new-session form, prefill the cwd field when
- * the path is clean, and say where it came from in plain text. It never
- * submits: session.open still needs the human's click on `open`.
+ * Show a folder hint: open the new-session form, prefill the folder when
+ * the path is clean (the folder field has the kernel check it), and say where
+ * it came from in plain text. It never submits: session.open still needs the
+ * human's press on Open.
  */
 export function applyCwdHint(t: CwdHintTarget, hint: CwdHint): void {
+  // #gui-folder-field: the prefill is CHECKED by the kernel and shown as the "from terminal" row (design copy hint)
   t.note.textContent = hint.prefill !== null
-    ? `Suggested by \`gnomon\` in a terminal (not verified): ${hint.display}: check it, then open.`
+    ? 'Suggested by `gnomon` in a terminal: check it, then Open.'
     : `A terminal suggested a folder that is not prefilled (${hint.why}): ${hint.display}`;
   t.note.hidden = false;
   if (hint.prefill !== null) t.input.value = hint.prefill;

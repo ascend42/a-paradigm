@@ -716,7 +716,7 @@ export class LocalLane {
     const repo = repoIdOf(loop?.act ? loop.act.scratch.repo : cwdReal);
     const userHome = this.#userHome();
     const loopRun = loop ? { loopId: loop.info.loopId, runId: loop.info.runId, nodeId: loop.info.nodeId, scope: loop.info.scope, repoKey: loop.info.repoKey } : null;
-    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: !loop, ...(loopRun ? { principalClass: req.principalClass, origin: LOOP_ORIGIN, loopRun } : {}) }, { session: hsid });
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: !loop, ...(loopRun ? { principalClass: req.principalClass, origin: LOOP_ORIGIN, loopRun } : { principalClass: req.principalClass }) }, { session: hsid }); // Aegis L2 (#folder-picker): every row names its opener's class
     await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools: loop && !loop.act ? 'none' : tools, ...(loop?.act ? { allowTools: loop.act.tools } : {}) }, { session: hsid });
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     const built = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key'), identity: this.#identity, path: this.#sessionPath, ...(this.#platform === 'win32' ? { tempDir: win32SessionTempDir(hsid), writableRoots: rootsReal } : {}) });

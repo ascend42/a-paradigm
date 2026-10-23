@@ -158,6 +158,7 @@ import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
 import { ModsAdmin, type ModAsker } from '../modhost/mods-admin.js';
 import { DeskTally } from '../desk/desk-stats.js';
+import { FolderPicker, type ChooserRunner, type FolderAsker, type FolderRow } from '../folders/folders.js';
 import { spawn as spawnChild } from 'node:child_process';
 
 /**
@@ -359,6 +360,8 @@ export interface DaemonSeams {
   billing?: BillingScanSource;
   /** the §2.4 rule 11 drain deadline (default: the supervisor's DRAIN_DEADLINE_MS; no root-signed config names one) */
   drainDeadlineMs?: number;
+  /** #folder-picker: runs the chooser instead of /usr/bin/osascript, and the platform it is offered on */
+  folders?: { runChooser?: ChooserRunner; platform?: NodeJS.Platform };
 }
 
 /** How long a live pidfile holder whose socket is silent is given (it may be the race winner mid-start) before `holder-silent`. */
@@ -1226,6 +1229,19 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     /* an unreadable history seeds nothing: no owner or name is invented (a rename is refused NOT_FOUND) */
   }
   log.onCommit((e) => sessionNames.observe(e));
+  // #folder-picker (TD-2026-10-23-162): the New session sheet's recent folders, a fold over the kernel's session.open
+  // rows seeded from the log (so recents survive a restart); the chooser itself is opened by the kernel (founder C1)
+  const folderPicker = new FolderPicker({ kernelPrincipal, ...(seams.supervisor?.userHome ? { userHome: seams.supervisor.userHome } : {}), ...(seams.folders?.runChooser ? { runChooser: seams.folders.runChooser } : {}), ...(seams.folders?.platform ? { platform: seams.folders.platform } : {}) });
+  try {
+    const seed: FolderRow[] = [];
+    for (const v of log.read({ reader: { class: 'human' }, kinds: ['session.open'] })) {
+      if (v.view === 'full') seed.push({ kind: v.event.kind, principal: v.event.principal, at: v.event.at, payload: v.event.payload });
+    }
+    folderPicker.seed(seed);
+  } catch {
+    /* an unreadable history seeds no recents: the sheet shows its empty state */
+  }
+  log.onCommit((e) => folderPicker.observe(e));
   // #mcp-passthrough (Aegis D2): `gnomon mod config` requests reach the human only as a root-class card
   let mcpCardsTimer: NodeJS.Timeout | null = null;
   const mcpCards = new McpConfigCards({ home, broker, mods: () => deskMods.list(), requestedBy: `p:${authority.ns ?? '00000000'}/cli`, launchKey: deskLaunchKey(home) });
@@ -1367,6 +1383,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,
       // Aegis M2: status.local is the human's (dispatch.ts gives other classes only configured / loopbackOnly / offered)
+      // TD-2026-10-23-162 (#folder-picker): the folder field's three read-only asks (status.folders is the human's)
+      folders: { choose: (asker: FolderAsker, payload: unknown) => folderPicker.choose(asker, payload), check: (asker: FolderAsker, payload: unknown) => folderPicker.check(asker, payload), recent: (asker: FolderAsker, payload: unknown) => folderPicker.recent(asker, payload), status: () => folderPicker.status(), connectionClosed: (connId: string) => folderPicker.connectionClosed(connId) },
       local: { request: (asker: Parameters<LocalConfigCards['request']>[0], payload: unknown) => localCards.request(asker, payload), probe: (asker: Parameters<LocalConfigCards['probe']>[0], payload: unknown) => localCards.probe(asker, payload), status: () => localStatus() },
     },
     reads: { log, hub },

@@ -68,12 +68,11 @@
 </div>
 </div>
 <div id="new-session-dialog" class="overlay" hidden>
-<form id="new-session-form" class="sheet-card" autocomplete="off">
-<p class="title">new session</p>
-<p id="ns-hint" class="meta" hidden></p>
-<label class="meta">cwd <input id="ns-cwd" class="field" type="text" required placeholder="/absolute/path/to/project"></label>
+<form id="new-session-form" class="sheet-card ns-card" role="dialog" aria-modal="true" aria-labelledby="ns-title" novalidate autocomplete="off">
+<h2 id="ns-title" class="title">New session</h2>
+<div id="ns-folder"></div>
 <label class="meta">model <select id="ns-model" class="field"><option value="claude">claude</option><option value="local">local model</option><option value="any">any</option></select></label>
-<div class="composer-foot"><button id="ns-cancel" class="key" type="button">cancel</button><button class="key" type="submit">open</button></div>
+<div class="ns-foot"><button id="ns-cancel" class="key" type="button">cancel</button><span><span id="ns-why" class="ff-why"></span><button id="ns-open" class="key pri" type="submit">Open</button></span></div>
 </form>
 </div>
 <div id="settings" class="overlay" hidden>

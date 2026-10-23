@@ -17,6 +17,7 @@
  */
 import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { FieldView, FormView, ResultView, SettingRow, SettingsSection } from './settings.js';
+import type { FolderFieldView } from './folder-field.js';
 
 export const LOCAL_SECTION = 'local-model' as const;
 export const LOCAL_PROBE_REQUEST = 'request.local.probe' as const;
@@ -42,7 +43,6 @@ export const LOCAL_COPY = Object.freeze({
   usedOff: 'loops with model steps won’t start; sessions you open can still use it',
   nameNote: 'what cards and logs call this endpoint',
   runnerOverride: 'use another runner (optional)',
-  runnerPlaceholder: '/Users/you/code/gnomon-local/dist',
   runnerNote: 'the folder that holds cli.js; the card pins it by its hash',
   save: 'Save · root card',
   unchanged: 'no change',
@@ -325,6 +325,8 @@ export interface LocalUi {
   checking: number | null;
   /** a Check again whose call failed (refused, or nothing sent): the kernel's lastProbe does not hold it */
   check: LocalProbeView | null;
+  /** #gui-folder-field: the runner override as the compact folder field (the controller draws it while the form is open) */
+  runnerView?: FolderFieldView | null;
 }
 export const emptyLocalUi = (): LocalUi => ({ form: null, open: false, errors: {}, advanced: false, busy: null, confirmOff: false, request: null, result: null, checking: null, check: null });
 
@@ -373,21 +375,21 @@ export function requestLine(at: string, e: { id: string; base: string; model: st
   return `${at} · ${e.id} · ${hostPort(e.base)} · ${e.model} · ${usedWords(e.loops)}`;
 }
 
-function fieldsOf(f: LocalForm, errors: FieldErrors): { fields: FieldView[]; advanced: FieldView[] } {
+function fieldsOf(f: LocalForm, errors: FieldErrors, runnerView: FolderFieldView | null = null): { fields: FieldView[]; advanced: FieldView[] } {
   const server: FieldView = { kind: 'seg', name: 'compat', label: 'server', options: LOCAL_SERVERS.map((s) => ({ act: 'server', value: s.compat, label: s.label, quiet: true, ...(f.compat === s.compat ? { pri: true } : {}) })), note: serverNote(f.compat) };
   const text = (name: LocalField, label: string, value: string, width: 'w-addr' | 'w-model' | 'w-name' | 'w-path', note: string, extra: { placeholder?: string } = {}): FieldView => ({ kind: 'text', name, label, value, width, note, ...(errors[name] ? { error: errors[name] } : {}), ...extra });
   const used: FieldView = { kind: 'seg', name: 'loops', label: 'used by', options: [{ act: 'loops', value: 'yes', label: 'Sessions and loops', quiet: true, ...(f.loops ? { pri: true } : {}) }, { act: 'loops', value: 'no', label: 'Sessions only', quiet: true, ...(!f.loops ? { pri: true } : {}) }], note: f.loops ? LOCAL_COPY.usedOn : LOCAL_COPY.usedOff };
   const name: FieldView = f.mode === 'change' ? { kind: 'value', name: 'id', label: 'endpoint name', value: `${f.id} · the endpoint this changes` } : text('id', 'endpoint name', f.id, 'w-name', LOCAL_COPY.nameNote);
   return {
     fields: [server, text('base', 'address', f.base, 'w-addr', LOCAL_COPY.addressNote), text('model', 'model', f.model, 'w-model', modelNote(f.compat)), used],
-    advanced: [name, { kind: 'value', name: 'runner-bundled', label: 'runner', value: 'gnomon-local · bundled with Gnomon' }, text('runner', LOCAL_COPY.runnerOverride, f.runner, 'w-path', LOCAL_COPY.runnerNote, { placeholder: LOCAL_COPY.runnerPlaceholder })],
+    advanced: [name, { kind: 'value', name: 'runner-bundled', label: 'runner', value: 'gnomon-local · bundled with Gnomon' }, runnerView ? { kind: 'folder', name: 'runner', label: LOCAL_COPY.runnerOverride, view: runnerView, note: LOCAL_COPY.runnerNote } : text('runner', LOCAL_COPY.runnerOverride, f.runner, 'w-path', LOCAL_COPY.runnerNote)],
   };
 }
 
 /** The open form in its state (open, invalid, checking, submitting, denied, expired, refused). */
 export function formViewOf(ui: LocalUi, bundledVersion: string | null): FormView {
   const f = ui.form ?? setupForm();
-  const { fields, advanced } = fieldsOf(f, ui.errors);
+  const { fields, advanced } = fieldsOf(f, ui.errors, ui.runnerView ?? null);
   const runnerValue = advanced.find((x) => x.name === 'runner-bundled');
   if (runnerValue && runnerValue.kind === 'value') runnerValue.value = `gnomon-local${bundledVersion ? ` ${bundledVersion}` : ''} · bundled with Gnomon`;
   const changes = f.mode === 'change' ? changesOf(f) : [];

@@ -129,11 +129,16 @@ describe('#gui-mods-panel renders from status', () => {
     expect(v.installed.find((m) => m.name === 'gnomon.ledger')!.pending).toEqual([{ cardId: 'card:R1', what: 'update' }]);
   });
 
-  it('Add from folder: a path field and Add key; git is not offered', () => {
+  it('Add from folder: the compact folder field (chosen, never a placeholder path) and an Add key disabled with its reason until checked; git is not offered', () => {
     const b = painted(STATUS);
     const add = section(b, 'add')!;
-    expect(add.all().some((e) => e.tag === 'input' && e.attrs.get('name') === 'folder')).toBe(true);
-    expect(keys(add)).toEqual(['link']);
+    expect(add.all().some((e) => e.tag === 'fieldset' && e.attrs.get('data-ff') === 'mod-add')).toBe(true);
+    expect(add.all().some((e) => e.attrs.has('placeholder'))).toBe(false);
+    expect(add.text).toContain('none · choose the folder that holds gnomon-manifest.json');
+    expect(keys(add).filter(Boolean)).toEqual(['link']); // the field's own keys route by data-ff-act
+    const link = add.all().find((e) => e.attrs.get('data-mod-act') === 'link')!;
+    expect(link.disabled).toBe(true);
+    expect(add.text).toContain('choose a folder first');
     expect(add.text).toContain('Installing from a git URL lands later');
   });
 

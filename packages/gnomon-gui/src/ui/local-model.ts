@@ -23,6 +23,8 @@
 import { RpcError, type ShownRefusal } from '../core/client.js';
 import { changeForm, changesOf, deniedResult, editField, emptyLocalUi, expiredResult, firstInvalid, formErrors, localStatusOf, pickServer, probeAnswerOf, probeRequest, probeVerdict, REMOVE_REQUEST, refusalLine, requestLine, setRequest, setupForm, turnedOffResult, appliedToast, turnedOffToast, type LocalField, type LocalForm, type LocalRequest, type LocalUi } from '../core/local-model.js';
 import type { LocalFocus, LocalPress } from './settings-sheet.js';
+import { FolderField, fieldView } from '../core/folder-field.js';
+import { focusFolder, routeFolderPress } from './folder-field.js';
 
 export interface LocalDeps {
   /** log.append of one request; throws RpcError on a refusal */
@@ -62,13 +64,47 @@ export class LocalModelController implements LocalPress {
   /** bumped by Esc and the sheet closing: a check in flight then raises no card */
   #gen = 0;
 
+  /**
+   * #gui-folder-field (TD-2026-10-23-162): the runner override is CHOSEN (the kernel's chooser or a typed path the
+   * kernel checks for cli.js), never a bare text field; its value is the kernel's real path, kept in form.runner.
+   */
+  readonly #runner: FolderField;
+
   constructor(d: LocalDeps) {
     this.#d = d;
+    this.#runner = new FolderField({
+      purpose: 'runner',
+      call: (req) => d.call(req),
+      changed: () => {
+        const f = this.#ui.form;
+        if (f) this.#ui.form = { ...f, runner: this.#runner.value() ?? '' };
+        if (this.#ui.errors.runner) {
+          const { runner: _gone, ...rest } = this.#ui.errors;
+          this.#ui.errors = rest;
+        }
+        this.#d.repaint();
+      },
+    });
   }
 
-  /** The section's state (settings model input). */
+  /** The section's state (settings model input); the runner field is drawn while the form is open. */
   ui(): LocalUi {
-    return this.#ui;
+    return this.#ui.form && this.#ui.open ? { ...this.#ui, runnerView: fieldView(this.#runner, 'compact') } : this.#ui;
+  }
+
+  /** A press in the runner's folder field (Choose folder…, Clear, Type a path, Use …/dist). */
+  folder(act: string, real: string | null, trusted: boolean): void {
+    if (!this.#ui.form || this.#ui.busy) return;
+    routeFolderPress(this.#runner, act, real, trusted);
+  }
+
+  folderInput(value: string): void {
+    if (this.#ui.form && !this.#ui.busy) this.#runner.typedInput(value);
+  }
+
+  afterPaint(body: HTMLElement): void {
+    const host = body.querySelector('[data-ff="lm-runner"]');
+    if (host) focusFolder(host, this.#runner);
   }
 
   #paint(focus?: LocalFocus): void {
@@ -106,6 +142,9 @@ export class LocalModelController implements LocalPress {
         const e = v.endpoints[0];
         if (act === 'change' && !e && !keep) return;
         ui.form = keep ?? (act === 'change' ? changeForm(e!) : setupForm());
+        this.#runner.reset();
+        this.#runner.setStatus(this.#d.status());
+        if (ui.form.runner) this.#runner.setValue(ui.form.runner);
         ui.open = true;
         ui.result = null;
         ui.confirmOff = false;
@@ -162,10 +201,16 @@ export class LocalModelController implements LocalPress {
   async submit(trusted: boolean): Promise<void> {
     const ui = this.#ui;
     if (!trusted || !ui.open || !ui.form || ui.busy || ui.request) return; // one request at a time
+    // #gui-folder-field: a runner check in flight lands first (form.runner is the kernel's real path)
+    await this.#runner.settled();
+    if (!ui.form || ui.busy || ui.request) return;
     const f = ui.form;
     if (f.mode === 'change' && !changesOf(f).length) return; // Save is disabled: "no change"
     ui.result = null;
-    const errs = formErrors(f);
+    // a runner chosen or typed but not checked usable stops the Save, with its reason
+    const rs = this.#runner.state();
+    const runnerOff = rs.chosen || rs.typed.trim() ? this.#runner.whyOff() : null;
+    const errs = runnerOff ? { ...formErrors(f), runner: `✕ ${runnerOff}` } : formErrors(f);
     const first = firstInvalid(errs);
     if (first) {
       ui.errors = errs;
@@ -270,6 +315,7 @@ export class LocalModelController implements LocalPress {
   }
 
   sheetClosed(): void {
+    this.#runner.closed();
     const ui = this.#ui;
     if (ui.busy === 'checking') this.#gen++;
     ui.confirmOff = false;

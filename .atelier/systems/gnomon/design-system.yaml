@@ -35,6 +35,14 @@
 # local-config; alert variant refused-start; loop-detail's can't-start line; the sheet's section-focused open defined;
 # vocabulary local model, card waiting, presence (amended); rules form-says-where-the-card-is, no-password-for-a-typo;
 # migration batch settings-form (pending; the bridge CSS item is done: styles.css carries the classes since the build).
+#
+# Amended 2026-10-23 by session 2026-10-23-gnomon-folder-picker (founder: "we need a folder picker because writing out a
+# path is bad UX"; then "we have inconsistent button heights"). The founder picked C1 the kernel opens the chooser
+# (folder.choose), C2 the centre session's folder is chosen else the most recent, C4 the home folder is allowed with the
+# amber warning; C3 drag from Finder is parked for 8.0 (recommendation). New: component folder-field; rule
+# paths-are-chosen; vocabulary folder, recent folders (cwd retired from GUI copy); token foundations.target.key-h and one
+# key size (quiet is a look, not a size); migration batches folder-field and key-height (pending).
+# Reference: .atelier/sessions/2026-10-23-gnomon-folder-picker/refs/folder-picker.html (board K: keys before and after).
 
 version: 2
 product: gnomon
@@ -173,10 +181,12 @@ foundations:
     status: clear
     from: { session: 2026-10-15-gnomon-aesthetic, board: motion, choice: lively-workshop, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
   target:
-    header-control: 28   # every header control (board header-5b)
-    min: 24              # every key, including the small ones on a chip-sized line (board gnomon-chip); WCAG 2.2 AA 2.5.8
+    key-h: 28            # --key-h: the one height of every key, any variant, any zone (session 2026-10-23-gnomon-folder-picker)
+    header-control: 28   # every header control (board header-5b); = key-h
+    min: 24              # the WCAG 2.2 AA 2.5.8 floor for any pointer target; no longer a key size (was: small keys on a chip-sized line, board gnomon-chip)
     status: clear
     from: { session: 2026-10-21-gnomon-voice, board: header-5b, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
+    amended_by: [{ session: 2026-10-23-gnomon-folder-picker, decided_by: creator, what: "key-h 28 is the one key height; 24 is only the target floor", founder_words: "we have inconsistent button heights" }]
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # Components. Source paths are relative to the repo root. Examples are the real markup (index.html or the h() calls);
@@ -189,11 +199,12 @@ components:
     variants:
       default: "sheet fill, key-edge ring, hard ink offset by day; ring only at night"
       pri: "filled ink, on-ink text: the one primary per group (first non-deny decision; send)"
-      quiet: "no offset, 24px min: secondary actions (close, done, raw, ⤢, Hold) and the small keys that used to be drawn as chips (✎ rename, run mode ▾, stack filter)"
+      quiet: "no offset, --ink2, the same height as every key (var(--key-h)): secondary actions (close, done, raw, ⤢, Hold, cancel, Advanced ▸, Type a path ▸) and the small keys that used to be drawn as chips (✎ rename, run mode ▾, stack filter). Quiet is a look, not a size (amended 2026-10-23: was 24px min)"
       seg: "a segmented choice (.seg-key in .seg); selected = filled ink by day, [bracketed] + glow at night"
       newb: "+ New session: full-width, [bracketed] at night"
       cost-label: "a key whose press costs something names it after ' · ': 'Loosen · needs trust', 'Resume · presence', 'Resume all · presence'; tightening says so too ('Apply · tighter'). From session 2026-10-22-gnomon-loops-ui, board steer-stop."
-    sizes: { header: { height: 28, font: 11.5 }, row: { min-height: 28, font: 11.5 }, quiet: { min-height: 24, min-width: 24, font: 11.5 } }
+    sizes: { all: { min-height: "var(--key-h) 28", min-width: "var(--key-h) 28 (glyph keys)", font: 11.5 } }
+    build: "height comes from min-height: var(--key-h) with inline-flex centring (padding 0 10; quiet 0 8), not from padding + line-height, so glyph labels (✎ ⋯ ⤢ ▸) and words land on the same box. The day offset shadow stays outside the layout box. A key whose label wraps may grow past it (min-height, not height)."
     states: [default, hover, focus, pressed, selected, disabled, busy]
     tokens: { fill: --sheet, edge: --key-edge, text: --ink, hover: --fold, offset: --key-shadow, pri-fill: --ink, pri-text: --on-ink, focus: "2px solid --key-edge" }
     source: packages/gnomon-gui/static/styles.css:180-197,244
@@ -211,7 +222,7 @@ components:
       cost-label: '<button class="key" type="button">Loosen · needs trust</button>'
     status: clear
     from: { session: 2026-10-20-gnomon-gui-fidelity, board: s1-tokens-themes, note: "ink keys, >= 3:1 edge, 28px; Aegis: model text never gets .key; small keys at 24px from board gnomon-chip", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
-    amended_by: [{ session: 2026-10-22-gnomon-loops-ui, board: steer-stop, what: "variant cost-label" }]
+    amended_by: [{ session: 2026-10-22-gnomon-loops-ui, board: steer-stop, what: "variant cost-label" }, { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, what: "one key size var(--key-h) 28 for every variant; quiet is a look, not a size (measured: 7 of 14 variants were 24px beside 28px keys)" }]
   field:
     role: "Text entry: composer, search, palette field, rename, settings inputs."
     variants: { default: ".field", palfield: "the header's palette launcher (a button drawn as a field)", composer: "one container: the composer draws the only border and the focus ring" }
@@ -453,6 +464,80 @@ components:
       - "rendered at 1024 and 1440, day and night, with 0, 1 and 2 endpoints, a 52-character model id and a 90-character runner path"
     status: clear
     from: { session: 2026-10-22-gnomon-local-model, board: local-model, choice: settings-form, decided_by: creator, contested: { C1: check-first, C2: confirm-when-used } }
+  folder-field:
+    role: "Naming a folder (or, in the file variant, a file) on this Mac. You choose it; you don't type it. Recent folders are one-click choices, Choose folder… opens the Mac's own chooser (the kernel opens it), and a typed path is an Advanced fallback, shown open only when no chooser exists."
+    variants:
+      recents: "New session: a radiogroup of up to six recent folders, then Choose folder… and Type a path ▸"
+      compact: "one value, no recents (Settings › Local model runner, Mods › Add from folder): the value or 'none · <what happens>', Choose folder… / Choose another…, Clear, Type a path ▸"
+      file: "the compact variant for a file (Mods › Configure command): Choose file…"
+    anatomy:
+      - "legend: the sheet's own label style (New session: .meta 11.5 --sec, like 'model'; settings-form: .sf-label 10.5)"
+      - "recent row (.ff-row, role=radio, roving tabindex, min-height 40): mark (✓ chosen, ✕ chosen but failed its check) · project swatch · name (11.5, 500; 600 chosen) over path (10.5 --sec, ~-shortened by the kernel) · when (10.5 --sec: today 14:06, yesterday, Oct 19, just chosen, from terminal)"
+      - "opens-in line (10.5 --ink2, path 600 --ink, wraps anywhere): the whole path of the chosen folder, plus ' · outside your home folder' when it is"
+      - "keys: Choose folder… (default key; busy 'Choosing…') and Type a path ▸ (quiet, aria-expanded)"
+      - "typed field (folded): label 'path', no placeholder, note 'a full path, or one starting with ~/ · checked as you type'"
+      - "one check line: ✓ note, ✕ error (.sf-err, role=alert) or ◆ warning (10.5 --warn-ink, role=status)"
+    states: [empty, recents, chosen, chooser-open, chooser-cancelled, typed-open, checking, found, not-absolute, missing, not-a-folder, unreadable, wrong-contents, home-or-above, outside-home, terminal-hint, no-chooser, opening, refused]
+    behaviour:
+      - "Sheet opens: the chosen row is the centre session's folder, else the most recent (C2); focus on it, so ⌘N then Enter opens. No recents: focus on Choose folder…"
+      - "Arrows move and choose within the list; Home/End jump; Tab leaves the list; Enter anywhere submits the sheet"
+      - "Choose folder… asks the kernel to open the macOS chooser (C1; trusted event only), starting in the parent of the most recent folder; the key is busy and a status line says it may be behind the window; picking a recent, Esc or cancel closes the chooser"
+      - "A chosen folder that isn't a recent goes to the top, chosen, 'just chosen'; focus returns to it. Cancelling changes nothing; focus returns to Choose folder… and a hidden status says 'No folder chosen. Nothing changed.'"
+      - "Every choice is checked by the kernel (read-only) before Open is enabled; 'checking…' only past 150 ms; typed paths 300 ms after the last key"
+      - "Every folder choice (row, chooser, typed, hint) restores the claude model remembered for that folder"
+      - "Open keeps the sheet open, busy 'Opening…', until session.open answers; success closes it; a refusal shows in place and keeps the choice"
+      - "Recents that no longer exist are left out; the home folder or above is allowed with the amber warning (C4); no drag from Finder in 8.0 (C3: the Mac's chooser takes a Finder drag and ⌘⇧G)"
+    copy:
+      title: "New session"
+      legend: "folder"
+      keys: { choose: "Choose folder…", choose-again: "Choose another…", choosing: "Choosing…", typed: "Type a path ▸ / ▾", clear: "Clear", open: "Open", opening: "Opening…", cancel: "cancel" }
+      chooser-prompt: { session: "Choose the folder this session works in.", runner: "Choose the folder that holds cli.js.", mod: "Choose the folder that holds gnomon-manifest.json." }
+      empty: "No recent folders yet. Choose the project folder this session works in."
+      opens-in: "opens in <path>   (+ ' · outside your home folder')"
+      chooser-open: "The macOS folder chooser is open. If you don't see it, it may be behind this window."
+      cancelled-sr: "No folder chosen. Nothing changed."
+      typed-note: "a full path, or one starting with ~/ · checked as you type"
+      found: "✓ folder found"
+      not-absolute: "✕ Start the path with / or ~/"
+      missing: "✕ Nothing at <path>. Check the spelling, or use Choose folder…."
+      not-a-folder: "✕ <path> is a file. Choose the folder that holds it."
+      unreadable: "✕ Gnomon can't read <path>: macOS hasn't allowed it. next: System Settings › Privacy & Security › Files and Folders, allow Gnomon this folder, then choose it again. Sessions opened here run with that access."   # amended 2026-10-23, Aegis L1 (grant the one folder; say what the grant means)
+      timeout: "✕ <path> didn't answer in time: its disk may be asleep or unplugged. next: reconnect it and choose the folder again, or choose another folder."   # Aegis M1: the kernel's 2 s fs deadline; Mika 2026-10-23 delta: an external disk IS on this Mac, so say what to do with it
+      network: "✕ <path> is on a network share. Choose a folder on this Mac."   # Aegis M1/M3: /net, /Network, UNC refused before any fs call
+      device: "✕ <path> is a device path, not a folder. Choose a folder on this Mac."
+      wrong-contents: { runner: "✕ <path> has no cli.js. Its dist folder does. [Use <path>/dist]", mod: "✕ <path> has no gnomon-manifest.json. Choose the folder that holds it." }
+      home-or-above: "◆ This is your home folder. A session here can read every project in it, and auto-edits is off here. Choose a project folder inside it if you can."
+      hint: "Suggested by `gnomon` in a terminal: check it, then Open."
+      no-chooser: "This kernel can't open the macOS folder chooser here. Type a full path, or pick a recent folder."
+      refused: "<CODE>  <path> is no longer there · next: choose the folder again"
+      open-disabled: { none: "choose a folder first", chooser: "waiting for the chooser", invalid: "fix the path first", unreadable: "Gnomon can't read this folder", refused: "choose another folder", mod-wrong-contents: "choose a folder with gnomon-manifest.json" }   # Mods › Add (Mika 2026-10-23)
+      runner-none: "none · the bundled runner is used"
+    tokens:
+      row: "min-height 40; padding 4 8; gap 8; hover --fold; chosen: 1px --key-edge ring + ✓ + 600 (never a hue); focus: inset 2px --key-edge"
+      gaps: "2 between rows, 6 inside the field, 14 between the sheet's groups"
+      width: "New session sheet min(560px, 100vw − 32px)"
+    never:
+      - "a text field as the first or only way to name a folder where a chooser exists"
+      - "a placeholder path that looks like a value (/absolute/path/to/project, /Users/you/…)"
+      - "a chosen state told apart by hue; the swatch is the project (rule hue-is-identity)"
+      - "a folder name rendered from anything but the kernel's escaped display string, as textContent (the core/launch.ts escape rule)"
+      - "a refusal that closes the sheet and drops the choice"
+    build_requirements:
+      - "kernel verb folder.choose {purpose: session|runner|mod|file, startIn?} → {path, display} | {cancelled} | refused no-chooser | busy; one chooser at a time; trusted user event only; the kernel draws it (C1: osascript choose folder in 8.0; a signed helper if the panel misbehaves); the wrapper keeps zero page IPC"
+      - "kernel verb folder.check {path, expect?: cli.js|gnomon-manifest.json} → {exists, isDir, readable, real, display (~-shortened, escaped), name, home: inside|outside|home-or-above, expectFound, suggest?}; read-only, no row written"
+      - "kernel verb folder.recent → up to 6 [{path, display, name, lastAt}] from session.open rows, deduped by realpath, missing dropped, newest first"
+      - "status/hello says whether folder.choose is offered (drives no-chooser)"
+      - "index.html New session form: role=dialog, aria-modal, aria-labelledby, h2 title; app.ts keeps the sheet open until session.open answers"
+      - "Aegis reviews folder.choose and folder.check"
+      - "rendered at 1024 and 1440, day and night, with 0, 1, 6 recents, a 60-character name and a 110-character path; atelier check clean"
+    source: ".atelier/sessions/2026-10-23-gnomon-folder-picker/refs/folder-picker.html and refs/folder-field.css (classes .ff .ff-row .ff-list .ff-opens .ff-keys .ff-value .ns-card .ns-foot)"
+    examples:
+      recents: '<fieldset class="ff"><legend class="meta">folder</legend><div class="ff-list" role="radiogroup" aria-label="Recent folders"><button type="button" role="radio" class="ff-row" aria-checked="true" tabindex="0" title="~/Documents/GitHub/a-paradigm" aria-label="a-paradigm, ~/Documents/GitHub/a-paradigm, last used today 14:06"><span class="ff-mk" aria-hidden="true">✓</span><span class="swatch h2" aria-hidden="true"></span><span class="ff-text"><span class="ff-name">a-paradigm</span><span class="ff-path">~/Documents/GitHub/a-paradigm</span></span><span class="ff-when">today 14:06</span></button></div><p class="ff-opens">opens in <b>~/Documents/GitHub/a-paradigm</b></p><div class="ff-keys"><button class="key" type="button">Choose folder…</button><button class="key quiet" type="button" aria-expanded="false">Type a path ▸</button></div></fieldset>'
+      error: '<p class="sf-err" role="alert">✕ Gnomon can’t read ~/Documents/Taxes: macOS hasn’t allowed it. next: System Settings › Privacy &amp; Security › Files and Folders, allow Gnomon, then choose the folder again.</p>'
+      warning: '<p class="ff-warn" role="status"><b>◆ This is your home folder.</b> A session here can read every project in it, and auto-edits is off here. Choose a project folder inside it if you can.</p>'
+      compact: '<div class="ff-value"><span class="ff-p"><b>~/code/gnomon-local/dist</b></span><button class="key" type="button">Choose another…</button><button class="key quiet" type="button">Clear</button></div>'
+    status: clear
+    from: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } }
   notice:
     role: "The band under the header, for kernel alerts only (re-pin, voice dev build). Kernel-owned, role=alert; it stays until acknowledged or resolved. Everything else is a toast."
     variants: { repin: ".notice.repin (kernel)", voice-dev: ".notice.voice-dev (kernel)" }
@@ -887,12 +972,15 @@ content:
       mod: "an installed extension, named mod:<name>"
       offer: "the agent's single suggestion to open a mod"
       kernel-owned: "a region no preset or mod can hide"
+      folder: "where a session works (the session.open cwd), in GUI copy; 'cwd' stays in the wire, the CLI and logs"
+      recent folders: "the folders past sessions opened in, newest first (at most six in New session)"
     retired:
       Ambient: "the rung name (Dictate, Send word or Pieces) or 'open mic'"
       push-to-talk: "Talk"
       inbox: "stack"
       LOOPS n running: "'loops n · m waiting' (the spec's Shuttle line; the indicator is the header loops word)"
       loop mode: "autonomy (observe / act / propose) or run mode, whichever is meant"
+      cwd: "'folder' in GUI copy (the New session field label)"
     status: clear
     from: { session: 2026-10-21-gnomon-voice, note: "commit 6f986338 retired Ambient/push-to-talk; 'stack' from the desk board (global decision stack)", confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } }
     amended_by:
@@ -903,6 +991,9 @@ content:
         note: "Decided, not contested: renaming run mode would churn shipped kernel copy for a collision that never shares a screen. Reopen if a loop surface ever shows run mode."
       - session: 2026-10-22-gnomon-local-model
         what: "local model, card waiting; presence includes the Mac password"
+        decided_by: creator
+      - session: 2026-10-23-gnomon-folder-picker
+        what: "folder, recent folders; cwd retired from GUI copy"
         decided_by: creator
   voice:
     - "Name the state plus one live fact; never only a glyph (board pill)"
@@ -924,6 +1015,8 @@ content:
 
 specimen:
   stylesheets: [packages/gnomon-gui/static/styles.css]
+  # the folder-field-bridge.css bridge was dropped by the folder picker build (TD-2026-10-23-162, 2026-10-23): styles.css
+  # carries the folder-field classes and the --key-h key size (migration batches folder-field and key-height)
   # the local-model-bridge.css bridge was dropped by the Local model build (2026-10-22): styles.css carries the
   # settings-form, .lp-refusal and .card-root-rows classes (migration batch settings-form)
   # the loops-direction.css bridge was dropped by the LP8 build: styles.css carries the loop classes
@@ -1066,6 +1159,9 @@ rules:
   - id: target-floor
     rule: "Every pointer target >= 24x24 (WCAG 2.2 AA 2.5.8); header controls 28px."
     from: { session: 2026-10-21-gnomon-voice, board: header-5b, note: "28px header; 24px floor added by Mika's vet; small keys from board gnomon-chip" }
+  - id: paths-are-chosen
+    rule: "A folder or file on this Mac is chosen, not typed: recent choices first, then the Mac's own chooser (the kernel opens it); a typed path is an Advanced fallback, open by default only when no chooser exists. Every choice is checked by the kernel before the key that uses it is enabled."
+    from: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } }
 
 preserve:
   - { what: tokens, value: "every colour token in docs/specs/gnomon-fixtures/contrast.json (G-GUI-10), verbatim (--live/--stamp are not fixture tokens; retiring them as state leaves the fixture unchanged)" }
@@ -1207,6 +1303,18 @@ migration:
   - { batch: settings-form, status: pending, from: "the Settings sheet's per-row '· kernel-owned' suffix in a section the kernel owns", to: "once in the section heading", uses: 1, files: ["packages/gnomon-gui/static/styles.css:940"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
   - { batch: settings-form, status: pending, from: ".key.pri[disabled]: --sec text on the ink fill (about 2.6:1 by day; Run now, a busy Allow)", to: "sheet fill, --rule edge, --sec text (as .seg-key[disabled], styles.css:924)", uses: 1, files: ["packages/gnomon-gui/static/styles.css:183,192"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
   - { batch: settings-form, status: done, done: { date: 2026-10-22, by: "the Local model build (packages/gnomon-gui)", note: "classes moved into styles.css; bridge file and its specimen link removed" }, from: "local-model-bridge.css in specimen.stylesheets", to: "the classes moved into styles.css by the build; drop the bridge", uses: 1, files: [".atelier/systems/gnomon/local-model-bridge.css"], from_decision: { session: 2026-10-22-gnomon-local-model, decided_by: creator } }
+  # batch folder-field (session 2026-10-23-gnomon-folder-picker): done 2026-10-23 (TD-2026-10-23-162)
+  - { batch: folder-field, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "built; kernel verbs request.folder.choose | check | recent; bridge CSS moved into styles.css and deleted" }, from: "New session 'cwd' text field (placeholder /absolute/path/to/project)", to: "folder-field recents; label 'folder'; Open pri; sheet stays open until session.open answers; role=dialog + h2", uses: 1, files: ["packages/gnomon-gui/static/index.html:72-77", "packages/gnomon-gui/src/ui/app.ts:3050-3064,1419-1436", "packages/gnomon-gui/src/ui/model-picker.ts:59,85", "packages/gnomon-gui/src/core/launch.ts:92-108"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: folder-field, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "built; kernel verbs request.folder.choose | check | recent; bridge CSS moved into styles.css and deleted" }, from: "Local model 'use another runner (optional)' text field (placeholder /Users/you/code/gnomon-local/dist)", to: "folder-field compact; expect cli.js", uses: 1, files: ["packages/gnomon-gui/src/core/local-model.ts:44-46,383", "packages/gnomon-gui/src/ui/settings-sheet.ts:88"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: folder-field, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "built; kernel verbs request.folder.choose | check | recent; bridge CSS moved into styles.css and deleted" }, from: "Mods 'Add from folder' text field (placeholder /Users/you/code/my-mod)", to: "folder-field compact; expect gnomon-manifest.json; Add disabled with its reason until checked", uses: 1, files: ["packages/gnomon-gui/src/ui/mods-panel.ts:163-165"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: folder-field, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "built; kernel verbs request.folder.choose | check | recent; bridge CSS moved into styles.css and deleted" }, from: "Mods Configure 'command (an absolute path)' text field", to: "folder-field file variant (Choose file…)", uses: 1, files: ["packages/gnomon-gui/src/ui/mods-panel.ts:89"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  # batch key-height (session 2026-10-23-gnomon-folder-picker; founder: "we have inconsistent button heights"): done 2026-10-23
+  - { batch: key-height, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "--key-h in :root; .key inline-flex min-height var(--key-h); every listed rule moved to the token" }, from: ".key height from padding 4 10 + line-height 18", to: ":root --key-h 28px; .key inline-flex, centred, min-height var(--key-h), padding 0 10", uses: "every key (~70 call sites)", files: ["packages/gnomon-gui/static/styles.css:109-131", "packages/gnomon-gui/static/styles.css:171-182"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: key-height, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "--key-h in :root; .key inline-flex min-height var(--key-h); every listed rule moved to the token" }, from: ".key.quiet min-height 24, padding 2 8 (cancel, close, done, Type a path, Advanced ▸ summaries, seg keys, pile-more, lt-fold, lp-back)", to: "min-height var(--key-h), min-width var(--key-h), padding 0 8", uses: 19, files: ["packages/gnomon-gui/static/styles.css:248", "packages/gnomon-gui/static/styles.css:1290"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: key-height, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "--key-h in :root; .key inline-flex min-height var(--key-h); every listed rule moved to the token" }, from: "chat-header small keys at 24 (✎ rename, run mode ▾, stack filter) and the 24px rename input beside them", to: "var(--key-h); the chat header row grows 4px", uses: 4, files: ["packages/gnomon-gui/static/styles.css:1011", "packages/gnomon-gui/static/styles.css:1013"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: key-height, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "--key-h in :root; .key inline-flex min-height var(--key-h); every listed rule moved to the token" }, from: ".more-btn padding 2 8 line-height 1; .composer-tall padding 2 8 line-height 1.4 (24px beside the 28px send)", to: "padding 0 8; height from the token", uses: 2, files: ["packages/gnomon-gui/static/styles.css:1019", "packages/gnomon-gui/static/styles.css:1030"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: key-height, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "--key-h in :root; .key inline-flex min-height var(--key-h); every listed rule moved to the token" }, from: ".composer-ctrls .key.pri min-height 24 padding 4 10", to: "min-height var(--key-h), padding 0 10", uses: 1, files: ["packages/gnomon-gui/static/styles.css:1040"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
+  - { batch: key-height, status: done, done: { date: 2026-10-23, by: "the folder picker build (TD-2026-10-23-162, packages/gnomon + packages/gnomon-gui)", note: "--key-h in :root; .key inline-flex min-height var(--key-h); every listed rule moved to the token" }, from: "fixed 28px restated per zone (.chrome .key, .menu-theme .seg-key)", to: "var(--key-h), or drop: the base rule gives it", uses: 2, files: ["packages/gnomon-gui/static/styles.css:779", "packages/gnomon-gui/static/styles.css:802"], from_decision: { session: 2026-10-23-gnomon-folder-picker, decided_by: creator, contested: { C1: kernel, C2: preselect, C3: park, C4: warn } } }
   # batch tokens
   - { batch: tokens, from: "--t-walk defined, unused (cap walk not built)", to: "build the walk or drop the token", uses: 0, files: ["packages/gnomon-gui/static/styles.css:122"], from_decision: { extract: 2026-10-21, confirmed: { session: 2026-10-21-design-systems, board: bulk-confirm } } }
 

@@ -112,6 +112,7 @@
   --fly: 550ms cubic-bezier(.3, .7, .3, 1);
   --reflow: 220ms;
   --radius: 3px;
+  --key-h: 28px; /* design-system foundations.target.key-h: the ONE height of every key, any variant, any zone (session 2026-10-23-gnomon-folder-picker) */
   --radius-pill: 999px; /* design-system foundations.radius.pill: the voice pill, reply choices, the slip's open key and their kbd pills */
   /* type: four steps (design-system foundations.type, board gnomon-type-scale). Size carries four roles; every other
      distinction is weight (400/500/600), case and face. There is no step between. */
@@ -167,30 +168,33 @@ html, body {
 
 /* S1 ink keys: a hard 2px ink offset (--key-shadow; none at night, where the --key-edge ring alone carries the key:
    the comp's night keys have no [ ] caps, only + New session does), a --key-edge ring (>= 3:1 on both surfaces;
-   never --rule), 28px tall; .pri is the filled primary key (--on-ink on --ink) */
+   never --rule), var(--key-h) tall; .pri is the filled primary key (--on-ink on --ink). Migration key-height: the height
+   comes from min-height + inline-flex centring, not padding + line-height, so a glyph label (✎ ⋯ ⤢ ▸) and a word land
+   on the same box; a label that wraps still grows (min-height, not height); the day offset stays outside the box */
 .key {
   font: inherit; font-size: var(--fs-control); font-weight: 500;
   color: var(--ink);
   background: var(--sheet);
   border: 1px solid var(--key-edge);
   border-radius: var(--radius);
-  padding: 4px 10px;
-  line-height: 18px; /* 18 + 2 x 4 padding + 2 x 1 edge = the 28px key (design-system foundations.space, 2px grid) */
-  min-height: 28px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; vertical-align: middle;
+  padding: 0 10px;
+  line-height: 18px;
+  min-height: var(--key-h);
   box-shadow: var(--key-shadow);
   cursor: pointer;
 }
 .key.pri { background: var(--ink); color: var(--on-ink); }
 /* hover (design-system migration menus-and-hover, pulled forward): a --fold fill, both themes; a filled key (pri, a
    selected segment, the pressed ⤢) keeps a distinct hover: its ink lifts to --ink2, never flat --fold */
-.key:hover:not([disabled]) { background: var(--fold); }
+.key:hover:not([disabled]):not([aria-disabled="true"]) { background: var(--fold); }
 .key.pri:hover:not([disabled]) { background: var(--ink2); }
 [data-theme="night"] .key.pri::before, [data-theme="night"] .key.pri::after { color: var(--on-ink); }
 [data-theme="night"] .key::before { content: "["; color: var(--sec); }
 [data-theme="night"] .key::after { content: "]"; color: var(--sec); }
 .key:active { transform: translate(2px, 2px); box-shadow: none; }
 .key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
-.key[disabled] { color: var(--sec); cursor: not-allowed; }
+.key[disabled], .key[aria-disabled="true"] { color: var(--sec); cursor: not-allowed; } /* aria-disabled: a busy key that keeps its focus (folder-field Choosing…) */
 /* design-system migration keys (session 2026-10-22-gnomon-local-model F10): a disabled pri key (Run now, a busy Allow,
    Checking…) draws as a default key with --sec text, as .seg-key[disabled]; --sec on the ink fill was about 2.6:1 */
 .key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
@@ -245,7 +249,7 @@ html, body {
 .feed { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; }
 .jump { position: absolute; right: 18px; bottom: 10px; }
-.key.quiet { box-shadow: none; color: var(--ink2); font-size: var(--fs-control); min-height: 24px; min-width: 24px; padding: 2px 8px; }
+.key.quiet { box-shadow: none; color: var(--ink2); font-size: var(--fs-control); min-height: var(--key-h); min-width: var(--key-h); padding: 0 8px; } /* quiet is a look, not a size (key-height) */
 .spacer-v { width: 1px; }
 .trow { position: absolute; left: 0; right: 0; padding: 2px 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 96ch; }
 /* chat: the user's message and claude's text as blocks; tool calls, results and notes as quiet single lines */
@@ -776,7 +780,7 @@ html, body {
    wordmark menu · the ⌘K palette · quiet kernel status · the voice pill. ONE control height (28px), nothing wraps
    inside a control (nowrap), the row itself never wraps (it truncates: the palette's words, then the pill's fact). */
 .chrome { flex-wrap: nowrap; min-width: 0; }
-.chrome .key { box-sizing: border-box; height: 28px; min-height: 28px; padding: 0 10px; display: inline-flex; align-items: center; white-space: nowrap; flex: none; }
+.chrome .key { box-sizing: border-box; height: var(--key-h); padding: 0 10px; white-space: nowrap; flex: none; }
 .chrome .pane-toggle { display: none; }
 @media (max-width: 900px) { .chrome .pane-toggle { display: inline-flex; } }
 .wm-wrap { position: relative; display: inline-flex; flex: none; }
@@ -799,7 +803,7 @@ html, body {
 .app-item[aria-expanded="true"] .mode-name::after { content: " ▴"; color: var(--sec); }
 .app-item[aria-expanded="false"] .mode-name::after { content: " ▾"; color: var(--sec); }
 .menu-theme { display: flex; flex-wrap: nowrap; gap: 4px; padding: 2px 8px 6px; }
-.menu-theme .seg-key { flex: 1; box-sizing: border-box; height: 28px; min-height: 28px; padding: 0 8px; white-space: nowrap; font-size: var(--fs-control); }
+.menu-theme .seg-key { flex: 1; box-sizing: border-box; height: var(--key-h); padding: 0 8px; white-space: nowrap; font-size: var(--fs-control); }
 .menu-theme .seg-key:hover:not(.current) { background: var(--fold); }
 .menu-theme .seg-key:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 /* the palette field: the most-used control, so it grows (to 460px) and only its words truncate */
@@ -1008,15 +1012,30 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .chead #transcript-title { flex: 0 1 auto; min-width: 8ch; max-width: 55%; }
 /* #gui-session-rename: the ✎ beside the title and the inline name input (header and session list) */
 /* board gnomon-chip: ✎, the run mode ▾ and the stack filter are keys, not chips: 24px quiet keys with the --key-edge */
-.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; height: 24px; min-height: 24px; min-width: 24px; padding: 0 8px; font-size: var(--fs-control); line-height: 1; border-color: var(--key-edge); }
+.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope { box-sizing: border-box; height: var(--key-h); min-height: var(--key-h); min-width: var(--key-h); padding: 0 8px; font-size: var(--fs-control); line-height: 1; border-color: var(--key-edge); }
 .chead .rename-btn { flex: none; }
-.rename-input { box-sizing: border-box; height: 24px; font: inherit; font-size: var(--fs-reading); color: var(--ink); background: var(--sheet); border: 1px solid var(--sec); border-radius: var(--radius); padding: 0 6px; min-width: 0; } /* border-box at 24px: the height of the header keys beside it (it rendered 23.6 from the padding alone) */
+.rename-input { box-sizing: border-box; height: var(--key-h); font: inherit; font-size: var(--fs-reading); color: var(--ink); background: var(--sheet); border: 1px solid var(--sec); border-radius: var(--radius); padding: 0 6px; min-width: 0; } /* border-box at var(--key-h): the height of the header keys beside it */
 .chead .rename-input { flex: 0 1 45%; min-width: 16ch; }
 .session-row.renaming { cursor: text; }
 .session-row.renaming .rename-input { width: 100%; font-size: var(--fs-control); }
-.chead-meta { flex: 0 0 auto; }
+/* Mika 2026-10-23: at 1024 the "started · 9m" gives way first, then the title (to 5ch), then the backend word, and the
+   project name last (to "■ abc…", whole name in its title); the model key never shrinks. The meta's parts join the header row (display: contents) so the when can out-shrink the title. */
+.chead-meta { display: contents; white-space: pre; }
+.chead-l { gap: 0; }
+.chead-l > #transcript-title, .chead-l > .rename-btn, .chead-l > .rename-input { margin-right: 10px; }
+.chead #transcript-title { min-width: 5ch; flex-shrink: 100; }
+.chead-meta > * { flex: none; white-space: pre; }
+.chead-meta > .chead-when { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* " · claude" gives way before the project, whole or not at all (never "· cl"): the model key beside it names the model */
+.chead-l { container: chead-l / inline-size; }
+@container chead-l (max-width: 339px) { .chead-meta > .chead-backend { display: none; } }
+/* the project never shrinks (a flex share would nibble it to "billi…" while the title still had room); instead its NAME
+   is capped: 10ch below 1280px (fits 1024 with the model key whole), 24ch above; the whole name is in its title */
+.chead-meta > .pink { flex: none; display: inline-flex; align-items: baseline; }
+.chead-proj { display: block; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+@media (max-width: 1279px) { .chead-proj { max-width: 10ch; } }
 .more-wrap { position: relative; display: inline-flex; }
-.more-btn { font-size: var(--fs-reading); line-height: 1; padding: 2px 8px; border-color: transparent; }
+.more-btn { font-size: var(--fs-reading); line-height: 18px; padding: 0 8px; border-color: transparent; }
 .more-menu { min-width: 200px; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
 
 /* #gui-composer (Atelier 2026-10-21 direction): the text wraps and grows to 12 lines, then scrolls; ⤢ raises the cap
@@ -1027,7 +1046,7 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .composer-main > textarea { resize: none; min-height: 21px; line-height: 1.6; overflow-y: hidden; }
 .composer-main > .composer-foot { margin-top: 0; justify-content: flex-start; }
 .composer-ctrls { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.composer-tall { padding: 2px 8px; line-height: 1.4; }
+.composer-tall { padding: 0 8px; line-height: 18px; }
 /* Luna #4: the tall view is ON: an ink key by day; [bracketed] with the glow by night */
 .composer-tall[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 [data-theme="night"] .composer-tall[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); text-shadow: var(--wm-glow); }
@@ -1037,7 +1056,7 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 [data-theme="night"] .composer-tall[aria-pressed="true"]::after { content: "]"; color: var(--ink); }
 .composer-lines { font-size: var(--fs-label); white-space: nowrap; }
 /* Luna #8: the ONE send key (11.5px; on the 2px grid it is a key's 4px 10px, 28px tall) */
-.composer-ctrls .key.pri { min-height: 24px; padding: 4px 10px; font-size: var(--fs-control); box-shadow: none; }
+.composer-ctrls .key.pri { min-height: var(--key-h); padding: 0 10px; font-size: var(--fs-control); box-shadow: none; }
 
 /* fidelity 2 stack head (comp): "Stack" left, "4 · hover to fan" and a small filter key right */
 .pilehead { padding: 12px 14px 8px; align-items: baseline; }
@@ -1070,7 +1089,7 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .mod-state-paused .mod-run, .mod-state-stopped .mod-run { color: var(--sec); }
 .mod-state-error .mod-run { color: var(--fail); }
 .mod-facts code { font-size: var(--fs-label); }
-.mod-keys { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.mod-keys { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; align-items: center; } /* a why-off reason sits on the key's centre line */
 .mod-pending { display: flex; align-items: center; gap: 6px; }
 .mod-result { padding-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mod-result.fail, .workshop-install-result.fail { color: var(--fail); }
@@ -1331,3 +1350,64 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .card-root-rows li.del { color: var(--sec); text-decoration: line-through 1px; }
 .card-root-rows li.del::before { content: "− "; content: "− " / ""; }
 .card-head .fam { color: var(--ink); font-weight: 600; letter-spacing: .04em; }
+
+/* ── component folder-field (TD-2026-10-23-162, session 2026-10-23-gnomon-folder-picker, rule paths-are-chosen;
+   migration batch folder-field). Moved from .atelier/systems/gnomon/folder-field-bridge.css. Tokens only, even px,
+   the four type steps, no new colour. A folder is chosen, not typed: recents, then the Mac's chooser (the kernel
+   opens it), then a typed path folded under Type a path. */
+
+/* the New session sheet: wide enough for a recent row at 1024 (it was content-sized, ~380px) */
+.ns-card { width: min(560px, calc(100vw - 32px)); max-width: 560px; max-height: calc(86vh - 16px); overflow-y: auto; gap: 14px; } /* the overlay sits 14vh down: six recents and the model scroll inside the sheet at 720 tall */ /* 14 between groups, 2 to 6 inside one: rule group-by-space-before-boxes */
+.ns-card > .title { margin: 0; font-size: var(--fs-title); }
+[data-theme="night"] .ns-card > .title { font-size: var(--fs-reading); }
+.ns-card label.meta { display: flex; flex-direction: column; gap: 2px; }
+.ns-card .ns-claude { display: flex; flex-direction: column; gap: 6px; }
+
+/* the field: a fieldset whose legend matches its sibling labels in the sheet (.meta, 11.5 --sec) */
+.ff { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ff > legend { padding: 0; margin: 0 0 2px; float: left; width: 100%; }
+.ff > legend + * { clear: both; }
+
+/* recent folders: a radiogroup of rows (roving tabindex, arrows move and choose) */
+.ff-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; }
+.ff-row {
+  display: grid; grid-template-columns: 12px 10px minmax(0, 1fr) auto; column-gap: 8px; align-items: center;
+  width: 100%; min-height: 40px; padding: 4px 8px; text-align: left;
+  font: inherit; color: var(--ink); background: none;
+  border: 1px solid transparent; border-radius: var(--radius); cursor: pointer;
+}
+.ff-row:hover { background: var(--fold); }
+.ff-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--key-edge); }
+/* chosen: the key edge ring (>= 3:1), the ✓ mark and weight 600; never a hue (the swatch is the project, rule hue-is-identity) */
+.ff-row[aria-checked="true"] { border-color: var(--key-edge); background: var(--sheet); }
+.ff-row[aria-checked="true"]:hover { background: var(--fold); }
+.ff-mk { font-size: var(--fs-control); font-weight: 600; line-height: 16px; }
+.ff-text { display: flex; flex-direction: column; min-width: 0; line-height: 16px; }
+.ff-name { font-size: var(--fs-control); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-row[aria-checked="true"] .ff-name { font-weight: 600; }
+.ff-path { font-size: var(--fs-label); color: var(--sec); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-when { font-size: var(--fs-label); color: var(--sec); white-space: nowrap; }
+
+/* the lines under the list */
+.ff-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ff-opens, .ff-empty, .ff-warn, .ff-status { margin: 0; }
+.ff-opens { font-size: var(--fs-label); color: var(--ink2); overflow-wrap: anywhere; }
+.ff-opens strong { font-weight: 600; color: var(--ink); } /* the DOM draws <strong> (ui/folder-field.ts), not <b> */
+.ff-empty { font-size: var(--fs-control); color: var(--ink2); }
+.ff-warn { font-size: var(--fs-label); color: var(--warn-ink); overflow-wrap: anywhere; }
+.ff-warn strong { font-weight: 600; }
+.ff-status { font-size: var(--fs-label); color: var(--ink2); }
+.ff-typed { display: flex; flex-direction: column; gap: 2px; }
+.ff-typed .field { font-size: var(--fs-control); min-height: var(--key-h); }
+.sf-err, .sf-note { overflow-wrap: anywhere; }
+.ff-hint { margin: 0; font-size: var(--fs-label); color: var(--ink2); overflow-wrap: anywhere; }
+
+/* compact variant (one value, no recents): Settings › Local model runner, Mods › Add from folder, Configure command */
+.ff-value { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: var(--key-h); font-size: var(--fs-control); color: var(--ink); }
+.ff-value .ff-p { overflow-wrap: anywhere; min-width: 0; }
+.ff-value .ff-none { color: var(--sec); }
+
+/* the sheet foot: cancel left; the disabled reason sits beside Open, in words */
+.ns-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.ns-foot > span { display: flex; gap: 8px; align-items: center; }
+.ff-why { font-size: var(--fs-label); color: var(--sec); }

@@ -160,7 +160,8 @@ export class FakeKernel implements Transport {
       case 'auth':
         return { guiToken: 'preview-gui-token', principal: HUMAN_PRINCIPAL, connId: 'conn:01JAPREVX4K7Q2M9FBH3N8RTWC' };
       case 'status':
-        return structuredClone(this.#status);
+        // #gui-folder-field: the kernel opens the chooser (a shot sets __ffPreview.chooser false for no-chooser)
+        return { ...structuredClone(this.#status), folders: { chooser: previewFolders().chooser !== false }, ...(previewFolders().mods ? { mods: previewFolders().mods } : {}), ...(previewFolders().local ? { local: previewFolders().local } : {}) };
       case 'log.read': {
         if (p.follow === true) {
           this.#following = true;
@@ -177,6 +178,8 @@ export class FakeKernel implements Transport {
         return { cardId, decided: true };
       }
       case 'log.append': {
+        // #gui-folder-field: request.folder.* answered from the preview set (a shot may override it: __ffPreview)
+        if (typeof p.kind === 'string' && p.kind.startsWith('request.folder.')) return previewFolderAnswer(p.kind, (p.payload ?? {}) as Record<string, unknown>);
         // #gui-offer-slip: the kernel decides the offer (offer.decided on the offer's own conversation)
         const pl = (p.payload ?? {}) as { offerId?: unknown; decision?: unknown };
         if (p.kind === 'request.offer.decide' && typeof pl.offerId === 'string') {
@@ -237,4 +240,53 @@ export function fakeWebSocketClass(make: (url: string) => FakeKernel): new (url:
       this.#k.close();
     }
   };
+}
+
+/* ── #gui-folder-field (DEV ONLY): the folder requests over a preview set of folders ─────────────────────────────── */
+interface FolderPreview {
+  chooser?: boolean;
+  recent?: Array<{ real: string; display: string; repoName: string; lastUsedAt: string }>;
+  /** path → check answer (anything else: ok inside the home) */
+  check?: Record<string, Record<string, unknown>>;
+  /** the chooser's answer; 'hold' keeps it open */
+  choose?: Record<string, unknown> | 'hold';
+  /** a status.mods to show (Mods › Configure needs a configurable mod) */
+  mods?: Record<string, unknown>;
+  /** a status.local to show (Settings › Local model, for the runner field) */
+  local?: Record<string, unknown>;
+}
+const PREVIEW_HOME = '/Users/you';
+function previewFolders(): FolderPreview {
+  return ((globalThis as { __ffPreview?: FolderPreview }).__ffPreview ?? {}) as FolderPreview;
+}
+const day = (d: number, hm: string): string => {
+  const t = new Date();
+  t.setDate(t.getDate() - d);
+  const [h, m] = hm.split(':').map(Number);
+  t.setHours(h!, m!, 0, 0);
+  return t.toISOString();
+};
+export const PREVIEW_RECENTS = [
+  { real: `${PREVIEW_HOME}/Documents/GitHub/a-paradigm`, display: '~/Documents/GitHub/a-paradigm', repoName: 'a-paradigm', lastUsedAt: day(0, '14:06') },
+  { real: `${PREVIEW_HOME}/Documents/GitHub/a-atelier`, display: '~/Documents/GitHub/a-atelier', repoName: 'a-atelier', lastUsedAt: day(0, '11:40') },
+  { real: `${PREVIEW_HOME}/Documents/GitHub/clients/northwind/billing-reconciliation-service-for-the-eu-subsidiaries-2026`, display: '~/Documents/GitHub/clients/northwind/billing-reconciliation-service-for-the-eu-subsidiaries-2026', repoName: 'billing-reconciliation-service-for-the-eu-subsidiaries-2026', lastUsedAt: day(1, '09:12') },
+  { real: `${PREVIEW_HOME}/neurons`, display: '~/neurons', repoName: 'neurons', lastUsedAt: day(4, '10:00') },
+  { real: '/Volumes/Work/client-site', display: '/Volumes/Work/client-site', repoName: 'client-site', lastUsedAt: day(6, '10:00') },
+  { real: `${PREVIEW_HOME}/Documents/GitHub/warpline`, display: '~/Documents/GitHub/warpline', repoName: 'warpline', lastUsedAt: day(11, '10:00') },
+];
+function previewCheck(path: string): Record<string, unknown> {
+  const over = previewFolders().check?.[path];
+  if (over) return over;
+  const real = path.startsWith('~/') ? `${PREVIEW_HOME}${path.slice(1)}` : path;
+  const display = real.startsWith(`${PREVIEW_HOME}/`) ? `~${real.slice(PREVIEW_HOME.length)}` : real;
+  const inside = real.startsWith(`${PREVIEW_HOME}/`);
+  return { ok: true, why: inside ? 'ok' : 'outside-home', real, display, name: real.split('/').pop() ?? real, home: inside ? 'inside' : 'outside' };
+}
+function previewFolderAnswer(kind: string, payload: Record<string, unknown>): unknown {
+  const f = previewFolders();
+  if (kind === 'request.folder.recent') return { recent: f.recent ?? PREVIEW_RECENTS };
+  if (kind === 'request.folder.check') return previewCheck(String(payload.path ?? ''));
+  if (payload.cancel === true) return { cancelled: true, closed: true };
+  if (f.choose === 'hold') return new Promise(() => undefined);
+  return f.choose ?? { cancelled: true };
 }

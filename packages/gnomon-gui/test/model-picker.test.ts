@@ -152,7 +152,7 @@ describe('model picker: page wiring (source)', () => {
   it('app.ts mounts the module and sends the picker model on open', () => {
     expect(app).toMatch(/mountModelPicker\(document/);
     expect(app).toMatch(/modelPicker\.openModel\(\$<HTMLSelectElement>\('ns-model'\)\.value\)/);
-    expect(app).toMatch(/void openSession\(cwd, model\)/);
+    expect(app).toMatch(/await openSession\(cwd, model\)/); // #gui-folder-field: the sheet waits for the answer
     expect(app).toMatch(/modelPicker\?\.headChip\(meta, s\.hsid\)/);
   });
   it('the switch is sent only after a trusted click on the go key or a trusted Enter in the field (Aegis L1), never on the submit event\'s own isTrusted', () => {

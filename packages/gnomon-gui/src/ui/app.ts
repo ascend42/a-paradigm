@@ -18,7 +18,7 @@
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
 import { chooseRung, clientFactOf, crashCauseOf, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungNameOf, rungOf, rungOfPresetCommand, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
-import { ladderEls, mountVoiceSheet, type FlowView, type SheetView } from './voice-settings.js';
+import { ladderEls, mountVoiceSheet, trapNext, type FlowView, type SheetView } from './voice-settings.js';
 import { composerFit, lineCountLabel, parseTall, serializeTall, TALL_KEY } from '../core/composer.js';
 import { acked, ackedAt, attachSend, captureOf, CAPTURE_KEY, cardVoiceOrigin, clampedFrom, CLAMP_CHIP, parseCapturePref, parsePreset, policyOf, PRESET_KEY, recordAck, saidTag, sendWordOf, voiceWho } from '../core/voice-presets.js';
 import { followLog, GnomonClient, GUI_CLIENT, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
@@ -54,6 +54,8 @@ import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatu
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
+import { FolderField, FF_COPY } from '../core/folder-field.js';
+import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
 import { cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
@@ -68,8 +70,12 @@ const put = (el: HTMLElement, s: string): void => {
   el.textContent = sanitizeDisplayText(s).text;
 };
 
-/** The new-session form elements a #bare-entry hint touches (values and text only). */
-const hintTarget = (): CwdHintTarget => ({ input: $<HTMLInputElement>('ns-cwd'), note: $('ns-hint'), dialog: $('new-session-dialog') });
+/**
+ * The #bare-entry hint box: applyCwdHint writes the note and the prefill here (values and text only); the New session
+ * sheet's folder field shows them (the prefill is CHECKED by the kernel and chosen "from terminal"; never submitted).
+ */
+const hintBox: CwdHintTarget = { input: { value: '' }, note: { textContent: '', hidden: true }, dialog: { hidden: true } };
+const hintTarget = (): CwdHintTarget => hintBox;
 
 const store = new GuiStore();
 let client: GnomonClient | null = null;
@@ -263,12 +269,15 @@ function paintChatHead(): void {
     const hue = groupHue(s.repo ?? UNSCOPED, g?.sessions ?? [s]);
     const started = s.openedAt ? s.openedAt.slice(11, 16) : '';
     const mins = s.openedAt ? Math.max(0, Math.round((Date.now() - Date.parse(s.openedAt)) / 60_000)) : null;
-    meta.appendChild(h(doc, 'span', { class: `pink h${hue}` }, '■ ', s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped') as unknown as Node);
-    meta.appendChild(document.createTextNode(` · ${backendWord(s.backend)}`));
+    const proj = s.repo && s.repo !== UNSCOPED ? s.repo : 'unscoped';
+    // Mika (2026-10-23 delta): the project name ellipsizes last and keeps its whole name in the title
+    meta.appendChild(h(doc, 'span', { class: `pink h${hue}`, title: proj }, '■ ', h(doc, 'span', { class: 'chead-proj' }, proj)) as unknown as Node);
+    meta.appendChild(h(doc, 'span', { class: 'chead-backend' }, ` · ${backendWord(s.backend)}`) as unknown as Node);
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
     // TD-2026-10-21-514: while a voice-origin turn is open, the header says edits ask first (the kernel clamps it)
     if (clampedFrom(store.transcript(s.hsid), s.hsid)) meta.appendChild(h(doc, 'span', { class: 'chip warn clamp-chip', role: 'status' }, CLAMP_CHIP) as unknown as Node);
-    meta.appendChild(document.createTextNode(`${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`));
+    // Mika (2026-10-23): "started · 9m" is the one part that ellipsizes, so the model key is never the one clipped
+    meta.appendChild(h(doc, 'span', { class: 'chead-when' }, `${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`) as unknown as Node);
   }
   const t = s ? sessionTitle(s) : '';
   $<HTMLTextAreaElement>('composer-text').placeholder = s ? `Reply to ${t}${t.endsWith('…') ? '' : '…'}` : 'Open a session to write to it';
@@ -1114,7 +1123,7 @@ const standingFeed = mountStandingFeed(document, {
 });
 store.onChange(() => standingFeed.repaint());
 // #gui-model-picker: the New-session model select, the header chip + switch, the Settings slot; its own module
-modelPicker = mountModelPicker(document, { client: () => client, rows: (hsid) => store.transcript(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), focused: () => focused, notice });
+modelPicker = mountModelPicker(document, { client: () => client, rows: (hsid) => store.transcript(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), focused: () => focused, notice, folder: () => nsField.value() });
 store.onChange(() => modelPicker?.repaint());
 // #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
 // #gui-local-model: the Local model section's press paths (ui/local-model.ts); the sheet hands it presses
@@ -1260,7 +1269,10 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
   verifyKey = pin.verifyWith;
   // #bare-entry (Aegis M1): the folder hint is shown ONLY after this launch token verified (hello + serverSig ok);
   // a failed attach drops it (no prefill, no note) and Reconnect never carries one (attach's default is null)
-  if (hint) applyCwdHint(hintTarget(), hint);
+  if (hint) {
+    applyCwdHint(hintTarget(), hint);
+    openNewSessionSheet();
+  }
   if (pin.notice && previousPin) {
     // C2: a re-pin is sticky, kernel-owned, names both keyIds, and is recorded in gui.log
     const from = shortKeyId(previousPin);
@@ -1416,11 +1428,13 @@ function unsentEcho(echo: Row | null, err: unknown, hsid: string | undefined = e
   schedule(new Set([`transcript:${hsid}`]));
 }
 
-async function openSession(cwd: string, model: string): Promise<void> {
-  if (!client) return;
+/** session.open; null when it opened, else the refusal in words (the New session sheet shows it in place). */
+async function openSession(cwd: string, model: string): Promise<string | null> {
+  if (!client) return 'not connected: nothing was sent';
   try {
     const r = await client.call<{ hsid: string }>('session.open', { cwd, model, attended: true });
     focus(r.hsid);
+    return null;
   } catch (err) {
     // TD-2026-10-19-063: a changed claude binary — the kernel pre-staged a re-pin card; the toast's Re-pin key focuses it
     const d = err instanceof RpcError ? ((err.refusal.data ?? {}) as Record<string, unknown>) : {};
@@ -1436,8 +1450,85 @@ async function openSession(cwd: string, model: string): Promise<void> {
             },
           }
         : undefined;
-    notice(err instanceof RpcError ? refusalText(err.refusal) : 'session.open failed', 'fail', { key: repin });
+    const why = err instanceof RpcError ? refusalText(err.refusal) : 'session.open failed';
+    // the sheet keeps the choice and shows the refusal in place; the re-pin case keeps its toast with the Re-pin key
+    if (repin) notice(why, 'fail', { key: repin });
+    return why;
   }
+}
+
+/* ── New session sheet (#gui-folder-field, TD-2026-10-23-162) ─────────────────────────────────────────────────── */
+let nsMounted: MountedFolderField | null = null;
+let nsOpening = false;
+/** The New session folder field: recents, the kernel's chooser, a typed path (core/folder-field.ts). */
+const nsField: FolderField = new FolderField({
+  purpose: 'session',
+  call: (req) => (client ? client.call('log.append', req) : Promise.reject(new Error('not connected'))),
+  changed: () => paintNewSession(),
+  // founder: every folder choice restores the claude model remembered for that folder
+  chose: (real) => modelPicker?.onFolder(real),
+});
+
+function paintNewSession(): void {
+  if (!nsMounted) nsMounted = mountFolderField(document, $('ns-folder'), nsField, { id: 'ns-ff', variant: 'recents', legend: { text: FF_COPY.legend, cls: 'meta' }, onEnter: (trusted) => void submitNewSession(trusted) });
+  if ($('new-session-dialog').hidden) return;
+  nsMounted.paint();
+  const why = nsOpening ? null : nsField.whyOff();
+  const open = $<HTMLButtonElement>('ns-open');
+  open.textContent = nsOpening ? FF_COPY.opening : FF_COPY.open;
+  open.disabled = nsOpening || why !== null;
+  if (nsOpening) open.setAttribute('aria-busy', 'true');
+  else open.removeAttribute('aria-busy');
+  put($('ns-why'), why ?? '');
+}
+
+/** ⌘N, + New session, the palette, or a verified terminal hint: the sheet opens on the centre session's folder (C2). */
+function openNewSessionSheet(): void {
+  nsField.reset();
+  nsField.setStatus(status);
+  nsOpening = false;
+  $('new-session-dialog').hidden = false;
+  if (!hintBox.note.hidden) nsField.setHint(hintBox.note.textContent ?? '', hintBox.input.value || null);
+  paintNewSession();
+  modelPicker?.onDialogOpen();
+  const centre = focused ? (store.sessions.get(focused)?.cwd ?? null) : null;
+  void nsField.loadRecents(centre).then(() => paintNewSession());
+  // the status may be older than the kernel's folder support (a fresh attach): read it once more
+  if (!status) void refreshStatus().then(() => nsField.setStatus(status));
+}
+
+function closeNewSessionSheet(): void {
+  $('new-session-dialog').hidden = true;
+  nsField.closed();
+  nsOpening = false;
+  hintBox.input.value = '';
+}
+
+/** Open (a trusted press or Enter): the sheet stays open, busy "Opening…", until session.open answers. */
+async function submitNewSession(trusted: boolean): Promise<void> {
+  if (!trusted || nsOpening || $('new-session-dialog').hidden) return; // Aegis L2: the human's own submit only
+  await nsField.settled();
+  const cwd = nsField.value();
+  if (cwd === null) return paintNewSession();
+  const model = modelPicker ? modelPicker.openModel($<HTMLSelectElement>('ns-model').value) : $<HTMLSelectElement>('ns-model').value;
+  if (model === null) return; // #gui-model-picker: an invalid custom id stays in the sheet with its reason
+  modelPicker?.remember(cwd, model);
+  nsOpening = true;
+  nsField.setRefused(null);
+  const why = await openSession(cwd, model);
+  nsOpening = false;
+  if (why === null) {
+    closeNewSessionSheet();
+    clearCwdHint(hintTarget());
+    return;
+  }
+  // a refusal shows in place and keeps the choice (design-system folder-field never: a refusal that closes the sheet)
+  // only a refusal of the FOLDER marks it ✕ and asks for another one (Open off, focus on the chosen row); any other
+  // refusal (no kernel, a changed binary, a limit) keeps the folder as it was and Open enabled, focused for a retry
+  if (/\bcwd\b/i.test(why)) nsField.setRefused(`${why.split(':')[0]}  ${nsField.state().chosen?.display || 'the folder'} is no longer there · next: choose the folder again`);
+  else nsField.setOpenFailed(why);
+  if (nsField.state().refused) (($('ns-folder').querySelector('.ff-row[aria-checked="true"]') ?? $('ns-folder').querySelector('[data-ff-act="choose"]')) as HTMLElement | null)?.focus();
+  else ($('ns-open') as HTMLButtonElement).focus();
 }
 
 /** The card with exactly this cardId in the stack, or null: never another card (ui/card-focus.ts). */
@@ -2708,8 +2799,7 @@ function run(id: string, trusted: boolean): void {
     void paintStack();
   } else if (id === 'session.new') {
     clearCwdHint(hintTarget()); // Aegis L2: a hint belongs to the launch that verified it, not to a later "+ new"
-    $('new-session-dialog').hidden = false;
-    modelPicker?.onDialogOpen();
+    openNewSessionSheet();
   }
   else if (id === 'session.rename') startRename(focused, 'head', trusted);
   else if (id === 'composer.focus') $('composer-text').focus();
@@ -3047,20 +3137,28 @@ function wire(): void {
     if ($('mode-menu').hidden) return;
     if (!(e.target as HTMLElement).closest('.mode-wrap')) closeModeMenu();
   });
+  // #gui-folder-field: the New session sheet is aria-modal, so Tab stays inside it (the voice drawer's trapNext)
+  document.addEventListener('keydown', (e) => {
+    const dlg = $('new-session-dialog');
+    if (e.key !== 'Tab' || dlg.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const form = dlg.querySelector('form') as HTMLElement;
+    const items = [...form.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null && x.tabIndex >= 0);
+    const a = document.activeElement as HTMLElement | null;
+    // the recents are one tab stop: only the row that holds tabindex 0 counts
+    const to = trapNext(items, a && form.contains(a) ? a : null, e.shiftKey);
+    if (to) {
+      e.preventDefault();
+      to.focus();
+    }
+  });
   $('ns-cancel').addEventListener('click', () => {
-    $('new-session-dialog').hidden = true;
+    closeNewSessionSheet();
     clearCwdHint(hintTarget());
   });
   $('new-session-form').addEventListener('submit', (e) => {
     e.preventDefault();
     if (!e.isTrusted) return; // Aegis L2: a session opens on the human's own submit only, like the card handlers
-    const cwd = $<HTMLInputElement>('ns-cwd').value;
-    const model = modelPicker ? modelPicker.openModel($<HTMLSelectElement>('ns-model').value) : $<HTMLSelectElement>('ns-model').value;
-    if (model === null) return; // #gui-model-picker: an invalid custom id stays in the sheet with its reason
-    modelPicker?.remember(cwd, model);
-    $('new-session-dialog').hidden = true;
-    clearCwdHint(hintTarget());
-    void openSession(cwd, model);
+    void submitNewSession(true);
   });
   $('reconnect-btn').addEventListener('click', () => void attach({ reconnect: true }, null));
   $('palette-btn').addEventListener('click', () => openPalette());
@@ -3099,6 +3197,10 @@ function wire(): void {
       e.preventDefault(); // #gui-settings: ⌘, as in every Mac app
       $('palette').hidden = true;
       settings.open();
+    } else if (e.key === 'Escape' && !$('new-session-dialog').hidden) {
+      e.preventDefault(); // #gui-folder-field: Esc closes the New session sheet (and the macOS chooser, if it is open)
+      closeNewSessionSheet();
+      clearCwdHint(hintTarget());
     } else if (e.key === 'Escape' && !$('wordmark-menu').hidden) {
       closeAppMenu(true); // #gui-wordmark-menu: back to the wordmark (a pointer opened it, so focus was not inside)
     } else if (e.key === 'Escape' && !$('voice-menu').hidden) {

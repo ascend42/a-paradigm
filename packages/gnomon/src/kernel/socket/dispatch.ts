@@ -100,6 +100,7 @@
  * first-party connection (the run-mode HumanRequestPort pattern). `approve` stays voice-off in every form;
  * `request.voice.arm`, root verbs and `permit.reserve` stay refused.
  */
+import { FOLDER_CHECK_REQUEST, FOLDER_CHOOSE_REQUEST, FOLDER_REQUESTS } from '../folders/folders.js';
 import {
   CLIENT_API_ID,
   CLIENT_RELAYS,
@@ -432,6 +433,19 @@ export interface HumanRequestPort {
     /** request.local.probe{model, base?, compat?}: the read-only loopback check before a card (no card, no row) */
     probe?(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
   };
+  /**
+   * TD-2026-10-23-162 (#folder-picker): request.folder.choose | .check | .recent from the human on a gui or device
+   * connection ONLY (the asker stamped here). Dispatcher-only and never a row: not in the §9.1 registry, so no
+   * contract id moves. status() is the human class's status.folders {chooser}.
+   */
+  folders?: {
+    choose(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    check(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    recent(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, payload: unknown): Promise<unknown>;
+    status(): Record<string, unknown>;
+    /** Aegis M2: a closed connection closes the chooser it opened */
+    connectionClosed?(connId: string): void;
+  };
   loops?: {
     request(asker: { connId: string; principal: string | undefined; principalClass: string; credential: string | undefined }, kind: string, payload: unknown): Promise<unknown>;
     status(): Record<string, unknown>;
@@ -573,6 +587,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // 8.0:session-rename: the names of THIS human's sessions (display text; the GUI folds session.renamed rows too)
       ...(o.requests?.sessionNames && cls === 'human' && s.principal ? { sessionNames: o.requests.sessionNames.namesFor(s.principal) } : {}),
       ...(o.requests?.loops && cls === 'human' ? { loops: o.requests.loops.status() } : {}),
+      // TD-2026-10-23-162 (#folder-picker): whether request.folder.choose is offered (the GUI's no-chooser state); the human's
+      ...(o.requests?.folders && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') ? { folders: o.requests.folders.status() } : {}), // Aegis L4
       // Aegis M2 (TD-2026-10-22-769): status.local in full to the human only; any other class sees three facts
       ...(o.requests?.local?.status ? { local: localStatusFor(cls, o.requests.local.status()) } : {}),
       // V2e: the voice connection reads its own principal here (the adopted fd had no hello/auth reply to carry it)
@@ -951,6 +967,18 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
           throw asRpcRefusal(err);
         }
       }
+      // TD-2026-10-23-162 (#folder-picker): choose / check / recent, gui/device human only; no row, no card, no id moves
+      if (typeof pa?.kind === 'string' && FOLDER_REQUESTS.includes(pa.kind) && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.folders) {
+        const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
+        if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
+        const asker = { connId: s.connId, principal: s.principal, principalClass: cls, credential: s.credential };
+        const f = o.requests.folders;
+        try {
+          return await (pa.kind === FOLDER_CHOOSE_REQUEST ? f.choose(asker, pa.payload) : pa.kind === FOLDER_CHECK_REQUEST ? f.check(asker, pa.payload) : f.recent(asker, pa.payload));
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
       // 8.0:loops (#loop-registry): the human's request.loop.* (gui/device human connections only, stamped by connId)
       if (typeof pa?.kind === 'string' && pa.kind.startsWith('request.loop.') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.loops) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
@@ -1140,6 +1168,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       o.approvals?.connectionClosed(ctx.connId);
       o.voice?.connectionClosed(ctx.connId);
       o.voiceClient?.connectionClosed(ctx.connId);
+      o.requests?.folders?.connectionClosed?.(ctx.connId); // #folder-picker (Aegis M2): its chooser closes with it
       clearTimers(ctx.connId);
       conns.delete(ctx.connId);
     },
