@@ -1251,7 +1251,10 @@ export class VoiceClient {
     // Aegis 2026-10-23 (Talk, narrow): a push-to-talk clip too short to verify fills the draft unverified too (the kernel
     // clamps its send); a long one that does not match keeps the gate and stays withheld
     const shortPtt = mode === 'ptt' && who.speechMs !== undefined && who.speechMs < MIN_VERIFY_SPEECH_MS;
-    const draftable = !enrolled && !trial && a.send !== undefined && ((mode === 'ambient' && a.mode !== 'ptt') || shortPtt);
+    // TD-2026-10-23-496: under a send-word (or pieces) ceiling the human accepted that anyone near the mic can send with
+    // the word, so the word's text goes to the kernel whoever said it (it counts it, unverified; its send is clamped)
+    const anyVoiceWord = !trial && (a.send === 'word' || a.send === 'pieces') && isSendWord(text, word);
+    const draftable = !enrolled && !trial && a.send !== undefined && ((mode === 'ambient' && a.mode !== 'ptt') || shortPtt || anyVoiceWord);
     const speakerId = adjacent ? this.#draftSpeaker! : stretch ? stretch.speakerId : enrolled ? `spk:${this.#o.ns}/${who.name}` : `spk:${who.unknownLabel}`;
     const ms = Math.max(this.#now(), this.#lastTurnMs);
     this.#lastTurnMs = ms;
@@ -1285,6 +1288,11 @@ export class VoiceClient {
     // a take of the word being taught: the dialog shows it; nothing is sent and the draft speaker is unchanged
     if (verdict?.trialTake === true) {
       this.#flow.info('trial take counted', { turnId });
+      return end('captured');
+    }
+    if (!enrolled && anyVoiceWord && verdict?.refused === undefined && verdict?.forwardable === true && verdict.draftOnly !== true) {
+      // TD-2026-10-23-496: the kernel counted the send word from an unverified voice; the GUI claims and sends the draft
+      this.#flow.info('send word heard (unverified voice)', { turnId });
       return end('captured');
     }
     if (!enrolled && verdict?.draftOnly === true && verdict.refused === undefined) {

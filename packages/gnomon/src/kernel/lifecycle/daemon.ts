@@ -122,7 +122,7 @@ import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
 import { planResume, resumeAfterUpgrade, type ResumeReport, type ResumeRow } from '../supervisor/resume.js';
 import { processControlFor, processStartMs } from './process-control.js';
-import { SessionSupervisor, createSessionPort, SessionNames, SESSION_NAME_SEED_KINDS, type NameRow } from '../supervisor/index.js';
+import { SessionSupervisor, createSessionPort, lateVoicePort, SessionNames, SESSION_NAME_SEED_KINDS, type NameRow } from '../supervisor/index.js';
 import { ClaudeRepinCards, REPIN_POLL_MS } from '../runner/repin-card.js';
 import { resolveClaudeSource } from '../runner/preflight.js';
 import { osUserHome } from '../runner/env.js';
@@ -1009,13 +1009,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   // TD-2026-10-20-262 dictation: a human send{source:'voice'} is attributed by #gnomon-voice (declared below; called
   // only once the daemon serves, so the late binding is safe)
-  const sessions = createSessionPort(supervisor, runModes, {
-    attributeHumanSend: (human, hsid, parts) => voice.attributeHumanSend(human, hsid, parts),
-    releaseAttribution: (attr) => voice.releaseAttribution(attr),
-    // TD-2026-10-21-514: the origin of a human voice send (a claim, or the fail-closed send-word backstop)
-    originFor: (connId, human, hsid, attr) => voice.originFor(connId, human, hsid, attr ?? null),
-    peekAttribution: (human, hsid, parts) => voice.peekAttribution(human, hsid, parts),
-  });
+  // TD-2026-10-21-514: the origin of a human voice send (a claim, or the fail-closed send-word backstop). Aegis M-1
+  // (2026-10-23): lateVoicePort forwards voiceHint to originFor and wires releaseOrigin (both were dropped here)
+  const sessions = createSessionPort(supervisor, runModes, lateVoicePort(() => voice));
   // #mod-host feed backlog (founder report 2026-10-23): ONE incremental fold of this boot's released rows (feed.ts
   // FeedBacklog; requireBoot: nothing counts until this boot's daemon.start is released, Aegis L)
   const feedFold = new FeedBacklog({ requireBoot: true });

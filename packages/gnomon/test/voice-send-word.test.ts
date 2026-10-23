@@ -149,16 +149,21 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     const ok = await r.turn('over and out', { speakerBasis: 'adjacent', t0: r.clock.t - 900, t1: r.clock.t });
     expect(ok.forwardable).toBe(true);
     expect(r.rows.at(-1)!.payload).toMatchObject({ speakerBasis: 'adjacent', forwardable: true });
+    // TD-2026-10-23-496: under the send-word ceiling the held word is the word whoever spoke it (unverified, never a draft part)
     const long = await r.turn('over and out', { speakerBasis: 'adjacent', t0: r.clock.t - 1600, t1: r.clock.t });
-    expect(long).toMatchObject({ forwardable: true, draftOnly: true });
-    expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
+    expect(long).toMatchObject({ forwardable: true });
+    expect(long).not.toHaveProperty('draftOnly');
+    expect(r.rows.at(-1)!.payload).toMatchObject({ speakerEnrolled: false, speakerVerified: false });
     const notWord = await r.turn('ship', { speakerBasis: 'adjacent', t0: r.clock.t - 500, t1: r.clock.t });
     expect(notWord).toMatchObject({ draftOnly: true });
     expect(await refusal(r.turn('x', { speakerBasis: 'verified' }))).toMatchObject({ code: 'BAD_REQUEST' });
-    // Aegis L-1: a short send word WITHOUT speakerBasis is held to the same rule (no draft nearby ⇒ refused)
+    // Aegis L-1: a short send word WITHOUT speakerBasis fails adjacency too; TD-2026-10-23-496 then takes it as the word
+    // from any voice (unverified), never a draft part
     const r3 = rig();
     await r3.attach('word');
-    expect(await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t })).toMatchObject({ draftOnly: true });
+    const lone = await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t });
+    expect(lone).toMatchObject({ forwardable: true });
+    expect(r3.rows.at(-1)!.payload).toMatchObject({ speakerEnrolled: false, speakerVerified: false });
     await r3.turn('a draft sentence long enough');
     expect((await r3.turn('over and out', { t0: r3.clock.t - 800, t1: r3.clock.t })).forwardable).toBe(true);
     // no draft pending and nothing within 2 s ⇒ refused
@@ -170,7 +175,8 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     await r2.send(['draft']);
     expect(d.seq).toBeGreaterThan(0);
     r2.clock.t += 5_000;
-    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ draftOnly: true });
+    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).not.toHaveProperty('draftOnly');
+    expect(r2.rows.at(-1)!.payload).toMatchObject({ speakerVerified: false });
   });
 
   it('an attended trial take needs no speaker check or adjacency, is never forwardable, and the kernel counts it', async () => {
@@ -344,7 +350,9 @@ describe('G-VOX-20 send word: claim, consume, bind, origin', () => {
     r2.v.setTrialWord({ text: 'ship it' }, 60_000);
     await r2.turn('ship it');
     r2.v.setTrialWord(null);
-    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).toMatchObject({ draftOnly: true });
+    // a take never anchors adjacency; under the send-word ceiling the word still counts, unverified (TD-2026-10-23-496)
+    expect(await r2.turn('over and out', { speakerBasis: 'adjacent', t0: r2.clock.t - 500, t1: r2.clock.t })).not.toHaveProperty('draftOnly');
+    expect(r2.rows.at(-1)!.payload).toMatchObject({ speakerEnrolled: false, speakerVerified: false });
   });
 
   it('the trial status reaches the human class only', () => {

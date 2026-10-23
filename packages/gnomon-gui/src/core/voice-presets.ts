@@ -82,8 +82,9 @@ export const ackedLine = (iso: string | null, now: Date = new Date()): string =>
  * word it names the word; Pieces names the pause. The box under it is ACK_TEXT itself (its hash is the kernel's).
  */
 export function riskSentence(o: { word: string | null; pieces?: boolean }): string {
-  const what = o.pieces || !o.word ? 'When you pause' : `When you say “${o.word}”`;
-  return `${what}, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.`;
+  // TD-2026-10-23-496: the send word sends the whole draft, words Gnomon couldn't check as you included
+  if (!o.pieces && o.word) return `When you say “${o.word}”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, so any edit Claude tries in a voice-sent turn asks you first.`;
+  return 'When you pause, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.';
 }
 
 /**

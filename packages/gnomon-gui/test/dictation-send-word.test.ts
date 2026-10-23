@@ -87,3 +87,14 @@ describe('send word (#gui-dictation)', () => {
     expect(sendClaim(s)).toBeNull(); // Enter is a hand send
   });
 });
+
+describe('TD-2026-10-23-496 / Aegis L-2: the send word from an unverified voice arrives hash-only with the kernel\'s isWord', () => {
+  it('under the word policy it starts the grace like a matched word; it is never a draft part', () => {
+    let s = run(wordState(), turn(1, 'rename the module', 100), { type: 'painted', now: 120 });
+    s = reduceDictation(s, { type: 'turnRow', seq: 2, hsid: A, payload: { turnId: 't2', speakerId: 'spk:unknown-1', speakerEnrolled: false, speakerVerified: false, forwardable: true, isWord: true, mode: 'conversation', textHash: 'hmac-sha256:00' }, now: 1300 });
+    expect(s.text).toBe('rename the module');
+    expect(s.grace).toEqual({ seq: 2, startedAt: 1300 });
+    s = run(s, { type: 'tick', now: 2310 });
+    expect(sendClaim(s)).toEqual({ hsid: A, by: 'word', turnSeq: 2 });
+  });
+});

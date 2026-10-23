@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ACK_TEXT, acked, ackedAt, ackWhen, riskSentence, saidTag, voiceWho, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
+import { ACK_KEY_PREFIX, ACK_TEXT, acked, ackedAt, ackWhen, riskSentence, saidTag, voiceWho, attachSend, choosePreset, CLAMP_CHIP, clampedFrom, parsePreset, policyOf, recordAck, sendWordOf, sentLabel } from '../src/core/voice-presets.js';
 import { chatItems } from '../src/core/store.js';
 import { captureOf, parseCapturePref } from '../src/core/voice-presets.js';
 import { clientRequest } from '../src/core/voice-client.js';
@@ -25,7 +25,12 @@ describe('voice presets', () => {
   });
   it('Send word and Pieces need the one-time liability acknowledgement, recorded per user', () => {
     const st = mem();
-    expect(ACK_TEXT).toBe('I understand a misheard or other voice can send for me; edits will still ask.');
+    expect(ACK_TEXT).toBe('Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
+    // Aegis L-1 (TD-2026-10-23-496): an acknowledgement of the OLD text no longer counts: the risk check is offered again
+    const old = new Map<string, string>([[`${ACK_KEY_PREFIX}p:abcdefgh/me`, 'I understand a misheard or other voice can send for me; edits will still ask.']]);
+    const store = { getItem: (k: string) => old.get(k) ?? null, setItem: (k: string, v: string) => void old.set(k, v), removeItem: (k: string) => void old.delete(k) };
+    expect(acked(store as never, 'p:abcdefgh/me')).toBe(false);
+    expect(choosePreset('send-word', { acked: acked(store as never, 'p:abcdefgh/me'), sendWord: { text: 'over', variants: [] } })).toBe('needs-ack');
     expect(choosePreset('send-word', { acked: acked(st, 'p:a/me'), sendWord: null })).toBe('needs-ack');
     expect(choosePreset('dictate', { acked: false, sendWord: null })).toBe('apply');
     expect(ackedAt(st, 'p:a/me')).toBeNull();
@@ -35,7 +40,7 @@ describe('voice presets', () => {
     expect(ackedAt(st, 'p:a/other')).toBeNull();
     expect(ackWhen('2026-10-21T09:00:00.000Z', new Date('2026-10-21T12:00:00.000Z'))).toBe('today');
     expect(ackWhen(null)).toBe('');
-    expect(riskSentence({ word: 'send it' })).toBe('When you say “send it”, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.');
+    expect(riskSentence({ word: 'send it' })).toBe("When you say “send it”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, so any edit Claude tries in a voice-sent turn asks you first.");
     expect(acked(st, 'p:a/other')).toBe(false);
     expect(choosePreset('send-word', { acked: true, sendWord: null })).toBe('needs-word');
     expect(choosePreset('send-word', { acked: true, sendWord: { text: 'over', variants: [] } })).toBe('apply');

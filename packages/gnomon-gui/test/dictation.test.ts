@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { HOTKEY_UNVERIFIED_NOTE, INHERITED_DRAFT_NOTE, inheritedDraft, inheritedQuote, UNVERIFIED_DRAFT_NOTE, UNVERIFIED_QUOTE_MAX, unverifiedQuote, UNVERIFIED_WAIT_MS, pieceDue, releaseTurnRows, unverifiedDraft, unverifiedTextsOf, sendClaim, wordReady } from '../src/core/dictation.js';
+import { HOTKEY_UNVERIFIED_NOTE, INHERITED_DRAFT_NOTE, uncheckedWords, inheritedDraft, inheritedQuote, UNVERIFIED_DRAFT_NOTE, UNVERIFIED_QUOTE_MAX, unverifiedQuote, UNVERIFIED_WAIT_MS, pieceDue, releaseTurnRows, unverifiedDraft, unverifiedTextsOf, sendClaim, wordReady } from '../src/core/dictation.js';
 import { clampedFrom, sentLabel } from '../src/core/voice-presets.js';
 import { refusalPhrase, dropLabelOf } from '../src/core/capture.js';
 import { dropFact } from '../src/core/voice-ladder.js';
@@ -454,20 +454,25 @@ describe('Dictate, the G-VOX-06 exception (founder bug 2026-10-21): an unverifie
   });
 });
 
-describe('Dictate, Aegis review 2026-10-21: an unverified voice never leaves by word, piece or countdown; its words never come from the log', () => {
+describe('Dictate, Aegis review 2026-10-21: an unverified voice never leaves by piece or countdown (the send word: TD-2026-10-23-496); its words never come from the log', () => {
   const unv = { mode: 'conversation', speakerId: 'spk:unknown-1', speakerEnrolled: false, draftOnly: true, speakerVerified: false };
   const WORD = { text: 'over and out', variants: [] };
-  it('[high] Dictate → Send word: the switch holds the draft, the word is not ready, saying it sends nothing', () => {
+  it('TD-2026-10-23-496 (supersedes [high] 2026-10-21 on this path): Dictate → Send word: the word sends the whole draft; the unchecked words are only noted', () => {
     let s = run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 }, turn(11, 'drop the database', 0, unv));
     s = run(s, { type: 'setPolicy', policy: 'word', sendWord: WORD, now: 10 });
-    expect(s.hold).toBe(true);
+    expect(s.hold).toBe(false);
     s = run(s, { type: 'painted', now: 20 }, turn(12, 'and the tests', 30, { mode: 'conversation' }), { type: 'painted', now: 40 });
-    expect(wordReady(s, 5_000)).toBe(false);
-    s = run(s, turn(13, 'over and out', 5_000, { mode: 'conversation' }), { type: 'tick', now: 7_000 });
-    expect(s.grace).toBeNull();
-    expect(s.sending).toBe(false);
-    expect(sendClaim(s)).toBeNull();
-    expect(dictationNote(s)).toBe('draft · unverified voice: “drop the database” · read it, then Enter sends'); // mixed: named
+    expect(wordReady(s, 5_000)).toBe(true);
+    expect(dictationNote(s)).toBe("draft · some words not checked as you · say 'over and out' or press Enter");
+    s = run(s, turn(13, 'over and out', 5_000, { mode: 'conversation' }));
+    expect(s.grace).not.toBeNull();
+    s = run(s, { type: 'tick', now: 7_000 });
+    expect(s.sending).toBe(true);
+    expect(sendClaim(s)).toMatchObject({ by: 'word', turnSeq: 13 });
+    expect(sendRequest(s)!.content.map((c) => c.text).join(' ')).toContain('drop the database');
+    // still: send-now (the voice app's key) never sends an unverified draft, it is held for Enter
+    const h = run(ready(5000), { type: 'setPolicy', policy: 'word', sendWord: WORD, now: 0 }, turn(11, 'drop it', 0, unv), { type: 'sendNowKey', now: 100 });
+    expect(h.sending).toBe(false);
   });
   it('[high] Pieces never sends an unverified part; [low] the countdown never arms over one, even a push-to-talk one', () => {
     let s = run(ready(5000), { type: 'setPolicy', policy: 'pieces', sendWord: null, now: 0 }, turn(11, 'drop it', 0, unv));
@@ -547,7 +552,12 @@ describe('Aegis H-1 (2026-10-23): words that inherited their speaker are marked 
     s = run(ready(5000), { type: 'setPolicy', policy: 'key', sendWord: null, now: 0 }, turn(11, 'yes', 0, inh));
     expect(dictationNote(s)).toBe(INHERITED_DRAFT_NOTE);
     const w = run(ready(5000), { type: 'setPolicy', policy: 'word', sendWord: { text: 'over and out', variants: [] }, now: 0 }, turn(11, 'ship it', 0, ver), turn(12, 'now', 100, inh));
-    expect(dictationNote(w)).toBe("draft · “now” not checked as you · say 'over and out' or press Enter"); // the rung already says edits ask first
+    expect(dictationNote(w)).toBe("draft · some words not checked as you · say 'over and out' or press Enter"); // TD-2026-10-23-496
+    expect(uncheckedWords(w)).toBe('now'); // the note's title names them
+    // Mika: a wholly unchecked draft is not 'some words'
+    const wa = run(ready(5000), { type: 'setPolicy', policy: 'word', sendWord: { text: 'over and out', variants: [] }, now: 0 }, turn(11, 'yes', 0, inh));
+    expect(dictationNote(wa)).toBe("draft · not checked as you · say 'over and out' or press Enter");
+    expect(uncheckedWords(wa)).toBeNull();
     // a piece needs a part checked as the human
     const p = run(ready(5000), { type: 'setPolicy', policy: 'pieces', sendWord: null, now: 0 }, turn(11, 'yes', 0, inh));
     expect(pieceDue(p, 60_000)).toBe(false);

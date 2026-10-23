@@ -16,6 +16,9 @@ description: >-
 components:
   gnomon-voice:
     description: >-
+      TD-2026-10-23-496: under a send-word or pieces ceiling the held word's
+      text goes to the kernel whoever said it (anyVoiceWord), and a kernel
+      verdict that counts it ends the capture as captured.
       Aegis review 2026-10-23: the client mirrors the bounded inheritance
       (Stretch.inherited; at most VOICE_CONTINUITY_MAX_TURNS turns and
       VOICE_CONTINUITY_MAX_MS per anchor, clips up to

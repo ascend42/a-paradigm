@@ -45,6 +45,21 @@ export interface VoiceAttributionPort {
   peekAttribution?(human: string, hsid: string, parts: readonly string[]): VoiceAttribution | null;
 }
 
+/**
+ * Aegis M-1 (2026-10-23): the daemon's binding of #gnomon-voice into the session port, forwarding EVERY method with ALL
+ * its arguments (voiceHint included) to a late-bound VoiceControl (declared after the port). The daemon and the tests
+ * use this one function, so the production wiring is the tested wiring.
+ */
+export function lateVoicePort(get: () => VoiceAttributionPort): VoiceAttributionPort {
+  return {
+    attributeHumanSend: (human, hsid, parts) => get().attributeHumanSend(human, hsid, parts),
+    releaseAttribution: (attr) => get().releaseAttribution(attr),
+    originFor: (connId, human, hsid, attr, voiceHint) => get().originFor?.(connId, human, hsid, attr ?? null, voiceHint === true) ?? null,
+    releaseOrigin: (connId) => get().releaseOrigin?.(connId),
+    peekAttribution: (human, hsid, parts) => get().peekAttribution?.(human, hsid, parts) ?? null,
+  };
+}
+
 export interface SessionCallContext {
   principal: string;
   principalClass: string;

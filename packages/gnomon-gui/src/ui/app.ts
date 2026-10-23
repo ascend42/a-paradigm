@@ -51,7 +51,7 @@ import { defaultScope, menuEntries, modeChip, modeLabel, modeRequest, nextRunMod
 import { captureDismiss, captureDisplayOf, capturePollMs, captureStatusOf, captureStep, freshCapture, meterShownOf, type CaptureTrack, type GhostText, voiceRefusalText } from '../core/capture.js';
 import { appMenuModel, APP_MENU_RUNS, linkView, menuKey, PANES_RUN, triggerKey, whoLine, type AppMenuRow, type LinkState } from '../core/header.js';
 import { CLIENT_POLL_MS, clientOf, clientPillOf, micTitleLine, clientPollWanted, pillActionOf, clientRequest, stopSpeakingRequest, devBannerOf, enrolAllowed, enrolNudgeOf, ENROL_POLL_MS, enrolRequest, enrolSent, enrolStart, ERROR_TITLE_MAX, forgetRequest, isEnrolCard, needsStart, noticeOf, oneLine, reduceEnrolStatus, toastFresh } from '../core/voice-client.js';
-import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, inheritedQuote, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
+import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, dictationNote, dictationStatusOf, draftControls, hasDraft, inheritedQuote, initialDictation, liveLine, parseDelay, pieceFraction, reduceDictation, releaseTurnRows, ringFraction, ringRemaining, sendClaim, sendRequest, serializeDelay, uncheckedWords, unverifiedQuote, unverifiedTextsOf, type DictationEvent, type QueuedTurnRow } from '../core/dictation.js';
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
@@ -2203,7 +2203,9 @@ function paintDictation(): void {
   // Mika: a mixed draft's note quotes the unverified words (truncated); the full words are the title
   const uq = on ? unverifiedQuote(dict) : null;
   const iq = on && !uq ? inheritedQuote(dict) : null; // Aegis H-1: the cut quote's full words, the same way
-  if (uq) $('dictation-live').title = `unverified voice: ${uq.full}`;
+  const uw = on && dict.policy === 'word' && dict.sendWord ? uncheckedWords(dict) : null; // TD-2026-10-23-496: the note says 'some words'; these are they
+  if (uw) $('dictation-live').title = `not checked as you: ${uw}`;
+  else if (uq) $('dictation-live').title = `unverified voice: ${uq.full}`;
   else if (iq) $('dictation-live').title = `not checked as you: ${iq.full}`;
   else $('dictation-live').removeAttribute('title');
   // one send control (the composer's send); [Hold] / [Resume] only beside a push-to-talk countdown (DRAFT_CONTROLS)

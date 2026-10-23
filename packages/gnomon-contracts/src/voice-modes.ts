@@ -47,6 +47,11 @@ export type SentBy = (typeof SENT_BY)[number];
 /**
  * The kernel-stamped origin of every turn.sent. `voice-unverified` (Dictate, the G-VOX-06 exception; Aegis 2026-10-21):
  * a human's Enter sent words from a voice the kernel did not verify (a draftOnly turn): clamped like `voice`.
+ * TD-2026-10-23-496 supersedes G-VOX-06 on the SEND-WORD path only: once the human accepted at a send-word (or pieces)
+ * attach that anyone near the mic can send with the word (VOICE_LIABILITY_ACK_TEXT, the start row's liabilityAck), the
+ * held word sends the whole draft, checked parts or not, and the word itself counts whoever said it. Such a send is
+ * `voice-unverified` (clamped: edits and tools ask first). Pieces, send-now, Talk and the voice principal's direct send
+ * keep G-VOX-06; voice never approves anything.
  */
 export const VOICE_ORIGINS = Object.freeze(['hand', 'voice', 'voice-unverified'] as const);
 export type VoiceOrigin = (typeof VOICE_ORIGINS)[number];
@@ -69,7 +74,13 @@ export const VOICE_PRESET_IDS = Object.freeze(Object.keys(VOICE_PRESETS) as Voic
 
 /** The liability modes: turned on only through the explicit one-time acknowledgement (TD-2026-10-21-514). */
 export const LIABILITY_SEND_POLICIES = Object.freeze(['word', 'pieces'] as const);
-export const VOICE_LIABILITY_ACK_TEXT = 'I understand a misheard or other voice can send for me; edits will still ask.';
+/**
+ * The one acceptance a Send word or Pieces attach needs (Aegis M-4). Re-versioned 2026-10-23 (Aegis L-1 on
+ * TD-2026-10-23-496) to name the new scope: the send word now sends the whole draft whoever spoke. The hash changes, so
+ * an earlier acknowledgement no longer counts and the human accepts once more (the GUI shows the risk check again).
+ * Was: 'I understand a misheard or other voice can send for me; edits will still ask.'
+ */
+export const VOICE_LIABILITY_ACK_TEXT = 'Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.';
 /**
  * Aegis M-4: the hash a voice.session.start{send:'word'|'pieces'} must carry as `liabilityAck` (the human's own
  * attach, after the acknowledgement dialog); the kernel writes {principal, ackHash} into the start row it signs.

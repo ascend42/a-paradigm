@@ -175,7 +175,9 @@ export function pieceFraction(s: DictationState, now: number): number | null {
 /** The draft may be sent by the word now: a draft, visible ≥ SEND_WORD_VISIBLE_MS, page visible, focused, attached, idle. */
 export function wordReady(s: DictationState, now: number): boolean {
   // Aegis 2026-10-21 (high): a draft holding an unverified voice's words is never sent by the word (a preset switch keeps the draft)
-  return hasDraft(s) && s.policy === 'word' && !unverifiedDraft(s) && s.pageVisible && s.focusedHere && s.attached !== null && s.attached === s.hsid && !s.sending && s.visibleSince !== null && now - s.visibleSince >= SEND_WORD_VISIBLE_MS;
+  // TD-2026-10-23-496 (supersedes Aegis 2026-10-21 on this path): the word sends the whole draft, checked words or not;
+  // the human accepted it at attach, and the kernel clamps the send (edits ask first)
+  return hasDraft(s) && s.policy === 'word' && s.pageVisible && s.focusedHere && s.attached !== null && s.attached === s.hsid && !s.sending && s.visibleSince !== null && now - s.visibleSince >= SEND_WORD_VISIBLE_MS;
 }
 
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
@@ -312,6 +314,12 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
     case 'turnRow': {
       if (e.seq <= s.sinceSeq || e.seq <= s.lastSeq) return s;
       const n0 = { ...s, lastSeq: e.seq };
+      // TD-2026-10-23-496 / Aegis L-2: the send word from an unverified voice arrives HASH-ONLY with the kernel's isWord
+      // verdict (no text to match): under the word policy it is the word
+      if (obj(e.payload)?.isWord === true && s.policy === 'word' && s.sendWord && e.hsid && e.hsid === s.attached) {
+        if (s.grace || !wordReady(s, e.now)) return { ...n0, nearMiss: null };
+        return { ...n0, nearMiss: null, grace: { seq: e.seq, startedAt: e.now } };
+      }
       const tt = turnText(e.payload);
       if (tt === null || !e.hsid || e.hsid !== s.attached) return n0;
       const t = tt.shown;
@@ -361,7 +369,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       if (pieceDue(s, e.now)) return { ...s, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), claim: { by: 'piece', turnSeqs: s.parts.map((p) => p.seq) } };
       // the send word's grace ran out: send with the claim (still ready: visible, focused, attached)
       if (s.grace && e.now - s.grace.startedAt >= SEND_WORD_GRACE_MS) {
-        if (!wordReady(s, e.now) || unverifiedDraft(s)) return { ...s, grace: null };
+        if (!wordReady(s, e.now)) return { ...s, grace: null };
         return { ...s, grace: null, sending: true, ringStartedAt: null, sentThrough: lastPartSeq(s), claim: { by: 'word', turnSeq: s.grace.seq } };
       }
       if (!armed(s) || s.ringStartedAt === null || s.delayMs === null) return s;
@@ -374,7 +382,7 @@ export function reduceDictation(s: DictationState, e: DictationEvent): Dictation
       return settle({ ...s, sending: false, hold: true, holdBy: 'gui', editedInFlight: false, claim: null }, e.now, false); // never loop a refused send: wait for the human
     case 'setPolicy':
       // Aegis 2026-10-21 (high): switching presets with an unverified voice in the draft holds it: only Enter sends it
-      return settle({ ...s, policy: e.policy, sendWord: e.sendWord, grace: null, nearMiss: null, ...(e.policy === 'countdown' ? {} : { ringStartedAt: null }), ...(unverifiedDraft(s) && e.policy !== s.policy ? { hold: true, holdBy: 'gui' as const } : {}) }, e.now, true);
+      return settle({ ...s, policy: e.policy, sendWord: e.sendWord, grace: null, nearMiss: null, ...(e.policy === 'countdown' ? {} : { ringStartedAt: null }), ...(unverifiedDraft(s) && e.policy !== s.policy && e.policy !== 'word' ? { hold: true, holdBy: 'gui' as const } : {}) }, e.now, true);
     case 'painted':
       // stamped after paint (double rAF) only while visible + focused + attached; the first paint of this text wins
       if (!hasDraft(s) || s.visibleSince !== null || !s.pageVisible || !s.focusedHere || s.attached === null || s.attached !== s.hsid) return s;
@@ -512,6 +520,16 @@ export function inheritedQuote(s: DictationState): { short: string; full: string
   return { short: quoteOf(full), full };
 }
 
+const unchecked = (p: { unverified?: boolean; inherited?: boolean }): boolean => p.unverified === true || p.inherited === true;
+/**
+ * TD-2026-10-23-496, Mika: under the send word, the words not checked as you (unverified or inherited) in a MIXED
+ * unedited draft, for the note's title; null when none are, every part is, or the draft was edited.
+ */
+export function uncheckedWords(s: DictationState): string | null {
+  if (s.edited || !s.parts.some(unchecked) || s.parts.every(unchecked)) return null;
+  return s.parts.filter(unchecked).map((p) => p.text).join(' ');
+}
+
 /** The pill's dictation note: "draft waiting" when a draft waits on another focused session, "held", or null. */
 export function dictationNote(s: DictationState): string | null {
   if (!hasDraft(s) || !s.parts.length) return null;
@@ -520,6 +538,12 @@ export function dictationNote(s: DictationState): string | null {
   if (s.grace) return WORD_GRACE_LINE;
   if (s.hotkeyHeld) return !s.edited && unverifiedDraft(s) ? HOTKEY_UNVERIFIED_NOTE : HOTKEY_EDITED_NOTE;
   if (s.nearMiss) return `Did you say '${s.nearMiss}'? Say it again or press Enter`;
+  // TD-2026-10-23-496: under the send word an unchecked part is information, not a block. Mika: 'some words' only when
+  // some are; a draft that is wholly unchecked (unedited) says so plainly. Which words: the note's title (uncheckedWords).
+  if (s.policy === 'word' && s.sendWord && (unverifiedDraft(s) || inheritedDraft(s))) {
+    const all = !s.edited && s.parts.every(unchecked);
+    return `draft · ${all ? '' : 'some words '}not checked as you · say '${s.sendWord.text}' or press Enter`;
+  }
   if (unverifiedDraft(s)) {
     // the quiet marker (every policy). Mika: a MIXED draft names which words are unverified (quoted, truncated; full in title)
     const q = unverifiedQuote(s);

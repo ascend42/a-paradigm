@@ -2291,6 +2291,15 @@ components:
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
   gnomon-voice:
     description: >-
+      TD-2026-10-23-496 (supersedes G-VOX-06 on the send-word path only):
+      under a send-word or pieces ceiling (liability acknowledged on the
+      start row) the held word from the attached human's voice principal
+      counts whoever said it (wordAnyVoice: isWord, speakerEnrolled false,
+      speakerVerified false, never a draft part) and a word claim is accepted
+      over unverified or inherited draft turns; the send is clamped
+      voice-unverified (originFor: the consumed word came from any voice, or
+      the draft holds an unverified or inherited turn). Pieces, send-now,
+      Talk and the direct send keep the gate; intercepted turns are refused.
       Aegis review 2026-10-23 (H-1, M-1, M-2, L-1..L-3): an inherited
       (continuity) turn is NOT verification (UserTurn.basis 'continuity'):
       every send that includes one is clamped voice-unverified (originFor,

@@ -819,6 +819,13 @@ components:
       - test/preview.test.ts
   gui-voice-capture:
     description: >-
+      TD-2026-10-23-496: under Send word the word sends the whole draft,
+      unchecked parts included (wordReady no longer blocks on them, a switch
+      to Send word no longer holds the draft); the note reads "draft · some
+      words not checked as you · say '<word>' or press Enter"; the risk
+      sentence says the word sends everything, even unchecked words, and
+      that anyone near the mic can send with it. Send-now and pieces still
+      hold an unverified draft for Enter.
       Aegis H-1 (2026-10-23): a turn that inherited its speaker
       (speakerBasis 'continuity') is a draft part marked inherited: the row
       reads "in composer · not checked as you", the draft note "draft ·

@@ -255,3 +255,21 @@ describe('Aegis L-3 (client): free-text log fields are cut before they reach the
     expect(j).toMatchObject({ code: 'ok', n: 5 });
   });
 });
+
+describe('TD-2026-10-23-496 (client): under a send-word ceiling the word counts whoever said it', () => {
+  it('an unverified send word is sent with its text and ends captured (the kernel counts it)', async () => {
+    const audio = new FakeAudioIO();
+    const link = new FakeLink();
+    link.att = { ...link.att!, mode: 'conversation', send: 'word' };
+    const engines = { ...stubEngines(['over and out', 'over and out']), speaker: new GatedStubSpeaker() };
+    const client = new VoiceClient({ audio, engines, link, ns: 'abcd1234', prints: () => [MATT], mode: 'ptt', delivery: 'composer', now: () => audio.clock, sendWord: () => ({ text: 'over and out', variants: [] }) });
+    clients.push(client);
+    await client.start();
+    // the attachment's ceiling (conversation) is the mode in force: an ambient segment ends on silence
+    audio.captureWav(toneWav(600, 0.2));
+    audio.silence(1500);
+    await client.idle();
+    expect(turns(link)[0]).toMatchObject({ speakerEnrolled: false, text: 'over and out' });
+    expect(link.capture.at(-1)).toMatchObject({ state: 'captured' });
+  });
+});

@@ -150,16 +150,17 @@ describe('G-VOX-06 Dictate exception: an unverified turn fills the draft, marked
     expect(r2.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'unverified' } });
   });
 
-  it('Aegis (high): Dictate → Send word re-attaches, and the word claim is still refused while an unverified turn is outstanding', async () => {
+  it('TD-2026-10-23-496: Dictate → Send word re-attaches; the word now sends the whole draft (clamped voice-unverified); send-now and pieces are still refused', async () => {
     const r = rig();
     await r.attach('dictate');
     await r.turn('drop the database', UNVERIFIED);
-    await r.attach('word'); // the preset switch: a NEW attachment on the same session
+    await r.attach('word'); // the preset switch: a NEW attachment on the same session (its start row carries the liability acknowledgement)
     await r.turn('and the tests'); // a verified draft turn under the word ceiling
-    const w = (await r.turn('over and out')) as { seq: number };
-    expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'word', turnSeq: w.seq }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only', by: 'word' });
     expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'hotkey' }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
-    expect(r.supSends).toHaveLength(0);
+    const w = (await r.turn('over and out')) as { seq: number };
+    expect(r.v.claimSend(r.human, { hsid: HSID, by: 'word', turnSeq: w.seq })).toMatchObject({ claimed: true });
+    await r.enter(['drop the database and the tests']);
+    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'unverified' } });
     // the same across Dictate → Pieces
     const r2 = rig();
     await r2.attach('dictate');
@@ -167,9 +168,7 @@ describe('G-VOX-06 Dictate exception: an unverified turn fills the draft, marked
     await r2.attach('pieces');
     const d = (await r2.turn('and the tests')) as { seq: number };
     expect(await refusal(() => r2.v.claimSend(r2.human, { hsid: HSID, by: 'piece', turnSeqs: [d.seq] }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only', by: 'piece' });
-    // the human's Enter sends the draft (clamped, the old attachment's turn consumed); then the word works again
-    await r.enter(['drop the database and the tests']);
-    expect(r.supSends.at(-1)).toMatchObject({ voiceOrigin: { sentBy: 'unverified' } });
+    // the unverified turn was consumed with that send: a verified-only draft's word send is a plain word send again
     await r.turn('next thing');
     const w2 = (await r.turn('over and out')) as { seq: number };
     expect(r.v.claimSend(r.human, { hsid: HSID, by: 'word', turnSeq: w2.seq })).toMatchObject({ claimed: true });
@@ -213,16 +212,17 @@ describe('G-VOX-06 stays for every rung that sends without a key press', () => {
   // founder ruling 2026-10-23: short speech is never thrown away. Under Send word and Pieces an unverified turn fills the
   // draft like Dictate; the word, pieces and send-now are refused while it is there, so only the human's Enter sends it
   for (const rung of ['word', 'pieces'] as const) {
-    it(`${rung}: an unverified turn fills the draft (hash-only row); only Enter sends it, clamped`, async () => {
+    it(`${rung}: an unverified turn fills the draft (hash-only row); ${rung === 'word' ? 'the word or Enter sends it' : 'only Enter sends it'}, clamped`, async () => {
       const r = rig();
       await r.attach(rung);
       const got = (await r.turn('rm -rf build', UNVERIFIED)) as { seq: number };
       expect(got).toMatchObject({ forwardable: true, draftOnly: true });
       expect(r.rows.at(-1)!.payload).not.toHaveProperty('text');
       const w = (await r.turn('over and out')) as { seq: number };
-      if (rung === 'word') expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'word', turnSeq: w.seq }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
+      // TD-2026-10-23-496: the word claim is accepted (the send it binds is clamped below); pieces keep their rule
+      if (rung === 'word') expect(r.v.claimSend(r.human, { hsid: HSID, by: 'word', turnSeq: w.seq })).toMatchObject({ claimed: true });
       else expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'piece', turnSeqs: [got.seq] }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
-      expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'hotkey' }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
+      if (rung === 'pieces') expect(await refusal(() => r.v.claimSend(r.human, { hsid: HSID, by: 'hotkey' }))).toMatchObject({ reason: 'voice-speaker', cause: 'draft-only' });
       expect(await refusal(r.v.send(r.vc, { hsid: HSID, content: [{ text: 'rm -rf build' }] }))).toMatchObject({ code: 'FORBIDDEN', gate: 'voice' });
       expect(r.supSends).toHaveLength(0);
       await r.enter(['rm -rf build']);

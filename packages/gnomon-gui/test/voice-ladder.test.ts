@@ -277,7 +277,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     s = run(s, trialStatus(takes('send it', 'sand it', 'send it')));
     r = paint();
     expect(r.text).toContain('I heard: “send it” ✓');
-    expect(r.text).toContain('I understand a misheard or other voice can send for me; edits will still ask.');
+    expect(r.text).toContain('Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
     // Aegis R-1: each collected mishearing is an UNTICKED opt-in box with its consequence in words
     const box = r.all((e) => e.attrs.get('data-vs-variant') === 'sand it')[0]!;
     expect(box.tag).toBe('input');
@@ -302,7 +302,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     const done = run(initialTeach(), { type: 'pick', text: 'over' }, trialStatus(takes('over', 'over')));
     let r = root(sheetEls(fdoc, view({ flow: { kind: 'teach', s: done, attached: true } })));
     const para = r.all((e) => e.className === 'vs-risk-text')[0]!;
-    expect(para.text).toBe('When you say “over”, Gnomon sends what you dictated. Another voice or a video could be taken for yours, so any edit Claude tries in a voice-sent turn asks you first.');
+    expect(para.text).toBe("When you say “over”, Gnomon sends everything in the draft, even words it couldn't check as you. Anyone near your mic, or a video playing, can send with this word, so any edit Claude tries in a voice-sent turn asks you first.");
     const box = r.all((e) => e.attrs.get('data-vs-ack') === 'teach')[0]!;
     expect(box.attrs.has('checked')).toBe(false);
     expect(r.all((e) => e.className === 'vs-check')[0]!.text.trim()).toBe(ACK_TEXT);
@@ -339,7 +339,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
   it('Pieces waits on the risk row: the exact text, "I understand", then "turn on Pieces"', () => {
     const r = root(sheetEls(fdoc, view({ flow: { kind: 'risk', rung: 'pieces', ack: false } })));
     const sec = r.all((e) => e.attrs.get('data-vs-section') === 'risk')[0]!;
-    expect(sec.text).toContain('I understand a misheard or other voice can send for me; edits will still ask.');
+    expect(sec.text).toContain('Anyone near my mic can send for me: the send word sends my whole draft. Edits will still ask.');
     const go = sec.all((e) => e.attrs.get('data-vs-risk') === 'go')[0]!;
     expect(go.text).toBe('turn on Pieces');
     expect(go.attrs.has('disabled')).toBe(true);
