@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-22T09:08:08.208Z'
+generated: '2026-10-22T20:05:17.022Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -314,7 +314,7 @@ by_symbol:
           - scripts/gnomon-node-gate.mjs
           - scripts/release.mjs
         description: 'feat(#paradigm)!: Node 24 or newer required everywhere'
-      - &ref_28
+      - &ref_37
         id: h0996
         ts: '2026-10-22T00:24:10Z'
         type: implement
@@ -421,7 +421,7 @@ by_symbol:
           - packages/sentinel/src/cli/commands.ts
           - packages/sentinel/src/types.ts
         description: 'fix(#paradigm-mcp): typecheck to zero across paradigm, paradigm-mcp and sentinel, fixing the live bugs it hid'
-      - &ref_29
+      - &ref_38
         id: h0995
         ts: '2026-10-22T00:24:02Z'
         type: implement
@@ -3056,7 +3056,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_35
+      - &ref_33
         id: h0689
         ts: '2026-09-01T03:29:21Z'
         type: implement
@@ -3508,7 +3508,7 @@ by_symbol:
         intent: feature
         files: []
         description: 'merge(#paradigm-plugin): bring main (7.15.1 agent turn limits, sentinel design fixes) into feat/gnomon'
-      - &ref_495
+      - &ref_496
         id: h0966
         ts: '2026-10-21T06:04:33Z'
         type: implement
@@ -3532,7 +3532,7 @@ by_symbol:
           - plugins/paradigm/hooks/hooks.json
           - plugins/paradigm/scripts/paradigm-session-start.sh
         description: 'feat(#hook-health-warning): SessionStart tells the agent when a hook was killed or slow'
-      - &ref_33
+      - &ref_31
         id: h0965
         ts: '2026-10-21T06:04:11Z'
         type: implement
@@ -3573,7 +3573,7 @@ by_symbol:
           - plugins/paradigm/scripts/paradigm-stop.sh
           - plugins/paradigm/scripts/paradigm-team-gate.sh
         description: 'feat(#hook-monitor): every plugin hook records its wall time and outcome'
-      - &ref_34
+      - &ref_32
         id: h0959
         ts: '2026-10-21T05:42:31Z'
         type: implement
@@ -3694,7 +3694,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#enforcement): v5.21.2 — stop hook false blocks from git-clean and file-modified habits'
-      - &ref_38
+      - &ref_36
         id: h0047
         ts: '2026-02-24T21:22:14Z'
         type: implement
@@ -3811,7 +3811,7 @@ by_symbol:
     recent:
       - *ref_14
       - *ref_21
-      - &ref_32
+      - &ref_30
         id: h0037
         ts: '2026-02-23T18:19:22Z'
         type: implement
@@ -4026,7 +4026,7 @@ by_symbol:
           - packages/university/ui/src/styles/academia.css
           - packages/university/ui/src/views/PLSATView.tsx
         description: 'feat(#lore): consolidate assessments into lore as unified project memory'
-      - &ref_30
+      - &ref_28
         id: h0114
         ts: '2026-03-02T22:50:44Z'
         type: implement
@@ -4095,7 +4095,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_490
+      - &ref_491
         id: h0955
         ts: '2026-10-21T03:42:32Z'
         type: implement
@@ -4392,71 +4392,36 @@ by_symbol:
       agent: []
   '#paradigm':
     symbol: '#paradigm'
-    total_changes: 31
-    last_modified: '2026-10-22T09:02:57Z'
+    total_changes: 35
+    last_modified: '2026-10-22T17:13:12Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_27
-      - &ref_444
-        id: h0999
-        ts: '2026-10-22T07:18:33Z'
+      - &ref_502
+        id: h1007
+        ts: '2026-10-22T17:13:12Z'
         type: implement
         symbols:
-          - '#gnomon-kernel'
-          - '#gnomon-wrapper'
           - '#paradigm'
+          - '#publish-gnomon'
         author:
           type: human
           id: ascend
-        commit: 03a8327394556002a2bf9df7f52f7ff9506612b0
-        intent: feature
+        commit: 3a71e42d5b6bbee61051371629c9cbd7bda20d3f
+        intent: fix
         files:
-          - .paradigm/decisions/TD-2026-10-22-310.yaml
-          - .paradigm/lore/entries/2026-10-22/L-2026-10-22-ascend-070909-859.lore
-          - .paradigm/work-log/2026-10-22/WL-orchestrator-2026-10-22-527.yaml
-          - docs/specs/gnomon.md
-          - package-lock.json
-          - packages/gnomon-darwin-arm64/.purpose
-          - packages/gnomon-darwin-x64/.purpose
-          - packages/gnomon-darwin-x64/README.md
-          - packages/gnomon-darwin-x64/index.js
-          - packages/gnomon-darwin-x64/package.json
-          - packages/gnomon-helper/checksums.json
-          - packages/gnomon-voice/checksums.json
-          - packages/gnomon/.purpose
-          - packages/gnomon/package.json
-          - packages/gnomon/scripts/pack-roundtrip.mjs
-          - packages/gnomon/scripts/prepack.mjs
-          - packages/gnomon/scripts/release-darwin.mjs
-          - packages/gnomon/scripts/seal-npm-release.mjs
-          - packages/gnomon/test/gate-gnomon-publish.test.ts
-          - packages/gnomon/test/pack-roundtrip.test.ts
-          - packages/gnomon/test/release-darwin.test.ts
-          - packages/gnomon/test/release-excludes-gnomon.test.ts
-          - packages/gnomon/test/sec-01.test.ts
-          - packages/gnomon/test/symbol-allowlist.json
-          - packages/gnomon/test/version-lockstep.test.ts
-          - packages/paradigm/.purpose
-          - packages/paradigm/bin/gnomon-app.js
-          - packages/paradigm/bin/gnomon.js
-          - packages/paradigm/tests/gnomon-shim-install.test.ts
-          - packages/paradigm/tests/gnomon-shim.test.ts
-          - scripts/.purpose
-          - scripts/gate-gnomon-publish.mjs
-          - scripts/publish-gnomon.mjs
-          - scripts/release.mjs
-          - scripts/sync-gnomon-versions.mjs
-        description: 'feat(#gnomon-kernel): Gnomon 8.0 ships for Apple silicon only'
-      - id: h0997
-        ts: '2026-10-22T00:42:40Z'
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/check-gnomon-published.mjs
+        description: 'fix(#publish-gnomon): paradigm refuses to publish before its exact @a-company/gnomon is on npm'
+      - id: h1004
+        ts: '2026-10-22T09:13:09Z'
         type: implement
         symbols:
           - '#paradigm'
         author:
           type: human
           id: ascend
-        commit: 1d29170473be48d4ed2168c9feb64815ea59251f
+        commit: db4af701b8f5fbf7fb0230fa98fe2fa80ba4ad76
         intent: feature
         files:
           - .paradigm/curriculum/index.yaml
@@ -4464,21 +4429,102 @@ by_symbol:
           - .paradigm/events/postflight-liveness.jsonl
           - .paradigm/events/settlement-liveness.jsonl
           - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
           - .paradigm/history/log.jsonl
           - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
           - .paradigm/personas/index.yaml
+          - .paradigm/protocols/add-sentinel-mcp-integration.protocol
+          - .paradigm/protocols/add-tool-with-sentinel-schema.protocol
           - .paradigm/protocols/index.yaml
+          - .paradigm/research/paradigm-8/8.0-where-we-are.html
+          - .paradigm/research/paradigm-8/CHANGELOG-8.0.0-draft.md
+          - .paradigm/research/paradigm-8/README-8.0-audit.md
+          - .paradigm/research/paradigm-8/README-8.0-draft.md
+          - .paradigm/scan-index.json
           - .paradigm/university/index.yaml
+          - .paradigm/work-log/2026-10-22/WL-orchestrator-2026-10-22-750.yaml
           - .warpline/fabric.jsonl
           - .warpline/refs/heads/selvage
           - .warpline/refs/selvage
-          - packages/paradigm/.paradigm/events/compliance-history.jsonl
           - packages/paradigm/.paradigm/events/hook-timings.jsonl
-          - packages/paradigm/.paradigm/events/postflight-liveness.jsonl
-          - packages/paradigm/.paradigm/events/team-funnel.jsonl
-        description: 'chore(#paradigm): checkpoint, lore, history and warpline fabric'
-      - *ref_28
-      - *ref_29
+        description: 'chore(#paradigm): checkpoint, lore, history and indexes'
+      - &ref_444
+        id: h1003
+        ts: '2026-10-22T09:13:08Z'
+        type: implement
+        symbols:
+          - '#gnomon-kernel'
+          - '#paradigm'
+        author:
+          type: human
+          id: ascend
+        commit: cb886fe46e6759d8bcf1092a8b54ee04f90a8da2
+        intent: feature
+        files:
+          - CHANGELOG.md
+          - package-lock.json
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - packages/sentinel/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'chore(#paradigm): release 8.0.0, Gnomon ships as a signed Mac app through npm'
+      - &ref_443
+        id: h1002
+        ts: '2026-10-22T09:11:58Z'
+        type: implement
+        symbols:
+          - '#gnomon-helper'
+          - '#gnomon-kernel'
+          - '#paradigm'
+        author:
+          type: human
+          id: ascend
+        commit: 6cf63e68f242adec066844d0f5530ff0d97a3664
+        intent: feature
+        files:
+          - .claude-plugin/marketplace.json
+          - README.md
+          - docs/commands/doctor.md
+          - docs/competitive/agentscope-analysis.md
+          - docs/guides/mcp-setup.md
+          - docs/guides/v6-migration.md
+          - docs/specs/gnomon.md
+          - docs/specs/personas.md
+          - install.sh
+          - packages/gnomon-helper/darwin/Package.swift
+          - packages/gnomon-helper/scripts/build-darwin.mjs
+          - packages/gnomon-voice/io-darwin/Package.swift
+          - packages/gnomon-voice/scripts/build-voice-io.mjs
+          - packages/gnomon-wrapper/tauri.conf.json
+          - packages/gnomon/.purpose
+          - packages/gnomon/src/kernel/setup/preflight.ts
+          - packages/gnomon/test/macos-floor.test.ts
+          - packages/gnomon/test/setup.test.ts
+          - packages/paradigm-mcp/README.md
+          - packages/paradigm-mcp/src/resources/context.ts
+          - packages/paradigm/README.md
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/.purpose
+          - packages/paradigm/scripts/sync-readme.mjs
+          - packages/paradigm/src/commands/graph-slice.ts
+          - packages/paradigm/src/commands/init.ts
+          - packages/paradigm/src/commands/promote.ts
+          - packages/paradigm/src/graph-server/routes/symbols.ts
+          - packages/paradigm/templates/paradigm/docs/commands.md
+          - packages/paradigm/templates/paradigm/specs/navigator.md
+          - packages/paradigm/tests/readme-sync.test.ts
+          - packages/site/src/app/sections/MetricsSection.tsx
+          - packages/site/src/content/docs/getting-started.md
+          - packages/site/src/content/docs/mcp-tools.md
+          - plugins/paradigm-cursor/.cursor-plugin/plugin.json
+          - plugins/paradigm-cursor/README.md
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/README.md
+          - plugins/paradigm/skills/shift/SKILL.md
+        description: 'docs(#paradigm): 8.0 README, accurate tool counts, false claims removed, macOS 15 floor'
+      - *ref_27
     contributors:
       human:
         - ascend
@@ -4490,7 +4536,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_31
+      - &ref_29
         id: h0035
         ts: '2026-02-23T16:33:27Z'
         type: implement
@@ -4553,7 +4599,7 @@ by_symbol:
           - packages/paradigm/src/commands/override.ts
           - packages/paradigm/src/lore-server/routes/lore.ts
         description: 'fix(#task-loader): ids never build a path outside their store'
-      - *ref_30
+      - *ref_28
       - &ref_80
         id: h0113
         ts: '2026-03-02T22:23:21Z'
@@ -4624,7 +4670,7 @@ by_symbol:
           - packages/paradigm/src/core/lore/filter.ts
           - packages/paradigm/src/lore-server/routes/lore.ts
         description: 'fix(#lore-viewer): full null-safety pass for symbols_touched across all lore code'
-      - *ref_31
+      - *ref_29
     contributors:
       human:
         - ascend
@@ -4636,7 +4682,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_31
+      - *ref_29
     contributors:
       human:
         - ascend
@@ -4648,7 +4694,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_31
+      - *ref_29
     contributors:
       human:
         - ascend
@@ -4660,7 +4706,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_31
+      - *ref_29
     contributors:
       human:
         - ascend
@@ -4696,7 +4742,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_32
+      - *ref_30
     contributors:
       human:
         - ascend
@@ -4708,7 +4754,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_32
+      - *ref_30
     contributors:
       human:
         - ascend
@@ -4720,8 +4766,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_33
-      - &ref_491
+      - *ref_31
+      - &ref_492
         id: h0962
         ts: '2026-10-21T05:49:03Z'
         type: implement
@@ -4793,7 +4839,7 @@ by_symbol:
           - packages/paradigm/src/commands/hooks/.purpose
           - packages/paradigm/tests/hooks-timing.test.ts
         description: 'test(#stop-hook): hook timing harness, folded into the 7.15.2 release entry'
-      - *ref_34
+      - *ref_32
     contributors:
       human:
         - ascend
@@ -4975,7 +5021,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
           - plugins/paradigm/scripts/paradigm-common.sh
         description: 'feat(#memory-cli): 7.9.0 — Memory Steward Phase A (govern native MEMORY.md)'
-      - *ref_35
+      - *ref_33
       - &ref_132
         id: h0313
         ts: '2026-04-22T05:54:31Z'
@@ -5097,7 +5143,7 @@ by_symbol:
           - reviews/2026-04-20-hotfix-review.md
           - reviews/2026-04-20-portal-add-gate-bug.md
         description: 'fix(#portal-writer): v5.37.11 — paradigm_portal_add_gate silent no-op on v2 scaffold'
-      - &ref_36
+      - &ref_34
         id: h0041
         ts: '2026-02-23T23:20:52Z'
         type: implement
@@ -5130,7 +5176,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_36
+      - *ref_34
     contributors:
       human:
         - ascend
@@ -5254,7 +5300,7 @@ by_symbol:
           - packages/paradigm/src/commands/plugin/check.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#plugin-check): use semver sort for plugin version detection'
-      - &ref_37
+      - &ref_35
         id: h0044
         ts: '2026-02-24T00:11:54Z'
         type: implement
@@ -5314,7 +5360,7 @@ by_symbol:
           - plugins/paradigm/skills/teach/SKILL.md
           - plugins/paradigm/skills/team/SKILL.md
         description: 'feat(#skills): v5.6.0 — 4 new skills + plugin content hash cache invalidation'
-      - *ref_37
+      - *ref_35
     contributors:
       human:
         - ascend
@@ -5326,7 +5372,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -5338,7 +5384,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -5350,7 +5396,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -5499,7 +5545,7 @@ by_symbol:
           - packages/university/src/content/plsat/v3.0.json
           - packages/university/src/content/reference.json
         description: 'feat(~aspects): full aspect audit — 195 aspects documented across all packages'
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -5511,8 +5557,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_28
-      - *ref_29
+      - *ref_37
+      - *ref_38
       - id: h0099
         ts: '2026-03-02T03:46:29Z'
         type: implement
@@ -5571,7 +5617,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -5583,7 +5629,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -5631,7 +5677,7 @@ by_symbol:
           - packages/purpose/core/.purpose
           - packages/sentinel/.purpose
         description: 'fix(#paradigm-mcp): paragon sweep — close all MCP tool gaps'
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -5643,7 +5689,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_38
+      - *ref_36
     contributors:
       human:
         - ascend
@@ -7583,7 +7629,7 @@ by_symbol:
     recent:
       - *ref_70
       - *ref_71
-      - *ref_34
+      - *ref_32
       - *ref_72
     contributors:
       human:
@@ -7996,7 +8042,7 @@ by_symbol:
           - packages/paradigm/src/lore-server/routes/sessions.ts
         description: 'fix(#lore-viewer): crash on old author object format and missing array fields'
       - *ref_79
-      - *ref_30
+      - *ref_28
       - *ref_80
       - *ref_81
     contributors:
@@ -11391,7 +11437,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_494
+      - &ref_495
         id: h0967
         ts: '2026-10-21T06:06:21Z'
         type: implement
@@ -14185,11 +14231,28 @@ by_symbol:
       agent: []
   '#portal-compliance':
     symbol: '#portal-compliance'
-    total_changes: 3
-    last_modified: '2026-04-22T23:19:19Z'
+    total_changes: 4
+    last_modified: '2026-10-22T16:59:19Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h1006
+        ts: '2026-10-22T16:59:19Z'
+        type: implement
+        symbols:
+          - '#portal-compliance'
+        author:
+          type: human
+          id: ascend
+        commit: b0a192fbdc3df45cda8be50e733d8230c24b6e20
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/src/core/portal-compliance.test.ts
+          - packages/paradigm/src/core/portal-compliance.ts
+        description: 'fix(#portal-compliance): rg exit 1 (no matches) is an answer, not a reason to re-scan with grep'
       - *ref_144
       - *ref_132
       - *ref_145
@@ -29395,7 +29458,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_35
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -29410,7 +29473,7 @@ by_symbol:
       - *ref_66
       - *ref_274
       - *ref_48
-      - *ref_35
+      - *ref_33
     contributors:
       human:
         - ascend
@@ -30026,7 +30089,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_445
+      - &ref_448
         id: h0992
         ts: '2026-10-22T00:05:17Z'
         type: implement
@@ -30244,7 +30307,7 @@ by_symbol:
           - packages/gnomon/test/approval-broker.test.ts
           - packages/gnomon/test/one-presence-count.test.ts
         description: 'fix(#gnomon-gui): root-capable cards fail closed; rootDecisions inside the hashed detail (Aegis M1)'
-      - &ref_452
+      - &ref_454
         id: h0914
         ts: '2026-10-21T00:47:51Z'
         type: implement
@@ -30265,7 +30328,7 @@ by_symbol:
           - packages/gnomon/.purpose
           - packages/gnomon/CHANGELOG.md
         description: 'docs(#approval-broker): spec residual, G-ID-11/12, purposes and changelog for the follow-up'
-      - &ref_453
+      - &ref_455
         id: h0913
         ts: '2026-10-21T00:46:40Z'
         type: implement
@@ -30308,7 +30371,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_475
+      - &ref_476
         id: h0960
         ts: '2026-10-21T05:21:24Z'
         type: implement
@@ -30332,7 +30395,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'fix(#gui-dictation): one send control, Hold only beside a countdown, one composer box'
-      - &ref_461
+      - &ref_462
         id: h0948
         ts: '2026-10-21T03:13:22Z'
         type: implement
@@ -30463,7 +30526,7 @@ by_symbol:
           - packages/gnomon/test/platform-registry.ts
           - packages/gnomon/vitest.config.ts
         description: 'fix(#kernel-log): Windows parity hygiene — writable-handle fsync, platform markers enforced, CI-portable tests'
-      - &ref_450
+      - &ref_452
         id: h0751
         ts: '2026-10-17T21:34:05Z'
         type: implement
@@ -30578,7 +30641,7 @@ by_symbol:
         description: 'feat(#gnomon-kernel): 8.0 M3, npm packaging: public @a-company/gnomon, darwin platform packages, a gnomon command in paradigm'
       - *ref_441
       - *ref_442
-      - &ref_451
+      - &ref_453
         id: h0938
         ts: '2026-10-21T02:57:24Z'
         type: implement
@@ -30611,7 +30674,7 @@ by_symbol:
           - packages/gnomon/test/voice-golden.test.ts
           - packages/gnomon/test/voice-v2a.test.ts
         description: 'feat(#gnomon-contracts): offer.retired + session.anomaly in one clientApiId move (T-2026-10-21-008)'
-      - &ref_449
+      - &ref_451
         id: h0934
         ts: '2026-10-21T02:42:55Z'
         type: implement
@@ -30635,12 +30698,13 @@ by_symbol:
       agent: []
   '#gnomon-helper':
     symbol: '#gnomon-helper'
-    total_changes: 12
-    last_modified: '2026-10-22T09:08:03Z'
+    total_changes: 13
+    last_modified: '2026-10-22T09:11:58Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_443
+      - *ref_443
+      - &ref_445
         id: h1001
         ts: '2026-10-22T09:08:03Z'
         type: implement
@@ -30673,7 +30737,7 @@ by_symbol:
         files:
           - packages/gnomon-helper/checksums.json
         description: 'chore(#gnomon-helper): checksums for the founder-signed 1.8.0 helper (fc0189fd)'
-      - &ref_457
+      - &ref_459
         id: h0915
         ts: '2026-10-21T00:49:12Z'
         type: implement
@@ -30691,62 +30755,71 @@ by_symbol:
           - packages/gnomon/scripts/gen-decision-vectors.ts
           - packages/gnomon/src/kernel/identity/decision-batch.ts
         description: 'fix(#gnomon-helper): strict JSON compare of root rows; read paths in full (Aegis F2)'
-      - &ref_458
-        id: h0904
-        ts: '2026-10-21T00:22:12Z'
-        type: implement
-        symbols:
-          - '#approval-broker'
-          - '#gnomon-helper'
-          - '#identity'
-          - '#manifest-loader'
-        author:
-          type: human
-          id: ascend
-        commit: 47fc44576eb8bb0fab6aece513e63c3c0b29bfa2
-        intent: feature
-        files:
-          - docs/specs/gnomon.md
-          - packages/gnomon-helper/.purpose
-          - packages/gnomon/.purpose
-          - packages/gnomon/CHANGELOG.md
-        description: 'docs(#gnomon-helper): spec, .purpose and changelog for one presence per decision'
     contributors:
       human:
         - ascend
       agent: []
   '#gnomon-kernel':
     symbol: '#gnomon-kernel'
-    total_changes: 14
-    last_modified: '2026-10-22T09:08:03Z'
+    total_changes: 16
+    last_modified: '2026-10-22T09:13:08Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_443
-      - *ref_27
       - *ref_444
-      - id: h0993
-        ts: '2026-10-22T00:09:03Z'
+      - *ref_443
+      - *ref_445
+      - *ref_27
+      - &ref_447
+        id: h0999
+        ts: '2026-10-22T07:18:33Z'
         type: implement
         symbols:
           - '#gnomon-kernel'
+          - '#gnomon-wrapper'
           - '#paradigm'
         author:
           type: human
           id: ascend
-        commit: ae2ddb049937b9bd7cca0a8f6088131b65b65bf8
-        intent: fix
+        commit: 03a8327394556002a2bf9df7f52f7ff9506612b0
+        intent: feature
         files:
-          - .github/workflows/release.yml
+          - .paradigm/decisions/TD-2026-10-22-310.yaml
+          - .paradigm/lore/entries/2026-10-22/L-2026-10-22-ascend-070909-859.lore
+          - .paradigm/work-log/2026-10-22/WL-orchestrator-2026-10-22-527.yaml
           - docs/specs/gnomon.md
-          - package.json
+          - package-lock.json
+          - packages/gnomon-darwin-arm64/.purpose
+          - packages/gnomon-darwin-x64/.purpose
+          - packages/gnomon-darwin-x64/README.md
+          - packages/gnomon-darwin-x64/index.js
+          - packages/gnomon-darwin-x64/package.json
+          - packages/gnomon-helper/checksums.json
+          - packages/gnomon-voice/checksums.json
           - packages/gnomon/.purpose
+          - packages/gnomon/package.json
+          - packages/gnomon/scripts/pack-roundtrip.mjs
+          - packages/gnomon/scripts/prepack.mjs
+          - packages/gnomon/scripts/release-darwin.mjs
+          - packages/gnomon/scripts/seal-npm-release.mjs
+          - packages/gnomon/test/gate-gnomon-publish.test.ts
+          - packages/gnomon/test/pack-roundtrip.test.ts
+          - packages/gnomon/test/release-darwin.test.ts
           - packages/gnomon/test/release-excludes-gnomon.test.ts
+          - packages/gnomon/test/sec-01.test.ts
+          - packages/gnomon/test/symbol-allowlist.json
+          - packages/gnomon/test/version-lockstep.test.ts
+          - packages/paradigm/.purpose
+          - packages/paradigm/bin/gnomon-app.js
+          - packages/paradigm/bin/gnomon.js
+          - packages/paradigm/tests/gnomon-shim-install.test.ts
+          - packages/paradigm/tests/gnomon-shim.test.ts
           - scripts/.purpose
+          - scripts/gate-gnomon-publish.mjs
           - scripts/publish-gnomon.mjs
           - scripts/release.mjs
-        description: 'fix(#gnomon-kernel): CI never publishes gnomon, and paradigm can''t publish before gnomon is on npm'
-      - *ref_445
+          - scripts/sync-gnomon-versions.mjs
+        description: 'feat(#gnomon-kernel): Gnomon 8.0 ships for Apple silicon only'
     contributors:
       human:
         - ascend
@@ -30897,8 +30970,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_443
-      - *ref_444
+      - *ref_445
+      - *ref_447
       - id: h0998
         ts: '2026-10-22T04:14:39Z'
         type: implement
@@ -30913,7 +30986,7 @@ by_symbol:
           - packages/gnomon-wrapper/NodeEntitlements.plist
           - packages/gnomon/test/entitlements-xml.test.ts
         description: 'fix(#gnomon-wrapper): NodeEntitlements.plist comment broke codesign''s parser'
-      - *ref_445
+      - *ref_448
       - id: h0990
         ts: '2026-10-21T23:12:07Z'
         type: implement
@@ -30993,7 +31066,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_447
+      - &ref_449
         id: h0761
         ts: '2026-10-17T23:52:09Z'
         type: implement
@@ -31033,7 +31106,7 @@ by_symbol:
           - packages/gnomon-contracts/test/m1-1-reservations.test.ts
           - packages/gnomon-contracts/test/refusal-rpc.test.ts
         description: 'feat(#gnomon-contracts): M1.1 reservations for spec v3.9 — strictness, convergence, change notes, socket reasons'
-      - &ref_448
+      - &ref_450
         id: h0737
         ts: '2026-10-17T17:29:25Z'
         type: implement
@@ -31090,8 +31163,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_447
-      - *ref_448
+      - *ref_449
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31103,8 +31176,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_449
-      - &ref_455
+      - *ref_451
+      - &ref_457
         id: h0764
         ts: '2026-10-18T00:43:52Z'
         type: implement
@@ -31142,7 +31215,7 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-log-read.test.ts
         description: 'feat(#socket): M1.4 slice 2 — log.read, subscriptions, ref.resolve, hash-free limited views, released head'
-      - *ref_447
+      - *ref_449
       - id: h0752
         ts: '2026-10-17T21:39:34Z'
         type: implement
@@ -31205,8 +31278,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_447
-      - *ref_448
+      - *ref_449
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31218,7 +31291,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_448
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31230,7 +31303,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_448
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31242,7 +31315,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_448
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31254,8 +31327,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_447
-      - *ref_448
+      - *ref_449
+      - *ref_450
     contributors:
       human:
         - ascend
@@ -31267,7 +31340,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_473
+      - &ref_474
         id: h0830
         ts: '2026-10-20T07:39:46Z'
         type: implement
@@ -31291,7 +31364,7 @@ by_symbol:
           - packages/gnomon/src/kernel/voice/voice-requests.ts
           - packages/gnomon/test/voice-capture.test.ts
         description: 'feat(#gui-voice-capture): capture states in the voice client and the kernel relay (WIP, A1 part 1)'
-      - &ref_468
+      - &ref_469
         id: h0817
         ts: '2026-10-20T06:23:36Z'
         type: implement
@@ -31320,7 +31393,7 @@ by_symbol:
           - packages/gnomon/test/voice-golden.test.ts
           - packages/gnomon/test/voice-v2a.test.ts
         description: 'wip(#always-rules): repin abiId, re-embed GUI, GUI scope params, untrack node_modules symlinks'
-      - &ref_454
+      - &ref_456
         id: h0769
         ts: '2026-10-19T22:03:26Z'
         type: implement
@@ -31373,7 +31446,7 @@ by_symbol:
           - packages/gnomon/test/platform-registry.ts
           - packages/gnomon/test/socket-abi.test.ts
         description: 'test(#socket): CI fixes after the P8-D98 merge (linux gui.open, win32 key modes)'
-      - &ref_462
+      - &ref_463
         id: h0784
         ts: '2026-10-19T15:27:28Z'
         type: implement
@@ -31468,8 +31541,8 @@ by_symbol:
           - packages/gnomon/test/socket-auth.test.ts
           - packages/gnomon/test/socket-server.test.ts
         description: 'feat(#socket): M1.4 slice 1 — hello negotiation, mutual auth, authenticated dispatch, status'
-      - *ref_450
-      - &ref_456
+      - *ref_452
+      - &ref_458
         id: h0739
         ts: '2026-10-17T18:03:13Z'
         type: implement
@@ -31528,7 +31601,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_451
+      - *ref_453
       - id: h0925
         ts: '2026-10-21T02:16:42Z'
         type: implement
@@ -31569,9 +31642,9 @@ by_symbol:
           - packages/gnomon/test/voice-golden.test.ts
           - packages/gnomon/test/voice-v2a.test.ts
         description: 'feat(#offer-router): offer.suppressed on the signed kernel log, folded by desk stats'
-      - *ref_452
-      - *ref_453
       - *ref_454
+      - *ref_455
+      - *ref_456
     contributors:
       human:
         - ascend
@@ -31583,8 +31656,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_455
-      - *ref_456
+      - *ref_457
+      - *ref_458
     contributors:
       human:
         - ascend
@@ -31596,7 +31669,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_457
+      - *ref_459
       - id: h0910
         ts: '2026-10-21T00:39:36Z'
         type: implement
@@ -31648,7 +31721,25 @@ by_symbol:
           - packages/gnomon/test/one-presence-per-decision.test.ts
           - packages/gnomon/test/voice-v2e-enrol.test.ts
         description: 'feat(#gnomon-voice): voice.enrol is root class at one presence (Aegis Q3, F3)'
-      - *ref_458
+      - id: h0904
+        ts: '2026-10-21T00:22:12Z'
+        type: implement
+        symbols:
+          - '#approval-broker'
+          - '#gnomon-helper'
+          - '#identity'
+          - '#manifest-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 47fc44576eb8bb0fab6aece513e63c3c0b29bfa2
+        intent: feature
+        files:
+          - docs/specs/gnomon.md
+          - packages/gnomon-helper/.purpose
+          - packages/gnomon/.purpose
+          - packages/gnomon/CHANGELOG.md
+        description: 'docs(#gnomon-helper): spec, .purpose and changelog for one presence per decision'
     contributors:
       human:
         - ascend
@@ -31660,7 +31751,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_455
+      - *ref_457
     contributors:
       human:
         - ascend
@@ -31672,7 +31763,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_459
+      - &ref_460
         id: h0767
         ts: '2026-10-18T16:47:38Z'
         type: implement
@@ -31717,7 +31808,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_460
+      - &ref_461
         id: h0929
         ts: '2026-10-21T02:38:38Z'
         type: implement
@@ -31764,7 +31855,7 @@ by_symbol:
           - packages/gnomon/test/voice-v2a.test.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'feat(#supervisor): turn.result names the turn it closes; a folded queued turn settles (review M2)'
-      - *ref_459
+      - *ref_460
     contributors:
       human:
         - ascend
@@ -31776,7 +31867,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_466
+      - &ref_467
         id: h0958
         ts: '2026-10-21T03:46:00Z'
         type: implement
@@ -31798,7 +31889,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/supervisor.ts
           - packages/gnomon/test/shell-readonly-widen.test.ts
         description: 'fix(#shell-readonly): paradigm read verbs pass only for paradigm >= 7.15.2 on the session PATH'
-      - &ref_484
+      - &ref_485
         id: h0944
         ts: '2026-10-21T03:09:11Z'
         type: implement
@@ -31818,8 +31909,8 @@ by_symbol:
           - packages/gnomon/test/offer-router.test.ts
         description: 'fix(#offer-router): replay lines before the stream is live are history, not consumption (re-review L-2)'
       - *ref_446
-      - *ref_460
-      - &ref_464
+      - *ref_461
+      - &ref_465
         id: h0922
         ts: '2026-10-21T01:09:52Z'
         type: implement
@@ -31844,7 +31935,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_459
+      - *ref_460
     contributors:
       human:
         - ascend
@@ -31856,7 +31947,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_479
+      - &ref_480
         id: h0964
         ts: '2026-10-21T06:02:44Z'
         type: implement
@@ -31882,7 +31973,7 @@ by_symbol:
           - packages/gnomon/src/platform/darwin/session-sbpl.ts
           - packages/gnomon/test/session-sandbox.test.ts
         description: 'fix(#session-sandbox): scope the session-env carve-back to this session''s uuid (Aegis H1/M1)'
-      - &ref_480
+      - &ref_481
         id: h0963
         ts: '2026-10-21T05:53:02Z'
         type: implement
@@ -31947,7 +32038,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_452
+      - *ref_454
       - id: h0905
         ts: '2026-10-21T00:29:34Z'
         type: implement
@@ -31989,7 +32080,7 @@ by_symbol:
           - .paradigm/lore/timeline.yaml
           - .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md
         description: 'docs(#manifest-loader): ratified mod naming and versioning spec (S0b of the Desk O1)'
-      - &ref_477
+      - &ref_478
         id: h0894
         ts: '2026-10-20T19:20:09Z'
         type: implement
@@ -32004,7 +32095,7 @@ by_symbol:
         intent: feature
         files: []
         description: 'merge(#paradigm-context-mod): Paradigm Context mod + K1/K3 (Aegis approved after the H1 ReDoS and M1 scope fixes); bundle re-embedded'
-      - &ref_478
+      - &ref_479
         id: h0873
         ts: '2026-10-20T19:09:58Z'
         type: implement
@@ -32175,7 +32266,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_461
+      - *ref_462
       - id: h0937
         ts: '2026-10-21T02:44:18Z'
         type: implement
@@ -32195,7 +32286,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'fix(#gui): the working row is one status, its clock is not announced (review a11y)'
-      - *ref_460
+      - *ref_461
       - id: h0928
         ts: '2026-10-21T02:32:45Z'
         type: implement
@@ -32247,7 +32338,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_462
+      - *ref_463
       - id: h0778
         ts: '2026-10-19T05:43:39Z'
         type: implement
@@ -32329,7 +32420,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_463
+      - &ref_464
         id: h0771
         ts: '2026-10-19T21:53:17Z'
         type: implement
@@ -32369,7 +32460,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_463
+      - *ref_464
     contributors:
       human:
         - ascend
@@ -32403,7 +32494,7 @@ by_symbol:
           - packages/gnomon/src/kernel/voice/voice-requests.ts
           - packages/gnomon/test/voice-capture.test.ts
         description: 'fix(#gnomon-voice): B1 Aegis L1-L3: decode watchdog, wider sanitiser, liveness limit'
-      - &ref_471
+      - &ref_472
         id: h0857
         ts: '2026-10-20T09:02:44Z'
         type: implement
@@ -32424,7 +32515,7 @@ by_symbol:
           - packages/gnomon/.purpose
           - packages/gnomon/test/symbol-allowlist.json
         description: 'feat(#gnomon-voice): B1 live words: spec §14.7 prose, .purpose, $voice-turn'
-      - &ref_472
+      - &ref_473
         id: h0856
         ts: '2026-10-20T08:54:31Z'
         type: implement
@@ -32495,7 +32586,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_467
+      - &ref_468
         id: h0949
         ts: '2026-10-21T03:13:56Z'
         type: implement
@@ -32509,7 +32600,7 @@ by_symbol:
         intent: feature
         files: []
         description: 'merge(#shell-readonly): auto-edits passes wider read-only command families (TD-2026-10-21-836)'
-      - *ref_464
+      - *ref_465
       - id: h0801
         ts: '2026-10-19T22:49:02Z'
         type: implement
@@ -32690,7 +32781,7 @@ by_symbol:
           - packages/gnomon-voice/src/types.ts
           - packages/gnomon-voice/test/kernel-link.test.ts
         description: 'feat(#gnomon-voice-io): hold-toggle hotkey for dictation (WIP S)'
-      - &ref_465
+      - &ref_466
         id: h0803
         ts: '2026-10-19T23:19:13Z'
         type: implement
@@ -32759,7 +32850,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_465
+      - *ref_466
     contributors:
       human:
         - ascend
@@ -32798,8 +32889,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_466
-      - &ref_489
+      - *ref_467
+      - &ref_490
         id: h0954
         ts: '2026-10-21T03:37:02Z'
         type: implement
@@ -32818,7 +32909,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/shell-readonly.ts
           - packages/gnomon/test/shell-readonly-widen.test.ts
         description: 'fix(#shell-readonly): paradigm read verbs pass on their grammar alone'
-      - *ref_467
+      - *ref_468
       - id: h0848
         ts: '2026-10-20T08:05:56Z'
         type: implement
@@ -32943,7 +33034,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/rules.ts
           - packages/gnomon/test/rules-bash-hash.test.ts
         description: 'feat(#always-rules): exact Bash rules also match by the {command} hash (RC5)'
-      - &ref_469
+      - &ref_470
         id: h0829
         ts: '2026-10-20T06:57:44Z'
         type: implement
@@ -32988,7 +33079,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_470
+      - &ref_471
         id: h0819
         ts: '2026-10-20T06:35:49Z'
         type: implement
@@ -33006,7 +33097,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'wip(#gui-cards): prefix words quoted and escaped on the always keys (Aegis M1); GUI re-embedded'
-      - *ref_468
+      - *ref_469
     contributors:
       human:
         - ascend
@@ -33018,7 +33109,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_469
+      - *ref_470
       - id: h0823
         ts: '2026-10-20T06:42:33Z'
         type: implement
@@ -33069,7 +33160,7 @@ by_symbol:
         files:
           - packages/gnomon/src/kernel/broker/broker.ts
         description: 'wip(#approval-broker): CLI presence prompt shows the quoted prefix words; prefix-policy tests (Aegis M1, L1, L5)'
-      - *ref_470
+      - *ref_471
     contributors:
       human:
         - ascend
@@ -33181,7 +33272,7 @@ by_symbol:
           - packages/gnomon-gui/static/styles.css
           - packages/gnomon-gui/test/desk.test.ts
         description: 'feat(#gui): fidelity pass 2 — compact cards with a details disclosure'
-      - &ref_474
+      - &ref_475
         id: h0861
         ts: '2026-10-20T15:28:22Z'
         type: implement
@@ -33241,8 +33332,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_471
       - *ref_472
+      - *ref_473
       - id: h0832
         ts: '2026-10-20T07:51:02Z'
         type: implement
@@ -33296,7 +33387,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'feat(#gui-voice-capture): capture pill states, V3 poll lifecycle, sanitised pill title (A1 part 2)'
-      - *ref_473
+      - *ref_474
     contributors:
       human:
         - ascend
@@ -33308,7 +33399,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_471
+      - *ref_472
     contributors:
       human:
         - ascend
@@ -33352,7 +33443,7 @@ by_symbol:
           - packages/gnomon-gui/static/styles.css
           - packages/gnomon-gui/test/choices.test.ts
         description: 'fix(#gui-table-talk): fidelity pass 2 Aegis L3 — night choice chips keep the filled pill'
-      - *ref_474
+      - *ref_475
       - id: h0860
         ts: '2026-10-20T15:23:40Z'
         type: implement
@@ -33417,7 +33508,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_442
-      - *ref_475
+      - *ref_476
       - id: h0867
         ts: '2026-10-20T18:51:52Z'
         type: implement
@@ -33445,7 +33536,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_476
+      - &ref_477
         id: h0869
         ts: '2026-10-20T18:53:13Z'
         type: implement
@@ -33476,7 +33567,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_476
+      - *ref_477
     contributors:
       human:
         - ascend
@@ -33545,8 +33636,8 @@ by_symbol:
           - .warpline/refs/heads/selvage
           - .warpline/refs/selvage
         description: 'chore(#paradigm-context-mod): record the Desk ratification (TD-2026-10-20-812), TD-2026-10-20-125, marathon lore and the Atelier session'
-      - *ref_477
-      - &ref_481
+      - *ref_478
+      - &ref_482
         id: h0874
         ts: '2026-10-20T19:11:40Z'
         type: implement
@@ -33567,7 +33658,7 @@ by_symbol:
           - packages/gnomon/src/kernel/manifest/install.ts
           - packages/gnomon/test/paradigm-context-mod.test.ts
         description: 'fix(#paradigm-context-mod): Aegis L2 — fixed type prefix, quoted dim titles; packageHash repinned'
-      - *ref_478
+      - *ref_479
       - id: h0872
         ts: '2026-10-20T19:07:08Z'
         type: implement
@@ -33648,7 +33739,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_492
+      - &ref_493
         id: h0971
         ts: '2026-10-21T06:17:56Z'
         type: implement
@@ -33670,7 +33761,7 @@ by_symbol:
           - packages/gnomon/src/kernel/supervisor/supervisor.ts
           - packages/gnomon/test/session-env-cleanup.test.ts
         description: 'fix(#session-supervisor): withhold the session-env carve when an existing dir is foreign-owned or group/world-writable (Aegis L-2)'
-      - &ref_493
+      - &ref_494
         id: h0970
         ts: '2026-10-21T06:17:18Z'
         type: implement
@@ -33698,9 +33789,9 @@ by_symbol:
           - packages/gnomon/test/daemon-children.test.ts
           - packages/gnomon/test/session-env-cleanup.test.ts
         description: 'fix(#session-supervisor): empty session-env/<uuid> at every session end, never through a link (Aegis M-B, L-1)'
-      - *ref_479
       - *ref_480
-      - *ref_478
+      - *ref_481
+      - *ref_479
     contributors:
       human:
         - ascend
@@ -33712,7 +33803,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_478
+      - *ref_479
     contributors:
       human:
         - ascend
@@ -33724,7 +33815,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_481
+      - *ref_482
     contributors:
       human:
         - ascend
@@ -33736,7 +33827,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_482
+      - &ref_483
         id: h0899
         ts: '2026-10-20T23:23:31Z'
         type: implement
@@ -33756,7 +33847,7 @@ by_symbol:
         intent: feature
         files: []
         description: 'merge(#offer-router): the Desk O1 (S0-S3) plus S0b mod naming and versioning, all slices Aegis-approved after fixes'
-      - &ref_483
+      - &ref_484
         id: h0895
         ts: '2026-10-20T21:50:14Z'
         type: implement
@@ -33781,8 +33872,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_482
       - *ref_483
+      - *ref_484
     contributors:
       human:
         - ascend
@@ -33794,7 +33885,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_485
+      - &ref_486
         id: h0940
         ts: '2026-10-21T03:04:54Z'
         type: implement
@@ -33836,7 +33927,7 @@ by_symbol:
           - packages/gnomon/src/cli/desk-cli.ts
           - packages/gnomon/test/desk-stats.test.ts
         description: 'test(#offer-router): desk stats never key on turn id alone (review C3)'
-      - *ref_482
+      - *ref_483
       - id: h0896
         ts: '2026-10-20T21:50:31Z'
         type: implement
@@ -33860,7 +33951,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_482
+      - *ref_483
     contributors:
       human:
         - ascend
@@ -33872,7 +33963,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_482
+      - *ref_483
     contributors:
       human:
         - ascend
@@ -33884,8 +33975,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_484
-      - &ref_486
+      - *ref_485
+      - &ref_487
         id: h0943
         ts: '2026-10-21T03:07:54Z'
         type: implement
@@ -33904,7 +33995,7 @@ by_symbol:
           - packages/gnomon/src/kernel/desk/offer-router.ts
           - packages/gnomon/test/offer-router.test.ts
         description: 'fix(#offer-router): an unconsumed queued turn is not streaming; a continuation keeps its turn (re-review L-1)'
-      - &ref_487
+      - &ref_488
         id: h0942
         ts: '2026-10-21T03:07:05Z'
         type: implement
@@ -33940,7 +34031,7 @@ by_symbol:
           - packages/gnomon/src/cli/desk-cli.ts
           - packages/gnomon/test/desk-stats.test.ts
         description: 'fix(#offer-router): desk stats subtract retired offers and count a suppression once per turn epoch (re-review M-3)'
-      - *ref_485
+      - *ref_486
     contributors:
       human:
         - ascend
@@ -33976,7 +34067,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'fix(#gnomon-gui): design-system menus, headings, wrapper and tokens batches'
-      - &ref_499
+      - &ref_500
         id: h0982
         ts: '2026-10-21T18:48:05Z'
         type: implement
@@ -34022,7 +34113,7 @@ by_symbol:
           - packages/gnomon/src/kernel/web/gui-bundle.ts
           - packages/gnomon/test/web-units.test.ts
         description: 'fix(#gnomon-gui): design-system type batch: four sizes, every font-size on a token'
-      - &ref_498
+      - &ref_499
         id: h0980
         ts: '2026-10-21T18:15:38Z'
         type: implement
@@ -34070,10 +34161,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_486
       - *ref_487
-      - *ref_485
-      - &ref_488
+      - *ref_488
+      - *ref_486
+      - &ref_489
         id: h0933
         ts: '2026-10-21T02:42:30Z'
         type: implement
@@ -34121,8 +34212,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_485
-      - *ref_488
+      - *ref_486
+      - *ref_489
     contributors:
       human:
         - ascend
@@ -34135,7 +34226,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_281
-      - *ref_489
+      - *ref_490
       - *ref_19
       - *ref_236
     contributors:
@@ -34162,7 +34253,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_280
-      - *ref_490
+      - *ref_491
     contributors:
       human:
         - ascend
@@ -34174,7 +34265,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_490
+      - *ref_491
     contributors:
       human:
         - ascend
@@ -34198,7 +34289,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_466
+      - *ref_467
     contributors:
       human:
         - ascend
@@ -34210,7 +34301,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_34
+      - *ref_32
     contributors:
       human:
         - ascend
@@ -34234,8 +34325,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_33
-      - *ref_491
+      - *ref_31
+      - *ref_492
     contributors:
       human:
         - ascend
@@ -34247,10 +34338,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_492
       - *ref_493
-      - *ref_479
+      - *ref_494
       - *ref_480
+      - *ref_481
     contributors:
       human:
         - ascend
@@ -34262,7 +34353,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_496
+      - &ref_497
         id: h0969
         ts: '2026-10-21T06:12:52Z'
         type: implement
@@ -34286,7 +34377,7 @@ by_symbol:
           - packages/paradigm/tests/hooks-monitor.test.ts
           - plugins/paradigm/scripts/paradigm-session-start.sh
         description: 'fix(#hook-health-warning): no ring text reaches the next session''s context except allowlisted hook names and numbers (Aegis M-A)'
-      - &ref_497
+      - &ref_498
         id: h0968
         ts: '2026-10-21T06:08:13Z'
         type: implement
@@ -34308,9 +34399,9 @@ by_symbol:
           - packages/paradigm/tests/hooks-monitor.test.ts
           - packages/paradigm/tests/hooks-timing.test.ts
         description: 'test(#hook-monitor): killed-hook detection, ring cap and doctor rendering; 7.15.2 CHANGELOG'
-      - *ref_494
       - *ref_495
-      - *ref_33
+      - *ref_496
+      - *ref_31
     contributors:
       human:
         - ascend
@@ -34322,9 +34413,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_496
       - *ref_497
-      - *ref_495
+      - *ref_498
+      - *ref_496
     contributors:
       human:
         - ascend
@@ -34336,9 +34427,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_496
       - *ref_497
-      - *ref_494
+      - *ref_498
+      - *ref_495
     contributors:
       human:
         - ascend
@@ -34350,7 +34441,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_493
+      - *ref_494
     contributors:
       human:
         - ascend
@@ -34515,7 +34606,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_498
+      - *ref_499
     contributors:
       human:
         - ascend
@@ -34527,7 +34618,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_498
+      - *ref_499
     contributors:
       human:
         - ascend
@@ -34539,7 +34630,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_499
+      - *ref_500
     contributors:
       human:
         - ascend
@@ -34551,7 +34642,77 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_499
+      - *ref_500
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#gui-loops':
+    symbol: '#gui-loops'
+    total_changes: 1
+    last_modified: '2026-10-22T09:43:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_501
+        id: h1005
+        ts: '2026-10-22T09:43:36Z'
+        type: implement
+        symbols:
+          - '#gui-loops'
+          - '#loop-registry'
+          - '#loop-runner'
+        author:
+          type: human
+          id: ascend
+        commit: 030fa52d31bcfd56153da8a3785100ab4b7e5be6
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-10-22-129.yaml
+          - .paradigm/decisions/TD-2026-10-22-197.yaml
+          - .paradigm/decisions/TD-2026-10-22-213.yaml
+          - .paradigm/lore/entries/2026-10-22/L-2026-10-22-ascend-091638-736.lore
+          - .paradigm/lore/entries/2026-10-22/L-2026-10-22-ascend-094038-844.lore
+          - .paradigm/lore/entries/2026-10-22/L-2026-10-22-ascend-094327-833.lore
+          - docs/plans/gnomon-windows.md
+          - docs/specs/gnomon-loops.md
+        description: 'docs(#loop-runner): Gnomon loops spec (recurring checks and fix loops for flows), reviewed by Aegis'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#loop-registry':
+    symbol: '#loop-registry'
+    total_changes: 1
+    last_modified: '2026-10-22T09:43:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_501
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#loop-runner':
+    symbol: '#loop-runner'
+    total_changes: 1
+    last_modified: '2026-10-22T09:43:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_501
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#publish-gnomon':
+    symbol: '#publish-gnomon'
+    total_changes: 1
+    last_modified: '2026-10-22T17:13:12Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_502
     contributors:
       human:
         - ascend

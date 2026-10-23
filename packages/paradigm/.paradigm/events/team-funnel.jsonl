@@ -16,3 +16,4 @@
 {"timestamp":"2026-10-21T23:26:56Z","type":"bypass","source":"stop-hook","magnitude":14,"reasons":"11 source files, 2 packages, 2 .purpose files","severity":"warn"}
 {"timestamp":"2026-10-21T23:27:50Z","type":"eligible","source":"prompt-gate","matched":"fix "}
 {"timestamp":"2026-10-21T23:30:20Z","type":"edit-advisory","source":"team-gate","file":"app-zip.ts"}
+{"timestamp":"2026-10-22T16:57:26Z","type":"edit-advisory","source":"team-gate","file":"portal-compliance.test.ts"}
