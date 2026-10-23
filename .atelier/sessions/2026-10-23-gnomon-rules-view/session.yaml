@@ -19,7 +19,14 @@ read: "One operator says Always a few times a day and forgets. Later a rule is w
   Changing ten rules must cost one password, not ten."
 started: 2026-10-23
 proposal: system-proposal.yaml
-status: proposed, not rendered (no refs/ yet); not applied to design-system.yaml
+status: built and rendered; applied to design-system.yaml (components rule-row, rules-save-bar) after the renders
+shoot: shoot.mjs   # renders the gnomon-gui preview fixtures rules-* with headless Chrome into refs/shots/ (refs/ is gitignored)
+rendered:
+  fixtures: [rules-0, rules-1, rules-5, rules-50, rules-200, rules-off-open, rules-tighten, rules-staged, rules-close, rules-refused, rules-waiting]
+  shots: "refs/shots/<fixture>-<1440|1024>-<day|night>.png (44 files)"
+rulings:
+  mika: "C1 Settings › Permissions › Rules, entry points palette Rules…, mode menu Always rules…, the Always toast's see Rules; C2 three kernel-clock presets, Turn off ▾ inline; C3 the save bar names its cost; staged rows by word and weight; removed struck with keep; unsaved close asks inline; a refusal keeps every change staged with next:"
+  aegis: "M2 narrowing never waits, one card per loosening batch re-validated at allow time, enabled only clears a flag; L1 kernel words on the card, detail.changes in contentHash, never standing or voice, oversize refused, one clientApiId move; L2 kernel clock, until in the future and <= 7 days, expiry visible in the feed, repoEditsRule / rules list / the mode chip honour off"
 contested:
   C1: "Where: Settings › Permissions › Rules (proposed) vs a leaf over the centre like Loops. Proposed: Settings, because
     the standing grant ('Today's grant') already lives in Permissions and the list is short (tens, not hundreds)."

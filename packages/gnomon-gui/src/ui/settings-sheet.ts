@@ -10,7 +10,10 @@
  *   - `[data-standing-revoke]` → `revoke(grantId)` (core/standing.ts revokeRequest through the page's client);
  *   - `[data-lm-act]`, `[data-lm-field]` and the form's submit → the Local model section's own press path
  *     (ui/local-model.ts; component settings-form: the form and request row kinds never run through SETTINGS_RUNS);
- *   - read-only rows have no control at all (a Check again key excepted, the section's own press path).
+ *   - read-only rows have no control at all (a Check again key excepted, the section's own press path);
+ *   - #gui-rules-view: `[data-rule-act]`, `[data-rules-save]`, `[data-rules-discard]`, `[data-rules-decide]` and the
+ *     `[data-rule-filter]` field → the Rules block's own press path (`rules`); closing the sheet with rule changes
+ *     staged asks inline first (`rules.beforeClose()` false keeps it open, its prompt painted and focused).
  *
  * Every press must be a trusted user event (G-GUI-04): a script-made click changes nothing.
  *
@@ -21,6 +24,7 @@
  */
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { folderFieldEl } from './folder-field.js';
+import { rulesBlockEl } from './rules-block.js';
 import { SETTINGS_RUNS, type FieldView, type FormKey, type FormView, type ResultView, type SectionId, type SettingRow, type SettingsSection } from '../core/settings.js';
 
 /** The Local model section's press path (ui/local-model.ts LocalModelController). */
@@ -39,11 +43,23 @@ export interface LocalPress {
   sheetClosed(): void;
 }
 
+/** #gui-rules-view: the Rules block's press path (ui/app.ts owns the staged state). */
+export interface RulesPress {
+  press(act: string, ruleId: string | null, value: string | null): void;
+  save(): void;
+  discard(): void;
+  decide(): void;
+  filter(text: string): void;
+  /** may the sheet close? false = changes are staged: the inline prompt shows instead */
+  beforeClose(): boolean;
+}
+
 export interface SettingsDeps {
   model: () => SettingsSection[];
   run: (id: string) => void;
   revoke: (grantId: string) => void;
   local?: LocalPress;
+  rules?: RulesPress;
 }
 
 /** Where focus goes after a Local model press: a field, a key, or the section's heading. */
@@ -116,6 +132,7 @@ function formEl(doc: MiniDoc, f: FormView): MiniEl {
 }
 
 function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
+  if (r.kind === 'rules') return rulesBlockEl(doc, r.view);
   if (r.kind === 'term') return h(doc, 'div', { class: 'settings-row sf-term', 'data-row': r.id }, h(doc, 'span', { class: 'settings-label' }), h(doc, 'p', { class: 'meta settings-how' }, r.text, h(doc, 'code', null, r.code)));
   const head = h(doc, 'span', { class: 'settings-label' }, r.label);
   if (r.kind === 'form') {
@@ -216,8 +233,9 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const a = document.activeElement as HTMLElement | null;
     const inBody = !!a && body.contains(a);
     const field = inBody ? a!.getAttribute('data-lm-field') : null;
-    const sel = field || a?.dataset.ffTyped !== undefined ? [(a as HTMLInputElement).selectionStart, (a as HTMLInputElement).selectionEnd] : null;
-    const keep = !inBody ? null : field ? `[data-lm-field="${CSS.escape(field)}"]` : a!.dataset.ffTyped !== undefined ? '[data-ff-typed]' : a!.dataset.ffAct ? `[data-ff-act="${CSS.escape(a!.dataset.ffAct)}"]` : a!.dataset.lmAct ? `[data-lm-act="${CSS.escape(a!.dataset.lmAct)}"]${a!.dataset.lmValue !== undefined ? `[data-lm-value="${CSS.escape(a!.dataset.lmValue)}"]` : ''}` : a!.dataset.settingsRun ? `[data-settings-run="${CSS.escape(a!.dataset.settingsRun)}"]` : a!.id ? `#${CSS.escape(a!.id)}` : a!.tagName === 'SUMMARY' ? '.sf-adv > summary' : null;
+    const ruleKey = inBody && a!.dataset.ruleAct ? `[data-rule-act="${CSS.escape(a!.dataset.ruleAct)}"][data-rule-id="${CSS.escape(a!.dataset.ruleId ?? '')}"]${a!.dataset.ruleValue ? `[data-rule-value="${CSS.escape(a!.dataset.ruleValue)}"]` : ''}` : inBody && a!.dataset.ruleFilter !== undefined ? '[data-rule-filter]' : null;
+    const sel = field || a?.dataset.ffTyped !== undefined || a?.dataset.ruleFilter !== undefined ? [(a as HTMLInputElement).selectionStart, (a as HTMLInputElement).selectionEnd] : null;
+    const keep = !inBody ? null : ruleKey ? ruleKey : field ? `[data-lm-field="${CSS.escape(field)}"]` : a!.dataset.ffTyped !== undefined ? '[data-ff-typed]' : a!.dataset.ffAct ? `[data-ff-act="${CSS.escape(a!.dataset.ffAct)}"]` : a!.dataset.lmAct ? `[data-lm-act="${CSS.escape(a!.dataset.lmAct)}"]${a!.dataset.lmValue !== undefined ? `[data-lm-value="${CSS.escape(a!.dataset.lmValue)}"]` : ''}` : a!.dataset.settingsRun ? `[data-settings-run="${CSS.escape(a!.dataset.settingsRun)}"]` : a!.id ? `#${CSS.escape(a!.id)}` : a!.tagName === 'SUMMARY' ? '.sf-adv > summary' : null;
     painting = true;
     paintSettings(document as unknown as MiniDoc, body, d.model(), focused);
     painting = false;
@@ -235,6 +253,14 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
   };
   const close = (): void => {
     if (overlay.hidden) return;
+    // #gui-rules-view (Mika): unsaved rule changes ask inline before the sheet closes
+    if (d.rules && !d.rules.beforeClose()) {
+      repaint();
+      const save = body.querySelector('.rules-close-prompt [data-rules-save]') as HTMLElement | null;
+      save?.scrollIntoView({ block: 'center' });
+      save?.focus({ preventScroll: true });
+      return;
+    }
     overlay.hidden = true;
     focused = null;
     d.local?.sheetClosed();
@@ -274,6 +300,15 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const t = e.target as HTMLElement;
     const rv = t.closest('[data-standing-revoke]') as HTMLElement | null;
     if (rv) return d.revoke(rv.dataset.standingRevoke!);
+    // #gui-rules-view: the block's own keys (stage, save, discard, decide)
+    const ra = t.closest('[data-rule-act], [data-rules-save], [data-rules-discard], [data-rules-decide]') as HTMLButtonElement | null;
+    if (ra && d.rules) {
+      if (ra.disabled) return;
+      if (ra.dataset.rulesSave !== undefined) return d.rules.save();
+      if (ra.dataset.rulesDiscard !== undefined) return d.rules.discard();
+      if (ra.dataset.rulesDecide !== undefined) return d.rules.decide();
+      return d.rules.press(ra.dataset.ruleAct!, ra.dataset.ruleId ?? null, ra.dataset.ruleValue ?? null);
+    }
     const ff = t.closest('[data-ff-act]') as HTMLButtonElement | null;
     if (ff) {
       if (!ff.disabled) d.local?.folder?.(ff.dataset.ffAct!, ff.dataset.ffReal ?? null, e.isTrusted);
@@ -302,6 +337,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const name = f.dataset?.lmField;
     if (name) d.local?.input(name, f.value);
     if (f.dataset?.ffTyped !== undefined) d.local?.folderInput?.(f.value);
+    if (f.dataset?.ruleFilter !== undefined) d.rules?.filter(f.value);
   });
   body.addEventListener('compositionstart', () => ime.start());
   body.addEventListener('compositionend', (e) => {

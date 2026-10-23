@@ -1541,3 +1541,31 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .ns-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
 .ns-foot > span { display: flex; gap: 8px; align-items: center; }
 .ff-why { font-size: var(--fs-label); color: var(--sec); }
+
+/* #gui-rules-view (8.0:rules-view; session 2026-10-23-gnomon-rules-view, components rule-row + rules-save-bar).
+   Settings › Permissions › Rules. State is carried by words and weight, never by hue: a staged row's "→ off for 1 hour"
+   is 600 ink; a removed row is struck through with a keep key; no amber ◆ anywhere in the block. */
+.settings-row.rules-block { display: block; padding: 0; }
+.rules-sum { margin: 0 0 6px; font-size: var(--fs-label); color: var(--sec); }
+.rules-filter { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.rules-empty { margin: 4px 0 8px; font-size: var(--fs-control); color: var(--ink2); max-width: 60ch; }
+.rules-group { margin: 0 0 10px; }
+.rules-repo { margin: 6px 0 2px; font-size: var(--fs-control); font-weight: 600; color: var(--ink); }
+.rules-count { font-weight: 400; font-size: var(--fs-label); color: var(--sec); }
+.rules-list { list-style: none; margin: 0; padding: 0; }
+.rule-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 6px 0; border-top: 1px solid var(--rule); }
+.rule-row:first-child { border-top: 0; }
+.rule-what { grid-column: 1; font-size: var(--fs-control); font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.rule-what.struck { text-decoration: line-through; color: var(--sec); }
+.rule-meta { grid-column: 1; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.rule-row.is-off .rule-state { font-weight: 600; color: var(--ink2); }
+.rule-staged { grid-column: 1; font-size: var(--fs-label); font-weight: 600; color: var(--ink); }
+.rule-keys { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 6px; align-items: center; justify-self: end; }
+/* Turn off ▾ opens inline under the row, like the card's Always ▾ (.always-choices) */
+.rule-offs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; padding-left: 8px; border-left: 1px solid var(--rule); }
+.rules-save-bar { position: sticky; bottom: -14px; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0; padding: 8px 0; background: var(--sheet); border-top: 1px solid var(--rule); }
+.rules-save-bar .rsb-count { font-size: var(--fs-control); font-weight: 600; color: var(--ink); margin-right: auto; }
+.rules-save-bar .rules-result { flex: 1 1 100%; margin: 0; }
+.rules-next { display: block; margin-top: 2px; }
+.rules-close-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 8px; border: 1px solid var(--key-edge); border-radius: var(--radius); }
+.rules-close-prompt .rcp-text { font-size: var(--fs-control); font-weight: 600; margin-right: auto; }

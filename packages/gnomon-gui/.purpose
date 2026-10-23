@@ -38,7 +38,17 @@ components:
       repo with counts, newest first, filter above 12 rules, the empty state)
       and expiryToastOf ("rule back on: <rule>", 6 s). Staged rows are marked
       by word and weight, never amber; a removed row is struck with a keep
-      key. Test: test/rules-view.test.ts.
+      key. ui/rules-block.ts paints the block (rule-row, rules-save-bar;
+      design system .atelier/systems/gnomon/); ui/settings-sheet.ts routes
+      its trusted presses and asks before closing with changes staged;
+      ui/app.ts owns the staged state, saveRules (ONE log.append, then the
+      same press decides the card allow), the three entry points (palette
+      rules.open "Rules…", the mode menu's "Always rules…", the Always toast's
+      "see Rules"), the expiry toast and a status re-read on rule rows.
+      Preview fixtures rules-0/1/5/50/200, rules-off-open, rules-tighten,
+      rules-staged, rules-close, rules-refused, rules-waiting (DEV hook
+      devRulesState, dropped from the served bundle). Test:
+      test/rules-view.test.ts.
   gui-session-rename:
     description: >-
       8.0:session-rename (founder ask: rename a session). core/rename.ts
