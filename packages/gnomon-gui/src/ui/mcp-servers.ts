@@ -12,8 +12,7 @@
  *   - The card's outcome comes from the kernel's rows (approval.decide / approval.expire for OUR card).
  */
 import { RpcError } from '../core/client.js';
-import { emptyMcpUi, mcpRequestOf, mcpStatusOf, notChangedResult, turnedOffResult, turnedOnResult, type McpRowView, type McpUi } from '../core/mcp-servers.js';
-import { refusalLine } from '../core/local-model.js';
+import { emptyMcpUi, MCP_FIRST_PARTY, mcpRefusalText, mcpRequestOf, mcpStatusOf, notChangedResult, turnedOffResult, turnedOnResult, type McpRowView, type McpUi } from '../core/mcp-servers.js';
 
 export interface McpDeps {
   /** log.append of one request; throws RpcError on a refusal */
@@ -27,6 +26,8 @@ export interface McpDeps {
   repaint: () => void;
   /** close the sheet and focus the card group (never its Allow) */
   decide: (cardId: string) => void;
+  /** after a press's outcome: move focus to this selector inside the section (Mika: never an off-screen heading) */
+  focus?: (selector: string) => void;
 }
 
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -63,7 +64,7 @@ export class McpServersController {
     if (!req) return;
     const name = act.startsWith('mcp:fp-') ? 'the Paradigm MCP' : (this.#row(value)?.name ?? 'the server');
     this.#name = name;
-    this.#ui = { ...this.#ui, busy: `${act}|${value}`, result: null };
+    this.#ui = { ...this.#ui, at: act.startsWith('mcp:fp-') ? MCP_FIRST_PARTY : value, busy: `${act}|${value}`, result: null };
     this.#d.repaint();
     void this.#send(act, req, name);
   }
@@ -74,15 +75,19 @@ export class McpServersController {
       const r = (await this.#d.call(req)) as Record<string, unknown> | null;
       if (r && r.pending === true && typeof r.cardId === 'string') {
         const scope = req.payload.scope === 'all' ? 'all repos' : String(req.payload.repo ?? '').split(/[\\/]/).pop();
-        this.#ui = { busy: null, result: null, request: { cardId: r.cardId, line: `${at} · turn on ${name} · ${scope}` } };
-      } else if (act === 'mcp:off' || act === 'mcp:fp-off') this.#ui = { busy: null, request: null, result: turnedOffResult(name, at) };
-      else this.#ui = { busy: null, request: null, result: turnedOnResult(name, at) };
+        this.#ui = { ...this.#ui, busy: null, result: null, request: { cardId: r.cardId, line: `${at} · turn on ${name} · ${scope}` } };
+      } else if (act === 'mcp:off' || act === 'mcp:fp-off') this.#ui = { ...this.#ui, busy: null, request: null, result: turnedOffResult(name, at) };
+      else this.#ui = { ...this.#ui, busy: null, request: null, result: turnedOnResult(name, at) };
     } catch (err) {
-      const text = err instanceof RpcError && err.refusal ? refusalLine(err.refusal) : `nothing was sent (${err instanceof Error ? err.message.slice(0, 120) : 'failed'})`;
-      this.#ui = { busy: null, request: null, result: { lead: 'Not changed:', text: ` ${text}`, fail: true } };
+      const text = err instanceof RpcError && err.refusal ? mcpRefusalText(err.refusal as never) : ' Gnomon did not answer. next: check the connection (⌘K, Reconnect), then press it again.';
+      this.#ui = { ...this.#ui, busy: null, request: null, result: { lead: 'Not changed:', text, fail: true } };
     }
     await this.#d.refreshStatus().catch(() => undefined);
     this.#d.repaint();
+    // focus follows the outcome: the card's Decide key, else the same server's first key (the result line under it is
+    // a status announcement); never the section heading a screen above the press
+    const id = this.#ui.at ?? '';
+    this.#d.focus?.(this.#ui.request ? '[data-lm-act="mcp:decide"]' : `[data-lm-value="${id.replace(/["\\]/g, '\\$&')}"]:not([disabled])`);
   }
 
   /** A kernel row: our card's outcome. */
@@ -91,7 +96,7 @@ export class McpServersController {
     const p = (r.payload && typeof r.payload === 'object' ? r.payload : {}) as Record<string, unknown>;
     if (!req || p.cardId !== req.cardId || (r.kind !== 'approval.decide' && r.kind !== 'approval.expire')) return;
     const at = this.#d.time(r.at ?? iso(this.#d.now()));
-    this.#ui = { busy: null, request: null, result: r.kind === 'approval.decide' && p.decision === 'allow' ? turnedOnResult(this.#name, at) : notChangedResult(this.#name, at, r.kind === 'approval.expire' ? 'expired' : 'denied') };
+    this.#ui = { ...this.#ui, busy: null, request: null, result: r.kind === 'approval.decide' && p.decision === 'allow' ? turnedOnResult(this.#name, at) : notChangedResult(this.#name, at, r.kind === 'approval.expire' ? 'expired' : 'denied') };
     void this.#d.refreshStatus().catch(() => undefined).then(() => this.#d.repaint());
   }
 }

@@ -536,6 +536,13 @@ export function stampWord(decision: string): string {
  * without it. A claim-mismatch card keeps its block whole (its red first line stays the body's first line) and is
  * titled by its kind; so is every kind outside KERNEL_TITLED_KINDS (Aegis M1).
  */
+/** A block's top-level Text children minus the lines `drop` names (the card face shows them elsewhere). */
+function withoutLines(block: unknown, drop: (line: string) => boolean): unknown {
+  const b = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>) : null;
+  if (!b || !Array.isArray(b.children)) return block;
+  return { ...b, children: (b.children as unknown[]).filter((k) => !(k && typeof k === 'object' && (k as { type?: unknown }).type === 'Text' && typeof (k as { text?: unknown }).text === 'string' && drop((k as { text: string }).text))) };
+}
+
 export function splitCardBlock(block: unknown, kind: string, keepWhole: boolean): { title: string; body: unknown } {
   if (!KERNEL_TITLED_KINDS.has(kind)) keepWhole = true;
   const b = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>) : null;
@@ -1093,9 +1100,14 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const ct = loud ? null : (v.composedTitle ?? null);
   const titleText = ct ? `${ct.verb}${ct.arg ? ` ${ct.arg}` : ''}` : title;
   const capped = !!ct?.truncated;
-  const bodyShown = loud || capped;
+  // #gui-mcp-servers (Mika 2026-10-23): turning on an MCP server signs only its decision row, so the face would say
+  // nothing about the server; its kernel lines (what runs, where, the shell, fetch and repo warnings) ARE the decision,
+  // so they show on the face, not under details. The k-line and the presence line already show: not twice.
+  const mcpFace = v.rootRows?.action === 'mcp.enable';
+  const bodyShown = loud || capped || mcpFace;
+  const shownBody = mcpFace ? withoutLines(body, (l) => l === kLine || l.startsWith('Allow takes the root key')) : body;
   // a kind whose lines the kernel does not compose: its words are labelled as the requester's (never the kernel's)
-  const bodyEl = h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, quoted ? h(doc, 'span', { class: 'meta card-quote-label' }, `the requester's words (${v.requestedBy}):`) : null, renderBlock(ctx, body));
+  const bodyEl = h(doc, 'div', { class: `card-body kernel-owned${quoted ? ' quoted' : ''}` }, quoted ? h(doc, 'span', { class: 'meta card-quote-label' }, `the requester's words (${v.requestedBy}):`) : null, renderBlock(ctx, shownBody));
   return h(
     doc,
     'section',
@@ -1116,7 +1128,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       tag ? ' ' : null,
       tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
-    h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
+    h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}${mcpFace ? ' wraps' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
     kLine ? h(doc, 'span', { class: 'k-line kernel-owned' }, kLine) : null,
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
     // TD-2026-10-19-063: a claim-mismatch card's body (its red first line) is never collapsed; Aegis H1: nor a card

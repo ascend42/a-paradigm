@@ -163,7 +163,8 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     if (r.live) row.setAttribute('aria-live', 'polite');
     row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value));
     if (r.how) row.appendChild(rich(doc, 'p', { class: 'meta settings-how' }, r.how));
-    if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys' }, ...r.keys.map((k) => keyEl(doc, k))));
+    // the keys are a group named by their row, so "Turn off" is heard with what it turns off (Mika 2026-10-23)
+    if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys', role: 'group', 'aria-label': r.label }, ...r.keys.map((k) => keyEl(doc, k))));
   }
   return row;
 }
@@ -220,9 +221,13 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     const field = inBody ? a!.getAttribute('data-lm-field') : null;
     const sel = field || a?.dataset.ffTyped !== undefined ? [(a as HTMLInputElement).selectionStart, (a as HTMLInputElement).selectionEnd] : null;
     const keep = !inBody ? null : field ? `[data-lm-field="${CSS.escape(field)}"]` : a!.dataset.ffTyped !== undefined ? '[data-ff-typed]' : a!.dataset.ffAct ? `[data-ff-act="${CSS.escape(a!.dataset.ffAct)}"]` : a!.dataset.lmAct ? `[data-lm-act="${CSS.escape(a!.dataset.lmAct)}"]${a!.dataset.lmValue !== undefined ? `[data-lm-value="${CSS.escape(a!.dataset.lmValue)}"]` : ''}` : a!.dataset.settingsRun ? `[data-settings-run="${CSS.escape(a!.dataset.settingsRun)}"]` : a!.id ? `#${CSS.escape(a!.id)}` : a!.tagName === 'SUMMARY' ? '.sf-adv > summary' : null;
+    // a repaint keeps the reader where they were: emptying the body clamps its scroll to the top (the Rules filter
+    // re-paints on every key, and the field being typed in must not scroll away; Mika 2026-10-23)
+    const top = body.scrollTop;
     painting = true;
     paintSettings(document as unknown as MiniDoc, body, d.model(), focused);
     painting = false;
+    body.scrollTop = top;
     const el = keep ? (body.querySelector(keep) as HTMLElement | null) : null;
     if (el && !(el as HTMLButtonElement).disabled) {
       el.focus({ preventScroll: true });

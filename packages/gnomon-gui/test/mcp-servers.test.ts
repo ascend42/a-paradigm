@@ -3,7 +3,7 @@
  * each press sends, and the press path's outcomes (a card waiting, allow, deny, a refusal).
  */
 import { describe, expect, it } from 'vitest';
-import { MCP_FIRST_PARTY, MCP_SECTION, mcpRequestOf, mcpSection, emptyMcpUi } from '../src/core/mcp-servers.js';
+import { MCP_COPY, MCP_FIRST_PARTY, MCP_SECTION, mcpRefusalText, mcpRequestOf, mcpSection, emptyMcpUi } from '../src/core/mcp-servers.js';
 import { McpServersController } from '../src/ui/mcp-servers.js';
 import { GUI_COMMANDS } from '../src/core/commands.js';
 import { RpcError } from '../src/core/client.js';
@@ -51,9 +51,15 @@ describe('#gui-mcp-servers section', () => {
   });
 
   it('a server with a problem shows ✕ and the reason, with no key; changed shows ?; on shows ✓ and Turn off', () => {
+    // the Paradigm plugin copy is covered by the first-party server: no ✕ (Mika), no key
     const p = byLabel(rows(status()), 'paradigm · plugin')!;
-    expect(p).toMatchObject({ mark: '✕' });
+    expect(p).toMatchObject({ value: MCP_COPY.covered });
+    expect('mark' in p && p.mark).toBeFalsy();
     expect(keysOf(p)).toEqual([]);
+    // a real problem: ✕, the kernel's reason, and what to do next
+    const bad = byLabel(rows(status({ servers: [row({ id: 'user::s', name: 's', problems: [{ code: 'command', text: 's is not on the session PATH' }] })] })), 's')!;
+    expect(bad).toMatchObject({ mark: '✕', value: 's is not on the session PATH' });
+    expect((bad as { how: string }).how).toContain('next: install it, or give its full path in ~/.claude.json');
     const s2 = status({ servers: [row({ on: { all: true, repos: [] } }), row({ id: 'user::x', name: 'x', changed: true })] });
     expect(byLabel(rows(s2), 'neurons')).toMatchObject({ mark: '✓', value: 'on in every repo' });
     expect(keysOf(byLabel(rows(s2), 'neurons'))).toEqual(['mcp:off=user::neurons']);
@@ -66,9 +72,15 @@ describe('#gui-mcp-servers section', () => {
     expect(req).toMatchObject({ chip: 'card waiting', line: 'turn on neurons · all repos' });
     expect(keysOf(req)).toEqual(['mcp:decide=card:A']);
     expect(keysOf(byLabel(rs, 'neurons'))).toEqual([]); // no second ask while one waits
+    // the waiting row sits under the server it is for, not after the last server
+    const ids = rs.map((r) => r.id);
+    expect(ids.indexOf('mcp-request')).toBe(ids.indexOf(byLabel(rs, 'neurons')!.id) + 1);
     const win = rows(status({ platform: 'win32', unsupported: 'platform' }));
     expect(keysOf(byLabel(win, 'neurons'))).toEqual([]);
-    expect(byLabel(win, 'On this PC')).toBeDefined();
+    // Windows: the reason comes before the rows it explains
+    expect(win.findIndex((r) => r.id === 'mcp-windows')).toBeLessThan(win.findIndex((r) => 'label' in r && r.label === 'neurons'));
+    // the focused folder's servers start their own group
+    expect(byLabel(rows(status()), 'tool · app (repo)')).toMatchObject({ grp: true });
   });
 
   it('not connected and an older kernel say so; the palette has "MCP servers…"', () => {
@@ -126,5 +138,29 @@ describe('#gui-mcp-servers press path', () => {
     await flush();
     expect(b.c.ui().result).toMatchObject({ fail: true });
     expect(b.c.ui().result!.text).toContain('that repo only');
+    // principle 5: no wire code, no symbol
+    expect(b.c.ui().result!.text).not.toContain('BAD_REQUEST');
+    expect(b.c.ui().result!.text).not.toContain('#mcp-servers');
+    // the result shows under the pressed server's row
+    expect(b.c.ui().at).toBe('project:/r/app:tool');
+    expect(mcpRefusalText({ code: 'BAD_REQUEST', reason: 'bad-params', message: '#mcp-servers: x', next: [], data: { why: 'repo-only' } })).toContain('next: from a session in that repo, use the On in key for its folder');
+  });
+});
+
+describe('#gui-mcp-servers enable card face (Mika 2026-10-23)', () => {
+  it('shows the kernel lines (what runs, the fetch warning) on the face, not under details, and its title wraps', async () => {
+    const { renderCard } = await import('../src/core/render.js');
+    type El = { tag: string; className: string; attrs: Map<string, string>; kids: unknown[]; appendChild(c: unknown): unknown; setAttribute(n: string, v: string): void };
+    const els: El[] = [];
+    const doc = { createElement: (tag: string) => { const e: El = { tag, className: '', attrs: new Map(), kids: [], appendChild(c) { this.kids.push(c); return c; }, setAttribute(n, v) { this.attrs.set(n, v); } }; els.push(e); return e; }, createTextNode: (t: string) => t };
+    const textOf = (e: unknown): string => (typeof e === 'string' ? e : (e as El).kids.map(textOf).join('\n'));
+    const block = { type: 'Box', children: ['Turn on MCP server pencil for all your repos', 'asked from Settings · 14:07 · applies to new sessions', 'runs /opt/homebrew/bin/npx -y @pencil-dev/mcp-server', 'downloads what it runs at every launch (npx): what runs can change without a new card', 'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice; deny changes nothing'].map((text) => ({ type: 'Text', text })) };
+    const card = renderCard({ doc } as never, { cardId: 'card:M1', kind: 'grant', requestedBy: 'p:abcdefgh/matt', hsid: null, repo: null, state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags: [], decisions: ['allow', 'deny'], decidable: true, rootRows: { lines: [], action: 'mcp.enable' } } as never, block) as unknown as El;
+    const details = els.find((e) => e.tag === 'details')!;
+    const face = card.kids.filter((k) => k !== details).map(textOf).join('\n');
+    expect(face).toContain('downloads what it runs at every launch');
+    expect(face.split('asked from Settings').length).toBe(2); // the k-line once
+    expect(textOf(details)).not.toContain('downloads what it runs');
+    expect(els.find((e) => e.className.startsWith('card-title'))!.className).toContain('wraps');
   });
 });

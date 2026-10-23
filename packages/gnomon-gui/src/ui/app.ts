@@ -1294,6 +1294,7 @@ const mcpServers = new McpServersController({
     settings.close();
     focusCardGroup(cardId);
   },
+  focus: (sel) => (document.querySelector(`#settings-body [data-section="${MCP_SECTION}"] ${sel}`) as HTMLElement | null)?.focus(),
 });
 const settings = mountSettings(document, {
   local: localModel,

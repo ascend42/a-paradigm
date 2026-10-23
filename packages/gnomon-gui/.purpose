@@ -1535,11 +1535,25 @@ components:
       needs no card. The enable card is the ⊙ gnomon grant family
       (render.ts gnomonFam for detail.action mcp.enable). Palette mcp.open
       "MCP servers…". Tests: test/mcp-servers.test.ts.
+      TD-2026-10-23-361: rows and the Paradigm row name the human's own
+      Claude Code allow rules (autoAllowWords) and inline code; the Paradigm
+      row says where it runs from and "(linked: it runs live …)".
+      Tests: test/mcp-servers-allow.test.ts.
+      Mika's review (2026-10-23): the request or result row shows under the
+      pressed server and focus follows it; plain refusals (mcpRefusalText);
+      the Paradigm plugin copy reads "covered by the Paradigm MCP above"; a ✕
+      row ends with next: (problemNext); Windows' row comes first; the
+      folder's servers start a group; the allow words lead with "no card for
+      its tools" and close the how line; the enable card shows the kernel's
+      lines on its face and its title wraps (render.ts mcpFace). Preview
+      fixtures mcp-servers, mcp-waiting, mcp-none, mcp-fp-missing,
+      mcp-windows, mcp-not-offered.
     path: src/core/mcp-servers.ts
     type: module
     tags: [gnomon, gui, settings, mcp, paradigm-8]
     tests:
       - test/mcp-servers.test.ts
+      - test/mcp-servers-allow.test.ts
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto
