@@ -55,6 +55,12 @@ components:
       heading names; the settings sheet keeps its scroll on a repaint (the
       filter no longer scrolls away while typing). Test:
       test/rules-view.test.ts.
+      Folding (founder 2026-10-23: "folded works"): at FOLD_AT (50) rules or
+      more every repo group starts folded with its heading and count; the
+      heading holds the fold key (data-rule-act fold, aria-expanded, ▸/▾;
+      toggleFold, ui.folds); the filter unfolds every group it matches; a
+      group holding a staged change, an open Turn off ▾ or a waiting rule
+      stays unfolded. Design system rule-row.folding.
   gui-session-rename:
     description: >-
       8.0:session-rename (founder ask: rename a session). core/rename.ts
@@ -478,6 +484,16 @@ components:
       sits in the stack head; the composer placeholder is "Reply to <name>…"
       with the long hint in title=, and send is the filled primary key.
       Tests: test/desk.test.ts.
+    card-body-scroll: >-
+      design-system card.body_scroll (founder 2026-10-23: "as long as the
+      card text is scrollable in the event it's too large that's fine"):
+      renderCard's .card-body (lines and field blocks) caps at
+      --card-body-max (min(42vh, 26em)) and scrolls inside the card; the
+      title, k-line, root rows, keys, presence line and contentHash stay
+      outside it, so Allow shows without scrolling. The body is one named
+      tab stop (tabindex 0, role group, CARD_BODY_LABEL); Tab moves on to
+      the keys. Covers the MCP enable and batch cards, the Rules batch card
+      and the git push card. Test: test/card-scroll.test.ts.
     card-sheet-pile-s3: >-
       S3 card sheet and stack pile (critique 2026-10-20 §2 S3). renderCard
       anatomy (data only from kernel fields): header ■ <repo basename> in
@@ -1581,6 +1597,21 @@ components:
       lines on its face and its title wraps (render.ts mcpFace). Preview
       fixtures mcp-servers, mcp-waiting, mcp-none, mcp-fp-missing,
       mcp-windows, mcp-not-offered.
+      #batch-card (founder 2026-10-23: "grouped cards of related things,
+      one password"): Mark for all repos / Mark in <folder> (acts
+      mcp:on-all / mcp:on-repo) STAGE a server in the page (markMcp,
+      unmarkMcp, clearMcp, reconcileMcp; value "marked: …", key Unmark; at
+      status.mcp.max marks the keys disable and say why); the "Marked to
+      turn on" row after the servers names them and the cost ("Turn on N
+      servers · asks Touch ID or your Mac password once") and sends ONE
+      request.mcp.enable{servers} (mcpBatchRequest); a refusal keeps every
+      mark. While a card waits its servers read "off until you allow its
+      card", the request row (one per waiting cardId, waitingCards) sits
+      with the batch, the other servers can be marked for the next card,
+      Turn on waits and says why; Turn off applies at once even then. An
+      allowed card that skipped a changed server names it (skippedResult
+      from status.mcp.skipped). Preview fixtures mcp-batch-card (the card,
+      its body scrolling) and mcp-batch-waiting.
     path: src/core/mcp-servers.ts
     type: module
     tags: [gnomon, gui, settings, mcp, paradigm-8]
