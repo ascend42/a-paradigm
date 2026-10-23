@@ -5,7 +5,7 @@
  * no Always.
  */
 import { describe, expect, it } from 'vitest';
-import { ALWAYS_REMOTE_NOTE, cardContentHash, gitVerbLine, gitVerbOf, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { ALWAYS_REMOTE_NOTE, cardContentHash, gitVerbLine, gitVerbOf, gitVerbWarning, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 
 class FText {
   constructor(readonly data: string) {}
@@ -62,12 +62,27 @@ describe('git verb cards', () => {
     const f = cardOf({ ...detail, force: true }, { flags: ['irreversible'] });
     const fe = renderCard({ doc: fdoc }, view(f, ['allow', 'deny'], ['irreversible']), f.block) as unknown as FEl;
     expect(fe.all().some((e) => e.attrs.get('data-decision') === 'always')).toBe(false);
-    expect(fe.all().find((e) => e.className.startsWith('k-line'))!.text).toMatch(/force push$/);
+    // Mika (Delta 8): what can't be taken back is on the face (not under details), once, beside the irreversible chip
+    expect(fe.all().find((e) => e.className.startsWith('k-line'))!.text).toBe('github.com · ascend42/a-platform-fighter · branch main');
+    expect(fe.all().filter((e) => e.className.startsWith('card-warn')).map((e) => e.text)).toEqual(['Force push: it can overwrite commits on the remote that your branch does not have.']);
+    expect(fe.all().find((e) => e.className === 'card-details')!.all().some((e) => e.className.startsWith('card-warn'))).toBe(false);
     const warn = 'Warning: the host githuh.com looks like github.com but is a different host. Deny unless you meant this host.';
     const l = cardOf({ ...detail, host: 'githuh.com', slug: 'githuh.com/ascend42/a-platform-fighter', hostWarning: 'x' }, { flags: ['claim-mismatch'] }, warn);
     const le = renderCard({ doc: fdoc }, view(l, ['allow', 'deny'], ['claim-mismatch']), l.block) as unknown as FEl;
     expect(le.all().some((e) => e.attrs.get('data-decision') === 'always')).toBe(false);
     expect(le.all().find((e) => e.attrs.get('data-decision') === 'deny')!.attrs.get('data-default')).toBe('true');
     expect(le.text).toContain(warn);
+    // the lookalike's warning is the first thing under the title: no k-line, no face warning before it
+    expect(le.all().some((e) => e.className.startsWith('k-line') || e.className.startsWith('card-warn'))).toBe(false);
+  });
+  it('a public repo and a force remove say so on the face; a plain push, a private create, init and add do not', () => {
+    const g = (o: Record<string, unknown>) => ({ verb: 'git.push', host: 'github.com', slug: 'github.com/a/b', branch: 'main', visibility: null, force: false, ...o }) as Parameters<typeof gitVerbWarning>[0];
+    expect(gitVerbWarning(g({ verb: 'repo.create', visibility: 'public' }))).toBe('Public: anyone can see this repo and its whole history.');
+    expect(gitVerbWarning(g({ verb: 'git.worktree.remove', force: true }))).toBe('Force remove: uncommitted changes in this worktree are lost.');
+    for (const o of [{}, { verb: 'repo.create', visibility: 'private' }, { verb: 'git.init' }, { verb: 'git.worktree.add' }, { verb: 'git.worktree.remove' }]) expect(gitVerbWarning(g(o))).toBeNull();
+    const pub = cardOf({ ...detail, verb: 'repo.create', tool: 'gnomon_repo_create', visibility: 'public' }, { flags: ['irreversible'] }, 'Create github.com/ascend42/a-platform-fighter (public), then push main to it');
+    const pe = renderCard({ doc: fdoc }, view(pub, ['allow', 'deny'], ['irreversible']), pub.block) as unknown as FEl;
+    expect(pe.all().find((e) => e.className.startsWith('card-warn'))!.text).toMatch(/^Public: /);
+    expect(pe.all().some((e) => e.attrs.get('data-decision') === 'always')).toBe(false);
   });
 });

@@ -414,7 +414,7 @@ export function createCard(p: CreatePlan): VerbCard {
   const lines = [
     `Create ${slug} (${p.visibility}), then push ${p.branch} to it`,
     `host: ${p.host}`,
-    `visibility: ${p.visibility}${p.visibility === 'public' ? ' — anyone can see this repo and its history' : ' — only you and people you add'}`,
+    `visibility: ${p.visibility} (${p.visibility === 'public' ? 'anyone can see this repo and its history' : 'only you and people you add can see it'})`,
     `remote: ${p.remote} → ${p.url} (added by Gnomon)`,
     `branch: ${p.branch} (refs/heads/${p.branch} → refs/heads/${p.branch}, tracked)`,
     `repo: ${p.root}`,
@@ -444,7 +444,7 @@ export function worktreeCard(p: { root: string; name: string; dir: string; branc
 
 export function initCard(root: string, remnant: boolean): VerbCard {
   const lines = [
-    `Make ${root} a git repo`,
+    `Make a git repo in ${root}`,
     `repo: ${root}`,
     `branch: ${INIT_BRANCH}; a minimal config (no hooks, no helpers, no includes) and an empty hooks folder`,
     ...(remnant ? ['An incomplete .git left by a failed git init is removed first (no config, no commits in it).'] : []),

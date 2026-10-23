@@ -97,7 +97,7 @@ describe('git.init (^git-init-gate)', () => {
     const res = await r.verbs.call('gnomon_git_init', {}, sess(w));
     expect(res.ok).toBe(true);
     expect(r.raised).toHaveLength(1);
-    expect((r.raised[0]!.lines as string[])[0]).toBe(`Make ${w.repo} a git repo`);
+    expect((r.raised[0]!.lines as string[])[0]).toBe(`Make a git repo in ${w.repo}`);
     const cfg = fs.readFileSync(path.join(w.repo, '.git', 'config'), 'utf8');
     expect(configProblems(cfg)).toEqual([]);
     expect(cfg).not.toMatch(/hookspath|fsmonitor|sshcommand|helper|filter|include|askpass|editor|pager/i);

@@ -645,7 +645,19 @@ export function gitVerbLine(g: GitVerbView): string | null {
   if (g.verb !== 'git.push' && g.verb !== 'repo.create') return null;
   if (!g.host || !g.slug) return null;
   const rest = g.slug.startsWith(`${g.host}/`) ? g.slug.slice(g.host.length + 1) : g.slug;
-  return [g.host, rest, ...(g.visibility ? [g.visibility] : []), ...(g.branch ? [`branch ${g.branch}`] : []), ...(g.force ? ['force push'] : [])].join(' · ');
+  return [g.host, rest, ...(g.visibility ? [g.visibility] : []), ...(g.branch ? [`branch ${g.branch}`] : [])].join(' · ');
+}
+
+/**
+ * #git-verbs (Mika, Delta 8): what can't be taken back, said on the card's face under the k-line, never only under
+ * details: a force push, a public repo, a force worktree remove. Composed from the verified git-verb facts (the
+ * kernel's own "Warning:" line stays in the body); the irreversible flag chip sits on the key row beside it.
+ */
+export function gitVerbWarning(g: GitVerbView): string | null {
+  if (g.verb === 'git.push' && g.force) return 'Force push: it can overwrite commits on the remote that your branch does not have.';
+  if (g.verb === 'repo.create' && g.visibility === 'public') return 'Public: anyone can see this repo and its whole history.';
+  if (g.verb === 'git.worktree.remove' && g.force) return 'Force remove: uncommitted changes in this worktree are lost.';
+  return null;
 }
 
 /** #git-verbs: the push card's one Always choice, in plain words (Mika: shown beside the key, never only on hover). */
@@ -1132,7 +1144,9 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const tag0 = voiceTagOf(v.voice ?? null);
   const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
   // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title
-  const kLine = gnomonFam ? (kernelTextLines(block).find((l) => /^asked from (Settings|the terminal) · /.test(l)) ?? null) : v.gitVerb ? gitVerbLine(v.gitVerb) : null;
+  // #git-verbs: a lookalike host (claim-mismatch) shows no k-line: its red warning stays the first thing under the title
+  const kLine = gnomonFam ? (kernelTextLines(block).find((l) => /^asked from (Settings|the terminal) · /.test(l)) ?? null) : v.gitVerb && !loud ? gitVerbLine(v.gitVerb) : null;
+  const gitWarn = v.gitVerb && !loud ? gitVerbWarning(v.gitVerb) : null;
   const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
   const failed = v.kind === 'incident' || v.flags.includes('failed');
   const who = `requested by ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`;
@@ -1165,6 +1179,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
     kLine ? h(doc, 'span', { class: 'k-line kernel-owned' }, kLine) : null,
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
+    gitWarn ? h(doc, 'p', { class: 'card-warn kernel-owned' }, gitWarn) : null,
     // TD-2026-10-19-063: a claim-mismatch card's body (its red first line) is never collapsed; Aegis H1: nor a card
     // whose composed arg was capped (the kernel's body is then the whole command, visibly)
     bodyShown ? bodyEl : null,

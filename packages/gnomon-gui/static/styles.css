@@ -414,7 +414,9 @@ html, body {
 .notice .key { margin-left: 8px; }
 /* TD-2026-10-19-063: a claim-mismatch card's first line ("NOT signed by the expected publisher") is red */
 .card.claim-mismatch { --edge: var(--fail-edge); }
-.card.claim-mismatch .card-body > :first-child { color: var(--fail); font-weight: 600; }
+.card.claim-mismatch .card-body > :first-child:not(.blk-box), .card.claim-mismatch .card-body > .blk-box > :first-child { color: var(--fail); font-weight: 600; }
+/* #git-verbs (Delta 8): what can't be taken back (a force push, a public repo, a force remove), on the face beside the irreversible chip */
+.card .card-warn { margin: 2px 0 0; font-size: var(--fs-control); font-weight: 600; color: var(--fail); white-space: pre-wrap; }
 
 /* ── S4 motion (critique 2026-10-20 §2 S4). Every motion is an event's (nothing idles); the global reduced-motion kill
    above stays, and the rules at the end of this block keep the END states visible without motion. ── */

@@ -663,7 +663,12 @@ components:
       "push to <host>/<owner>/<repo>" (data-scope exact; noted "this remote
       from this repo, any branch, never a force push"); a force push or a
       lookalike host (claim-mismatch) offers none (design-system variant
-      git-push);
+      git-push); a force push, a public repo or a force worktree remove
+      says what can't be taken back in one .card-warn line on the face
+      (gitVerbWarning, beside the irreversible chip, never only under
+      details), and a lookalike host shows no k-line so its red warning is
+      the first line under the title; a claim-mismatch card reds only its
+      first body line (Mika Delta 8);
       refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,
       papercraft day / phosphor night / auto themes and reduced motion.
