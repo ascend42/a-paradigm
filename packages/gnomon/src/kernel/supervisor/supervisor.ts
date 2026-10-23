@@ -1382,6 +1382,11 @@ export class SessionSupervisor {
     return this.#gitVerbs ? [...roots.flatMap((r) => kernelWorktreeDirs(r)), ...roots] : roots;
   }
 
+  /** Aegis M2 (round 1): are the kernel git verbs served to this platform's sessions? Never on win32 (the constructor drops them). */
+  kernelVerbsServed(): boolean {
+    return this.#gitVerbs !== undefined;
+  }
+
   /** #git-verbs: what a verb needs to know about the session, read now (the effective mode at this call). */
   #verbSession(s: Session): VerbSession {
     const repoKey = repoKeyOf([s.cwd, ...(s.worktree ? [s.worktree] : [])]);

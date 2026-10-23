@@ -344,6 +344,21 @@ describe('git.push (^git-push-gate)', () => {
     expect(git(w.root, 'config', '--file', snap, 'core.sshCommand').stdout.trim()).toBe(`ssh -F '${path.join(w.gnomonHome, 'git-verbs', 'ssh_config')}'`);
     expect(fs.readFileSync(path.join(w.gnomonHome, 'git-verbs', 'ssh_config'), 'utf8')).toContain('Host github.com');
   });
+  it('Aegis round 2 L2: a credential helper (or its config file) where the session can write refuses the push; the card names the snapshot hash', async () => {
+    const w = world();
+    committed(w.repo);
+    const helper = path.join(w.repo, 'tools', 'git-credential-evil');
+    fs.mkdirSync(path.dirname(helper));
+    fs.writeFileSync(helper, '#!/bin/sh\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(w.userHome, '.gitconfig'), `[credential]\n\thelper = ${helper}\n`);
+    const r = rig(w);
+    r.set.url = ['https://github.com/o/r.git'];
+    expect((await r.verbs.call('gnomon_git_push', {}, sess(w))).why).toBe('unsafe-config');
+    fs.writeFileSync(path.join(w.userHome, '.gitconfig'), '[credential]\n\thelper = osxkeychain\n');
+    await r.verbs.refreshPushConfig();
+    expect((await r.verbs.call('gnomon_git_push', {}, sess(w))).ok).toBe(true);
+    expect(String((r.raised.at(-1)!.detail as Record<string, unknown>).pushConfigHash)).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
   it('Aegis M3: remotes defined outside .git/config refuse; the remote must be named in .git/config', async () => {
     const w = world();
     committed(w.repo, null);
@@ -518,6 +533,17 @@ describe('git.verb rows (contracts, 8.0:git-verbs)', () => {
     expect(validateKindPayload('git.verb', { ...ok, phase: 'ran' }).length).toBeGreaterThan(0);
     expect(validateKindPayload('git.verb', { ...ok, why: 'because' }).length).toBeGreaterThan(0);
     expect(validateKindPayload('git.verb', { ...ok, phase: 'failed', why: 'command-failed', exitCode: 128 })).toEqual([]);
+  });
+});
+
+describe('Aegis M2: no git verbs on win32 (where the refusal lives: SessionSupervisor\'s constructor, supervisor.ts #gitVerbs)', () => {
+  it('a win32 supervisor serves no kernel verbs; darwin does', async () => {
+    const { SessionSupervisor } = await import('../src/kernel/supervisor/supervisor.js');
+    const w = world();
+    const verbs = new GitVerbs({ log: async () => undefined, gnomonHome: w.gnomonHome, userHome: () => w.userHome });
+    const base = { log: async () => undefined, children: { intend: async () => undefined, track: () => undefined, stop: async () => undefined }, fuse: {} as never, home: w.gnomonHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.gnomonHome, 's.sock'), gitVerbs: verbs } as never;
+    expect(new SessionSupervisor({ ...(base as object), platform: 'win32' } as never).kernelVerbsServed()).toBe(false);
+    expect(new SessionSupervisor({ ...(base as object), platform: 'darwin' } as never).kernelVerbsServed()).toBe(true);
   });
 });
 

@@ -29,6 +29,7 @@
  * Loop sessions never run a verb (loop-session). One verb at a time per repo root (queued).
  */
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import type { GitVerb, GitVerbReason, RunMode } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -36,7 +37,7 @@ import { wrappedBlock } from '../manifest/install.js';
 import { inputHash } from '../supervisor/permission.js';
 import { HARDENED_GIT_FLAGS } from './scratch.js';
 import { scanSecrets } from '../loops/secret-scan.js';
-import { capturePushConfig, EXEC_OUTPUT_CAP, execTool, ghPath, gitPath, localGitEnv, networkEnv, PUSH_GIT_FLAGS, redactOutput, VERB_TIMEOUTS, type Exec } from './verb-exec.js';
+import { capturePushConfig, snapshotWritableBy, type PushConfigSnapshot, EXEC_OUTPUT_CAP, execTool, ghPath, gitPath, localGitEnv, networkEnv, PUSH_GIT_FLAGS, redactOutput, VERB_TIMEOUTS, type Exec } from './verb-exec.js';
 import {
   configProblems, createCard, dotGitOf, GIT_VERB_TOOLS, hostWarning, INIT_BRANCH, initCard, initConfigText, initRefusal, parseRemote, pushCard, pushRuleInput,
   readConfigEntries, validBranch, validOwner, validRemoteName, validRepoName, kernelWorktreeDirs, isSteeringPath, validWorktreeName, worktreeCard, WORKTREES_REL, type RemoteInfo, type VerbCard,
@@ -176,14 +177,14 @@ export class GitVerbs {
   readonly #queue = new Map<string, Promise<unknown>>();
 
   /** Aegis H1: the kernel's push config snapshot (verb-exec.ts capturePushConfig); null until captured */
-  #pushConfig: string | null = null;
+  #pushConfig: PushConfigSnapshot | null = null;
 
   constructor(o: GitVerbsOptions) {
     this.#o = o;
   }
 
   /** Aegis H1: (re)capture the push config snapshot from the human's credential and ssh settings (daemon start). */
-  async refreshPushConfig(): Promise<string | null> {
+  async refreshPushConfig(): Promise<PushConfigSnapshot | null> {
     const git = (this.#o.git ?? gitPath)();
     if (!git) return null;
     try {
@@ -196,8 +197,20 @@ export class GitVerbs {
 
   /** The env of a network git/gh call: scrubbed, under the kernel's config snapshot, the common dir pinned to the repo's own. */
   async #netEnv(toolDir: string, commonDir?: string): Promise<Record<string, string>> {
-    if (this.#pushConfig === null || !fs.existsSync(this.#pushConfig)) await this.refreshPushConfig();
-    return networkEnv({ userHome: this.#o.userHome(), toolDir, from: this.#env(), gitConfig: this.#pushConfig, ...(commonDir ? { commonDir } : {}) });
+    if (this.#pushConfig === null || !fs.existsSync(this.#pushConfig.path)) await this.refreshPushConfig();
+    return networkEnv({ userHome: this.#o.userHome(), toolDir, from: this.#env(), gitConfig: this.#pushConfig?.path ?? null, ...(commonDir ? { commonDir } : {}) });
+  }
+
+  /** Aegis round 2 L2: the snapshot's programs and origins must not lie where this session can write. */
+  async #snapshotRefusal(s: VerbSession): Promise<Refused | null> {
+    if (this.#pushConfig === null || !fs.existsSync(this.#pushConfig.path)) await this.refreshPushConfig();
+    const snap = this.#pushConfig;
+    if (!snap) return null;
+    const tmpBase = real(os.tmpdir());
+    // what a session can write besides its roots: its Gnomon-made TMPDIR and cache (under these two) and the shared temp dirs
+    const writable = [...this.#roots(s), path.join(tmpBase, 'gnomon-tmp'), path.join(tmpBase, 'gnomon-cache'), '/private/tmp', '/private/var/tmp', '/tmp'];
+    const bad = snapshotWritableBy(snap, writable);
+    return bad ? { refused: 'unsafe-config', text: `Your git credential or ssh settings run or include ${bad}, a path this session can write: Gnomon does not push with it. Move it, or push from your own terminal.` } : null;
   }
 
   tools(): readonly McpToolSpec[] {
@@ -471,6 +484,8 @@ export class GitVerbs {
     if (sr) return this.#refuse(s, verb, hash, sr.refused, sr.text);
     const st = await this.#repoState(root, a.branch);
     if (isRefused(st)) return this.#refuse(s, verb, hash, st.refused, st.text);
+    const snapBad = await this.#snapshotRefusal(s);
+    if (snapBad) return this.#refuse(s, verb, hash, snapBad.refused, snapBad.text);
     const info = await this.#resolveRemote(st, remote);
     if (isRefused(info)) return this.#refuse(s, verb, hash, info.refused, info.text);
     const warning = hostWarning(info.host);
@@ -500,7 +515,10 @@ export class GitVerbs {
       }
     }
     if (!viaRule) {
-      const d = await this.#decide(s, pushCard({ root, branch: st.branch, sha: st.sha, remote, remoteInfo: info, force, warning, lease, secrets: scan.secrets, scanIncomplete: scan.incomplete }), 'gnomon_git_push', rule, ruleHash);
+      const card = pushCard({ root, branch: st.branch, sha: st.sha, remote, remoteInfo: info, force, warning, lease, secrets: scan.secrets, scanIncomplete: scan.incomplete });
+      // Aegis round 2 L2: the card (inside its contentHash) names the credential-config snapshot the push runs under
+      if (this.#pushConfig) card.detail.pushConfigHash = this.#pushConfig.hash;
+      const d = await this.#decide(s, card, 'gnomon_git_push', rule, ruleHash);
       cardId = d.cardId ?? undefined;
       if (d.decision === 'none') return this.#refuse(s, verb, hash, 'no-approval-surface', 'No approval surface could take the card: not pushed.', { host: info.host });
       if (d.decision !== 'allow' && d.decision !== 'always') return this.#refuse(s, verb, hash, scan.secrets.length ? 'secret-in-push' : 'denied', scan.secrets.length ? 'The human did not approve pushing commits that look like they hold a secret.' : 'The human did not approve this push.', { host: info.host, ...(cardId ? { cardId } : {}) });

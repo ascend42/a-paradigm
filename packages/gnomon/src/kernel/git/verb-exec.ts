@@ -20,6 +20,7 @@
  *                   redacted, capped. Output never reaches a log row.
  */
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { EMPTY_HOOKS_PATH, gitBinary, hardenedGitEnv } from './scratch.js';
@@ -172,22 +173,64 @@ export function ghPath(): string | null {
 export const PUSH_CONFIG_KEYS = /^(credential\..+|core\.sshcommand)$/i;
 export const PUSH_CONFIG_SCOPES: readonly string[] = Object.freeze(['system', 'global', 'unknown']);
 
-export async function capturePushConfig(o: { dir: string; git: string; userHome: string; exec?: Exec; from?: Readonly<Record<string, string | undefined>> }): Promise<string> {
+/** Aegis round 2 L2: what a snapshot runs and where its entries came from (checked against each session's write allows at push). */
+export interface PushConfigSnapshot {
+  path: string;
+  /** sha256 of the snapshot file (on the push card) */
+  hash: string;
+  /** realpaths of the programs it runs (credential helpers, the ssh command's program); null when not resolvable */
+  programs: Array<{ key: string; program: string | null }>;
+  /** the config files its entries came from (`--show-origin`), realpath'd */
+  origins: string[];
+}
+
+/** The program a credential helper / ssh command value runs, realpath'd (helper names resolve as git-credential-<name>). */
+export function helperProgram(key: string, value: string, searchDirs: readonly string[]): string | null {
+  const v = value.trim();
+  if (v === '') return null;
+  const first = (v.startsWith('!') ? v.slice(1).trim() : v).split(/\s+/)[0] ?? '';
+  if (first === '') return null;
+  const name = path.isAbsolute(first) || /^core\.sshcommand$/i.test(key) || v.startsWith('!') ? first : `git-credential-${first}`;
+  const cands = path.isAbsolute(name) ? [name] : searchDirs.map((d) => path.join(d, name));
+  for (const c of cands) {
+    try {
+      return fs.realpathSync.native(c);
+    } catch {
+      /* next */
+    }
+  }
+  return null;
+}
+
+export async function capturePushConfig(o: { dir: string; git: string; userHome: string; exec?: Exec; from?: Readonly<Record<string, string | undefined>> }): Promise<PushConfigSnapshot> {
   const exec = o.exec ?? execTool;
   fs.mkdirSync(o.dir, { recursive: true, mode: 0o700 });
   const env = { PATH: [path.dirname(o.git), '/usr/bin', '/bin'].join(path.delimiter), HOME: o.userHome, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', ...(o.from?.XDG_CONFIG_HOME ? { XDG_CONFIG_HOME: o.from.XDG_CONFIG_HOME } : {}) };
-  const r = await exec(o.git, ['config', '--list', '--show-scope', '-z'], { cwd: o.userHome, env, timeoutMs: VERB_TIMEOUTS.read });
+  const r = await exec(o.git, ['config', '--list', '--show-origin', '--show-scope', '-z'], { cwd: o.userHome, env, timeoutMs: VERB_TIMEOUTS.read });
+  const execPath = (await exec(o.git, ['--exec-path'], { cwd: o.userHome, env, timeoutMs: VERB_TIMEOUTS.read })).stdout.trim();
+  const searchDirs = [...(execPath ? [execPath] : []), path.dirname(o.git), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
+  const programs: PushConfigSnapshot['programs'] = [];
+  const origins = new Set<string>();
   const tmp = path.join(o.dir, `gitconfig.${process.pid}.${Date.now()}`);
   fs.writeFileSync(tmp, '', { mode: 0o600 });
   const fields = r.code === 0 ? r.stdout.split('\0') : [];
   let ssh = false;
-  for (let i = 0; i + 1 < fields.length; i += 2) {
+  for (let i = 0; i + 2 < fields.length; i += 3) {
     const scope = fields[i]!;
-    const nl = fields[i + 1]!.indexOf('\n');
-    const key = nl < 0 ? fields[i + 1]! : fields[i + 1]!.slice(0, nl);
-    const value = nl < 0 ? 'true' : fields[i + 1]!.slice(nl + 1);
+    const origin = fields[i + 1]!;
+    const nl = fields[i + 2]!.indexOf('\n');
+    const key = nl < 0 ? fields[i + 2]! : fields[i + 2]!.slice(0, nl);
+    const value = nl < 0 ? 'true' : fields[i + 2]!.slice(nl + 1);
     if (!PUSH_CONFIG_SCOPES.includes(scope) || !PUSH_CONFIG_KEYS.test(key)) continue;
     if (/^core\.sshcommand$/i.test(key)) ssh = true;
+    if (origin.startsWith('file:')) {
+      try {
+        origins.add(fs.realpathSync.native(origin.slice(5)));
+      } catch {
+        origins.add(path.resolve(origin.slice(5)));
+      }
+    }
+    if (/^credential\..*helper$/i.test(key) || /^core\.sshcommand$/i.test(key)) programs.push({ key, program: helperProgram(key, value, searchDirs) });
     await exec(o.git, ['config', '--file', tmp, '--add', key, value], { cwd: o.dir, env, timeoutMs: VERB_TIMEOUTS.read });
   }
   if (!ssh) {
@@ -204,7 +247,19 @@ export async function capturePushConfig(o: { dir: string; git: string; userHome:
   }
   const out = path.join(o.dir, 'gitconfig');
   fs.renameSync(tmp, out);
-  return out;
+  const hash = `sha256:${createHash('sha256').update(fs.readFileSync(out)).digest('hex')}`;
+  return { path: out, hash, programs, origins: [...origins].sort() };
+}
+
+/**
+ * Aegis round 2 L2: a snapshot is refused for a session when a program it runs or a config file it came from lies under
+ * a path that session may write (its roots, TMPDIR, cache, the shared temp dirs). Returns the offending path, or null.
+ */
+export function snapshotWritableBy(snap: Pick<PushConfigSnapshot, 'programs' | 'origins'>, writable: readonly string[]): string | null {
+  const under = (p: string): boolean => writable.some((w) => p === w || p.startsWith(w.endsWith(path.sep) ? w : `${w}${path.sep}`));
+  for (const pr of snap.programs) if (pr.program && under(pr.program)) return pr.program;
+  for (const o of snap.origins) if (under(o)) return o;
+  return null;
 }
 
 /** A command's output as the agent may see it: URL userinfo and secret shapes redacted, the last `max` characters. */
