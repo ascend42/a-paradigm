@@ -6,7 +6,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import simpleGit, { type SimpleGit } from 'simple-git';
+import { simpleGit, type SimpleGit } from 'simple-git';
 
 const SYMBOL_RE = /[#$^!~][\w-]+/g;
 
@@ -103,12 +103,17 @@ export function createGitRouter(projectDir: string): Router {
   // POST /api/git/stage { paths: string[] }
   router.post('/stage', async (req: Request, res: Response) => {
     try {
-      const { paths } = req.body as { paths: string[] };
-      if (!paths?.length) {
+      const { paths } = req.body as { paths: unknown };
+      if (!Array.isArray(paths) || !paths.length) {
         res.status(400).json({ error: 'paths is required' });
         return;
       }
-      await git.add(paths);
+      // Each path is a plain string and never an option: `--` ends option parsing for git add.
+      if (!paths.every((p): p is string => typeof p === 'string' && p.length > 0 && !p.startsWith('-'))) {
+        res.status(400).json({ error: 'paths must be non-empty strings that do not start with "-"' });
+        return;
+      }
+      await git.add(['--', ...paths]);
       res.json({ staged: paths });
     } catch (err) {
       res.status(500).json({ error: 'Failed to stage files', detail: String(err) });

@@ -45,7 +45,7 @@ components:
   yaml-parser:
     description: '#yaml-parser: Parses YAML content from .purpose files'
   zod-schemas:
-    description: '#zod-schemas: Zod schemas for PurposeFile, PurposeItem, etc.'
+    description: '#zod-schemas: Zod schemas (zod 4) for PurposeFile, PurposeItem, etc. Every z.record declares its string key schema.'
   validator:
     description: '#validator: Validates parsed purpose data — includes cross-file validation (validateCrossFile) for parent refs, symbol list refs, and flow step refs across all .purpose files'
   schema-rules:

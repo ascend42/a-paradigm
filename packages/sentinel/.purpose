@@ -11,7 +11,7 @@ description: |
 # ============================================
 
 #IncidentStorage:
-  description: SQLite-based storage for incidents, patterns, and resolutions
+  description: SQLite-based storage for incidents, patterns, and resolutions. Ids from node:crypto randomUUID (no uuid dependency).
   tags: [feature, persistence]
   anchors:
     - src/storage.ts:1-500
@@ -111,7 +111,7 @@ description: |
     - '#SentinelClient'
 
 #SentinelClient:
-  description: Lightweight JS/TS client SDK for sending structured logs, metrics, and traces to the Sentinel server with batching, ring buffer, auto-retry, and graceful degradation
+  description: Lightweight JS/TS client SDK for sending structured logs, metrics, and traces to the Sentinel server with batching, ring buffer, auto-retry, and graceful degradation. Session, trace and span ids come from globalThis.crypto.randomUUID (Web Crypto, so it works in Node and browsers; no uuid dependency).
   tags: [sdk, client]
   anchors:
     - src/client.ts:1-350
@@ -121,6 +121,12 @@ description: |
     - POST /api/traces
     - POST /api/services
     - POST /api/state
+
+#GitHistoryLoader:
+  description: Loads commit history (limit, since), changed files and inferred symbols per commit, and the .purpose symbols at a commit, via simple-git 4. Tested against a real temp repo in src/server/loaders/git.test.ts.
+  tags: [feature, git]
+  anchors:
+    - src/server/loaders/git.ts
 
 #NodesStore:
   description: Zustand store managing symbol nodes, filters, and layout state

@@ -178,7 +178,7 @@ export async function agentListCommand(options: AgentListOptions = {}) {
   }
 
   if (anyMissing) {
-    console.log(chalk.dim('  * not installed — run: paradigm agent install <id>'));
+    console.log(chalk.dim('  * not installed — bundled agents: paradigm agent sync-global; your own: paradigm agent create <id>'));
     console.log('');
   }
 
@@ -238,7 +238,7 @@ export async function agentShowCommand(id: string, options: AgentShowOptions = {
     console.log(`  ${chalk.white.bold('Partners')} (${profile.partners.length})`);
     for (const part of profile.partners) {
       if (!installed.has(part.id)) {
-        console.log(`    ${part.id}  ${chalk.yellow('(not installed)')} ${chalk.dim('— paradigm agent install ' + part.id)}`);
+        console.log(`    ${part.id}  ${chalk.yellow('(not installed)')} ${chalk.dim('— paradigm agent sync-global (bundled) or paradigm agent create ' + part.id)}`);
         continue;
       }
       const partnerProfile = allProfiles.find(a => a.id === part.id);

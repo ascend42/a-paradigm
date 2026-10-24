@@ -82,7 +82,7 @@ export const historyContextInputSchema = z.object({
  * Validate input against a schema and return typed result or error
  */
 export function validateInput<T>(
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T>,
   input: unknown
 ): { success: true; data: T } | { success: false; error: string } {
   const result = schema.safeParse(input);
@@ -92,7 +92,7 @@ export function validateInput<T>(
   }
 
   // Format error message
-  const errors = result.error.errors.map((e) => {
+  const errors = result.error.issues.map((e) => {
     const path = e.path.length > 0 ? `${e.path.join('.')}: ` : '';
     return `${path}${e.message}`;
   });

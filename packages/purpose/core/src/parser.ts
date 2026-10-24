@@ -23,7 +23,7 @@ const PurposeItemSchema = z.object({
   // Standard fields
   endpoints: z.array(z.string()).optional(),
   tests: z.array(z.string()).optional(),
-  rules: z.record(z.unknown()).optional(),
+  rules: z.record(z.string(), z.unknown()).optional(),
   aspects: z.array(z.string()).optional(),
   // Symbol reference arrays
   flows: z.array(z.string()).optional(),
@@ -39,7 +39,7 @@ const PurposeItemSchema = z.object({
   'used-for': z.array(z.string()).optional(),
   exports: z.array(z.string()).optional(),
   status: z.string().optional(),
-  properties: z.record(z.unknown()).optional(),
+  properties: z.record(z.string(), z.unknown()).optional(),
   handles: z.array(z.string()).optional(),
 }).passthrough();
 
@@ -55,7 +55,7 @@ const SignalDefinitionObjectSchema = z.object({
   severity: z.enum(['info', 'warn', 'error']).optional(),
   emitters: z.array(z.string()).optional(),
   related: z.array(z.string()).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 // Allow string shorthand: "signal-name: description string"
 const SignalDefinitionSchema = z.union([
@@ -131,25 +131,25 @@ const PurposeFileSchema = z.object({
   description: z.string().optional(),
   apiSpec: z.string().optional(),
   context: z.array(z.string()).optional(),
-  rules: z.record(z.unknown()).optional(),
+  rules: z.record(z.string(), z.unknown()).optional(),
   // Support both array format [{ id, description }] and record format { id: { description } }
   features: z.union([
     z.array(PurposeItemArraySchema),
-    z.record(PurposeItemSchema),
+    z.record(z.string(), PurposeItemSchema),
   ]).optional(),
   components: z.union([
     z.array(PurposeItemArraySchema),
-    z.record(PurposeItemSchema),
+    z.record(z.string(), PurposeItemSchema),
   ]).optional(),
-  gates: z.record(GateDefinitionSchema).optional(),
-  states: z.record(StateDefinitionSchema).optional(),
-  signals: z.record(SignalDefinitionSchema).optional(),
-  aspects: z.record(AspectDefinitionSchema).optional(),
+  gates: z.record(z.string(), GateDefinitionSchema).optional(),
+  states: z.record(z.string(), StateDefinitionSchema).optional(),
+  signals: z.record(z.string(), SignalDefinitionSchema).optional(),
+  aspects: z.record(z.string(), AspectDefinitionSchema).optional(),
   relationships: z.array(RelationshipSchema).optional(),
   // Support both array format and record format for flows
   flows: z.union([
     z.array(FlowWithStepsSchema),
-    z.record(FlowDefinitionSchema),
+    z.record(z.string(), FlowDefinitionSchema),
   ]).optional(),
   references: z.array(ReferenceSchema).optional(),
 });

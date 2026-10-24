@@ -18,7 +18,7 @@
 
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
-import type { ZodSchema } from 'zod';
+import type { ZodType } from 'zod';
 import { classifyYamlError as sharedClassifyYamlError, type YamlErrorClass } from '@a-company/portal-core';
 import { isStrictMode } from './strict-mode.js';
 
@@ -51,7 +51,7 @@ export function classifyYamlError(err: unknown): { errorClass: YamlErrorClass; d
  */
 export function safeLoad<T>(
   filePath: string,
-  opts?: { schema?: ZodSchema<T>; strict?: boolean },
+  opts?: { schema?: ZodType<T>; strict?: boolean },
 ): LoadResult<T> {
   if (!fs.existsSync(filePath)) {
     return { status: 'missing' };
