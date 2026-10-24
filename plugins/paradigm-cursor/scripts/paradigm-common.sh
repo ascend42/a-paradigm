@@ -1238,3 +1238,30 @@ _compliance_snapshot() {
     "$_ts" "$VIOLATION_COUNT" "$_checks" >> "$_dir/compliance-history.jsonl" 2>/dev/null || true
 }
 _compliance_snapshot
+
+# --- Stop-hook loop guard helpers (called by the stop scripts' verdict) ---
+# Claude Code sets stop_hook_active=true on a Stop that follows a turn the
+# Stop hook itself continued; Cursor sends loop_count. A violation the agent
+# cannot fix inside the turn would otherwise block every stop forever. The
+# stop scripts compare this run's violation fingerprint with the one stored in
+# .paradigm/.stop-block-fingerprint (line 1 fingerprint, line 2 consecutive
+# blocks) and end the turn when a fix attempt changed nothing.
+#
+# _pm_violation_fp — prints a fingerprint of the violation SET. Only the
+# headline lines ("  - ...") count; digits are stripped because some lines
+# embed a magnitude or count that drifts without the violation changing.
+_pm_violation_fp() {
+  printf '%s' "$VIOLATIONS" | grep '^  - ' | sed 's/[0-9][0-9]*//g' | sort | cksum
+}
+
+# _pm_record_unresolved <fingerprint> <consecutive> — appends a
+# stop-block-unresolved row to .paradigm/events/team-funnel.jsonl (raw append,
+# same pattern as the bypass row in Check 13). Best-effort, never fails.
+_pm_record_unresolved() {
+  mkdir -p ".paradigm/events" 2>/dev/null
+  _UNRES_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
+  _UNRES_FP=$(printf '%s' "$1" | tr -cd '0-9 ')
+  _UNRES_K=$(printf '%s' "$2" | tr -cd '0-9')
+  echo "{\"timestamp\":\"$_UNRES_TS\",\"type\":\"stop-block-unresolved\",\"source\":\"stop-hook\",\"fingerprint\":\"$_UNRES_FP\",\"violations\":${VIOLATION_COUNT:-0},\"consecutive\":${_UNRES_K:-0}}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+  return 0
+}

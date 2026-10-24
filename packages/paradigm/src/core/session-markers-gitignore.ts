@@ -20,6 +20,7 @@ export const SESSION_MARKERS: readonly string[] = Object.freeze([
   '.session-started',
   '.solo-declared',
   '.stop-hook-active',
+  '.stop-block-fingerprint',
   '.team-prompted',
   '.team-reminded',
   '.team-bypass-recorded',
