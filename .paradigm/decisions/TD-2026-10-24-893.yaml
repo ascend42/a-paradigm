@@ -1,0 +1,38 @@
+id: TD-2026-10-24-893
+timestamp: '2026-10-24T18:16:28.559Z'
+title: 'Orchestration gate: roster-agent delegation counts as completion; marker expires by TTL (amends T-005)'
+decision: >-
+  .paradigm/.orchestrated is written by a PostToolUse Agent|Task hook when a paradigm:* or .claude/agents/<type>.md
+  subagent returns a non-empty result (source "delegation"), in addition to settlement/debrief. The marker is no longer
+  deleted on passing Stop; all readers honour it by PARADIGM_GATE_TTL_HOURS like .solo-declared. Every delegation is
+  logged to team-funnel with credited true|false.
+rationale: >-
+  Check 13 false-positived in sessions that delegated via the Agent tool (no writer) and re-warned every turn after a
+  real debrief (Stop deleted the marker). A returned subagent is completed work, not mere invocation, so T-005's intent
+  holds; restricting credit to roster agents keeps Explore/general-purpose searches from counting. Funnel rows let Loid
+  recalibrate delegation vs settlement/debrief.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: builder
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Override orchestration-required to warn for this release
+    rejected_because: Founder asked for a proper fix; override hides the bug
+  - option: Credit any Agent-tool call
+    rejected_because: Search agents are not team orchestration; would undo T-005
+symbols_affected:
+  - '#orchestration-marker'
+  - '#delegation-hook'
+  - '#team-gate'
+  - '#prompt-gate'
+status: active
+tags:
+  - enforcement
+  - stop-hook
+  - T-005

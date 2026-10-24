@@ -35,10 +35,11 @@
 #  15. Native memory hygiene nudge (advisory only, TD-2026-09-19-110)
 #
 # Generated-state scope: when every modified file is Paradigm's or Warpline's
-# own generated state (.paradigm/*, .warpline/* — the hooks, post-commit and
+# own generated state (.paradigm/*, .warpline/* — at the root or nested in a
+# package, e.g. packages/x/.paradigm/events — the hooks, post-commit and
 # MCP tools write these themselves), no code changed, so the checks that need
 # code (purpose discovery + anchors, the compliance-check CLI) are skipped.
-# .warpline/* is never counted as a source file.
+# Generated state (root or nested) is never counted as a source file.
 
 # Per-section timing (#hook-monitor): the Claude Code Stop hook sources
 # paradigm-hook-monitor.sh, which records each section's ms to
@@ -64,7 +65,7 @@ _MODIFIED_COUNT=0
 for file in $MODIFIED; do
   _MODIFIED_COUNT=$((_MODIFIED_COUNT + 1))
   case "$file" in
-    .paradigm/*|.warpline/*) ;;
+    .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;
     *) PARADIGM_GENERATED_ONLY=false ;;
   esac
 done
@@ -256,7 +257,7 @@ for file in $MODIFIED; do
     .paradigm/*|*.purpose|portal.yaml)
       PARADIGM_COUNT=$((PARADIGM_COUNT + 1))
       ;;
-    .warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
+    .warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
     *)
       SOURCE_COUNT=$((SOURCE_COUNT + 1))
       # Check if this file's directory has a covering .purpose that was modified
@@ -325,7 +326,7 @@ DIRS_WITHOUT_PURPOSE=""
 
 for file in $MODIFIED; do
   case "$file" in
-    .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+    .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
 
   _parent "$file"; dir=$_PD
@@ -533,7 +534,7 @@ fi
 # This catches cases where .pending-review is missing or out of sync.
 for file in $MODIFIED; do
   case "$file" in
-    .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+    .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
   [ -f "$file" ] || continue
 
@@ -661,7 +662,7 @@ if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ];
       LORE_SYMBOLS=""
       for file in $MODIFIED; do
         case "$file" in
-          .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+          .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
         esac
         sym_dir=$(basename "$(dirname "$file")")
         case "$LORE_SYMBOLS" in
@@ -1017,6 +1018,7 @@ if [ "$_SEV" != "off" ]; then
   SEEN_PKGS=""
   for file in $MODIFIED; do
     case "$file" in
+      */.paradigm/*|*/.warpline/*) ;;
       packages/*)
         _pkg=$(echo "$file" | cut -d'/' -f2)
         case "$SEEN_PKGS" in
@@ -1038,7 +1040,7 @@ if [ "$_SEV" != "off" ]; then
   SEC_ADJACENT=0
   for file in $MODIFIED; do
     case "$file" in
-      .paradigm/*|.warpline/*) ;;
+      .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;
       portal.yaml|*/portal.yaml) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
       *auth*|*permission*|*gate*|*security*|*token*|*session*) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
     esac

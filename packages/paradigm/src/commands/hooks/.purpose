@@ -82,14 +82,15 @@ components:
       --exclude-standard` (nested agent worktrees and node_modules are skipped)
       and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
       Check 4 anchors); (3) no network (npx --no-install); (4) generated-state
-      scope (8.0): when every modified file is .paradigm/* or .warpline/* (the
+      scope (8.0): when every modified file is .paradigm/* or .warpline/*,
+      at the root or nested in a package (packages/x/.paradigm/events; the
       hooks, post-commit and MCP tools write these on every turn) no code
       changed, so purpose discovery (Checks 4/6) and the compliance-check CLI
       are skipped (~0.35 s instead of ~1.2-1.9 s); remediations, purpose-required
-      patterns and the memory nudge still run. .warpline/* never counts as a
-      source file (it inflated the orchestration magnitude). Enforced by
-      tests/hooks-timing.test.ts (each hook under 2 s through a pipe, plus a
-      lint check on background jobs) and tests/hooks-monitor.test.ts.
+      patterns and the memory nudge still run. Generated state (root or nested)
+      never counts as a source file (it inflated the orchestration magnitude).
+      Enforced by tests/hooks-timing.test.ts (each hook under 2 s through a
+      pipe, plus a lint check on background jobs) and tests/hooks-monitor.test.ts.
     type: utility
     file: scripts/paradigm-common.sh
     tags:

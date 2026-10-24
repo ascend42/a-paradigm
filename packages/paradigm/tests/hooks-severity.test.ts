@@ -137,6 +137,43 @@ describe('Check 13 honours .orchestrated by TTL', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Generated state nested in a package (packages/x/.paradigm/events/*.jsonl,
+// packages/x/.warpline/*) is Paradigm's own output, never source: it must not
+// count toward SOURCE_COUNT, the cross-package signal or Check 13's magnitude.
+// ---------------------------------------------------------------------------
+
+describe('nested generated state is not source', () => {
+  const NESTED = [
+    '.paradigm/events/stream.jsonl',
+    '.warpline/fabric.jsonl',
+    '.warpline/refs/heads/selvage',
+    'packages/paradigm/.paradigm/events/compliance-history.jsonl',
+    'packages/paradigm/.paradigm/events/team-funnel.jsonl',
+    'packages/paradigm/.paradigm/events/postflight-liveness.jsonl',
+    'packages/gnomon/.warpline/refs/selvage',
+  ];
+  function run(files: string[]): string {
+    const root = orchProject('none');
+    for (const f of files) {
+      fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
+      fs.writeFileSync(path.join(root, f), '{}\n');
+    }
+    const script = `cd "${root}"; MODIFIED="${files.join('\n')}"; . "${COMMON_SH}" >/dev/null 2>&1
+echo "generated=$PARADIGM_GENERATED_ONLY source=$SOURCE_COUNT"; echo "$ADVISORY"`;
+    return spawnSync('sh', ['-c', script], { env: { PATH: `${stubBin()}:/usr/bin:/bin`, HOME: root }, encoding: 'utf8' }).stdout;
+  }
+  it('root and nested state only → generated-only, zero source, no orchestration advisory', () => {
+    const out = run(NESTED);
+    expect(out).toContain('generated=true source=0');
+    expect(out).not.toContain('(orchestration)');
+  });
+  it('real source beside nested state still counts (control)', () => {
+    const out = run([...NESTED, 'packages/gnomon/src/a.ts']);
+    expect(out).toContain('generated=false source=1');
+  });
+});
+
 describe('a passing Stop leaves .orchestrated in place', () => {
   for (const script of ['claude-code-stop.sh', 'cursor-stop.sh']) {
     it(script, () => {
