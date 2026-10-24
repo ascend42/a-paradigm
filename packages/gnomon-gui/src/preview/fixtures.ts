@@ -223,8 +223,21 @@ const ALWAYS_CARDS: Record<string, unknown>[] = [
   cardOf({ name: 'billing lore', kind: 'permission', hsid: BILLING, lines: ['The session asks to run Bash', 'repo: /Users/matt/code/billing', 'command: paradigm lore record --type fix --title "round once at the end"', 'always: the rule pins this exact command text, not what it runs (a script or binary it calls can change).'], extra: [{ type: 'bash-prefix', detail: ALWAYS_BASH_DETAIL }], detail: ALWAYS_BASH_DETAIL, decisions: ['allow', 'deny', 'always'], voice: { eligible: 'reversible', label: 'card 6', readback: 'allow Bash paradigm lore record', echo: 'allowing card 6' } }),
 ];
 
+/** #gui-ask-card: an ask-user card's detail as the kernel composes it (permission.ts composePermission), so the GUI verifies it. */
+function askDetail(hsid: string, repo: string, questions: Array<{ question: string; header: string | null; multiSelect: boolean; options: Array<{ label: string; description: string | null; preview?: string }> }>): Record<string, unknown> {
+  return { tool: 'AskUserQuestion', toolUseId: 'toolu_preview', requestId: `req-${hsid.slice(-6)}`, inputHash: `sha256:${'a'.repeat(64)}`, repo, questions, maxAnswerChars: 1000 };
+}
+const ATELIER_ASK = askDetail(A('atelier').hsid, '/Users/matt/code/atelier', [{ question: 'Which tells file wins, repo or home?', header: 'Tells', multiSelect: false, options: [{ label: 'repo', description: '.atelier/tells.yaml in this repo' }, { label: 'home', description: '~/.atelier/tells.yaml for every repo' }] }]);
+/** #gui-ask-card: the claude 2.1.309 probe's two questions (previews on the first, multi-select on the second), pinned in billing. */
+const BILLING_ASK = askDetail(BILLING, '/Users/matt/code/billing', [
+  { question: 'Which rounding should the invoice use?', header: 'Rounding', multiSelect: false, options: [{ label: 'Round once at the end', description: 'Sum the raw lines, round the total (matches the PDF).', preview: 'const total = round(lines.reduce(sum, 0));\n// 41.07' }, { label: 'Round every line', description: 'Round each line, then sum (the old behaviour).', preview: 'const total = lines.map(round).reduce(sum, 0);\n// 41.06' }] },
+  { question: 'Which checks should run before the pull request?', header: 'Checks', multiSelect: true, options: [{ label: 'unit tests', description: 'The twelve billing tests.' }, { label: 'typecheck', description: null }, { label: 'invoice snapshot', description: 'Re-render the three sample PDFs and compare.' }] },
+]);
+const ASK_LINES = (n: number, repo: string): string[] => [`The session asks you ${n === 1 ? 'a question' : `${n} questions`}`, `repo: ${repo}`, 'answer: pick an option or type your own answer for each question.'];
+const BILLING_ASK_CARD = cardOf({ name: 'billing ask', kind: 'ask-user', hsid: BILLING, lines: ASK_LINES(2, '/Users/matt/code/billing'), extra: [{ type: 'ask-user', detail: BILLING_ASK }], detail: BILLING_ASK, decisions: ['answer'] });
+
 const EXTRA_CARDS: Record<string, unknown>[] = [
-  cardOf({ name: 'atelier ask', kind: 'ask-user', hsid: A('atelier').hsid, lines: ['The session asks you a question', 'repo: atelier', 'Which tells file wins, repo or home?', '  1. repo (.atelier/tells.yaml)', '  2. home (~/.atelier/tells.yaml)'], detail: { questions: [{ q: 'Which tells file wins, repo or home?', options: ['repo', 'home'] }] }, decisions: ['answer'] }),
+  cardOf({ name: 'atelier ask', kind: 'ask-user', hsid: A('atelier').hsid, lines: ASK_LINES(1, '/Users/matt/code/atelier'), extra: [{ type: 'ask-user', detail: ATELIER_ASK }], detail: ATELIER_ASK, decisions: ['answer'] }),
   cardOf({ name: 'gnomon-web plan', kind: 'plan', hsid: A('gnomon-web').hsid, lines: ['The session proposes a plan', 'repo: gnomon-web', '1. Move SettingsPage onto kit.Box', '2. Drop the old modal', '3. Re-run the visual fixtures', 'approve-plan: the session leaves plan mode. reject: it stays, with your note.'], detail: { plan: 'settings on kit' }, decisions: ['approve-plan', 'reject'] }),
   cardOf({ name: 'warpline verdict', kind: 'verdict', hsid: A('warpline').hsid, lines: ['Review verdict · seal v3', '2 findings · 0 blocking', 'accept: land it. reject: send it back with your note.'], detail: { findings: 2 }, decisions: ['accept', 'reject'] }),
   cardOf({ name: 'warpline merge', kind: 'merge-conflict', hsid: A('warpline').hsid, lines: ['Merge conflict · selvage', 'src/fabric.ts: both strands edit weave()'], detail: { path: 'src/fabric.ts' }, decisions: ['resolve', 'deny'] }),
@@ -290,7 +303,7 @@ export const OFFER_ID = `offer:${ulid('offer constellation')}`;
 const OFFER_MUTED_ID = `offer:${ulid('offer neurons 1')}`;
 const OFFER_QUIET_ID = `offer:${ulid('offer neurons 2')}`;
 
-function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolean; mcpBatch?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted'; host?: 'slips' | 'long' } = {}): Chain {
+function deskChain(o: { ask?: boolean; always?: boolean; extraCards?: boolean; mcpCard?: boolean; mcpBatch?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices' | 'multi'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted'; host?: 'slips' | 'long' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -374,6 +387,7 @@ function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolea
     c.add(T(at[i]!), 'approval.request', { card, flags: card.flags ?? [], ...(card.kind === 'permission' ? { tool: 'Bash', tool_input: { command: 'pnpm test --filter billing' } } : {}) }, { session: hsid, repo: a.repo });
   });
   // TD-2026-10-23-939 follow-up: the scoped always choices on an Edit card and a Bash card, pinned in billing (Mika's shots)
+  if (o.ask) c.add(T('14:07:40'), 'approval.request', { card: BILLING_ASK_CARD, flags: [], tool: 'AskUserQuestion' }, { session: BILLING, repo: 'billing' });
   if (o.always)
     ALWAYS_CARDS.forEach((card, i) => c.add(T(`14:07:3${i}`), 'approval.request', { card, flags: [], ...(i === 0 ? { tool: 'Edit', tool_input: ALWAYS_EDIT_INPUT } : { tool: 'Bash', tool_input: ALWAYS_BASH_INPUT }) }, { session: BILLING, repo: 'billing' }));
   // #gui-mcp-servers: the root card Settings › MCP servers raised (⊙ gnomon family), waiting in the stack (Mika's shots)
@@ -393,8 +407,8 @@ function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolea
     if (o.talk) {
       // table talk: the reply's speak block, the kernel's one speakable row (turnSeq set in talkFixture), then one
       // playback row per sentence from the pipelined TTS (the third cut off by a barge-in)
-      const said = o.talk === 'choices' ? 'The rounding fix is in and the tests pass. Should I open the pull request now?' : 'The rounding fix is in. All twelve billing tests pass. The invoice PDF now matches the totals.';
-      const body = o.talk === 'choices' ? `A  Yes, open it against main.\nB  No, wait until I have read the diff.` : 'I rounded once at the end of `totals.ts`; the three-line order now totals $41.07, as on the invoice.';
+      const said = o.talk === 'choices' ? 'The rounding fix is in and the tests pass. Should I open the pull request now?' : o.talk === 'multi' ? 'The rounding fix is in. Which checks should I add to the pull request?' : 'The rounding fix is in. All twelve billing tests pass. The invoice PDF now matches the totals.';
+      const body = o.talk === 'choices' ? `A  Yes, open it against main.\nB  No, wait until I have read the diff.` : o.talk === 'multi' ? `Pick any of these:\n\n1. Run the twelve billing tests\n2. Typecheck the package\n3. Re-render the three sample invoices` : 'I rounded once at the end of `totals.ts`; the three-line order now totals $41.07, as on the invoice.';
       ev('billing', T('14:09'), textLine(`\`\`\`speak\n${said}\n\`\`\`\n\n${body}`));
       on('billing', T('14:09:01'), 'voice.turn.agent', { source: 'kernel-speakable', turnSeq: 0, items: [{ kind: 'reply', text: said, from: 'block' }] });
       if (o.talk === 'spoken') {
@@ -524,7 +538,7 @@ function rulesOf(n: number, offEvery = 0): Record<string, unknown> {
 const rulesFx = (name: string, title: string, n: number, offEvery: number, rulesState = 'none'): Fixture => fixture(name, title, deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...rulesOf(n, offEvery) }, BILLING, false, { open: 'rules', rulesState });
 
 /** The talk fixtures: the kernel's speakable row cites its reply's seq (known once the chain is ordered). */
-function talkFixture(name: string, title: string, talk: 'spoken' | 'choices', replyMode?: 'show', open?: Fixture['open']): Fixture {
+function talkFixture(name: string, title: string, talk: 'spoken' | 'choices' | 'multi', replyMode?: 'show', open?: Fixture['open']): Fixture {
   const fx = fixture(name, title, deskChain({ voice: 'talk', talk }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, ...(replyMode ? { replyMode } : {}) }), BILLING, false, open ? { open } : {});
   const ev = (r: LogRow): { kind: string; payload: Record<string, unknown> } => (r as unknown as { event: { kind: string; payload: Record<string, unknown> } }).event;
   const reply = fx.rows.find((r) => ev(r).kind === 'turn.event' && String(ev(r).payload.line).includes('```speak'));
@@ -842,6 +856,8 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   'settings-day': fixture('settings-day', 'Day chosen in Settings: papercraft even when the Mac is dark', deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS }, BILLING, false, { open: 'settings', choice: 'day' }),
   spoken: talkFixture('spoken', 'Table talk: one reply spoken sentence by sentence, the last cut off (one spoken-aloud marker)', 'spoken'),
   choices: talkFixture('choices', 'Table talk: a reply that ends with lettered options (clickable choices)', 'choices'),
+  'choices-multi': talkFixture('choices-multi', 'Table talk: "pick any of these" options as toggles with one Send key (#gui-ask-card)', 'multi'),
+  'ask-card': fixture('ask-card', 'Billing asks two questions (AskUserQuestion): previews on the first, multi-select on the second; pinned in the chat and in the stack', deskChain({ ask: true }), statusOf(VOICE_RUNNING), BILLING),
   'model-switch': fixture('model-switch', 'Billing switched haiku → sonnet mid-session; the ▾ confirm sheet open (opus)', deskChain({ model: 'switched' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'model-switch' }),
   'model-unconfirmed': fixture('model-unconfirmed', 'A model switch Claude did not confirm: "model: switching… (unconfirmed)"', deskChain({ model: 'unconfirmed' }), statusOf(VOICE_RUNNING), BILLING),
   'host-slips': fixture('host-slips', 'The Desk: a billing reply naming /plugin twice, "restart the session" and /mcp; three host slips (the cap) and an offer slip under it', deskChain({ offer: 'slip', host: 'slips' }), statusOf(VOICE_RUNNING), BILLING),
