@@ -27,7 +27,8 @@
  *   --skip-native reuse the already-built helper and voice-io (packages/*\/bin/darwin) instead of rebuilding them.
  *
  * Steps (signed inside-out; every step that fails stops the release):
- *   1. helper + voice-io: their own build scripts (Developer ID, their own entitlements and profile);
+ *   1. helper + voice-io: their own build scripts (Developer ID, their own entitlements and profile), after building
+ *      @a-company/gnomon-contracts, which build-voice-io.mjs imports;
  *   2. `npm run build:gnomon`, then `npm run build:release -w @a-company/gnomon -- --arch <arch>` (the kernel with
  *      the GUI embedded and the helper/voice-io sha256 COMPILED IN, #release-pins);
  *   3. Node: packages/gnomon-wrapper/bundled-node.lock.json names the official tarball and its sha256; it is
@@ -406,8 +407,11 @@ export async function release(argv) {
       const { findIdentity } = await import(path.join(PACKAGES, 'gnomon-helper', 'scripts', 'signing.mjs'));
       identity = findIdentity().sha1;
     }
-    // 1. native helpers (their own scripts sign them with their own entitlements)
+    // 1. native helpers (their own scripts sign them with their own entitlements). build-voice-io.mjs imports the
+    //    voice-io identifier and requirement from @a-company/gnomon-contracts' dist, so build that first: a fresh
+    //    checkout (npm ci) has no dist, and a stale one would pin an old identity.
     if (!o.skipNative) {
+      await step('npm run build -w @a-company/gnomon-contracts', () => run('npm', ['run', 'build', '-w', '@a-company/gnomon-contracts']));
       await step('build GnomonHelper.app', () => run(process.execPath, [path.join(PACKAGES, 'gnomon-helper', 'scripts', 'build-darwin.mjs'), ...signFlag]));
       await step('build GnomonVoiceIO.app', () => run(process.execPath, [path.join(PACKAGES, 'gnomon-voice', 'scripts', 'build-voice-io.mjs'), ...signFlag]));
     }
