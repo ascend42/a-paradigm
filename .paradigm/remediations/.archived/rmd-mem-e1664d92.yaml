@@ -8,6 +8,6 @@ unblock_hint: >-
   Curate with: paradigm memory route mem-e1664d92 --to habits (or ignore; this advisory self-clears
   after ~14 days).
 created: '2026-10-24T01:13:30.766Z'
-expires_at: '2026-11-07T01:15:44.459Z'
+expires_at: '2026-11-07T17:40:28.401Z'
 target:
   file: feedback_user_review_async.md

@@ -11,8 +11,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
-import { sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
+import { darwinFloor, sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -41,8 +42,11 @@ process.stdin.on('data', (d) => {
   }
 });`;
 
+// the enforced profile needs the session floor (macOS 15+ and SIP on); a host below it (a CI VM with SIP off) cannot run it
+const floor = darwinFloor();
+
 describe('#mcp-servers: a stdio server runs inside the session profile', () => {
-  it('answers tools/list under the profile; the first-party dir is write-denied and the Gnomon home unreadable', async () => {
+  it.skipIf(!floor.ok)('answers tools/list under the profile; the first-party dir is write-denied and the Gnomon home unreadable', async () => {
     const home = tmp('gn-home-');
     const repo = tmp('gn-repo-');
     const pkg = tmp('gn-pkg-');
@@ -81,6 +85,18 @@ describe('#mcp-servers: a stdio server runs inside the session profile', () => {
     expect(r.repo).toBe('wrote');
     expect(fs.existsSync(path.join(pkg, 'planted.js'))).toBe(false);
   }, 30_000);
+
+  it.skipIf(floor.ok)('below the session floor the profile refuses sandbox-unavailable naming the floor (why the test above is skipped here)', () => {
+    let err: unknown;
+    try {
+      sessionLaunchPlan({} as never, 'darwin');
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(LifecycleRefusal);
+    expect((err as LifecycleRefusal).reason).toBe('sandbox-unavailable');
+    expect((err as LifecycleRefusal).detail).toMatchObject({ profile: 'session', floor: (floor as { floor?: string }).floor });
+  });
 
   it('a nested sandbox_apply is refused (no per-server network profile inside a session; measured)', () => {
     const r = spawnSync('/usr/bin/sandbox-exec', ['-p', '(version 1)(allow default)', '/usr/bin/sandbox-exec', '-p', '(version 1)(allow default)(deny network-outbound)', '/usr/bin/true'], { encoding: 'utf8' });

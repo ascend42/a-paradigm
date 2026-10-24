@@ -1,0 +1,38 @@
+id: mem-e1664d92
+name: User reviews are asynchronous — don't block on them
+description: >-
+  When user can't do a full review in-session, don't pause work. Track the review as a task with a
+  descriptive status, note the work done, and keep firing forward work.
+
+
+  When a code/design review is requested and the user can't do it themselves in the moment, **do NOT
+  pause forward progress waiting for them**. Instead:
+
+
+  1. Create a Task with a clear subject (e.g., "Review v6.0.4 Wave 2 (de-enforcement gating)")
+
+  2. Use the task `description` to capture WHAT was done — file paths, key risks, what to verify
+
+  3. Task `status` reflects the review state (pending = awaiting user, in_progress = user is
+  reviewing now, completed = user signed off)
+
+  4. Keep firing the next forward step (don't gate it on the review)
+
+
+  **Why:** User stated 2026-04-26 — "I can't do full reviews right now so let's keep moving forward
+  but maybe we track them as tasks for me to review later. So add them as tasks and note the work
+  done. And status is the review related one"
+
+
+  **How to apply:** When the always-team memory ("never bypass orchestration") would suggest a
+  reviewer pass at a checkpoint, AND the user hasn't time to engage with the review, swap "fire
+  reviewer agent now" for "create review task + keep building." Critical-correctness work (gates,
+  security, auth) still warrants a reviewer-agent pass; THIS rule is about the user's personal
+  review cadence, not skipping reviewer-agent automation.
+category: documentation
+trigger: postflight
+severity: advisory
+check:
+  type: context-checked
+  params: {}
+enabled: false

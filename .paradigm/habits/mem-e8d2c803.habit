@@ -1,0 +1,25 @@
+id: mem-e8d2c803
+name: No hanging words in text
+description: >-
+  Avoid orphan/widow words that wrap onto a line by themselves in headlines and body text
+
+
+
+  Avoid hanging words — single words that wrap onto their own line in headlines, subtitles, or body
+  text. Use `&nbsp;` between short word pairs (e.g., "AI&nbsp;agents", "can&nbsp;read") to keep them
+  together.
+
+
+  **Why:** It looks unpolished and breaks visual rhythm, especially on large hero text.
+
+
+  **How to apply:** When writing any marketing/hero/headline text on the site, check for orphans at
+  common viewport widths. Use non-breaking spaces (`&nbsp;` in JSX) to glue short word pairs
+  together.
+category: documentation
+trigger: postflight
+severity: advisory
+check:
+  type: context-checked
+  params: {}
+enabled: false

@@ -14,11 +14,15 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildSessionPolicy } from '../src/kernel/manifest/policy.js';
 import { loopActLaunchPlan } from '../src/kernel/sandbox/loop-act.js';
+import { darwinFloor } from '../src/kernel/sandbox/session.js';
+import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { createScratch, GitRefusal, parkScratch, removeScratch, scratchChanges } from '../src/kernel/git/scratch.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { PKG_ROOT } from './helpers.js';
 
 const darwin = process.platform === 'darwin';
+// the enforced profile needs the session floor (macOS 15+ and SIP on); a host below it (a CI VM with SIP off) cannot run it
+const floor = darwin ? darwinFloor() : { ok: false as const };
 const tmps: string[] = [];
 const kids: ChildProcess[] = [];
 const closers: Array<() => void> = [];
@@ -47,7 +51,21 @@ const listen = async (srv: net.Server, host = '127.0.0.1'): Promise<number> => {
 };
 const lanIp = (): string => Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address ?? '10.255.255.1';
 
-describe.skipIf(!darwin)('the loop-act profile under sandbox-exec (Aegis escape suite)', () => {
+describe.skipIf(!darwin || floor.ok)('the loop-act profile below the session floor (the escape suite is skipped here, never weakened)', () => {
+  it('refuses sandbox-unavailable naming the floor, which is why the escape suite cannot run on this host', () => {
+    let err: unknown;
+    try {
+      loopActLaunchPlan({} as never, 'darwin');
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(LifecycleRefusal);
+    expect((err as LifecycleRefusal).reason).toBe('sandbox-unavailable');
+    expect((err as LifecycleRefusal).detail).toMatchObject({ profile: 'loop-act', floor: (floor as { floor?: string }).floor });
+  });
+});
+
+describe.skipIf(!darwin || !floor.ok)('the loop-act profile under sandbox-exec (Aegis escape suite)', () => {
   it('every escape is denied; the scratch, tmp, node_modules reads and the endpoint port are allowed', async () => {
     const home = tmp('gnomon-home-');
     const userHome = tmp('gnomon-user-');

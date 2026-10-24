@@ -1,0 +1,27 @@
+id: mem-a65205fd
+name: Agent create defaults to project scope
+description: >-
+  paradigm agent create defaults to project-local, requires --global for global agents. Document
+  this clearly — most users want global.
+
+
+
+  `paradigm agent create <id>` saves to `.paradigm/agents/` (project-local) by default.
+
+  `paradigm agent create <id> --global` saves to `~/.paradigm/agents/` (global).
+
+
+  **Why:** Most users expect agents to persist across projects. The default is counterintuitive.
+
+
+  **How to apply:** When writing docs, README, or agent-related help text, always show the
+  `--global` flag prominently. The README's custom agent example should use `~/.paradigm/agents/`
+  (the global path). Agent guides should lead with global creation and mention project-scoping as an
+  advanced override.
+category: documentation
+trigger: postflight
+severity: advisory
+check:
+  type: context-checked
+  params: {}
+enabled: false
