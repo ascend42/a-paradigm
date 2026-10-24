@@ -607,6 +607,21 @@ html, body {
 .slip.gone { border: 0; box-shadow: none; transform: none; background: none; margin-left: 0; }
 .slip.gone .slip-tab { border: 0; padding: 0; }
 .slip.arrive { animation: slip-in 320ms cubic-bezier(.3, .7, .3, 1) both; }
+/* #gui-host-hints (design-system host-slip, founder 2026-10-23): the offer-slip paper, flat (no tilt: it decides
+   nothing and is not an invitation), the gnomon family glyph. ONE slip per reply (Mika, Delta 10): its items are
+   grouped by space and parted by a dashed rule; the command is the exact bytes Copy writes. */
+.host-slip { transform: none; }
+.host-item + .host-item { border-top: 1px dashed var(--rule); }
+.host-said { padding: 6px 10px 0; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.host-said code { font-size: inherit; background: var(--fold); padding: 0 4px; border-radius: var(--radius); color: var(--ink2); }
+.host-item .slip-q { padding-top: 2px; }
+.host-cmd { display: block; margin: 4px 10px 0; padding: 2px 6px; font-family: var(--mono); font-size: var(--fs-control); color: var(--ink); background: var(--ground); border: 1px solid var(--rule); border-radius: var(--radius); overflow-wrap: anywhere; user-select: all; }
+.host-slip [data-host-copy] { min-width: 8ch; }
+/* Aegis M1: the reply's argument inside the command, underlined (not a hue) and labelled by .host-note; L1: isolated */
+.host-arg { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.host-said code, .host-cmd, .host-warn { unicode-bidi: isolate; }
+.host-note { padding: 4px 10px 0; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.host-warn { color: var(--warn-ink); }
 @keyframes slip-in { from { opacity: 0; transform: translateY(-6px) rotate(0); } to { opacity: 1; transform: rotate(calc(-0.7deg * var(--slip-tilt))); } }
 
 /* reduced motion (OS or in-app): every transition and animation is instant (design-system motion rules) */
@@ -712,6 +727,9 @@ html, body {
 .rung-line { display: block; color: var(--sec); font-size: var(--fs-control); }
 .rung-tag { font-size: var(--fs-label); color: var(--ink2); white-space: nowrap; }
 .rung-tag.tag { font-size: var(--fs-label); color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); padding: 0 6px; }
+/* #voice-reply-mode: replies · [Speak and show | Show only], the sheet's replies row in the ladder */
+.ladder-replies { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 6px 0; border-top: 1px dashed var(--rule); margin-top: 4px; }
+.ladder-replies .meta { font-size: var(--fs-label); color: var(--sec); }
 .ladder-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 6px 2px; font-size: var(--fs-label); color: var(--sec); }
 .link { background: none; border: 0; padding: 0; font: inherit; font-size: var(--fs-control); color: var(--ink2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .link:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }

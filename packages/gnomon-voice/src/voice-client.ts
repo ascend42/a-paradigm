@@ -751,6 +751,7 @@ export class VoiceClient {
     this.#attachment = next;
     if (!readFailed) {
       this.#checkStopSeq();
+      this.#checkReplyMode();
       this.#restoreMic();
       this.#checkMicSeq();
       void this.#applyMicKey();
@@ -853,6 +854,25 @@ export class VoiceClient {
     if (w === true && !this.#o.audio.micOn && this.#o.capture === 'toggle') void this.setMicWanted(true);
   }
 
+  /**
+   * #voice-reply-mode (founder 2026-10-23: "just type back and not speak"): the kernel's status.voice.replyMode. 'show'
+   * = replies are shown, not spoken: a kernel-speakable row plays nothing (the GUI still shows the reply arranged, the
+   * spoken part over the body); the mic, capture and sending are untouched. Turning it on stops a reply being said.
+   */
+  #replyMode: 'speak' | 'show' = 'speak';
+  #checkReplyMode(): void {
+    const m = this.#o.link.replyMode?.() ?? null;
+    const next = m === 'show' ? 'show' : 'speak';
+    if (next === this.#replyMode) return;
+    this.#replyMode = next;
+    this.#flow.info('reply mode', { mode: next });
+    if (next === 'show') this.stopSpeaking('reply-mode');
+  }
+  /** The reply mode in force ('show': no spoken playback). */
+  get replyMode(): 'speak' | 'show' {
+    return this.#replyMode;
+  }
+
   /** The human's ⏹ (GUI button / Esc → request.voice.client{op:'stop-speaking'}) shows up as a changed status count. */
   #checkStopSeq(): void {
     const seq = this.#o.link.stopSpeakingSeq?.() ?? null;
@@ -866,7 +886,7 @@ export class VoiceClient {
    * Stop speaking NOW: the chunk playing stops (play.stop flushes the binary's queue), the rest of the reply and any
    * prefetched sentence are dropped. Returns whether anything was being said. Never touches capture or the kernel.
    */
-  stopSpeaking(by: 'hotkey' | 'gui' | 'detach' | 'api' = 'api'): boolean {
+  stopSpeaking(by: 'hotkey' | 'gui' | 'detach' | 'reply-mode' | 'api' = 'api'): boolean {
     if (!this.#speechOn && !this.#playing && !this.#speakQueue.length) return false;
     this.#speechGen++;
     this.#speakQueue = [];
@@ -1351,6 +1371,9 @@ export class VoiceClient {
       this.#spokenTurns.add(key);
       if (this.#spokenTurns.size > 256) this.#spokenTurns.delete(this.#spokenTurns.values().next().value!);
     }
+    // #voice-reply-mode 'show': the reply is shown, not said (the turn is marked said, so turning speech back on
+    // never replays an older reply)
+    if (this.#replyMode === 'show') return this.#flow.info('reply shown, not spoken', { items: items.length });
     const at = hr();
     for (const it of items) this.say(it.text, it.voice, at);
   }

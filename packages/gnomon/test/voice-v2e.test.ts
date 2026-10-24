@@ -318,6 +318,7 @@ function drig() {
         calls.push(`select-input:${String(c.id)}`);
         return { inputChoice: { id: c.id, name: c.name ?? null } };
       },
+      replyMode: (m: unknown) => (calls.push(`reply-mode:${String(m)}`), { replyMode: m }),
       sendWord: async (p) => (calls.push(`sendword:${JSON.stringify(p)}`), { trial: null }),
     },
   });
@@ -387,6 +388,19 @@ describe('#gnomon-voice V2e: the adopted-fd principal is voice and nothing else'
 });
 
 describe('#gnomon-voice V2e: request.voice.client is human only', () => {
+  it("#voice-reply-mode: op 'reply-mode' {mode: speak|show} is human only; anything else is BAD_REQUEST", async () => {
+    const r = drig();
+    const call = await r.connect({ kind: 'human', credential: 'gui' });
+    expect(await call('log.append', { kind: 'request.voice.client', payload: { op: 'reply-mode', mode: 'show' } })).toEqual({ voiceClient: { replyMode: 'show' } });
+    expect(await call('log.append', { kind: 'request.voice.client', payload: { op: 'reply-mode', mode: 'speak' } })).toEqual({ voiceClient: { replyMode: 'speak' } });
+    for (const bad of [{ op: 'reply-mode' }, { op: 'reply-mode', mode: 'mute' }, { op: 'reply-mode', mode: 'show', x: 1 }]) expect(await refusal(call('log.append', { kind: 'request.voice.client', payload: bad })), JSON.stringify(bad)).toMatchObject({ code: 'BAD_REQUEST' });
+    for (const who of [{ kind: 'voice' }, { kind: 'agent' }, { kind: 'readToken' }] as Who[]) {
+      const c = await r.connect(who);
+      await expect(c('log.append', { kind: 'request.voice.client', payload: { op: 'reply-mode', mode: 'show' } }), who.kind).rejects.toBeInstanceOf(RpcRefusal);
+    }
+    expect(r.calls).toEqual(['reply-mode:show', 'reply-mode:speak']);
+  });
+
   it("founder request 2026-10-23: ops 'select-input' and 'mic-meter' are human only; a bad id is BAD_REQUEST; other classes never reach it", async () => {
     const r = drig();
     const call = await r.connect({ kind: 'human', credential: 'gui' });

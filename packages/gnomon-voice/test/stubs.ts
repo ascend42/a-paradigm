@@ -132,6 +132,11 @@ export class FakeLink implements KernelLink {
   micToggleSeq(): number | null {
     return this.micSeq;
   }
+  /** #voice-reply-mode: status.voice.replyMode (null ⇒ not reported) */
+  replyModeVal: 'speak' | 'show' | null = null;
+  replyMode(): 'speak' | 'show' | null {
+    return this.replyModeVal;
+  }
   /** founder request 2026-10-23: status.voice.inputChoice (null ⇒ not held) */
   inputChoiceVal: { id: string | null } | null = null;
   inputChoice(): { id: string | null } | null {

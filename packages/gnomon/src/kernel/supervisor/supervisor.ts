@@ -139,6 +139,7 @@ import { loopClampAllows, withLoopOrigin } from './loop-clamp.js';
 import { guidanceHashOf } from '../voice/table-talk.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { GIT_VERB_TOOLS, GIT_VERBS_GUIDANCE, KERNEL_MCP_SERVER, kernelToolName, kernelWorktreeDirs } from '../git/verbs.js';
+import { sessionSystemPrompt } from './host-guidance.js';
 import { KERNEL_MCP_ENTRY, kernelMcpAnswer } from './kernel-mcp.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -1095,7 +1096,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const settingSources = settingSourcesFor(hooksMode);
-      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), ...((): { appendSystemPrompt?: string } => { const sp = [req.systemPrompt, this.#gitVerbs ? GIT_VERBS_GUIDANCE : undefined].filter((x): x is string => typeof x === 'string' && x.length > 0); return sp.length ? { appendSystemPrompt: sp.join('\n\n') } : {}; })(), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
+      const argv = buildClaudeArgv({ uuid, ...(r ? { resume: true } : {}), policyPath, mcpConfigPath, settingSources, ...(repoCtx ? { pluginDirs: repoCtx.pluginDir ? [repoCtx.pluginDir] : [], addDirs: repoCtx.memoryDirs } : {}), appendSystemPrompt: sessionSystemPrompt({ ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}), gitVerbs: this.#gitVerbs ? GIT_VERBS_GUIDANCE : null }), ...(req.model && req.model !== 'claude' && req.model !== 'any' && req.model !== 'default' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras, hsid }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);

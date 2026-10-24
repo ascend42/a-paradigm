@@ -511,6 +511,16 @@ export class VoiceReports {
     this.#inputChoice = { id: c.id as string | null, name: c.id === null ? null : typeof c.name === 'string' ? plain(c.name, MIC_NAME_MAX).trim() : null };
     return { inputChoice: { ...this.#inputChoice } };
   }
+  /**
+   * #voice-reply-mode (founder 2026-10-23): 'speak' (Speak and show, the default) or 'show' (Show only: the voice app
+   * plays no reply). The daemon persists it (<home>/voice/reply.json) and restores it at start; status.voice.replyMode.
+   */
+  #replyMode: 'speak' | 'show' = 'speak';
+  replyMode(mode: unknown): { replyMode: 'speak' | 'show' } {
+    if (mode !== 'speak' && mode !== 'show') throw bad("the reply mode is 'speak' or 'show'");
+    this.#replyMode = mode;
+    return { replyMode: mode };
+  }
   /** TD-2026-10-21-514: the Mic key switch: bare ` global (opt-in) or ⌃` (default); the client re-binds on a change */
   #micKeyBare = false;
   micKey(bare: boolean): { micKeyBare: boolean } {
@@ -529,9 +539,9 @@ export class VoiceReports {
   }
 
   /** status.voice.enrolment / notice / dictation (null when none, or stale past the TTL). */
-  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; mic: MicReport | null; inputChoice: { id: string | null; name: string | null }; micMeterOpen: boolean; stopSpeakingSeq: number; micWanted: boolean | null; micToggleSeq: number; micKeyBare: boolean } {
+  status(): { enrolment: EnrolmentReport | null; notice: { text: string; code?: string; at: string } | null; dictation: DictationReport | null; playback: PlaybackReport | null; capture: CaptureReport | null; prints: PrintsReport | null; mic: MicReport | null; inputChoice: { id: string | null; name: string | null }; micMeterOpen: boolean; stopSpeakingSeq: number; micWanted: boolean | null; micToggleSeq: number; micKeyBare: boolean; replyMode: 'speak' | 'show' } {
     const fresh = <T extends { at: string }>(x: T | null, ttl = VOICE_REPORT_TTL_MS): T | null => (x && this.#now() - Date.parse(x.at) <= ttl ? x : null);
-    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, mic: this.#mic, inputChoice: { ...this.#inputChoice }, micMeterOpen: this.#now() < this.#micMeterUntil, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted, micToggleSeq: this.#micToggleSeq, micKeyBare: this.#micKeyBare };
+    return { enrolment: fresh(this.#enrolment), notice: fresh(this.#notice), dictation: fresh(this.#dictation), playback: fresh(this.#playback), capture: fresh(this.#capture, VOICE_CAPTURE_TTL_MS), prints: this.#prints, mic: this.#mic, inputChoice: { ...this.#inputChoice }, micMeterOpen: this.#now() < this.#micMeterUntil, stopSpeakingSeq: this.#stopSpeakingSeq, micWanted: this.#micWanted, micToggleSeq: this.#micToggleSeq, micKeyBare: this.#micKeyBare, replyMode: this.#replyMode };
   }
 }
 

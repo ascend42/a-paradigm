@@ -220,6 +220,42 @@ describe('kernel-speakable rows', () => {
     expect(mine[0]!.payload).not.toHaveProperty('source');
   });
 
+  it("#voice-reply-mode 'show': a kernel-speakable row plays nothing; switching to show stops a reply being said; 'speak' says the next one", async () => {
+    const { audio, engines, link, client } = await setup();
+    link.speakable([{ kind: 'reply', text: 'First. Second. Third.' }]);
+    await settle();
+    expect(engines.tts.said.length).toBeGreaterThan(0);
+    link.replyModeVal = 'show';
+    await client.refresh();
+    expect(client.replyMode).toBe('show');
+    for (let i = 0; i < 4; i++) {
+      await settle();
+      audio.tick(1000);
+    }
+    await client.idle();
+    const before = engines.tts.said.length;
+    expect(engines.tts.said).not.toContain('Third.'); // turning it on dropped the rest of the reply
+    link.speakable([{ kind: 'reply', text: 'Shown only.' }, { kind: 'edits', text: 'Edited 2 files.', from: 'kernel' }]);
+    for (let i = 0; i < 4; i++) {
+      await settle();
+      audio.tick(1000);
+    }
+    await client.idle();
+    expect(engines.tts.said).toHaveLength(before);
+    // the mic and capture are untouched: the attachment and the mode stand
+    expect(client.attachment?.hsid).toBe(link.att!.hsid);
+    link.replyModeVal = 'speak';
+    await client.refresh();
+    link.speakable([{ kind: 'reply', text: 'Said again.' }]);
+    for (let i = 0; i < 4; i++) {
+      await settle();
+      audio.tick(1000);
+    }
+    await client.idle();
+    expect(engines.tts.said.at(-1)).toBe('Said again.');
+    expect(engines.tts.said).not.toContain('Shown only.');
+  });
+
   it('table talk S4: kernel words get the earcon and the system speaker; model text (block or heuristic) never does', async () => {
     const { audio, engines, link, client } = await setup();
     const lens: number[] = [];

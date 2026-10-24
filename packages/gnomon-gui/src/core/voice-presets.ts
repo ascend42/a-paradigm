@@ -123,5 +123,5 @@ export function voiceWho(o: { speaker: string; edited: boolean; sent: string | n
   return { who: o.speaker === 'voice' ? 'voice' : `${o.speaker} · voice`, sent: `· ${o.sent ?? 'spoken'}${o.edited ? ' · edited' : ''}` };
 }
 /** Luna #10: the tag before a reply's spoken part, in words ("voice" carries it, never a hue: board gnomon-status-colour). */
-export const saidTag = (by: 'kernel' | 'reply'): string => (by === 'kernel' ? 'voice · said aloud' : 'voice · spoken part');
+export const saidTag = (by: 'kernel' | 'reply', replyMode: 'speak' | 'show' = 'speak'): string => (replyMode === 'show' ? 'voice · spoken part · not played' : by === 'kernel' ? 'voice · said aloud' : 'voice · spoken part');
 

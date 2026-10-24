@@ -21,13 +21,13 @@ import { DELAY_CHOICES, delayLabel, serializeDelay } from '../core/dictation.js'
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { teachAckLine, teachCounter, teachHeardLine, teachPrompt, teachShowsRisk, teachVariants, teachVariantsLine, TEACH_DROP_VARIANTS, TEACH_PICKS, type TeachState } from '../core/send-word-teach.js';
 import { consentText, enrolLine, normalizeVoiceName, type EnrolState } from '../core/voice-client.js';
-import { micKeyName, RUNG_NAME, type InputChoiceView, type RungEntry, type SheetRowView, type SheetSection } from '../core/voice-ladder.js';
+import { micKeyName, REPLY_MODE_NAME, RUNG_NAME, type InputChoiceView, type ReplyMode, type RungEntry, type SheetRowView, type SheetSection } from '../core/voice-ladder.js';
 import { ACK_TEXT, riskSentence } from '../core/voice-presets.js';
 
 /* ── the ladder popover ─────────────────────────────────────────────── */
 
 /** The ladder's children: the target line (when the rung applies elsewhere), one button per rung, then the foot (mic key · listen, and the settings link). */
-export function ladderEls(doc: MiniDoc, entries: readonly RungEntry[], foot: string, target: string | null = null): MiniEl[] {
+export function ladderEls(doc: MiniDoc, entries: readonly RungEntry[], foot: string, target: string | null = null, replies: ReplyMode | null = null): MiniEl[] {
   const out: MiniEl[] = [];
   // Luna #6: a rung applies to the focused session; when voice is on another, say so first
   if (target) out.push(h(doc, 'p', { class: 'meta ladder-target', role: 'note' }, target));
@@ -52,6 +52,12 @@ export function ladderEls(doc: MiniDoc, entries: readonly RungEntry[], foot: str
     );
     if (e.disabled) b.setAttribute('disabled', '');
     out.push(b);
+  }
+  // #voice-reply-mode: Speak and show | Show only (the same choice as the sheet's replies row; voice input is unchanged)
+  if (replies) {
+    const seg = h(doc, 'span', { class: 'seg' });
+    for (const m of ['speak', 'show'] as const) seg.appendChild(h(doc, 'button', { class: `key quiet seg-key${replies === m ? ' current' : ''}`, type: 'button', role: 'menuitemradio', 'aria-checked': String(replies === m), 'data-reply-mode': m }, REPLY_MODE_NAME[m]));
+    out.push(h(doc, 'div', { class: 'ladder-replies', role: 'group', 'aria-label': 'replies' }, h(doc, 'span', { class: 'meta' }, 'replies'), seg));
   }
   out.push(h(doc, 'div', { class: 'ladder-foot' }, h(doc, 'span', null, foot), h(doc, 'button', { class: 'link', type: 'button', role: 'menuitem', 'data-vs-open': 'voice' }, 'voice settings…')));
   return out;

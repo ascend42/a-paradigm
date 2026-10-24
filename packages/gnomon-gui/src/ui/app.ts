@@ -17,6 +17,7 @@
  */
 import { isCardDecidable, sanitizeDisplayText, VOICE_LIABILITY_ACK_HASH } from '@a-company/gnomon-contracts';
 import { initialTeach, reduceTeach, teachCommit, type TeachEvent, type TeachState } from '../core/send-word-teach.js';
+import { replyModeOf, replyModeRequest, type ReplyMode } from '../core/voice-ladder.js';
 import { chooseRung, clientFactOf, crashCauseOf, inputChoices, ladderAria, ladderEntries, ladderFoot, ladderTargetLine, presetOfRung, rungNameOf, rungOf, rungOfPresetCommand, sendOfRung, sheetRows, stateOfRung, voicePillOf, type Readiness, type Rung, type SheetSection } from '../core/voice-ladder.js';
 import { ladderEls, mountVoiceSheet, trapNext, type FlowView, type SheetView } from './voice-settings.js';
 import { COMPOSER_LINES, composerFit, fitTallRoom, lineCountLabel, lineCountShown, parseTall, serializeTall, TALL_FEED_MIN_PX, TALL_KEY } from '../core/composer.js';
@@ -33,6 +34,8 @@ import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } 
 import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
 import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
+import { renderHostSlips, wireHostSlips } from './host-slip.js';
+import { copyTextOf, hostHintsOf, type HostHint } from '../core/host-hints.js';
 import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
 import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
@@ -479,7 +482,7 @@ function itemEl(it: FoldedItem): HTMLElement {
   // TD-2026-10-21-514: "spoken · sent by you / on release / by send word / as a piece" (the plain origin; TD-2026-10-23-939)
   const sentBy = spoken || it.sentLabel ? h(doc, 'span', { class: 'sent-by' }, `${spoken ? spoken.sent : it.sentLabel}`) : null;
   const body = label
-    ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, saidTag(it.saidBy === 'kernel' ? 'kernel' : 'reply')), ' ', it.said)] : []), replyBody(it)]
+    ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, saidTag(it.saidBy === 'kernel' ? 'kernel' : 'reply', replyModeOf(status))), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
       : [it.text];
@@ -494,7 +497,68 @@ function itemEl(it: FoldedItem): HTMLElement {
     return h(doc, 'div', { class: 'trow role-raw-detail' }, h(doc, 'pre', { class: 'raw-line', tabindex: '0', 'aria-label': 'the whole line' }, it.text)) as unknown as HTMLElement;
   }
   const slips = slipsAt.get(it.key) ?? [];
-  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : ''}` }, ...body, ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+  // #gui-host-hints: the reply text above is shown verbatim; a host slip under it says the Gnomon way
+  const host = it.role === 'assistant' && !rawMode ? hostHintsFor(it.key, it.text) : [];
+  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : ''}` }, ...body, ...renderHostSlips(doc, it.key, host, hostCopied), ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+}
+
+/* ── #gui-host-hints (founder 2026-10-23): host slips under a reply that names what does not run in Gnomon ── */
+/** the hints each mounted reply drew (the Copy key copies from here: the same string its <code> shows) */
+const hostAt = new Map<string, { text: string; hints: HostHint[] }>();
+let hostCopied: string | null = null;
+let hostCopiedTimer: ReturnType<typeof setTimeout> | null = null;
+function hostHintsFor(key: string, text: string): HostHint[] {
+  const had = hostAt.get(key);
+  if (had && had.text === text) return had.hints;
+  const hints = hostHintsOf(text);
+  if (hints.length) hostAt.set(key, { text, hints });
+  else hostAt.delete(key);
+  if (hostAt.size > 400) hostAt.delete(hostAt.keys().next().value!);
+  return hints;
+}
+/** Copy: a trusted press writes the slip's shown command to the clipboard; nothing runs. No clipboard: select it for ⌘C. */
+function onHostCopy(ref: string, e: Event): void {
+  if (!e.isTrusted) return;
+  const cut = ref.lastIndexOf(':');
+  const item = ref.slice(0, cut);
+  const hint = hostAt.get(item)?.hints[Number(ref.slice(cut + 1))];
+  const cmd = hint ? copyTextOf(hint) : null;
+  if (cmd === null) return;
+  // Aegis L2: copy only what the slip shows: the rendered command's text must equal cmd exactly, else nothing is copied
+  const shown = $('viewport').querySelector(`[data-host-cmd="${CSS.escape(ref)}"]`)?.textContent ?? null;
+  if (shown !== cmd) return void notice('The command on screen changed: nothing was copied', 'fail', { source: 'host-copy' });
+  const selectIt = (): void => {
+    const code = $('viewport').querySelector(`[data-host-cmd="${CSS.escape(ref)}"]`);
+    const sel = window.getSelection();
+    if (!code || !sel) return;
+    const r = document.createRange();
+    r.selectNodeContents(code);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    notice('Selected the command: press ⌘C to copy it', 'info', { source: 'host-copy' });
+  };
+  if (!navigator.clipboard?.writeText) return selectIt();
+  // Mika Delta 10: the remount replaces the key, so a key that had focus gets it back (keyboard users stay put)
+  const repaint = (): void => {
+    const sel = `[data-host-copy="${CSS.escape(ref)}"]`;
+    const had = document.activeElement === $('viewport').querySelector(sel);
+    remountItem(item);
+    paintTranscript();
+    if (had) ($('viewport').querySelector(sel) as HTMLElement | null)?.focus({ preventScroll: true });
+  };
+  navigator.clipboard.writeText(cmd).then(
+    () => {
+      hostCopied = ref;
+      repaint();
+      put($('toast-say'), `Copied: ${cmd}`); // the polite live region: "Copied" is said, not only drawn
+      if (hostCopiedTimer) clearTimeout(hostCopiedTimer);
+      hostCopiedTimer = setTimeout(() => {
+        hostCopied = null;
+        repaint();
+      }, 2000);
+    },
+    selectIt,
+  );
 }
 
 /* ── #gui-offer-slip (TD-2026-10-20-812 O1): the margin slips under the reply that offered (core/offers.ts) ── */
@@ -1983,6 +2047,24 @@ async function setMicKey(bare: boolean, trusted: boolean): Promise<void> {
  * Founder request 2026-10-23: the human picks the voice input (null = follow the system default). The kernel keeps the
  * choice across restarts and the voice app moves the mic to it; the sheet's input row shows the result.
  */
+/** #voice-reply-mode: Speak and show | Show only, the human's trusted press only; the kernel keeps it per kernel home (Aegis L3). */
+async function setReplyMode(mode: ReplyMode, trusted: boolean): Promise<void> {
+  if (!trusted) return;
+  if (!client) return notice('not connected: the reply mode was not changed', 'fail');
+  try {
+    await client.call('log.append', replyModeRequest(mode));
+    notice(mode === 'show' ? 'Replies: show only. Voice input stays on; replies are written, not spoken.' : 'Replies: spoken and shown.', 'info', { source: 'reply-mode' });
+    await refreshStatus();
+  } catch (err) {
+    notice(err instanceof RpcError ? refusalText(err.refusal) : 'the reply mode was not changed', 'fail', { source: 'reply-mode' });
+  }
+  voiceSheet.repaint();
+  paintVoice();
+  paintVoiceMenu();
+  // Mika Delta 10: the spoken part's tag says "not played" in Show only; mounted replies repaint with the new mode
+  for (const it of items) if (it.said !== undefined) remountItem(it.key);
+  paintTranscript();
+}
 async function selectInput(id: string | null, trusted: boolean): Promise<void> {
   if (!trusted || !client || !canAttach(status)) return;
   const name = id === null ? undefined : clientOf(status).mic.inputs.find((d) => d.id === id)?.name ?? clientOf(status).mic.chosenName ?? undefined;
@@ -2135,7 +2217,7 @@ function sheetView(): SheetView {
   const v = voiceStatusOf(status);
   const c = clientOf(status);
   const r = readiness();
-  const rows = sheetRows({ ...r, ackedAt: ackedAt(localStorage, myPrincipal()), enrolled: c.enrolled, reteach: enrolNudgeOf(c) === 'reteach', micKeyBare: micKeyBareOf(status), capture: capturePref, delayMs: dict.delayMs, hotkey: v.hotkey, attachable: canAttach(status), client: c });
+  const rows = sheetRows({ ...r, ackedAt: ackedAt(localStorage, myPrincipal()), enrolled: c.enrolled, reteach: enrolNudgeOf(c) === 'reteach', micKeyBare: micKeyBareOf(status), capture: capturePref, delayMs: dict.delayMs, hotkey: v.hotkey, attachable: canAttach(status), client: c, replyMode: replyModeOf(status) });
   let flow: FlowView | null = null;
   if (vsFlow === 'teach' && teach) flow = { kind: 'teach', s: teach, attached: v.hsid !== null };
   else if (vsFlow === 'enrol' && store.enrol) flow = { kind: 'enrol', s: store.enrol, name: enrolName, agreed: enrolAgreed, enrolled: c.enrolled, forgetArmed, level: null };
@@ -2162,7 +2244,7 @@ function sheetAct(action: string, value: string, trusted: boolean): void {
       capturePref = value === 'listen.toggle' ? 'toggle' : 'open';
       localStorage.setItem(CAPTURE_KEY, capturePref);
       void applyCapture();
-    }
+    } else if (value === 'reply.show' || value === 'reply.speak') void setReplyMode(value === 'reply.show' ? 'show' : 'speak', trusted);
   } else if (action === 'pick') void teachStep({ type: 'pick', text: value });
   else if (action === 'teach') {
     if (value === 'common-yes' || value === 'common-no') void teachStep({ type: 'confirmCommon', yes: value === 'common-yes' });
@@ -2762,6 +2844,8 @@ function paintVoice(): void {
     micKeyBare: bare,
     heardAgoS: lastHeardAt === null ? null : (Date.now() - lastHeardAt) / 1000,
     draftWaiting: (draftWaitingShown = draftWaitingOf()),
+    // Mika Delta 10: Show only is named on the pill while voice is on (the founder's "speak back or not" at a glance)
+    replyMode: replyModeOf(status),
   });
   // board header-5b: when the voice app can't run (nothing attached), the pill IS the action ("Start voice · app not
   // running"); its accessible name says what a click does, and it opens no menu then
@@ -2960,18 +3044,19 @@ function paintVoiceMenu(): void {
   // Mika 2026-10-23: a mic fault's row says the voice app's whole sentence (the pill has only the short cause)
   const mf = clientOf(status).micFault;
   const act = v.state !== 'off' && cp.action !== null ? { action: cp.action, label: cp.actionLabel, fact: mf && cp.className.includes('voice-micfault') ? oneLine(mf.text, ERROR_TITLE_MAX) : (clientFactOf(cp.label, cp.tail) ?? '') } : null;
-  const key = JSON.stringify([entries, foot, target, act]);
+  const replies = canAttach(status) ? replyModeOf(status) : null;
+  const key = JSON.stringify([entries, foot, target, act, replies]);
   if (key === ladderShown && menu.firstChild) return;
   ladderShown = key;
-  const had = (document.activeElement as HTMLElement | null)?.closest?.('#voice-menu [data-rung], #voice-menu [data-vs-open]') as HTMLElement | null;
-  const fk = had ? (had.dataset.rung ?? 'settings') : null;
+  const had = (document.activeElement as HTMLElement | null)?.closest?.('#voice-menu [data-rung], #voice-menu [data-reply-mode], #voice-menu [data-vs-open]') as HTMLElement | null;
+  const fk = had ? (had.dataset.rung ?? (had.dataset.replyMode ? `reply:${had.dataset.replyMode}` : 'settings')) : null;
   clear(menu);
   if (act) menu.appendChild(h(doc, 'div', { class: 'ladder-start' }, h(doc, 'span', { class: 'meta' }, act.fact), h(doc, 'button', { class: 'key', type: 'button', role: 'menuitem', 'data-voice-act': act.action }, act.label)) as unknown as Node);
-  for (const el of ladderEls(doc, entries, foot, target)) menu.appendChild(el as unknown as Node);
-  if (fk) ((fk === 'settings' ? menu.querySelector('[data-vs-open]') : menu.querySelector(`[data-rung="${fk}"]`)) as HTMLElement | null)?.focus();
+  for (const el of ladderEls(doc, entries, foot, target, replies)) menu.appendChild(el as unknown as Node);
+  if (fk) ((fk === 'settings' ? menu.querySelector('[data-vs-open]') : fk.startsWith('reply:') ? menu.querySelector(`[data-reply-mode="${fk.slice(6)}"]`) : menu.querySelector(`[data-rung="${fk}"]`)) as HTMLElement | null)?.focus();
 }
 /** The ladder's focusable items, in order (arrow keys move among them). */
-const ladderItems = (): HTMLElement[] => [...$('voice-menu').querySelectorAll<HTMLElement>('[data-voice-act], [data-rung]:not([disabled]), [data-vs-open]')];
+const ladderItems = (): HTMLElement[] => [...$('voice-menu').querySelectorAll<HTMLElement>('[data-voice-act], [data-rung]:not([disabled]), [data-reply-mode], [data-vs-open]')];
 function openVoiceMenu(): void {
   // voice drops fix: opening the ladder is the human's dismiss of a sticky drop on the pill (core/capture.ts)
   captureTrack = captureDismiss(captureTrack, Date.now());
@@ -3481,6 +3566,8 @@ function wire(): void {
     if (had) ($('viewport').querySelector(`[data-act="${CSS.escape(k)}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
   };
   wireOfferSlips($('viewport'), onOfferAct); // #gui-offer-slip: trusted Open (two-step) / not now
+  // #gui-host-hints: Copy (the shown command to the clipboard) and open (a Gnomon screen), trusted presses only
+  wireHostSlips($('viewport'), { copy: onHostCopy, open: (id, e) => run(id, e.isTrusted) });
   $('viewport').addEventListener('click', (e) => {
     const c = (e.target as HTMLElement).closest('.choices.live [data-choice]') as HTMLElement | null;
     if (c) return onChoice(e, c);
@@ -3721,6 +3808,8 @@ function wire(): void {
       closeVoiceMenu(false);
       return openVoiceSettings();
     }
+    const rm = t.closest('[data-reply-mode]') as HTMLElement | null;
+    if (rm) return void setReplyMode(rm.dataset.replyMode === 'show' ? 'show' : 'speak', e.isTrusted);
     const b = t.closest('[data-rung]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
     void chooseRungUi(b.dataset.rung as Rung, e.isTrusted);

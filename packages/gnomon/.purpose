@@ -3524,6 +3524,50 @@ components:
       - test/voice-origin.test.ts
     oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
 
+  voice-reply-mode:
+    description: >-
+      #voice-reply-mode (founder request 2026-10-23, "just type back and not
+      speak"; spec §14.4.1; src/kernel/voice/reply-mode-store.ts).
+      Speak and show ('speak', the default) or Show only ('show'). The human
+      sets it with request.voice.client{op:'reply-mode', mode} on a gui or
+      device connection (dispatcher, human only, no card: it only narrows
+      what the voice app does); VoiceReports holds it, status.voice.replyMode
+      reports it, and the daemon persists it per kernel home at
+      <home>/voice/reply.json (0600 in 0700, atomic; a missing or malformed
+      file reads as speak) and restores it at start. The kernel's speakable
+      projection, turn guidance and the GUI's arrangement are unchanged; the
+      voice app (gnomon-voice VoiceClient#checkReplyMode) plays no
+      kernel-speakable row under show and stops a reply being said when it
+      turns on. Voice input stays as it is.
+    path: src/kernel/voice/reply-mode-store.ts
+    type: module
+    tags: [gnomon, kernel, voice]
+    tests:
+      - test/voice-v2e-speak.test.ts
+      - test/voice-v2e.test.ts
+
+  host-guidance:
+    description: >-
+      #host-guidance (founder request 2026-10-23; spec §6.6 "Host context";
+      src/kernel/supervisor/host-guidance.ts). HOST_GUIDANCE is a short
+      paragraph every Claude Code session the #supervisor spawns carries in
+      its --append-system-prompt (sessionSystemPrompt: the caller's
+      systemPrompt, then HOST_GUIDANCE, then GIT_VERBS_GUIDANCE when the
+      kernel verbs are on). It says the session runs inside Gnomon headless:
+      no slash commands (/plugin, /mcp, /config, /login), no TUI the human
+      can type into, no "restart the session" or interactive claude; prefer
+      Gnomon's tools (gnomon_git_*) and Settings screens (MCP servers,
+      Rules, Local model, Voice); for terminal-only work give the exact
+      shell command. Public text, never a security boundary. The GUI half
+      is #gui-host-hints (the reply stays verbatim, a host slip says the
+      Gnomon way).
+    path: src/kernel/supervisor/host-guidance.ts
+    type: module
+    tags: [gnomon, kernel, supervisor, guidance]
+    tests:
+      - test/host-guidance.test.ts
+      - test/kernel-mcp-session.test.ts
+
   shell-readonly:
     description: >-
       #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1, Aegis

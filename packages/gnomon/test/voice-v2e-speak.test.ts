@@ -8,6 +8,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { inputChoicePath, readInputChoice, writeInputChoice } from '../src/kernel/voice/input-choice-store.js';
+import { readReplyMode, replyModePath, writeReplyMode } from '../src/kernel/voice/reply-mode-store.js';
 import { KernelSpeakable, SpeakableProjector, speakableSummary, isKernelSpeakable, ASK_WAITING } from '../src/kernel/voice/speakable.js';
 import { mayBeVisible, projectForReader } from '../src/kernel/log/redaction.js';
 import { voiceStatusFor, VoiceReports, VOICE_MIC_METER_TTL_MS, VOICE_REPORT_TTL_MS } from '../src/kernel/voice/voice-requests.js';
@@ -81,11 +82,11 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
   it('validates and relays enrolment progress and notices; stale past the TTL', () => {
     let t = 1_000_000;
     const r = new VoiceReports(() => t);
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false, replyMode: 'speak' });
     r.report({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5 } });
     r.report({ notice: { text: 'Microphone access is off.‮' } });
     const at = new Date(t).toISOString();
-    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
+    expect(r.status()).toEqual({ enrolment: { name: 'founder', phase: 'recording', phrase: 2, of: 5, at }, notice: { text: 'Microphone access is off. ', at }, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false, replyMode: 'speak' });
     for (const bad of [null, {}, { x: 1 }, { enrolment: { name: 'Bad Name', phase: 'ready' } }, { enrolment: { name: 'a', phase: 'nope' } }, { enrolment: { name: 'a', phase: 'ready', phrase: -1 } }, { enrolment: { name: 'a', phase: 'ready', extra: 1 } }, { notice: { text: '' } }, { notice: { text: 'x', y: 1 } }]) {
       expect(() => r.report(bad), JSON.stringify(bad)).toThrow(TypeError);
     }
@@ -98,7 +99,7 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     r.report({ notice: { text: 'x'.repeat(1000) } });
     expect(r.status().notice!.text).toHaveLength(280);
     t += VOICE_REPORT_TTL_MS + 1;
-    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false });
+    expect(r.status()).toEqual({ enrolment: null, notice: null, dictation: null, playback: null, capture: null, prints: null, mic: null, inputChoice: { id: null, name: null }, micMeterOpen: false, stopSpeakingSeq: 0, micWanted: null, micToggleSeq: 0, micKeyBare: false, replyMode: 'speak' });
   });
 
   it('2026-10-23: the mic report relays the input in use and a mic fault as status.voice.mic (a state, per connection)', () => {
@@ -158,6 +159,24 @@ describe('#gnomon-voice V2e: request.voice.report (relayed in status.voice, no k
     expect(fs.statSync(inputChoicePath(home)).mode & 0o777).toBe(0o600);
     fs.writeFileSync(inputChoicePath(home), '{"format":"other","id":"x"}');
     expect(readInputChoice(home)).toBeNull();
+  });
+
+  it('#voice-reply-mode: Speak and show by default; show only is held, validated, on status and persisted (0600) per home', () => {
+    const r = new VoiceReports(() => 1);
+    expect(r.status().replyMode).toBe('speak');
+    expect(r.replyMode('show')).toEqual({ replyMode: 'show' });
+    expect(r.status().replyMode).toBe('show');
+    for (const bad of [null, '', 'silent', 1, { mode: 'show' }]) expect(() => r.replyMode(bad), JSON.stringify(bad)).toThrow(TypeError);
+    expect(r.status().replyMode).toBe('show');
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'reply-mode-'));
+    expect(readReplyMode(home)).toBeNull();
+    writeReplyMode(home, 'show');
+    expect(readReplyMode(home)).toBe('show');
+    expect(fs.statSync(replyModePath(home)).mode & 0o777).toBe(0o600);
+    writeReplyMode(home, 'speak');
+    expect(readReplyMode(home)).toBe('speak');
+    fs.writeFileSync(replyModePath(home), '{"format":"other","mode":"show"}');
+    expect(readReplyMode(home)).toBeNull();
   });
 
   it('T-2026-10-19-026: playback edges relay as status.voice.playback; stop-speaking bumps a declared counter', () => {
