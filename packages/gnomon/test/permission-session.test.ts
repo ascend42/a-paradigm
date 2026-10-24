@@ -20,7 +20,7 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { answerDigest, decisionMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer, usesDecisionV2 } from '../src/kernel/log/signer.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
-import { ASK_MAX_ANSWER_CHARS, ASK_USER_NO_ANSWER, composePermission, FIELD_BODY_PREFIX, inputHash, parseAskAnswer, PLAN_FILE } from '../src/kernel/supervisor/permission.js';
+import { askAnswerCap, askNoteCap, ASK_MAX_ANSWER_CHARS, ASK_USER_NO_ANSWER, composePermission, FIELD_BODY_PREFIX, inputHash, parseAskAnswer, PLAN_FILE } from '../src/kernel/supervisor/permission.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
@@ -166,6 +166,41 @@ describe('falsifier 1+2: the argv and the parser (pure)', () => {
     for (const bad of [{ ...q0, options: [{ label: 'a', preview: '' }, { label: 'b' }] }, { ...q0, options: [{ label: 'a', preview: 'x'.repeat(4001) }, { label: 'b' }] }, { ...q0, options: [{ label: 'a', preview: 7 }, { label: 'b' }] }, { ...q0, options: [{ label: 'a' }, { label: 'a' }] }]) {
       expect(composePermission({ requestId: 'r', toolName: 'AskUserQuestion', toolUseId: null, input: { questions: [bad] } }, { repo: '/r', denyWrite: [] })).toMatchObject({ kind: 'auto-deny', why: 'bad-input' });
     }
+  });
+  it('Aegis M1 (2026-10-24): a question, header, label, description or preview the display sanitizer flags is bad-input (no card)', () => {
+    const q = { question: 'Which?', header: 'H', multiSelect: false, options: [{ label: 'a', description: 'd', preview: 'p\nq' }, { label: 'b' }] };
+    const plain = composePermission({ requestId: 'r', toolName: 'AskUserQuestion', toolUseId: null, input: { questions: [q] } }, { repo: '/r', denyWrite: [] });
+    expect(plain.kind).toBe('card'); // newlines and tabs in a preview are not flags
+    const o0 = q.options[0]!;
+    for (const bad of [
+      { ...q, question: 'Which\u202e?' },
+      { ...q, header: 'H\u200b' },
+      { ...q, options: [{ ...o0, label: 'a\u{e0041}' }, q.options[1]] },
+      { ...q, options: [{ ...o0, description: 'd\u2066x' }, q.options[1]] },
+      { ...q, options: [{ ...o0, preview: 'p\u200dq' }, q.options[1]] },
+    ]) {
+      expect(composePermission({ requestId: 'r', toolName: 'AskUserQuestion', toolUseId: null, input: { questions: [bad] } }, { repo: '/r', denyWrite: [] })).toMatchObject({ kind: 'auto-deny', why: 'bad-input' });
+    }
+  });
+  it('Aegis L2 (2026-10-24): a full multi-select answer (every label + Other at its cap) parses; the note cap fits the longest note', () => {
+    const labels = Array.from({ length: 16 }, (_, i) => `${'L'.repeat(140)}${i}`);
+    const many = { question: 'Which apply?', header: null, multiSelect: true, options: labels.map((label) => ({ label, description: null })) };
+    const one = { question: 'Which one?', header: null, multiSelect: false, options: [{ label: 'x', description: null }] };
+    const qs = [many, one];
+    const full = [...labels, 'o'.repeat(ASK_MAX_ANSWER_CHARS)].join(', ');
+    expect(full.length).toBeGreaterThan(ASK_MAX_ANSWER_CHARS);
+    expect(askAnswerCap(many)).toBe(full.length);
+    const note = JSON.stringify({ answers: { 'Which apply?': full, 'Which one?': 'y'.repeat(ASK_MAX_ANSWER_CHARS) } });
+    expect(note.length).toBeGreaterThan(4096);
+    expect(note.length).toBeLessThanOrEqual(askNoteCap(qs));
+    expect(parseAskAnswer(qs, note)).toEqual({ answers: { 'Which apply?': full, 'Which one?': 'y'.repeat(ASK_MAX_ANSWER_CHARS) } });
+    // worst JSON expansion still fits: every Other character a control char (\u0001 is 6 units)
+    const ctrl = JSON.stringify({ answers: { 'Which apply?': [...labels, '\u0001'.repeat(ASK_MAX_ANSWER_CHARS)].join(', '), 'Which one?': '\u0001'.repeat(ASK_MAX_ANSWER_CHARS) } });
+    expect(ctrl.length).toBeLessThanOrEqual(askNoteCap(qs));
+    // one past the cap is refused; a one-pick question keeps ASK_MAX_ANSWER_CHARS
+    expect(parseAskAnswer(qs, JSON.stringify({ answers: { 'Which apply?': `${full}x`, 'Which one?': 'y' } }))).toHaveProperty('error');
+    expect(parseAskAnswer([one], 'y'.repeat(ASK_MAX_ANSWER_CHARS + 1))).toHaveProperty('error');
+    expect(askNoteCap([one])).toBeGreaterThanOrEqual(4096);
   });
   it('Aegis C1: a single-line Bash command over 512 code points renders completely (wrapped, never cut)', () => {
     const tail = 'rm -rf ~/important-$(whoami)';
@@ -629,6 +664,20 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(r.answers()).toEqual([]);
     expect(r.kinds('approval.decide')).toEqual([]);
     expect(r.pending()).toHaveLength(1);
+  });
+
+  it('Aegis L2 end to end: a multi-select note longer than 4096 characters is taken by approve (the card names its own cap) and answered', async () => {
+    const r = rig();
+    const labels = Array.from({ length: 16 }, (_, i) => `${'L'.repeat(140)}${i}`);
+    const input = { questions: [{ question: 'Which apply?', multiSelect: true, options: labels.map((label) => ({ label })) }, { question: 'Notes?', options: [{ label: 'none' }, { label: 'some' }] }] };
+    await r.open([{ request: { id: 'a-4', tool: 'AskUserQuestion', input } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const full = [...labels, 'o'.repeat(ASK_MAX_ANSWER_CHARS)].join(', ');
+    const note = JSON.stringify({ answers: { 'Which apply?': full, 'Notes?': 'n'.repeat(ASK_MAX_ANSWER_CHARS) } });
+    expect(note.length).toBeGreaterThan(4096);
+    await r.approve(r.pending()[0]!.cardId, 'answer', { note });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'a-4'))).toBe(true);
+    expect((r.answers()[0]!.updatedInput as { answers: Record<string, string> }).answers['Which apply?']).toBe(full);
   });
 
   it('12c. an unanswered ask-user card expires after 10 min into deny "no answer"; a malformed AskUserQuestion is denied with no card', async () => {

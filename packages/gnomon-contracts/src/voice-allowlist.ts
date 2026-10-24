@@ -57,7 +57,9 @@ const row = (approve: VoiceAllowRow['approve'], deny: readonly CardDecision[]): 
 export const VOICE_ALLOWLIST: Readonly<Record<CardKind, VoiceAllowRow>> = Object.freeze({
   // toggle 1 (D58, §14.7 Toggles)
   permission: row({ reversible: ['allow', 'deny'] }, ['deny']), // `always` never by voice (§14.7 Never)
-  'ask-user': row({ reversible: ['answer'] }, []), // ask-user takes no deny-direction decision
+  // Aegis L1 (2026-10-24, #gui-ask-card): voice never answers a question (broker #approve refuses voice); ask-user
+  // takes no deny-direction decision, so the row is empty: hand only
+  'ask-user': row({}, []),
   plan: row({ reversible: ['approve-plan'] }, ['reject']),
   // toggle 2 (D58, §14.7 Toggles)
   'gate-class': row({ gate: ['allow'] }, ['deny']),

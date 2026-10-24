@@ -110,6 +110,10 @@ export interface PresenceRequest {
   connId: string;
 }
 
+/** The approve note cap (UTF-16 units) for a card that names none, and the most any card may raise it to (Aegis L2). */
+export const NOTE_MAX_CHARS = 4096;
+export const NOTE_ABS_MAX_CHARS = 512 * 1024;
+
 /** The human declined (or the helper timed out): FORBIDDEN{presence}, logged approval.presence.denied. */
 export class PresenceDenied extends Error {
   constructor(message = 'presence denied') {
@@ -282,6 +286,8 @@ export interface RaiseInput {
   checkNote?: (decision: string, note: string | undefined) => string | null;
   /** The note is the human's private answer: approval.decide carries {noteHash, noteBytes}, never the text. */
   privateNote?: boolean;
+  /** Aegis L2: this card's approve-note cap (ask-user: askNoteCap); absent ⇒ NOTE_MAX_CHARS */
+  maxNoteChars?: number;
   /** `always` (S-L1): the repo the standing rule is scoped to; carried on approval.rule.learned. A card without it never takes `always`. */
   ruleScope?: { repoKey: string };
 }
@@ -345,6 +351,7 @@ interface CardRecord {
   note?: string;
   checkNote?: RaiseInput['checkNote'];
   privateNote?: boolean;
+  maxNoteChars?: number;
   ruleScope?: { repoKey: string };
   /** F6: a standing-grant card (RaiseInput.standingGrant): allow is fresh, not root */
   standingGrant?: boolean;
@@ -556,7 +563,7 @@ export class ApprovalBroker {
     // log before the card exists for anyone (B3: only the broker appends approval.*)
     await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
     if (input.standingGrant && input.kind !== 'grant') throw fail('BAD_REQUEST', 'bad-params', 'standingGrant is a grant card');
-    this.#cards.set(cardId, { card, detail: input.detail, ...(input.standingGrant ? { standingGrant: true } : {}), ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.prepare ? { prepare: input.prepare } : {}), ...(input.rootDecisions ? { rootDecisions: [...input.rootDecisions] } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
+    this.#cards.set(cardId, { card, detail: input.detail, ...(input.standingGrant ? { standingGrant: true } : {}), ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.prepare ? { prepare: input.prepare } : {}), ...(input.rootDecisions ? { rootDecisions: [...input.rootDecisions] } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(typeof input.maxNoteChars === 'number' && input.maxNoteChars > NOTE_MAX_CHARS ? { maxNoteChars: Math.min(input.maxNoteChars, NOTE_ABS_MAX_CHARS) } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
     return card;
   }
 
@@ -786,7 +793,8 @@ export class ApprovalBroker {
     if (p.via !== undefined) throw fail('BAD_REQUEST', 'bad-params', 'via is set by the kernel from the connection, not by the caller');
     if (typeof p.cardId !== 'string' || !ID_PATTERNS.card.test(p.cardId)) throw fail('BAD_REQUEST', 'bad-params', 'cardId must be card:<ULID>');
     if (typeof p.decision !== 'string' || !(CARD_DECISIONS as readonly string[]).includes(p.decision)) throw fail('BAD_REQUEST', 'bad-params', 'decision is not a card:v1 decision');
-    if (p.note !== undefined && (typeof p.note !== 'string' || p.note.length > 4096)) throw fail('BAD_REQUEST', 'bad-params', 'note must be a string of at most 4096 characters');
+    // Aegis L2: a card may raise its own note cap (ask-user: askNoteCap); the absolute bound is checked before the lookup
+    if (p.note !== undefined && (typeof p.note !== 'string' || p.note.length > NOTE_ABS_MAX_CHARS)) throw fail('BAD_REQUEST', 'bad-params', `note must be a string of at most ${NOTE_MAX_CHARS} characters`);
     const cardId = p.cardId;
     const decision = p.decision;
 
@@ -794,6 +802,8 @@ export class ApprovalBroker {
     const r = this.#cards.get(cardId);
     if (!r) throw fail('NOT_FOUND', 'not-found', `no card ${cardId}`, { cardId });
     const card = r.card;
+    const noteCap = r.maxNoteChars ?? NOTE_MAX_CHARS;
+    if (typeof p.note === 'string' && p.note.length > noteCap) throw fail('BAD_REQUEST', 'bad-params', `note must be a string of at most ${noteCap} characters`, { cardId });
     if (card.state === 'held' && decision !== 'withdraw') throw fail('FORBIDDEN', 'held', 'a held card takes only withdraw', { cardId });
     if (!isCardDecidable(card, decision)) throw fail('BAD_REQUEST', 'bad-params', `card ${cardId} is ${String(card.state)}: not decidable with ${decision}`, { cardId, state: String(card.state) });
     const flags = (card.flags ?? []) as string[];

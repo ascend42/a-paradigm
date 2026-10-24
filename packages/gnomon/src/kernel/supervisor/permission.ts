@@ -43,7 +43,7 @@
  * granted by the meter); only the human's decision on the card does.
  */
 import * as path from 'node:path';
-import { canonicalJson } from '@a-company/gnomon-contracts';
+import { canonicalJson, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { createHash } from 'node:crypto';
 import { realpathFollow, realpathLoose, UnresolvablePath, type PolicyPath } from '../manifest/policy.js';
 import { wrappedBlock } from '../manifest/install.js';
@@ -62,6 +62,8 @@ export const ASK_MAX_QUESTION_CHARS = 400;
 export const ASK_MAX_LABEL_CHARS = 150;
 export const ASK_MAX_TEXT_CHARS = 400;
 export const ASK_MAX_ANSWER_CHARS = 1000;
+/** The broker's default approve-note cap; an ask-user card raises its own (askNoteCap), never lower than this. */
+export const ASK_BASE_NOTE_CHARS = 4096;
 /**
  * #gui-ask-card: an option's `preview` (claude 2.1.309 sends it, probe p-ask-2.1.309: multi-line text such as a code
  * snippet, shown when the option is focused). Shown in FULL as fenced card lines and as plain text in the GUI, never
@@ -367,6 +369,9 @@ const cps = (t: string): number => Array.from(t).length;
 export function askQuestions(input: Record<string, unknown>): AskQuestion[] | string {
   // Aegis C1: a closed schema — any other key (at any level) is refused, never rendered
   const extra = (o: Record<string, unknown>, keys: readonly string[]): string | null => Object.keys(o).find((k) => !keys.includes(k)) ?? null;
+  // Aegis M1 (2026-10-24): text the ONE display sanitizer flags (bidi, hidden or tag characters, controls) is refused,
+  // fail closed, as table talk does: it would show altered on the card and could ride back inside the human's answer
+  const flagged = (t: unknown): boolean => typeof t === 'string' && sanitizeDisplayText(t).flags.length > 0;
   if (extra(input, ASK_INPUT_KEYS) !== null) return 'unknown input key (only questions)';
   const q = input.questions;
   if (!Array.isArray(q) || q.length === 0) return 'questions must be a non-empty list';
@@ -379,6 +384,7 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
     if (extra(o, ASK_QUESTION_KEYS) !== null) return `question ${i + 1} has an unknown key`;
     if (!oneLine(o.question) || cps(o.question) > ASK_MAX_QUESTION_CHARS) return `question ${i + 1} must be one line of at most ${ASK_MAX_QUESTION_CHARS} characters`;
     if (seen.has(o.question)) return `question ${i + 1} repeats an earlier question`;
+    if (flagged(o.question) || flagged(o.header)) return `question ${i + 1} has hidden, bidi or control characters`;
     seen.add(o.question);
     if (o.header !== undefined && (typeof o.header !== 'string' || !oneLine(o.header) || cps(o.header) > ASK_MAX_LABEL_CHARS)) return `question ${i + 1} header must be one short line`;
     if (o.multiSelect !== undefined && typeof o.multiSelect !== 'boolean') return `question ${i + 1} multiSelect must be true or false`;
@@ -392,6 +398,7 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
       if (p.description !== undefined && (typeof p.description !== 'string' || !oneLine(p.description) || cps(p.description) > ASK_MAX_TEXT_CHARS)) return `question ${i + 1} option ${j + 1} description must be one line of at most ${ASK_MAX_TEXT_CHARS} characters`;
       if (p.preview !== undefined && (typeof p.preview !== 'string' || p.preview.trim() === '' || p.preview.includes('\0') || cps(p.preview) > ASK_MAX_PREVIEW_CHARS)) return `question ${i + 1} option ${j + 1} preview must be text of at most ${ASK_MAX_PREVIEW_CHARS} characters`;
       if (options.some((x) => x.label === p.label)) return `question ${i + 1} option ${j + 1} repeats an earlier label`;
+      if (flagged(p.label) || flagged(p.description) || flagged(p.preview)) return `question ${i + 1} option ${j + 1} has hidden, bidi or control characters`;
       options.push({ label: p.label, description: typeof p.description === 'string' ? p.description : null, ...(typeof p.preview === 'string' ? { preview: p.preview } : {}) });
     }
     out.push({ question: o.question, header: typeof o.header === 'string' ? o.header : null, options, multiSelect: o.multiSelect === true });
@@ -421,6 +428,28 @@ export function askLines(qs: readonly AskQuestion[]): string[] {
     }
   }
   return out;
+}
+
+/**
+ * Aegis L2 (2026-10-24): the longest answer a question can take. One pick: ASK_MAX_ANSWER_CHARS (a label is shorter).
+ * Many: every label joined with ', ', then ', ' and an Other text of ASK_MAX_ANSWER_CHARS (the GUI's composition), so a
+ * full multi-select answer is never refused.
+ */
+export function askAnswerCap(q: AskQuestion): number {
+  if (!q.multiSelect) return ASK_MAX_ANSWER_CHARS;
+  return q.options.reduce((n, o) => n + cps(o.label) + 2, 0) + ASK_MAX_ANSWER_CHARS;
+}
+
+/**
+ * Aegis L2: the approve-note cap of an ask-user card (the broker's maxNoteChars), sized so the longest note the
+ * questions admit always fits: the JSON {answers} form with every question text and its askAnswerCap, at the worst
+ * JSON.stringify expansion (6 UTF-16 units per code point: a control or lone surrogate as \uXXXX), plus framing.
+ * Never below ASK_BASE_NOTE_CHARS. With the schema bounds (8 questions, 16 options) it stays under 300k units, far
+ * inside the transport's 4 MiB frame.
+ */
+export function askNoteCap(qs: readonly AskQuestion[]): number {
+  const worst = qs.reduce((n, q) => n + 6 * (cps(q.question) + askAnswerCap(q)) + 8, 16);
+  return Math.max(ASK_BASE_NOTE_CHARS, worst);
 }
 
 /**
@@ -458,7 +487,8 @@ export function parseAskAnswer(qs: readonly AskQuestion[], note: unknown): { ans
   const answers = Object.create(null) as Record<string, string>;
   for (const q of qs) {
     const a = obj[q.question];
-    if (typeof a !== 'string' || a.trim() === '' || cps(a) > ASK_MAX_ANSWER_CHARS) return { error: `each answer must be non-empty text of at most ${ASK_MAX_ANSWER_CHARS} characters` };
+    const capQ = askAnswerCap(q);
+    if (typeof a !== 'string' || a.trim() === '' || cps(a) > capQ) return { error: `each answer must be non-empty text of at most ${capQ} characters` };
     answers[q.question] = a;
   }
   return { answers };
