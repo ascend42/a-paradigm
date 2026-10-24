@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { MiniDoc, MiniEl } from '../src/core/render.js';
 import { chatItems, type Row } from '../src/core/store.js';
-import { REPLY_MODE_NAME, replyModeOf, replyModeRequest, sheetRows, SHEET_SECTIONS } from '../src/core/voice-ladder.js';
+import { REPLY_MODE_NAME, replyModeOf, replyModeRequest, sheetRows, SHEET_SECTIONS, voicePillOf } from '../src/core/voice-ladder.js';
 import { saidTag } from '../src/core/voice-presets.js';
 import { ladderEls } from '../src/ui/voice-settings.js';
 
@@ -54,7 +54,7 @@ describe('#voice-reply-mode GUI', () => {
   it("Voice settings' replies row, after listen, toggles between the two", () => {
     expect(SHEET_SECTIONS.indexOf('replies')).toBe(SHEET_SECTIONS.indexOf('listen') + 1);
     expect(rows().find((r) => r.id === 'replies')).toEqual({ id: 'replies', label: 'replies', value: 'spoken and shown', tone: 'plain', action: { label: 'show only', act: 'reply.show' } });
-    expect(rows({ replyMode: 'show' }).find((r) => r.id === 'replies')).toEqual({ id: 'replies', label: 'replies', value: 'shown only · not spoken · voice input stays on', tone: 'plain', action: { label: 'speak them', act: 'reply.speak' } });
+    expect(rows({ replyMode: 'show' }).find((r) => r.id === 'replies')).toEqual({ id: 'replies', label: 'replies', value: 'shown only · not spoken · voice input stays on', tone: 'plain', action: { label: 'speak and show', act: 'reply.speak' } });
     expect(rows({ attachable: false }).find((r) => r.id === 'replies')!.action).toBeNull();
   });
   it('the ladder shows replies · Speak and show | Show only as menu radios (checked = the mode in force)', () => {
@@ -84,5 +84,24 @@ describe('#voice-reply-mode GUI', () => {
     expect(APP).toContain("await client.call('log.append', replyModeRequest(mode));");
     expect(APP).toContain("void setReplyMode(value === 'reply.show' ? 'show' : 'speak', trusted)");
     expect(APP).toContain("void setReplyMode(rm.dataset.replyMode === 'show' ? 'show' : 'speak', e.isTrusted)");
+  });
+});
+
+describe('Mika Delta 10: the pill names Show only; the ladder keeps focus; mounted replies repaint', () => {
+  const base = { rung: 'dictate' as const, hotkey: '⌃⌥Space', sendWord: null, attached: true, target: 'billing', clientConnected: true, clientFact: null, capture: null, micKeyBare: false, heardAgoS: null };
+  it('the resting fact leads with "show only"; the accessible name and title say it in words', () => {
+    const p = voicePillOf({ ...base, replyMode: 'show' });
+    expect(p.fact).toBe('show only');
+    expect(voicePillOf({ ...base, rung: 'talk', replyMode: 'show' }).fact).toBe('show only · hold ⌃⌥Space');
+    expect(voicePillOf({ ...base, rung: 'talk', replyMode: 'show' }).aria).toBe('Voice: Talk, mic closed, hold ⌃⌥Space, replies shown only, not spoken');
+    expect(p.aria).toBe('Voice: Dictate, mic open, listening, replies shown only, not spoken');
+    expect(p.title).toContain('Replies: show only (written, not spoken).');
+    expect(voicePillOf({ ...base, replyMode: 'speak' }).fact).toBe('listening');
+    expect(voicePillOf({ ...base, rung: 'off', attached: false, replyMode: 'show' }).fact).toBe('');
+    expect(voicePillOf({ ...base, rung: 'off', attached: false, replyMode: 'show' }).aria).not.toContain('shown only');
+  });
+  it('a reply-mode press keeps focus on its key; said tags repaint', () => {
+    expect(APP).toMatch(/#voice-menu \[data-reply-mode\]/);
+    expect(APP).toMatch(/for \(const it of items\) if \(it\.said !== undefined\) remountItem\(it\.key\);/);
   });
 });

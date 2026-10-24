@@ -1447,7 +1447,7 @@ The voice client runs as its own principal `p:<ns>/voice` with its own Ed25519 d
 
 **The voice reader, narrowed.** The `voice` projection shows the attached session's `voice.*` rows only, the kernel's speakable row in full; never `turn.*`, session, approval or secret rows.
 
-**Reply mode (`#voice-reply-mode`, founder request 2026-10-23).** Voice settings › replies and the ladder offer Speak and show (the default) or Show only. Show only keeps voice input, the speakable row, the turn guidance and the GUI's arrangement of a reply (the spoken part over the body, the choices, the slips); only the voice app's playback is off, and turning it on stops a reply being said. The human sets it with `request.voice.client{op:'reply-mode', mode}` (human only, no card); the kernel reports `status.voice.replyMode` and keeps it per human in `<home>/voice/reply.json`.
+**Reply mode (`#voice-reply-mode`, founder request 2026-10-23).** Voice settings › replies and the ladder offer Speak and show (the default) or Show only. Show only keeps voice input, the speakable row, the turn guidance and the GUI's arrangement of a reply (the spoken part over the body, the choices, the slips); only the voice app's playback is off, and turning it on stops a reply being said. The human sets it with `request.voice.client{op:'reply-mode', mode}` (human only, no card); the kernel reports `status.voice.replyMode` and keeps it per kernel home in `<home>/voice/reply.json` (one mode per Gnomon home, whoever connects).
 
 #### 14.4.2 Speaker verification is a convenience filter, not a security boundary (founder regression 2026-10-20)
 

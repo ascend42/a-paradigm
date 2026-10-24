@@ -79,7 +79,7 @@ export type ReplyMode = 'speak' | 'show';
 export const REPLY_MODE_NAME: Readonly<Record<ReplyMode, string>> = Object.freeze({ speak: 'Speak and show', show: 'Show only' });
 /** The kernel's status.voice.replyMode (anything else, or an older kernel, reads as speak). */
 export const replyModeOf = (status: unknown): ReplyMode => ((status as { voice?: { replyMode?: unknown } } | null)?.voice?.replyMode === 'show' ? 'show' : 'speak');
-/** The request a reply-mode choice sends (the kernel persists it per human). */
+/** The request a reply-mode choice sends (the kernel persists it per kernel home, Aegis L3). */
 export const replyModeRequest = (mode: ReplyMode): { kind: 'request.voice.client'; payload: { op: 'reply-mode'; mode: ReplyMode } } => ({ kind: 'request.voice.client', payload: { op: 'reply-mode', mode } });
 
 export interface Readiness {
@@ -190,6 +190,8 @@ export interface PillInput {
    * that session's short name, shown as the pill's fact ("draft waiting · billing"), never a loose header note
    */
   draftWaiting?: string | null;
+  /** #voice-reply-mode (Mika Delta 10): Show only is named on the pill while a rung is on */
+  replyMode?: ReplyMode;
 }
 
 export interface PillView {
@@ -238,12 +240,18 @@ export function dropFact(cap: Pick<CaptureView, 'reason' | 'refusal' | 'cause'>)
 export function voicePillOf(i: PillInput): PillView {
   const name = PILL_NAME[i.rung];
   const live = i.attached && i.clientConnected !== false && ((stateOfRung(i.rung) === 'ambient' && !i.micClosed) || i.capture?.display.state === 'hearing');
+  // Show only: replies are written, not played. Said in the accessible name and the title whenever a rung is on, and
+  // on the pill itself beside the resting fact (rest()); a passing state (hearing, a drop) keeps the room for itself.
+  const showOnly = i.replyMode === 'show' && i.rung !== 'off';
   const mk = (fact: string, tone: PillView['tone'] = 'plain'): PillView => {
     const mic = live ? 'mic open' : 'mic closed';
     const cause = fact === i.clientFact && i.clientCause ? i.clientCause : null;
-    const title = `Voice: ${name}${i.target ? ` on ${i.target}` : ''} (${mic}). Kernel-owned: it shows what the kernel says. Click for the ladder.`;
-    return { name, fact, tone, live, aria: `Voice: ${name}, ${mic}${fact ? `, ${fact}` : ''}${cause ? ` (${cause})` : ''}`, title: i.clientTitle ? `${title} ${i.clientTitle}` : title };
+    const title = `Voice: ${name}${i.target ? ` on ${i.target}` : ''} (${mic}).${showOnly ? ' Replies: show only (written, not spoken).' : ''} Kernel-owned: it shows what the kernel says. Click for the ladder.`;
+    const aria = `Voice: ${name}, ${mic}${fact && fact !== 'show only' ? `, ${fact.replace(/^show only · /, '')}` : showOnly && live ? ', listening' : ''}${cause ? ` (${cause})` : ''}${showOnly ? ', replies shown only, not spoken' : ''}`;
+    return { name, fact, tone, live, aria, title: i.clientTitle ? `${title} ${i.clientTitle}` : title };
   };
+  // "show only" leads (a narrow header cuts the tail, never the mode); "listening" is the filled dot's, so it gives way
+  const rest = (fact: string): PillView => mk(!showOnly ? fact : fact === 'listening' ? 'show only' : `show only · ${fact}`);
   const d = i.capture?.display;
   if (d && d.state === 'dropped' && i.capture?.cap) {
     if (i.capture.cap.reason === 'mic-off') return mk(`mic off · ${micKeyName(i.micKeyBare)}`);
@@ -259,9 +267,9 @@ export function voicePillOf(i: PillInput): PillView {
   if (i.rung === 'off') return mk('');
   if (i.micClosed && stateOfRung(i.rung) === 'ambient') return mk(`mic off · ${micKeyName(i.micKeyBare)}`);
   if (i.rung !== 'word' && i.heardAgoS !== null && i.heardAgoS >= 0 && i.heardAgoS <= HEARD_AGO_MAX_S) return mk(`heard ${Math.max(1, Math.round(i.heardAgoS))}s ago`);
-  if (i.rung === 'talk') return mk(`hold ${i.hotkey}`);
-  if (i.rung === 'word') return mk(i.sendWord ? `say “${i.sendWord}”` : 'set up a send word');
-  return mk('listening');
+  if (i.rung === 'talk') return rest(`hold ${i.hotkey}`);
+  if (i.rung === 'word') return rest(i.sendWord ? `say “${i.sendWord}”` : 'set up a send word');
+  return rest('listening');
 }
 
 /**
@@ -379,7 +387,7 @@ export function sheetRows(i: SheetInput): SheetRowView[] {
     { id: 'listen', label: 'listen', value: i.capture === 'toggle' ? `the mic key turns it on and off (${micKeyName(i.micKeyBare)})` : 'always on (open-mic rungs)', tone: 'plain', action: i.attachable ? { label: i.capture === 'toggle' ? 'keep always on' : 'use mic key', act: i.capture === 'toggle' ? 'listen.open' : 'listen.toggle' } : null },
     // #voice-reply-mode: the arrangement (spoken part, body, choices, slips) stays either way; only playback is off
     i.replyMode === 'show'
-      ? { id: 'replies', label: 'replies', value: 'shown only · not spoken · voice input stays on', tone: 'plain', action: i.attachable ? { label: 'speak them', act: 'reply.speak' } : null }
+      ? { id: 'replies', label: 'replies', value: 'shown only · not spoken · voice input stays on', tone: 'plain', action: i.attachable ? { label: 'speak and show', act: 'reply.speak' } : null }
       : { id: 'replies', label: 'replies', value: 'spoken and shown', tone: 'plain', action: i.attachable ? { label: 'show only', act: 'reply.show' } : null },
     { id: 'timing', label: 'timing', value: `talk sends after ${i.delayMs === null ? 'you press Enter' : secs(i.delayMs)} · ${PIECES_TIMING}`, tone: 'plain', action: null },
     { id: 'risk', label: 'risk', value: i.acked ? ackedLine(i.ackedAt ?? null, i.now) : 'not acknowledged', tone: i.acked ? 'ok' : 'warn', action: i.acked || !i.attachable ? null : { label: 'review', act: 'risk' } },

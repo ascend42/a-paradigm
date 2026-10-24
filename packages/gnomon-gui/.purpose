@@ -1190,7 +1190,15 @@ components:
       mcp …` to MCP servers, `claude` / --resume to New session). A slash
       command counts in a code span that starts with it, at a line start
       (fences, "$ " prompts, list bullets) or after a verb; paths, HTTP
-      routes, URLs and bare prose never count. A copied command is built
+      routes, URLs and bare prose never count. Review round (Mika Delta 10,
+      Aegis M1/L1/L2): ONE slip per reply (tab "⊙ note · gnomon", up to 3
+      items parted by a dashed rule, a repeated line said once); the reply's
+      argument in a plugin command is underlined and labelled "named in the
+      reply", and add/install/enable/update carry the fixed warning
+      "Plugins run code on your machine: …"; the said text keeps recognised
+      tokens only, through the contracts sanitizer (no bidi survives); Copy
+      refuses unless the rendered command text equals the command, keeps
+      focus and is announced in #toast-say. A copied command is built
       from the table plus a SAFE_ARG token (no spaces, quotes or shell
       metacharacters), else the slip falls back to words; at most 3 hints
       per reply, deduplicated. The reply text is NEVER rewritten: app.ts

@@ -524,6 +524,9 @@ function onHostCopy(ref: string, e: Event): void {
   const hint = hostAt.get(item)?.hints[Number(ref.slice(cut + 1))];
   const cmd = hint ? copyTextOf(hint) : null;
   if (cmd === null) return;
+  // Aegis L2: copy only what the slip shows: the rendered command's text must equal cmd exactly, else nothing is copied
+  const shown = $('viewport').querySelector(`[data-host-cmd="${CSS.escape(ref)}"]`)?.textContent ?? null;
+  if (shown !== cmd) return void notice('The command on screen changed: nothing was copied', 'fail', { source: 'host-copy' });
   const selectIt = (): void => {
     const code = $('viewport').querySelector(`[data-host-cmd="${CSS.escape(ref)}"]`);
     const sel = window.getSelection();
@@ -535,16 +538,23 @@ function onHostCopy(ref: string, e: Event): void {
     notice('Selected the command: press ⌘C to copy it', 'info', { source: 'host-copy' });
   };
   if (!navigator.clipboard?.writeText) return selectIt();
+  // Mika Delta 10: the remount replaces the key, so a key that had focus gets it back (keyboard users stay put)
+  const repaint = (): void => {
+    const sel = `[data-host-copy="${CSS.escape(ref)}"]`;
+    const had = document.activeElement === $('viewport').querySelector(sel);
+    remountItem(item);
+    paintTranscript();
+    if (had) ($('viewport').querySelector(sel) as HTMLElement | null)?.focus({ preventScroll: true });
+  };
   navigator.clipboard.writeText(cmd).then(
     () => {
       hostCopied = ref;
-      remountItem(item);
-      paintTranscript();
+      repaint();
+      put($('toast-say'), `Copied: ${cmd}`); // the polite live region: "Copied" is said, not only drawn
       if (hostCopiedTimer) clearTimeout(hostCopiedTimer);
       hostCopiedTimer = setTimeout(() => {
         hostCopied = null;
-        remountItem(item);
-        paintTranscript();
+        repaint();
       }, 2000);
     },
     selectIt,
@@ -2037,7 +2047,7 @@ async function setMicKey(bare: boolean, trusted: boolean): Promise<void> {
  * Founder request 2026-10-23: the human picks the voice input (null = follow the system default). The kernel keeps the
  * choice across restarts and the voice app moves the mic to it; the sheet's input row shows the result.
  */
-/** #voice-reply-mode: Speak and show | Show only, the human's trusted press only; the kernel keeps it per human. */
+/** #voice-reply-mode: Speak and show | Show only, the human's trusted press only; the kernel keeps it per kernel home (Aegis L3). */
 async function setReplyMode(mode: ReplyMode, trusted: boolean): Promise<void> {
   if (!trusted) return;
   if (!client) return notice('not connected: the reply mode was not changed', 'fail');
@@ -2049,7 +2059,10 @@ async function setReplyMode(mode: ReplyMode, trusted: boolean): Promise<void> {
     notice(err instanceof RpcError ? refusalText(err.refusal) : 'the reply mode was not changed', 'fail', { source: 'reply-mode' });
   }
   voiceSheet.repaint();
+  paintVoice();
   paintVoiceMenu();
+  // Mika Delta 10: the spoken part's tag says "not played" in Show only; mounted replies repaint with the new mode
+  for (const it of items) if (it.said !== undefined) remountItem(it.key);
   paintTranscript();
 }
 async function selectInput(id: string | null, trusted: boolean): Promise<void> {
@@ -2831,6 +2844,8 @@ function paintVoice(): void {
     micKeyBare: bare,
     heardAgoS: lastHeardAt === null ? null : (Date.now() - lastHeardAt) / 1000,
     draftWaiting: (draftWaitingShown = draftWaitingOf()),
+    // Mika Delta 10: Show only is named on the pill while voice is on (the founder's "speak back or not" at a glance)
+    replyMode: replyModeOf(status),
   });
   // board header-5b: when the voice app can't run (nothing attached), the pill IS the action ("Start voice · app not
   // running"); its accessible name says what a click does, and it opens no menu then
@@ -3033,12 +3048,12 @@ function paintVoiceMenu(): void {
   const key = JSON.stringify([entries, foot, target, act, replies]);
   if (key === ladderShown && menu.firstChild) return;
   ladderShown = key;
-  const had = (document.activeElement as HTMLElement | null)?.closest?.('#voice-menu [data-rung], #voice-menu [data-vs-open]') as HTMLElement | null;
-  const fk = had ? (had.dataset.rung ?? 'settings') : null;
+  const had = (document.activeElement as HTMLElement | null)?.closest?.('#voice-menu [data-rung], #voice-menu [data-reply-mode], #voice-menu [data-vs-open]') as HTMLElement | null;
+  const fk = had ? (had.dataset.rung ?? (had.dataset.replyMode ? `reply:${had.dataset.replyMode}` : 'settings')) : null;
   clear(menu);
   if (act) menu.appendChild(h(doc, 'div', { class: 'ladder-start' }, h(doc, 'span', { class: 'meta' }, act.fact), h(doc, 'button', { class: 'key', type: 'button', role: 'menuitem', 'data-voice-act': act.action }, act.label)) as unknown as Node);
   for (const el of ladderEls(doc, entries, foot, target, replies)) menu.appendChild(el as unknown as Node);
-  if (fk) ((fk === 'settings' ? menu.querySelector('[data-vs-open]') : menu.querySelector(`[data-rung="${fk}"]`)) as HTMLElement | null)?.focus();
+  if (fk) ((fk === 'settings' ? menu.querySelector('[data-vs-open]') : fk.startsWith('reply:') ? menu.querySelector(`[data-reply-mode="${fk.slice(6)}"]`) : menu.querySelector(`[data-rung="${fk}"]`)) as HTMLElement | null)?.focus();
 }
 /** The ladder's focusable items, in order (arrow keys move among them). */
 const ladderItems = (): HTMLElement[] => [...$('voice-menu').querySelectorAll<HTMLElement>('[data-voice-act], [data-rung]:not([disabled]), [data-reply-mode], [data-vs-open]')];

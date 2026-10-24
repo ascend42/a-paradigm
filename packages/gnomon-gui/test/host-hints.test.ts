@@ -54,7 +54,7 @@ const one = (text: string): HostHint => {
 describe('#gui-host-hints mapping table', () => {
   it("the field case: /plugin marketplace add X → copy `claude plugin marketplace add X`, and the restart → New session", () => {
     const [plugin, restart] = hostHintsOf(FIELD);
-    expect(plugin).toEqual({ said: '/plugin marketplace add neondatabase/agent-skills', line: "Slash commands don't run in Gnomon. Run this in your terminal:", action: { kind: 'copy', command: 'claude plugin marketplace add neondatabase/agent-skills' } });
+    expect(plugin).toEqual({ said: '/plugin marketplace add neondatabase/agent-skills', line: "Slash commands don't run in Gnomon. Run this in your terminal:", action: { kind: 'copy', command: 'claude plugin marketplace add neondatabase/agent-skills', arg: 'neondatabase/agent-skills' }, warn: 'Plugins run code on your machine: check where neondatabase/agent-skills comes from before you run this.' });
     expect(restart).toMatchObject({ said: 'restart the session', action: { kind: 'open', id: 'session.new' } });
   });
   it('/plugin subcommands map to the claude plugin CLI; a bare /plugin to its help', () => {
@@ -63,6 +63,30 @@ describe('#gui-host-hints mapping table', () => {
     expect(copyTextOf(one('`/plugin marketplace update agent-skills`'))).toBe('claude plugin marketplace update agent-skills');
     expect(copyTextOf(one('Open `/plugin` and pick Discover.'))).toBe('claude plugin --help');
     expect(copyTextOf(one('/plugin marketplace add https://github.com/neondatabase/agent-skills.git'))).toBe('claude plugin marketplace add https://github.com/neondatabase/agent-skills.git');
+  });
+  it('Aegis M1: the argument the reply chose is marked, and a command that brings plugin code carries the fixed warning', () => {
+    for (const [text, arg] of [['Run `/plugin install neon@agent-skills`.', 'neon@agent-skills'], ['Type /plugin enable neon', 'neon'], ['Run `claude plugin install neon@agent-skills`', 'neon@agent-skills'], ['Run `claude plugin marketplace add a/b`', 'a/b']] as const) {
+      const h = one(text);
+      expect(h.action).toMatchObject({ kind: 'copy', arg });
+      expect(copyTextOf(h)!.endsWith(` ${arg}`)).toBe(true);
+      expect(h.warn).toBe(`Plugins run code on your machine: check where ${arg} comes from before you run this.`);
+    }
+    const off = one('Type /plugin disable neon');
+    expect(off.action).toMatchObject({ kind: 'copy', command: 'claude plugin disable neon', arg: 'neon' });
+    expect(off.warn).toBeUndefined();
+    expect(one('`/plugin marketplace list`').warn).toBeUndefined();
+  });
+  it('Aegis L1: the said text holds recognised tokens only; zero-width characters go and no bidi control survives', () => {
+    const rlo = '\u202E';
+    const bad = one('Run `/plugin install neon@x' + rlo + 'evil`');
+    expect(bad.said).not.toMatch(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/);
+    expect(bad.action).toBeNull(); // a bidi control in the argument fails SAFE_ARG: nothing to copy
+    const quoted = one('Run `/plugin install neon"x`');
+    expect(quoted.said).toBe('/plugin install …');
+    expect(quoted.action).toBeNull();
+    const cl = one('Run `claude --resume $(curl x)`');
+    expect(cl.said).toBe('claude --resume … x'); // $(curl is not a token: …
+    expect(one('Run `/mcp\u200B`').said).toBe('/mcp');
   });
   it('/mcp opens Settings › MCP servers; /config Settings; /permissions Rules; /clear a new session', () => {
     expect(one('Run `/mcp` to check the server.').action).toEqual({ kind: 'open', id: 'mcp.open', label: 'Open MCP servers' });
@@ -156,7 +180,9 @@ describe('#gui-host-hints slip DOM', () => {
     expect(key.attrs.get('data-host-copy')).toBe('12:0');
     expect(key.attrs.has('data-decision')).toBe(false);
     expect(key.text).toBe('Copy');
-    expect(el.text).toContain('in Gnomon · /plugin marketplace add neondatabase/agent-skills');
+    expect(el.text).toContain('note · gnomon');
+    expect(el.attrs.get('aria-label')).toBe('note from Gnomon');
+    expect(el.all().find((x) => x.className === 'host-said')!.text).toBe('/plugin marketplace add neondatabase/agent-skills');
     expect((renderHostSlips(fdoc, '12', [plugin!], '12:0')[0] as unknown as FEl).all().find((x) => x.tag === 'button')!.text).toBe('Copied');
   });
   it('the screen slip opens a palette id; the note slip has no key', () => {
@@ -166,6 +192,41 @@ describe('#gui-host-hints slip DOM', () => {
     const note = renderHostSlips(fdoc, '3', hostHintsOf('Then type /frobnicate'))[0] as unknown as FEl;
     expect(note.all().some((x) => x.tag === 'button')).toBe(false);
     expect(note.text).toContain(NO_SLASH);
+  });
+  it('Mika Delta 10: ONE slip per reply, one item per hint; the repeated lead is said once; prose is quoted', () => {
+    const hints = hostHintsOf('Run `/plugin marketplace add neondatabase/agent-skills`, then `/plugin install neon@agent-skills`, then restart the session.');
+    expect(hints).toHaveLength(3);
+    const out = renderHostSlips(fdoc, '7', hints);
+    expect(out).toHaveLength(1);
+    const el = out[0] as unknown as FEl;
+    const items = el.all().filter((x) => x.className === 'host-item');
+    expect(items.map((x) => x.attrs.get('data-host'))).toEqual(['7:0', '7:1', '7:2']);
+    const q = (x: FEl): string | null => x.all().find((y) => y.className === 'slip-q')?.text ?? null;
+    expect(q(items[0]!)).toBe("Slash commands don't run in Gnomon. Run this in your terminal:");
+    expect(q(items[1]!)).toBeNull(); // the same words as the item above: not repeated
+    expect(q(items[2]!)).toMatch(/^Gnomon has no restart/);
+    expect(items[2]!.all().find((y) => y.className === 'host-said')!.text).toBe('“restart the session”');
+    expect(items[1]!.all().find((y) => y.tag === 'button')!.attrs.get('data-host-copy')).toBe('7:1');
+    expect(renderHostSlips(fdoc, '7', [])).toEqual([]);
+    const two = renderHostSlips(fdoc, '8', hostHintsOf('Run `/plugin marketplace add a/b`, then check `/mcp`.'))[0] as unknown as FEl;
+    expect(two.all().filter((x) => x.className === 'slip-q').map((x) => x.text)).toEqual(["Slash commands don't run in Gnomon. Run this in your terminal:", 'MCP servers are in Settings.']);
+  });
+  it('Aegis M1: the slip underlines the argument, labels it and shows the warning; the code text is still the command', () => {
+    const [h0] = hostHintsOf('Run `/plugin install neon@agent-skills`.');
+    const el = renderHostSlips(fdoc, '4', [h0!])[0] as unknown as FEl;
+    const code = el.all().find((x) => x.className === 'host-cmd')!;
+    expect(code.text).toBe('claude plugin install neon@agent-skills');
+    expect(code.all().find((x) => x.className === 'host-arg')!.text).toBe('neon@agent-skills');
+    expect(el.all().find((x) => x.className === 'host-note')!.text).toBe('underlined: named in the reply, not by Gnomon');
+    expect(el.all().find((x) => x.className === 'host-note host-warn')!.text).toBe(h0!.warn);
+    expect(CSS).toMatch(/\.host-said code, \.host-cmd, \.host-warn \{ unicode-bidi: isolate; \}/);
+  });
+  it('Aegis L2: Copy refuses unless the rendered command text equals the command exactly', () => {
+    expect(APP).toMatch(/const shown = \$\('viewport'\)\.querySelector\(`\[data-host-cmd="\$\{CSS\.escape\(ref\)\}"\]`\)\?\.textContent \?\? null;\n  if \(shown !== cmd\) return/);
+  });
+  it('Mika Delta 10: Copy keeps focus across its remount and is announced', () => {
+    expect(APP).toMatch(/if \(had\) \(\$\('viewport'\)\.querySelector\(sel\) as HTMLElement \| null\)\?\.focus\(\{ preventScroll: true \}\);/);
+    expect(APP).toMatch(/put\(\$\('toast-say'\), `Copied: \$\{cmd\}`\)/);
   });
   it('presses are trusted only; Copy copies from the drawn hint; open runs a HOST_OPEN_IDS command; nothing is sent', () => {
     expect(SLIP_UI).toMatch(/if \(!e\.isTrusted\) return;/);

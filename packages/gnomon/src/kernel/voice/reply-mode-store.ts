@@ -5,7 +5,8 @@
  * type back and not speak"). 'speak' = Speak and show (the default), 'show' = Show only: the voice app plays no spoken
  * reply; the speakable projection, the GUI's arrangement (the spoken part over the body, choices, slips) and voice
  * input are unchanged. <home>/voice/reply.json, 0600 in a 0700 dir: {format, mode}. Written atomically; a missing or
- * malformed file reads as 'speak'. Per human: <home> is the human's own Gnomon home. Not a security boundary.
+ * malformed file reads as 'speak'. Per kernel home (Aegis L3): one <home> is one mode, whoever connects to that kernel;
+ * on a shared Mac each human with their own Gnomon home has their own. Not a security boundary.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';

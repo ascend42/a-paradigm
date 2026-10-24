@@ -20,11 +20,17 @@
  *   - At most HOST_HINTS_MAX hints per reply, one per instruction (deduplicated).
  */
 
+import { displayText } from './render.js';
+
 /** The palette command ids a host slip may open (screens only: none sends, decides or changes anything). */
 export const HOST_OPEN_IDS = Object.freeze(['mcp.open', 'rules.open', 'local.setup', 'settings.open', 'voice.settings.open', 'session.new'] as const);
 export type HostOpenId = (typeof HOST_OPEN_IDS)[number];
 
-export type HostAction = { kind: 'copy'; command: string } | { kind: 'open'; id: HostOpenId; label: string };
+/**
+ * A copy action: `command` is the exact text copied. `arg` (Aegis M1) is the part of it the REPLY chose (a plugin or a
+ * marketplace source), always the command's tail; the slip marks it "named in the reply".
+ */
+export type HostAction = { kind: 'copy'; command: string; arg?: string } | { kind: 'open'; id: HostOpenId; label: string };
 
 export interface HostHint {
   /** the instruction as the reply put it (shown in the slip's tab as code), capped */
@@ -32,6 +38,8 @@ export interface HostHint {
   /** what to do in Gnomon, in the GUI's words (from the table, never model text) */
   line: string;
   action: HostAction | null;
+  /** Aegis M1: a fixed line from the table naming the risk (plugins run code), with the reply's argument in it */
+  warn?: string;
 }
 
 export const HOST_HINTS_MAX = 3;
@@ -45,23 +53,41 @@ export const NO_SLASH = "Slash commands don't run in Gnomon.";
 const IN_TERMINAL = "Slash commands don't run in Gnomon. Run this in your terminal:";
 
 const open = (id: HostOpenId, label: string): HostAction => ({ kind: 'open', id, label });
-const copy = (command: string): HostAction => ({ kind: 'copy', command });
+const copy = (command: string, arg?: string): HostAction => ({ kind: 'copy', command, ...(arg ? { arg } : {}) });
+/** Aegis M1: the fixed warning for a command that brings plugin code onto the machine (add, install, enable, update). */
+export const pluginWarn = (arg: string): string => `Plugins run code on your machine: check where ${arg} comes from before you run this.`;
+const BRINGS_CODE = /^(?:add|install|i|enable|update)$/i;
 
 /** One rule: the words and the action for a slash command, given what follows it on its line (`rest`, trimmed). */
-type SlashRule = (rest: string) => { line: string; action: HostAction | null; said?: string };
+type SlashRule = (rest: string) => { line: string; action: HostAction | null; said?: string; warn?: string };
 
 /** `/plugin …` → the `claude plugin …` CLI (it mirrors the slash subcommands); anything else → `claude plugin --help`. */
-const PLUGIN_SUBS: ReadonlyArray<readonly [RegExp, (m: RegExpExecArray) => string | null]> = [
-  [/^marketplace\s+(add|remove|rm|update)\s+(\S+)/i, (m) => (safeArg(m[2]) ? `claude plugin marketplace ${m[1]!.toLowerCase()} ${m[2]}` : null)],
-  [/^marketplace\s+(list|update)\b/i, (m) => `claude plugin marketplace ${m[1]!.toLowerCase()}`],
-  [/^(install|i|uninstall|remove|rm|enable|disable|update)\s+(\S+)/i, (m) => (safeArg(m[2]) ? `claude plugin ${m[1]!.toLowerCase() === 'i' ? 'install' : m[1]!.toLowerCase()} ${m[2]}` : null)],
+/** One plugin subcommand: its words (from the table, lowercased) and the reply's argument (null when there is none). */
+interface PluginCmd {
+  words: string;
+  arg: string | null;
+}
+const PLUGIN_SUBS: ReadonlyArray<readonly [RegExp, (m: RegExpExecArray) => PluginCmd]> = [
+  [/^marketplace\s+(add|remove|rm|update)\s+(\S+)/i, (m) => ({ words: `marketplace ${m[1]!.toLowerCase()}`, arg: m[2]! })],
+  [/^marketplace\s+(list|update)\b/i, (m) => ({ words: `marketplace ${m[1]!.toLowerCase()}`, arg: null })],
+  [/^(install|i|uninstall|remove|rm|enable|disable|update)\s+(\S+)/i, (m) => ({ words: m[1]!.toLowerCase() === 'i' ? 'install' : m[1]!.toLowerCase(), arg: m[2]! })],
 ];
+/**
+ * A plugin subcommand as a hint (Aegis M1, L1): the said text and the command are built from the table's words and an
+ * argument that passes SAFE_ARG, never from the raw capture; an unsafe argument shows as … and copies nothing.
+ */
+function pluginHint(cmd: PluginCmd, saidLead: string, line: string): { said: string; line: string; action: HostAction | null; warn?: string } {
+  const ok = cmd.arg === null || safeArg(cmd.arg);
+  const said = `${saidLead} ${cmd.words}${cmd.arg === null ? '' : ` ${ok ? cmd.arg : '…'}`}`;
+  if (!ok) return { said, line: `${NO_SLASH} Plugins are managed from your terminal, with claude plugin.`, action: null };
+  const command = `claude plugin ${cmd.words}${cmd.arg === null ? '' : ` ${cmd.arg}`}`;
+  const last = cmd.words.split(' ').pop()!;
+  return { said, line, action: copy(command, cmd.arg ?? undefined), ...(cmd.arg !== null && BRINGS_CODE.test(last) ? { warn: pluginWarn(cmd.arg) } : {}) };
+}
 function pluginRule(rest: string): ReturnType<SlashRule> {
   for (const [re, cmd] of PLUGIN_SUBS) {
     const m = re.exec(rest);
-    if (!m) continue;
-    const c = cmd(m);
-    return { said: `/plugin ${m[0]}`, ...(c ? { line: IN_TERMINAL, action: copy(c) } : { line: `${NO_SLASH} Plugins are managed from your terminal, with claude plugin.`, action: null }) };
+    if (m) return pluginHint(cmd(m), '/plugin', IN_TERMINAL);
   }
   return { said: '/plugin', line: `${NO_SLASH} Plugins are managed from your terminal:`, action: copy('claude plugin --help') };
 }
@@ -157,13 +183,18 @@ function slashHint(hit: SlashHit): HostHint | null {
   const rule = !hit.name.includes(':') && Object.hasOwn(HOST_SLASH_TABLE, base) ? HOST_SLASH_TABLE[base]! : null;
   if (rule) {
     const r = rule(hit.rest);
-    return { said: capSaid(r.said ?? `/${hit.name}`), line: r.line, action: r.action };
+    return { said: capSaid(r.said ?? `/${hit.name}`), line: r.line, action: r.action, ...(r.warn ? { warn: r.warn } : {}) };
   }
   if (BUILTINS.has(hit.name) || hit.how === 'verb' || hit.name.includes(':')) return { said: capSaid(`/${hit.name}`), line: NO_SLASH, action: null };
   return null;
 }
 
-const capSaid = (s: string): string => (s.length <= SAID_MAX ? s : `${s.slice(0, SAID_MAX - 1)}…`);
+const capSaid = (raw: string): string => {
+  // Aegis L1: through the contracts sanitizer (the GUI keeps no tables of its own): zero-width characters go, a bidi
+  // control shows as a visible token (⟨RLO⟩), so nothing reorders the slip's text
+  const s = displayText(raw);
+  return s.length <= SAID_MAX ? s : `${s.slice(0, SAID_MAX - 1)}…`;
+};
 
 /** "restart the session", "restart Claude Code", "restart your claude session" */
 const RESTART = /\brestart(?:ing)?\s+(?:the\s+|your\s+|this\s+)?(?:claude(?:\s+code)?(?:\s+session)?|session|conversation|cli)\b/i;
@@ -174,13 +205,22 @@ const CLAUDE_CODE = /`claude\b([^`\n]*)`/g;
 
 /** The hint for a `claude …` command line the reply asks for, or null. */
 function claudeHint(argsRaw: string): HostHint | null {
-  const args = argsRaw.replace(/[.,;:!?)]+$/, '').trim();
+  const args = displayText(argsRaw).replace(/[.,;:!?)]+$/, '').trim();
   // "claude code" in prose is the product name, not a command
   if (/^code\b/i.test(args)) return null;
   const toks = args ? args.split(/\s+/) : [];
-  const said = capSaid(`claude${args ? ` ${args}` : ''}`);
+  // Aegis L1: the said text from recognised tokens only (plain words and SAFE_ARG tokens; anything else is …)
+  const said = capSaid(['claude', ...toks.map((t) => (/^-{0,2}[a-z][a-z-]*$/i.test(t) || safeArg(t) ? t : '…'))].join(' '));
   if (toks[0] === 'plugin' || toks[0] === 'plugins') {
-    const ok = toks.length <= 5 && toks.slice(1).every((t) => /^[a-z][a-z-]*$/i.test(t) || safeArg(t));
+    const sub = toks.slice(1).join(' ');
+    for (const [re, cmd] of PLUGIN_SUBS) {
+      const m = re.exec(sub);
+      if (m && m[0].trim() === sub.trim()) {
+        const h = pluginHint(cmd(m), 'claude plugin', 'This runs in your terminal, not in Gnomon:');
+        return { ...h, said };
+      }
+    }
+    const ok = toks.length <= 5 && toks.slice(1).every((t) => /^[a-z][a-z-]*$/i.test(t));
     return ok ? { said, line: 'This runs in your terminal, not in Gnomon:', action: copy(['claude', 'plugin', ...toks.slice(1)].join(' ')) } : { said, line: 'This runs in your terminal, not in Gnomon.', action: null };
   }
   if (toks[0] === 'mcp') return { said, line: 'In Gnomon, MCP servers are in Settings.', action: open('mcp.open', 'Open MCP servers') };

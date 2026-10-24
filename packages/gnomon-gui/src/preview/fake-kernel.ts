@@ -202,6 +202,11 @@ export class FakeKernel implements Transport {
         }
         // founder report 2026-10-23 (input selection): a shot may refuse the input change (__vxPreview.input)
         if (p.kind === 'request.voice.client' && (p.payload as { op?: unknown } | undefined)?.op === 'select-input' && previewVoice().input) throw previewVoice().input!;
+        // #voice-reply-mode: the kernel keeps Speak and show | Show only (status.voice.replyMode)
+        if (p.kind === 'request.voice.client' && (p.payload as { op?: unknown } | undefined)?.op === 'reply-mode') {
+          const v = (this.#status.voice ??= {}) as Record<string, unknown>;
+          v.replyMode = (p.payload as { mode?: unknown }).mode === 'show' ? 'show' : 'speak';
+        }
         return { ok: true };
       }
       case 'session.send':

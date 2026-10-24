@@ -290,7 +290,7 @@ export const OFFER_ID = `offer:${ulid('offer constellation')}`;
 const OFFER_MUTED_ID = `offer:${ulid('offer neurons 1')}`;
 const OFFER_QUIET_ID = `offer:${ulid('offer neurons 2')}`;
 
-function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolean; mcpBatch?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted' } = {}): Chain {
+function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolean; mcpBatch?: boolean; voice?: 'armed' | 'crashed' | 'talk'; talk?: 'spoken' | 'choices'; model?: 'switched' | 'unconfirmed'; offer?: 'slip' | 'muted'; host?: 'slips' | 'long' } = {}): Chain {
   const c = new Chain();
   // the previous boot: twelve past sessions
   c.add(T('08:00', '2026-10-06'), 'daemon.start', { version: '8.0.0', pid: 3110 });
@@ -333,15 +333,18 @@ function deskChain(o: { always?: boolean; extraCards?: boolean; mcpCard?: boolea
   ev('billing', T('14:05:27'), toolLine(['Bash', { command: 'pnpm test totals', description: '12 passed, 3.1s' }]));
   ev('billing', T('14:05:35'), toolLine(['Bash', { command: 'node scripts/repro.js', description: 'Reproduce the 3-line order' }]));
   ev('billing', T('14:05:46'), textLine('I found why the totals drift: **applyDiscount()** rounds each line before summing, so a 3-line order can be off by a cent. Rounding once at the end matches the invoice PDF and is a two-line change in `totals.ts`. I’d like to run the billing tests to confirm.'));
+  // #gui-host-hints: a reply naming what does not run in Gnomon; host slips under it (Mika's shots)
+  if (o.host === 'slips') ev('billing', T('14:05:46.500'), textLine('To check the totals against the live database, add the Neon tools: run `/plugin marketplace add neondatabase/agent-skills`, then `/plugin install neon@agent-skills`. After that, restart the session so the new MCP server loads, and confirm it with `/mcp`.'));
+  if (o.host === 'long') ev('billing', T('14:05:48'), textLine('The skills live in a fork. Run `/plugin marketplace add git@github.com:an-unusually-long-organisation-name/billing-reconciliation-agent-skills-and-hooks-collection.git` and then type /reconcile-ledger in the chat.'));
 
   // #gui-offer-slip: the kernel's offer.shown under the billing reply (the #offer-router disposed its ```offer block)
   const shown = (at: string, offerId: string, mod: string, kind: string, question: string, title: string, contextIn: string[]): void => on('billing', at, 'offer.shown', { offerId, mod, kind, phase: 'synthesize', title, question, replyTurnId: `turn:${BILLING}/1`, contextIn });
-  if (o.offer === 'slip') shown(T('14:05:47'), OFFER_ID, 'constellation', 'map-the-idea', 'Map the rounding paths on the Constellation board before the fix?', 'Map it', ['recent-messages', 'open-files']);
+  if (o.offer === 'slip') shown(T('14:05:47'), OFFER_ID, 'ascend42.constellation', 'map-the-idea', 'Map the rounding paths on the Constellation board before the fix?', 'Map it', ['recent-messages', 'open-files']);
   if (o.offer === 'muted') {
-    shown(T('14:05:47'), OFFER_MUTED_ID, 'neurons', 'keep-finding', 'Keep “round once at the end” in Neurons?', 'Keep it', ['recent-messages']);
+    shown(T('14:05:47'), OFFER_MUTED_ID, 'ascend42.neurons', 'keep-finding', 'Keep “round once at the end” in Neurons?', 'Keep it', ['recent-messages']);
     on('billing', T('14:05:55'), 'offer.decided', { offerId: OFFER_MUTED_ID, decision: 'not-now' });
     ev('billing', T('14:06:20'), textLine('The fix is staged: one rounding call at the end of `totals()`. The tests are next once you allow the run.'));
-    shown(T('14:06:21'), OFFER_QUIET_ID, 'neurons', 'keep-finding', 'Keep the fix note in Neurons?', 'Keep it', ['recent-messages']);
+    shown(T('14:06:21'), OFFER_QUIET_ID, 'ascend42.neurons', 'keep-finding', 'Keep the fix note in Neurons?', 'Keep it', ['recent-messages']);
   }
 
   // #gui-model-picker: billing opened on haiku, then the human switched it mid-session (8.0:model-switch)
@@ -521,8 +524,8 @@ function rulesOf(n: number, offEvery = 0): Record<string, unknown> {
 const rulesFx = (name: string, title: string, n: number, offEvery: number, rulesState = 'none'): Fixture => fixture(name, title, deskChain(), { ...statusOf(VOICE_RUNNING), ...SETTINGS_STATUS, ...rulesOf(n, offEvery) }, BILLING, false, { open: 'rules', rulesState });
 
 /** The talk fixtures: the kernel's speakable row cites its reply's seq (known once the chain is ordered). */
-function talkFixture(name: string, title: string, talk: 'spoken' | 'choices'): Fixture {
-  const fx = fixture(name, title, deskChain({ voice: 'talk', talk }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false } }), BILLING);
+function talkFixture(name: string, title: string, talk: 'spoken' | 'choices', replyMode?: 'show', open?: Fixture['open']): Fixture {
+  const fx = fixture(name, title, deskChain({ voice: 'talk', talk }), statusOf({ ...attached(T('14:06:30')), clientConnected: true, client: { phase: 'running', restarts: 0, devUnsigned: false }, ...(replyMode ? { replyMode } : {}) }), BILLING, false, open ? { open } : {});
   const ev = (r: LogRow): { kind: string; payload: Record<string, unknown> } => (r as unknown as { event: { kind: string; payload: Record<string, unknown> } }).event;
   const reply = fx.rows.find((r) => ev(r).kind === 'turn.event' && String(ev(r).payload.line).includes('```speak'));
   for (const r of fx.rows) if (ev(r).payload?.source === 'kernel-speakable') ev(r).payload.turnSeq = reply!.seq;
@@ -841,6 +844,10 @@ export const FIXTURES: Readonly<Record<string, Fixture>> = Object.freeze({
   choices: talkFixture('choices', 'Table talk: a reply that ends with lettered options (clickable choices)', 'choices'),
   'model-switch': fixture('model-switch', 'Billing switched haiku → sonnet mid-session; the ▾ confirm sheet open (opus)', deskChain({ model: 'switched' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'model-switch' }),
   'model-unconfirmed': fixture('model-unconfirmed', 'A model switch Claude did not confirm: "model: switching… (unconfirmed)"', deskChain({ model: 'unconfirmed' }), statusOf(VOICE_RUNNING), BILLING),
+  'host-slips': fixture('host-slips', 'The Desk: a billing reply naming /plugin twice, "restart the session" and /mcp; three host slips (the cap) and an offer slip under it', deskChain({ offer: 'slip', host: 'slips' }), statusOf(VOICE_RUNNING), BILLING),
+  'host-slip-long': fixture('host-slip-long', 'The Desk: a host slip whose command is a long git remote (wraps), and an unknown /command after "type" (words only)', deskChain({ host: 'long' }), statusOf(VOICE_RUNNING), BILLING),
+  'reply-show-only': talkFixture('reply-show-only', 'Table talk in Show only: the spoken part is shown, not played (voice input stays on)', 'spoken', 'show'),
+  'reply-show-ladder': talkFixture('reply-show-ladder', 'The voice pill open in Show only: the replies row in the ladder', 'spoken', 'show', 'voice-ladder'),
   'offer-slip': fixture('offer-slip', 'The Desk: a margin slip from mod:constellation under the billing reply', deskChain({ offer: 'slip' }), statusOf(VOICE_RUNNING), BILLING),
   'offer-armed': fixture('offer-armed', 'The slip armed by a first press: "takes: … · ↵ to open"', deskChain({ offer: 'slip' }), statusOf(VOICE_RUNNING), BILLING, false, { open: 'offer-armed' }),
   'offer-muted': fixture('offer-muted', '"not now" on mod:neurons: a trace, and its next offer stays quiet (L4)', deskChain({ offer: 'muted' }), statusOf(VOICE_RUNNING), BILLING),
