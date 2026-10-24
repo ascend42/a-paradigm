@@ -345,6 +345,8 @@ export interface VoiceClientPort {
   micKey?(bare: boolean): unknown;
   /** founder request 2026-10-23: request.voice.client{op:'select-input', id: device id | null, name?} (Voice settings → Input) */
   selectInput?(choice: { id: unknown; name?: unknown }): unknown;
+  /** #voice-reply-mode: request.voice.client{op:'reply-mode', mode: 'speak' | 'show'} (Voice settings › replies, the ladder) */
+  replyMode?(mode: unknown): unknown;
   /** Aegis L-2: request.voice.client{op:'mic-meter', open} — Voice settings' level meter is open (renewed) or closed */
   micMeter?(open: boolean): unknown;
   /**
@@ -1085,6 +1087,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         }
         if (op === 'mic-toggle' && o.voiceClient.micToggle && Object.keys(vcp).length === 1 && !extra.length) return { voiceClient: o.voiceClient.micToggle() };
         if (op === 'mic-key' && o.voiceClient.micKey && Object.keys(vcp).length === 2 && typeof vcp.bare === 'boolean' && !extra.length) return { voiceClient: o.voiceClient.micKey(vcp.bare) };
+        // #voice-reply-mode: the human's own reply mode (no card: show only narrows what the voice app does)
+        if (op === 'reply-mode' && o.voiceClient.replyMode && Object.keys(vcp).length === 2 && (vcp.mode === 'speak' || vcp.mode === 'show') && !extra.length) return { voiceClient: o.voiceClient.replyMode(vcp.mode) };
         if (op === 'mic-meter' && o.voiceClient.micMeter && Object.keys(vcp).length === 2 && typeof vcp.open === 'boolean' && !extra.length) return { voiceClient: o.voiceClient.micMeter(vcp.open) };
         // founder request 2026-10-23: the human's input choice (not a security boundary: it only picks the microphone)
         if (op === 'select-input' && o.voiceClient.selectInput && 'id' in vcp && Object.keys(vcp).every((k) => k === 'op' || k === 'id' || k === 'name') && !extra.length) {
@@ -1095,7 +1099,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
             throw err;
           }
         }
-        if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'|'mic-toggle'} | {op:'mic-key', bare} | {op:'select-input', id, name?} | {op:'mic-meter', open}}`);
+        if (extra.length || (op !== 'start' && op !== 'stop' && !(op === 'stop-speaking' && stopSpeaking)) || Object.keys(pa.payload as object).length !== 1) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append{kind:'${VOICE_CLIENT_REQUEST}', payload:{op:'start'|'stop'|'stop-speaking'|'mic-toggle'} | {op:'mic-key', bare} | {op:'select-input', id, name?} | {op:'mic-meter', open} | {op:'reply-mode', mode: 'speak'|'show'}}`);
         // T-2026-10-19-026: ⏹ Stop speaking narrows (silences the voice app) ⇒ no card, no presence
         if (op === 'stop-speaking') return { voiceClient: stopSpeaking!.call(o.voiceClient) };
         return { voiceClient: await (op === 'start' ? o.voiceClient.start() : o.voiceClient.stop()) };

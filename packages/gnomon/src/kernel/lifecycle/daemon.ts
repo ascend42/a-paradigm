@@ -155,6 +155,7 @@ import { loadedReleasePins } from './release-pins.js';
 import { VoiceEnrolCards, VoiceReports } from '../voice/voice-requests.js';
 import { cachedSendWordSource, parseSendWordRequest, writeSendWord, writeTrialWord } from '../voice/send-word-store.js';
 import { readInputChoice, writeInputChoice } from '../voice/input-choice-store.js';
+import { readReplyMode, writeReplyMode } from '../voice/reply-mode-store.js';
 import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
@@ -1166,6 +1167,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   });
   const voiceReports = new VoiceReports();
   {
+    const reply = readReplyMode(home);
+    if (reply) voiceReports.replyMode(reply);
     const saved = readInputChoice(home);
     if (saved) {
       try {
@@ -1468,6 +1471,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       selectInput: (c: { id: unknown; name?: unknown }) => {
         const r = voiceReports.inputChoice(c);
         writeInputChoice(home, r.inputChoice);
+        return r;
+      },
+      // #voice-reply-mode (founder 2026-10-23): Speak and show | Show only, kept across restarts (<home>/voice/reply.json)
+      replyMode: (mode: unknown) => {
+        const r = voiceReports.replyMode(mode);
+        writeReplyMode(home, r.replyMode);
         return r;
       },
       // TD-2026-10-21-514: the human sets or clears the held send word (persisted 0600; the kernel reads it back)

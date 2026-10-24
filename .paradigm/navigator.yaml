@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-23T00:49:09.277Z'
+generated: '2026-10-24T01:28:54.531Z'
 structure: {}
 key_files:
   config:
@@ -133,7 +133,6 @@ symbols:
   '#purpose-component-publish-gnomon': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
@@ -268,6 +267,7 @@ symbols:
   '#purpose-component-contract-voice-modes': packages/gnomon-contracts/
   '#purpose-component-send-word-matcher': packages/gnomon-contracts/
   '#purpose-component-gnomon-darwin-arm64': packages/gnomon-darwin-arm64/
+  '#purpose-component-gui-rules-view': packages/gnomon-gui/
   '#purpose-component-gui-session-rename': packages/gnomon-gui/
   '#purpose-component-gui-model-picker': packages/gnomon-gui/
   '#purpose-component-gui': packages/gnomon-gui/
@@ -278,7 +278,10 @@ symbols:
   '#purpose-component-gui-preview': packages/gnomon-gui/
   '#purpose-component-gui-voice-capture': packages/gnomon-gui/
   '#purpose-component-gui-mods-panel': packages/gnomon-gui/
+  '#purpose-component-gui-loops': packages/gnomon-gui/
+  '#purpose-component-gui-turn-steps': packages/gnomon-gui/
   '#purpose-component-gui-offer-slip': packages/gnomon-gui/
+  '#purpose-component-gui-host-hints': packages/gnomon-gui/
   '#purpose-component-gui-table-talk': packages/gnomon-gui/
   '#purpose-component-gui-wordmark-menu': packages/gnomon-gui/
   '#purpose-component-gui-voice-ladder': packages/gnomon-gui/
@@ -288,22 +291,27 @@ symbols:
   '#purpose-component-gui-space-radius': packages/gnomon-gui/
   '#purpose-component-gui-toast': packages/gnomon-gui/
   '#purpose-component-gui-composer': packages/gnomon-gui/
+  '#purpose-component-gui-folder-field': packages/gnomon-gui/
+  '#purpose-component-gui-local-model': packages/gnomon-gui/
+  '#purpose-component-gui-mcp-servers': packages/gnomon-gui/
   '#purpose-component-gui-settings': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
   '#purpose-component-gnomon-helper-win32': packages/gnomon-helper/
   '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/
   '#purpose-component-gnomon-mod-sdk': packages/gnomon-mod-sdk/
-  '#purpose-component-workshop-mod': packages/gnomon/release/Gnomon.app/Contents/Resources/gnomon-mods/
-  '#purpose-component-ledger-mod': packages/gnomon/release/Gnomon.app/Contents/Resources/gnomon-mods/
-  '#purpose-component-paradigm-context-mod': packages/gnomon/release/Gnomon.app/Contents/Resources/gnomon-mods/
-  '#purpose-component-neurons-mod': packages/gnomon/release/Gnomon.app/Contents/Resources/gnomon-mods/
-  '#purpose-component-constellation-mod': packages/gnomon/release/Gnomon.app/Contents/Resources/gnomon-mods/
+  '#purpose-component-workshop-mod': packages/gnomon-mods/
+  '#purpose-component-ledger-mod': packages/gnomon-mods/
+  '#purpose-component-paradigm-context-mod': packages/gnomon-mods/
+  '#purpose-component-neurons-mod': packages/gnomon-mods/
+  '#purpose-component-constellation-mod': packages/gnomon-mods/
   '#purpose-component-gnomon-voice': packages/gnomon/
   '#purpose-component-gnomon-voice-io': packages/gnomon-voice/
   '#purpose-component-gnomon-voice-io-build': packages/gnomon-voice/
   '#purpose-component-gnomon-voice-bench-partials': packages/gnomon-voice/
   '#purpose-component-gnomon-wrapper': packages/gnomon-wrapper/
+  '#purpose-component-rules-apply': packages/gnomon/
+  '#purpose-component-batch-card': packages/gnomon/
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
   '#purpose-component-socket': packages/gnomon/
@@ -336,21 +344,42 @@ symbols:
   '#purpose-component-offer-router': packages/gnomon/
   '#purpose-component-mods-admin': packages/gnomon/
   '#purpose-component-desk-stats': packages/gnomon/
+  '#purpose-component-git-verbs': packages/gnomon/
+  '#purpose-component-kernel-mcp': packages/gnomon/
   '#purpose-component-mcp-passthrough': packages/gnomon/
+  '#purpose-component-mcp-servers': packages/gnomon/
   '#purpose-component-budget-fuse': packages/gnomon/
   '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-session-runner': packages/gnomon/
   '#purpose-component-supervisor': packages/gnomon/
+  '#purpose-component-voice-origin': packages/gnomon/
+  '#purpose-component-voice-reply-mode': packages/gnomon/
+  '#purpose-component-host-guidance': packages/gnomon/
   '#purpose-component-shell-readonly': packages/gnomon/
   '#purpose-component-always-rules': packages/gnomon/
   '#purpose-component-prefix-policy': packages/gnomon/
+  '#purpose-component-loop-schema': packages/gnomon/
+  '#purpose-component-loop-registry': packages/gnomon/
+  '#purpose-component-loop-check': packages/gnomon/
+  '#purpose-component-loop-git': packages/gnomon/
+  '#purpose-component-loop-land': packages/gnomon/
+  '#purpose-component-loop-act': packages/gnomon/
+  '#purpose-component-loop-runner': packages/gnomon/
+  '#purpose-component-loop-timers': packages/gnomon/
+  '#purpose-component-loop-events': packages/gnomon/
+  '#purpose-component-loop-strictness': packages/gnomon/
+  '#purpose-component-loop-agent-ops': packages/gnomon/
+  '#purpose-component-strictness-levels': packages/gnomon/
   '#purpose-component-trace-capture': packages/gnomon/
   '#purpose-component-rules-cli': packages/gnomon/
   '#purpose-component-mode-cli': packages/gnomon/
+  '#purpose-component-strictness-cli': packages/gnomon/
   '#purpose-component-rules-revoke': packages/gnomon/
   '#purpose-component-gnomon-guide': packages/gnomon/
   '#purpose-component-gnomon-trace': packages/gnomon/
   '#purpose-component-local-runner': packages/gnomon/
+  '#purpose-component-local-config-request': packages/gnomon/
+  '#purpose-component-folder-picker': packages/gnomon/
   '#purpose-component-claude-adapter': packages/paradigm/src/core/ide-adapters/
   '#purpose-component-mod-host': packages/gnomon/
   '#purpose-component-mod-cli': packages/gnomon/
@@ -749,6 +778,7 @@ symbols:
   '#purpose-component-legacy-tool-map': packages/paradigm-mcp/src/tools/
   '#purpose-component-tool-surface': packages/paradigm-mcp/src/tools/
   '#purpose-component-brain-mcp': packages/paradigm-mcp/src/tools/
+  '#purpose-component-loop-mcp': packages/paradigm-mcp/src/tools/
   '#purpose-component-paradigm-retrieve': packages/paradigm-mcp/src/tools/
   '#purpose-component-paradigm-propose-block': packages/paradigm-mcp/src/tools/
   '#purpose-component-paradigm-authority-claim': packages/paradigm-mcp/src/tools/
@@ -805,6 +835,8 @@ symbols:
   '#purpose-component-notebook-loader': packages/paradigm-mcp/src/utils/
   '#purpose-component-classroom-decay': packages/paradigm-mcp/src/utils/
   '#purpose-component-classroom-fail-side': packages/paradigm-mcp/src/utils/
+  '#purpose-component-loop-files': packages/paradigm-mcp/src/utils/
+  '#purpose-component-loop-templates': packages/paradigm-mcp/src/utils/
   '#purpose-component-tool-family': packages/paradigm-mcp/src/utils/
   '#purpose-component-tool-registry': packages/paradigm-mcp/src/utils/
   '#purpose-component-compliance-checker': packages/paradigm-mcp/src/utils/
@@ -906,6 +938,7 @@ symbols:
   '#purpose-component-check-14-remediation-gate': packages/paradigm/src/commands/hooks/
   '#purpose-component-check-15-memory-hygiene-nudge': packages/paradigm/src/commands/hooks/
   '#purpose-component-active-remediations': packages/paradigm/src/commands/internal/
+  '#purpose-component-loop-cli': packages/paradigm/src/commands/loop/
   '#purpose-component-lore-record-command': packages/paradigm/src/commands/lore/
   '#purpose-component-lore-assess-command': packages/paradigm/src/commands/lore/
   '#purpose-component-lore-calibration-command': packages/paradigm/src/commands/lore/
@@ -1068,7 +1101,9 @@ symbols:
   ^purpose-gate-conductor-launched: packages/conductor/
   ^purpose-gate-^symphony-enabled: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
-  ^gate-voice-origin-clamp: ./
+  ^gate-git-init-gate: ./
+  ^gate-git-push-gate: ./
+  ^gate-loop-origin-clamp: ./
   ^purpose-gate-offer-accept: packages/gnomon/
   ^gate-setup-token: ./
   ^gate-unprovisioned-only: ./
@@ -1106,6 +1141,7 @@ symbols:
   $purpose-flow-$task-archive: packages/conductor/
   $purpose-flow-$sentinel-investigation: packages/conductor/
   $purpose-flow-voice-turn: packages/gnomon-voice/
+  $purpose-flow-local-config-flow: packages/gnomon/
   $purpose-flow-send-by-word: packages/gnomon/
   $purpose-flow-send-by-pieces: packages/gnomon/
   $purpose-flow-offer-handoff: packages/gnomon/
@@ -1195,7 +1231,6 @@ symbols:
   '!purpose-signal-!task-cancelled': packages/conductor/
   '!purpose-signal-!task-reassigned': packages/conductor/
   '!purpose-signal-!tasks-archived': packages/conductor/
-  '!purpose-signal-voice-clamp-applied': packages/gnomon/
   '!purpose-signal-log-emitted': packages/logger/
   '!purpose-signal-context-loaded': packages/paradigm-mcp/
   '!purpose-signal-context-error': packages/paradigm-mcp/
@@ -1500,6 +1535,8 @@ symbols:
   '#purpose-ref-component-voice-stop': packages/gnomon-gui/
   '#purpose-ref-component-composer-ghost': packages/gnomon-gui/
   '#purpose-ref-component-voice-caption': packages/gnomon-gui/
+  '#purpose-ref-component-turn-say': packages/gnomon-gui/
+  '#purpose-ref-component-host-guidance.': packages/gnomon-gui/
   '#purpose-ref-component-conn': packages/gnomon-gui/
   '#purpose-ref-component-risk': packages/gnomon-gui/
   '#purpose-ref-component-toasts': packages/gnomon-gui/
@@ -1508,6 +1545,9 @@ symbols:
   '#purpose-ref-component-toast-say': packages/gnomon-gui/
   '#purpose-ref-component-toast-alert': packages/gnomon-gui/
   '#purpose-ref-component-gui-voice-settings.': packages/gnomon-gui/
+  '!purpose-ref-signal-approval.rule.disabled': packages/gnomon/
+  '!purpose-ref-signal-approval.rule.enabled': packages/gnomon/
+  '#purpose-ref-component-mcp-servers.': packages/gnomon/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
   $purpose-ref-flow-RUNNER_TEMP: packages/gnomon/
   $purpose-ref-flow-HOME: packages/gnomon/
@@ -1521,14 +1561,27 @@ symbols:
   '#purpose-ref-component-freshPrompt': packages/gnomon/
   '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
+  '#purpose-ref-component-continuityOf': packages/gnomon/
   '#purpose-ref-component-desk-stats.': packages/gnomon/
+  '#purpose-ref-component-editRoots': packages/gnomon/
+  ^gate-mcp-server-enable: ./
+  '!purpose-ref-signal-mcp-server-enabled': packages/gnomon/
+  '!purpose-ref-signal-mcp-server-disabled': packages/gnomon/
   '#purpose-ref-component-onExit': packages/gnomon/
   ^purpose-ref-gate-claude: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
+  ^gate-voice-never-approves: ./
+  '#purpose-ref-component-checkReplyMode': packages/gnomon/
   $purpose-ref-flow-NAME: packages/gnomon/
   '@purpose-ref-aspect-user': packages/gnomon/
   $purpose-ref-flow-name: packages/gnomon/
   '#purpose-ref-component-rules-revoke.': packages/gnomon/
+  ^gate-loop-trusted: ./
+  '#purpose-ref-component-tool-read': packages/gnomon/
+  $purpose-ref-flow-loop-run: packages/gnomon/
+  '#purpose-ref-component-rule': packages/gnomon/
+  '!purpose-ref-signal-config.loaded': packages/gnomon/
+  '#purpose-ref-component-primeFeed': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
   '@purpose-ref-aspect-mcp-tool-handler': packages/paradigm-mcp/
@@ -1621,6 +1674,7 @@ symbols:
   '!purpose-ref-signal-cid-claim-written': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-cid-postflight-self-healed': packages/paradigm-mcp/src/tools/
   '#purpose-ref-component-live-index.': packages/paradigm-mcp/src/utils/
+  '#purpose-ref-component-loop-mcp.': packages/paradigm-mcp/src/utils/
   $purpose-ref-flow-agent-learning-loop: packages/paradigm-mcp/src/utils/
   '!purpose-ref-signal-agent-state-recorded': packages/paradigm-mcp/src/utils/
   '!purpose-ref-signal-skill-used': packages/paradigm-mcp/src/utils/

@@ -3524,6 +3524,28 @@ components:
       - test/voice-origin.test.ts
     oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
 
+  voice-reply-mode:
+    description: >-
+      #voice-reply-mode (founder request 2026-10-23, "just type back and not
+      speak"; spec §14.4.1; src/kernel/voice/reply-mode-store.ts).
+      Speak and show ('speak', the default) or Show only ('show'). The human
+      sets it with request.voice.client{op:'reply-mode', mode} on a gui or
+      device connection (dispatcher, human only, no card: it only narrows
+      what the voice app does); VoiceReports holds it, status.voice.replyMode
+      reports it, and the daemon persists it per human at
+      <home>/voice/reply.json (0600 in 0700, atomic; a missing or malformed
+      file reads as speak) and restores it at start. The kernel's speakable
+      projection, turn guidance and the GUI's arrangement are unchanged; the
+      voice app (gnomon-voice VoiceClient#checkReplyMode) plays no
+      kernel-speakable row under show and stops a reply being said when it
+      turns on. Voice input stays as it is.
+    path: src/kernel/voice/reply-mode-store.ts
+    type: module
+    tags: [gnomon, kernel, voice]
+    tests:
+      - test/voice-v2e-speak.test.ts
+      - test/voice-v2e.test.ts
+
   host-guidance:
     description: >-
       #host-guidance (founder request 2026-10-23; spec §6.6 "Host context";

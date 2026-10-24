@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-23T00:49:09.301Z",
+  "generatedAt": "2026-10-24T01:28:54.549Z",
   "flows": {
     "$voice-turn": {
       "id": "$voice-turn",
@@ -19,9 +19,41 @@
       ],
       "definedIn": "packages/gnomon-voice/.purpose"
     },
+    "$local-config-flow": {
+      "id": "$local-config-flow",
+      "description": "$local-config-flow (TD-2026-10-22-769, spec §13.1 \"Real homes\"): the human asks (Settings → Local model, or `gnomon local set`) → request.local.probe checks the loopback server first (no card) → request.local.config{op:'set'} → #local-config-request validates (loopback only) and raises the root `grant` card (local.config) → #approval-broker: fresh presence + the root key in ONE helper touch (decision.sign, row table local.config, helper 1.9.0) → the effect writes local.signed.json (0600, atomic) → the daemon reloads it hot (loadLocalConfig → supervisor.setLocalConfig → LocalLane.setConfig, probe cache cleared → probeLocal; live sessions keep their spawn-time config) → the loop runner's configured() sees it and drops start refusals it now serves (recheckStartRefusals; their stack alerts clear). Remove: request.local.config{op:'remove'} deletes the file and reloads (config.loaded{why:'removed'}), no card.",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "#local-config-request",
+          "symbol": "#local-config-request"
+        },
+        {
+          "id": "step-2",
+          "action": "#approval-broker",
+          "symbol": "#approval-broker"
+        },
+        {
+          "id": "step-3",
+          "action": "#local-runner",
+          "symbol": "#local-runner"
+        },
+        {
+          "id": "step-4",
+          "action": "#supervisor",
+          "symbol": "#supervisor"
+        },
+        {
+          "id": "step-5",
+          "action": "#loop-runner",
+          "symbol": "#loop-runner"
+        }
+      ],
+      "definedIn": "packages/gnomon/.purpose"
+    },
     "$send-by-word": {
       "id": "$send-by-word",
-      "description": "$send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends the spoken send word as its own voice.turn.user (short words by adjacency: speakerBasis 'adjacent', accepted only under 1500 ms, matching, within 2 s of / pending with the draft speaker) → the kernel stamps isWord at receipt (#send-word-matcher, never the text) → the GUI (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the 1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked, consumed atomically, bound to the connection for 5 s) → session.send{source:'voice'} gets origin 'voice', sentBy 'word' → ^voice-origin-clamp until its turn.result. Backstop: an unclaimed pending word turn stamps voice anyway. Aegis fixes: the origin check runs on EVERY human send (stale or wrong-session claims stamp voice; under a word+ ceiling an ambient-matched send is a piece, so Enter on an ambient draft is clamped); a voice turn closes only after its own replay and a later result; a short word passes adjacency with or without speakerBasis; a word or pieces attach carries liabilityAck (sha256 of the ack text), recorded in the kernel-written start row. The guided dialog teaches the word as an ATTENDED TRIAL (spec §14.7 trial semantics; 2 min, send-word-trial.json 0600): every turn of the attached human's voice principal is a take with no speaker check and no adjacency, stamped trialTake, forwardable:false, isWord false, never a dictation turn or adjacency anchor, and never sent (Aegis M-1: the voice principal's direct session.send of a take is refused voice-grammar, cause trial-take); a take is captured only while the trial is listening, and its row is hash-only plus trialVerdict (Aegis M-2: the heard text lives only in kernel memory for status); send-word-trial.json is written only from VoiceControl onTrialChange with the kernel-clock until and only while listening (Aegis L-2); a trial binds to the attached session and ends on any detach (human, voice principal, idle) or an attach to another hsid (Aegis L-1); the kernel is the ONE take counter (status.voice.sendWordTrial, human class only: word, state, take, takes, maxTakes 4, correct, variants, last, until) and request.voice.sendword{op:'save', dropVariants?} commits the word and the variants its mishearings collected (each passing the variant guard, #send-word-matcher acceptableVariant), minus the ones the human dropped, only after a correct take. request.voice.client mic-toggle / mic-key / start{capture} drive the mic, the Mic key and the capture kind of the kernel-spawned client (--capture ptt|open|toggle).",
+      "description": "$send-by-word (TD-2026-10-21-514, spec §14.7): the voice client appends the spoken send word as its own voice.turn.user (short words by adjacency: speakerBasis 'adjacent', accepted only under 1500 ms, matching, within 2 s of / pending with the draft speaker) → the kernel stamps isWord at receipt (#send-word-matcher, never the text) → the GUI (#gui-dictation) sees the word after a draft visible ≥ 1 s, shows the 1 s grace → request.voice.send.claim{by:'word', turnSeq} (checked, consumed atomically, bound to the connection for 5 s) → session.send{source:'voice'} gets origin 'voice', sentBy 'word' → a record only (#voice-origin: the turn runs like a typed one). Backstop: an unclaimed pending word turn stamps voice anyway. Aegis fixes: the origin check runs on EVERY human send (stale or wrong-session claims stamp voice; under a word+ ceiling an ambient-matched send is a piece, so Enter on an ambient draft is stamped voice); a short word passes adjacency with or without speakerBasis; a word or pieces attach carries liabilityAck (sha256 of the ack text), recorded in the kernel-written start row. The guided dialog teaches the word as an ATTENDED TRIAL (spec §14.7 trial semantics; 2 min, send-word-trial.json 0600): every turn of the attached human's voice principal is a take with no speaker check and no adjacency, stamped trialTake, forwardable:false, isWord false, never a dictation turn or adjacency anchor, and never sent (Aegis M-1: the voice principal's direct session.send of a take is refused voice-grammar, cause trial-take); a take is captured only while the trial is listening, and its row is hash-only plus trialVerdict (Aegis M-2: the heard text lives only in kernel memory for status); send-word-trial.json is written only from VoiceControl onTrialChange with the kernel-clock until and only while listening (Aegis L-2); a trial binds to the attached session and ends on any detach (human, voice principal, idle) or an attach to another hsid (Aegis L-1); the kernel is the ONE take counter (status.voice.sendWordTrial, human class only: word, state, take, takes, maxTakes 4, correct, variants, last, until) and request.voice.sendword{op:'save', dropVariants?} commits the word and the variants its mishearings collected (each passing the variant guard, #send-word-matcher acceptableVariant), minus the ones the human dropped, only after a correct take. request.voice.client mic-toggle / mic-key / start{capture} drive the mic, the Mic key and the capture kind of the kernel-spawned client (--capture ptt|open|toggle).",
       "steps": [
         {
           "id": "step-1",
@@ -48,7 +80,7 @@
     },
     "$send-by-pieces": {
       "id": "$send-by-pieces",
-      "description": "$send-by-pieces (TD-2026-10-21-514, spec §14.7): the attachment's pieces send ceiling (voice.session.start{send:'pieces'}, one fresh presence per GUI login, refused at strictness L2 or above) → the GUI batches finalized segments by gap/cap (1500 / 8000 ms) and holds while the session is busy → request.voice.send.claim{by:'piece', turnSeqs} → session.send{source:'voice'} with origin 'voice', sentBy 'piece' and the piece guidance note on the per-turn guidance block → ^voice-origin-clamp.",
+      "description": "$send-by-pieces (TD-2026-10-21-514, spec §14.7): the attachment's pieces send ceiling (voice.session.start{send:'pieces'}, one fresh presence per GUI login, refused at strictness L2 or above) → the GUI batches finalized segments by gap/cap (1500 / 8000 ms) and holds while the session is busy → request.voice.send.claim{by:'piece', turnSeqs} → session.send{source:'voice'} with origin 'voice', sentBy 'piece' and the piece guidance note on the per-turn guidance block (#voice-origin).",
       "steps": [
         {
           "id": "step-1",
@@ -920,16 +952,29 @@
     "#gnomon-voice-io": [
       "$voice-turn"
     ],
+    "#local-config-request": [
+      "$local-config-flow"
+    ],
+    "#approval-broker": [
+      "$local-config-flow"
+    ],
+    "#local-runner": [
+      "$local-config-flow"
+    ],
+    "#supervisor": [
+      "$local-config-flow",
+      "$send-by-word",
+      "$send-by-pieces"
+    ],
+    "#loop-runner": [
+      "$local-config-flow"
+    ],
     "#gui-dictation": [
       "$send-by-word",
       "$send-by-pieces"
     ],
     "#send-word-matcher": [
       "$send-by-word"
-    ],
-    "#supervisor": [
-      "$send-by-word",
-      "$send-by-pieces"
     ],
     "#desk-guidance": [
       "$offer-handoff"
