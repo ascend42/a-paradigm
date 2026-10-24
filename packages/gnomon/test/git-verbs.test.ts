@@ -25,8 +25,17 @@ const tmps: string[] = [];
 afterEach(() => {
   for (const d of tmps.splice(0)) fs.rmSync(d, { recursive: true, force: true });
 });
+/** The kernel rightly treats /tmp and /var/tmp as session-writable (a push config there is refused), and on Linux os.tmpdir() IS /tmp: keep the fake user home out of the shared temp dirs. */
+function worldBase(): string {
+  const t = fs.realpathSync(os.tmpdir());
+  const shared = ['/tmp', '/private/tmp', '/var/tmp', '/private/var/tmp'].some((d) => t === d || t.startsWith(`${d}/`));
+  if (!shared) return t;
+  const b = path.join(os.homedir(), '.gnomon-test-tmp');
+  fs.mkdirSync(b, { recursive: true });
+  return fs.realpathSync(b);
+}
 function world() {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-gv-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(worldBase(), 'gnomon-gv-')));
   tmps.push(root);
   const repo = path.join(root, 'proj');
   const userHome = path.join(root, 'home');
