@@ -37,7 +37,7 @@ const PRESET_NOTE: Readonly<Record<string, string>> = Object.freeze({ desk: 'ses
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** The wordmark menu, top to bottom (refs/header-5b.html option C). */
-export function appMenuModel(i: { layout: Layout; panesOpen: boolean; theme: readonly ThemeSwitchEntry[]; who: string; loops?: { note: string; paused: boolean } | null }): AppMenuRow[] {
+export function appMenuModel(i: { layout: Layout; panesOpen: boolean; theme: readonly ThemeSwitchEntry[]; who: string; loops?: { note: string; paused: boolean; off?: boolean } | null }): AppMenuRow[] {
   const rows: AppMenuRow[] = [{ kind: 'head', label: 'layout' }];
   for (const name of Object.keys(PRESETS)) rows.push({ kind: 'item', run: `layout.${name}`, name: cap(name), note: PRESET_NOTE[name] ?? '', radio: true, checked: i.layout.name === name });
   rows.push({ kind: 'item', run: PANES_RUN, name: 'Panes and Workshop…', note: 'show or hide a pane, move the Workshop', expands: true, expanded: i.panesOpen });
@@ -52,7 +52,7 @@ export function appMenuModel(i: { layout: Layout; panesOpen: boolean; theme: rea
   if (i.loops) {
     rows.push({ kind: 'rule' });
     rows.push({ kind: 'item', run: 'loops.open', name: 'Loops…', note: i.loops.note });
-    if (!i.loops.paused) rows.push({ kind: 'item', run: 'loops.pause-all', name: 'Pause all loops', note: 'no presence · resuming needs it' });
+    if (!i.loops.paused && !i.loops.off) rows.push({ kind: 'item', run: 'loops.pause-all', name: 'Pause all loops', note: 'no presence · resuming needs it' });
   }
   rows.push({ kind: 'rule' }, { kind: 'head', label: 'theme' });
   rows.push({ kind: 'theme', options: i.theme.map((e) => ({ run: e.run, label: e.label, checked: e.current, title: e.title })) });

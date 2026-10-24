@@ -18,6 +18,8 @@ export * as repoHooks from './kernel/supervisor/repo-hooks.js';
 export { HELPER_REQUIREMENT, MIN_HELPER_VERSION } from './kernel/identity/helper.js';
 export { VOICE_IO_REQUIREMENT, MIN_VOICE_IO_VERSION } from './kernel/voice/voice-install.js';
 export * as releasePins from './kernel/lifecycle/release-pins.js';
+// TD-2026-10-24-447 (#loops-gate): scripts/release-darwin.mjs probes a staged bundle's gate (loops must be off in a release)
+export * as loopsGate from './kernel/loops/gate.js';
 export { releaseHelperSha256 } from './kernel/identity/helper.js';
 export { releaseVoiceIoSha256 } from './kernel/voice/voice-install.js';
 export { pinHelper } from './kernel/identity/helper.js';

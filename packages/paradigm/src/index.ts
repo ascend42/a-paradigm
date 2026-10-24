@@ -2892,6 +2892,21 @@ program
     await calibrateCommand(options);
   });
 
+// paradigm learn routing --backfill — cold-start the routing store from git history
+const learnCmd = program
+  .command('learn')
+  .description('Build learned stores from project history');
+
+learnCmd
+  .command('routing')
+  .description('Routing store: --backfill mines git history (Symbols: trailers, fix(/revert commits) into .paradigm/learned/routing.json (counts only)')
+  .option('--backfill', 'Build routing.json from the last 90 days of git history')
+  .option('--project <path>', 'Project root (defaults to cwd)')
+  .action(async (options) => {
+    const { learnRoutingCommand } = await import('./commands/learn-routing.js');
+    await learnRoutingCommand(options);
+  });
+
 // paradigm notebook <command> — Agent notebook management
 const notebookCmd = program
   .command('notebook')

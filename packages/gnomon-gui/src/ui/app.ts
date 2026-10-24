@@ -66,7 +66,7 @@ import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, Rep
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
 import { alertEl, mountLoopsView, slipEl as loopSlipEl } from './loops-view.js';
-import { cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
+import { loopsOff, cardLoopOf, choicePath, loopCardTitle, leafMeta, loopAlerts, loopRowToast, loopsOf, loopsWord, pauseAllText, PAUSE_ALL_REQUEST, trustSlip } from '../core/loops.js';
 import { canAttach, cardNoticeStep, escStopsSpeaking, isVoiceWidenCard, SPEAK_POLL_MS, SPEAK_WATCH_MS, speakPollWanted, stopSpeakingShown, planVoice, sessionName, voiceRefusalNote, voiceRequest, voiceStatusOf, type VoiceState } from '../core/voice.js';
 
 const doc = document as unknown as MiniDoc;
@@ -90,6 +90,7 @@ let client: GnomonClient | null = null;
 let session: Session | null = null;
 let verifyKey: string | null = null;
 let status: Record<string, unknown> | null = null;
+store.loopCardsHidden = () => loopsOff(loopsOf(status)); // TD-2026-10-24-447: stale 8.0.0 loop cards are neither shown nor counted
 let focused: string | null = null; // hsid
 let modPanelRow: (row: { kind?: unknown } | null) => void = () => undefined; // K0 mod panels hook
 let stackScoped = false;
@@ -326,7 +327,7 @@ function paintChatHead(): void {
   $<HTMLTextAreaElement>('composer-text').placeholder = s ? `Reply to ${t}${t.endsWith('…') ? '' : '…'}` : 'Open a session to write to it';
   const empty = $('empty');
   empty.hidden = !!focused || feedView;
-  if (!empty.hidden) put($('empty-meta'), `${store.liveCount()} live · ${store.cards.size} need you`);
+  if (!empty.hidden) put($('empty-meta'), `${store.liveCount()} live · ${store.visibleCardCount()} need you`);
 }
 
 const ROLE_LABEL: Partial<Record<ChatItem['role'], string>> = { user: 'you', assistant: 'claude' };
@@ -1039,13 +1040,14 @@ function watchCardBody(card: HTMLElement): void {
 
 async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   const focusRepo = focused ? (store.sessions.get(focused)?.repo ?? null) : null;
+  // TD-2026-10-24-447: with loops off in this build a loop-trust / loop-choice card still held from an 8.0.0 install is not shown
   const cards = (stackScoped && focused ? store.stack(focusRepo) : store.stack()).filter((c) => !departing.has(c.cardId));
   // fidelity 2: the comp's head ("Stack" · "4 · hover to fan"); the scope is a small filter key (named when it filters)
   const scoped = stackScoped && !!focused;
   put($('stack-scope'), scoped ? 'this project ▾' : '▾');
   $('stack-scope').title = scoped ? 'Showing this session\'s project only (click: all projects)' : 'Showing all projects (click: only this session\'s project)';
   $('stack-scope').setAttribute('aria-pressed', String(scoped));
-  put($('inbox'), `${store.cards.size}`);
+  put($('inbox'), `${store.visibleCardCount()}`);
   for (const c of cards) {
     const k = verifiedKey(c.cardId, String(c.card.contentHash ?? ''));
     if (!verified.has(k) && verifyKey && session) {
@@ -1228,6 +1230,7 @@ async function loopRequest(req: { kind: string; payload: Record<string, unknown>
   }
 }
 async function pauseAllLoops(trusted: boolean): Promise<void> {
+  if (loopsOff(loopsOf(status))) return; // TD-2026-10-24-447: nothing to pause in this build
   const before = loopsOf(status)?.running ?? 0;
   const n = (loopsOf(status)?.loops ?? []).filter((x) => x.state !== 'waiting-trust' && x.state !== 'invalid').length;
   if (await loopRequest(PAUSE_ALL_REQUEST, trusted, '')) {
@@ -3527,8 +3530,9 @@ function paintAppMenu(): void {
   m.setAttribute('aria-describedby', 'wordmark-who');
   if (fk) (m.querySelector(`[data-run="${fk}"]`) as HTMLElement | null)?.focus();
 }
-function loopsMenu(): { note: string; paused: boolean } | null {
+function loopsMenu(): { note: string; paused: boolean; off?: boolean } | null {
   const m = loopsOf(status);
+  if (loopsOff(m)) return { note: 'off in this build', paused: false, off: true };
   return m ? { note: leafMeta(m), paused: m.pausedAll } : null;
 }
 function openAppMenu(focusAt: 'first' | 'last' | null): void {

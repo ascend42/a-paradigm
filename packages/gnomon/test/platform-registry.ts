@@ -85,6 +85,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/daemon-stop.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   // T-2026-10-19-014 B0 (TD-2026-10-19-339): the daemon.stop human-device verb over the real unix-socket daemon.
   { test: 'test/daemon-stop-verb.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
+  // TD-2026-10-24-447 (#loops-gate): the gate over a real unix-socket daemon; the gate, stub, dispatch and CLI halves run everywhere in the sibling.
+  { test: 'test/loops-gate-daemon.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/loops-gate.test.ts', na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   { test: 'test/idle-exit.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   // M1.11 slice 2: #mod-host in the real daemon (unix socket + POSIX device-key modes).
   { test: 'test/mod-daemon.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/mod-append-budget.test.ts', na: 'Windows parity phase (P8-D78): the daemon endpoint is a unix socket and device keys use POSIX modes; the pure clamp and budget half runs everywhere in the sibling' },

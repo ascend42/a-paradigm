@@ -68,6 +68,7 @@ export const HUMAN_REQUEST_KINDS: readonly string[] = Object.freeze([
   'request.offer.decide',
   'request.offer.mute',
   'request.session.rename',
+  // #loops-gate: with loops off, dispatch refuses these before this gate (loops-disabled); a direct append reaches nothing either way
   // ── 8.0:loops (gnomon-loops.md §5 "Human ops"): the human's loop asks; refused here until a first-party route
   // serves them (build steps 3 and 5); pause{all:true} is the kill switch ──
   'request.loop.trust',

@@ -125,7 +125,18 @@ export interface LoopsModel {
   running: number;
   waitingTrust: number;
   pausedAll: boolean;
+  /** false when this build ships with loops off (status.loops.enabled === false; TD-2026-10-24-447); absent key reads as on */
+  enabled: boolean;
+  /** the kernel's closed reason while off ('not-in-this-build') */
+  reason?: string;
 }
+
+/** The words every loops-off surface shows (TD-2026-10-24-447); the kernel's refusal `loops-disabled` carries the same text. */
+export const LOOPS_OFF_TEXT = 'Loops are off in this build. They arrive in Gnomon 8.1.';
+/** The loop card kinds the broker may still hold from an 8.0.0 install (they are hidden while loops are off). */
+export const isLoopCardKind = (kind: string): boolean => kind === 'loop-trust' || kind === 'loop-choice';
+/** True when the kernel says loops are off in this build. */
+export const loopsOff = (m: LoopsModel | null): boolean => !!m && m.enabled === false;
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
@@ -213,6 +224,8 @@ function stateOf(registry: string, reason: string | undefined, running: boolean)
 export function loopsOf(status: unknown): LoopsModel | null {
   const l = isObj(status) && isObj(status.loops) ? status.loops : null;
   if (!l) return null;
+  // TD-2026-10-24-447: a build with loops off sends `enabled: false`; the model is empty and every loop surface stays quiet
+  if (l.enabled === false) return { loops: [], uptime: null, running: 0, waitingTrust: 0, pausedAll: false, enabled: false, reason: str(l.reason) ?? 'not-in-this-build' };
   const runs = (Array.isArray(l.runs) ? l.runs : []).map(parseRun).filter((r): r is LoopRun => r !== null);
   const runningBy = new Map<string, string>();
   for (const r of Array.isArray(l.running) ? l.running : []) if (isObj(r) && typeof r.key === 'string') runningBy.set(r.key, str(r.runId) ?? '');
@@ -251,7 +264,7 @@ export function loopsOf(status: unknown): LoopsModel | null {
     };
   });
   const pausedAll = loops.length > 0 && loops.every((x) => x.state === 'kill-switch' || x.state === 'waiting-trust' || x.state === 'invalid') && loops.some((x) => x.state === 'kill-switch');
-  return { loops, uptime: parseUptime(l.uptime), running: loops.filter((x) => x.state === 'running').length, waitingTrust: loops.filter((x) => x.state === 'waiting-trust').length, pausedAll };
+  return { loops, uptime: parseUptime(l.uptime), running: loops.filter((x) => x.state === 'running').length, waitingTrust: loops.filter((x) => x.state === 'waiting-trust').length, pausedAll, enabled: true };
 }
 
 /** hh:mm of an ISO instant in local time ('' when absent or bad). */
@@ -283,7 +296,8 @@ export interface LoopsWord {
   title: string;
 }
 export function loopsWord(m: LoopsModel | null): LoopsWord {
-  if (!m || m.loops.length === 0) return { shown: false, text: '', narrow: '', title: '' };
+  // loops off in this build: no header word at all (the quieter choice; the Loops view and the Gnomon menu say why)
+  if (!m || m.enabled === false || m.loops.length === 0) return { shown: false, text: '', narrow: '', title: '' };
   const enabled = enabledOf(m);
   if (m.pausedAll) {
     const n = m.loops.filter((x) => x.state === 'kill-switch').length;
@@ -632,7 +646,7 @@ export interface LoopAlert {
 }
 /** Loops stuck and still needing you: the latest loop run failed or was stopped by a limit, or the kernel paused it. */
 export function loopAlerts(m: LoopsModel | null, dismissed: ReadonlySet<string>, now: number = Date.now()): LoopAlert[] {
-  if (!m) return [];
+  if (!m || m.enabled === false) return [];
   const out: LoopAlert[] = [];
   for (const x of m.loops) {
     const project = projectOf(x);
@@ -672,7 +686,7 @@ export interface SlipLine {
 /** Loops waiting for trust with no loop-trust card yet (the slip at the stack's foot; hidden at 0). */
 export const SLIP_MAX = 3;
 export function trustSlip(m: LoopsModel | null, cardLoopIds: ReadonlySet<string>): { tab: string; lines: SlipLine[]; more: number } | null {
-  if (!m) return null;
+  if (!m || m.enabled === false) return null;
   const lines = m.loops
     .filter((x) => x.state === 'waiting-trust' && !cardLoopIds.has(x.loopId))
     .map((x) => ({ key: x.key, loopId: x.loopId, text: `${x.loopId} · ${x.changed ? 'changed' : 'new'}${x.shape ? ` · ${authorPhrase(x)}` : ''}` }));
@@ -693,6 +707,7 @@ export interface LoopToast {
  * (`loop.notified{as:'toast'}`). A notify `as:'card'` raises a card (the stack shows it); trouble is a stack alert.
  */
 export function loopRowToast(row: { kind?: string; payload?: unknown }, m: LoopsModel | null): LoopToast | null {
+  if (m && m.enabled === false) return null;
   const p = isObj(row.payload) ? row.payload : {};
   const loopId = str(p.loopId);
   if (!loopId) return null;

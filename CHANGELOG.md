@@ -5,7 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [8.0.0] — 2026-10-22
+## [8.0.1] — 2026-10-24
+
+**Gnomon 8.0 for testers, with loops switched off for this round.** 8.0.0 is skipped: `@a-company/paradigm@8.0.0` was published from the wrong checkout on 2026-10-22 and unpublished, and npm never reuses a version, so the real 8.0 ships as 8.0.1. Everything in the 8.0.0 notes below applies to 8.0.1. The 8.0.0 entry stays in this file as the feature list.
+
+### Changed
+- **Loops are off in release builds** (`#loops-gate`, TD-2026-10-24-447, G-LOOP-29). The signed Gnomon.app bundles no Paradigm CLI, so builtin loop checks (flow-check, purpose-validate, drift, reindex, ripple) could only end in `error`. Until the builtins ship inside Gnomon (8.1, T-2026-10-22-016), the kernel builds no loop registry, runner, timers or watchers in a release build, and every `request.loop.*`, `loop.request` and `gnomon loop *` is refused with "Loops are off in this build. They arrive in Gnomon 8.1." `GNOMON_LOOPS` can never turn them on in a release build. Existing loop files and log rows stay on disk, untouched and inert. The desk hides the loops word, shows one line in the Loops view and hides stale loop cards.
+- **The release script refuses a kernel that isn't a release build.** `release-darwin.mjs` checks the staged kernel and the assembled app, and fails unless the kernel's pins are release mode and loops are off.
+
+### Added
+- **`gnomon economy stats`** (`#turn-economy`). A read-only per-turn view of model calls, exploration before the first edit, context size per call, cache-read share and subagent tokens by model. It is derived from the verified log and adds no new row kinds. It is the baseline for the orchestration work after 8.0.
+- **`paradigm learn routing --backfill`** (`#routing-backfill`). Writes `.paradigm/learned/routing.json` from git history: counts per area of fixes and reverts, tagged history-only with a frozen cutoff. It is a risk-ordering prior, not a clean/unclean outcome count.
+
 
 **Gnomon, the Paradigm 8.0 kernel, ships as a signed Mac app installed through npm.** `npm i -g @a-company/paradigm`, then `gnomon`, opens first-run setup. After two Touch ID (or password) prompts you reach the desk. You don't build or sign anything, and your own Node version doesn't matter. Gnomon is one daemon per user. It owns your sessions, your identity, a hash-chained log, the approvals and a localhost GUI, and it drives Claude Code as a sandboxed headless backend on your own subscription (decision TD-2026-10-21-758). 8.0 runs on Apple silicon Macs only (TD-2026-10-22-310). The Paradigm CLI and MCP server also get the read-only command guarantee and hook fixes that were prepared as 7.15.2, plus a typecheck to zero that turned up live bugs.
 

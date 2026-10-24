@@ -119,6 +119,7 @@ import {
 import { KERNEL_METHODS, type MatrixClass, type MethodRegistry } from './methods.js';
 import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
+import { LOOPS_DISABLED_MESSAGE, LOOPS_DISABLED_REASON } from '../loops/gate.js'; // #loops-gate
 import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
 import { SERVER_FEATURES } from './auth.js';
 import { resolveRef } from '../refs/resolve.js';
@@ -373,6 +374,11 @@ export const VOICE_SEND_CLAIM_REQUEST = 'request.voice.send.claim' as const;
 export const VOICE_SENDWORD_REQUEST = 'request.voice.sendword' as const;
 /** TD-2026-10-22-769: the human's local-model config request (dispatcher-only, never a row; no contract id moves). */
 export const LOCAL_CONFIG_REQUEST = 'request.local.config' as const;
+/** #loops-gate (TD-2026-10-24-447): defence in depth. A loops port that reports `enabled: false` refuses every loop ask here, before any row is appended. */
+function loopsOffGuard(port: { status(): Record<string, unknown> }): void {
+  if (port.status().enabled === false) throw new RpcRefusal('FORBIDDEN', LOOPS_DISABLED_REASON, LOOPS_DISABLED_MESSAGE);
+}
+
 /** Aegis M2: status.local as a class sees it: in full for the human; configured / loopbackOnly / offered for any other. */
 export function localStatusFor(cls: string, full: Record<string, unknown>): Record<string, unknown> {
   return cls === 'human' ? full : { configured: full.configured === true, loopbackOnly: true, offered: full.offered === true };
@@ -1054,6 +1060,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       }
       // 8.0:loops (#loop-registry): the human's request.loop.* (gui/device human connections only, stamped by connId)
       if (typeof pa?.kind === 'string' && pa.kind.startsWith('request.loop.') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.loops) {
+        loopsOffGuard(o.requests.loops); // #loops-gate: refused before any row or card
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {
@@ -1066,6 +1073,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       // principal and hsid come from THIS connection, never the payload. Every class reaches the gate, which refuses
       // all but an agent (sessions and loop sessions: LL5; peers, voice, mods: never)
       if (pa?.kind === 'loop.request' && o.requests?.loops?.agent) {
+        loopsOffGuard(o.requests.loops); // #loops-gate: refused before any row or card
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for loop.request (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {

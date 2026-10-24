@@ -36,6 +36,7 @@ import { kernelPinOf } from './daemon-cli.js';
 import { humanDeviceOf } from './rules-cli.js';
 import { GNOMON_VERSION } from '../version.js';
 import { heading, readout, refused, type Out } from './readout.js';
+import { resolveLoopsEnabled, LOOPS_DISABLED_MESSAGE, LOOPS_DISABLED_REASON } from '../kernel/loops/gate.js'; // #loops-gate
 
 export const LOOP_EXIT_OK = 0;
 export const LOOP_EXIT_REFUSED = 1;
@@ -107,7 +108,7 @@ export function logLines(r: LoopRunView): string[] {
   return r.nodes.map((n) => `#${n.visit} ${n.nodeId} (${n.type ?? '?'}${n.round !== undefined ? `, round ${n.round}` : ''}) ${n.verdict}${n.choice ? ` [${n.choice}]` : ''} --${n.edge ?? '?'}--> ${n.next ?? '(stopped)'}${n.durationMs ? ` ${n.durationMs} ms` : ''}${n.detail ? ` · ${n.detail}` : ''}`);
 }
 
-export async function runLoopCommand(argv: readonly string[], io: { stdout: Out; stderr: Out }, cwd: string = process.cwd()): Promise<number> {
+export async function runLoopCommand(argv: readonly string[], io: { stdout: Out; stderr: Out }, cwd: string = process.cwd(), loopsEnabled: boolean = resolveLoopsEnabled()): Promise<number> {
   let verb: Verb | undefined;
   let id: string | undefined;
   let repo: string | undefined;
@@ -140,6 +141,11 @@ export async function runLoopCommand(argv: readonly string[], io: { stdout: Out;
       verb = a as Verb;
     } else if (!a.startsWith('-') && id === undefined && verb !== undefined && ID_VERBS.includes(verb)) id = a;
     else return usage(`unknown argument ${a}`);
+  }
+  // #loops-gate (TD-2026-10-24-447): the same bundle carries the same gate; no daemon is asked in a build without loops
+  if (!loopsEnabled) {
+    refused(io.stderr, 'FORBIDDEN', LOOPS_DISABLED_REASON, LOOPS_DISABLED_MESSAGE, []);
+    return LOOP_EXIT_REFUSED;
   }
   if (verb === undefined) return usage(`name a verb: ${VERBS.join(', ')}`);
   const killSwitch = verb === 'pause' && all;
@@ -182,6 +188,10 @@ export async function runLoopCommand(argv: readonly string[], io: { stdout: Out;
       const status = async (): Promise<{ loops: LoopView[]; trustStatus: TrustEvent[]; waitingTrust: number; runs: LoopRunView[] } | null> => {
         const st = await call('status', {});
         if (!st) return null;
+        if ((st.loops as { enabled?: unknown } | undefined)?.enabled === false) {
+          refused(io.stderr, 'FORBIDDEN', LOOPS_DISABLED_REASON, LOOPS_DISABLED_MESSAGE, []);
+          return null;
+        }
         const l = st.loops as { loops?: LoopView[]; trustStatus?: TrustEvent[]; waitingTrust?: { n?: number }; runs?: LoopRunView[] } | undefined;
         if (!l) {
           refused(io.stderr, 'ENGINE', 'not-implemented', 'this kernel reports no loops (an older gnomond?)', ['gnomon daemon status']);

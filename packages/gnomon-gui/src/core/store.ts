@@ -26,6 +26,7 @@
  *     kernel answers `cursor-epoch` (or a page names another log) and the GUI
  *     re-reads from the start.
  */
+import { isLoopCardKind } from './loops.js';
 import { sentLabel } from './voice-presets.js';
 import { StepTracker, type StepNow, type TurnStep } from './turn-steps.js';
 import { projectHue, sha256Tagged, validateKindPayload } from '@a-company/gnomon-contracts';
@@ -154,6 +155,16 @@ export class GuiStore {
   /** Rows with no session, kept for the kernel feed. */
   readonly kernelFeed: Row[] = [];
   readonly cards = new Map<string, StackCard>();
+  /** TD-2026-10-24-447: true while loops are off in this build; loop-trust / loop-choice cards held from an 8.0.0 install are then not shown or counted. The page sets it from status.loops. */
+  loopCardsHidden: () => boolean = () => false;
+  /** Cards the human can see: every card, less the stale loop cards while loops are off. The one source for the stack, the inbox badge, the empty-state count and a session's pending count. */
+  visibleCards(): StackCard[] {
+    const hide = this.loopCardsHidden();
+    return [...this.cards.values()].filter((c) => !(hide && isLoopCardKind(c.kind)));
+  }
+  visibleCardCount(): number {
+    return this.visibleCards().length;
+  }
   /** #gui-loops: the kernel's loop.notified{as:'card'} rows by cardId (which loop run raised a loop-choice card; newest 256) */
   readonly loopCards = new Map<string, { loopId: string; runId?: string; nodeId?: string; text?: string }>();
   /** Aegis C1e: root decisions logged with a rowsDigest that is not the shown rows' digest (newest 16), shown red */
@@ -381,7 +392,7 @@ export class GuiStore {
 
   /** The stack, arrival order; inside a session only that project's cards (`repo` given), else all (global inbox). */
   stack(repo?: string | null): StackCard[] {
-    const all = [...this.cards.values()].sort((a, b) => a.arrivedSeq - b.arrivedSeq);
+    const all = this.visibleCards().sort((a, b) => a.arrivedSeq - b.arrivedSeq);
     return repo === undefined ? all : all.filter((c) => c.repo === repo);
   }
 
@@ -390,7 +401,7 @@ export class GuiStore {
     const by = new Map<string, Array<SessionRow & { pending: number }>>();
     for (const s of this.sessions.values()) {
       const k = s.repo ?? UNSCOPED;
-      const pending = [...this.cards.values()].filter((c) => c.hsid === s.hsid).length;
+      const pending = this.visibleCards().filter((c) => c.hsid === s.hsid).length;
       if (!by.has(k)) by.set(k, []);
       by.get(k)!.push({ ...s, pending });
     }

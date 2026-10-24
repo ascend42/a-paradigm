@@ -2716,6 +2716,34 @@ components:
       - test/mods-admin.test.ts
       - test/desk-stats.test.ts
 
+  turn-economy:
+    description: >-
+      #turn-economy (orchestration design §12 Phase 0 item 1, the `turn.economy`
+      fold; spec id #turn-economy). src/kernel/desk/turn-economy.ts: a derived
+      READ-ONLY VIEW (no log kind, no contract change) over turn.event /
+      turn.sent / turn.result / session.open. One numbers-and-ids row per turn
+      (a result that folds a queued turn is one row, foldedTurns 2): modelCalls
+      (distinct main-chain message.id), preEditExplore {read, grep, glob} until
+      the first Edit/Write/NotebookEdit, ctxAtStart (null for the first turn of
+      an epoch, a resume included), cacheReadShare from turn.result split, and
+      subagentTokensByModel (parent_tool_use_id lines, by message.model). Keyed
+      (hsid, session.open epoch seq, turn) as #desk-stats is, since turn ids
+      restart at /1 after a resume. Lines stored by hash only are counted as
+      truncated in the coverage and never parsed; rewritten (lineKept) lines
+      are not read. foldTurnEconomy is the pure fold; EconomyTally (daemon.ts,
+      next to DeskTally) seeds from the human projection on first read and is
+      fed by onCommit. CLI: `gnomon economy stats [<home>] [--json]`
+      (src/cli/economy-cli.ts, folds incrementally inside verifyLog onRow).
+      Review fields: ctxMax, callsOver140k, ctxHistogram (bounded buckets),
+      conductorModel, subagentUncachedByModel, edited, ctxAtStartSource
+      (prev | firstCall), hashOnly / truncatedAssistant / excludeFromMedians;
+      model names sanitised; assistant lines with no outstanding turn are
+      dropped (coverage.unpairedLines).
+    tags: [desk, economy, paradigm-8]
+    signals: []
+    tests:
+      - test/turn-economy.test.ts
+
   git-verbs:
     description: >-
       #git-verbs (T-2026-10-23-002; spec §6.6). The kernel runs git for a
@@ -3900,6 +3928,9 @@ components:
       and the content hash. Repo env files a loop links leave its config
       closure and join its protected set; editing a value needs no re-trust.
       LoopRunRefInfo.nodeEnv carries the trusted node's env names (Aegis F4).
+      TD-2026-10-24-447 (#loops-gate): with loops off, wireLoops() returns the
+      inert disabledLoops() stub and constructs no registry, runner, timers,
+      watchers or idle holder; `gnomon loop *` prints the same copy and exits 1.
     path: src/kernel/loops/registry.ts
     type: module
     tags: [gnomon, loops, paradigm-8, security]
@@ -3910,6 +3941,32 @@ components:
       - test/loop-compiled.test.ts
       - test/loop-cli.test.ts
       - test/decision-batch.test.ts
+
+  loops-gate:
+    description: >-
+      #loops-gate (TD-2026-10-24-447; docs/specs/gnomon-loops.md §11, G-LOOP-29) in
+      src/kernel/loops/gate.ts. The one boot-time switch for loops, resolved once in
+      daemon.ts before wireLoops(): a release build (the compiled __GNOMON_RELEASE__
+      define, via loadedReleasePins) is OFF; a dev build is ON unless GNOMON_LOOPS=0;
+      GNOMON_LOOPS=1 never turns it on in a release build. Never read from a user
+      file or the log. Off: wireLoops() returns the disabledLoops() stub (no registry,
+      runner, timers, watchers, idle hold, exit hook; no log seeding) whose
+      request/agent refuse FORBIDDEN loops-disabled "Loops are off in this build.
+      They arrive in Gnomon 8.1." and whose status() is {enabled:false,
+      reason:'not-in-this-build', loops:[], ...}; the stub stays wired as
+      requests.loops so request.loop.* and loop.request never fall to generic
+      log.append. dispatch.ts also refuses both blocks when status().enabled is
+      false, before any row. One diag daemon.desk loops.disabled at boot. Existing
+      loop rows and files stay (append-only), inert. $daemon-lifecycle owns the boot call.
+    path: src/kernel/loops/gate.ts
+    type: module
+    tags: [gnomon, loops, paradigm-8, release]
+    gates: []
+    signals: []
+    tests:
+      - test/loops-gate.test.ts
+      - test/loops-gate-daemon.test.ts
+      - test/release-darwin.test.ts
 
   loop-check:
     description: >-
@@ -5283,6 +5340,10 @@ flows:
     tags: [gnomon, setup]
 
   daemon-lifecycle:
+    loops-gate: >-
+      TD-2026-10-24-447 (#loops-gate, G-LOOP-29). daemon.ts resolves resolveLoopsEnabled() once
+      before wireLoops({enabled}) and emits one daemon.desk loops.disabled when off; the stub
+      loops port stays wired as requests.loops.
     windows-home: >-
       BUILT (Windows parity W3; spec §16 Home dir + modes, G-WIN-02). ensureGnomonHome on win32 calls
       platform/owner-only.ts ownerOnlyDir: the win32 helper (platform/win32/helper-client.ts; repo-built,

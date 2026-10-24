@@ -43,6 +43,8 @@ import { LOOP_EVENT_INDEX_KINDS, LoopEvents, type LoopEventRow } from './events.
 import { LoopTrust, type LoopAsker } from './trust.js';
 import { LoopAgentOps, type LoopAgentAsker } from './agent-ops.js';
 import { LOOP_LAND_FOLD_KINDS } from './land.js'; // #loop-land (step 11)
+import { RpcRefusal } from '../socket/rpc.js';
+import { LOOPS_DISABLED_MESSAGE, LOOPS_DISABLED_REASON, LOOPS_DISABLED_STATUS_REASON } from './gate.js'; // #loops-gate
 
 /** How often landed loop commits are checked for reverts (read-only git). */
 export const LAND_REVERT_SCAN_MS = 60_000;
@@ -56,6 +58,8 @@ export interface LoopsLog {
 }
 
 export interface WireLoopsOptions {
+  /** #loops-gate: false returns the inert stub (nothing constructed, nothing seeded); absent = enabled (tests) */
+  enabled?: boolean;
   home: string;
   log: LoopsLog;
   kernelPrincipal: string;
@@ -136,7 +140,32 @@ export function paradigmCliResolver(resolve: () => string = () => createRequire(
   };
 }
 
-export function wireLoops(o: WireLoopsOptions): WiredLoops {
+/** What the daemon uses of the loops; the disabled stub carries exactly this. */
+export type LoopsHandle = Pick<WiredLoops, 'recovered' | 'port' | 'brake' | 'localConfigApplied' | 'close'>;
+
+/** #loops-gate: the stub wired as requests.loops when loops are off. Constructs nothing; every ask is refused. */
+export function disabledLoops(): LoopsHandle {
+  const refuse = (): never => {
+    throw new RpcRefusal('FORBIDDEN', LOOPS_DISABLED_REASON, LOOPS_DISABLED_MESSAGE);
+  };
+  return {
+    recovered: Promise.resolve(0),
+    port: {
+      request: async () => refuse(),
+      agent: async () => refuse(),
+      status: () => ({ enabled: false, reason: LOOPS_DISABLED_STATUS_REASON, loops: [], running: 0, queued: 0, recent: [], startRefused: [], effective: {}, landing: [] }),
+    },
+    brake: async () => 0,
+    localConfigApplied: () => undefined,
+    close: () => undefined,
+  };
+}
+
+export function wireLoops(o: WireLoopsOptions & { enabled: false }): LoopsHandle;
+export function wireLoops(o: WireLoopsOptions & { enabled?: true }): WiredLoops;
+export function wireLoops(o: WireLoopsOptions): WiredLoops | LoopsHandle;
+export function wireLoops(o: WireLoopsOptions): WiredLoops | LoopsHandle {
+  if (o.enabled === false) return disabledLoops();
   const append = (kind: string, payload: Record<string, unknown>, connId?: string): Promise<void> =>
     o.log.append({ kind, principal: o.kernelPrincipal, payload: { ...payload }, ...(connId ? { connId } : {}) }).then(() => undefined);
   const registry = new LoopRegistry({

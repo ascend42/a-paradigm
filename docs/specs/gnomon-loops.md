@@ -447,3 +447,11 @@ Decided:
 
 Open:
 1. **Sandbox before Move 2.** Until M2.3 ships the oracle profile, should read checks run under the `session` profile with that residual stated, or wait?
+
+## 11. Release gate (`#loops-gate`, TD-2026-10-24-447)
+
+Loops ship disabled in the 8.0.1 tester release (T-2026-10-22-016 deferred to 8.1). One boot-time gate, `loopsEnabled`, is resolved once in `daemon.ts` before `wireLoops()` (`kernel/loops/gate.ts`): a release build (the compiled `__GNOMON_RELEASE__` define) is off; a dev build is on unless `GNOMON_LOOPS=0`; `GNOMON_LOOPS=1` never enables a release build. The gate is never read from a user file or the log.
+
+Off, `wireLoops()` returns an inert stub: no registry, runner, timers, watchers, idle holder, exit hook or sweeps, and the log is not seeded. `request.loop.*` and `loop.request` refuse `FORBIDDEN loops-disabled` ("Loops are off in this build. They arrive in Gnomon 8.1.") and `dispatch.ts` refuses both before any row. `status.loops` carries `enabled:false` and `reason:'not-in-this-build'` (additive; `clientApiId` is unchanged). `gnomon loop *` prints the same copy and exits non-zero. Existing loop rows and files are left as they are, inert. The kernel emits one `loops.disabled` diag at boot.
+
+- **G-LOOP-29** With loops off, `request.loop.*` and `loop.request` are refused `loops-disabled` and append no row; `status.loops` is `{enabled:false, reason:'not-in-this-build', …}`; no timer, watcher, runner or idle hold exists; a trusted loop already in the log does not run; `gnomon loop *` prints the copy and exits 1. `GNOMON_LOOPS=1` turns loops on only when the release define is absent.

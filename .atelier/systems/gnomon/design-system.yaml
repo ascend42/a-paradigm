@@ -860,7 +860,9 @@ components:
   loop-list:
     role: "The Loops list: a pinned 'needs you' group (waiting for trust, kernel-paused, waiting to land, parked), then one group per project (swatch head). A loop can show twice, pinned and in its project."
     anatomy: ["group head (10.5 caps --sec; project groups lead with the swatch)", "loop rows"]
-    states: [default, empty, paused-all]
+    states: [default, empty, paused-all, off]
+    off: "Loops off in this build (status.loops.enabled false): the list is one .meta paragraph, 'Loops are off in this build. They arrive in Gnomon 8.1.'; the head is the title and esc only (no meta, keep-alive line or Pause all); no detail pane beside it. The edge tab, the alerts and the trust slip do not show; the loops-word is hidden; loops.pause-all leaves the palette and the Gnomon menu."
+    amended_by: [{ date: 2026-10-24, decided_by: creator, what: "state off: Gnomon 8.0.1 ships with loops disabled (TD-2026-10-24-447); loops-word hidden while off", reviewed: { by: atelier-mika, date: 2026-10-24, verdict: accepted-with-fixes } }]
     source: ".atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .lp-body .lp-gh)"
     examples:
       default: '<div class="lp-body"><div class="lp-gh">needs you</div><button class="lp-row" type="button"><span class="mk" aria-hidden="true">◆</span><span class="l1"><b>triage-on-commit</b> · waiting for trust · new</span><span class="nx">arky · 14:12</span><span class="l2"><span class="sw h2"></span>a-paradigm · commit.landed · local only</span></button><div class="lp-gh"><span class="sw h0"></span>storefront</div><button class="lp-row" type="button"><span class="mk" aria-hidden="true">●</span><span class="l1"><b>flow-health-checkout</b> · running · at tests (3 of 4)</span><span class="nx">started 14:21</span><span class="l2">5/12 runs today · 4m/60m compute · local only · observe · by you</span></button></div>'

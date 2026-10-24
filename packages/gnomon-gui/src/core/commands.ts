@@ -18,6 +18,7 @@
  */
 
 import { localPaletteTitle } from './local-model.js';
+import { loopsOf, loopsOff } from './loops.js';
 
 export interface Command {
   id: string;
@@ -173,12 +174,14 @@ export function parseLayout(s: string): Layout | null {
 }
 
 /** Palette entries: GUI commands then kernel verbs (from status.verbs). */
-export function paletteEntries(status: { verbs?: Array<{ verb: string; access?: unknown; available?: boolean; milestone?: string }> } | null): Command[] {
+export function paletteEntries(status: { verbs?: Array<{ verb: string; access?: unknown; available?: boolean; milestone?: string }>; loops?: unknown } | null): Command[] {
   const verbs = (status?.verbs ?? [])
     .filter((v) => v.access !== false)
     .map((v): Command => ({ id: `verb.${v.verb}`, title: `kernel verb ${v.verb}`, verb: true, available: v.available === true, ...(v.available ? {} : { why: v.milestone ? `lands ${v.milestone}` : 'not served' }) }));
   // #gui-local-model (design palette): "Set up local model…" until one is set, then "Local model settings…"
-  const gui = GUI_COMMANDS.map((c) => (c.id === 'local.setup' ? { ...c, title: localPaletteTitle(status) } : c));
+  // TD-2026-10-24-447: with loops off in this build there is nothing to pause; the kill switch is not offered
+  const loopsOffNow = loopsOff(loopsOf(status));
+  const gui = GUI_COMMANDS.filter((c) => !(loopsOffNow && c.id === 'loops.pause-all')).map((c) => (c.id === 'local.setup' ? { ...c, title: localPaletteTitle(status) } : c));
   return [...gui, ...verbs];
 }
 

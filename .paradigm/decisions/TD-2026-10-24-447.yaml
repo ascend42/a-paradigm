@@ -1,0 +1,37 @@
+id: TD-2026-10-24-447
+timestamp: '2026-10-24T08:45:11.254Z'
+title: 8.0.1 tester release ships with loops disabled; Phase 0 closes the orchestration work for this release
+decision: >-
+  Gnomon 8.0.1 ships to testers with loops disabled behind a clear message, because the signed Gnomon.app bundles no
+  paradigm CLI and builtin loop checks (flow-check, purpose-validate, drift, reindex, ripple) end in error. Bundling the
+  builtins stays T-2026-10-22-016 for 8.1. Orchestration work pauses at the Phase 0 closure point: the turn.economy fold
+  (derived view, no contract change) and the routing backfill (history-only risk prior) are in; probes P1-P4 and item 4
+  emitters (detector.event, verdict.founder, calibration.reviewer, revert detection) are deferred.
+rationale: >-
+  Testers get the Mac build sooner without a failing flow-health surface. Review found the Phase 0 baselines were not
+  yet pre-registerable, so the closure is the corrected fold and backfill, with probes and emitters waiting on
+  founder-run hardware probes and a decision about which principal writes userland kinds.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: supported
+  - id: aegis
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#turn-economy'
+  - '#loop-registry'
+  - '#loop-runner'
+status: active
+tags:
+  - gnomon
+  - release
+  - 8.0.1
+  - loops
+  - orchestration

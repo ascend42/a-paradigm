@@ -83,6 +83,28 @@ describe('#release-darwin pins', () => {
     expect(() => rel.stageKernel(pkg, path.join(d, 'stage2'))).toThrow(/symlink/);
   });
 
+  describe('assertReleaseKernel (TD-2026-10-24-447: the shipped kernel is a release build with loops off)', () => {
+    const kernel = (mode: string, loopsOn: boolean, withGate = true): string => {
+      const d = tmp();
+      const dist = path.join(d, 'kernel', 'dist');
+      mkdirSync(dist, { recursive: true });
+      writeFileSync(path.join(dist, 'index.js'), [
+        `export const releasePins = { loadedReleasePins: () => ({ mode: ${JSON.stringify(mode)}, why: 'test', manifest: { release: '8.0.1', appZips: [{ arch: 'arm64' }] } }) };`,
+        withGate ? `export const loopsGate = { resolveLoopsEnabled: () => ${loopsOn} };` : '',
+      ].join('\n'));
+      return path.join(d, 'kernel');
+    };
+    it('accepts a release kernel whose loops gate stays off', async () => {
+      await expect(rel.assertReleaseKernel(kernel('release', false), '8.0.1')).resolves.toBeUndefined();
+    });
+    it('refuses a dev kernel, a wrong version, a missing gate and a kernel with loops on', async () => {
+      await expect(rel.assertReleaseKernel(kernel('dev', false), '8.0.1')).rejects.toThrow(/REFUSING TO SHIP.*not a release/);
+      await expect(rel.assertReleaseKernel(kernel('release', false), '9.9.9')).rejects.toThrow(/REFUSING TO SHIP/);
+      await expect(rel.assertReleaseKernel(kernel('release', false, false), '8.0.1')).rejects.toThrow(/no loops gate/);
+      await expect(rel.assertReleaseKernel(kernel('release', true), '8.0.1')).rejects.toThrow(/loops are ON/);
+    });
+  });
+
   it('a downloaded node that does not hash to the lock is refused; a cached one that does is extracted', async () => {
     const d = tmp();
     const root = path.join(d, 'src', 'node-v24.0.0-darwin-arm64', 'bin');

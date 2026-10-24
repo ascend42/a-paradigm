@@ -291,3 +291,71 @@ describe('LP8 loop card head wording', () => {
   });
 });
 
+
+describe('loops off in this build (TD-2026-10-24-447)', () => {
+  const OFF = { loops: { enabled: false, reason: 'not-in-this-build', loops: [], running: 0, queued: 0, recent: [], startRefused: [], effective: {}, landing: [] } };
+  it('loopsOf carries enabled:false and an empty model; an absent key reads as on', () => {
+    expect(loopsOf(OFF)).toMatchObject({ enabled: false, reason: 'not-in-this-build', loops: [], running: 0, waitingTrust: 0, pausedAll: false });
+    expect(loopsOf({ loops: { loops: [] } })?.enabled).toBe(true);
+    expect(loopsOf({ loops: { enabled: true, loops: [] } })?.enabled).toBe(true);
+  });
+  it('hides the header word, the alerts, the trust slip and the toasts', () => {
+    const m = loopsOf(OFF);
+    expect(loopsWord(m)).toMatchObject({ shown: false, text: '' });
+    expect(loopAlerts(m, new Set())).toEqual([]);
+    expect(trustSlip(m, new Set())).toBeNull();
+    expect(loopRowToast({ kind: 'loop.run.ended', payload: { loopId: 'x', reason: 'goal' } }, m)).toBeNull();
+  });
+  it('the view paints one empty state with the build copy and no Pause all', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const src = readFileSync(fileURLToPath(new URL('../src/ui/loops-view.ts', import.meta.url)), 'utf8');
+    const { LOOPS_OFF_TEXT } = await import('../src/core/loops.js');
+    expect(LOOPS_OFF_TEXT).toBe('Loops are off in this build. They arrive in Gnomon 8.1.');
+    const list = src.slice(src.indexOf('function paintList('), src.indexOf('if (!m.loops.length) body'));
+    expect(list).toContain('loopsOff(m)');
+    expect(list).toContain('LOOPS_OFF_TEXT');
+    const head = src.slice(src.indexOf('function paintHead('), src.indexOf('const kill ='));
+    expect(head).toContain('loopsOff(m)');
+    expect(head).not.toContain('pause-all');
+  });
+  it('the palette drops loops.pause-all (keeps loops.open) and the Gnomon menu drops Pause all loops', async () => {
+    const { paletteEntries } = await import('../src/core/commands.js');
+    const { appMenuModel } = await import('../src/core/header.js');
+    const { applyPreset } = await import('../src/core/commands.js');
+    const ids = (s: unknown) => paletteEntries(s as never).map((c) => c.id);
+    expect(ids(OFF)).not.toContain('loops.pause-all');
+    expect(ids(OFF)).toContain('loops.open');
+    expect(ids({ loops: { loops: [] } })).toContain('loops.pause-all');
+    expect(ids(null)).toContain('loops.pause-all');
+    const rows = appMenuModel({ layout: applyPreset('desk'), panesOpen: false, theme: [], who: '', loops: { note: 'off in this build', paused: false, off: true } });
+    const runs = rows.flatMap((r) => (r.kind === 'item' ? [r.run] : []));
+    expect(runs).toContain('loops.open');
+    expect(runs).not.toContain('loops.pause-all');
+  });
+});
+
+describe('stale 8.0.0 loop cards while loops are off (TD-2026-10-24-447)', () => {
+  it('the stack, inbox count, empty-state count and session note all agree', async () => {
+    const { GuiStore, sessionNote } = await import('../src/core/store.js');
+    const store = new GuiStore();
+    const mk = (cardId: string, kind: string) => ({ cardId, kind, hsid: 's1', repo: 'r', card: {}, arrivedSeq: store.cards.size }) as never;
+    store.sessions.set('s1', { hsid: 's1', repo: 'r', state: 'running', lastSeq: 1 } as never);
+    store.cards.set('a', mk('a', 'loop-trust'));
+    store.cards.set('b', mk('b', 'loop-choice'));
+    store.cards.set('c', mk('c', 'permission'));
+    let off = false;
+    store.loopCardsHidden = () => off;
+    expect(store.visibleCardCount()).toBe(3);
+    off = true;
+    expect(store.visibleCardCount()).toBe(1);
+    expect(store.stack().map((c) => c.cardId)).toEqual(['c']);
+    expect(store.stack('r').map((c) => c.cardId)).toEqual(['c']);
+    const pending = store.groups()[0]!.sessions[0]!.pending;
+    expect(pending).toBe(1);
+    expect(sessionNote({ state: 'running', pending }).text).toBe('1 card');
+    store.cards.delete('c');
+    expect(store.visibleCardCount()).toBe(0);
+    expect(sessionNote({ state: 'running', pending: store.groups()[0]!.sessions[0]!.pending }).text).toBe('running');
+  });
+});

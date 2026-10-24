@@ -15,7 +15,7 @@
 import { h, type MiniDoc } from '../core/render.js';
 import type { ShownRefusal } from '../core/client.js';
 import { localStatusOf } from '../core/local-model.js';
-import { cantStart, runRefusalOf, startLine, authorPhrase, budgetFields, budgetKey, budgetRequest, detailKeys, edgeTab, hhmm, keepLine, leafMeta, loopGroups, loopRequest, loopsOf, projectOf, runPath, runTrace, trustSections, type LoopAct, type LoopAlert, type LoopItem, type LoopsModel, type SlipLine } from '../core/loops.js';
+import { cantStart, runRefusalOf, startLine, authorPhrase, budgetFields, budgetKey, budgetRequest, detailKeys, edgeTab, hhmm, keepLine, leafMeta, loopGroups, loopRequest, loopsOf, LOOPS_OFF_TEXT, loopsOff, projectOf, runPath, runTrace, trustSections, type LoopAct, type LoopAlert, type LoopItem, type LoopsModel, type SlipLine } from '../core/loops.js';
 import { graphScale, layoutGraph, ZOOM_STEP, type GraphLayout } from '../core/loop-graph.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -166,6 +166,8 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
   const item = (key: string | null): LoopItem | undefined => model?.loops.find((x) => x.key === key);
 
   function paintHead(m: LoopsModel): HTMLElement {
+    // loops off in this build: the title and fold key only (no counts, no keep-alive line, no Pause all)
+    if (loopsOff(m)) return el(doc, 'div', null, el(doc, 'div', { class: 'lp-head' }, el(doc, 'span', { class: 'title' }, 'Loops'), el(doc, 'span', { class: 'spacer' }), el(doc, 'button', { class: 'key quiet', type: 'button', 'data-lp': 'fold', title: 'Fold to the edge tab (Esc)' }, 'esc')));
     // Pause all only when there is a loop to pause; after it, resuming is per loop (Resume · presence in each detail)
     const kill = m.pausedAll
       ? el(doc, 'span', { class: 'meta' }, 'resume each loop from its detail · presence')
@@ -183,6 +185,10 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
 
   function paintList(m: LoopsModel): HTMLElement {
     const body = el(doc, 'div', { class: 'lp-body' });
+    if (loopsOff(m)) {
+      body.appendChild(el(doc, 'p', { class: 'meta lp-empty' }, LOOPS_OFF_TEXT));
+      return el(doc, 'div', { class: 'lp' }, paintHead(m), body);
+    }
     if (!m.loops.length) body.appendChild(el(doc, 'p', { class: 'meta lp-empty' }, 'No loops yet. An agent can write one in a session, or add .paradigm/loops/<id>.loop.json; nothing runs until you trust it.'));
     if (waitingOnly) body.appendChild(el(doc, 'div', { class: 'lp-gh' }, 'waiting for trust only · ', el(doc, 'button', { class: 'key quiet', type: 'button', 'data-lp': 'show-all' }, 'show all')));
     for (const g of loopGroups(m, Date.now()).map((x) => (waitingOnly ? { ...x, rows: x.rows.filter((r) => item(r.key)?.state === 'waiting-trust') } : x)).filter((x) => x.rows.length && (!waitingOnly || x.repo === null))) {
@@ -285,7 +291,7 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
     leaf.className = `lp-leaf${arrive ? ' arrive' : ''}`;
     arrive = false;
     leaf.appendChild(el(doc, 'div', { class: 'gut', 'aria-hidden': 'true' }));
-    if (wide) {
+    if (wide && !loopsOff(model)) {
       const split = el(doc, 'div', { class: 'leaf-split' }, paintList(model), sel ? paintDetail(sel) : el(doc, 'div', { class: 'lp-detail' }, el(doc, 'p', { class: 'meta lp-pick' }, 'Pick a loop to see its graph, last loop run and keys.')));
       leaf.appendChild(split);
     } else leaf.appendChild(sel && detailOnly ? paintDetail(sel) : paintList(model));
@@ -311,7 +317,7 @@ export function mountLoopsView(d: LoopsViewDeps): LoopsView {
     if (!open) return;
     open = false;
     repaint();
-    (returnTo && returnTo.isConnected ? returnTo : tab).focus();
+    (returnTo && returnTo.isConnected ? returnTo : tab.hidden ? doc.body : tab).focus();
   }
   function foldTrust(): void {
     unfolded = null;

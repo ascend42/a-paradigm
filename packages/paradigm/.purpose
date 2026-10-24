@@ -635,6 +635,14 @@ components:
     description: v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing.
     file: src/commands/calibrate.ts
     type: command
+  routing-backfill:
+    description: Gnomon orchestration Phase 0 — routing cold start. Mines git history (90 days anchored to the HEAD commit date, no merges) for `Symbols:` trailers, maps each symbol to the nearest .purpose that defines it (area = POSIX dir of that .purpose; unresolved -> "(unowned)"), and counts commits, fix( rework and reverts per area into .paradigm/learned/routing.json as a kind:'history-only' risk-ordering prior (NOT Beta arm outcomes), with cutoffSha/cutoffDate, per-area lastCommitDate + settledCommits (14-day settle lag), a coverage block (commitsTotal/WithTrailer/SkippedNoTrailer/commitsUnique/purposeFilesSkipped) and the (unowned) bucket flagged unowned:true. Trailers and reverts honoured only in the final message block; .purpose parsing is lstat+regular-file+1MiB capped. Counts only (no subjects/authors/prompt text; headSha/cutoffSha persisted), deterministic and idempotent (sorted keys, no timestamps). A revert without its own trailer inherits the reverted commit's symbols. Git via argv with NUL/\x01 delimiters. Does not write ~/.paradigm/learned/routing-prior.json.
+    file: src/core/routing-backfill.ts
+    type: utility
+  learn-routing-command:
+    description: `paradigm learn routing --backfill` — runs #routing-backfill and reports areas via cli-output helpers.
+    file: src/commands/learn-routing.ts
+    type: command
 signals:
   init-success:
     description: Paradigm initialized successfully

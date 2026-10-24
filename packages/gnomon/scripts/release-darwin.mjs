@@ -63,6 +63,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkReleaseDist } from './prepack.mjs';
 
 export const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PACKAGES = path.resolve(PKG, '..');
@@ -192,6 +193,22 @@ export function stageKernel(pkg, contents) {
   copyTree(path.join(pkg, 'dist'), path.join(dst, 'dist'));
   copyFileSync(path.join(pkg, 'package.json'), path.join(dst, 'package.json'));
   return dst;
+}
+
+/**
+ * TD-2026-10-24-447 (#loops-gate), Aegis review: the kernel a release app carries MUST be a release build (the pins and
+ * the loops gate are compiled into the bundle). Loads `<kernel>/dist/index.js` and throws unless its mode is `release`
+ * and its loops gate stays OFF even with GNOMON_LOOPS=1. Run on the staged kernel and on the assembled app's.
+ */
+export async function assertReleaseKernel(kernelDir, version, check = checkReleaseDist) {
+  const dist = path.join(kernelDir, 'dist');
+  const { problems, module: m } = await check(dist, version);
+  if (problems.length || !m) throw new Error(`REFUSING TO SHIP: the kernel at ${kernelDir} is not a release build: ${problems.join('; ') || 'dist did not load'}`);
+  const pins = m.releasePins?.loadedReleasePins?.();
+  if (pins?.mode !== 'release') throw new Error(`REFUSING TO SHIP: the kernel at ${kernelDir} is a ${pins?.mode ?? 'unknown'} build, not a release`);
+  const gate = m.loopsGate?.resolveLoopsEnabled;
+  if (typeof gate !== 'function') throw new Error(`REFUSING TO SHIP: the kernel at ${kernelDir} carries no loops gate (dist/index.js exports no loopsGate)`);
+  if (gate({ env: { GNOMON_LOOPS: '1' } }) !== false) throw new Error(`REFUSING TO SHIP: loops are ON in the kernel at ${kernelDir} (the 8.0.1 release ships them disabled)`);
 }
 
 /** Stage the voice client: its package.json, dist, models manifest, and sherpa-onnx-node + this arch's platform package. */
@@ -416,6 +433,7 @@ export async function release(argv) {
       writeFileSync(path.join(k, 'dist', 'cli', 'gnomon.js'), '// placeholder kernel\n');
       copyFileSync(path.join(PKG, 'package.json'), path.join(k, 'package.json'));
     } else stageKernel(PKG, stage);
+    if (!o.dryRun) await assertReleaseKernel(path.join(stage, LAYOUT.kernel), version);
     const voicePkg = path.join(PACKAGES, 'gnomon-voice');
     if (o.dryRun && !existsSync(path.join(voicePkg, 'dist', 'cli.js'))) {
       mkdirSync(path.join(stage, LAYOUT.voice, 'dist'), { recursive: true });
@@ -455,6 +473,7 @@ export async function release(argv) {
     const outApp = path.join(o.out, APP_NAME);
     plan.push(`assemble ${outApp}`);
     assembleApp({ skeletonApp: skeleton, stage, helperApp, voiceIoApp, outApp, ditto: process.platform === 'darwin' });
+    if (!o.dryRun) await assertReleaseKernel(path.join(outApp, 'Contents', LAYOUT.kernel), version);
     const missing = missingFromLayout(outApp);
     if (missing.length) throw new Error(`the assembled app is missing ${missing.join(', ')}`);
     // 8. sign the app (no --deep: nested code is signed already), verify, notarize

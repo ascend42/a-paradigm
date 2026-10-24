@@ -84,6 +84,7 @@ import { StrictnessBook, StrictnessControl, strictnessSourceOf } from '../broker
 import { StandingGrantBook, StandingGrants, standingSourceOf } from '../broker/standing-grant.js';
 import { repoKeyOf } from '../supervisor/repo-hooks.js';
 import { paradigmCliResolver, wireLoops } from '../loops/wire.js';
+import { resolveLoopsEnabled } from '../loops/gate.js'; // #loops-gate
 import type { CardV1 } from '@a-company/gnomon-contracts';
 import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse, FUSE_RESTORE_KINDS, type FuseRow } from '../budget/fuse.js';
@@ -165,6 +166,7 @@ import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
 import { ModsAdmin, type ModAsker } from '../modhost/mods-admin.js';
 import { DeskTally } from '../desk/desk-stats.js';
+import { EconomyTally } from '../desk/turn-economy.js';
 import { FolderPicker, type ChooserRunner, type FolderAsker, type FolderRow } from '../folders/folders.js';
 import { spawn as spawnChild } from 'node:child_process';
 
@@ -630,6 +632,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         try {
           if (mcpCardsTimer) clearInterval(mcpCardsTimer);
           modPickup.stop();
+          economyTally.close(); // #turn-economy: stop folding commits
         } catch {
           /* shutdown before the pickup existed */
         }
@@ -1343,6 +1346,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // #mods-admin (the GUI Mods panel): the `gnomon mod` verbs as human requests + status.mods.installed/available,
   // with the Desk counts of `gnomon desk stats` kept live by #desk-stats' DeskTally
   const deskTally = new DeskTally({ log, kernelPrincipal });
+  // #turn-economy: the derived per-turn economy view (no log kind of its own), seeded on first read, fed by onCommit
+  const economyTally = new EconomyTally({ log, kernelPrincipal });
   const modsAdmin = new ModsAdmin({
     home,
     trust: authority,
@@ -1363,7 +1368,10 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     const st = web?.status() as { listening?: boolean; port?: number } | undefined;
     return [...(st?.listening && typeof st.port === 'number' ? [st.port] : []), ...mods.loopbackPorts()];
   };
-  const loops = wireLoops({ home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop'),
+  // #loops-gate (TD-2026-10-24-447): resolved ONCE here from the compiled release define and GNOMON_LOOPS (honoured only in a dev build)
+  const loopsEnabled = resolveLoopsEnabled();
+  if (!loopsEnabled) emit({ kind: 'daemon.desk', event: 'loops.disabled', reason: 'not-in-this-build', release: loadedReleasePins().mode !== 'dev' });
+  const loops = wireLoops({ enabled: loopsEnabled, home, log, kernelPrincipal, broker, root: authority, paradigmCli: paradigmCliResolver(), scheduler, holdIdle: () => idle.hold('loop'),
     // step 8 (#loop-runner): judge/summarize steps open unattended local sessions only through supervisor.openLoop
     model: { openLoop: (ref, req) => supervisor.openLoop(ref, req), configured: () => ({ endpoints: (localCfg.config?.endpoints ?? []).filter((e) => e.loops === true).map((e) => e.id), runner: localCfg.config?.runner !== undefined, any: localCfg.config?.endpoints.length ?? 0 }), settled: (runId) => supervisor.loopSessionsSettled(runId) },
     strictness: (repoKey) => ({ level: strictness.level(repoKey), mode: runModes.repoView(repoKey).effective }),

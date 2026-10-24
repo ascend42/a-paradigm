@@ -1,0 +1,7 @@
+id: WL-orchestrator-2026-10-24-399
+timestamp: '2026-10-24T08:23:52.116Z'
+agent: orchestrator
+task_ref: T-2026-10-21-029
+summary: Settlement of task DAG T-2026-10-21-029 (crashed)
+outcome: partial
+symbols_touched: []
