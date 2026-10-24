@@ -1,0 +1,443 @@
+{
+  "schema": "gnomon-cwd-hint-vectors:v1",
+  "note": "#bare-entry prefill/escape rule (Aegis L3): prefill iff every code point is shown as itself; read by packages/gnomon/test/bare-entry.test.ts and packages/gnomon-gui/test/gui.test.ts; checked and displayed on NFC(p), prefilled as p byte for byte, caps counted on p",
+  "cases": [
+    {
+      "name": "plain",
+      "cps": [
+        47,
+        85,
+        115,
+        101,
+        114,
+        115,
+        47,
+        109,
+        97,
+        116,
+        116,
+        47,
+        109,
+        121,
+        32,
+        114,
+        101,
+        112,
+        111
+      ],
+      "prefill": true,
+      "escaped": []
+    },
+    {
+      "name": "quotes",
+      "cps": [
+        47,
+        114,
+        47,
+        34,
+        113,
+        39,
+        117,
+        111,
+        116,
+        101
+      ],
+      "prefill": true,
+      "escaped": []
+    },
+    {
+      "name": "accented-nfc",
+      "cps": [
+        47,
+        114,
+        47,
+        99,
+        97,
+        102,
+        233
+      ],
+      "prefill": true,
+      "escaped": []
+    },
+    {
+      "name": "cjk",
+      "cps": [
+        47,
+        114,
+        47,
+        12503,
+        12525
+      ],
+      "prefill": true,
+      "escaped": []
+    },
+    {
+      "name": "newline",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        10,
+        98
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{a}"
+      ]
+    },
+    {
+      "name": "esc",
+      "cps": [
+        47,
+        114,
+        47,
+        27,
+        91,
+        50,
+        74
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{1b}"
+      ]
+    },
+    {
+      "name": "tab",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        9
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{9}"
+      ]
+    },
+    {
+      "name": "nul",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        0
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{0}"
+      ]
+    },
+    {
+      "name": "c1",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        133
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{85}"
+      ]
+    },
+    {
+      "name": "rlo",
+      "cps": [
+        47,
+        114,
+        47,
+        8238,
+        116
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{202e}"
+      ]
+    },
+    {
+      "name": "lri",
+      "cps": [
+        47,
+        114,
+        47,
+        8294
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{2066}"
+      ]
+    },
+    {
+      "name": "zwsp",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        8203
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{200b}"
+      ]
+    },
+    {
+      "name": "zwj",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        8205
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{200d}"
+      ]
+    },
+    {
+      "name": "bom",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        65279
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{feff}"
+      ]
+    },
+    {
+      "name": "soft-hyphen",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        173
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{ad}"
+      ]
+    },
+    {
+      "name": "cgj-034f",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        847
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{34f}"
+      ]
+    },
+    {
+      "name": "hangul-choseong-filler-115f",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        4447
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{115f}"
+      ]
+    },
+    {
+      "name": "hangul-filler-3164",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        12644
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{3164}"
+      ]
+    },
+    {
+      "name": "vs16-fe0f",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        65039
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{fe0f}"
+      ]
+    },
+    {
+      "name": "interlinear-fff9",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        65529
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{fff9}"
+      ]
+    },
+    {
+      "name": "tag-e0001",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        917505
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{e0001}"
+      ]
+    },
+    {
+      "name": "tag-e0041",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        917569
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{e0041}"
+      ]
+    },
+    {
+      "name": "line-separator",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        8232
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{2028}"
+      ]
+    },
+    {
+      "name": "nbsp",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        160
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{a0}"
+      ]
+    },
+    {
+      "name": "replacement-fffd",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        65533
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{fffd}"
+      ]
+    },
+    {
+      "name": "backslash",
+      "cps": [
+        47,
+        114,
+        47,
+        97,
+        92,
+        98
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\\\"
+      ]
+    },
+    {
+      "name": "combining-acute-nfd",
+      "cps": [
+        47,
+        114,
+        47,
+        99,
+        97,
+        102,
+        101,
+        769
+      ],
+      "prefill": true,
+      "escaped": [],
+      "note": "composes under NFC to U+00E9: checked and shown as NFC, prefilled as the original bytes"
+    },
+    {
+      "name": "orphan-combining-mark",
+      "cps": [
+        47,
+        114,
+        47,
+        769,
+        97
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{301}"
+      ]
+    },
+    {
+      "name": "uncomposable-mark",
+      "cps": [
+        47,
+        114,
+        47,
+        120,
+        769
+      ],
+      "prefill": false,
+      "escaped": [
+        "\\u{301}"
+      ]
+    },
+    {
+      "name": "nfd-hangul-composes",
+      "cps": [
+        47,
+        114,
+        47,
+        4370,
+        4449,
+        4523
+      ],
+      "prefill": true,
+      "escaped": []
+    }
+  ]
+}

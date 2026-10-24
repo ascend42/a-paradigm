@@ -1,0 +1,53 @@
+id: TD-2026-10-19-908
+timestamp: '2026-10-19T08:52:04.669Z'
+title: Sessions survive a kernel update by drain and resume, built before dogfood GA (Orca Adapt 7)
+decision: >-
+  Build drain and resume before dogfood GA. On an update, the old kernel stops starting new turns, lets each session
+  reach a turn boundary (or interrupts it after a deadline), writes session.drained{uuid, reason:'upgrade'}, and exits.
+  The new kernel reopens each drained session with `claude --resume <uuid>` through the existing respawn path,
+  re-running the law-7 preflight, layersHash and the permit rules. Claude sessions come first and gnomon-local second.
+  Invariants:
+
+  - Cached approval unlocks and voice arms never carry over to the new kernel.
+
+  - Permits are re-attributed, never minted.
+
+  - Pending cards are raised again.
+
+  - Per-peer feature gates are negotiated in hello features, inside serverSig/auth, and a missing feature means refuse.
+
+  Live process handover stays an unprobed idea for after Move 2.
+rationale: >-
+  Founder ruling, 2026-10-19 decision dialog. Today an update kills every session, which hurts most while dogfooding and
+  encourages skipping updates. Drain and resume reuses the existing respawn path and keeps session ownership in the
+  single law-7 kernel. Live handover is unprobed (only socket fd passing has been proven), would be hard on Windows, and
+  transfers trust from one kernel to another.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: proposed
+  - id: aegis
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Live handover of child pipes
+    rejected_because: unprobed, large cost, a trust transfer between kernels
+  - option: Per-session stdio holder process
+    rejected_because: moves session custody out of the kernel
+  - option: Defer to 8.1
+    rejected_because: every update kills sessions during dogfood
+symbols_affected:
+  - $daemon-lifecycle
+  - '#backend-adapter'
+status: active
+tags:
+  - gnomon
+  - orca-audit
+  - daemon-lifecycle
+  - T-2026-10-19-010

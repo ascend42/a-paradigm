@@ -1,0 +1,28 @@
+id: L-2026-10-17-ascend-085000-001
+type: human-note
+timestamp: '2026-10-17T08:50:00.710Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Founder directive: stringent Paradigm symbols throughout the Gnomon build'
+summary: |-
+  The founder asked that the Gnomon build be stringent about Paradigm symbols, so the map of features and functionality stays easy to keep and update. Rules:
+  - every new component, flow, gate, signal or aspect gets its .purpose entry in the same change;
+  - the spec's Appendix A node ids are reused verbatim in .purpose files, code headers and commit Symbols trailers;
+  - `paradigm purpose validate` and `paradigm index` run before every commit.
+
+  The running PR-3 and PR-5 builders were told. It is saved as a feedback memory so every builder prompt carries it. Proposed enforcement: a gnomon test that cross-checks spec Appendix A nodes against .purpose symbols for implemented code, so drift fails CI.
+symbols_touched:
+  - '#paradigm-harness'
+tags:
+  - paradigm-8
+  - gnomon
+  - symbols
+  - process
+linked_lore:
+  - L-2026-10-17-ascend-084905-001
+git_context:
+  ref: ffad9be1b1cd3b67e93986f98411976ff1df9175
+  branch: feat/gnomon
+  dirty: true

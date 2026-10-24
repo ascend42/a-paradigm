@@ -1,0 +1,118 @@
+{
+  "probe": "p14b-web-handoff",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "design": "kernel listens on 127.0.0.1:53834 (pauseOnConnect), hands each accepted socket to the child via subprocess.send('conn', socket)",
+    "profileNote": "the P14 pattern profile (p14-link-outbound profileFor(null): deny-default, no network-* rule), not the shipped transportProfileSbpl; the shipped profile is covered by test/web-sandbox.test.ts (T-2026-10-18-020 (i)-(iii), (v))",
+    "lan": "en0",
+    "profile": "(version 1)\n(deny default)\n(allow process-exec (literal \"<node>\"))\n(allow file-read* (literal \"/\") (subpath \"/opt/homebrew/Cellar/node/26.0.0\") (subpath \"/opt/homebrew/Cellar/llhttp/9.4.1/lib\") (subpath \"/opt/homebrew/Cellar/libuv/1.53.0/lib\") (subpath \"/opt/homebrew/Cellar/ada-url/3.4.4/lib\") (subpath \"/opt/homebrew/Cellar/simdjson/4.6.4/lib\") (subpath \"/opt/homebrew/Cellar/brotli/1.2.0/lib\") (subpath \"/opt/homebrew/Cellar/c-ares/1.34.6/lib\") (subpath \"/opt/homebrew/Cellar/hdrhistogram_c/0.11.9/lib\") (subpath \"/opt/homebrew/Cellar/merve/1.2.2_1/lib\") (subpath \"/opt/homebrew/Cellar/nbytes/0.1.4/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp2/1.69.0/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp3/1.16.0/lib\") (subpath \"/opt/homebrew/Cellar/libngtcp2/1.23.0/lib\") (subpath \"/opt/homebrew/Cellar/sqlite/3.53.4/lib\") (subpath \"/opt/homebrew/Cellar/uvwasi/0.0.23/lib\") (subpath \"/opt/homebrew/Cellar/zstd/1.5.7_1/lib\") (subpath \"/opt/homebrew/Cellar/openssl@3/3.6.3/lib\") (subpath \"/opt/homebrew/Cellar/icu4c@78/78.3/lib\") (subpath \"/opt/homebrew/opt\") (subpath \"/opt/homebrew/Cellar\"))\n(allow file-read* (literal \"/opt/homebrew/Cellar/node/26.0.0/bin/node\") (literal \"/dev/null\") (literal \"/dev/urandom\") (literal \"/dev/random\") (subpath \"/usr/lib\") (subpath \"/System/Library\") (subpath \"/System/Cryptexes\") (subpath \"/private/var/db/dyld\") (subpath \"/Library/Apple/System/Library\"))\n(allow file-read-metadata)\n(allow file-write-data (literal \"/dev/null\"))\n(allow sysctl-read)",
+    "childStarted": true,
+    "i_fullDuplex": {
+      "clientReceived": 4194304,
+      "clientShaOk": true,
+      "childReceived": 4194304,
+      "childShaOk": true,
+      "wrote": true,
+      "childSawRemote": "127.0.0.1",
+      "childSawLocal": "127.0.0.1",
+      "wallMs": 7,
+      "ok": true
+    },
+    "ii_peerCloseSeen": true,
+    "iii_repeatedHandoffs": {
+      "count": 5,
+      "reps": [
+        {
+          "i": 0,
+          "reply": "pong:ping0",
+          "childGot": "ping0",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 1,
+          "reply": "pong:ping1",
+          "childGot": "ping1",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 2,
+          "reply": "pong:ping2",
+          "childGot": "ping2",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 3,
+          "reply": "pong:ping3",
+          "childGot": "ping3",
+          "peerClose": true,
+          "ok": true
+        },
+        {
+          "i": 4,
+          "reply": "pong:ping4",
+          "childGot": "ping4",
+          "peerClose": true,
+          "ok": true
+        }
+      ],
+      "ok": true
+    },
+    "iv_networkDenies": {
+      "results": {
+        "listen_0000": "EPERM",
+        "listen_v6any": "EPERM",
+        "listen_lan": "EPERM",
+        "listen_loop4": "EPERM",
+        "listen_loop6": "EPERM",
+        "listen_nohost": "EPERM",
+        "udpbind_0000": "EPERM",
+        "udpbind_v6any": "EPERM",
+        "udpbind_lan": "EPERM",
+        "udpbind_loop4": "EPERM",
+        "connect_kernel": "EPERM",
+        "connect_other": "EPERM",
+        "unixSocket": "EPERM"
+      },
+      "ok": true
+    },
+    "kernelAccepted": 6,
+    "v_unsandboxedControl": {
+      "results": {
+        "listen_0000": "listening",
+        "listen_v6any": "listening",
+        "listen_lan": "listening",
+        "listen_loop4": "listening",
+        "listen_loop6": "listening",
+        "listen_nohost": "listening",
+        "udpbind_0000": "bound",
+        "udpbind_v6any": "bound",
+        "udpbind_lan": "bound",
+        "udpbind_loop4": "bound",
+        "connect_kernel": "connected",
+        "connect_other": "connected",
+        "unixSocket": "connected"
+      },
+      "acceptedDuringControl": 1,
+      "ok": true
+    }
+  },
+  "specRefs": [
+    "§15.5 transport",
+    "§11.2 rule 1",
+    "§A.7",
+    "§19.1 M1.0 P14b-web",
+    "research paradigm-8/37 P14b",
+    "T-2026-10-18-020",
+    "T-2026-10-18-017"
+  ],
+  "at": "2026-10-18T17:30:28.722Z"
+}

@@ -1,0 +1,45 @@
+id: L-2026-10-17-ascend-210158-001
+type: agent-session
+timestamp: '2026-10-17T21:01:58.293Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: D83 kernel-log change landed after 3 review rounds (first PR through the new review process)
+summary: |-
+  This is the first PR under T-2026-10-17-003 (fresh-context reviewer plus required Aegis, max 3 rounds, diff-only after round 1, findings verified by the orchestrator). It landed with Aegis APPROVE in round 3. Rounds-to-pass: 3.
+
+  Round 1 found 5+8 Importants, including:
+  - a same-boot tamper downgradable to unclean-reboot (no re-stamp on open);
+  - the clean-close check reading the file anchor;
+  - an unsigned gap row verifying;
+  - a clean-close test that could not fail;
+  - a p99 that was the max at n=60.
+
+  Round 2 left 2+4 Importants: in-memory-only fault markers, one-directional kernel-key binding, a keyless rotation break, and an interrupted-ack brick. Round 3 closed them. The orchestrator independently re-verified key findings each round and re-ran the suites before commit (gnomon 168, contracts 125).
+
+  Founder decisions along the way: D84 (dev-only no-recovery window) and D85 (file-anchor lag relaxed only across a verified reboot; task created with Aegis's exact rule and 10 fixtures). The process worked: reviewers found real security bugs a single builder pass missed, and the cap held at 3.
+symbols_touched:
+  - '#kernel-log'
+learnings:
+  - Two independent reviewers (general + security) on security-critical kernel code found disjoint real bugs; the builder alone shipped a tamper-downgrade path and tests that could not fail.
+  - Ask reviewers to judge whether each test can fail; 'the test passes' is not evidence when the test is hollow.
+verification:
+  status: pass
+  details:
+    gnomon: 168
+    contracts: 125
+    review: Aegis APPROVE round 3
+    roundsToPass: 3
+tags:
+  - paradigm-8
+  - gnomon
+  - kernel-log
+  - review
+  - process
+linked_lore:
+  - L-2026-10-17-ascend-210023-001
+git_context:
+  ref: 2f51d49122fc1424ae0c6b76c4ce0ebcd0d6cf14
+  branch: feat/gnomon
+  dirty: true

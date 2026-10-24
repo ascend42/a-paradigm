@@ -1,0 +1,113 @@
+id: TD-2026-10-16-950
+timestamp: '2026-10-16T05:04:54.770Z'
+title: 'Paradigm 8.0 = Gnomon: a kernel beneath Claude Code, adjudicating an agent armada'
+decision: >-
+  1. Name: Gnomon (@a-company/gnomon). Shape: Heddle + Shuttle. A small kernel daemon underneath Claude Code, one per
+  user, starts on first use, exits when idle. The Shuttle Mod band is its display. Claude Code stays the shell and gold
+  standard. constellation, flow, Conductor, atelier and Platform become clients. deepseek-harness, Codex and local
+  models sit behind a backend adapter.
+
+  2. Kernel primitives: identity/keys, a hash-chained kernel log, the session runner, approvals/HUMAN_ONLY with the
+  budget fuse inside, the scheduler, and manifest/refs. Userland: symbol graph, notebooks, calibration, contracts
+  compiler, Warpline engine, neurons, lore.
+
+  3. Ratified: the kernel log is separate from Warpline's fabric and linked by causes[]. Spawn injects one logged
+  pointer line to `warpline status` (F4). The kernel issues an hsid with a cc:<uuid> alias. Conductor's Swift runner is
+  deleted.
+
+  4. The Shuttle band reads only authenticated kernel socket events; it never reads status files.
+
+  5. Six laws: no spawn without a permit; honesty is CI; tiny ABI; reversible by construction; nothing spends by
+  default; trust posture.
+
+  6. Spec-as-contract: deterministic compile to contract.v1; agents claim, the kernel certifies. Checks per project
+  type:
+     - Warpline projects: tests + Warpline admission + a key-proven reviewer.
+     - Git projects: tests + reviewer + clean merge with CI green.
+     - Disagreement becomes a KNOT.
+  7. Warpline is opt-in per project; otherwise standard git.
+
+  8. Learning loop: credit, not popularity; day-one joinable learning logs with denominators; a calibrated reviewer
+  keyed by (repo, mode); liveness gates plus a reader. The loop reads only the kernel log.
+
+  9. Build the scalable, proper version first; iterate live with ample internal logs.
+
+  10. 8.0 is for the founder first; 8.1 is for the world.
+rationale: >-
+  Decided in the Atelier deep decision dialog (session 2026-10-15-paradigm-8-spec). Inputs:
+
+  - Four scouts: Odysseus, deepseek-harness, landscape, own tool family.
+
+  - Arky's kernel passes; Loid's learning-loop and direct views.
+
+  - Fable's vision, re-read and naming passes.
+
+  - Inside and outside inspections of ruflo (research .paradigm/research/paradigm-8/00-13).
+
+
+  Key evidence:
+
+  - The founder's tools already form a harness in pieces: three drifted Claude runners (Conductor passes
+  --dangerously-skip-permissions), three approval UIs, six schedulers, five ledgers.
+
+  - The market converges on plugins/skills/hooks/worktrees, but nobody adjudicates merges. deepseek-harness refuses to;
+  ruflo's coordination_sync is a simulated stub.
+
+  - Ruflo proves demand (~180k weekly installs) and the failure modes: quota drain from daemons (#2661), stub tools,
+  uninstall persistence, and a CVE.
+
+  - Paradigm's own learning loop is a popularity loop: 384 of 396 notebook entries are never applied, and injection has
+  been dark since 2026-07-22.
+
+
+  Founder overrides:
+
+  - Socket-only band feed, over the files-first recommendation.
+
+  - A name from the family intersection, over Heddle.
+
+  - Warpline opt-in per project.
+
+  - Build the proper version first.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: fable
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: 'Bolt: Paradigm as a distro on deepseek-harness'
+    rejected_because: Bets the kernel on a developer-preview plugin API; kept only as a backend adapter
+  - option: 'Shuttle alone: Mods only, no daemon'
+    rejected_because: ruflo shows Mod panes still need a daemon feeding them; cross-session budget needs shared state
+  - option: Daemonless kernel
+    rejected_because: Kept only as a documented degrade path; consolidation and budgets need an always-available owner
+  - option: 'Loom: breadth-first meta-harness (hundreds of tools, roleplayed consensus)'
+    rejected_because: ruflo's lane; users report it does not do the work
+  - option: Distro on ruflo
+    rejected_because: No stable kernel, daily releases, 477-tool surface would drown F4
+  - option: Names Heddle, Orrery, Spindle, Treadle, Jacquard
+    rejected_because: >-
+      Founder wanted the intersection of purpose/paradigm/warpline/neurons/constellation/atelier; Gnomon touches five of
+      six and its etymology is the positioning
+symbols_affected:
+  - '#paradigm-harness'
+  - '#warpline'
+  - '#conductor'
+  - '#notebook-loader'
+status: active
+tags:
+  - paradigm-8
+  - gnomon
+  - harness
+  - architecture

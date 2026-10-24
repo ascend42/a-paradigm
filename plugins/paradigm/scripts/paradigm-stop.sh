@@ -12,7 +12,11 @@
 # Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
 case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
 [ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin Stop 30000 10000
+# Per-section timing -> .paradigm/events/stop-timing.jsonl (no-ops without the monitor)
+command -v _pm_mark >/dev/null 2>&1 || _pm_mark() { :; }
+command -v _pm_count >/dev/null 2>&1 || _pm_count() { :; }
 
+_pm_mark read-input
 INPUT=$(cat)
 
 # Extract cwd from input (try jq first, fallback to grep)
@@ -34,6 +38,7 @@ fi
 cd "$CWD" || exit 0
 
 # Get modified files (uncommitted changes)
+_pm_mark git-diff
 MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
 if [ -z "$MODIFIED" ]; then
   # Clean up session markers on pass (no modifications)
@@ -46,6 +51,7 @@ fi
 SCRIPT_DIR=$(dirname "$0")
 . "$SCRIPT_DIR/paradigm-common.sh"
 
+_pm_mark verdict
 # --- Report auto-fixes if any ---
 if [ "$AUTO_FIX_COUNT" -gt 0 ]; then
   echo "" >&2

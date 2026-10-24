@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-21T00:02:18.448Z'
+generated: '2026-10-24T01:12:57.895Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -55,7 +55,7 @@ protocols:
       - backend
   - id: P-add-command-with-file-output
     name: Add a CLI command that writes files
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - command writes files
@@ -248,7 +248,7 @@ protocols:
       - events
   - id: P-add-sentinel-mcp-integration
     name: Add Sentinel MCP tools
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - sentinel mcp tool
@@ -326,7 +326,7 @@ protocols:
       - reindex
   - id: P-add-tool-with-sentinel-schema
     name: Add an MCP tool for Sentinel data
-    status: current
+    status: stale
     last_verified: '2026-03-01T12:00:00Z'
     trigger:
       - sentinel tool
@@ -458,6 +458,22 @@ protocols:
       - bug
       - agent-protocol
       - calibration
+  - id: P-gnomon-table-talk-voice-replies
+    name: Gnomon table talk (reply to a listening human)
+    status: stale
+    last_verified: '2026-10-20T06:00:00Z'
+    trigger:
+      - table talk
+      - voice attached
+      - gnomon voice reply
+      - speak block
+      - spoken reply
+      - reply out loud
+    tags:
+      - gnomon
+      - voice
+      - table-talk
+      - conversation
   - id: P-record-lore
     name: Record a lore entry
     status: stale
@@ -520,7 +536,7 @@ protocols:
       - qa
       - battle-test
 health:
-  total: 39
-  current: 20
-  stale: 15
+  total: 40
+  current: 17
+  stale: 19
   broken: 4

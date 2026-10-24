@@ -1,0 +1,41 @@
+id: L-2026-10-16-ascend-211936-001
+type: human-note
+timestamp: '2026-10-16T21:19:36.990Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Correction: Gnomon is a localhost GUI (terminal-like), not an in-terminal TUI'
+summary: |-
+  The founder clarified that Gnomon is a full GUI tool that feels terminal-like, running on localhost in the browser and possibly as a desktop app later. It is not an in-terminal TUI. That corrects the reading of P8-D26 and D32 (pi-tui as the shell renderer).
+
+  Other founder decisions in this exchange:
+  - CLI only; no full in-terminal UI.
+  - Persona voice based on Simplified Technical English.
+  - No restyling pass; brief by instruction.
+
+  Spec v3.2 is needed for the localhost GUI shell. It must cover localhost web security: origin lock, token, and DNS-rebinding protection.
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D50
+    decision: Gnomon's shell is a terminal-like GUI served by the local kernel on localhost and opened in the browser (desktop wrapper optional later); supersedes the in-terminal reading of P8-D26 and P8-D32
+    rationale: 'Founder: "i was under the notion that we were building a full gui tool that could be just browser or as a desktop app eventualy" and "i was under the belief this would always just be running on localhost"'
+  - id: P8-D51
+    decision: CLI only for the terminal (gnomon spawn/status/approve/replay); no full in-terminal UI
+    rationale: Founder choice.
+  - id: P8-D52
+    decision: Default persona voice follows Simplified Technical English (ASD-STE100) style rules with a length budget; no restyling pass, brevity by instruction
+    rationale: 'Founder: "no restyling, brief sounds fine and fair people are wanting for that STE type speak"'
+tags:
+  - paradigm-8
+  - gnomon
+  - gui
+  - correction
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-211329-001
+git_context:
+  ref: eddf85fcd1dfdd1a63d23c5879183815e16588c6
+  branch: ideate/paradigm-8
+  dirty: true

@@ -1,0 +1,40 @@
+id: L-2026-10-17-ascend-063541-001
+type: human-note
+timestamp: '2026-10-17T06:35:41.258Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Founder rulings P8-D59..D63: voice-approval mechanism shape and the librarian plan'
+summary: The founder resolved the divergences between Aegis (26) and Arky (27) and approved the librarian panel (28). The combined mechanism goes into spec v3.4.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gnomon-voice'
+decisions:
+  - id: P8-D59
+    decision: 'Hybrid targeting: reversible cards are targeted by spoken ordinal or closed label against the read-back deck (Arky A26-05; eyes-free). Gate-class cards need the kernel''s secret per-card handle word, shown only to the arming connection or spoken into headphones, plus the 2-word challenge (Aegis S26-H3, §2.3). A free-word target always goes two-step.'
+    rationale: 'Founder picked the recommended hybrid: hands-free speed where a mistake is reversible, and a kernel-verifiable secret where it is not.'
+  - id: P8-D60
+    decision: 'The gate arm window is user-configurable (root-signed config). Defaults are Aegis''s: 5 min hard cap, at most 3 gate decisions per arm, headphones required, 2-word challenge, 5 s hold. The configurable ceiling is 60 min (Arky''s max). The reversible arm defaults to 15 min idle and a 60 min hard cap, configurable up to 240 min.'
+    rationale: 'Founder: customized time window, defaults are fine. Bounds keep a misconfiguration from becoming an all-day gate arm.'
+  - id: P8-D61
+    decision: 'KNOT resolve and verdict accept/reject by voice need a separate per-project sub-opt-in, off by default even when toggle 2 is on (Aegis S26-M7). They follow the gate-arm rules when enabled and carry via: voice into Warpline attribution.'
+    rationale: They are content judgments on a diff; hearing alone proves who spoke, not that the human read it.
+  - id: P8-D62
+    decision: 'Toggles are root-signed grant rows grant.voice-approvals{repo, classes} (Arky A26-02). Phrases, timings and the binary pin go in root-signed ~/.gnomon/config.yaml. Narrowing (turning off) needs no presence. Never in project.yaml. Hand-only even with every toggle: install, use-api-token, always, voice-arm, grant, root-signed verbs, voice-share, flagged cards.'
+    rationale: Toggles are capabilities, so they are grants; Aegis and Arky agree on custody and the forbidden set. The orchestrator chose grant rows over config.yaml.
+  - id: P8-D63
+    decision: 'Librarian (Atelier N2 follow-up): no new agent. Activate archivist ''Index'' for guides and READMEs. Widen Loid''s memory review to research, specs, lore and decisions. Rune adds a dead-reference staleness test. Branches and stashes go on Cid''s stale-open board. Everything is advisory and founder-decided. Promote to a dedicated agent only if a 70% catch rate on replayed hand supersessions and a 50% keep rate hold and the work crowds Loid.'
+    rationale: 'Panel 28: the role exists (Index), and TD-467 and TD-110 route new governance to existing owners by tense.'
+tags:
+  - paradigm-8
+  - gnomon
+  - voice
+  - decision
+  - librarian
+linked_lore:
+  - L-2026-10-17-ascend-062138-001
+git_context:
+  ref: 382646a973d90a8f6a9511f3cedee1cc08c39863
+  branch: ideate/paradigm-8
+  dirty: true

@@ -1,0 +1,39 @@
+id: L-2026-10-20-ascend-213127-001
+type: human-note
+timestamp: '2026-10-20T21:31:27.830Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 9: founder ideas, a standardized mod naming structure and mod-authoring skills'
+summary: |-
+  Founder idea 1: a standardized naming structure for mods, for future-proofing. The trigger was two collisions: `neurons` hit the userland event namespace, and the constellation MCP server name could clash with the user's existing server.
+
+  My proposal:
+  - mod id = publisher.name. The publisher is `gnomon` for first-party, the URL owner for git installs, and `local` for folders.
+  - Display = name plus glyph; the publisher shows on the install card and when names clash.
+  - MCP server = gm-<publisher>-<name>.
+  - env = PUBLISHER_NAME_*.
+  - events = mod.<publisher>.<name>.*.
+  - first-party is checked by publisher, replacing the reserved prefix lists.
+  - To fold into S0 before merge.
+
+  Founder idea 2: skills that make it seamless to turn folders or APIs into mods: from-folder, from-api, offers/playbook, check (T-2026-10-20-012).
+  Both await a founder go, then Arky and Aegis vetting.
+symbols_touched:
+  - '#mod-host'
+  - '#manifest-loader'
+  - '#offer-router'
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - founder-idea
+  - naming
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-211217-001
+git_context:
+  ref: cd3ef9b545ea5b0e24115daba2e00c9cc4290716
+  branch: feat/gnomon
+  dirty: true

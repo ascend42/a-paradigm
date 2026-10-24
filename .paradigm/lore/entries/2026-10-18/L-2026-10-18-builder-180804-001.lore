@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-180804-001
+type: insight
+timestamp: '2026-10-18T18:08:04.398Z'
+author: builder
+title: 'T-016 round 3: the auth wire format is a clientApiId input'
+summary: 'Aegis ruled to fold the auth wire format into clientApiId inside the same unpublished P8-D93 move. CLIENT_API_DESCRIPTOR gains auth = AUTH_WIRE_DESCRIPTOR: the three domains (gnomon:auth-server:v2, gnomon:auth:v1, gnomon:auth-token:v1) and one fixed preimage vector per form (server, device, read token) with fixed inputs and the exact preimage string, so a domain or layout change now moves the id (closes the round-2 residual that domains were not inputs). The kernel signer''s auth, authServer and authToken domains are now the contracts constants (one definition). Final clientApiId sha256:1faf47f5867f17b95b12922bde7ec21890970f24154ef43e52c06c33e43d8720 (from fd576e6d...e0fd; interim f998e8a8... and c5cb75ce... never merged); kitId, abiId unchanged; GUI bundle sha256:82fbaab4....'
+symbols_touched:
+  - '#gnomon-contracts'
+  - '#contract-client-api-id'
+  - '#kernel-log'
+  - '#socket'
+tags:
+  - decision
+  - gnomon
+  - client-api-id
+  - P8-D93
+  - round-3
+linked_lore:
+  - L-2026-10-18-builder-180320-001
+confidence: 0.92
+git_context:
+  ref: bdd3065316eac817161bc469b59ae6f7c718e439
+  branch: gnomon/t016-api-bump
+  dirty: true

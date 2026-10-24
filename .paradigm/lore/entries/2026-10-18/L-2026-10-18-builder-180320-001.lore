@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-180320-001
+type: insight
+timestamp: '2026-10-18T18:03:20.807Z'
+author: builder
+title: 'T-016 round 2: residual stated, domain v2, reason enum, final P8-D93 id'
+summary: 'Aegis/reviewer round 2 folded into the same unmerged bump. (1) Residual stated exactly in §4.9, auth.ts and §A.8: clientNonce closes replay of a recorded hello, not live relay (same-uid/root socket rename can relay hello+auth; frames carry no MAC; web port narrower), tracked T-2026-10-18-024. (2) session.compacted reason is a closed enum threshold|overflow|manual|unspecified. (3) compactedPayloadOf returns null unless token counts are safe non-negative ints. (4) P8-D93 names the pre-release exception to the compatible-additive rule (required clientNonce). (5) server-sig domain gnomon:auth-server:v2 everywhere (supersedes the round-1 ''keep v1'' call); GUI nonce drawn inside the try. (6) hello-params negative test. (7) Final clientApiId sha256:c5cb75ce402dd5bd0aa2c9271f98d275d79fb0808251f720f90c25d04c143316 (was fd576e6d...e0fd before the bump; round-1 interim f998e8a8... never merged); kitId and abiId unchanged; GUI bundle sha256:338205b6.... Note: auth domains are not clientApiId inputs, so the domain change alone would not move it; the closed reason enum (published in the event schema) did.'
+symbols_touched:
+  - '#socket'
+  - '#gnomon-contracts'
+  - '#gui'
+  - '#local-runner'
+  - '#kernel-log'
+tags:
+  - decision
+  - gnomon
+  - security
+  - P8-D93
+  - round-2
+linked_lore:
+  - L-2026-10-18-builder-174931-001
+  - L-2026-10-18-builder-174940-001
+confidence: 0.9
+git_context:
+  ref: e9df393afeca591c5eb68ca1e11147b979a52048
+  branch: gnomon/t016-api-bump
+  dirty: true

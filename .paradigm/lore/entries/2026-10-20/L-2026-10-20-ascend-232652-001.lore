@@ -1,0 +1,42 @@
+id: L-2026-10-20-ascend-232652-001
+type: milestone
+timestamp: '2026-10-20T23:26:52.154Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 14: the Desk O1 plus S0b naming and versioning merged into feat/gnomon (bd2d54d5), all suites green, ready for the founder''s dogfood'
+summary: |-
+  feat/gnomon is at bd2d54d5 (local, not pushed). It merges feat/gnomon-desk-s0b: O1 S0 to S3 plus the S0b naming and versioning.
+  Tests on merged HEAD: contracts 542, gui 458 (bundle check passes), voice 137, gnomon 2699, perf passes, tsc clean. All packages are built in the main checkout, and the gnomon CLI is linked.
+  S0b:
+  - publisher.name ids, manifest:2 with a pure v1 upgrader, engines, TOFU publisher bindings for any host
+  - downgrade judged by packageHash history (a revert class), COLLISION checks against installed mods and the user's .mcp.json names, publisherDisplay in the GUI
+  - Aegis APPROVE-WITH-FIXES, all 10 fixes in
+  Regression caught before merge: the generated distro server (now gm_gnomon_paradigm-distro) would have been dropped by S1's reserved-prefix rule. Fixed by passing verified distro servers through as trusted, while a mod's derived name wins over a distro entry.
+  Open for the founder: Paradigm tools inside Gnomon sessions are now named mcp__gm_gnomon_paradigm-distro__*. Only the doctor legacy-names audit references the old names; no hook matchers use them.
+  Flakes seen under full-suite load: session-resume, session-model, G-LOG-04 perf. Each passed when re-run.
+symbols_touched:
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#mcp-passthrough'
+  - '#neurons-mod'
+  - '#constellation-mod'
+  - '#gui-offer-slip'
+  - '#manifest-loader'
+  - '#gnomon-contracts'
+commit: bd2d54d5
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - milestone
+  - naming
+  - versioning
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-215926-001
+git_context:
+  ref: bd2d54d567afc8ff816ea0b7a83d94ea2e778529
+  branch: feat/gnomon
+  dirty: true

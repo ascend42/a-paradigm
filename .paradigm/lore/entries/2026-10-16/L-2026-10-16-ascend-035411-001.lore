@@ -1,0 +1,30 @@
+id: L-2026-10-16-ascend-035411-001
+type: human-note
+timestamp: '2026-10-16T03:54:11.288Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.0 audience: founder first, 8.1 for the world'
+summary: 'Founder decision: 8.0 is built for the founder''s own workflows first, dog-fooded on real repos and projects and iterated; 8.1 is the public release. Also recorded: three scout reports (Odysseus, deepseek-harness, landscape) saved under .paradigm/research/paradigm-8/.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D1
+    decision: 8.0 audience = the founder first; 8.1 = for the world
+    rationale: 'Founder: "8.0 is for me first and after we work with my real workflows on other repos and projects and iterate on things to fix/improve then we will probably have 8.1 for the world effectively". Optimise 8.0 for one fully-invested power user across his tool family; defer newcomer onboarding, packaging polish and broad provider support to 8.1.'
+learnings:
+  - 'Early scout epiphany: every harness is converging on plugins+skills+hooks+subagents+worktrees+MCP; the open gaps (merging parallel work, loop governance, memory validation, cross-harness identity) are exactly what Warpline, neurons and the calibration loop already target.'
+  - deepseek-harness explicitly refuses to merge or adjudicate parallel work ("False mutual exclusion is more dangerous than an explicit warning") — the gap Warpline is built for.
+  - Odysseus teacher→skill flywheel (cheap model fails, strong model writes a verified SKILL.md) maps onto Paradigm's notebook/calibration learning loop.
+tags:
+  - paradigm-8
+  - harness
+  - decision
+  - audience
+linked_lore:
+  - L-2026-10-16-ascend-035229-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true

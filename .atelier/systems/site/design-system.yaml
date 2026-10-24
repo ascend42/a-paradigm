@@ -1,0 +1,510 @@
+# useparadigm.dev design system (product: site, packages/site/src).
+# Layers: foundations, components, zones, content, specimen, rules, migration.
+# Every entry traces to a decision (from:). status: clear = adopted from the code
+# as-is pending the creator's bulk confirm; contested = needs a board.
+# Draft by Mika, 2026-10-21, from `atelier system extract --product site`
+# (inventory: .atelier/systems/site/inventory.html, 69 UI files).
+version: 2
+extends: none
+read: "The public face of Paradigm: developers deciding whether to adopt a context-engineering framework, reading docs while they set it up, and taking University courses. Dark Obsidian chrome where the five symbol colours carry meaning; the University switches to a warm Academia register (parchment, burgundy, gold, Crimson Pro)."
+from: { decision: "founder: the site keeps its own Obsidian/Academia identity (Geist/Inter, Crimson Pro), extends: none; codify it as it is", note: "relayed by the session lead, 2026-10-21" }
+source_of_truth: "packages/site/src/tokens/{obsidian,academia,symbols}.css hold the tokens; this file names their roles and records decisions on top of them."
+
+# ─────────────────────────────────────────────────────────────────────────────
+foundations:
+  # Colour roles. Each role names its CSS variable and its value per palette.
+  # Palettes: dark (Obsidian default, html[data-theme=dark]), light
+  # (html[data-theme=light]), academia_dark / academia_light ([data-section=university]).
+  color:
+    surface.deep:      { var: "--surface-0", dark: "#0a0a0b", light: "#ffffff", academia_dark: "#1a1614", academia_light: "#F5F1E8", status: clear, from: { extract: 2026-10-21 } }
+    surface.page:      { var: "--surface-1", dark: "#111113", light: "#f9fafb", academia_dark: "#221e1b", academia_light: "#FDF8F0", status: clear, from: { extract: 2026-10-21 } }
+    surface.raised:    { var: "--surface-2", dark: "#1a1a1f", light: "#f3f4f6", academia_dark: "#2a2522", academia_light: "#ffffff", status: clear, from: { extract: 2026-10-21 } }
+    surface.hover:     { var: "--surface-3", dark: "#2a2a32", light: "#e5e7eb", academia_dark: "#332d29", academia_light: "#FAF3E6", status: clear, note: "also used as the default card/divider border (53 uses)", from: { extract: 2026-10-21 } }
+    border.strong:     { var: "--surface-4", dark: "#3f3f4a", light: "#d1d5db", academia_dark: "#3d3530", academia_light: "#E8E0D0", status: clear, note: "code often writes the raw --surface-steel instead; migrate to --surface-4 so Academia remaps it", from: { extract: 2026-10-21 } }
+    text.muted:        { var: "--text-muted", dark: "#6b7280", light: "#9ca3af", academia_dark: "#8B7355", academia_light: "#8B7355", status: contested, board: muted-text, note: "fails AA for body text in all four palettes (3.9 / 2.4 / 3.7 / 4.2:1)", from: { extract: 2026-10-21 } }
+    text.secondary:    { var: "--text-secondary", dark: "#9ca3af", light: "#6b7280", academia_dark: "#B8A88A", academia_light: "#4A3728", status: clear, from: { extract: 2026-10-21 } }
+    text.body:         { var: "--text-primary", dark: "#d1d5db", light: "#374151", academia_dark: "#E8E0D0", academia_light: "#2C1810", status: clear, from: { extract: 2026-10-21 } }
+    text.heading:      { var: "--text-heading", dark: "#e5e7eb", light: "#1f2937", academia_dark: "#F5F1E8", academia_light: "#2C1810", status: clear, from: { extract: 2026-10-21 } }
+    text.bright:       { var: "--text-bright", dark: "#f3f4f6", light: "#111827", academia_dark: "#FDF8F0", academia_light: "#2C1810", status: clear, from: { extract: 2026-10-21 } }
+    text.display:      { var: "--text-white", dark: "#fafafa", light: "#030712", status: clear, note: "hero headline only", from: { extract: 2026-10-21 } }
+    # Symbol hues: the five Paradigm symbols. One meaning per hue (see rules).
+    symbol.component:  { var: "--sym-component", dark: "#22c55e", light: "#16a34a", hover_dark: "#86efac", hover_light: "#166534", status: clear, note: "also the brand accent (links, primary action, focus ring); see board accent-and-symbol-hues", from: { extract: 2026-10-21 } }
+    symbol.flow:       { var: "--sym-flow", dark: "#8b5cf6", light: "#7c3aed", status: clear, from: { extract: 2026-10-21 } }
+    symbol.gate:       { var: "--sym-gate", dark: "#ef4444", light: "#dc2626", status: clear, from: { extract: 2026-10-21 } }
+    symbol.signal:     { var: "--sym-signal", dark: "#eab308", light: "#ca8a04", status: clear, note: "light value is 2.8:1 on the page; text in signal amber needs the -light (#854d0e) step in light theme", from: { extract: 2026-10-21 } }
+    symbol.aspect:     { var: "--sym-aspect", dark: "#6b7280", light: "#4b5563", status: clear, from: { extract: 2026-10-21 } }
+    symbol.tag-fill:   { var: "--tag-<symbol>-bg", alpha: 0.08, status: clear, from: { extract: 2026-10-21 } }
+    symbol.tag-border: { var: "--tag-<symbol>-border", alpha_dark: 0.19, alpha_light: 0.2, status: clear, from: { extract: 2026-10-21 } }
+    symbol.glow:       { var: "--glow-<symbol>", alpha: 0.4, status: clear, note: "LiveGraph only", from: { extract: 2026-10-21 } }
+    # Academia accents (University only)
+    academia.accent:   { var: "--burgundy", academia_dark: "#C4515C", academia_light: "#6B1C23", hover_dark: "#D4727B", hover_light: "#8B2E38", status: clear, note: "dark value is 3.7:1 on the page: fine for large titles, fails for the 12-14px breadcrumbs and links that use it", from: { extract: 2026-10-21 } }
+    academia.accent-fill: { var: "--burgundy-bg", status: clear, from: { extract: 2026-10-21 } }
+    academia.gilt:     { var: "--gold", academia_dark: "#D4BA8E", academia_light: "#C5A572", status: clear, note: "rules and ornaments; as text it is 2.2:1 in light (plsat tagline)", from: { extract: 2026-10-21 } }
+    academia.state:    { var: "--success / --error / --warning (+ -bg)", status: clear, note: "defined, unused: reserved for an interactive quiz", from: { extract: 2026-10-21 } }
+    on-accent:         { var: null, dark: "#ffffff", status: contested, board: primary-action, note: "label colour on the green primary action; no token today (literal #fff x5, --surface-void x2)", from: { extract: 2026-10-21 } }
+    # Literals the code uses that are on purpose
+    terminal.chrome:   { values: ["#ff5f57", "#febc2e", "#28c840"], status: clear, note: "macOS window dots in FauxTerminal only", from: { extract: 2026-10-21 } }
+    seal.ink:          { values: ["#4a7c59", "#6b1c23", "#c5a572", "#2d5f8a", "#7b5ea7", "#b8860b", "#fdf8f0"], status: clear, note: "UniversitySeal.tsx SVG fallbacks; an illustration, not UI colour", from: { extract: 2026-10-21 } }
+
+  font:
+    sans:    { var: "--font-sans", family: "Geist", fallback: "Inter", status: clear, from: { decision: "founder: Geist/Inter" } }
+    mono:    { var: "--font-mono", family: "Geist Mono", fallback: "JetBrains Mono", status: clear, from: { extract: 2026-10-21 } }
+    heading-academia: { var: "--font-heading", family: "Crimson Pro", fallback: "Georgia", scope: "[data-section=university] titles and section titles", status: clear, note: "Crimson Pro is never loaded (no @font-face or next/font); every University title renders in Georgia today. See migration.", from: { decision: "founder: Crimson Pro for the University" } }
+    weights: { body: 400, label: 500, heading: 600, emphasis: 700, status: clear, note: "600 x27, 500 x10, 700 x8", from: { extract: 2026-10-21 } }
+
+  type:
+    # px; the var names come from obsidian.css. 56 is the hero headline clamp max.
+    sizes: [12, 14, 16, 18, 22, 28, 36, 48, 56]
+    roles:
+      micro:   { var: "--text-micro", px: 12, leading: 16, uses: 36 }
+      small:   { var: "--text-small", px: 14, leading: 20, uses: 53 }
+      body:    { var: "--text-body", px: 16, leading: 24, uses: 28 }
+      h4:      { var: "--text-h4", px: 18, leading: 24, uses: 27, note: "also the lead/subtitle size" }
+      h3:      { var: "--text-h3", px: 22, leading: 28 }
+      h2:      { var: "--text-h2", px: 28, leading: 36 }
+      h1:      { var: "--text-h1", px: 36, leading: 44 }
+      display: { var: "--text-display", px: 48, leading: 56 }
+      hero:    { px: "clamp(36, 5vw, 56)", leading: 1.15, note: "HeroSection headline only" }
+    label: { case: uppercase, tracking: 0.05em, size: micro, family: mono, note: "the eyebrow/meta label, written 19 times across modules" }
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  space:
+    # px. 8px base from obsidian.css plus the 2/4/6 inline steps chips and gaps
+    # actually use (6 x23, 2 x19, 4 x17) and 12 as the half step.
+    scale: [2, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128]
+    roles:
+      inline-gap: 6
+      chip-pad: "2 8"
+      control-pad-y: 8
+      card-pad: 24       # --space-3
+      section-y: 128     # --space-16
+      page-x: 24         # --space-3
+    status: clear
+    note: "Off-scale now: 10 (x12), 14 (x5), 20 (x2), 28 (x6), 3, 13. See migration."
+    from: { extract: 2026-10-21 }
+
+  radius:
+    none: 0
+    sm: 4
+    md: 6
+    lg: 8
+    xl: 12
+    pill: 9999
+    round: "50%"
+    roles: { control: md, card: lg, chip: pill, panel: xl }
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  layout:
+    max-width.marketing: 1200
+    max-width.content: 800
+    header-height: 64
+    breakpoints: { narrow: 640, tablet: 768 }
+    status: clear
+    note: "768 x10, 640 x4, 480 x1; one min-width query. Desktop-first."
+    from: { extract: 2026-10-21 }
+
+  elevation:
+    card: "1px border, no shadow (Obsidian is glow-based, no drop shadows)"
+    terminal: "0 4px 24px rgba(0,0,0,.15) (FauxTerminal only)"
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  motion:
+    ease.out: "cubic-bezier(0.16, 1, 0.3, 1)"
+    duration.fast: 150
+    duration.normal: 300
+    duration.slow: 600
+    enter: "framer-motion fade + 12-24px rise, 0.5-0.6s, ease.out, once in view"
+    status: clear
+    note: "Only NodeGraph (unused) honours prefers-reduced-motion. The hero gradient (10s infinite), LiveGraph canvas and every framer-motion entrance ignore it. See rules.motion-reduced."
+    from: { extract: 2026-10-21 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+  button:
+    role: "The site's one call to action per zone: primary (filled green) to start, secondary to leave for GitHub or the University."
+    anatomy: [label]
+    variants:
+      primary: "filled --sym-component, 600 weight"
+      secondary: "contested: bordered ghost (Hero) or bare text link (CTA section)"
+    sizes:
+      sm: { pad: "8 16", font: small, where: "header" }
+      md: { pad: "10 20", font: small, where: "mobile menu; --btn-padding token (unused)" }
+      lg: { pad: "12 28", font: body, where: "hero, closing CTA" }
+    states: [default, hover, focus]
+    missing_states: [pressed, disabled, loading]
+    tokens: { fill: "--sym-component", fill-hover: "--sym-component-light", radius: "--radius-md", label: "on-accent (contested)" }
+    source: packages/site/src/app/sections/HeroSection.module.css
+    built_times: 7
+    instances:
+      - packages/site/src/components/SiteHeader.module.css:76      # .cta, white label
+      - packages/site/src/components/SiteHeader.module.css:157     # .mobileCta, white label
+      - packages/site/src/app/sections/HeroSection.module.css:90   # .primaryCta, white label
+      - packages/site/src/app/sections/HeroSection.module.css:110  # .secondaryCta, bordered
+      - packages/site/src/app/sections/CTASection.module.css:33    # .primaryCta, --surface-void label
+      - packages/site/src/app/sections/CTASection.module.css:53    # .secondaryCta, text link
+      - packages/site/src/app/learn/page.module.css:159            # .plsatCta, burgundy fill
+    examples:
+      default: '<div class="actions"><a class="primaryCta" href="/docs/getting-started">Get Started</a><a class="secondaryCta" href="https://github.com/ascend42/a-paradigm">View on GitHub</a></div>'
+      hover: '<div class="actions"><a class="primaryCta" style="background:var(--sym-component-light);transform:translateY(-1px)" href="#">Get Started</a><a class="secondaryCta" style="border-color:var(--text-secondary);color:var(--text-heading)" href="#">View on GitHub</a></div>'
+      focus: '<div class="actions"><a class="primaryCta" style="outline:2px solid var(--sym-component);outline-offset:2px" href="#">Get Started</a></div>'
+    status: contested
+    board: [primary-action, secondary-action]
+    from: { extract: 2026-10-21 }
+
+  symbol-badge:
+    role: "Names one Paradigm symbol (#component, $flow, ^gate, !signal, ~aspect) in its hue with its shape; the only place symbol colour sits on a pill."
+    anatomy: [shape, label]
+    variants: { component: "● #", flow: "◆ $", gate: "■ ^", signal: "▲ !", aspect: "◇ ~" }
+    sizes: { sm: { font: micro, pad: "1 8" }, md: { font: small, pad: "2 10" }, lg: { font: body, pad: "4 14" } }
+    states: [default]
+    tokens: { text: "--sym-<type>", fill: "--tag-<type>-bg", border: "--tag-<type>-border", radius: "--radius-pill" }
+    source: packages/site/src/components/SymbolBadge.tsx
+    examples:
+      default: '<span class="badge component md"><span class="shape">●</span><span class="label">#auth-middleware</span></span> <span class="badge flow md"><span class="shape">◆</span><span class="label">$checkout-flow</span></span> <span class="badge gate md"><span class="shape">■</span><span class="label">^authenticated</span></span> <span class="badge signal md"><span class="shape">▲</span><span class="label">!payment-complete</span></span> <span class="badge aspect md"><span class="shape">◇</span><span class="label">~audit-required</span></span>'
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  tag:
+    role: "A neutral, non-interactive label for a topic or level (blog topic, agent capability, course difficulty); never a symbol hue."
+    anatomy: [label]
+    variants: { neutral: "surface-3 fill, text-secondary", level: "uppercase mono label (difficulty)" }
+    sizes: { sm: { font: micro, pad: "2 8" } }
+    states: [default]
+    tokens: { fill: "--surface-3", text: "--text-secondary", radius: "--radius-pill" }
+    source: packages/site/src/components/docs/SymbolPage.module.css
+    built_times: 5
+    instances:
+      - packages/site/src/components/docs/SymbolPage.module.css:79       # neutral, text-secondary (canonical)
+      - packages/site/src/app/blog/page.module.css:74                    # neutral, text-muted, mono
+      - packages/site/src/app/agents/page.module.css:110                 # green symbol hue on a non-symbol
+      - packages/site/src/app/learn/page.module.css:75                   # difficulty in symbol hues
+      - packages/site/src/app/learn/course/[courseId]/page.module.css:43 # badge, uppercase
+    examples:
+      default: '<span style="font-size:var(--text-micro);padding:2px 8px;background:var(--surface-3);border-radius:var(--radius-pill);color:var(--text-secondary)">review</span>'
+    status: contested
+    board: accent-and-symbol-hues
+    from: { extract: 2026-10-21 }
+
+  card:
+    role: "A bordered raised surface holding one item of a grid (symbol, course, agent, post, docs entry); the whole card is the link when it links."
+    anatomy: ["header (optional)", title, description, "footer (optional)"]
+    variants: { static: "no hover", link: "hover lifts border to --surface-4" }
+    sizes: { compact: { pad: 16 }, default: { pad: 24 }, roomy: { pad: 32 } }
+    states: [default, hover, focus]
+    tokens: { fill: "--surface-2", border: "--surface-3 (Academia: --surface-4)", border-hover: "--surface-4", radius: "--radius-lg" }
+    source: packages/site/src/app/sections/SymbolsSection.module.css
+    built_times: 9
+    instances:
+      - packages/site/src/app/sections/SymbolsSection.module.css:38   # hover border + lift 2px
+      - packages/site/src/app/learn/page.module.css:49                 # hover burgundy border + lift
+      - packages/site/src/app/agents/page.module.css:61                # hover border only
+      - packages/site/src/app/blog/page.module.css:29                  # hover border only, pad 32
+      - packages/site/src/components/docs/CategoryListPage.module.css:39 # hover border + fill, pad 16
+      - packages/site/src/components/docs/PortalPage.module.css:51     # static
+      - packages/site/src/app/sections/MetricsSection.module.css:15    # static
+      - "packages/site/src/app/docs/[[...slug]]/page.module.css:118"   # borderless, lift
+      - packages/site/src/app/learn/plsat/page.module.css:95           # static
+    note: "Three hover treatments (border; border+lift; border+fill). Agents cards look clickable and are not links."
+    examples:
+      default: '<div style="padding:var(--space-3);background:var(--surface-2);border:1px solid var(--surface-3);border-radius:var(--radius-lg);max-width:320px"><h3 style="font-size:var(--text-h4)">Component</h3><p style="font-size:var(--text-small);color:var(--text-secondary)">Services, views, models. Every named piece of your system.</p></div>'
+      hover: '<div style="padding:var(--space-3);background:var(--surface-2);border:1px solid var(--surface-4);border-radius:var(--radius-lg);max-width:320px;transform:translateY(-2px)"><h3 style="font-size:var(--text-h4)">Component</h3><p style="font-size:var(--text-small);color:var(--text-secondary)">Services, views, models. Every named piece of your system.</p></div>'
+    status: clear
+    note_hover: "recommendation: border + 2px lift for link cards (most used, and the lift signals 'opens'); static cards get no hover"
+    from: { extract: 2026-10-21 }
+
+  code-block:
+    role: "Shows code or a command in mono on the deep surface, with an optional header naming the file or language."
+    anatomy: ["header (optional)", "filename (optional)", "language (optional)", pre]
+    variants: { numbered: "CodeBlock.tsx, line numbers + symbol highlighting", plain: "markdown code fences", command: "one-line install/run command" }
+    states: [default, overflow-x]
+    missing_states: [copied]
+    tokens: { fill: "--surface-void", border: "--surface-steel", header-fill: "--surface-2", radius: "--radius-lg" }
+    source: packages/site/src/components/CodeBlock.tsx
+    built_times: 5
+    instances:
+      - packages/site/src/components/CodeBlock.tsx:23
+      - packages/site/src/components/docs/ContentPage.tsx:126
+      - "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:269"
+      - packages/site/src/app/learn/plsat/page.tsx:142
+      - packages/site/src/app/sections/HeroSection.tsx:86          # installCode, wraps mid-package-name at 375px
+    examples:
+      default: '<div class="container"><div class="header"><span class="filename">src/auth/.purpose</span><span class="language">yaml</span></div><pre class="pre"><code class="code"><span class="line"><span class="lineNumber">1</span><span class="lineContent">gates:</span>\n</span><span class="line"><span class="lineNumber">2</span><span class="lineContent">  <span class="symGate">^authenticated</span>:</span>\n</span></code></pre></div>'
+    status: contested
+    board: code-block-canon
+    from: { extract: 2026-10-21 }
+
+  site-header:
+    role: "Global top bar: wordmark home link, four section links, theme toggle, GitHub, Get Started."
+    anatomy: [mark, wordmark, nav, theme-toggle, github-link, cta, mobile-toggle]
+    states: [default, hover, focus, mobile-open]
+    missing_states: [current-section]
+    source: packages/site/src/components/SiteHeader.tsx
+    examples:
+      default: '<header class="header" style="position:static"><div class="inner"><a class="logo" href="/"><span class="wordmark">paradigm</span></a><nav class="nav"><a class="navLink" href="/docs">Docs</a><a class="navLink" href="/agents">Agents</a><a class="navLink" href="/learn">Learn</a><a class="navLink" href="/blog">Blog</a></nav><div class="actions"><a class="cta" href="/docs/getting-started">Get Started</a></div></div></header>'
+    note: "Theme toggle (26px) and GitHub icon (20px) are under the 44px target; no aria-current on the active section."
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  theme-toggle:
+    role: "Switches dark/light and remembers it (localStorage paradigm-theme)."
+    states: [default, hover-missing, focus]
+    source: packages/site/src/components/ThemeToggle.tsx
+    note: "Inline styles, no hover state; ignores prefers-color-scheme on first visit (always dark)."
+    examples:
+      default: '<button aria-label="Switch to light mode" style="background:none;border:none;color:var(--text-secondary);padding:4px;display:flex;border-radius:var(--radius-sm)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/></svg></button>'
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  docs-sidebar:
+    role: "Docs navigation: symbol count, filter box, collapsible sections, active link."
+    anatomy: [title, count, filter, section-toggle, link, symbol-prefix]
+    states: [default, hover, active, collapsed, filtered]
+    missing_states: [empty-filter-result]
+    source: packages/site/src/components/docs/DocsSidebar.tsx
+    note: "A filter with no match renders nothing (no 'no matches' line). Filter input sets outline:none and relies on a border colour change. At 768px and below it stacks above the content and takes up to 50dvh before the page starts."
+    examples:
+      default: '<nav style="width:260px"><div style="font-size:var(--text-micro);text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding:4px 8px">Guides</div><a href="#" style="display:block;padding:4px 8px;font-size:var(--text-small);color:var(--text-bright);background:var(--surface-2);border-radius:var(--radius-md)">Getting Started</a><a href="#" style="display:block;padding:4px 8px;font-size:var(--text-small);color:var(--text-secondary)">Purpose Files</a></nav>'
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  section-label:
+    role: "The small uppercase mono label above a value or block (eyebrow, meta label, stat label, code language)."
+    tokens: { size: "--text-micro", family: "--font-mono", tracking: "0.05em", color: "--text-muted" }
+    built_times: 19
+    instances:
+      - packages/site/src/components/docs/SymbolPage.module.css:46
+      - packages/site/src/components/docs/FlowPage.module.css:32
+      - "packages/site/src/app/docs/[[...slug]]/page.module.css:140"
+      - packages/site/src/app/learn/plsat/page.module.css:149
+      - packages/site/src/components/docs/DocsSidebar.module.css:87
+    examples:
+      default: '<span style="font-family:var(--font-mono);font-size:var(--text-micro);text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)">Defined in</span>'
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  university-seal:
+    role: "The University's crest; an illustration at the top of University pages."
+    source: packages/site/src/components/UniversitySeal.tsx
+    states: [default]
+    examples:
+      default: '<div data-section="university" style="padding:16px;background:var(--surface-1)"><span style="font-family:var(--font-heading);font-size:var(--text-display);color:var(--text-heading)">Paradigm University</span></div>'
+    status: clear
+    from: { extract: 2026-10-21 }
+
+  live-graph:
+    role: "Hero background: an animated canvas of symbol nodes growing a project, paired with the FauxTerminal narrating it."
+    source: packages/site/src/components/NodeGraph/LiveGraph.tsx
+    states: [growing, active, reduced-motion-missing]
+    note: "NodeGraph.tsx and LiveIndicator.tsx are not imported anywhere (dead)."
+    status: clear
+    from: { extract: 2026-10-21 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+zones:
+  header:
+    surface: every page (sticky, 64px, blurred surface-1)
+    holds: [wordmark, "section nav: Docs, Agents, Learn, Blog", theme toggle, GitHub link, Get Started]
+    never: [notices, search, secondary CTAs, version or release chips]
+    overflow: "At 768px nav and CTA move into the hamburger panel; theme toggle and GitHub stay. Nothing wraps."
+    status: clear
+    from: { extract: 2026-10-21 }
+  footer:
+    surface: every page
+    holds: [wordmark + tagline, built-by, "link columns: Product, Community, Learn", symbol shapes row]
+    never: [links to routes that do not exist]
+    overflow: "Columns stack at 768px."
+    note: "4 of 11 links are dead today (/changelog, /pricing, /learn/courses, /learn/reference); /philosophy has no inbound link anywhere."
+    status: clear
+    from: { extract: 2026-10-21 }
+  marketing-hero:
+    surface: home
+    holds: [eyebrow, h1, subtitle, "one primary + one secondary action", install command, LiveGraph + FauxTerminal behind]
+    never: [more than two actions, forms, notices]
+    overflow: "At 640px actions stack full width; the install command must not break inside the package name."
+    status: clear
+    from: { extract: 2026-10-21 }
+  marketing-section:
+    surface: home (symbols, how it works, metrics, closing CTA)
+    holds: [h2 + subheading, one grid or step list, at most one action pair (closing CTA only)]
+    never: [a second h1, CTAs inside grids]
+    overflow: "Grids reflow by auto-fill; step rows stack at 768px."
+    status: clear
+    from: { extract: 2026-10-21 }
+  docs-sidebar:
+    surface: /docs/*
+    holds: [title + symbol count, filter, collapsible sections of links]
+    never: [page content, CTAs]
+    overflow: "Scrolls inside itself (sticky). At 768px it stacks above content; should collapse to a disclosure instead of taking half the screen."
+    status: clear
+    from: { extract: 2026-10-21 }
+  docs-content:
+    surface: /docs/*
+    holds: [breadcrumbs, one h1, body (max 800px)]
+    never: [a nested <main> (today: app/docs/layout.tsx:32 inside the root main)]
+    overflow: "Code and tables scroll horizontally inside their block."
+    status: clear
+    from: { extract: 2026-10-21 }
+  university-page:
+    surface: /learn/* ([data-section=university], Academia palette)
+    holds: [breadcrumbs, seal, Crimson Pro title + subtitle, course grid or lesson body, PLSAT card]
+    never: [Obsidian green actions, symbol hues used for non-symbol meaning]
+    overflow: "Grid auto-fills at 300px min; single column at 375px."
+    note: "The site header stays Obsidian above an Academia page; recorded as intended (shared chrome)."
+    status: clear
+    from: { extract: 2026-10-21 }
+  index-page:
+    surface: /agents, /blog, /philosophy
+    holds: [page header (h1 + subtitle), list or grid]
+    never: [disabled controls with no explanation (agents search today)]
+    overflow: "Grid reflows; header text centres."
+    status: clear
+    from: { extract: 2026-10-21 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+content:
+  vocabulary:
+    use:
+      component: "# symbol: a named piece of the system"
+      flow: "$ symbol: a multi-step process spanning components"
+      gate: "^ symbol: an auth checkpoint"
+      signal: "! symbol: an event"
+      aspect: "~ symbol: a cross-cutting rule anchored to code"
+      ".purpose file": "the per-directory description agents read"
+      "portal.yaml": "where gates are declared"
+      "context engineering": "the discipline the product names itself after"
+      "MCP tools": "how agents call Paradigm; name them by family + op, e.g. paradigm_lore (op record)"
+      University: "the learning section (/learn)"
+      PLSAT: "the University certification exam"
+    contested:
+      section-names: { board: section-names, now: { "/agents": ["Agents (nav)", "Agent Registry (footer)", "The Armory (h1)"], "/blog": ["Blog (nav)", "The Voice (h1)"], "/learn": ["Learn (nav)", "University (footer)", "Paradigm University (h1)"] } }
+    retired:
+      # Pre-7.13 per-op MCP names. Hidden aliases were removed in 7.15
+      # (legacy-tool-map.ts header), so these no longer work for readers.
+      paradigm_lore_record: "paradigm_lore (op record)"
+      paradigm_lore_assess: "paradigm_lore (op assess)"
+      paradigm_lore_calibration: "paradigm_lore (op calibration)"
+      paradigm_task_create: "paradigm_task (op create)"
+      paradigm_task_list: "paradigm_task (op list)"
+      paradigm_session_recover: "paradigm_session (op recover)"
+      paradigm_session_checkpoint: "paradigm_session (op checkpoint)"
+      paradigm_handoff_prepare: "paradigm_session (op handoff_prepare)"
+      paradigm_protocol_record: "paradigm_protocol (op record)"
+      paradigm_protocol_search: "paradigm_protocol (op search)"
+      paradigm_wisdom_context: "paradigm_wisdom (op context)"
+      paradigm_notebook_promote: "paradigm_notebook (op promote)"
+      paradigm_history_fragility: "paradigm_history (op fragility)"
+      paradigm_symphony_send: "paradigm_symphony (op send)"
+      paradigm_symphony_poll: "paradigm_symphony (op poll)"
+      paradigm_symphony_peek: "paradigm_symphony (op peek)"
+      paradigm_symphony_request_file: "paradigm_symphony (op request_file)"
+    stale_facts:
+      - { where: packages/site/src/app/sections/MetricsSection.tsx:8, says: "100+ MCP Tools", now: "32 tools by default since 7.13 (CHANGELOG.md:141)" }
+      - { where: packages/site/src/app/blog/page.tsx:14, says: "Introducing Paradigm 4.0", now: "7.15.2" }
+      - { where: packages/site/src/app/agents/page.tsx:16, says: "placeholder install counts (1,200 / 890 / 750 / 620)", now: "no registry data; invented numbers shown as fact" }
+    status: clear
+    from: { extract: 2026-10-21 }
+  voice:
+    - "Short declaratives in marketing ('Five symbols. That's it.'); plain instruction in docs."
+    - "Symbols are written with their prefix (#auth-middleware, ^authenticated) and set in mono."
+    - "Title Case for headings and buttons (Get Started, View on GitHub) — the code is consistent on this."
+    - "No emoji. Shapes (● ◆ ■ ▲ ◇) stand for the symbols and are never decorative elsewhere."
+    - "Numbers on the site are true today or not shown."
+  status: clear
+  from: { extract: 2026-10-21 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+specimen:
+  # CSS modules are written as plain class names in source, so the raw files
+  # render the real styles. Only modules without colliding class names are
+  # loaded (.header/.card/.tag/.primaryCta are each defined in several modules —
+  # itself a finding); other components use token-only inline examples.
+  stylesheets:
+    - packages/site/src/tokens/obsidian.css
+    - packages/site/src/tokens/symbols.css
+    - packages/site/src/tokens/academia.css
+    - packages/site/src/app/globals.css
+    - packages/site/src/components/SymbolBadge.module.css
+    - packages/site/src/components/CodeBlock.module.css
+    - packages/site/src/app/sections/HeroSection.module.css
+  themes:
+    dark: { html_attrs: 'data-theme="dark"', background: "#111113" }
+    light: { html_attrs: 'data-theme="light"', background: "#f9fafb" }
+  note: "Academia renders by wrapping an example in <div data-section=\"university\"> (academia.css uses a descendant selector, so html attrs alone cannot show light Academia)."
+  from: { extract: 2026-10-21 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+rules:
+  - id: color-on-palette
+    check: color-off-palette
+    from: { extract: 2026-10-21 }
+  - id: type-on-scale
+    check: type-off-scale
+    from: { extract: 2026-10-21 }
+  - id: spacing-on-scale
+    check: spacing-off-scale
+    from: { extract: 2026-10-21 }
+  - id: radius-on-scale
+    check: radius-off-scale
+    from: { extract: 2026-10-21 }
+  - id: font-in-system
+    check: font-off-system
+    from: { decision: "founder: Geist/Inter, Crimson Pro" }
+  - id: one-meaning-per-symbol-hue
+    rule: "Violet, red, amber and grey mean flow, gate, signal and aspect only. Difficulty, topics and status use neutral tags or Academia accents. Green is both component and the brand accent pending board accent-and-symbol-hues."
+    status: contested
+    board: accent-and-symbol-hues
+    from: { extract: 2026-10-21 }
+  - id: aa-text-contrast
+    rule: "Text meets 4.5:1 (3:1 at 18px+ or 14px bold) on its surface in dark, light, Academia dark and Academia light."
+    from: { decision: "Mika review-checklist 1" }
+  - id: motion-reduced
+    rule: "Under prefers-reduced-motion: no infinite animation (hero gradient), LiveGraph renders a still frame, framer entrances render final state."
+    from: { decision: "Mika review-checklist 5" }
+  - id: targets-44
+    rule: "Header icon buttons and the hamburger are at least 44x44 (padding, not a bigger glyph)."
+    from: { decision: "Mika review-checklist 2" }
+  - id: no-dead-links
+    rule: "Every internal href resolves to a route in src/app. Planned pages are not linked until they exist."
+    from: { extract: 2026-10-21 }
+  - id: tokens-not-raw-palette
+    rule: "Use role vars (--surface-4, --text-secondary) not palette names (--surface-steel, --text-slate) so Academia and light can remap them."
+    from: { extract: 2026-10-21 }
+
+decisions:
+  - { decision: "Site keeps its own Obsidian/Academia identity; extends: none", by: founder, date: 2026-10-21 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Baseline (atelier check --product site, 2026-10-21): 69 files, 0 fail, 51 warn
+#   spacing-on-scale 27, color-on-palette 9, type-on-scale 7, em-dash 6,
+#   radius-on-scale 1, tinted-shadow-missing 1. Contrast, motion, dead links and
+#   retired terms in JSON content are not mechanical; they are rows below.
+# Drift the system would remove. Nothing here is applied without the creator's yes;
+# contested rows wait for their board.
+migration:
+  - { from: "Crimson Pro declared but never loaded (renders Georgia)", to: "load Crimson Pro via next/font in app/learn/layout.tsx and set --font-heading to its variable", uses: 18, files: [packages/site/src/tokens/academia.css, packages/site/src/app/learn/layout.tsx], status: clear }
+  - { from: "primary button label #fff on #22c55e (2.3:1; hover 1.4:1)", to: "on-accent per board primary-action", uses: 7, files: [packages/site/src/components/SiteHeader.module.css, packages/site/src/app/sections/HeroSection.module.css, packages/site/src/app/sections/CTASection.module.css, packages/site/src/app/learn/page.module.css], status: contested }
+  - { from: "7 hand-built button classes", to: "one Button (primary/secondary x sm/md/lg)", uses: 7, files: [packages/site/src/components/SiteHeader.module.css, packages/site/src/app/sections/HeroSection.module.css, packages/site/src/app/sections/CTASection.module.css, packages/site/src/app/learn/page.module.css, packages/site/src/app/learn/plsat/page.module.css], status: contested }
+  - { from: "--text-muted below AA in all palettes", to: "per board muted-text", uses: 44, files: [packages/site/src/tokens/obsidian.css, packages/site/src/tokens/academia.css], status: contested }
+  - { from: "5 tag/badge implementations, 2 in symbol hues", to: "one Tag (neutral) + SymbolBadge for symbols", uses: 5, files: [packages/site/src/app/agents/page.module.css, packages/site/src/app/blog/page.module.css, packages/site/src/app/learn/page.module.css, "packages/site/src/app/learn/course/[courseId]/page.module.css"], status: contested }
+  - { from: "markdown renderer + code block duplicated in ContentPage and lesson page; plsat and hero hand-roll code", to: "one Markdown renderer and one CodeBlock", uses: 5, files: [packages/site/src/components/docs/ContentPage.tsx, "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx", packages/site/src/app/learn/plsat/page.tsx, packages/site/src/app/sections/HeroSection.tsx], status: contested }
+  - { from: "17 retired per-op MCP tool names (removed in 7.15)", to: "family + op form", uses: 25, files: [packages/site/src/content/courses/agile-development.json, packages/site/src/content/courses/git-fundamentals.json], status: clear }
+  - { from: "dead links /changelog /pricing /learn/courses /learn/reference and /blog/<slug>", to: "remove until the routes exist (or build them)", uses: 6, files: [packages/site/src/components/SiteFooter.tsx, packages/site/src/app/blog/page.tsx], status: clear }
+  - { from: "/philosophy unreachable", to: "link from footer Product column", uses: 0, files: [packages/site/src/components/SiteFooter.tsx], status: clear }
+  - { from: "stale facts: 100+ MCP Tools, Paradigm 4.0, invented install counts", to: "true numbers or remove", uses: 3, files: [packages/site/src/app/sections/MetricsSection.tsx, packages/site/src/app/blog/page.tsx, packages/site/src/app/agents/page.tsx], status: clear }
+  - { from: "no prefers-reduced-motion (hero gradient 10s infinite, LiveGraph, framer entrances)", to: "rules.motion-reduced", uses: 9, files: [packages/site/src/app/sections/HeroSection.module.css, packages/site/src/components/NodeGraph/LiveGraph.tsx, packages/site/src/app/sections/SymbolsSection.tsx, packages/site/src/app/sections/HowItWorksSection.tsx, packages/site/src/app/sections/MetricsSection.tsx], status: clear }
+  - { from: "nested <main> in docs layout", to: "<div> or <article>", uses: 1, files: [packages/site/src/app/docs/layout.tsx], status: clear }
+  - { from: "theme toggle 26px, GitHub 20px, hamburger 36x18 targets", to: "44px hit areas", uses: 3, files: [packages/site/src/components/ThemeToggle.tsx, packages/site/src/components/SiteHeader.module.css], status: clear }
+  - { from: "spacing 10/14/20/28/3/13px", to: "nearest scale step (8 or 12 / 16 / 24 / 32 / 2 or 4 / 12)", uses: 28, files: ["(see atelier check spacing-on-scale)"], status: clear }
+  - { from: "font-size 10px, 12px literals, 0.9em, 0.7em", to: "--text-micro / --text-small", uses: 9, files: [packages/site/src/components/NodeGraph/FauxTerminal.module.css, packages/site/src/components/SymbolBadge.module.css, packages/site/src/components/docs/ContentPage.module.css], status: clear }
+  - { from: "FauxTerminal syntax literals #4ade80 #facc15 #f8fafc, LiveGraph #888 and runtime rgba()", to: "--sym-*-light / --text-* tokens; LiveGraph reads computed vars", uses: 9, files: [packages/site/src/components/NodeGraph/FauxTerminal.module.css, packages/site/src/components/NodeGraph/LiveGraph.tsx], status: clear }
+  - { from: "em dashes in UI copy (tell em-dash)", to: "colon, comma or full stop", uses: 6, files: ["(see atelier check em-dash)"], status: clear }
+  - { from: "retired tool names live in content/courses/*.json, which atelier check does not scan", to: "fix by hand (grep paradigm_[a-z]+_[a-z]+) until check covers JSON content", uses: 25, files: [packages/site/src/content/courses/agile-development.json, packages/site/src/content/courses/git-fundamentals.json], status: clear }
+  - { from: "radius 10px (FauxTerminal)", to: "--radius-xl", uses: 1, files: [packages/site/src/components/NodeGraph/FauxTerminal.module.css], status: clear }
+  - { from: "--surface-steel / --text-slate used directly", to: "--surface-4 / --text-muted", uses: 24, files: ["(grep --surface-steel)"], status: clear }
+  - { from: "docs filter with no matches renders nothing", to: "'No docs match \"<q>\".' line", uses: 1, files: [packages/site/src/components/docs/DocsSidebar.tsx], status: clear }
+  - { from: "agents search input disabled with no explanation", to: "remove until search exists, or label 'Search coming soon'", uses: 1, files: [packages/site/src/app/agents/page.tsx], status: clear }
+  - { from: "dead components NodeGraph.tsx, LiveIndicator.tsx", to: "delete", uses: 0, files: [packages/site/src/components/NodeGraph/NodeGraph.tsx, packages/site/src/components/LiveIndicator.tsx], status: clear }
+  - { from: "Academia dark --burgundy (3.7:1) on 12-14px breadcrumbs/links; light --gold as text (2.2:1)", to: "--burgundy-light for small text in dark; gold only for rules/ornament", uses: 6, files: [packages/site/src/app/learn/plsat/page.module.css, "packages/site/src/app/learn/course/[courseId]/page.module.css"], status: clear }

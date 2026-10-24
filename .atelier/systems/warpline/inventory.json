@@ -1,0 +1,4054 @@
+{
+  "root": "/Users/ascend/Documents/GitHub/a-paradigm",
+  "product": "warpline",
+  "name": "Warpline console",
+  "generated": "2026-10-21T15:52:00.166Z",
+  "files": 9,
+  "hasSystem": true,
+  "values": {
+    "color": [
+      {
+        "value": "#e9a23b4d",
+        "count": 5,
+        "where": [
+          "docs/warpline/index.html:267",
+          "docs/warpline/pov.html:104",
+          "docs/warpline/pov.html:108",
+          "docs/warpline/system.html:217",
+          "docs/warpline/system.html:412"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b40",
+        "count": 4,
+        "where": [
+          "docs/warpline/index.html:61",
+          "docs/warpline/index.html:739",
+          "docs/warpline/pov.html:31",
+          "docs/warpline/system.html:69"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bf4d",
+        "count": 4,
+        "where": [
+          "docs/warpline/index.html:268",
+          "docs/warpline/pov.html:103",
+          "docs/warpline/pov.html:109",
+          "docs/warpline/system.html:218"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#00000080",
+        "count": 4,
+        "where": [
+          "docs/warpline/index.html:523",
+          "docs/warpline/index.html:524",
+          "docs/warpline/system.html:486",
+          "docs/warpline/system.html:487"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#0b0d14cc",
+        "count": 3,
+        "where": [
+          "docs/warpline/index.html:117",
+          "docs/warpline/pov.html:51",
+          "docs/warpline/system.html:125"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#000000",
+        "count": 3,
+        "where": [
+          "docs/warpline/index.html:513",
+          "docs/warpline/pov.html:136",
+          "docs/warpline/system.html:476"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#aa11ff00",
+        "count": 3,
+        "where": [
+          "docs/warpline/index.html:650",
+          "docs/warpline/system.html:820",
+          "docs/warpline/system.html:822"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff066",
+        "count": 3,
+        "where": [
+          "docs/warpline/index.html:874",
+          "docs/warpline/index.html:898",
+          "docs/warpline/system.html:220"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#34d8a059",
+        "count": 3,
+        "where": [
+          "docs/warpline/pov.html:102",
+          "docs/warpline/system.html:219",
+          "docs/warpline/system.html:466"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b47",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:180",
+          "docs/warpline/system.html:270"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bf47",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:449",
+          "docs/warpline/system.html:271"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23bb3",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:530",
+          "docs/warpline/system.html:223"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bfb3",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:531",
+          "docs/warpline/system.html:224"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff0cc",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:532",
+          "docs/warpline/system.html:225"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#bb3300ff",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:794",
+          "docs/warpline/index.html:796"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff01a",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:874",
+          "docs/warpline/index.html:898"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#00000066",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:345"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b00",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:176"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b80",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:289"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b0a",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:329"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bf0f",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:329"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bf38",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:361"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#99cc33bb",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:656"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#44ee7711",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:662"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2222ddaa",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:668"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b14",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:739"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bf40",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:788"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#34d8a0",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:904"
+        ],
+        "tokens": [
+          "--clean"
+        ]
+      },
+      {
+        "value": "#e9a23b",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:1741"
+        ],
+        "tokens": [
+          "--warp",
+          "--weave-grad"
+        ]
+      },
+      {
+        "value": "#2dd4bf",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:1745"
+        ],
+        "tokens": [
+          "--weft",
+          "--weave-grad"
+        ]
+      },
+      {
+        "value": "#f2c078",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:1753"
+        ],
+        "tokens": [
+          "--warp-soft"
+        ]
+      },
+      {
+        "value": "rgba(233,162,59,\" + (0.5 * meaningfront)",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:1850"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "rgba(233,162,59,\" + (0.15 + 0.4 * meaningfront)",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:1851"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "rgba(28,33,56,\" + (1)",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:1852"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff059",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:110"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#34d8a01a",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:127"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff080",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:128"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#8b8a8266",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:250"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b66",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:252"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b12",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:252"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bf52",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:254"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#34d8a04d",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:272"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff04d",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:342"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#0f12208c",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:392"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff0b3",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:402"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7c6ff02e",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:410"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#e9a23b59",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:467"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2dd4bf59",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:468"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#5e5c5499",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:469"
+        ],
+        "tokens": []
+      }
+    ],
+    "font": [],
+    "font-size": [
+      {
+        "value": "12",
+        "count": 38,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:139",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:61",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:68",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:84",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:103"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "11",
+        "count": 32,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:118",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:149",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:163",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:230",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:245"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "13",
+        "count": 21,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:169",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:315",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:357",
+          "docs/warpline/index.html:73",
+          "docs/warpline/index.html:271"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "11.5",
+        "count": 13,
+        "where": [
+          "docs/warpline/index.html:263",
+          "docs/warpline/index.html:339",
+          "docs/warpline/index.html:407",
+          "docs/warpline/pov.html:72",
+          "docs/warpline/pov.html:98"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "12.5",
+        "count": 12,
+        "where": [
+          "docs/warpline/index.html:133",
+          "docs/warpline/index.html:487",
+          "docs/warpline/index.html:517",
+          "docs/warpline/pov.html:56",
+          "docs/warpline/pov.html:139"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "15",
+        "count": 11,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:274",
+          "docs/warpline/index.html:172",
+          "docs/warpline/index.html:183",
+          "docs/warpline/index.html:228",
+          "docs/warpline/index.html:387"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "13.5",
+        "count": 11,
+        "where": [
+          "docs/warpline/index.html:138",
+          "docs/warpline/index.html:315",
+          "docs/warpline/index.html:335",
+          "docs/warpline/index.html:377",
+          "docs/warpline/index.html:378"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "14",
+        "count": 8,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:207",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:265",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:271",
+          "docs/warpline/index.html:351",
+          "docs/warpline/index.html:427"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "16",
+        "count": 8,
+        "where": [
+          "docs/warpline/index.html:168",
+          "docs/warpline/index.html:347",
+          "docs/warpline/index.html:438",
+          "docs/warpline/index.html:538",
+          "docs/warpline/index.html:799"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 7,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:121",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:216",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:328",
+          "docs/warpline/system.html:396",
+          "docs/warpline/system.html:403"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "22",
+        "count": 5,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:261",
+          "docs/warpline/index.html:124",
+          "docs/warpline/pov.html:52",
+          "docs/warpline/system.html:132",
+          "docs/warpline/system.html:379"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "18",
+        "count": 5,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:353",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:354",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:368",
+          "docs/warpline/index.html:507",
+          "docs/warpline/system.html:307"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "17",
+        "count": 3,
+        "where": [
+          "docs/warpline/index.html:53",
+          "docs/warpline/pov.html:28",
+          "docs/warpline/system.html:61"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "15.5",
+        "count": 3,
+        "where": [
+          "docs/warpline/index.html:539",
+          "docs/warpline/pov.html:132",
+          "docs/warpline/system.html:313"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "14.5",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:231",
+          "docs/warpline/index.html:368"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "16.5",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:236",
+          "docs/warpline/pov.html:88"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10.5",
+        "count": 2,
+        "where": [
+          "docs/warpline/system.html:321",
+          "docs/warpline/system.html:463"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "20",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:144"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "26",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:229"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "19",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:429"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "21",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:99"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "23",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:131"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "40",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:418"
+        ],
+        "tokens": []
+      }
+    ],
+    "spacing": [
+      {
+        "value": "8",
+        "count": 38,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:137",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:44",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:50",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:60",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:74"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "16",
+        "count": 25,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:137",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:40",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:100",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:123",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:137"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "14",
+        "count": 23,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:40",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:163",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:178",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:222",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:260"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 20,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:83",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:100",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:243",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:265",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:291"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "18",
+        "count": 20,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:138",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:283",
+          "docs/warpline/index.html:141",
+          "docs/warpline/index.html:251",
+          "docs/warpline/index.html:397"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "22",
+        "count": 18,
+        "where": [
+          "docs/warpline/index.html:77",
+          "docs/warpline/index.html:165",
+          "docs/warpline/index.html:224",
+          "docs/warpline/index.html:259",
+          "docs/warpline/index.html:354"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "12",
+        "count": 17,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:138",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:167",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:207",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:271",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:284"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "24",
+        "count": 13,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:123",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:138",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:159",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:206",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:255"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "4",
+        "count": 13,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:167",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:316",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:316",
+          "docs/warpline/index.html:125",
+          "docs/warpline/index.html:373"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "9",
+        "count": 13,
+        "where": [
+          "docs/warpline/index.html:141",
+          "docs/warpline/index.html:264",
+          "docs/warpline/index.html:452",
+          "docs/warpline/index.html:478",
+          "docs/warpline/pov.html:58"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "6",
+        "count": 12,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:83",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:148",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:213",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:230",
+          "docs/warpline/index.html:878"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "20",
+        "count": 10,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:258",
+          "docs/warpline/index.html:335",
+          "docs/warpline/index.html:364",
+          "docs/warpline/index.html:494",
+          "docs/warpline/index.html:1102"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "26",
+        "count": 9,
+        "where": [
+          "docs/warpline/index.html:174",
+          "docs/warpline/index.html:185",
+          "docs/warpline/index.html:235",
+          "docs/warpline/index.html:294",
+          "docs/warpline/index.html:346"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "30",
+        "count": 9,
+        "where": [
+          "docs/warpline/index.html:233",
+          "docs/warpline/index.html:344",
+          "docs/warpline/index.html:384",
+          "docs/warpline/index.html:421",
+          "docs/warpline/index.html:435"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "56",
+        "count": 9,
+        "where": [
+          "docs/warpline/index.html:245",
+          "docs/warpline/index.html:280",
+          "docs/warpline/index.html:306",
+          "docs/warpline/index.html:314",
+          "docs/warpline/index.html:354"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "3",
+        "count": 8,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:249",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:357",
+          "docs/warpline/index.html:264",
+          "docs/warpline/index.html:394",
+          "docs/warpline/pov.html:101"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "7",
+        "count": 7,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:316",
+          "docs/warpline/index.html:451",
+          "docs/warpline/index.html:692",
+          "docs/warpline/index.html:892",
+          "docs/warpline/system.html:183"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "28",
+        "count": 6,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:159",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:276",
+          "docs/warpline/index.html:159",
+          "docs/warpline/index.html:255",
+          "docs/warpline/index.html:507"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "11",
+        "count": 6,
+        "where": [
+          "docs/warpline/index.html:239",
+          "docs/warpline/index.html:367",
+          "docs/warpline/index.html:386",
+          "docs/warpline/index.html:880",
+          "docs/warpline/system.html:293"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "64",
+        "count": 5,
+        "where": [
+          "docs/warpline/index.html:1222",
+          "docs/warpline/index.html:1410",
+          "docs/warpline/index.html:1422",
+          "docs/warpline/index.html:1430",
+          "docs/warpline/index.html:1440"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "40",
+        "count": 4,
+        "where": [
+          "docs/warpline/index.html:168",
+          "docs/warpline/pov.html:92",
+          "docs/warpline/pov.html:93",
+          "docs/warpline/system.html:435"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "44",
+        "count": 4,
+        "where": [
+          "docs/warpline/index.html:222",
+          "docs/warpline/index.html:442",
+          "docs/warpline/index.html:492",
+          "docs/warpline/system.html:284"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "36",
+        "count": 4,
+        "where": [
+          "docs/warpline/index.html:310",
+          "docs/warpline/index.html:503",
+          "docs/warpline/pov.html:124",
+          "docs/warpline/system.html:180"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "48",
+        "count": 4,
+        "where": [
+          "docs/warpline/index.html:503",
+          "docs/warpline/pov.html:112",
+          "docs/warpline/pov.html:122",
+          "docs/warpline/system.html:363"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "2",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:316",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:328",
+          "docs/warpline/system.html:463"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "23",
+        "count": 3,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:321",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:322",
+          "docs/warpline/index.html:885"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "5",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:60",
+          "docs/warpline/system.html:404"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "13",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:346",
+          "docs/warpline/index.html:741"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "80",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:511",
+          "docs/warpline/system.html:162"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "34",
+        "count": 2,
+        "where": [
+          "docs/warpline/pov.html:117",
+          "docs/warpline/pov.html:122"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "72",
+        "count": 2,
+        "where": [
+          "docs/warpline/pov.html:136",
+          "docs/warpline/system.html:474"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "32",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:270"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "21",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:292"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "120",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:150"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "96",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:150"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "60",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:511"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "130",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:63"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "90",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:63"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "38",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:67"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "132",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:162"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "52",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:230"
+        ],
+        "tokens": []
+      }
+    ],
+    "radius": [
+      {
+        "value": "6",
+        "count": 8,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:59",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:82",
+          "docs/warpline/index.html:264",
+          "docs/warpline/pov.html:107",
+          "docs/warpline/system.html:214"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "999",
+        "count": 8,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:168",
+          "docs/warpline/index.html:140",
+          "docs/warpline/index.html:174",
+          "docs/warpline/index.html:185",
+          "docs/warpline/pov.html:58"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "2",
+        "count": 7,
+        "where": [
+          "docs/warpline/index.html:129",
+          "docs/warpline/index.html:240",
+          "docs/warpline/pov.html:53",
+          "docs/warpline/pov.html:89",
+          "docs/warpline/pov.html:123"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "14",
+        "count": 7,
+        "where": [
+          "docs/warpline/index.html:224",
+          "docs/warpline/index.html:293",
+          "docs/warpline/index.html:314",
+          "docs/warpline/index.html:402",
+          "docs/warpline/index.html:436"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "16",
+        "count": 7,
+        "where": [
+          "docs/warpline/index.html:246",
+          "docs/warpline/index.html:359",
+          "docs/warpline/index.html:491",
+          "docs/warpline/index.html:503",
+          "docs/warpline/pov.html:112"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "12",
+        "count": 6,
+        "where": [
+          "docs/warpline/pov.html:71",
+          "docs/warpline/pov.html:117",
+          "docs/warpline/pov.html:117",
+          "docs/warpline/system.html:342",
+          "docs/warpline/system.html:359"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "15",
+        "count": 3,
+        "where": [
+          "docs/warpline/index.html:214",
+          "docs/warpline/pov.html:95",
+          "docs/warpline/system.html:205"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "4",
+        "count": 3,
+        "where": [
+          "docs/warpline/system.html:424",
+          "docs/warpline/system.html:425",
+          "docs/warpline/system.html:431"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "8",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:221",
+          "docs/warpline/system.html:293"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:257",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:282"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "5",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:316",
+          "docs/warpline/system.html:406"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0",
+        "count": 2,
+        "where": [
+          "docs/warpline/pov.html:117",
+          "docs/warpline/pov.html:117"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "13",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:446"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "3",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:184"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "7",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:267"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "18",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:284"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "11",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:392"
+        ],
+        "tokens": []
+      }
+    ],
+    "shadow": [
+      {
+        "value": "0 0 30px rgba(124,111,240,0.1)\">",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:874",
+          "docs/warpline/index.html:898"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 0 rgba(233, 162, 59, 0)",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:176"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 8px 30px rgba(233, 162, 59, 0.28)",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:180"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 14px rgba(233,162,59,0.5)",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:289"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 0 4px rgba(52,216,160,0.1)",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:127"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 14px rgba(124,111,240,0.5)",
+        "count": 1,
+        "where": [
+          "docs/warpline/pov.html:128"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 32px rgba(233,162,59,0.07)",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:252"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0 0 8px rgba(124,111,240,0.7)",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:402"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "inset 0 0 14px rgba(124,111,240,0.18)",
+        "count": 1,
+        "where": [
+          "docs/warpline/system.html:410"
+        ],
+        "tokens": []
+      }
+    ],
+    "duration": [
+      {
+        "value": "600",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:301",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:302"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "0.001",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:549",
+          "docs/warpline/system.html:498"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "300",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:551",
+          "docs/warpline/system.html:500"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "2400",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:192"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "2000",
+        "count": 1,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:335"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "200",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:295"
+        ],
+        "tokens": []
+      }
+    ],
+    "easing": [
+      {
+        "value": "ease-in-out",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:192",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:335"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "ease-out",
+        "count": 2,
+        "where": [
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:301",
+          "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:302"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "ease",
+        "count": 2,
+        "where": [
+          "docs/warpline/index.html:551",
+          "docs/warpline/system.html:500"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "linear",
+        "count": 1,
+        "where": [
+          "docs/warpline/index.html:295"
+        ],
+        "tokens": []
+      }
+    ]
+  },
+  "nearDuplicates": [
+    {
+      "kind": "color",
+      "values": [
+        "#e9a23b4d",
+        "#e9a23b40",
+        "#e9a23b47",
+        "#e9a23bb3",
+        "#e9a23b00",
+        "#e9a23b80",
+        "#e9a23b0a",
+        "#e9a23b14",
+        "#e9a23b66",
+        "#e9a23b12",
+        "#e9a23b59"
+      ],
+      "count": 20
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#2dd4bf4d",
+        "#2dd4bf47",
+        "#2dd4bfb3",
+        "#2dd4bf0f",
+        "#2dd4bf38",
+        "#2dd4bf40",
+        "#2dd4bf52",
+        "#2dd4bf59"
+      ],
+      "count": 13
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#00000080",
+        "#00000066"
+      ],
+      "count": 5
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#0b0d14cc",
+        "#0f12208c"
+      ],
+      "count": 4
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#7c6ff066",
+        "#7c6ff0cc",
+        "#7c6ff01a",
+        "#7c6ff059",
+        "#7c6ff080",
+        "#7c6ff04d",
+        "#7c6ff0b3",
+        "#7c6ff02e"
+      ],
+      "count": 12
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#34d8a059",
+        "#34d8a01a",
+        "#34d8a04d"
+      ],
+      "count": 5
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "12",
+        "11.5"
+      ],
+      "count": 51
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "11",
+        "10.5"
+      ],
+      "count": 34
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "13",
+        "12.5"
+      ],
+      "count": 33
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "15",
+        "15.5"
+      ],
+      "count": 14
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "13.5",
+        "14"
+      ],
+      "count": 19
+    },
+    {
+      "kind": "font-size",
+      "values": [
+        "16",
+        "16.5"
+      ],
+      "count": 10
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "8",
+        "9"
+      ],
+      "count": 51
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "16",
+        "14"
+      ],
+      "count": 48
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "10",
+        "11"
+      ],
+      "count": 26
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "18",
+        "20",
+        "21"
+      ],
+      "count": 31
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "22",
+        "24",
+        "23"
+      ],
+      "count": 34
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "12",
+        "13"
+      ],
+      "count": 19
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "4",
+        "3"
+      ],
+      "count": 21
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "6",
+        "7"
+      ],
+      "count": 19
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "26",
+        "30",
+        "28"
+      ],
+      "count": 24
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "56",
+        "64",
+        "60"
+      ],
+      "count": 15
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "40",
+        "44",
+        "38"
+      ],
+      "count": 9
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "36",
+        "34",
+        "32"
+      ],
+      "count": 7
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "48",
+        "52"
+      ],
+      "count": 5
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "80",
+        "72"
+      ],
+      "count": 4
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "120",
+        "130",
+        "132"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "96",
+        "90"
+      ],
+      "count": 2
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "6",
+        "5"
+      ],
+      "count": 10
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "2",
+        "3"
+      ],
+      "count": 8
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "14",
+        "16",
+        "15"
+      ],
+      "count": 17
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "12",
+        "13"
+      ],
+      "count": 7
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "8",
+        "7"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "radius",
+      "values": [
+        "10",
+        "11"
+      ],
+      "count": 3
+    }
+  ],
+  "tokens": [
+    {
+      "name": "--linen-400",
+      "value": "#8B8A82",
+      "uses": 155,
+      "where": "docs/warpline/index.html:24"
+    },
+    {
+      "name": "--mono",
+      "value": "JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, monospace",
+      "uses": 146,
+      "where": "docs/warpline/index.html:39"
+    },
+    {
+      "name": "--warp",
+      "value": "#e9a23b",
+      "uses": 104,
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:12"
+    },
+    {
+      "name": "--weft",
+      "value": "#2dd4bf",
+      "uses": 104,
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:13"
+    },
+    {
+      "name": "--seam",
+      "value": "#7c6ff0",
+      "uses": 79,
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:14"
+    },
+    {
+      "name": "--ease",
+      "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+      "uses": 73,
+      "where": "docs/warpline/index.html:36"
+    },
+    {
+      "name": "--linen-200",
+      "value": "#CFCABE",
+      "uses": 59,
+      "where": "docs/warpline/index.html:23"
+    },
+    {
+      "name": "--ink-700",
+      "value": "#1C2138",
+      "uses": 58,
+      "where": "docs/warpline/index.html:19"
+    },
+    {
+      "name": "--linen-50",
+      "value": "#F4F1EA",
+      "uses": 52,
+      "where": "docs/warpline/index.html:22"
+    },
+    {
+      "name": "--warp-soft",
+      "value": "#F2C078",
+      "uses": 51,
+      "where": "docs/warpline/index.html:27"
+    },
+    {
+      "name": "--ink-800",
+      "value": "#141829",
+      "uses": 39,
+      "where": "docs/warpline/index.html:18"
+    },
+    {
+      "name": "--ink-850",
+      "value": "#0F1220",
+      "uses": 25,
+      "where": "docs/warpline/index.html:17"
+    },
+    {
+      "name": "--display",
+      "value": "Fraunces\", Georgia, serif",
+      "uses": 23,
+      "where": "docs/warpline/index.html:40"
+    },
+    {
+      "name": "--weft-soft",
+      "value": "#5EEAD4",
+      "uses": 20,
+      "where": "docs/warpline/index.html:29"
+    },
+    {
+      "name": "--cut",
+      "value": "#5e5c54",
+      "uses": 19,
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:16"
+    },
+    {
+      "name": "--clean",
+      "value": "#34d8a0",
+      "uses": 17,
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:15"
+    },
+    {
+      "name": "--textw",
+      "value": "820px",
+      "uses": 17,
+      "where": "docs/warpline/index.html:35"
+    },
+    {
+      "name": "--ink-600",
+      "value": "#2A3050",
+      "uses": 14,
+      "where": "docs/warpline/index.html:20"
+    },
+    {
+      "name": "--warp-mono",
+      "value": "JetBrains Mono', 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace",
+      "uses": 13,
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:19"
+    },
+    {
+      "name": "--ink-900",
+      "value": "#0B0D14",
+      "uses": 12,
+      "where": "docs/warpline/index.html:16"
+    },
+    {
+      "name": "--ui",
+      "value": "Inter\", system-ui, -apple-system, sans-serif",
+      "uses": 12,
+      "where": "docs/warpline/index.html:41"
+    },
+    {
+      "name": "--warp-serif",
+      "value": "Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif",
+      "uses": 11,
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:18"
+    },
+    {
+      "name": "--maxw",
+      "value": "1120px",
+      "uses": 3,
+      "where": "docs/warpline/index.html:34"
+    },
+    {
+      "name": "--pad-sec",
+      "value": "clamp(96px, 14vh, 180px)",
+      "uses": 3,
+      "where": "docs/warpline/index.html:37"
+    },
+    {
+      "name": "--weave-grad",
+      "value": "linear-gradient(135deg, #E9A23B 0%, #2DD4BF 100%)",
+      "uses": 0,
+      "where": "docs/warpline/index.html:32"
+    }
+  ],
+  "unusedTokens": [
+    "--weave-grad"
+  ],
+  "undefinedTokens": [
+    "--p-accent-red",
+    "--p-border",
+    "--p-text-primary",
+    "--p-bg-panel",
+    "--p-bg-tertiary",
+    "--p-text-secondary",
+    "--p-border-active",
+    "--p-bg-hover",
+    "--p-text-muted",
+    "--p-accent-orange",
+    "--p-bg-card"
+  ],
+  "components": [
+    {
+      "name": "WarplineSection",
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:26"
+    },
+    {
+      "name": "OracleDivergenceViewer",
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:25"
+    },
+    {
+      "name": "OracleLedgerRail",
+      "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:14"
+    }
+  ],
+  "classFamilies": [
+    {
+      "family": "reveal",
+      "classes": 1,
+      "uses": 149,
+      "members": [
+        "reveal"
+      ]
+    },
+    {
+      "family": "wl",
+      "classes": 67,
+      "uses": 101,
+      "members": [
+        "wl-empty-viewer",
+        "wl-empty-viewer__h",
+        "wl-runheader",
+        "wl-runheader__weave",
+        "wl-runheader__a",
+        "wl-runheader__verb",
+        "wl-runheader__b",
+        "wl-runheader__meta",
+        "wl-split",
+        "wl-split__side",
+        "wl-split__side--bytes",
+        "wl-split__title"
+      ]
+    },
+    {
+      "family": "warpline",
+      "classes": 4,
+      "uses": 62,
+      "members": [
+        "warpline",
+        "warpline__viewer",
+        "warpline__rail",
+        "warpline-col"
+      ]
+    },
+    {
+      "family": "d2",
+      "classes": 1,
+      "uses": 53,
+      "members": [
+        "d2"
+      ]
+    },
+    {
+      "family": "sec",
+      "classes": 2,
+      "uses": 50,
+      "members": [
+        "sec-deck",
+        "sec-title"
+      ]
+    },
+    {
+      "family": "emph",
+      "classes": 3,
+      "uses": 49,
+      "members": [
+        "emph",
+        "emph-weft",
+        "emph-seam"
+      ]
+    },
+    {
+      "family": "git",
+      "classes": 2,
+      "uses": 46,
+      "members": [
+        "git",
+        "git-eq"
+      ]
+    },
+    {
+      "family": "section",
+      "classes": 3,
+      "uses": 42,
+      "members": [
+        "section",
+        "section--bleed",
+        "section--bleed-deep"
+      ]
+    },
+    {
+      "family": "chip",
+      "classes": 1,
+      "uses": 35,
+      "members": [
+        "chip"
+      ]
+    },
+    {
+      "family": "klass",
+      "classes": 1,
+      "uses": 33,
+      "members": [
+        "klass"
+      ]
+    },
+    {
+      "family": "wrap",
+      "classes": 1,
+      "uses": 31,
+      "members": [
+        "wrap"
+      ]
+    },
+    {
+      "family": "d1",
+      "classes": 1,
+      "uses": 30,
+      "members": [
+        "d1"
+      ]
+    },
+    {
+      "family": "gui",
+      "classes": 2,
+      "uses": 30,
+      "members": [
+        "gui-col",
+        "gui"
+      ]
+    },
+    {
+      "family": "draw",
+      "classes": 1,
+      "uses": 29,
+      "members": [
+        "draw"
+      ]
+    },
+    {
+      "family": "surface",
+      "classes": 4,
+      "uses": 28,
+      "members": [
+        "surface-tag",
+        "surface",
+        "surface-head",
+        "surface-status"
+      ]
+    },
+    {
+      "family": "eyebrow",
+      "classes": 1,
+      "uses": 27,
+      "members": [
+        "eyebrow"
+      ]
+    },
+    {
+      "family": "warpgrid",
+      "classes": 1,
+      "uses": 26,
+      "members": [
+        "warpgrid"
+      ]
+    },
+    {
+      "family": "k",
+      "classes": 1,
+      "uses": 25,
+      "members": [
+        "k"
+      ]
+    },
+    {
+      "family": "d3",
+      "classes": 1,
+      "uses": 24,
+      "members": [
+        "d3"
+      ]
+    },
+    {
+      "family": "layer",
+      "classes": 6,
+      "uses": 24,
+      "members": [
+        "layer",
+        "layer-head",
+        "layer-tag",
+        "layer-name",
+        "layer-body",
+        "layer-pills"
+      ]
+    },
+    {
+      "family": "svg",
+      "classes": 2,
+      "uses": 23,
+      "members": [
+        "svg-lbl-lit",
+        "svg-lbl"
+      ]
+    },
+    {
+      "family": "dim",
+      "classes": 1,
+      "uses": 22,
+      "members": [
+        "dim"
+      ]
+    },
+    {
+      "family": "flow",
+      "classes": 7,
+      "uses": 21,
+      "members": [
+        "flow-down",
+        "flow-block",
+        "flow-bar",
+        "flow-num",
+        "flow-title",
+        "flow-who",
+        "flow-foot"
+      ]
+    },
+    {
+      "family": "wire",
+      "classes": 9,
+      "uses": 19,
+      "members": [
+        "wire",
+        "wire-split",
+        "wire-2x2",
+        "wire-diff-row",
+        "wire-bigzero",
+        "wire-churn",
+        "wire-bars",
+        "wire-bar",
+        "wire-skel"
+      ]
+    },
+    {
+      "family": "none",
+      "classes": 1,
+      "uses": 19,
+      "members": [
+        "none"
+      ]
+    },
+    {
+      "family": "term",
+      "classes": 4,
+      "uses": 18,
+      "members": [
+        "term-row",
+        "term",
+        "term-step",
+        "term-bar"
+      ]
+    },
+    {
+      "family": "l",
+      "classes": 2,
+      "uses": 18,
+      "members": [
+        "l",
+        "l-lit"
+      ]
+    },
+    {
+      "family": "lbl",
+      "classes": 1,
+      "uses": 17,
+      "members": [
+        "lbl"
+      ]
+    },
+    {
+      "family": "glow",
+      "classes": 4,
+      "uses": 17,
+      "members": [
+        "glow-seam",
+        "glow-amber",
+        "glow-weft",
+        "glow"
+      ]
+    },
+    {
+      "family": "step",
+      "classes": 2,
+      "uses": 17,
+      "members": [
+        "step-cap",
+        "step"
+      ]
+    },
+    {
+      "family": "hero",
+      "classes": 7,
+      "uses": 16,
+      "members": [
+        "hero",
+        "hero-canvas",
+        "hero-inner",
+        "hero-h1",
+        "hero-deck",
+        "hero-sub",
+        "hero-legend"
+      ]
+    },
+    {
+      "family": "doescol",
+      "classes": 1,
+      "uses": 16,
+      "members": [
+        "doescol"
+      ]
+    },
+    {
+      "family": "gitcol",
+      "classes": 1,
+      "uses": 16,
+      "members": [
+        "gitcol"
+      ]
+    },
+    {
+      "family": "quiet",
+      "classes": 1,
+      "uses": 15,
+      "members": [
+        "quiet"
+      ]
+    },
+    {
+      "family": "weft",
+      "classes": 2,
+      "uses": 15,
+      "members": [
+        "weft",
+        "weft-anim"
+      ]
+    },
+    {
+      "family": "card",
+      "classes": 1,
+      "uses": 15,
+      "members": [
+        "card"
+      ]
+    },
+    {
+      "family": "row",
+      "classes": 1,
+      "uses": 15,
+      "members": [
+        "row"
+      ]
+    },
+    {
+      "family": "lit",
+      "classes": 1,
+      "uses": 14,
+      "members": [
+        "lit"
+      ]
+    },
+    {
+      "family": "pill",
+      "classes": 1,
+      "uses": 14,
+      "members": [
+        "pill"
+      ]
+    },
+    {
+      "family": "diagram",
+      "classes": 2,
+      "uses": 13,
+      "members": [
+        "diagram",
+        "diagram-cap"
+      ]
+    },
+    {
+      "family": "gap",
+      "classes": 2,
+      "uses": 12,
+      "members": [
+        "gap-row",
+        "gap"
+      ]
+    },
+    {
+      "family": "arr",
+      "classes": 1,
+      "uses": 12,
+      "members": [
+        "arr"
+      ]
+    },
+    {
+      "family": "phase",
+      "classes": 5,
+      "uses": 12,
+      "members": [
+        "phase-path",
+        "phase-row",
+        "phase-node",
+        "phase-note",
+        "phase"
+      ]
+    },
+    {
+      "family": "ok",
+      "classes": 1,
+      "uses": 12,
+      "members": [
+        "ok"
+      ]
+    },
+    {
+      "family": "foot",
+      "classes": 4,
+      "uses": 11,
+      "members": [
+        "foot-grid",
+        "foot-inner",
+        "foot-tag",
+        "foot-links"
+      ]
+    },
+    {
+      "family": "inv",
+      "classes": 7,
+      "uses": 10,
+      "members": [
+        "inv-cols",
+        "inv-panel",
+        "inv-left",
+        "inv-eyebrow",
+        "inv-note",
+        "inv-axis",
+        "inv-right"
+      ]
+    },
+    {
+      "family": "axis",
+      "classes": 1,
+      "uses": 10,
+      "members": [
+        "axis"
+      ]
+    },
+    {
+      "family": "uni",
+      "classes": 1,
+      "uses": 10,
+      "members": [
+        "uni"
+      ]
+    },
+    {
+      "family": "s",
+      "classes": 1,
+      "uses": 10,
+      "members": [
+        "s-n"
+      ]
+    },
+    {
+      "family": "maps",
+      "classes": 1,
+      "uses": 10,
+      "members": [
+        "maps"
+      ]
+    },
+    {
+      "family": "new",
+      "classes": 1,
+      "uses": 10,
+      "members": [
+        "new"
+      ]
+    },
+    {
+      "family": "hash",
+      "classes": 1,
+      "uses": 9,
+      "members": [
+        "hash"
+      ]
+    },
+    {
+      "family": "banner",
+      "classes": 1,
+      "uses": 9,
+      "members": [
+        "banner"
+      ]
+    },
+    {
+      "family": "prompt",
+      "classes": 1,
+      "uses": 9,
+      "members": [
+        "prompt"
+      ]
+    },
+    {
+      "family": "cmd",
+      "classes": 1,
+      "uses": 9,
+      "members": [
+        "cmd"
+      ]
+    },
+    {
+      "family": "cmp",
+      "classes": 3,
+      "uses": 8,
+      "members": [
+        "cmp-scroll",
+        "cmp",
+        "cmp-foot"
+      ]
+    },
+    {
+      "family": "seam",
+      "classes": 2,
+      "uses": 8,
+      "members": [
+        "seam",
+        "seam-bar"
+      ]
+    },
+    {
+      "family": "transformed",
+      "classes": 1,
+      "uses": 8,
+      "members": [
+        "transformed"
+      ]
+    },
+    {
+      "family": "in",
+      "classes": 1,
+      "uses": 7,
+      "members": [
+        "in-view"
+      ]
+    },
+    {
+      "family": "warp",
+      "classes": 1,
+      "uses": 7,
+      "members": [
+        "warp"
+      ]
+    },
+    {
+      "family": "cap",
+      "classes": 3,
+      "uses": 7,
+      "members": [
+        "cap-row",
+        "cap-card",
+        "cap-cmd"
+      ]
+    },
+    {
+      "family": "ol",
+      "classes": 1,
+      "uses": 7,
+      "members": [
+        "ol"
+      ]
+    },
+    {
+      "family": "terminal",
+      "classes": 1,
+      "uses": 7,
+      "members": [
+        "terminal"
+      ]
+    },
+    {
+      "family": "wordmark",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "wordmark"
+      ]
+    },
+    {
+      "family": "key",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "key-points"
+      ]
+    },
+    {
+      "family": "fix",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "fix"
+      ]
+    },
+    {
+      "family": "built",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "built"
+      ]
+    },
+    {
+      "family": "purpose",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "purpose"
+      ]
+    },
+    {
+      "family": "wlabel",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "wlabel"
+      ]
+    },
+    {
+      "family": "w70",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "w70"
+      ]
+    },
+    {
+      "family": "group",
+      "classes": 1,
+      "uses": 6,
+      "members": [
+        "group-head"
+      ]
+    },
+    {
+      "family": "parity",
+      "classes": 4,
+      "uses": 5,
+      "members": [
+        "parity",
+        "parity-keep",
+        "parity-h",
+        "parity-close"
+      ]
+    },
+    {
+      "family": "om",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "om-edge"
+      ]
+    },
+    {
+      "family": "knot",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "knot"
+      ]
+    },
+    {
+      "family": "stat",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "stat"
+      ]
+    },
+    {
+      "family": "v",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "v"
+      ]
+    },
+    {
+      "family": "tag",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "tag"
+      ]
+    },
+    {
+      "family": "rung",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "rung"
+      ]
+    },
+    {
+      "family": "meta",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "meta"
+      ]
+    },
+    {
+      "family": "is",
+      "classes": 5,
+      "uses": 5,
+      "members": [
+        "is-git",
+        "is-warp",
+        "is-engine",
+        "is-surface",
+        "is-divergence"
+      ]
+    },
+    {
+      "family": "obsolete",
+      "classes": 1,
+      "uses": 5,
+      "members": [
+        "obsolete"
+      ]
+    },
+    {
+      "family": "btn",
+      "classes": 2,
+      "uses": 4,
+      "members": [
+        "btn-primary",
+        "btn-ghost"
+      ]
+    },
+    {
+      "family": "pull",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "pull-stmt"
+      ]
+    },
+    {
+      "family": "code",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "code"
+      ]
+    },
+    {
+      "family": "keep",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "keep-row"
+      ]
+    },
+    {
+      "family": "pn",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "pn"
+      ]
+    },
+    {
+      "family": "gloss",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "gloss"
+      ]
+    },
+    {
+      "family": "g",
+      "classes": 4,
+      "uses": 4,
+      "members": [
+        "g-warp",
+        "g-weft",
+        "g-weave",
+        "g-fabric"
+      ]
+    },
+    {
+      "family": "cell",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "cell"
+      ]
+    },
+    {
+      "family": "cn",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "cn"
+      ]
+    },
+    {
+      "family": "nbuilt",
+      "classes": 1,
+      "uses": 4,
+      "members": [
+        "nbuilt"
+      ]
+    },
+    {
+      "family": "topnav",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "topnav"
+      ]
+    },
+    {
+      "family": "navlinks",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "navlinks"
+      ]
+    },
+    {
+      "family": "ghost",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "ghost-btn"
+      ]
+    },
+    {
+      "family": "two",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "two-up"
+      ]
+    },
+    {
+      "family": "scrolled",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "scrolled"
+      ]
+    },
+    {
+      "family": "gate",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "gate"
+      ]
+    },
+    {
+      "family": "up",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "up"
+      ]
+    },
+    {
+      "family": "arrow",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "arrow"
+      ]
+    },
+    {
+      "family": "steps",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "steps"
+      ]
+    },
+    {
+      "family": "clean",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "clean"
+      ]
+    },
+    {
+      "family": "warpv",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "warpv"
+      ]
+    },
+    {
+      "family": "seamv",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "seamv"
+      ]
+    },
+    {
+      "family": "track",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "track"
+      ]
+    },
+    {
+      "family": "fill",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "fill"
+      ]
+    },
+    {
+      "family": "deferred",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "deferred"
+      ]
+    },
+    {
+      "family": "w85",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "w85"
+      ]
+    },
+    {
+      "family": "w50",
+      "classes": 1,
+      "uses": 3,
+      "members": [
+        "w50"
+      ]
+    },
+    {
+      "family": "kw",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "kw"
+      ]
+    },
+    {
+      "family": "loop",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "loop-stage",
+        "loop-center"
+      ]
+    },
+    {
+      "family": "d4",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "d4"
+      ]
+    },
+    {
+      "family": "grid",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "grid-2"
+      ]
+    },
+    {
+      "family": "three",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "three"
+      ]
+    },
+    {
+      "family": "side",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "side"
+      ]
+    },
+    {
+      "family": "sh",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "sh"
+      ]
+    },
+    {
+      "family": "nm",
+      "classes": 1,
+      "uses": 2,
+      "members": [
+        "nm"
+      ]
+    },
+    {
+      "family": "map",
+      "classes": 2,
+      "uses": 2,
+      "members": [
+        "map-controls",
+        "map-foot"
+      ]
+    },
+    {
+      "family": "cta",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "cta-row"
+      ]
+    },
+    {
+      "family": "muted",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "muted"
+      ]
+    },
+    {
+      "family": "inversion",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "inversion-stage"
+      ]
+    },
+    {
+      "family": "rem",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "rem"
+      ]
+    },
+    {
+      "family": "add",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "add"
+      ]
+    },
+    {
+      "family": "honor",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "honor-list"
+      ]
+    },
+    {
+      "family": "obj",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "obj-list"
+      ]
+    },
+    {
+      "family": "mental",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "mental-model"
+      ]
+    },
+    {
+      "family": "walkthrough",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "walkthrough"
+      ]
+    },
+    {
+      "family": "sell",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "sell"
+      ]
+    },
+    {
+      "family": "weave",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "weave-strip"
+      ]
+    },
+    {
+      "family": "glossary",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "glossary"
+      ]
+    },
+    {
+      "family": "final",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "final-cta"
+      ]
+    },
+    {
+      "family": "pov",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "pov"
+      ]
+    },
+    {
+      "family": "status",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "status-strip"
+      ]
+    },
+    {
+      "family": "cold",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "cold"
+      ]
+    },
+    {
+      "family": "note",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "note"
+      ]
+    },
+    {
+      "family": "designed",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "designed"
+      ]
+    },
+    {
+      "family": "latent",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "latent"
+      ]
+    },
+    {
+      "family": "gated",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "gated"
+      ]
+    },
+    {
+      "family": "ladder",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "ladder"
+      ]
+    },
+    {
+      "family": "now",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "now"
+      ]
+    },
+    {
+      "family": "stack",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "stack"
+      ]
+    },
+    {
+      "family": "ro",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "ro-note"
+      ]
+    },
+    {
+      "family": "record",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "record-inset"
+      ]
+    },
+    {
+      "family": "cleanv",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "cleanv"
+      ]
+    },
+    {
+      "family": "handoff",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "handoff"
+      ]
+    },
+    {
+      "family": "gallery",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "gallery"
+      ]
+    },
+    {
+      "family": "bytes",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "bytes"
+      ]
+    },
+    {
+      "family": "meaning",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "meaning"
+      ]
+    },
+    {
+      "family": "amber",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "amber"
+      ]
+    },
+    {
+      "family": "star",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "star"
+      ]
+    },
+    {
+      "family": "strike",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "strike"
+      ]
+    },
+    {
+      "family": "dangle",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "dangle"
+      ]
+    },
+    {
+      "family": "legend",
+      "classes": 1,
+      "uses": 1,
+      "members": [
+        "legend-key"
+      ]
+    }
+  ],
+  "copy": {
+    "distinct": 1027,
+    "samples": [
+      {
+        "text": "1px solid var(--p-border)",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:140"
+      },
+      {
+        "text": "Select an Oracle run",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:34"
+      },
+      {
+        "text": "or pick two branches and Run / Preview to weave one.",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:35"
+      },
+      {
+        "text": "◀ weave ▶",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:64"
+      },
+      {
+        "text": "wl-seam wl-seam--divergence",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:83"
+      },
+      {
+        "text": "wl-seam wl-seam--both-caught",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:85"
+      },
+      {
+        "text": "git · bytes",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:92"
+      },
+      {
+        "text": "warpline · meaning",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:107"
+      },
+      {
+        "text": "Confusion matrix — git × meaning",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:172"
+      },
+      {
+        "text": "meaning · clean",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:175"
+      },
+      {
+        "text": "meaning · knot",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:176"
+      },
+      {
+        "text": "git · clean",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:178"
+      },
+      {
+        "text": "git · conflict",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:182"
+      },
+      {
+        "text": "The weave",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:229"
+      },
+      {
+        "text": "The break",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:237"
+      },
+      {
+        "text": " · retired by ",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:304"
+      },
+      {
+        "text": "essence A",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:330"
+      },
+      {
+        "text": "essence B",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:334"
+      },
+      {
+        "text": "conflicting slots",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:338"
+      },
+      {
+        "text": "from",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:346"
+      },
+      {
+        "text": "edge",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:350"
+      },
+      {
+        "text": "severed target",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:354"
+      },
+      {
+        "text": "retired by",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:358"
+      },
+      {
+        "text": "branch A",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:99"
+      },
+      {
+        "text": "branch B",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:109"
+      },
+      {
+        "text": "POST /oracle — full git-reality, appends the ledger",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:122"
+      },
+      {
+        "text": "POST /forecast — ephemeral meaning forecast, no ledger write",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:130"
+      },
+      {
+        "text": "git only",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:87"
+      },
+      {
+        "text": "meaning only ★",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:96"
+      },
+      {
+        "text": "No knots. No dangles. The weave is clean.",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:142"
+      },
+      {
+        "text": "A scored disagreement git could not see.",
+        "where": "packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:144"
+      },
+      {
+        "text": "WARPLINE — Version control for meaning",
+        "where": "docs/warpline/index.html:6"
+      },
+      {
+        "text": "WARPLINE",
+        "where": "docs/warpline/index.html:562"
+      },
+      {
+        "text": "The Inversion",
+        "where": "docs/warpline/index.html:564"
+      },
+      {
+        "text": "Weaving",
+        "where": "docs/warpline/index.html:565"
+      },
+      {
+        "text": "Tapestry",
+        "where": "docs/warpline/index.html:566"
+      },
+      {
+        "text": "vs Git",
+        "where": "docs/warpline/index.html:567"
+      },
+      {
+        "text": "The CLI",
+        "where": "docs/warpline/index.html:568"
+      },
+      {
+        "text": "Follow the build &rarr;",
+        "where": "docs/warpline/index.html:569"
+      },
+      {
+        "text": "WARPLINE · A successor to Git",
+        "where": "docs/warpline/index.html:580"
+      },
+      {
+        "text": "Version control for meaning,&nbsp;not&nbsp;bytes.",
+        "where": "docs/warpline/index.html:581"
+      },
+      {
+        "text": "The first version control that knows who changed what, why,&nbsp;and what&nbsp;it&nbsp;cost.",
+        "where": "docs/warpline/index.html:582"
+      },
+      {
+        "text": "Now it reads your actual&nbsp;code. Warpline lifts every function into meaning — so a rename costs&nbsp;nothing, and a call into a deleted one can't&nbsp;hide. Experimental, and being woven&nbsp;now.",
+        "where": "docs/warpline/index.html:583"
+      },
+      {
+        "text": "Read the thesis",
+        "where": "docs/warpline/index.html:585"
+      },
+      {
+        "text": "See it weave &darr;",
+        "where": "docs/warpline/index.html:586"
+      },
+      {
+        "text": "02 · The problem",
+        "where": "docs/warpline/index.html:596"
+      },
+      {
+        "text": "Git took a photograph. It froze the&nbsp;bytes.",
+        "where": "docs/warpline/index.html:597"
+      },
+      {
+        "text": "artifact",
+        "where": "docs/warpline/index.html:599"
+      },
+      {
+        "text": "03 · The inversion · the worldview",
+        "where": "docs/warpline/index.html:610"
+      },
+      {
+        "text": "Bytes were never the&nbsp;point.",
+        "where": "docs/warpline/index.html:611"
+      },
+      {
+        "text": "projection",
+        "where": "docs/warpline/index.html:613"
+      },
+      {
+        "text": "bytes",
+        "where": "docs/warpline/index.html:622"
+      },
+      {
+        "text": "function",
+        "where": "docs/warpline/index.html:623"
+      },
+      {
+        "text": "return",
+        "where": "docs/warpline/index.html:624"
+      },
+      {
+        "text": "the file on disk · authoritative today",
+        "where": "docs/warpline/index.html:628"
+      },
+      {
+        "text": "meaning",
+        "where": "docs/warpline/index.html:635"
+      },
+      {
+        "text": "fn",
+        "where": "docs/warpline/index.html:648"
+      },
+      {
+        "text": "totalDue",
+        "where": "docs/warpline/index.html:649"
+      },
+      {
+        "text": "Cart",
+        "where": "docs/warpline/index.html:655"
+      },
+      {
+        "text": "price",
+        "where": "docs/warpline/index.html:661"
+      },
+      {
+        "text": "Money",
+        "where": "docs/warpline/index.html:667"
+      },
+      {
+        "text": "#22da",
+        "where": "docs/warpline/index.html:668"
+      },
+      {
+        "text": "kind + contract + typed edges · ghosted",
+        "where": "docs/warpline/index.html:672"
+      },
+      {
+        "text": "WEAVE ↓  (meaning → code · roadmap)",
+        "where": "docs/warpline/index.html:687"
+      },
+      {
+        "text": "ABSORB ↑  (edits → semantic delta, lossless)",
+        "where": "docs/warpline/index.html:689"
+      },
+      {
+        "text": "absorb( weave( W ) ) &nbsp;≡&nbsp; W",
+        "where": "docs/warpline/index.html:692"
+      },
+      {
+        "text": "WARP",
+        "where": "docs/warpline/index.html:698"
+      },
+      {
+        "text": "The store of meaning. The source of truth — kind, contract, and typed edges, content-addressed.",
+        "where": "docs/warpline/index.html:699"
+      },
+      {
+        "text": "WEAVE",
+        "where": "docs/warpline/index.html:702"
+      },
+      {
+        "text": "Project the warp back into code — the roadmap direction. Today, bytes are materialized from Warpline's own content-addressed store.",
+        "where": "docs/warpline/index.html:703"
+      },
+      {
+        "text": "ABSORB",
+        "where": "docs/warpline/index.html:706"
+      },
+      {
+        "text": "Re-ingest hand edits as a semantic delta — losslessly, back into the warp.",
+        "where": "docs/warpline/index.html:707"
+      },
+      {
+        "text": "04 · The atom of change",
+        "where": "docs/warpline/index.html:717"
+      },
+      {
+        "text": "Every change carries its own&nbsp;conscience.",
+        "where": "docs/warpline/index.html:718"
+      },
+      {
+        "text": "A Git commit makes no claim about consequences. A Warpline",
+        "where": "docs/warpline/index.html:719"
+      },
+      {
+        "text": "justification",
+        "where": "docs/warpline/index.html:719"
+      },
+      {
+        "text": "is the atom — and it can be checked.",
+        "where": "docs/warpline/index.html:719"
+      },
+      {
+        "text": "Git commit · thin",
+        "where": "docs/warpline/index.html:725"
+      },
+      {
+        "text": "byte-diff",
+        "where": "docs/warpline/index.html:733"
+      },
+      {
+        "text": "author string",
+        "where": "docs/warpline/index.html:733"
+      },
+      {
+        "text": "free-text message",
+        "where": "docs/warpline/index.html:733"
+      },
+      {
+        "text": "Makes no claim about consequences.",
+        "where": "docs/warpline/index.html:735"
+      },
+      {
+        "text": "Warpline justification · rich",
+        "where": "docs/warpline/index.html:740"
+      },
+      {
+        "text": "actor",
+        "where": "docs/warpline/index.html:742"
+      },
+      {
+        "text": "&nbsp; agent:rune#7c2 · sealed into the pickId",
+        "where": "docs/warpline/index.html:742"
+      },
+      {
+        "text": "intent",
+        "where": "docs/warpline/index.html:743"
+      },
+      {
+        "text": "&nbsp; correct rounding on multi-currency carts",
+        "where": "docs/warpline/index.html:743"
+      },
+      {
+        "text": "semantic-delta",
+        "where": "docs/warpline/index.html:744"
+      },
+      {
+        "text": "&nbsp; totalDue: ℤ → Money(ccy)",
+        "where": "docs/warpline/index.html:744"
+      },
+      {
+        "text": "ripple-closure",
+        "where": "docs/warpline/index.html:746"
+      },
+      {
+        "text": "🔒 computed by the store, not claimed",
+        "where": "docs/warpline/index.html:753"
+      },
+      {
+        "text": "witness",
+        "where": "docs/warpline/index.html:755"
+      },
+      {
+        "text": "&nbsp; hash-chained ✓ &nbsp;",
+        "where": "docs/warpline/index.html:755"
+      },
+      {
+        "text": "tamper-evident",
+        "where": "docs/warpline/index.html:755"
+      },
+      {
+        "text": "(signatures: roadmap)",
+        "where": "docs/warpline/index.html:755"
+      },
+      {
+        "text": "A change is malformed if it lies about what it&nbsp;touches.",
+        "where": "docs/warpline/index.html:759"
+      },
+      {
+        "text": "05 · Structural identity",
+        "where": "docs/warpline/index.html:768"
+      },
+      {
+        "text": "A rename is not a&nbsp;conflict. It's nothing&nbsp;at&nbsp;all.",
+        "where": "docs/warpline/index.html:769"
+      },
+      {
+        "text": "When meaning is the identity, a label change moves nothing. The",
+        "where": "docs/warpline/index.html:770"
+      },
+      {
+        "text": "hash",
+        "where": "docs/warpline/index.html:770"
+      },
+      {
+        "text": "moves only when the meaning does.",
+        "where": "docs/warpline/index.html:770"
+      },
+      {
+        "text": "Git · text-diff",
+        "where": "docs/warpline/index.html:776"
+      },
+      {
+        "text": "3 files dirtied · review required.",
+        "where": "docs/warpline/index.html:784"
+      },
+      {
+        "text": "Warpline · structural identity",
+        "where": "docs/warpline/index.html:789"
+      },
+      {
+        "text": "label:",
+        "where": "docs/warpline/index.html:791"
+      },
+      {
+        "text": "getUser",
+        "where": "docs/warpline/index.html:791"
+      },
+      {
+        "text": "fetchUser",
+        "where": "docs/warpline/index.html:791"
+      },
+      {
+        "text": "hash(kind + contract + edges):",
+        "where": "docs/warpline/index.html:792"
+      },
+      {
+        "text": "#b30f-77ac-e1",
+        "where": "docs/warpline/index.html:794"
+      },
+      {
+        "text": "edges addressed by target-hash → stay attached",
+        "where": "docs/warpline/index.html:798"
+      },
+      {
+        "text": "diff counter:",
+        "where": "docs/warpline/index.html:799"
+      },
+      {
+        "text": "The hash moves iff the meaning&nbsp;moves.",
+        "where": "docs/warpline/index.html:803"
+      },
+      {
+        "text": "Down to the function.",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": "Warpline doesn't stop at components — it lifts every TypeScript function, method, and class into the same&nbsp;WARP. A function's identity is its structure and written types, never its name or its&nbsp;formatting. Rename",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": "&nbsp;→&nbsp;",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": ", move it to another file, reformat it: same essence, zero&nbsp;delta. Change what it",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": "does",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": "— one operator, one missing",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": "await",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": "— and the essence&nbsp;moves. Code becomes meaning the same way symbols do, and the two share one&nbsp;fabric.",
+        "where": "docs/warpline/index.html:805"
+      },
+      {
+        "text": "06 · Merge is weaving",
+        "where": "docs/warpline/index.html:813"
+      },
+      {
+        "text": "Many branches. One&nbsp;fabric.",
+        "where": "docs/warpline/index.html:814"
+      },
+      {
+        "text": "weave",
+        "where": "docs/warpline/index.html:817"
+      },
+      {
+        "text": "User",
+        "where": "docs/warpline/index.html:832"
+      },
+      {
+        "text": "Order",
+        "where": "docs/warpline/index.html:835"
+      },
+      {
+        "text": "Tax",
+        "where": "docs/warpline/index.html:836"
+      },
+      {
+        "text": "feat/a",
+        "where": "docs/warpline/index.html:845"
+      },
+      {
+        "text": "feat/b",
+        "where": "docs/warpline/index.html:846"
+      },
+      {
+        "text": "feat/c",
+        "where": "docs/warpline/index.html:847"
+      },
+      {
+        "text": "decision",
+        "where": "docs/warpline/index.html:863"
+      },
+      {
+        "text": "dangling reference a text-merge would miss",
+        "where": "docs/warpline/index.html:868"
+      },
+      {
+        "text": "⬡ Recorded decision · not an error · warp node: Money",
+        "where": "docs/warpline/index.html:875"
+      },
+      {
+        "text": "SIDE A · feat/a",
+        "where": "docs/warpline/index.html:878"
+      },
+      {
+        "text": "Money is minor-units integer. Rationale: avoids float drift.",
+        "where": "docs/warpline/index.html:879"
+      },
+      {
+        "text": "ripple blast radius: 11 symbols",
+        "where": "docs/warpline/index.html:880"
+      },
+      {
+        "text": "SIDE C · feat/c",
+        "where": "docs/warpline/index.html:883"
+      },
+      {
+        "text": "Money carries currency tag. Rationale: multi-ccy correctness.",
+        "where": "docs/warpline/index.html:884"
+      },
+      {
+        "text": "ripple blast radius: 23 symbols",
+        "where": "docs/warpline/index.html:885"
+      },
+      {
+        "text": "N non-intersecting branches → one weave, zero human merge labor",
+        "where": "docs/warpline/index.html:892"
+      },
+      {
+        "text": "⬡ The divergence proof · real code · run on this&nbsp;repo",
+        "where": "docs/warpline/index.html:899"
+      },
+      {
+        "text": "Two branches touch one",
+        "where": "docs/warpline/index.html:901"
+      },
+      {
+        "text": ".ts",
+        "where": "docs/warpline/index.html:901"
+      },
+      {
+        "text": "&nbsp;file.",
+        "where": "docs/warpline/index.html:901"
+      },
+      {
+        "text": "Branch",
+        "where": "docs/warpline/index.html:902"
+      },
+      {
+        "text": "renames",
+        "where": "docs/warpline/index.html:902"
+      },
+      {
+        "text": "&amp; deletes the old&nbsp;name.",
+        "where": "docs/warpline/index.html:902"
+      },
+      {
+        "text": "adds a new call to",
+        "where": "docs/warpline/index.html:903"
+      },
+      {
+        "text": "getUser()",
+        "where": "docs/warpline/index.html:903"
+      },
+      {
+        "text": "git merge-tree:&nbsp;&nbsp;",
+        "where": "docs/warpline/index.html:904"
+      },
+      {
+        "text": "CLEAN&nbsp;✓",
+        "where": "docs/warpline/index.html:904"
+      },
+      {
+        "text": "&nbsp;&nbsp;— 0 conflicts. It would&nbsp;ship.",
+        "where": "docs/warpline/index.html:904"
+      },
+      {
+        "text": "warpline oracle:&nbsp;",
+        "where": "docs/warpline/index.html:905"
+      },
+      {
+        "text": "DIVERGENT",
+        "where": "docs/warpline/index.html:905"
+      },
+      {
+        "text": "&nbsp;— a call into a function that no longer&nbsp;exists.",
+        "where": "docs/warpline/index.html:905"
+      },
+      {
+        "text": "git merged the bytes. Warpline saw the break in the&nbsp;meaning.",
+        "where": "docs/warpline/index.html:907"
+      },
+      {
+        "text": "verdict: DIVERGENT&nbsp;·&nbsp;divergeMeaningOnly:&nbsp;1",
+        "where": "docs/warpline/index.html:908"
+      },
+      {
+        "text": "07 · The Tapestry",
+        "where": "docs/warpline/index.html:918"
+      },
+      {
+        "text": "A history you can read at a&nbsp;glance.",
+        "where": "docs/warpline/index.html:919"
+      },
+      {
+        "text": "is",
+        "where": "docs/warpline/index.html:921"
+      },
+      {
+        "text": "pick",
+        "where": "docs/warpline/index.html:922"
+      },
+      {
+        "text": "knot",
+        "where": "docs/warpline/index.html:923"
+      },
+      {
+        "text": "selvage",
+        "where": "docs/warpline/index.html:924"
+      },
+      {
+        "text": "git log --graph",
+        "where": "docs/warpline/index.html:926"
+      },
+      {
+        "text": "BOLT · v2.1.0",
+        "where": "docs/warpline/index.html:937"
+      },
+      {
+        "text": "#user",
+        "where": "docs/warpline/index.html:947"
+      },
+      {
+        "text": "#cart",
+        "where": "docs/warpline/index.html:948"
+      },
+      {
+        "text": "#money ◉3",
+        "where": "docs/warpline/index.html:949"
+      },
+      {
+        "text": "#order",
+        "where": "docs/warpline/index.html:950"
+      },
+      {
+        "text": "#tax",
+        "where": "docs/warpline/index.html:951"
+      },
+      {
+        "text": "main",
+        "where": "docs/warpline/index.html:960"
+      },
+      {
+        "text": "feat/checkout",
+        "where": "docs/warpline/index.html:961"
+      },
+      {
+        "text": "feat/pricing",
+        "where": "docs/warpline/index.html:962"
+      },
+      {
+        "text": "feat/multi-ccy",
+        "where": "docs/warpline/index.html:963"
+      },
+      {
+        "text": "knot · decision",
+        "where": "docs/warpline/index.html:979"
+      },
+      {
+        "text": "selvage · live edge",
+        "where": "docs/warpline/index.html:983"
+      },
+      {
+        "text": "Warp = meaning · Weft = branches · the hot lane glows before it knots · the bright edge is now",
+        "where": "docs/warpline/index.html:986"
+      },
+      {
+        "text": "Follow a thread",
+        "where": "docs/warpline/index.html:992"
+      },
+      {
+        "text": "Click a warp — a symbol — and its whole lifeline lights up across every branch, with",
+        "where": "docs/warpline/index.html:993"
+      },
+      {
+        "text": "who",
+        "where": "docs/warpline/index.html:993"
+      },
+      {
+        "text": "decided each change, unbroken across renames. The query git can't answer: a symbol's whole&nbsp;life.",
+        "where": "docs/warpline/index.html:993"
+      },
+      {
+        "text": "warpline lifeline ^auth",
+        "where": "docs/warpline/index.html:994"
+      },
+      {
+        "text": "The heatmap",
+        "where": "docs/warpline/index.html:997"
+      },
+      {
+        "text": "Warp threads glow by how many open branches contend for them. Cold = will auto-consolidate; hot = a decision is coming. Steer your fleet of branches away from collisions",
+        "where": "docs/warpline/index.html:998"
+      },
+      {
+        "text": "before",
+        "where": "docs/warpline/index.html:998"
+      },
+      {
+        "text": "merge-day, not&nbsp;after.",
+        "where": "docs/warpline/index.html:998"
+      },
+      {
+        "text": "warpline heatmap",
+        "where": "docs/warpline/index.html:999"
+      },
+      {
+        "text": "Preview the weave",
+        "where": "docs/warpline/index.html:1002"
+      },
+      {
+        "text": "Select branches and forecast the result with zero checkout: how many auto-clean, which knots, any dangling references — and the lowest-knot order to weave them. Merge-day becomes a forecast you read&nbsp;first.",
+        "where": "docs/warpline/index.html:1003"
+      },
+      {
+        "text": "warpline weave --preview",
+        "where": "docs/warpline/index.html:1004"
+      },
+      {
+        "text": "08 · The accountability loop",
+        "where": "docs/warpline/index.html:1014"
+      },
+      {
+        "text": "Trust is earned, scoped, and&nbsp;it&nbsp;compounds.",
+        "where": "docs/warpline/index.html:1015"
+      },
+      {
+        "text": "next",
+        "where": "docs/warpline/index.html:1018"
+      },
+      {
+        "text": "CHANGE",
+        "where": "docs/warpline/index.html:1049"
+      },
+      {
+        "text": "FIELD",
+        "where": "docs/warpline/index.html:1055"
+      },
+      {
+        "text": "OUTCOME",
+        "where": "docs/warpline/index.html:1056"
+      },
+      {
+        "text": "ATTRIBUTION",
+        "where": "docs/warpline/index.html:1062"
+      },
+      {
+        "text": "TRUST",
+        "where": "docs/warpline/index.html:1068"
+      },
+      {
+        "text": "UPDATE",
+        "where": "docs/warpline/index.html:1069"
+      },
+      {
+        "text": "breaks / holds",
+        "where": "docs/warpline/index.html:1074"
+      },
+      {
+        "text": "scored vs predicted ripple · honest uncertainty rewarded",
+        "where": "docs/warpline/index.html:1075"
+      }
+    ]
+  },
+  "drift": {}
+}

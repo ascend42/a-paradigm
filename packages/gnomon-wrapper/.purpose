@@ -1,0 +1,123 @@
+version: "2.0"
+description: >-
+  Gnomon wrapper — Gnomon.app, the Tauri 2 shell (Rust over WKWebView) that is
+  the GUI's default daily surface (docs/specs/gnomon.md §11.1, §11.2 rule 2,
+  §16, §18; M1.13, P8-D56). Slice 1 is macOS; WebView2 and the native
+  capture-exclusion panel (S29-K8, M4.6) are later phases with seams left.
+
+components:
+  gnomon-wrapper:
+    description: >-
+      Package-level component (allowlisted in packages/gnomon/test/symbol-allowlist.json:
+      Appendix A treats gnomon-wrapper as a package, not a spec node). Tauri
+      pinned exact (=2.12.4; tauri-build =2.7.3). One window whose main frame
+      is in exactly one phase the NATIVE side moves (src/nav.rs): the bundled
+      status page (tauri://localhost) or the one kernel origin
+      http://127.0.0.1:<port>; on_navigation refuses every other URL (another
+      port, localhost, userinfo tricks, other schemes) and on_new_window
+      denies. IPC is disabled for page content (src/surface.rs): invoke_system
+      replaces Tauri's invoke script with a stub that holds no invoke key and
+      throws, there is no command and no invoke handler, capabilities: [] (the
+      generated gen/schemas/capabilities.json is {}), withGlobalTauri: false,
+      freezePrototype: true. Devtools only in debug builds (no devtools
+      feature). A document-start script defines a frozen
+      window.gnomonSurface='wrapper' on the 127.0.0.1 origin only, which the
+      GUI reads to declare hello surface wrapper and drop the extension-risk
+      badge (display only). Hardened runtime with an EMPTY entitlements set.
+      Double-click flow (src/main.rs): the app spawns `node --disable-sigusr1 <dist>/cli/gnomon.js
+      up --wrapper` (src/kernel.rs: env_clear + HOME USER LOGNAME LANG TMPDIR
+      SHELL + fixed PATH, no NODE_OPTIONS/GNOMON_*/DYLD_*). Trust root (Aegis
+      C1, src/tree.rs shared with build.rs): the build records the node path
+      as found plus the sha256 of its realpath target, and the
+      gnomon-wrapper-kernel-tree:v1 hash of packages/gnomon/{dist,package.json};
+      check_trust_root re-hashes both before every spawn and refuses "built
+      against a different node/kernel … Rebuild the app" (covers brew upgrade
+      node). local.signed.json is not a node source (Aegis C2). Stderr to
+      ~/Library/Logs/Gnomon/kernel.log (0600), reads gnomon-wrapper-channel:v1
+      (src/contract.rs; LaunchGrant Debug redacts token and key), and on a grant
+      runs the native preflight (src/loopback.rs): channel bundleHash == the pin
+      compiled from gui-bundle.ts (src/bundle.rs), its own WebSocket hello with
+      surface wrapper verified natively (src/verify.rs: ed25519-dalek strict,
+      exact SPKI, kernel keyId, sent clientNonce, gnomon:auth-server:v2), then
+      every pinned file and / re-hashed — only then Phase::Kernel and navigate.
+      Any refusal (unprovisioned shows `gnomon identity init`) stays on the
+      status page. Window close hides (kernel keeps running), Dock click
+      reopens, Cmd-Q sends quit, waits 10 s, kills. Tests: unit (nav, surface,
+      contract, verify against TS-generated vectors, bundle, kernel env/argv),
+      tests/live_kernel.rs (preflight vs a live dev kernel; a foreign key and
+      another pin refused), tests/no_page_ipc.rs (config falsifiers).
+      Round 2: the child is `node --disable-sigusr1 …` (NODE_FLAGS, first and
+      only); the channel is #wrapper-channel; lines are capped at 64 KiB at
+      read time; at stdout EOF the phase returns to Status and an EOF without
+      a refusal/down line says "the kernel exited before starting" with the
+      status; Cmd-Q prevent_exit + worker-thread stop (try_wait, 10 s, kill);
+      src/logfile.rs opens kernel.log O_NOFOLLOW with fchmod/fstat checks and
+      a 0700 dir; tests/crafted_ipc.rs (Tauri mock runtime: keyless messages
+      dropped, keyed commands refused from both origins); subframes are
+      excluded by the kernel CSP frame-src 'none' (falsified statically and
+      on the live header). #setup-endpoint (T-2026-10-19-005 MVP-b): an
+      unprovisioned home makes `up --wrapper` emit {t:setup,port,setupToken,
+      setupPublicKey,bundleHash,expiresAt} (contract.rs SetupGrant, Debug
+      redacted; ^setup-token exactly 43 base64url); loopback.rs
+      setup_preflight runs the SAME pin and serverSig checks against the
+      ephemeral setup key speaking gnomon-setup:v1; nav.rs Phase::Setup{port}
+      locks navigation to that one origin; the page reaches no Tauri command
+      (G-GUI-12). After success the channel's {t:up} continues into the
+      normal launch. refusal_text no longer says "In Terminal". The bundled
+      status page (static/status.css) uses the GUI's type tokens
+      (--fs-reading, --fs-title) and base radius (--radius 3), see
+      #gui-type and #gui-space-radius, and copies the GUI's --ground,
+      --ink, --fail per theme (light / prefers-color-scheme dark) and its
+      --mono stack (JetBrains Mono): it cannot import styles.css, so the
+      values are duplicated and must change with it.
+      8.0 M2 (T-2026-10-21-029, TD-2026-10-21-758 zero-build): two build
+      modes, chosen at BUILD time (build.rs, GNOMON_BUILD_MODE). BUNDLE (the
+      release script sets GNOMON_WRAPPER_BUNDLE_STAGE to a Contents-shaped
+      stage): build.rs pins the BUNDLE-RELATIVE paths of src/layout.rs
+      (Resources/node/bin/node, Resources/kernel; shared verbatim with the
+      app like tree.rs) and the sha256 of the staged, already-signed node and
+      the kernel tree hash of the staged kernel; a stage that does not hash
+      fails the build. At every spawn check_trust_root resolves Contents from
+      current_exe's realpath (must be <X>.app/Contents/MacOS), refuses a node
+      or kernel that is a symlink or reaches outside the bundle, and refuses a
+      hash mismatch with "reinstall Gnomon" — so the app runs from any
+      location (moved/copied) and a modified one is refused (Aegis C1 intent
+      kept). DEV (no stage): the absolute checkout pins exactly as before, for
+      founder dogfooding. NodeEntitlements.plist (allow-jit,
+      allow-unsigned-executable-memory only) signs the bundled node;
+      bundled-node.lock.json pins the official Node 24.x tarball per arch.
+      Tests: kernel.rs relocation (an app moved to another directory resolves
+      at its new location, through a symlink too), stage pins == assembled
+      bundle, modified/symlinked node or kernel refused, non-.app executable
+      refused, and a tree-hash vector shared with the release script's JS twin.
+      Aegis M2 review: right before the spawn src/codesign.rs verifies the
+      bundled node with SecStaticCodeCheckValidity (strict, all architectures)
+      against GNOMON_BUILD_NODE_REQUIREMENT (layout::node_requirement:
+      developer-id = Apple anchor + Developer ID + team SW4BMQ8PNL + identifier
+      gnomon.node; adhoc = identifier only, for --unsigned), on top of the
+      hash; pinned files with nlink > 1 are refused; a release-profile build
+      without a stage panics unless GNOMON_WRAPPER_DEV=1 (build-darwin.mjs sets
+      it); `gnomon-wrapper --build-mode` prints bundle|dev and the release
+      script refuses to sign anything else. NodeEntitlements.plist is allow-jit
+      only (measured on arm64). node-release-keys.json vendors the Node release
+      key fingerprints bump-bundled-node.mjs verifies SHASUMS256.txt against.
+      Residual: check-to-posix_spawn window, covered by App Management
+      protection (spec §18.1).
+      8.0 M4 (T-2026-10-21-031): the app also carries
+      Resources/gnomon-mods (the kernel's first-party mods; not part of the
+      wrapper's pins, covered by the app seal and their packageHash pins).
+      Paradigm's `gnomon` (#gnomon-app-installer) installs the app and opens
+      it through LaunchServices, so this wrapper stays the trust root for
+      bare `gnomon`; WRAPPER_REQUIREMENT is the requirement it verifies.
+      CLI passthrough (Aegis M4 high 1): `gnomon-wrapper --cli -- <args>`
+      (kernel.rs parse_cli / cli_command, main.rs run_cli) runs
+      check_trust_root, then execs the bundled node `--disable-sigusr1
+      <kernel>/dist/cli/gnomon.js <args>` with the SAME env allow-list as the
+      kernel child (stdio inherited, cwd kept, exit code and signals the
+      kernel's); no `--` exits 64, a trust-root refusal 69. Paradigm's
+      `gnomon <verb>` uses it, so the terminal and the window share one trust
+      root. Tests: kernel.rs cli units, tests/cli_mode.rs (the built binary;
+      NODE_OPTIONS / GNOMON_* set by the caller never reach the kernel).
+    path: src
+    type: module
+    tags: [gnomon, wrapper, tauri, rust, paradigm-8, M1.13]

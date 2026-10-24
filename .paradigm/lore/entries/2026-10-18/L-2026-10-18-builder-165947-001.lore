@@ -1,0 +1,29 @@
+id: L-2026-10-18-builder-165947-001
+type: milestone
+timestamp: '2026-10-18T16:59:47.239Z'
+author: builder
+title: M1.8 slice 2 round 2 committed (868ad44f..cda4df73)
+summary: 'H1 whole-runner pin + home copy, M3 roots resolved once, M2 + steer race, spec §5 steer row, M1 compaction provenance (typed session.compacted NOT built: it would move clientApiId), T-019 inject bytes fix with real-KernelLog tests, daemon two-boot chain-loop test, compaction headroom/once-per-step/text-tool tail; gnomon 960 pass, gnomon-local 89, contracts 316, mod-sdk 3, tsc clean'
+symbols_touched:
+  - '#local-runner'
+  - '#gnomon-local'
+  - '#supervisor'
+files_modified:
+  - packages/gnomon/src/kernel/supervisor/local-session.ts
+  - packages/gnomon/src/kernel/supervisor/supervisor.ts
+  - packages/gnomon-local/src/agent.ts
+  - packages/gnomon-local/src/compaction.ts
+  - packages/gnomon-local/src/rpc.ts
+  - docs/specs/gnomon.md
+files_created:
+  - packages/gnomon/src/kernel/local/runner-pin.ts
+  - packages/gnomon/test/local-config-daemon.test.ts
+commit: cda4df73
+learnings:
+  - 'No id moved: no new event kind and the contracts rpc param list is unchanged'
+  - 'Deferred to the coordinator: session.compacted kind (moves clientApiId); L1 L2 L3 per instruction'
+body: 'Commits: 868ad44f (1), e9e14d18 (2), 36de3f3d (3), a627de8f (4), 145f0ad6 (5 partial), c464e5f0 (6), d2dce179 + cda4df73 (7).'
+git_context:
+  ref: cda4df73669691191dc37a00a11fe19b400a34df
+  branch: gnomon/m18-slice2
+  dirty: true

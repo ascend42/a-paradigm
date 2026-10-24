@@ -1,0 +1,48 @@
+id: TD-2026-10-24-231
+timestamp: '2026-10-24T04:24:14.252Z'
+title: 'Gnomon orchestration: founder rulings on the design''s open decisions'
+decision: >-
+  For .paradigm/research/paradigm-8/gnomon-orchestration-design.md:
+
+  - R1: balanced roster defaults. Explorer/search and mechanical work (commits, lore, docs) on haiku; builder, tester
+  and reviewer on sonnet; aegis, mika and arky on opus. Paradigm's AGENT_TIERS changes to match.
+
+  - R7: after Continue fresh, the old session stops once the successor has replied, and stays resumable and linked in
+  the sidebar.
+
+  - R4: Cid's context brief is OPT-IN per repo (not on by default).
+
+  - R6 and R11: the handoff thresholds (advise and strong, as a percentage of the window) AND which steps the handoff
+  performs (checkpoint, open fresh, recover, retire old) are human-customizable in Settings. The defaults stay 70% and
+  80% with all steps on.
+
+  - Everything else as recommended:
+    - R2: savings shown as relative conductor-equivalent tokens.
+    - R3: strict roster available, off by default.
+    - R5: a role's model stays a human dial for now.
+    - R8: shadow audits on gnomon-local.
+    - R9: one contract batch.
+    - R10: down-overrides below a floor allowed, and logged.
+    - R12: fix or retire MODEL_PRICING.
+    - R13: pre-register the moat numbers.
+rationale: >-
+  The founder answered the decision dialog on 2026-10-24. The handoff note, quoted: "handoff percent and pieces should
+  be customizable otherwise all yes". The Cid brief is opt-in by the founder's choice over the recommended default-on.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: arky
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#roster-stager'
+  - '#context-handoff'
+  - '#cid-lane'
+  - '#gnomon-cid'
+status: active
+tags:
+  - gnomon
+  - orchestration
+  - roster
+  - handoff

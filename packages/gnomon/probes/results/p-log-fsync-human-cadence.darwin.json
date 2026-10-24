@@ -1,0 +1,1597 @@
+{
+  "probe": "p-log-fsync",
+  "variant": "human-cadence (P8-D83)",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "sqlite": "3.53.0",
+    "node": "v26.0.0"
+  },
+  "conditions": {
+    "note": "shared dev machine under concurrent load during all runs: load average ~12-15 (M4, 10 cores); Data volume 95% full (23 GiB free). 1e6 wall times are 2.5-3x the earlier quiet arm-A 1e6 run (34 s), so absolute tails are load-inflated; H1-vs-H3 contrast within the same run (rep2) is the controlled comparison.",
+    "commands": [
+      "P_LOG_FSYNC_N=300000 P_LOG_FSYNC_ARMS=H1,H2,H2b,H3 node packages/gnomon/probes/run.mjs p-log-fsync --timeout 3600000",
+      "P_LOG_FSYNC_N=1000000 P_LOG_FSYNC_ARMS=H1 (rep1, before criticalSeries was added)",
+      "P_LOG_FSYNC_N=1000000 P_LOG_FSYNC_ARMS=H1,H3 (rep2, with criticalSeries)"
+    ]
+  },
+  "runs": {
+    "n300k-H1-H2-H2b-H3": {
+      "verdict": "pass",
+      "evidence": {
+        "n": 300000,
+        "budgetMs": 5,
+        "tmpRoot": "<tmp>",
+        "dataVolume": "/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)",
+        "cpus": "Apple M4",
+        "armsMeetingBudget": [
+          "H2b",
+          "H3"
+        ],
+        "sqliteCompileOptions": [
+          "ATOMIC_INTRINSICS=1",
+          "COMPILER=clang-17.0.0",
+          "DEFAULT_AUTOVACUUM",
+          "DEFAULT_CACHE_SIZE=-2000",
+          "DEFAULT_FILE_FORMAT=4",
+          "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+          "DEFAULT_MMAP_SIZE=0",
+          "DEFAULT_PAGE_SIZE=4096",
+          "DEFAULT_PCACHE_INITSZ=20",
+          "DEFAULT_RECURSIVE_TRIGGERS",
+          "DEFAULT_SECTOR_SIZE=4096",
+          "DEFAULT_SYNCHRONOUS=2",
+          "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+          "DEFAULT_WAL_SYNCHRONOUS=2",
+          "DEFAULT_WORKER_THREADS=0",
+          "DIRECT_OVERFLOW_READ",
+          "ENABLE_API_ARMOR",
+          "ENABLE_COLUMN_METADATA",
+          "ENABLE_DBSTAT_VTAB",
+          "ENABLE_FTS3",
+          "ENABLE_FTS3_PARENTHESIS",
+          "ENABLE_FTS5",
+          "ENABLE_GEOPOLY",
+          "ENABLE_MATH_FUNCTIONS",
+          "ENABLE_MEMORY_MANAGEMENT",
+          "ENABLE_PERCENTILE",
+          "ENABLE_PREUPDATE_HOOK",
+          "ENABLE_RTREE",
+          "ENABLE_SESSION",
+          "ENABLE_STAT4",
+          "ENABLE_UNLOCK_NOTIFY",
+          "MALLOC_SOFT_LIMIT=1024",
+          "MAX_ATTACHED=10",
+          "MAX_COLUMN=2000",
+          "MAX_COMPOUND_SELECT=500",
+          "MAX_DEFAULT_PAGE_SIZE=8192",
+          "MAX_EXPR_DEPTH=1000",
+          "MAX_FUNCTION_ARG=1000",
+          "MAX_LENGTH=1000000000",
+          "MAX_LIKE_PATTERN_LENGTH=50000",
+          "MAX_MMAP_SIZE=0x7fff0000",
+          "MAX_PAGE_COUNT=0xfffffffe",
+          "MAX_PAGE_SIZE=65536",
+          "MAX_SQL_LENGTH=1000000000",
+          "MAX_TRIGGER_DEPTH=1000",
+          "MAX_VARIABLE_NUMBER=250000",
+          "MAX_VDBE_OP=250000000",
+          "MAX_WORKER_THREADS=8",
+          "MUTEX_PTHREADS",
+          "SYSTEM_MALLOC",
+          "TEMP_STORE=1",
+          "THREADSAFE=1",
+          "USE_URI"
+        ],
+        "arms": {
+          "H1": {
+            "arm": "H1",
+            "desc": "human cadence: D+E coalesced bulk + 1 critical/1000 ms wall: PRAGMA fullfsync=ON (F_FULLFSYNC) + sync anchor rename",
+            "n": 300000,
+            "wallS": 12.523,
+            "checkpoints": 15,
+            "total": {
+              "p50": 0.031,
+              "p90": 0.046,
+              "p99": 0.165,
+              "p999": 0.388,
+              "max": 108.261,
+              "over5ms": 31
+            },
+            "commit": {
+              "p50": 0.031,
+              "p90": 0.044,
+              "p99": 0.077,
+              "p999": 0.281,
+              "max": 108.001,
+              "over5ms": 14
+            },
+            "anchor": {
+              "p50": 0,
+              "p90": 0,
+              "p99": 0.124,
+              "p999": 0.255,
+              "max": 43.995,
+              "over5ms": 17
+            },
+            "slowPer50k": [
+              5,
+              5,
+              3,
+              6,
+              5,
+              7
+            ],
+            "firstSlowAt": 16129,
+            "slowDominatedBy": {
+              "commit": 14,
+              "anchor": 17
+            },
+            "bulk": {
+              "p50": 0.031,
+              "p90": 0.046,
+              "p99": 0.165,
+              "p999": 0.382,
+              "max": 108.261,
+              "over5ms": 20,
+              "n": 299988,
+              "over5Frac": 0.00006666933344000427
+            },
+            "critical": {
+              "p50": 6.41,
+              "p90": 15.307,
+              "p99": 26.702,
+              "p999": 26.702,
+              "max": 26.702,
+              "over5ms": 11,
+              "n": 12
+            },
+            "criticalCommit": {
+              "p50": 6.228,
+              "p90": 15.124,
+              "p99": 26.308,
+              "p999": 26.308,
+              "max": 26.308,
+              "over5ms": 11
+            },
+            "criticalAnchor": {
+              "p50": 0.231,
+              "p90": 0.487,
+              "p99": 0.593,
+              "p999": 0.593,
+              "max": 0.593,
+              "over5ms": 0
+            },
+            "cadence": {
+              "criticalPerWallS": 0.9582368442066598
+            },
+            "gLog04": {
+              "bulkP99Ok": true,
+              "bulkOver5Ok": true,
+              "criticalP99Ok": false
+            }
+          },
+          "H2": {
+            "arm": "H2",
+            "desc": "human cadence: critical = default commit + F_BARRIERFSYNC on the WAL",
+            "reachable": false,
+            "evidence": [
+              "node:sqlite bundles the upstream SQLite amalgamation; PRAGMA compile_options (see evidence.sqliteCompileOptions) has no barrier-fsync option",
+              "upstream os_unix.c full_fsync(): HAVE_FULLFSYNC -> fcntl(F_FULLFSYNC) only when PRAGMA fullfsync=ON, else fsync(2); no F_BARRIERFSYNC path (that is an Apple patch to the system libsqlite3 only)",
+              "node fs.fsync/fsyncSync -> libuv uv__fs_fsync on __APPLE__: fcntl(F_FULLFSYNC) first, F_BARRIERFSYNC only if F_FULLFSYNC fails, then fsync(2); no way to request the barrier alone",
+              "node has no fcntl binding; native helpers are out of scope (no native code), so H2b substitutes"
+            ]
+          },
+          "H2b": {
+            "arm": "H2b",
+            "desc": "human cadence: critical = PRAGMA fullfsync=OFF explicit, synchronous=FULL -> fsync(2) (no drive-cache flush) + sync anchor rename",
+            "n": 300000,
+            "wallS": 12.341,
+            "checkpoints": 15,
+            "total": {
+              "p50": 0.032,
+              "p90": 0.047,
+              "p99": 0.17,
+              "p999": 0.356,
+              "max": 18.055,
+              "over5ms": 17
+            },
+            "commit": {
+              "p50": 0.032,
+              "p90": 0.044,
+              "p99": 0.08,
+              "p999": 0.235,
+              "max": 5.946,
+              "over5ms": 1
+            },
+            "anchor": {
+              "p50": 0,
+              "p90": 0,
+              "p99": 0.132,
+              "p999": 0.245,
+              "max": 18.017,
+              "over5ms": 16
+            },
+            "slowPer50k": [
+              3,
+              3,
+              2,
+              4,
+              2,
+              3
+            ],
+            "firstSlowAt": 20000,
+            "slowDominatedBy": {
+              "commit": 1,
+              "anchor": 16
+            },
+            "bulk": {
+              "p50": 0.032,
+              "p90": 0.047,
+              "p99": 0.17,
+              "p999": 0.356,
+              "max": 18.055,
+              "over5ms": 17,
+              "n": 299988,
+              "over5Frac": 0.000056668933424003625
+            },
+            "critical": {
+              "p50": 0.185,
+              "p90": 0.251,
+              "p99": 0.302,
+              "p999": 0.302,
+              "max": 0.302,
+              "over5ms": 0,
+              "n": 12
+            },
+            "criticalCommit": {
+              "p50": 0.06,
+              "p90": 0.067,
+              "p99": 0.078,
+              "p999": 0.078,
+              "max": 0.078,
+              "over5ms": 0
+            },
+            "criticalAnchor": {
+              "p50": 0.128,
+              "p90": 0.187,
+              "p99": 0.224,
+              "p999": 0.224,
+              "max": 0.224,
+              "over5ms": 0
+            },
+            "cadence": {
+              "criticalPerWallS": 0.9723685276719878
+            },
+            "gLog04": {
+              "bulkP99Ok": true,
+              "bulkOver5Ok": true,
+              "criticalP99Ok": true
+            }
+          },
+          "H3": {
+            "arm": "H3",
+            "desc": "human cadence: critical = no extra flush (synchronous=FULL default) + sync anchor rename (baseline)",
+            "n": 300000,
+            "wallS": 12.051,
+            "checkpoints": 15,
+            "total": {
+              "p50": 0.031,
+              "p90": 0.045,
+              "p99": 0.157,
+              "p999": 0.25,
+              "max": 48.974,
+              "over5ms": 19
+            },
+            "commit": {
+              "p50": 0.031,
+              "p90": 0.043,
+              "p99": 0.077,
+              "p999": 0.146,
+              "max": 45.847,
+              "over5ms": 3
+            },
+            "anchor": {
+              "p50": 0,
+              "p90": 0,
+              "p99": 0.124,
+              "p999": 0.174,
+              "max": 48.945,
+              "over5ms": 15
+            },
+            "slowPer50k": [
+              2,
+              3,
+              2,
+              3,
+              2,
+              7
+            ],
+            "firstSlowAt": 20000,
+            "slowDominatedBy": {
+              "commit": 4,
+              "anchor": 15
+            },
+            "bulk": {
+              "p50": 0.031,
+              "p90": 0.045,
+              "p99": 0.157,
+              "p999": 0.25,
+              "max": 48.974,
+              "over5ms": 19,
+              "n": 299988,
+              "over5Frac": 0.00006333586676800405
+            },
+            "critical": {
+              "p50": 0.151,
+              "p90": 0.174,
+              "p99": 0.19,
+              "p999": 0.19,
+              "max": 0.19,
+              "over5ms": 0,
+              "n": 12
+            },
+            "criticalCommit": {
+              "p50": 0.03,
+              "p90": 0.04,
+              "p99": 0.062,
+              "p999": 0.062,
+              "max": 0.062,
+              "over5ms": 0
+            },
+            "criticalAnchor": {
+              "p50": 0.125,
+              "p90": 0.133,
+              "p99": 0.139,
+              "p999": 0.139,
+              "max": 0.139,
+              "over5ms": 0
+            },
+            "cadence": {
+              "criticalPerWallS": 0.9957679860592482
+            },
+            "gLog04": {
+              "bulkP99Ok": true,
+              "bulkOver5Ok": true,
+              "criticalP99Ok": true
+            }
+          }
+        }
+      },
+      "specRefs": [
+        "§3.2",
+        "G-LOG-06",
+        "M1.2 append p99 <= 5 ms"
+      ],
+      "at": "2026-10-17T19:16:30.189Z"
+    },
+    "n1e6-H1-rep1": {
+      "verdict": "fail",
+      "evidence": {
+        "n": 1000000,
+        "budgetMs": 5,
+        "tmpRoot": "<tmp>",
+        "dataVolume": "/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)",
+        "cpus": "Apple M4",
+        "armsMeetingBudget": [],
+        "sqliteCompileOptions": [
+          "ATOMIC_INTRINSICS=1",
+          "COMPILER=clang-17.0.0",
+          "DEFAULT_AUTOVACUUM",
+          "DEFAULT_CACHE_SIZE=-2000",
+          "DEFAULT_FILE_FORMAT=4",
+          "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+          "DEFAULT_MMAP_SIZE=0",
+          "DEFAULT_PAGE_SIZE=4096",
+          "DEFAULT_PCACHE_INITSZ=20",
+          "DEFAULT_RECURSIVE_TRIGGERS",
+          "DEFAULT_SECTOR_SIZE=4096",
+          "DEFAULT_SYNCHRONOUS=2",
+          "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+          "DEFAULT_WAL_SYNCHRONOUS=2",
+          "DEFAULT_WORKER_THREADS=0",
+          "DIRECT_OVERFLOW_READ",
+          "ENABLE_API_ARMOR",
+          "ENABLE_COLUMN_METADATA",
+          "ENABLE_DBSTAT_VTAB",
+          "ENABLE_FTS3",
+          "ENABLE_FTS3_PARENTHESIS",
+          "ENABLE_FTS5",
+          "ENABLE_GEOPOLY",
+          "ENABLE_MATH_FUNCTIONS",
+          "ENABLE_MEMORY_MANAGEMENT",
+          "ENABLE_PERCENTILE",
+          "ENABLE_PREUPDATE_HOOK",
+          "ENABLE_RTREE",
+          "ENABLE_SESSION",
+          "ENABLE_STAT4",
+          "ENABLE_UNLOCK_NOTIFY",
+          "MALLOC_SOFT_LIMIT=1024",
+          "MAX_ATTACHED=10",
+          "MAX_COLUMN=2000",
+          "MAX_COMPOUND_SELECT=500",
+          "MAX_DEFAULT_PAGE_SIZE=8192",
+          "MAX_EXPR_DEPTH=1000",
+          "MAX_FUNCTION_ARG=1000",
+          "MAX_LENGTH=1000000000",
+          "MAX_LIKE_PATTERN_LENGTH=50000",
+          "MAX_MMAP_SIZE=0x7fff0000",
+          "MAX_PAGE_COUNT=0xfffffffe",
+          "MAX_PAGE_SIZE=65536",
+          "MAX_SQL_LENGTH=1000000000",
+          "MAX_TRIGGER_DEPTH=1000",
+          "MAX_VARIABLE_NUMBER=250000",
+          "MAX_VDBE_OP=250000000",
+          "MAX_WORKER_THREADS=8",
+          "MUTEX_PTHREADS",
+          "SYSTEM_MALLOC",
+          "TEMP_STORE=1",
+          "THREADSAFE=1",
+          "USE_URI"
+        ],
+        "arms": {
+          "H1": {
+            "arm": "H1",
+            "desc": "human cadence: D+E coalesced bulk + 1 critical/1000 ms wall: PRAGMA fullfsync=ON (F_FULLFSYNC) + sync anchor rename",
+            "n": 1000000,
+            "wallS": 87.705,
+            "checkpoints": 50,
+            "total": {
+              "p50": 0.035,
+              "p90": 0.053,
+              "p99": 0.229,
+              "p999": 7.702,
+              "max": 2874.006,
+              "over5ms": 2358
+            },
+            "commit": {
+              "p50": 0.035,
+              "p90": 0.051,
+              "p99": 0.127,
+              "p999": 7.667,
+              "max": 2870.59,
+              "over5ms": 2295
+            },
+            "anchor": {
+              "p50": 0,
+              "p90": 0,
+              "p99": 0.14,
+              "p999": 0.291,
+              "max": 528.133,
+              "over5ms": 68
+            },
+            "slowPer50k": [
+              10,
+              5,
+              4,
+              6,
+              78,
+              233,
+              117,
+              96,
+              92,
+              107,
+              51,
+              189,
+              95,
+              263,
+              159,
+              154,
+              118,
+              157,
+              239,
+              185
+            ],
+            "firstSlowAt": 9847,
+            "slowDominatedBy": {
+              "commit": 2293,
+              "anchor": 65
+            },
+            "bulk": {
+              "p50": 0.035,
+              "p90": 0.053,
+              "p99": 0.228,
+              "p999": 7.685,
+              "max": 1018.389,
+              "over5ms": 2274,
+              "n": 999916,
+              "over5Frac": 0.0022741910320466917
+            },
+            "critical": {
+              "p50": 55.751,
+              "p90": 682.569,
+              "p99": 2874.006,
+              "p999": 2874.006,
+              "max": 2874.006,
+              "over5ms": 84,
+              "n": 84
+            },
+            "criticalCommit": {
+              "p50": 53.344,
+              "p90": 668.644,
+              "p99": 2870.59,
+              "p999": 2870.59,
+              "max": 2870.59,
+              "over5ms": 84
+            },
+            "criticalAnchor": {
+              "p50": 0.697,
+              "p90": 2.53,
+              "p99": 13.925,
+              "p999": 13.925,
+              "max": 13.925,
+              "over5ms": 4
+            },
+            "cadence": {
+              "criticalPerWallS": 0.9577561142466222
+            },
+            "gLog04": {
+              "bulkP99Ok": true,
+              "bulkOver5Ok": false,
+              "criticalP99Ok": false
+            }
+          }
+        }
+      },
+      "specRefs": [
+        "§3.2",
+        "G-LOG-06",
+        "M1.2 append p99 <= 5 ms"
+      ],
+      "at": "2026-10-17T19:18:04.949Z"
+    },
+    "n1e6-H1-H3-rep2": {
+      "verdict": "fail",
+      "evidence": {
+        "n": 1000000,
+        "budgetMs": 5,
+        "tmpRoot": "<tmp>",
+        "dataVolume": "/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)",
+        "cpus": "Apple M4",
+        "armsMeetingBudget": [],
+        "sqliteCompileOptions": [
+          "ATOMIC_INTRINSICS=1",
+          "COMPILER=clang-17.0.0",
+          "DEFAULT_AUTOVACUUM",
+          "DEFAULT_CACHE_SIZE=-2000",
+          "DEFAULT_FILE_FORMAT=4",
+          "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+          "DEFAULT_MMAP_SIZE=0",
+          "DEFAULT_PAGE_SIZE=4096",
+          "DEFAULT_PCACHE_INITSZ=20",
+          "DEFAULT_RECURSIVE_TRIGGERS",
+          "DEFAULT_SECTOR_SIZE=4096",
+          "DEFAULT_SYNCHRONOUS=2",
+          "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+          "DEFAULT_WAL_SYNCHRONOUS=2",
+          "DEFAULT_WORKER_THREADS=0",
+          "DIRECT_OVERFLOW_READ",
+          "ENABLE_API_ARMOR",
+          "ENABLE_COLUMN_METADATA",
+          "ENABLE_DBSTAT_VTAB",
+          "ENABLE_FTS3",
+          "ENABLE_FTS3_PARENTHESIS",
+          "ENABLE_FTS5",
+          "ENABLE_GEOPOLY",
+          "ENABLE_MATH_FUNCTIONS",
+          "ENABLE_MEMORY_MANAGEMENT",
+          "ENABLE_PERCENTILE",
+          "ENABLE_PREUPDATE_HOOK",
+          "ENABLE_RTREE",
+          "ENABLE_SESSION",
+          "ENABLE_STAT4",
+          "ENABLE_UNLOCK_NOTIFY",
+          "MALLOC_SOFT_LIMIT=1024",
+          "MAX_ATTACHED=10",
+          "MAX_COLUMN=2000",
+          "MAX_COMPOUND_SELECT=500",
+          "MAX_DEFAULT_PAGE_SIZE=8192",
+          "MAX_EXPR_DEPTH=1000",
+          "MAX_FUNCTION_ARG=1000",
+          "MAX_LENGTH=1000000000",
+          "MAX_LIKE_PATTERN_LENGTH=50000",
+          "MAX_MMAP_SIZE=0x7fff0000",
+          "MAX_PAGE_COUNT=0xfffffffe",
+          "MAX_PAGE_SIZE=65536",
+          "MAX_SQL_LENGTH=1000000000",
+          "MAX_TRIGGER_DEPTH=1000",
+          "MAX_VARIABLE_NUMBER=250000",
+          "MAX_VDBE_OP=250000000",
+          "MAX_WORKER_THREADS=8",
+          "MUTEX_PTHREADS",
+          "SYSTEM_MALLOC",
+          "TEMP_STORE=1",
+          "THREADSAFE=1",
+          "USE_URI"
+        ],
+        "arms": {
+          "H1": {
+            "arm": "H1",
+            "desc": "human cadence: D+E coalesced bulk + 1 critical/1000 ms wall: PRAGMA fullfsync=ON (F_FULLFSYNC) + sync anchor rename",
+            "n": 1000000,
+            "wallS": 109.26,
+            "checkpoints": 50,
+            "total": {
+              "p50": 0.039,
+              "p90": 0.061,
+              "p99": 0.344,
+              "p999": 7.728,
+              "max": 6760.461,
+              "over5ms": 2836
+            },
+            "commit": {
+              "p50": 0.038,
+              "p90": 0.059,
+              "p99": 0.235,
+              "p999": 7.679,
+              "max": 6750.542,
+              "over5ms": 2744
+            },
+            "anchor": {
+              "p50": 0,
+              "p90": 0,
+              "p99": 0.232,
+              "p999": 0.442,
+              "max": 631.77,
+              "over5ms": 97
+            },
+            "slowPer50k": [
+              20,
+              16,
+              13,
+              11,
+              13,
+              14,
+              383,
+              137,
+              443,
+              305,
+              225,
+              59,
+              175,
+              118,
+              94,
+              72,
+              297,
+              146,
+              100,
+              195
+            ],
+            "firstSlowAt": 1132,
+            "slowDominatedBy": {
+              "commit": 2751,
+              "anchor": 85
+            },
+            "bulk": {
+              "p50": 0.039,
+              "p90": 0.061,
+              "p99": 0.341,
+              "p999": 7.709,
+              "max": 631.836,
+              "over5ms": 2738,
+              "n": 999901,
+              "over5Frac": 0.0027382710888377948
+            },
+            "critical": {
+              "p50": 47.081,
+              "p90": 689.174,
+              "p99": 6760.461,
+              "p999": 6760.461,
+              "max": 6760.461,
+              "over5ms": 98,
+              "n": 99
+            },
+            "criticalCommit": {
+              "p50": 46.756,
+              "p90": 688.686,
+              "p99": 6750.542,
+              "p999": 6750.542,
+              "max": 6750.542,
+              "over5ms": 93
+            },
+            "criticalAnchor": {
+              "p50": 0.832,
+              "p90": 5.398,
+              "p99": 160.741,
+              "p999": 160.741,
+              "max": 160.741,
+              "over5ms": 10
+            },
+            "cadence": {
+              "criticalPerWallS": 0.9060955518945634
+            },
+            "criticalSeries": [
+              [
+                10845,
+                6.724
+              ],
+              [
+                25663,
+                8.098
+              ],
+              [
+                43402,
+                6.496
+              ],
+              [
+                61259,
+                5.949
+              ],
+              [
+                78501,
+                5.803
+              ],
+              [
+                98394,
+                7.268
+              ],
+              [
+                115716,
+                5.921
+              ],
+              [
+                133637,
+                9.097
+              ],
+              [
+                151319,
+                7.305
+              ],
+              [
+                169238,
+                7.078
+              ],
+              [
+                189255,
+                6.222
+              ],
+              [
+                207338,
+                4.645
+              ],
+              [
+                225890,
+                5.172
+              ],
+              [
+                241909,
+                52.28
+              ],
+              [
+                258248,
+                31.029
+              ],
+              [
+                273721,
+                65.291
+              ],
+              [
+                290476,
+                18.89
+              ],
+              [
+                307082,
+                63.057
+              ],
+              [
+                320670,
+                62.201
+              ],
+              [
+                321567,
+                6760.461
+              ],
+              [
+                321568,
+                21.603
+              ],
+              [
+                334796,
+                62.684
+              ],
+              [
+                345055,
+                76.228
+              ],
+              [
+                345509,
+                88.456
+              ],
+              [
+                345848,
+                577.77
+              ],
+              [
+                351282,
+                23.711
+              ],
+              [
+                363953,
+                88.159
+              ],
+              [
+                374856,
+                76.109
+              ],
+              [
+                375123,
+                413.472
+              ],
+              [
+                383956,
+                76.784
+              ],
+              [
+                394667,
+                31.007
+              ],
+              [
+                400631,
+                110.626
+              ],
+              [
+                401067,
+                63.753
+              ],
+              [
+                414776,
+                19.193
+              ],
+              [
+                423257,
+                19.628
+              ],
+              [
+                426536,
+                58.373
+              ],
+              [
+                430836,
+                62.51
+              ],
+              [
+                440001,
+                47.081
+              ],
+              [
+                446989,
+                54.258
+              ],
+              [
+                450659,
+                141.673
+              ],
+              [
+                451052,
+                397.69
+              ],
+              [
+                452024,
+                10.999
+              ],
+              [
+                464592,
+                28.045
+              ],
+              [
+                472488,
+                287.068
+              ],
+              [
+                472700,
+                456.34
+              ],
+              [
+                476470,
+                86.111
+              ],
+              [
+                489588,
+                26.828
+              ],
+              [
+                501399,
+                160.968
+              ],
+              [
+                501912,
+                689.174
+              ],
+              [
+                505611,
+                48.262
+              ],
+              [
+                519345,
+                14.859
+              ],
+              [
+                532064,
+                133.659
+              ],
+              [
+                532853,
+                768.168
+              ],
+              [
+                536842,
+                24.161
+              ],
+              [
+                554974,
+                39.819
+              ],
+              [
+                562790,
+                1262.338
+              ],
+              [
+                562791,
+                38.373
+              ],
+              [
+                586405,
+                15.602
+              ],
+              [
+                606395,
+                37.663
+              ],
+              [
+                607327,
+                684.017
+              ],
+              [
+                615120,
+                50.527
+              ],
+              [
+                638030,
+                18.762
+              ],
+              [
+                648716,
+                2072.589
+              ],
+              [
+                648717,
+                14.105
+              ],
+              [
+                668752,
+                24.671
+              ],
+              [
+                688194,
+                29.986
+              ],
+              [
+                691078,
+                766.081
+              ],
+              [
+                695798,
+                42.208
+              ],
+              [
+                713699,
+                73.399
+              ],
+              [
+                730310,
+                76.894
+              ],
+              [
+                735434,
+                994.81
+              ],
+              [
+                735442,
+                15.852
+              ],
+              [
+                754192,
+                51.403
+              ],
+              [
+                770897,
+                76.125
+              ],
+              [
+                778719,
+                1149.159
+              ],
+              [
+                778720,
+                9.54
+              ],
+              [
+                796861,
+                70.534
+              ],
+              [
+                809488,
+                15.272
+              ],
+              [
+                810323,
+                625.462
+              ],
+              [
+                817024,
+                11.102
+              ],
+              [
+                833035,
+                14.133
+              ],
+              [
+                841276,
+                112.651
+              ],
+              [
+                841917,
+                591.875
+              ],
+              [
+                849351,
+                39.035
+              ],
+              [
+                866109,
+                128.285
+              ],
+              [
+                876327,
+                116.788
+              ],
+              [
+                880001,
+                32.814
+              ],
+              [
+                883145,
+                14.121
+              ],
+              [
+                901364,
+                46.956
+              ],
+              [
+                917603,
+                28.397
+              ],
+              [
+                921776,
+                2268.358
+              ],
+              [
+                921777,
+                20.092
+              ],
+              [
+                939442,
+                21.063
+              ],
+              [
+                955215,
+                38.377
+              ],
+              [
+                961531,
+                1297.207
+              ],
+              [
+                961532,
+                14.268
+              ],
+              [
+                977982,
+                42.91
+              ],
+              [
+                990643,
+                60.211
+              ],
+              [
+                991537,
+                449.678
+              ]
+            ],
+            "gLog04": {
+              "bulkP99Ok": true,
+              "bulkOver5Ok": false,
+              "criticalP99Ok": false
+            }
+          },
+          "H3": {
+            "arm": "H3",
+            "desc": "human cadence: critical = no extra flush (synchronous=FULL default) + sync anchor rename (baseline)",
+            "n": 1000000,
+            "wallS": 95.205,
+            "checkpoints": 50,
+            "total": {
+              "p50": 0.036,
+              "p90": 0.056,
+              "p99": 0.313,
+              "p999": 7.781,
+              "max": 718.186,
+              "over5ms": 5522
+            },
+            "commit": {
+              "p50": 0.036,
+              "p90": 0.054,
+              "p99": 0.233,
+              "p999": 7.71,
+              "max": 714.484,
+              "over5ms": 5466
+            },
+            "anchor": {
+              "p50": 0,
+              "p90": 0,
+              "p99": 0.132,
+              "p999": 0.292,
+              "max": 141.089,
+              "over5ms": 59
+            },
+            "slowPer50k": [
+              366,
+              361,
+              208,
+              397,
+              174,
+              486,
+              234,
+              348,
+              198,
+              297,
+              201,
+              407,
+              203,
+              197,
+              404,
+              199,
+              201,
+              297,
+              298,
+              46
+            ],
+            "firstSlowAt": 548,
+            "slowDominatedBy": {
+              "commit": 5464,
+              "anchor": 58
+            },
+            "bulk": {
+              "p50": 0.036,
+              "p90": 0.056,
+              "p99": 0.312,
+              "p999": 7.78,
+              "max": 718.186,
+              "over5ms": 5516,
+              "n": 999906,
+              "over5Frac": 0.005516518552743958
+            },
+            "critical": {
+              "p50": 0.258,
+              "p90": 0.716,
+              "p99": 10.183,
+              "p999": 10.183,
+              "max": 10.183,
+              "over5ms": 6,
+              "n": 94
+            },
+            "criticalCommit": {
+              "p50": 0.051,
+              "p90": 0.117,
+              "p99": 7.792,
+              "p999": 7.792,
+              "max": 7.792,
+              "over5ms": 5
+            },
+            "criticalAnchor": {
+              "p50": 0.188,
+              "p90": 0.366,
+              "p99": 10.005,
+              "p999": 10.005,
+              "max": 10.005,
+              "over5ms": 1
+            },
+            "cadence": {
+              "criticalPerWallS": 0.9873431017278504
+            },
+            "criticalSeries": [
+              [
+                9872,
+                0.459
+              ],
+              [
+                11635,
+                0.368
+              ],
+              [
+                21509,
+                0.244
+              ],
+              [
+                39563,
+                0.205
+              ],
+              [
+                41170,
+                7.911
+              ],
+              [
+                48312,
+                0.344
+              ],
+              [
+                63870,
+                0.221
+              ],
+              [
+                70133,
+                0.393
+              ],
+              [
+                71526,
+                0.205
+              ],
+              [
+                86450,
+                0.21
+              ],
+              [
+                99042,
+                0.509
+              ],
+              [
+                99850,
+                0.24
+              ],
+              [
+                108435,
+                0.261
+              ],
+              [
+                123514,
+                0.3
+              ],
+              [
+                126150,
+                0.367
+              ],
+              [
+                129383,
+                0.282
+              ],
+              [
+                145945,
+                0.295
+              ],
+              [
+                157929,
+                0.344
+              ],
+              [
+                158744,
+                3.868
+              ],
+              [
+                171673,
+                0.27
+              ],
+              [
+                187307,
+                0.33
+              ],
+              [
+                188111,
+                0.33
+              ],
+              [
+                196872,
+                0.194
+              ],
+              [
+                214793,
+                0.19
+              ],
+              [
+                221564,
+                0.224
+              ],
+              [
+                222047,
+                10.183
+              ],
+              [
+                240001,
+                2.957
+              ],
+              [
+                252275,
+                0.716
+              ],
+              [
+                253100,
+                0.3
+              ],
+              [
+                253782,
+                0.449
+              ],
+              [
+                270347,
+                0.222
+              ],
+              [
+                286329,
+                0.329
+              ],
+              [
+                286778,
+                0.375
+              ],
+              [
+                293487,
+                0.307
+              ],
+              [
+                311314,
+                0.294
+              ],
+              [
+                319224,
+                0.371
+              ],
+              [
+                319751,
+                0.3
+              ],
+              [
+                338760,
+                0.35
+              ],
+              [
+                349783,
+                0.376
+              ],
+              [
+                350540,
+                8.354
+              ],
+              [
+                363058,
+                0.25
+              ],
+              [
+                381919,
+                0.294
+              ],
+              [
+                388705,
+                0.249
+              ],
+              [
+                389485,
+                0.232
+              ],
+              [
+                407721,
+                0.206
+              ],
+              [
+                422843,
+                0.258
+              ],
+              [
+                423630,
+                7.926
+              ],
+              [
+                439562,
+                0.15
+              ],
+              [
+                462795,
+                0.154
+              ],
+              [
+                468876,
+                0.276
+              ],
+              [
+                469684,
+                0.252
+              ],
+              [
+                479924,
+                0.183
+              ],
+              [
+                504138,
+                0.18
+              ],
+              [
+                513211,
+                8.007
+              ],
+              [
+                514688,
+                0.143
+              ],
+              [
+                539071,
+                4.583
+              ],
+              [
+                552093,
+                0.221
+              ],
+              [
+                552900,
+                0.25
+              ],
+              [
+                572847,
+                0.17
+              ],
+              [
+                592715,
+                0.198
+              ],
+              [
+                593553,
+                0.297
+              ],
+              [
+                603583,
+                0.179
+              ],
+              [
+                624164,
+                0.166
+              ],
+              [
+                628527,
+                0.228
+              ],
+              [
+                634322,
+                0.15
+              ],
+              [
+                660001,
+                0.27
+              ],
+              [
+                668228,
+                0.232
+              ],
+              [
+                668995,
+                0.264
+              ],
+              [
+                689798,
+                0.17
+              ],
+              [
+                701542,
+                0.289
+              ],
+              [
+                702334,
+                0.206
+              ],
+              [
+                721217,
+                0.155
+              ],
+              [
+                741116,
+                0.19
+              ],
+              [
+                741894,
+                0.436
+              ],
+              [
+                754387,
+                0.161
+              ],
+              [
+                778491,
+                0.258
+              ],
+              [
+                785653,
+                0.342
+              ],
+              [
+                787469,
+                0.196
+              ],
+              [
+                813026,
+                0.149
+              ],
+              [
+                825314,
+                0.344
+              ],
+              [
+                831354,
+                0.285
+              ],
+              [
+                833147,
+                0.167
+              ],
+              [
+                859265,
+                0.133
+              ],
+              [
+                872569,
+                0.219
+              ],
+              [
+                873410,
+                0.198
+              ],
+              [
+                874251,
+                0.214
+              ],
+              [
+                899404,
+                0.132
+              ],
+              [
+                916670,
+                0.204
+              ],
+              [
+                917307,
+                6.398
+              ],
+              [
+                936879,
+                0.262
+              ],
+              [
+                949119,
+                0.349
+              ],
+              [
+                949918,
+                0.204
+              ],
+              [
+                964937,
+                0.193
+              ],
+              [
+                990660,
+                0.141
+              ]
+            ],
+            "gLog04": {
+              "bulkP99Ok": true,
+              "bulkOver5Ok": false,
+              "criticalP99Ok": true
+            }
+          }
+        }
+      },
+      "specRefs": [
+        "§3.2",
+        "G-LOG-06",
+        "M1.2 append p99 <= 5 ms"
+      ],
+      "at": "2026-10-17T19:21:43.033Z"
+    }
+  }
+}

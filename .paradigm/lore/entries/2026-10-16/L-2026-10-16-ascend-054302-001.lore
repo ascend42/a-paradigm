@@ -1,0 +1,37 @@
+id: L-2026-10-16-ascend-054302-001
+type: human-note
+timestamp: '2026-10-16T05:43:02.313Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon spec v1 reviewed by Arky + Aegis; founder security rulings
+summary: 'Fable wrote docs/specs/gnomon.md v1 (806 lines, 17 sections, self-compiling Appendix A). Arky (16/19 citations accurate; boundary, schema hash, ABI matrix, 7.x hook breakage, spike ordering) and Aegis (4 critical: Bash = possession of the box, latest-row-wins registry, oracles run repo code on the key box, agent-writable project policy; 7 high) reviewed it (research 14, 15). Founder rulings on the security trade-offs recorded; spec revision v2 next.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+decisions:
+  - id: P8-D12
+    decision: 'Human signing via key file + CLI for founder-only 8.0, as an ACCEPTED RISK (Aegis rated critical: an agent with Bash can read the key and self-approve). Amends TD-2026-10-14-735 §4 (S4 custodian before multi-instance runs) for solo use only. Revisit trigger: before any second human, shared fabric, or 8.1.'
+    rationale: 'Founder chose speed over Touch ID prompts; recorded with zero-UX-cost mitigations: signed registry rows, kernel-owned log namespaces no principal may append, deny rules on key paths.'
+  - id: P8-D13
+    decision: Oracles run under a macOS sandbox-exec profile first (deny ~/.gnomon, ~/.ssh, keychain, egress; scrubbed env; read-only worktree), rootless containers later. ACCEPTED RISK amending TD-2026-10-14-735 §7 for solo 8.0; same revisit trigger.
+    rationale: No extra install now; weaker isolation acknowledged.
+  - id: P8-D14
+    decision: Warpline PICKs are signed by stable roster agents (keys minted once by the founder); sessions borrow the credential and link session to strand by causes[]; the kernel never mints.
+    rationale: 'Arky: kernel minting imports the Warpline engine, bypasses the human gate (keys.ts:441) and pins the signing epoch; per-session keys break one-key-one-notebook-owner.'
+  - id: P8-D15
+    decision: The reviewer oracle runs on the founder's subscription as a claude -p turn under the budget fuse
+    rationale: Keeps the subscription-only preflight intact.
+tags:
+  - paradigm-8
+  - gnomon
+  - spec
+  - security
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-050454-210
+git_context:
+  ref: 870041452b6333659a31c72df27a242a934fede7
+  branch: ideate/paradigm-8
+  dirty: true

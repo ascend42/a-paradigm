@@ -168,6 +168,10 @@ skills:
     role: owns
   - id: ui-critique-loop
     role: owns
+  - id: ui-build-protocol
+    role: owns
+  - id: design-options-protocol
+    role: owns
   - id: a11y-audit
     role: uses
 

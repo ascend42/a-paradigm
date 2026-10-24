@@ -1,0 +1,33 @@
+id: L-2026-10-20-ascend-074448-001
+type: review
+timestamp: '2026-10-20T07:44:48.419Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Luna''s critique: the tokens are right, but the object is missing (Gnomon GUI vs the Atelier direction)'
+summary: |-
+  Luna compared the shipped GUI with the approved 2026-10-15 direction. styles.css carries the pigment tokens (pinned by G-GUI-10), but none of the material renders. 16 ranked gaps; the top ones:
+  1. Fonts are named but never bundled (fallback to system mono and Georgia).
+  2. The empty centre is the raw kernel feed.
+  3. No grain: data: URLs are blocked by the CSP.
+  4. Soft keys instead of hard ink offsets.
+  5. The stack is a flat list, not a pile.
+  6. Card anatomy is missing.
+  7. The Workshop is never rendered.
+  Also: project hues disagree between the GUI (repo hash mod 6) and the kernel feed (cwd hash mod 8), and the live mic is vermilion with an endless pulse instead of amber and static.
+  Brief in slices S1–S5, written in .atelier/sessions/2026-10-20-gnomon-gui-fidelity/critique.md; Mika's vetting is pending. Defaults taken while the founder sleeps: amber static live mic; the comp's stamp colour; session names from the first user message (28 chars). S1 builder launched.
+symbols_touched:
+  - '#gui'
+learnings:
+  - 'Tokens being correct is not fidelity: an approved direction is mostly material (fonts, grain, shadows, layout, motion). Verify against the comp visually, not by token diff.'
+  - 'A CSP that blocks data: URLs silently kills comp techniques; check comp CSS against the production CSP when translating.'
+tags:
+  - gnomon
+  - design
+  - atelier
+  - marathon-2026-10-20
+git_context:
+  ref: 4de4d97878cfdcb2f9ad67348646afd1828d2324
+  branch: feat/gnomon
+  dirty: true

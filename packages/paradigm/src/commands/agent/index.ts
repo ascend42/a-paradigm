@@ -645,18 +645,6 @@ export async function agentActivateCommand(id: string) {
 // Helpers
 // ============================================================================
 
-function saveProfile(rootDir: string, id: string, profile: AgentProfile) {
-  const projectPath = path.join(rootDir, PROJECT_AGENTS_DIR, `${id}${AGENT_EXT}`);
-  if (fs.existsSync(projectPath)) {
-    fs.writeFileSync(projectPath, yaml.dump(profile, { lineWidth: 120, noRefs: true, sortKeys: false }), 'utf-8');
-    return;
-  }
-  const globalPath = path.join(GLOBAL_AGENTS_DIR, `${id}${AGENT_EXT}`);
-  const dir = GLOBAL_AGENTS_DIR;
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(globalPath, yaml.dump(profile, { lineWidth: 120, noRefs: true, sortKeys: false }), 'utf-8');
-}
-
 function loadProfile(rootDir: string, id: string): AgentProfile | null {
   const projectPath = path.join(rootDir, PROJECT_AGENTS_DIR, `${id}${AGENT_EXT}`);
   if (fs.existsSync(projectPath)) {

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/release-manifest.v1.schema.json",
+  "title": "release-manifest:v1",
+  "description": "The native executables one Gnomon release ships (GnomonHelper.app, GnomonVoiceIO.app) and the exact sha256 the kernel accepts for each (G-HLP-01). Written by packages/gnomon/scripts/write-release-manifest.mjs and embedded in the build stamp; at most one entry per (name, arch), a universal entry stands alone (validateReleaseManifestV1).",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "gnomon-release-manifest:v1"
+    },
+    "release": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "gnomon-helper",
+              "gnomon-voice-io"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "requirement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "arch": {
+            "type": "string",
+            "enum": [
+              "arm64",
+              "x64",
+              "universal"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "sha256",
+          "requirement",
+          "arch"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 8
+    },
+    "appZips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "arch": {
+            "type": "string",
+            "enum": [
+              "arm64",
+              "x64"
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "arch",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 2
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "release",
+    "artifacts"
+  ],
+  "additionalProperties": false
+}

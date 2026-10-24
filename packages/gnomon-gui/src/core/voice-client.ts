@@ -1,0 +1,570 @@
+/**
+ * @symbol #gui
+ *
+ * #gui voice-app lifecycle, enrolment and notices (voice slice V2e GUI, T-2026-10-19-026). PURE.
+ *
+ * The founder's rule for V2e is SEAMLESS: no terminal step. The GUI starts and stops the voice app, shows its setup
+ * phases, teaches Gnomon a voice, and shows the app's quiet notices. Everything here is a thin ADAPTER over a kernel
+ * contract that was built in parallel; every shape assumption lives in this file (see ASSUMPTIONS below).
+ *
+ *   - `clientOf(status)` reads `status.voice.clientConnected` and `status.voice.client = {phase: idle | installing |
+ *     downloading | starting | running | crashed | unavailable, downloadMb?: {n, of}, devUnsigned?, lastError?,
+ *     unavailable?}` plus the enrolled voices (`status.voice.enrolled`, see ASSUMPTIONS). Unknown phases fail toward
+ *     "not running" (the human is offered Start, never told a dead app is listening).
+ *   - The human's gestures are `log.append` rows: `request.voice.client{op: 'start' | 'stop' | 'stop-speaking'}`,
+ *     `request.voice.enrol{name, consent}` (the kernel raises a fresh-presence Touch ID card whose effect writes the
+ *     root-signed enrolment row), and `request.voice.forget{name}` (no card).
+ *   - The pill (core/voice.ts pillOf) is kernel-owned; `clientPillOf` replaces it only while NOTHING is attached. While
+ *     attached the live mic keeps its louder state and the client's real condition is APPENDED (`.tail`, T-2026-10-20-002):
+ *     never under-report the mic, never hide a crashed, setting-up or disconnected app, or a missing enrolled voice.
+ *   - The kernel logs no row when the voice app's phase or connection changes, so the page re-reads status lightly
+ *     (`clientPollWanted`, CLIENT_POLL_MS) while voice is attached or the app is passing through a transient phase.
+ *   - Only a human-class connection gets any of these controls (`canAttach`); a voice connection never does.
+ *
+ * THE CONTRACT (the kernel's final V2e shapes, formerly "assumptions"; adjust here only):
+ *   A1 enrolled voices: `status.voice.enrolled` (sorted names). Absent ⇒ unknown (no "teach your voice" nudge).
+ *   A2 forget: `request.voice.forget{name}` → {forgotten: true, speakerId}; NO card (a forget narrows).
+ *   A3 enrolment: the Touch ID card comes FIRST. `request.voice.enrol{name, consent}` → {pending: true, cardId}; the
+ *      human allows the strictness card (detail.op 'voice.enrol'); its effect writes the root-signed enrolment row
+ *      and sets `status.voice.enrolment = {name, phase: 'requested', at}`. The voice app then records the phrases
+ *      and relays `ready | recording | recorded | done | failed | cancelled` (`phrase` 0-based, `of`, `error?`) into
+ *      the same status field. The GUI re-reads status on the relevant rows and polls lightly while the dialog waits.
+ *      The report carries no phrase text: ENROL_PHRASES below is the client's list (gnomon-voice enrol.ts; a
+ *      gnomon-voice test pins the two equal).
+ *   A4 the request.voice.enrol answer is `{pending: true, cardId}`; without one the GUI looks for a pending card
+ *      whose detail.op is `voice.enrol` and offers to focus it.
+ *   A5 notices: `status.voice.notice = {text, code?, at} | null` (relayed by the voice app, never a log row); a new
+ *      `at` becomes a quiet toast, never a decision.
+ *   A6 lifecycle rows: `voice.client.*`, `voice.enrol` and `voice.forget` rows change status.voice (the page
+ *      re-reads status on them).
+ */
+import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
+
+export type ClientPhase = 'idle' | 'installing' | 'downloading' | 'starting' | 'running' | 'crashed' | 'unavailable';
+export const CLIENT_PHASES: readonly ClientPhase[] = Object.freeze(['idle', 'installing', 'downloading', 'starting', 'running', 'crashed', 'unavailable'] as const);
+
+export interface ClientView {
+  /** the kernel reports the voice app's lifecycle at all */
+  known: boolean;
+  phase: ClientPhase;
+  download: { n: number; of: number } | null;
+  /** the kernel's download size (MB) when it reports a total only */
+  downloadTotal: number | null;
+  devUnsigned: boolean;
+  lastError: string | null;
+  unavailable: string | null;
+  /** enrolled voice names, or null when the kernel does not say (A1) */
+  enrolled: string[] | null;
+  /**
+   * status.voice.prints.stale (2026-10-20): enrolled names whose voice print predates the voice app's speech-gated
+   * check. The app ignores such a print, so for the nudge those names count as NOT enrolled. [] when none or unknown.
+   */
+  stale: string[];
+  /** status.voice.clientConnected, or null when the status does not tell */
+  connected: boolean | null;
+  /** the crash is the kernel's `backoff` (a restart is scheduled), not a terminal `failed` */
+  backoff: boolean;
+  /**
+   * status.voice.mic.fault (field bug 2026-10-23): why the mic turned itself off, in the voice app's plain words, or
+   * null when the mic works (or the kernel does not say). The pill says it instead of failing silently.
+   */
+  micFault: { code: string; text: string } | null;
+  /** status.voice.mic.device: the input in use, when the voice app reports it */
+  micDevice: { name: string; transport: string | null; sampleRate: number | null } | null;
+  /** founder request 2026-10-23 (input selection): the mic as the voice app reports it, and the human's choice */
+  mic: MicView;
+}
+
+/** The Voice settings › input view: what is connected, chosen, in use, and how loud (status.voice.mic + inputChoice). */
+export interface MicView {
+  /** the voice app reported its inputs at all (an older voice app does not: no picker) */
+  known: boolean;
+  on: boolean | null;
+  aec: 'vpio' | 'headphones' | 'none' | null;
+  inputs: Array<{ id: string; name: string; transport: string | null; sampleRate: number | null }>;
+  /** the kernel-held choice: a device id, or null = follow the system default */
+  chosen: string | null;
+  /** the chosen device's name as saved (shown while it is disconnected) */
+  chosenName: string | null;
+  /** the chosen device is not connected (the mic follows the system default meanwhile) */
+  missing: boolean;
+  level: number | null;
+}
+
+const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+
+/** `spk:<ns>/<name>` or a plain name → the name. */
+const nameOf = (v: unknown): string | null => {
+  const o = obj(v);
+  const s = o ? (str(o.name) ?? str(o.speakerId)) : str(v);
+  if (!s) return null;
+  const m = /^spk:[^/]*\/(.+)$/.exec(s);
+  return m ? m[1]! : s;
+};
+
+/**
+ * The kernel's status.voice.client.phase words (voice-child.ts VoiceChildPhase) → the GUI's. backoff is a crash
+ * awaiting its restart; failed is a crash the human restarts (or unavailable, when the kernel names a reason).
+ */
+const KERNEL_PHASE: Readonly<Record<string, ClientPhase>> = Object.freeze({
+  stopped: 'idle',
+  preparing: 'installing',
+  installing: 'installing',
+  'downloading-models': 'downloading',
+  starting: 'starting',
+  running: 'running',
+  backoff: 'crashed',
+  failed: 'crashed',
+  unavailable: 'unavailable',
+});
+
+/** The voice-app view from a `status` result (the adapter: every client-status assumption lives here). */
+export function clientOf(status: unknown): ClientView {
+  const v = obj(obj(status)?.voice);
+  const c = obj(v?.client);
+  const connected = v && typeof v.clientConnected === 'boolean' ? v.clientConnected : null;
+  const raw = str(c?.phase);
+  let phase: ClientPhase = raw && (CLIENT_PHASES as readonly string[]).includes(raw) ? (raw as ClientPhase) : raw && raw in KERNEL_PHASE ? KERNEL_PHASE[raw]! : 'idle';
+  if (phase !== 'unavailable' && str(c?.unavailable) && (raw === 'failed' || raw === 'unavailable')) phase = 'unavailable';
+  // the kernel's connection word wins over a stale phase: connected ⇒ running; a "running" claim while not connected ⇒ not running
+  if (connected === true && (phase === 'idle' || phase === 'starting')) phase = 'running';
+  if (connected === false && phase === 'running') phase = 'idle';
+  // the kernel reports the download as its total (an integer MB); {n, of} is also understood
+  const d = obj(c?.downloadMb);
+  const total = num(c?.downloadMb);
+  const n = num(d?.n);
+  const of = num(d?.of);
+  const list = Array.isArray(v?.enrolled) ? v!.enrolled : null;
+  return {
+    known: c !== null || connected !== null,
+    phase,
+    download: n !== null && of !== null && of > 0 ? { n: Math.min(n, of), of } : null,
+    downloadTotal: total !== null && total > 0 ? total : null,
+    devUnsigned: c?.devUnsigned === true,
+    lastError: str(c?.lastError),
+    unavailable: str(c?.unavailable),
+    enrolled: list ? [...new Set(list.map(nameOf).filter((x): x is string => x !== null))] : null,
+    stale: Array.isArray(obj(v?.prints)?.stale) ? [...new Set((obj(v?.prints)!.stale as unknown[]).map(nameOf).filter((x): x is string => x !== null))] : [],
+    connected,
+    backoff: phase === 'crashed' && raw === 'backoff',
+    ...micOf(obj(v?.mic), obj(v?.inputChoice)),
+  };
+}
+
+function micOf(m: Record<string, unknown> | null, choice: Record<string, unknown> | null): { micFault: ClientView['micFault']; micDevice: ClientView['micDevice']; mic: MicView } {
+  const f = obj(m?.fault);
+  const d = obj(m?.device);
+  const code = str(f?.code);
+  const text = str(f?.text);
+  const name = str(d?.name);
+  const inputs = Array.isArray(m?.inputs)
+    ? (m!.inputs as unknown[]).flatMap((x) => {
+        const i = obj(x);
+        const id = str(i?.id);
+        const n = str(i?.name);
+        return id && n ? [{ id, name: n, transport: str(i?.transport), sampleRate: num(i?.sampleRate) }] : [];
+      })
+    : [];
+  const aec = m?.aec === 'vpio' || m?.aec === 'headphones' || m?.aec === 'none' ? m.aec : null;
+  const level = num(m?.level);
+  return {
+    micFault: code && text ? { code, text } : null,
+    micDevice: name ? { name, transport: str(d?.transport), sampleRate: num(d?.sampleRate) } : null,
+    mic: {
+      known: Array.isArray(m?.inputs),
+      on: typeof m?.on === 'boolean' ? m.on : null,
+      aec,
+      inputs,
+      chosen: str(choice?.id),
+      chosenName: str(choice?.name),
+      missing: m?.missing === true,
+      level: level !== null && level <= 1 ? level : null,
+    },
+  };
+}
+
+const KHZ = (hz: number): string => `${Math.round(hz / 100) / 10} kHz`;
+/** "MacBook Pro Microphone · built-in · 48 kHz" (the parts the voice app reported). */
+export function deviceLine(d: { name: string; transport: string | null; sampleRate: number | null }): string {
+  return [d.name, d.transport, d.sampleRate ? KHZ(d.sampleRate) : null].filter((x): x is string => !!x).join(' · ');
+}
+/** What the echo canceller is doing, in words: on (voice processing), not needed (headphones), or off. */
+export function aecWords(aec: MicView['aec']): string | null {
+  return aec === 'vpio' ? 'echo cancel on' : aec === 'headphones' ? 'headphones, no echo' : aec === 'none' ? 'echo cancel off' : null;
+}
+/** The pill's title line naming the mic (founder request 2026-10-23: the current mic is always visible), or ''. */
+export function micTitleLine(c: ClientView): string {
+  if (c.micFault) return '';
+  const d = c.micDevice;
+  if (c.mic.missing) return `\nMic: ${c.mic.chosenName ?? 'the chosen mic'} is not connected${d ? `; using ${deviceLine(d)}` : ''}.`;
+  return d ? `\nMic: ${deviceLine(d)}${aecWords(c.mic.aec) ? ` · ${aecWords(c.mic.aec)}` : ''}` : '';
+}
+
+/**
+ * Mika 2026-10-23: a mic fault's words on the pill, short (the fact is capped at 20ch at 1024 and the header row never
+ * wraps): "mic stopped" plus the cause in a few words for the codes the voice app sends (gnomon-voice micFaultText).
+ * The full sentence goes in the title, the accessible name and the ladder's Restart row.
+ */
+export function micFaultFact(f: { code: string }): string {
+  switch (f.code) {
+    case 'restart-loop':
+      return 'mic stopped: input kept changing';
+    case 'no-input':
+      return 'mic stopped: no input device';
+    case 'engine-start':
+      return 'mic stopped: macOS refused it';
+    default:
+      return 'mic stopped';
+  }
+}
+
+/** The re-enrolment nudge's words (a print from an older voice check is ignored until the speaker enrols again). */
+export const REENROL_LABEL = 'Re-teach Gnomon your voice (the voice check was upgraded)';
+/**
+ * The nudge (A1 + 2026-10-20): 'teach' when the kernel's list is known and empty; 'reteach' when every enrolled name
+ * (the kernel's root-signed list) has only a stale print (they count as not enrolled); null otherwise (or when the list is unknown: never a false nudge).
+ */
+export function enrolNudgeOf(c: ClientView): 'teach' | 'reteach' | null {
+  if (c.enrolled === null) return null;
+  if (c.enrolled.length === 0) return 'teach'; // nobody is enrolled with the kernel: a stale print alone enrols no one
+  return c.enrolled.every((n) => c.stale.includes(n)) ? 'reteach' : null;
+}
+
+/** The voice app is up (or coming up): Stop is offered, Start is not. */
+export const clientBusy = (c: ClientView): boolean => c.phase === 'installing' || c.phase === 'downloading' || c.phase === 'starting' || c.phase === 'running';
+/** Attach / Ambient while this holds starts the voice app in the same gesture. */
+export const needsStart = (c: ClientView): boolean => c.known && (c.phase === 'idle' || c.phase === 'crashed');
+
+export type PillAction = 'start' | 'restart' | 'enrol' | null;
+export interface ClientPill {
+  /** null: keep core/voice.ts pillOf as it is (always null while attached) */
+  label: string | null;
+  /** attached only: the client condition appended to the live label (" · voice crashed: …"), or null for none */
+  tail: string | null;
+  className: string;
+  title: string;
+  action: PillAction;
+  actionLabel: string;
+  /** 0..1 while downloading, else null */
+  progress: number | null;
+}
+
+const MB = (x: number): string => (x >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10));
+/** The longest lastError shown in the pill label (the kernel's text carries up to 300 chars of the app's stderr). */
+export const PILL_ERROR_MAX = 60;
+export const ERROR_TITLE_MAX = 400;
+/**
+ * Aegis L1 (862ef85a): lastError is the voice app's own stderr text, so it is sanitised (display.ts §4.5: controls,
+ * bidi and hidden characters made visible or removed) BEFORE it is folded to one line and capped, and the cap counts
+ * code points, so a surrogate pair is never cut in half.
+ */
+export const oneLine = (s: string, max: number): string => {
+  const t = sanitizeDisplayText(s).text.replace(/\s+/g, ' ').trim();
+  const cps = Array.from(t);
+  return cps.length > max ? `${cps.slice(0, max - 1).join('')}…` : t;
+};
+
+/**
+ * The pill's voice-app overlay. With NOTHING attached it replaces the pill: "Voice app not running" [Start voice] ·
+ * "Setting up voice…" · "Downloading voice models · N of M MB" (bar) · "Starting…" · "Voice crashed · Restart" ·
+ * "Voice unavailable · <why>" · running with no enrolled voice: "Teach Gnomon your voice first" (unenrolled speech is
+ * never forwarded). ATTACHED (T-2026-10-20-002), Aegis M (V2d) never under-report a live mic: `label` stays null (the
+ * live class, meter and "Listening" / "Hold … to talk" stand) and the real condition is appended as `tail`, first
+ * match wins: crashed or backoff "· voice crashed: <lastError>" [Restart] · the setup phases · unavailable · a mic fault "· mic stopped: <why>" [Restart] · not
+ * connected "· voice app not connected" [Start voice] · `enrolled` [] "· teach Gnomon your voice first" [Teach]
+ * (`enrolled` null is unknown: no nudge). A non-human connection sees the same words and no action.
+ */
+export function clientPillOf(c: ClientView, attached: boolean, attachable: boolean): ClientPill {
+  const none: ClientPill = { label: null, tail: null, className: '', title: '', action: null, actionLabel: '', progress: null };
+  if (!c.known) return none;
+  const act = (a: PillAction): PillAction => (attachable ? a : null);
+  if (attached) return attachedTailOf(c, act, none);
+  switch (c.phase) {
+    case 'idle':
+      return { label: 'Voice app not running', tail: null, className: 'voice-noclient', title: 'The Gnomon voice app is not running. Start it here; no terminal needed.', action: act('start'), actionLabel: 'Start voice', progress: null };
+    case 'installing':
+      return { label: 'Setting up voice…', tail: null, className: 'voice-noclient voice-setup', title: 'Gnomon is setting up the voice app.', action: null, actionLabel: '', progress: null };
+    case 'downloading': {
+      const d = c.download;
+      return { label: d ? `Downloading voice models · ${MB(d.n)} of ${MB(d.of)} MB` : c.downloadTotal ? `Downloading voice models (${MB(c.downloadTotal)} MB)…` : 'Downloading voice models…', tail: null, className: 'voice-noclient voice-setup', title: 'The voice models download once, then stay on this Mac.', action: null, actionLabel: '', progress: d ? d.n / d.of : null };
+    }
+    case 'starting':
+      return { label: 'Starting…', tail: null, className: 'voice-noclient voice-setup', title: 'The voice app is starting.', action: null, actionLabel: '', progress: null };
+    case 'crashed':
+      return { label: 'Voice crashed', tail: null, className: 'voice-noclient voice-crashed', title: c.lastError ? `The voice app stopped: ${oneLine(c.lastError, ERROR_TITLE_MAX)}` : 'The voice app stopped unexpectedly.', action: act('restart'), actionLabel: 'Restart', progress: null };
+    case 'unavailable':
+      return { label: `Voice unavailable${c.unavailable ? ` · ${oneLine(c.unavailable, PILL_ERROR_MAX)}` : ''}`, tail: null, className: 'voice-noclient voice-unavailable', title: c.unavailable ? oneLine(c.unavailable, ERROR_TITLE_MAX) : 'Voice is not available on this machine.', action: null, actionLabel: '', progress: null };
+    case 'running':
+      if (enrolNudgeOf(c) === 'reteach')
+        return { label: REENROL_LABEL, tail: null, className: 'voice-off voice-nudge', title: 'Gnomon upgraded its voice check, so your old voice print is no longer used and your speech is dropped. Teach it your voice again (about a minute).', action: act('enrol'), actionLabel: 'Re-teach', progress: null };
+      if (enrolNudgeOf(c) === 'teach')
+        return { label: 'Teach Gnomon your voice first', tail: null, className: 'voice-off voice-nudge', title: 'Gnomon only forwards speech from an enrolled voice. Teach it yours (about a minute).', action: act('enrol'), actionLabel: 'Teach', progress: null };
+      return none;
+  }
+}
+
+/** The pill as its own action (board header-5b): the label is a verb only while the voice app can't run. */
+export interface PillActionView {
+  action: Exclude<PillAction, null>;
+  /** the rung slot's words: the verb ("Start voice") */
+  name: string;
+  /** the one fact: why the verb is offered ("app not running") */
+  fact: string;
+  /** the accessible name says what a click does */
+  aria: string;
+  title: string;
+}
+
+/**
+ * Board header-5b (design-system gnomon.voice.header): when nothing is attached and the voice app can't run (or
+ * hears no enrolled voice), the pill IS the action, "○ Start voice · app not running", and there is no separate
+ * Start key. Attached, the live rung stands (Aegis M V2d: never under-report) and the action sits at the top of the
+ * ladder instead: null here. A connection that may not act (cp.action null) keeps the plain pill.
+ */
+export function pillActionOf(cp: ClientPill, attached: boolean, cause: string | null = null): PillActionView | null {
+  if (attached || cp.action === null) return null;
+  const why = cause ? ` (${cause})` : '';
+  switch (cp.action) {
+    case 'start':
+      return { action: 'start', name: 'Start voice', fact: 'app not running', aria: 'Start voice: starts the voice app. Voice is off; the voice app is not running.', title: `${cp.title} Click: start the voice app.` };
+    case 'restart':
+      return { action: 'restart', name: 'Restart voice', fact: 'voice crashed', aria: `Restart voice: restarts the voice app. Voice is off; the voice app crashed${why}.`, title: `${cp.title} Click: restart the voice app.` };
+    case 'enrol':
+      return cp.actionLabel === 'Re-teach'
+        ? { action: 'enrol', name: 'Re-teach voice', fact: 'voice check upgraded', aria: 'Re-teach voice: opens teaching Gnomon your voice again, about a minute. Voice is off.', title: `${cp.title} Click: teach it your voice again.` }
+        : { action: 'enrol', name: 'Teach voice', fact: 'no voice enrolled', aria: 'Teach voice: opens teaching Gnomon your voice, about a minute. Voice is off.', title: `${cp.title} Click: teach it your voice.` };
+  }
+}
+
+/** The attached overlay (see clientPillOf): the live state stands, the condition is appended. */
+function attachedTailOf(c: ClientView, act: (a: PillAction) => PillAction, none: ClientPill): ClientPill {
+  const t = (tail: string, className: string, title: string, action: PillAction = null, actionLabel = '', progress: number | null = null): ClientPill => ({ label: null, tail: ` · ${tail}`, className, title, action, actionLabel: action ? actionLabel : '', progress });
+  switch (c.phase) {
+    case 'crashed':
+      return t(c.lastError ? `voice crashed: ${oneLine(c.lastError, PILL_ERROR_MAX)}` : 'voice crashed', 'voice-noclient voice-crashed', `The voice app ${c.backoff ? 'crashed and is restarting' : 'stopped'}${c.lastError ? `: ${oneLine(c.lastError, ERROR_TITLE_MAX)}` : '.'} Nothing is heard until it runs.`, act('restart'), 'Restart');
+    case 'installing':
+      return t('setting up voice…', 'voice-noclient voice-setup', 'Gnomon is setting up the voice app; nothing is heard until it runs.');
+    case 'downloading': {
+      const d = c.download;
+      return t(d ? `downloading voice models · ${MB(d.n)} of ${MB(d.of)} MB` : 'downloading voice models…', 'voice-noclient voice-setup', 'The voice models download once; nothing is heard until the voice app runs.', null, '', d ? d.n / d.of : null);
+    }
+    case 'starting':
+      return t('voice starting…', 'voice-noclient voice-setup', 'The voice app is starting; nothing is heard until it runs.');
+    case 'unavailable':
+      return t(`voice unavailable${c.unavailable ? `: ${oneLine(c.unavailable, PILL_ERROR_MAX)}` : ''}`, 'voice-noclient voice-unavailable', c.unavailable ? oneLine(c.unavailable, ERROR_TITLE_MAX) : 'Voice is not available on this machine.');
+    case 'idle':
+      return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
+    case 'running':
+      // field bug 2026-10-23: the mic turned itself off; say why (the app's plain words) and offer the restart that retries it
+      // Mika 2026-10-23: the pill carries a short cause (its 20ch fact at 1024; a 518px pill at 1440 with the sentence),
+      // the voice app's whole sentence is the title, the accessible name and the ladder's Restart row
+      if (c.micFault) return t(micFaultFact(c.micFault), 'voice-noclient voice-crashed voice-micfault', `${oneLine(c.micFault.text, ERROR_TITLE_MAX)} Nothing is heard until the mic is on again. Restart voice to try again.`, act('restart'), 'Restart');
+      // founder request 2026-10-23: the chosen mic is not connected (voice still works, on the system default)
+      // (Mika 2026-10-23: 18 characters, whole inside the pill's 20ch fact at 1024; the title says 'is not connected')
+      if (c.mic.missing) return t('chosen mic missing', 'voice-nudge voice-micmissing', `${oneLine(c.mic.chosenName ?? 'The chosen mic', PILL_ERROR_MAX)} is not connected${c.micDevice ? `, so Gnomon is listening on ${oneLine(deviceLine(c.micDevice), PILL_ERROR_MAX)}` : ''}. It switches back when the mic reconnects. Voice settings › input changes it.`);
+      if (c.connected === false) return t('voice app not connected', 'voice-noclient', 'The kernel does not see the voice app connected; nothing is heard until it is.', act('start'), 'Start voice');
+      if (enrolNudgeOf(c) === 'reteach') return t('re-teach Gnomon your voice (the voice check was upgraded)', 'voice-nudge', 'Gnomon upgraded its voice check, so your old voice print is no longer used and what it hears is dropped. Teach it your voice again (about a minute).', act('enrol'), 'Re-teach');
+      if (enrolNudgeOf(c) === 'teach') return t('teach Gnomon your voice first', 'voice-nudge', 'No voice is enrolled, so Gnomon drops what it hears. Teach it yours (about a minute).', act('enrol'), 'Teach');
+      return none;
+  }
+}
+
+/** How often the page re-reads status while `clientPollWanted` (the kernel logs no row on a phase change). */
+export const CLIENT_POLL_MS = 2000;
+const TRANSIENT: ReadonlySet<ClientPhase> = new Set(['installing', 'downloading', 'starting']);
+/**
+ * The light status re-read (T-2026-10-20-002): while voice is attached (a crash, a reconnect or a backoff restart must
+ * reach the pill) or while the app passes through a transient phase (setup, starting, a backoff restart). A terminal
+ * phase with nothing attached waits for the next row. Human connections only; an older kernel (no lifecycle) never.
+ */
+export function clientPollWanted(c: ClientView, attached: boolean, attachable: boolean): boolean {
+  return attachable && c.known && (attached || TRANSIENT.has(c.phase) || c.backoff);
+}
+
+export interface ClientMenuEntry {
+  id: 'voice.client.start' | 'voice.client.stop' | 'voice.enrol';
+  label: string;
+  note: string;
+}
+
+/** The pill menu's voice-app items (human connections only; a voice connection gets none). */
+export function clientMenuEntries(c: ClientView, attachable: boolean): ClientMenuEntry[] {
+  if (!attachable || !c.known) return [];
+  const out: ClientMenuEntry[] = [];
+  if (clientBusy(c)) out.push({ id: 'voice.client.stop', label: 'Stop voice', note: 'quit the voice app; the mic closes' });
+  else if (c.phase !== 'unavailable') out.push({ id: 'voice.client.start', label: c.phase === 'crashed' ? 'Restart voice' : 'Start voice', note: 'start the voice app' });
+  out.push({ id: 'voice.enrol', label: 'Teach Gnomon your voice…', note: enrolNudgeOf(c) === 'reteach' ? 'the voice check was upgraded: teach it again' : c.enrolled && c.enrolled.length ? `enrolled: ${c.enrolled.join(', ')}` : 'only enrolled voices are heard' });
+  return out;
+}
+
+export type ClientRequest =
+  | { kind: 'request.voice.client'; payload: { op: 'start' | 'stop' | 'stop-speaking'; capture?: 'ptt' | 'open' | 'toggle' } }
+  | { kind: 'request.voice.enrol'; payload: { name: string; consent: string } }
+  | { kind: 'request.voice.forget'; payload: { name: string } };
+
+export const clientRequest = (op: 'start' | 'stop', capture?: 'ptt' | 'open' | 'toggle'): ClientRequest => ({ kind: 'request.voice.client', payload: { op, ...(op === 'start' && capture ? { capture } : {}) } });
+/** Stop speaking (T-2026-10-19-026): narrows only (silences the voice app), so no card and no presence. */
+export const stopSpeakingRequest = (): ClientRequest => ({ kind: 'request.voice.client', payload: { op: 'stop-speaking' } });
+
+/** The kernel's speaker-name rule (kernel/voice/enrolment.ts NAME): lowercase, ≤ 64. */
+export const VOICE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+/** "Matt C." → "matt-c." (the form shows the normalized name before sending). */
+export const normalizeVoiceName = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9._-]/g, '').slice(0, 64);
+
+/** The plain-language consent the human agrees to (recorded with the enrolment, §14.4). */
+export function consentText(name: string): string {
+  return `I, ${name}, agree that Gnomon may record three short phrases of my voice on this Mac and keep a voiceprint so it can recognise me. The voiceprint stays on this Mac, is never uploaded, and I can forget it at any time from this window.`;
+}
+
+export function enrolRequest(rawName: string, agreed: boolean): { ok: true; req: ClientRequest } | { ok: false; reason: string } {
+  const name = normalizeVoiceName(rawName);
+  if (!VOICE_NAME.test(name)) return { ok: false, reason: 'a name is letters, digits, dot, dash or underscore' };
+  if (!agreed) return { ok: false, reason: 'tick the consent box to continue' };
+  return { ok: true, req: { kind: 'request.voice.enrol', payload: { name, consent: consentText(name) } } };
+}
+
+/** A2: forget is its own request (no card). */
+export const forgetRequest = (name: string): ClientRequest => ({ kind: 'request.voice.forget', payload: { name } });
+
+/** The three phrases the voice app records (A3; the same list as gnomon-voice enrol.ts ENROL_PHRASES). */
+export const ENROL_PHRASES: readonly string[] = Object.freeze([
+  'The quick brown fox jumps over the lazy dog.',
+  'Please run the tests and tell me what failed.',
+  'I enrol my voice on this computer, and it stays here.',
+]);
+
+/** form → confirm (the Touch ID card) → waiting (the voice app) → phrase … → done | failed */
+export type EnrolStep = 'form' | 'confirm' | 'waiting' | 'phrase' | 'done' | 'failed';
+export interface EnrolState {
+  step: EnrolStep;
+  name: string | null;
+  /** the Touch ID card the request raised (A4) */
+  cardId: string | null;
+  phrases: readonly string[];
+  /** the phrase being read (0-based) */
+  index: number;
+  recording: boolean;
+  /** phrases recorded so far */
+  recorded: number;
+  error: string | null;
+  /** when the card was allowed (ms): an enrolment report stamped before it is a previous attempt's */
+  since: number | null;
+}
+
+export const enrolStart = (): EnrolState => ({ step: 'form', name: null, cardId: null, phrases: ENROL_PHRASES, index: 0, recording: false, recorded: 0, error: null, since: null });
+
+/** The request was accepted: the Touch ID card is next (A3/A4). */
+export function enrolSent(s: EnrolState, name: string, cardId: string | null): EnrolState {
+  return { ...s, step: 'confirm', name, cardId, index: 0, recorded: 0, recording: false, error: null, since: null };
+}
+
+/** The card was allowed: the voice app records next. */
+export function enrolAllowed(s: EnrolState, now: number): EnrolState {
+  return { ...s, step: 'waiting', since: now, error: null };
+}
+
+/** Clock slack between the page and the kernel's `at` stamp (same Mac; generous). */
+const AT_SLACK_MS = 5000;
+
+/**
+ * Fold `status.voice.enrolment` into the flow (A3). Only after the card was allowed; a report for another name, or
+ * stamped before the allow (a previous attempt), changes nothing. Returns `s` itself when nothing changed.
+ */
+export function reduceEnrolStatus(s: EnrolState, status: unknown): EnrolState {
+  if (s.step !== 'waiting' && s.step !== 'phrase') return s;
+  if (!s.name || s.since === null) return s;
+  const e = obj(obj(obj(status)?.voice)?.enrolment);
+  if (!e || str(e.name) !== s.name) return s;
+  const at = Date.parse(str(e.at) ?? '');
+  if (Number.isFinite(at) && at < s.since - AT_SLACK_MS) return s;
+  const of = num(e.of) ?? s.phrases.length;
+  const idx = num(e.phrase);
+  const here = idx !== null ? Math.min(idx, Math.max(0, of - 1)) : s.index;
+  let next: EnrolState;
+  switch (str(e.phase)) {
+    case 'requested':
+      next = { ...s, step: 'waiting', recording: false };
+      break;
+    case 'ready':
+      next = { ...s, step: 'phrase', index: here, recording: false };
+      break;
+    case 'recording':
+      next = { ...s, step: 'phrase', index: here, recording: true };
+      break;
+    case 'recorded': {
+      const recorded = Math.max(s.recorded, (idx ?? s.index) + 1);
+      next = { ...s, step: 'phrase', index: Math.min(recorded, of - 1), recorded, recording: false };
+      break;
+    }
+    case 'done': {
+      // Aegis L3: "done" only when the kernel's root-signed registry lists the name (status.voice.enrolled)
+      const listed = Array.isArray(obj(obj(status)?.voice)?.enrolled) && (obj(obj(status)?.voice)!.enrolled as unknown[]).map(nameOf).includes(s.name);
+      next = listed ? { ...s, step: 'done', recorded: of, recording: false, error: null } : { ...s, step: 'phrase', index: Math.max(0, of - 1), recorded: of, recording: false };
+      break;
+    }
+    case 'failed':
+    case 'cancelled':
+      next = { ...s, step: 'failed', recording: false, error: str(e.error) ?? (e.phase === 'cancelled' ? 'the voice app cancelled the recording' : 'the recording failed') };
+      break;
+    default:
+      return s;
+  }
+  return next.step === s.step && next.index === s.index && next.recording === s.recording && next.recorded === s.recorded && next.error === s.error ? s : next;
+}
+
+/** The one-line status of the flow, for the dialog and screen readers. */
+export function enrolLine(s: EnrolState): string {
+  switch (s.step) {
+    case 'form':
+      return 'Choose a name and read the consent.';
+    case 'waiting':
+      return 'Waiting for the voice app to start listening…';
+    case 'phrase':
+      return `Recording ${s.name ?? 'this voice'}: only ${s.name ?? 'that person'} should speak. Phrase ${s.index + 1} of ${s.phrases.length}: ${s.recording ? 'recording, read it aloud' : 'get ready to read it aloud'}`;
+    case 'confirm':
+      return 'Confirm with Touch ID, then read three short phrases aloud.';
+    case 'done':
+      return `Gnomon knows ${s.name}'s voice now.`;
+    case 'failed':
+      return `Not enrolled: ${s.error ?? 'the recording failed'}`;
+  }
+}
+
+/** A Touch ID card from an enrolment request (A4: detail.op voice.enrol naming exactly this voice). */
+export function isEnrolCard(card: { kind: string; card: Record<string, unknown> } | undefined, name: string | null): boolean {
+  if (!card || !name) return false;
+  const d = obj(card.card.detail);
+  if (!d || d.op !== 'voice.enrol') return false;
+  // Aegis L4: the card must name this voice (a nameless card is never taken for it)
+  return nameOf(d.name ?? d.speakerId) === name;
+}
+
+/** A5: `status.voice.notice` as {text, at} (one line, bounded), or null. */
+export function noticeOf(status: unknown): { text: string; at: string | null } | null {
+  const n = obj(obj(obj(status)?.voice)?.notice);
+  const t = str(n?.text);
+  if (!t) return null;
+  // Aegis L6: always attributed — the text is the voice app's, never the kernel's
+  const one = `${NOTICE_PREFIX}${t.replace(/\s+/g, ' ').trim()}`;
+  return { text: one.length > NOTICE_MAX ? `${one.slice(0, NOTICE_MAX - 1)}…` : one, at: str(n?.at) };
+}
+export const NOTICE_MAX = 140;
+export const NOTICE_PREFIX = 'Voice app: ';
+/** A notice older than this when it is read (a backlog page) is not toasted: toasts are for now, not history. */
+export const TOAST_MAX_AGE_MS = 30_000;
+export function toastFresh(at: string | null, now: number): boolean {
+  if (!at) return true;
+  const t = Date.parse(at);
+  return !Number.isFinite(t) || now - t <= TOAST_MAX_AGE_MS;
+}
+
+/** A6: rows whose arrival changes status.voice.client or the enrolled list (the page re-reads status). */
+export const isClientRow = (kind: string): boolean => kind.startsWith('voice.client.') || kind === 'voice.enrol' || kind === 'voice.forget';
+
+/** The light status poll while the enrol dialog waits on the voice app (A3: progress is status, not rows). */
+export const ENROL_POLL_MS = 1000;
+
+/** The LOUD dev-build banner text, or null. */
+export const devBannerOf = (c: ClientView): string | null => (c.devUnsigned ? 'Voice is running an unsigned development build' : null);

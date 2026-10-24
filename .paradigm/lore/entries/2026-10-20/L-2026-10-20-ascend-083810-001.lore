@@ -1,0 +1,30 @@
+id: L-2026-10-20-ascend-083810-001
+type: insight
+timestamp: '2026-10-20T08:38:10.924Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Voice B0 benchmark: Parakeet tail re-decode is viable at 4 s windows; the sync decode blocks the event loop today'
+summary: |-
+  316e13d2 (scripts/bench-partials.mjs, PROBES.md B0).
+  - Speed: ~34 ms per second of audio (30x real time) at 2 threads. A 6 s window has p50 ~205 ms, but its p95 crossed the 250 ms gate in 3 of 4 passes. The machine was loaded (load average 8–14 from parallel builders), so an idle re-run is pending. A 4 s window passes every time (p95 139–179 ms). 4 threads helps little and is worse under load.
+  - Event loop: sherpa-onnx-node 1.13.8 has decodeAsync, which blocks the event loop ~2 ms. The sync decode() used in sherpa.ts TODAY blocks the voice client's loop for 200–400 ms per segment, which also hurts capture states and hotkeys.
+  - Flicker: comes from the last word, spelling flips, and a freely sliding window start. Under an agreed-prefix commit rule, 0–2 committed words were ever contradicted, and the unfixed tail is ~3 words (~1 s behind the speaker).
+  - Recommendation: B1 tail re-decode via decodeAsync, a 4 s anchored window, one decode in flight (skip ticks), solid agreed words plus a dim tail, 2 threads.
+symbols_touched:
+  - '#gnomon-voice'
+learnings:
+  - Benchmarks run while parallel agents load the machine overstate tail latency; gate on an idle re-run.
+  - The sync native decode was a hidden event-loop blocker in production voice; benchmarks of the async path exposed it.
+tags:
+  - gnomon
+  - voice
+  - benchmark
+  - marathon-2026-10-20
+linked_commits:
+  - 316e13d2
+git_context:
+  ref: 4d0ec8d0dd822989b3af520a0634318c1a8c2dc2
+  branch: feat/gnomon
+  dirty: true

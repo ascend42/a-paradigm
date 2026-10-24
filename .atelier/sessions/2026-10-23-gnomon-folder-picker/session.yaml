@@ -1,0 +1,127 @@
+id: 2026-10-23-gnomon-folder-picker
+verb: propose
+scope: "Every place a human types a filesystem path in the Gnomon GUI, starting with New session's cwd field: a folder-field
+  component (Choose folder… through a native macOS chooser, recent folders as one-click choices, the typed path kept only as
+  an Advanced fallback), its states and copy, applied to New session, Settings › Local model runner and Mods › Add from folder."
+product: gnomon
+system: .atelier/systems/gnomon/
+depth: focused
+surface: desktop GUI (New session sheet, Settings sheet, Mods sheet)
+mode: extend
+change: add
+by: Mika (design engineer)
+founder_words: "we need a folder picker because writing out a path is bad UX"
+read: "One operator opens a session in one of a handful of project folders many times a day. The usual open should be ⌘N,
+  Enter. Choosing a new folder should be the Mac's own chooser, and typing a path the rare exception."
+started: 2026-10-23
+reference: refs/folder-picker.html            # refs/ is gitignored (.gitignore:227), as in earlier sessions
+bridge_css: refs/folder-field.css             # moves into packages/gnomon-gui/static/styles.css at build; includes the --key-h proposal
+proposal: system-proposal.yaml
+rendered:
+  now: [refs/shots/now-new-session-day.png, refs/shots/now-new-session-night.png]
+  proposal:
+    - refs/shots/folder-picker-1024-day.png
+    - refs/shots/folder-picker-1024-night.png
+    - refs/shots/folder-picker-1440-day.png
+    - refs/shots/folder-picker-1440-night.png
+    - refs/shots/folder-picker-grayscale.png
+    - refs/shots/folder-picker-night-grayscale.png
+    - refs/shots/folder-picker-deutan.png
+    - refs/shots/folder-picker-protan.png
+    - refs/shots/folder-picker-tritan.png
+    - refs/shots/folder-picker-lineheight-1.5.png
+    - refs/shots/focus-row-day.png
+    - refs/shots/focus-row-night.png
+    - refs/shots/focus-choose-day.png
+    - refs/shots/focus-choose-night.png
+
+inventory:   # every place a human types a filesystem path (atelier system which → gnomon for each file)
+  - where: "New session sheet · cwd"
+    at: "packages/gnomon-gui/static/index.html:74 (<input id=ns-cwd placeholder=/absolute/path/to/project>)"
+    read_by: "ui/app.ts:3057 (submit), core/launch.ts:92-108 (terminal hint prefill), ui/model-picker.ts:59,85 (model remembered per folder, restored on 'change')"
+    kind: folder · daily
+  - where: "Settings › Local model › Advanced · use another runner (optional)"
+    at: "packages/gnomon-gui/src/core/local-model.ts:44-46 (copy + placeholder /Users/you/code/gnomon-local/dist), :383 (field), ui/settings-sheet.ts:88 (input)"
+    kind: folder (must hold cli.js) · rare
+  - where: "Mods › Add from folder"
+    at: "packages/gnomon-gui/src/ui/mods-panel.ts:163-165 (input name=folder placeholder /Users/you/code/my-mod, key Add)"
+    kind: folder (must hold gnomon-manifest.json) · rare
+  - where: "Mods › Configure · command (an absolute path)"
+    at: "packages/gnomon-gui/src/ui/mods-panel.ts:89 (placeholder /opt/homebrew/bin/…)"
+    kind: FILE (an executable) · rare; the file variant of the same pattern
+  - where: "Mods › Configure · env <NAME>"
+    at: "packages/gnomon-gui/src/ui/mods-panel.ts:91"
+    kind: "free value; may hold a path but the GUI can't know which. Out of scope: stays a text field"
+inventory_not_found:
+    - "Loops envFiles: authored in the loop definition (packages/gnomon/src/kernel/loops/loop-env.ts:11), never typed in the GUI; no GUI file names envFiles"
+    - "First-run setup (src/setup/screens.ts): no path field; the terminal's folder arrives as the launch hint"
+    - "packages/gnomon-wrapper/static and packages/gnomon-mods/workshop: no text inputs"
+inventory_displayed_not_typed: ["core/store.ts:881 'session opened · <cwd>'", "core/local-model.ts:342,443 folderOf(cwd) in the last-fallback line"]
+
+known:
+  - fact: "the wrapper exposes no IPC to the page by design: no #[tauri::command], capabilities [], withGlobalTauri false, postMessage replaced to throw"
+    evidence: packages/gnomon-wrapper/src/surface.rs:1-31; tauri.conf.json:10,25
+  - fact: "the kernel refuses a cwd that is not an existing absolute directory at session.open, after the sheet has closed; the GUI shows it as a toast"
+    evidence: packages/gnomon/src/kernel/supervisor/local-session.ts:665-667; packages/gnomon-gui/src/ui/app.ts:3061-3063,1419-1436
+  - fact: "auto-edits is refused for the home folder, any folder above it, and /"
+    evidence: packages/gnomon/src/kernel/broker/run-mode.ts:350-355
+  - fact: "the GUI knows each session's cwd (session.open rows) but not the home path, so it can't shorten with ~ itself"
+    evidence: packages/gnomon-gui/src/core/store.ts:82-83,275
+  - fact: "a terminal-suggested folder is displayed through one escape rule and prefilled only when clean (Aegis L3)"
+    evidence: packages/gnomon-gui/src/core/launch.ts:43-83
+  - fact: "a browser drop of a Finder folder gives the page a name and a handle, never an absolute path; in the wrapper Tauri's native drop handler sees paths but has no route to the page"
+    evidence: "HTML DataTransfer / File System Access (no path by design); surface.rs (no IPC)"
+
+findings_on_now:   # the shipped sheet, captured refs/shots/now-new-session-*.png
+  - { id: N1, cost: high, what: "a blank text field labelled 'cwd' is the only way to name the folder; placeholder /absolute/path/to/project", rule: "founder; friction-log-walkthrough", fix: "folder-field" }
+  - { id: N2, cost: high, what: "the sheet closes before session.open answers (app.ts:3061), so a refusal arrives as a toast and the choice is lost", rule: "functional-states-say-what-happened; in-between-states-designed", fix: "state opening: the sheet stays with Open busy; a refusal shows in place" }
+  - { id: N3, cost: medium, what: "'cwd' is shell jargon; the vocabulary says a session is 'a conversation in a folder'", rule: "content.vocabulary.session", fix: "label 'folder'" }
+  - { id: N4, cost: medium, what: "the form has no role=dialog / aria-modal / accessible name (index.html:72-73); title is <p class=title>", rule: "migration batch sheets-and-headings; WCAG 4.1.2", fix: "role=dialog aria-modal aria-labelledby, <h2 class=title>New session</h2>" }
+  - { id: N5, cost: low, what: "'open' is a default key, not the sheet's primary; the model switch sheet uses a pri 'Switch'", rule: "components.key.variants.pri (one primary per group)", fix: "key pri 'Open'" }
+  - { id: N6, cost: low, what: "the claude model is remembered per folder but restored only on the cwd input's 'change' event (model-picker.ts:85)", rule: "consistency", fix: "every folder choice (recent, chooser, typed, hint) runs restore()" }
+
+contested:   # for the founder (and Arky/Aegis on C1)
+  - id: C1
+    question: "Who draws the macOS folder chooser?"
+    options:
+      kernel: "a kernel verb folder.choose opens the Mac's own chooser (osascript 'choose folder' now; a signed helper later if the panel misbehaves). Works in the wrapper AND in a browser on the same Mac; the wrapper keeps zero page IPC."
+      wrapper: "Tauri's dialog plugin in the wrapper. Needs a page-to-wrapper channel that surface.rs deliberately removed (four layers); a browser gets no chooser."
+    recommend: kernel
+    why: "The kernel is already the page's one trusted, authenticated channel, so the chooser comes to every surface without reopening the IPC the wrapper was built to close."
+  - id: C2
+    question: "What is chosen when the sheet opens?"
+    options: { preselect: "the folder of the session in the centre, else the most recent; ⌘N, Enter opens", none: "nothing; Open disabled until you pick" }
+    recommend: preselect
+    why: "Opening a session is cheap and reversible, and the usual case is 'another session where I already am'; the opens-in line names the folder before Enter."
+  - id: C3
+    question: "Drag a folder from Finder into the sheet?"
+    options: { park: "not in 8.0; the Mac's chooser accepts a Finder drag and ⌘⇧G itself", build: "wrapper catches the native drop and hands the path to the kernel, which pushes it to the page (a new wrapper→kernel→page channel, Aegis review)" }
+    recommend: park
+    why: "A browser never gives the page an absolute path, and the wrapper route is a new trusted channel for a gesture the native chooser already supports."
+  - id: C4
+    question: "The home folder (or / or above it)?"
+    options: { warn: "allowed, amber warning naming what it costs (auto-edits off, every project readable)", block: "Open disabled" }
+    recommend: warn
+    why: "The kernel allows it; only auto-edits is refused, so the GUI should say that, not invent a stricter rule."
+
+verdict:
+  covers: "the proposal as rendered: heuristics, states, copy, contrast, keyboard order, grayscale and CVD, 1024 and 1440, day and night"
+  result: approved-with-fixes   # fixes are the build requirements in system-proposal.yaml; C1-C4 await the founder
+  cannot_establish: "that ⌘N then Enter is what the founder does most, or that an osascript chooser comes to the front reliably"
+  cheapest_check: "a week of the founder's session.open rows: how often the cwd equals the centre session's or the most recent folder (C2); and ten chooser opens from the browser and the wrapper, counting how often the panel opens behind (C1)"
+
+founder_note_2026-10-23:
+  words: "the designs from mika look good, but ive noticed we have inconsistent button heights"
+  cause: ".key and .key.pri are 28px; .key.quiet is 24px (styles.css:248), as are the chat-header and composer glyph keys (1011, 1019, 1030); the day offset shadow makes a default key read 30 beside a 24 quiet one. System-wide, not local to this design."
+  fix: "one token --key-h 28px for every key; quiet changes the look, not the size (system-proposal.yaml, batch key-height). Applied in refs/folder-field.css; board K shows every variant before and after."
+  rendered: [refs/shots/keys-before-after-day.png, refs/shots/keys-before-after-night.png, refs/shots/ff-keys-after-day.png, refs/shots/ff-keys-after-night.png]
+
+decided:   # the founder's picks, relayed by the coordinator 2026-10-23
+  - { id: C1, choice: kernel, decided_by: creator, what: "the kernel opens the macOS chooser (folder.choose); the wrapper keeps zero page IPC" }
+  - { id: C2, choice: preselect, decided_by: creator, what: "the centre session's folder is chosen, else the most recent" }
+  - { id: C3, choice: park, decided_by: recommendation, what: "no drag from Finder in 8.0; the Mac's chooser takes a Finder drag and ⌘⇧G itself" }
+  - { id: C4, choice: warn, decided_by: creator, what: "the home folder (or above it) is allowed with the amber warning" }
+applied:
+  to: [.atelier/systems/gnomon/design-system.yaml, .atelier/systems/gnomon/DESIGN.md, .atelier/systems/gnomon/specimen.html]
+  what: "component folder-field; rule paths-are-chosen; vocabulary folder / recent folders, retired cwd; token key-h and one key size; migration batches folder-field and key-height (pending)"
+status: closed

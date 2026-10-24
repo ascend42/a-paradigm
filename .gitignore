@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+# a node_modules SYMLINK (worktrees link the main checkout's) is a file, not a dir: ignore it too
+node_modules
 .pnp
 .pnp.js
 .yarn/cache
@@ -223,3 +225,11 @@ packages/warpline/probe-*/
 
 # Atelier reference renders
 .atelier/sessions/*/refs/
+
+# T-2026-10-21-029: Gnomon.app release output (packages/gnomon/scripts/release-darwin.mjs)
+packages/gnomon/release/
+
+# T-2026-10-21-030 (8.0 M3): release zips copied into the platform packages, and the prepack copy of the mods
+packages/gnomon-darwin-*/Gnomon.app.zip
+packages/gnomon-darwin-*/Gnomon.app.zip.sha256
+packages/gnomon/gnomon-mods/

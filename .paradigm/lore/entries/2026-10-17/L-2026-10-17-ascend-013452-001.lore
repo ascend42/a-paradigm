@@ -1,0 +1,25 @@
+id: L-2026-10-17-ascend-013452-001
+type: human-note
+timestamp: '2026-10-17T01:34:52.470Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Resumed after crash; aesthetic session stays paused for founder's UX research assessment
+summary: 'The machine crashed. Recovery found no lost work: HEAD 0a5442bb (Gnomon spec v3.3) holds everything, and only auto-generated logs were dirty. The session checkpoint was stale (it said v3.1 / eddf85fc); git and lore were the source of truth. The next gated step is finishing the Atelier aesthetic session (P8-D57, before Move 1). It stays paused while the founder works through the deep UX-design research assessment for the agent team and neurons. On resume: ingest the founder''s links/findings into neurons, have Luna and Mika digest them, then reopen the boards (colour, type, motion, cli-voice, decision-stack + sidebar render). Colour and type come first because the M1.10 contrast fixtures depend on them.'
+symbols_touched:
+  - '#paradigm-harness'
+learnings:
+  - After a crash, session checkpoints can trail the real state by several commits; reconcile against git HEAD and the newest lore before resuming.
+tags:
+  - paradigm-8
+  - gnomon
+  - atelier
+  - paused
+  - recovery
+linked_lore:
+  - L-2026-10-16-ascend-223456-001
+git_context:
+  ref: 0a5442bbe54a5ff1d098f082fda3f19e666256d9
+  branch: ideate/paradigm-8
+  dirty: true

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "display-block:v1",
+  "type": "Box",
+  "title": "Workshop",
+  "direction": "column",
+  "children": [
+    {
+      "type": "Box",
+      "title": "needs you 1",
+      "children": [
+        {
+          "type": "Text",
+          "text": "▲ permission",
+          "tone": "cap",
+          "cap": {
+            "shape": "tall",
+            "hue": 2,
+            "filled": true,
+            "state": "needs",
+            "label": "? permission"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Box",
+      "title": "working 1 of 2",
+      "children": [
+        {
+          "type": "Text",
+          "text": "▲ builder filled working",
+          "tone": "hue-2",
+          "cap": {
+            "shape": "tall",
+            "hue": 2,
+            "filled": true,
+            "state": "working",
+            "label": "builder"
+          }
+        },
+        {
+          "type": "Text",
+          "text": "▲ builder outlined still",
+          "tone": "violet",
+          "cap": {
+            "shape": "tall",
+            "hue": 5,
+            "filled": false,
+            "state": "knot",
+            "label": "builder"
+          }
+        }
+      ]
+    }
+  ]
+}

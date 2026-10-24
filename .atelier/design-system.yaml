@@ -47,3 +47,142 @@ decisions:
   - { session: 2026-10-14-warpline-console, board: intent-dials, choice: control-room }
   - { session: 2026-10-14-warpline-console, board: human-states, choice: neutral-mark }
   - { session: 2026-10-14-warpline-console, board: repos-and-nav, choice: two-levels, scope: v1 }
+
+gnomon:
+  read: "An instrument for one operator running an armada: glanced at many times a day in the Claude Code band, opened a few times a day to decide; exact, calm, quietly beautiful, a made object that reads a larger order."
+  world:
+    choice: shadow-instrument
+    rules:
+      - "One raking light from the top left; surfaces carry a hard cast shadow as material, never as a state signal (Mika)"
+      - "The light edge on a surface is the gnomon's line: linen, never a hue"
+      - "Progress reads as a shadow sweeping a dial"
+      - "Warpline surfaces keep the loom (threads, selvage); Constellation views keep the sky; both sit under the one light"
+    from: { session: 2026-10-15-gnomon-aesthetic, board: world }
+  style:
+    choice: "light = papercraft (cut-paper sheets, grain, ink lines, folded paper caps, pressable ink keys); dark = phosphor terminal (mono, glow, bracketed keys, glyph caps); optional automatic day/night swap"
+    supersedes: { board: world, choice: shadow-instrument }
+    overrides:
+      - { tell: default-warm-paper, scope: "light mode", reason: "creator wants a papercraft feel", from: { session: 2026-10-15-gnomon-aesthetic, board: style } }
+    from: { session: 2026-10-15-gnomon-aesthetic, board: style }
+  colour:
+    choice: pigment-set
+    tokens:
+      day:   { ground: "#EDE8DC", sheet: "#F8F5EE", ink: "#16150F", ink2: "#2A2925", sec: "#5A5850", rule: "#D9D5CB", fold: "#E1DBCC" }
+      night: { ground: "#0F1116", sheet: "#171A21", ink: "#E8F4F0", ink2: "#C9DCD6", sec: "#86998F", rule: "#2A2F38", fold: "#23262E" }
+      project:   # fill (caps, edges, swatches) / ink (any text in that hue) / night (phosphor; fill and text)
+        terracotta: { fill: "#C08A73", ink: "#8E4E38", night: "#E6A88F" }
+        sage:       { fill: "#9DAF8C", ink: "#56663F", night: "#B7CCA3" }
+        slate:      { fill: "#8C9DBB", ink: "#44577C", night: "#A9B9DB" }
+        ochre:      { fill: "#D2B074", ink: "#7A5A1C", night: "#E8C88C" }
+        rose-clay:  { fill: "#C9949A", ink: "#874B54", night: "#E4AEB4" }
+        sea-grey:   { fill: "#8FB0AE", ink: "#3F6664", night: "#A8CFCB" }
+      semantic:
+        failure: { day: "#B4382A", night: "#FF7A66" }
+        warning: { edge: { day: "#A8730C", night: "#FFC15A" }, ink: { day: "#6E4700", night: "#FFC15A" }, bg: { day: "#F6E3B8", night: "rgba(255,193,90,.10)" } }
+        knot:    { day: "#5B4FD6", night: "#A79CFF" }
+    rules:
+      - "Project hue fills never carry text; any text in a project hue uses its ink pair (>= 5.1:1 on sheet and ground); night hues pass as text (>= 8.6:1)"
+      - "Caps and swatches always keep a 1px ink edge, so a fill (2-2.7:1 on paper) is never the only boundary (WCAG 1.4.11)"
+      - "Failure = vermilion, only for failed sessions/runs; warning amber = warnings, held voice countdowns and the GATE-armed indicator; violet = KNOT only; no other saturated colour"
+      - "A project hue is identity, never state: state is carried by edge colour from the semantic set plus a word"
+    from: { session: 2026-10-15-gnomon-aesthetic, board: colour, ref: refs/colour.html }
+  type:
+    choice: mono-spine
+    tokens:
+      mono: "JetBrains Mono (400/500/600)"
+      display: "Fraunces opsz 9..144 (460/600), day mode only"
+    rules:
+      - "JetBrains Mono sets all UI and body text in both modes, the same mono as Warpline (one mono across the suite); Inter is not used in Gnomon"
+      - "Fraunces appears only on the wordmark and page/section titles in day mode; at night titles are mono, uppercase, letter-spacing .08em"
+      - "Long-form text in mono (agent replies, card bodies): 13.5px, line-height 1.6, measure <= 80ch (Mika: mono body needs the extra leading)"
+      - "Timestamps, durations, handles and meta lines are mono at 11-11.5px in the secondary ink"
+    from: { session: 2026-10-15-gnomon-aesthetic, board: type, ref: refs/type.html }
+  motion:
+    choice: lively-workshop
+    tokens:
+      card-in: "spring flutter 550ms cubic-bezier(.3,.7,.3,1): in from the right at 12deg, overshoot -5%/-3deg, settle at a random +-1.5deg"
+      card-decide: "stamp scales 1.9 -> .92 -> 1 (400ms, cubic-bezier(.3,1.4,.5,1)), then the card dips to .97 and flies off up-left at -14deg (450ms)"
+      card-fail: "droop: rotate 2.2deg + 3px down (500ms ease-out) while the edge turns vermilion; never a shake"
+      cap-walk: "900ms step-bob path from Working to Needs you"
+      cap-stream: "bob 1.1s ease-in-out, only while the session streams"
+    rules:
+      - "Motion still fires only on events (a card arrives, is decided, fails; a cap changes lanes; a session streams); nothing idles"
+      - "Voice-held cards show the 3s countdown bar first; the stamp plays only after the hold commits, never during it"
+      - "Reduced motion (OS setting or in-app): every transition is instant; the stamp shows without scaling"
+      - "Stack reflow uses 220ms top transitions so the pile closes up without jumps"
+    from: { session: 2026-10-15-gnomon-aesthetic, board: motion, ref: refs/motion.html }
+  cli-voice:
+    choice: instrument-readout
+    rules:
+      - "Aligned two-column readouts: lowercase label column, value column; numbers before nouns ('4 running'); items joined with ' · '"
+      - "Marks: ✓ ok, ✕ refused/failed, ◆ KNOT; no emoji, no exclamation marks, no 'Oops'"
+      - "Colour only for semantics (vermilion fail, amber warn, violet KNOT); output stays readable with NO_COLOR"
+      - "Every refusal prints the refusal code in caps, the reason in plain words, then an indented 'next:' line from refusal:v1.next[]"
+      - "Durations as '2m 14s', clock times as '14:02'; thin-space thousands ('1 204')"
+    example: |
+      $ gnomon status
+      sessions  4 running · 1 failed · 2 need you
+      cards     permission ×1 · knot ×1
+      voice     armed · reversible · 41:10 left
+      ✓ kernel 8.0.0-dev · log verified (1 204 events)
+    from: { session: 2026-10-15-gnomon-aesthetic, board: cli-voice }
+  layout:
+    choice: desk
+    structure:
+      header: "wordmark menu (Gnomon ▾: Layout presets, Day/Night/Auto, Mods…, Voice settings…, Settings… ⌘,) · command palette (⌘K) · quiet kernel status (link dot, word only when not connected; browser-risk amber outlined chip) · kernel-owned voice pill (the Start action when the voice app can't run) (superseded 2026-10-21, board header-5b)"
+      left: "sessions: + New (⌘N), Active grouped with project swatch + state note (needs you / failed / streaming), Past collapsed"
+      centre: "the chat: per-message timestamps, 'took Ns' durations, collapsible activity history; that project's pending cards pinned above the composer"
+      right: "global decision stack as a paper pile, sorted by urgency; hover fans it out to compare and pick which to hit first"
+      footer: "Workshop mod: Needs you | Working caps (default placement: footer; vertical right/left edge available as layout presets; founder 2026-10-17, ref refs/workshop-placement.html)"
+    rules:
+      - "Every panel (sidebar, stack rail, Workshop) can be hidden or moved via the Gnomon menu (Layout presets, Panes and Workshop…) or ⌘K; the choice persists per viewer (rewritten 2026-10-21, board header-5b: the ⊞ Layout key left the header)"
+      - "A card appears both in the global stack and pinned in its own session's chat; deciding it in either place removes it from both"
+      - "Kernel-owned regions (voice-armed indicator, handle words, held countdown) cannot be hidden by any layout preset"
+    from: { session: 2026-10-15-gnomon-aesthetic, board: decision-stack-and-sidebar, ref: refs/layout.html, note: "desk is totally it" }
+  voice:
+    model:
+      choice: trust-ladder
+      rules:
+        - "Voice is one choice: a ladder of presets ordered by how much voice does on its own: Off, Talk, Dictate, Send word, Pieces. The mic follows the preset; there is no separate capture menu"
+        - "Each rung states what it does in one line and what it costs (edits ask first, Touch ID) where it costs something"
+      from: { session: 2026-10-21-gnomon-voice, board: mode-model, note: "trust ladder is the closes but there is a part of how the mic mode is one aspect and the \"settings\" of the training the voice, the button to use for toggling, the send word. we need something that actually fits this" }
+    setup:
+      choice: ladder-plus-settings-sheet
+      rules:
+        - "The pill opens only the ladder (live switching). Everything configured lives in one Voice settings sheet: your voice, keys, send word, timing, risk"
+        - "The ladder links to the sheet; a rung that isn't ready (no send word, risk not acknowledged) says so and opens the sheet at that section"
+      from: { session: 2026-10-21-gnomon-voice, board: setup-home }
+    pill:
+      choice: mode-plus-live-fact
+      rules:
+        - "Header pill = mic dot (filled + soft ring when the mic is open) + rung name + one live fact ('say “send”', 'mic off · ⌃`', 'heard 4s ago'). Never only a glyph"
+        - "Clamped voice-sent turn: 2px amber (warning) edge and the fact 'edits ask first'. Speech not sent: vermilion fact with the reason in words. No other colour"
+        - "The pill is kernel-owned and cannot be hidden by any layout preset"
+      from: { session: 2026-10-21-gnomon-voice, board: pill, ref: refs/pill.html }
+    composer:
+      choice: autogrow
+      rules:
+        - "The composer wraps and grows with its text up to 12 lines, then scrolls; a ⤢ key toggles a tall view of 24 lines and back; a line count shows beside it"
+        - "Exactly one send control in the composer region"
+      from: { session: 2026-10-21-gnomon-voice, board: composer, note: "also the text box does not grow in size as there are more lines (to a limit of course, would also be good to have a shrink and grow button so they can see the context window as well.)" }
+    teach:
+      choice: inline-in-sheet
+      rules:
+        - "Teaching opens inline under its row in the Voice settings sheet: one prompt, a live 'I heard: …' line, one counter ('take 1 of up to 4' / 'phrase 2 of 3'), then save. No modal over the sheet"
+        - "Send word: pick (send, send it, over, or your own), say it once; done when heard right; only a mishearing asks again and is kept as an accepted variant"
+        - "The risk check (exact text plus an 'I understand' box) sits right before save for Send word, and before turning on Pieces"
+        - "Never ask the user to say the product name. Spoken phrases are plain sentences"
+        - "Takes and phrases never appear in the transcript or the composer"
+        - "A collected mishearing counts as the send word only if the user ticks it at save (unticked by default, with the line 'Saying “x” on its own will also send')"
+      overrides:
+        - { rule: "a mishearing ... is kept as an accepted variant", reason: "Aegis R-1: a real word like 'sent' said alone would send; founder kept the opt-in", by: creator, from: { session: 2026-10-21-gnomon-voice, board: teach, finish_review: true } }
+      from: { session: 2026-10-21-gnomon-voice, board: teach, ref: refs/teach.html, note: "also you are making the user say \"Gnomon\" which there is NO reference to how it supposed to be said in the first place." }
+    header:
+      choice: wordmark-menu
+      rules:
+        - "The header row holds only four things: wordmark menu, palette, quiet kernel status, voice pill; every control is 28px and never wraps"
+        - "Rarely used tools (Layout presets, theme, Mods, Voice settings, Settings) live in the wordmark menu and ⌘K, never as header keys; the ▾ is always visible with hover and pressed states"
+        - "Status is quiet when well: the link is a dot that gains a word only when not connected; the browser-risk chip is outlined amber at key height and stays visible"
+        - "When the voice app can't run, the pill itself is the action ('○ Start voice · app not running'); there is no separate Start key; its aria-label says what a click does"
+        - "Notices are toasts in the current vocabulary (no 'Ambient'), never loose text in the header"
+      from: { session: 2026-10-21-gnomon-voice, board: header-5b, ref: refs/header-5b.html, note: "we have no consistent layout or design on these elements" }

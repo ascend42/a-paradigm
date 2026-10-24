@@ -1,0 +1,40 @@
+id: TD-2026-10-23-939
+timestamp: '2026-10-23T19:57:58.669Z'
+title: Voice-sent turns follow the run mode and Always rules, like typed turns
+decision: >-
+  A turn sent by voice (Dictate's Enter, the send word, pieces) gets the same permissions as a typed turn: the session's
+  run mode and the human's saved Always rules and standing grants apply unchanged. The voice clamp ("voice turn · edits
+  ask first") is removed as a permission override. What stays: voice never approves anything (cards, grants, trust, mode
+  changes); every voice-sent turn is still logged with its origin (voice, voice-unverified, word); the per-word "not
+  checked as you" marks stay as information. Supersedes TD-2026-10-21-514's edits-ask-first clamp.
+rationale: >-
+  Founder, 2026-10-23, explicitly accepting the risk after it was spelled out (a TV or bystander triggering the send
+  word could then run whatever the run mode allows): "the entire point of diction is that they accept the risk", and
+  earlier "i am in dicatte, with auto-edit. it should just perform actions without RE ASKING ME after i hit always for
+  it as a saved rule". Field evidence: on auto-edits, every Bash call in a voice-sent turn raised a card, and Always
+  didn't stop the next one, because the clamp overrode both the run mode and saved rules. Same principle as
+  TD-2026-10-23-496 and TD-2026-10-23-268: the human owns their environment and their choices; the run mode they set is
+  the control.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Keep the clamp but let Always rules apply inside it
+    rejected_because: Still ignores the run mode the human chose
+  - option: Remove it for Dictate only
+    rejected_because: The founder accepts the risk for voice use generally (the send word was already accepted in TD-2026-10-23-496)
+symbols_affected:
+  - '#gnomon-voice'
+  - '#voice-clamp'
+  - '#session-supervisor'
+  - '#gui-voice'
+status: active
+tags:
+  - gnomon
+  - voice
+  - security
+  - permissions

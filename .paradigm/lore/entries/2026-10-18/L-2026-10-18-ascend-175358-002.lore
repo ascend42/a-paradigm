@@ -1,0 +1,18 @@
+id: L-2026-10-18-ascend-175358-002
+type: insight
+timestamp: '2026-10-18T17:53:58.417Z'
+author: ascend
+title: 'M1.6 slice 2 r2 reading: meter time and trust'
+summary: A turn counts under its own budget.usage row's at (row written first; FuseLog may return {at}), so runtime and restore agree even across midnight. Restore runs before daemon.start, so its today is the day of the chain's last event; counters are keyed by each row's own day. Chain times beyond wall + 5 min clamp to the wall clock, reported once as a daemon callback event (no log kind, no clientApiId move). Restore counts only kernel-principal rows signed by a kernel key, and usage whose user equals the grant's user.
+symbols_touched:
+  - '#budget-fuse'
+  - '#kernel-log'
+commit: 855818a1
+tags:
+  - decision
+  - gnomon
+  - m1.6
+git_context:
+  ref: 5e95874841aba9b759ae90f82ad70d026cf9fe27
+  branch: gnomon/m16-slice2
+  dirty: true

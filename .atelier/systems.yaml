@@ -1,0 +1,15 @@
+# Products in this repo, each with its own design system (.atelier/systems/<id>/).
+# .atelier/design-system.yaml, if present, is the repo-wide base every product inherits.
+# Parked 2026-10-21 (founder: "for now we can ignore all of design systems other than gnomon"):
+# warpline, platform and site have drafts in .atelier/systems/<id>/ but are not declared,
+# so nothing checks against them. Re-declare with `atelier system init` to resume.
+version: 1
+products:
+  gnomon:
+    name: Gnomon console
+    paths:
+      - packages/gnomon-gui/src
+      - packages/gnomon-gui/static
+      - packages/gnomon-wrapper/static
+      - packages/gnomon-mods/workshop
+    extends: none

@@ -1,0 +1,25 @@
+id: L-2026-10-22-ascend42-190243-001
+type: insight
+timestamp: '2026-10-22T19:02:43.523Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Windows Hello is usable by apps on the founder's laptop (pre-P02)
+summary: 'The founder has a Windows Hello PIN. dsregcmd''s NgcSet:NO is only the Windows Hello for Business flag. UserConsentVerifier reports Available and KeyCredentialManager.IsSupportedAsync is true, which unblocks W4 phase B. Next: probe P02, an ECDSA P-256 key in the Microsoft Passport (NGC) KSP that signs only after a Hello gesture.'
+symbols_touched:
+  - '#identity'
+  - '#gnomon-helper'
+learnings:
+  - dsregcmd NgcSet tracks Windows Hello for Business, not the consumer Hello PIN; check UserConsentVerifier.CheckAvailabilityAsync / KeyCredentialManager.IsSupportedAsync instead
+tags:
+  - windows
+  - gnomon
+  - W4
+  - probe
+linked_tasks:
+  - T-2026-10-22-007
+git_context:
+  ref: 93324492de1275b89ac4d41328d9738ec3b0e18d
+  branch: feat/gnomon-windows
+  dirty: false

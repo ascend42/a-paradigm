@@ -75,19 +75,6 @@ export interface PlatformServerOptions {
 }
 
 /**
- * Detect if an optional package is available
- */
-function isPackageAvailable(packageName: string): boolean {
-  try {
-    // Check if the package can be resolved
-    require.resolve(packageName);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {

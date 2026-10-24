@@ -1,0 +1,40 @@
+{
+  "$schema": "gnomon-contrast-fixtures:v1",
+  "source": ".atelier/design-system.yaml (gnomon.colour, gnomon.type) · session 2026-10-15-gnomon-aesthetic",
+  "oracle": "G-GUI-10",
+  "thresholds": { "text": 4.5, "nonText": 3.0 },
+  "themes": {
+    "day": {
+      "surfaces": { "ground": "#EDE8DC", "sheet": "#F8F5EE" },
+      "text": {
+        "ink": "#16150F", "ink2": "#2A2925", "sec": "#5A5850",
+        "fail": "#B4382A", "warnInk": "#6E4700", "knot": "#5B4FD6",
+        "terracotta": "#8E4E38", "sage": "#56663F", "slate": "#44577C", "ochre": "#7A5A1C", "rose-clay": "#874B54", "sea-grey": "#3F6664"
+      },
+      "nonText": { "keyEdge": "#2A2925", "capEdge": "#2A2925", "warnEdge": "#A8730C", "failEdge": "#B4382A", "knotEdge": "#5B4FD6" },
+      "fillOnly": { "terracotta": "#C08A73", "sage": "#9DAF8C", "slate": "#8C9DBB", "ochre": "#D2B074", "rose-clay": "#C9949A", "sea-grey": "#8FB0AE" },
+      "pairs": [
+        { "fg": "#6E4700", "bg": "#F6E3B8", "kind": "text", "what": "voice-armed indicator text on its fill" },
+        { "fg": "#A8730C", "bg": "#F6E3B8", "kind": "nonText", "what": "voice-armed indicator edge on its fill" },
+        { "fg": "#F8F5EE", "bg": "#16150F", "kind": "text", "what": "on-ink: primary key text on its ink fill" }
+      ]
+    },
+    "night": {
+      "surfaces": { "ground": "#0F1116", "sheet": "#171A21" },
+      "text": {
+        "ink": "#E8F4F0", "ink2": "#C9DCD6", "sec": "#86998F",
+        "fail": "#FF7A66", "warnInk": "#FFC15A", "knot": "#A79CFF",
+        "terracotta": "#E6A88F", "sage": "#B7CCA3", "slate": "#A9B9DB", "ochre": "#E8C88C", "rose-clay": "#E4AEB4", "sea-grey": "#A8CFCB"
+      },
+      "nonText": { "keyEdge": "#C9DCD6", "capEdge": "#C9DCD6", "warnEdge": "#FFC15A", "failEdge": "#FF7A66", "knotEdge": "#A79CFF" },
+      "fillOnly": {},
+      "pairs": [ { "fg": "#171A21", "bg": "#E8F4F0", "kind": "text", "what": "on-ink: primary key text on its ink fill" } ]
+    }
+  },
+  "rules": [
+    "every text token passes >= 4.5:1 on every surface of its theme",
+    "every nonText token passes >= 3:1 on every surface of its theme (key edges, cap edges, state edges)",
+    "fillOnly tokens are never used for text and always sit inside a capEdge; they are reported, not gated",
+    "the warning edge #A8730C is nonText only on day; warning text uses warnInk"
+  ]
+}

@@ -1,0 +1,36 @@
+id: L-2026-10-20-ascend-090837-001
+type: milestone
+timestamp: '2026-10-20T09:08:37.249Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: The S5 Workshop caps merged; the Atelier GUI brief (S1–S5) is complete on feat/gnomon
+summary: |-
+  c2cfc0e1 merges S5 after the Aegis re-check APPROVE. The gnomon-gui .purpose conflict kept the feat/gnomon wording (design constants, not ms, per G-HON-07); the bundle was re-embedded (sha256:ff11db2b…). Suites: gui 338, gnomon 2440 plus the web-units pin.
+  Mistake and fix: my scripted repin grepped the embed hash from the wrong output, sed wrote an EMPTY pin into web-units.test.ts, and the run failed G-WEB-08. I restored the real hash by hand and re-ran web-units (81 pass).
+  With this, all of Luna's five slices are on feat/gnomon. Remaining design items: the voice countdown has no kernel source; knot/incident titles need kernel-composed line 1 at raise sites; L1 (Workshop region bound by name); layout.* commands are block-safe (check that presets can't hide panes).
+symbols_touched:
+  - '#gui'
+  - '#contract-workshop-cap'
+errors_encountered:
+  - description: The scripted repin wrote an empty hash into the G-WEB-08 pin (grep of embed output failed silently)
+    resolution: Restored the hash from gui-bundle.ts by hand; web-units green. Next time read the pin from GUI_BUNDLE_HASH, not from npm output, and guard against empty variables in sed
+verification:
+  status: pass
+  details:
+    gui: 338
+    gnomon: 2440 + web-units 81
+tags:
+  - gnomon
+  - design
+  - atelier
+  - merge
+  - marathon-2026-10-20
+linked_commits:
+  - c2cfc0e1
+  - 4f3c6e9a
+git_context:
+  ref: c2cfc0e10b47d7ba93cd0bc03211a7b161b1948e
+  branch: feat/gnomon
+  dirty: true

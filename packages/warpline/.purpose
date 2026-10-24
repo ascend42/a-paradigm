@@ -4336,7 +4336,7 @@ aspects:
       tripwire — was wired to nothing, and every "green CI extension of PW-4"
       exit criterion was unsatisfiable. Now root `npm test` = `test:cli &&
       test:warpline`, and ci.yml carries a dedicated BLOCKING `warpline` job
-      (Node 20, NOT continue-on-error) that runs `npm run test:warpline`.
+      (Node 24, NOT continue-on-error) that runs `npm run test:warpline`.
       TWO DELIBERATE PROPERTIES. (1) `test:warpline` BUILDS dist before running:
       four tests (f4-cli-arm, pick-agentid-env, two in stake-denylist-v2) are
       `it.skipIf(!existsSync(dist/cli.js))`, so an absent or STALE dist makes

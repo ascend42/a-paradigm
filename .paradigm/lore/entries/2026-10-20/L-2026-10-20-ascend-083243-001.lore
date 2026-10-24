@@ -1,0 +1,29 @@
+id: L-2026-10-20-ascend-083243-001
+type: review
+timestamp: '2026-10-20T08:32:43.203Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Aegis APPROVE GUI S2/S3, with two mediums: requester text promoted to a card title; buried pile keys are clickable'
+summary: 'The markdown renderer for model text is sound: allowlisted h() only, no links or images, sanitised leaves, bounded nesting, and a 10k match cap. Click routing uses the button''s own data-card-id, and z-order puts earlier cards on top. M1: S3 promotes card line 1 (requester-controlled for peer/session cards) to a bold title while moving requestedBy into a hover tooltip, so a requester can present kernel-looking prose. M2: when the pile isn''t fanned, a buried card''s keys are clickable with its head hidden, and the re-layout race can slide the next card''s key under the pointer. L1: an uncited voice.turn.user can name a session. L2: the agent can bold lookalike status labels. Fixes go to the builder before S4. The F2–F6 builder has F4/F5 in (5c7e3877) and is working on F6 with a clientApiId move.'
+symbols_touched:
+  - '#gui'
+learnings:
+  - 'Visual hierarchy is a security property: promoting untrusted text to a heading and demoting provenance to a tooltip is a spoofing vector even when the bytes are sanitised.'
+  - Overlapping interactive UI (piles) needs pointer-events gating and a re-layout click guard.
+verification:
+  status: pass
+  details:
+    verdict: APPROVE
+    medium: 2
+    low: 2
+tags:
+  - gnomon
+  - design
+  - aegis
+  - marathon-2026-10-20
+git_context:
+  ref: 4d0ec8d0dd822989b3af520a0634318c1a8c2dc2
+  branch: feat/gnomon
+  dirty: true

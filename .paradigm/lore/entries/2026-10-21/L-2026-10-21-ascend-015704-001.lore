@@ -1,0 +1,27 @@
+id: L-2026-10-21-ascend-015704-001
+type: milestone
+timestamp: '2026-10-21T01:57:04.680Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Dogfood verified on df00bd7a: 1 password per card, sessions start after upgrade, Homebrew node on PATH'
+summary: 'The founder verified on the rebuilt kernel (df00bd7a). Each mod config card cost exactly 1 password (TD-2026-10-20-514). After the self-upgrade, a new session spawned with no not_subscription_auth refusal: USER now comes from the OS. Inside the session `which node` printed /opt/homebrew/bin/node, so the PATH default applies (TD-2026-10-21-077). The kernel-key-changed banner after an upgrade is expected; running `gnomon` opens a fresh tab. Still open: the Desk slip (desk stats showed 0 offers before the first turn).'
+symbols_touched:
+  - '#approval-broker'
+  - '#session-runner'
+  - '#supervisor'
+verification:
+  status: pass
+  details:
+    prompts_per_card: 1
+    session_auth: ok
+    which_node: /opt/homebrew/bin/node
+tags:
+  - gnomon
+  - dogfood
+  - marathon-2026-10-20
+git_context:
+  ref: 49d940765730463da90641ed83230388dace2195
+  branch: feat/gnomon
+  dirty: true

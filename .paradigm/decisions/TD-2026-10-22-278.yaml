@@ -1,0 +1,37 @@
+id: TD-2026-10-22-278
+timestamp: '2026-10-22T09:06:36.512Z'
+title: 'Gnomon on Windows: hybrid approvals, LocalAppData install, built on the founder''s Windows machine'
+decision: >-
+  (1) Approvals: hybrid. Routine cards (tool permission, ask-user, plan) are click-only; Windows Hello (PIN acceptable)
+  is required for root provisioning and rotation, config and grant signing, gate-class, 'always', install, budget
+  resume, cloud fallback, api-token, link pairing, and voice enrolment and arms. Status shows presence per class. (2)
+  Install: a versioned folder under %LOCALAPPDATA%\Programs\Gnomon, not MSIX. Aegis's caveat stands (a same-user process
+  can modify it; no App Management equivalent), so re-verify Authenticode before every launch and hold the verified file
+  handle across CreateProcess. (3) The Windows parity pass is done on the founder's Windows machine, in a Claude Code
+  session picking up from docs/plans/gnomon-windows.md.
+rationale: >-
+  Founder choices after Arky's and Aegis's plans (.paradigm/research/paradigm-8/gnomon-windows-plan.html). Hybrid keeps
+  the root-signed rails (budget fuse, permits) meaningful against same-user code while keeping routine approvals as
+  simple clicks. LocalAppData was chosen over MSIX for packaging simplicity, accepting weaker install integrity.
+  Building natively avoids blind cross-compiles and allows probes and acceptance tests on real TPM/Hello hardware.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: security
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Click-only everywhere
+    rejected_because: budgets and permits become advisory against same-user code
+  - option: MSIX install
+    rejected_because: founder chose simpler packaging; caveat recorded
+status: active
+tags:
+  - gnomon
+  - windows
+  - security
+  - distribution

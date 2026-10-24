@@ -1,0 +1,33 @@
+id: TD-2026-10-21-077
+timestamp: '2026-10-21T00:58:26.985Z'
+title: 'Gnomon: session PATH from root-signed config, with a fixed per-platform default'
+decision: >-
+  A session's PATH comes from a new root-signed config key, `sessions.path` (a list of absolute directories). When it is
+  unset, rejected or rolled back, a fixed per-platform default is used. On macOS the default is the pinned node's
+  directory, ~/.local/bin, /opt/homebrew/bin, /usr/local/bin, /usr/bin, /bin, /usr/sbin and /sbin. The daemon's own PATH
+  is never passed to a session, whatever the launch path (terminal `gnomon up`, Gnomon.app, --detach/gnomond, upgrade
+  re-exec).
+rationale: >-
+  The session PATH used to differ by launch path. After a self-upgrade it was /usr/bin:/bin:/usr/sbin:/sbin, which lost
+  node, npm and gh. The spec (§2.4 rule 2) already intends "PATH from root-signed config". A config key lets the founder
+  add nvm/asdf/volta dirs with one card, with no code change and no trust in the activator env.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: builder
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Fixed default only
+    rejected_because: adding a tool dir would need a code change
+  - option: Login-shell PATH ($SHELL -lc)
+    rejected_because: runs user rc files inside the key-holding process; activator-env trust that S-H3 rules out
+symbols_affected:
+  - '#session-runner'
+  - '#supervisor'
+status: active
+tags:
+  - gnomon
+  - session-env
+  - founder

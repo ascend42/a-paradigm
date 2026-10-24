@@ -9,7 +9,6 @@ import {
   loadPeers,
   revokePeer,
   forgetAllPeers,
-  type PeerRecord,
 } from '../../../../paradigm-mcp/src/utils/symphony-peers.js';
 import type {
   SymphonyPeersOptions,

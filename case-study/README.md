@@ -19,7 +19,7 @@ An AI agent builds and evolves a project management API (TaskFlow) across 3 sess
 
 ### Prerequisites
 
-- Node.js 18+, npm
+- Node.js 24+, npm
 - jq, curl
 - Two Claude Code sessions (or sequential runs)
 

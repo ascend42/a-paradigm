@@ -1,0 +1,45 @@
+id: L-2026-10-19-ascend-081130-001
+type: milestone
+timestamp: '2026-10-19T08:11:30.674Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon process hardening (Orca audit items 1–6) merged to feat/gnomon
+summary: |-
+  T-2026-10-19-009 is done. All six process-hardening items adopted from the Orca audit are implemented: tree sweep, socket ownership, a ready{identity} handshake with classified exit codes, per-method permission tiers that deny by default, deny-safe broker falsifiers, and backpressure with delivery-unknown. Aegis, a reviewer for items 1–3 and a reviewer for items 4–6 reviewed the work. Two parallel builders then landed the fix pass:
+  - Aegis M1: in-chunk hold at maxInFlight, maxWriteBuffer 8 MiB and maxConnections 64.
+  - Aegis M2: the ready fd is sealed as CLOEXEC via a /dev/fd re-open, and the launcher rejects a ready line whose socketPath doesn't match.
+  - The post-settle probe hang is fixed.
+  - A leader gone before the stop snapshot is now reported as an unverifiable tree.
+  - A call that never left the client reports connection-closed, and the 9 GONE assertions are tightened again.
+  - The named pipe no longer gets chmod.
+  - A test pins unlink-before-close.
+  feat/gnomon was fast-forwarded to 2eb6e657 locally and is not pushed. The full suite: 1548 passed and 1 failed. The failure is the wrapper-channel ps-snapshot positive control, which this branch doesn't touch; it passed 3 out of 3 reruns in isolation, so it is a load flake.
+symbols_touched:
+  - '#socket'
+  - $daemon-lifecycle
+  - '#approval-broker'
+  - '#web-endpoint'
+  - '#socket-client'
+commit: 2eb6e657
+decisions:
+  - id: close-unlink
+    decision: A clean close still unlinks its own socket, guarded by dev+ino, rather than following Orca's never-unlink rule
+    rationale: 'Aegis: the unlink runs before server.close(), while the bound listener pins the inode, so it cannot be reused; a test pins the order'
+  - id: m1-hold
+    decision: Frames past maxInFlight within a single chunk are held, not refused with BUSY and not closed
+    rationale: RefusalCode is closed, so BUSY would need a version bump, and closing would break clients that pipeline requests
+verification:
+  status: partial
+  details:
+    suite: 1548 passed, 1 failed (wrapper-channel flake), gui 54 passed
+    linux_cloexec: untested until CI
+    windows_ready_fd: residual P8-D78
+linked_tasks:
+  - T-2026-10-19-009
+  - T-2026-10-19-011
+git_context:
+  ref: 2eb6e65780b1165083a68eba271bac4c019b9bd0
+  branch: feat/gnomon
+  dirty: true

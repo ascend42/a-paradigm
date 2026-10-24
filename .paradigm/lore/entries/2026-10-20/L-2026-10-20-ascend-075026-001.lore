@@ -1,0 +1,52 @@
+id: L-2026-10-20-ascend-075026-001
+type: agent-session
+timestamp: '2026-10-20T07:50:26.606Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Read-only parity built: the founder''s 4 prompting commands now pass with no card'
+summary: |-
+  Tier 1 plus F1 and F7 landed on feat/gnomon (2745fd3f, 32b4a08e, dd8e958a, 2153e7a1, b8e082f1, 4de4d978, 68f988a4). All 4 of today's prompting commands now pass verbatim.
+  - K1: the kernel classifies against the session root and rewrites the command via updatedInput to `builtin cd -q -- '<root>' && builtin unset CDPATH && {…}`, so what runs is what was proven; tested under real zsh and bash.
+  - cwd sets: up to 8 possible cwds tracked across ; || newline.
+  - Grammar: relative cd, case, brace expansion, tainted lowercase locals.
+  - Git: read-only subcommands added.
+  - "Always" rules now also match by the {command} hash, including old rules.
+  - F1: the read-only pass runs in ask mode too. F7: the MAINTAIN env in policy.json.
+  - Not built: RC4, the miss row. Any new event kind or payload field is published in CLIENT_API_DESCRIPTOR, so it moves clientApiId and needs a founder ruling.
+  - Side effect: `cd ABS/subdir && git …` now needs a card (git only at the root).
+  - Suite: 2340 passed; 1 failure from another builder's preview WIP (symbols-drift). Contracts 453.
+  Aegis review launched.
+symbols_touched:
+  - '#shell-readonly'
+  - '#supervisor'
+  - '#always-rules'
+  - '#approval-broker'
+  - '#manifest-loader'
+learnings:
+  - Proving a command and then running a different context is the gap; anchoring the proven command (rewrite via updatedInput) closes it without trusting the host's cwd tracking.
+  - Event-kind additions are a contract move in Gnomon, so observability rows (miss logging) need to be planned into an id bump.
+verification:
+  status: partial
+  details:
+    gnomon_passed: 2340
+    gnomon_failed: 1
+    contracts: 453
+    aegis: pending
+tags:
+  - gnomon
+  - permissions
+  - marathon-2026-10-20
+linked_commits:
+  - 2745fd3f
+  - 32b4a08e
+  - dd8e958a
+  - 2153e7a1
+  - b8e082f1
+  - 4de4d978
+  - 68f988a4
+git_context:
+  ref: 68f988a4901b16150e5d77425f5abe37984c58c3
+  branch: feat/gnomon
+  dirty: true

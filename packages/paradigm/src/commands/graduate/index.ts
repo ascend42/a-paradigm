@@ -56,18 +56,6 @@ const SEED_HABIT_NAMES: Record<string, string> = {
   'university-onboarded': 'University Onboarding',
 };
 
-const TIER_COLORS: Record<string, (s: string) => string> = {
-  hook: chalk.green,
-  habit: chalk.yellow,
-  mcp: chalk.red,
-};
-
-const TIER_ICONS: Record<string, string> = {
-  hook: '⚡',   // zero cost
-  habit: '💭',   // agent-reminded
-  mcp: '🔧',    // agent-manual
-};
-
 /**
  * paradigm graduate status
  */
@@ -137,7 +125,7 @@ export async function graduateStatusCommand(options: { json?: boolean }) {
   // MCP tier
   if (byTier.mcp.length > 0) {
     console.log(chalk.red.bold('  🔧 MCP Tools (manual, high token cost)'));
-    for (const { id, state } of byTier.mcp) {
+    for (const { id } of byTier.mcp) {
       const name = SEED_HABIT_NAMES[id] || id;
       console.log(`    ${chalk.red('●')} ${name} ${chalk.gray(`(${id})`)}`);
     }

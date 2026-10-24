@@ -1,0 +1,43 @@
+id: L-2026-10-19-builder-031025-001
+type: milestone
+timestamp: '2026-10-19T03:10:25.008Z'
+author: builder
+title: 'Gnomon bare entry: gnomon in a folder suggests that folder; already-running refuses instead of joining'
+summary: Bare gnomon = gnomon up + a fragment-only &cwd=<base64url> folder hint on the TTY launch URL line; GUI prefills clean absolute paths only, shows text, never submits. A running kernel is not joined (REFUSED GNOMON already-running, exit 3) because minting from it needs a gnomon open wire verb that moves clientApiId; design note for T-2026-10-19-001 in spec 2.4 rule 8. Installer scripts/install-darwin.mjs + npm run gnomon:install; README rewritten.
+symbols_touched:
+  - '#bare-entry'
+  - '#gnomon-up'
+  - '#gui'
+  - '#web-endpoint'
+  - '#wrapper-channel'
+files_modified:
+  - packages/gnomon/src/cli/gnomon.ts
+  - packages/gnomon/src/cli/up-cli.ts
+  - packages/gnomon/src/cli/launch-tty.ts
+  - packages/gnomon-gui/src/core/launch.ts
+  - packages/gnomon-gui/src/ui/app.ts
+  - docs/specs/gnomon.md
+  - docs/guides/gnomon-dogfood.md
+files_created:
+  - packages/gnomon/src/cli/bare-cli.ts
+  - packages/gnomon/test/bare-entry.test.ts
+  - packages/gnomon/scripts/install-darwin.mjs
+  - packages/gnomon/test/install-darwin.test.ts
+  - packages/gnomon/README.md
+learnings:
+  - The URL fragment is the only hint channel that adds no new token surface
+  - A same-user cwd claim must be escaped and never prefilled when it needs escaping
+  - A malformed hint drops the hint never the launch
+tags:
+  - gnomon
+  - dogfood
+  - launch
+linked_commits:
+  - 972a689c
+  - a928f4b9
+  - b1adf012
+confidence: 0.85
+git_context:
+  ref: b1adf012a472a120e43230b7aa5d4bf9e682185c
+  branch: gnomon/bare-entry
+  dirty: false

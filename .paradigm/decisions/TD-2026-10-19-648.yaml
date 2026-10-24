@@ -1,0 +1,49 @@
+id: TD-2026-10-19-648
+timestamp: '2026-10-19T08:52:04.700Z'
+title: Adopt the team plan for Orca Adapt items 8, 10, 11, 12
+decision: >-
+  Item 8: the log cursor becomes {log: logId, seq}. A cursor from another log is refused with
+  BAD_REQUEST{reason:'cursor-epoch'}. Cursors are seq-only in limited views, with no hash or prev. Build it now, in the
+  batched clientApiId move (T-2026-10-19-001).
+
+
+  Item 11: reserve claimGen on contract.claimed and the CAS_LOST reasons stale-claim, claim-expired and claim-superseded
+  now. Build in M2.2.
+
+
+  Item 12: spec §3.9 now. Each side's kernel-key signature covers the handshake hash, and verification uses the pinned
+  key ids exactly. Build in M2.8.
+
+
+  Item 10: `gnomon guide <topic>` is a CLI-only verb. Its topics are compiled into the signed binary and are pull-only,
+  never injected. A CI honesty check fails the build if a guide names a verb, flag or reason the descriptors lack. Build
+  before Move 2. Agent topics come first: spawn, claims, cards, refusals.
+
+
+  Also reserve item 7's feature names and session.drained in the same clientApiId move.
+rationale: >-
+  Founder adopted the team plan in the 2026-10-19 decision dialog. These items mostly follow from earlier decisions:
+  log.read since/next, the F4 TD-2026-07-21-766, Noise IK/XX plus SAS (§3.9), P8-D93 and P8-D89a. Batching keeps the
+  published client API moving only once (P8-D89).
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: proposed
+  - id: aegis
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#socket'
+  - '#peer-link'
+  - '#armada'
+status: active
+tags:
+  - gnomon
+  - orca-audit
+  - T-2026-10-19-010

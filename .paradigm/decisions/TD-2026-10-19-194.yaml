@@ -1,0 +1,51 @@
+id: TD-2026-10-19-194
+timestamp: '2026-10-19T21:18:54.339Z'
+title: 'Voice pulled forward: slice plan V0–V9 and founder rulings (T-2026-10-19-026)'
+decision: >-
+  Build voice in slices: V0 contracts (voice-class allowlist, default deny; CLIENT_API_ID/ABI_ID pin test) → V1 kernel
+  voice principal talk-only → V2 gnomon-voice client PTT on Mac (first dogfood) → V3 conversation mode. In parallel: P1
+  mic-permission probe → V4 supervised child; V5 helper 1.6 (arm store, approve-voice domain, lock/sleep observer,
+  re-notarized) → V6 policy → V7 reversible arm → V8a/V8b reversible decisions + anti-echo/replay. V9 (gate/judgment)
+  parked until strictness levels exist and T-VOX-02 is reported. Aegis reviews every slice.
+
+  Founder rulings: (1) voice-originated turns under auto-edits are ALLOWED, the same as typed turns: no ask clamp
+  (against the Arky+Aegis recommendation). (2) If P1 fails: talk-only on Mac until the helper gains a peer-PID +
+  code-signature op; arming only for armCustody: child until then. (3) gnomon-voice ships as a signed single executable;
+  the models stay outside it, covered by a manifest hash.
+
+  Adopted by consensus with no founder objection: null strictness = toggle 1 at most, no gate arms; any
+  approval.mode.set ends every arm; drain leaves status.arms empty; manual mode allows voice deny only; Mac only; voice
+  sends ride the attached session's permit; the kernel requires each voice session.send to reference a logged enrolled
+  PTT voice.turn.user outside playback+echo tail; the human attaches voice to a session by a GUI gesture.
+rationale: >-
+  This is the safest early increment that can be dogfooded (talk with no approvals) while helper 1.6 is built in
+  parallel. The founder accepted the T2 risk (room audio or TTS driving auto-edits) to keep auto-edits uniform. The
+  residual mitigation is V1's kernel-side gates: enrolled speaker, push-to-talk, the echo window, and no
+  conversation-mode forwarding in V1.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: proposed
+  - id: aegis
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Force ask for tool calls in voice-started turns
+    rejected_because: 'Founder ruled Allow: auto-edits stays uniform for voice and typed turns'
+  - option: 'armCustody: client fallback via socket'
+    rejected_because: Node has no peer PID, so it cannot be verified without a helper op
+  - option: Hashed Node bundle
+    rejected_because: A signed single executable gives a stable TCC/Gatekeeper identity and a simpler pin
+symbols_affected:
+  - '#gnomon-voice'
+  - ^voice-armed
+  - '#approval-broker'
+  - $voice-approval
+status: active
+tags:
+  - gnomon
+  - voice
+  - paradigm-8

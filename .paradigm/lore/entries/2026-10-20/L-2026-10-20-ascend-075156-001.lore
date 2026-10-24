@@ -1,0 +1,46 @@
+id: L-2026-10-20-ascend-075156-001
+type: agent-session
+timestamp: '2026-10-20T07:51:56.772Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Voice capture A1/A2 built: hearing / catching / got it / dropped-with-reason, plus a real level meter'
+summary: |-
+  Builder shipped phase A of T-2026-10-20-005 in commits 6ca8f0a3, f06ac152 and f55af625 on its worktree branch.
+  - Voice client: a per-segment capture state machine with a closed drop-reason set; throttled ≤5 Hz, terminal states always sent.
+  - Kernel: relays it as status.voice.capture with a 5 s TTL, voice principal only; the gui-only seam for V2 is built.
+  - Level: the Swift level is finally consumed, so the meter shows real dBFS instead of a decorative CSS loop.
+  - GUI: polls 1 s at rest and 175 ms while hearing; the polls now clear on disconnect (Aegis L2); lastError is sanitized (Aegis L1); the dead voice.turn.partial paths are removed.
+  - Ids unchanged.
+  - Suites: voice 102, gnomon 2247, gui 234, contracts 453.
+  - Choices to check: a STT exception maps to no-words; echo is checked before too-short; possibly a double aria-live.
+  Aegis review launched. Phase B (live words) is next, after the B0 benchmark.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+  - $voice-turn
+learnings:
+  - The gnomon suite needs `npm run build` and must run outside the sandbox; ~40 daemon/web/setup tests fail for environment reasons otherwise. Put this in builder briefs.
+verification:
+  status: pass
+  details:
+    voice: 102
+    gnomon: 2247
+    gui: 234
+    contracts: 453
+    aegis: pending
+tags:
+  - gnomon
+  - voice
+  - marathon-2026-10-20
+linked_tasks:
+  - T-2026-10-20-005
+linked_commits:
+  - 6ca8f0a3
+  - f06ac152
+  - f55af625
+git_context:
+  ref: 68f988a4901b16150e5d77425f5abe37984c58c3
+  branch: feat/gnomon
+  dirty: true

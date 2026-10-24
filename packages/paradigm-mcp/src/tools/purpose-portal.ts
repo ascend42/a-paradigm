@@ -36,6 +36,7 @@ import type {
   PurposeFile,
   PurposeItem,
   FlowDefinition,
+  ValidationIssue,
 } from '@a-company/purpose-core';
 
 // ============================================
@@ -761,7 +762,8 @@ async function handleAddComponent(
     (data as Record<string, unknown>)[sec] as PurposeFile['components']
   );
 
-  const item: PurposeItem & Record<string, unknown> = existing[bareId] || { description: '' };
+  // `file` and `status` are written alongside the schema-declared PurposeItem fields.
+  const item: PurposeItem & { file?: string; status?: string } = existing[bareId] || { description: '' };
   item.description = description;
 
   if (file !== undefined) item.file = file;
@@ -1336,11 +1338,8 @@ const CLARIFICATION_REGEX = /\[NEEDS CLARIFICATION:\s*[^\]]+\]/gi;
  * Scan a parsed .purpose file for [NEEDS CLARIFICATION: ...] markers in description fields.
  * Returns an array of warning issues for each marker found.
  */
-function scanClarificationMarkers(
-  data: PurposeFile,
-  filePath: string,
-): Array<{ type: string; message: string; path?: string }> {
-  const issues: Array<{ type: string; message: string; path?: string }> = [];
+function scanClarificationMarkers(data: PurposeFile): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
 
   function checkField(value: unknown, fieldPath: string) {
     if (typeof value === 'string') {
@@ -1439,7 +1438,7 @@ async function handleValidate(
       }
 
       // Check for clarification markers
-      const clarificationIssues = scanClarificationMarkers(parseResult.data, filePath);
+      const clarificationIssues = scanClarificationMarkers(parseResult.data);
       validation.issues.push(...clarificationIssues);
 
       results.push({
@@ -1480,7 +1479,7 @@ async function handleValidate(
       }
 
       // Check for clarification markers
-      const clarificationIssues = scanClarificationMarkers(parseResult.data, filePath);
+      const clarificationIssues = scanClarificationMarkers(parseResult.data);
       validation.issues.push(...clarificationIssues);
 
       results.push({

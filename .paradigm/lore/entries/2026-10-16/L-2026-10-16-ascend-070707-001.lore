@@ -1,0 +1,38 @@
+id: L-2026-10-16-ascend-070707-001
+type: human-note
+timestamp: '2026-10-16T07:07:07.688Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon must run on Windows too; voice decisions
+summary: 'Voice research landed (research 19, 20). Founder decisions: push-to-talk plus an opt-in conversation mode with barge-in; local-only voice in 8.0; a compacted lore record plus raw turns for the team chat log. New cross-cutting requirement: everything Gnomon builds must also work on Windows, which reopens the voice client build and every macOS-specific choice in the spec (sandbox-exec, Keychain, unix socket, MLX, CoreML).'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-R4
+    decision: 'Requirement: everything Gnomon builds must also work on Windows'
+    rationale: 'Founder: "all of what we build needs to also work if on a windows"'
+  - id: P8-D28
+    decision: 'Voice interaction: push-to-talk by default plus a toggleable conversation mode with barge-in; mic state always visible'
+    rationale: Safe default with a real back-and-forth when wanted.
+  - id: P8-D29
+    decision: Voice is local only in 8.0; only text goes to Claude; cloud speech-to-speech considered for 8.1
+    rationale: Privacy; no official Anthropic realtime audio API.
+  - id: P8-D30
+    decision: 'Team chat log: every voice turn is a kernel event (text_planned vs text_spoken); at session end turns compact into a lore record linked to raw turns; shared text-only, redacted, with per-speaker consent; audio not kept by default'
+    rationale: Lore-like log for teams without leaking audio.
+learnings:
+  - 'Windows support reopens macOS-specific choices: sandbox-exec (Windows needs AppContainer/job objects or an ACL backend, as deepseek-harness has), Keychain/Touch ID (Windows Credential Manager/Windows Hello), unix sockets (named pipes), MLX/CoreML/FluidAudio (Mac-only; need cross-platform engines with Mac acceleration as an optional backend).'
+tags:
+  - paradigm-8
+  - gnomon
+  - voice
+  - windows
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-070321-001
+git_context:
+  ref: 3b3523687a485bdcedfadc7070d5f33c2043ff97
+  branch: ideate/paradigm-8
+  dirty: true

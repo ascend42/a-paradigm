@@ -1,0 +1,27 @@
+id: L-2026-10-17-ascend-084643-001
+type: human-note
+timestamp: '2026-10-17T08:46:43.377Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D77: kernel linking/relay deferred until the Gnomon core is ready'
+summary: 'The founder deferred the LAN relay and linking work (M2.8/M2.9) until the Gnomon core is ready; no second computer is available for the test. The spec''s §3.9 design stays as written. The cheap Move 1 reservations stay in M1.1: contract values, the hsid-short definition, sensitivity defaults, and rootKeyId comparison. OPEN 16 (relay host) is parked.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#peer-link'
+decisions:
+  - id: P8-D77
+    decision: Defer the relay and kernel-linking build (M2.8/M2.9, OPEN 16) until the Gnomon core (Move 1) is ready; keep the M1.1 reservations so linking needs no redesign later
+    rationale: 'Founder: wants the core of Gnomon ready first, and no other computer is ready for the test.'
+tags:
+  - paradigm-8
+  - gnomon
+  - linking
+  - decision
+linked_lore:
+  - L-2026-10-17-ascend-084150-001
+git_context:
+  ref: ffad9be1b1cd3b67e93986f98411976ff1df9175
+  branch: feat/gnomon
+  dirty: true

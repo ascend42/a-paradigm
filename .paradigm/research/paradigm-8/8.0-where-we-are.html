@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paradigm 8.0 Status</title>
+<style>
+:root{--bg:#f6f3ec;--card:#fffdf8;--ink:#1f1d1a;--ink2:#55504a;--rule:#ddd6c8;--accent:#2f5d50;--warn:#9a5b00;--fail:#a3341f;--code:#efeadf}
+@media (prefers-color-scheme:dark){:root{--bg:#141412;--card:#1c1b19;--ink:#ece8df;--ink2:#a8a29a;--rule:#34312c;--accent:#7fbfa9;--warn:#e0a54a;--fail:#ff8a70;--code:#26241f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Inter",sans-serif}
+main{max-width:860px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px}
+h2{font-size:20px;margin:44px 0 12px;padding-top:16px;border-top:1px solid var(--rule)}
+h3{font-size:16px;margin:24px 0 8px}
+p,li{color:var(--ink)}
+.sub{color:var(--ink2);margin:0 0 24px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:16px 18px;margin:12px 0}
+.why{color:var(--ink2);font-size:15px}
+.why b{color:var(--ink)}
+code{font:13.5px/1.5 ui-monospace,"JetBrains Mono",Menlo,monospace;background:var(--code);padding:1px 5px;border-radius:3px}
+pre{font:13.5px/1.55 ui-monospace,"JetBrains Mono",Menlo,monospace;background:var(--code);padding:12px 14px;border-radius:4px;overflow-x:auto;margin:8px 0}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{color:var(--ink2);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 7px;border-radius:3px;border:1px solid currentColor}
+.done{color:var(--accent)}.you{color:var(--warn)}.blocked{color:var(--ink2)}.fixme{color:var(--fail)}
+ol.steps>li{margin:0 0 14px}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;margin:10px 0}
+.flow span{background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:4px 8px}
+.flow i{color:var(--ink2);font-style:normal}
+pre:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.items td:first-child{white-space:nowrap}
+.items .tag{display:block;width:max-content;margin:0 0 4px}
+td code{overflow-wrap:anywhere}
+@media (max-width:520px){ol.steps{padding-left:22px}ol.steps ol,ol.steps ul{padding-left:20px}ol.steps .card{padding:14px 12px}}
+</style>
+</head>
+<body>
+<main>
+<h1>Paradigm 8.0: where we are</h1>
+<p class="sub"><b>Superseded (22 Oct, later):</b> 8.0 now waits for Windows and loops, ships as 8.0.1 (8.0.0 was burned on npm), and 7.15.2 shipped the Stop hook fix. See the decisions TD-2026-10-22-197, -129 and task T-2026-10-22-014.</p>
+<p class="sub">21–22 October 2026 · branch <code>feat/gnomon</code>, pushed to <code>1d291704</code> · this page explains what changed, why, and what's left for you.</p>
+
+<div class="card">
+<b>In one paragraph.</b> Today Gnomon got its own design system and its UI was moved onto it. Dictate was fixed so it takes everything you say. Then the big piece: making Gnomon something anyone can install with <code>npm i -g @a-company/paradigm</code> and run with <code>gnomon</code>, with no building or signing on their side. All the code for that is written, reviewed by Aegis at every step, tested and pushed. What's left is your signing setup and one signed test run before we tag 8.0.0.
+</div>
+
+<h2>1 · Test it now (your dev install)</h2>
+<p>Your local testing works the same way as before. The dev build of the app sets its dev mode automatically.</p>
+<pre tabindex="0">git pull                                   # already on feat/gnomon
+npm run build:gnomon
+node packages/gnomon-wrapper/scripts/build-darwin.mjs --unsigned   # rebuild Gnomon.app: the wrapper changed
+# then launch Gnomon as usual (approve the upgrade card if one appears)</pre>
+<p class="why"><b>Why rebuild the app:</b> the wrapper (the macOS app shell) changed in M2 and M4: it has a new trust check and a new CLI mode. Your helper and voice binaries didn't change, so they don't need rebuilding.</p>
+<h3>What to look for</h3>
+<ul>
+<li><b>Dictate:</b> short phrases land in the draft; anything not recognised as you is marked "unverified voice" and quoted in the note, and only Enter sends it.</li>
+<li><b>Notices:</b> one toast style at the chat column's right edge, with fail and warn labelled in words.</li>
+<li><b>Type and controls:</b> four text sizes; anything clickable is a 24px key with a hover state.</li>
+<li><b>Standing offer:</b> "Make it standing" takes you to its grant card; you approve it there.</li>
+</ul>
+
+<h2>2 · What changed today, and why</h2>
+
+<h3>Gnomon design system <span class="tag done">done</span></h3>
+<p>Atelier now keeps one design system per product. We mapped four products (Gnomon, Warpline, Platform, the site), drafted all four, and you parked all but Gnomon. You decided 8 contested questions, and the system lives in <code>.atelier/systems/gnomon/</code>. The UI was then migrated in 7 batches, each reviewed rendered by Mika: copy, field edges and status colour, chips vs keys, toasts, the four-step type scale, spacing and radius, menus and headings.</p>
+<p class="why"><b>Why:</b> the UI had 17 font sizes, 8 chip styles and 4 ways to show a notice, so every change re-decided the same things. Now <code>atelier check</code> goes from 1 failure and 174 warnings to 0 failures and 6 warnings, and new UI has a record to follow.</p>
+
+<h3>Dictate takes everything said <span class="tag done">done</span></h3>
+<p>Your short phrases were dropped as "speaker not recognised". The voice check refuses anything under 1.5 seconds of speech, and the kernel then refused to forward it. In Dictate, nothing sends without your Enter, so the check was blocking you for no safety gain. Now every turn fills the draft and only Enter sends it. Talk, Send word and Pieces still check the speaker, because they send without a key.</p>
+<p class="why"><b>Why it's still safe:</b> Aegis found and we closed a real hole: switching to Send word mid-draft could have sent unverified text. A sent turn containing unverified words also makes Claude ask before edits. Other people's speech is kept out of the permanent log (only a hash is stored) and only your own GUI sees it.</p>
+
+<h3>Why Gnomon couldn't be installed by anyone else <span class="tag done">diagnosed</span></h3>
+<ul>
+<li>Every Gnomon package was private, so <code>npm i</code> never delivered it.</li>
+<li>Running it meant cloning the repo and building it with Node 24.</li>
+<li>The helper (Touch ID, Secure Enclave keys) and the voice binary are Swift apps signed only on your Mac. Anyone else would need Xcode and your signing identity.</li>
+<li>The app shell had <i>your</i> Node's path and hash compiled in, so it couldn't run on another Mac.</li>
+</ul>
+
+<h3>The 8.0 plan you approved <span class="tag done">decided</span></h3>
+<div class="flow"><span>you build &amp; sign once per release</span><i>→</i><span>npm platform packages</span><i>→</i><span>user: <code>npm i -g @a-company/paradigm</code></span><i>→</i><span><code>gnomon</code></span><i>→</i><span>2 Touch ID prompts</span><i>→</i><span>the desk</span></div>
+<p>Decision TD-2026-10-21-758: bundled Node, npm platform packages, signing by a script on your Mac, and voice models from upstream with our mirror as a fallback.</p>
+
+<table>
+<tr><th>Piece</th><th>What it does</th><th>Why it matters</th></tr>
+<tr><td><b>M1</b> release pins<br><code>b0edca77</code></td><td>A release kernel carries the exact hash of the helper and voice binaries, compiled in. A swapped binary is refused even when it's validly signed.</td><td>A signature alone proves who built it, not which build. Aegis made sure deleting or editing a file can't switch the pins off.</td></tr>
+<tr><td><b>M2</b> one signed app<br><code>6f6c7f7d</code></td><td><code>Gnomon.app</code> contains its own pinned Node, the kernel, the helper and voice-io. The wrapper checks everything by paths relative to the app.</td><td>It runs on any Mac, whatever Node the user has. The Node download is checked against Node's signed release keys.</td></tr>
+<tr><td><b>M3</b> npm packaging<br><code>daa7af22</code></td><td>Public <code>@a-company/gnomon</code> plus <code>-darwin-arm64</code> / <code>-x64</code> holding the zipped app; paradigm gets a <code>gnomon</code> command.</td><td>One install command. A publish gate refuses anything that isn't Developer ID signed, notarized and a release build.</td></tr>
+<tr><td><b>M4</b> first run<br><code>adbd1e12</code></td><td><code>gnomon</code> installs the app to /Applications (or ~/Applications), verifies it on every launch, and runs everything through the wrapper.</td><td>The user's shell environment can't inject code, a planted app is never opened, and updates keep your identity.</td></tr>
+<tr><td>CI guard<br><code>ae2ddb04</code></td><td>CI never publishes Gnomon, and refuses to publish paradigm until Gnomon is on npm.</td><td>Otherwise merging to main would have tried to publish unsigned Gnomon, or shipped a paradigm that fails to install.</td></tr>
+<tr><td>Mika's protocols<br><code>f210c9c2</code></td><td>Mika's review protocols ship as skills.</td><td>See "my mistakes" below: as behaviours they never reached any agent.</td></tr>
+<tr><td>Typecheck<br><code>098f6d35</code></td><td>335 type errors down to zero, and CI now really type-checks.</td><td>The errors hid live bugs: every platform tool threw, Sentinel seed patterns never loaded, and persona validation never matched.</td></tr>
+</table>
+
+<h2>3 · What you need to do, in order</h2>
+<ol class="steps">
+<li><span class="tag you">you</span> <b>Test the dev build</b> (section 1) and tell me what's off.
+<div class="why"><b>Why:</b> today's UI and voice changes need your daily use, not just tests.</div></li>
+
+<li><span class="tag you">you</span> <b>M0: signing setup</b> (T-2026-10-21-027). <b>Most of this is already done.</b> I checked your Mac on 22 Oct.
+<div class="card">
+<b>Why signing is needed at all.</b> Three separate jobs depend on it:
+<ol>
+<li><b>Gatekeeper.</b> macOS refuses to open an app downloaded onto another Mac unless it's signed with a Developer ID <i>and</i> notarized (Apple scans it and issues a ticket that's stapled to the app). Without it, every user sees "Gnomon can't be opened" with no button to proceed.</li>
+<li><b>The Secure Enclave keys.</b> Each user's root and approvals keys live in their Mac's Secure Enclave, inside a <i>keychain access group</i> (<code>SW4BMQ8PNL.gnomon.prod</code>). macOS only lets an app use that group if it's signed by your team and carries a provisioning profile that grants the group. That's what keeps any other app on the user's Mac from using their Gnomon keys.</li>
+<li><b>Gnomon's own trust checks.</b> The kernel and wrapper refuse a helper, Node or voice binary unless it carries your team's signature (and, from M1, the exact hash of the release build). An unsigned build is refused by design.</li>
+</ol>
+Signing happens once per release, on your Mac, with your identity. Users never sign anything; they get your signed app.
+</div>
+<table>
+<tr><th>Piece</th><th>Where it lives</th><th>Status</th></tr>
+<tr><td>Developer ID Application certificate</td><td>your login keychain: "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)"</td><td><span class="tag done">ready</span></td></tr>
+<tr><td>Notary credentials</td><td>keychain profile <code>gnomon-notary</code> (App Store Connect API key <code>~/.config/gnomon-signing/AuthKey_….p8</code>)</td><td><span class="tag done">ready</span>: <code>notarytool history</code> succeeds</td></tr>
+<tr><td>Helper provisioning profile</td><td><code>~/.config/gnomon-signing/gnomon-helper.provisionprofile</code> (App ID <code>SW4BMQ8PNL.gnomon.helper</code>)</td><td><span class="tag done">works</span>, with one caveat below</td></tr>
+<tr><td>npm</td><td>logged in as <code>ascend42</code>, read-write on <code>@a-company</code></td><td><span class="tag done">ready</span></td></tr>
+<tr><td>npm names</td><td><code>@a-company/gnomon</code>, <code>-darwin-arm64</code>, <code>-darwin-x64</code></td><td><span class="tag done">free</span> (404 today)</td></tr>
+</table>
+<h3>The one real decision: keychain separation</h3>
+<p>Apple's Developer ID profile grants your team's <i>whole</i> keychain namespace (<code>SW4BMQ8PNL.*</code>), not just Gnomon's group. So in principle, <b>any other app you sign with your team</b> (a future tool, an experiment) could ask for the <code>gnomon.prod</code> group and use your users' Gnomon keys. Aegis flagged this (helper README, "Keychain separation"). Today the only team-signed binaries are Gnomon's own, so the risk is about the future.</p>
+<p class="why"><b>Why decide before 8.0:</b> users' keys are bound to that access group the moment they first run Gnomon. Changing it after release means every user re-creates their identity.</p>
+<p><b>What I don't know yet:</b> whether Apple lets a Developer ID profile be narrowed to one group, or whether the only real fix is a rule ("never sign anything else with this team"). I don't want to guess about Apple's portal. Next step: Aegis and I research it and bring you exact portal steps or a written rule, before the signed release build. Nothing for you to click until then.</p>
+</li>
+
+<li><span class="tag blocked">after M0</span> <b>First signed release build</b>. I can drive this with you, on your Mac:
+<pre tabindex="0">node packages/gnomon/scripts/release-darwin.mjs --arch arm64 --notarize --package-dir packages/gnomon-darwin-arm64</pre>
+<div class="why"><b>Why:</b> four things can only be proven signed (T-029): notarization accepts Node inside the app, the signed Node loads the voice libraries, the helper works from inside the app, and the Intel entitlements. If notarization objects to Node's location, we move it.</div></li>
+
+<li><span class="tag blocked">after M0</span> <b>Clean-Mac test</b> (T-031): a fresh macOS VM with no Xcode and only Node 20. Run <code>npm i -g</code> and then <code>gnomon</code>, and it should reach setup, two Touch ID prompts, then the desk. Also check that an upgrade keeps your identity, that it works offline, and that Linux gets a polite refusal.
+<div class="why"><b>Why:</b> this is the promise. A user never builds or signs anything.</div></li>
+
+<li><span class="tag you">you</span> <b>Publish Gnomon first, then merge</b>:
+<pre tabindex="0">npm run publish:gnomon     # gate → darwin-arm64 → darwin-x64 → gnomon, then confirms on npm</pre>
+Then I bump to 8.0.0, write the CHANGELOG, and open the PR to main. Merging lets CI publish paradigm 8.0.0.
+<div class="why"><b>Why this order:</b> paradigm 8 depends on gnomon 8. If paradigm reached npm first, every install would fail, and CI refuses to do that now.</div></li>
+</ol>
+
+<h2>4 · Open items</h2>
+<table class="items">
+<tr><th>Task</th><th>What</th></tr>
+<tr><td><span class="tag fixme">high</span> T-2026-10-22-002</td><td>Paradigm never reads <code>portal.yaml</code> routes, so route gate checks see nothing. Aegis to triage.</td></tr>
+<tr><td>T-2026-10-22-001</td><td>A trigger so Mika's protocol runs on every UI change, not just when asked.</td></tr>
+<tr><td>T-2026-10-21-022</td><td>Card voice tag needs the voice prefix and <code>card.voice</code> from the kernel.</td></tr>
+<tr><td>T-2026-10-21-024</td><td>At 1024px a toast covers the Settings close key; design change needed.</td></tr>
+<tr><td>T-2026-10-21-026</td><td>An emptied unverified draft keeps Send word blocked until the next voice turn.</td></tr>
+<tr><td>T-018 … T-021</td><td>Bugs found in the parked products (Platform, site, Warpline) and the GUI preview fixture.</td></tr>
+<tr><td>T-2026-10-21-025</td><td>"Local Paradigm": tabled, waiting for your explanation.</td></tr>
+</table>
+
+<h2>5 · My mistakes today</h2>
+<ul>
+<li><b>Behaviours:</b> I told you Mika's protocol shipped in the designer template. It didn't reach any agent, because Paradigm never reads behaviours at runtime. Arky caught it, and it's fixed as skills.</li>
+<li><b>Dictate:</b> I first offered threshold tweaks when the real answer was that Dictate shouldn't gate on the speaker at all.</li>
+<li><b>git stash:</b> I briefly stashed the shared working tree while a builder was mid-batch. It was restored with nothing lost, and I won't do it again.</li>
+</ul>
+</main>
+</body>
+</html>

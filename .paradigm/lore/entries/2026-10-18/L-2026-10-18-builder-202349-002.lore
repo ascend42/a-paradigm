@@ -1,0 +1,23 @@
+id: L-2026-10-18-builder-202349-002
+type: milestone
+timestamp: '2026-10-18T20:23:49.958Z'
+author: builder
+title: 'Gnomon dogfood launch path: gnomon dev init / dev up, runbook, darwin e2e smoke'
+summary: 'The founder can now run gnomon dev init, then gnomon dev up, open the printed 127.0.0.1 launch URL and drive an attended Claude Code session from the GUI on a DEV-ONLY software root. Unsigned and dev-only until M1.3. Runbook: docs/guides/gnomon-dogfood.md. Verified live on darwin: the sandboxed web transport child came up and printed the URL; the fake-claude smoke runs open/send/turn.result with no approval card.'
+symbols_touched:
+  - '#dev-launch'
+tags:
+  - gnomon
+  - dev-launch
+  - dogfood
+  - milestone
+linked_commits:
+  - 1c4c33da
+  - 9b3b1a4a
+  - 94300fd0
+  - 029679d9
+confidence: 0.85
+git_context:
+  ref: 029679d92f06f248def8f788ffa966be3dad854c
+  branch: gnomon/dogfood-launch
+  dirty: true

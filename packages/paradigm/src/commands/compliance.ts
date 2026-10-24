@@ -18,7 +18,6 @@ import {
   loadHabits,
   evaluateHabits,
   buildEvaluationContext,
-  type HabitDefinition,
   type HabitTrigger,
 } from '../core/habits/index.js';
 

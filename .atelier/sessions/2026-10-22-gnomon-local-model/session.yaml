@@ -1,0 +1,276 @@
+id: 2026-10-22-gnomon-local-model
+verb: propose
+scope: "Guided local-model setup for Gnomon (TD-2026-10-22-769): a Local model section in the Settings sheet, its form, the
+  root card for gnomon-root-local:v1, the turn-off path, and how a loop refused with no-local-model sends you there."
+product: gnomon
+system: .atelier/systems/gnomon/
+depth: focused
+surface: desktop GUI (Settings sheet overlay, stack, Loops leaf)
+mode: extend
+change: add
+by: Mika (design engineer), over Arky's sketch
+read: "One operator, on his own Mac, sets up a loopback model server once, then mostly forgets it. Calm, exact, says what
+  each press costs; the password is the expensive step, so no press should waste one."
+started: 2026-10-22 23:30:00+00:00
+reference: refs/local-model.html
+rendered:
+  - refs/shots/local-model-day.png
+  - refs/shots/local-model-night.png
+  - refs/shots/local-model-grayscale.png
+  - refs/shots/local-model-deutan.png
+  - refs/shots/local-model-protan.png
+  - refs/shots/local-model-tritan.png
+  - refs/shots/local-model-lineheight-1.5.png
+  - refs/shots/local-model-1024-viewport.png
+
+known:
+  - fact: "local config is root-signed (local.signed.json, schema gnomon-root-local:v1); a set raises a grant card (detail.action local.config); remove is notify-and-proceed"
+    evidence: TD-2026-10-22-769; packages/gnomon/src/kernel/local/config.ts:15-34
+  - fact: "an endpoint is {id, base, model, compat, surface?, textTools?, loops?}; compat is one of llama.cpp, ollama, lm-studio, vllm, mlx-lm; up to 16 endpoints"
+    evidence: packages/gnomon/src/kernel/local/config.ts:45-75,131
+  - fact: "probe yields ok, model, tools, nCtx (+source), error; routing reasons no-endpoint, probe-failed, no-tools, ctx-unknown, ctx-below-floor, no-runner"
+    evidence: packages/gnomon/src/kernel/local/probe.ts; routing.ts:26-40
+  - fact: "no-local-model has three kernel whys: none marked loops:true, none matches the profile, no runner pinned"
+    evidence: packages/gnomon/src/kernel/loops/runner.ts:108,443,487-488
+  - fact: "toasts are hidden while any overlay is open, and the stack sits under the scrim"
+    evidence: design-system.yaml zones.overlays.never; zones.toasts.overflow
+  - fact: "the Mods sheet already ships a form that raises a card: inline Configure (.mod-config/.mod-field), 'Ask for the change', 'decide in the stack'"
+    evidence: packages/gnomon-gui/src/ui/mods-panel.ts:80-95; styles.css:1072-1077
+  - fact: "a root-capable card shows no Allow unless every signed row renders (rootRowLine, fail closed); gnomon-root-local:v1 has no case yet"
+    evidence: packages/gnomon-gui/src/core/render.ts:531-560,569-597,794-799
+  - fact: "the Settings sheet's charter is 'existing GUI commands only, no new kernel verb' (SETTINGS_RUNS); open() takes no section"
+    evidence: packages/gnomon-gui/src/core/settings.ts:7-10,82-99; ui/settings-sheet.ts:83-89
+  - fact: "Touch ID fails for the founder: presence is the typed Mac password"
+    evidence: founder memory user_touchid_password
+assumed:
+  - claim: "status.local will carry endpoints, runner, config version and signer, the last probe and the last fallback, and an unsupported:'platform' flag on Windows"
+    check: "Arky / the builder confirm the status.local shape before the GUI build"
+  - claim: "the founder sets one endpoint from the GUI; more than one comes only from the CLI"
+    check: "field run: does he ever add a second server?"
+
+findings_on_the_sketch:
+  - id: F1
+    cost: high
+    what: "Submitting shows a toast. While the Settings sheet is open toasts are hidden and the stack is under the scrim, so the founder sees nothing and can't reach the card."
+    rule: "zones.overlays.never (toasts); functional-states-say-what-happened"
+    fix: "the section shows 'card waiting' in place with a Decide in the stack key that closes the sheet and focuses the card (not its Allow), as the Mods sheet does"
+  - id: F2
+    cost: high
+    what: "A wrong model name or a stopped server is found only after Allow, so each mistake costs another card and another typed password."
+    rule: "in-between-states-designed; friction-log-walkthrough"
+    fix: "check the server before the card (contested C1); in any case the page validates scheme, loopback host, port and a model name on Save, before any card"
+  - id: F3
+    cost: high
+    what: "No rootRowLine case for gnomon-root-local:v1: the card would render 'This card does not show what its approval signs' and no Allow."
+    rule: "Aegis C1e (render.ts:794-799)"
+    fix: "add the case; one line per signed field (config version, each endpoint, model and loops, runner pin); return null on any field it can't render"
+  - id: F4
+    cost: medium
+    what: "A scheduled loop refused with no-local-model at 02:00 is visible only in its detail, which nobody opens; it fails silently."
+    rule: "stuck-to-stack-done-to-toast"
+    fix: "a stack alert per loop ('■ evening-tidy didn't start'), deduped with a count, cleared when a local model is set; the row joins needs you"
+  - id: F5
+    cost: medium
+    what: "The Settings sheet has no section-focused open (settings-sheet.ts open() takes no argument), though the system lists the state."
+    rule: "sheet.states section-focused"
+    fix: "open(section?) scrolls to the section and focuses its heading (tabindex -1); a 2px key-edge rule until focus leaves; close returns focus to the opener"
+  - id: F6
+    cost: medium
+    what: "A free-text endpoint id and a free toggle for loops; the id means nothing to the founder and the toggle reads as on/off by fill."
+    rule: "copy: say what to do; status-in-ink"
+    fix: "id moves under Advanced with a default from the server ('ollama'); loops becomes a two-word seg 'Sessions and loops | Sessions only'"
+  - id: F7
+    cost: medium
+    what: "The form would replace the whole signed config; an endpoint added from the CLI would be dropped."
+    rule: "stress-with-real-content (1, 2, 16 endpoints)"
+    fix: "the form edits one endpoint by id; others are listed read-only and appear 'unchanged' on the card"
+  - id: F8
+    cost: low
+    what: "Seven read-only rows each carry '· kernel-owned', which drowns the values."
+    rule: "group-by-space-before-boxes"
+    fix: "the section heading carries '· kernel-owned' once; rows grouped by space: what (endpoint, model, used by) · health (check, last fallback) · provenance (runner, signed)"
+  - id: F9
+    cost: low
+    what: "Copy says 'Touch ID' everywhere; for the founder presence is his Mac password."
+    rule: "content.vocabulary presence"
+    fix: "long copy says 'your presence: Touch ID or your Mac password'; key labels keep the one word 'presence'"
+  - id: F10
+    cost: low
+    what: "Existing, seen in the render: a disabled .key.pri (Run now, busy Allow) draws --sec text on the ink fill, about 2.6:1 by day, so its label is near-unreadable."
+    rule: "functional-states-say-what-happened (disabled says why); exempt from 1.4.3 but still must read"
+    fix: "migration: .key.pri[disabled] draws as a default key with --sec text (sheet fill, --rule edge), as .seg-key[disabled] does (styles.css:924)"
+
+state_diagram: |
+  not offered ─(kernel update)→ none
+  windows (terminal; no key)
+  none ─Set up…→ form ─Save (page invalid)→ form+errors ─fix→ form
+                      ─Save (kernel refusal)→ form+refusal line
+                      ─Save→ card waiting ─Deny/expire→ form (entries kept, 'Not changed' line)
+                                          ─Allow→ waiting presence ─sign→ set·checking ─→ set·ok | set·check failed
+                      ─cancel/Esc→ none (entries kept until the sheet closes)
+  set·* ─Change…→ change form (Save disabled 'no change' until edited) ─Save→ card waiting …
+  set·failed ─Check again→ set·checking
+  set·* ─Turn off→ (loops use it) confirm ─Turn off→ turning off → none + 'Turned off' line
+                   (no loop uses it) turning off → none
+  interrupted: sheet closed while card waiting → card stays in the stack; reopening shows 'card waiting'
+               sheet closed with form open → entries dropped; nothing sent
+               kernel restarts while card waiting → card expires cancelled; section shows 'Not changed: the card expired'
+
+recommended_copy:
+  section: { title: "Local model", owner: "· kernel-owned", intro: "A model server on this Mac that sessions and loops can use instead of Claude. The kernel owns it: setting or changing it raises a root card; turning it off doesn’t." }
+  none: { label: "Local model", value: "none set up", how: "Loops with model steps can’t start. A session that asks for a local model raises a fallback card instead.", key: "Set up local model…" }
+  windows: { value: "not on Windows in 8.0", how: "Local models run on the Mac for now. On this PC loops with model steps can’t start, and a session that asks for a local model raises a fallback card." }
+  not_offered: { value: "not offered by this kernel", how: "Update Gnomon to set one up here. The terminal form is gnomon local status." }
+  terminal: "Terminal: gnomon local status | set | remove"
+  form:
+    lead: "Point Gnomon at a model server running on this Mac."
+    lead_change: "Changing the local model. The card shows exactly what changes."
+    server: { label: server, options: [Ollama, LM Studio, llama.cpp, vLLM, MLX], note_ollama: "Ollama listens on 127.0.0.1:11434 unless you changed it", defaults: { ollama: "http://127.0.0.1:11434", lm-studio: "http://127.0.0.1:1234", llama.cpp: "http://127.0.0.1:8080", vllm: "http://127.0.0.1:8000", mlx-lm: "http://127.0.0.1:8080" } }
+    address: { label: address, note: "this Mac only in 8.0: 127.0.0.1 or localhost" }
+    model: { label: model, note: "its name as `ollama list` shows it" }
+    used_by: { label: "used by", options: ["Sessions and loops", "Sessions only"], note_on: "loops run their model steps on it unattended, inside their budgets", note_off: "loops with model steps won’t start; sessions you open can still use it" }
+    advanced: { key: "Advanced ▸", name: { label: "endpoint name", note: "what cards and logs call this endpoint" }, runner: { label: runner, value: "gnomon-local 8.0.0 · bundled with Gnomon" }, runner_override: { label: "use another runner (optional)", placeholder: "/Users/you/code/gnomon-local/dist", note: "the folder that holds cli.js; the card pins it by its hash" } }
+    keys: { save: "Save · root card", cancel: cancel, unchanged_why: "no change" }
+    changes_line: "changes: model qwen2.5-coder:14b → qwen2.5-coder:32b"
+    foot: "Nothing changes until you Allow its card in the stack. Allow takes the root key and your presence: Touch ID or your Mac password."
+    errors:
+      lan: "✕ 192.168.1.20 is another machine on your network. In 8.0 the server must be on this Mac: use 127.0.0.1 or localhost."
+      malformed: "✕ Not an address: start it with http://"
+      port: "✕ Add the port, e.g. :11434"
+      cloud: "✕ api.anthropic.com is not a local server"
+      model: "✕ Name the model as `ollama list` shows it, e.g. qwen2.5-coder:14b."
+      kernel: "BILLING_REFUSED  192.168.1.20 is not on this Mac · next: use 127.0.0.1 or localhost"
+  pending: { label: Asked, chip: "card waiting", line: "23:20 · ollama · 127.0.0.1:11434 · qwen2.5-coder:14b · sessions and loops", key: "Decide in the stack", how: "Allow takes the root key and your presence. Deny keeps things as they are and brings your entries back here." }
+  denied: "Not changed: you denied the card at 23:22. Your entries are below."
+  expired: "Not changed: the card expired at 23:50 (Gnomon restarted). Your entries are below."
+  set_rows: { Endpoint: "ollama · http://127.0.0.1:11434", Model: "qwen2.5-coder:14b", Used by: "sessions and loops | sessions only", Runner: "gnomon-local 8.0.0 · bundled · tree 9c41e0b2", Signed: "config v1 · 23:23 · root key", Last fallback: "none since it was set | 23:31 · “Totals are off by a cent” asked for local and got a fallback card: no answer", keys: ["Change…", "Turn off"] }
+  check:
+    checking: { value: "checking… started 23:24", how: "The kernel asks the server for its models, a tool call and its context size." }
+    ok: "✓ answers · tools native · context 32 768 · 23:24"
+    probe_failed: { value: "✕ no answer: connection refused · 23:24", how: "Start Ollama (the menu bar app, or ollama serve), then Check again. Until then local sessions raise a fallback card and loops stop at their first model step.", key: "Check again" }
+    no_tools: { value: "✕ answers, but can’t call tools", how: "Pick a model with tool calls (qwen2.5-coder has them), then Change…." }
+    ctx_below_floor: { value: "✕ context 4 096: sessions need 8 192", how: "Raise num_ctx for this model (a Modelfile’s PARAMETER num_ctx 16384), then Check again." }
+    ctx_unknown: { value: "? context size unknown", how: "Gnomon couldn’t read it from the server; sessions fall back until it can." }
+    no_runner: { value: "✕ runner not pinned", how: "Change… and Save to pin the bundled runner." }
+  turn_off:
+    confirm: "Turn off qwen2.5-coder:14b? 2 loops use it: evening-tidy, green-typecheck-gnomon. They won’t start until you set one up again, and that takes a card and your password."
+    keys: ["Turn off", "keep it"]
+    busy: "Turning off…"
+    done: "Turned off at 23:40. evening-tidy and green-typecheck-gnomon won’t start until a local model is set up."
+  card:
+    head: "⊙ gnomon · grant · by you · [hand only · root key]"
+    title_new: "Set up the local model"
+    title_change: "Change the local model"
+    k_line: "asked from Settings · 23:20 · applies at once, no restart"
+    signs:
+      - "local model config v1 · new   (change: local model config v2 → v3)"
+      - "endpoint ollama · an Ollama server at http://127.0.0.1:11434"
+      - "model qwen2.5-coder:14b · loops may use it"
+      - "runner gnomon-local 8.0.0 · bundled · tree 9c41e0b2…3a7f · node 24.10.0 · sha 5e2a90c1…"
+    keys: [Allow, Deny]
+    presence: "Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice"
+    waiting: "waiting for your presence with the root key… (the Mac asks for Touch ID or your password)"
+    allowed_k_line: "allowed 23:23 · config v1 applied · checking the server"
+  toasts:
+    applied: "LOCAL MODEL · set · qwen2.5-coder:14b on 127.0.0.1:11434 · ✓ answers · tools native · context 32 768"
+    applied_failed: "LOCAL MODEL · set, but no answer: connection refused at 127.0.0.1:11434 · next: start Ollama, then Settings → Local model → Check again · [Open settings] [close]"
+    turned_off: "LOCAL MODEL · turned off · evening-tidy and green-typecheck-gnomon won’t start until one is set up · [Open settings]"
+  loops:
+    refusal_none: { head: "✕ can’t start · no-local-model", text: "No local model is set up, and this loop has a model step (digest).", key: "Set up local model…" }
+    refusal_sessions_only: { text: "qwen2.5-coder:14b is set up for sessions only. Let loops use it in Settings.", key: "Local model settings…" }
+    refusal_no_runner: { text: "The local model has no runner pinned. Change it in Settings and Save to pin the bundled one.", key: "Local model settings…" }
+    run_now_why: "Run now needs a local model | Run now needs a local model loops may use"
+    row: { l1: "evening-tidy · can’t start", nx: "since 18:30", l2: "a-paradigm · needs a local model (digest) · act · by you", mark: "◆" }
+    alert: { title: "■ evening-tidy didn’t start", path: "no local model · scheduled 18:30 · refused before any step · ×3 since Monday", keys: ["Set up local model…", "Dismiss"] }
+  palette: { none: "Set up local model…", set: "Local model settings…", id: local.setup }
+
+contested:
+  - id: C1
+    question: "Check the server before the card, or only after Allow?"
+    options:
+      - { id: check-first, label: "Check before the card", description: "A Check key (and Save runs it first) asks the kernel to probe the address without signing anything: a new read-only, loopback-only request. The card is raised only when the server answers and the model is there.", tradeoff: "kernel scope during the build; saves a card and a typed password per mistake" }
+      - { id: check-after, label: "Check after Allow only", description: "No new kernel request. The probe runs once the signed config applies; a typo shows as '✕ no answer' and costs another card and password to fix.", tradeoff: "no kernel work; each wrong try costs a password" }
+    recommended: check-first
+    why: "Presence is a typed password for the founder; a typo in a model name should not cost one."
+    decision: { kind: pick, choice: check-first, decided_by: creator, date: 2026-10-22 }
+  - id: C2
+    question: "Turning off: one press, or an inline confirm when loops use it?"
+    options:
+      - { id: confirm-when-used, label: "Confirm only when loops use it", description: "One inline confirm naming the loops that stop; no confirm when nothing depends on it." }
+      - { id: one-press, label: "One press, always", description: "Notify-and-proceed in the GUI too; the result line and the toast name what stopped." }
+    recommended: confirm-when-used
+    decision: { kind: pick, choice: confirm-when-used, decided_by: creator, date: 2026-10-22 }
+    why: "The kernel stays notify-and-proceed. The one GUI step exists because undoing a misclick costs a card and a typed password, and it appears only when loops would stop."
+  - id: C3
+    question: "Which family does a root configuration card (local.config; also daemon-stop, api-token) name in its head?"
+    options:
+      - { id: gnomon, label: "⊙ gnomon", description: "A new family for cards about Gnomon itself; ⊙ reads as a sundial's face and has no emoji form." }
+      - { id: none, label: "No family", description: "Keep the head as it is for kernel cards until the mod and voice families land." }
+    recommended: gnomon
+    decision: { kind: pick, choice: gnomon, decided_by: creator, date: 2026-10-22 }
+    why: "Rule family-by-glyph-and-word says every card names what it relates to; these cards relate to Gnomon, not a session or a loop. A taste call: Luna or the founder."
+
+system_proposal:
+  target: .atelier/systems/gnomon/design-system.yaml
+  status: applied 2026-10-22 to .atelier/systems/gnomon/design-system.yaml and DESIGN.md (founder approved the design and C1-C3)
+  add:
+    components:
+      settings-form:
+        role: "A form that opens inline under its row in a sheet (Settings, Mods) and asks the kernel for a change. Labelled fields, one key that names its cost, cancel. When the change raises a card, the row shows the request in place and offers Decide in the stack, because toasts and the stack are hidden under an overlay. Codifies the shipped Mods Configure form (.mod-config/.mod-field) and the Voice sheet's inline flow (.vs-flow)."
+        anatomy: ["lead line (11.5 --ink2)", "fields: label (10.5 --sec) over control (.field or .seg) over note (10.5 --sec)", "Advanced (a quiet key on a <summary>) for rarely needed fields", "keys: the cost-label pri key + quiet cancel; a disabled key says why beside it", "foot note: what happens after the key", "request line after submit: plain chip 'card waiting' + what was asked + quiet key Decide in the stack", "result line: role=status; a refusal in --fail with CODE, reason and next:"]
+        states: [closed, open, invalid, submitting, card-waiting, denied, expired, refused, applied]
+        tokens:
+          rule: "2px solid --ink at the left, padding-left 12 (as .vs-flow)"
+          gap: "10 between fields, 2 between label, control and note"
+          label: "10.5 --sec"
+          control: "11.5, min-height 28; width by content: address 34ch, name 16ch, model and paths min(100%, 60ch)"
+          note: "10.5 --sec"
+          invalid: "aria-invalid, 2px --fail-edge, message 10.5 600 --fail starting with ✕, linked by aria-describedby; replaces the note"
+          request-chip: "chip (plain): a waiting card is not a warning"
+          result: "10.5 --ink2, the outcome word in 600"
+        behaviour: ["Enter in a field presses the key", "Esc closes the form before the sheet; entries are kept until the sheet closes", "on submit with errors, focus moves to the first invalid field", "on submit, focus moves to the request line's key", "Decide in the stack closes the sheet and focuses the card group, never its Allow", "one request at a time: the form is replaced by the request line while a card waits", "denied or expired brings the form back with the entries and a 'Not changed' line", "every press is a trusted user event (G-GUI-04)"]
+        row_kinds: "SettingRow gains kind 'form' (closed: a key; open: the form) and kind 'request' (the card-waiting line). Neither runs through SETTINGS_RUNS; like 'revoke', each is a kind of its own with its own press path."
+        never: ["a modal over a sheet (rule teach-inline)", "a toast as the only sign the request went out (toasts are hidden under overlays)", "an amber chip for a waiting card", "a placeholder that looks like a value"]
+        source: ".atelier/sessions/2026-10-22-gnomon-local-model/refs/local-model.html (classes .set-form .sf-*); shipped precedent packages/gnomon-gui/src/ui/mods-panel.ts:80-95"
+        from: { session: 2026-10-22-gnomon-local-model, by: Mika, decided_by: creator }
+    card:
+      family: { gnomon: "⊙ gnomon (root configuration cards: local.config, daemon-stop, api-token). Contested C3." }
+      variant: { local-config: "kind grant, detail.action local.config; kernel-composed title 'Set up the local model' | 'Change the local model'; signed lines one per field through rootRowLine(gnomon-root-local:v1), changed lines with the loop-diff marks; presence line; hand only · root key" }
+    alert:
+      variant: { refused-start: "a loop whose trigger fired but which refused to start (no-local-model): '■ <id> didn’t start', path 'no local model · scheduled hh:mm · refused before any step · ×n since <day>', quiet keys Set up local model… and Dismiss; one per loop, deduped; clears when the cause clears" }
+    loop-detail:
+      anatomy_add: "start-refusal line between the meta and the graph: ✕ can’t start · <code> (600 --ink), the kernel's reason in words, one key to the fix; key-edge box, no fill colour"
+    sheet:
+      section_focused: "open(section) scrolls to the section, focuses its heading (tabindex -1), draws a 2px --key-edge rule at its left until focus leaves; close returns focus to the opener"
+      section_owner: "a section the kernel owns says '· kernel-owned' once in its heading, and its rows drop the per-row suffix"
+    content:
+      vocabulary:
+        local model: "a model server on this Mac that sessions and loops can use instead of Claude (8.0: loopback only)"
+        card waiting: "a request whose card is in the stack (plain chip)"
+        presence: "amended: fresh Touch ID, or the Mac password where Touch ID is unavailable; long copy says 'Touch ID or your Mac password', keys say 'presence'"
+    rules:
+      - id: form-says-where-the-card-is
+        rule: "A form whose submit raises a card names the cost in its key ('Save · root card'), shows the request in place, and offers Decide in the stack; it never relies on a toast while an overlay is open."
+      - id: no-password-for-a-typo
+        rule: "Anything the page or the kernel can check without signing is checked before a card that needs presence is raised (C1: check-first)."
+    migration:
+      - { batch: settings-form, from: ".mod-config / .mod-field and 'Ask for the change' in the Mods sheet", to: "settings-form classes and anatomy; key 'Save · card' names its cost", files: ["packages/gnomon-gui/src/ui/mods-panel.ts:85-95", "packages/gnomon-gui/static/styles.css:1072-1077"] }
+      - { batch: settings-form, from: "Mods 'card waiting' chips drawn as chip warn", to: "chip (plain)", files: ["packages/gnomon-gui/src/ui/mods-panel.ts:80-82"] }
+      - { batch: keys, from: ".key.pri[disabled]: --sec text on the ink fill", to: "sheet fill, --rule edge, --sec text (as .seg-key[disabled])", files: ["packages/gnomon-gui/static/styles.css:183,192"] }
+
+build_requirements:
+  - "core/render.ts rootRowLine: a case on schemaVersion 'gnomon-root-local:v1' rendering every signed field; null on anything it can't render (no Allow)"
+  - "core/settings.ts: SectionId 'local-model' between voice and permissions; row kinds 'form' and 'request'; values from status.local only"
+  - "ui/settings-sheet.ts: open(section?) (section-focused); Esc closes an open form first; a press path for request.local.config and the remove request outside SETTINGS_RUNS, trusted events only"
+  - "commands: palette local.setup → settings.open at local-model"
+  - "loops: the start-refusal line maps the kernel's why, never infers it; the refused-start alert needs the kernel to log a refused fire"
+  - "test at 1024 and 1440, day and night, with 0, 1 and 2 endpoints, a 52-character model id and a 90-character runner path"
+
+decisions:
+  - { what: "the Local model design (refs/local-model.html)", choice: approved, decided_by: creator, date: 2026-10-22 }
+  - { contested: C1, choice: check-first, decided_by: creator, note: "needs a read-only, loopback-only kernel probe request before the card (kernel work for the builder)" }
+  - { contested: C2, choice: confirm-when-used, decided_by: creator }
+  - { contested: C3, choice: gnomon, decided_by: creator, note: "⊙ gnomon family for root configuration cards" }
+closed: 2026-10-22
+
+verdict_scope: "This review shows the flow holds up against the heuristics and the system. It doesn't show the founder can finish setup at the field run. Cheapest check: before the run, give him the built section with Ollama stopped and a misspelled model, and watch him get from 'none set up' to '✓ answers' without help, counting password prompts."

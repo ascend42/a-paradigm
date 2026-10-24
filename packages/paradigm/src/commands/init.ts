@@ -768,7 +768,7 @@ export async function initCommand(options: InitOptions) {
     } catch (error) {
       // Graceful failure - warn but don't block init
       spinner.warn(chalk.yellow('Could not create scan index: ' + (error as Error).message));
-      console.log(chalk.gray('    Run `paradigm scan` manually after adding .purpose files'));
+      console.log(chalk.gray('    Run `paradigm index` manually after adding .purpose files'));
     }
   }
 

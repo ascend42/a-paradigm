@@ -30,7 +30,7 @@ function formatGate(gate: any) {
 /**
  * Register gate resources with the MCP server
  */
-export function registerGateResources(server: Server, getContext: () => ProjectContext) {
+export function registerGateResources(_server: Server, _getContext: () => ProjectContext) {
   // This is handled in the main resource handler
   // Here we export helper functions for gate-specific queries
 }

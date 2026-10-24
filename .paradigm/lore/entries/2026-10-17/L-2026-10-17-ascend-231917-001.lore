@@ -1,0 +1,35 @@
+id: L-2026-10-17-ascend-231917-001
+type: agent-session
+timestamp: '2026-10-17T23:19:17.696Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Spec v3.9 complete; T-014 checks-before-writes landed
+summary: |-
+  T-014 (S34-30) landed at 029173d5: a refused open writes nothing; all checks run before any write; reviewed by both reviewers, approved in round 1. Follow-ups are in T-2026-10-17-015.
+
+  Spec v3.9 is complete. Part 1 (1b54fcda) adds D83-D85 as built, the Windows residuals and the D84 release gate. Part 2 covers strictness, convergence and change notes:
+  - one vocabulary: approval.strictness.* levels L0-L3; card kinds reconsider/strictness/incident; gates review/strictness; falsifiers G-STR/G-REV/G-CHG; telemetry T-REV-01/T-STR-01;
+  - run modes manual/ask/auto-edits with one-click control and ⇧Tab cycling, but no bypass mode (the mode control ships in M2.11);
+  - `reconsider` has no accept, so the override at the cap goes through a knot card;
+  - rounds are keyed by node lineage;
+  - a batched landing verdict at L2;
+  - §4.11 M1.1 reservations; tasks M2.10/M2.11; provisional thresholds tracked as OPEN 20.
+
+  T-004 is done. Next: implement the M1.1 contract reservations (merged A35-20 + S35 list), then M1.4 (socket hello/auth).
+symbols_touched:
+  - '#approval-broker'
+  - '#kernel-log'
+  - '#paradigm-harness'
+tags:
+  - paradigm-8
+  - gnomon
+  - spec
+  - state
+linked_lore:
+  - L-2026-10-17-ascend-230742-001
+git_context:
+  ref: 9260d9def73516bb9d2d9233531df5834549e294
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,38 @@
+id: L-2026-10-17-ascend-061036-001
+type: human-note
+timestamp: '2026-10-17T06:10:36.853Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Atelier playbook v0 reviewed; voice approvals become opt-in per project (P8-D58)
+summary: The founder reviewed all 99 items in a-atelier docs/playbook/REVIEW.html. 95 were approved as written. D19 was approved as written after a third-style idea was withdrawn. E5 widens to timestamps, durations and activity history. E12 reverses the voice-never-approves default into an opt-in. N2 was approved with an open librarian-agent question. The marks are saved in a-atelier docs/playbook/review-marks-v0.md. P8-D58 amends the Gnomon spec §14.4 / S22-M1 and needs an Aegis + Arky mechanism pass before spec v3.4.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gnomon-voice'
+decisions:
+  - id: P8-D58
+    decision: Voice approvals are possible when toggled on per project. Toggle 1 lets voice approve reversible (cached-unlock-class) decisions. A separate toggle 2, with a warning when it is enabled, also lets voice approve gate-class (fresh-presence) decisions. Both are off by default, and approval phrases are configurable. With both off, the G1 behaviour holds (voice opens, never decides).
+    rationale: 'Power users want to move as fast and hands-free as possible. Splitting gate-class onto its own explicit toggle keeps the default safe and makes the riskier grant a deliberate act. Amends spec §14.4 / S22-M1 / G-VOX-04: the mechanism is needed because speaker id is not authentication and approve is currently HUMAN_ONLY with decisionSig by the presence-held approvals key.'
+  - id: P8-PB-E5
+    decision: status-feedback board adds per-message relative timestamps (exact on hover), start time and completion duration for runs longer than about 1 s, and a collapsible activity history per session
+    rationale: 'Founder: anything that gives the user context on when things started, how long they took and what was done.'
+  - id: P8-PB-D19
+    decision: D19 approved as written; no third base style
+    rationale: 'Founder: stick to the original plan.'
+learnings:
+  - 'Founder review overrode a G1 approval with an E12 change in the same pass: when two marks conflict, surface it and resolve with a targeted question before writing either back.'
+tags:
+  - paradigm-8
+  - gnomon
+  - atelier
+  - playbook
+  - voice
+  - decision
+linked_lore:
+  - L-2026-10-17-ascend-013452-001
+  - L-2026-10-16-ascend-223456-001
+git_context:
+  ref: b4f3d778ff3c9cd5e582d149eb324a1777ca7f9a
+  branch: ideate/paradigm-8
+  dirty: true

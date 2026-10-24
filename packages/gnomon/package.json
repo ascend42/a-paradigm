@@ -1,0 +1,82 @@
+{
+  "name": "@a-company/gnomon",
+  "version": "8.0.1",
+  "description": "Gnomon — the Paradigm 8.0 kernel: one daemon per user owning sessions, identity, the hash-chained log, approvals and the localhost web endpoint (docs/specs/gnomon.md). ZERO runtime dependencies (G-SEC-01).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./loops": {
+      "types": "./dist/loops.d.ts",
+      "import": "./dist/loops.js"
+    },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    },
+    "./cli": "./dist/cli/gnomon.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "gnomon": "dist/cli/gnomon.js",
+    "gnomond": "dist/cli/gnomond.js",
+    "gnomon-web": "dist/transport/gnomon-web.js"
+  },
+  "files": [
+    "dist",
+    "gnomon-mods"
+  ],
+  "scripts": {
+    "build": "tsup && node scripts/build-stamp.mjs",
+    "build:release": "node scripts/build-release.mjs",
+    "release:darwin": "node scripts/release-darwin.mjs",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run && npm run test:perf",
+    "test:watch": "vitest",
+    "probe": "node probes/run.mjs",
+    "test:perf": "node scripts/test-perf.mjs",
+    "repin:first-party": "node scripts/repin-first-party.mjs",
+    "install:darwin": "node scripts/install-darwin.mjs",
+    "prepack": "node scripts/prepack.mjs",
+    "postpack": "node scripts/prepack.mjs --clean",
+    "prepublishOnly": "node ../../scripts/gate-gnomon-publish.mjs"
+  },
+  "devDependencies": {
+    "@a-company/gnomon-contracts": "1.0.0",
+    "@types/node": "^24.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "optionalDependencies": {
+    "@a-company/gnomon-darwin-arm64": "8.0.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-paradigm/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-paradigm#readme",
+  "keywords": [
+    "paradigm",
+    "gnomon",
+    "kernel",
+    "daemon"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

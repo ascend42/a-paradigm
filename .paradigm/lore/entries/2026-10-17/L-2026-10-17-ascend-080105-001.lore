@@ -1,0 +1,31 @@
+id: L-2026-10-17-ascend-080105-001
+type: human-note
+timestamp: '2026-10-17T08:01:05.932Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'New requirement P8-R9: Gnomon kernel linking over LAN and internet for handoff and co-work'
+summary: |-
+  The founder wants Gnomon sessions on different kernels to link over the local network and remote networks so they can intercommunicate, co-work and hand off. First scope: the founder's own machines and teammates. First uses: session handoff and co-work messaging. A shared decision stack is not in the first cut. The founder would like it built early if possible.
+
+  This conflicts with today's spec: the web endpoint is loopback-only with no address field (§11.2 rule 1), there is one kernel per user, and approve is HUMAN_ONLY per device. A link must be a separate, mutually authenticated peer transport, never a widened GUI endpoint. It intersects the armada preconditions (T-2026-10-14-001: key-based principals, collision-free ids), the Warpline server (T-2026-10-14-003) and the nevr.land relay.
+
+  Arky and Aegis were dispatched for a design and placement pass (research 31/32).
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-R9
+    decision: 'Kernel linking: Gnomon kernels on the founder''s own machines and on teammates'' machines can pair and link over LAN or the internet; the first capabilities are session handoff and co-work messaging between sessions on different kernels'
+    rationale: Founder request 2026-10-17; scope chosen in the decision dialog.
+tags:
+  - paradigm-8
+  - gnomon
+  - linking
+  - requirement
+linked_lore:
+  - L-2026-10-17-ascend-075830-001
+git_context:
+  ref: 519b6a6f43df81d1a5a83680832d62c764f93fce
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,32 @@
+id: L-2026-10-19-builder-020000-001
+type: insight
+timestamp: '2026-10-19T02:00:00.000Z'
+author: builder
+title: 'P8-D97 round 2: kernel memory audit, shell preprocessing fails closed, production-policy probe'
+summary: 'Aegis H1-H3, M1-M3, Q6 and reviewer 1/2/4/5 built. Probe p10m-repo-context round 2 under the PRODUCTION policy (no allow rules) passed 12 checks. Denial sources: a read of another session''s file, direct or through a shell variable, was denied by a policy.json deny rule with no can_use_tool request (Claude resolves the variable); osascript was allowed on its card and then refused by the sandbox (exit 126); no classifier was involved. Without the setting, a skill''s inline ! shell hits the always-ask Bash rule and fails closed with no request; with disableSkillShellExecution in --settings, both the Skill tool and a user-typed /project:zsh get a placeholder. The first rerun was refused by the model as exfiltration-shaped, so the steps are now separate turns. A scratch HOME needs CLAUDE_CODE_OAUTH_TOKEN from claude setup-token (not available here), so the founder ~/.claude user-layer confound is recorded in the result.'
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+  - '#manifest-loader'
+tags:
+  - gnomon
+  - p8-d97
+  - probe
+  - aegis
+learnings:
+  - split probe turns so one model refusal cannot mask the other measurements
+  - disableSkillShellExecution is honoured from the kernel --settings file
+  - Claude resolves shell variables when matching Bash commands against deny rules
+linked_lore:
+  - L-2026-10-19-builder-004151-001
+linked_commits:
+  - 35bf43f0
+  - 2c5d6ad5
+  - dcfe7bf8
+  - e42ab4c0
+  - 99cac06d
+  - 76f841c9
+  - bdf8c53b
+  - 350cfd8b
+  - e1969587
+confidence: 0.85

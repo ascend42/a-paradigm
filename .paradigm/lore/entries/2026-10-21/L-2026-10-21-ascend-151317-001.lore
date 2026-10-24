@@ -1,0 +1,38 @@
+id: L-2026-10-21-ascend-151317-001
+type: insight
+timestamp: '2026-10-21T15:13:17.619Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Rerun of the header board under the refined Atelier process gave a structurally different, accepted result
+summary: |-
+  The same founder problem ("no consistent layout or design on these elements") was run twice.
+
+  First run, with Luna improvised in the main thread and no gates: three options that were the same toolbar restyled. The founder called them "lacking".
+
+  Second run, with Luna spawned and the audit, scope and distinctness gates, a real "Now" column and Mika vetting:
+  - The audit found that the header had drifted from 4 specified elements to 12, at five control heights.
+  - It found duplicates: the voice pill with Start voice, theme ×3, Mods ×3.
+  - It found a stale idle note using the retired word "Ambient".
+  - It produced three options on distinct axes: what the header is for (command line), how status is carried (kernel band), and where tools live (wordmark menu).
+  - Mika attached concerns to each option and recorded one Luna/Mika disagreement for the founder.
+  - The founder picked C (wordmark menu) without further revision.
+
+  The gates changed the outcome, not just its polish.
+symbols_touched:
+  - '#atelier-design'
+  - '#gui'
+learnings:
+  - An audit with file:line evidence surfaces drift and duplicates that a styling pass hides.
+  - Requiring each option to name a structural axis produced options the founder could actually choose between.
+tags:
+  - atelier
+  - design
+  - process
+  - gnomon
+  - marathon-2026-10-20
+git_context:
+  ref: a846b668abc47310586398799d1ec6df0cf68f5e
+  branch: feat/gnomon
+  dirty: true

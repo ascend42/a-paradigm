@@ -1,0 +1,44 @@
+id: L-2026-10-17-ascend-074722-001
+type: milestone
+timestamp: '2026-10-17T07:47:22.862Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Move 1 entry gates cleared: aesthetic closed, contrast fixtures committed, Developer ID present'
+summary: |-
+  Both Move 1 entry preconditions (P8-D57) are now met:
+  - (1) The aesthetic is closed, and the §11.3 contrast fixtures are committed at docs/specs/gnomon-fixtures/contrast.json with a checker, check-contrast.mjs (oracle G-GUI-10). The fixtures caught a real defect on their first run: the day amber warning edge #C98A12 was 2.4–2.7:1 against paper. It is now #A8730C (3.35/3.77:1), updated in the design system and every ref.
+  - (2) A Developer ID Application identity exists in the founder's keychain (OPEN 1 partly resolved; notarization profile confirmed at M1.0; Windows signing is still a Move 1 item).
+
+  Also this session:
+  - Luna's notebook entry nb-luna-elvanti-calm-ground-living-elements was extended with a third confirmation (confidence 0.9): recommend the crafted option first on expression boards.
+  - Founder ruled that Warpline gets its own display mod inside Gnomon (task T-2026-10-17-002).
+  - The Workshop's vertical placement is rendered (refs/workshop-placement.html) and awaits founder review.
+
+  Next: begin Move 1 with M1.0 probes, planned with the team.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gui'
+files_created:
+  - docs/specs/gnomon-fixtures/contrast.json
+  - docs/specs/gnomon-fixtures/check-contrast.mjs
+files_modified:
+  - docs/specs/gnomon.md
+  - .atelier/design-system.yaml
+learnings:
+  - 'Committing contrast fixtures as an executable check paid off immediately: a token that looked fine in renders failed WCAG 1.4.11 at 2.4:1. Make every design token gate a script, not a review.'
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - milestone
+  - a11y
+linked_lore:
+  - L-2026-10-17-ascend-073914-001
+linked_tasks:
+  - T-2026-10-17-002
+git_context:
+  ref: 4f0f5dfd8b84192f33664c838ef15d3d1b4cea7b
+  branch: ideate/paradigm-8
+  dirty: true

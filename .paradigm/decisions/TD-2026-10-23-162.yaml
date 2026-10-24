@@ -1,0 +1,28 @@
+id: TD-2026-10-23-162
+timestamp: '2026-10-23T02:56:32.643Z'
+title: 'Paths are chosen, not typed: a kernel-opened folder chooser and one key height'
+decision: >-
+  Every GUI place that takes a filesystem path uses the folder-field component: recent folders, a "Choose folder…" key
+  and the typed path as a fallback. The kernel opens the macOS folder chooser (folder.choose) and checks paths
+  (folder.check), and the GUI asks folder.recent for recent folders, so the wrapper keeps zero page IPC. New session
+  preselects the centre session's folder, else the most recent. The home folder is allowed with an amber warning. Drag
+  from Finder is not in 8.0. Every key uses one height token, --key-h: 28px.
+rationale: >-
+  The founder: "we need a folder picker because writing out a path is bad UX", and noticed inconsistent button heights
+  (quiet keys were 24px, default and primary 28px). They picked C1 kernel, C2 centre session and C4 allow with a
+  warning. Mika's design and system proposal.
+participants:
+  - id: founder
+    role: decider
+    stance: for
+  - id: designer
+    role: designer
+    stance: for
+alternatives_considered:
+  - option: A Tauri dialog plugin in the wrapper
+    rejected_because: reopens page-to-wrapper IPC; no chooser in a browser
+symbols_affected:
+  - '#gui'
+  - '#gui-settings'
+  - '#gnomon-wrapper'
+status: active

@@ -355,14 +355,14 @@ export function searchSiblingFiles(
  * @param rootDir - Project root
  * @param filePath - Original file path (relative)
  * @param originalContent - Normalized content at materialization time
- * @param autoHeal - Whether to auto-apply relocations for score ≥ 0.85
+ * @param _autoHeal - Whether to auto-apply relocations for score ≥ 0.85
  * @returns ContentSearchResult with the best match
  */
 export function contentSearch(
   rootDir: string,
   filePath: string,
   originalContent: string,
-  autoHeal: boolean = true
+  _autoHeal: boolean = true
 ): ContentSearchResult {
   const fingerprint = generateFingerprint(originalContent);
   const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(rootDir, filePath);

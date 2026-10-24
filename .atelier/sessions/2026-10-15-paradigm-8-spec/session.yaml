@@ -1,0 +1,126 @@
+id: 2026-10-15-paradigm-8-spec
+verb: direct
+scope: "Paradigm 8.0 harness spec decisions, run as the founder's decision dialog. Boards: shape, kernel log, Warpline teaching at spawn, session id, Conductor runner, spec-as-contract, name. References show each team member's viewpoint side by side with diagrams."
+depth: deep
+surface: terminal
+mode: greenfield
+read: "A decision room for one founder choosing the architecture of Paradigm 8.0: read once, carefully, to see where Fable, Arky, Loid, the scouts and Claude agree and disagree before ruling; exact, diagram-led, the Warpline loom register."
+sources: [.paradigm/research/paradigm-8/00-brief.md, 01-scout-odysseus.md, 02-scout-deepseek-harness.md, 03-scout-landscape.md, 04-scout-own-family.md, 05-arky-kernel.md, 06-loid-learning.md, 07-fable-vision.md]
+started: 2026-10-15T00:00:00Z
+boards:
+  - id: shape
+    question: "What is the Paradigm Harness, structurally?"
+    options:
+      - { id: heddle, label: "A · Heddle (kernel beneath Claude Code)", recommended: true, why: "Fable and Arky independently chose it; scouts support a small kernel" }
+      - { id: bolt, label: "B · Bolt (distro on deepseek-harness)" }
+      - { id: shuttle, label: "C · Shuttle (Mods only)" }
+    references_rendered: [heddle, bolt, shuttle]
+    revised_after: ruflo (research 08-11)
+    options_v2:
+      - { id: heddle-shuttle, label: "Heddle + Shuttle", recommended: true, why: "Fable, Arky, scouts for; Loid for on condition the loop reads only the kernel log (12-loid-direct.md); ruflo proves Mod panes need a kernel feeding them" }
+      - { id: daemonless, label: "Daemonless kernel (fallback/staging)" }
+      - { id: bolt-adapter, label: "Bolt as a backend adapter" }
+      - { id: loom, label: "Loom (breadth-first meta-harness)", rejected: true, why: "ruflo's lane" }
+    decision:
+      kind: pick
+      choice: heddle-shuttle
+      decided_by: creator
+      notes:
+        - "Hold until ruflo lands"
+        - "fully inspect this as i feel like it may shift our perception on the plan options"
+  - id: converged-tensions
+    question: "Ratify the four converged Fable/Arky positions?"
+    options:
+      - { id: ratify-all, label: "Ratify all four", recommended: true }
+      - { id: amend-one, label: "Ratify, amend one" }
+    references_rendered: [tensions]
+    decision:
+      kind: pick
+      choice: ratify-all
+      decided_by: creator
+      rules:
+        - "Kernel log is separate from Warpline's fabric; every PICK event carries causes[] to its strand"
+        - "Spawn injects one logged pointer line to `warpline status`; the skill is installed, never pushed (F4)"
+        - "Kernel issues hsid; cc:<uuid> is a resolvable alias; hsid derivable in a hook"
+        - "Delete Conductor's ClaudeStreamSession.swift; Conductor is a socket client"
+  - id: band-feed
+    question: "How is the Shuttle band fed?"
+    options:
+      - { id: files-then-socket, label: "Files first, socket next", recommended: true }
+      - { id: socket-only, label: "Socket events only" }
+    references_rendered: [files-then-socket, socket-only]
+    decision:
+      kind: pick
+      choice: socket-only
+      decided_by: creator
+      consequence: "Move 3 depends on the kernel socket; a spike proving a Claude Code Mod can hold an outside connection moves into move 1 (ruflo never demonstrated it)."
+  - id: laws
+    question: "Which Heddle laws become 8.0 invariants?"
+    references_rendered: []
+    decision:
+      kind: pick
+      choice: [no-spawn-without-permit, honesty-ci-and-tiny-abi, reversible-and-spends-nothing, trust-posture]
+      decided_by: creator
+      note: "All six of Fable's laws adopted"
+  - id: oracles
+    question: "What certifies a contract node in 8.0?"
+    options:
+      - { id: three-key-proven, label: "Tests + Warpline + key-proven reviewer", recommended: true }
+      - { id: two, label: "Tests + Warpline only" }
+      - { id: three-opt-in, label: "Three, reviewer opt-in" }
+    references_rendered: [contract]
+    decision:
+      kind: pick
+      choice: three-key-proven
+      decided_by: creator
+      notes:
+        - "one thing to note is that the user still has to state if they are going to have the project as a warpline project otherwise it just functions as standard git as there are other functions to this tool beyond the warpline aspect that make it valuable. I choose option 1 and just wanted to note this"
+  - id: git-mode-oracle
+    question: "In git-mode projects, what replaces Warpline admission?"
+    decision: { kind: pick, choice: clean-merge-ci-green, decided_by: creator, rule: "Git-mode nodes: tests + key-proven reviewer + clean merge onto base with CI green; git conflicts become inbox items without semantic judgment" }
+  - id: name
+    question: "Name for the harness?"
+    options:
+      - { id: heddle, label: Heddle, recommended: true }
+      - { id: jacquard, label: Jacquard }
+      - { id: treadle, label: Treadle }
+      - { id: orrery, label: Orrery }
+    references_rendered: [name]
+    references_rendered_round2: [name2]
+    decision:
+      kind: pick
+      choice: gnomon
+      decided_by: creator
+      round2_options: [gnomon, heddle, orrery, spindle]
+      notes:
+        - "i would like something that feels in the vibe of where \"purpose, paradigm, warpline, neurons, constellation, atelier\" etc all intersect if possible"
+  - id: learning-loop
+    question: "Which of Loid's learning-loop requirements become 8.0 commitments?"
+    source: .paradigm/research/paradigm-8/12-loid-direct.md
+    decision:
+      kind: pick
+      choice: [credit-not-popularity, day-one-learning-logs, calibrate-the-reviewer, liveness-gates-and-reader]
+      decided_by: creator
+      rules:
+        - "Credit = an entry loaded in a turn whose outcome was accepted; split injected vs credited; re-enable injection ranked by credited minus broke"
+        - "Day-one learning logs joinable on hsid + turn + contractId + entry id; every learning number keeps its denominator"
+        - "Reviewer oracle is calibrated (passes that later break); calibration keyed by (repo, mode), never pooled"
+        - "Liveness gates: >=1 verdict per working day, >=1 tend per week; pending verdicts and tend proposals surface in the band/inbox"
+        - "The learning loop reads only the kernel log, never the Shuttle display"
+principles:
+  - id: warpline-opt-in
+    rule: "Warpline is opt-in per project. A project the user declares a Warpline project runs native (TD-2026-10-14-735); every other project runs on standard git, and the rest of the harness (kernel, budget, contracts, learning loop, Shuttle) works the same."
+  - id: build-proper-first
+    rule: "Build the scalable, proper version first, not a throwaway staging version; it is tested and iterated live."
+    note: "i want us to aim to build the scalable, proper version of this first, we will just be testing and iterating on this live so we also need ample internal logs around it so we can iterate on it properly"
+  - id: ample-internal-logs
+    rule: "Every kernel component emits structured internal logs (Paradigm logger, kernel log events) rich enough to diagnose and iterate on live behaviour."
+follow_ups:
+  - "After the plan is finished: a full Atelier aesthetic session for the tool itself"
+  - "A local HTML pitch document: what it is, how it operates, optimizations, value prop"
+direction:
+  render: [refs/direction.html]
+  approved: pending
+decision_record: TD-2026-10-16-950
+closed: 2026-10-15
+summary: "Paradigm 8.0 = Gnomon: Heddle + Shuttle kernel beneath Claude Code; four converged rules ratified; socket-only Shuttle band; six laws; spec-as-contract with three key-proven oracles (git mode: tests + reviewer + clean merge/CI); Warpline opt-in per project; Loid's four learning-loop commitments; build proper first with ample internal logs."

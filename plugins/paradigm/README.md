@@ -1,7 +1,7 @@
 # Paradigm — Claude Code Plugin
 
 AI-native project architecture for Claude Code. One install gives you structured
-context, enforcement hooks, multi-agent orchestration, and 50+ MCP tools — in
+context, enforcement hooks, multi-agent orchestration, and 32 grouped MCP tools (more on demand) — in
 every project, automatically.
 
 ## Installation
@@ -25,7 +25,7 @@ server wires automatically on install, and the enforcement hooks start automatic
 | PreToolUse | Before `git commit` | Auto-rebuilds symbol index before commits |
 | PostToolUse | After file edits | Advisory reminder about .purpose coverage |
 
-### 50+ MCP Tools (automatic)
+### 32 grouped MCP tools, more on demand (automatic)
 
 All tools are available immediately — no configuration needed:
 
@@ -184,7 +184,7 @@ All agents default to `inherit` (your configured model). For optimal results:
 ## Requirements
 
 - Claude Code 1.0.33 or later
-- Node.js >= 18
+- Node.js >= 24 (the hooks and the MCP server run on your Node; Paradigm 8.0 requires 24 or newer)
 - `@a-company/paradigm` npm package — MCP server runs automatically via `npx`. For skills like `/paradigm:shift`, also install the CLI globally: `npm install -g @a-company/paradigm`
 
 ## Links

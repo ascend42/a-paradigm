@@ -1,0 +1,32 @@
+id: L-2026-10-20-ascend-192127-001
+type: milestone
+timestamp: '2026-10-20T19:21:27.563Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'All marathon builders merged: fidelity pass 2 + Paradigm Context on feat/gnomon (55df7dc3); ready for the founder''s restart'
+summary: |-
+  Fidelity pass 2 (after the Aegis H1 fix: full command visible, wrapped, ⏎ separators) and the Paradigm Context mod (after the H1 ReDoS, M1 scope, M2 home and M3 budget fixes) are merged. Suites on HEAD: gnomon 2555, gui 429 (+check:bundle), contracts 471; test:perf passes when the machine is quiet (the earlier G-LOG-04 failures were load). No builders running. Checkpoint updated.
+  Merge lesson: generated .paradigm index files left STAGED by builds block merges, and `git checkout --` doesn't unstage them; use `git restore --staged --worktree`.
+symbols_touched:
+  - '#gui'
+  - '#paradigm-context-mod'
+  - '#mod-host'
+verification:
+  status: pass
+  details:
+    gnomon: 2555
+    gui: 429
+    contracts: 471
+    perf: pass
+tags:
+  - gnomon
+  - merge
+  - marathon-2026-10-20
+linked_commits:
+  - 55df7dc3
+git_context:
+  ref: 55df7dc31c8e0c5682cb500bcefee290412258fc
+  branch: feat/gnomon
+  dirty: true

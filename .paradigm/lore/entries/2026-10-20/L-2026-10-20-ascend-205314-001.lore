@@ -1,0 +1,27 @@
+id: L-2026-10-20-ascend-205314-001
+type: human-note
+timestamp: '2026-10-20T20:53:14.082Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 7: founder rulings on O1 (Claude Docs after a spike; definition of "kept")'
+summary: |-
+  Two founder rulings on O1:
+  1. Dogfood with Neurons and Constellation first. Claude Docs follows a spike (a stdio proxy with an OAuth token vs an http ManifestMcp transport with a kernel-held token); the founder picks after Aegis weighs in.
+  2. kept = the slip was opened AND the mod's MCP tool completed without error in the same conversation. This is the denominator for the 15% kill line. Accepted "for now", so revisit after the first dogfood data.
+symbols_touched:
+  - '#offer-router'
+  - '#claude-docs-mod'
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - founder-ruling
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-204657-001
+git_context:
+  ref: cd3ef9b545ea5b0e24115daba2e00c9cc4290716
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,2287 @@
+{
+  "root": "/Users/ascend/Documents/GitHub/a-paradigm",
+  "product": "site",
+  "name": "useparadigm.dev",
+  "generated": "2026-10-21T15:51:59.115Z",
+  "files": 69,
+  "hasSystem": true,
+  "values": {
+    "color": [
+      {
+        "value": "#4a7c59",
+        "count": 17,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:22",
+          "packages/site/src/components/UniversitySeal.tsx:23",
+          "packages/site/src/components/UniversitySeal.tsx:24",
+          "packages/site/src/components/UniversitySeal.tsx:25",
+          "packages/site/src/components/UniversitySeal.tsx:26"
+        ],
+        "tokens": [
+          "--success"
+        ]
+      },
+      {
+        "value": "#4a7c5930",
+        "count": 12,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:23",
+          "packages/site/src/components/UniversitySeal.tsx:24",
+          "packages/site/src/components/UniversitySeal.tsx:25",
+          "packages/site/src/components/UniversitySeal.tsx:27",
+          "packages/site/src/components/UniversitySeal.tsx:28"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#6b1c23",
+        "count": 10,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:42",
+          "packages/site/src/components/UniversitySeal.tsx:43",
+          "packages/site/src/components/UniversitySeal.tsx:45",
+          "packages/site/src/components/UniversitySeal.tsx:46",
+          "packages/site/src/components/UniversitySeal.tsx:47"
+        ],
+        "tokens": [
+          "--burgundy"
+        ]
+      },
+      {
+        "value": "#ffffff",
+        "count": 7,
+        "where": [
+          "packages/site/src/app/learn/plsat/page.module.css:186",
+          "packages/site/src/app/learn/plsat/page.module.css:269",
+          "packages/site/src/app/sections/HeroSection.module.css:96",
+          "packages/site/src/app/sections/HeroSection.module.css:106",
+          "packages/site/src/components/SiteHeader.module.css:82"
+        ],
+        "tokens": [
+          "--surface-2",
+          "--surface-void"
+        ]
+      },
+      {
+        "value": "#c5a572",
+        "count": 5,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:18",
+          "packages/site/src/components/UniversitySeal.tsx:19",
+          "packages/site/src/components/UniversitySeal.tsx:69",
+          "packages/site/src/components/UniversitySeal.tsx:76",
+          "packages/site/src/components/UniversitySeal.tsx:77"
+        ],
+        "tokens": [
+          "--gold",
+          "--gold-dark"
+        ]
+      },
+      {
+        "value": "#ef4444",
+        "count": 2,
+        "where": [
+          "packages/site/src/components/LiveIndicator.module.css:22",
+          "packages/site/src/components/LiveIndicator.module.css:30"
+        ],
+        "tokens": [
+          "--sym-gate"
+        ]
+      },
+      {
+        "value": "#3f3f4a",
+        "count": 2,
+        "where": [
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:391",
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:461"
+        ],
+        "tokens": [
+          "--surface-steel"
+        ]
+      },
+      {
+        "value": "#22c55e33",
+        "count": 1,
+        "where": [
+          "packages/site/src/app/globals.css:67"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ef44441a",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/LiveIndicator.module.css:6"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ef44444d",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/LiveIndicator.module.css:7"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ef444426",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/LiveIndicator.module.css:15"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#00000026",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:15"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#ff5f57",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:39"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#febc2e",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:40"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#28c840",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:41"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#4ade80",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:70"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#facc15",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:82"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#f8fafc",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:91"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#888888",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:294"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#9ca3af",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:310"
+        ],
+        "tokens": [
+          "--text-silver",
+          "--text-slate"
+        ]
+      },
+      {
+        "value": "rgba(${cr}, ${cg}, ${cb}, ${(0.2 + combined * 0.3)",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:779"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "rgba(${cr}, ${cg}, ${cb}, 0)",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:780"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "rgba(${lr}, ${lg}, ${lb}, 0.15)",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:817"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "rgba(${mr}, ${mg}, ${mb}, 0.12)",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/LiveGraph.tsx:842"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#fdf8f020",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:42"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#2d5f8a",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:54"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#7b5ea7",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:55"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "#b8860b",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/UniversitySeal.tsx:56"
+        ],
+        "tokens": [
+          "--warning"
+        ]
+      }
+    ],
+    "font": [],
+    "font-size": [
+      {
+        "value": "14.4",
+        "count": 4,
+        "where": [
+          "packages/site/src/app/(marketing)/philosophy/page.module.css:66",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:100",
+          "packages/site/src/components/docs/ContentPage.module.css:57",
+          "packages/site/src/components/docs/PortalPage.module.css:21"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 2,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:46",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:99"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "12",
+        "count": 2,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:57",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:114"
+        ],
+        "tokens": [
+          "--text-micro",
+          "--grid-columns",
+          "--radius-xl"
+        ]
+      },
+      {
+        "value": "11.2",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/SymbolBadge.module.css:14"
+        ],
+        "tokens": []
+      }
+    ],
+    "spacing": [
+      {
+        "value": "6",
+        "count": 23,
+        "where": [
+          "packages/site/src/app/(marketing)/philosophy/page.module.css:62",
+          "packages/site/src/app/agents/page.module.css:107",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:101",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:128",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:333"
+        ],
+        "tokens": [
+          "--radius-md"
+        ]
+      },
+      {
+        "value": "2",
+        "count": 19,
+        "where": [
+          "packages/site/src/app/(marketing)/philosophy/page.module.css:62",
+          "packages/site/src/app/agents/page.module.css:114",
+          "packages/site/src/app/blog/page.module.css:78",
+          "packages/site/src/app/docs/[[...slug]]/page.module.css:96",
+          "packages/site/src/app/docs/[[...slug]]/page.module.css:215"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "4",
+        "count": 17,
+        "where": [
+          "packages/site/src/app/docs/[[...slug]]/page.module.css:25",
+          "packages/site/src/app/docs/[[...slug]]/page.module.css:122",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:376",
+          "packages/site/src/app/learn/plsat/page.module.css:114",
+          "packages/site/src/app/learn/plsat/page.module.css:155"
+        ],
+        "tokens": [
+          "--radius-sm"
+        ]
+      },
+      {
+        "value": "8",
+        "count": 16,
+        "where": [
+          "packages/site/src/app/agents/page.module.css:114",
+          "packages/site/src/app/blog/page.module.css:70",
+          "packages/site/src/app/blog/page.module.css:78",
+          "packages/site/src/app/docs/[[...slug]]/page.module.css:6",
+          "packages/site/src/app/learn/page.module.css:78"
+        ],
+        "tokens": [
+          "--space-1",
+          "--radius-lg"
+        ]
+      },
+      {
+        "value": "16",
+        "count": 13,
+        "where": [
+          "packages/site/src/app/agents/page.module.css:30",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:128",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:145",
+          "packages/site/src/app/learn/plsat/page.module.css:202",
+          "packages/site/src/app/learn/plsat/page.module.css:216"
+        ],
+        "tokens": [
+          "--text-body",
+          "--leading-micro",
+          "--space-2"
+        ]
+      },
+      {
+        "value": "10",
+        "count": 12,
+        "where": [
+          "packages/site/src/app/agents/page.module.css:30",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:197",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:274",
+          "packages/site/src/app/learn/course/[courseId]/page.module.css:46",
+          "packages/site/src/app/learn/page.module.css:163"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "28",
+        "count": 6,
+        "where": [
+          "packages/site/src/app/sections/CTASection.module.css:36",
+          "packages/site/src/app/sections/CTASection.module.css:56",
+          "packages/site/src/app/sections/HeroSection.module.css:93",
+          "packages/site/src/app/sections/HeroSection.module.css:113",
+          "packages/site/src/components/docs/DocsSidebar.module.css:21"
+        ],
+        "tokens": [
+          "--text-h2",
+          "--leading-h3"
+        ]
+      },
+      {
+        "value": "12",
+        "count": 5,
+        "where": [
+          "packages/site/src/app/sections/CTASection.module.css:36",
+          "packages/site/src/app/sections/CTASection.module.css:56",
+          "packages/site/src/app/sections/HeroSection.module.css:93",
+          "packages/site/src/app/sections/HeroSection.module.css:113",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:54"
+        ],
+        "tokens": [
+          "--text-micro",
+          "--grid-columns",
+          "--radius-xl"
+        ]
+      },
+      {
+        "value": "14",
+        "count": 5,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:27",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:54",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:111",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:121",
+          "packages/site/src/components/SymbolBadge.module.css:25"
+        ],
+        "tokens": [
+          "--text-small"
+        ]
+      },
+      {
+        "value": "24",
+        "count": 3,
+        "where": [
+          "packages/site/src/app/learn/page.module.css:163",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:3",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:4"
+        ],
+        "tokens": [
+          "--leading-h4",
+          "--leading-body",
+          "--space-3"
+        ]
+      },
+      {
+        "value": "20",
+        "count": 2,
+        "where": [
+          "packages/site/src/app/sections/HeroSection.module.css:136",
+          "packages/site/src/components/SiteHeader.module.css:162"
+        ],
+        "tokens": [
+          "--leading-small"
+        ]
+      },
+      {
+        "value": "3",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/docs/SymbolPage.module.css:135"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "13",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/docs/SymbolPage.module.css:147"
+        ],
+        "tokens": []
+      }
+    ],
+    "radius": [
+      {
+        "value": "0",
+        "count": 4,
+        "where": [
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:154",
+          "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.module.css:155",
+          "packages/site/src/components/docs/ContentPage.module.css:111",
+          "packages/site/src/components/docs/ContentPage.module.css:112"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "10",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:10"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "4",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/SiteFooter.module.css:51"
+        ],
+        "tokens": [
+          "--radius-sm"
+        ]
+      }
+    ],
+    "shadow": [
+      {
+        "value": "0 4px 24px rgba(0, 0, 0, 0.15)",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:15"
+        ],
+        "tokens": []
+      }
+    ],
+    "duration": [
+      {
+        "value": "800",
+        "count": 2,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:14",
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:100"
+        ],
+        "tokens": [
+          "--max-width-content"
+        ]
+      },
+      {
+        "value": "10000",
+        "count": 1,
+        "where": [
+          "packages/site/src/app/sections/HeroSection.module.css:64"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "1500",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/LiveIndicator.module.css:23"
+        ],
+        "tokens": []
+      }
+    ],
+    "easing": [
+      {
+        "value": "ease-in-out",
+        "count": 2,
+        "where": [
+          "packages/site/src/app/sections/HeroSection.module.css:64",
+          "packages/site/src/components/LiveIndicator.module.css:23"
+        ],
+        "tokens": []
+      },
+      {
+        "value": "ease-out",
+        "count": 1,
+        "where": [
+          "packages/site/src/components/NodeGraph/FauxTerminal.module.css:14"
+        ],
+        "tokens": []
+      }
+    ]
+  },
+  "nearDuplicates": [
+    {
+      "kind": "color",
+      "values": [
+        "#ffffff",
+        "#f8fafc"
+      ],
+      "count": 8
+    },
+    {
+      "kind": "color",
+      "values": [
+        "#ef44441a",
+        "#ef44444d",
+        "#ef444426"
+      ],
+      "count": 3
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "2",
+        "3"
+      ],
+      "count": 20
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "16",
+        "14"
+      ],
+      "count": 18
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "28",
+        "24"
+      ],
+      "count": 9
+    },
+    {
+      "kind": "spacing",
+      "values": [
+        "12",
+        "13"
+      ],
+      "count": 6
+    }
+  ],
+  "tokens": [
+    {
+      "name": "--space-2",
+      "value": "1rem",
+      "uses": 80,
+      "where": "packages/site/src/tokens/obsidian.css:60"
+    },
+    {
+      "name": "--space-1",
+      "value": "0.5rem",
+      "uses": 67,
+      "where": "packages/site/src/tokens/obsidian.css:59"
+    },
+    {
+      "name": "--font-mono",
+      "value": "var(--font-geist-mono, 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace)",
+      "uses": 56,
+      "where": "packages/site/src/tokens/obsidian.css:38"
+    },
+    {
+      "name": "--space-3",
+      "value": "1.5rem",
+      "uses": 54,
+      "where": "packages/site/src/tokens/obsidian.css:61"
+    },
+    {
+      "name": "--surface-3",
+      "value": "#FAF3E6",
+      "uses": 53,
+      "where": "packages/site/src/tokens/academia.css:23"
+    },
+    {
+      "name": "--text-small",
+      "value": "0.875rem",
+      "uses": 53,
+      "where": "packages/site/src/tokens/obsidian.css:46"
+    },
+    {
+      "name": "--text-heading",
+      "value": "#2C1810",
+      "uses": 47,
+      "where": "packages/site/src/tokens/academia.css:29"
+    },
+    {
+      "name": "--ease-out",
+      "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+      "uses": 47,
+      "where": "packages/site/src/tokens/obsidian.css:88"
+    },
+    {
+      "name": "--duration-fast",
+      "value": "150ms",
+      "uses": 47,
+      "where": "packages/site/src/tokens/obsidian.css:91"
+    },
+    {
+      "name": "--text-muted",
+      "value": "#8B7355",
+      "uses": 44,
+      "where": "packages/site/src/tokens/academia.css:28"
+    },
+    {
+      "name": "--sym-component",
+      "value": "#16a34a",
+      "uses": 44,
+      "where": "packages/site/src/tokens/obsidian.css:140"
+    },
+    {
+      "name": "--text-secondary",
+      "value": "#4A3728",
+      "uses": 43,
+      "where": "packages/site/src/tokens/academia.css:27"
+    },
+    {
+      "name": "--space-4",
+      "value": "2rem",
+      "uses": 37,
+      "where": "packages/site/src/tokens/obsidian.css:62"
+    },
+    {
+      "name": "--text-micro",
+      "value": "0.75rem",
+      "uses": 36,
+      "where": "packages/site/src/tokens/obsidian.css:47"
+    },
+    {
+      "name": "--surface-2",
+      "value": "#ffffff",
+      "uses": 32,
+      "where": "packages/site/src/tokens/academia.css:22"
+    },
+    {
+      "name": "--text-primary",
+      "value": "#2C1810",
+      "uses": 32,
+      "where": "packages/site/src/tokens/academia.css:26"
+    },
+    {
+      "name": "--text-body",
+      "value": "1rem",
+      "uses": 28,
+      "where": "packages/site/src/tokens/obsidian.css:45"
+    },
+    {
+      "name": "--sym-aspect",
+      "value": "#4b5563",
+      "uses": 28,
+      "where": "packages/site/src/tokens/obsidian.css:156"
+    },
+    {
+      "name": "--burgundy",
+      "value": "#6B1C23",
+      "uses": 27,
+      "where": "packages/site/src/tokens/academia.css:32"
+    },
+    {
+      "name": "--text-h4",
+      "value": "1.125rem",
+      "uses": 27,
+      "where": "packages/site/src/tokens/obsidian.css:44"
+    },
+    {
+      "name": "--surface-4",
+      "value": "#E8E0D0",
+      "uses": 25,
+      "where": "packages/site/src/tokens/academia.css:24"
+    },
+    {
+      "name": "--surface-steel",
+      "value": "#3f3f4a",
+      "uses": 25,
+      "where": "packages/site/src/tokens/obsidian.css:12"
+    },
+    {
+      "name": "--radius-lg",
+      "value": "8px",
+      "uses": 24,
+      "where": "packages/site/src/tokens/obsidian.css:77"
+    },
+    {
+      "name": "--space-6",
+      "value": "3rem",
+      "uses": 23,
+      "where": "packages/site/src/tokens/obsidian.css:63"
+    },
+    {
+      "name": "--sym-gate",
+      "value": "#dc2626",
+      "uses": 22,
+      "where": "packages/site/src/tokens/obsidian.css:148"
+    },
+    {
+      "name": "--font-sans",
+      "value": "var(--font-geist-sans, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)",
+      "uses": 20,
+      "where": "packages/site/src/tokens/obsidian.css:37"
+    },
+    {
+      "name": "--radius-md",
+      "value": "6px",
+      "uses": 19,
+      "where": "packages/site/src/tokens/obsidian.css:76"
+    },
+    {
+      "name": "--text-bright",
+      "value": "#2C1810",
+      "uses": 18,
+      "where": "packages/site/src/tokens/academia.css:30"
+    },
+    {
+      "name": "--font-heading",
+      "value": "Crimson Pro', Georgia, 'Times New Roman', serif",
+      "uses": 17,
+      "where": "packages/site/src/tokens/academia.css:15"
+    },
+    {
+      "name": "--sym-flow",
+      "value": "#7c3aed",
+      "uses": 17,
+      "where": "packages/site/src/tokens/obsidian.css:144"
+    },
+    {
+      "name": "--sym-signal",
+      "value": "#ca8a04",
+      "uses": 16,
+      "where": "packages/site/src/tokens/obsidian.css:152"
+    },
+    {
+      "name": "--text-h3",
+      "value": "1.375rem",
+      "uses": 14,
+      "where": "packages/site/src/tokens/obsidian.css:43"
+    },
+    {
+      "name": "--space-8",
+      "value": "4rem",
+      "uses": 14,
+      "where": "packages/site/src/tokens/obsidian.css:64"
+    },
+    {
+      "name": "--text-h1",
+      "value": "2.25rem",
+      "uses": 13,
+      "where": "packages/site/src/tokens/obsidian.css:41"
+    },
+    {
+      "name": "--text-h2",
+      "value": "1.75rem",
+      "uses": 13,
+      "where": "packages/site/src/tokens/obsidian.css:42"
+    },
+    {
+      "name": "--radius-sm",
+      "value": "4px",
+      "uses": 13,
+      "where": "packages/site/src/tokens/obsidian.css:75"
+    },
+    {
+      "name": "--gold",
+      "value": "#C5A572",
+      "uses": 12,
+      "where": "packages/site/src/tokens/academia.css:37"
+    },
+    {
+      "name": "--max-width-marketing",
+      "value": "1200px",
+      "uses": 11,
+      "where": "packages/site/src/tokens/obsidian.css:69"
+    },
+    {
+      "name": "--max-width-content",
+      "value": "800px",
+      "uses": 11,
+      "where": "packages/site/src/tokens/obsidian.css:70"
+    },
+    {
+      "name": "--space-16",
+      "value": "8rem",
+      "uses": 10,
+      "where": "packages/site/src/tokens/obsidian.css:66"
+    },
+    {
+      "name": "--radius-pill",
+      "value": "9999px",
+      "uses": 10,
+      "where": "packages/site/src/tokens/obsidian.css:79"
+    },
+    {
+      "name": "--surface-0",
+      "value": "#F5F1E8",
+      "uses": 9,
+      "where": "packages/site/src/tokens/academia.css:20"
+    },
+    {
+      "name": "--surface-1",
+      "value": "#FDF8F0",
+      "uses": 9,
+      "where": "packages/site/src/tokens/academia.css:21"
+    },
+    {
+      "name": "--surface-void",
+      "value": "#0a0a0b",
+      "uses": 9,
+      "where": "packages/site/src/tokens/obsidian.css:8"
+    },
+    {
+      "name": "--text-display",
+      "value": "3rem",
+      "uses": 7,
+      "where": "packages/site/src/tokens/obsidian.css:40"
+    },
+    {
+      "name": "--tag-gate-bg",
+      "value": "rgba(220, 38, 38, 0.08)",
+      "uses": 6,
+      "where": "packages/site/src/tokens/obsidian.css:164"
+    },
+    {
+      "name": "--header-height",
+      "value": "64px",
+      "uses": 5,
+      "where": "packages/site/src/tokens/obsidian.css:71"
+    },
+    {
+      "name": "--tag-component-bg",
+      "value": "rgba(22, 163, 74, 0.08)",
+      "uses": 5,
+      "where": "packages/site/src/tokens/obsidian.css:160"
+    },
+    {
+      "name": "--tag-flow-bg",
+      "value": "rgba(124, 58, 237, 0.08)",
+      "uses": 5,
+      "where": "packages/site/src/tokens/obsidian.css:162"
+    },
+    {
+      "name": "--tag-aspect-bg",
+      "value": "rgba(75, 85, 99, 0.08)",
+      "uses": 5,
+      "where": "packages/site/src/tokens/obsidian.css:168"
+    },
+    {
+      "name": "--sym-component-light",
+      "value": "#166534",
+      "uses": 4,
+      "where": "packages/site/src/tokens/obsidian.css:142"
+    },
+    {
+      "name": "--tag-signal-bg",
+      "value": "rgba(202, 138, 4, 0.08)",
+      "uses": 4,
+      "where": "packages/site/src/tokens/obsidian.css:166"
+    },
+    {
+      "name": "--surface-graphite",
+      "value": "#2a2a32",
+      "uses": 3,
+      "where": "packages/site/src/tokens/obsidian.css:11"
+    },
+    {
+      "name": "--text-slate",
+      "value": "#6b7280",
+      "uses": 3,
+      "where": "packages/site/src/tokens/obsidian.css:22"
+    },
+    {
+      "name": "--tag-component-border",
+      "value": "rgba(22, 163, 74, 0.2)",
+      "uses": 3,
+      "where": "packages/site/src/tokens/obsidian.css:161"
+    },
+    {
+      "name": "--tag-flow-border",
+      "value": "rgba(124, 58, 237, 0.2)",
+      "uses": 3,
+      "where": "packages/site/src/tokens/obsidian.css:163"
+    },
+    {
+      "name": "--tag-gate-border",
+      "value": "rgba(220, 38, 38, 0.2)",
+      "uses": 3,
+      "where": "packages/site/src/tokens/obsidian.css:165"
+    },
+    {
+      "name": "--surface-obsidian",
+      "value": "#111113",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:9"
+    },
+    {
+      "name": "--surface-carbon",
+      "value": "#1a1a1f",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:10"
+    },
+    {
+      "name": "--text-silver",
+      "value": "#9ca3af",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:23"
+    },
+    {
+      "name": "--text-cloud",
+      "value": "#d1d5db",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:24"
+    },
+    {
+      "name": "--text-mist",
+      "value": "#e5e7eb",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:25"
+    },
+    {
+      "name": "--text-snow",
+      "value": "#f3f4f6",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:26"
+    },
+    {
+      "name": "--leading-h4",
+      "value": "1.5rem",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:53"
+    },
+    {
+      "name": "--leading-small",
+      "value": "1.25rem",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:55"
+    },
+    {
+      "name": "--sym-gate-light",
+      "value": "#991b1b",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:150"
+    },
+    {
+      "name": "--tag-signal-border",
+      "value": "rgba(202, 138, 4, 0.2)",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:167"
+    },
+    {
+      "name": "--tag-aspect-border",
+      "value": "rgba(75, 85, 99, 0.2)",
+      "uses": 2,
+      "where": "packages/site/src/tokens/obsidian.css:169"
+    },
+    {
+      "name": "--glow-flow",
+      "value": "rgba(139, 92, 246, 0.4)",
+      "uses": 2,
+      "where": "packages/site/src/tokens/symbols.css:46"
+    },
+    {
+      "name": "--burgundy-light",
+      "value": "#8B2E38",
+      "uses": 1,
+      "where": "packages/site/src/tokens/academia.css:33"
+    },
+    {
+      "name": "--burgundy-bg",
+      "value": "rgba(107, 28, 35, 0.06)",
+      "uses": 1,
+      "where": "packages/site/src/tokens/academia.css:35"
+    },
+    {
+      "name": "--gold-bg",
+      "value": "rgba(197, 165, 114, 0.09)",
+      "uses": 1,
+      "where": "packages/site/src/tokens/academia.css:40"
+    },
+    {
+      "name": "--text-white",
+      "value": "#fafafa",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:27"
+    },
+    {
+      "name": "--leading-h1",
+      "value": "2.75rem",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:50"
+    },
+    {
+      "name": "--leading-h2",
+      "value": "2.25rem",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:51"
+    },
+    {
+      "name": "--leading-h3",
+      "value": "1.75rem",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:52"
+    },
+    {
+      "name": "--leading-body",
+      "value": "1.5rem",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:54"
+    },
+    {
+      "name": "--space-12",
+      "value": "6rem",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:65"
+    },
+    {
+      "name": "--radius-xl",
+      "value": "12px",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:78"
+    },
+    {
+      "name": "--duration-slow",
+      "value": "600ms",
+      "uses": 1,
+      "where": "packages/site/src/tokens/obsidian.css:93"
+    },
+    {
+      "name": "--glow-component",
+      "value": "rgba(34, 197, 94, 0.4)",
+      "uses": 1,
+      "where": "packages/site/src/tokens/symbols.css:45"
+    },
+    {
+      "name": "--glow-gate",
+      "value": "rgba(239, 68, 68, 0.4)",
+      "uses": 1,
+      "where": "packages/site/src/tokens/symbols.css:47"
+    },
+    {
+      "name": "--glow-signal",
+      "value": "rgba(234, 179, 8, 0.4)",
+      "uses": 1,
+      "where": "packages/site/src/tokens/symbols.css:48"
+    },
+    {
+      "name": "--glow-aspect",
+      "value": "rgba(107, 114, 128, 0.4)",
+      "uses": 1,
+      "where": "packages/site/src/tokens/symbols.css:49"
+    },
+    {
+      "name": "--burgundy-dark",
+      "value": "#4A1118",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:34"
+    },
+    {
+      "name": "--gold-light",
+      "value": "#D4BA8E",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:38"
+    },
+    {
+      "name": "--gold-dark",
+      "value": "#A68B5B",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:39"
+    },
+    {
+      "name": "--success",
+      "value": "#4A7C59",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:42"
+    },
+    {
+      "name": "--success-bg",
+      "value": "rgba(74, 124, 89, 0.09)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:43"
+    },
+    {
+      "name": "--error",
+      "value": "#9B2C2C",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:44"
+    },
+    {
+      "name": "--error-bg",
+      "value": "rgba(155, 44, 44, 0.09)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:45"
+    },
+    {
+      "name": "--warning",
+      "value": "#B8860B",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:46"
+    },
+    {
+      "name": "--warning-bg",
+      "value": "rgba(184, 134, 11, 0.09)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:47"
+    },
+    {
+      "name": "--border-color",
+      "value": "var(--surface-4)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:49"
+    },
+    {
+      "name": "--shadow-card",
+      "value": "0 1px 3px rgba(44, 24, 16, 0.08), 0 4px 12px rgba(44, 24, 16, 0.05)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:50"
+    },
+    {
+      "name": "--glow-subtle",
+      "value": "none",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:51"
+    },
+    {
+      "name": "--glow-node",
+      "value": "none",
+      "uses": 0,
+      "where": "packages/site/src/tokens/academia.css:52"
+    },
+    {
+      "name": "--leading-display",
+      "value": "3.5rem",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:49"
+    },
+    {
+      "name": "--leading-micro",
+      "value": "1rem",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:56"
+    },
+    {
+      "name": "--grid-columns",
+      "value": "12",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:72"
+    },
+    {
+      "name": "--ease-in",
+      "value": "cubic-bezier(0.7, 0, 0.84, 0)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:89"
+    },
+    {
+      "name": "--ease-in-out",
+      "value": "cubic-bezier(0.65, 0, 0.35, 1)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:90"
+    },
+    {
+      "name": "--duration-normal",
+      "value": "300ms",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:92"
+    },
+    {
+      "name": "--btn-radius",
+      "value": "var(--radius-md)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:96"
+    },
+    {
+      "name": "--btn-padding",
+      "value": "10px 20px",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:97"
+    },
+    {
+      "name": "--btn-font-size",
+      "value": "var(--text-small)",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:98"
+    },
+    {
+      "name": "--sym-component-dark",
+      "value": "#14532d",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:141"
+    },
+    {
+      "name": "--sym-flow-dark",
+      "value": "#4c1d95",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:145"
+    },
+    {
+      "name": "--sym-flow-light",
+      "value": "#5b21b6",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:146"
+    },
+    {
+      "name": "--sym-gate-dark",
+      "value": "#7f1d1d",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:149"
+    },
+    {
+      "name": "--sym-signal-dark",
+      "value": "#713f12",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:153"
+    },
+    {
+      "name": "--sym-signal-light",
+      "value": "#854d0e",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:154"
+    },
+    {
+      "name": "--sym-aspect-dark",
+      "value": "#1f2937",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:157"
+    },
+    {
+      "name": "--sym-aspect-light",
+      "value": "#374151",
+      "uses": 0,
+      "where": "packages/site/src/tokens/obsidian.css:158"
+    }
+  ],
+  "unusedTokens": [
+    "--burgundy-dark",
+    "--gold-light",
+    "--gold-dark",
+    "--success",
+    "--success-bg",
+    "--error",
+    "--error-bg",
+    "--warning",
+    "--warning-bg",
+    "--border-color",
+    "--shadow-card",
+    "--glow-subtle",
+    "--glow-node",
+    "--leading-display",
+    "--leading-micro",
+    "--grid-columns",
+    "--ease-in",
+    "--ease-in-out",
+    "--duration-normal",
+    "--btn-radius",
+    "--btn-padding",
+    "--btn-font-size",
+    "--sym-component-dark",
+    "--sym-flow-dark",
+    "--sym-flow-light",
+    "--sym-gate-dark",
+    "--sym-signal-dark",
+    "--sym-signal-light",
+    "--sym-aspect-dark",
+    "--sym-aspect-light"
+  ],
+  "undefinedTokens": [
+    "--font-geist-sans",
+    "--font-geist-mono"
+  ],
+  "components": [
+    {
+      "name": "PhilosophyPage",
+      "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:9"
+    },
+    {
+      "name": "AgentsPage",
+      "where": "packages/site/src/app/agents/page.tsx:45"
+    },
+    {
+      "name": "BlogPage",
+      "where": "packages/site/src/app/blog/page.tsx:28"
+    },
+    {
+      "name": "DocsLayout",
+      "where": "packages/site/src/app/docs/layout.tsx:14"
+    },
+    {
+      "name": "RootLayout",
+      "where": "packages/site/src/app/layout.tsx:48"
+    },
+    {
+      "name": "LearnLayout",
+      "where": "packages/site/src/app/learn/layout.tsx:11"
+    },
+    {
+      "name": "LearnPage",
+      "where": "packages/site/src/app/learn/page.tsx:66"
+    },
+    {
+      "name": "PlsatPage",
+      "where": "packages/site/src/app/learn/plsat/page.tsx:12"
+    },
+    {
+      "name": "HomePage",
+      "where": "packages/site/src/app/page.tsx:8"
+    },
+    {
+      "name": "CTASection",
+      "where": "packages/site/src/app/sections/CTASection.tsx:4"
+    },
+    {
+      "name": "HeroSection",
+      "where": "packages/site/src/app/sections/HeroSection.tsx:15"
+    },
+    {
+      "name": "HowItWorksSection",
+      "where": "packages/site/src/app/sections/HowItWorksSection.tsx:60"
+    },
+    {
+      "name": "MetricsSection",
+      "where": "packages/site/src/app/sections/MetricsSection.tsx:23"
+    },
+    {
+      "name": "SymbolsSection",
+      "where": "packages/site/src/app/sections/SymbolsSection.tsx:67"
+    },
+    {
+      "name": "CodeBlock",
+      "where": "packages/site/src/components/CodeBlock.tsx:14"
+    },
+    {
+      "name": "LiveIndicator",
+      "where": "packages/site/src/components/LiveIndicator.tsx:14"
+    },
+    {
+      "name": "FauxTerminal",
+      "where": "packages/site/src/components/NodeGraph/FauxTerminal.tsx:75"
+    },
+    {
+      "name": "SCENARIOS",
+      "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:124"
+    },
+    {
+      "name": "LiveGraph",
+      "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:374"
+    },
+    {
+      "name": "NodeGraph",
+      "where": "packages/site/src/components/NodeGraph/NodeGraph.tsx:109"
+    },
+    {
+      "name": "SiteFooter",
+      "where": "packages/site/src/components/SiteFooter.tsx:24"
+    },
+    {
+      "name": "SiteHeader",
+      "where": "packages/site/src/components/SiteHeader.tsx:15"
+    },
+    {
+      "name": "SymbolBadge",
+      "where": "packages/site/src/components/SymbolBadge.tsx:20"
+    },
+    {
+      "name": "ThemeToggle",
+      "where": "packages/site/src/components/ThemeToggle.tsx:7"
+    },
+    {
+      "name": "UniversitySeal",
+      "where": "packages/site/src/components/UniversitySeal.tsx:6"
+    },
+    {
+      "name": "CategoryListPage",
+      "where": "packages/site/src/components/docs/CategoryListPage.tsx:49"
+    },
+    {
+      "name": "ContentPage",
+      "where": "packages/site/src/components/docs/ContentPage.tsx:12"
+    },
+    {
+      "name": "DocsSidebar",
+      "where": "packages/site/src/components/docs/DocsSidebar.tsx:21"
+    },
+    {
+      "name": "FlowPage",
+      "where": "packages/site/src/components/docs/FlowPage.tsx:10"
+    },
+    {
+      "name": "PortalPage",
+      "where": "packages/site/src/components/docs/PortalPage.tsx:9"
+    },
+    {
+      "name": "SymbolPage",
+      "where": "packages/site/src/components/docs/SymbolPage.tsx:28"
+    }
+  ],
+  "classFamilies": [],
+  "copy": {
+    "distinct": 210,
+    "samples": [
+      {
+        "text": "Context engineering as a discipline. Why structured codebase context is the missing layer in AI-native development.",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:6"
+      },
+      {
+        "text": "The Manifesto",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:13"
+      },
+      {
+        "text": "Context engineering is a discipline",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:14"
+      },
+      {
+        "text": "The problem",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:23"
+      },
+      {
+        "text": "t an AI problem. It",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:30"
+      },
+      {
+        "text": "The insight",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:37"
+      },
+      {
+        "text": "#Components",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:47"
+      },
+      {
+        "text": "$Flows",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:53"
+      },
+      {
+        "text": "^Gates",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:59"
+      },
+      {
+        "text": "!Signals",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:65"
+      },
+      {
+        "text": "~Aspects",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:71"
+      },
+      {
+        "text": "Context as infrastructure",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:82"
+      },
+      {
+        "text": ".purpose",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:89"
+      },
+      {
+        "text": "The compounding effect",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:101"
+      },
+      {
+        "text": "Not just for AI",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:114"
+      },
+      {
+        "text": "An invitation",
+        "where": "packages/site/src/app/(marketing)/philosophy/page.tsx:127"
+      },
+      {
+        "text": "Agent Registry",
+        "where": "packages/site/src/app/agents/page.tsx:5"
+      },
+      {
+        "text": "Browse, discover, and install specialized AI agents built with Paradigm.",
+        "where": "packages/site/src/app/agents/page.tsx:6"
+      },
+      {
+        "text": "Paradigm Reviewer",
+        "where": "packages/site/src/app/agents/page.tsx:13"
+      },
+      {
+        "text": "Two-stage code review: spec compliance then code quality. Uses .purpose files for context.",
+        "where": "packages/site/src/app/agents/page.tsx:14"
+      },
+      {
+        "text": "Paradigm Tester",
+        "where": "packages/site/src/app/agents/page.tsx:21"
+      },
+      {
+        "text": "Writes and runs tests based on .purpose specifications. Validates gate implementations.",
+        "where": "packages/site/src/app/agents/page.tsx:22"
+      },
+      {
+        "text": "Paradigm Architect",
+        "where": "packages/site/src/app/agents/page.tsx:29"
+      },
+      {
+        "text": "Designs implementation plans for multi-file features. Reads .purpose files for architecture context.",
+        "where": "packages/site/src/app/agents/page.tsx:30"
+      },
+      {
+        "text": "Paradigm Security",
+        "where": "packages/site/src/app/agents/page.tsx:37"
+      },
+      {
+        "text": "Authorization, authentication, input validation analysis. Reads portal.yaml for gate verification.",
+        "where": "packages/site/src/app/agents/page.tsx:38"
+      },
+      {
+        "text": "The Armory",
+        "where": "packages/site/src/app/agents/page.tsx:49"
+      },
+      {
+        "text": "Search agents...",
+        "where": "packages/site/src/app/agents/page.tsx:56"
+      },
+      {
+        "text": "Featured Agents",
+        "where": "packages/site/src/app/agents/page.tsx:64"
+      },
+      {
+        "text": "Updates, tutorials, and deep dives on context engineering and AI-native development.",
+        "where": "packages/site/src/app/blog/page.tsx:7"
+      },
+      {
+        "text": "Introducing Paradigm 4.0: The Context Engineering Framework",
+        "where": "packages/site/src/app/blog/page.tsx:14"
+      },
+      {
+        "text": "Five symbols. Structured context. AI agents that actually know your codebase. Paradigm 4.0 is the biggest release yet.",
+        "where": "packages/site/src/app/blog/page.tsx:15"
+      },
+      {
+        "text": "What is Context Engineering?",
+        "where": "packages/site/src/app/blog/page.tsx:21"
+      },
+      {
+        "text": "Context engineering is the discipline of structuring information so AI systems can effectively use it. Here is why it matters.",
+        "where": "packages/site/src/app/blog/page.tsx:22"
+      },
+      {
+        "text": "The Voice",
+        "where": "packages/site/src/app/blog/page.tsx:32"
+      },
+      {
+        "text": "Portal Reference",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:56"
+      },
+      {
+        "text": "Not Found",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:58"
+      },
+      {
+        "text": "Documentation",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:192"
+      },
+      {
+        "text": "Getting Started",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:200"
+      },
+      {
+        "text": "Installation",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:205"
+      },
+      {
+        "text": "Install Paradigm and create your first project",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:206"
+      },
+      {
+        "text": "The Five Symbols",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:212"
+      },
+      {
+        "text": "Components, Flows, Gates, Signals, and Aspects",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:213"
+      },
+      {
+        "text": "Purpose Files",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:219"
+      },
+      {
+        "text": "Write and maintain .purpose files",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:220"
+      },
+      {
+        "text": "Symbol Reference",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:228"
+      },
+      {
+        "text": "Authorization",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:241"
+      },
+      {
+        "text": "View all gates and protected routes",
+        "where": "packages/site/src/app/docs/[[...slug]]/page.tsx:246"
+      },
+      {
+        "text": "%s | Paradigm Docs",
+        "where": "packages/site/src/app/docs/layout.tsx:9"
+      },
+      {
+        "text": "Paradigm documentation — auto-generated symbol reference, guides, flows, and portal.",
+        "where": "packages/site/src/app/docs/layout.tsx:11"
+      },
+      {
+        "text": "Paradigm — The Context Engineering Framework",
+        "where": "packages/site/src/app/layout.tsx:21"
+      },
+      {
+        "text": "The context engineering framework for AI-native development. Structure your codebase so AI agents understand it.",
+        "where": "packages/site/src/app/layout.tsx:25"
+      },
+      {
+        "text": "Structure your codebase so AI agents understand it. Five symbols. Infinite clarity.",
+        "where": "packages/site/src/app/layout.tsx:34"
+      },
+      {
+        "text": "Lesson Not Found",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:18"
+      },
+      {
+        "text": "University",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:43"
+      },
+      {
+        "text": "Key Concepts",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:68"
+      },
+      {
+        "text": "Check Your Understanding",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:80"
+      },
+      {
+        "text": "Lesson navigation",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:108"
+      },
+      {
+        "text": "&larr; Previous",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:115"
+      },
+      {
+        "text": "Next &rarr;",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:127"
+      },
+      {
+        "text": "Complete &rarr;",
+        "where": "packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:136"
+      },
+      {
+        "text": "Course Not Found",
+        "where": "packages/site/src/app/learn/course/[courseId]/page.tsx:18"
+      },
+      {
+        "text": "Core Curriculum",
+        "where": "packages/site/src/app/learn/course/[courseId]/page.tsx:48"
+      },
+      {
+        "text": "Extracurricular",
+        "where": "packages/site/src/app/learn/course/[courseId]/page.tsx:50"
+      },
+      {
+        "text": "Syllabus",
+        "where": "packages/site/src/app/learn/course/[courseId]/page.tsx:59"
+      },
+      {
+        "text": "&rarr;",
+        "where": "packages/site/src/app/learn/course/[courseId]/page.tsx:69"
+      },
+      {
+        "text": "%s | Paradigm University",
+        "where": "packages/site/src/app/learn/layout.tsx:6"
+      },
+      {
+        "text": "Learn context engineering with structured courses, quizzes, and PLSAT certification.",
+        "where": "packages/site/src/app/learn/layout.tsx:8"
+      },
+      {
+        "text": "Core concepts, symbol system, .purpose files, and project setup.",
+        "where": "packages/site/src/app/learn/page.tsx:9"
+      },
+      {
+        "text": "Flows, gates, signals, and navigation. Building connected systems.",
+        "where": "packages/site/src/app/learn/page.tsx:17"
+      },
+      {
+        "text": "Aspects, ripple analysis, wisdom system, and multi-agent orchestration.",
+        "where": "packages/site/src/app/learn/page.tsx:25"
+      },
+      {
+        "text": "Sentinel observability, deployment, CI/CD integration, and production workflows.",
+        "where": "packages/site/src/app/learn/page.tsx:33"
+      },
+      {
+        "text": "PARA 501: Advanced Systems",
+        "where": "packages/site/src/app/learn/page.tsx:40"
+      },
+      {
+        "text": "Lore system, session intelligence, hook enforcement, and platform mastery.",
+        "where": "packages/site/src/app/learn/page.tsx:41"
+      },
+      {
+        "text": "Git Fundamentals",
+        "where": "packages/site/src/app/learn/page.tsx:48"
+      },
+      {
+        "text": "Git for AI-native development. Branching, commits, recovery, and CI/CD.",
+        "where": "packages/site/src/app/learn/page.tsx:49"
+      },
+      {
+        "text": "Agile Development",
+        "where": "packages/site/src/app/learn/page.tsx:57"
+      },
+      {
+        "text": "Agile practices for AI-native teams. Stories, sprints, reviews, and multi-agent workflows.",
+        "where": "packages/site/src/app/learn/page.tsx:58"
+      },
+      {
+        "text": "Paradigm University",
+        "where": "packages/site/src/app/learn/page.tsx:76"
+      },
+      {
+        "text": "Self-paced",
+        "where": "packages/site/src/app/learn/page.tsx:121"
+      },
+      {
+        "text": "PLSAT Certification",
+        "where": "packages/site/src/app/learn/page.tsx:135"
+      },
+      {
+        "text": "Paradigm Licensure Standardized Assessment Test",
+        "where": "packages/site/src/app/learn/page.tsx:138"
+      },
+      {
+        "text": "PLSAT — Paradigm Licensure Standardized Assessment Test",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:7"
+      },
+      {
+        "text": "99 randomized questions from the PARA 101-501 curriculum. 90 minutes. 90% to pass. Demonstrate your mastery of context engineering.",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:9"
+      },
+      {
+        "text": "PLSAT",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:18"
+      },
+      {
+        "text": "What Is the PLSAT?",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:33"
+      },
+      {
+        "text": "What It Covers",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:48"
+      },
+      {
+        "text": "Symbols, .purpose files, tags, logger, portal.yaml, project structure",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:53"
+      },
+      {
+        "text": "Flows, gates, aspects, anchors, disciplines, signal patterns",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:58"
+      },
+      {
+        "text": "History, fragility, wisdom, ripple analysis, navigation, protocols",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:63"
+      },
+      {
+        "text": "MCP tools, multi-agent coordination, orchestration, PM governance",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:68"
+      },
+      {
+        "text": "Advanced Systems",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:72"
+      },
+      {
+        "text": "Lore, Sentinel, session intelligence, hook enforcement, symphony",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:73"
+      },
+      {
+        "text": "Exam Details",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:79"
+      },
+      {
+        "text": "Questions",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:83"
+      },
+      {
+        "text": "Minutes",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:87"
+      },
+      {
+        "text": "Pass Threshold",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:91"
+      },
+      {
+        "text": "Choices per Question",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:95"
+      },
+      {
+        "text": "How to Prepare",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:101"
+      },
+      {
+        "text": "Complete the PARA courses.",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:106"
+      },
+      {
+        "text": "Practice with lesson quizzes.",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:113"
+      },
+      {
+        "text": "Review reference cards.",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:120"
+      },
+      {
+        "text": "Build a real project.",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:127"
+      },
+      {
+        "text": "How to Take the PLSAT",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:136"
+      },
+      {
+        "text": "Terminal",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:144"
+      },
+      {
+        "text": "# Interactive terminal quiz\\nparadigm university quiz plsat\\n\\n# Or launch the full University platform\\nparadigm university serve",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:147"
+      },
+      {
+        "text": "Ready to certify?",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:157"
+      },
+      {
+        "text": "paradigm university serve",
+        "where": "packages/site/src/app/learn/plsat/page.tsx:158"
+      },
+      {
+        "text": "Ready to give your AI agents real context?",
+        "where": "packages/site/src/app/sections/CTASection.tsx:8"
+      },
+      {
+        "text": "use client",
+        "where": "packages/site/src/app/sections/HeroSection.tsx:1"
+      },
+      {
+        "text": "AI&nbsp;agents understand&nbsp;it",
+        "where": "packages/site/src/app/sections/HeroSection.tsx:47"
+      },
+      {
+        "text": "noopener noreferrer",
+        "where": "packages/site/src/app/sections/HeroSection.tsx:74"
+      },
+      {
+        "text": "One command adds a .paradigm/ directory to your project with a config file and navigator.",
+        "where": "packages/site/src/app/sections/HowItWorksSection.tsx:11"
+      },
+      {
+        "text": "paradigm scan\\` to index",
+        "where": "packages/site/src/app/sections/HowItWorksSection.tsx:17"
+      },
+      {
+        "text": "Add .purpose files to your directories. They tell agents what each part of your codebase does.",
+        "where": "packages/site/src/app/sections/HowItWorksSection.tsx:22"
+      },
+      {
+        "text": "Agents use Paradigm MCP tools to navigate, check impact, and validate changes before writing code.",
+        "where": "packages/site/src/app/sections/HowItWorksSection.tsx:42"
+      },
+      {
+        "text": "add OAuth",
+        "where": "packages/site/src/app/sections/HowItWorksSection.tsx:44"
+      },
+      {
+        "text": "How it works",
+        "where": "packages/site/src/app/sections/HowItWorksSection.tsx:65"
+      },
+      {
+        "text": "MCP Tools",
+        "where": "packages/site/src/app/sections/MetricsSection.tsx:8"
+      },
+      {
+        "text": "For AI agents",
+        "where": "packages/site/src/app/sections/MetricsSection.tsx:8"
+      },
+      {
+        "text": "Less context",
+        "where": "packages/site/src/app/sections/MetricsSection.tsx:9"
+      },
+      {
+        "text": "Tokens saved vs file reads",
+        "where": "packages/site/src/app/sections/MetricsSection.tsx:9"
+      },
+      {
+        "text": "Setup time",
+        "where": "packages/site/src/app/sections/MetricsSection.tsx:10"
+      },
+      {
+        "text": "paradigm shift",
+        "where": "packages/site/src/app/sections/MetricsSection.tsx:10"
+      },
+      {
+        "text": "Services, views, models. Every named piece of your system.",
+        "where": "packages/site/src/app/sections/SymbolsSection.tsx:13"
+      },
+      {
+        "text": "Multi-step processes that span components. Checkout, onboard, etc.",
+        "where": "packages/site/src/app/sections/SymbolsSection.tsx:22"
+      },
+      {
+        "text": "Auth checkpoints. Who can do what. Roles, ownership, access.",
+        "where": "packages/site/src/app/sections/SymbolsSection.tsx:31"
+      },
+      {
+        "text": "Events that ripple through the system. Webhooks, notifications.",
+        "where": "packages/site/src/app/sections/SymbolsSection.tsx:40"
+      },
+      {
+        "text": "Cross-cutting concerns anchored to code. Audit, logging, compliance.",
+        "where": "packages/site/src/app/sections/SymbolsSection.tsx:49"
+      },
+      {
+        "text": "Five symbols. That's it.",
+        "where": "packages/site/src/app/sections/SymbolsSection.tsx:72"
+      },
+      {
+        "text": "LIVE",
+        "where": "packages/site/src/components/LiveIndicator.tsx:41"
+      },
+      {
+        "text": "l.syncAt",
+        "where": "packages/site/src/components/NodeGraph/FauxTerminal.tsx:40"
+      },
+      {
+        "text": "symphony",
+        "where": "packages/site/src/components/NodeGraph/FauxTerminal.tsx:157"
+      },
+      {
+        "text": "checking context",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:78"
+      },
+      {
+        "text": "scanning symbols",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:78"
+      },
+      {
+        "text": "found it!",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:79"
+      },
+      {
+        "text": "match found",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:79"
+      },
+      {
+        "text": "located source",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:79"
+      },
+      {
+        "text": "symbol resolved",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:79"
+      },
+      {
+        "text": "ripple analysis...",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:80"
+      },
+      {
+        "text": "checking impact",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:80"
+      },
+      {
+        "text": "tracing dependencies",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:80"
+      },
+      {
+        "text": "3 flows affected",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:80"
+      },
+      {
+        "text": "applying fix",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:81"
+      },
+      {
+        "text": "gate check passed",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:81"
+      },
+      {
+        "text": "tests passing",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:81"
+      },
+      {
+        "text": "all clear",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:82"
+      },
+      {
+        "text": "New App",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:127"
+      },
+      {
+        "text": "  image uploads and search",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:161"
+      },
+      {
+        "text": "  Reading project structure...",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:162"
+      },
+      {
+        "text": "$ mkdir src/services/recipes",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:164"
+      },
+      {
+        "text": "  Created RecipeService, SearchIndex",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:165"
+      },
+      {
+        "text": "$ Writing src/routes/publish.ts",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:166"
+      },
+      {
+        "text": "  Added $publish-flow with 4 steps",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:168"
+      },
+      {
+        "text": "  \\u2713 App scaffolded \\u00b7 18 symbols",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:169"
+      },
+      {
+        "text": "Resume Session",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:174"
+      },
+      {
+        "text": "  Recovering session checkpoint...",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:208"
+      },
+      {
+        "text": "  Phase: implementing \\u00b7 3 files open",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:209"
+      },
+      {
+        "text": "  ~idempotent anchor drifted (L41\\u219258)",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:212"
+      },
+      {
+        "text": "$ Auto-healing aspect drift...",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:213"
+      },
+      {
+        "text": "  Updated 1 anchor, verified hash",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:214"
+      },
+      {
+        "text": "  \\u2713 Session restored \\u00b7 ready to go",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:216"
+      },
+      {
+        "text": "Symphony Collab",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:221"
+      },
+      {
+        "text": "  frontend/notifications agent",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:254"
+      },
+      {
+        "text": "$ Writing NotifyPanel.tsx",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:257"
+      },
+      {
+        "text": "  Toast stack + badge counter done",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:258"
+      },
+      {
+        "text": "  \\u2709 backend: \"WS schema ready?\"",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:259"
+      },
+      {
+        "text": "  \\u2709 from backend: \"Typed. See -143\"",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:260"
+      },
+      {
+        "text": "$ Wiring $subscribe-flow hooks",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:261"
+      },
+      {
+        "text": "  ^ws-connected gate integrated",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:262"
+      },
+      {
+        "text": "  backend/notifications agent",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:266"
+      },
+      {
+        "text": "$ Writing PushGateway.ts",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:269"
+      },
+      {
+        "text": "  WS channels + auth ^channel-auth",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:270"
+      },
+      {
+        "text": "  \\u2709 from frontend: \"WS schema?\"",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:271"
+      },
+      {
+        "text": "  \\u2709 frontend: \"Typed. See ENG-143\"",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:272"
+      },
+      {
+        "text": "$ Adding ~dedup-enforced aspect",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:273"
+      },
+      {
+        "text": "0 && agent.hops",
+        "where": "packages/site/src/components/NodeGraph/LiveGraph.tsx:643"
+      },
+      {
+        "text": "xMidYMid slice",
+        "where": "packages/site/src/components/NodeGraph/NodeGraph.tsx:128"
+      },
+      {
+        "text": "Reference Cards",
+        "where": "packages/site/src/components/SiteFooter.tsx:20"
+      },
+      {
+        "text": "paradigm",
+        "where": "packages/site/src/components/SiteFooter.tsx:29"
+      },
+      {
+        "text": "Main navigation",
+        "where": "packages/site/src/components/SiteHeader.tsx:26"
+      },
+      {
+        "text": "Toggle menu",
+        "where": "packages/site/src/components/SiteHeader.tsx:53"
+      },
+      {
+        "text": "color var(--duration-fast) var(--ease-out)",
+        "where": "packages/site/src/components/ThemeToggle.tsx:46"
+      },
+      {
+        "text": "'Crimson Pro', Georgia, serif",
+        "where": "packages/site/src/components/UniversitySeal.tsx:61"
+      },
+      {
+        "text": "Code units — services, views, commands, utilities, stores, and more.",
+        "where": "packages/site/src/components/docs/CategoryListPage.tsx:16"
+      },
+      {
+        "text": "Multi-step processes that span multiple components.",
+        "where": "packages/site/src/components/docs/CategoryListPage.tsx:22"
+      },
+      {
+        "text": "Authorization checkpoints that enforce access control.",
+        "where": "packages/site/src/components/docs/CategoryListPage.tsx:28"
+      },
+      {
+        "text": "Events emitted by components, consumed by other parts of the system.",
+        "where": "packages/site/src/components/docs/CategoryListPage.tsx:34"
+      },
+      {
+        "text": "Cross-cutting concerns anchored to specific code locations.",
+        "where": "packages/site/src/components/docs/CategoryListPage.tsx:40"
+      },
+      {
+        "text": "No description",
+        "where": "packages/site/src/components/docs/CategoryListPage.tsx:70"
+      },
+      {
+        "text": "Documentation navigation",
+        "where": "packages/site/src/components/docs/DocsSidebar.tsx:33"
+      },
+      {
+        "text": "Filter docs...",
+        "where": "packages/site/src/components/docs/DocsSidebar.tsx:39"
+      },
+      {
+        "text": "Filter documentation",
+        "where": "packages/site/src/components/docs/DocsSidebar.tsx:42"
+      },
+      {
+        "text": "Clear filter",
+        "where": "packages/site/src/components/docs/DocsSidebar.tsx:48"
+      },
+      {
+        "text": "Defined in",
+        "where": "packages/site/src/components/docs/FlowPage.tsx:32"
+      },
+      {
+        "text": "Steps",
+        "where": "packages/site/src/components/docs/FlowPage.tsx:40"
+      },
+      {
+        "text": "Involved Symbols",
+        "where": "packages/site/src/components/docs/FlowPage.tsx:66"
+      },
+      {
+        "text": "portal.yaml",
+        "where": "packages/site/src/components/docs/PortalPage.tsx:15"
+      },
+      {
+        "text": "Gates",
+        "where": "packages/site/src/components/docs/PortalPage.tsx:22"
+      },
+      {
+        "text": "Requires:",
+        "where": "packages/site/src/components/docs/PortalPage.tsx:38"
+      }
+    ]
+  },
+  "drift": {}
+}

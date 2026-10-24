@@ -1,0 +1,30 @@
+id: L-2026-10-16-ascend-172614-001
+type: insight
+timestamp: '2026-10-16T17:26:14.633Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'UX research round 1: four sources critically curated for the Atelier playbook'
+summary: 'Founder goal: "globally expand on our UX / UI process and ''eye'' of our agents as well as us working on a new ''atelier'' design playbook". Four scouts critically curated hendurhance/ui-ux, gschema/awesome-ux, the NN/g UX Basics study guide (26 articles, 39 video pages) and NN/g''s topic sidebar (10 of 45 topics, ~35 articles). Reports are stored in a-atelier docs/playbook/research/ on branch feat/design-playbook. Luna is synthesizing rules.yaml, PLAYBOOK.md and proposals; Loid is designing a design-eye calibration benchmark. Neurons sources: s:web-c851f25a7a, s:web-71c0531a86, s:web-1324e2f24b, s:web-9af0b08dad.'
+symbols_touched:
+  - '#atelier-design'
+learnings:
+  - Atelier's 32 tells are almost all visual slop detectors (landing pages); only contrast and unmotivated motion touch usability. The agents' design eye lacks heuristics, IA, interaction, error recovery and accessibility depth.
+  - 'Popular UX lists are weak: awesome-ux was abandoned in 2018 with about 20% link rot; hendurhance/ui-ux is a job-seeker path that never links Nielsen''s heuristics or WCAG, and it links 107 pirated book mirrors (never link or ingest these; cite titles only).'
+  - The strongest material is NN/g's own articles plus the AI-UX canon (Apple's generative AI guidelines, Google PAIR, Microsoft HAX, IBM Carbon AI label, Shape of AI).
+  - Agents can genuinely run heuristic evaluation (3-5 independent evaluators), cognitive walkthroughs and rubric scoring; synthetic card sorts and interviews give hypotheses only; think-aloud tests and diary studies need real people.
+  - 'Agent-UX rules directly relevant to Gnomon: calibrated (not maximal) trust, citation next to claim, don''t present reasoning traces as explanations, confirm only high-stakes actions, never silently swap a user constraint, clarifying questions at most 4 with skip, decision cards only for irreversible actions with a non-approve default, voice users rarely retry after one failure, no autoscroll while streaming.'
+  - 'Gaps across all sources: terminal/TUI, developer tools, multi-agent/approval UX, accessibility standards themselves, microcopy, tokens, colour science, motion specs.'
+tags:
+  - atelier
+  - ux
+  - research
+  - playbook
+  - design-eye
+linked_lore:
+  - L-2026-10-16-ascend-170856-001
+git_context:
+  ref: eddf85fcd1dfdd1a63d23c5879183815e16588c6
+  branch: ideate/paradigm-8
+  dirty: true

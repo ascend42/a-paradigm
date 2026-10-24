@@ -14,6 +14,7 @@ import * as path from 'path';
 import {
   searchSymbols,
   checkAspectAnchors,
+  type SymbolIndex,
 } from '@a-company/premise-core';
 import type { ParsedGateConfig } from '@a-company/portal-core';
 
@@ -47,8 +48,8 @@ export interface ComplianceFinding {
 export interface ComplianceContext {
   /** Root directory of the project */
   rootDir: string;
-  /** Parsed scan index */
-  index: unknown;
+  /** Symbol index (ProjectContext.index) */
+  index: SymbolIndex;
   /**
    * Gate config from portal.yaml.
    *

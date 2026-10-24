@@ -1,0 +1,36 @@
+id: L-2026-10-16-ascend-073513-001
+type: human-note
+timestamp: '2026-10-16T07:35:13.249Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Spec v3 reviewed: local runner leaves the kernel, hardware keys, one Move 1'
+summary: 'Aegis (research 22) and Arky (23) reviewed spec v3 and independently converged on the same top findings: the local runner sits inside the key-holding kernel (pi-ai bundles cloud SDKs, verified); the root key is not truly presence-bound; mods can exceed their declared effects. Founder decisions follow; spec v3.1 next.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D36
+    decision: Keep one Move 1 (no M1a/M1b split), despite both Arky and Fable recommending the split
+    rationale: Founder's call; scope unchanged.
+  - id: P8-D37
+    decision: Drop the Claude-Code-to-local-endpoint probe; local models run only through Gnomon's own local runner (gnomon-local child process); noted for 8.1
+    rationale: Law 7 refuses the endpoint override by construction; the probe would expose the OAuth token; CC's prompt overflows small local contexts.
+  - id: P8-D38
+    decision: 'Approvals use a hardware-backed key: one Touch ID / Windows Hello unlock when the TUI attaches, held in memory, dropped after 15 min idle; always a fresh prompt for gate-class, install, KNOT resolve, verdict, cloud fallback and budget resume; CLI approve without the TUI prompts every time. Supersedes the key-file part of P8-D12.'
+    rationale: Removes the on-disk approval key that sandbox escapes could read, without habituating the founder to blind taps.
+  - id: P8-D39
+    decision: Root key becomes a non-exportable hardware key (Secure Enclave P-256 on macOS, TPM / Windows Hello P-256 on Windows) via small signed native helpers; the Windows helper also creates the named pipe with a DACL and first-instance; agent keys stay Ed25519
+    rationale: 'Aegis C2 and Arky: keystore items are readable by same-user processes and presence checks need signed native code.'
+tags:
+  - paradigm-8
+  - gnomon
+  - spec
+  - security
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-071254-001
+git_context:
+  ref: 9395727423c4922b2217d609de72338af5447bf9
+  branch: ideate/paradigm-8
+  dirty: true

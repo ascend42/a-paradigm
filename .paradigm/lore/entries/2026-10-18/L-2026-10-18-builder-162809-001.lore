@@ -1,0 +1,36 @@
+id: L-2026-10-18-builder-162809-001
+type: milestone
+timestamp: '2026-10-18T16:28:09.363Z'
+author: builder
+title: 'M1.10 #gui slice 1 landed (rounds 1+2) on gnomon/m110-gui'
+summary: 'Pinned SPA bundle served by #web-endpoint (GUI_BUNDLE_HASH sha256:98f8f66bb46c9ee5b7f195542dfd3421a51da97470e2a75b0d8b94cbc8896241): fragment read-and-clear, WebCrypto Ed25519 serverSig + pin with visible re-pin, contracts sanitizer + DOM-text rendering, sessions sidebar, virtualized transcript, composer, decision stack with verified kernel-signed actions, palette, presets, themes, /diag redaction. test:gnomon green (kernel 936 passed).'
+symbols_touched:
+  - '#gui'
+  - '#web-endpoint'
+files_modified:
+  - packages/gnomon/src/kernel/web/endpoint.ts
+  - packages/gnomon/src/kernel/web/bundle.ts
+  - docs/specs/gnomon.md
+  - .gitattributes
+files_created:
+  - packages/gnomon-gui
+  - packages/gnomon/src/kernel/web/gui-bundle.ts
+  - packages/gnomon/src/kernel/web/gui-pin.ts
+  - packages/gnomon/test/gui-endpoint.test.ts
+commit: 673456ae
+learnings:
+  - The pinned bundle must stay out of the transport child's import closure (gui-pin.ts)
+  - 'macOS has no timeout(1): a hung vitest looks like empty output'
+  - A raw-socket adapter that awaits nextJson in a loop can starve; poll frames on a timer
+tags:
+  - gnomon
+  - m1-10
+  - milestone
+body: 'Deferred to slice 2: browser matrix and 50 ms keystroke-to-paint falsifier (no Playwright), pure-JS Ed25519 fallback, bundled fonts, kernel-stored prefs, streaming Markdown, /blob images, React renderer with Doodle, strictness/voice header controls, swap to the published #client-ts. Open: approve contentHash param would move clientApiId; client nonce T-2026-10-18-016; wrapper surface detection.'
+linked_commits:
+  - 8b41a1f4
+  - 673456ae
+git_context:
+  ref: 673456ae5eddef4e805e743fc5401a00f27e4927
+  branch: gnomon/m110-gui
+  dirty: true

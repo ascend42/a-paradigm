@@ -1,0 +1,39 @@
+id: L-2026-10-20-ascend-185804-001
+type: review
+timestamp: '2026-10-20T18:58:04.853Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Aegis BLOCK Paradigm Context mod: ReDoS in the kernel YAML scan (H1) plus cross-scope K3 join (M1)'
+summary: |-
+  Verified: the K3 join is server-side with forged keys dropped; live sessions only; no egress with paradigm.read:summary; the mod is display-only; the falsifiers are real; secrets dropped, titles sanitised; the YAML subset is safe from aliases and nesting.
+  H1: paradigm-slice.ts strips comments with /\s+#.*$/, which is quadratic on long whitespace. The projector is synchronous on the daemon main loop, so any repo file (a cloned repo, or one an agent writes) can freeze the kernel, approvals included, just by focusing a session there, and it recurs every 3 s.
+  M1: mod.view has no class gate, so a non-human principal could read another repo's decision and lore titles by naming its hsid (a confused deputy).
+  M2: the home check compares strings only (symlink and case bypass).
+  M3: unbounded readdir and sync reads, a cwd-keyed cache.
+  Lows: TOCTOU/hardlink, item type prefixes, the scrub list.
+  A fix builder was launched in the same worktree after merging current feat/gnomon.
+symbols_touched:
+  - '#paradigm-context-mod'
+  - '#mod-host'
+learnings:
+  - 'Any kernel code that parses repo content on the main loop is a DoS surface: no backtracking regexes, caps before regexes, budgets, single-flight.'
+  - Adding a cross-scope read to an existing relay (mod.view) changes its threat model; re-check who can call it.
+verification:
+  status: fail
+  details:
+    verdict: BLOCK
+    high: 1
+    medium: 3
+    low: 3
+tags:
+  - gnomon
+  - mods
+  - aegis
+  - security
+  - marathon-2026-10-20
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

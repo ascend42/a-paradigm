@@ -83,7 +83,7 @@ export function navigate(
 function navigateFind(
   config: NavigatorConfig,
   target: string,
-  rootDir: string
+  _rootDir: string
 ): NavigateResult {
   const result: NavigateResult = {
     paths: [],
@@ -145,7 +145,7 @@ function navigateFind(
 function navigateExplore(
   config: NavigatorConfig,
   target: string,
-  rootDir: string
+  _rootDir: string
 ): NavigateResult {
   const result: NavigateResult = {
     paths: [],
@@ -204,7 +204,7 @@ function navigateExplore(
 function navigateContext(
   config: NavigatorConfig,
   task: string,
-  rootDir: string
+  _rootDir: string
 ): NavigateResult {
   const result: NavigateResult = {
     paths: [],

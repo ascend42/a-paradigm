@@ -10,17 +10,14 @@
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
   loadAllAgentProfiles,
-  loadAgentProfile,
   resolveAgent,
-  findAgentsByNickname,
-  saveAgentProfile,
   queryExpertise,
   verifyIntegrity,
   loadProjectRoster,
   saveProjectRoster,
   listAllGlobalAgentIds,
 } from '../utils/agent-loader.js';
-import { loadAgentState, loadAllAgentStates } from '../utils/agent-state.js';
+import { loadAllAgentStates } from '../utils/agent-state.js';
 
 /**
  * Get list of agent identity tools with safety annotations

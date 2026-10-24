@@ -1,0 +1,19 @@
+id: L-2026-10-19-builder-011511-001
+type: insight
+timestamp: '2026-10-19T01:15:11.491Z'
+author: builder
+title: 'M1.11 slice 3 round 3: a replay guard must not eat legitimate pins'
+summary: The C1 replay rule silently dropped an approved uninstall after a clock step back or within one millisecond. The writer now stamps pins max(now, newest pin plus one millisecond) by the reader's exact rule and reads the table back, throwing unless its row is the effective pin; the uninstall effect reports nothing unless it took effect. Every reader-side guard needs a writer that provably satisfies it, checked by read-back.
+symbols_touched:
+  - '#manifest-loader'
+  - '#mod-cli'
+commit: 63a4c9b5
+tags:
+  - gnomon
+  - M1.11
+  - aegis
+confidence: 0.85
+git_context:
+  ref: 63a4c9b5f69670b5994b198244c2507d0f1b1126
+  branch: gnomon/m111-slice3
+  dirty: false

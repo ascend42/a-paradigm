@@ -1,0 +1,15 @@
+id: L-2026-10-22-ascend-211200-174
+type: insight
+timestamp: '2026-10-22T21:12:00.222Z'
+author: ascend
+title: Decision TD-2026-10-22-369 recorded
+summary: Companion lore entry for decision record TD-2026-10-22-369. See .paradigm/decisions/TD-2026-10-22-369.yaml.
+symbols_touched:
+  - '#loop-land'
+  - '#loop-runner'
+  - '#loop-act'
+references:
+  decision_id: TD-2026-10-22-369
+tags:
+  - companion-lore
+  - decision-reference

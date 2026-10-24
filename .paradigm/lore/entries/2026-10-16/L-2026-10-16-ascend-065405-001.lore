@@ -1,0 +1,39 @@
+id: L-2026-10-16-ascend-065405-001
+type: insight
+timestamp: '2026-10-16T06:54:05.522Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Epiphany: local models for automations are why Gnomon exists; local lane enters Move 1'
+summary: 'Founder remembered the original reason for an owned harness: automations should run on local models. The decided plan treated local models only as a placeholder backend adapter, so it was not sufficient. Decisions: both a native local runner and a probe of Claude Code against a local endpoint, routed per task; local-marked work falls back to the cloud only with an approval card; the local lane lands in Move 1; the teacher-to-skill flywheel ships in 8.0. Also recorded: the YC QM scout (research 18), and Arky and Aegis confirmation passes on spec v2 (16, 17).'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D20
+    decision: 'Local models run through both a native local runner (Ollama/llama.cpp/MLX) as a second backend adapter and a probed Claude Code-to-local-endpoint path; each task or automation declares model: local | claude | any'
+    rationale: 'Founder: "i also wanted it to work with local models especially on the side of when automations run as for some of them i do want it to specifcally use my local models to perform operations. thats why i wanted my own harness"'
+  - id: P8-D21
+    decision: Local-marked work that cannot run locally falls back to the cloud only after an approval card; unattended work waits for the card
+    rationale: Founder chose fallback-with-card over fail-closed.
+  - id: P8-D22
+    decision: 'The local lane lands in Move 1: adapter interface built for two backends from day one, local runner spike, compute dimension (concurrency, time per machine) in the budget fuse'
+    rationale: Build proper first.
+  - id: P8-D23
+    decision: 'Teacher-to-skill flywheel in 8.0: a local model fails (deterministic detector) -> Claude on the subscription under the fuse writes the fix and a candidate skill -> Classroom certifies'
+    rationale: Odysseus's best idea; maps onto Loid's classroom gate; turns local failures into supply for the learning loop.
+learnings:
+  - 'The owned kernel is justified by three things Claude Code alone cannot give: local-model automations, a cross-session budget and log, and merge adjudication.'
+  - 'Mods-only (Shuttle) would have failed the local-model need outright: unattended local automations have no Claude Code session to host a Mod.'
+tags:
+  - paradigm-8
+  - gnomon
+  - epiphany
+  - local-models
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-060356-001
+git_context:
+  ref: 3b3523687a485bdcedfadc7070d5f33c2043ff97
+  branch: ideate/paradigm-8
+  dirty: true

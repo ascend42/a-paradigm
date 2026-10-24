@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-165245-001
+type: milestone
+timestamp: '2026-10-18T16:52:45.905Z'
+author: builder
+title: 'fixes-015-017 round 3: linked source path cannot forge an install-card line'
+summary: Linked realpath with Zl/Zp/Cf/C0/C1 refused at stage and re-derivation; header middle-truncated to one line so the count line is always index 2; spec A.7 notes no bound-address runtime check yet
+symbols_touched:
+  - '#manifest-loader'
+  - '#oracle-sandbox'
+files_modified:
+  - packages/gnomon/src/kernel/manifest/install.ts
+  - packages/gnomon/src/kernel/manifest/manifest.ts
+  - packages/gnomon/test/approval-broker.test.ts
+  - docs/specs/gnomon.md
+  - packages/gnomon/.purpose
+commit: 1a19a94d
+learnings:
+  - every kernel-composed card field sourced from the filesystem is attacker text too
+  - display truncation is safe only when the hashed detail keeps the full value
+body: Final round for gnomon/fixes-015-017 (Aegis conditions closed). The tripwire and handoff stay in T-2026-10-18-020.
+git_context:
+  ref: 1a19a94d449f9e84df839c25edf46b91641e3e4d
+  branch: gnomon/fixes-015-017
+  dirty: false

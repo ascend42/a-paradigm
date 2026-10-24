@@ -469,7 +469,7 @@ aspects:
       - '#CoreTools'
     enforcement: |
       paradigm_search type enum: ['component', 'flow', 'gate', 'signal', 'aspect']
-      paradigm_status counts: #components, $flows, ^gates, !signals, ~aspects
+      paradigm_status counts: #components, $flows, gates (^), !signals, ~aspects
   global-persistence:
     description: Session and wisdom data dual-written to both local project and global ~/.paradigm/ directories
     tags:
@@ -692,7 +692,7 @@ aspects:
       hasRecoveredThisSession() and markRecovered() use a boolean flag
       (_recovered) on the SessionTracker singleton. The dispatch layer
       in tools/index.ts checks this flag on the first tool call and
-      prepends recovery preamble + plugin update notice only once.
+      prepends the recovery preamble only once.
   context-window-default-200k:
     description: Default context window size for handoff calculations is 200,000 tokens
     tags:
@@ -1102,7 +1102,7 @@ aspects:
       - '#OrchestrationTools'
     enforcement: |
       The reviewer role prompt defines a two-stage protocol: Stage 1 checks
-      spec compliance (.purpose, ^gates, $flows, !signals, ~aspects).
+      spec compliance (.purpose, gates (^), $flows, !signals, ~aspects).
       Stage 1 must pass before Stage 2 (code quality). Every review must
       produce at least 3 categorized findings (blocking/improvement/note).
       "No looks good with zero findings."
@@ -1137,19 +1137,21 @@ aspects:
       omitted because these tools read from the same session tracker
       they would be writing to.
   recovery-preamble-first-response:
-    description: Recovery preamble and plugin update notice are prepended to the first tool response only
+    description: The recovery preamble is prepended to the first tool response only; plugin-update notices never are
     tags:
       - mcp
       - recovery
     anchors:
-      - src/tools/index.ts:1050-1057
+      - src/tools/index.ts
     applies-to:
       - '#ToolHandlers'
     enforcement: |
-      After the tool result IIFE completes, if recoveryPreamble or
-      updateNotice is non-null, they are prepended to the first content
-      item's text. This only fires once per session (guarded by
-      hasRecoveredThisSession).
+      After the tool result IIFE completes, a non-null recoveryPreamble is
+      prepended to the first content item's text. This only fires once per
+      session (guarded by hasRecoveredThisSession). Plugin-update facts are
+      NOT prepended (they once were, as agent-directed "Tell the user…" text
+      that leaked into Gnomon sessions); they are reported only by
+      paradigm_status check:'plugins' (#plugin-update-checker).
   fuzzy-search-max-distance-3:
     description: Fuzzy symbol search uses a maximum Levenshtein distance of 3 and returns at most 5 results
     tags:

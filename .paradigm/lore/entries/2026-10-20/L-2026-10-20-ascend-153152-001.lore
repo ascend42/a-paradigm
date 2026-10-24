@@ -1,0 +1,36 @@
+id: L-2026-10-20-ascend-153152-001
+type: incident
+timestamp: '2026-10-20T15:31:52.598Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Voice speaker verification: not a regression. Latent t0 skew plus silence-dominated CAM++ embeddings accepted a video as the founder'
+summary: |-
+  The founder's test showed their own speech rejected and a nearby video accepted as "matt". The debugging builder (WIP 0ae93349) bisected to eaa8777b sources and found the same failures there, so this predates tonight. Two latent defects:
+  (1) SherpaVad.reset() didn't reset #fed, so after any VAD reset (enrolment phrases, pause, barge-in, mode change) segment t0 was skewed into the past by all prior audio (60 s and 214 s in the kernel log). That broke echo guards and looked like a backlog. Fixed.
+  (2) CAM++ embeddings are dominated by quiet frames, because feature normalisation runs over the whole input. A stranger's wav scored 0.52 vs the print but 0.73–0.82 with quiet padding (threshold 0.6). The founder's print (norm 60 vs ~30) was enrolled from quiet-heavy phrases, so it matched any quiet-heavy segment. On human recordings, 44/70 padded impostors passed vs 3/70 plain.
+  The identical textHash was a red herring: unenrolled turns hash ''. Kokoro voices are useless as distinct impostors (CAM++ scores them ~0.86 alike).
+  Fix in progress: a speech-only gate front-end, a minimum of 500 ms of speech (fail closed), front-end-tagged prints, stale-print re-enrol nudge, finals prioritised over partials. The founder must re-enrol after it lands. Safety advice given: ambient off until fixed, because under auto-edits ambient speech acts as typed input.
+symbols_touched:
+  - '#gnomon-voice'
+  - $voice-turn
+errors_encountered:
+  - description: VAD reset left the sample counter, skewing segment timestamps by tens to hundreds of seconds
+    resolution: 'Reset #fed with the detector'
+  - description: Silence-dominated speaker embeddings caused both false rejects and false accepts
+    resolution: Speech-only gate before CAM++, a minimum speech duration, front-end-versioned prints, re-enrol
+learnings:
+  - Speaker verification on short ambient segments is a convenience filter, not a security boundary; ambient under auto-edits trusts it, so it must fail closed.
+  - Synthetic TTS voices are not valid impostors for speaker-verification tests; use distinct human recordings.
+  - '''Regression'' claims need a bisect: this predated the session.'
+tags:
+  - gnomon
+  - voice
+  - security
+  - incident
+  - marathon-2026-10-20
+git_context:
+  ref: 3b5c71396f52a71bc825aeb653ed599013c2fa91
+  branch: feat/gnomon
+  dirty: true

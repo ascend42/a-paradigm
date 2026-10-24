@@ -1,0 +1,17 @@
+id: L-2026-10-18-builder-203743-003
+type: insight
+timestamp: '2026-10-18T20:37:43.785Z'
+author: builder
+title: 'M1.3 reading: identity init takes two root touches; rotate is explicit, logged, signed by the old root'
+summary: 'Presence per root signature is kept literally: the approvals binding and the device row are two prompts, no batching. RootAuthority.signRow stays synchronous (gnomon-helper once via spawnSync, fine for the CLI) and gains optional signRowAsync for the daemon so a root-class decision never blocks the event loop. Rotate needs a TTY and the typed word rotate, writes a journal line signed by the old root, moves the old registry aside as evidence and retires the old SE keys. The kernel key stays ephemeral software this slice, so no root-signed kernel row is written at init.'
+symbols_touched:
+  - '#identity'
+commit: c918ca1f
+tags:
+  - decision
+  - gnomon
+  - m1.3
+git_context:
+  ref: c918ca1f2bef783b36ba39517b67e3d23c765e00
+  branch: gnomon/m13-slice1
+  dirty: true

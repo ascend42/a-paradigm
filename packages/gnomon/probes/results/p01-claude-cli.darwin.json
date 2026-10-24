@@ -1,0 +1,76 @@
+{
+  "probe": "p01-claude-cli",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "claude": "2.1.302 (Claude Code)",
+    "node": "v26.0.0"
+  },
+  "verdict": "partial",
+  "evidence": {
+    "claude": {
+      "path": "~/.local/bin/claude",
+      "via": "known-location (not on PATH)",
+      "version": "2.1.302 (Claude Code)",
+      "minRequired": "2.1.288",
+      "versionOk": true
+    },
+    "flagsPresent": {
+      "--print": true,
+      "--setting-sources": true,
+      "--resume": true,
+      "--fork-session": true,
+      "--output-format": true,
+      "--input-format": true,
+      "--include-partial-messages": true,
+      "--replay-user-messages": true,
+      "--verbose": true,
+      "--mcp-config": true,
+      "--strict-mcp-config": true,
+      "--no-session-persistence": true
+    },
+    "flagHelp": {
+      "--print": "--print and --output-format=stream-json)",
+      "--setting-sources": "--setting-sources <sources> Comma-separated list of setting sources to load (user, project, local).",
+      "--resume": "--resume <session-id>, continues that session in the background under the same ID, or starts a copy and says so when the session is already running",
+      "--fork-session": "--fork-session When resuming, create a new session ID instead of reusing the original (use with --resume or --continue)",
+      "--output-format": "--output-format=stream-json)",
+      "--input-format": "--input-format <format> Input format (only works with --print): \"text\" (default), or \"stream-json\" (realtime streaming input) (choices: \"text\", \"stream-json\")",
+      "--include-partial-messages": "--include-partial-messages Include partial message chunks as they arrive (only works with --print and --output-format=stream-json)",
+      "--replay-user-messages": "--replay-user-messages Re-emit user messages from stdin back on stdout for acknowledgment (only works with --input-format=stream-json and --output-format=stream-json)",
+      "--verbose": "--verbose Override verbose mode setting from config",
+      "--mcp-config": "--mcp-config <configs...> Load MCP servers from JSON files or strings (space-separated)",
+      "--strict-mcp-config": "--strict-mcp-config to skip MCP servers too). Also confines the file tools to the working directories (--add-dir included), refuses bypassPermissions, and lets only a person or the configured permission handler approve writes to settings, git and tool-configuration files.",
+      "--no-session-persistence": "--no-session-persistence Disable session persistence - sessions will not be saved to disk and cannot be resumed (only works with --print)"
+    },
+    "streamJson": {
+      "output": true,
+      "input": true
+    },
+    "settingSourcesDocumentedValues": "user, project, local",
+    "forbiddenFlagsStillExist": {
+      "--dangerously-skip-permissions": true,
+      "--allowedTools": true,
+      "--bare": true
+    },
+    "pendingManual": {
+      "hookStdinSessionId": "Run one interactive/`-p` turn with a SessionStart/PreToolUse hook that dumps stdin; confirm `session_id` is present on 2.1.288+ (OPEN 8). Costs one turn.",
+      "controlRequestInterrupt": "Spawn the §3.3 stream-json line, send {\"type\":\"control_request\",\"request_id\":\"…\",\"request\":{\"subtype\":\"interrupt\"}} mid-turn; record the control_response and that the turn stops (A23-4, G-RUN-03). Costs one turn.",
+      "settingSourcesSemantics": "Verify which layers `--setting-sources user,project,local` (and an empty list) actually load, and whether managed settings and CLAUDE.md are unaffected (§3.3 layersHash). Help text lists only user, project, local.",
+      "loopbackOverrideRefusal": "G-SUB-01 / law 7: confirm ANTHROPIC_BASE_URL pointing at loopback is refused by the adapter preflight (kernel-side; needs the adapter).",
+      "resumeForkAcrossMachines": "research 31: transplant a transcript + `--resume`/`--fork-session` across machines/OS.",
+      "runInsideSessionProfile": "p10m claudeCompat: a real `claude -p` Bash turn under the session sandbox profile."
+    }
+  },
+  "specRefs": [
+    "§3.3 spawn line",
+    "§3.3 FORBIDDEN_FLAGS",
+    "§10 law 7",
+    "§19.1 M1.0 P01",
+    "OPEN 8",
+    "G-SUB-01",
+    "research 29 §2 P01"
+  ],
+  "at": "2026-10-17T08:30:41.373Z"
+}

@@ -44,7 +44,53 @@ _pm_end() {
   _pm_every=${PARADIGM_HOOK_RING_TRIM_EVERY:-64}
   [ "$_pm_every" -gt 0 ] 2>/dev/null || _pm_every=64
   [ $(( $$ % _pm_every )) -eq 0 ] && _pm_trim
+  _pm_sections_flush
   _PM_RING=
+  return 0
+}
+
+# --- Per-section timing (Stop hook; #hook-monitor) ---
+# _pm_mark <section> closes the open section (its ms since the previous mark)
+# and opens <section>. At exit _pm_end writes ONE record per run to the bounded
+# ring .paradigm/events/stop-timing.jsonl: total ms, outcome, the section that
+# was still open when the hook ended ("inflight": names where a killed run was
+# stuck), each section's ms, and the counters set with _pm_count. A slow run
+# then explains itself. Cost: one `date` per mark. Fail open like the rest.
+_PM_SECS=
+_PM_SEC=
+_PM_SEC_T=
+_PM_COUNTS=
+_pm_mark() {
+  [ -n "$_PM_RING" ] || return 0
+  _pm_now
+  [ -n "$_PM_SEC" ] && _PM_SECS="$_PM_SECS${_PM_SECS:+,}\"$_PM_SEC\":$(( _pm_t - _PM_SEC_T ))"
+  _PM_SEC=$1
+  _PM_SEC_T=$_pm_t
+  return 0
+}
+# _pm_count <name> <integer> — a counter recorded with the sections.
+_pm_count() {
+  [ -n "$_PM_RING" ] || return 0
+  case "$2" in ''|*[!0-9]*) return 0 ;; esac
+  _PM_COUNTS="$_PM_COUNTS${_PM_COUNTS:+,}\"$1\":$2"
+  return 0
+}
+_pm_sections_flush() {
+  [ -n "$_PM_SECS$_PM_SEC" ] || return 0
+  _pm_sf="${_PM_RING%/*}/stop-timing.jsonl"
+  _pm_inflight=
+  if [ -n "$_PM_SEC" ]; then
+    _PM_SECS="$_PM_SECS${_PM_SECS:+,}\"$_PM_SEC\":$(( _pm_t - _PM_SEC_T ))"
+    _pm_inflight=$_PM_SEC
+  fi
+  { printf '{"hook":"%s","id":"%s","t":%s,"ms":%s,"rc":%s,"outcome":"%s","inflight":"%s","sections":{%s},"counts":{%s}}\n' "$_PM_HOOK" "$_PM_ID" "$_pm_t" "$_pm_ms" "$_pm_rc" "$_pm_out" "$_pm_inflight" "$_PM_SECS" "$_PM_COUNTS" >> "$_pm_sf"; } 2>/dev/null
+  # Bounded: same 1-in-N cadence as the ring; PARADIGM_STOP_TIMING_MAX lines kept.
+  if [ $(( $$ % _pm_every )) -eq 0 ]; then
+    _pm_smax=${PARADIGM_STOP_TIMING_MAX:-200}
+    { tail -n "$_pm_smax" "$_pm_sf" > "$_pm_sf.tmp.$$" && mv -f "$_pm_sf.tmp.$$" "$_pm_sf"; } 2>/dev/null || rm -f "$_pm_sf.tmp.$$" 2>/dev/null
+  fi
+  _PM_SECS=
+  _PM_SEC=
   return 0
 }
 

@@ -1,0 +1,162 @@
+version: "2.0"
+description: >-
+  Gnomon signed platform helper (docs/specs/gnomon.md §3.1, §16, §18). npm
+  shell (private) holding the built, signed binaries in bin/ (gitignored build
+  output) with checksums.json (advisory). The kernel verifies the helper at
+  spawn (G-HLP-01): code-signing requirement + version floor, and in a
+  release build the sha256 that packages/gnomon's release manifest pins
+  (#release-pins, T-2026-10-21-028).
+  darwin/ is a SwiftPM package (swift-tools 5.9, macOS 14); scripts/ builds
+  the signed .app (Developer ID identity looked up in the keychain, the
+  provisioning profile embedded from ~/.config/gnomon-signing) and optionally
+  notarizes it (keychain profile gnomon-notary). win32/ is the Rust helper
+  (P8-D71, W2 of docs/plans/gnomon-windows.md), built by scripts/build-win32.mjs.
+
+components:
+  gnomon-helper:
+    description: >-
+      Holds what the kernel must never hold. M1.3 slice 1: the root and
+      approvals P-256 keys in the Secure Enclave (access group
+      SW4BMQ8PNL.gnomon, .privateKeyUsage + .userPresence), a sign API over
+      stdin/stdout (`serve` NDJSON loop, `once` for one request) speaking
+      gnomon-helper:v1 — info, key.create/public/delete, sign (root: fresh
+      presence per signature; approvals: fresh, or a per-connection cached
+      unlock held here keyed by the request's connId string, bounded to 32,
+      dropped 12 h after it opened or after 512 signatures under it, with no
+      separate idle limit (TD-2026-10-20-086 F4, helper 1.7.0; 1.6.0 was
+      15 idle min / 60 min / 64; a kept fresh sign reports `bounds` so the
+      broker opens the same caps, else it keeps the 1.6.0 ones; F5: the
+      kernel sends the GUI device's `udev:` key there so the unlock survives
+      a reconnect; UnlockBoundsTests.swift), on unlock.drop and on exit),
+      unlock.drop(-all). Every fresh sign (root and approvals) returns
+      `shown`, the helper's own prompt line, which the provisioner checks names
+      the digest it displayed (helper 1.5.0; 1.4.0 omitted it for root, so
+      guided setup failed helper-line-mismatch). M4: promptText strips every format (Cf), control
+      and line/paragraph separator from the caller text before the OS prompt. Each key signs
+      only its own domain prefixes (root: row-sig, presence; approvals:
+      approve, presence). Inputs bounded before any key is touched. Refuses
+      to run sandboxed (P8-D68). Never prints key material. Helper 1.6.0
+      (protocol gnomon-helper:v2, V5 of TD-2026-10-19-194, spec §14.7,
+      S29-K5, G-BRK-06): voice ARMS in their own store (Custody.swift, cap
+      Bounds.maxArms 8, separate from maxUnlocks 32), opened by arm.open
+      (fresh presence bound to {humanConnId, voiceConnId}); arm.sign signs
+      ONLY gnomon:approve-voice:v1 for that pair, and neither fresh nor
+      cached signing ever accepts that domain; arm.close(-all); conn.close
+      drops a connId's unlock and every arm naming it. SessionWatch.swift
+      observes screen lock, screensaver, display sleep, system sleep and
+      user switch (distributed + NSWorkspace notifications, IOKit power, a
+      CGSession poll at a 250 ms cadence), invalidates every arm and unlock, bumps the
+      epoch (a prompt open across the event is never kept), then pushes an
+      unsolicited {push:'session', cause, arms, unlocks, seq} line. serve
+      runs requests on a reader thread and the main run loop for the
+      observer; Output serializes stdout. Aegis V5 fixes: arm.sign parses the
+      frozen gnomon:voice-decision:v1 preimage (gnomon-contracts
+      voice-decision.ts) and refuses unless it names this arm and pair;
+      arm.open and arm.sign fail closed on a locked, off-console or unknown
+      session (CGSessionProbe); maxSignatures required (ceiling 1024); the
+      helper arm line leads the prompt, caller text capped at 120. Helper
+      1.8.0 (TD-2026-10-20-514, G-ID-09, G-ID-10, Aegis C1-C4, C7):
+      decision.sign — ONE fresh evaluatePresence signs a card decision's
+      approvals messages (approve:v1 + presence:v1, at most one each) and
+      every root row (1..8, the gnomon-root-decision:v2 row first) under the
+      same context, invalidated at once; never keep, never Unlocks.put; 10
+      messages and 256 KiB at most. bindDecisionBatch checks the decision
+      row against the approve message, sha256(intent) against rowsDigest,
+      each later row (volatile fields dropped) against intent[i], cardId and
+      manifestHash binding, and the closed per-cardKind row table;
+      Helper 1.9.0 (TD-2026-10-22-769): the `local.config` row table (ONE
+      gnomon-root-local:v1 row: closed fields, 1..4 loopback endpoints with a
+      local compat, a pinned runner; localRowRefusal/localRowShown, mirrored
+      in the kernel's decision-batch.ts and held to the shared vectors) and
+      `requestedBy` in the loop.trusted field set; regexes are ASCII-only and
+      must span the whole string (fullMatch), so ICU and JS agree. The kernel
+      refuses a loop-trust or local.config card at raise on an older helper;
+      Aegis review: the local row's runner is never compacted (dir and node
+      <= 256 chars, too-large-to-show otherwise), runnerSource bundled |
+      override is in the closed row and an override is marked on the line;
+      loop.trusted by ('root' or a principal) and requestedBy are principal
+      ids of at most 128 chars;
+      decisionLine names what every row grants and every digest, FIRST in
+      the dialog, refused rather than truncated. The TS mirror and shared
+      vectors: gnomon src/kernel/identity/decision-batch.ts,
+      gnomon-contracts test/fixtures/decision-batch-vectors.json. Root key:
+      fresh presence per DECISION. `probe-decision <gen>` is the on-device
+      check (one dialog, both keys, an unevaluated context fails). Unit
+      tests: darwin/Tests (swift test; DecisionSignTests.swift). Later: the
+      kernel-key keystore item, the keystore log anchor, XPC under launchd,
+      the Windows pipe, job objects, WFP, launch-token hand-off.
+    path: darwin/Sources/gnomon-helper/
+    type: module
+    tags: [gnomon, helper, native, swift, paradigm-8, secure-enclave, m1.3]
+  gnomon-helper-win32:
+    description: >-
+      The Windows platform helper (Rust, windows-sys, P8-D71; W2). gnomon-helper.exe
+      --version | serve | once speak the gnomon-helper:v2 envelope with the win32
+      platform ops: info (userSid), pipe.secure (opens the kernel's
+      kernel pipe gnomon-<hex> READ_CONTROL|WRITE_DAC, sets the protected
+      current-user-only DACL, reads it back, reports the pipe's server pid; P03
+      proved the DACL is pipe-wide and Node cannot adopt a foreign pipe), pipe.read,
+      acl.owner-only (file or dir, OICI on a dir) and acl.read (owner-only
+      verdicts from the read-back SDDL: owner = user SID, every ACE an allow for
+      it), fs.rename-durable (MoveFileExW REPLACE_EXISTING|WRITE_THROUGH),
+      boot.id (win:<PrefetchParameters BootId>), shell.open (loopback http(s)
+      only, never a URL carrying a launch token). exec -- <abs .exe> args is the
+      job-object launcher: it joins a fresh KILL_ON_JOB_CLOSE |
+      DIE_ON_UNHANDLED_EXCEPTION job BEFORE spawning, so every descendant is
+      in the job with no race and killing the launcher kills the tree
+      (G-RUN-03); never a .cmd/.bat, never a PATH lookup. Inputs bounded:
+      absolute drive paths only (no UNC, device or .. paths), pipe names
+      gnomon-<hex>. W4 phase A (approvals.rs): key.create / key.public / sign for
+      the APPROVALS key only — a non-exportable P-256 key in the Microsoft Software
+      KSP (gnomon-<gen>-approvals, DPAPI per user); sign {mode:'click'} signs
+      approve-domain messages only (gnomon:approve:v1, domain-refused otherwise),
+      DER over SHA-256; cached refuses no-unlock. W4 phase B (presence.rs, probe
+      P02): the PRESENCE key, a separate P-256 key in the Microsoft Passport
+      (Windows Hello) KSP, //gnomon.local/<gen>/presence, NgcCacheType
+      AUTH_MANDATORY (Hello on creation and on every signature), key.create /
+      key.public {key:'presence'}; sign {mode:'fresh', messages:[approve,
+      presence]} signs the presence challenge (gnomon:presence:v1 only) under a
+      Hello prompt owned by the foreground window FIRST, then the decision with
+      the approvals key; a cancel is presence-denied. unlock.drop /
+      unlock.drop-all / conn.close are no-ops; the root key and voice arms refuse
+      unsupported-op. Version 0.3.0.
+      exec is containment for well-behaved trees (partial: WMI/COM/Task Scheduler
+      launches are not descendants, Aegis M4). W5 (sessions): sandbox [--desktop]
+      [--low] [--session-sid <S-1-9-4174-2026-1022-n>] runs a session under a
+      restricted token (restricting SIDs = the user's enabled groups + user +
+      GNOMON_SESSION_SID S-1-9-4174-2026-1022 + this session's own SID), Low
+      integrity, an explicit user+SYSTEM default DACL (the launcher itself keeps the
+      shielded kernel's), a private Low-labelled desktop created with an explicit DACL,
+      in a job with UI limits. acl.session places per path the ACEs naming the Gnomon
+      SID (an allow may name the session's own SID: `sid`), replacing every explicit
+      Gnomon-SID ACE there: deny-read/write/all, deny-replace (no delete/rename/
+      re-ACL and no FILE_DELETE_CHILD: the parent of a literal deny), allow-read,
+      allow-write, allow-write-keep (allow below, no replace of the root), clear, and
+      the labels label-low / label-readable / label-meta (inherit-only no-read-up: the
+      dir itself readable for attributes) / label-no-read-up / label-clear; HKCU\ keys
+      take write denies (registry masks). A deny adds an OWNER RIGHTS READ_CONTROL-only
+      ACE (replaces the owner's implicit WRITE_DAC, grants nothing a session could
+      use). process.confine lowers a running child (the GUI transport) to Low in a
+      one-process job; process.shield denies the Gnomon SID every access to a process,
+      its threads and its token's default DACL (the kernel shields itself). The kernel
+      pipe's DACL denies the Gnomon SID; owner-only verdicts accept those denies.
+      Unsigned until W7 (Trusted Signing): a dev kernel pins it by sha256, a
+      release kernel refuses it. cargo test runs the pure checks.
+    path: win32/src/
+    type: module
+    tags: [gnomon, helper, native, rust, windows, paradigm-8, w2, w5]
+  gnomon-helper-build:
+    description: >-
+      scripts/build-darwin.mjs (swift build -c release → GnomonHelper.app,
+      Info.plist bundle id gnomon.helper, embedded profile, entitlements,
+      codesign --options runtime --timestamp with the one Developer ID
+      Application identity of team SW4BMQ8PNL found in the keychain, verify
+      --strict and against HELPER_REQUIREMENT, sha256 into checksums.json);
+      --unsigned for CI. scripts/notarize-darwin.mjs (ditto, notarytool
+      submit --keychain-profile gnomon-notary --wait, stapler) is optional and
+      founder-run, never run by tests. scripts/build-win32.mjs: cargo build
+      --release --locked → bin/win32/gnomon-helper.exe (gitignored), sha256 into
+      checksums.json (unsigned).
+    path: scripts/
+    type: module
+    tags: [gnomon, helper, signing, build, m1.3]

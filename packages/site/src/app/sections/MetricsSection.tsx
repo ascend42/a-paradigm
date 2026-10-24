@@ -5,7 +5,7 @@ import styles from './MetricsSection.module.css';
 
 const METRICS = [
   { value: '5', label: 'Symbols', detail: 'Cover every concept' },
-  { value: '100+', label: 'MCP Tools', detail: 'For AI agents' },
+  { value: '32', label: 'MCP Tools', detail: 'Grouped, more on demand' },
   { value: '90%', label: 'Less context', detail: 'Tokens saved vs file reads' },
   { value: '<1min', label: 'Setup time', detail: 'paradigm shift' },
 ];

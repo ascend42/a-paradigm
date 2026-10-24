@@ -1,0 +1,35 @@
+id: L-2026-10-17-ascend-081146-001
+type: human-note
+timestamp: '2026-10-17T08:11:46.979Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Linking rulings P8-D73..D76: handoff means brief + documents, self-hosted relay, Warpline deferred'
+summary: 'The founder redefined handoff. That collapses most of research 31/32''s handoff machinery: no session takeover, no custody CAS/epochs, no transcript transplant, no permit or subscription transfer. Linking becomes structured messaging between kernels, where one message kind (a handoff brief with attachments) can start or continue a session on the receiver after the receiving human accepts with presence. Pairing, Noise/link key, the egress filter, injection receipts and taint, rate limits, and peers never reaching the 12 verbs all still apply.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D73
+    decision: 'Handoff = sending instructions and/or related documents (a handoff brief plus attachments) so another session, on another kernel or the same one, can continue the work. It is NOT a literal takeover: the source session keeps or ends its own life, and the receiver starts or continues its own session on its own backend and subscription after its human accepts. Research 31 A31-11..13 and 32 S32-03 (custody, seal, bundle transfer, hsid lineage) are dropped; the brief path (A31-11 ''brief'') becomes the only handoff path.'
+    rationale: 'Founder: ''handoffs are the idea of giving instructions and/or related documents so the other can continue work, not a literal handoff takeover''.'
+  - id: P8-D74
+    decision: 'Transport: kernels never listen beyond loopback; a self-hosted blind relay (gnomon-relay, zero deps) on an always-on founder machine forwards end-to-end-encrypted frames. LAN only at first; the founder runs no overlay yet, so internet reach waits for an overlay or the nevr.land relay.'
+    rationale: Founder chose Arky's self-hosted relay; keeps §11.2 rule 1 true word for word.
+  - id: P8-D75
+    decision: 'Teammates: co-work messages and handoff briefs both work for teammate links (no subscription transfer exists under D73), subject to pairing with presence on both sides, the teammate egress filter (team/org audience only, declassify card with secret scan for attachments), taint, and injection receipts. OPEN 7 no longer blocks teammate linking. §1''s ''not a second human'' is narrowed: other humans may exist only as peers over links and never as principals on the local kernel; ''teleport'' stays a non-goal.'
+    rationale: D73 removes the subscription-transfer issue that kept teammate handoff behind OPEN 7.
+  - id: P8-D76
+    decision: 'Warpline-mode sessions: handoff briefs may reference Warpline refs, but syncing Warpline state across kernels waits for the Warpline server''s bundle sync (T-2026-10-14-003)'
+    rationale: Founder chose to defer.
+tags:
+  - paradigm-8
+  - gnomon
+  - linking
+  - decision
+linked_lore:
+  - L-2026-10-17-ascend-080653-001
+git_context:
+  ref: d83c7ec8890cbd61996d25b79488e3c3e258a09f
+  branch: feat/gnomon
+  dirty: true

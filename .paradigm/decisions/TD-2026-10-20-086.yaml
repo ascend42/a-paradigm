@@ -1,0 +1,67 @@
+id: TD-2026-10-20-086
+timestamp: '2026-10-20T07:27:38.045Z'
+title: Gnomon auto-edits parity and notify-not-ask (F1–F7), plus live voice capture (V1–V5)
+decision: >-
+  The founder said "yes to all" on 2026-10-20.
+
+  PARITY:
+
+  F1 The read-only Bash pass also applies in `ask` mode.
+
+  F2 The GUI mode switch defaults to folder (repo) scope.
+
+  F3 A root-signed default of auto-edits applies to every non-home repo.
+
+  F4 The cached unlock lasts until screen lock, sleep or user switch, capped at 12 h and 512 signatures.
+
+  F5 The unlock is bound to the GUI device, so it survives reconnects.
+
+  F6 A daily standing grant (one presence) covers permission `always`, mode loosen, voice ambient widen/arm, and restart
+  with no binary change. Each use writes a notify row and shows in a GUI feed with Revoke. Root/install/repin,
+  gate-class, fallback-cloud, declassify and peer actions are never standing.
+
+  F7 CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1 in the session policy.
+
+  VOICE:
+
+  V1 No partial words until a provisional speaker match at about 1.5 s.
+
+  V2 Partial text is shown only to the gui credential.
+
+  V3 About 1 s status polling while attached, no push relay, so the ids do not move.
+
+  V4 An unenrolled bystander shows only the reason, with no text and no count.
+
+  V5 B1 CPU cost is accepted, gated by the B0 benchmark, with the B2 streaming model as the fallback.
+rationale: >-
+  The founder's words: "the fact that using gnomon is more cumbersome than using claude code naturally is a direct
+  failure of the tool". Their Touch ID fails, so every presence prompt means a typed password. The data: kernel.db held
+  14 Bash cards and 0 approval.auto rows, so the read-only pass had never fired. Bar: never prompt more than native
+  Claude Code. The kernel stays the single gate (Arky Q2: do not defer to native read-only). These rulings loosen past
+  ones: auto-edits.ts:47 and spec §3.4 D87; run-mode.ts:58-66 per-loosen presence; T-2026-10-18-028 M2 (60 min unlock);
+  S25-H1 per-connection unlock; B8/classes.ts:57 fresh-per-decision. Aegis reviews each implementation. For voice: the
+  founder asked to see that their words are captured and to see the words as they speak them, while partials never reach
+  the agent.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: claude-opus-5-5
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#shell-readonly'
+  - '#approval-broker'
+  - '#always-rules'
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+  - '#standing-grant'
+status: active
+tags:
+  - gnomon
+  - founder-ruling
+  - permissions
+  - voice

@@ -48,7 +48,7 @@ must point at a screenshot.
 2. Choose an output directory for this critique (for example `ui-critique-<date>` in the working directory) and state it in the report. Capture round 0 with a browser tool (Claude in Chrome or an equivalent screenshot-capable browser MCP): resize to 320, 768 and 1440 px wide and screenshot each; then switch to dark mode (prefers-color-scheme emulation or the app's theme toggle) and screenshot at 1440. That is four screenshots per round, saved as `<round>-<viewport>.png` — `r0-320.png`, `r0-768.png`, `r0-1440.png`, `r0-1440-dark.png`. Scroll-capture long pages.
 3. Score the 10-point checklist against the screenshots, marking each pass, fail or n/a with the screenshot that proves it:
    1. Contrast meets WCAG AA — 4.5:1 body text, 3:1 large text and UI components.
-   2. Touch targets are at least 44x44 px with at least 8 px between them.
+   2. Targets are at least 24x24 CSS px (WCAG 2.5.8 AA); at least 44pt / 48dp on touch and for primary actions; at least 8px gaps between them.
    3. Values come from design tokens — no ad-hoc colors, spacing or radii visible as off-scale.
    4. Layout holds at 320, 768 and 1440 — no horizontal scroll, clipped text or overlapping elements.
    5. prefers-reduced-motion is respected — non-essential animation stops.

@@ -1,0 +1,31 @@
+id: L-2026-10-16-ascend-042006-001
+type: insight
+timestamp: '2026-10-16T04:20:06.058Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'ruflo inspected: breadth without depth; trust and adjudication are the opening'
+summary: 'Founder asked to fully inspect ruvnet/ruflo (renamed claude-flow) as it may shift plan options. Two scouts (inside: code; outside: adoption, issues, CVEs) saved at .paradigm/research/paradigm-8/08, 09; neurons source s:web-c289dc3d99. Board 1 (shape) held pending re-assessment by Fable and Arky.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+learnings:
+  - Demand for a persistent multi-agent memory layer over Claude Code is proven (~180k weekly npm installs, 75k stars) even when the product is shallow.
+  - 'ruflo is not its own loop: MCP server (~477 tools) + hooks + Claude Code Mods + a daemon that shells out to claude --print. Real work is Claude Code''s Task tool. Its 2026 shape is Heddle+Shuttle at breadth, shallow depth.'
+  - 'ruflo has no merge adjudication: coordination_sync is a simulated stub (verified coordination-tools.ts:324) and isolation is best-of-N winner-take-all. ''ruflo coordinates agents; Heddle adjudicates their work.'''
+  - 'Production evidence for budget governance: ruflo issue #2661 — per-worktree daemons silently drained Claude quotas, fixed with a user-global O_EXCL launch budget (verified global-ai-budget.ts). Heddle needs a cost fuse and visible fan-out on day one.'
+  - 'Trust is the market''s weak point: RCE CVE, obfuscated preinstall (since removed), uninstall persistence, unreproduced benchmarks, stub tools. Deterministic, measured, reversible, small-permission design is a differentiator.'
+  - 'Worth stealing: honesty CI tests that assert tools don''t fabricate; mod trust tiers with a provenance allowlist project scope can''t set; repo-supervisor election so N daemons don''t multiply crons; guidance compiler (CLAUDE.md into ID''d rule shards) as a cousin of spec-as-contract.'
+tags:
+  - paradigm-8
+  - harness
+  - competitive
+  - ruflo
+  - epiphany
+linked_lore:
+  - L-2026-10-16-ascend-040054-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true

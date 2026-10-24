@@ -12,7 +12,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20, 22]
+        # Node 24 is the floor for every package (Paradigm 8.0; Node 20 is end of life)
+        node-version: [24]
 
     steps:
       - name: Checkout
@@ -33,6 +34,10 @@ jobs:
       - name: Test
         run: npm test
 
+      # Root script runs the per-project typechecks (paradigm-mcp, paradigm —
+      # which also checks the paradigm-mcp sources it bundles — sentinel, gnomon).
+      # T-2026-10-21-032: the old root `tsc --noEmit` had no tsconfig and never
+      # checked a file.
       - name: Typecheck
         run: npm run typecheck
 
@@ -46,7 +51,7 @@ jobs:
   # unrelated reasons and therefore ignored (the "wired to nothing" failure this
   # job exists to close, panel B-1).
   #
-  # Pinned to Node 20, with the same dependency build chain warpline-guard.yml
+  # Pinned to Node 24 (the repo floor), with the same dependency build chain warpline-guard.yml
   # establishes. Unlike warpline-guard, this one is NOT continue-on-error:
   # descriptors-frozen.test.ts and the rest of the F4 tripwires have to be able
   # to fail a PR.
@@ -61,7 +66,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
@@ -99,7 +104,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies

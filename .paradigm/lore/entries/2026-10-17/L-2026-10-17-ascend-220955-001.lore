@@ -1,0 +1,52 @@
+id: L-2026-10-17-ascend-220955-001
+type: milestone
+timestamp: '2026-10-17T22:09:55.415Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon CI fully green on macOS, Ubuntu and Windows (draft PR #49)'
+summary: |-
+  The first all-green CI run (39073693925) on draft PR #49 covers:
+  - tests on macos-14, ubuntu-latest and windows-latest (Node 24): contracts 125, plus kernel 170/171 on Windows with marked POSIX files excluded and registered;
+  - probes on macOS and Windows;
+  - native builds;
+  - the Warpline guard.
+
+  It took 8 CI rounds:
+  - npm optional-deps bugs: the rolldown binding was missing, then a second `npm install --no-save` pruned the first binding;
+  - Windows CRLF on byte-compared schemas;
+  - Linux /tmp homes, correctly refused by the daemon;
+  - Windows EPERM from fsync on a read-only handle (fixed with a writable-handle helper);
+  - ESM path imports;
+  - platform markers not enforced at runtime;
+  - a REAL kernel-log bug: a refused open leaked its DatabaseSync handle (21 fds over 10 refused opens on macOS), fixed with an fd-count regression test;
+  - one test deleting an open log's home.
+
+  Follow-ups: T-2026-10-17-013 (docs, small) and T-014 (S34-30, a queued anchor write after a refused open can overwrite keystore evidence).
+symbols_touched:
+  - '#kernel-log'
+  - '#gnomon-ci'
+  - '#gnomon-kernel'
+  - $daemon-lifecycle
+commit: 874f6ace
+learnings:
+  - Windows CI surfaces resource leaks that POSIX hides (open files can be deleted on macOS/Linux); counting /dev/fd makes such leaks testable on macOS.
+  - fsync on Windows needs a writable handle (FlushFileBuffers); 'r' handles fail with EPERM.
+verification:
+  status: pass
+  details:
+    ci_run: 39073693925
+    jobs: 8/8 green
+tags:
+  - paradigm-8
+  - gnomon
+  - ci
+  - windows
+  - milestone
+linked_lore:
+  - L-2026-10-17-ascend-214000-001
+git_context:
+  ref: 874f6ace099af73fc5e44b11d3239a77aaa1e736
+  branch: feat/gnomon
+  dirty: true

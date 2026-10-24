@@ -1,0 +1,30 @@
+id: TD-2026-10-20-125
+timestamp: '2026-10-20T15:56:27.195Z'
+title: Ambient voice lands in the composer and needs confirmation to send
+decision: >-
+  Ambient speech never auto-sends a turn. Verified speech fills the composer, and it is sent only by a human key press
+  or by a spoken "send" from a verified speaker after the text is visible. A misidentified voice can therefore only fill
+  the box, never act. Live words and dictation stay. This supersedes the earlier auto-send after 3 s of silence for
+  ambient mode (TD-2026-10-20-262 / TD-2026-10-20-294 "ambient behaves like typed").
+rationale: >-
+  Calibration (L-2026-10-20-ascend-155424-001): the fixed speaker check rejects 0/284 human impostors but rejects ~50%
+  of same-speaker trials on the local data, while the old check accepted a video as the founder. Under auto-edits,
+  ambient speech acted as typed input, so speaker verification was a de facto security boundary that it cannot be. The
+  founder chose "Composer, then confirm".
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: claude-opus-5-5
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#gnomon-voice'
+  - '#gui-dictation'
+  - $voice-turn
+status: active
+tags:
+  - gnomon
+  - voice
+  - founder-ruling
+  - security

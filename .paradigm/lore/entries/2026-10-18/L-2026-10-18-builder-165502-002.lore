@@ -1,0 +1,27 @@
+id: L-2026-10-18-builder-165502-002
+type: insight
+timestamp: '2026-10-18T16:55:02.795Z'
+author: builder
+title: 'M1.12 slice 3 round 2 reading: replay folds inside verify''s pass; turn binds to the client inject'
+summary: 'Chose to fold inside verify''s single pass (VerifyLogOptions.onRow) over a seq/hash cross-check: one read, one SQLite snapshot, so a row committed mid-verify is never folded. turn.sent binds to the last unconsumed origin:client inject. A string bytes field is the divergence inject-plaintext. The CLI states trust root home-local and the keystore state.'
+symbols_touched:
+  - '#kernel-log'
+files_modified:
+  - packages/gnomon/src/kernel/log/kernel-log.ts
+  - packages/gnomon/src/kernel/log/replay.ts
+  - packages/gnomon/src/cli/replay-cli.ts
+  - packages/gnomon/test/m112-replay.test.ts
+learnings:
+  - A read-only WAL reader's statement snapshot already excludes rows committed after it began; the test commits a row from inside the verify pass (a KeyRing subclass) and the projection hash is unchanged
+  - Kernel and peer injects are folded as inputs but never matched to a turn; only origin:client feeds session.send
+  - The replay buffers the verified rows until verify reports ok (memory grows with log size; a streaming fold that discards on failure is the follow-up)
+tags:
+  - gnomon
+  - m1.12
+  - replay
+  - round-2
+body: 'B1 / Aegis C2: the earlier version read the files twice (verify, then fold), a TOCTOU window. Aegis C1: string bytes are no longer re-hashed and accepted; they are a divergence, because the append path refuses them. The supervisor and local-session fix is T-019 in the M1.8 lane. Aegis medium: replay keys come from the home itself, so it proves consistency, never provenance; the readout says so.'
+git_context:
+  ref: 6ca958770bc6bda1bf9f0af3ab283f1832619473
+  branch: gnomon/m112-slice3
+  dirty: true

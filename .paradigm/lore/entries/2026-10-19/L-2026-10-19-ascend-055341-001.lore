@@ -1,0 +1,53 @@
+id: L-2026-10-19-ascend-055341-001
+type: review
+timestamp: '2026-10-19T05:53:41.592Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Orca audit: process and IPC lessons for Gnomon'
+summary: |-
+  The founder asked what Gnomon can learn from stablyai/orca's inter-process communication and process handling. Three-lens audit: Arky (lifecycle), Aegis (trust) and a protocol reader.
+  Adopt:
+  - a descendant tree-kill with an unverifiable verdict;
+  - socket ownership where "can't tell" is never treated as "dead" and the socket is never unlinked on close (Orca retired 23 race defects this way);
+  - a readiness handshake and classified exit codes;
+  - a deny-by-default permission tier on every RPC method;
+  - tests for the deny-safe permission semantics;
+  - backpressure handling.
+  Adapt:
+  - sessions that survive kernel updates (Gnomon's biggest spec gap);
+  - journal-cursor catch-up;
+  - ACP as a third backend;
+  - a guide served by the binary;
+  - fenced dispatch.
+  Avoid:
+  - the Agent SDK;
+  - yolo bypasses and running agents without a sandbox;
+  - unpinned agents;
+  - static bearer tokens;
+  - WebSockets without an Origin check;
+  - screen-scrape status on the permission path.
+  Open founder question: approving from a phone versus Secure Enclave presence.
+symbols_touched:
+  - '#session-runner'
+  - '#supervisor'
+  - $daemon-lifecycle
+  - '#socket'
+  - '#web-endpoint'
+  - '#backend-adapter'
+  - '#approval-broker'
+tags:
+  - gnomon
+  - research
+  - orca-audit
+  - ipc
+body: 'Full write-up: .paradigm/research/gnomon-orca-audit-2026-10-19.md. Source: s:web-4747a804fd; Orca at commit 3ef5a460.'
+linked_tasks:
+  - T-2026-10-19-007
+  - T-2026-10-19-009
+  - T-2026-10-19-010
+git_context:
+  ref: 488df7e4f3e72d8dab81a6bf6aefa2921dab5af8
+  branch: feat/gnomon
+  dirty: true

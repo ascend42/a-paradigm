@@ -1,0 +1,27 @@
+id: L-2026-10-18-ascend-011701-001
+type: human-note
+timestamp: '2026-10-18T01:17:01.707Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D89: Move 1 clientApiId moves once, batched'
+summary: 'Founder ruling: the kinds/fields Move 1 still needs beyond the M1.1 reservations (first: daemon.log.quarantined for T-009(a) quarantine genesis) are collected and land in ONE deliberate clientApiId move, re-pinned in m1-1-reservations.test.ts, rather than one bump per need. Nothing outside the repo pins clientApiId yet.'
+symbols_touched:
+  - '#kernel-log'
+  - '#contract-event-v1'
+  - '#socket'
+decisions:
+  - id: P8-D89
+    decision: Batch all remaining Move 1 clientApiId-moving additions into one bump, re-pinned once
+    rationale: Builder found daemon.log.quarantined (reserved, kernel-signed) moves clientApiId 8e30f400 -> 09c9c00c; reusing daemon.log.gap or daemon.start is unsafe. Pre-release, nothing external pins the id, so one deliberate move beats drift.
+tags:
+  - paradigm-8
+  - gnomon
+  - ruling
+linked_tasks:
+  - T-2026-10-17-009
+git_context:
+  ref: 8c6f4fb5dca417e8f13b9035ef07c16b452b392e
+  branch: feat/gnomon
+  dirty: true

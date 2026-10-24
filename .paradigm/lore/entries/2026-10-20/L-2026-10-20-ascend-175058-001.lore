@@ -1,0 +1,29 @@
+id: L-2026-10-20-ascend-175058-001
+type: human-note
+timestamp: '2026-10-20T17:50:58.507Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks idea, checkpoint 1: where it stands now'
+summary: |-
+  The founder sharpened the idea: "each mod has a set of protocols that an agent can easily understand the use cases of when and where it works or when to suggest it, like a playbook… akin to how mcp is to cli". They also want mods to have "their own ui in the gnomon display for a more localised experience (at times)", and "the protocol around it for users to make and share their own mods around other repos and flows".
+  Current shape: mod = playbook (Agent Skills-style: frontmatter description = when to use/suggest; full body on demand) + capabilities (MCP or kernel calls) + optional local UI (panel or fenced sheet) + handoff contracts (context in, results out, chainable). The agent offers mods by conversation phase (diverge → synthesize → commit) as invitation chips/voice, accepted by a trusted gesture.
+  Key open risk: a third-party playbook is text inside the agent's context, so it is a prompt-injection channel that needs trust tiers and sanitisation.
+  In flight: Arky (protocol, runtime, security, sharing, phased plan) and Luna (invitation, handoff and local-UI boards).
+  The founder asked for lore at each step and at the end.
+symbols_touched:
+  - '#mod-host'
+  - '#gnomon-mod-sdk'
+tags:
+  - gnomon
+  - mods
+  - ideation
+  - mod-playbooks
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-174838-001
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

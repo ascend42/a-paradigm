@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gnomon Windows Plan</title>
+<style>
+:root{--bg:#f6f3ec;--card:#fffdf8;--ink:#1f1d1a;--ink2:#55504a;--rule:#ddd6c8;--accent:#2f5d50;--warn:#8a5200;--fail:#a3341f;--code:#efeadf}
+@media (prefers-color-scheme:dark){:root{--bg:#141412;--card:#1c1b19;--ink:#ece8df;--ink2:#a8a29a;--rule:#34312c;--accent:#7fbfa9;--warn:#e0a54a;--fail:#ff8a70;--code:#26241f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Inter",sans-serif}
+main{max-width:860px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px}
+h2{font-size:20px;margin:44px 0 12px;padding-top:16px;border-top:1px solid var(--rule)}
+h3{font-size:16px;margin:24px 0 8px}
+.sub{color:var(--ink2);margin:0 0 24px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:16px 18px;margin:12px 0}
+.card>p:first-child{margin-top:0}.card>p:last-child{margin-bottom:0}
+.why{color:var(--ink2);font-size:15px}
+.why b{color:var(--ink)}
+code{font:13.5px/1.5 ui-monospace,"JetBrains Mono",Menlo,monospace;background:var(--code);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;font-size:15px;table-layout:auto}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule);vertical-align:top;overflow-wrap:break-word}
+th{color:var(--ink2);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 7px;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.done{color:var(--accent)}.you{color:var(--warn)}.miss{color:var(--fail)}.part{color:var(--ink2)}
+ul,ol{padding-left:22px}
+li{margin:0 0 6px}
+@media (max-width:480px){ul,ol{padding-left:18px}th,td{padding:6px 4px;font-size:14px}}
+</style>
+</head>
+<body>
+<main>
+<h1>Gnomon on Windows: the plan</h1>
+<p class="sub">22 October 2026 · drafted by Arky (architecture, build, packaging) and Aegis (security parity) · nothing is built yet, and nothing is decided until you choose below.</p>
+
+<div class="card">
+<b>In one paragraph.</b> The spec designed Windows in from the start, but almost none of the Windows-specific code exists yet. Getting Gnomon <i>buildable</i> on Windows is four milestones (W0–W3, plus the app shell W6). Getting it <i>shippable</i> takes about ten. Your "just click to approve" idea removes the hardest piece (hardware keys with Windows Hello) from the critical path. Aegis recommends keeping Hello for a small set of high-stakes actions. You need a real x64 Windows PC to finish, because a Mac VM can't stand in for the acceptance tests.
+</div>
+
+<h2>1 · Your idea: click to approve, no Hello</h2>
+<p>Routine cards get approved by clicking them in the app, with no Windows Hello or password prompt. That drops a lot of work: the hardware key setup, the presence prompt window and probe P02.</p>
+<h3>What it gives up (Aegis)</h3>
+<p>Without presence, the approval key is a software key that any program running as you can read. Such a program could sign approvals itself, or fake a click on "Approve" (Windows lets a program send clicks to another window). So on Windows an approval proves "some code running as this user said yes", not "the human said yes". On a Mac, Touch ID or a password proves it was you.</p>
+<h3>What keeps it honest anyway</h3>
+<ul>
+<li>The kernel accepts decisions only from the verified Gnomon app window, never from scripts, the CLI or a browser tab.</li>
+<li>Sessions run at Windows' <i>low integrity level</i>, which stops them sending clicks into the app.</li>
+<li>A permanent <b>"presence: off (Windows)"</b> banner, and the custody level shown in <code>status</code>.</li>
+<li>Voice approvals are off on Windows. Voice is for talking only.</li>
+</ul>
+<h3>Aegis's recommendation: a hybrid</h3>
+<table>
+<tr><th>Click only</th><th>Still asks Windows Hello (PIN is fine)</th></tr>
+<tr><td>Tool permissions, ask-user, plan approval. These are the everyday cards, the same class your Mac caches today.</td><td>Setting up or rotating your root key; signing config and grants; gate-class cards, "always" rules, installs, budget resume, cloud fallback, API tokens; pairing links; voice enrolment.</td></tr>
+</table>
+<p class="why"><b>Why:</b> that's a handful of prompts a week. If even these were click-only, the budget fuse and permits would only be advisory against any program running as you.</p>
+
+<h2>2 · What exists today</h2>
+<table>
+<tr><th>Piece</th><th>Windows version</th><th>State</th></tr>
+<tr><td>Socket to the kernel</td><td>Named pipe with an owner-only ACL</td><td><span class="tag miss">missing</span></td></tr>
+<tr><td>Helper (keys, OS work)</td><td>Rust helper (decision P8-D71)</td><td><span class="tag miss">placeholder</span></td></tr>
+<tr><td>Checking binaries are ours</td><td>Authenticode (WinVerifyTrust)</td><td><span class="tag miss">missing</span></td></tr>
+<tr><td>Process control</td><td>Job objects</td><td><span class="tag miss">stub</span></td></tr>
+<tr><td>Sandbox</td><td>Restricted tokens, low integrity, ACLs, firewall (WFP)</td><td><span class="tag miss">missing</span></td></tr>
+<tr><td>Durable log writes</td><td>Write-through renames, boot id</td><td><span class="tag part">partial</span></td></tr>
+<tr><td>App shell and trust root</td><td>Tauri on WebView2</td><td><span class="tag miss">Mac only</span></td></tr>
+<tr><td>Bundled Node</td><td>win-x64 Node, signed by OpenJS</td><td><span class="tag miss">missing</span></td></tr>
+<tr><td>Voice capture</td><td>WASAPI (Rust)</td><td><span class="tag miss">missing</span></td></tr>
+<tr><td>Speech models</td><td>sherpa win-x64</td><td><span class="tag part">unmeasured</span></td></tr>
+<tr><td>Kernel tests in CI</td><td>windows-latest</td><td><span class="tag done">running</span></td></tr>
+</table>
+
+<h2>3 · Milestones (x64)</h2>
+<table>
+<tr><th>#</th><th>What</th><th>Size</th><th>Needs the PC?</th></tr>
+<tr><td>W0</td><td>Dev environment and CI: Rust MSVC toolchain, real Windows CI legs, cross-checking from the Mac</td><td>S</td><td>no</td></tr>
+<tr><td>W1</td><td>Probes: pipe permissions, firewall, socket hand-off, where Claude Code installs, disk durability</td><td>M</td><td><b>yes</b></td></tr>
+<tr><td>W2</td><td>Rust helper core: pipe, job objects, ACLs, durable rename, restricted spawn (no key work)</td><td>L</td><td>to accept</td></tr>
+<tr><td>W3</td><td>Kernel Windows backends: pipe endpoint, process control, Authenticode checks, home folder ACL</td><td>L</td><td>to accept</td></tr>
+<tr><td>W6</td><td>App shell: Windows layout, pinned node.exe and kernel, Authenticode trust root, environment scrub (incl. WebView2 debug variables)</td><td>L</td><td>to accept</td></tr>
+<tr><td colspan="4"><b>→ Buildable</b> after W0–W3 and W6</td></tr>
+<tr><td>W4</td><td>Click-approval identity tier (software keys, "presence: off" shown everywhere), plus Hello for the hybrid list if you choose it</td><td>M</td><td>yes (Hello)</td></tr>
+<tr><td>W5</td><td>Sandbox profiles under restricted tokens and low integrity; firewall per W1; honest "partial" where Windows can't match</td><td>XL</td><td><b>yes</b></td></tr>
+<tr><td>W7</td><td>Windows release script: signs everything with Azure Trusted Signing, zip and pinned hash</td><td>M</td><td>yes</td></tr>
+<tr><td>W8</td><td><code>@a-company/gnomon-win32-x64</code>, the <code>gnomon</code> command on Windows, install and updates</td><td>M</td><td>to accept</td></tr>
+<tr><td>W9</td><td>Clean-machine test in Windows Sandbox: install, setup, desk, upgrade, uninstall</td><td>M</td><td><b>yes</b></td></tr>
+<tr><td colspan="4"><b>→ Shippable</b> after W4–W9 (W5 can ship "partial")</td></tr>
+<tr><td>W10</td><td>Voice on Windows: WASAPI capture, speech models on CPU</td><td>L</td><td>yes</td></tr>
+<tr><td>W11</td><td>Optional: Windows Hello for root operations (needed for the hybrid)</td><td>M</td><td>yes</td></tr>
+</table>
+<p class="why"><b>Windows on ARM:</b> not needed. A Mac VM (Parallels) runs only Windows on ARM. It's handy for development but can't pass the x64 acceptance tests.</p>
+
+<h2>4 · What only you can provide</h2>
+<ul>
+<li><b>A real x64 Windows PC</b>: Windows 11 Pro, TPM 2.0 (firmware TPM is fine), 16 GB RAM. Any recent mini PC, about $500. It also runs Windows Sandbox for the clean-machine test.</li>
+<li><b>Azure Trusted Signing</b> for Windows code signing: an Azure subscription, identity validation (US and Canada individuals qualify), Basic tier at about $10/month (check current pricing). Arky's advice is not to buy an EV certificate: since 2024 it no longer gets instant SmartScreen trust. Expect "unrecognized app" warnings at first, until reputation builds. npm installs mostly avoid this.</li>
+</ul>
+
+<h2>5 · Decisions for you</h2>
+<table>
+<tr><th>Decision</th><th>Recommendation</th></tr>
+<tr><td>1. Approvals on Windows</td><td><b>Hybrid</b>: click for routine cards, Hello (PIN is fine) for the short high-stakes list. Your "click everywhere" is possible, but then the budget fuse and permits are only advisory against programs running as you.</td></tr>
+<tr><td>2. Install location</td><td>Aegis: <b>MSIX</b> (Windows' app package, installed read-only so other programs can't swap files, and it gets per-app microphone consent). Arky: a versioned folder in <code>%LOCALAPPDATA%</code> (simpler, but any program running as you can modify it). Aegis's point is the stronger one; it costs more packaging work.</td></tr>
+<tr><td>3. Key custody</td><td>Aegis: a small <b>broker service</b> installed with one admin prompt, so other programs can't read the keys. Otherwise key custody stays "partial".</td></tr>
+<tr><td>4. Browser access to the desk</td><td><b>App only on Windows</b>: no browser tab, since the reconnect check relies on presence.</td></tr>
+<tr><td>5. Sandbox if the firewall piece fails</td><td>Ship it marked <b>partial</b> rather than block.</td></tr>
+<tr><td>6. Minimum system</td><td>Windows 11 23H2+, x64, TPM 2.0, Windows Hello set up (PIN fine), standard user account.</td></tr>
+</table>
+
+<h2>6 · Found on the Mac while planning this</h2>
+<div class="card">
+<p>Aegis found that the <b>Mac helper doesn't check who's calling it</b>. The planned check, where the helper answers only the signed kernel (decision D68), isn't built yet. Any program running as you can start the helper and trigger a <i>real</i> Touch ID prompt that shows its own text. It can't sign anything without your touch or password, so your keys stay protected, but it can try to trick you into approving. I told you earlier this check existed; it doesn't yet. It's filed as high priority (T-2026-10-22-004) for Aegis to decide before 8.0: build the check, or list it as a known limitation in the release notes.</p>
+</div>
+</main>
+</body>
+</html>

@@ -10,12 +10,11 @@
  */
 
 import chalk from 'chalk';
-import { out, success, warn, error, header, kv, json as jsonOut } from '../utils/cli-output.js';
+import { out, success, error, header, kv, json as jsonOut } from '../utils/cli-output.js';
 import {
   CHECK_IDS,
   loadEnforcementConfig,
   resolveAllChecks,
-  getCheckSeverity,
   setEnforcementLevel,
   setCheckOverride,
   resetCheckOverride,
@@ -23,9 +22,8 @@ import {
   isValidLevel,
   isValidCheckId,
   isValidSeverity,
-  getPresetSeverity,
 } from '../core/enforcement/index.js';
-import type { CheckSeverity, EnforcementLevel } from '../core/enforcement/index.js';
+import type { CheckSeverity } from '../core/enforcement/index.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // STATUS (default)

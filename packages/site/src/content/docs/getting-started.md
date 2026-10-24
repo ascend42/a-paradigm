@@ -41,7 +41,7 @@ Paradigm works as a Claude Code plugin. Install it from the marketplace:
 /install-plugin ascend42/a-paradigm
 ```
 
-This gives your AI agents access to 100+ MCP tools for navigating, querying, and modifying your symbol graph.
+This gives your AI agents access to 32 grouped MCP tools (more on demand) for navigating, querying, and modifying your symbol graph.
 
 ---
 

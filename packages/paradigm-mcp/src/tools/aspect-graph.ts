@@ -461,7 +461,14 @@ async function handleAspectGraphTraversal(
     // BFS traversal collecting nodes and edges
     const visited = new Set<string>();
     const nodeMap = new Map<string, { aspectId: string; category?: string; severity?: string; depth: number }>();
-    const collectedEdges: Array<{ source: string; target: string; relation: string; weight: number }> = [];
+    const collectedEdges: Array<{
+      source: string;
+      target: string;
+      relation: string;
+      weight: number;
+      origin: string;
+      inferred: boolean;
+    }> = [];
 
     interface QueueItem {
       symbol: string;

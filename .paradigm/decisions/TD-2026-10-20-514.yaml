@@ -1,0 +1,42 @@
+id: TD-2026-10-20-514
+timestamp: '2026-10-20T23:50:40.162Z'
+title: 'Gnomon: one presence prompt per decision, including root-class cards'
+decision: >-
+  Every card decision costs exactly ONE user-presence prompt, root-class (install, uninstall, config) included. One
+  helper request runs a single fresh evaluatePolicy. Under that one context it signs every message the decision needs:
+  the approvals decisionSig, the presence challenge, the root decision row and every grant row (trust, capability,
+  egress, publisher, install). The prompt line lists every digest, and the context is invalidated right after. This
+  supersedes the "a root-class decision costs two" budget in docs/specs/gnomon.md:64 (TD-2026-10-19-063). It keeps
+  "presence per signature" in the sense of one fresh attended presence per decision, with no reuse windows and no cached
+  root unlock.
+rationale: >-
+  The founder's Touch ID fails, so each prompt is a typed password. In the 2026-10-20 dogfood one first-party install
+  cost 4 prompts (8 for two mods). Founder: "that is a wildy unacceptible workflow" / "approval for these things should
+  take 1 per thing". The extra prompts add no security. All the signatures attest to the same single human act on the
+  same card content hash. A batched request already shows every digest (Aegis H3), so attribution and visibility are
+  kept.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Batch only the root rows (2 prompts)
+    rejected_because: founder bar is 1 per decision
+  - option: touchIDAuthenticationAllowableReuseDuration window
+    rejected_because: does not cover the typed-password fallback, and it is a reuse window, not presence for the decision
+  - option: Standing grants for install
+    rejected_because: root-class actions are never standing (spec §3.4); they still need an attended act
+symbols_affected:
+  - '#gnomon-helper'
+  - '#approval-broker'
+  - '#manifest-loader'
+status: active
+tags:
+  - gnomon
+  - presence
+  - founder
+  - dogfood
+  - security

@@ -1,0 +1,25 @@
+{
+  "name": "@a-company/gnomon-helper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gnomon signed platform helper (spec \u00a716, \u00a718): npm shell holding the prebuilt, signed helper binaries in bin/ plus checksums.json, verified by the kernel at start (G-HLP-01). Sources: darwin/ (SwiftPM), win32/ (Rust, P8-D71).",
+  "files": [
+    "bin",
+    "checksums.json"
+  ],
+  "scripts": {
+    "build:darwin": "node scripts/build-darwin.mjs",
+    "build:darwin:unsigned": "node scripts/build-darwin.mjs --unsigned",
+    "notarize:darwin": "node scripts/notarize-darwin.mjs"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-helper"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

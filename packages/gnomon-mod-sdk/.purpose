@@ -1,0 +1,18 @@
+version: "2.0"
+description: >-
+  @a-company/gnomon-mod-sdk (spec §12, §18; M1.11 slice 1) - mod-abi:v1 types
+  re-exported from @a-company/gnomon-contracts, the zero-dependency mod
+  runtime serveMod (dist/runtime.js, vendored into a mod folder as
+  gnomon-mod-sdk.mjs so the sandboxed child reads only approved bytes) and
+  the example mod example/hello. Slice 2: fixture/golden harness, gnomon mod
+  scaffolding, link/dev tooling, the gnomon-mods MCP bridge.
+
+components:
+  gnomon-mod-sdk:
+    description: >-
+      The mod SDK package: serveMod speaks JSON-RPC 2.0 NDJSON on stdio
+      (init echoes MOD_ABI_ID; view.render/command.run/tool.call handlers get
+      an AbortSignal honouring cancel and the host-stamped relayedFor; api
+      state.get/set, kernel.call, stderr log, egress CONNECT via the host's
+      loopback proxy). Example mod example/hello (view, command, tools, state).
+    tags: [mods, sdk, M1.11]

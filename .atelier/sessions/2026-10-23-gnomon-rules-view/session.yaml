@@ -1,0 +1,36 @@
+id: 2026-10-23-gnomon-rules-view
+verb: propose
+scope: "A Rules view in the Gnomon GUI: every saved Always rule and the standing grant in one list, each revocable, togglable
+  and switchable off for a time, with changes staged and applied by ONE save (one presence for a loosening batch, none for a
+  tightening one). Placement: Settings › Permissions (extended, not duplicated) and a palette entry 'Rules…'."
+product: gnomon
+system: .atelier/systems/gnomon/
+depth: focused
+surface: desktop GUI (Settings sheet › Permissions; palette; the mode menu's revoke entry)
+mode: extend
+change: add
+by: builder (for Mika's design review and Aegis's security review)
+founder_words: "they should have a place where they can easily see their list of rules so that they can revert a bad call or
+  toggle something for a time, these togglings can do a single 'accept all edits' save style so they aren't doing the same
+  permission entry for like 20 different rules"
+decision: TD-2026-10-23-939 (follow-up)
+read: "One operator says Always a few times a day and forgets. Later a rule is wrong, or must be off while a stranger is at
+  the desk. The list must answer, at a glance: what does this allow, where, since when, from which card, and is it on.
+  Changing ten rules must cost one password, not ten."
+started: 2026-10-23
+proposal: system-proposal.yaml
+status: built and rendered; applied to design-system.yaml (components rule-row, rules-save-bar) after the renders
+shoot: shoot.mjs   # renders the gnomon-gui preview fixtures rules-* with headless Chrome into refs/shots/ (refs/ is gitignored)
+rendered:
+  fixtures: [rules-0, rules-1, rules-5, rules-50, rules-200, rules-off-open, rules-tighten, rules-staged, rules-close, rules-refused, rules-waiting]
+  shots: "refs/shots/<fixture>-<1440|1024>-<day|night>.png (44 files)"
+rulings:
+  mika: "C1 Settings › Permissions › Rules, entry points palette Rules…, mode menu Always rules…, the Always toast's see Rules; C2 three kernel-clock presets, Turn off ▾ inline; C3 the save bar names its cost; staged rows by word and weight; removed struck with keep; unsaved close asks inline; a refusal keeps every change staged with next:"
+  aegis: "M2 narrowing never waits, one card per loosening batch re-validated at allow time, enabled only clears a flag; L1 kernel words on the card, detail.changes in contentHash, never standing or voice, oversize refused, one clientApiId move; L2 kernel clock, until in the future and <= 7 days, expiry visible in the feed, repoEditsRule / rules list / the mode chip honour off"
+contested:
+  C1: "Where: Settings › Permissions › Rules (proposed) vs a leaf over the centre like Loops. Proposed: Settings, because
+    the standing grant ('Today's grant') already lives in Permissions and the list is short (tens, not hundreds)."
+  C2: "Off for a time: presets 1 hour · until tomorrow (06:00 local) · until I turn it back on (proposed). A custom time is
+    left out of 8.0."
+  C3: "Turning a rule back ON is a loosening (it widens what runs without a card): one fresh presence for the whole batch.
+    Aegis to confirm that re-enabling counts as loosening while an 'off for a time' that expires on its own does not ask."

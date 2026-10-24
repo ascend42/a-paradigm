@@ -1,0 +1,57 @@
+{
+  "name": "@a-company/gnomon-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gnomon contracts — versioned TS types + JSON Schemas for the Gnomon kernel's hard contracts (spec §4, §18). Zero runtime dependencies.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schemas/*": "./schemas/*",
+    "./conformance/*": "./conformance/*"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "conformance"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "schemas": "npm run build && node scripts/write-schemas.mjs",
+    "conformance": "npm run build && node scripts/write-conformance.mjs",
+    "client-api-doc": "npm run build && node scripts/write-client-api-doc.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.0.1",
+    "vitest": "^4.1.0"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-contracts"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-paradigm/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-paradigm#readme",
+  "keywords": [
+    "paradigm",
+    "gnomon",
+    "contracts",
+    "json-schema"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

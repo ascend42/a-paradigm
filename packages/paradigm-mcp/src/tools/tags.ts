@@ -34,6 +34,8 @@ interface SuggestedTag {
   tag: string;
   'proposed-by': string;
   'proposed-at': string;
+  /** What the tag means and when to apply it */
+  description?: string;
   reason: string;
   'applies-to'?: string[];
   'example-symbols'?: string[];
@@ -416,6 +418,7 @@ export async function handleTagsTool(
         tag,
         'proposed-by': 'claude',
         'proposed-at': new Date().toISOString(),
+        description,
         reason,
         'applies-to': appliesTo || ['#'],
         'example-symbols': exampleSymbols,
@@ -494,24 +497,16 @@ export async function handleTagsTool(
 
       for (const anchor of anchors) {
         const resolution = resolveAnchorPath(anchor.path, purposeDir, ctx.rootDir);
-        const filePath = resolution.resolvedPath;
         const exists = resolution.exists;
         let lineCount: number | undefined;
 
         if (exists) {
-          try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const lines = content.split('\n');
-
-            if (typeof anchor.lines === 'number') {
-              lineCount = 1;
-            } else if (Array.isArray(anchor.lines) && anchor.lines.length === 2) {
-              lineCount = anchor.lines[1] - anchor.lines[0] + 1;
-            } else if (Array.isArray(anchor.lines)) {
-              lineCount = anchor.lines.length;
-            }
-          } catch {
-            // Ignore read errors
+          if (typeof anchor.lines === 'number') {
+            lineCount = 1;
+          } else if (Array.isArray(anchor.lines) && anchor.lines.length === 2) {
+            lineCount = anchor.lines[1] - anchor.lines[0] + 1;
+          } else if (Array.isArray(anchor.lines)) {
+            lineCount = anchor.lines.length;
           }
         }
 
@@ -556,9 +551,9 @@ export async function handleTagsTool(
             matchingSymbols.push(sym.symbol);
 
             // Check if symbol has this aspect in its aspects array or data
+            const symAspects = (sym.data as { aspects?: unknown } | null)?.aspects;
             const hasAspect =
-              (sym.data as Record<string, unknown>)?.aspects?.includes?.(aspectSymbol) ||
-              (sym.data as Record<string, unknown>)?.aspects?.includes?.(aspect);
+              Array.isArray(symAspects) && (symAspects.includes(aspectSymbol) || symAspects.includes(aspect));
 
             if (hasAspect) {
               symbolsWithAspect.push(sym.symbol);

@@ -6,6 +6,7 @@
  * Phase 3: Execution engine (run journeys + chains)
  */
 
+import type { EventSchemaDeclaration } from '@a-company/sentinel';
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
   loadPersonas,
@@ -32,21 +33,21 @@ import {
 
 const PERSONA_SCHEMA_ID = 'paradigm-personas';
 
-const PERSONA_SCHEMA = {
+const PERSONA_SCHEMA: EventSchemaDeclaration = {
   id: PERSONA_SCHEMA_ID,
   version: '1.0',
   name: 'Paradigm Personas',
   description: 'Events from persona journey and chain execution',
-  scope: { key: 'persona_id', label: 'Persona' },
-  eventTypes: {
-    'persona.run.start': { category: 'lifecycle', severity: 'info' },
-    'persona.step.pass': { category: 'assertion', severity: 'info' },
-    'persona.step.fail': { category: 'assertion', severity: 'warning' },
-    'persona.step.skip': { category: 'lifecycle', severity: 'info' },
-    'persona.run.complete': { category: 'lifecycle', severity: 'info' },
-    'persona.chain.complete': { category: 'lifecycle', severity: 'info' },
-    'persona.coverage.report': { category: 'analysis', severity: 'info' },
-  },
+  scope: { field: 'persona_id', type: 'string', label: 'Persona', ordering: 'independent' },
+  eventTypes: [
+    { type: 'persona.run.start', category: 'lifecycle', severity: 'info' },
+    { type: 'persona.step.complete', category: 'assertion', severity: 'info' },
+    { type: 'persona.step.fail', category: 'assertion', severity: 'warn' },
+    { type: 'persona.step.skip', category: 'lifecycle', severity: 'info' },
+    { type: 'persona.run.complete', category: 'lifecycle', severity: 'info' },
+    { type: 'persona.chain.complete', category: 'lifecycle', severity: 'info' },
+    { type: 'persona.coverage.report', category: 'analysis', severity: 'info' },
+  ],
 };
 
 let sentinelSchemaRegistered = false;
@@ -59,7 +60,7 @@ async function emitPersonaEvents(result: RunResult | ChainRunResult): Promise<vo
     // Register schema once
     if (!sentinelSchemaRegistered) {
       try {
-        storage.registerSchema(PERSONA_SCHEMA as Parameters<typeof storage.registerSchema>[0]);
+        storage.registerSchema(PERSONA_SCHEMA);
         sentinelSchemaRegistered = true;
       } catch {
         // Schema may already exist

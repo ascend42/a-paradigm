@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-164239-001
+type: insight
+timestamp: '2026-10-18T16:42:39.104Z'
+author: builder
+title: 'M1.8 slice 2: per-task endpoint choice is kernel-side, steer joins the in-flight turn''s permit'
+summary: session.open has no endpoint param in §5, so per-task choice = first endpoint in signed order capable for the task floor; session.send{steer} with a turn in flight writes turn.steer under that turn's permit (no new permit, no turn.sent); idle steer is a plain send; Claude sessions refuse steer
+symbols_touched:
+  - '#local-runner'
+  - '#supervisor'
+files_modified:
+  - packages/gnomon/src/kernel/supervisor/local-session.ts
+  - packages/gnomon/src/kernel/supervisor/port.ts
+  - packages/gnomon/src/kernel/supervisor/supervisor.ts
+commit: 77e59cf3
+learnings:
+  - Law 1 counts turn.sent rows; a steer is not a new turn so it needs no new permit
+  - A permitId with steer is refused rather than ignored
+tags:
+  - decision
+body: 'No ABI extension was made. When no endpoint is capable the fallback card carries the first endpoint''s reason. Roots inside the Gnomon home are now refused too (found while planning G-LCL-06: the tools would otherwise confine to keys/).'
+git_context:
+  ref: 77e59cf30ba18c55d5a3277738748b5d62c3c5ba
+  branch: gnomon/m18-slice2
+  dirty: true

@@ -1,0 +1,17 @@
+id: L-2026-10-18-builder-204628-003
+type: milestone
+timestamp: '2026-10-18T20:46:28.796Z'
+author: builder
+title: M1.7 slice 2 round 2 closed
+summary: Reviewer blocking cap fix, Aegis C1 allow-list + null-proto, C2 warning + §A.9 residual, C3 probe (pass), C4 hardlink falsifier, forged-decision falsifier, G-SUB-07, O_NOFOLLOW, invalid-fuse => none, withdraw records nothing.
+symbols_touched:
+  - '#supervisor'
+  - '#session-runner'
+commit: 1a394300
+tags:
+  - gnomon
+  - m1.7
+git_context:
+  ref: 1a39430031f74253480c7795bab3450e60794d51
+  branch: gnomon/m17-slice2
+  dirty: true

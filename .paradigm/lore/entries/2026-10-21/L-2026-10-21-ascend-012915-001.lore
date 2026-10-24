@@ -1,0 +1,61 @@
+id: L-2026-10-21-ascend-012915-001
+type: agent-session
+timestamp: '2026-10-21T01:29:15.611Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: One presence per decision (TD-514), session env from the OS, PATH from signed config with tool dirs write-denied
+summary: |-
+  The founder's dogfood found that one mod install cost 4 passwords. TD-2026-10-20-514 makes every card decision cost exactly one presence: a helper 1.8.0 decision.sign op runs one LAContext over both the approvals key and the root key, and the kernel prepares every root row before the prompt. Aegis conditions C1-C7 are in: rootRows on the card, decision row v2 with rowsDigest, a helper-composed dialog line, a closed per-cardKind table, a cross-process grants lock and closure rule, and GUI fail-closed. Uninstall, voice.enrol (now root class), mcp.config, api-token and client decisionSig all cost 1. The founder signed the helper and the on-device probe passed twice.
+
+  A second dogfood failure: sessions were refused with not_subscription_auth after the daemon self-upgraded. The re-exec env had dropped USER, and Claude Code finds its keychain login by $USER. The fix takes USER, LOGNAME, SHELL, TMPDIR and HOME from the OS. Session PATH now comes from config.sessions.path or a fixed default (TD-2026-10-21-077). Every user-writable PATH dir, including the whole Homebrew prefix, is write-denied for sessions (TD-2026-10-21-162; a brew-via-card flow is T-2026-10-21-005).
+
+  Agent turn limits were raised to 100 on main (plugin 7.15.1, pushed bb93992b).
+symbols_touched:
+  - '#gnomon-helper'
+  - '#identity'
+  - '#approval-broker'
+  - '#manifest-loader'
+  - '#gnomon-voice'
+  - '#gui'
+  - '#session-runner'
+  - '#supervisor'
+  - '#paradigm-plugin'
+decisions:
+  - id: TD-2026-10-20-514
+    decision: One presence per card decision, root-class included
+    rationale: 'Founder: 4 passwords per install is unacceptable'
+  - id: TD-2026-10-21-077
+    decision: Session PATH from root-signed config or a fixed default
+    rationale: PATH differed by launch path; after an upgrade it lost /opt/homebrew/bin
+  - id: TD-2026-10-21-162
+    decision: Write-deny user-writable PATH dirs; brew install via a card
+    rationale: 'Aegis: planting persistence vector'
+errors_encountered:
+  - description: Sessions refused not_subscription_auth after a daemon self-upgrade
+    resolution: Session identity env from os.userInfo(), not the daemon env
+  - description: Subagents repeatedly hit 20-50 turn caps
+    resolution: The installed plugin cache was stale; released 7.15.1 with maxTurns 100 to main
+learnings:
+  - 'Count presence prompts as a cost: the spec budgeted 2 per root card, and the implementation spent 4-7.'
+  - 'A clean re-exec env silently changes child behaviour: anything a child needs from identity must come from the OS, not the env.'
+  - A repo change to plugin agent files does nothing until it is on main with a plugin.json bump.
+verification:
+  status: pass
+  details:
+    gnomon: 2778 passed
+    gui: 483 passed
+    contracts: 542 passed
+    swift: 27 passed
+    probe: ok twice
+tags:
+  - gnomon
+  - presence
+  - session-env
+  - dogfood
+  - marathon-2026-10-20
+git_context:
+  ref: df00bd7a4eebafd284313c9d1bffa8384d010608
+  branch: feat/gnomon
+  dirty: true

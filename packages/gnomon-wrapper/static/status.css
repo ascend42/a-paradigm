@@ -1,0 +1,13 @@
+/* type: the GUI's four steps (styles.css --fs-*, design-system foundations.type); this page uses reading and title */
+/* colour: the GUI's --ground / --ink / --fail per theme, and its --mono stack. COPIED from packages/gnomon-gui/static/styles.css
+   (day = :root, night = [data-theme="night"]) because this page loads before the GUI and cannot import it: change both together. */
+:root { color-scheme: light dark; --fs-reading: 13.5px; --fs-title: 17px; --radius: 3px; /* radius: the GUI's base (design-system foundations.radius) */
+  --ground: #EDE8DC; --ink: #16150F; --fail: #B4382A;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+@media (prefers-color-scheme: dark) { :root { --ground: #0F1116; --ink: #E8F4F0; --fail: #FF7A66; } }
+html, body { margin: 0; height: 100%; background: var(--ground); color: var(--ink); font: var(--fs-reading)/1.5 var(--mono); }
+.status { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 12vw; }
+.wordmark { font-size: var(--fs-reading); letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.6; margin: 0 0 1em; }
+.state { font-size: var(--fs-title); margin: 0 0 1em; }
+.state.error { color: var(--fail); }
+.detail { font: inherit; white-space: pre-wrap; margin: 0; padding: 1em; border: 1px solid currentColor; border-radius: var(--radius); opacity: 0.85; user-select: text; }

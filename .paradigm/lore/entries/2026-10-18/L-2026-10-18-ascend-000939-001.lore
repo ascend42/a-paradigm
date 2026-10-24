@@ -1,0 +1,32 @@
+id: L-2026-10-18-ascend-000939-001
+type: human-note
+timestamp: '2026-10-18T00:09:39.723Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'M1.4 slice 2 dispatched: log.read, subscriptions, redaction, ref.resolve'
+summary: |-
+  The founder approved the next M1.4 slice. A builder is implementing:
+  - log.read with filters, cursor pagination and §9.3 redaction per reader class;
+  - follow subscriptions with a 10 000-frame cap that drops the subscription, wired to backpressure;
+  - ref.resolve for the built-in schemes the log can resolve;
+  - scoped views (or not-implemented refusals) for qualified access;
+  - G-ABI-02 rows and redaction tests.
+
+  It goes through reviewer plus Aegis (redaction is security-heavy). After it: slice 3 (read tokens + the full G-ABI/G-SOCK suites), then #web-endpoint.
+symbols_touched:
+  - '#socket'
+  - '#kernel-log'
+  - ~ample-internal-logs
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - state
+linked_lore:
+  - L-2026-10-18-ascend-000803-001
+git_context:
+  ref: 5beb4a7f82f068423b71febb05a6bff302d39df1
+  branch: feat/gnomon
+  dirty: true

@@ -370,7 +370,7 @@ export async function runPersona(
 }
 
 export async function runPersonaObject(
-  rootDir: string,
+  _rootDir: string,
   persona: Persona,
   options: RunOptions,
 ): Promise<RunResult> {
@@ -502,7 +502,7 @@ export async function runChain(
   const chain = yaml.load(fs.readFileSync(chainPath, 'utf8')) as ChainDefinition;
 
   // Apply permutation overrides if specified
-  let permutation: ChainDefinition['permutations'] extends Array<infer T> ? T : never | undefined;
+  let permutation: NonNullable<ChainDefinition['permutations']>[number] | undefined;
   if (options.permutation && chain.permutations) {
     permutation = chain.permutations.find(p => p.id === options.permutation);
     if (!permutation) {
@@ -525,6 +525,7 @@ export async function runChain(
     if (!persona) {
       personaResults.push({
         persona: entry.persona,
+        run_id: generateRunId(),
         status: 'error',
         steps: [],
         spawns_triggered: [],

@@ -1,0 +1,15 @@
+id: L-2026-10-23-ascend-204520-172
+type: insight
+timestamp: '2026-10-23T20:45:20.479Z'
+author: ascend
+title: Decision TD-2026-10-23-815 recorded
+summary: Companion lore entry for decision record TD-2026-10-23-815. See .paradigm/decisions/TD-2026-10-23-815.yaml.
+symbols_touched:
+  - '#always-rules'
+  - '#standing-grant'
+  - '#broker'
+references:
+  decision_id: TD-2026-10-23-815
+tags:
+  - companion-lore
+  - decision-reference

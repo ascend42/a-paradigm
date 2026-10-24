@@ -1,0 +1,191 @@
+# Gnomon (Paradigm 8.0) — PR-0 CI (research 29 §3; spec §16 rule, §19.1).
+# Platform-independent tests run on Windows from day one (A23-5). Since 8.0 M3
+# (T-2026-10-21-030) Gnomon is part of the root build/test scripts too (ci.yml,
+# Node 24, the floor for every package); this workflow keeps the cross-OS matrix through build:gnomon /
+# test:gnomon on Node 24 only.
+name: Gnomon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/gnomon*/**'
+      - 'docs/specs/gnomon*.md'
+      - '.github/**'
+  pull_request:
+    paths:
+      - 'packages/gnomon*/**'
+      - 'docs/specs/gnomon*.md'
+      - '.github/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gnomon-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # GitHub's macOS runners have SIP off, so the session enforcement suite skips there (floor sip) and the
+        # refusal runs; macos-15 also records (informational, no assertion) the copied-osascript exit under the generated profile;
+        # macos-14 exercises the macOS floor refusal. The full enforcement suite runs only on a SIP-on macOS 15+ host.
+        os: [macos-14, macos-15, windows-latest, ubuntu-latest]
+        node: [24]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      # W2/W3 (docs/plans/gnomon-windows.md): the kernel's Windows backends need the Rust platform helper; the
+      # win32-helper suite fails (never skips) on CI when it is missing. Unsigned: signing identities never enter CI.
+      - name: Build the Windows platform helper (unsigned)
+        if: runner.os == 'Windows'
+        run: node packages/gnomon-helper/scripts/build-win32.mjs
+
+      # test:gnomon rebuilds first: the G-KRN-02 dist scan fails loudly (never
+      # skips) when dist/ is missing.
+      - name: Build (@a-company/gnomon-contracts, @a-company/gnomon)
+        run: npm run build:gnomon
+
+      - name: Test (contracts, kernel fence G-KRN-02, G-SEC-01, G-WIN-05)
+        run: npm run test:gnomon
+
+      # M1.12 slice 3: the honesty gate on its own line, so a G-HON failure is named in the run (it also
+      # runs inside test:gnomon; platform-independent). The client-API doc fixed point (G-HON-04 rule)
+      # runs in the contracts suite above.
+      - name: Honesty CI (G-HON-02, G-HON-03, G-HON-05, G-HON-06, G-HON-07)
+        working-directory: packages/gnomon
+        run: npx vitest run test/honesty.test.ts
+
+      - name: Typecheck
+        run: |
+          npm run typecheck --workspace=@a-company/gnomon-contracts
+          npm run typecheck --workspace=@a-company/gnomon
+          npm run typecheck --workspace=@a-company/gnomon-gui
+
+  # M1.0 probes runnable on hosted runners. PR-0 runs only the harness
+  # self-test; PR-2 adds P03 (win), P08, P09, P11, P12 and the P06 smoke.
+  # Results are uploaded as artifacts only — real results are committed from
+  # hardware runs (research 29 §3).
+  probes-ci:
+    name: probes (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Zero deps, no build: run.mjs must work on a fresh checkout.
+      # CI results go to a runner temp dir (--out-dir), never into
+      # probes/results/: the committed files there are hardware runs only,
+      # and the artifact must not mix them in.
+      - name: Probe harness self-test (p-harness)
+        shell: bash
+        run: node packages/gnomon/probes/run.mjs p-harness --out-dir "$RUNNER_TEMP/probe-results"
+
+      # P09 + P12 on hosted runners (mechanics only; the runner's Chrome).
+      # Exit 2 (partial: no Safari/Firefox/WKWebView row on CI) is expected;
+      # only a fail (exit 1) or a harness error fails the step.
+      - name: Probes P09, P12 (browser engines under the §11.2 CSP)
+        shell: bash
+        run: |
+          status=0
+          for id in p09-ed25519-matrix p12-excalidraw-csp; do
+            code=0
+            node packages/gnomon/probes/run.mjs "$id" --timeout 900000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
+            if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then status=1; fi
+          done
+          exit $status
+
+      - name: Upload probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-results-${{ matrix.os }}
+          path: ${{ runner.temp }}/probe-results/*.json
+          if-no-files-found: warn
+
+  native:
+    name: native (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Unsigned: signing identities and secrets never enter CI.
+      - name: Build gnomon-helper (darwin, unsigned)
+        if: runner.os == 'macOS'
+        working-directory: packages/gnomon-helper/darwin
+        run: |
+          swift build
+          .build/debug/gnomon-helper --version
+
+      # #gnomon-voice-io (TD-2026-10-19-298, V2b): macOS only (AVAudioEngine, CoreAudio, Carbon). Unsigned; the
+      # unit tests need no audio hardware, and nothing here opens the mic (--selftest is founder-run, PROBES.md).
+      - name: Build + test gnomon-voice-io (darwin, unsigned)
+        if: runner.os == 'macOS'
+        working-directory: packages/gnomon-voice/io-darwin
+        run: |
+          swift build
+          swift test
+          .build/debug/gnomon-voice-io --version
+
+      # #gnomon-wrapper (M1.13 slice 1): macOS only. Unsigned, no notarization (identities never enter CI).
+      # The Windows wrapper (WebView2, named-pipe channel) is the parity phase (P8-D78), so it is not built there.
+      # The kernel dist is built FIRST: build.rs pins its tree hash and tests/live_kernel.rs runs against it
+      # (with CI=true it fails rather than skips when dist or node is missing).
+      - name: Setup Node.js (gnomon-wrapper live test)
+        if: runner.os == 'macOS'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies (gnomon-wrapper live test)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/install-deps
+
+      - name: Build the kernel dist (gnomon-wrapper live test)
+        if: runner.os == 'macOS'
+        run: npm run build:gnomon
+
+      - name: Test gnomon-wrapper (Rust/Tauri, macOS)
+        if: runner.os == 'macOS'
+        working-directory: packages/gnomon-wrapper
+        run: cargo test --locked
+
+      # W0 (docs/plans/gnomon-windows.md): the Rust helper's own tests (pure checks: SDDL verdicts, path, pipe-name
+      # and URL bounds, argv quoting) plus a release build. The WebView2 wrapper joins this leg in W6.
+      - name: Test + build gnomon-helper (win32, unsigned)
+        if: runner.os == 'Windows'
+        working-directory: packages/gnomon-helper/win32
+        run: |
+          cargo test --locked
+          cargo build --release --locked
+          target/release/gnomon-helper.exe --version

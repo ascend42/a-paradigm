@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-203743-002
+type: insight
+timestamp: '2026-10-18T20:37:43.609Z'
+author: builder
+title: 'M1.3 reading: pin the helper by code-signing requirement, re-check before spawn; identity.json trusted only when the SE confirms it'
+summary: 'The helper is pinned by codesign --verify --strict plus a designated requirement (Developer ID Application, team SW4BMQ8PNL, identifier gnomon.helper); inode/size/mtime/sha256 recorded at verification and re-checked synchronously before every spawn. checksums.json is advisory: timestamped signatures change the sha per build. identity.json is same-user writable, so the daemon opens it only when the pinned helper returns the same SE public keys and the approvals binding verifies under that root; anything else refuses to start, never a software root. Each key signs only its own domain prefixes in the helper.'
+symbols_touched:
+  - '#identity'
+  - '#gnomon-helper'
+commit: '6e999172'
+tags:
+  - decision
+  - gnomon
+  - m1.3
+  - security
+git_context:
+  ref: c918ca1f2bef783b36ba39517b67e3d23c765e00
+  branch: gnomon/m13-slice1
+  dirty: true

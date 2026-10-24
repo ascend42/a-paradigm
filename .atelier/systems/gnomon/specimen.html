@@ -1,0 +1,1378 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gnomon console design system</title><style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1b1c1e;--muted:#5d6066;--line:#e3e3df;--warn:#9a5b00;--warn-bg:#fff4e0;--ok:#1f6b3a;--ok-bg:#e6f4ea;--accent:#2b59c3;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:28px;line-height:1.2;margin:0 0 4px}
+h2{font-size:19px;margin:40px 0 12px;padding-top:16px;border-top:1px solid var(--line)}
+h3{font-size:15px;margin:20px 0 8px}
+p,li{max-width:72ch}
+.meta{color:var(--muted);font-size:13px}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.swatch{height:56px;border-radius:6px;border:1px solid var(--line);margin-bottom:8px;background-image:linear-gradient(var(--c),var(--c)),conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0);background-size:auto,12px 12px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.off{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.badge.on{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:20px}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto}
+.bar{height:12px;background:var(--accent);border-radius:2px}
+.where{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.callout{background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:12px 14px;margin:12px 0}
+iframe{width:100%;border:1px solid var(--line);border-radius:6px;background:transparent;height:72px;display:block}
+nav.toc{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;margin-top:12px}
+nav.toc a{color:var(--accent)}
+.theme-toggle{position:fixed;top:12px;right:12px;font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+</style></head><body><button class="theme-toggle" type="button" onclick="(function(r){var d=r.getAttribute('data-theme');var dark=d?d==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.setAttribute('data-theme',dark?'light':'dark')})(document.documentElement)">Theme</button><main><h1>Gnomon console design system</h1>
+<p>An instrument for one operator running an armada: glanced at many times a day in the Claude Code band, opened a few times a day to decide; exact, calm, quietly beautiful, a made object that reads a larger order.</p>
+<p class="meta">Generated from <code>.atelier/systems/gnomon/design-system.yaml</code>. Regenerate with <code>atelier system specimen --product gnomon</code>; edit the YAML, not this page.</p>
+<nav class="toc"><a href="#foundations">Foundations</a><a href="#components">Components</a><a href="#zones">Zones</a><a href="#content">Content</a><a href="#rules">Rules</a></nav>
+<h2 id="foundations">Foundations</h2>
+<h3>Colour</h3><div class="grid">
+<div class="card"><div class="swatch" style="--c:#EDE8DC"></div><b>day.surface.ground</b><div class="mono meta">#EDE8DC</div></div>
+<div class="card"><div class="swatch" style="--c:#F8F5EE"></div><b>day.surface.sheet</b><div class="mono meta">#F8F5EE</div></div>
+<div class="card"><div class="swatch" style="--c:#E1DBCC"></div><b>day.surface.fold</b><div class="mono meta">#E1DBCC</div></div>
+<div class="card"><div class="swatch" style="--c:#16150F"></div><b>day.text.primary</b><div class="mono meta">#16150F</div></div>
+<div class="card"><div class="swatch" style="--c:#2A2925"></div><b>day.text.strong-secondary</b><div class="mono meta">#2A2925</div></div>
+<div class="card"><div class="swatch" style="--c:#5A5850"></div><b>day.text.secondary</b><div class="mono meta">#5A5850</div></div>
+<div class="card"><div class="swatch" style="--c:#D9D5CB"></div><b>day.line.rule</b><div class="mono meta">#D9D5CB</div></div>
+<div class="card"><div class="swatch" style="--c:#2A2925"></div><b>day.line.key-edge</b><div class="mono meta">#2A2925</div></div>
+<div class="card"><div class="swatch" style="--c:#F8F5EE"></div><b>day.text.on-ink</b><div class="mono meta">#F8F5EE</div></div>
+<div class="card"><div class="swatch" style="--c:#B4382A"></div><b>day.state.fail</b><div class="mono meta">#B4382A</div></div>
+<div class="card"><div class="swatch" style="--c:#6E4700"></div><b>day.state.warn-ink</b><div class="mono meta">#6E4700</div></div>
+<div class="card"><div class="swatch" style="--c:#A8730C"></div><b>day.state.warn-edge</b><div class="mono meta">#A8730C</div></div>
+<div class="card"><div class="swatch" style="--c:#F6E3B8"></div><b>day.state.warn-bg</b><div class="mono meta">#F6E3B8</div></div>
+<div class="card"><div class="swatch" style="--c:#5B4FD6"></div><b>day.state.knot</b><div class="mono meta">#5B4FD6</div></div>
+<div class="card"><div class="swatch" style="--c:#0F1116"></div><b>night.surface.ground</b><div class="mono meta">#0F1116</div></div>
+<div class="card"><div class="swatch" style="--c:#171A21"></div><b>night.surface.sheet</b><div class="mono meta">#171A21</div></div>
+<div class="card"><div class="swatch" style="--c:#23262E"></div><b>night.surface.fold</b><div class="mono meta">#23262E</div></div>
+<div class="card"><div class="swatch" style="--c:#E8F4F0"></div><b>night.text.primary</b><div class="mono meta">#E8F4F0</div></div>
+<div class="card"><div class="swatch" style="--c:#C9DCD6"></div><b>night.text.strong-secondary</b><div class="mono meta">#C9DCD6</div></div>
+<div class="card"><div class="swatch" style="--c:#86998F"></div><b>night.text.secondary</b><div class="mono meta">#86998F</div></div>
+<div class="card"><div class="swatch" style="--c:#2A2F38"></div><b>night.line.rule</b><div class="mono meta">#2A2F38</div></div>
+<div class="card"><div class="swatch" style="--c:#C9DCD6"></div><b>night.line.key-edge</b><div class="mono meta">#C9DCD6</div></div>
+<div class="card"><div class="swatch" style="--c:#171A21"></div><b>night.text.on-ink</b><div class="mono meta">#171A21</div></div>
+<div class="card"><div class="swatch" style="--c:#FF7A66"></div><b>night.state.fail</b><div class="mono meta">#FF7A66</div></div>
+<div class="card"><div class="swatch" style="--c:#FFC15A"></div><b>night.state.warn-ink</b><div class="mono meta">#FFC15A</div></div>
+<div class="card"><div class="swatch" style="--c:#FFC15A"></div><b>night.state.warn-edge</b><div class="mono meta">#FFC15A</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(255, 193, 90, 0.10)"></div><b>night.state.warn-bg</b><div class="mono meta">rgba(255, 193, 90, 0.10)</div></div>
+<div class="card"><div class="swatch" style="--c:#A79CFF"></div><b>night.state.knot</b><div class="mono meta">#A79CFF</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(200, 255, 235, .35)"></div><b>night.glow.wordmark</b><div class="mono meta">rgba(200, 255, 235, .35)</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(160, 255, 220, .22)"></div><b>night.glow.cap</b><div class="mono meta">rgba(160, 255, 220, .22)</div></div>
+<div class="card"><div class="swatch" style="--c:#C08A73"></div><b>project.terracotta.fill</b><div class="mono meta">#C08A73</div></div>
+<div class="card"><div class="swatch" style="--c:#8E4E38"></div><b>project.terracotta.ink</b><div class="mono meta">#8E4E38</div></div>
+<div class="card"><div class="swatch" style="--c:#E6A88F"></div><b>project.terracotta.night</b><div class="mono meta">#E6A88F</div></div>
+<div class="card"><div class="swatch" style="--c:#9DAF8C"></div><b>project.sage.fill</b><div class="mono meta">#9DAF8C</div></div>
+<div class="card"><div class="swatch" style="--c:#56663F"></div><b>project.sage.ink</b><div class="mono meta">#56663F</div></div>
+<div class="card"><div class="swatch" style="--c:#B7CCA3"></div><b>project.sage.night</b><div class="mono meta">#B7CCA3</div></div>
+<div class="card"><div class="swatch" style="--c:#8C9DBB"></div><b>project.slate.fill</b><div class="mono meta">#8C9DBB</div></div>
+<div class="card"><div class="swatch" style="--c:#44577C"></div><b>project.slate.ink</b><div class="mono meta">#44577C</div></div>
+<div class="card"><div class="swatch" style="--c:#A9B9DB"></div><b>project.slate.night</b><div class="mono meta">#A9B9DB</div></div>
+<div class="card"><div class="swatch" style="--c:#D2B074"></div><b>project.ochre.fill</b><div class="mono meta">#D2B074</div></div>
+<div class="card"><div class="swatch" style="--c:#7A5A1C"></div><b>project.ochre.ink</b><div class="mono meta">#7A5A1C</div></div>
+<div class="card"><div class="swatch" style="--c:#E8C88C"></div><b>project.ochre.night</b><div class="mono meta">#E8C88C</div></div>
+<div class="card"><div class="swatch" style="--c:#C9949A"></div><b>project.rose-clay.fill</b><div class="mono meta">#C9949A</div></div>
+<div class="card"><div class="swatch" style="--c:#874B54"></div><b>project.rose-clay.ink</b><div class="mono meta">#874B54</div></div>
+<div class="card"><div class="swatch" style="--c:#E4AEB4"></div><b>project.rose-clay.night</b><div class="mono meta">#E4AEB4</div></div>
+<div class="card"><div class="swatch" style="--c:#8FB0AE"></div><b>project.sea-grey.fill</b><div class="mono meta">#8FB0AE</div></div>
+<div class="card"><div class="swatch" style="--c:#3F6664"></div><b>project.sea-grey.ink</b><div class="mono meta">#3F6664</div></div>
+<div class="card"><div class="swatch" style="--c:#A8CFCB"></div><b>project.sea-grey.night</b><div class="mono meta">#A8CFCB</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(15, 17, 22, 0.35)"></div><b>overlay.scrim</b><div class="mono meta">rgba(15, 17, 22, 0.35)</div></div>
+<div class="card"><div class="swatch" style="--c:clear"></div><b>status</b><div class="mono meta">clear</div></div>
+<div class="card"><div class="swatch" style="--c:2026-10-15-gnomon-aesthetic"></div><b>from.session</b><div class="mono meta">2026-10-15-gnomon-aesthetic</div></div>
+<div class="card"><div class="swatch" style="--c:colour"></div><b>from.board</b><div class="mono meta">colour</div></div>
+<div class="card"><div class="swatch" style="--c:pigment-set"></div><b>from.choice</b><div class="mono meta">pigment-set</div></div>
+<div class="card"><div class="swatch" style="--c:2026-10-21-design-systems"></div><b>from.confirmed.session</b><div class="mono meta">2026-10-21-design-systems</div></div>
+<div class="card"><div class="swatch" style="--c:bulk-confirm"></div><b>from.confirmed.board</b><div class="mono meta">bulk-confirm</div></div>
+</div>
+<h3>Type families</h3>
+<div class="card" style="margin-bottom:8px"><div class="meta">mono · <span class="mono">JetBrains Mono</span></div><div style="font-family:JetBrains Mono,system-ui;font-size:22px">The control room for your source</div></div>
+<div class="card" style="margin-bottom:8px"><div class="meta">display · <span class="mono">Fraunces</span></div><div style="font-family:Fraunces,system-ui;font-size:22px">The control room for your source</div></div>
+<div class="card" style="margin-bottom:8px"><div class="meta">status · <span class="mono">clear</span></div><div style="font-family:clear,system-ui;font-size:22px">The control room for your source</div></div>
+<div class="card" style="margin-bottom:8px"><div class="meta">from.session · <span class="mono">2026-10-15-gnomon-aesthetic</span></div><div style="font-family:2026-10-15-gnomon-aesthetic,system-ui;font-size:22px">The control room for your source</div></div>
+<div class="card" style="margin-bottom:8px"><div class="meta">from.board · <span class="mono">type</span></div><div style="font-family:type,system-ui;font-size:22px">The control room for your source</div></div>
+<div class="card" style="margin-bottom:8px"><div class="meta">from.choice · <span class="mono">mono-spine</span></div><div style="font-family:mono-spine,system-ui;font-size:22px">The control room for your source</div></div>
+<div class="card" style="margin-bottom:8px"><div class="meta">from.confirmed.session · <span class="mono">2026-10-21-design-systems</span></div><div style="font-family:2026-10-21-design-systems,system-ui;font-size:22px">The control room for your source</div></div>
+<div class="card" style="margin-bottom:8px"><div class="meta">from.confirmed.board · <span class="mono">bulk-confirm</span></div><div style="font-family:bulk-confirm,system-ui;font-size:22px">The control room for your source</div></div>
+<h3>Type scale</h3><div class="scroll"><table>
+<tr><td class="mono" style="width:80px">10.5px</td><td style="font-size:10.5px;line-height:1.25">Voice off · edits ask first</td></tr>
+<tr><td class="mono" style="width:80px">11.5px</td><td style="font-size:11.5px;line-height:1.25">Voice off · edits ask first</td></tr>
+<tr><td class="mono" style="width:80px">13.5px</td><td style="font-size:13.5px;line-height:1.25">Voice off · edits ask first</td></tr>
+<tr><td class="mono" style="width:80px">17px</td><td style="font-size:17px;line-height:1.25">Voice off · edits ask first</td></tr>
+</table></div>
+<h3>Spacing</h3><div class="scroll"><table>
+<tr><td class="mono" style="width:140px">scale 0</td><td><div class="bar" style="width:0px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 2</td><td><div class="bar" style="width:2px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 4</td><td><div class="bar" style="width:4px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 6</td><td><div class="bar" style="width:6px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 8</td><td><div class="bar" style="width:8px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 10</td><td><div class="bar" style="width:10px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 12</td><td><div class="bar" style="width:12px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 14</td><td><div class="bar" style="width:14px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 16</td><td><div class="bar" style="width:16px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 18</td><td><div class="bar" style="width:18px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 20</td><td><div class="bar" style="width:20px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 22</td><td><div class="bar" style="width:22px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 24</td><td><div class="bar" style="width:24px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 26</td><td><div class="bar" style="width:26px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 28</td><td><div class="bar" style="width:28px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 30</td><td><div class="bar" style="width:30px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 32</td><td><div class="bar" style="width:32px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 34</td><td><div class="bar" style="width:34px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">scale 36</td><td><div class="bar" style="width:36px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">layout 48</td><td><div class="bar" style="width:48px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">layout 64</td><td><div class="bar" style="width:64px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">layout 76</td><td><div class="bar" style="width:76px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">layout 110</td><td><div class="bar" style="width:110px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">layout 140</td><td><div class="bar" style="width:140px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">roles.row-gap 6</td><td><div class="bar" style="width:6px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">roles.control-pad-x 10</td><td><div class="bar" style="width:10px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">roles.pane-pad-x 20</td><td><div class="bar" style="width:20px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">roles.card-pad 10 12 10 14</td><td><div class="bar" style="width:10px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">status clear</td><td><div class="bar" style="width:0px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">from.session 2026-10-21-design-systems</td><td><div class="bar" style="width:400px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">from.board gnomon-spacing</td><td><div class="bar" style="width:0px;max-width:100%"></div></td></tr>
+<tr><td class="mono" style="width:140px">from.choice 2px-grid</td><td><div class="bar" style="width:2px;max-width:100%"></div></td></tr>
+</table></div>
+<h3>Radius, shadow, motion</h3><div class="scroll"><table><tr><th>Group</th><th>Token</th><th>Value</th></tr>
+<tr><td>radius</td><td class="mono">none</td><td class="mono">0</td></tr>
+<tr><td>radius</td><td class="mono">base</td><td class="mono">3</td></tr>
+<tr><td>radius</td><td class="mono">pill</td><td class="mono">999</td></tr>
+<tr><td>radius</td><td class="mono">status</td><td class="mono">clear</td></tr>
+<tr><td>radius</td><td class="mono">from.extract</td><td class="mono">2026-10-21</td></tr>
+<tr><td>radius</td><td class="mono">from.note</td><td class="mono">3 wins its near-duplicate group (2/3/4) by uses, 27 vs 8 vs 5; pill from board header-5b (day: rounded paper pill; night: square)</td></tr>
+<tr><td>radius</td><td class="mono">from.confirmed.session</td><td class="mono">2026-10-21-design-systems</td></tr>
+<tr><td>radius</td><td class="mono">from.confirmed.board</td><td class="mono">bulk-confirm</td></tr>
+<tr><td>shadow</td><td class="mono">key</td><td class="mono">2px 2px 0 var(--key-edge)</td></tr>
+<tr><td>shadow</td><td class="mono">sheet</td><td class="mono">0 1px 0 rgba(0, 0, 0, .06), 3px 4px 0 -1px var(--fold), 4px 6px 10px rgba(60, 48, 30, .14)</td></tr>
+<tr><td>shadow</td><td class="mono">overlay</td><td class="mono">2px 3px 0 rgba(22, 21, 15, 0.18)</td></tr>
+<tr><td>shadow</td><td class="mono">slip</td><td class="mono">1px 2px 0 rgba(22, 21, 15, .08)</td></tr>
+<tr><td>shadow</td><td class="mono">status</td><td class="mono">clear</td></tr>
+<tr><td>shadow</td><td class="mono">from.session</td><td class="mono">2026-10-20-gnomon-gui-fidelity</td></tr>
+<tr><td>shadow</td><td class="mono">from.board</td><td class="mono">s1-tokens-themes</td></tr>
+<tr><td>shadow</td><td class="mono">from.note</td><td class="mono">material, never a state signal (world rule)</td></tr>
+<tr><td>shadow</td><td class="mono">from.confirmed.session</td><td class="mono">2026-10-21-design-systems</td></tr>
+<tr><td>shadow</td><td class="mono">from.confirmed.board</td><td class="mono">bulk-confirm</td></tr>
+<tr><td>motion</td><td class="mono">durations</td><td class="mono">120, 160, 180, 220, 320, 360, 400, 500, 1100, 3000</td></tr>
+<tr><td>motion</td><td class="mono">easings</td><td class="mono">cubic-bezier(.3, .7, .3, 1), cubic-bezier(.3, 1.4, .5, 1), cubic-bezier(.2, .8, .2, 1), ease-in, ease-out, ease-in-out, linear</td></tr>
+<tr><td>motion</td><td class="mono">tokens.arrive</td><td class="mono">160ms ease-out</td></tr>
+<tr><td>motion</td><td class="mono">tokens.stamp</td><td class="mono">400ms cubic-bezier(.3,1.4,.5,1)</td></tr>
+<tr><td>motion</td><td class="mono">tokens.fade</td><td class="mono">180ms ease-out</td></tr>
+<tr><td>motion</td><td class="mono">tokens.droop</td><td class="mono">500ms ease-out</td></tr>
+<tr><td>motion</td><td class="mono">tokens.bob</td><td class="mono">1100ms ease-in-out</td></tr>
+<tr><td>motion</td><td class="mono">tokens.hold</td><td class="mono">3000ms linear</td></tr>
+<tr><td>motion</td><td class="mono">tokens.reflow</td><td class="mono">220ms</td></tr>
+<tr><td>motion</td><td class="mono">tokens.slip-in</td><td class="mono">320ms cubic-bezier(.3,.7,.3,1)</td></tr>
+<tr><td>motion</td><td class="mono">tokens.leaf-in</td><td class="mono">360ms</td></tr>
+<tr><td>motion</td><td class="mono">tokens.meter</td><td class="mono">120ms linear</td></tr>
+<tr><td>motion</td><td class="mono">status</td><td class="mono">clear</td></tr>
+<tr><td>motion</td><td class="mono">from.session</td><td class="mono">2026-10-15-gnomon-aesthetic</td></tr>
+<tr><td>motion</td><td class="mono">from.board</td><td class="mono">motion</td></tr>
+<tr><td>motion</td><td class="mono">from.choice</td><td class="mono">lively-workshop</td></tr>
+<tr><td>motion</td><td class="mono">from.confirmed.session</td><td class="mono">2026-10-21-design-systems</td></tr>
+<tr><td>motion</td><td class="mono">from.confirmed.board</td><td class="mono">bulk-confirm</td></tr>
+<tr><td>motion</td><td class="mono">amended_by</td><td class="mono">[object Object], [object Object]</td></tr>
+</table></div>
+<h2 id="components">Components</h2>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">key</h3><p>Anything you can click that the kernel or the app owns: decisions, actions, toggles, and every small control on a chip-sized line. Never drawn from model text.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">label</span> <span class="badge">kbd hint (optional)</span></td></tr>
+<tr><th>Variants</th><td><div><b>default</b>: sheet fill, key-edge ring, hard ink offset by day; ring only at night</div><div><b>pri</b>: filled ink, on-ink text: the one primary per group (first non-deny decision; send)</div><div><b>quiet</b>: no offset, --ink2, the same height as every key (var(--key-h)): secondary actions (close, done, raw, ⤢, Hold, cancel, Advanced ▸, Type a path ▸) and the small keys that used to be drawn as chips (✎ rename, run mode ▾, stack filter). Quiet is a look, not a size (amended 2026-10-23: was 24px min)</div><div><b>seg</b>: a segmented choice (.seg-key in .seg); selected = filled ink by day, [bracketed] + glow at night</div><div><b>newb</b>: + New session: full-width, [bracketed] at night</div><div><b>cost-label</b>: a key whose press costs something names it after &#39; · &#39;: &#39;Loosen · needs trust&#39;, &#39;Resume · presence&#39;, &#39;Resume all · presence&#39;; tightening says so too (&#39;Apply · tighter&#39;). From session 2026-10-22-gnomon-loops-ui, board steer-stop.</div></td></tr>
+<tr><th>Sizes</th><td><div><b>all</b>: <span class="mono">{&quot;min-height&quot;:&quot;var(--key-h) 28&quot;,&quot;min-width&quot;:&quot;var(--key-h) 28 (glyph keys)&quot;,&quot;font&quot;:11.5}</span></div></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">hover</span> <span class="badge">focus</span> <span class="badge">pressed</span> <span class="badge">selected</span> <span class="badge">disabled</span> <span class="badge">busy</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --sheet<br>edge → --key-edge<br>text → --ink<br>hover → --fold<br>offset → --key-shadow<br>pri-fill → --ink<br>pri-text → --on-ink<br>focus → 2px solid --key-edge</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:180-197,244</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=default&amp;t=day" title="key, default, day"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=hover&amp;t=day" title="key, hover, day"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=focus&amp;t=day" title="key, focus, day"></iframe></div>
+<div><div class="meta">pri</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=pri&amp;t=day" title="key, pri, day"></iframe></div>
+<div><div class="meta">quiet</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=quiet&amp;t=day" title="key, quiet, day"></iframe></div>
+<div><div class="meta">small</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=small&amp;t=day" title="key, small, day"></iframe></div>
+<div><div class="meta">selected</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=selected&amp;t=day" title="key, selected, day"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=disabled&amp;t=day" title="key, disabled, day"></iframe></div>
+<div><div class="meta">busy</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=busy&amp;t=day" title="key, busy, day"></iframe></div>
+<div><div class="meta">pressed</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=pressed&amp;t=day" title="key, pressed, day"></iframe></div>
+<div><div class="meta">cost-label</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=cost-label&amp;t=day" title="key, cost-label, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=default&amp;t=night" title="key, default, night"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=hover&amp;t=night" title="key, hover, night"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=focus&amp;t=night" title="key, focus, night"></iframe></div>
+<div><div class="meta">pri</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=pri&amp;t=night" title="key, pri, night"></iframe></div>
+<div><div class="meta">quiet</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=quiet&amp;t=night" title="key, quiet, night"></iframe></div>
+<div><div class="meta">small</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=small&amp;t=night" title="key, small, night"></iframe></div>
+<div><div class="meta">selected</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=selected&amp;t=night" title="key, selected, night"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=disabled&amp;t=night" title="key, disabled, night"></iframe></div>
+<div><div class="meta">busy</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=busy&amp;t=night" title="key, busy, night"></iframe></div>
+<div><div class="meta">pressed</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=pressed&amp;t=night" title="key, pressed, night"></iframe></div>
+<div><div class="meta">cost-label</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=cost-label&amp;t=night" title="key, cost-label, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=default&amp;t=day-still" title="key, default, day-still"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=hover&amp;t=day-still" title="key, hover, day-still"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=focus&amp;t=day-still" title="key, focus, day-still"></iframe></div>
+<div><div class="meta">pri</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=pri&amp;t=day-still" title="key, pri, day-still"></iframe></div>
+<div><div class="meta">quiet</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=quiet&amp;t=day-still" title="key, quiet, day-still"></iframe></div>
+<div><div class="meta">small</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=small&amp;t=day-still" title="key, small, day-still"></iframe></div>
+<div><div class="meta">selected</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=selected&amp;t=day-still" title="key, selected, day-still"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=disabled&amp;t=day-still" title="key, disabled, day-still"></iframe></div>
+<div><div class="meta">busy</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=busy&amp;t=day-still" title="key, busy, day-still"></iframe></div>
+<div><div class="meta">pressed</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=pressed&amp;t=day-still" title="key, pressed, day-still"></iframe></div>
+<div><div class="meta">cost-label</div><iframe loading="lazy" src="specimen-frame.html#c=key&amp;s=cost-label&amp;t=day-still" title="key, cost-label, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">field</h3><p>Text entry: composer, search, palette field, rename, settings inputs.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><div><b>default</b>: .field</div><div><b>palfield</b>: the header&#39;s palette launcher (a button drawn as a field)</div><div><b>composer</b>: one container: the composer draws the only border and the focus ring</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">hover</span> <span class="badge">focus</span> <span class="badge">invalid</span> <span class="badge">disabled</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --sheet<br>edge → --sec (5.8:1 on the page, 6.5:1 on the sheet)<br>hover → --key-edge<br>focus → 2px solid --key-edge<br>invalid → --fail-edge</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:199-206,755,800-804,865-871,966</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=default&amp;t=day" title="field, default, day"></iframe></div>
+<div><div class="meta">palfield</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=palfield&amp;t=day" title="field, palfield, day"></iframe></div>
+<div><div class="meta">invalid</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=invalid&amp;t=day" title="field, invalid, day"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=disabled&amp;t=day" title="field, disabled, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=default&amp;t=night" title="field, default, night"></iframe></div>
+<div><div class="meta">palfield</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=palfield&amp;t=night" title="field, palfield, night"></iframe></div>
+<div><div class="meta">invalid</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=invalid&amp;t=night" title="field, invalid, night"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=disabled&amp;t=night" title="field, disabled, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=default&amp;t=day-still" title="field, default, day-still"></iframe></div>
+<div><div class="meta">palfield</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=palfield&amp;t=day-still" title="field, palfield, day-still"></iframe></div>
+<div><div class="meta">invalid</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=invalid&amp;t=day-still" title="field, invalid, day-still"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=field&amp;s=disabled&amp;t=day-still" title="field, disabled, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: hover, focus. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">menu</h3><p>A popover list under its trigger: the wordmark menu, run mode, model, ⋯ more.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">heading (.menu-h)</span> <span class="badge">{&quot;item (.mode-item / .app-item&quot;:&quot;name&quot;}</span> <span class="badge">note</span> <span class="badge">kbd)</span> <span class="badge">rule (.menu-rule)</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">hover</span> <span class="badge">focus</span> <span class="badge">current</span> <span class="badge">disabled</span> <span class="badge">expanded-group</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --sheet<br>edge → --key-edge<br>shadow → --sheet-shadow<br>radius → 3<br>hover → --fold</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:611-618,784-798</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=default&amp;t=day" title="menu, default, day"></iframe></div>
+<div><div class="meta">current</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=current&amp;t=day" title="menu, current, day"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=disabled&amp;t=day" title="menu, disabled, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=default&amp;t=night" title="menu, default, night"></iframe></div>
+<div><div class="meta">current</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=current&amp;t=night" title="menu, current, night"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=disabled&amp;t=night" title="menu, disabled, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=default&amp;t=day-still" title="menu, default, day-still"></iframe></div>
+<div><div class="meta">current</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=current&amp;t=day-still" title="menu, current, day-still"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=menu&amp;s=disabled&amp;t=day-still" title="menu, disabled, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: hover, focus, expanded-group. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">voice-pill</h3><p>Kernel-owned header indicator and the ladder&#39;s trigger: mic dot + rung name + one live fact; never only a glyph.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">dot</span> <span class="badge">rung</span> <span class="badge">fact</span> <span class="badge">meter (only while hearing)</span> <span class="badge">progress (setup)</span></td></tr>
+<tr><th>Variants</th><td><div><b>off</b>: hollow dot, &#39;Voice off&#39;</div><div><b>live</b>: filled ink dot + soft ring</div><div><b>fail</b>: vermilion fact with the reason</div><div><b>action</b>: &#39;○ Start voice · app not running&#39; when the app can&#39;t run</div></td></tr>
+<tr><th>Sizes</th><td><div><b>header</b>: <span class="mono">{&quot;height&quot;:28,&quot;font&quot;:11.5}</span></div></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">hover</span> <span class="badge">focus</span> <span class="badge">expanded</span> <span class="badge">live</span> <span class="badge">fail</span> <span class="badge">action</span></td></tr>
+<tr><th>Tokens</th><td class="mono">edge → --key-edge<br>dot-live → --ink<br>fail → --fail<br>radius → pill by day, 0 at night</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:624-645; packages/gnomon-gui/static/index.html:22</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">off</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=off&amp;t=day" title="voice-pill, off, day"></iframe></div>
+<div><div class="meta">live</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=live&amp;t=day" title="voice-pill, live, day"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=fail&amp;t=day" title="voice-pill, fail, day"></iframe></div>
+<div><div class="meta">action</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=action&amp;t=day" title="voice-pill, action, day"></iframe></div>
+<div><div class="meta">expanded</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=expanded&amp;t=day" title="voice-pill, expanded, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">off</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=off&amp;t=night" title="voice-pill, off, night"></iframe></div>
+<div><div class="meta">live</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=live&amp;t=night" title="voice-pill, live, night"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=fail&amp;t=night" title="voice-pill, fail, night"></iframe></div>
+<div><div class="meta">action</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=action&amp;t=night" title="voice-pill, action, night"></iframe></div>
+<div><div class="meta">expanded</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=expanded&amp;t=night" title="voice-pill, expanded, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">off</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=off&amp;t=day-still" title="voice-pill, off, day-still"></iframe></div>
+<div><div class="meta">live</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=live&amp;t=day-still" title="voice-pill, live, day-still"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=fail&amp;t=day-still" title="voice-pill, fail, day-still"></iframe></div>
+<div><div class="meta">action</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=action&amp;t=day-still" title="voice-pill, action, day-still"></iframe></div>
+<div><div class="meta">expanded</div><iframe loading="lazy" src="specimen-frame.html#c=voice-pill&amp;s=expanded&amp;t=day-still" title="voice-pill, expanded, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: default, hover, focus. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">voice-ladder</h3><p>The pill&#39;s popover: five rungs (Off, Talk, Dictate, Send word, Pieces), one line each, a cost tag; links to Voice settings.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">target line</span> <span class="badge">start row (when the app needs a fix)</span> <span class="badge">rung (radio</span> <span class="badge">name</span> <span class="badge">line</span> <span class="badge">tag)</span> <span class="badge">foot (mic key · listen</span> <span class="badge">link)</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">hover</span> <span class="badge">focus</span> <span class="badge">checked</span> <span class="badge">disabled</span> <span class="badge">not-ready</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:647-666; packages/gnomon-gui/src/ui/voice-settings.ts:34-49</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=default&amp;t=day" title="voice-ladder, default, day"></iframe></div>
+<div><div class="meta">checked</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=checked&amp;t=day" title="voice-ladder, checked, day"></iframe></div>
+<div><div class="meta">not-ready</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=not-ready&amp;t=day" title="voice-ladder, not-ready, day"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=disabled&amp;t=day" title="voice-ladder, disabled, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=default&amp;t=night" title="voice-ladder, default, night"></iframe></div>
+<div><div class="meta">checked</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=checked&amp;t=night" title="voice-ladder, checked, night"></iframe></div>
+<div><div class="meta">not-ready</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=not-ready&amp;t=night" title="voice-ladder, not-ready, night"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=disabled&amp;t=night" title="voice-ladder, disabled, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=default&amp;t=day-still" title="voice-ladder, default, day-still"></iframe></div>
+<div><div class="meta">checked</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=checked&amp;t=day-still" title="voice-ladder, checked, day-still"></iframe></div>
+<div><div class="meta">not-ready</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=not-ready&amp;t=day-still" title="voice-ladder, not-ready, day-still"></iframe></div>
+<div><div class="meta">disabled</div><iframe loading="lazy" src="specimen-frame.html#c=voice-ladder&amp;s=disabled&amp;t=day-still" title="voice-ladder, disabled, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: hover, focus. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">kernel-status</h3><p>Quiet kernel status in the header: a link dot that gains a word only when not connected; the loops word while any loop is enabled (component loops-word); the browser-risk chip (a status label at key height).</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><div><b>link-ok</b>: filled ink dot, no word</div><div><b>link-off</b>: hollow dot + word (&#39;connecting…&#39;, &#39;not connected&#39;)</div><div><b>risk</b>: outlined amber chip at key height (28px, header only)</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">ok</span> <span class="badge">connecting</span> <span class="badge">disconnected</span> <span class="badge">risk</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:806-811; packages/gnomon-gui/static/index.html:21</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">ok</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=ok&amp;t=day" title="kernel-status, ok, day"></iframe></div>
+<div><div class="meta">connecting</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=connecting&amp;t=day" title="kernel-status, connecting, day"></iframe></div>
+<div><div class="meta">disconnected</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=disconnected&amp;t=day" title="kernel-status, disconnected, day"></iframe></div>
+<div><div class="meta">risk</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=risk&amp;t=day" title="kernel-status, risk, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">ok</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=ok&amp;t=night" title="kernel-status, ok, night"></iframe></div>
+<div><div class="meta">connecting</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=connecting&amp;t=night" title="kernel-status, connecting, night"></iframe></div>
+<div><div class="meta">disconnected</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=disconnected&amp;t=night" title="kernel-status, disconnected, night"></iframe></div>
+<div><div class="meta">risk</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=risk&amp;t=night" title="kernel-status, risk, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">ok</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=ok&amp;t=day-still" title="kernel-status, ok, day-still"></iframe></div>
+<div><div class="meta">connecting</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=connecting&amp;t=day-still" title="kernel-status, connecting, day-still"></iframe></div>
+<div><div class="meta">disconnected</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=disconnected&amp;t=day-still" title="kernel-status, disconnected, day-still"></iframe></div>
+<div><div class="meta">risk</div><iframe loading="lazy" src="specimen-frame.html#c=kernel-status&amp;s=risk&amp;t=day-still" title="kernel-status, risk, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">chip</h3><p>A status label nobody clicks: one fact on a line (the card voice tag, hand only, flags, mod symbols, dev). Anything you can click is a key (24px, --key-edge), never a chip.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">text</span> <span class="badge">handle word (gate voice tag only)</span></td></tr>
+<tr><th>Variants</th><td><div><b>plain</b>: --sec text, --rule edge</div><div><b>ink</b>: --ink text (mod symbol chips)</div><div><b>warn</b>: --warn-ink text, --warn-edge, --warn-bg (flags, dev)</div></td></tr>
+<tr><th>Sizes</th><td><div><b>default</b>: <span class="mono">{&quot;height&quot;:18,&quot;font&quot;:10.5,&quot;pad-x&quot;:6,&quot;gap&quot;:4}</span></div></td></tr>
+<tr><th>States</th><td><span class="badge">plain</span> <span class="badge">ink</span> <span class="badge">warn</span></td></tr>
+<tr><th>Tokens</th><td class="mono">edge → --rule<br>text → --sec<br>radius → 3 by day, 0 at night<br>warn-edge → --warn-edge<br>warn-bg → --warn-bg</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:950 (the decided chip; .badge, .card-voice, .tone-chip fold into it; .clamp-chip is gone with the clamp, TD-2026-10-23-939, see migration batch chips-and-small-keys)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">plain</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=plain&amp;t=day" title="chip, plain, day"></iframe></div>
+<div><div class="meta">ink</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=ink&amp;t=day" title="chip, ink, day"></iframe></div>
+<div><div class="meta">warn</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=warn&amp;t=day" title="chip, warn, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">plain</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=plain&amp;t=night" title="chip, plain, night"></iframe></div>
+<div><div class="meta">ink</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=ink&amp;t=night" title="chip, ink, night"></iframe></div>
+<div><div class="meta">warn</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=warn&amp;t=night" title="chip, warn, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">plain</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=plain&amp;t=day-still" title="chip, plain, day-still"></iframe></div>
+<div><div class="meta">ink</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=ink&amp;t=day-still" title="chip, ink, day-still"></iframe></div>
+<div><div class="meta">warn</div><iframe loading="lazy" src="specimen-frame.html#c=chip&amp;s=warn&amp;t=day-still" title="chip, warn, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">card</h3><p>A kernel decision as a paper sheet: in the global stack and pinned in its session; deciding either removes both.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">state edge (left)</span> <span class="badge">head (■ project · kind · by requester · voice tag chip)</span> <span class="badge">title</span> <span class="badge">raised line or held note</span> <span class="badge">held bar</span> <span class="badge">keys</span> <span class="badge">contentHash line</span> <span class="badge">details disclosure</span> <span class="badge">stamp</span></td></tr>
+<tr><th>Variants</th><td><div><b>neutral</b>: edge = project ink (pe-h0..5)</div><div><b>knot</b>: violet edge, uppercase violet title</div><div><b>failed</b>: vermilion edge + title, droops once</div><div><b>gate/held</b>: amber edge; held shows the 3s bar</div><div><b>claim-mismatch</b>: vermilion edge, red first body line, Deny focused, no primary</div><div><b>voice-origin</b>: amber edge + &#39;asked during a voice-sent turn&#39;</div><div><b>loop-trust</b>: ↻ loop family; --key-edge edge; short in the pile (title, by, what changed in one line, &#39;hand only · root key&#39;); Read unfolds the same card over the centre (component loop-trust-unfolded); Trust only after the whole definition</div><div><b>loop-choice</b>: ↻ loop family; kind &#39;decide&#39;; the kernel line &#39;Raised by loop &lt;id&gt; (authored by &lt;who&gt;)&#39;; the run path with marks; Continue (pri, hand only, fresh presence) and Stop</div><div><b>local-config</b>: ⊙ gnomon family; kind grant, detail.action local.config (clientApiId unchanged); kernel-composed title &#39;Set up the local model&#39; | &#39;Change the local model&#39;; k-line &#39;asked from Settings · hh:mm · applies at once, no restart&#39;; &#39;This decision signs&#39; lists every field of the gnomon-root-local:v1 row, one per line (config version, each endpoint with server and address, model and whether loops may use it, the runner pin), changed lines with the loop-diff marks; Allow (pri) and Deny; presence line; hand only · root key</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">arriving (a quick fade-in, opacity only)</span> <span class="badge">default</span> <span class="badge">buried (keys inert until fanned)</span> <span class="badge">fanned</span> <span class="badge">held</span> <span class="badge">stamped (the decision word, straight)</span> <span class="badge">leaving (fades out, opacity only, then the pile closes up; founder 2026-10-23, tokens.motion amended_by)</span> <span class="badge">failed</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --sheet<br>edge-w → 4 day / 3 night<br>shadow → --sheet-shadow<br>pad → 10 12 10 14</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:313-394,1009-1014; packages/gnomon-gui/src/core/render.ts:352-357,736-800</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=default&amp;t=day" title="card, default, day"></iframe></div>
+<div><div class="meta">gate</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=gate&amp;t=day" title="card, gate, day"></iframe></div>
+<div><div class="meta">knot</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=knot&amp;t=day" title="card, knot, day"></iframe></div>
+<div><div class="meta">held</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=held&amp;t=day" title="card, held, day"></iframe></div>
+<div><div class="meta">failed</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=failed&amp;t=day" title="card, failed, day"></iframe></div>
+<div><div class="meta">session-family</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=session-family&amp;t=day" title="card, session-family, day"></iframe></div>
+<div><div class="meta">loop-trust</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=loop-trust&amp;t=day" title="card, loop-trust, day"></iframe></div>
+<div><div class="meta">loop-choice</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=loop-choice&amp;t=day" title="card, loop-choice, day"></iframe></div>
+<div><div class="meta">local-config</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=local-config&amp;t=day" title="card, local-config, day"></iframe></div>
+<div><div class="meta">local-config-change</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=local-config-change&amp;t=day" title="card, local-config-change, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=default&amp;t=night" title="card, default, night"></iframe></div>
+<div><div class="meta">gate</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=gate&amp;t=night" title="card, gate, night"></iframe></div>
+<div><div class="meta">knot</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=knot&amp;t=night" title="card, knot, night"></iframe></div>
+<div><div class="meta">held</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=held&amp;t=night" title="card, held, night"></iframe></div>
+<div><div class="meta">failed</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=failed&amp;t=night" title="card, failed, night"></iframe></div>
+<div><div class="meta">session-family</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=session-family&amp;t=night" title="card, session-family, night"></iframe></div>
+<div><div class="meta">loop-trust</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=loop-trust&amp;t=night" title="card, loop-trust, night"></iframe></div>
+<div><div class="meta">loop-choice</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=loop-choice&amp;t=night" title="card, loop-choice, night"></iframe></div>
+<div><div class="meta">local-config</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=local-config&amp;t=night" title="card, local-config, night"></iframe></div>
+<div><div class="meta">local-config-change</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=local-config-change&amp;t=night" title="card, local-config-change, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=default&amp;t=day-still" title="card, default, day-still"></iframe></div>
+<div><div class="meta">gate</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=gate&amp;t=day-still" title="card, gate, day-still"></iframe></div>
+<div><div class="meta">knot</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=knot&amp;t=day-still" title="card, knot, day-still"></iframe></div>
+<div><div class="meta">held</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=held&amp;t=day-still" title="card, held, day-still"></iframe></div>
+<div><div class="meta">failed</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=failed&amp;t=day-still" title="card, failed, day-still"></iframe></div>
+<div><div class="meta">session-family</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=session-family&amp;t=day-still" title="card, session-family, day-still"></iframe></div>
+<div><div class="meta">loop-trust</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=loop-trust&amp;t=day-still" title="card, loop-trust, day-still"></iframe></div>
+<div><div class="meta">loop-choice</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=loop-choice&amp;t=day-still" title="card, loop-choice, day-still"></iframe></div>
+<div><div class="meta">local-config</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=local-config&amp;t=day-still" title="card, local-config, day-still"></iframe></div>
+<div><div class="meta">local-config-change</div><iframe loading="lazy" src="specimen-frame.html#c=card&amp;s=local-config-change&amp;t=day-still" title="card, local-config-change, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: arriving (a quick fade-in, opacity only), buried (keys inert until fanned), fanned, stamped (the decision word, straight), leaving (fades out, opacity only, then the pile closes up; founder 2026-10-23, tokens.motion amended_by). Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">pile</h3><p>The global stack as a paper pile: decision cards sorted by urgency, then alerts, then the waiting-for-trust slip at the foot; fans on hover AND focus-within so buried keys are keyboard-reachable (alerts and the slip sit flat).</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">stacked</span> <span class="badge">fanned</span> <span class="badge">open</span> <span class="badge">empty</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:307-312,366-378</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">stacked</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=stacked&amp;t=day" title="pile, stacked, day"></iframe></div>
+<div><div class="meta">fanned</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=fanned&amp;t=day" title="pile, fanned, day"></iframe></div>
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=empty&amp;t=day" title="pile, empty, day"></iframe></div>
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=open&amp;t=day" title="pile, open, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">stacked</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=stacked&amp;t=night" title="pile, stacked, night"></iframe></div>
+<div><div class="meta">fanned</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=fanned&amp;t=night" title="pile, fanned, night"></iframe></div>
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=empty&amp;t=night" title="pile, empty, night"></iframe></div>
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=open&amp;t=night" title="pile, open, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">stacked</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=stacked&amp;t=day-still" title="pile, stacked, day-still"></iframe></div>
+<div><div class="meta">fanned</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=fanned&amp;t=day-still" title="pile, fanned, day-still"></iframe></div>
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=empty&amp;t=day-still" title="pile, empty, day-still"></iframe></div>
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=pile&amp;s=open&amp;t=day-still" title="pile, open, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">cap</h3><p>A session in the Workshop: hat shape = work type, filled = Claude, outlined = local, hue = project, violet only for KNOT; bobs only while streaming.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">working</span> <span class="badge">streaming (bob)</span> <span class="badge">needs-you</span> <span class="badge">knot</span> <span class="badge">reduced-motion (prints &#39;working&#39;)</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:476-516; packages/gnomon-mods/workshop/index.mjs</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">needs-you</div><iframe loading="lazy" src="specimen-frame.html#c=cap&amp;s=needs-you&amp;t=day" title="cap, needs-you, day"></iframe></div>
+<div><div class="meta">streaming</div><iframe loading="lazy" src="specimen-frame.html#c=cap&amp;s=streaming&amp;t=day" title="cap, streaming, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">needs-you</div><iframe loading="lazy" src="specimen-frame.html#c=cap&amp;s=needs-you&amp;t=night" title="cap, needs-you, night"></iframe></div>
+<div><div class="meta">streaming</div><iframe loading="lazy" src="specimen-frame.html#c=cap&amp;s=streaming&amp;t=night" title="cap, streaming, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">needs-you</div><iframe loading="lazy" src="specimen-frame.html#c=cap&amp;s=needs-you&amp;t=day-still" title="cap, needs-you, day-still"></iframe></div>
+<div><div class="meta">streaming</div><iframe loading="lazy" src="specimen-frame.html#c=cap&amp;s=streaming&amp;t=day-still" title="cap, streaming, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: working, streaming (bob), knot, reduced-motion (prints &#39;working&#39;). Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">swatch</h3><p>Project identity square beside a name: hue fill inside a 1px key-edge ring.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:226-232</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=swatch&amp;s=default&amp;t=day" title="swatch, default, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=swatch&amp;s=default&amp;t=night" title="swatch, default, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=swatch&amp;s=default&amp;t=day-still" title="swatch, default, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">model-text-control</h3><p>A control built from the agent&#39;s text (table-talk choices, offer slip Open, kit block buttons): dashed edge, never .key, no hard offset, no [ ].</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><div><b>choice</b>: .choice with a filled .choice-k letter pill</div><div><b>slip-open</b>: .slip-open with a ↵ kbd</div><div><b>blk-button</b>: .blk-button (data, inert in panel/workshop)</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">hover (solid edge)</span> <span class="badge">focus (dashed outline)</span> <span class="badge">armed (amber)</span> <span class="badge">picked</span> <span class="badge">disabled</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:262-287,388,542-555</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=default&amp;t=day" title="model-text-control, default, day"></iframe></div>
+<div><div class="meta">armed</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=armed&amp;t=day" title="model-text-control, armed, day"></iframe></div>
+<div><div class="meta">picked</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=picked&amp;t=day" title="model-text-control, picked, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=default&amp;t=night" title="model-text-control, default, night"></iframe></div>
+<div><div class="meta">armed</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=armed&amp;t=night" title="model-text-control, armed, night"></iframe></div>
+<div><div class="meta">picked</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=picked&amp;t=night" title="model-text-control, picked, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=default&amp;t=day-still" title="model-text-control, default, day-still"></iframe></div>
+<div><div class="meta">armed</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=armed&amp;t=day-still" title="model-text-control, armed, day-still"></iframe></div>
+<div><div class="meta">picked</div><iframe loading="lazy" src="specimen-frame.html#c=model-text-control&amp;s=picked&amp;t=day-still" title="model-text-control, picked, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: hover (solid edge), focus (dashed outline), armed (amber), disabled. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">offer-slip</h3><p>The agent&#39;s one offer of a mod, under the reply that made it: tab (glyph, offer · mod:&lt;name&gt;), question, takes: line, Open + not now.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">arrive</span> <span class="badge">live</span> <span class="badge">armed</span> <span class="badge">inert</span> <span class="badge">gone</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:529-559; packages/gnomon-gui/src/ui/offer-slip.ts:35-60</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">live</div><iframe loading="lazy" src="specimen-frame.html#c=offer-slip&amp;s=live&amp;t=day" title="offer-slip, live, day"></iframe></div>
+<div><div class="meta">gone</div><iframe loading="lazy" src="specimen-frame.html#c=offer-slip&amp;s=gone&amp;t=day" title="offer-slip, gone, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">live</div><iframe loading="lazy" src="specimen-frame.html#c=offer-slip&amp;s=live&amp;t=night" title="offer-slip, live, night"></iframe></div>
+<div><div class="meta">gone</div><iframe loading="lazy" src="specimen-frame.html#c=offer-slip&amp;s=gone&amp;t=night" title="offer-slip, gone, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">live</div><iframe loading="lazy" src="specimen-frame.html#c=offer-slip&amp;s=live&amp;t=day-still" title="offer-slip, live, day-still"></iframe></div>
+<div><div class="meta">gone</div><iframe loading="lazy" src="specimen-frame.html#c=offer-slip&amp;s=gone&amp;t=day-still" title="offer-slip, gone, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: arrive, armed, inert. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">sheet</h3><p>A modal sheet over a scrim (palette, new session, Settings, Mods) or a right drawer (Voice settings).</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">head (title h2</span> <span class="badge">scope note</span> <span class="badge">close/done)</span> <span class="badge">body (sections h3 of label | value | note rows)</span></td></tr>
+<tr><th>Variants</th><td><div><b>card</b>: .sheet-card</div><div><b>settings</b>: .settings-card</div><div><b>drawer</b>: .vs-drawer .voice-sheet</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">open</span> <span class="badge">closed</span> <span class="badge">section-focused (opened at a section)</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:518-523,687-720,921-934</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">settings</div><iframe loading="lazy" src="specimen-frame.html#c=sheet&amp;s=settings&amp;t=day" title="sheet, settings, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">settings</div><iframe loading="lazy" src="specimen-frame.html#c=sheet&amp;s=settings&amp;t=night" title="sheet, settings, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">settings</div><iframe loading="lazy" src="specimen-frame.html#c=sheet&amp;s=settings&amp;t=day-still" title="sheet, settings, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: open, closed, section-focused (opened at a section). Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">settings-form</h3><p>A form that opens inline under its row in a sheet (Settings, Mods) and asks the kernel for a change. Labelled fields, one key that names its cost, cancel. When the change raises a card, the row shows the request in place and offers Decide in the stack, because toasts are hidden and the stack sits under the scrim while a sheet is open. Codifies the shipped Mods Configure form (.mod-config/.mod-field) and the Voice sheet&#39;s inline flow (.vs-flow).</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">lead line (11.5 --ink2)</span> <span class="badge">fields: label (10.5 --sec) over control (.field or .seg) over note (10.5 --sec)</span> <span class="badge">Advanced: a quiet key on a &lt;summary&gt; for rarely needed fields</span> <span class="badge">keys: the cost-label pri key + quiet cancel; a disabled key says why beside it</span> <span class="badge">foot note: what happens after the key</span> <span class="badge">request line after submit: plain chip &#39;card waiting&#39; + what was asked + quiet key Decide in the stack</span> <span class="badge">result line: role=status; a refusal in --fail with CODE, reason and next:</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">closed</span> <span class="badge">open</span> <span class="badge">invalid</span> <span class="badge">checking</span> <span class="badge">submitting</span> <span class="badge">card-waiting</span> <span class="badge">denied</span> <span class="badge">expired</span> <span class="badge">refused</span> <span class="badge">applied</span></td></tr>
+<tr><th>Tokens</th><td class="mono">rule → 2px solid --ink at the left, padding-left 12 (as .vs-flow)<br>gap → 10 between fields; 2 between label, control and note<br>label → 10.5 --sec<br>control → 11.5, min-height 28; width by content: address 34ch, name 16ch, model and paths min(100%, 60ch)<br>note → 10.5 --sec<br>invalid → aria-invalid, 2px --fail-edge, message 10.5 600 --fail led by ✕, linked by aria-describedby; it replaces the note<br>request-chip → chip (plain): a waiting card is not a warning (rule three-semantic-colours)<br>result → 10.5 --ink2, the outcome word 600; a refusal in --fail</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-local-model/refs/local-model.html (classes .set-form .sf-*); shipped precedent packages/gnomon-gui/src/ui/mods-panel.ts:80-95</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">closed</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=closed&amp;t=day" title="settings-form, closed, day"></iframe></div>
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=open&amp;t=day" title="settings-form, open, day"></iframe></div>
+<div><div class="meta">invalid</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=invalid&amp;t=day" title="settings-form, invalid, day"></iframe></div>
+<div><div class="meta">checking</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=checking&amp;t=day" title="settings-form, checking, day"></iframe></div>
+<div><div class="meta">submitting</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=submitting&amp;t=day" title="settings-form, submitting, day"></iframe></div>
+<div><div class="meta">card-waiting</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=card-waiting&amp;t=day" title="settings-form, card-waiting, day"></iframe></div>
+<div><div class="meta">denied</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=denied&amp;t=day" title="settings-form, denied, day"></iframe></div>
+<div><div class="meta">expired</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=expired&amp;t=day" title="settings-form, expired, day"></iframe></div>
+<div><div class="meta">refused</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=refused&amp;t=day" title="settings-form, refused, day"></iframe></div>
+<div><div class="meta">applied</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=applied&amp;t=day" title="settings-form, applied, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">closed</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=closed&amp;t=night" title="settings-form, closed, night"></iframe></div>
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=open&amp;t=night" title="settings-form, open, night"></iframe></div>
+<div><div class="meta">invalid</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=invalid&amp;t=night" title="settings-form, invalid, night"></iframe></div>
+<div><div class="meta">checking</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=checking&amp;t=night" title="settings-form, checking, night"></iframe></div>
+<div><div class="meta">submitting</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=submitting&amp;t=night" title="settings-form, submitting, night"></iframe></div>
+<div><div class="meta">card-waiting</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=card-waiting&amp;t=night" title="settings-form, card-waiting, night"></iframe></div>
+<div><div class="meta">denied</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=denied&amp;t=night" title="settings-form, denied, night"></iframe></div>
+<div><div class="meta">expired</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=expired&amp;t=night" title="settings-form, expired, night"></iframe></div>
+<div><div class="meta">refused</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=refused&amp;t=night" title="settings-form, refused, night"></iframe></div>
+<div><div class="meta">applied</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=applied&amp;t=night" title="settings-form, applied, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">closed</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=closed&amp;t=day-still" title="settings-form, closed, day-still"></iframe></div>
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=open&amp;t=day-still" title="settings-form, open, day-still"></iframe></div>
+<div><div class="meta">invalid</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=invalid&amp;t=day-still" title="settings-form, invalid, day-still"></iframe></div>
+<div><div class="meta">checking</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=checking&amp;t=day-still" title="settings-form, checking, day-still"></iframe></div>
+<div><div class="meta">submitting</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=submitting&amp;t=day-still" title="settings-form, submitting, day-still"></iframe></div>
+<div><div class="meta">card-waiting</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=card-waiting&amp;t=day-still" title="settings-form, card-waiting, day-still"></iframe></div>
+<div><div class="meta">denied</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=denied&amp;t=day-still" title="settings-form, denied, day-still"></iframe></div>
+<div><div class="meta">expired</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=expired&amp;t=day-still" title="settings-form, expired, day-still"></iframe></div>
+<div><div class="meta">refused</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=refused&amp;t=day-still" title="settings-form, refused, day-still"></iframe></div>
+<div><div class="meta">applied</div><iframe loading="lazy" src="specimen-frame.html#c=settings-form&amp;s=applied&amp;t=day-still" title="settings-form, applied, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">folder-field</h3><p>Naming a folder (or, in the file variant, a file) on this Mac. You choose it; you don&#39;t type it. Recent folders are one-click choices, Choose folder… opens the Mac&#39;s own chooser (the kernel opens it), and a typed path is an Advanced fallback, shown open only when no chooser exists.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">legend: the sheet&#39;s own label style (New session: .meta 11.5 --sec, like &#39;model&#39;; settings-form: .sf-label 10.5)</span> <span class="badge">recent row (.ff-row, role=radio, roving tabindex, min-height 40): mark (✓ chosen, ✕ chosen but failed its check) · project swatch · name (11.5, 500; 600 chosen) over path (10.5 --sec, ~-shortened by the kernel) · when (10.5 --sec: today 14:06, yesterday, Oct 19, just chosen, from terminal)</span> <span class="badge">opens-in line (10.5 --ink2, path 600 --ink, wraps anywhere): the whole path of the chosen folder, plus &#39; · outside your home folder&#39; when it is</span> <span class="badge">keys: Choose folder… (default key; busy &#39;Choosing…&#39;) and Type a path ▸ (quiet, aria-expanded)</span> <span class="badge">typed field (folded): label &#39;path&#39;, no placeholder, note &#39;a full path, or one starting with ~/ · checked as you type&#39;</span> <span class="badge">one check line: ✓ note, ✕ error (.sf-err, role=alert) or ◆ warning (10.5 --warn-ink, role=status)</span></td></tr>
+<tr><th>Variants</th><td><div><b>recents</b>: New session: a radiogroup of up to six recent folders, then Choose folder… and Type a path ▸</div><div><b>compact</b>: one value, no recents (Settings › Local model runner, Mods › Add from folder): the value or &#39;none · &lt;what happens&gt;&#39;, Choose folder… / Choose another…, Clear, Type a path ▸</div><div><b>file</b>: the compact variant for a file (Mods › Configure command): Choose file…</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">empty</span> <span class="badge">recents</span> <span class="badge">chosen</span> <span class="badge">chooser-open</span> <span class="badge">chooser-cancelled</span> <span class="badge">typed-open</span> <span class="badge">checking</span> <span class="badge">found</span> <span class="badge">not-absolute</span> <span class="badge">missing</span> <span class="badge">not-a-folder</span> <span class="badge">unreadable</span> <span class="badge">wrong-contents</span> <span class="badge">home-or-above</span> <span class="badge">outside-home</span> <span class="badge">terminal-hint</span> <span class="badge">no-chooser</span> <span class="badge">opening</span> <span class="badge">refused</span> <span class="badge">open-failed</span> <span class="badge">open-failed-keyed</span></td></tr>
+<tr><th>Tokens</th><td class="mono">row → min-height 40; padding 4 8; gap 8; hover --fold; chosen: 1px --key-edge ring + ✓ + 600 (never a hue); focus: inset 2px --key-edge<br>gaps → 2 between rows, 6 inside the field, 14 between the sheet&#39;s groups<br>width → New session sheet min(560px, 100vw − 32px)</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-23-gnomon-folder-picker/refs/folder-picker.html and refs/folder-field.css (classes .ff .ff-row .ff-list .ff-opens .ff-keys .ff-value .ns-card .ns-foot)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">recents</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=recents&amp;t=day" title="folder-field, recents, day"></iframe></div>
+<div><div class="meta">error</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=error&amp;t=day" title="folder-field, error, day"></iframe></div>
+<div><div class="meta">warning</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=warning&amp;t=day" title="folder-field, warning, day"></iframe></div>
+<div><div class="meta">compact</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=compact&amp;t=day" title="folder-field, compact, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">recents</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=recents&amp;t=night" title="folder-field, recents, night"></iframe></div>
+<div><div class="meta">error</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=error&amp;t=night" title="folder-field, error, night"></iframe></div>
+<div><div class="meta">warning</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=warning&amp;t=night" title="folder-field, warning, night"></iframe></div>
+<div><div class="meta">compact</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=compact&amp;t=night" title="folder-field, compact, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">recents</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=recents&amp;t=day-still" title="folder-field, recents, day-still"></iframe></div>
+<div><div class="meta">error</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=error&amp;t=day-still" title="folder-field, error, day-still"></iframe></div>
+<div><div class="meta">warning</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=warning&amp;t=day-still" title="folder-field, warning, day-still"></iframe></div>
+<div><div class="meta">compact</div><iframe loading="lazy" src="specimen-frame.html#c=folder-field&amp;s=compact&amp;t=day-still" title="folder-field, compact, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: empty, chosen, chooser-open, chooser-cancelled, typed-open, checking, found, not-absolute, missing, not-a-folder, unreadable, wrong-contents, home-or-above, outside-home, terminal-hint, no-chooser, opening, refused, open-failed, open-failed-keyed. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">notice</h3><p>The band under the header, for kernel alerts only (re-pin, voice dev build). Kernel-owned, role=alert; it stays until acknowledged or resolved. Everything else is a toast.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><div><b>repin</b>: .notice.repin (kernel)</div><div><b>voice-dev</b>: .notice.voice-dev (kernel)</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">repin</span> <span class="badge">voice-dev</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --warn-bg<br>edge → --warn-edge bottom rule<br>text → --warn-ink, 11.5</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:174,390-391; packages/gnomon-gui/static/index.html:25-26</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">repin</div><iframe loading="lazy" src="specimen-frame.html#c=notice&amp;s=repin&amp;t=day" title="notice, repin, day"></iframe></div>
+<div><div class="meta">voice-dev</div><iframe loading="lazy" src="specimen-frame.html#c=notice&amp;s=voice-dev&amp;t=day" title="notice, voice-dev, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">repin</div><iframe loading="lazy" src="specimen-frame.html#c=notice&amp;s=repin&amp;t=night" title="notice, repin, night"></iframe></div>
+<div><div class="meta">voice-dev</div><iframe loading="lazy" src="specimen-frame.html#c=notice&amp;s=voice-dev&amp;t=night" title="notice, voice-dev, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">repin</div><iframe loading="lazy" src="specimen-frame.html#c=notice&amp;s=repin&amp;t=day-still" title="notice, repin, day-still"></iframe></div>
+<div><div class="meta">voice-dev</div><iframe loading="lazy" src="specimen-frame.html#c=notice&amp;s=voice-dev&amp;t=day-still" title="notice, voice-dev, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">toast</h3><p>Every notice that is not a kernel alert, in one style and one place: GUI outcomes (saved, not sent, refusals), the voice idle auto-off, update available, standing-grant offers and confirmations.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">tone edge (left</span> <span class="badge">3px)</span> <span class="badge">text</span> <span class="badge">next: line (refusals)</span> <span class="badge">one key (optional: Restart now, Make it standing)</span> <span class="badge">close (fail and persistent)</span></td></tr>
+<tr><th>Variants</th><td><div><b>info</b>: ink edge; leaves after 6s, paused while hovered or focused</div><div><b>warn</b>: amber edge</div><div><b>fail</b>: vermilion edge; stays until closed (Esc or close); role=alert</div><div><b>persistent</b>: ink edge; stays until its cause is resolved (update available: until the upgrade card is decided)</div><div><b>loop-done</b>: info, 6s: a loop reached its goal or landed. Tag &#39;↻ loop · &lt;id&gt;&#39;, the result with its sha, project and duration, one quiet key Open run. Pause all&#39;s confirmation, Run now started and a budget applied use the same tag.</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">info</span> <span class="badge">warn</span> <span class="badge">fail</span> <span class="badge">persistent</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --sheet<br>ring → --key-edge<br>edge-w → 3<br>shadow → --overlay-shadow<br>radius → 3<br>text → --ink, 11.5</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/index.html:27-28 (#notice, #voice-toast become one #toasts region); app.ts:98-104 notice()</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">info</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=info&amp;t=day" title="toast, info, day"></iframe></div>
+<div><div class="meta">warn</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=warn&amp;t=day" title="toast, warn, day"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=fail&amp;t=day" title="toast, fail, day"></iframe></div>
+<div><div class="meta">persistent</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=persistent&amp;t=day" title="toast, persistent, day"></iframe></div>
+<div><div class="meta">loop-done</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=loop-done&amp;t=day" title="toast, loop-done, day"></iframe></div>
+<div><div class="meta">loop-pause-all</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=loop-pause-all&amp;t=day" title="toast, loop-pause-all, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">info</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=info&amp;t=night" title="toast, info, night"></iframe></div>
+<div><div class="meta">warn</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=warn&amp;t=night" title="toast, warn, night"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=fail&amp;t=night" title="toast, fail, night"></iframe></div>
+<div><div class="meta">persistent</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=persistent&amp;t=night" title="toast, persistent, night"></iframe></div>
+<div><div class="meta">loop-done</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=loop-done&amp;t=night" title="toast, loop-done, night"></iframe></div>
+<div><div class="meta">loop-pause-all</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=loop-pause-all&amp;t=night" title="toast, loop-pause-all, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">info</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=info&amp;t=day-still" title="toast, info, day-still"></iframe></div>
+<div><div class="meta">warn</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=warn&amp;t=day-still" title="toast, warn, day-still"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=fail&amp;t=day-still" title="toast, fail, day-still"></iframe></div>
+<div><div class="meta">persistent</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=persistent&amp;t=day-still" title="toast, persistent, day-still"></iframe></div>
+<div><div class="meta">loop-done</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=loop-done&amp;t=day-still" title="toast, loop-done, day-still"></iframe></div>
+<div><div class="meta">loop-pause-all</div><iframe loading="lazy" src="specimen-frame.html#c=toast&amp;s=loop-pause-all&amp;t=day-still" title="toast, loop-pause-all, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">transcript-row</h3><p>One row of the chat: user and claude blocks; tool, result, activity and working lines as quiet single lines.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><div><b>user</b>: right-aligned sheet bubble</div><div><b>assistant</b>: plain prose, measure 80ch</div><div><b>labelled-part</b>: .reply-part (renamed from .chip): a left rule and a bold label</div><div><b>activity</b>: collapsible fold with a rule</div><div><b>raw</b>: the raw view&#39;s one-line summary that says what the line is (a system line&#39;s subtype and identifying fields, a hook by name, short id and outcome); it folds like activity (▸ / ▾, Enter or Space) to its whole line pretty-printed, text only, in a box that scrolls inside itself (max 40vh, both ways), never the page; hook and tool output only ever in the fold</div><div><b>working</b>: spinner + a KEY naming what the turn is doing right now, with a live clock: &#39;thinking&#39;, &#39;writing the reply&#39;, &#39;&lt;Tool&gt; · &lt;short target&gt;&#39; (&#39;Read · src/ui/app.ts&#39;, &#39;Bash · npm test&#39;) from its call until its result, &#39;&lt;Event&gt; hook[ · matcher]&#39; while one hook runs (&#39;Stop hook · 4s&#39;), &#39;&lt;Event&gt; hooks · N running&#39;, &#39;compacting&#39; (a status line), &#39;finishing&#39; once the reply ended and the turn has not with nothing else to explain it, else &#39;working…&#39;. A hook names itself only once it has run 1 s (HOOK_DWELL_MS); until then the key keeps what it named before, so fast PreToolUse / PostToolUse hooks never flick it. The clock counts from the start of what it names. The words ellipsize and the clock never does (tabular numerals); the full words are its title. A row-key like activity (role=button, aria-expanded, Enter or Space, the activity fold&#39;s ▸ / ▾, at least 24px tall, focus ring 2px --key-edge): it unfolds step-list under it. The row is no live region (it remounts on every step); the page&#39;s one persistent sr-only status #turn-say says &#39;&lt;Claude|The local model&gt; is &lt;what&gt;&#39; once what the turn does has held 2 s. Hook and tool output never reach it</div><div><b>step-list</b>: under the working key while unfolded: this turn&#39;s steps so far, one quiet line each, at least 24px tall (label · duration · outcome: ok, error, blocked: &lt;first line&gt;, timed out, failed (exit N)); the label ellipsizes, the duration and outcome never do; oldest first by start, a live step with its own clock; a step with detail folds like the raw variant (▸ / ▾) to its whole lines pretty-printed (rowDetail: the same redaction and withheld rules, text only). The list scrolls inside itself (max 40vh, never sideways, overscroll contained); a plain list labelled &quot;This turn&#39;s steps&quot; (no role=log: a remounted live region announces unreliably), the clocks aria-hidden. It folds away when the turn ends, leaving hook-result</div><div><b>claude-note</b>: Claude&#39;s own synthetic note (a stream user line marked isSynthetic that is not hook feedback): one quiet line &#39;Claude · &lt;text&gt;&#39; (--sec, label size, 28px in, a 2px --rule left rule). Never role-system: that look is the kernel&#39;s own notes (run mode, session ended), so a repo hook cannot forge one (Aegis M1 2026-10-23)</div><div><b>hook-result</b>: the turn&#39;s one quiet summary line under its reply, before its result line (--sec, label size, 28px in, like voice-heard): each hook group of one event that is notable, &#39;&lt;Event&gt; hook · [name ·] &lt;secs&gt; · &lt;outcomes&gt;&#39; or &#39;N &lt;Event&gt; hooks · &lt;secs&gt; · &lt;outcomes&gt;&#39; (outcomes a comma list of ok, &#39;[name ]blocked: &lt;first line of the reason&gt;&#39;, &#39;timed out&#39;, &#39;failed (exit N)&#39;), plus &#39;N tool call[s] failed&#39;; groups joined by &#39;; &#39;. Only a blocked, failed or timed-out hook draws attention (tone warn: --warn-ink text, 2px --warn-edge left rule); ok hooks under 2 s and a turn with nothing notable show no line. Output lives only in the raw view&#39;s fold and the step-list detail</div><div><b>tool</b>: ↳ line</div><div><b>voice-heard</b>: secondary line</div><div><b>voice-refused</b>: vermilion left rule + reason</div><div><b>said</b>: a spoken reply (ink2 rule)</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">live</span> <span class="badge">collapsed</span> <span class="badge">expanded</span> <span class="badge">error</span> <span class="badge">warn</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:246-296,834-859 (role-hook beside role-voice-heard)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">user</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=user&amp;t=day" title="transcript-row, user, day"></iframe></div>
+<div><div class="meta">activity</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=activity&amp;t=day" title="transcript-row, activity, day"></iframe></div>
+<div><div class="meta">working</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=working&amp;t=day" title="transcript-row, working, day"></iframe></div>
+<div><div class="meta">working-key</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=working-key&amp;t=day" title="transcript-row, working-key, day"></iframe></div>
+<div><div class="meta">step-list</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=step-list&amp;t=day" title="transcript-row, step-list, day"></iframe></div>
+<div><div class="meta">hook-result</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=hook-result&amp;t=day" title="transcript-row, hook-result, day"></iframe></div>
+<div><div class="meta">hook-result-warn</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=hook-result-warn&amp;t=day" title="transcript-row, hook-result-warn, day"></iframe></div>
+<div><div class="meta">raw</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=raw&amp;t=day" title="transcript-row, raw, day"></iframe></div>
+<div><div class="meta">raw-open</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=raw-open&amp;t=day" title="transcript-row, raw-open, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">user</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=user&amp;t=night" title="transcript-row, user, night"></iframe></div>
+<div><div class="meta">activity</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=activity&amp;t=night" title="transcript-row, activity, night"></iframe></div>
+<div><div class="meta">working</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=working&amp;t=night" title="transcript-row, working, night"></iframe></div>
+<div><div class="meta">working-key</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=working-key&amp;t=night" title="transcript-row, working-key, night"></iframe></div>
+<div><div class="meta">step-list</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=step-list&amp;t=night" title="transcript-row, step-list, night"></iframe></div>
+<div><div class="meta">hook-result</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=hook-result&amp;t=night" title="transcript-row, hook-result, night"></iframe></div>
+<div><div class="meta">hook-result-warn</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=hook-result-warn&amp;t=night" title="transcript-row, hook-result-warn, night"></iframe></div>
+<div><div class="meta">raw</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=raw&amp;t=night" title="transcript-row, raw, night"></iframe></div>
+<div><div class="meta">raw-open</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=raw-open&amp;t=night" title="transcript-row, raw-open, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">user</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=user&amp;t=day-still" title="transcript-row, user, day-still"></iframe></div>
+<div><div class="meta">activity</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=activity&amp;t=day-still" title="transcript-row, activity, day-still"></iframe></div>
+<div><div class="meta">working</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=working&amp;t=day-still" title="transcript-row, working, day-still"></iframe></div>
+<div><div class="meta">working-key</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=working-key&amp;t=day-still" title="transcript-row, working-key, day-still"></iframe></div>
+<div><div class="meta">step-list</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=step-list&amp;t=day-still" title="transcript-row, step-list, day-still"></iframe></div>
+<div><div class="meta">hook-result</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=hook-result&amp;t=day-still" title="transcript-row, hook-result, day-still"></iframe></div>
+<div><div class="meta">hook-result-warn</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=hook-result-warn&amp;t=day-still" title="transcript-row, hook-result-warn, day-still"></iframe></div>
+<div><div class="meta">raw</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=raw&amp;t=day-still" title="transcript-row, raw, day-still"></iframe></div>
+<div><div class="meta">raw-open</div><iframe loading="lazy" src="specimen-frame.html#c=transcript-row&amp;s=raw-open&amp;t=day-still" title="transcript-row, raw-open, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: default, live, collapsed, expanded, error, warn. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">composer</h3><p>The one place to write: grows to 12 lines then scrolls; ⤢ toggles 24; exactly one send key.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">textarea (one line when empty, centred on send; grows to 12, ⤢ 24)</span> <span class="badge">placeholder &#39;Reply to &lt;title&gt;…&#39; stays on one line and ends in an ellipsis; it never makes the empty composer taller</span> <span class="badge">tall view (⤢) takes only the room the window has: never past the pane (send and ⤢ stay on screen), never the conversation below 120 px, never fewer lines than 12</span> <span class="badge">controls: ONE row at the bottom right, in the order line count, ⤢, send (gap 8); they stay pinned bottom right as the text grows</span> <span class="badge">line count (10.5 --sec) only from 2 lines up; at 1 line it says nothing</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">empty</span> <span class="badge">typing</span> <span class="badge">focus</span> <span class="badge">tall</span> <span class="badge">dictating (ghost words + ring)</span> <span class="badge">held</span> <span class="badge">disabled (no session)</span></td></tr>
+<tr><th>Tokens</th><td class="mono">empty-height → one --key-h key plus the composer&#39;s padding</td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:865-871,976-992; packages/gnomon-gui/static/index.html:51-58</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=composer&amp;s=default&amp;t=day" title="composer, default, day"></iframe></div>
+<div><div class="meta">grown</div><iframe loading="lazy" src="specimen-frame.html#c=composer&amp;s=grown&amp;t=day" title="composer, grown, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=composer&amp;s=default&amp;t=night" title="composer, default, night"></iframe></div>
+<div><div class="meta">grown</div><iframe loading="lazy" src="specimen-frame.html#c=composer&amp;s=grown&amp;t=night" title="composer, grown, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=composer&amp;s=default&amp;t=day-still" title="composer, default, day-still"></iframe></div>
+<div><div class="meta">grown</div><iframe loading="lazy" src="specimen-frame.html#c=composer&amp;s=grown&amp;t=day-still" title="composer, grown, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: empty, typing, focus, tall, dictating (ghost words + ring), held, disabled (no session). Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">session-row</h3><p>A session in the left rail: swatch, name, state note (needs you / failed / KNOT / with mod:&lt;name&gt;).</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">hover</span> <span class="badge">active</span> <span class="badge">needs-you</span> <span class="badge">failed (droops once)</span> <span class="badge">gone</span> <span class="badge">renaming</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:233-237,751-767; packages/gnomon-gui/src/ui/app.ts:560-576</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=session-row&amp;s=default&amp;t=day" title="session-row, default, day"></iframe></div>
+<div><div class="meta">active</div><iframe loading="lazy" src="specimen-frame.html#c=session-row&amp;s=active&amp;t=day" title="session-row, active, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=session-row&amp;s=default&amp;t=night" title="session-row, default, night"></iframe></div>
+<div><div class="meta">active</div><iframe loading="lazy" src="specimen-frame.html#c=session-row&amp;s=active&amp;t=night" title="session-row, active, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=session-row&amp;s=default&amp;t=day-still" title="session-row, default, day-still"></iframe></div>
+<div><div class="meta">active</div><iframe loading="lazy" src="specimen-frame.html#c=session-row&amp;s=active&amp;t=day-still" title="session-row, active, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: hover, needs-you, failed (droops once), gone, renaming. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">mod-fence</h3><p>A mod&#39;s view in a GUI-owned fence (label mod:&lt;name&gt;, dashed --rule edge); kit blocks only; never mimics kernel-owned regions; no kit.Button in panel or Workshop.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">dev-linked</span> <span class="badge">paused</span> <span class="badge">error</span> <span class="badge">absent</span> <span class="badge">fitted</span> <span class="badge">key-value-table</span> <span class="badge">truncated-focused</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:962-1037 (fence 962-982, fitted .mod-fit 983-1037); packages/gnomon-gui/src/core/render.ts:97-150,226-270 (fit, tableFit, fitTextKind, the swatch); packages/gnomon-gui/src/core/mod-panels.ts:159-214 (TRUNCATABLE_SELECTOR, markTruncated, renderModFence); packages/gnomon-gui/src/ui/mod-panels-mount.ts:173</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=default&amp;t=day" title="mod-fence, default, day"></iframe></div>
+<div><div class="meta">fitted</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=fitted&amp;t=day" title="mod-fence, fitted, day"></iframe></div>
+<div><div class="meta">dev-linked</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=dev-linked&amp;t=day" title="mod-fence, dev-linked, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=default&amp;t=night" title="mod-fence, default, night"></iframe></div>
+<div><div class="meta">fitted</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=fitted&amp;t=night" title="mod-fence, fitted, night"></iframe></div>
+<div><div class="meta">dev-linked</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=dev-linked&amp;t=night" title="mod-fence, dev-linked, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=default&amp;t=day-still" title="mod-fence, default, day-still"></iframe></div>
+<div><div class="meta">fitted</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=fitted&amp;t=day-still" title="mod-fence, fitted, day-still"></iframe></div>
+<div><div class="meta">dev-linked</div><iframe loading="lazy" src="specimen-frame.html#c=mod-fence&amp;s=dev-linked&amp;t=day-still" title="mod-fence, dev-linked, day-still"></iframe></div>
+</div>
+<div class="callout">No example for: paused, error, absent, key-value-table, truncated-focused. Every state needs one before the component counts as specified.</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">empty-state</h3><p>The quiet centre when no session is open: a sheet with title, meta and + New session.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-gui/static/styles.css:828-832; packages/gnomon-gui/static/index.html:44</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=empty-state&amp;s=empty&amp;t=day" title="empty-state, empty, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=empty-state&amp;s=empty&amp;t=night" title="empty-state, empty, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=empty-state&amp;s=empty&amp;t=day-still" title="empty-state, empty, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">wrapper-status</h3><p>The desktop wrapper&#39;s boot page (&#39;starting the kernel&#39;), before the GUI loads.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">packages/gnomon-wrapper/static/status.css; packages/gnomon-wrapper/static/index.html</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=wrapper-status&amp;s=default&amp;t=day" title="wrapper-status, default, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=wrapper-status&amp;s=default&amp;t=night" title="wrapper-status, default, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=wrapper-status&amp;s=default&amp;t=day-still" title="wrapper-status, default, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">alert</h3><p>A stack sheet that decides nothing: a loop that is stuck and still needs you (failed, stopped by a budget or exit, paused by the kernel). It sorts under every decision card and above the trust slip, and stays until dismissed or its cause clears.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">family head (↻ loop · ■ project · alert · hh:mm)</span> <span class="badge">title led by a state mark (✕ failed, ■ stopped, ‖ paused)</span> <span class="badge">run path with node marks</span> <span class="badge">quiet keys only: Open run, Dismiss</span></td></tr>
+<tr><th>Variants</th><td><div><b>fail</b>: vermilion left edge; ✕ and the title in --fail</div><div><b>stop</b>: --key-edge edge; ■ and the title in ink; names the limit that stopped it</div><div><b>kernel-pause</b>: dashed amber left edge; ‖ and the reason; Resume · presence lives in the detail, not on the alert</div><div><b>refused-start</b>: --key-edge edge; a loop whose trigger fired but which was refused before any step (no-local-model): title &#39;■ &lt;id&gt; didn’t start&#39;, path &#39;&lt;reason&gt; · scheduled hh:mm · refused before any step · ×n since &lt;day&gt;&#39;; quiet keys to the fix (Set up local model…) and Dismiss; one per loop, a repeat refusal updates its count; clears itself when the cause clears; the loop also pins to needs you</div></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">fail</span> <span class="badge">stop</span> <span class="badge">kernel-pause</span> <span class="badge">refused-start</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --sheet<br>shadow → none<br>day-ring → 1px --rule<br>edge-w → --edge-w<br>fail-edge → --fail-edge<br>kernel-pause-edge → --warn-edge, dashed<br>title → 11.5 control</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame desk, .card.alert); not yet in packages/gnomon-gui</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=fail&amp;t=day" title="alert, fail, day"></iframe></div>
+<div><div class="meta">stop</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=stop&amp;t=day" title="alert, stop, day"></iframe></div>
+<div><div class="meta">kernel-pause</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=kernel-pause&amp;t=day" title="alert, kernel-pause, day"></iframe></div>
+<div><div class="meta">refused-start</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=refused-start&amp;t=day" title="alert, refused-start, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=fail&amp;t=night" title="alert, fail, night"></iframe></div>
+<div><div class="meta">stop</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=stop&amp;t=night" title="alert, stop, night"></iframe></div>
+<div><div class="meta">kernel-pause</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=kernel-pause&amp;t=night" title="alert, kernel-pause, night"></iframe></div>
+<div><div class="meta">refused-start</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=refused-start&amp;t=night" title="alert, refused-start, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=fail&amp;t=day-still" title="alert, fail, day-still"></iframe></div>
+<div><div class="meta">stop</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=stop&amp;t=day-still" title="alert, stop, day-still"></iframe></div>
+<div><div class="meta">kernel-pause</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=kernel-pause&amp;t=day-still" title="alert, kernel-pause, day-still"></iframe></div>
+<div><div class="meta">refused-start</div><iframe loading="lazy" src="specimen-frame.html#c=alert&amp;s=refused-start&amp;t=day-still" title="alert, refused-start, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">trust-slip</h3><p>The foot of the stack: loops an agent wrote or changed that wait for trust, before any card exists. One line per loop, each with a Review key that raises the real loop-trust card. It is not a card: dashed edge, no fill, no fold shadow, never a decision key.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">tab: ↻ n loops waiting for trust · no card yet</span> <span class="badge">row: &lt;id&gt; · new|changed · by &lt;author&gt; + Review (24px quiet key)</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">one</span> <span class="badge">many</span> <span class="badge">truncated</span></td></tr>
+<tr><th>Tokens</th><td class="mono">edge → 1px dashed --key-edge<br>fill → none<br>tab → 10.5 --sec over a dashed --rule<br>row → 11.5 --ink2</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame desk, .wt-slip)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">many</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=many&amp;t=day" title="trust-slip, many, day"></iframe></div>
+<div><div class="meta">one</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=one&amp;t=day" title="trust-slip, one, day"></iframe></div>
+<div><div class="meta">truncated</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=truncated&amp;t=day" title="trust-slip, truncated, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">many</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=many&amp;t=night" title="trust-slip, many, night"></iframe></div>
+<div><div class="meta">one</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=one&amp;t=night" title="trust-slip, one, night"></iframe></div>
+<div><div class="meta">truncated</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=truncated&amp;t=night" title="trust-slip, truncated, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">many</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=many&amp;t=day-still" title="trust-slip, many, day-still"></iframe></div>
+<div><div class="meta">one</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=one&amp;t=day-still" title="trust-slip, one, day-still"></iframe></div>
+<div><div class="meta">truncated</div><iframe loading="lazy" src="specimen-frame.html#c=trust-slip&amp;s=truncated&amp;t=day-still" title="trust-slip, truncated, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loops-word</h3><p>The kernel status&#39;s loops word in the header: a 28px quiet key beside the link dot, shown while any loop is enabled; opens the Loops leaf. Its tooltip and the leaf head carry the keep-alive line.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">word: loops &lt;n running&gt;</span> <span class="badge">· &lt;m&gt; waiting (omitted at 0)</span> <span class="badge">title=: Loops are keeping Gnomon running (&lt;k&gt; enabled). Click: open Loops. Pause all: ⌘K loops: pause all.</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><div><b>header</b>: <span class="mono">{&quot;height&quot;:28,&quot;font&quot;:11.5}</span></div></td></tr>
+<tr><th>States</th><td><span class="badge">running</span> <span class="badge">idle</span> <span class="badge">paused-all</span> <span class="badge">hover</span> <span class="badge">focus</span></td></tr>
+<tr><th>Tokens</th><td class="mono">text → --ink2<br>hover → --rule edge, --sheet fill<br>focus → 2px solid --key-edge</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frames desk/leaf, .kstat .loops-word)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=running&amp;t=day" title="loops-word, running, day"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=idle&amp;t=day" title="loops-word, idle, day"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=paused-all&amp;t=day" title="loops-word, paused-all, day"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=hover&amp;t=day" title="loops-word, hover, day"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=focus&amp;t=day" title="loops-word, focus, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=running&amp;t=night" title="loops-word, running, night"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=idle&amp;t=night" title="loops-word, idle, night"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=paused-all&amp;t=night" title="loops-word, paused-all, night"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=hover&amp;t=night" title="loops-word, hover, night"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=focus&amp;t=night" title="loops-word, focus, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=running&amp;t=day-still" title="loops-word, running, day-still"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=idle&amp;t=day-still" title="loops-word, idle, day-still"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=paused-all&amp;t=day-still" title="loops-word, paused-all, day-still"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=hover&amp;t=day-still" title="loops-word, hover, day-still"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=loops-word&amp;s=focus&amp;t=day-still" title="loops-word, focus, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loops-leaf</h3><p>The Loops view: a GUI-owned leaf that slides over the centre column (the mod-leaf pattern). Sessions and the stack stay visible beside it, so loop cards, alerts and toasts stay in reach while you steer.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">head: Loops (17) · meta &#39;n running · m waiting for trust&#39; · Pause all · ⤢ · esc</span> <span class="badge">keep-alive line: &#39;Loops are keeping Gnomon running · k enabled · next fire &lt;id&gt; hh:mm&#39;</span> <span class="badge">body: list | detail side by side at &gt;= 1200px; one at a time below, with ← Loops</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">open</span> <span class="badge">arriving</span> <span class="badge">folded</span> <span class="badge">paused-all</span></td></tr>
+<tr><th>Tokens</th><td class="mono">fill → --ground, list and detail on --sheet<br>gutter → 8px hatched --rule<br>arrive → leaf-in 360ms cubic-bezier(.3,.7,.3,1); none when reduced</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .lp-leaf .lp-head .lp-keep .lp-edgetab)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=open&amp;t=day" title="loops-leaf, open, day"></iframe></div>
+<div><div class="meta">arriving</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=arriving&amp;t=day" title="loops-leaf, arriving, day"></iframe></div>
+<div><div class="meta">folded</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=folded&amp;t=day" title="loops-leaf, folded, day"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=paused-all&amp;t=day" title="loops-leaf, paused-all, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=open&amp;t=night" title="loops-leaf, open, night"></iframe></div>
+<div><div class="meta">arriving</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=arriving&amp;t=night" title="loops-leaf, arriving, night"></iframe></div>
+<div><div class="meta">folded</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=folded&amp;t=night" title="loops-leaf, folded, night"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=paused-all&amp;t=night" title="loops-leaf, paused-all, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">open</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=open&amp;t=day-still" title="loops-leaf, open, day-still"></iframe></div>
+<div><div class="meta">arriving</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=arriving&amp;t=day-still" title="loops-leaf, arriving, day-still"></iframe></div>
+<div><div class="meta">folded</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=folded&amp;t=day-still" title="loops-leaf, folded, day-still"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loops-leaf&amp;s=paused-all&amp;t=day-still" title="loops-leaf, paused-all, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loop-row</h3><p>One loop in the Loops list: two lines, name first, in the instrument-readout voice.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">mark (spans both lines)</span> <span class="badge">line 1: name (600) · state word · last outcome or where it is</span> <span class="badge">right: next due, or since / started</span> <span class="badge">line 2 (10.5 --sec): spend against caps · local only | Claude opt-in · effective autonomy with the cap reason · by &lt;author&gt;; in the pinned group it leads with the project swatch</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">running</span> <span class="badge">idle</span> <span class="badge">paused</span> <span class="badge">kernel-paused</span> <span class="badge">waiting-trust</span> <span class="badge">waiting-land</span> <span class="badge">parked</span> <span class="badge">active</span> <span class="badge">hover</span> <span class="badge">focus</span></td></tr>
+<tr><th>Tokens</th><td class="mono">mark → --ink, 11.5<br>name → --ink 600<br>line2 → 10.5 --sec<br>active → 2px --key-edge left rule + --fold<br>fail-mark → --fail 600 with ✕</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .lp-row)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=running&amp;t=day" title="loop-row, running, day"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=idle&amp;t=day" title="loop-row, idle, day"></iframe></div>
+<div><div class="meta">paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=paused&amp;t=day" title="loop-row, paused, day"></iframe></div>
+<div><div class="meta">kernel-paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=kernel-paused&amp;t=day" title="loop-row, kernel-paused, day"></iframe></div>
+<div><div class="meta">waiting-trust</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=waiting-trust&amp;t=day" title="loop-row, waiting-trust, day"></iframe></div>
+<div><div class="meta">waiting-land</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=waiting-land&amp;t=day" title="loop-row, waiting-land, day"></iframe></div>
+<div><div class="meta">parked</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=parked&amp;t=day" title="loop-row, parked, day"></iframe></div>
+<div><div class="meta">active</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=active&amp;t=day" title="loop-row, active, day"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=hover&amp;t=day" title="loop-row, hover, day"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=focus&amp;t=day" title="loop-row, focus, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=running&amp;t=night" title="loop-row, running, night"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=idle&amp;t=night" title="loop-row, idle, night"></iframe></div>
+<div><div class="meta">paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=paused&amp;t=night" title="loop-row, paused, night"></iframe></div>
+<div><div class="meta">kernel-paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=kernel-paused&amp;t=night" title="loop-row, kernel-paused, night"></iframe></div>
+<div><div class="meta">waiting-trust</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=waiting-trust&amp;t=night" title="loop-row, waiting-trust, night"></iframe></div>
+<div><div class="meta">waiting-land</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=waiting-land&amp;t=night" title="loop-row, waiting-land, night"></iframe></div>
+<div><div class="meta">parked</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=parked&amp;t=night" title="loop-row, parked, night"></iframe></div>
+<div><div class="meta">active</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=active&amp;t=night" title="loop-row, active, night"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=hover&amp;t=night" title="loop-row, hover, night"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=focus&amp;t=night" title="loop-row, focus, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=running&amp;t=day-still" title="loop-row, running, day-still"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=idle&amp;t=day-still" title="loop-row, idle, day-still"></iframe></div>
+<div><div class="meta">paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=paused&amp;t=day-still" title="loop-row, paused, day-still"></iframe></div>
+<div><div class="meta">kernel-paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=kernel-paused&amp;t=day-still" title="loop-row, kernel-paused, day-still"></iframe></div>
+<div><div class="meta">waiting-trust</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=waiting-trust&amp;t=day-still" title="loop-row, waiting-trust, day-still"></iframe></div>
+<div><div class="meta">waiting-land</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=waiting-land&amp;t=day-still" title="loop-row, waiting-land, day-still"></iframe></div>
+<div><div class="meta">parked</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=parked&amp;t=day-still" title="loop-row, parked, day-still"></iframe></div>
+<div><div class="meta">active</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=active&amp;t=day-still" title="loop-row, active, day-still"></iframe></div>
+<div><div class="meta">hover</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=hover&amp;t=day-still" title="loop-row, hover, day-still"></iframe></div>
+<div><div class="meta">focus</div><iframe loading="lazy" src="specimen-frame.html#c=loop-row&amp;s=focus&amp;t=day-still" title="loop-row, focus, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loop-list</h3><p>The Loops list: a pinned &#39;needs you&#39; group (waiting for trust, kernel-paused, waiting to land, parked), then one group per project (swatch head). A loop can show twice, pinned and in its project.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">group head (10.5 caps --sec; project groups lead with the swatch)</span> <span class="badge">loop rows</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">default</span> <span class="badge">empty</span> <span class="badge">paused-all</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .lp-body .lp-gh)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=default&amp;t=day" title="loop-list, default, day"></iframe></div>
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=empty&amp;t=day" title="loop-list, empty, day"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=paused-all&amp;t=day" title="loop-list, paused-all, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=default&amp;t=night" title="loop-list, default, night"></iframe></div>
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=empty&amp;t=night" title="loop-list, empty, night"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=paused-all&amp;t=night" title="loop-list, paused-all, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">default</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=default&amp;t=day-still" title="loop-list, default, day-still"></iframe></div>
+<div><div class="meta">empty</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=empty&amp;t=day-still" title="loop-list, empty, day-still"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loop-list&amp;s=paused-all&amp;t=day-still" title="loop-list, paused-all, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loop-detail</h3><p>One loop in the leaf: a head with every key naming its cost, a meta line, the graph, inline budgets, the last run, and the run timeline with Revert on each landed sha.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">head: ← Loops (narrow only) · name (17) · state chip · by chip · keys</span> <span class="badge">meta (10.5 --sec): ■ project · trigger · autonomy (with cap reason) · local only · trusted &lt;hash8&gt; · a disabled key&#39;s reason</span> <span class="badge">can&#39;t-start line (only when the kernel refused a start): &#39;✕ can’t start · &lt;code&gt;&#39; (600 --ink), the kernel&#39;s reason in words, one key to the fix; --key-edge box, no fill colour</span> <span class="badge">graph</span> <span class="badge">budgets</span> <span class="badge">last run (run-trace)</span> <span class="badge">timeline: runs with landed sha + Revert</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">idle</span> <span class="badge">running</span> <span class="badge">waiting-trust</span> <span class="badge">kernel-paused</span> <span class="badge">paused-all</span> <span class="badge">cant-start</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .lp-dhead .lp-dmeta); can&#39;t-start line .atelier/sessions/2026-10-22-gnomon-local-model/refs/local-model.html (.lp-refusal)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">waiting-trust</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=waiting-trust&amp;t=day" title="loop-detail, waiting-trust, day"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=idle&amp;t=day" title="loop-detail, idle, day"></iframe></div>
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=running&amp;t=day" title="loop-detail, running, day"></iframe></div>
+<div><div class="meta">kernel-paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=kernel-paused&amp;t=day" title="loop-detail, kernel-paused, day"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=paused-all&amp;t=day" title="loop-detail, paused-all, day"></iframe></div>
+<div><div class="meta">cant-start</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=cant-start&amp;t=day" title="loop-detail, cant-start, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">waiting-trust</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=waiting-trust&amp;t=night" title="loop-detail, waiting-trust, night"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=idle&amp;t=night" title="loop-detail, idle, night"></iframe></div>
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=running&amp;t=night" title="loop-detail, running, night"></iframe></div>
+<div><div class="meta">kernel-paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=kernel-paused&amp;t=night" title="loop-detail, kernel-paused, night"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=paused-all&amp;t=night" title="loop-detail, paused-all, night"></iframe></div>
+<div><div class="meta">cant-start</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=cant-start&amp;t=night" title="loop-detail, cant-start, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">waiting-trust</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=waiting-trust&amp;t=day-still" title="loop-detail, waiting-trust, day-still"></iframe></div>
+<div><div class="meta">idle</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=idle&amp;t=day-still" title="loop-detail, idle, day-still"></iframe></div>
+<div><div class="meta">running</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=running&amp;t=day-still" title="loop-detail, running, day-still"></iframe></div>
+<div><div class="meta">kernel-paused</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=kernel-paused&amp;t=day-still" title="loop-detail, kernel-paused, day-still"></iframe></div>
+<div><div class="meta">paused-all</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=paused-all&amp;t=day-still" title="loop-detail, paused-all, day-still"></iframe></div>
+<div><div class="meta">cant-start</div><iframe loading="lazy" src="specimen-frame.html#c=loop-detail&amp;s=cant-start&amp;t=day-still" title="loop-detail, cant-start, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">budget-field</h3><p>An inline budget cap in the loop detail: label, number field, one key that names its cost, a note. Tightening applies at once; loosening raises a loop-trust card and the old cap holds until you trust it.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">label</span> <span class="badge">field (8ch)</span> <span class="badge">key: Save (disabled, &#39;no change&#39;) | Apply · tighter | Loosen · needs trust</span> <span class="badge">note (10.5 --sec)</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">unchanged</span> <span class="badge">tighter</span> <span class="badge">looser</span> <span class="badge">applied</span> <span class="badge">card-raised</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .bud; paintBud)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">unchanged</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=unchanged&amp;t=day" title="budget-field, unchanged, day"></iframe></div>
+<div><div class="meta">tighter</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=tighter&amp;t=day" title="budget-field, tighter, day"></iframe></div>
+<div><div class="meta">looser</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=looser&amp;t=day" title="budget-field, looser, day"></iframe></div>
+<div><div class="meta">applied</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=applied&amp;t=day" title="budget-field, applied, day"></iframe></div>
+<div><div class="meta">card-raised</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=card-raised&amp;t=day" title="budget-field, card-raised, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">unchanged</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=unchanged&amp;t=night" title="budget-field, unchanged, night"></iframe></div>
+<div><div class="meta">tighter</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=tighter&amp;t=night" title="budget-field, tighter, night"></iframe></div>
+<div><div class="meta">looser</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=looser&amp;t=night" title="budget-field, looser, night"></iframe></div>
+<div><div class="meta">applied</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=applied&amp;t=night" title="budget-field, applied, night"></iframe></div>
+<div><div class="meta">card-raised</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=card-raised&amp;t=night" title="budget-field, card-raised, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">unchanged</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=unchanged&amp;t=day-still" title="budget-field, unchanged, day-still"></iframe></div>
+<div><div class="meta">tighter</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=tighter&amp;t=day-still" title="budget-field, tighter, day-still"></iframe></div>
+<div><div class="meta">looser</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=looser&amp;t=day-still" title="budget-field, looser, day-still"></iframe></div>
+<div><div class="meta">applied</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=applied&amp;t=day-still" title="budget-field, applied, day-still"></iframe></div>
+<div><div class="meta">card-raised</div><iframe loading="lazy" src="specimen-frame.html#c=budget-field&amp;s=card-raised&amp;t=day-still" title="budget-field, card-raised, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loop-graph</h3><p>The loop detail&#39;s drawing of the definition with the last run on it: boxes for nodes, pills for terminals (@goal, @stop, @pause), edges labelled with outcomes. The founder picked it over the recommended listing; the trust card keeps the listing (you trust text, not shapes).</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">tools row: orientation · zoom % · − fit + (24px quiet keys)</span> <span class="badge">view (scrolls inside its own frame)</span> <span class="badge">key line: ✓ pass · ✕ fail (heavy edge) · ? unsure · … waiting · · not reached (dashed) · solid edges: the last run&#39;s path · ×n visits</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">left-to-right</span> <span class="badge">top-to-bottom</span> <span class="badge">zoomed</span> <span class="badge">node-focus</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, .g-frame .g-box .g-e .g-l)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">left-to-right</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=left-to-right&amp;t=day" title="loop-graph, left-to-right, day"></iframe></div>
+<div><div class="meta">top-to-bottom</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=top-to-bottom&amp;t=day" title="loop-graph, top-to-bottom, day"></iframe></div>
+<div><div class="meta">zoomed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=zoomed&amp;t=day" title="loop-graph, zoomed, day"></iframe></div>
+<div><div class="meta">node-focus</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=node-focus&amp;t=day" title="loop-graph, node-focus, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">left-to-right</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=left-to-right&amp;t=night" title="loop-graph, left-to-right, night"></iframe></div>
+<div><div class="meta">top-to-bottom</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=top-to-bottom&amp;t=night" title="loop-graph, top-to-bottom, night"></iframe></div>
+<div><div class="meta">zoomed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=zoomed&amp;t=night" title="loop-graph, zoomed, night"></iframe></div>
+<div><div class="meta">node-focus</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=node-focus&amp;t=night" title="loop-graph, node-focus, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">left-to-right</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=left-to-right&amp;t=day-still" title="loop-graph, left-to-right, day-still"></iframe></div>
+<div><div class="meta">top-to-bottom</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=top-to-bottom&amp;t=day-still" title="loop-graph, top-to-bottom, day-still"></iframe></div>
+<div><div class="meta">zoomed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=zoomed&amp;t=day-still" title="loop-graph, zoomed, day-still"></iframe></div>
+<div><div class="meta">node-focus</div><iframe loading="lazy" src="specimen-frame.html#c=loop-graph&amp;s=node-focus&amp;t=day-still" title="loop-graph, node-focus, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">run-trace</h3><p>The last run under the graph, one visit per line: time, mark, node and what it did, duration. Model text sits in a dashed agent-claimed box (rule model-text-never-a-key). Landed shas carry Revert.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">time (8ch, 10.5 --sec)</span> <span class="badge">mark (✓ ✕ ? …)</span> <span class="badge">node (600) · evidence</span> <span class="badge">duration or a key</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">pass</span> <span class="badge">fail</span> <span class="badge">unsure</span> <span class="badge">waiting</span> <span class="badge">agent-claimed</span> <span class="badge">landed</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame leaf, ol.tr)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">pass</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=pass&amp;t=day" title="run-trace, pass, day"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=fail&amp;t=day" title="run-trace, fail, day"></iframe></div>
+<div><div class="meta">unsure</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=unsure&amp;t=day" title="run-trace, unsure, day"></iframe></div>
+<div><div class="meta">waiting</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=waiting&amp;t=day" title="run-trace, waiting, day"></iframe></div>
+<div><div class="meta">agent-claimed</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=agent-claimed&amp;t=day" title="run-trace, agent-claimed, day"></iframe></div>
+<div><div class="meta">landed</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=landed&amp;t=day" title="run-trace, landed, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">pass</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=pass&amp;t=night" title="run-trace, pass, night"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=fail&amp;t=night" title="run-trace, fail, night"></iframe></div>
+<div><div class="meta">unsure</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=unsure&amp;t=night" title="run-trace, unsure, night"></iframe></div>
+<div><div class="meta">waiting</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=waiting&amp;t=night" title="run-trace, waiting, night"></iframe></div>
+<div><div class="meta">agent-claimed</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=agent-claimed&amp;t=night" title="run-trace, agent-claimed, night"></iframe></div>
+<div><div class="meta">landed</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=landed&amp;t=night" title="run-trace, landed, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">pass</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=pass&amp;t=day-still" title="run-trace, pass, day-still"></iframe></div>
+<div><div class="meta">fail</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=fail&amp;t=day-still" title="run-trace, fail, day-still"></iframe></div>
+<div><div class="meta">unsure</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=unsure&amp;t=day-still" title="run-trace, unsure, day-still"></iframe></div>
+<div><div class="meta">waiting</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=waiting&amp;t=day-still" title="run-trace, waiting, day-still"></iframe></div>
+<div><div class="meta">agent-claimed</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=agent-claimed&amp;t=day-still" title="run-trace, agent-claimed, day-still"></iframe></div>
+<div><div class="meta">landed</div><iframe loading="lazy" src="specimen-frame.html#c=run-trace&amp;s=landed&amp;t=day-still" title="run-trace, landed, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loop-trust-unfolded</h3><p>The loop-trust card unfolded over the centre column by its Read key: the same card, at most 96ch wide. Reading order: kernel line, the diff (changed loops open on it), the ordered listing, runs when, spends at most, lands and protects (gate-class called out in amber words), then Trust and Don&#39;t trust in a sticky foot with the presence line.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">fold key (Esc)</span> <span class="badge">family head</span> <span class="badge">title</span> <span class="badge">kernel line (changed by · when · paused until you decide · trusted &lt;old&gt; → &lt;new&gt;)</span> <span class="badge">sections: what changed · does (listing) · runs when · spends at most · lands and protects</span> <span class="badge">foot: Trust (pri) · Don&#39;t trust · presence line · contentHash and what it covers</span> <span class="badge">stamp TRUSTED</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">new</span> <span class="badge">changed</span> <span class="badge">waiting-presence</span> <span class="badge">trusted</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame trust, .lt-wrap .lt-sec .lt-foot)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">changed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=changed&amp;t=day" title="loop-trust-unfolded, changed, day"></iframe></div>
+<div><div class="meta">new</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=new&amp;t=day" title="loop-trust-unfolded, new, day"></iframe></div>
+<div><div class="meta">waiting-presence</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=waiting-presence&amp;t=day" title="loop-trust-unfolded, waiting-presence, day"></iframe></div>
+<div><div class="meta">trusted</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=trusted&amp;t=day" title="loop-trust-unfolded, trusted, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">changed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=changed&amp;t=night" title="loop-trust-unfolded, changed, night"></iframe></div>
+<div><div class="meta">new</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=new&amp;t=night" title="loop-trust-unfolded, new, night"></iframe></div>
+<div><div class="meta">waiting-presence</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=waiting-presence&amp;t=night" title="loop-trust-unfolded, waiting-presence, night"></iframe></div>
+<div><div class="meta">trusted</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=trusted&amp;t=night" title="loop-trust-unfolded, trusted, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">changed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=changed&amp;t=day-still" title="loop-trust-unfolded, changed, day-still"></iframe></div>
+<div><div class="meta">new</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=new&amp;t=day-still" title="loop-trust-unfolded, new, day-still"></iframe></div>
+<div><div class="meta">waiting-presence</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=waiting-presence&amp;t=day-still" title="loop-trust-unfolded, waiting-presence, day-still"></iframe></div>
+<div><div class="meta">trusted</div><iframe loading="lazy" src="specimen-frame.html#c=loop-trust-unfolded&amp;s=trusted&amp;t=day-still" title="loop-trust-unfolded, trusted, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loop-diff</h3><p>A loop definition&#39;s change against the trusted version, in the unfolded trust card. Marks and weight, never a hue: + added lines bold on --fold with a --key-edge left rule; − removed lines --sec with a 1px strike; unchanged runs folded to &#39;… n unchanged lines&#39;, naming what stayed the same (argv, argv0 sha, closure digest).</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">file line: path · trusted &lt;old&gt; (who, when) → &lt;new&gt; (who, when)</span> <span class="badge">context, removed and added lines</span> <span class="badge">fold line</span> <span class="badge">gate note (--warn-ink words) when a land path or protected input changes</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">added</span> <span class="badge">removed</span> <span class="badge">context</span> <span class="badge">folded</span> <span class="badge">gate-note</span></td></tr>
+<tr><th>Tokens</th><td class="mono">added → --ink 600 on --fold, 2px --key-edge left rule<br>removed → --sec, line-through 1px<br>context → --ink2<br>fold → 10.5 --sec italic<br>gate-note → 10.5 --warn-ink</td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame trust, .df)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">added</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=added&amp;t=day" title="loop-diff, added, day"></iframe></div>
+<div><div class="meta">removed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=removed&amp;t=day" title="loop-diff, removed, day"></iframe></div>
+<div><div class="meta">context</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=context&amp;t=day" title="loop-diff, context, day"></iframe></div>
+<div><div class="meta">folded</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=folded&amp;t=day" title="loop-diff, folded, day"></iframe></div>
+<div><div class="meta">gate-note</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=gate-note&amp;t=day" title="loop-diff, gate-note, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">added</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=added&amp;t=night" title="loop-diff, added, night"></iframe></div>
+<div><div class="meta">removed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=removed&amp;t=night" title="loop-diff, removed, night"></iframe></div>
+<div><div class="meta">context</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=context&amp;t=night" title="loop-diff, context, night"></iframe></div>
+<div><div class="meta">folded</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=folded&amp;t=night" title="loop-diff, folded, night"></iframe></div>
+<div><div class="meta">gate-note</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=gate-note&amp;t=night" title="loop-diff, gate-note, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">added</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=added&amp;t=day-still" title="loop-diff, added, day-still"></iframe></div>
+<div><div class="meta">removed</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=removed&amp;t=day-still" title="loop-diff, removed, day-still"></iframe></div>
+<div><div class="meta">context</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=context&amp;t=day-still" title="loop-diff, context, day-still"></iframe></div>
+<div><div class="meta">folded</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=folded&amp;t=day-still" title="loop-diff, folded, day-still"></iframe></div>
+<div><div class="meta">gate-note</div><iframe loading="lazy" src="specimen-frame.html#c=loop-diff&amp;s=gate-note&amp;t=day-still" title="loop-diff, gate-note, day-still"></iframe></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">loop-listing</h3><p>The ordered listing of a loop&#39;s nodes on the trust card: number, id and type, then argv, argv0 realpath with sha and interpreter, pass rule, tools, inputs, exits, and the outgoing edges. It reads at 80ch without wrapping argv; it is what you trust, so it is text.</p>
+<div class="scroll"><table>
+<tr><th style="width:110px">Anatomy</th><td><span class="badge">verdict margin (empty on the trust card)</span> <span class="badge">number</span> <span class="badge">id (600) + type · role</span> <span class="badge">key/value lines (key 10ch --sec, code on --fold)</span> <span class="badge">edges line (10.5 --sec): outcome → target, ↺ for a back edge</span></td></tr>
+<tr><th>Variants</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>Sizes</th><td><span class="meta">none recorded</span></td></tr>
+<tr><th>States</th><td><span class="badge">check</span> <span class="badge">model</span> <span class="badge">notify</span> <span class="badge">call</span></td></tr>
+<tr><th>Tokens</th><td class="mono"><span class="meta">none recorded</span></td></tr>
+<tr><th>Source</th><td class="mono">.atelier/sessions/2026-10-22-gnomon-loops-ui/refs/direction.html (frame trust, ol.lst)</td></tr>
+</table></div>
+<div class="meta" style="margin-top:12px">day theme</div><div class="grid">
+<div><div class="meta">check</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=check&amp;t=day" title="loop-listing, check, day"></iframe></div>
+<div><div class="meta">model</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=model&amp;t=day" title="loop-listing, model, day"></iframe></div>
+<div><div class="meta">notify</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=notify&amp;t=day" title="loop-listing, notify, day"></iframe></div>
+<div><div class="meta">call</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=call&amp;t=day" title="loop-listing, call, day"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">night theme</div><div class="grid">
+<div><div class="meta">check</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=check&amp;t=night" title="loop-listing, check, night"></iframe></div>
+<div><div class="meta">model</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=model&amp;t=night" title="loop-listing, model, night"></iframe></div>
+<div><div class="meta">notify</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=notify&amp;t=night" title="loop-listing, notify, night"></iframe></div>
+<div><div class="meta">call</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=call&amp;t=night" title="loop-listing, call, night"></iframe></div>
+</div>
+<div class="meta" style="margin-top:12px">day-still theme</div><div class="grid">
+<div><div class="meta">check</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=check&amp;t=day-still" title="loop-listing, check, day-still"></iframe></div>
+<div><div class="meta">model</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=model&amp;t=day-still" title="loop-listing, model, day-still"></iframe></div>
+<div><div class="meta">notify</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=notify&amp;t=day-still" title="loop-listing, notify, day-still"></iframe></div>
+<div><div class="meta">call</div><iframe loading="lazy" src="specimen-frame.html#c=loop-listing&amp;s=call&amp;t=day-still" title="loop-listing, call, day-still"></iframe></div>
+</div>
+</div>
+<h2 id="zones">Zones</h2>
+<div class="scroll"><table><tr><th>Zone</th><th>Holds</th><th>Never</th><th>When it runs out of room</th></tr>
+<tr><td><b>header</b><div class="meta">desk</div></td><td><span class="badge">wordmark menu (Gnomon ▾: Layout presets, Panes and Workshop…, Loops…, Pause all loops, Day/Night/Auto, Mods…, Voice settings…, Settings… ⌘,)</span> <span class="badge">⌘K palette field</span> <span class="badge">quiet kernel status (link dot; the loops word while any loop is enabled; browser-risk chip)</span> <span class="badge">voice pill (+ Stop speaking while speaking)</span> <span class="badge">pane toggles (sessions, decisions) under 900px</span></td><td><span class="badge">notices, outcome text or toasts inside the row</span> <span class="badge">tool keys (Layout, theme, Mods, Settings)</span> <span class="badge">a second Start voice key</span> <span class="badge">anything that wraps inside a control</span></td><td>The row never wraps: the loops word drops &#39;waiting&#39; to its counts first (full text in title=), then the palette&#39;s words truncate, then the pill&#39;s fact (20ch &lt; 1040px, 10ch &lt; 760px). With &#39;loops 1 · 2 waiting&#39; the row held at 1440, 1024, 900 and 760, day and night (Mika, direction page, 2026-10-22). Phone widths are out of scope (rule desktop-only); the 390px clipping of the decisions toggle is left for the mobile version, not fixed here.</td></tr>
+<tr><td><b>notices</b><div class="meta">desk, the band under the header</div></td><td><span class="badge">kernel alerts only: re-pin, voice dev build</span></td><td><span class="badge">GUI outcomes, refusals, update available or offers (they are toasts)</span> <span class="badge">inside the header row</span> <span class="badge">anything outside .shell</span> <span class="badge">retired vocabulary (Ambient, push-to-talk)</span></td><td>One alert per line, in arrival order; each stays until acknowledged or resolved.</td></tr>
+<tr><td><b>toasts</b><div class="meta">over the chat column, top-right (styles.css:956); lifted under the header while an overlay is open</div></td><td><span class="badge">GUI outcomes (saved, not sent, refusal code + reason + next:)</span> <span class="badge">voice idle auto-off</span> <span class="badge">update available (with Restart now, which focuses the upgrade card)</span> <span class="badge">standing-grant offers and confirmations</span> <span class="badge">loop outcomes that need nothing: goal reached, landed (6s, Open run)</span> <span class="badge">Pause all&#39;s confirmation, Run now started, a budget applied (tighter)</span></td><td><span class="badge">kernel alerts (the band)</span> <span class="badge">a decision key (a toast may focus a card, never decide one)</span> <span class="badge">bottom-right or bottom-centre placement</span> <span class="badge">covering the header row or a decision key</span> <span class="badge">a loop that still needs you: fail, stop, kernel pause (stack alerts) or waiting for trust (the slip)</span></td><td>At most three, newest on top; an older info toast leaves first. Text wraps to 4 lines at 44ch; a longer refusal keeps its next: line and puts the rest in title=. Hidden while an overlay is open, back when it closes.</td></tr>
+<tr><td><b>sessions</b><div class="meta">desk, left (200-260px)</div></td><td><span class="badge">+ New session (⌘N)</span> <span class="badge">search</span> <span class="badge">Active grouped by project (swatch + state note)</span> <span class="badge">Past collapsed</span> <span class="badge">mod slot left-bottom (bounded 45%)</span></td><td><span class="badge">decision keys</span> <span class="badge">kernel status</span></td><td>Names truncate with the full name in title=; the list scrolls; under 900px it is a drawer from the sessions toggle.</td></tr>
+<tr><td><b>centre</b><div class="meta">desk, centre</div></td><td><span class="badge">chat header: title (✎ rename) · ■ project · model · started · run mode ▾ · ⋯ (small controls are 24px keys)</span> <span class="badge">the chat (timestamps, took Ns, activity fold, working line)</span> <span class="badge">&#39;↓ latest&#39; (one key at the chat&#39;s bottom right, only while scrolled up; &#39;↓ latest · N new&#39;)</span> <span class="badge">offer slips under their reply</span> <span class="badge">this session&#39;s pending cards pinned above the composer (max 30vh)</span> <span class="badge">the composer (one send key)</span> <span class="badge">the empty sheet when no session is open</span> <span class="badge">the Loops leaf over the chat (header loops word, Gnomon ▾ Loops…, ⌘K loops.open); Esc folds it to an edge tab</span> <span class="badge">a loop-trust card unfolded over the chat by its Read key (fold or Esc puts it back)</span></td><td><span class="badge">the raw kernel feed as default (it is a palette view)</span> <span class="badge">a second send control</span> <span class="badge">a mod surface covering header, stack, Workshop or pinned cards</span> <span class="badge">a leaf or unfolded card that covers the sessions rail, the stack or the header</span> <span class="badge">page-level sideways scroll from a loop graph (it zooms inside its own frame)</span></td><td>Rows hold an 80ch measure; the title gives way before the meta; pinned scrolls past 30vh.</td></tr>
+<tr><td><b>stack</b><div class="meta">desk, right (300-340px; Decide preset 320-460px)</div></td><td><span class="badge">Stack head: &#39;n to decide · m alerts&#39; · hover to fan · project filter (a 24px key)</span> <span class="badge">the pile, in this order: decision cards (most urgent first), then alerts, then the waiting-for-trust slip at the foot</span> <span class="badge">a family head on every card and alert, by glyph and word (↻ loop, ◇ session; ✦ mod and voice planned)</span> <span class="badge">+N more</span> <span class="badge">mod slot right (ruled off, headed mods, outside the pile&#39;s scroll)</span></td><td><span class="badge">model-text controls beside decision keys (Aegis M2)</span> <span class="badge">toasts over a decision key (pile reserves 140px)</span> <span class="badge">an alert above a decision card, or an alert tail that pushes a decision key out of reach</span> <span class="badge">a decision key on an alert or on the slip</span> <span class="badge">a family told by hue</span> <span class="badge">outcomes that need nothing (goal reached, landed: toasts)</span> <span class="badge">kernel alerts (the band)</span></td><td>The pile scrolls; decision cards fan on hover/focus while alerts and the slip sit flat beneath them; under 900px it is a drawer from the decisions toggle.</td></tr>
+<tr><td><b>workshop</b><div class="meta">desk, footer strip (default, 64px) or a 76px column left/right</div></td><td><span class="badge">Workshop mod caps: Needs you | Working</span> <span class="badge">Install Workshop when absent</span> <span class="badge">one quiet status line (live · waiting · log · rpc), right end</span></td><td><span class="badge">kit.Button (Aegis M2)</span> <span class="badge">a per-mod hue</span> <span class="badge">type under 10.5</span></td><td>Under 900px it is always the footer; in the 76px column cap questions truncate at about 9 characters with the full text in title=. In the footer every word (mod label, zone title, quiet note, paused line, status line) sits in ONE line box of --key-h at the strip&#39;s floor, so all baselines agree with each other and with a key there; hats stand on the floor, a waiting cap&#39;s question above its hat, and the reduced-motion word of a working cap (&#39;working&#39;) above its hat too, never below the floor (Mika 2026-10-23). Nothing wraps from 1024 to 2560: the host and the status line clip.</td></tr>
+<tr><td><b>overlays</b><div class="meta">over the desk</div></td><td><span class="badge">command palette</span> <span class="badge">new session</span> <span class="badge">Settings sheet</span> <span class="badge">Mods sheet</span> <span class="badge">Voice settings drawer (teaching inline under its row)</span> <span class="badge">reconnect</span></td><td><span class="badge">a modal over the Voice settings sheet</span> <span class="badge">toasts (hidden while any overlay is open)</span></td><td>Sheets cap at 78vh and scroll their body; under 900px they take the width minus 32px.</td></tr>
+<tr><td><b>kernel-owned</b><div class="meta">every zone</div></td><td><span class="badge">voice pill</span> <span class="badge">link status, the loops word (and its keep-alive line) and the browser-risk chip</span> <span class="badge">a loop card&#39;s kernel line (Raised by loop … / changed by …)</span> <span class="badge">run mode</span> <span class="badge">re-pin and voice-dev alerts</span> <span class="badge">dictation ring</span> <span class="badge">handle words</span> <span class="badge">held countdown</span> <span class="badge">card bodies, the voice tag and the contentHash line</span></td><td><span class="badge">hidden by any layout preset, pane switch or mod</span></td><td>n/a</td></tr>
+</table></div>
+<h2 id="content">Content</h2>
+<h3>Say</h3><div class="scroll"><table>
+<tr><td><b>session</b></td><td>one Claude (or local model) conversation in a folder</td></tr>
+<tr><td><b>card</b></td><td>one decision the kernel asks of you</td></tr>
+<tr><td><b>stack</b></td><td>the global pile of every pending card (header &#39;Stack&#39;; &#39;decision stack&#39; in long form)</td></tr>
+<tr><td><b>pinned</b></td><td>this session&#39;s pending cards above the composer (&#39;pending in this session&#39;)</td></tr>
+<tr><td><b>KNOT</b></td><td>a conflict git can&#39;t see; violet; the only use of violet</td></tr>
+<tr><td><b>run mode</b></td><td>manual / ask / auto-edits, per folder or per session. Always the two words &#39;run mode&#39; (never &#39;mode&#39; alone, never &#39;run&#39;); it is a session&#39;s permission setting and has nothing to do with loops</td></tr>
+<tr><td><b>loop</b></td><td>a definition that runs on its own (triggers, nodes, budgets; loop:v2), named by its id in mono</td></tr>
+<tr><td><b>run</b></td><td>one execution of a loop, from trigger to @goal, @stop or @pause. Inside loop surfaces (the leaf, loop cards, alerts, loop toasts) just &#39;run&#39;: Run now, Open run, last run, run 7f3a. Anywhere else, &#39;loop run&#39;. A session is never a run</td></tr>
+<tr><td><b>round</b></td><td>one pass of a fix cycle inside a run (&#39;round 3 of 8&#39;)</td></tr>
+<tr><td><b>waiting for trust</b></td><td>a loop definition no human has trusted at this hash</td></tr>
+<tr><td><b>trust</b></td><td>the root-key, hand-only decision that lets a loop definition run; Untrust takes it back; &#39;Don&#39;t trust&#39; on the card</td></tr>
+<tr><td><b>Pause all</b></td><td>the loops kill switch (key label); no presence; resuming needs presence (&#39;Resume all · presence&#39;); a row paused by it reads &#39;paused · kill switch&#39;</td></tr>
+<tr><td><b>kernel pause</b></td><td>the kernel paused a loop (thrash, strictness, content or closure change, budget); &#39;kernel-paused&#39; on a row; resuming needs presence</td></tr>
+<tr><td><b>alert</b></td><td>a stack sheet that decides nothing: a loop that is stuck and still needs you</td></tr>
+<tr><td><b>family</b></td><td>what a card or alert relates to, named by glyph and word in its head (↻ loop, ◇ session)</td></tr>
+<tr><td><b>autonomy</b></td><td>observe / act / propose, with the cap reason (&#39;act → propose (L2: a-paradigm strictness)&#39;); never &#39;mode&#39;</td></tr>
+<tr><td><b>presence</b></td><td>fresh Touch ID, or the Mac password where Touch ID is unavailable; named in a key&#39;s cost (&#39;Resume · presence&#39;); long copy says &#39;Touch ID or your Mac password&#39; (amended by session 2026-10-22-gnomon-local-model)</td></tr>
+<tr><td><b>local model</b></td><td>a model server on this Mac that sessions and loops can use instead of Claude (8.0: loopback only); &#39;Set up local model…&#39;, &#39;none set up&#39;</td></tr>
+<tr><td><b>card waiting</b></td><td>a request whose card is in the stack (a plain chip in the sheet that asked for it)</td></tr>
+<tr><td><b>land</b></td><td>a loop committing its scratch work to the branch; &#39;landed &lt;sha&gt;&#39;; &#39;waiting to land&#39;; &#39;parked&#39; when it waited too long</td></tr>
+<tr><td><b>Workshop</b></td><td>the caps mod: Needs you | Working</td></tr>
+<tr><td><b>cap</b></td><td>one session in the Workshop</td></tr>
+<tr><td><b>rung</b></td><td>a voice preset on the ladder: Off, Talk, Dictate, Send word, Pieces</td></tr>
+<tr><td><b>open mic</b></td><td>the mic is listening without a held key</td></tr>
+<tr><td><b>send word</b></td><td>the word that sends a voice turn</td></tr>
+<tr><td><b>chip</b></td><td>a status label nobody clicks (never &#39;badge&#39; in copy)</td></tr>
+<tr><td><b>key</b></td><td>anything you click</td></tr>
+<tr><td><b>toast</b></td><td>a notice that is not a kernel alert</td></tr>
+<tr><td><b>hand only</b></td><td>a card voice can&#39;t decide (the voice tag&#39;s words)</td></tr>
+<tr><td><b>mod</b></td><td>an installed extension, named mod:&lt;name&gt;</td></tr>
+<tr><td><b>offer</b></td><td>the agent&#39;s single suggestion to open a mod</td></tr>
+<tr><td><b>kernel-owned</b></td><td>a region no preset or mod can hide</td></tr>
+<tr><td><b>folder</b></td><td>where a session works (the session.open cwd), in GUI copy; &#39;cwd&#39; stays in the wire, the CLI and logs</td></tr>
+<tr><td><b>recent folders</b></td><td>the folders past sessions opened in, newest first (at most six in New session)</td></tr>
+</table></div>
+<h3>Retired (checked by <code>atelier check</code>)</h3><div class="scroll"><table><tr><th>Don't say</th><th>Say</th></tr>
+<tr><td>Ambient</td><td>the rung name (Dictate, Send word or Pieces) or &#39;open mic&#39;</td></tr>
+<tr><td>push-to-talk</td><td>Talk</td></tr>
+<tr><td>inbox</td><td>stack</td></tr>
+<tr><td>LOOPS n running</td><td>&#39;loops n · m waiting&#39; (the spec&#39;s Shuttle line; the indicator is the header loops word)</td></tr>
+<tr><td>loop mode</td><td>autonomy (observe / act / propose) or run mode, whichever is meant</td></tr>
+<tr><td>cwd</td><td>&#39;folder&#39; in GUI copy (the New session field label)</td></tr>
+</table></div>
+<h3>Voice</h3><ul><li>Name the state plus one live fact; never only a glyph (board pill)</li><li>Lowercase, numbers before nouns (&#39;4 running&#39;), items joined with &#39; · &#39; (cli-voice)</li><li>No emoji, no exclamation marks, no &#39;Oops&#39; (cli-voice)</li><li>Every refusal: CODE in caps, the reason in plain words, then &#39;next:&#39; (cli-voice; app.ts refusalText)</li><li>Durations &#39;2m 14s&#39;, clock &#39;14:02&#39;, thin-space thousands &#39;1 204&#39; (cli-voice)</li><li>A disabled control says why in words, not only in a tooltip (settings-sheet.ts:44-47)</li><li>Never ask the user to say the product name; spoken phrases are plain sentences (board teach)</li><li>A voice instruction quotes the exact phrase the grammar accepts, in “ ” after &#39;say&#39; (board gnomon-voice-tag)</li><li>State is a word plus a mark (filled or hollow dot, ✓ ✕ ◆) and weight, in ink; colour only for the three semantic states, never alone (board gnomon-status-colour)</li></ul>
+<h2 id="rules">Rules, preserve, overrides</h2><div class="scroll"><table><tr><th>Rule</th><th>Check</th><th>Severity</th></tr>
+<tr><td>color-on-palette</td><td class="mono">color-off-palette</td><td>warn</td></tr>
+<tr><td>font-on-system</td><td class="mono">font-off-system</td><td>warn</td></tr>
+<tr><td>no-inter-no-system-mono</td><td class="mono">font-forbidden</td><td>warn</td></tr>
+<tr><td>type-on-scale</td><td class="mono">type-off-scale</td><td>warn</td></tr>
+<tr><td>spacing-on-scale</td><td class="mono">spacing-off-scale</td><td>warn</td></tr>
+<tr><td>radius-on-scale</td><td class="mono">radius-off-scale</td><td>warn</td></tr>
+<tr><td>no-pure-black-white</td><td class="mono">color-literal-forbidden</td><td>default</td></tr>
+<tr><td>desktop-only</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>chip-is-not-a-key</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>notices-by-kind</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>four-type-steps</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>status-in-ink</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>voice-tag-quotes-the-phrase</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>violet-is-knot-only</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>three-semantic-colours</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>hue-is-identity</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>control-edge-3-to-1</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>motion-on-events-only</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>reduced-motion-instant</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>stamp-after-hold</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>no-shake</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>fraunces-day-titles-only</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>mono-body-leading</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>night-glow-sparing</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>model-text-never-a-key</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>panels-movable-kernel-fixed</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>card-in-both-places</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>header-four-things</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>voice-one-ladder</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>teach-inline</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>composer-autogrow</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>one-offer-per-reply</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>stack-order</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>family-by-glyph-and-word</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>stuck-to-stack-done-to-toast</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>cost-in-the-label</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>trust-reads-whole</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>diff-without-hue</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>loop-graph-fits</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>pause-all-everywhere</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>form-says-where-the-card-is</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>no-password-for-a-typo</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>target-floor</td><td class="mono">review</td><td>agent</td></tr>
+<tr><td>paths-are-chosen</td><td class="mono">review</td><td>agent</td></tr>
+</table></div>
+<h3>Preserve</h3><ul><li class="mono">{&quot;what&quot;:&quot;tokens&quot;,&quot;value&quot;:&quot;every colour token in docs/specs/gnomon-fixtures/contrast.json (G-GUI-10), verbatim (--live/--stamp are not fixture tokens; retiring them as state leaves the fixture unchanged)&quot;}</li><li class="mono">{&quot;what&quot;:&quot;kernel-owned&quot;,&quot;value&quot;:&quot;class kernel-owned regions and data-gnomon-slot hooks (spec §11)&quot;}</li><li class="mono">{&quot;what&quot;:&quot;commands&quot;,&quot;value&quot;:&quot;palette run ids (voice.preset.*, theme.*, layout.*, workshop.*); wire values unchanged (e.g. &#39;ambient&#39;)&quot;}</li><li class="mono">{&quot;what&quot;:&quot;csp&quot;,&quot;value&quot;:&quot;no inline style (rotations by classes), no data: URLs (grain.svg), fonts self-hosted&quot;}</li><li class="mono">{&quot;what&quot;:&quot;voice-grammar&quot;,&quot;value&quot;:&quot;the phrases in card voice tags come from spec §14.7 and the configured prefix, never composed by the GUI from model text&quot;}</li></ul>
+<h3>Tell overrides</h3><ul><li><code>default-display-serif</code> (wordmark and day titles): Fraunces is a recorded choice (mono spine + Fraunces for day titles only), not a default reach</li><li><code>default-warm-paper</code> (day theme): the founder wants a papercraft feel</li><li><code></code> (Workshop caps): caps bob while (and only while) their session streams</li><li><code></code> (send word teach): Aegis R-1: a real word like &#39;sent&#39; said alone would send; the founder kept the opt-in (unticked by default)</li><li><code></code> (the stack zone: alerts and the waiting-for-trust slip join the decision cards): founder: &#39;i think i like the idea of the stack being a stack of alerts and other decision cards and decision cards canbe styled a certain way depending on what they relate to&#39;</li></ul>
+<p class="meta">38 recorded decisions.</p></main></body></html>

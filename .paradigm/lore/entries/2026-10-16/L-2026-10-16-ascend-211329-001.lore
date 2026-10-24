@@ -1,0 +1,37 @@
+id: L-2026-10-16-ascend-211329-001
+type: human-note
+timestamp: '2026-10-16T21:13:29.308Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon mod idea: Doodle, a shared canvas for humans and agents'
+summary: |-
+  Founder's main thought (the gnome persona idea was a side thought). Doodle is a low-stakes first version of a canvas that both the human and AI agents draw on.
+  - **What it's for:** making shapes while talking; drawing together toward whatever the work calls for, such as animations; photo display with line edits so issues can be redlined; live discussion.
+  - **Logging:** interactions are logged and tied into lore. Done right, this allows time-reversing events to see how an idea got there, with transcription if desired.
+  - Founder: "the more these things are connected i think my hope is that it yields great positive boons on people's workflows".
+  - Fable is ideating it into a concept doc.
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-R6
+    decision: 'Requirement (ideation): Doodle mod, a shared human and agent canvas: shapes, freehand, animation sketches, photo display with redlining, live discussion; every interaction logged, tied to lore, replayable backwards in time with optional transcription'
+    rationale: Founder's primary idea for this conversation.
+learnings:
+  - 'Doodle fits the kernel by construction: if every stroke is a kernel event, time-reversal is just replay, and voice turns align to strokes by timestamp.'
+  - A redline on a screenshot is an Atelier critique in drawn form; each mark can cite a rules.yaml id and become a card or task.
+  - A real canvas needs a GUI or web client; a terminal can at most show images (kitty graphics protocol) and thumbnails. Doodle likely needs a first-party canvas surface beyond mod-abi:v1's closed view kit.
+tags:
+  - paradigm-8
+  - gnomon
+  - mod
+  - doodle
+  - canvas
+  - ideation
+linked_lore:
+  - L-2026-10-16-ascend-210906-001
+git_context:
+  ref: eddf85fcd1dfdd1a63d23c5879183815e16588c6
+  branch: ideate/paradigm-8
+  dirty: true

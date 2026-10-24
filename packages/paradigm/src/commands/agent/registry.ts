@@ -208,7 +208,7 @@ export async function agentInstallCommand(source: string, options: { global?: bo
 // paradigm agent publish
 // ============================================================================
 
-export async function agentPublishCommand(options: { namespace?: string }) {
+export async function agentPublishCommand(_options: { namespace?: string }) {
   const tracker = log.command('agent-publish').start('Agent publish info', {});
 
   console.log(chalk.bold('\n  Publishing agents to nevr.land\n'));

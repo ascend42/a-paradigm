@@ -1,0 +1,297 @@
+{
+  "probe": "p-log-fsync",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "sqlite": "3.53.0",
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "n": 300000,
+    "budgetMs": 5,
+    "tmpRoot": "<tmp>/p-log-fsync-cQEheN",
+    "dataVolume": "/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)",
+    "cpus": "Apple M4",
+    "armsMeetingBudget": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E"
+    ],
+    "arms": {
+      "A": {
+        "arm": "A",
+        "desc": "raw SQLite (kernel-log pragmas) only",
+        "n": 300000,
+        "wallS": 10.848,
+        "checkpoints": 15,
+        "total": {
+          "p50": 0.028,
+          "p90": 0.041,
+          "p99": 0.06,
+          "p999": 0.085,
+          "max": 52.462,
+          "over5ms": 47
+        },
+        "commit": {
+          "p50": 0.028,
+          "p90": 0.041,
+          "p99": 0.06,
+          "p999": 0.084,
+          "max": 52.462,
+          "over5ms": 32
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0,
+          "p99": 0,
+          "p999": 0,
+          "max": 13.355,
+          "over5ms": 15
+        },
+        "slowPer50k": [
+          4,
+          15,
+          2,
+          21,
+          2,
+          3
+        ],
+        "firstSlowAt": 19343,
+        "slowDominatedBy": {
+          "commit": 32,
+          "anchor": 15
+        }
+      },
+      "B": {
+        "arm": "B",
+        "desc": "A + head tmp+rename every commit (current anchor.ts)",
+        "n": 300000,
+        "wallS": 66.956,
+        "checkpoints": 15,
+        "total": {
+          "p50": 0.145,
+          "p90": 0.166,
+          "p99": 1.217,
+          "p999": 7.72,
+          "max": 279.637,
+          "over5ms": 2834
+        },
+        "commit": {
+          "p50": 0.033,
+          "p90": 0.048,
+          "p99": 0.371,
+          "p999": 7.556,
+          "max": 15.865,
+          "over5ms": 2804
+        },
+        "anchor": {
+          "p50": 0.11,
+          "p90": 0.124,
+          "p99": 0.145,
+          "p999": 0.293,
+          "max": 271.816,
+          "over5ms": 33
+        },
+        "slowPer50k": [
+          5,
+          4,
+          196,
+          991,
+          798,
+          840
+        ],
+        "firstSlowAt": 20000,
+        "slowDominatedBy": {
+          "commit": 2802,
+          "anchor": 32
+        }
+      },
+      "C": {
+        "arm": "C",
+        "desc": "A + head pwrite in place at offset 0, no rename, every commit",
+        "n": 300000,
+        "wallS": 22.162,
+        "checkpoints": 15,
+        "total": {
+          "p50": 0.035,
+          "p90": 0.053,
+          "p99": 0.124,
+          "p999": 7.839,
+          "max": 71.958,
+          "over5ms": 1219
+        },
+        "commit": {
+          "p50": 0.033,
+          "p90": 0.05,
+          "p99": 0.12,
+          "p999": 7.823,
+          "max": 71.946,
+          "over5ms": 1204
+        },
+        "anchor": {
+          "p50": 0.002,
+          "p90": 0.003,
+          "p99": 0.004,
+          "p999": 0.016,
+          "max": 13.347,
+          "over5ms": 15
+        },
+        "slowPer50k": [
+          179,
+          163,
+          196,
+          248,
+          227,
+          206
+        ],
+        "firstSlowAt": 15892,
+        "slowDominatedBy": {
+          "commit": 1204,
+          "anchor": 15
+        }
+      },
+      "D": {
+        "arm": "D",
+        "desc": "A + head tmp+rename every 64 commits",
+        "n": 300000,
+        "wallS": 11.049,
+        "checkpoints": 15,
+        "total": {
+          "p50": 0.029,
+          "p90": 0.042,
+          "p99": 0.143,
+          "p999": 0.178,
+          "max": 203.41,
+          "over5ms": 19
+        },
+        "commit": {
+          "p50": 0.029,
+          "p90": 0.04,
+          "p99": 0.061,
+          "p999": 0.096,
+          "max": 203.41,
+          "over5ms": 4
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0,
+          "p99": 0.114,
+          "p999": 0.133,
+          "max": 13.503,
+          "over5ms": 15
+        },
+        "slowPer50k": [
+          3,
+          3,
+          5,
+          3,
+          2,
+          3
+        ],
+        "firstSlowAt": 9626,
+        "slowDominatedBy": {
+          "commit": 4,
+          "anchor": 15
+        }
+      },
+      "E": {
+        "arm": "E",
+        "desc": "A + head tmp+rename on a 50 ms timer",
+        "n": 300000,
+        "wallS": 11.161,
+        "checkpoints": 15,
+        "total": {
+          "p50": 0.028,
+          "p90": 0.04,
+          "p99": 0.067,
+          "p999": 0.231,
+          "max": 129.711,
+          "over5ms": 48
+        },
+        "commit": {
+          "p50": 0.028,
+          "p90": 0.04,
+          "p99": 0.065,
+          "p999": 0.149,
+          "max": 129.434,
+          "over5ms": 33
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0,
+          "p99": 0,
+          "p999": 0,
+          "max": 14.768,
+          "over5ms": 15
+        },
+        "slowPer50k": [
+          2,
+          25,
+          2,
+          12,
+          4,
+          3
+        ],
+        "firstSlowAt": 20000,
+        "slowDominatedBy": {
+          "commit": 33,
+          "anchor": 15
+        }
+      },
+      "F": {
+        "arm": "F",
+        "desc": "B with head in a sibling subdir of the db dir",
+        "n": 300000,
+        "wallS": 78.658,
+        "checkpoints": 15,
+        "total": {
+          "p50": 0.146,
+          "p90": 0.167,
+          "p99": 7.181,
+          "p999": 7.704,
+          "max": 529.218,
+          "over5ms": 4309
+        },
+        "commit": {
+          "p50": 0.034,
+          "p90": 0.05,
+          "p99": 7.026,
+          "p999": 7.536,
+          "max": 375.263,
+          "over5ms": 4269
+        },
+        "anchor": {
+          "p50": 0.111,
+          "p90": 0.125,
+          "p99": 0.15,
+          "p999": 0.252,
+          "max": 529.167,
+          "over5ms": 42
+        },
+        "slowPer50k": [
+          511,
+          712,
+          740,
+          745,
+          850,
+          751
+        ],
+        "firstSlowAt": 251,
+        "slowDominatedBy": {
+          "commit": 4268,
+          "anchor": 41
+        }
+      }
+    }
+  },
+  "specRefs": [
+    "§3.2",
+    "G-LOG-06",
+    "M1.2 append p99 <= 5 ms"
+  ],
+  "at": "2026-10-17T18:08:20.721Z"
+}

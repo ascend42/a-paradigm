@@ -1,0 +1,49 @@
+id: TD-2026-10-24-341
+timestamp: '2026-10-24T04:12:07.990Z'
+title: 'Gnomon orchestration: the session model is the conductor; the roster maps agents to models'
+decision: >-
+  In Gnomon, the model the human picks for a session is the orchestration conductor; Gnomon never switches it.
+  Delegation goes to Paradigm agents, each with a default model in its .agent profile and a per-repo override in Gnomon
+  Settings (e.g. explorer haiku, builder sonnet, reviewers opus). Gnomon's per-turn route is visible advice to the
+  conductor, filled with roster models (chip: builder (sonnet) + aegis (opus)), overridable, never blocking. Cost is
+  controlled by two dials: the conductor model and the roster map. Cheaper workers are suggested even under an Opus
+  conductor, with the saving shown; the human's choice wins. The kernel never calls Haiku itself (law 7); the
+  deterministic Cid context pack and a local-model tiebreak do the routing. Phase 1 is the context lifecycle: a recover
+  slip on open (any recent checkpoint, any branch, 72 h) and a pre-compaction checkpoint, fresh session and recover
+  handoff.
+rationale: >-
+  Founder, 2026-10-23: "maybe the idea of gnomon is that when you choose your agent and the specific model, you are
+  picking the model of your orchestration", then "yes that sounds good". It fits Gnomon's existing invariant that only
+  the human switches a session's model (supervisor.ts:1787) and law 7. It turns token cost into two visible, human-owned
+  dials, and keeps Paradigm's roster as the source of agent identity. From Arky's design (revisions 1-2) and Loid's
+  learning plan (.paradigm/research/paradigm-8/gnomon-orchestration-learning.md).
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: arky
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Haiku as a kernel-side router that picks the process
+    rejected_because: Law 7 forbids the kernel calling the Anthropic API, and a hidden model switch takes control from the human
+  - option: Gnomon switches the session model per turn
+    rejected_because: Only the human switches a session's model, and argv is fixed per session
+symbols_affected:
+  - '#cid-lane'
+  - '#gnomon-cid'
+  - '#context-handoff'
+  - '#kernel-slips'
+  - '#supervisor'
+status: active
+tags:
+  - gnomon
+  - orchestration
+  - tokens
+  - roster

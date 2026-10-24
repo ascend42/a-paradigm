@@ -1,0 +1,43 @@
+id: L-2026-10-19-ascend-210944-001
+type: milestone
+timestamp: '2026-10-19T21:09:44.482Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon dogfood day: trace, helper 1.5.0, GUI fixes, run modes'
+summary: |-
+  Founder dogfooding, 2026-10-19 afternoon. Everything is merged to feat/gnomon at 9cfb82f6 with CI green.
+
+  - gnomon trace plus a per-project capture under the Gnomon home (TD-139, amended by TD-057 after an Aegis block).
+  - Helper 1.5.0: root signs now return `shown`. Before this, every real guided setup failed with helper-line-mismatch, and the fake helper hid the bug. Signed and notarized locally.
+  - GUI. It had never shown a live session: the store read LogRow flat while the kernel sends it nested, and the launch-token GUI got a community-client view. Both are fixed, with an e2e test. Also added a full-window layout, a chat transcript, sticky scroll matching the founder's exact rules, a fix for scroll snap-back, and stale-session handling.
+  - Run modes manual / ask / auto-edits, with ⇧Tab and `gnomon mode`. Aegis blocked twice (dangling symlinks, the gate-class list), and every finding is fixed.
+  - Agent maxTurns aligned to 100.
+  - Next: voice (T-026, founder request).
+symbols_touched:
+  - '#gnomon-trace'
+  - '#trace-capture'
+  - '#gnomon-helper'
+  - '#gui'
+  - '#approval-broker'
+  - '#mode-cli'
+  - '#socket'
+learnings:
+  - Dogfooding found two bugs that had always been there (the helper line, GUI row shape) and that fakes hid. Real-kernel e2e tests are now required for GUI flows.
+  - '`gnomon trace` paid off at once: it showed the sessions worked and only the GUI was broken.'
+  - Aegis blocked security-relevant designs twice (in-project traces, auto-edits symlinks). Review before merge is worth it.
+tags:
+  - gnomon
+  - dogfood
+  - arc:paradigm-8
+linked_tasks:
+  - T-2026-10-19-026
+  - T-2026-10-19-027
+  - T-2026-10-19-025
+  - T-2026-10-19-024
+  - T-2026-10-19-023
+git_context:
+  ref: 9cfb82f64f12ac974ca3add6a144bf891edd0d56
+  branch: feat/gnomon
+  dirty: true

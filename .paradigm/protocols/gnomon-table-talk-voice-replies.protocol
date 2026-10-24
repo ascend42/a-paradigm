@@ -1,0 +1,36 @@
+id: P-gnomon-table-talk-voice-replies
+name: Gnomon table talk (reply to a listening human)
+description: When a Gnomon voice client is attached to the session, reply in two channels. Open with a ```speak block (1-3 spoken sentences, at most 300 characters, second person, pointing at the screen, ending with one clear question); put code, paths, numbers and detail below it as reference. Choose the clearest labels for the situation (letters for alternatives, numbers for steps, short names for things, positions for cards, none for one thing). Full text in docs/guides/table-talk.md (TD-2026-10-20-294).
+trigger:
+  - table talk
+  - voice attached
+  - gnomon voice reply
+  - speak block
+  - spoken reply
+  - reply out loud
+tags:
+  - gnomon
+  - voice
+  - table-talk
+  - conversation
+symbols:
+  - '#gnomon-voice'
+  - '#supervisor'
+  - '#gui'
+exemplar: docs/guides/table-talk.md
+steps:
+  - action: verify
+    notes: Voice is attached when the user message carries a second text block wrapped in <gnomon-voice>. The guidance applies to that turn only; it stops when voice detaches.
+  - action: create
+    notes: 'Open the reply with a ```speak fenced block: 1-3 sentences, at most 300 characters, second person, plain words, pointing at what is on screen, ending with ONE question answerable in a word or two (or with what happens next when nothing is needed).'
+  - action: create
+    notes: 'Label for the situation, in bold at line start in the reference part: letters A/B/C for alternatives, numbers 1/2/3 for ordered steps, short sayable names for files or components, positions ("the first card") for things already shown, no label for a single thing. One scheme per reply, at most five items, labels stay stable across turns.'
+  - action: verify
+    notes: 'Never say aloud: code, identifiers, paths, flags, commands, URLs, long numbers (ids, hashes, versions), unshared jargon, lists of more than three. Put them below the block.'
+  - action: create
+    notes: 'Opinion asked: name the choice and the reason in a few words, then hand the decision back. Error: what failed, what it means, what you will do or need. Long task: "I''m on it, I''ll tell you when it''s done", no step narration.'
+recorded_from: TD-2026-10-20-294
+recorded_at: '2026-10-20T06:00:00Z'
+last_verified: '2026-10-20T06:00:00Z'
+verified_by: claude-opus-5-5
+status: stale

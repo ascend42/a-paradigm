@@ -37,3 +37,59 @@ The Warpline design system (`docs/specs/warpline-design-system.md`) is preserved
 - A failure colour for failed checks. It needs its own board, because every hue already carries a meaning.
 - Offer review threads, which are deferred.
 - Build gate: no console build starts while F4 (cold-agent legibility) is unmeasured.
+
+---
+
+# Gnomon (Paradigm 8.0): design direction
+
+Session `2026-10-15-gnomon-aesthetic` set this direction with Luna and Mika. It was approved on 2026-10-17. The approved comp is `sessions/2026-10-15-gnomon-aesthetic/refs/direction.html`, with the board renders beside it (`colour`, `type`, `motion`, `layout`, `papercraft`, `workshop-mod`). Comps are local renders and gitignored. Tokens and rules are under `gnomon:` in `design-system.yaml`. The spec it serves is `docs/specs/gnomon.md` v3.4.
+
+## The read
+An instrument for one operator running an armada. You glance at it many times a day and open it a few times a day to decide. It is exact, calm and quietly beautiful: a made object that reads a larger order.
+
+## Two modes of one object
+- **Day is papercraft:** cut-paper sheets on a grained ground, ink lines, folded paper caps, and pressable ink keys with a hard offset shadow. This deliberately overrides the `default-warm-paper` tell, because the founder wants the papercraft feel.
+- **Night is phosphor:** a near-black ground, glowing outlines, bracketed keys and glyph caps. An automatic day/night swap is optional.
+
+## Colour: the pigment set
+- **Six soft mineral hues** (terracotta, sage, slate, ochre, rose-clay, sea-grey) mean *project identity* and nothing else. They appear on caps, card edges and swatches. Any text in a hue uses its darker ink pair, and every fill keeps a 1px ink edge.
+- **Three semantic colours, no more:** vermilion means failed; amber means warning, held voice countdowns and GATE-armed; violet means KNOT.
+
+## Type: the mono spine
+JetBrains Mono sets everything in both modes, the same mono as Warpline. Fraunces appears only on the wordmark and titles in day mode. Long text in mono gets line-height 1.6 and lines of at most 80 characters.
+
+## Motion: the lively workshop
+- Things move only when something happens, but they move with character:
+  - a decision sheet flutters in on a spring;
+  - deciding stamps it APPROVED and flies it off;
+  - a failing session droops and turns its edge vermilion, and never shakes;
+  - a cap walks from Working to Needs you.
+- Caps bob only while their session streams.
+- A voice approval shows its 3 s countdown before the stamp.
+- Reduced motion makes all of it instant.
+
+## Layout: the desk
+- **Left:** sessions, with `+ New`, active sessions by project and past sessions collapsed.
+- **Centre:** the chat, with timestamps, durations and a collapsible activity history. The session's own pending cards are pinned above the composer.
+- **Right:** the global decision stack as a paper pile that fans out on hover, so you can choose which to hit first.
+- **Footer:** the Workshop mod.
+- **Header:** the ⌘K palette and the kernel-owned voice-armed indicator.
+
+Every panel can be hidden or moved. Kernel-owned regions can't be hidden: the armed indicator, handle words and the held countdown.
+
+## CLI voice: instrument readout
+Aligned lowercase labels, numbers first, items joined by ` · `, and ✓ ✕ ◆ marks. There is no emoji. Every refusal ends with a `next:` line.
+
+## Open
+- The Workshop mod's vertical (sidebar) variant has not been rendered against the desk layout yet.
+- Warpline's open failure-colour item could adopt Gnomon's vermilion. That needs Warpline's own board, because its hues are preserved.
+
+## Gnomon voice (session 2026-10-21-gnomon-voice)
+
+Voice is one choice, not two. A trust ladder orders the presets by how much voice does on its own (Off, Talk, Dictate, Send word, Pieces), and the mic follows the rung. Each rung says what it does in a line and what it costs when it costs something. The header pill always names the rung plus one live fact, with a filled dot when the mic is open; it turns amber with "edits ask first" while a voice-sent turn is clamped, and shows a vermilion reason when speech wasn't sent.
+
+Using voice and configuring it are separate. The pill opens only the ladder. Everything configured lives in one Voice settings sheet: your voice, the send word, keys, listening, timing and the risk acknowledgement. Teaching happens inline under its row in that sheet, with one prompt, a live "I heard", one counter and the risk check right before save. A send word is said once; only a mishearing asks again. Nobody is ever asked to say the product name, and nothing from teaching reaches the transcript or composer.
+
+The composer grows with the text to 12 lines, then scrolls; ⤢ switches to a 24-line tall view and back.
+
+Direction render: `.atelier/sessions/2026-10-21-gnomon-voice/refs/direction.html` (approved by the founder).

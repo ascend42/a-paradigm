@@ -1,0 +1,42 @@
+id: TD-2026-10-19-139
+timestamp: '2026-10-19T17:32:20.459Z'
+title: Trace capture is a core per-project audit mode, switched on by the human and stored in the project
+decision: >-
+  Gnomon's raw stream capture is a core mode, available to every user on every build. It is not limited to test builds.
+
+  - The human enables it per folder with `gnomon trace on|off`, and `gnomon trace status` lists traced folders. The
+  state is kept in the Gnomon home, which sessions cannot write, and no project file can enable it.
+
+  - Captures go to <project>/.gnomon/trace/<hsid>.jsonl as {t, dir: in|out|ctl, line}. The folder ignores itself through
+  its own .gitignore of '*', so the repo's .gitignore is never edited.
+
+  - The session sandbox denies read and write on <cwd>/.gnomon/trace.
+
+  - When a session is traced, the session row says so.
+
+  - `gnomon trace` reads the kernel log, the Claude transcript and the capture into one timeline, and checks each
+  turn.sent contentHash.
+rationale: >-
+  Founder ruling, 2026-10-19. The goal is the fullest possible audit context for dogfooding and for any user. A toggle
+  only the human controls means a session cannot hide its own activity. Storing the capture in the project makes it
+  discoverable, and the self-ignoring folder keeps prompts out of commits.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+alternatives_considered:
+  - option: Test builds only, behind a switch
+    rejected_because: the founder wants it as a core tool
+  - option: A project config toggle
+    rejected_because: an agent could switch tracing off
+  - option: Store captures in the Gnomon home
+    rejected_because: less discoverable from the project
+symbols_affected:
+  - '#trace-capture'
+  - '#gnomon-trace'
+  - '#session-sandbox'
+status: active
+tags:
+  - gnomon
+  - trace
+  - audit

@@ -1,0 +1,29 @@
+id: L-2026-10-18-builder-162751-001
+type: insight
+timestamp: '2026-10-18T16:27:51.908Z'
+author: builder
+title: 'Decision: the GUI re-pins a changed fragment key visibly, never silently'
+summary: A launch-fragment kernel key that differs from the page's localStorage pin is trusted (it came through the authenticated gnomon open channel) and re-pinned, with a sticky kernel-owned notice naming old/new keyIds, cleared only by a user click, plus a /diag line. Reconnect (no fragment) verifies against the pin; no pin and no fragment refuses.
+symbols_touched:
+  - '#gui'
+  - '#web-endpoint'
+files_modified:
+  - packages/gnomon-gui/src/core/launch.ts
+  - packages/gnomon-gui/src/ui/app.ts
+  - packages/gnomon-gui/static/index.html
+  - docs/specs/gnomon.md
+commit: 673456ae
+learnings:
+  - Refusing on a fragment/pin mismatch would loop forever after a key rotation because gnomon open hands out the same new key
+  - The visible trail (sticky notice + gui.log line) is what makes trusting the fragment safe
+tags:
+  - decision
+  - gnomon
+  - m1-10
+  - aegis-c2
+  - s25-m4
+body: Spec §4.9 said a mismatch refuses; that reading cannot survive a legitimate kernel key rotation. Aegis C2 conditioned approval on a sticky, kernel-owned, keyId-naming, logged re-pin; spec §4.9 (S25-M4) and §11.2 rule 2 amended in 673456ae. Recorded as an insight because lore type decision was removed in v6 and the decision CLI is MCP-only here.
+git_context:
+  ref: 673456ae5eddef4e805e743fc5401a00f27e4927
+  branch: gnomon/m110-gui
+  dirty: true

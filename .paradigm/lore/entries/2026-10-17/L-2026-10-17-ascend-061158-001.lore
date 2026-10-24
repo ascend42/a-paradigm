@@ -1,0 +1,24 @@
+id: L-2026-10-17-ascend-061158-001
+type: human-note
+timestamp: '2026-10-17T06:11:58.959Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'State: P8-D58 mechanism pass and N2 librarian panel dispatched; aesthetic boards wait'
+summary: 'Where we are: the playbook v0 review is complete (marks in a-atelier docs/playbook/review-marks-v0.md @ 93546c9) and P8-D58 is recorded (L-2026-10-17-ascend-061036-001). In flight: (1) Aegis (research 26) and Arky (research 27) are designing the voice-approval mechanism that reconciles P8-D58 with spec §14.4 / S22-M1 / G-VOX-04 / the decision-class broker. Their output feeds spec v3.4. (2) A team panel (Loid, Rune, Cid, Arky) is answering the N2 librarian-agent question: a new specialist, a protocol, or neurons-only. Next after both: founder rulings on any open questions, then spec v3.4, then resume the Atelier aesthetic boards (colour and type first for the M1.10 contrast fixtures, then motion, cli-voice, decision-stack + sidebar render). P8-D57 still holds: the aesthetic must finish before Move 1.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gnomon-voice'
+tags:
+  - paradigm-8
+  - gnomon
+  - state
+  - voice
+  - atelier
+linked_lore:
+  - L-2026-10-17-ascend-061036-001
+git_context:
+  ref: 02d0c89115a180d1a85a10fab3f943336d80afaa
+  branch: ideate/paradigm-8
+  dirty: true

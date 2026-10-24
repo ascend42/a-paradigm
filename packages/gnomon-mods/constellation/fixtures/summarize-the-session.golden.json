@@ -1,0 +1,20 @@
+{
+  "offer": {
+    "mod": "gnomon.constellation",
+    "kind": "summarize-the-session",
+    "question": "Shall I write the session summary to Constellation?"
+  },
+  "body": "That closes the migration: the schema moved, the backfill ran clean and the old table is gone.",
+  "shown": {
+    "mod": "gnomon.constellation",
+    "kind": "summarize-the-session",
+    "phase": "synthesize",
+    "title": "Write the session summary",
+    "contextIn": [
+      "session-summary",
+      "recent-messages"
+    ],
+    "question": "Shall I write the session summary to Constellation?",
+    "handoffTool": "summarize"
+  }
+}

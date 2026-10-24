@@ -1,0 +1,19 @@
+id: L-2026-10-18-ascend-175358-001
+type: insight
+timestamp: '2026-10-18T17:53:58.168Z'
+author: ascend
+title: 'M1.6 slice 2 r2 reading: theft path is not a $flow node; ceiling coalesces'
+summary: 'The theft path #web-endpoint -> #socket -> #approval-broker meets the 3-component threshold, but it is a one-row relay with no state or steps of its own (revoke, write socket.auth.theft, raise one card). Documented in .purpose and theft-card.ts prose instead of a new $flow: a spec node moves Appendix A''s count (47) and is the founder''s call. Past 8 open theft cards a theft coalesces into the newest open card (its chain row stays); counted synchronously so concurrency cannot overshoot.'
+symbols_touched:
+  - '#approval-broker'
+  - '#socket'
+  - '#web-endpoint'
+commit: '5e958748'
+tags:
+  - decision
+  - gnomon
+  - m1.6
+git_context:
+  ref: 5e95874841aba9b759ae90f82ad70d026cf9fe27
+  branch: gnomon/m16-slice2
+  dirty: false

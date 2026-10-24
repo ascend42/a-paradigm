@@ -1,0 +1,27 @@
+id: L-2026-10-18-builder-165502-001
+type: insight
+timestamp: '2026-10-18T16:55:02.444Z'
+author: builder
+title: 'NEEDS RATIFICATION: G-HON-07 budget exemption (budgets and configured intervals are not latency claims)'
+summary: 'The G-HON-07 docs scan treats every ms/µs number as a latency claim except: (a) a comparator or bound word right before it (<, >, under, over, within, budget, at most, up to, every, after, default); (b) a config word within the 60 characters before it (timeout, interval, cadence, deadline, budget, debounce, ttl, idle, cap, limit, falsifier, threshold, window); (c) a config word right after it (after, debounce, timeout, poll, falsifier, ...). The spec says ''every latency number'', so this exemption is a reading the founder must ratify.'
+symbols_touched:
+  - '#client-conformance'
+  - ~ample-internal-logs
+files_modified:
+  - packages/gnomon/test/honesty.ts
+  - packages/gnomon/test/honesty.test.ts
+learnings:
+  - Without the exemption every timeout and budget in the .purpose files fails the gate
+  - and none of them is a measurement
+  - A wrong exemption could hide a real measurement behind a config word nearby; the falsifiers pin the boundary in both directions
+tags:
+  - decision
+  - needs-ratification
+  - gnomon
+  - honesty-ci
+  - G-HON-07
+body: 'Round 2 (B2) widened the scan: tables, wrapped paragraphs and keyword-less lines are all checked. MACHINE now requires a concrete chip, versioned OS or arch; METHOD requires a named method (hrtime, vitest, test:perf, a probe id or result file, n = N, over N runs). Real hit on the first run: packages/gnomon/.purpose claimed ''~10 ms/commit on Apple SSD'' for fullfsync with no recorded method or machine, so the number was removed. Options for the founder: ratify as is; narrow the exemption to comparators only (every configured interval in docs would then need a ''budget:'' marker); or require configured values to live in code constants, not docs.'
+git_context:
+  ref: 6ca958770bc6bda1bf9f0af3ab283f1832619473
+  branch: gnomon/m112-slice3
+  dirty: false

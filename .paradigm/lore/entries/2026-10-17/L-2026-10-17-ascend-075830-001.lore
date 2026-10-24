@@ -1,0 +1,39 @@
+id: L-2026-10-17-ascend-075830-001
+type: human-note
+timestamp: '2026-10-17T07:58:30.425Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Founder rulings P8-D68..D72: signed kernel binary, real Windows PC, notarize now, Rust Windows helper'
+summary: 'The founder answered the Move 1 kickoff decisions. The orchestrator took two defaults (D72). Next: spec v3.5 folds in K1–K8 and these rulings, the PR-0 scaffold starts in parallel, and the founder creates the gnomon.helper App ID with a Developer ID provisioning profile.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D68
+    decision: 'K1: the kernel ships as a Developer-ID-signed single executable (Node SEA). The macOS helper becomes an XPC/launchd service that answers only that signed binary (peer code-signing requirement); the helper refuses to run when sandboxed; the §15.5 securityd-per-item sentence is removed. macOS kernelKeyCustody stays ''full'' only under this design.'
+    rationale: 'Aegis S29-K1: any same-user process could run the helper, so the ''full'' claim was false; the founder chose to keep full custody by binding to a signed kernel.'
+  - id: P8-D69
+    decision: The Windows probes (S29-07/08/09, Arky P02/P10w) run on the founder's real Win11 PC with TPM 2.0 + Hello and a standard-user account, from the start of Move 1
+    rationale: The founder has a Windows PC; CI cannot test Hello/TPM or non-admin WFP.
+  - id: P8-D70
+    decision: 'Set up notarization now: a gnomon-notary notarytool keychain profile (App Store Connect API key) during M1.0 (Arky P00)'
+    rationale: Avoids surprises when the helper and wrapper ship.
+  - id: P8-D71
+    decision: 'OPEN 3 resolved: the Windows helper is written in Rust (windows crate), sharing the pinned toolchain with the Tauri wrapper'
+    rationale: 'Arky 29: one fewer toolchain; windows-rs covers NCrypt/Passport KSP, WFP, job objects and pipes.'
+  - id: P8-D72
+    decision: 'Defaults taken by the orchestrator: (a) Gnomon packages require Node >=24 while the repo stays >=20; Gnomon is kept out of the root build/test and marked private until 8.0. (b) Windows code signing (Azure Trusted Signing vs OV) is decided before M1.13 ships, with Azure Trusted Signing preferred.'
+    rationale: Neither blocks M1.0. Both are revisitable by the founder.
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - decision
+  - security
+linked_lore:
+  - L-2026-10-17-ascend-075432-001
+git_context:
+  ref: 519b6a6f43df81d1a5a83680832d62c764f93fce
+  branch: feat/gnomon
+  dirty: true

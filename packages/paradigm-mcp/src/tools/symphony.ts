@@ -18,7 +18,6 @@ import {
   markAgentPollTime,
   getMyIdentity,
   registerAgent,
-  resolveAgentIdentity,
   listAgents,
   listThreads,
   loadThread,
@@ -36,7 +35,6 @@ import {
   isAgentAsleep,
   cleanStaleAgents,
   garbageCollect,
-  updateAgentStatus,
   peekInbox,
   recordAckSize,
   type SymphonyMessage,
@@ -465,15 +463,6 @@ export async function handleSymphonyTool(
 
       // Emit thread:created lifecycle event if we auto-created
       if (threadCreated && threadRoot) {
-        const threadEvent: SymphonyMessage = {
-          id: `thread-created-${threadRoot}`,
-          threadRoot,
-          timestamp: message.timestamp,
-          sender: message.sender,
-          intent: 'context',
-          content: { text: `Thread created: ${message.content.text.slice(0, 60)}` },
-          symbols: [],
-        };
         // Override with lifecycle event type directly via fetch
         fetch(`${SENTINEL_URL}/api/events`, {
           method: 'POST',

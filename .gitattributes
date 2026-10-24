@@ -4,3 +4,30 @@
 *.lore linguist-language=YAML
 *.agent linguist-language=YAML
 *.notebook linguist-language=YAML
+
+# Generated JSON Schemas are byte-compared against src/schemas.ts in tests; keep LF on every OS.
+packages/gnomon-contracts/schemas/*.json text eol=lf
+
+# Normative conformance vectors are compared byte-for-byte on every OS
+packages/gnomon-contracts/conformance/*.json text eol=lf
+
+# #gui bundle: the pinned tree hash covers these bytes, and --check byte-compares the generated embed; keep LF on every OS (B3)
+packages/gnomon-gui/static/* text eol=lf
+packages/gnomon-gui/static/fonts/*.txt text eol=lf
+# Bundled fonts (#gui S1) are hashed byte-for-byte into the pin: never convert line endings or diff them as text
+*.woff2 binary
+packages/gnomon-gui/static/fonts/*.woff2 binary
+packages/gnomon-gui/src/** text eol=lf
+packages/gnomon/src/kernel/web/gui-bundle.ts text eol=lf
+packages/gnomon-contracts/src/** text eol=lf
+
+# The generated client-API doc is a byte-compared fixed point (G-HON-04 rule) on every OS
+docs/specs/gnomon-client-api.md text eol=lf
+
+# First-party mods are pinned by packageHash (FIRST_PARTY_PACKAGE_HASHES): keep LF on every OS.
+packages/gnomon-mods/** text eol=lf
+# Voice decision preimage vectors, read by the TS and Swift suites (helper 1.6.0); keep LF on every OS.
+packages/gnomon-contracts/test/fixtures/*.json text eol=lf
+
+# Node scripts start with a shebang; vitest cannot parse a CRLF shebang line when a test imports one (Windows checkout). Keep LF on every OS.
+*.mjs text eol=lf

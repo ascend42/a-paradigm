@@ -1,0 +1,18 @@
+id: L-2026-10-18-builder-203743-001
+type: insight
+timestamp: '2026-10-18T20:37:43.376Z'
+author: builder
+title: 'M1.3 reading: the helper makes the decisionSig; presence and signature are one touch'
+summary: The GUI cannot hold the approvals key, so approve without decisionSig has the helper sign approveMessage after presence (fresh, or the connId cached unlock held in the helper). The same touch signs a single-use kernel presence challenge (gnomon:presence:v1, kernel-internal) so the broker still gets a bound PresenceToken, minted only on a signature that verifies under the pinned key. A client-supplied decisionSig is still verified. No wire reason, event kind or clientApiId change.
+symbols_touched:
+  - '#identity'
+  - '#approval-broker'
+commit: '6e999172'
+tags:
+  - decision
+  - gnomon
+  - m1.3
+git_context:
+  ref: c918ca1f2bef783b36ba39517b67e3d23c765e00
+  branch: gnomon/m13-slice1
+  dirty: true

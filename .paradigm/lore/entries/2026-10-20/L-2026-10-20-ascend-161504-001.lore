@@ -1,0 +1,35 @@
+id: L-2026-10-20-ascend-161504-001
+type: milestone
+timestamp: '2026-10-20T16:15:04.216Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Voice speaker fix + ambient-never-sends merged into feat/gnomon (Aegis APPROVE)
+summary: |-
+  The speaker-fix branch merged cleanly. Aegis APPROVE:
+  - Every ambient path to a session needs a human key press (kernel non-ptt refusal, client never sends ambient, GUI never auto-sends an ambient draft, chips need trusted input, no spoken grammar).
+  - The speech gate fails closed.
+  - The stale nudge is scoped.
+  Post-merge suites: contracts 463, voice 137, gui 388 (+ bundle check), gnomon 2447.
+  Follow-ups in a new task: M1 (stamp the kernel ceiling at receipt so a lying ptt claim can't auto-send under an open mic), L1/L2, and the M2 condition on any future spoken "send".
+  The founder must re-teach their voice after restarting onto this build.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-dictation'
+verification:
+  status: pass
+  details:
+    contracts: 463
+    voice: 137
+    gui: 388
+    gnomon: 2447
+tags:
+  - gnomon
+  - voice
+  - merge
+  - marathon-2026-10-20
+git_context:
+  ref: 7a285e0b26b345c901dd16e4cbb8117a7b54c85a
+  branch: feat/gnomon
+  dirty: true

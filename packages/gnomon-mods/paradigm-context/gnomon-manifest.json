@@ -1,0 +1,15 @@
+{
+  "manifest": 2,
+  "kind": "mod",
+  "publisher": "gnomon",
+  "name": "paradigm-context",
+  "version": "1.1.1",
+  "abi": "mod-abi:v1",
+  "description": "Paradigm Context: the focused session's project knowledge (open tasks, recent decisions, recent lore and the symbols they touch), read-only, from the kernel's bounded paradigm-slice.",
+  "provides": {
+    "views": [
+      { "id": "paradigm-context.sheet", "slot": "sidebar", "placement": "append", "fixtures": ["fixtures/empty.json", "fixtures/full.json", "fixtures/full-dark.json", "fixtures/stale.json", "fixtures/unfocused.json"] }
+    ]
+  },
+  "requires": { "capabilities": ["paradigm.read:summary"], "egress": "none" }
+}

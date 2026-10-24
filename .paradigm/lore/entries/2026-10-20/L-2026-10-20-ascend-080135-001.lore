@@ -1,0 +1,40 @@
+id: L-2026-10-20-ascend-080135-001
+type: agent-session
+timestamp: '2026-10-20T08:01:35.032Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'GUI slice S1 (materials) built: fonts, grain, ink keys, amber mic, night glow scope'
+summary: |-
+  Builder shipped S1 on its worktree branch (890540eb…b2ca30c7):
+  - Fonts: OFL JetBrains Mono (400/500/600) plus a variable Fraunces, vendored via `npm pack` with no new dependency, licence files shipped, hashes pinned.
+  - Build: build.mjs walks static/ recursively and embeds binaries raw. This fixes a latent bug: the text-mode embed would have corrupted fonts.
+  - Kernel: materializeGuiBundle creates sub-directories; rules.ts maps svg → image/svg+xml so grain.svg renders under nosniff; the CSP is unchanged.
+  - Look: ink keys with a filled primary; the live mic is amber and static; night glow only on the wordmark.
+  - Tests: gui 247, gnomon 2342; the contrast fixtures gained the ink tokens.
+  I compared the before and after shots: the type and keys now match the comp's language. Remaining structure is S2 (rail, names, activity folding, markdown, quiet centre) and S3 (pile). Aegis review launched; S2 continues in the same branch.
+symbols_touched:
+  - '#gui'
+  - '#web-endpoint'
+verification:
+  status: pass
+  details:
+    gui: 247
+    gnomon: 2342
+    visual: shots-s1 reviewed vs baseline
+tags:
+  - gnomon
+  - design
+  - atelier
+  - marathon-2026-10-20
+linked_commits:
+  - 890540eb
+  - 235d027c
+  - d7069ada
+  - 5b6617b8
+  - b2ca30c7
+git_context:
+  ref: 3dd21946a30b70dad39628d94fe493ea3ff252ba
+  branch: feat/gnomon
+  dirty: true

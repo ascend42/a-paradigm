@@ -1,0 +1,36 @@
+id: L-2026-10-16-ascend-040001-001
+type: insight
+timestamp: '2026-10-16T04:00:01.216Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.0: Arky kernel + Loid loop findings; spec-driven fleet build ask'
+summary: 'Arky and Loid passes landed (.paradigm/research/paradigm-8/05, 06). Founder added P8-R2: codified spec documents and diagrams that the orchestrator compiles into expected symbols, flows and tests, to track progress and build async with a fleet of agents under checks and balances. Fable vision pass still running with both requirements relayed.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+  - '#notebook-loader'
+  - '#conductor'
+decisions:
+  - id: P8-R2
+    decision: 'Requirement: codified spec documents and diagrams compile into expected symbols, flows, gates and tests; progress is tracked against them; a fleet builds async with checks and balances'
+    rationale: 'Founder: "the idea of having paradigm cotified spec documents and diagrams that the orchestration knows what symbols and flows and tests etc to be made to track progress and build async with a fleet of agents with checks and balances"'
+learnings:
+  - 'Arky: the three Claude runners have drifted, not just duplicated. Conductor''s ClaudeStreamSession.swift:183 passes --dangerously-skip-permissions with no session id, while flow forbids it. One kernel supervisor is a safety fix, not just tidying.'
+  - 'Arky: Paradigm''s events/stream.jsonl ids (ev-<ms>-<rand>, no seq/principal/hash) fail TD-2026-10-14-735''s collision-free requirement; flow''s hash-chained chain table is the best log seed.'
+  - 'Arky: Warpline''s agent-shell treats a missing WARPLINE_AGENT_ID as human; flow''s ENV_ALLOW drops it, so (inferred) flow-spawned sessions could pass human-only Warpline checks today.'
+  - 'Arky: the kernel must stay tiny (principals/keys, hash-chained log, session supervisor, approval broker, manifest loader, ref resolver); the moat (symbol graph, notebooks, calibration, Warpline engine) lives in userland. Warpline-native sessions = userland boot package + four kernel spawn duties; F4 forbids injecting Warpline teaching beyond one pointer line.'
+  - 'Loid (verified): the learning loop is a popularity loop. orchestration.ts:881 increments appliedCount on injection, notebook-loader.ts:148 ranks by it; 384/396 global notebook entries never applied; injection dark since 2026-07-22; calibration empty on a-paradigm; journals fell to 0 since August; 200/200 debates complementary. 8.0 needs honest credited-vs-injected usage, written-back decay, same-symbol contradiction audits, and source-hash staleness.'
+tags:
+  - paradigm-8
+  - harness
+  - epiphany
+  - learning-loop
+  - kernel
+linked_lore:
+  - L-2026-10-16-ascend-035646-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true

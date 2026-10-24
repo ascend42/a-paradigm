@@ -4,7 +4,7 @@
 
 import type { ProjectContext } from '../utils/index-loader.js';
 import { loadTasks, loadTask, createTask, updateTask, completeTask, shelveTask } from '../utils/task-loader.js';
-import type { Claimant, ExternalRef } from '../utils/task-loader.js';
+import type { Claimant, ExternalRef, TaskFilterStatus, TaskFilter } from '../utils/task-loader.js';
 
 // ── Tool definitions ──────────────────────────────────────
 
@@ -160,8 +160,8 @@ export async function handleTasksTool(
 
     case 'paradigm_task_list': {
       const tasks = await loadTasks(ctx.rootDir, {
-        status: (args.status as string) || 'open',
-        priority: args.priority as string | undefined,
+        status: (args.status as TaskFilterStatus | undefined) || 'open',
+        priority: args.priority as TaskFilter['priority'],
         tag: args.tag as string | undefined,
         limit: (args.limit as number) || 20,
       });

@@ -1,0 +1,46 @@
+id: L-2026-10-17-ascend-172952-001
+type: agent-session
+timestamp: '2026-10-17T17:29:52.485Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: PR-3 contracts and PR-5 daemon lifecycle landed; rulings D80 (open hardening) and D81 (symbol CI)
+summary: |-
+  PR-3 (4718b7d1): gnomon-contracts core, 122 tests. Covers event:v1 with per-kind sensitivity defaults, ids, principals compared by rootKeyId, refs, refusal:v1 (a Warpline subset verified from source text), card:v1 with reserved voice/linking values, gnomon-rpc:v1 hello and additive enums, and a pinned clientApiId. Generated schemas are byte-checked.
+
+  PR-5 (54694cd5): $daemon-lifecycle + #socket, 54 new tests (96 kernel). Covers the O_EXCL pidfile with rename-aside reclaim, the 0600 socket never under /tmp, byte-level NDJSON framing that fixes Warpline's split-UTF-8 bug, the clean re-exec env and idle exit. tsup removeNodeProtocol:false was needed for the dist fence.
+
+  Spec questions owed to v3.8:
+  - the `turn` ref scheme;
+  - GNOMON_HOME as a test-only override vs §15.3;
+  - the idle default of 10 min;
+  - the socket.disconnect kind;
+  - the kind list expansions;
+  - base32 alphabet choices.
+
+  Symbol note: contracts introduced #contract-* sub-component ids that are not in spec Appendix A; the symbol-CI check (D81) must decide whether these become spec nodes or an allowlisted sub-component class.
+symbols_touched:
+  - '#gnomon-contracts'
+  - '#socket'
+  - $daemon-lifecycle
+  - '#gnomon-kernel'
+commit: 54694cd5
+decisions:
+  - id: P8-D80
+    decision: 'The open escape is accepted (D79) AND hardened: the macOS session profile denies process-exec of /usr/bin/open, /usr/bin/osascript and lsregister; a probe verifies this in M1.7; a self-compiled launcher remains a stated residual in §A.2, which is widened to say an escaped app runs with full same-user rights (approvals still need presence)'
+    rationale: Founder chose accept + harden after the wider scope of the escape was surfaced.
+  - id: P8-D81
+    decision: Add a CI check (with PR-4) that fails on drift between spec Appendix A symbols and the .purpose symbols of implemented Gnomon code
+    rationale: Founder directive for stringent symbols; enforce mechanically, not by discipline.
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - build
+linked_lore:
+  - L-2026-10-17-ascend-085000-001
+git_context:
+  ref: 54694cd5e3695d916fd2f77928942e661011b1dc
+  branch: feat/gnomon
+  dirty: true

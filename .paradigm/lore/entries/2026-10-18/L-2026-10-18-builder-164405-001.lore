@@ -1,0 +1,27 @@
+id: L-2026-10-18-builder-164405-001
+type: insight
+timestamp: '2026-10-18T16:44:05.105Z'
+author: builder
+title: 'M1.12 slice 3 reading: honesty CI rules G-HON-02/03/05/06/07'
+summary: 'Spec §9.7 names the honesty rules but not their mechanics. Readings: G-HON-02 is a grep of shipped source; G-HON-03 declares every status number (status-numbers.ts) and checks a live status; G-HON-05 refuses model-steering text in descriptions; G-HON-06 refuses unscoped guard names; G-HON-07 needs method and machine for measured latencies in package docs and status. Each rule has a planted-violation falsifier.'
+symbols_touched:
+  - '#client-conformance'
+  - '#socket'
+  - ~ample-internal-logs
+files_created:
+  - packages/gnomon/test/honesty.ts
+  - packages/gnomon/test/honesty.test.ts
+  - packages/gnomon/src/kernel/socket/status-numbers.ts
+learnings:
+  - The spec's own §9.6 uses gauges like unlocks{n}
+  - so the n-of rule means a subset count needs a denominator and a whole-set count is a gauge
+  - The live status had one undeclared number (budget.subscriptionWindow.windowMs); the gate caught it on the first run
+  - Comments are scanned too
+  - so the vocabulary is the exact words (simulated
+  - simulation) rather than simulate
+  - 'The design spec gnomon.md is outside the G-HON-07 docs scan: its measured lines cite probe arms by prose (residual)'
+body: 'G-HON-02 scans packages/gnomon*/src and the mod-sdk example for: Math.random outside ids modules; simulated or simulation; sleep() or delay(); numbers assigned to gain-like names; and mechanism words the code lacks (neural, consensus, quantum, hive-mind). The last follows research 09/11. G-HON-03 has these classes: {n, of}; a gauge n; gauge; ordinal; limit; duration; latency; subset-of-path, which must not exceed its denominator. Any other number fails as bare. G-HON-05 applies steering regexes (instead of Task, always call, prefer this, Claude Code has no) to description and title strings in source and in gnomon-manifest.json. G-HON-06 refuses isSafe, isSecure, isTrusted, isValid, checkSecurity and similar names. G-HON-07 requires a measured p50/p95/p99/median latency to name its method and machine on the same line. A comparator (< or budget) marks the number as a budget, which is exempt.'
+git_context:
+  ref: 9683ef5217e8096791d8a158d8a20a270dc24373
+  branch: gnomon/m112-slice3
+  dirty: true

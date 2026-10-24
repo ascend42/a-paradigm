@@ -1,0 +1,33 @@
+id: L-2026-10-16-ascend-070808-001
+type: insight
+timestamp: '2026-10-16T07:08:08.463Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: TUI + mods references in; voice on sherpa-onnx with a Mac boost
+summary: 'The TUI and mods scout landed (research 21). It recommends lifting pi-tui as the renderer, pi-agent-core and pi-ai for the local loop, OpenCode''s client/server topology, and out-of-process mods with a closed view kit. Founder chose a sherpa-onnx voice core with FluidAudio as an optional Mac backend, so voice works on Windows. Open flag: whether shipping subscription-driven headless Claude sessions to the world in 8.1 fits Anthropic''s terms needs checking before 8.1.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D31
+    decision: Voice client is built on sherpa-onnx (Silero VAD, Parakeet STT, diarization, Kokoro TTS via ONNX, Node bindings) on Mac/Windows/Linux, with FluidAudio on the Neural Engine as an optional Mac backend behind the same interface; capabilities verified in the Move 1 probe
+    rationale: P8-R4 Windows requirement; one engine, platform boost optional.
+learnings:
+  - deepseek-harness dropped its pi-tui TUI after long sessions rendered slowly (12 s for 196k events, 800 ms/keystroke until width-keyed line caches); Gnomon's TUI needs virtualization and line caching from day one.
+  - None of the reference harnesses sandbox mods; running Gnomon mods out of process over stdio JSON-RPC with declared, enforced effects would be a genuine first.
+  - Headless Claude Code loses live streaming unless --include-partial-messages is passed; the spec's runner argv must add it for the TUI.
+  - 'Open question for 8.1: confirm that distributing a harness that drives users'' subscription Claude Code headless fits Anthropic''s terms.'
+tags:
+  - paradigm-8
+  - gnomon
+  - tui
+  - mods
+  - voice
+  - windows
+linked_lore:
+  - L-2026-10-16-ascend-070707-001
+git_context:
+  ref: 3b3523687a485bdcedfadc7070d5f33c2043ff97
+  branch: ideate/paradigm-8
+  dirty: true

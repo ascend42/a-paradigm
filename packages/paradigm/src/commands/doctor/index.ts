@@ -755,8 +755,10 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           if (fs.existsSync(quizDir)) {
             for (const file of fs.readdirSync(quizDir).filter(f => f.endsWith('.yaml'))) {
               try {
-                const quiz = yaml.load(fs.readFileSync(path.join(quizDir, file), 'utf8')) as Record<string, unknown>;
-                if (quiz?.questions) {
+                const quiz = yaml.load(fs.readFileSync(path.join(quizDir, file), 'utf8')) as {
+                  questions?: Array<{ choices?: Record<string, unknown>; correct?: string }>;
+                } | null;
+                if (Array.isArray(quiz?.questions)) {
                   for (const q of quiz.questions) {
                     if (q.choices && q.correct && !(q.correct in q.choices)) {
                       issues++;
@@ -772,17 +774,20 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           if (fs.existsSync(pathDir)) {
             for (const file of fs.readdirSync(pathDir).filter(f => f.endsWith('.yaml'))) {
               try {
-                const lp = yaml.load(fs.readFileSync(path.join(pathDir, file), 'utf8')) as Record<string, unknown>;
-                if (lp?.steps) {
+                const lp = yaml.load(fs.readFileSync(path.join(pathDir, file), 'utf8')) as {
+                  steps?: Array<{ content?: unknown }>;
+                } | null;
+                if (Array.isArray(lp?.steps)) {
                   for (const step of lp.steps) {
-                    if (step.content && !step.content.startsWith('plsat:')) {
+                    const content = step?.content;
+                    if (typeof content === 'string' && !content.startsWith('plsat:')) {
                       // Check if referenced content exists
                       let found = false;
                       for (const sd of ['notes', 'policies', 'quizzes', 'paths']) {
                         const sdPath = path.join(contentDir, sd);
                         if (fs.existsSync(sdPath)) {
                           const files = fs.readdirSync(sdPath);
-                          if (files.some(f => f.startsWith(step.content))) {
+                          if (files.some(f => f.startsWith(content))) {
                             found = true;
                             break;
                           }
@@ -1397,7 +1402,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       const { narrateAllGaps } = await import('../../utils/gap-narrator.js');
 
       // Map doctor results to gap-narrator CheckResults
-      const gapCheckResults = [];
+      const gapCheckResults: Parameters<typeof narrateAllGaps>[0] = [];
 
       for (const result of results) {
         if (result.status === 'ok') continue;
@@ -1407,7 +1412,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         } else if (result.name === '.paradigm/scan-index.json' && result.status === 'warn') {
           gapCheckResults.push({ type: 'index-stale' as const, target: result.name, severity: 'improvement' as const });
         } else if (result.name === 'Portal compliance') {
-          gapCheckResults.push({ type: 'portal-mismatch' as const, target: result.name, severity: (result.status === 'error' ? 'blocking' : 'improvement') as const });
+          gapCheckResults.push({ type: 'portal-mismatch' as const, target: result.name, severity: result.status === 'error' ? 'blocking' : 'improvement' });
         } else if (result.name === 'Clarification markers') {
           gapCheckResults.push({ type: 'missing-description' as const, target: result.name, severity: 'improvement' as const });
         }

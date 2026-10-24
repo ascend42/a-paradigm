@@ -1,0 +1,27 @@
+id: L-2026-10-20-ascend-083702-001
+type: agent-session
+timestamp: '2026-10-20T08:37:02.479Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: GUI S4 motion plus the Aegis S2/S3 fixes built; S5 (Workshop caps) handed to a fresh builder
+summary: 'b327662c S4: comp-path fly-in, the APPROVED stamp only after the kernel accepted, then fly-off with removal on animationend, droop on failure, and reduced motion removing at once. 1ddf08f6 closes Aegis M1 (visible "by requester"; titles only from kernel-composed lines, call sites enumerated; other kinds quoted in italics), M2 (buried keys inert unless fanned; a 300 ms re-layout click guard), L1 (names only from the replay or cited voice turns), L2 (plain chips), the hue modulus and the Layout test. a32a6c1f: the fixture turn reads 41s, as in the comp. gui 307. Open: the voice countdown has no kernel source yet (no held voice decision is reported); S5 needs a kernel mod-block gate change for structured caps, createElementNS in MiniDoc, a Workshop re-pin and Aegis on the cap shape. The builder''s context reached ~460k tokens, so S5 went to a fresh agent.'
+symbols_touched:
+  - '#gui'
+  - '#gui-preview'
+learnings:
+  - Long-running builders that are resumed repeatedly accumulate huge context; hand off to a fresh agent with a written state summary after ~3-4 slices.
+tags:
+  - gnomon
+  - design
+  - atelier
+  - marathon-2026-10-20
+linked_commits:
+  - b327662c
+  - 1ddf08f6
+  - a32a6c1f
+git_context:
+  ref: 4d0ec8d0dd822989b3af520a0634318c1a8c2dc2
+  branch: feat/gnomon
+  dirty: true

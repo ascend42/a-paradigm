@@ -7,8 +7,6 @@
 import {
   checkGraduationEligibility,
   getGraduationSummary,
-  graduateHabit,
-  demoteHabit,
 } from '../utils/graduation-engine.js';
 import { getConfig } from '../utils/graduation-store.js';
 import type { GraduationCheckResult } from '../utils/graduation-types.js';

@@ -1,0 +1,574 @@
+# Warpline console design system (product: warpline, extends: none).
+# Layers: recorded decisions (moved verbatim) + v2 foundations, components, zones, content.
+# PROVENANCE of the recorded block below:
+#   lines "read" through "decisions" = .atelier/design-system.yaml:1-49 @ 927b1a36, unchanged
+#   except version (1 there; 2 here for the v2 layers). Mechanical rules are appended to
+#   `rules:` after the recorded entries, marked "drafted 2026-10-21".
+#   recorded.design_md = .atelier/DESIGN.md:1-39 @ 927b1a36, verbatim.
+#   Sessions: 2026-10-14-warpline-console, 2026-10-15-paradigm-8-spec.
+# The repo-wide files are untouched; the session thread retires them after all products are drafted.
+version: 2   # recorded: version: 1 (.atelier/design-system.yaml:1)
+read: "The control room for an agent armada's source control: you and a dev team check in a few times a day to make the calls machines can't; calm, exact, a dark loom register where violet only ever means 'git is blind here'."
+source_of_truth: "docs/specs/warpline-design-system.md (tokens, type, components, the three system rules) is preserved as-is; this file records console decisions on top of it."
+dials: { layout: 3, motion: 4, density: 7, from: { session: 2026-10-14-warpline-console, board: intent-dials } }
+hierarchy:
+  levels: [org-dashboard, repo]
+  org: "repo cards with visibility, activity and needs-you counts; cross-repo needs-you list"
+  repo_tabs: [Inbox, Floor, Code, Offers, Tapestry, Runs, Releases, Fleet, Settings]
+  scope: v1
+  from: { session: 2026-10-14-warpline-console, board: repos-and-nav, note: "too generic of a style ... form and function i like so we can go with it for v1" }
+structure:
+  home: inbox
+  nav: [Inbox, Floor, Offers, Tapestry, Symbols, Fleet, Calibration]
+  live_band: { placement: above-inbox, sizes: [hidden, compact, expanded], default: compact }
+  floor: { section: true, same_motion_rule: true }
+  from: { session: 2026-10-14-warpline-console, board: console-structure }
+rules:
+  - id: motion-on-events-only
+    rule: "Live surfaces (band, Floor) move only when a pick is admitted, a KNOT forms, or a KNOT is resolved; no idle or ambient animation. Reduced motion: final state, no travel."
+    from: { session: 2026-10-14-warpline-console, board: console-structure, note: "only reall animate when changes come in and they get rectified" }
+  - id: live-band-resizable
+    rule: "The live band can be hidden, compact, or expanded (labelled lanes); the choice persists per viewer."
+    from: { session: 2026-10-14-warpline-console, board: console-structure, note: "maybe ways to makek the live larger or smaller" }
+  - id: decide-in-split-view
+    rule: "Decisions open in a split view: the ranked queue stays on the left, the selected KNOT or HELD item on the right; sealing advances to the next open item."
+    from: { session: 2026-10-14-warpline-console, board: decision-surface }
+  - id: roles-by-domain
+    rule: "Owner decides everything incl. gate/auth contracts; Developer decides KNOTs only in domains they own, others read-only with a stated reason; Observer is read-only; agents never sign in to the console (MCP/CLI only, visible on the Floor). Every decision requires a human key."
+    from: { session: 2026-10-14-warpline-console, board: access }
+  - id: one-meaning-per-hue
+    rule: "No new hue for human states. HELD = linen-50 outline + human mark; human principal = filled linen chip with mark; agent principal = outlined linen-400 chip. Amber stays branch A, teal branch B, violet git-blind conflict."
+    from: { session: 2026-10-14-warpline-console, board: human-states }
+  - id: density-control-room
+    rule: "Card padding 10x14, row gap 6, tally padding 10x14, main padding 18x20 (all on the 4px scale)."
+    from: { session: 2026-10-14-warpline-console, board: intent-dials }
+  # ── drafted 2026-10-21 (Mika): enforced + agent rules on top of the recorded ones ──
+  # Appended to the recorded rules above (kept verbatim). Mechanical ids run in `atelier check`.
+  - { id: color-on-palette, check: color-off-palette, status: clear, from: { spec: "§1.1" } }
+  - { id: font-on-system, check: font-off-system, status: clear, from: { spec: "§1.2" } }
+  - { id: type-on-scale, check: type-off-scale, status: clear, from: { spec: "§1.2" } }
+  - { id: spacing-on-scale, check: spacing-off-scale, status: contested, from: { decision: rules.density-control-room, spec: "§1.2" } }
+  - { id: radius-on-scale, check: radius-off-scale, status: clear, from: { spec: "§1.2" } }
+  - id: seam-only-where-git-blind
+    rule: "--seam appears only on git-blind meaning: ★ cell, seam, DIVERGENT, knot glyph, dangle void/target, divergent ledger dot, body slot; one exception, the Run button."
+    status: clear
+    from: { spec: "docs/specs/warpline-design-system.md:19-24" }
+  - { id: restraint-default, rule: "CONVERGENT is calm: seam dim and static, nothing glows.", status: clear, from: { spec: "docs/specs/warpline-design-system.md:25-27" } }
+  - { id: no-count-animation, rule: "Counts, tallies and scores render their final value on mount.", status: clear, from: { spec: "docs/specs/warpline-design-system.md:28-32" } }
+  - { id: one-drift-per-screen, rule: "Only the first dangle drifts; the rest hang.", status: clear, from: { spec: "§1.3 Dangle render" } }
+  - id: contrast-aa
+    rule: "Text 4.5:1, large text and UI glyphs 3:1, in every Platform theme. --cut is decorative only (2.6:1)."
+    status: clear
+    from: { checklist: "Mika review-checklist 1" }
+  - id: target-size
+    rule: "Pointer targets at least 24x24 (WCAG 2.5.8) at control-room density; 44x44 under (pointer: coarse)."
+    status: clear
+    from: { checklist: "Mika review-checklist 2", decision: rules.density-control-room }
+  - id: keyboard-reachable
+    rule: "Everything clickable is a button or link with a visible :focus-visible ring; the drill-over closes on Escape and returns focus."
+    status: clear
+    from: { checklist: "Mika review-checklist 7" }
+preserve:
+  - { what: system-rules, value: "seam violet only where git is blind; restraint is the default; no count animation (warpline-design-system.md:19-32)" }
+  - { what: tokens, value: "ink/linen/warp/weft/seam/clean/cut + Fraunces/Inter/JetBrains Mono" }
+  - { what: nomenclature, value: "PICK, WEAVE, KNOT, DECIDE, SELVAGE, TAPESTRY, OFFER, ENDORSEMENT (warpline-flows.md section 1)" }
+  - { what: api-routes, value: "/api/warpline/* and WS warpline:* events" }
+decisions:
+  - session: 2026-10-14-warpline-console
+    board: console-structure
+    choice: { home: inbox-first, live: "band + Floor section" }
+  - { session: 2026-10-14-warpline-console, board: decision-surface, choice: split }
+  - { session: 2026-10-14-warpline-console, board: access, choice: roles-by-domain }
+  - { session: 2026-10-14-warpline-console, board: intent-dials, choice: control-room }
+  - { session: 2026-10-14-warpline-console, board: human-states, choice: neutral-mark }
+  - { session: 2026-10-14-warpline-console, board: repos-and-nav, choice: two-levels, scope: v1 }
+
+recorded:
+  design_md:
+    from: { file: .atelier/DESIGN.md, lines: "1-39", commit: 927b1a36 }
+    text: |
+      # Warpline Console: design direction
+
+      Session `2026-10-14-warpline-console` set this direction with Luna and Mika. It is approved as the starting version. The approved comps are `sessions/2026-10-14-warpline-console/refs/direction.html` (inside a repo) and `refs/repos.html`, option B (the org level). Comps are local renders and gitignored. The decision record is `sessions/2026-10-14-warpline-console/session.yaml`, and the enforced tokens and rules are in `design-system.yaml`.
+
+      ## The read
+      This is the control room for an agent armada's source control. You and a dev team check in a few times a day to make the calls machines can't. The register is calm, exact and dark, like a loom, and violet only ever means "git is blind here."
+
+      ## What stays
+      The Warpline design system (`docs/specs/warpline-design-system.md`) is preserved whole:
+      - **Palette:** ink and linen ground. Amber is branch A, teal is branch B, and violet is the git-blind conflict.
+      - **Type:** Fraunces for meaning, Inter for chrome, JetBrains Mono for bytes.
+      - **The three system rules:** violet only where git is blind; restraint by default; no count animation.
+
+      ## Structure
+      - **Two levels (v1).** An org dashboard of repos (visibility, activity, needs-you counts, plus a cross-repo needs-you list) leads to a repo page with tabs: Inbox, Floor, Code, Offers, Tapestry, Runs, Releases, Fleet, Settings. The creator likes the form and function but finds the style too generic; giving it Warpline's own character is a v2 item.
+      - **Inbox first.** A repo opens on its Inbox: decisions ranked by expected loss, with the folded admissions below.
+      - **Live band.** The band above the Inbox is the Floor in miniature. It can be hidden, compact or expanded, and it moves only when a pick is admitted, a KNOT forms, or a KNOT is resolved. The Floor tab is the same view at full size.
+      - **Deciding happens in a split view.** The queue sits on the left and the decision on the right: both intents, contested slots, blast radius, and a resolve form with a required reason. Sealing a decision advances to the next item.
+      - **Roles by domain.**
+        - Owner decides everything, including gate, auth and pipeline changes.
+        - Developer decides KNOTs only in the domains they own and sees the rest read-only, with the reason stated.
+        - Observer reads.
+        - Agents never sign in; they act through MCP or the CLI and appear on the Floor.
+
+      ## Look
+      - **Control room dials 3·4·7.** Strict grid, dense rows, and events with real presence (arrive, cinch, settle), all gated on reduced motion.
+      - **One meaning per hue.** "Needs a human" is drawn neutral: a linen outline with a human mark. Humans are filled linen chips and agents are outlined grey.
+
+      ## Forge surfaces (TD-2026-10-14-551)
+      - **Code:** files at any state, with meaning blame per symbol in the margin and an honesty label on every file (meaning-decided or byte-decided).
+      - **Runs:** the verdict runs first, so a KNOT is never built. Checks become signed witnesses, and a failing required check parks a protected landing.
+      - **Releases:** signed cuts (BOLTs) with their checks attached.
+      - **Settings:** visibility, collaborators, protected refs and required checks, and webhooks.
+
+      ## Open
+      - The v2 look for the org/repo shell.
+      - A failure colour for failed checks. It needs its own board, because every hue already carries a meaning.
+      - Offer review threads, which are deferred.
+      - Build gate: no console build starts while F4 (cold-agent legibility) is unmeasured.
+  sessions:
+    - { id: 2026-10-14-warpline-console, path: .atelier/sessions/2026-10-14-warpline-console/session.yaml, boards: [console-structure, decision-surface, access, intent-dials, human-states, repos-and-nav], audit_keep_retire_gates: "see session audit:" }
+    - id: 2026-10-15-paradigm-8-spec
+      path: .atelier/sessions/2026-10-15-paradigm-8-spec/session.yaml
+      carried: "Only the decisions that touch Warpline, verbatim:"
+      principles: ["warpline-opt-in: Warpline is opt-in per project. A project the user declares a Warpline project runs native (TD-2026-10-14-735); every other project runs on standard git, and the rest of the harness (kernel, budget, contracts, learning loop, Shuttle) works the same."]
+      rules:
+        - "Kernel log is separate from Warpline's fabric; every PICK event carries causes[] to its strand"
+        - "Spawn injects one logged pointer line to `warpline status`; the skill is installed, never pushed (F4)"
+        - "Git-mode nodes: tests + key-proven reviewer + clean merge onto base with CI green; git conflicts become inbox items without semantic judgment"
+      read: "the Warpline loom register (session read)"
+    - { audit_gates_from: 2026-10-14-warpline-console, gates: ["Roadmap hard stop: no console build begins while F4 (cold-agent legibility) is unmeasured; design is allowed, build is gated", "Forge spec G4: no forge-private storage; every screen field maps to a fabric record"] }
+    - { audit_retire_from: 2026-10-14-warpline-console, retire: ["Viewer binds OracleRecord, one era stale; the console must bind KnotPayload / verdict JSON (forge spec §3)"] }
+
+# ════════════════════════════════════════════════════════════════════════════
+# v2 LAYERS — drafted by Mika, 2026-10-21, from the extract + the records above.
+# Source of truth: docs/specs/warpline-design-system.md (preserved; these layers
+# record decisions on top of it). Every entry: status clear | contested, and from:.
+# Contested entries carry the RECOMMENDED option so `atelier check` measures it;
+# the creator's reconcile (system.md step 3) may change them.
+# Scope: sections/warpline/** and docs/warpline only. The Platform shell chrome
+# (sidebar, top bar, --p-* bridge values) belongs to the `platform` system.
+# ════════════════════════════════════════════════════════════════════════════
+extends: none
+product: warpline
+inventory: { path: .atelier/systems/warpline/inventory.html, date: 2026-10-21, files: 9 }
+
+foundations:
+  color:
+    # role → value. Spec §1.1 table, verbatim hexes. Alpha variants of these
+    # (e.g. #E9A23B4d) are on-palette.
+    ground.page: "#0B0D14"        # --ink-900
+    ground.section: "#0F1220"     # --ink-850
+    ground.card: "#141829"        # --ink-800
+    rule.default: "#1C2138"       # --ink-700, borders + warp-grid skeleton
+    rule.hover: "#2A3050"         # --ink-600
+    text.primary: "#F4F1EA"       # --linen-50
+    text.body: "#CFCABE"          # --linen-200
+    text.muted: "#8B8A82"         # --linen-400 (bytes tone; 4.99:1 on ink-850)
+    thread.a: "#E9A23B"           # --warp, branch A ONLY
+    thread.a-soft: "#F2C078"      # --warp-soft, hash chips, emphasis
+    thread.b: "#2DD4BF"           # --weft, branch B / weave clean
+    thread.b-soft: "#5EEAD4"      # --weft-soft
+    seam: "#7C6FF0"               # git is blind here. Rule 1.
+    git.clean-trap: "#34D8A0"     # --clean, git's CLEAN chip ONLY
+    thread.cut: "#5E5C54"         # severed end, retired ghosts (decorative only: 2.6:1)
+    scrim: "#0B0D1499"            # drill-over backdrop = ink-900 @ 60%; replaces rgba(0,0,0,.4)
+    weave-grad: "linear-gradient(135deg, #E9A23B 0%, #2DD4BF 100%)"
+    status: clear
+    from: { spec: "docs/specs/warpline-design-system.md:38-60", plus: "scrim derived from ink-900, no new hue (one-meaning-per-hue)" }
+  color_roles_contested:
+    section-ground:
+      status: contested
+      rank: 1
+      question: "Does .warpline own its ground (ink) in every Platform theme, or inherit --p-bg-*?"
+      recommended: own-ink-ground
+      now: "inherits --p-bg-panel/tertiary/card; light theme puts warp/weft/clean on white at 1.6-2.2:1; --p-text-muted is 2.1:1 on dark"
+      from: { extract: 2026-10-21, decision: "read: 'a dark loom register' (2026-10-14-warpline-console)" }
+    git-voice:
+      status: contested
+      rank: 4
+      question: "What colour speaks for git (git-only count, CONFLICT chip)?"
+      recommended: neutral-linen
+      now: "--p-accent-orange #d29922, a near-amber that reads as branch A"
+      from: { extract: 2026-10-21, decision: "rules.one-meaning-per-hue" }
+    failure:
+      status: contested
+      rank: 3
+      question: "Failure colour (failed request, failed check)"
+      recommended: neutral-mark
+      now: "--p-accent-red inline (WarplineSection.tsx:138)"
+      from: { decision: "DESIGN.md Open: 'A failure colour for failed checks. It needs its own board'" }
+  font:
+    meaning: "Fraunces"           # --warp-serif / docs --display
+    chrome: "Inter"               # spec: --p-ui (does not exist in Platform; see migration)
+    bytes: "JetBrains Mono"       # --warp-mono / docs --mono
+    status: clear
+    from: { spec: "docs/specs/warpline-design-system.md:64-76", preserve: tokens }
+  type:
+    # spec §1.2 steps: micro 10-11 · mono 12-13 · body 13-14 · body-l 15 · title 18 ·
+    # display-m 22 · display-l 30 · display-xl 92 (brand hero only, clamp 48-92).
+    # 16 and 40 are brand-page steps (docs/warpline) per the contested brand-scale rec.
+    sizes: [10, 11, 12, 13, 14, 15, 16, 18, 22, 30, 40, 48, 92]
+    roles:
+      micro: [10, 11]
+      mono: [12, 13]
+      body: [13, 14]
+      body-l: 15
+      title: 18
+      display-m: 22
+      display-l: 30
+      brand.body: 16
+      brand.section: 40
+      display-xl: { min: 48, max: 92, scope: docs/warpline hero only }
+    status: clear
+    status_brand_steps: contested
+    from: { spec: "docs/specs/warpline-design-system.md:78-88", brand_steps: { extract: 2026-10-21 } }
+  space:
+    # spec base 4·8·12·16·24·32·48·64·96 + the component steps the density decision
+    # names (6 row gap, 10x14 card, 18x20 main) + 2 for hairline gaps.
+    scale: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 32, 48, 64, 96]
+    roles:
+      gap.hairline: 2
+      gap.row: 6
+      gap.component: 12
+      pad.card: "10 14"
+      pad.cell: 14
+      pad.tally: "10 14"
+      pad.main: "18 20"
+      pad.section: 24
+      rail.width: 300
+      drill.width: 420
+    status: contested
+    rank: 6
+    from: { spec: "docs/specs/warpline-design-system.md:90-94", decision: "rules.density-control-room", extract: 2026-10-21 }
+    note: "density-control-room says its values are 'all on the 4px scale'; 6, 10, 14 and 18 are not. Recorded text and spec scale disagree."
+  radius:
+    hairline: 2
+    control: 6
+    cell: 8
+    card: 10
+    brand-card: 16      # docs/warpline cards (brand-scale rec)
+    pill: 999
+    status: clear
+    from: { spec: "docs/specs/warpline-design-system.md:94 (chip 999, card/cell 8-10, control 6)", extract: 2026-10-21 }
+  motion:
+    ease.brand: "cubic-bezier(0.22, 1, 0.36, 1)"   # docs --ease, 73 uses
+    ease.event: ease-out                            # cinch
+    ease.sway: ease-in-out                          # drift, seam pulse
+    duration.cinch: 600
+    duration.drift: 2000
+    duration.seam-pulse: 2400
+    duration.hover: 200
+    duration.reveal: 300
+    gate: "every animation sits inside prefers-reduced-motion: no-preference; reduce = final state"
+    status: clear
+    from: { spec: "docs/specs/warpline-design-system.md:27-32 and §1.3 knot/dangle/split", decision: "rules.motion-on-events-only", extract: 2026-10-21 }
+
+components:
+  verdict-chip:
+    role: "A verdict pill; the hero's point is two of these contradicting. Never a button."
+    anatomy: [label]
+    variants: { git-clean: "git's CLEAN trap, --clean", git-conflict: "git CONFLICT", divergent: "--seam", weave-clean: "--weft" }
+    sizes: { default: { font: 13, weight: 600, padding: "4 12", radius: pill } }
+    states: [static]   # colour IS the state; the label must carry it too (not colour alone)
+    tokens: { border: currentColor, git-clean: --clean, git-conflict: "git-voice (contested)", divergent: --seam, weave-clean: --weft }
+    source: packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:165-176
+    examples:
+      git-clean: '<div class="warpline" style="display:block;height:auto;padding:16px"><span class="wl-chip wl-chip--clean">CLEAN ✓</span></div>'
+      git-conflict: '<div class="warpline" style="display:block;height:auto;padding:16px"><span class="wl-chip wl-chip--conflict">CONFLICT</span></div>'
+      divergent: '<div class="warpline" style="display:block;height:auto;padding:16px"><span class="wl-chip wl-chip--divergent">DIVERGENT</span></div>'
+      weave-clean: '<div class="warpline" style="display:block;height:auto;padding:16px"><span class="wl-chip wl-chip--weave-clean">CLEAN</span></div>'
+    status: clear
+    from: { spec: "§1.3 Chip" }
+  hash-chip:
+    role: "A mono fact tag (hash, symbol key) on the brand pages; filled, 6 radius. Not the verdict chip."
+    variants: { plain: ink-700 fill, hash: warp-soft, weft: weft, seam: "seam (git-blind only)", clean: "clean (git trap only)" }
+    sizes: { default: { font: "11.5 → 12", padding: "3 9", radius: control } }
+    states: [static]
+    source: docs/warpline/pov.html:107-110, docs/warpline/system.html:212-220
+    examples:
+      hash: '<span class="chip hash">#b30f-77ac-e1</span>'
+    status: clear
+    from: { extract: 2026-10-21, note: "class .chip means a different thing in docs than .wl-chip in the console; named apart here" }
+  status-pill:
+    role: "Build status on the system map (built / warp / weft)."
+    source: docs/warpline/system.html:265-273
+    examples: { built: '<span class="pill built">BUILT</span>' }
+    status: clear
+    from: { extract: 2026-10-21 }
+  verdict-card:
+    role: "The scored result plus one plain-language consequence; the score always sits beside its raw counts."
+    anatomy: [label, counts, consequence]
+    variants: { divergent: "label --seam", convergent: "label --weft" }
+    states: [divergent, convergent]
+    tokens: { label: "--warp-serif 22", counts: "--warp-mono 12 text.muted", border: rule.default, radius: card }
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:192-211
+    examples:
+      divergent: '<div class="warpline" style="display:block;height:auto"><div class="wl-verdict"><div class="wl-verdict__head"><span class="wl-verdict__label wl-verdict__label--divergent">DIVERGENT</span><span class="wl-verdict__counts">score 0.93 · agree 41 / git-only 2 / meaning-only 1</span></div><div class="wl-verdict__consequence">contradictory edits to #code:checkout::submit · slots: body, signature</div></div></div>'
+      convergent: '<div class="warpline" style="display:block;height:auto"><div class="wl-verdict"><div class="wl-verdict__head"><span class="wl-verdict__label wl-verdict__label--convergent">CONVERGENT</span><span class="wl-verdict__counts">score 1.00 · agree 44 / git-only 0 / meaning-only 0</span></div><div class="wl-verdict__consequence">No knots. No dangles. The weave is clean.</div></div></div>'
+    status: clear
+    from: { spec: "§1.3 Verdict card" }
+  meaning-bytes-split:
+    role: "The thesis on one row: git's bytes verdict left, Warpline's meaning verdict right, the seam between."
+    anatomy: [bytes-side, seam, meaning-side, title, chip, tally]
+    variants: { divergence: "seam pulses (only animated state)", both-caught: "seam static 0.45", git-noise: "seam 0.25", convergent: "seam 0.25" }
+    states: [divergence, both-caught, git-noise, convergent, reduced-motion]
+    tokens: { grid: "1fr 1px 1fr", bytes: "--warp-mono text.muted", meaning: --warp-serif, seam: --seam }
+    narrow: "contested: see zones.viewer.overflow"
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:75-126
+    examples:
+      divergence: '<div class="warpline" style="display:block;height:auto"><div class="wl-split"><div class="wl-split__side wl-split__side--bytes"><div class="wl-split__title">git · bytes</div><span class="wl-chip wl-chip--clean">CLEAN ✓</span><div class="wl-split__tally">0 conflicted paths</div></div><div class="wl-seam wl-seam--divergence"></div><div class="wl-split__side wl-split__side--meaning"><div class="wl-split__title">warpline · meaning</div><span class="wl-chip wl-chip--divergent">DIVERGENT</span><div class="wl-split__tally">1 knot · 1 dangle — <b>1 git-blind</b></div></div></div></div>'
+      both-caught: '<div class="warpline" style="display:block;height:auto"><div class="wl-split"><div class="wl-split__side wl-split__side--bytes"><div class="wl-split__title">git · bytes</div><span class="wl-chip wl-chip--conflict">CONFLICT</span><div class="wl-split__tally">2 conflicted paths</div></div><div class="wl-seam wl-seam--both-caught"></div><div class="wl-split__side wl-split__side--meaning"><div class="wl-split__title">warpline · meaning</div><span class="wl-chip wl-chip--divergent">DIVERGENT</span><div class="wl-split__tally">1 knot · 0 dangles</div></div></div></div>'
+      convergent: '<div class="warpline" style="display:block;height:auto"><div class="wl-split"><div class="wl-split__side wl-split__side--bytes"><div class="wl-split__title">git · bytes</div><span class="wl-chip wl-chip--clean">CLEAN ✓</span><div class="wl-split__tally">0 conflicted paths</div></div><div class="wl-seam"></div><div class="wl-split__side wl-split__side--meaning"><div class="wl-split__title">warpline · meaning</div><span class="wl-chip wl-chip--weave-clean">CLEAN</span><div class="wl-split__tally">0 knots · 0 dangles</div></div></div></div>'
+    status: clear
+    from: { spec: "§1.3 Meaning-vs-bytes split" }
+  matrix-cell:
+    role: "One cell of the literal 2x2 (git x meaning); click lists the real symbol keys. Counts never animate."
+    anatomy: [count, label, symbols]
+    variants: { plain: "", git-only: "count in git-voice (contested)", star: "--seam border; the only cell allowed to glow, statically, when lit" }
+    states: [default, hover, focus, open, star, star-lit, empty-zero]
+    tokens: { count: "--warp-mono 26 → 22 bold", label: "11 text.muted", border: rule.default, radius: cell, pad: 14 }
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:130-188
+    examples:
+      default: '<div class="warpline" style="display:block;height:auto;padding:16px"><button class="wl-cell"><div class="wl-cell__count">41</div><div class="wl-cell__label">agree · clean</div></button></div>'
+      git-only: '<div class="warpline" style="display:block;height:auto;padding:16px"><button class="wl-cell wl-cell--gitonly"><div class="wl-cell__count">2</div><div class="wl-cell__label">git only</div></button></div>'
+      star-lit-open: '<div class="warpline" style="display:block;height:auto;padding:16px"><button class="wl-cell wl-cell--star wl-cell--lit"><div class="wl-cell__count">1</div><div class="wl-cell__label">meaning only ★</div><div class="wl-cell__symbols"><span>#code:checkout::submit</span></div></button></div>'
+    missing_states: [focus]   # no :focus-visible style; see migration
+    status: clear
+    from: { spec: "§1.3 Confusion matrix" }
+  knot:
+    role: "Two intents binding one symbol with contradictory meaning; threads cinch once, then hold."
+    anatomy: [intents, threads, glyph, symbol, slots]
+    states: [default, hover, cinch-once, reduced-motion, focus]
+    tokens: { thread-a: --warp, thread-b: --weft, glyph: --seam, slot-body: --seam }
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:257-289
+    examples:
+      default: '<div class="warpline" style="display:block;height:auto;padding:16px"><div class="wl-render wl-knot"><div class="wl-knot__intents"><span class="wl-knot__intent--a">A · tighten checkout validation</span><span class="wl-knot__intent--b">B · allow guest checkout</span></div><div class="wl-knot__threads"><div class="wl-knot__thread wl-knot__thread--a"></div><div class="wl-knot__thread wl-knot__thread--b"></div><div class="wl-knot__glyph"></div></div><div class="wl-knot__symbol">#code:checkout::submit</div><div><span class="wl-slot wl-slot--body">body</span><span class="wl-slot">signature</span></div></div></div>'
+    missing_states: [focus]   # a div with onClick; not keyboard reachable
+    status: clear
+    from: { spec: "§1.3 Knot render" }
+  dangle:
+    role: "A call into a symbol the other branch retired; the first one drifts once, the rest hang."
+    anatomy: [edge-kind, live-span, loose-end, void, label]
+    states: [drift (first only), hanging, reduced-motion, hover, focus]
+    tokens: { live: --warp, loose: --cut, void: "--seam dashed", target: --seam }
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:291-309
+    examples:
+      hanging: '<div class="warpline" style="display:block;height:auto;padding:16px"><div class="wl-render wl-dangle"><div class="wl-dangle__span"><span class="wl-dangle__edgekind">calls</span><div class="wl-dangle__live"></div><div class="wl-dangle__loose"></div><div class="wl-dangle__void"></div></div><div class="wl-dangle__label"><span class="wl-knot__intent--a">#code:checkout::submit</span> → <span class="wl-dangle__target">#code:auth::getUser</span> · retired by A</div></div></div>'
+    missing_states: [focus]
+    status: clear
+    from: { spec: "§1.3 Dangle render" }
+  slot:
+    role: "A conflicting slot name inside a knot; the body slot is git-blind and takes the seam."
+    variants: { default: "", body: --seam }
+    source: packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:316-317
+    examples:
+      default: '<div class="warpline" style="display:block;height:auto;padding:16px"><span class="wl-slot">signature</span></div>'
+      body: '<div class="warpline" style="display:block;height:auto;padding:16px"><span class="wl-slot wl-slot--body">body</span></div>'
+    status: clear
+    from: { spec: "§1.3 Knot render (code-lens body slot)" }
+  ledger-row:
+    role: "One past Oracle run in the rail, newest first; a seam dot marks a divergent run."
+    anatomy: [dot, branches, verdict, timestamp]
+    states: [default, hover, active, divergent, convergent, focus]
+    tokens: { branches: --warp-mono, verdict: "--warp-serif 11", dot: "--seam (divergent) / none", active: "left border --p-border-active (NOT seam: Rule 1)" }
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:41-67
+    examples:
+      active-divergent: '<div class="warpline" style="display:block;height:auto;width:300px"><div class="wl-rail__row wl-rail__row--active"><span class="wl-rail__dot wl-rail__dot--divergent"></span><div style="flex:1;min-width:0"><div class="wl-rail__branches">feature/checkout-rework→main</div><div><span class="wl-rail__verdict wl-rail__verdict--divergent">DIVERGENT</span> <span class="wl-rail__ts">10/21/2026, 8:52 AM</span></div></div></div></div>'
+      convergent: '<div class="warpline" style="display:block;height:auto;width:300px"><div class="wl-rail__row"><span class="wl-rail__dot"></span><div style="flex:1;min-width:0"><div class="wl-rail__branches">loom-engine→main</div><div><span class="wl-rail__verdict wl-rail__verdict--convergent">CONVERGENT</span> <span class="wl-rail__ts">10/20/2026, 4:10 PM</span></div></div></div></div>'
+      empty: '<div class="warpline" style="display:block;height:auto;width:300px"><div class="wl-rail__empty">No Oracle runs yet. Pick two branches above and Run, or POST /api/warpline/oracle.</div></div>'
+    missing_states: [focus]
+    status: clear
+    from: { spec: "§1.3 Ledger row", rule: "system rule 1 outranks the spec's 'active → --seam left-border' note; the spec's own QA flagged it" }
+  ref-picker:
+    role: "Choose two branches, then Run (records to the ledger) or Preview (ephemeral)."
+    anatomy: [select-a, weave-mark, select-b, run, preview]
+    states: [default, disabled (same branch / unselected), running, no-refs]
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:75-137
+    examples:
+      default: '<div class="warpline" style="display:block;height:auto;width:300px"><div class="wl-refpicker"><div class="wl-refpicker__row"><select aria-label="branch A"><option>feature/checkout-rework</option></select></div><div class="wl-refpicker__weave">◀ weave ▶</div><div class="wl-refpicker__row"><select aria-label="branch B"><option>main</option></select></div><div class="wl-refpicker__actions"><button class="wl-btn wl-btn--run">Run</button><button class="wl-btn">Preview</button></div></div></div>'
+      running: '<div class="warpline" style="display:block;height:auto;width:300px"><div class="wl-refpicker"><div class="wl-refpicker__actions"><button class="wl-btn wl-btn--run" disabled>Running…</button><button class="wl-btn" disabled>Preview</button></div></div></div>'
+    status: clear
+    from: { spec: "§1.3 Ref-picker" }
+  button:
+    role: "Actions. Neutral chrome by default; --run (seam) only for invoking the git-blind oracle."
+    variants: { default: neutral, run: "--seam border + text (Rule 1's one sanctioned affordance)" }
+    sizes: { default: { font: 12, padding: "6 10", radius: control, height: "~26 (see rules.target-size)" } }
+    states: [default, hover, focus, disabled]
+    source: packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:77-89
+    examples:
+      default: '<div class="warpline" style="display:block;height:auto;padding:16px"><button class="wl-btn">Preview</button></div>'
+      run: '<div class="warpline" style="display:block;height:auto;padding:16px"><button class="wl-btn wl-btn--run">Run</button></div>'
+      disabled: '<div class="warpline" style="display:block;height:auto;padding:16px"><button class="wl-btn" disabled>Preview</button></div>'
+    missing_states: [focus]
+    status: clear
+    from: { spec: "§1.3 Buttons" }
+  run-header:
+    role: "Which two branches, the merge base, when."
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:59-71
+    tokens: { weave: "--warp-serif 20 → 18 (spec: title 18)", a: --warp, b: --weft, meta: "--warp-mono 11 text.muted" }
+    examples:
+      default: '<div class="warpline" style="display:block;height:auto"><div class="wl-runheader"><div class="wl-runheader__weave"><span class="wl-runheader__a">feature/checkout-rework</span><span class="wl-runheader__verb">◀ weave ▶</span><span class="wl-runheader__b">main</span></div><div class="wl-runheader__meta">base 3f9a2c1d0e</div><div class="wl-runheader__meta">10/21/2026, 8:52 AM</div></div></div>'
+    status: clear
+    from: { spec: "§1.3 Run-header" }
+  drill-over:
+    role: "Right slide-over with the proof behind a knot or dangle."
+    states: [knot, dangle, closed]
+    missing_states: [escape-to-close, focus-trap, focus-return]
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:313-366
+    examples:
+      knot: '<div class="warpline" style="display:block;height:320px;position:relative"><div class="wl-drill__backdrop"><div class="wl-drill"><button class="wl-drill__close" aria-label="Close">×</button><div class="wl-drill__title">Knot · #code:checkout::submit</div><div class="wl-drill__row"><div class="wl-drill__k">essence A</div><div class="wl-drill__v wl-drill__v--a">validate(cart) → strict</div></div><div class="wl-drill__row"><div class="wl-drill__k">essence B</div><div class="wl-drill__v wl-drill__v--b">validate(cart, guest) → lenient</div></div></div></div></div>'
+    status: clear
+    from: { spec: "§1.3 Drill-over" }
+  empty-viewer:
+    role: "Viewer with no run selected."
+    source: packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:30-39
+    examples:
+      default: '<div class="warpline" style="display:block;height:200px"><div class="wl-empty-viewer"><div class="wl-empty-viewer__h">Select an Oracle run</div><div>or pick two branches and Run / Preview to weave one.</div></div></div>'
+    status: clear
+    from: { spec: "§1.3 Section shell (no-selection)" }
+  error-notice:
+    role: "A failed Run/Preview/ledger load, above the viewer."
+    states: [shown]
+    missing_states: [dismiss, role=alert, retry]
+    tokens: { text: "failure (contested)" }
+    source: packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:134-145
+    examples:
+      default: '<div class="warpline" style="display:block;height:auto"><div style="padding:8px 16px;color:var(--p-accent-red);font-size:12px;border-bottom:1px solid var(--p-border)">Oracle failed: Error: HTTP 500</div></div>'
+    status: contested
+    rank: 3
+    from: { extract: 2026-10-21, decision: "DESIGN.md Open: failure colour needs its own board" }
+
+components_planned:
+  # spec §1.3 "NEW components needed", not built; listed so new work reuses the names.
+  ids: [sem-delta-row, empty-delta-split, weave-forecast-banner, lifeline-strip, heatmap-cell, decision-card, tally-metric]
+  from: { spec: "docs/specs/warpline-design-system.md (NEW components table)" }
+
+zones:
+  rail:
+    surface: Warpline section (built), left
+    holds: [ref-picker, ledger rows (newest first), rail empty state]
+    never: [notices, verdicts, settings beyond the two refs]
+    overflow: "Rows scroll; branch names truncate with ellipsis (needs a title attribute)."
+    status: clear
+    from: { spec: "§1.3 Section shell" }
+  viewer:
+    surface: Warpline section (built), right
+    holds: [run-header, meaning-bytes-split, matrix, verdict-card, divergence panel (knots, dangles) or calm copy]
+    never: [navigation, settings, decorative seam]
+    overflow: "RECOMMENDED (contested): below a 720px viewer the rail becomes a drawer opened from the run-header, the split stacks bytes over meaning with a horizontal seam, the matrix keeps both columns. Now: rail fixed 300px, split and matrix clip (★ cell cut off at a 560px window)."
+    status: contested
+    rank: 2
+    from: { extract: 2026-10-21, spec: "split = literal 1fr 1px 1fr" }
+  drill-over:
+    surface: over the viewer, right edge
+    holds: [knot proof, dangle proof]
+    never: [actions that seal a decision (that is the split decide view)]
+    overflow: "420px, max 90%; content scrolls."
+    status: clear
+    from: { spec: "§1.3 Drill-over" }
+  notices:
+    surface: top of the viewer column
+    holds: [request errors]
+    never: [inside the rail, inside a card]
+    overflow: "One line; long errors truncate with a title."
+    status: contested
+    rank: 3
+    from: { extract: 2026-10-21 }
+  console-designed:
+    # Approved in 2026-10-14-warpline-console, not built; build gated on F4.
+    org-dashboard: { holds: [repo cards (visibility, activity, needs-you), cross-repo needs-you list] }
+    repo-tabs: { holds: [Inbox, Floor, Code, Offers, Tapestry, Runs, Releases, Fleet, Settings] }
+    live-band: { placement: above Inbox, sizes: [hidden, compact, expanded], never: [idle animation] }
+    decide-split: { holds: [ranked queue left, selected KNOT or HELD item right, resolve form with required reason] }
+    status: clear
+    from: { session: 2026-10-14-warpline-console, boards: [console-structure, decision-surface, repos-and-nav] }
+  brand-pages:
+    surface: docs/warpline/index.html, pov.html, system.html
+    holds: [nav, hero, sections with eyebrow + sec-title + deck, footer]
+    never: [console chrome]
+    overflow: "Grids collapse to one column at 860/720/600/520 (existing media queries)."
+    status: clear
+    from: { extract: 2026-10-21 }
+  not-ours:
+    platform-shell: "Sidebar, top bar, theme switch and the --p-* values belong to the `platform` system."
+    from: { decision: "founder: warpline covers sections/warpline and docs/warpline only" }
+
+content:
+  vocabulary:
+    use:
+      PICK: "one change (commit's replacement)"
+      WEAVE: "merge two lines of intent; '◀ weave ▶' between branch names"
+      KNOT: "two intents bind contradictory meaning to one symbol"
+      DECIDE: "a human resolves a KNOT"
+      SELVAGE: "HEAD"
+      TAPESTRY: "woven history"
+      OFFER: "proposal (PR's replacement)"
+      ENDORSEMENT: "trust approval"
+      DANGLE: "a call into a symbol the other branch retired"
+      BOLT: "a signed release cut"
+      Oracle run: "one recorded git-vs-meaning comparison"
+      DIVERGENT / CONVERGENT: "the meaning verdict"
+      git-blind: "what git cannot see; the only thing violet marks"
+      HELD: "needs a human (neutral mark, no hue)"
+    git_terms_allowed: "merge, commit, conflict, PR are git's words; use them only when naming what git does (the bytes side, comparison tables)."
+    retired: {}
+    status: clear
+    from: { preserve: nomenclature, spec: "§3 'Nomenclature is locked (flows §1)'", extract: 2026-10-21 }
+  contested:
+    meaning-clean-word:
+      rank: 5
+      instances: ["OracleDivergenceViewer.tsx:111 meaning chip says CLEAN", "viewerState.ts:40 git chip says CLEAN ✓", "OracleLedgerRail.tsx:59 + OracleDivergenceViewer.tsx:200 say CONVERGENT"]
+      recommended: CONVERGENT
+      from: { extract: 2026-10-21, spec: "--clean exists so git-clean never reads as Warpline-clean" }
+  voice:
+    - "Name the verdict, then the count with its denominator. A score never stands alone."
+    - "Restraint: calm copy for clean runs ('No knots. No dangles. The weave is clean.')."
+    - "Render only real data; a proxy is labelled 'proxy', never 'scrutiny'."
+    - "Byte-only files say 'not yet meaning', never a fake semantic verdict."
+  voice_from: { spec: "§1.3 verdict card, §2 dependency note, GAP-1" }
+
+specimen:
+  stylesheets:
+    - packages/paradigm/platform-ui/src/styles/tokens.css
+    - packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css
+  themes:
+    dark: { html_attrs: 'data-theme="dark"' }
+    light: { html_attrs: 'data-theme="light"' }
+  note: "Examples wrap in .warpline because the tokens are scoped there. docs/warpline styles are inline <style> blocks and are not loaded by the specimen."
+  from: { extract: 2026-10-21 }
+
+
+migration:
+  # Old → new, uses, files. Drift the system decided to remove. Not applied: no UI source changed.
+  - { from: "fonts never loaded in the console (Fraunces, Inter, JetBrains Mono fall back to Iowan/system/SF Mono)", to: "load the three families in the Warpline section; chrome binds Inter, not the Platform's -apple-system", uses: "all", files: [packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css], status: clear }
+  - { from: "--p-text-muted #484f58 (2.1:1) for ts, axis, labels, empty text", to: "text.muted --linen-400 (4.99:1)", uses: 9, files: [packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css], status: "contested (follows section-ground)" }
+  - { from: "--p-bg-panel/tertiary/card grounds", to: "ground.section/card (ink) in every theme", uses: 7, files: [packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css], status: "contested (section-ground)" }
+  - { from: "--p-accent-orange on git-only count + CONFLICT chip", to: "git voice (recommended: linen text.body)", uses: 2, files: ["packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:174,231"], status: contested }
+  - { from: "--p-accent-red inline error bar", to: "error-notice component (recommended: neutral linen + mark, role=alert, dismiss)", uses: 1, files: ["packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:134-145"], status: contested }
+  - { from: "font-size 20 (run-header weave)", to: 18, uses: 1, files: ["packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:144"], status: clear }
+  - { from: "font-size 26 (matrix count)", to: 22, uses: 1, files: ["packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:229"], status: clear }
+  - { from: "font-size 11.5/12.5/13.5/14.5/15.5/16.5/10.5", to: "nearest whole step (12/12/14/14/16/16/10)", uses: 45, files: [docs/warpline/index.html, docs/warpline/pov.html, docs/warpline/system.html], status: "contested (brand scale)" }
+  - { from: "font-size 17/19/21/23", to: "16/18/22/22", uses: 6, files: [docs/warpline], status: "contested (brand scale)" }
+  - { from: "spacing 3/5/7/9/11/13/21/23", to: "nearest scale step", uses: 37, files: [warpline.css, docs/warpline], status: "contested (spacing)" }
+  - { from: "spacing 22/26/28/30/36/40/44/56", to: "20/24/24/32/32/48/48/48 or 64", uses: 59, files: [docs/warpline, "warpline.css:159,276"], status: "contested (spacing)" }
+  - { from: "radius 5 (slot)", to: "6 control", uses: 2, files: ["packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:316"], status: clear }
+  - { from: "radius 12/13/14/15/18", to: "16 brand-card", uses: 18, files: [docs/warpline], status: "contested (brand scale)" }
+  - { from: "radius 3/4/7/11", to: "2/6/8/10", uses: 6, files: [docs/warpline/system.html], status: clear }
+  - { from: "rgba(0,0,0,.4) drill backdrop; #000 footer gradient end", to: "scrim / ground.page", uses: 4, files: ["packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:345", docs/warpline], status: clear }
+  - { from: "div onClick on ledger row, knot, dangle; no :focus-visible anywhere", to: "button elements with a focus ring", uses: 3, files: ["OracleLedgerRail.tsx:45", "OracleDivergenceViewer.tsx:269,293"], status: clear }
+  - { from: "drill close × at ~22px; no Escape", to: "24px+ target, Escape closes, focus returns", uses: 1, files: ["OracleDivergenceViewer.tsx:323", "warpline.css:353"], status: clear }
+  - { from: "dangle loose end overflows its card at wide widths (14% of card width)", to: "fixed loose length (e.g. 64px)", uses: 1, files: ["warpline.css:322"], status: clear }
+  - { from: "meaning chip 'CLEAN'", to: "CONVERGENT (recommended)", uses: 1, files: ["OracleDivergenceViewer.tsx:111"], status: contested }
+  - { from: "font tokens --warp-serif/--warp-mono (console) vs --display/--mono/--ui (docs)", to: "one role-named set: --wl-font-meaning/-chrome/-bytes", uses: 194, files: [warpline.css, docs/warpline], status: clear }
+  - { from: "extractor noise: #aa11ff00, #bb3300ff, #99cc33bb, #44ee7711, #2222ddaa are hash text (#a1f0 etc.), not colours", to: "no change", uses: 8, files: [docs/warpline/index.html, docs/warpline/system.html], status: clear }
+  - { from: "em-dash in UI copy (tell: em-dash)", to: "colon, period or middot per the voice", uses: 110, files: ["OracleDivergenceViewer.tsx:172", "OracleLedgerRail.tsx:122,130", docs/warpline], status: clear }
+  - { from: "numbered eyebrows '01 · The system map' (tell: numbered-section-labels)", to: "unnumbered eyebrows", uses: 19, files: [docs/warpline/index.html, docs/warpline/pov.html, docs/warpline/system.html], status: clear }
+
+baseline:
+  date: 2026-10-21
+  command: "atelier check --product warpline"
+  totals: { files: 9, fail: 0, warn: 350 }
+  by_rule: { spacing-on-scale: 118, em-dash: 110, type-on-scale: 53, radius-on-scale: 28, numbered-section-labels: 19, color-on-palette: 19, pure-black: 3 }
+  by_scope: { console: 16, docs_warpline: 334 }
+  note: "color-on-palette includes 4 false positives (#a1f0 hash text in docs/warpline/system.html:820,822 and index.html). Contrast, targets, focus and light-theme failures are agent-checked, not counted here."

@@ -1,0 +1,24 @@
+id: L-2026-10-18-ascend-000803-001
+type: human-note
+timestamp: '2026-10-18T00:08:03.926Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: CI green again on all three OSes after M1.1 + M1.4 slice 1
+summary: 'CI run 39081420814 is green on all 7 jobs (tests on macOS/Ubuntu/Windows, probes, native builds). The only Windows issue after M1.1 and M1.4 was two tests that each commit 1024 fsync''d rows: about 0.2 s on macOS, over 30 s on Windows. They got a uniform 240 s ceiling, with no platform branch, per G-WIN-05 (5beb4a7f). Next in M1.4: log.read with subscriptions and redaction, read tokens, ref.resolve, the full G-ABI/G-SOCK suites, then the #web-endpoint. M1.3 is still blocked on the founder (provisioning profile, notarization key).'
+symbols_touched:
+  - '#gnomon-ci'
+  - '#kernel-log'
+  - '#socket'
+tags:
+  - paradigm-8
+  - gnomon
+  - ci
+  - state
+linked_lore:
+  - L-2026-10-18-ascend-000003-001
+git_context:
+  ref: 5beb4a7f82f068423b71febb05a6bff302d39df1
+  branch: feat/gnomon
+  dirty: true

@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "7.15.2",
+  "version": "8.0.1",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -9,12 +9,14 @@
     "paradigm": "./dist/index.js",
     "paradigm-mcp": "./dist/mcp.js",
     "sentinel": "./dist/sentinel.js",
-    "sentinel-mcp": "./dist/sentinel-mcp.js"
+    "sentinel-mcp": "./dist/sentinel-mcp.js",
+    "gnomon": "./bin/gnomon.js"
   },
   "files": [
     "dist",
     "templates",
-    "platform-ui/dist"
+    "platform-ui/dist",
+    "bin"
   ],
   "scripts": {
     "build": "node scripts/generate-hooks.mjs && tsup && npm run build:platform-ui && npm run build:sentinel-assets",
@@ -26,9 +28,13 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/commands/",
-    "prepublishOnly": "npm run build"
+    "sync:readme": "node scripts/sync-readme.mjs",
+    "check:readme": "node scripts/sync-readme.mjs --check",
+    "prepack": "node scripts/sync-readme.mjs",
+    "prepublishOnly": "node scripts/check-gnomon-published.mjs && npm run build"
   },
   "dependencies": {
+    "@a-company/gnomon": "8.0.1",
     "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
     "@a-company/registry-client": "^0.1.0",
@@ -84,6 +90,6 @@
     "documentation"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   }
 }

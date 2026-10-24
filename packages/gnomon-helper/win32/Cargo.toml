@@ -1,0 +1,44 @@
+# #gnomon-helper (win32): the Windows platform helper (spec §16, §18; P8-D71; docs/plans/gnomon-windows.md W2).
+# Every direct dependency is pinned EXACT (spec §18, law 6), as in gnomon-wrapper.
+[package]
+name = "gnomon-helper"
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.92"
+description = "Gnomon platform helper for Windows: owner-only DACLs (pipe, home), job-object launcher, durable rename, boot id, ShellExecute hand-off"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "gnomon-helper"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "=1.0.151"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Console",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_JobObjects",
+  "Win32_System_Pipes",
+  "Win32_System_Registry",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_SystemServices",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

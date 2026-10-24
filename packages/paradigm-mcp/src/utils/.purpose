@@ -2,6 +2,22 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  plugin-update-checker:
+    description: >-
+      #plugin-update-checker: detects stale Claude Code plugins (marketplace clones vs remote, cached
+      install vs marketplace content hash). Output is inert data: PluginUpdateNotice
+      {kind:'plugin-update', plugin, marketplace, repo, from, to, reason, command}, plus a
+      descriptive, host-aware summary that never addresses the agent. detectPluginHost reads
+      GNOMON_HSID (set by Gnomon's #session-runner on every session): a Gnomon session's summary
+      names only the terminal command `claude plugin marketplace update <mkt> && claude plugin
+      update <plugin>@<mkt>`; interactive Claude Code may also name /plugin. Reported only by
+      paradigm_status check:'plugins' (legacy paradigm_plugin_check); never prepended to the
+      first tool result of a session, and no background refresh runs on the first tool call.
+    type: service
+    anchors:
+      - plugin-update-checker.ts
+      - plugin-update-checker.test.ts
+    tags: [plugins, host-aware, gnomon]
   context-freshness:
     description: >-
       #context-freshness (7.15.0, TD-2026-10-13-661 Phase 1): the MCP server's ProjectContext is
@@ -114,8 +130,51 @@ components:
       - feature
       - classroom
       - learning-loop
+  loop-files:
+    description: >-
+      #loop-files (Gnomon loops LP1, docs/specs/gnomon-loops.md §2/§5): repo loop definition files.
+      .paradigm/loops/<id>.yaml is parsed with js-yaml (CORE schema), validated and compiled by
+      #loop-schema (@a-company/gnomon/loops) with the other repo loops (call cycles, depth, unknown
+      callees) and the flow index (.paradigm/flow-index.json; a flow resolves to its defining
+      .purpose dir plus each step symbol's .purpose dir from scan-index.json), and the id must match
+      the file name. On success <id>.loop.json (canonical key order, indented) is written beside the
+      YAML; on failure a stale one is removed so the kernel never reads a definition the YAML no
+      longer says. writeLoop (create/update), validateLoopFile/validateAllLoops, listLoops (fresh,
+      stale, missing), getLoop and defaultTemplateFlow (the templates are #loop-templates). A flow
+      index written on Windows (backslash paths) is normalized before it resolves, so a flow never
+      widens to ** on another platform; another machine's drive path resolves to nothing. Shared
+      by #loop-cli and #loop-mcp. Hardened (Aegis LP1): symlinks refused for .paradigm, the loops
+      dir and every loop file; the dir's realpath must be the repo's .paradigm/loops; validate takes
+      only files directly in it; writes go temp + rename and never through a symlink; stale JSON is
+      removed even with write:false; orphan .loop.json (YAML gone) listed and removed by validate
+      all; readShebangAt records argv0Interpreter.
+    type: loader
+    anchors:
+      - loop-files.ts
+    tags: [feature, gnomon, loops]
+  loop-templates:
+    description: >-
+      #loop-templates (Gnomon loops LP9, build plan step 14; docs/specs/gnomon-loops.md §2 Examples
+      A-D): the loop:v2 starting points behind `paradigm loop new <id> --template <name>` and
+      paradigm_loop create {template}. flow-health (Example A: read-only flow, .purpose and drift
+      checks, a local summary toast), green (Example B on a local model: tsc -p <dir>/tsconfig.json,
+      a local act step, every change a propose card), watch (Example C on a file trigger), tidy
+      (Example D in its 8.0 form: reindex and .purpose validation on a private copy plus a local
+      digest; reports only, because write checks are not in 8.0), and a minimal starter. All valid
+      under the 8.0 validator and runnable by the 8.0 runner (local models only, no write checks);
+      the wording fits approve-to-land (TD-2026-10-22-369): no template promises to land on its own.
+      green names the tsconfig FILE, because an argv path is protected from act edits and a
+      wildcard-free protected path covers everything beneath it. Parameters (flow, dir) are checked
+      against closed patterns before they reach YAML (TemplateParamError). Each template's compiled
+      hashes are pinned in its test.
+    type: utility
+    anchors:
+      - loop-templates.ts
+    tests:
+      - loop-templates.test.ts
+    tags: [feature, gnomon, loops]
   tool-family:
-    description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:'full' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'
+    description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:''full'' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'
     type: utility
     tags:
       - feature
@@ -380,3 +439,13 @@ components:
     signals:
       - '!skill-used'
     tags: [feature, skills, learning-loop]
+  persona-sentinel-validation:
+    description: 'personas-loader validateAgainstSentinel — matches each persona journey step to its latest paradigm-personas Sentinel event (persona.step.complete / persona.step.fail, filtered by run_id, chain_id, environment). queryEvents returns newest first, so events are replayed oldest to newest and the latest event per step decides pass or fail. Reads GenericEvent.data (previously a non-existent data_json, so no step ever matched).'
+    type: service
+    file: packages/paradigm-mcp/src/utils/personas-loader.ts
+    tags: [personas, sentinel]
+  portal-routes:
+    description: 'Single accessor for portal.yaml routes. portalRoutes(gateConfig) returns [] because portal-core parseGateConfig drops routes (T-2026-10-22-002, owned by Aegis); fix it here and paradigm_gates_for_route, pm preflight/postflight and habits evaluation all pick it up. parsePortalRoutes(raw) reads the raw YAML routes map (gate list or { gates, method }) and is used for workspace siblings.'
+    type: utility
+    file: packages/paradigm-mcp/src/utils/portal-routes.ts
+    tags: [portal, security]

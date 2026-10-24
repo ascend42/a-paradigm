@@ -20,7 +20,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
 import {
   type ContentCategory,
   RING1_CONTENT_CATEGORIES,

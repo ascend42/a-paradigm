@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-203743-004
+type: milestone
+timestamp: '2026-10-18T20:37:43.934Z'
+author: builder
+title: 'Gnomon M1.3 slice 1: Secure Enclave root + approvals behind the signed helper; gnomon identity init'
+summary: 'Signed Swift helper (gnomon-helper:v1 over stdin/stdout, SE root + approvals with presence, per-connId cached unlocks), build/sign/notarize scripts; kernel HardwareRootAuthority + HelperApprovalsKey + hardware presence attestation wired through the broker ApprovalsKey seam; gnomond opens a provisioned home or refuses; gnomon identity init/status. gnomon suite 1051 passed, contracts 324, gui 28. Deferred: kernel key keystore item, keystore log anchor (T-009(b)), T-007 quarantine supersede and kernel-principal continuity, gnomon open on the real home, XPC peer check.'
+symbols_touched:
+  - '#identity'
+  - '#gnomon-helper'
+  - '#gnomon-helper-build'
+  - '#approval-broker'
+  - $daemon-lifecycle
+tags:
+  - gnomon
+  - m1.3
+  - milestone
+linked_commits:
+  - fa608709
+  - '6e999172'
+  - c918ca1f
+git_context:
+  ref: c918ca1f2bef783b36ba39517b67e3d23c765e00
+  branch: gnomon/m13-slice1
+  dirty: true

@@ -1,0 +1,19 @@
+{
+  "offer": {
+    "mod": "gnomon.neurons",
+    "kind": "search-the-brain",
+    "question": "Want me to check the brain for what you already know about cache eviction first?"
+  },
+  "body": "Before we design the cache, it is worth knowing what you already concluded about LRU versus TTL eviction last time.",
+  "shown": {
+    "mod": "gnomon.neurons",
+    "kind": "search-the-brain",
+    "phase": "diverge",
+    "title": "Check the brain first",
+    "contextIn": [
+      "recent-messages"
+    ],
+    "question": "Want me to check the brain for what you already know about cache eviction first?",
+    "handoffTool": "neuron_search"
+  }
+}

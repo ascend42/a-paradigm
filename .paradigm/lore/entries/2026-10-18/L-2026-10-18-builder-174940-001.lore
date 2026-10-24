@@ -1,0 +1,21 @@
+id: L-2026-10-18-builder-174940-001
+type: insight
+timestamp: '2026-10-18T17:49:40.766Z'
+author: builder
+title: 'P8-D93: one batched clientApiId move (clientNonce + session.compacted)'
+summary: 'Per P8-D89''s batching rule, T-016 moves clientApiId exactly once for two changes: the hello clientNonce (+ client-local reason client-nonce-mismatch) and the typed kernel event session.compacted{hsid, turn, reason, summaryHash, tokensBefore, tokensAfter} (summaryHash sensitive field; KIND_PAYLOADS published as x-gnomon-kind-payloads). clientApiId sha256:fd576e6d7ee15cd7f7481768d085117c1e22b37902d93821a11359736c98e0fd -> sha256:f998e8a87d892666e30cd4ced040bb9266a6ff87da703b2b728c9f16fc7c3714. kitId and abiId (sha256:18357f44...) unchanged: hello is not a verb and abiId hashes only verbs, relays, next-legal. GUI bundle pin moved to sha256:bf1fadb3... (it embeds contracts).'
+symbols_touched:
+  - '#gnomon-contracts'
+  - '#kernel-log'
+  - '#local-runner'
+  - '#socket'
+tags:
+  - decision
+  - gnomon
+  - client-api-id
+  - P8-D93
+confidence: 0.95
+git_context:
+  ref: 1500288bea1a91411760b92d4beaf5704ea50460
+  branch: gnomon/t016-api-bump
+  dirty: true

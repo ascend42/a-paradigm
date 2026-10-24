@@ -1,0 +1,23 @@
+{
+  "schema": "gnomon-bundled-node-lock:v1",
+  "comment": "Written ONLY by packages/gnomon/scripts/bump-bundled-node.mjs (never by hand): SHASUMS256.txt verified with gpg against packages/gnomon-wrapper/node-release-keys.json, both tarballs checked against it. release-darwin.mjs downloads <base>/v<version>/<file> and refuses it unless its sha256 equals the pin.",
+  "version": "24.22.1",
+  "base": "https://nodejs.org/dist",
+  "artifacts": {
+    "darwin-arm64": {
+      "file": "node-v24.22.1-darwin-arm64.tar.gz",
+      "sha256": "89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7"
+    },
+    "darwin-x64": {
+      "file": "node-v24.22.1-darwin-x64.tar.gz",
+      "sha256": "d132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035"
+    }
+  },
+  "provenance": {
+    "method": "gpg-shasums256",
+    "signer": "5BE8A3F6C8A5C01D106C0AD820B1A390B168D356",
+    "shasumsSha256": "fdfbffc969c0f604beff0124d409b33a43b53f5c681d6220f80023e0d6df9dc4",
+    "keysSha256": "71e799e5c6a452f05208bb7ef33f04cd4b5937096d9c111a9be6192c4beb8e2b",
+    "verifiedAt": "2026-10-21T23:05:41.356Z"
+  }
+}

@@ -1,0 +1,389 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>useparadigm.dev — what you have</title><style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1b1c1e;--muted:#5d6066;--line:#e3e3df;--warn:#9a5b00;--warn-bg:#fff4e0;--ok:#1f6b3a;--ok-bg:#e6f4ea;--accent:#2b59c3;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:28px;line-height:1.2;margin:0 0 4px}
+h2{font-size:19px;margin:40px 0 12px;padding-top:16px;border-top:1px solid var(--line)}
+h3{font-size:15px;margin:20px 0 8px}
+p,li{max-width:72ch}
+.meta{color:var(--muted);font-size:13px}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.swatch{height:56px;border-radius:6px;border:1px solid var(--line);margin-bottom:8px;background-image:linear-gradient(var(--c),var(--c)),conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0);background-size:auto,12px 12px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.off{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.badge.on{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:20px}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto}
+.bar{height:12px;background:var(--accent);border-radius:2px}
+.where{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.callout{background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:12px 14px;margin:12px 0}
+iframe{width:100%;border:1px solid var(--line);border-radius:6px;background:transparent;height:72px;display:block}
+nav.toc{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;margin-top:12px}
+nav.toc a{color:var(--accent)}
+.theme-toggle{position:fixed;top:12px;right:12px;font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+</style></head><body><button class="theme-toggle" type="button" onclick="(function(r){var d=r.getAttribute('data-theme');var dark=d?d==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.setAttribute('data-theme',dark?'light':'dark')})(document.documentElement)">Theme</button><main><h1>useparadigm.dev: what you have</h1>
+<p class="meta">Extracted from 69 UI files (product <code>site</code>) on 2026-10-21. Compared with the product's current design system.</p>
+<div class="stats"><div class="card stat"><b>28</b><span>distinct colours</span></div><div class="card stat"><b>0</b><span>font families</span></div><div class="card stat"><b>4</b><span>font sizes</span></div><div class="card stat"><b>13</b><span>spacing values</span></div><div class="card stat"><b>3</b><span>radii</span></div><div class="card stat"><b>114</b><span>tokens defined</span></div><div class="card stat"><b>6</b><span>near-duplicate groups</span></div><div class="card stat"><b>0</b><span>off-system uses</span></div></div>
+<nav class="toc"><a href="#near">Near-duplicates</a><a href="#color">Colour</a><a href="#type">Type</a><a href="#space">Spacing</a><a href="#radius">Radius</a><a href="#effects">Shadow and motion</a><a href="#tokens">Tokens</a><a href="#components">Components</a><a href="#copy">Copy</a></nav>
+<h2 id="near">Near-duplicates: decisions the system hasn't made</h2>
+<p>Each group is values close enough to read as the same thing. Usually one should win.</p><div class="grid">
+<div class="card"><div class="meta">color · 8 uses</div><div class="row"><div title="#ffffff" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ffffff"></div><div title="#f8fafc" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f8fafc"></div></div><div class="mono">#ffffff, #f8fafc</div></div>
+<div class="card"><div class="meta">color · 3 uses</div><div class="row"><div title="#ef44441a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ef44441a"></div><div title="#ef44444d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ef44444d"></div><div title="#ef444426" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ef444426"></div></div><div class="mono">#ef44441a, #ef44444d, #ef444426</div></div>
+<div class="card"><div class="meta">spacing · 20 uses</div><div class="mono">2, 3</div></div>
+<div class="card"><div class="meta">spacing · 18 uses</div><div class="mono">16, 14</div></div>
+<div class="card"><div class="meta">spacing · 9 uses</div><div class="mono">28, 24</div></div>
+<div class="card"><div class="meta">spacing · 6 uses</div><div class="mono">12, 13</div></div>
+</div>
+<h2 id="color">Colour</h2><div class="grid">
+<div class="card"><div class="swatch" style="--c:#4a7c59"></div><div class="mono">#4a7c59</div><div class="row meta">17 uses </div><div class="mono meta">--success</div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:22<br>packages/site/src/components/UniversitySeal.tsx:23<br>packages/site/src/components/UniversitySeal.tsx:24<br>packages/site/src/components/UniversitySeal.tsx:25<br>packages/site/src/components/UniversitySeal.tsx:26<br>+12 more</div></div>
+<div class="card"><div class="swatch" style="--c:#4a7c5930"></div><div class="mono">#4a7c5930</div><div class="row meta">12 uses </div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:23<br>packages/site/src/components/UniversitySeal.tsx:24<br>packages/site/src/components/UniversitySeal.tsx:25<br>packages/site/src/components/UniversitySeal.tsx:27<br>packages/site/src/components/UniversitySeal.tsx:28<br>+7 more</div></div>
+<div class="card"><div class="swatch" style="--c:#6b1c23"></div><div class="mono">#6b1c23</div><div class="row meta">10 uses </div><div class="mono meta">--burgundy</div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:42<br>packages/site/src/components/UniversitySeal.tsx:43<br>packages/site/src/components/UniversitySeal.tsx:45<br>packages/site/src/components/UniversitySeal.tsx:46<br>packages/site/src/components/UniversitySeal.tsx:47<br>+5 more</div></div>
+<div class="card"><div class="swatch" style="--c:#ffffff"></div><div class="mono">#ffffff</div><div class="row meta">7 uses </div><div class="mono meta">--surface-2 --surface-void</div><div class="where mono">packages/site/src/app/learn/plsat/page.module.css:186<br>packages/site/src/app/learn/plsat/page.module.css:269<br>packages/site/src/app/sections/HeroSection.module.css:96<br>packages/site/src/app/sections/HeroSection.module.css:106<br>packages/site/src/components/SiteHeader.module.css:82<br>+2 more</div></div>
+<div class="card"><div class="swatch" style="--c:#c5a572"></div><div class="mono">#c5a572</div><div class="row meta">5 uses </div><div class="mono meta">--gold --gold-dark</div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:18<br>packages/site/src/components/UniversitySeal.tsx:19<br>packages/site/src/components/UniversitySeal.tsx:69<br>packages/site/src/components/UniversitySeal.tsx:76<br>packages/site/src/components/UniversitySeal.tsx:77</div></div>
+<div class="card"><div class="swatch" style="--c:#ef4444"></div><div class="mono">#ef4444</div><div class="row meta">2 uses </div><div class="mono meta">--sym-gate</div><div class="where mono">packages/site/src/components/LiveIndicator.module.css:22<br>packages/site/src/components/LiveIndicator.module.css:30</div></div>
+<div class="card"><div class="swatch" style="--c:#3f3f4a"></div><div class="mono">#3f3f4a</div><div class="row meta">2 uses </div><div class="mono meta">--surface-steel</div><div class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:391<br>packages/site/src/components/NodeGraph/LiveGraph.tsx:461</div></div>
+<div class="card"><div class="swatch" style="--c:#22c55e33"></div><div class="mono">#22c55e33</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/app/globals.css:67</div></div>
+<div class="card"><div class="swatch" style="--c:#ef44441a"></div><div class="mono">#ef44441a</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/LiveIndicator.module.css:6</div></div>
+<div class="card"><div class="swatch" style="--c:#ef44444d"></div><div class="mono">#ef44444d</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/LiveIndicator.module.css:7</div></div>
+<div class="card"><div class="swatch" style="--c:#ef444426"></div><div class="mono">#ef444426</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/LiveIndicator.module.css:15</div></div>
+<div class="card"><div class="swatch" style="--c:#00000026"></div><div class="mono">#00000026</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.module.css:15</div></div>
+<div class="card"><div class="swatch" style="--c:#ff5f57"></div><div class="mono">#ff5f57</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.module.css:39</div></div>
+<div class="card"><div class="swatch" style="--c:#febc2e"></div><div class="mono">#febc2e</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.module.css:40</div></div>
+<div class="card"><div class="swatch" style="--c:#28c840"></div><div class="mono">#28c840</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.module.css:41</div></div>
+<div class="card"><div class="swatch" style="--c:#4ade80"></div><div class="mono">#4ade80</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.module.css:70</div></div>
+<div class="card"><div class="swatch" style="--c:#facc15"></div><div class="mono">#facc15</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.module.css:82</div></div>
+<div class="card"><div class="swatch" style="--c:#f8fafc"></div><div class="mono">#f8fafc</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.module.css:91</div></div>
+<div class="card"><div class="swatch" style="--c:#888888"></div><div class="mono">#888888</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:294</div></div>
+<div class="card"><div class="swatch" style="--c:#9ca3af"></div><div class="mono">#9ca3af</div><div class="row meta">1 uses </div><div class="mono meta">--text-silver --text-slate</div><div class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:310</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(${cr}, ${cg}, ${cb}, ${(0.2 + combined * 0.3)"></div><div class="mono">rgba(${cr}, ${cg}, ${cb}, ${(0.2 + combined * 0.3)</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:779</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(${cr}, ${cg}, ${cb}, 0)"></div><div class="mono">rgba(${cr}, ${cg}, ${cb}, 0)</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:780</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(${lr}, ${lg}, ${lb}, 0.15)"></div><div class="mono">rgba(${lr}, ${lg}, ${lb}, 0.15)</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:817</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(${mr}, ${mg}, ${mb}, 0.12)"></div><div class="mono">rgba(${mr}, ${mg}, ${mb}, 0.12)</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:842</div></div>
+<div class="card"><div class="swatch" style="--c:#fdf8f020"></div><div class="mono">#fdf8f020</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:42</div></div>
+<div class="card"><div class="swatch" style="--c:#2d5f8a"></div><div class="mono">#2d5f8a</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:54</div></div>
+<div class="card"><div class="swatch" style="--c:#7b5ea7"></div><div class="mono">#7b5ea7</div><div class="row meta">1 uses </div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:55</div></div>
+<div class="card"><div class="swatch" style="--c:#b8860b"></div><div class="mono">#b8860b</div><div class="row meta">1 uses </div><div class="mono meta">--warning</div><div class="where mono">packages/site/src/components/UniversitySeal.tsx:56</div></div>
+</div>
+<h2 id="type">Type</h2><h3>Families</h3><div class="scroll"><table><tr><th>Family</th><th>Uses</th><th></th><th>Where</th></tr>
+</table></div><h3>Sizes</h3><div class="scroll"><table><tr><th>Size</th><th>Sample</th><th>Uses</th><th></th></tr>
+<tr><td class="mono">10px</td><td style="font-size:10px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">11.2px</td><td style="font-size:11.2px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">12px</td><td style="font-size:12px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">14.4px</td><td style="font-size:14.4px;line-height:1.2">Ambient voice off</td><td>4</td><td></td></tr>
+</table></div>
+<h2 id="space">Spacing</h2><div class="scroll"><table><tr><th>Value</th><th></th><th>Uses</th><th></th></tr>
+<tr><td class="mono">2px</td><td style="width:50%"><div class="bar" style="width:2px;max-width:100%"></div></td><td>19</td><td></td></tr>
+<tr><td class="mono">3px</td><td style="width:50%"><div class="bar" style="width:3px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">4px</td><td style="width:50%"><div class="bar" style="width:4px;max-width:100%"></div></td><td>17</td><td></td></tr>
+<tr><td class="mono">6px</td><td style="width:50%"><div class="bar" style="width:6px;max-width:100%"></div></td><td>23</td><td></td></tr>
+<tr><td class="mono">8px</td><td style="width:50%"><div class="bar" style="width:8px;max-width:100%"></div></td><td>16</td><td></td></tr>
+<tr><td class="mono">10px</td><td style="width:50%"><div class="bar" style="width:10px;max-width:100%"></div></td><td>12</td><td></td></tr>
+<tr><td class="mono">12px</td><td style="width:50%"><div class="bar" style="width:12px;max-width:100%"></div></td><td>5</td><td></td></tr>
+<tr><td class="mono">13px</td><td style="width:50%"><div class="bar" style="width:13px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">14px</td><td style="width:50%"><div class="bar" style="width:14px;max-width:100%"></div></td><td>5</td><td></td></tr>
+<tr><td class="mono">16px</td><td style="width:50%"><div class="bar" style="width:16px;max-width:100%"></div></td><td>13</td><td></td></tr>
+<tr><td class="mono">20px</td><td style="width:50%"><div class="bar" style="width:20px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">24px</td><td style="width:50%"><div class="bar" style="width:24px;max-width:100%"></div></td><td>3</td><td></td></tr>
+<tr><td class="mono">28px</td><td style="width:50%"><div class="bar" style="width:28px;max-width:100%"></div></td><td>6</td><td></td></tr>
+</table></div>
+<h2 id="radius">Radius</h2><div class="grid">
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:0px;margin-bottom:8px"></div><div class="mono">0px</div><div class="row meta">4 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:10px;margin-bottom:8px"></div><div class="mono">10px</div><div class="row meta">1 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:4px;margin-bottom:8px"></div><div class="mono">4px</div><div class="row meta">1 uses </div></div>
+</div>
+<h2 id="effects">Shadow and motion</h2><div class="scroll"><table><tr><th>Kind</th><th>Value</th><th>Uses</th><th></th></tr>
+<tr><td>shadow</td><td class="mono">0 4px 24px rgba(0, 0, 0, 0.15)</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">800ms</td><td>2</td><td></td></tr>
+<tr><td>duration</td><td class="mono">10000ms</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">1500ms</td><td>1</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease-in-out</td><td>2</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease-out</td><td>1</td><td></td></tr>
+</table></div>
+<h2 id="tokens">Tokens (custom properties)</h2>
+<div class="callout"><b>30 defined but never used:</b> <span class="mono">--burgundy-dark --gold-light --gold-dark --success --success-bg --error --error-bg --warning --warning-bg --border-color --shadow-card --glow-subtle --glow-node --leading-display --leading-micro --grid-columns --ease-in --ease-in-out --duration-normal --btn-radius --btn-padding --btn-font-size --sym-component-dark --sym-flow-dark --sym-flow-light --sym-gate-dark --sym-signal-dark --sym-signal-light --sym-aspect-dark --sym-aspect-light</span></div>
+<div class="callout"><b>2 used but never defined here:</b> <span class="mono">--font-geist-sans --font-geist-mono</span></div>
+<div class="scroll"><table><tr><th>Token</th><th>Value</th><th>Uses</th><th>Defined</th></tr>
+<tr><td class="mono">--space-2</td><td class="mono">1rem</td><td>80</td><td class="where mono">packages/site/src/tokens/obsidian.css:60</td></tr>
+<tr><td class="mono">--space-1</td><td class="mono">0.5rem</td><td>67</td><td class="where mono">packages/site/src/tokens/obsidian.css:59</td></tr>
+<tr><td class="mono">--font-mono</td><td class="mono">var(--font-geist-mono, &#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, &#39;Fira Code&#39;, monospace)</td><td>56</td><td class="where mono">packages/site/src/tokens/obsidian.css:38</td></tr>
+<tr><td class="mono">--space-3</td><td class="mono">1.5rem</td><td>54</td><td class="where mono">packages/site/src/tokens/obsidian.css:61</td></tr>
+<tr><td class="mono">--surface-3</td><td class="mono">#FAF3E6</td><td>53</td><td class="where mono">packages/site/src/tokens/academia.css:23</td></tr>
+<tr><td class="mono">--text-small</td><td class="mono">0.875rem</td><td>53</td><td class="where mono">packages/site/src/tokens/obsidian.css:46</td></tr>
+<tr><td class="mono">--text-heading</td><td class="mono">#2C1810</td><td>47</td><td class="where mono">packages/site/src/tokens/academia.css:29</td></tr>
+<tr><td class="mono">--ease-out</td><td class="mono">cubic-bezier(0.16, 1, 0.3, 1)</td><td>47</td><td class="where mono">packages/site/src/tokens/obsidian.css:88</td></tr>
+<tr><td class="mono">--duration-fast</td><td class="mono">150ms</td><td>47</td><td class="where mono">packages/site/src/tokens/obsidian.css:91</td></tr>
+<tr><td class="mono">--text-muted</td><td class="mono">#8B7355</td><td>44</td><td class="where mono">packages/site/src/tokens/academia.css:28</td></tr>
+<tr><td class="mono">--sym-component</td><td class="mono">#16a34a</td><td>44</td><td class="where mono">packages/site/src/tokens/obsidian.css:140</td></tr>
+<tr><td class="mono">--text-secondary</td><td class="mono">#4A3728</td><td>43</td><td class="where mono">packages/site/src/tokens/academia.css:27</td></tr>
+<tr><td class="mono">--space-4</td><td class="mono">2rem</td><td>37</td><td class="where mono">packages/site/src/tokens/obsidian.css:62</td></tr>
+<tr><td class="mono">--text-micro</td><td class="mono">0.75rem</td><td>36</td><td class="where mono">packages/site/src/tokens/obsidian.css:47</td></tr>
+<tr><td class="mono">--surface-2</td><td class="mono">#ffffff</td><td>32</td><td class="where mono">packages/site/src/tokens/academia.css:22</td></tr>
+<tr><td class="mono">--text-primary</td><td class="mono">#2C1810</td><td>32</td><td class="where mono">packages/site/src/tokens/academia.css:26</td></tr>
+<tr><td class="mono">--text-body</td><td class="mono">1rem</td><td>28</td><td class="where mono">packages/site/src/tokens/obsidian.css:45</td></tr>
+<tr><td class="mono">--sym-aspect</td><td class="mono">#4b5563</td><td>28</td><td class="where mono">packages/site/src/tokens/obsidian.css:156</td></tr>
+<tr><td class="mono">--burgundy</td><td class="mono">#6B1C23</td><td>27</td><td class="where mono">packages/site/src/tokens/academia.css:32</td></tr>
+<tr><td class="mono">--text-h4</td><td class="mono">1.125rem</td><td>27</td><td class="where mono">packages/site/src/tokens/obsidian.css:44</td></tr>
+<tr><td class="mono">--surface-4</td><td class="mono">#E8E0D0</td><td>25</td><td class="where mono">packages/site/src/tokens/academia.css:24</td></tr>
+<tr><td class="mono">--surface-steel</td><td class="mono">#3f3f4a</td><td>25</td><td class="where mono">packages/site/src/tokens/obsidian.css:12</td></tr>
+<tr><td class="mono">--radius-lg</td><td class="mono">8px</td><td>24</td><td class="where mono">packages/site/src/tokens/obsidian.css:77</td></tr>
+<tr><td class="mono">--space-6</td><td class="mono">3rem</td><td>23</td><td class="where mono">packages/site/src/tokens/obsidian.css:63</td></tr>
+<tr><td class="mono">--sym-gate</td><td class="mono">#dc2626</td><td>22</td><td class="where mono">packages/site/src/tokens/obsidian.css:148</td></tr>
+<tr><td class="mono">--font-sans</td><td class="mono">var(--font-geist-sans, &#39;Inter&#39;, -apple-system, BlinkMacSystemFont, &#39;Segoe UI&#39;, sans-serif)</td><td>20</td><td class="where mono">packages/site/src/tokens/obsidian.css:37</td></tr>
+<tr><td class="mono">--radius-md</td><td class="mono">6px</td><td>19</td><td class="where mono">packages/site/src/tokens/obsidian.css:76</td></tr>
+<tr><td class="mono">--text-bright</td><td class="mono">#2C1810</td><td>18</td><td class="where mono">packages/site/src/tokens/academia.css:30</td></tr>
+<tr><td class="mono">--font-heading</td><td class="mono">Crimson Pro&#39;, Georgia, &#39;Times New Roman&#39;, serif</td><td>17</td><td class="where mono">packages/site/src/tokens/academia.css:15</td></tr>
+<tr><td class="mono">--sym-flow</td><td class="mono">#7c3aed</td><td>17</td><td class="where mono">packages/site/src/tokens/obsidian.css:144</td></tr>
+<tr><td class="mono">--sym-signal</td><td class="mono">#ca8a04</td><td>16</td><td class="where mono">packages/site/src/tokens/obsidian.css:152</td></tr>
+<tr><td class="mono">--text-h3</td><td class="mono">1.375rem</td><td>14</td><td class="where mono">packages/site/src/tokens/obsidian.css:43</td></tr>
+<tr><td class="mono">--space-8</td><td class="mono">4rem</td><td>14</td><td class="where mono">packages/site/src/tokens/obsidian.css:64</td></tr>
+<tr><td class="mono">--text-h1</td><td class="mono">2.25rem</td><td>13</td><td class="where mono">packages/site/src/tokens/obsidian.css:41</td></tr>
+<tr><td class="mono">--text-h2</td><td class="mono">1.75rem</td><td>13</td><td class="where mono">packages/site/src/tokens/obsidian.css:42</td></tr>
+<tr><td class="mono">--radius-sm</td><td class="mono">4px</td><td>13</td><td class="where mono">packages/site/src/tokens/obsidian.css:75</td></tr>
+<tr><td class="mono">--gold</td><td class="mono">#C5A572</td><td>12</td><td class="where mono">packages/site/src/tokens/academia.css:37</td></tr>
+<tr><td class="mono">--max-width-marketing</td><td class="mono">1200px</td><td>11</td><td class="where mono">packages/site/src/tokens/obsidian.css:69</td></tr>
+<tr><td class="mono">--max-width-content</td><td class="mono">800px</td><td>11</td><td class="where mono">packages/site/src/tokens/obsidian.css:70</td></tr>
+<tr><td class="mono">--space-16</td><td class="mono">8rem</td><td>10</td><td class="where mono">packages/site/src/tokens/obsidian.css:66</td></tr>
+<tr><td class="mono">--radius-pill</td><td class="mono">9999px</td><td>10</td><td class="where mono">packages/site/src/tokens/obsidian.css:79</td></tr>
+<tr><td class="mono">--surface-0</td><td class="mono">#F5F1E8</td><td>9</td><td class="where mono">packages/site/src/tokens/academia.css:20</td></tr>
+<tr><td class="mono">--surface-1</td><td class="mono">#FDF8F0</td><td>9</td><td class="where mono">packages/site/src/tokens/academia.css:21</td></tr>
+<tr><td class="mono">--surface-void</td><td class="mono">#0a0a0b</td><td>9</td><td class="where mono">packages/site/src/tokens/obsidian.css:8</td></tr>
+<tr><td class="mono">--text-display</td><td class="mono">3rem</td><td>7</td><td class="where mono">packages/site/src/tokens/obsidian.css:40</td></tr>
+<tr><td class="mono">--tag-gate-bg</td><td class="mono">rgba(220, 38, 38, 0.08)</td><td>6</td><td class="where mono">packages/site/src/tokens/obsidian.css:164</td></tr>
+<tr><td class="mono">--header-height</td><td class="mono">64px</td><td>5</td><td class="where mono">packages/site/src/tokens/obsidian.css:71</td></tr>
+<tr><td class="mono">--tag-component-bg</td><td class="mono">rgba(22, 163, 74, 0.08)</td><td>5</td><td class="where mono">packages/site/src/tokens/obsidian.css:160</td></tr>
+<tr><td class="mono">--tag-flow-bg</td><td class="mono">rgba(124, 58, 237, 0.08)</td><td>5</td><td class="where mono">packages/site/src/tokens/obsidian.css:162</td></tr>
+<tr><td class="mono">--tag-aspect-bg</td><td class="mono">rgba(75, 85, 99, 0.08)</td><td>5</td><td class="where mono">packages/site/src/tokens/obsidian.css:168</td></tr>
+<tr><td class="mono">--sym-component-light</td><td class="mono">#166534</td><td>4</td><td class="where mono">packages/site/src/tokens/obsidian.css:142</td></tr>
+<tr><td class="mono">--tag-signal-bg</td><td class="mono">rgba(202, 138, 4, 0.08)</td><td>4</td><td class="where mono">packages/site/src/tokens/obsidian.css:166</td></tr>
+<tr><td class="mono">--surface-graphite</td><td class="mono">#2a2a32</td><td>3</td><td class="where mono">packages/site/src/tokens/obsidian.css:11</td></tr>
+<tr><td class="mono">--text-slate</td><td class="mono">#6b7280</td><td>3</td><td class="where mono">packages/site/src/tokens/obsidian.css:22</td></tr>
+<tr><td class="mono">--tag-component-border</td><td class="mono">rgba(22, 163, 74, 0.2)</td><td>3</td><td class="where mono">packages/site/src/tokens/obsidian.css:161</td></tr>
+<tr><td class="mono">--tag-flow-border</td><td class="mono">rgba(124, 58, 237, 0.2)</td><td>3</td><td class="where mono">packages/site/src/tokens/obsidian.css:163</td></tr>
+<tr><td class="mono">--tag-gate-border</td><td class="mono">rgba(220, 38, 38, 0.2)</td><td>3</td><td class="where mono">packages/site/src/tokens/obsidian.css:165</td></tr>
+<tr><td class="mono">--surface-obsidian</td><td class="mono">#111113</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:9</td></tr>
+<tr><td class="mono">--surface-carbon</td><td class="mono">#1a1a1f</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:10</td></tr>
+<tr><td class="mono">--text-silver</td><td class="mono">#9ca3af</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:23</td></tr>
+<tr><td class="mono">--text-cloud</td><td class="mono">#d1d5db</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:24</td></tr>
+<tr><td class="mono">--text-mist</td><td class="mono">#e5e7eb</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:25</td></tr>
+<tr><td class="mono">--text-snow</td><td class="mono">#f3f4f6</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:26</td></tr>
+<tr><td class="mono">--leading-h4</td><td class="mono">1.5rem</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:53</td></tr>
+<tr><td class="mono">--leading-small</td><td class="mono">1.25rem</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:55</td></tr>
+<tr><td class="mono">--sym-gate-light</td><td class="mono">#991b1b</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:150</td></tr>
+<tr><td class="mono">--tag-signal-border</td><td class="mono">rgba(202, 138, 4, 0.2)</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:167</td></tr>
+<tr><td class="mono">--tag-aspect-border</td><td class="mono">rgba(75, 85, 99, 0.2)</td><td>2</td><td class="where mono">packages/site/src/tokens/obsidian.css:169</td></tr>
+<tr><td class="mono">--glow-flow</td><td class="mono">rgba(139, 92, 246, 0.4)</td><td>2</td><td class="where mono">packages/site/src/tokens/symbols.css:46</td></tr>
+<tr><td class="mono">--burgundy-light</td><td class="mono">#8B2E38</td><td>1</td><td class="where mono">packages/site/src/tokens/academia.css:33</td></tr>
+<tr><td class="mono">--burgundy-bg</td><td class="mono">rgba(107, 28, 35, 0.06)</td><td>1</td><td class="where mono">packages/site/src/tokens/academia.css:35</td></tr>
+<tr><td class="mono">--gold-bg</td><td class="mono">rgba(197, 165, 114, 0.09)</td><td>1</td><td class="where mono">packages/site/src/tokens/academia.css:40</td></tr>
+<tr><td class="mono">--text-white</td><td class="mono">#fafafa</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:27</td></tr>
+<tr><td class="mono">--leading-h1</td><td class="mono">2.75rem</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:50</td></tr>
+<tr><td class="mono">--leading-h2</td><td class="mono">2.25rem</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:51</td></tr>
+<tr><td class="mono">--leading-h3</td><td class="mono">1.75rem</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:52</td></tr>
+<tr><td class="mono">--leading-body</td><td class="mono">1.5rem</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:54</td></tr>
+<tr><td class="mono">--space-12</td><td class="mono">6rem</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:65</td></tr>
+<tr><td class="mono">--radius-xl</td><td class="mono">12px</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:78</td></tr>
+<tr><td class="mono">--duration-slow</td><td class="mono">600ms</td><td>1</td><td class="where mono">packages/site/src/tokens/obsidian.css:93</td></tr>
+<tr><td class="mono">--glow-component</td><td class="mono">rgba(34, 197, 94, 0.4)</td><td>1</td><td class="where mono">packages/site/src/tokens/symbols.css:45</td></tr>
+<tr><td class="mono">--glow-gate</td><td class="mono">rgba(239, 68, 68, 0.4)</td><td>1</td><td class="where mono">packages/site/src/tokens/symbols.css:47</td></tr>
+<tr><td class="mono">--glow-signal</td><td class="mono">rgba(234, 179, 8, 0.4)</td><td>1</td><td class="where mono">packages/site/src/tokens/symbols.css:48</td></tr>
+<tr><td class="mono">--glow-aspect</td><td class="mono">rgba(107, 114, 128, 0.4)</td><td>1</td><td class="where mono">packages/site/src/tokens/symbols.css:49</td></tr>
+<tr><td class="mono">--burgundy-dark</td><td class="mono">#4A1118</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:34</td></tr>
+<tr><td class="mono">--gold-light</td><td class="mono">#D4BA8E</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:38</td></tr>
+<tr><td class="mono">--gold-dark</td><td class="mono">#A68B5B</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:39</td></tr>
+<tr><td class="mono">--success</td><td class="mono">#4A7C59</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:42</td></tr>
+<tr><td class="mono">--success-bg</td><td class="mono">rgba(74, 124, 89, 0.09)</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:43</td></tr>
+<tr><td class="mono">--error</td><td class="mono">#9B2C2C</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:44</td></tr>
+<tr><td class="mono">--error-bg</td><td class="mono">rgba(155, 44, 44, 0.09)</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:45</td></tr>
+<tr><td class="mono">--warning</td><td class="mono">#B8860B</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:46</td></tr>
+<tr><td class="mono">--warning-bg</td><td class="mono">rgba(184, 134, 11, 0.09)</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:47</td></tr>
+<tr><td class="mono">--border-color</td><td class="mono">var(--surface-4)</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:49</td></tr>
+<tr><td class="mono">--shadow-card</td><td class="mono">0 1px 3px rgba(44, 24, 16, 0.08), 0 4px 12px rgba(44, 24, 16, 0.05)</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:50</td></tr>
+<tr><td class="mono">--glow-subtle</td><td class="mono">none</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:51</td></tr>
+<tr><td class="mono">--glow-node</td><td class="mono">none</td><td>0</td><td class="where mono">packages/site/src/tokens/academia.css:52</td></tr>
+<tr><td class="mono">--leading-display</td><td class="mono">3.5rem</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:49</td></tr>
+<tr><td class="mono">--leading-micro</td><td class="mono">1rem</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:56</td></tr>
+<tr><td class="mono">--grid-columns</td><td class="mono">12</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:72</td></tr>
+<tr><td class="mono">--ease-in</td><td class="mono">cubic-bezier(0.7, 0, 0.84, 0)</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:89</td></tr>
+<tr><td class="mono">--ease-in-out</td><td class="mono">cubic-bezier(0.65, 0, 0.35, 1)</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:90</td></tr>
+<tr><td class="mono">--duration-normal</td><td class="mono">300ms</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:92</td></tr>
+<tr><td class="mono">--btn-radius</td><td class="mono">var(--radius-md)</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:96</td></tr>
+<tr><td class="mono">--btn-padding</td><td class="mono">10px 20px</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:97</td></tr>
+<tr><td class="mono">--btn-font-size</td><td class="mono">var(--text-small)</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:98</td></tr>
+<tr><td class="mono">--sym-component-dark</td><td class="mono">#14532d</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:141</td></tr>
+<tr><td class="mono">--sym-flow-dark</td><td class="mono">#4c1d95</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:145</td></tr>
+<tr><td class="mono">--sym-flow-light</td><td class="mono">#5b21b6</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:146</td></tr>
+<tr><td class="mono">--sym-gate-dark</td><td class="mono">#7f1d1d</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:149</td></tr>
+<tr><td class="mono">--sym-signal-dark</td><td class="mono">#713f12</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:153</td></tr>
+<tr><td class="mono">--sym-signal-light</td><td class="mono">#854d0e</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:154</td></tr>
+<tr><td class="mono">--sym-aspect-dark</td><td class="mono">#1f2937</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:157</td></tr>
+<tr><td class="mono">--sym-aspect-light</td><td class="mono">#374151</td><td>0</td><td class="where mono">packages/site/src/tokens/obsidian.css:158</td></tr>
+</table></div>
+<h2 id="components">Components and class families</h2>
+<h3>Named components</h3><div class="scroll"><table><tr><th>Name</th><th>Where</th></tr>
+<tr><td class="mono">PhilosophyPage</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:9</td></tr>
+<tr><td class="mono">AgentsPage</td><td class="where mono">packages/site/src/app/agents/page.tsx:45</td></tr>
+<tr><td class="mono">BlogPage</td><td class="where mono">packages/site/src/app/blog/page.tsx:28</td></tr>
+<tr><td class="mono">DocsLayout</td><td class="where mono">packages/site/src/app/docs/layout.tsx:14</td></tr>
+<tr><td class="mono">RootLayout</td><td class="where mono">packages/site/src/app/layout.tsx:48</td></tr>
+<tr><td class="mono">LearnLayout</td><td class="where mono">packages/site/src/app/learn/layout.tsx:11</td></tr>
+<tr><td class="mono">LearnPage</td><td class="where mono">packages/site/src/app/learn/page.tsx:66</td></tr>
+<tr><td class="mono">PlsatPage</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:12</td></tr>
+<tr><td class="mono">HomePage</td><td class="where mono">packages/site/src/app/page.tsx:8</td></tr>
+<tr><td class="mono">CTASection</td><td class="where mono">packages/site/src/app/sections/CTASection.tsx:4</td></tr>
+<tr><td class="mono">HeroSection</td><td class="where mono">packages/site/src/app/sections/HeroSection.tsx:15</td></tr>
+<tr><td class="mono">HowItWorksSection</td><td class="where mono">packages/site/src/app/sections/HowItWorksSection.tsx:60</td></tr>
+<tr><td class="mono">MetricsSection</td><td class="where mono">packages/site/src/app/sections/MetricsSection.tsx:23</td></tr>
+<tr><td class="mono">SymbolsSection</td><td class="where mono">packages/site/src/app/sections/SymbolsSection.tsx:67</td></tr>
+<tr><td class="mono">CodeBlock</td><td class="where mono">packages/site/src/components/CodeBlock.tsx:14</td></tr>
+<tr><td class="mono">LiveIndicator</td><td class="where mono">packages/site/src/components/LiveIndicator.tsx:14</td></tr>
+<tr><td class="mono">FauxTerminal</td><td class="where mono">packages/site/src/components/NodeGraph/FauxTerminal.tsx:75</td></tr>
+<tr><td class="mono">SCENARIOS</td><td class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:124</td></tr>
+<tr><td class="mono">LiveGraph</td><td class="where mono">packages/site/src/components/NodeGraph/LiveGraph.tsx:374</td></tr>
+<tr><td class="mono">NodeGraph</td><td class="where mono">packages/site/src/components/NodeGraph/NodeGraph.tsx:109</td></tr>
+<tr><td class="mono">SiteFooter</td><td class="where mono">packages/site/src/components/SiteFooter.tsx:24</td></tr>
+<tr><td class="mono">SiteHeader</td><td class="where mono">packages/site/src/components/SiteHeader.tsx:15</td></tr>
+<tr><td class="mono">SymbolBadge</td><td class="where mono">packages/site/src/components/SymbolBadge.tsx:20</td></tr>
+<tr><td class="mono">ThemeToggle</td><td class="where mono">packages/site/src/components/ThemeToggle.tsx:7</td></tr>
+<tr><td class="mono">UniversitySeal</td><td class="where mono">packages/site/src/components/UniversitySeal.tsx:6</td></tr>
+<tr><td class="mono">CategoryListPage</td><td class="where mono">packages/site/src/components/docs/CategoryListPage.tsx:49</td></tr>
+<tr><td class="mono">ContentPage</td><td class="where mono">packages/site/src/components/docs/ContentPage.tsx:12</td></tr>
+<tr><td class="mono">DocsSidebar</td><td class="where mono">packages/site/src/components/docs/DocsSidebar.tsx:21</td></tr>
+<tr><td class="mono">FlowPage</td><td class="where mono">packages/site/src/components/docs/FlowPage.tsx:10</td></tr>
+<tr><td class="mono">PortalPage</td><td class="where mono">packages/site/src/components/docs/PortalPage.tsx:9</td></tr>
+<tr><td class="mono">SymbolPage</td><td class="where mono">packages/site/src/components/docs/SymbolPage.tsx:28</td></tr>
+</table></div>
+<h3>Class families</h3><p class="meta">Classes grouped by their first word. A family with many classes and few uses is often one component written several ways.</p><div class="scroll"><table><tr><th>Family</th><th>Classes</th><th>Uses</th><th>Members</th></tr>
+</table></div>
+<h2 id="copy">Copy</h2><p class="meta">210 distinct user-visible strings. The vocabulary layer is decided from these.</p><div class="scroll"><table><tr><th>Text</th><th>Where</th></tr>
+<tr><td>Context engineering as a discipline. Why structured codebase context is the missing layer in AI-native development.</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:6</td></tr>
+<tr><td>The Manifesto</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:13</td></tr>
+<tr><td>Context engineering is a discipline</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:14</td></tr>
+<tr><td>The problem</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:23</td></tr>
+<tr><td>t an AI problem. It</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:30</td></tr>
+<tr><td>The insight</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:37</td></tr>
+<tr><td>#Components</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:47</td></tr>
+<tr><td>$Flows</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:53</td></tr>
+<tr><td>^Gates</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:59</td></tr>
+<tr><td>!Signals</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:65</td></tr>
+<tr><td>~Aspects</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:71</td></tr>
+<tr><td>Context as infrastructure</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:82</td></tr>
+<tr><td>.purpose</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:89</td></tr>
+<tr><td>The compounding effect</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:101</td></tr>
+<tr><td>Not just for AI</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:114</td></tr>
+<tr><td>An invitation</td><td class="where mono">packages/site/src/app/(marketing)/philosophy/page.tsx:127</td></tr>
+<tr><td>Agent Registry</td><td class="where mono">packages/site/src/app/agents/page.tsx:5</td></tr>
+<tr><td>Browse, discover, and install specialized AI agents built with Paradigm.</td><td class="where mono">packages/site/src/app/agents/page.tsx:6</td></tr>
+<tr><td>Paradigm Reviewer</td><td class="where mono">packages/site/src/app/agents/page.tsx:13</td></tr>
+<tr><td>Two-stage code review: spec compliance then code quality. Uses .purpose files for context.</td><td class="where mono">packages/site/src/app/agents/page.tsx:14</td></tr>
+<tr><td>Paradigm Tester</td><td class="where mono">packages/site/src/app/agents/page.tsx:21</td></tr>
+<tr><td>Writes and runs tests based on .purpose specifications. Validates gate implementations.</td><td class="where mono">packages/site/src/app/agents/page.tsx:22</td></tr>
+<tr><td>Paradigm Architect</td><td class="where mono">packages/site/src/app/agents/page.tsx:29</td></tr>
+<tr><td>Designs implementation plans for multi-file features. Reads .purpose files for architecture context.</td><td class="where mono">packages/site/src/app/agents/page.tsx:30</td></tr>
+<tr><td>Paradigm Security</td><td class="where mono">packages/site/src/app/agents/page.tsx:37</td></tr>
+<tr><td>Authorization, authentication, input validation analysis. Reads portal.yaml for gate verification.</td><td class="where mono">packages/site/src/app/agents/page.tsx:38</td></tr>
+<tr><td>The Armory</td><td class="where mono">packages/site/src/app/agents/page.tsx:49</td></tr>
+<tr><td>Search agents...</td><td class="where mono">packages/site/src/app/agents/page.tsx:56</td></tr>
+<tr><td>Featured Agents</td><td class="where mono">packages/site/src/app/agents/page.tsx:64</td></tr>
+<tr><td>Updates, tutorials, and deep dives on context engineering and AI-native development.</td><td class="where mono">packages/site/src/app/blog/page.tsx:7</td></tr>
+<tr><td>Introducing Paradigm 4.0: The Context Engineering Framework</td><td class="where mono">packages/site/src/app/blog/page.tsx:14</td></tr>
+<tr><td>Five symbols. Structured context. AI agents that actually know your codebase. Paradigm 4.0 is the biggest release yet.</td><td class="where mono">packages/site/src/app/blog/page.tsx:15</td></tr>
+<tr><td>What is Context Engineering?</td><td class="where mono">packages/site/src/app/blog/page.tsx:21</td></tr>
+<tr><td>Context engineering is the discipline of structuring information so AI systems can effectively use it. Here is why it matters.</td><td class="where mono">packages/site/src/app/blog/page.tsx:22</td></tr>
+<tr><td>The Voice</td><td class="where mono">packages/site/src/app/blog/page.tsx:32</td></tr>
+<tr><td>Portal Reference</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:56</td></tr>
+<tr><td>Not Found</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:58</td></tr>
+<tr><td>Documentation</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:192</td></tr>
+<tr><td>Getting Started</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:200</td></tr>
+<tr><td>Installation</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:205</td></tr>
+<tr><td>Install Paradigm and create your first project</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:206</td></tr>
+<tr><td>The Five Symbols</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:212</td></tr>
+<tr><td>Components, Flows, Gates, Signals, and Aspects</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:213</td></tr>
+<tr><td>Purpose Files</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:219</td></tr>
+<tr><td>Write and maintain .purpose files</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:220</td></tr>
+<tr><td>Symbol Reference</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:228</td></tr>
+<tr><td>Authorization</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:241</td></tr>
+<tr><td>View all gates and protected routes</td><td class="where mono">packages/site/src/app/docs/[[...slug]]/page.tsx:246</td></tr>
+<tr><td>%s | Paradigm Docs</td><td class="where mono">packages/site/src/app/docs/layout.tsx:9</td></tr>
+<tr><td>Paradigm documentation — auto-generated symbol reference, guides, flows, and portal.</td><td class="where mono">packages/site/src/app/docs/layout.tsx:11</td></tr>
+<tr><td>Paradigm — The Context Engineering Framework</td><td class="where mono">packages/site/src/app/layout.tsx:21</td></tr>
+<tr><td>The context engineering framework for AI-native development. Structure your codebase so AI agents understand it.</td><td class="where mono">packages/site/src/app/layout.tsx:25</td></tr>
+<tr><td>Structure your codebase so AI agents understand it. Five symbols. Infinite clarity.</td><td class="where mono">packages/site/src/app/layout.tsx:34</td></tr>
+<tr><td>Lesson Not Found</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:18</td></tr>
+<tr><td>University</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:43</td></tr>
+<tr><td>Key Concepts</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:68</td></tr>
+<tr><td>Check Your Understanding</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:80</td></tr>
+<tr><td>Lesson navigation</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:108</td></tr>
+<tr><td>&amp;larr; Previous</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:115</td></tr>
+<tr><td>Next &amp;rarr;</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:127</td></tr>
+<tr><td>Complete &amp;rarr;</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/lesson/[lessonId]/page.tsx:136</td></tr>
+<tr><td>Course Not Found</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/page.tsx:18</td></tr>
+<tr><td>Core Curriculum</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/page.tsx:48</td></tr>
+<tr><td>Extracurricular</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/page.tsx:50</td></tr>
+<tr><td>Syllabus</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/page.tsx:59</td></tr>
+<tr><td>&amp;rarr;</td><td class="where mono">packages/site/src/app/learn/course/[courseId]/page.tsx:69</td></tr>
+<tr><td>%s | Paradigm University</td><td class="where mono">packages/site/src/app/learn/layout.tsx:6</td></tr>
+<tr><td>Learn context engineering with structured courses, quizzes, and PLSAT certification.</td><td class="where mono">packages/site/src/app/learn/layout.tsx:8</td></tr>
+<tr><td>Core concepts, symbol system, .purpose files, and project setup.</td><td class="where mono">packages/site/src/app/learn/page.tsx:9</td></tr>
+<tr><td>Flows, gates, signals, and navigation. Building connected systems.</td><td class="where mono">packages/site/src/app/learn/page.tsx:17</td></tr>
+<tr><td>Aspects, ripple analysis, wisdom system, and multi-agent orchestration.</td><td class="where mono">packages/site/src/app/learn/page.tsx:25</td></tr>
+<tr><td>Sentinel observability, deployment, CI/CD integration, and production workflows.</td><td class="where mono">packages/site/src/app/learn/page.tsx:33</td></tr>
+<tr><td>PARA 501: Advanced Systems</td><td class="where mono">packages/site/src/app/learn/page.tsx:40</td></tr>
+<tr><td>Lore system, session intelligence, hook enforcement, and platform mastery.</td><td class="where mono">packages/site/src/app/learn/page.tsx:41</td></tr>
+<tr><td>Git Fundamentals</td><td class="where mono">packages/site/src/app/learn/page.tsx:48</td></tr>
+<tr><td>Git for AI-native development. Branching, commits, recovery, and CI/CD.</td><td class="where mono">packages/site/src/app/learn/page.tsx:49</td></tr>
+<tr><td>Agile Development</td><td class="where mono">packages/site/src/app/learn/page.tsx:57</td></tr>
+<tr><td>Agile practices for AI-native teams. Stories, sprints, reviews, and multi-agent workflows.</td><td class="where mono">packages/site/src/app/learn/page.tsx:58</td></tr>
+<tr><td>Paradigm University</td><td class="where mono">packages/site/src/app/learn/page.tsx:76</td></tr>
+<tr><td>Self-paced</td><td class="where mono">packages/site/src/app/learn/page.tsx:121</td></tr>
+<tr><td>PLSAT Certification</td><td class="where mono">packages/site/src/app/learn/page.tsx:135</td></tr>
+<tr><td>Paradigm Licensure Standardized Assessment Test</td><td class="where mono">packages/site/src/app/learn/page.tsx:138</td></tr>
+<tr><td>PLSAT — Paradigm Licensure Standardized Assessment Test</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:7</td></tr>
+<tr><td>99 randomized questions from the PARA 101-501 curriculum. 90 minutes. 90% to pass. Demonstrate your mastery of context engineering.</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:9</td></tr>
+<tr><td>PLSAT</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:18</td></tr>
+<tr><td>What Is the PLSAT?</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:33</td></tr>
+<tr><td>What It Covers</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:48</td></tr>
+<tr><td>Symbols, .purpose files, tags, logger, portal.yaml, project structure</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:53</td></tr>
+<tr><td>Flows, gates, aspects, anchors, disciplines, signal patterns</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:58</td></tr>
+<tr><td>History, fragility, wisdom, ripple analysis, navigation, protocols</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:63</td></tr>
+<tr><td>MCP tools, multi-agent coordination, orchestration, PM governance</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:68</td></tr>
+<tr><td>Advanced Systems</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:72</td></tr>
+<tr><td>Lore, Sentinel, session intelligence, hook enforcement, symphony</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:73</td></tr>
+<tr><td>Exam Details</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:79</td></tr>
+<tr><td>Questions</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:83</td></tr>
+<tr><td>Minutes</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:87</td></tr>
+<tr><td>Pass Threshold</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:91</td></tr>
+<tr><td>Choices per Question</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:95</td></tr>
+<tr><td>How to Prepare</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:101</td></tr>
+<tr><td>Complete the PARA courses.</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:106</td></tr>
+<tr><td>Practice with lesson quizzes.</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:113</td></tr>
+<tr><td>Review reference cards.</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:120</td></tr>
+<tr><td>Build a real project.</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:127</td></tr>
+<tr><td>How to Take the PLSAT</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:136</td></tr>
+<tr><td>Terminal</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:144</td></tr>
+<tr><td># Interactive terminal quiz\nparadigm university quiz plsat\n\n# Or launch the full University platform\nparadigm university serve</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:147</td></tr>
+<tr><td>Ready to certify?</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:157</td></tr>
+<tr><td>paradigm university serve</td><td class="where mono">packages/site/src/app/learn/plsat/page.tsx:158</td></tr>
+<tr><td>Ready to give your AI agents real context?</td><td class="where mono">packages/site/src/app/sections/CTASection.tsx:8</td></tr>
+<tr><td>use client</td><td class="where mono">packages/site/src/app/sections/HeroSection.tsx:1</td></tr>
+<tr><td>AI&amp;nbsp;agents understand&amp;nbsp;it</td><td class="where mono">packages/site/src/app/sections/HeroSection.tsx:47</td></tr>
+<tr><td>noopener noreferrer</td><td class="where mono">packages/site/src/app/sections/HeroSection.tsx:74</td></tr>
+<tr><td>One command adds a .paradigm/ directory to your project with a config file and navigator.</td><td class="where mono">packages/site/src/app/sections/HowItWorksSection.tsx:11</td></tr>
+<tr><td>paradigm scan\` to index</td><td class="where mono">packages/site/src/app/sections/HowItWorksSection.tsx:17</td></tr>
+<tr><td>Add .purpose files to your directories. They tell agents what each part of your codebase does.</td><td class="where mono">packages/site/src/app/sections/HowItWorksSection.tsx:22</td></tr>
+<tr><td>Agents use Paradigm MCP tools to navigate, check impact, and validate changes before writing code.</td><td class="where mono">packages/site/src/app/sections/HowItWorksSection.tsx:42</td></tr>
+<tr><td>add OAuth</td><td class="where mono">packages/site/src/app/sections/HowItWorksSection.tsx:44</td></tr>
+<tr><td>How it works</td><td class="where mono">packages/site/src/app/sections/HowItWorksSection.tsx:65</td></tr>
+<tr><td>MCP Tools</td><td class="where mono">packages/site/src/app/sections/MetricsSection.tsx:8</td></tr>
+<tr><td>For AI agents</td><td class="where mono">packages/site/src/app/sections/MetricsSection.tsx:8</td></tr>
+</table></div></main></body></html>

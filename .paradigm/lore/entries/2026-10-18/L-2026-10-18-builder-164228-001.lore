@@ -1,0 +1,34 @@
+id: L-2026-10-18-builder-164228-001
+type: milestone
+timestamp: '2026-10-18T16:42:28.222Z'
+author: builder
+title: M1.8 slice 2 committed (77e59cf3)
+summary: Root-signed local config + runner pin + daemon wiring, per-task endpoint choice, daemon-start probe, steer, compaction in gnomon-local; gnomon 942 pass, gnomon-local 83, contracts 316, mod-sdk 3, tsc clean
+symbols_touched:
+  - '#local-runner'
+  - '#gnomon-local'
+  - '#supervisor'
+files_modified:
+  - packages/gnomon/src/kernel/local/config.ts
+  - packages/gnomon/src/kernel/supervisor/local-session.ts
+  - packages/gnomon/src/kernel/lifecycle/daemon.ts
+  - docs/specs/gnomon.md
+files_created:
+  - packages/gnomon/test/local-config.test.ts
+  - packages/gnomon-local/src/compaction.ts
+  - packages/gnomon-local/test/compaction.test.ts
+commit: 77e59cf3
+learnings:
+  - 'Deferred: darwin sandboxed e2e rig (G-LCL-06'
+  - G-LCL-01 fake half
+  - 6-child G-LAW-01c)
+  - gnomon probe local CLI verb
+  - claude estimate on the fallback card
+  - JSONL session tree
+  - bash/edit tools
+  - local automations (law 5)
+body: No new symbols, so no Appendix A rows; no allowlist additions; dispatch.ts untouched.
+git_context:
+  ref: 77e59cf30ba18c55d5a3277738748b5d62c3c5ba
+  branch: gnomon/m18-slice2
+  dirty: false

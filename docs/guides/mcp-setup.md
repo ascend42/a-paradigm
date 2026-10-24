@@ -68,7 +68,7 @@ Dynamic: [Minimal context] → [Need #checkout info?] → [Query MCP] → [Conti
 Before setting up MCP, ensure you have:
 
 1. **A Paradigm project** — Run `paradigm shift` if you haven't already
-2. **Node.js 18+** — Required for the MCP server
+2. **Node.js 24+** — Required for the MCP server
 3. **A supported AI client** — Claude Code, Cursor, Claude Desktop, Continue, or Cline
 
 > **Claude Code users:** The fastest path is the Claude Code plugin — it handles both enforcement hooks and MCP in one step. See [Claude Code Plugin](#claude-code-plugin) below. If you prefer manual config without the plugin, see [Claude Code (Manual)](#claude-code-manual) in the Manual Setup section.
@@ -162,15 +162,16 @@ The Claude Code plugin is the recommended install path. It configures MCP, enfor
 **Install:**
 ```
 /plugin marketplace add ascend42/a-paradigm
+/plugin install paradigm@a-paradigm
 ```
 
-Restart Claude Code after installing. All 150+ Paradigm MCP tools will be available immediately in every project.
+Restart Claude Code after installing. Paradigm's 32 grouped MCP tools (more on demand via `paradigm_tool_activate`) will be available immediately in every project.
 
 **What the plugin provides vs per-project setup:**
 
 | | Plugin | `paradigm mcp setup --client claude-code` |
 |---|---|---|
-| **MCP tools** | All 150+, globally for every project | Per-project config in `~/.claude/claude.json` |
+| **MCP tools** | 32 grouped tools (more on demand), globally for every project | Per-project config in `~/.claude/claude.json` |
 | **Enforcement hooks** | Stop, PreToolUse, PostToolUse | Must run `paradigm hooks install --claude-code` separately |
 | **Skills** | `/paradigm:init`, `/paradigm:shift`, `/paradigm:scan`, etc. | Not included |
 | **Agents** | architect, builder, reviewer, security, tester (5 bundled) | Not included |

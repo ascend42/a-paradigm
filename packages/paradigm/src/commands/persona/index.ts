@@ -30,6 +30,8 @@ interface PersonaStep {
   produces?: Record<string, string>;
   spawns?: Array<{ persona: string; at_step?: string }>;
   signals?: string[];
+  headers?: Record<string, string>;
+  payload?: Record<string, unknown>;
 }
 
 interface Persona {

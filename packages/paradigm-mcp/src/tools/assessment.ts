@@ -23,7 +23,6 @@ import {
 import {
   loadArcs,
   loadArc,
-  createArc,
   closeArc,
   loadEntries,
   loadEntry,

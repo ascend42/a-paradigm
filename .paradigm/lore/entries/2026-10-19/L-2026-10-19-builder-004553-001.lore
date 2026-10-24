@@ -1,0 +1,36 @@
+id: L-2026-10-19-builder-004553-001
+type: milestone
+timestamp: '2026-10-19T00:45:53.216Z'
+author: builder
+title: 'M1.13 slice 1: Gnomon.app (macOS) — double-click wrapper, signed and notarized'
+summary: packages/gnomon-wrapper ships as a Tauri 2.12.4 app that spawns 'gnomon up --wrapper' with a clean env, reads the launch grant on a private stdout pipe (gnomon-wrapper-channel:v1), verifies the bundle pin, its own hello serverSig (ed25519-dalek) and the served bytes natively, then navigates to the one loopback origin. No page IPC, locked navigation, devtools debug-only, empty entitlements. Close hides, Cmd-Q stops the kernel. Built, Developer-ID signed, notarized (Accepted) and stapled.
+symbols_touched:
+  - '#gnomon-wrapper'
+  - '#gnomon-up'
+  - '#dev-launch'
+  - '#gui'
+  - '#web-endpoint'
+commit: 60989ae1
+learnings:
+  - 'tauri 2.11.5 does not compile against the tauri-runtime 2.12 cargo resolves: pin 2.12.4 + tauri-build 2.7.3'
+  - 'Node child stdio pipes on macOS are socketpairs (fstat isSocket) while Rust Command uses real FIFOs: a channel check must accept both'
+  - invoke_system with a keyless stub removes the only page-visible copy of the Tauri invoke key
+  - 'the app topology inverted mid-task: the app is the parent and the kernel child writes the grant on its stdout pipe'
+  - 'a GUI change moves GUI_BUNDLE_HASH which the wrapper compiles in: rebuild the app with the GUI'
+tags:
+  - gnomon
+  - M1.13
+  - wrapper
+  - tauri
+  - milestone
+linked_commits:
+  - e8a5bf16
+  - 32e0c3df
+  - 5b16c099
+  - 249de987
+  - 60989ae1
+confidence: 0.85
+git_context:
+  ref: 60989ae14d210401271607b157ecd0ca3a5718e0
+  branch: gnomon/m113-wrapper
+  dirty: false

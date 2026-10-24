@@ -10,8 +10,6 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { trackToolCall } from './context.js';
 
-const enforcementConfiguredThisSession = new Set<string>();
-
 interface ToolContext {
   rootDir: string;
 }
