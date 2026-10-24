@@ -10,7 +10,7 @@
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import * as net from 'node:net';
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -34,6 +34,7 @@ import {
   type DaemonHandle,
 } from '../src/kernel/lifecycle/index.js';
 import { readKernelPubs, recordKernelPub } from '../src/kernel/identity/index.js';
+import { gitPath } from '../src/kernel/git/verb-exec.js';
 import { PKG_ROOT } from './helpers.js';
 import { tempHome } from './daemon-helpers.js';
 
@@ -100,6 +101,23 @@ describe('home resolution', () => {
     const link = `${h}-link`;
     symlinkSync(h, link);
     expect(() => ensureGnomonHome(link)).toThrow(/not a plain directory/);
+  });
+});
+
+describe('shutdown leaves no writer behind', () => {
+  // The start-up push config capture (#git-verbs, Aegis H1) is fire-and-forget: it spawns git several times and
+  // writes <home>/git-verbs/{gitconfig.<pid>.<ms>, ssh_config, gitconfig}. Shutdown resolving before it settled let
+  // those writes land after the lock was released, racing a successor kernel and the tests' rmSync of the home
+  // (ENOTEMPTY in afterEach, or a recreated home leaked in TMPDIR).
+  it('the push config capture has settled when shutdown resolves: no temp file, and nothing more is written', async () => {
+    const h = home();
+    const d = await startDaemon({ home: h, idleMs: 60_000 });
+    await d.shutdown('signal'); // at once: the capture is still spawning git
+    const dir = path.join(h, 'git-verbs');
+    const entries = existsSync(dir) ? readdirSync(dir).sort() : [];
+    expect(entries.filter((e) => e.startsWith('gitconfig.'))).toEqual([]); // no half-made snapshot
+    if (gitPath()) expect(entries).toContain('gitconfig'); // the capture finished before shutdown resolved
+    else expect(entries).toEqual([]);
   });
 });
 

@@ -536,6 +536,34 @@ describe('git.verb rows (contracts, 8.0:git-verbs)', () => {
   });
 });
 
+describe('push config capture and close() (daemon shutdown)', () => {
+  it('close() resolves only once a capture in flight has written its snapshot; after close no capture starts', async () => {
+    const w = world();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const calls: string[][] = [];
+    const exec: Exec = async (bin, args, x) => {
+      calls.push([...args]);
+      if (calls.length === 1) await gate; // hold the first git call: the capture is in flight
+      return execTool(bin, args, x);
+    };
+    const verbs = new GitVerbs({ log: async () => undefined, gnomonHome: w.gnomonHome, userHome: () => w.userHome, exec, env: () => ({ PATH: ENV.PATH }) });
+    const capture = verbs.refreshPushConfig();
+    let closed = false;
+    const closing = verbs.close().then(() => (closed = true));
+    await new Promise((r) => setImmediate(r));
+    expect(closed).toBe(false); // still waiting on the held capture
+    release();
+    await closing;
+    expect(fs.existsSync(path.join(w.gnomonHome, 'git-verbs', 'gitconfig'))).toBe(true);
+    expect(fs.readdirSync(path.join(w.gnomonHome, 'git-verbs')).filter((e) => e.startsWith('gitconfig.'))).toEqual([]);
+    const snap = await capture;
+    const n = calls.length;
+    expect(await verbs.refreshPushConfig()).toBe(snap); // closed: the snapshot it has, no new capture
+    expect(calls.length).toBe(n);
+  });
+});
+
 describe('Aegis M2: no git verbs on win32 (where the refusal lives: SessionSupervisor\'s constructor, supervisor.ts #gitVerbs)', () => {
   it('a win32 supervisor serves no kernel verbs; darwin does', async () => {
     const { SessionSupervisor } = await import('../src/kernel/supervisor/supervisor.js');

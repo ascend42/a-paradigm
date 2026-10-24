@@ -648,6 +648,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           /* shutdown before voice existed */
         }
         await server?.close();
+        try {
+          // #git-verbs: the start-up push config capture writes under the home; it settles before the lock is released
+          await gitVerbs.close();
+        } catch {
+          /* shutdown before the git verbs existed */
+        }
         clearInterval(diagTimer);
         clearInterval(tokenTimer);
         clearInterval(brokerTimer);

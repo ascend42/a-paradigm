@@ -178,21 +178,42 @@ export class GitVerbs {
 
   /** Aegis H1: the kernel's push config snapshot (verb-exec.ts capturePushConfig); null until captured */
   #pushConfig: PushConfigSnapshot | null = null;
+  /** captures in flight (each writes under <home>/git-verbs): close() waits for them, so none writes after the daemon stops */
+  readonly #capturing = new Set<Promise<unknown>>();
+  #closed = false;
 
   constructor(o: GitVerbsOptions) {
     this.#o = o;
   }
 
-  /** Aegis H1: (re)capture the push config snapshot from the human's credential and ssh settings (daemon start). */
+  /**
+   * Aegis H1: (re)capture the push config snapshot from the human's credential and ssh settings (daemon start).
+   * After close() no capture starts (the current snapshot, or null ⇒ GIT_CONFIG_GLOBAL=/dev/null, is returned).
+   */
   async refreshPushConfig(): Promise<PushConfigSnapshot | null> {
+    if (this.#closed) return this.#pushConfig;
     const git = (this.#o.git ?? gitPath)();
     if (!git) return null;
+    const capture = capturePushConfig({ dir: path.join(this.#o.gnomonHome, 'git-verbs'), git, userHome: this.#o.userHome(), exec: this.#exec(), from: this.#env() });
+    this.#capturing.add(capture);
     try {
-      this.#pushConfig = await capturePushConfig({ dir: path.join(this.#o.gnomonHome, 'git-verbs'), git, userHome: this.#o.userHome(), exec: this.#exec(), from: this.#env() });
+      this.#pushConfig = await capture;
     } catch {
       this.#pushConfig = null;
+    } finally {
+      this.#capturing.delete(capture);
     }
     return this.#pushConfig;
+  }
+
+  /**
+   * Daemon shutdown: no capture starts after this, and every capture in flight has settled (its files written or
+   * failed) when it resolves. The daemon's start-up capture is fire-and-forget; without this it kept spawning git and
+   * writing <home>/git-verbs/{gitconfig,ssh_config} after shutdown resolved and the daemon lock was released.
+   */
+  async close(): Promise<void> {
+    this.#closed = true;
+    await Promise.allSettled([...this.#capturing]);
   }
 
   /** The env of a network git/gh call: scrubbed, under the kernel's config snapshot, the common dir pinned to the repo's own. */

@@ -2772,6 +2772,13 @@ components:
       per session (L5); gh api user is a `lookup` row (L6). Session file
       writes are deny-by-default (T-2026-10-23-004, policy.writeAllow,
       probe p10m-write-allow, test/write-allow-sandbox.test.ts).
+      GitVerbs.close() (daemon shutdown, $daemon-lifecycle): no snapshot
+      capture starts after it, and every capture in flight (the daemon's
+      fire-and-forget start-up refreshPushConfig spawns git several times and
+      writes <home>/git-verbs/{gitconfig.<pid>.<ms>, ssh_config, gitconfig})
+      settles before shutdown releases the daemon lock, so no write lands in
+      the home after shutdown resolves (it raced a successor kernel and the
+      tests' rmSync of the home: ENOTEMPTY in afterEach, leaked temp homes).
     path: src/kernel/git/
     type: module
     tags: [gnomon, kernel, git, security, paradigm-8]
@@ -2780,6 +2787,7 @@ components:
       - test/git-verbs.test.ts
       - test/git-verbs-sandbox.test.ts
       - test/write-allow-sandbox.test.ts
+      - test/daemon-lifecycle.test.ts
 
   kernel-mcp:
     description: >-
