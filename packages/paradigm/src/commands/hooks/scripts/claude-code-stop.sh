@@ -121,9 +121,8 @@ rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
-rm -f ".paradigm/.orchestrated"
-# NOTE: .solo-declared / .team-prompted / .team-reminded / .team-bypass-recorded
-# are deliberately NOT cleared here — Stop fires per assistant turn, and clearing
+# NOTE: .orchestrated / .solo-declared / .team-prompted / .team-reminded /
+# .team-bypass-recorded are deliberately NOT cleared here — Stop fires per assistant turn, and clearing
 # would erase solo declarations mid-session and re-nag every turn. They expire
 # by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 

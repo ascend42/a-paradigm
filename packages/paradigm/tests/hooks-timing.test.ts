@@ -117,6 +117,7 @@ describe('plugin hooks close their pipes within budget', () => {
     ['UserPromptSubmit', 'paradigm-prompt-gate.sh', { hook_event_name: 'UserPromptSubmit', prompt: 'implement a feature' }],
     ['PostToolUse Write', 'paradigm-postwrite.sh', { hook_event_name: 'PostToolUse', tool_name: 'Write' }],
     ['PostToolUse Skill', 'paradigm-skill-used.sh', { hook_event_name: 'PostToolUse', tool_name: 'Skill', tool_input: { skill: 'pdg-x' } }],
+    ['PostToolUse Agent', 'paradigm-delegation.sh', { hook_event_name: 'PostToolUse', tool_name: 'Agent', tool_input: { subagent_type: 'paradigm:architect' }, tool_response: 'ok' }],
   ];
   for (const [label, script, input] of cases) {
     it(`${label}: exits and closes the pipe within budget`, async () => {

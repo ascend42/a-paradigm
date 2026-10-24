@@ -85,6 +85,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/paradigm-delegation.sh",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

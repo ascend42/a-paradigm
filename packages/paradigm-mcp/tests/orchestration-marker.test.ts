@@ -65,6 +65,12 @@ describe('recordOrchestrationCompletion (helper contract)', () => {
     expect(typeof marker!.timestamp).toBe('string');
   });
 
+  it("round-trips source:'delegation' (the shell delegation hook's source)", () => {
+    expect(recordOrchestrationCompletion(tmpDir, { verdicts: 1, source: 'delegation' })).toBe(true);
+    const marker = readMarker();
+    expect(marker).toMatchObject({ type: 'orchestrated', verdicts: 1, source: 'delegation' });
+  });
+
   it('is best-effort: a write failure returns false and does not throw', () => {
     // Point rootDir at a path whose `.paradigm` is actually a FILE, so mkdir/write fails.
     const badRoot = path.join(tmpDir, 'bad');

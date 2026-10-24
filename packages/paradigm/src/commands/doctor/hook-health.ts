@@ -52,7 +52,7 @@ const GRACE_MS = 5000;
  * rest. Keep in sync with HOOK_ALLOW in scripts/claude-code-session-start.sh.
  */
 export const HOOK_NAMES: readonly string[] = Object.freeze([
-  'SessionStart', 'Stop', 'PreToolUse-Bash', 'PreToolUse-Glob', 'PreToolUse-Write', 'UserPromptSubmit', 'PostToolUse-Write', 'PostToolUse-Skill',
+  'SessionStart', 'Stop', 'PreToolUse-Bash', 'PreToolUse-Glob', 'PreToolUse-Write', 'UserPromptSubmit', 'PostToolUse-Write', 'PostToolUse-Skill', 'PostToolUse-Agent',
 ]);
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 

@@ -1069,9 +1069,11 @@ if [ "$_SEV" != "off" ]; then
       [ -f "$1" ] || return 1
       [ -n "$(find "$1" -mmin "-$_GATE_TTL_MIN" 2>/dev/null)" ]
     }
-    # A structured solo declaration (paradigm solo <reason>) satisfies the gate —
-    # bypass becomes a legible recorded choice instead of silent drift.
-    if [ ! -f ".paradigm/.orchestrated" ] && ! _marker_fresh ".paradigm/.solo-declared"; then
+    # A fresh orchestration marker (settlement, debrief, or a roster-agent
+    # delegation via the PostToolUse Agent|Task hook) or a structured solo
+    # declaration (paradigm solo <reason>) satisfies the gate — bypass becomes a
+    # legible recorded choice instead of silent drift.
+    if ! _marker_fresh ".paradigm/.orchestrated" && ! _marker_fresh ".paradigm/.solo-declared"; then
       # Record the bypass to the team-funnel telemetry regardless of severity —
       # the invocation-rate metric needs the event even when only warning.
       # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
@@ -1087,14 +1089,14 @@ if [ "$_SEV" != "off" ]; then
       if [ "$_SEV" = "block" ]; then
         VIOLATIONS="$VIOLATIONS
   - Task magnitude $MAGNITUDE >= $ORCH_THRESHOLD without orchestration ($MAGNITUDE_REASONS).
-    Run paradigm_orchestrate_inline mode=\"quick\" for fast pre-check.
-    Or declare solo explicitly: paradigm solo <trivial|hotfix|user-directed|exploratory>
+    Delegate to a roster agent, run a debrief, or declare solo explicitly:
+    paradigm solo <trivial|hotfix|user-directed|exploratory>
     Override: paradigm enforcement override orchestration-required warn"
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
   - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration.
-    Bypass recorded to team-funnel telemetry. Next time: orchestrate, or declare \`paradigm solo <reason>\`."
+    Bypass recorded to team-funnel telemetry. Next time: delegate to a roster agent, run a debrief, or declare \`paradigm solo <reason>\`."
       fi
     fi
   fi

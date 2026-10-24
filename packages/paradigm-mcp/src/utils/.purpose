@@ -335,7 +335,7 @@ components:
       - '#journal-loader'
       - '#session-work-log'
   orchestration-marker:
-    description: 'v7 "Teeth" T-005 — single best-effort writer of the .paradigm/.orchestrated enforcement marker that satisfies the Stop-hook orchestration-required gate. recordOrchestrationCompletion(rootDir, {verdicts, source}) writes { timestamp, type:orchestrated, verdicts, source }. Called ONLY from real completion signals (a chainLive settlement in task-settlement.ts, or a debrief with real agent verdicts in captain.ts) — never on orchestrate_inline tool entry. Enforcement now verifies completion (verdicts>0), not invocation. Write failures are logged and swallowed so settlement/debrief never break.'
+    description: 'v7 "Teeth" T-005 — single best-effort writer of the .paradigm/.orchestrated enforcement marker that satisfies the Stop-hook orchestration-required gate. recordOrchestrationCompletion(rootDir, {verdicts, source}) writes { timestamp, type:orchestrated, verdicts, source }. Called ONLY from real completion signals (a chainLive settlement in task-settlement.ts, or a debrief with real agent verdicts in captain.ts) — never on orchestrate_inline tool entry. Enforcement now verifies completion (verdicts>0), not invocation. Write failures are logged and swallowed so settlement/debrief never break. Source union is settlement | debrief | delegation: the delegation source is written by the Claude Code PostToolUse Agent|Task shell hook (#delegation-hook, claude-code-delegation.sh) with the same payload shape plus a subagent field. Readers honour the marker by age (PARADIGM_GATE_TTL_HOURS, default 4h).'
     type: utility
     tags:
       - enforcement
