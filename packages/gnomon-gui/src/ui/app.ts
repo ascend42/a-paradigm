@@ -33,6 +33,8 @@ import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } 
 import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
 import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
+import { renderHostSlips, wireHostSlips } from './host-slip.js';
+import { copyTextOf, hostHintsOf, type HostHint } from '../core/host-hints.js';
 import { bindInlineRename, planRename, renameRequest, type RenameBinding } from '../core/rename.js';
 import { chatItems, derivedTitle, rowDetail, durationText, foldActivity, foldRaw, groupHue, rawFoldKey, GuiStore, isLiveState, replyParts, rowOf, sessionFullTitle, sessionNote, sessionTitle, splitActivePast, UNSCOPED, type ChatItem, type FoldedItem, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
@@ -494,7 +496,58 @@ function itemEl(it: FoldedItem): HTMLElement {
     return h(doc, 'div', { class: 'trow role-raw-detail' }, h(doc, 'pre', { class: 'raw-line', tabindex: '0', 'aria-label': 'the whole line' }, it.text)) as unknown as HTMLElement;
   }
   const slips = slipsAt.get(it.key) ?? [];
-  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : ''}` }, ...body, ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+  // #gui-host-hints: the reply text above is shown verbatim; a host slip under it says the Gnomon way
+  const host = it.role === 'assistant' && !rawMode ? hostHintsFor(it.key, it.text) : [];
+  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : ''}` }, ...body, ...renderHostSlips(doc, it.key, host, hostCopied), ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+}
+
+/* ── #gui-host-hints (founder 2026-10-23): host slips under a reply that names what does not run in Gnomon ── */
+/** the hints each mounted reply drew (the Copy key copies from here: the same string its <code> shows) */
+const hostAt = new Map<string, { text: string; hints: HostHint[] }>();
+let hostCopied: string | null = null;
+let hostCopiedTimer: ReturnType<typeof setTimeout> | null = null;
+function hostHintsFor(key: string, text: string): HostHint[] {
+  const had = hostAt.get(key);
+  if (had && had.text === text) return had.hints;
+  const hints = hostHintsOf(text);
+  if (hints.length) hostAt.set(key, { text, hints });
+  else hostAt.delete(key);
+  if (hostAt.size > 400) hostAt.delete(hostAt.keys().next().value!);
+  return hints;
+}
+/** Copy: a trusted press writes the slip's shown command to the clipboard; nothing runs. No clipboard: select it for ⌘C. */
+function onHostCopy(ref: string, e: Event): void {
+  if (!e.isTrusted) return;
+  const cut = ref.lastIndexOf(':');
+  const item = ref.slice(0, cut);
+  const hint = hostAt.get(item)?.hints[Number(ref.slice(cut + 1))];
+  const cmd = hint ? copyTextOf(hint) : null;
+  if (cmd === null) return;
+  const selectIt = (): void => {
+    const code = $('viewport').querySelector(`[data-host-cmd="${CSS.escape(ref)}"]`);
+    const sel = window.getSelection();
+    if (!code || !sel) return;
+    const r = document.createRange();
+    r.selectNodeContents(code);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    notice('Selected the command: press ⌘C to copy it', 'info', { source: 'host-copy' });
+  };
+  if (!navigator.clipboard?.writeText) return selectIt();
+  navigator.clipboard.writeText(cmd).then(
+    () => {
+      hostCopied = ref;
+      remountItem(item);
+      paintTranscript();
+      if (hostCopiedTimer) clearTimeout(hostCopiedTimer);
+      hostCopiedTimer = setTimeout(() => {
+        hostCopied = null;
+        remountItem(item);
+        paintTranscript();
+      }, 2000);
+    },
+    selectIt,
+  );
 }
 
 /* ── #gui-offer-slip (TD-2026-10-20-812 O1): the margin slips under the reply that offered (core/offers.ts) ── */
@@ -3481,6 +3534,8 @@ function wire(): void {
     if (had) ($('viewport').querySelector(`[data-act="${CSS.escape(k)}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
   };
   wireOfferSlips($('viewport'), onOfferAct); // #gui-offer-slip: trusted Open (two-step) / not now
+  // #gui-host-hints: Copy (the shown command to the clipboard) and open (a Gnomon screen), trusted presses only
+  wireHostSlips($('viewport'), { copy: onHostCopy, open: (id, e) => run(id, e.isTrusted) });
   $('viewport').addEventListener('click', (e) => {
     const c = (e.target as HTMLElement).closest('.choices.live [data-choice]') as HTMLElement | null;
     if (c) return onChoice(e, c);

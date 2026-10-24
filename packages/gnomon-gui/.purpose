@@ -1174,6 +1174,37 @@ components:
       answers request.offer.decide with offer.decided. Tests:
       test/offers.test.ts.
     signals: []
+  gui-host-hints:
+    description: >-
+      #gui-host-hints (founder request 2026-10-23, the "pre-sanitization";
+      design-system host-slip, proposed). core/host-hints.ts (PURE) is the
+      ONE mapping table from an instruction a headless Gnomon session cannot
+      do to the Gnomon way: slash commands (HOST_SLASH_TABLE: /plugin … to
+      the `claude plugin …` CLI with a Copy key, /mcp to Settings › MCP
+      servers, /config and /settings to Settings, /permissions to Rules,
+      /clear /new /compact to New session, /login to `claude` then /login,
+      /doctor to `claude doctor`; BUILTINS and any /command after run, type,
+      use, enter or try, or a namespaced one, get the generic "Slash
+      commands don't run in Gnomon."), "restart the session / Claude Code"
+      (New session) and "run claude …" (`claude plugin …` copied, `claude
+      mcp …` to MCP servers, `claude` / --resume to New session). A slash
+      command counts in a code span that starts with it, at a line start
+      (fences, "$ " prompts, list bullets) or after a verb; paths, HTTP
+      routes, URLs and bare prose never count. A copied command is built
+      from the table plus a SAFE_ARG token (no spaces, quotes or shell
+      metacharacters), else the slip falls back to words; at most 3 hints
+      per reply, deduplicated. The reply text is NEVER rewritten: app.ts
+      itemEl draws the hints (hostHintsFor, cached per item and text) as
+      host slips after the unchanged body, not in the raw view.
+      ui/host-slip.ts: renderHostSlips (the offer-slip paper, flat, the ⊙
+      gnomon glyph, tab "in Gnomon · <instruction>" as code, the GUI line,
+      the command in a mono <code class=host-cmd>, one quiet key: Copy or the
+      screen's name) and wireHostSlips (trusted clicks only; open runs a
+      HOST_OPEN_IDS palette command; Copy writes the drawn hint's command,
+      the same string the <code> shows, with navigator.clipboard, else
+      selects it and says ⌘C). Recognition never sends, appends or runs
+      anything. Kernel half: #host-guidance. Tests: test/host-hints.test.ts.
+    signals: []
   gui-table-talk:
     description: >-
       #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block
