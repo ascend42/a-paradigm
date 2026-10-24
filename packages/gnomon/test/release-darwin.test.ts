@@ -157,6 +157,10 @@ describe('#release-darwin --dry-run --unsigned', () => {
     expect(s.zip).toBeNull();
     const lock = rel.nodeLockFor(process.arch === 'x64' ? 'x64' : 'arm64');
     expect(s.plan).toContain(`fetch ${lock.url} (sha256 ${lock.sha256})`);
+    // build-voice-io.mjs imports gnomon-contracts' dist: a fresh checkout must build it before the native helpers
+    const contracts = s.plan.indexOf('npm run build -w @a-company/gnomon-contracts');
+    expect(contracts).toBeGreaterThanOrEqual(0);
+    expect(contracts).toBeLessThan(s.plan.indexOf('build GnomonVoiceIO.app'));
     expect(s.plan.indexOf('cargo tauri build --bundles app --no-sign (GNOMON_WRAPPER_BUNDLE_STAGE)')).toBeGreaterThan(s.plan.findIndex((p) => p.startsWith('codesign ') && p.includes('node')));
     // the kernel ships zero runtime deps: no node_modules beside it; the voice client carries its own
     expect(existsSync(path.join(s.app, 'Contents/Resources/kernel/node_modules'))).toBe(false);
