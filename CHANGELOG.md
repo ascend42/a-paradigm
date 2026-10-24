@@ -5,9 +5,9 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [8.0.1] — 2026-10-24
+## [8.0.2] — 2026-10-24
 
-**Gnomon 8.0 for testers, with loops switched off for this round.** 8.0.0 is skipped: `@a-company/paradigm@8.0.0` was published from the wrong checkout on 2026-10-22 and unpublished, and npm never reuses a version, so the real 8.0 ships as 8.0.1. Everything in the 8.0.0 notes below applies to 8.0.1. The 8.0.0 entry stays in this file as the feature list.
+**Gnomon 8.0 for testers, with loops switched off for this round.** 8.0.1 is skipped too: it reached only the Claude Code plugin, as a partial build for a few hours on 2026-10-24, and was never published to npm. 8.0.2 is the first npm release of 8.0, and its new version makes every plugin install refresh. 8.0.0 is skipped: `@a-company/paradigm@8.0.0` was published from the wrong checkout on 2026-10-22 and unpublished, and npm never reuses a version, so the real 8.0 ships as 8.0.2. Everything in the 8.0.0 notes below applies to 8.0.2. The 8.0.0 entry stays in this file as the feature list.
 
 ### Changed
 - **Loops are off in release builds** (`#loops-gate`, TD-2026-10-24-447, G-LOOP-29). The signed Gnomon.app bundles no Paradigm CLI, so builtin loop checks (flow-check, purpose-validate, drift, reindex, ripple) could only end in `error`. Until the builtins ship inside Gnomon (8.1, T-2026-10-22-016), the kernel builds no loop registry, runner, timers or watchers in a release build, and every `request.loop.*`, `loop.request` and `gnomon loop *` is refused with "Loops are off in this build. They arrive in Gnomon 8.1." `GNOMON_LOOPS` can never turn them on in a release build. Existing loop files and log rows stay on disk, untouched and inert. The desk hides the loops word, shows one line in the Loops view and hides stale loop cards.

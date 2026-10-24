@@ -6,7 +6,8 @@
  * packages/gnomon/package.json `version`; this script makes everything else follow it, exactly (no ranges):
  *   - packages/gnomon-darwin-arm64/package.json `version` (Apple silicon only in 8.0, TD-2026-10-22-310);
  *   - packages/gnomon/package.json `optionalDependencies` for the platform package (and nothing else);
- *   - packages/paradigm/package.json `dependencies["@a-company/gnomon"]`.
+ *   - packages/paradigm/package.json `dependencies["@a-company/gnomon"]`;
+ *   - packages/paradigm-mcp/package.json `dependencies["@a-company/gnomon"]` (8.0.2: it drifted, the 8.0.1 bump fixed it by hand).
  * It never bumps paradigm's own version (the 8.0.0 release bump is M5).
  *
  *   node scripts/sync-gnomon-versions.mjs          rewrite what drifted, print each change
@@ -25,6 +26,7 @@ export const platformPackageName = (arch) => `@a-company/gnomon-darwin-${arch}`;
 const files = (root) => ({
   gnomon: path.join(root, 'packages', 'gnomon', 'package.json'),
   paradigm: path.join(root, 'packages', 'paradigm', 'package.json'),
+  paradigmMcp: path.join(root, 'packages', 'paradigm-mcp', 'package.json'),
   platforms: Object.fromEntries(ARCHES.map((a) => [a, path.join(root, 'packages', `gnomon-darwin-${a}`, 'package.json')])),
 });
 const read = (f) => JSON.parse(readFileSync(f, 'utf8'));
@@ -52,8 +54,10 @@ export function gnomonVersionDrift(root = REPO) {
       drift.push({ file: f.gnomon, field: `optionalDependencies.${name}`, have, want: undefined });
     }
   }
-  const dep = read(f.paradigm).dependencies?.['@a-company/gnomon'];
-  if (dep !== want) drift.push({ file: f.paradigm, field: 'dependencies.@a-company/gnomon', have: dep, want });
+  for (const file of [f.paradigm, f.paradigmMcp]) {
+    const dep = read(file).dependencies?.['@a-company/gnomon'];
+    if (dep !== want) drift.push({ file, field: 'dependencies.@a-company/gnomon', have: dep, want });
+  }
   return drift;
 }
 

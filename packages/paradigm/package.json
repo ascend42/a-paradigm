@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "8.0.1",
+  "version": "8.0.2",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,7 +34,7 @@
     "prepublishOnly": "node scripts/check-gnomon-published.mjs && npm run build"
   },
   "dependencies": {
-    "@a-company/gnomon": "8.0.1",
+    "@a-company/gnomon": "8.0.2",
     "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
     "@a-company/university-core": "*",
