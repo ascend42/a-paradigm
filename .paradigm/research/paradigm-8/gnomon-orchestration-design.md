@@ -329,12 +329,19 @@ There are two models in v1: risk and per-human preference. The model each role r
 - **Recovery reads a stale global checkpoint** (session-tracker.ts:407-413 vs :487) → confirm with P2, then file it under the framework-bug protocol (Cid).
 - **The contract batch is heavy** → one move.
 
-## 16. Remaining founder decisions
+## 16. Founder decisions
 Decided:
 - D1: any branch, 72 h.
 - The conductor-plus-roster shape (TD-2026-10-24-341).
 
-Open:
+**Ruled 2026-10-24** (see the decision following TD-2026-10-24-341):
+- R1: balanced roster defaults.
+- R7: stop the old session, keep it resumable.
+- **R4: the Cid brief is opt-in per repo.**
+- **R6 and R11: the handoff thresholds and the handoff steps are customizable in Settings** (defaults 70% and 80% of the window, all steps on).
+- All others as recommended.
+
+Original list, kept for reference:
 - **R1.** Shipped roster defaults. Builder on sonnet means changing Paradigm AGENT_TIERS (builder, tester and documentor are on haiku today).
 - **R2.** The chip's saving unit: relative conductor-equivalent tokens (recommended), raw tokens, or dollars.
 - **R3.** A per-repo "strict roster" (`_FORCE`): available, off by default (recommended).
