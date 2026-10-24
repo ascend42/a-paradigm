@@ -4,9 +4,9 @@
  * Reads Claude Code's plugin metadata at ~/.claude/plugins/ and compares
  * installed versions/SHAs against marketplace clones and remote origins.
  *
- * Used in two ways:
- * 1. Auto-check: On first MCP tool call, read stored results and fire background refresh
- * 2. Manual check: Via paradigm_plugin_check MCP tool or CLI command
+ * Reported only on request: paradigm_status check:'plugins' (MCP) and
+ * `paradigm plugin check` (CLI). Never prepended to other tool results: the
+ * output is structured PluginUpdateNotice facts, not agent-directed text.
  */
 
 import * as fs from 'fs';
@@ -20,6 +20,8 @@ import { exec } from 'child_process';
 export interface PluginUpdateResult {
   repo: string;
   plugin: string;
+  /** Claude Code marketplace name (the clone's dir name); absent in older stored state */
+  marketplace?: string;
   installedVersion: string;
   installedSha: string;
   localVersion: string;
@@ -44,7 +46,6 @@ export interface PluginUpdateCheckState {
 
 const CLAUDE_PLUGINS_DIR = path.join(os.homedir(), '.claude', 'plugins');
 const CHECK_STATE_PATH = path.join(os.homedir(), '.paradigm', 'plugin-update-check.json');
-const THROTTLE_HOURS = 6;
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -66,23 +67,13 @@ function readJsonSafe<T>(filePath: string): T | null {
   }
 }
 
-function loadCheckState(): PluginUpdateCheckState | null {
-  return readJsonSafe<PluginUpdateCheckState>(CHECK_STATE_PATH);
-}
-
+/** Last results on disk, for diagnostics (nothing reads them back into a tool result). */
 function saveCheckState(state: PluginUpdateCheckState): void {
   const dir = path.dirname(CHECK_STATE_PATH);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
   fs.writeFileSync(CHECK_STATE_PATH, JSON.stringify(state, null, 2));
-}
-
-function isThrottled(): boolean {
-  const state = loadCheckState();
-  if (!state) return false;
-  const elapsed = Date.now() - new Date(state.lastCheck).getTime();
-  return elapsed < THROTTLE_HOURS * 3600 * 1000;
 }
 
 // ─── Content Hash ───────────────────────────────────────────────────
@@ -141,6 +132,7 @@ function computePluginContentHash(pluginDir: string): string {
  */
 interface DiscoveredPlugin {
   repo: string;
+  marketplace: string;
   plugin: string;
   installedVersion: string;
   installedSha: string;
@@ -247,6 +239,7 @@ function discoverPlugins(): DiscoveredPlugin[] {
 
       plugins.push({
         repo,
+        marketplace: repoDir,
         plugin: pluginName,
         installedVersion,
         installedSha,
@@ -302,6 +295,7 @@ async function checkPlugin(plugin: DiscoveredPlugin): Promise<PluginUpdateResult
   return {
     repo: plugin.repo,
     plugin: plugin.plugin,
+    marketplace: plugin.marketplace,
     installedVersion: plugin.installedVersion,
     installedSha: localSha,
     localVersion: plugin.localVersion,
@@ -317,84 +311,110 @@ async function checkPlugin(plugin: DiscoveredPlugin): Promise<PluginUpdateResult
 
 // ─── Public API ─────────────────────────────────────────────────────
 
+/** Why a plugin is reported as updatable. */
+export type PluginUpdateReason = 'remote-commits' | 'content-changed' | 'version-changed';
+
 /**
- * Read stored check results and return a notice string if updates are available.
- * Pure file read — safe for the synchronous first-tool-call path.
+ * An inert, structured plugin-update fact. Data only, no instructions to the
+ * agent, so it is safe inside a tool result.
  */
-export function getPluginUpdateNotice(): string | null {
-  const state = loadCheckState();
-  if (!state?.results) return null;
+export interface PluginUpdateNotice {
+  kind: 'plugin-update';
+  plugin: string;
+  /** Claude Code marketplace name (the `<mkt>` in `plugin@<mkt>`) */
+  marketplace: string;
+  /** Git owner/name of the marketplace source */
+  repo: string;
+  /** Installed state: short SHA, content hash or version, per `reason` */
+  from: string;
+  /** Available state, same unit as `from` */
+  to: string;
+  reason: PluginUpdateReason;
+  /** The terminal command that applies the update (works in every host) */
+  command: string;
+}
 
-  const updatable = state.results.filter(r => r.hasRemoteUpdate || r.hasCacheStale);
-  if (updatable.length === 0) return null;
+/** The host running the agent session this MCP server serves. */
+export type PluginHost = 'gnomon' | 'claude-code';
 
-  const lines: string[] = [];
-  lines.push('--- PLUGIN UPDATES AVAILABLE ---');
-  lines.push('Updates available for installed Claude Code plugins:');
+/**
+ * Gnomon sets GNOMON_HSID on every session it spawns (packages/gnomon
+ * src/kernel/runner/env.ts buildSessionEnv) and Claude Code passes its env to
+ * stdio MCP servers. A Gnomon session is not interactive Claude Code: it has
+ * no slash commands.
+ */
+export function detectPluginHost(env: NodeJS.ProcessEnv = process.env): PluginHost {
+  return typeof env.GNOMON_HSID === 'string' && env.GNOMON_HSID.length > 0 ? 'gnomon' : 'claude-code';
+}
 
-  const pullCmds: string[] = [];
-  const reinstallCmds: string[] = [];
-  for (const r of updatable) {
+/** `claude plugin` CLI form (checked against `claude plugin --help`). */
+export function pluginUpdateCommand(plugin: string, marketplace: string): string {
+  return `claude plugin marketplace update ${marketplace} && claude plugin update ${plugin}@${marketplace}`;
+}
+
+/** Turn check results into structured notices (empty when nothing is updatable). */
+export function toPluginUpdateNotices(results: PluginUpdateResult[]): PluginUpdateNotice[] {
+  const notices: PluginUpdateNotice[] = [];
+  for (const r of results) {
+    // Marketplace name = the clone's directory under ~/.claude/plugins/marketplaces/
+    const marketplace = r.marketplace || path.basename(r.marketplacePath);
+    const base = {
+      kind: 'plugin-update' as const,
+      plugin: r.plugin,
+      marketplace,
+      repo: r.repo,
+      command: pluginUpdateCommand(r.plugin, marketplace),
+    };
     if (r.hasRemoteUpdate) {
-      const versionInfo = r.installedVersion !== 'unknown'
-        ? `${r.installedVersion} → ${r.localVersion}`
-        : 'newer commits available';
-      lines.push(`  - ${r.plugin} (${r.repo}): ${versionInfo}`);
-      pullCmds.push(`git -C ${r.marketplacePath} pull origin main`);
-      reinstallCmds.push(`/plugin marketplace add ${r.repo}`);
+      notices.push({ ...base, reason: 'remote-commits', from: (r.installedSha || 'unknown').slice(0, 12), to: (r.remoteSha || 'unknown').slice(0, 12) });
     } else if (r.hasContentDrift) {
-      lines.push(`  - ${r.plugin} (${r.repo}): content changed (hash ${r.cachedContentHash} → ${r.marketplaceContentHash}, reinstall needed)`);
-      reinstallCmds.push(`/plugin marketplace add ${r.repo}`);
+      notices.push({ ...base, reason: 'content-changed', from: r.cachedContentHash, to: r.marketplaceContentHash });
     } else if (r.hasCacheStale) {
-      lines.push(`  - ${r.plugin} (${r.repo}): ${r.installedVersion} → ${r.localVersion} (reinstall needed)`);
-      reinstallCmds.push(`/plugin marketplace add ${r.repo}`);
+      notices.push({ ...base, reason: 'version-changed', from: r.installedVersion, to: r.localVersion });
     }
   }
+  return notices;
+}
 
+const REASON_TEXT: Record<PluginUpdateReason, string> = {
+  'remote-commits': 'newer commits upstream',
+  'content-changed': 'content changed',
+  'version-changed': 'newer version in the marketplace',
+};
+
+/**
+ * A descriptive summary for a person, never addressed to the agent.
+ * Host-aware: a Gnomon session names only the terminal command; interactive
+ * Claude Code also names `/plugin`.
+ */
+export function formatPluginUpdateSummary(notices: PluginUpdateNotice[], host: PluginHost): string {
+  if (notices.length === 0) return 'All installed plugins are up to date.';
+  const lines = [`Plugin updates available (${notices.length}):`];
+  for (const n of notices) {
+    lines.push(`  - ${n.plugin}@${n.marketplace} (${n.repo}): ${REASON_TEXT[n.reason]}, ${n.from} → ${n.to}`);
+  }
   lines.push('');
-  lines.push('Tell the user about these updates and suggest the following steps:');
-
-  if (pullCmds.length > 0) {
-    lines.push('');
-    lines.push('Step 1 — Pull latest from remote:');
-    lines.push(`  ${pullCmds.join(' && \\\n  ')}`);
-  }
-
-  if (reinstallCmds.length > 0) {
-    const stepNum = pullCmds.length > 0 ? 2 : 1;
-    lines.push('');
-    lines.push(`Step ${stepNum} — Reinstall to update the cached version:`);
-    for (const cmd of reinstallCmds) {
-      lines.push(`  ${cmd}`);
-    }
-    lines.push('');
-    lines.push(`Step ${stepNum + 1} — Restart the Claude Code session to load the new version.`);
-  }
-
-  lines.push('---');
-
+  lines.push(host === 'gnomon'
+    ? 'Update from a terminal outside the Gnomon session; a new session loads it:'
+    : 'Update with /plugin in Claude Code or from a terminal; a restart loads it:');
+  for (const n of notices) lines.push(`  ${n.command}`);
   return lines.join('\n');
 }
 
-/**
- * Fire-and-forget async check. Writes results for the next session.
- * Throttled to skip if last check was <6 hours ago.
- */
-export function schedulePluginUpdateCheck(): void {
-  if (isThrottled()) return;
+export interface PluginCheckReport {
+  host: PluginHost;
+  pluginsChecked: number;
+  notices: PluginUpdateNotice[];
+  summary: string;
+}
 
-  // Fire and forget — don't await, don't let errors propagate
-  (async () => {
-    try {
-      const results = await runPluginUpdateCheck();
-      saveCheckState({
-        lastCheck: new Date().toISOString(),
-        results,
-      });
-    } catch {
-      // Silently fail — this is background work
-    }
-  })();
+/** The paradigm_status check:'plugins' payload: structured notices plus a descriptive summary. */
+export function buildPluginCheckReport(results: PluginUpdateResult[], host: PluginHost): PluginCheckReport {
+  const notices = toPluginUpdateNotices(results);
+  const summary = results.length === 0
+    ? 'No Claude Code plugins found in ~/.claude/plugins/marketplaces/.'
+    : formatPluginUpdateSummary(notices, host);
+  return { host, pluginsChecked: results.length, notices, summary };
 }
 
 /**

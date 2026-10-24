@@ -2,6 +2,22 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  plugin-update-checker:
+    description: >-
+      #plugin-update-checker: detects stale Claude Code plugins (marketplace clones vs remote, cached
+      install vs marketplace content hash). Output is inert data: PluginUpdateNotice
+      {kind:'plugin-update', plugin, marketplace, repo, from, to, reason, command}, plus a
+      descriptive, host-aware summary that never addresses the agent. detectPluginHost reads
+      GNOMON_HSID (set by Gnomon's #session-runner on every session): a Gnomon session's summary
+      names only the terminal command `claude plugin marketplace update <mkt> && claude plugin
+      update <plugin>@<mkt>`; interactive Claude Code may also name /plugin. Reported only by
+      paradigm_status check:'plugins' (legacy paradigm_plugin_check); never prepended to the
+      first tool result of a session, and no background refresh runs on the first tool call.
+    type: service
+    anchors:
+      - plugin-update-checker.ts
+      - plugin-update-checker.test.ts
+    tags: [plugins, host-aware, gnomon]
   context-freshness:
     description: >-
       #context-freshness (7.15.0, TD-2026-10-13-661 Phase 1): the MCP server's ProjectContext is
