@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 - **Node 24 or newer is required (Node 20 reached end of life in April 2026; Node 22 users must upgrade).** Every published package declares `engines.node >=24.0.0`, the Claude Code plugin's hooks and the MCP server run on your Node, and the Gnomon app still bundles its own pinned Node.
-- **No commands, MCP tools or files were removed.**
+- **nevr.land support is removed** (`#agent-registry`). `paradigm agent install`, `paradigm agent search` and `paradigm agent publish` talked to the nevr.land registry, which Paradigm no longer supports, and they are gone, along with the `@a-company/registry-client` dependency. Bundled agents still install with `paradigm agent sync-global`, and your own with `paradigm agent create <id>`. No other commands, MCP tools or files were removed.
 - On Apple silicon Macs, installing paradigm also downloads the zipped `Gnomon.app` (an optional dependency). Other platforms skip it.
 
 ### Known limitations

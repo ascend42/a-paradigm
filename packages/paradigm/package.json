@@ -37,7 +37,6 @@
     "@a-company/gnomon": "8.0.1",
     "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
-    "@a-company/registry-client": "^0.1.0",
     "@a-company/university-core": "*",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "chalk": "^5.3.0",
