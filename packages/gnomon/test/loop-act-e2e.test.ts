@@ -57,7 +57,8 @@ function tmp(prefix: string): string {
   tmps.push(d);
   return d;
 }
-const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
+/** maintenance.auto=false: the rig's own commits must not start git's detached auto-maintenance, whose transient .git/objects/maintenance.lock lands in one snapshot and not the other. */
+const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', ...args], { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
 
 /** Every byte under a dir (files, links, modes), .git included: the founder's checkout must not move. */
 function snapshot(root: string): Record<string, string> {

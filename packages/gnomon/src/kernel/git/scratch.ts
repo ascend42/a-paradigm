@@ -77,7 +77,7 @@ if (process.platform === 'win32') {
 export const HARDENED_GIT_FLAGS: readonly string[] = Object.freeze([
   '--no-optional-locks',
   '-c', `core.hooksPath=${EMPTY_HOOKS_PATH}`, '-c', 'core.fsmonitor=false', '-c', 'core.sshCommand=false', '-c', 'protocol.allow=never',
-  '-c', 'core.pager=cat', '-c', 'credential.helper=', '-c', 'core.quotepath=off', '-c', 'core.longpaths=true', '-c', 'gc.auto=0',
+  '-c', 'core.pager=cat', '-c', 'credential.helper=', '-c', 'core.quotepath=off', '-c', 'core.longpaths=true', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false',
 ]);
 
 /** A clean env: no inherited GIT_* (GIT_DIR, GIT_INDEX_FILE … would redirect the call), no global or system config. */

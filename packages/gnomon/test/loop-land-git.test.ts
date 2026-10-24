@@ -38,7 +38,7 @@ function tmp(prefix: string): string {
 }
 const GENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 const status = (root: string): string => git(root, 'status', '--porcelain=v1', '--untracked-files=all').split('\n').filter((l) => !l.includes('HOOK-')).join('\n');
-const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=Matt', '-c', 'user.email=matt@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8', env: GENV });
+const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=Matt', '-c', 'user.email=matt@example.com', '-c', 'commit.gpgsign=false', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', ...args], { cwd, encoding: 'utf8', env: GENV });
 
 /** Every byte under a dir (files, links, exec bits); `.git` excluded unless asked. */
 function snapshot(root: string, withGit = false): Record<string, string> {
