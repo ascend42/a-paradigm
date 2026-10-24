@@ -76,12 +76,13 @@ describe('CI release excludes gnomon', () => {
 });
 
 describe('founder publish order', () => {
-  it('gate, then arm64, gnomon, then verify; paradigm only with --release (no x64 step)', () => {
+  it('gate, then arm64, gnomon, then verify, then the lock repair; paradigm only with --release (no x64 step)', () => {
     const steps = publishPlan({ hasVersion: () => false, release: true });
     expect(steps.map((s: { kind: string; name?: string }) => `${s.kind}${s.name ? ` ${s.name}` : ''}`)).toEqual([
       'gate',
       ...MANUAL.map((n) => `publish ${n}`),
       ...MANUAL.map((n) => `verify ${n}`),
+      'lock',
       'release',
     ]);
     expect(steps.at(-1).args).toEqual(['run', 'release']);

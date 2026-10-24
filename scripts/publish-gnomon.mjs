@@ -9,6 +9,8 @@
  *                8.0, TD-2026-10-22-310: x64 is not published).
  *   3. gnomon    @a-company/gnomon (paradigm's exact dependency names it; its prepublishOnly re-runs the gate).
  *   4. verify    each of the two is visible on npm at this version.
+ *   4b. lock     scripts/refresh-platform-lock.mjs: re-resolve the platform package's versionless lock placeholder now it
+ *                is on npm (it breaks every npm ci otherwise); commit package-lock.json to main.
  *   5. paradigm  only with --release: `npm run release` (scripts/release.mjs: its preflight re-checks step 4, then
  *                changeset publish). Without it, CI's release job publishes paradigm once the release PR merges, and
  *                refuses until steps 2-3 are on npm.
@@ -22,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { manualOnlyPackages, npmHasVersion, REPO } from './release.mjs';
 
 /**
- * The ordered steps: [{ kind: 'gate' | 'publish' | 'skip' | 'verify' | 'release', name?, version?, cmd?, args? }].
+ * The ordered steps: [{ kind: 'gate' | 'publish' | 'skip' | 'verify' | 'lock' | 'release', name?, version?, cmd?, args? }].
  * Pure given `hasVersion`.
  */
 export function publishPlan({ root = REPO, hasVersion = npmHasVersion, release = false } = {}) {
@@ -37,6 +39,8 @@ export function publishPlan({ root = REPO, hasVersion = npmHasVersion, release =
     steps.push({ kind: 'publish', name: p.name, version: p.version, cmd: 'npm', args });
   }
   for (const p of pkgs) steps.push({ kind: 'verify', name: p.name, version: p.version });
+  // Now the platform package is on npm, the lock's versionless placeholder for it would break every npm ci.
+  steps.push({ kind: 'lock', cmd: process.execPath, args: ['scripts/refresh-platform-lock.mjs'] });
   if (release) steps.push({ kind: 'release', cmd: 'npm', args: ['run', 'release'] });
   return steps;
 }
@@ -82,6 +86,7 @@ function main() {
       return code;
     }
   }
+  if (!dry) say('commit package-lock.json to main if refresh-platform-lock changed it (git status), or the next npm ci breaks.');
   if (!steps.some((s) => s.kind === 'release')) {
     say('done. Paradigm is next: merge the release PR (CI runs `npm run release`), or re-run with --release here.');
   }
