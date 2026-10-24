@@ -199,14 +199,22 @@ export function stageKernel(pkg, contents) {
 /**
  * TD-2026-10-24-447 (#loops-gate), Aegis review: the kernel a release app carries MUST be a release build (the pins and
  * the loops gate are compiled into the bundle). Loads `<kernel>/dist/index.js` and throws unless its mode is `release`
- * and its loops gate stays OFF even with GNOMON_LOOPS=1. Run on the staged kernel and on the assembled app's.
+ * and its loops gate stays OFF even with GNOMON_LOOPS=1. Run on the staged kernel and on the assembled app's. It does
+ * not require appZips: those are sealed into the npm dist after the zip exists (8.0.2 found this on the first real run).
+ * It does require the helper and voice-io pins for `arch` (Aegis, 8.0.2).
  */
-export async function assertReleaseKernel(kernelDir, version, check = checkReleaseDist) {
+export async function assertReleaseKernel(kernelDir, version, arch, check = checkReleaseDist) {
   const dist = path.join(kernelDir, 'dist');
-  const { problems, module: m } = await check(dist, version);
+  // The in-app kernel cannot pin the zip of the app that carries it; appZips belong to the npm dist (seal-npm-release).
+  const { problems, module: m } = await check(dist, version, { requireAppZips: false });
   if (problems.length || !m) throw new Error(`REFUSING TO SHIP: the kernel at ${kernelDir} is not a release build: ${problems.join('; ') || 'dist did not load'}`);
   const pins = m.releasePins?.loadedReleasePins?.();
   if (pins?.mode !== 'release') throw new Error(`REFUSING TO SHIP: the kernel at ${kernelDir} is a ${pins?.mode ?? 'unknown'} build, not a release`);
+  // Every native artifact this app carries must be pinned for this arch (an exact entry, else a universal one, as
+  // gnomon-contracts releaseArtifactFor resolves it): a missing pin would only surface at runtime as a refusal.
+  const artifacts = Array.isArray(pins.manifest?.artifacts) ? pins.manifest.artifacts : [];
+  const missing = ['gnomon-helper', 'gnomon-voice-io'].filter((name) => !artifacts.some((a) => a?.name === name && (a.arch === arch || a.arch === 'universal')));
+  if (missing.length) throw new Error(`REFUSING TO SHIP: the kernel at ${kernelDir} pins no ${missing.join(' or ')} for ${arch}`);
   const gate = m.loopsGate?.resolveLoopsEnabled;
   if (typeof gate !== 'function') throw new Error(`REFUSING TO SHIP: the kernel at ${kernelDir} carries no loops gate (dist/index.js exports no loopsGate)`);
   if (gate({ env: { GNOMON_LOOPS: '1' } }) !== false) throw new Error(`REFUSING TO SHIP: loops are ON in the kernel at ${kernelDir} (the 8.0.1 release ships them disabled)`);
@@ -437,7 +445,7 @@ export async function release(argv) {
       writeFileSync(path.join(k, 'dist', 'cli', 'gnomon.js'), '// placeholder kernel\n');
       copyFileSync(path.join(PKG, 'package.json'), path.join(k, 'package.json'));
     } else stageKernel(PKG, stage);
-    if (!o.dryRun) await assertReleaseKernel(path.join(stage, LAYOUT.kernel), version);
+    if (!o.dryRun) await assertReleaseKernel(path.join(stage, LAYOUT.kernel), version, o.arch);
     const voicePkg = path.join(PACKAGES, 'gnomon-voice');
     if (o.dryRun && !existsSync(path.join(voicePkg, 'dist', 'cli.js'))) {
       mkdirSync(path.join(stage, LAYOUT.voice, 'dist'), { recursive: true });
@@ -477,7 +485,7 @@ export async function release(argv) {
     const outApp = path.join(o.out, APP_NAME);
     plan.push(`assemble ${outApp}`);
     assembleApp({ skeletonApp: skeleton, stage, helperApp, voiceIoApp, outApp, ditto: process.platform === 'darwin' });
-    if (!o.dryRun) await assertReleaseKernel(path.join(outApp, 'Contents', LAYOUT.kernel), version);
+    if (!o.dryRun) await assertReleaseKernel(path.join(outApp, 'Contents', LAYOUT.kernel), version, o.arch);
     const missing = missingFromLayout(outApp);
     if (missing.length) throw new Error(`the assembled app is missing ${missing.join(', ')}`);
     // 8. sign the app (no --deep: nested code is signed already), verify, notarize

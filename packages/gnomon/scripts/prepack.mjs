@@ -37,12 +37,17 @@ export async function releaseDistProblems(dist, version) {
 }
 
 /** { problems, module }: the release check plus the dist module it loaded (for callers that read its pins). */
-export async function checkReleaseDist(dist, version) {
-  const r = await releaseDistCheck(dist, version);
+/**
+ * `requireAppZips` (default true) is for the dist npm publishes: it must pin every darwin app zip. The kernel staged
+ * INSIDE Gnomon.app passes false: it cannot pin the zip of the app that contains it (the zip is made from it), so the
+ * release app checks mode, version and the loops gate, and the npm dist is sealed with the zips afterwards.
+ */
+export async function checkReleaseDist(dist, version, { requireAppZips = true } = {}) {
+  const r = await releaseDistCheck(dist, version, requireAppZips);
   return Array.isArray(r) ? { problems: r, module: null } : r;
 }
 
-async function releaseDistCheck(dist, version) {
+async function releaseDistCheck(dist, version, requireAppZips) {
   let m;
   try {
     // the mtime query keeps a re-built dist at the same path from being served from the ESM cache
@@ -55,7 +60,7 @@ async function releaseDistCheck(dist, version) {
   if (!pins || pins.mode !== 'release') return [`dist is a ${pins?.mode ?? 'unknown'} build, not a release (${pins?.why ?? 'no release pins'}); run scripts/seal-npm-release.mjs`];
   const problems = [];
   if (pins.manifest.release !== version) problems.push(`dist pins release ${pins.manifest.release}, not ${version}`);
-  for (const arch of APP_ZIP_ARCHES) if (!pins.manifest.appZips?.some((z) => z.arch === arch)) problems.push(`dist pins no Gnomon.app zip for ${arch}`);
+  if (requireAppZips) for (const arch of APP_ZIP_ARCHES) if (!pins.manifest.appZips?.some((z) => z.arch === arch)) problems.push(`dist pins no Gnomon.app zip for ${arch}`);
   return { problems, module: m };
 }
 
