@@ -227,6 +227,11 @@ export interface KernelLink {
   micKeyBare?(): boolean | null;
   /** founder request 2026-10-23: status.voice.inputChoice ({id: device id | null = system default}), null when none is held */
   inputChoice?(): { id: string | null } | null;
+  /**
+   * #voice-reply-mode (founder 2026-10-23): status.voice.replyMode, the human's reply mode: 'speak' (say and show) or
+   * 'show' (show only: no spoken playback; the mic and voice input are unchanged). null = not reported (speak).
+   */
+  replyMode?(): 'speak' | 'show' | null;
   /** Aegis L-2: status.voice.micMeterOpen (the GUI's level meter is open); absent ⇒ never relay the level */
   micMeterOpen?(): boolean;
   append(kind: string, payload: Record<string, unknown>): Promise<AppendResult>;

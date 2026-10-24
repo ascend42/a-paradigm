@@ -270,6 +270,11 @@ export class GnomonKernelLink implements KernelLink {
   #micKeyBare: boolean | null = null;
   #inputChoice: { id: string | null } | null = null;
   #micMeterOpen = false;
+  #replyMode: 'speak' | 'show' | null = null;
+  /** #voice-reply-mode: status.voice.replyMode from the last attachment() read, null when the kernel does not report it */
+  replyMode(): 'speak' | 'show' | null {
+    return this.#replyMode;
+  }
   /** Aegis L-2: status.voice.micMeterOpen — relay the mic level only while Voice settings' meter is open */
   micMeterOpen(): boolean {
     return this.#micMeterOpen;
@@ -289,6 +294,8 @@ export class GnomonKernelLink implements KernelLink {
     this.#stopSpeakingSeq = stopSpeakingSeqFromStatus(st);
     const vv = (st as { voice?: { micWanted?: unknown; micToggleSeq?: unknown; micKeyBare?: unknown; inputChoice?: unknown } } | undefined)?.voice;
     this.#micMeterOpen = (vv as { micMeterOpen?: unknown } | undefined)?.micMeterOpen === true;
+    const rm = (vv as { replyMode?: unknown } | undefined)?.replyMode;
+    this.#replyMode = rm === 'show' || rm === 'speak' ? rm : null;
     const ic = vv?.inputChoice as { id?: unknown } | null | undefined;
     this.#inputChoice = ic && typeof ic === 'object' && (ic.id === null || (typeof ic.id === 'string' && ic.id.length > 0 && ic.id.length <= 256)) ? { id: ic.id as string | null } : null;
     this.#micWanted = typeof vv?.micWanted === 'boolean' ? vv.micWanted : null;
