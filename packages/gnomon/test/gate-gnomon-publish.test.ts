@@ -23,10 +23,10 @@ const ARCHES = ['arm64']; // Apple silicon only in 8.0 (TD-2026-10-22-310)
 let root = '';
 const sha = (f: string): string => createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 
-/** A repo-shaped fixture: the three manifests, the arm64 platform package holding an UNSIGNED dry-run zip. */
+/** A repo-shaped fixture: the four manifests, the arm64 platform package holding an UNSIGNED dry-run zip. */
 beforeAll(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-gate-')));
-  for (const p of ['gnomon', 'paradigm', 'gnomon-darwin-arm64']) {
+  for (const p of ['gnomon', 'paradigm', 'paradigm-mcp', 'gnomon-darwin-arm64']) {
     fs.mkdirSync(path.join(root, 'packages', p), { recursive: true });
     fs.copyFileSync(path.join(PACKAGES, p, 'package.json'), path.join(root, 'packages', p, 'package.json'));
   }

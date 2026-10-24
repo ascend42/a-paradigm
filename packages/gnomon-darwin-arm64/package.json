@@ -1,6 +1,6 @@
 {
   "name": "@a-company/gnomon-darwin-arm64",
-  "version": "8.0.1",
+  "version": "8.0.2",
   "description": "Gnomon for macOS on arm64: the signed, notarized, relocatable Gnomon.app (bundled Node, kernel, helper, voice I/O) as a ditto zip with its sha256 (TD-2026-10-21-758). Installed as an optional dependency of @a-company/gnomon; you never install it directly.",
   "type": "module",
   "main": "./index.js",

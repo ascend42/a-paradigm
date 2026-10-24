@@ -29,7 +29,7 @@ components:
     type: module
     tags: [feature, agent-partners, partners-primitive]
   RegistryTypes:
-    description: "v6.0.3 marketplace SKU primitives — typed-only contracts, no live consumer. Exports PartnerBundle (groups partnered agents into single SKU), ReciprocalInstallMeta (typed install-prompt metadata), PartnerCoverage (registry-index indicator). nevr.land support was removed in 8.0.1; these types stay for the partners model."
+    description: "v6.0.3 marketplace SKU primitives — typed-only contracts, no live consumer. Exports PartnerBundle (groups partnered agents into single SKU), ReciprocalInstallMeta (typed install-prompt metadata), PartnerCoverage (registry-index indicator). nevr.land support was removed in 8.0.2; these types stay for the partners model."
     type: module
     tags: [feature, agent-partners, marketplace-primitive, contracts-only]
   SyncGlobalCommand:

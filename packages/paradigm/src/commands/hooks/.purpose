@@ -98,7 +98,7 @@ components:
       - performance
   stop-loop-guard:
     description: |
-      8.0.1 Stop-hook loop guard (claude-code-stop.sh, cursor-stop.sh; helpers
+      8.0.2 Stop-hook loop guard (claude-code-stop.sh, cursor-stop.sh; helpers
       _pm_violation_fp and _pm_record_unresolved in paradigm-common.sh). A
       violation the agent cannot fix inside the turn used to block every stop
       forever. Claude Code: the hook reads stop_hook_active (jq, grep
