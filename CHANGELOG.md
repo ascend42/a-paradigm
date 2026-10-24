@@ -90,6 +90,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@a-company/gnomon` 8.0.0 and `@a-company/gnomon-darwin-arm64` 8.0.0 (new, public)
 - `@a-company/sentinel` 3.9.1 (seed patterns load)
 
+## [7.15.2] — 2026-10-22
+
+**The Stop hook finishes in about 1 s, and read-only commands write nothing.** This patch brings the hook and CLI fixes from the 8.0 line to 7.x. It contains no Gnomon code, and the Node floor stays at 20.
+
+### Added
+- **Hook self-monitoring** (`#hook-monitor`). Every plugin hook appends a start record and an end record to `.paradigm/events/hook-timings.jsonl`, a ring capped at about 500 lines. The end record carries wall-clock ms, the exit code, and the outcome: `ok`, `blocked`, `error`, or `killed` (on SIGTERM). A hook the host killed with SIGKILL leaves a start record with no end; once that record is older than the hook's timeout plus 5 s, it counts as killed. Each run costs about 4 ms, with no CLI or node process. Monitoring fails open: it never writes to stdout, never changes an exit code, and records nothing when a write is denied. `PARADIGM_HOOK_MONITOR_OFF=1` turns it off.
+- **SessionStart hook-health warning** (`#hook-health-warning`). A new plugin SessionStart hook prints one line to the agent for each hook that was killed or ran over budget since the last warning. It warns at most once per session. Only allowlisted hook names and numbers from the ring reach the agent's context. Project-level installs (`paradigm hooks install --claude-code`) register it too (`#paradigm-hooks`).
+- **`paradigm doctor` hook-health section** (`#doctor-hook-health`), with a remedy line on every warning. It reports:
+  - per-hook p50, p95 and max wall time, kills and over-budget runs, read from the ring;
+  - repo traits that make hooks slow: nested git repos or worktrees under the root, the `.purpose` count, the number of aspect-anchor lines and the number of untracked files;
+  - plugin cache staleness: the installed user-scope plugin against the marketplace version, and project-scope pins older than the user install.
+- **Hook timing harness** (`packages/paradigm/tests/hooks-timing.test.ts`). It runs every plugin hook the way Claude Code does and times it until EOF on both pipes. Each hook must finish in under 2 s (`PARADIGM_HOOK_BUDGET_MS`), and an undetached background child fails the run. A lint check rejects any `&` that doesn't redirect all three fds.
+
+### Changed
+- **Read-only commands are read-only** (`#command-policy`). `status`, `doctor`, `ripple`, `integrity`, `purpose validate`, `portal validate`, `task ls|show`, `lore list|show` and `notices` make no filesystem writes and no network calls. Migration notices go to stderr, so `--json` stdout stays clean, and notices are acknowledged only on write paths. Lore reads, in the CLI and the MCP server, no longer migrate legacy entries.
+- **Hooks honour configured enforcement severities** (`#paradigm-common`). Before, every check ran at its hard-coded default whatever `.paradigm/config.yaml` said. **If your config differs from the defaults, checks will now block, warn or stay off as configured.**
+- **Hook session markers are gitignored** (`#session-markers-gitignore`). `paradigm init` and `paradigm sync` write a managed block to `.paradigm/.gitignore`.
+
+### Fixed
+- **The Stop hook finishes in about 1 s instead of hitting its 30 s timeout** (`#stop-hook`). In repos with agent worktrees it timed out, so Claude Code killed it and its checks never actually enforced anything. `.purpose` discovery now uses `git ls-files` (skipping nested repos and ignored trees), and the aspect-anchor check runs in one `awk` pass. On a fixture with 16 nested worktrees the hook drops from 176 s to 0.9 s, and it still blocks exactly as before.
+- **No hook leaves a child holding Claude Code's pipe.** The Stop hook's duplicate background `ambient postflight` is gone, and background `event emit` is fully detached. Ancestor walks stop at `/`. The pre-commit hook uses `npx --no-install`, so it no longer downloads the unrelated public `paradigm` package.
+- **One shared lore migration** (`#lore-legacy`, `#lore-storage`). The CLI and the MCP server migrate legacy lore through the same code, and only on writes. The MCP lore loader's author fallback no longer returns `unknown` because of a missing `os` import.
+
+### Security
+- **Ids never build a path outside their store** (`#task-loader`). A crafted id such as `L-…/../../x` could make `paradigm lore show` print a file outside the project. Ids containing a separator, a dot or `..` are now refused wherever an id becomes a path: lore, tasks and `paradigm override`.
+
+### Packages
+- `@a-company/paradigm` 7.15.2
+- `@a-company/paradigm-mcp` 7.15.2 (private, bundled)
+- plugin 7.15.2
+
 ## [7.15.1] — 2026-10-20
 
 ### Changed
