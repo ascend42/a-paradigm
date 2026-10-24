@@ -1,217 +1,307 @@
 {
-  "sessionId": "smvhbtz56",
-  "startTime": 1792539661866,
-  "lastActivity": 1792595597812,
+  "sessionId": "smviacni5",
+  "startTime": 1792597640189,
+  "lastActivity": 1792801243592,
   "breadcrumbs": [
     {
-      "timestamp": 1792539677441,
-      "action": "tool-call",
-      "tool": "paradigm_session_recover",
-      "summary": "session_recover"
-    },
-    {
-      "timestamp": 1792540240084,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Gnomon: one presence prompt per decision, including root-cla"
-    },
-    {
-      "timestamp": 1792542547489,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: milestone"
-    },
-    {
-      "timestamp": 1792544075439,
+      "timestamp": 1792628341631,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"TD-2026-10-20-514 Aegis residuals (tracked, not merge-blocki\""
+      "summary": "Created task: \"Portal routes are never read: ParsedGateConfig has no `route\""
     },
     {
-      "timestamp": 1792544306919,
+      "timestamp": 1792628341920,
       "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Gnomon: session PATH from root-signed config, with a fixed p"
+      "tool": "paradigm_task_done",
+      "summary": "Completed task T-2026-10-21-032"
     },
     {
-      "timestamp": 1792544383202,
+      "timestamp": 1792630000362,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon Windows session env after a daemon re-exec (Aegis M1 \""
+      "summary": "Created task: \"README audit for 8.0 (founder, 2026-10-22): after the 8.0 re\""
     },
     {
-      "timestamp": 1792544454423,
+      "timestamp": 1792630414609,
       "action": "tool-call",
       "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-21-001"
+      "summary": "Updated task T-2026-10-21-027"
     },
     {
-      "timestamp": 1792545004509,
+      "timestamp": 1792630525407,
       "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon: a guided UI plus a CLI verb to change the root-signe\""
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-10-21-027"
     },
     {
-      "timestamp": 1792545133284,
+      "timestamp": 1792643022497,
       "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon contracts: publish the session.sandbox phases identit\""
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-10-21-029"
     },
     {
-      "timestamp": 1792545283032,
+      "timestamp": 1792652948852,
       "action": "tool-call",
       "tool": "paradigm_decision_record",
-      "summary": "decision_record: Gnomon: sessions can't write into PATH tool dirs; a Homebrew"
+      "summary": "decision_record: Gnomon 8.0 ships for Apple silicon Macs only"
     },
     {
-      "timestamp": 1792545290389,
+      "timestamp": 1792659288400,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon: brew install/upgrade from a session via a card (TD-2\""
+      "summary": "Created task: \"Mac helper has no caller verification (D68 not implemented).\""
     },
     {
-      "timestamp": 1792546155098,
+      "timestamp": 1792659541602,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: 8.0 README and platform floors: root README is the source, p"
+    },
+    {
+      "timestamp": 1792659996303,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Gnomon on Windows: hybrid approvals, LocalAppData install, b"
+    },
+    {
+      "timestamp": 1792660063433,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W0: dev environment and CI. Pinned Rust MSVC toolcha\""
+    },
+    {
+      "timestamp": 1792660063757,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W1: probes on the founder's PC. P03 (can Node adopt \""
+    },
+    {
+      "timestamp": 1792660063782,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W2: the Rust helper core (packages/gnomon-helper/win\""
+    },
+    {
+      "timestamp": 1792660063808,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W3: kernel Windows backends. Pipe endpoint (endpoint\""
+    },
+    {
+      "timestamp": 1792660063830,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W6: the wrapper on Windows (Tauri/WebView2). Windows\""
+    },
+    {
+      "timestamp": 1792660063852,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W4: hybrid approvals identity tier (TD-2026-10-22-27\""
+    },
+    {
+      "timestamp": 1792660063874,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W5: sandbox profiles. Sessions at Low integrity (UIP\""
+    },
+    {
+      "timestamp": 1792660063895,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W7-W9: release and ship. W7 release-win32.mjs (win-x\""
+    },
+    {
+      "timestamp": 1792660063913,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Windows W10-W11: voice and hardening. W10 Rust voice-io on W\""
+    },
+    {
+      "timestamp": 1792660319422,
+      "action": "tool-call",
+      "tool": "paradigm_task_done",
+      "summary": "Completed task T-2026-10-22-003"
+    },
+    {
+      "timestamp": 1792660598164,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: 8.0 ships when Windows Gnomon is done"
+    },
+    {
+      "timestamp": 1792660598414,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=validating, 8.0 release HELD until Windows parity is done on the founder"
+    },
+    {
+      "timestamp": 1792662038234,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Gnomon loops: scope and founder choices"
+    },
+    {
+      "timestamp": 1792662207108,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Loops ship in 8.0, built with their Move 2 dependencies on f"
+    },
+    {
+      "timestamp": 1792689192510,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"8.0 ships as 8.0.1: @a-company/paradigm@8.0.0 was published \""
+    },
+    {
+      "timestamp": 1792690772299,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon GUI bug (found by Luna rendering the loops references\""
+    },
+    {
+      "timestamp": 1792692279155,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Loops builtins in the signed app (8.0): builtin checks (para\""
+    },
+    {
+      "timestamp": 1792695037838,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=implementing, Loops for 8.0 on feat/gnomon-loops (worktree /Users/ascend/D"
+    },
+    {
+      "timestamp": 1792703514495,
+      "action": "tool-call",
+      "tool": "paradigm_decision",
+      "summary": "decision: record"
+    },
+    {
+      "timestamp": 1792703520118,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Loops in 8.0 are approve-to-land: no auto-land"
+    },
+    {
+      "timestamp": 1792710855242,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Real-home local model setup: bundled runner, full guided UI,"
+    },
+    {
+      "timestamp": 1792715935730,
+      "action": "tool-call",
+      "tool": "paradigm_lore",
+      "summary": "lore: record"
+    },
+    {
+      "timestamp": 1792715941295,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Loops steps 10, 11 and 14, the Windows merge, and the real-h"
+    },
+    {
+      "timestamp": 1792717191462,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Loops may use secrets the human trusts them with"
+    },
+    {
+      "timestamp": 1792718615066,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Loop secrets come from env files; network is a per-loop opt-"
+    },
+    {
+      "timestamp": 1792720867061,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Loops merged into feat/gnomon and pushed; loop secrets and n"
+    },
+    {
+      "timestamp": 1792724191879,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Paths are chosen, not typed: a kernel-opened folder chooser "
+    },
+    {
+      "timestamp": 1792776675708,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon: offer Paradigm setup when opening a non-Paradigm fol\""
+    },
+    {
+      "timestamp": 1792781433118,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: The send word sends whatever is in the draft; the user owns "
+    },
+    {
+      "timestamp": 1792785477865,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Voice-sent turns follow the run mode and Always rules, like "
+    },
+    {
+      "timestamp": 1792785869686,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon: kernel-run git verbs, so sessions can init repos and\""
+    },
+    {
+      "timestamp": 1792786809692,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Gnomon sessions don't get the human's MCP servers (founder, \""
+    },
+    {
+      "timestamp": 1792788319739,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: A standing grant can form Always rules"
+    },
+    {
+      "timestamp": 1792793623016,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: MCP servers in Gnomon honor the human's own allow rules and "
+    },
+    {
+      "timestamp": 1792793651168,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"VERIFY + FIX: the Gnomon session sandbox may allow file writ\""
+    },
+    {
+      "timestamp": 1792794936865,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-10-23-004"
+    },
+    {
+      "timestamp": 1792801237963,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
       "summary": "lore_record: agent-session"
     },
     {
-      "timestamp": 1792546155710,
-      "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=validating, One-presence-per-decision (TD-2026-10-20-514) and the sessio"
-    },
-    {
-      "timestamp": 1792547824624,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: milestone"
-    },
-    {
-      "timestamp": 1792547927574,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon Desk: offers are silently dropped when the founder se\""
-    },
-    {
-      "timestamp": 1792547992690,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon GUI (dogfood 2026-10-21): a running turn looks finish\""
-    },
-    {
-      "timestamp": 1792549603766,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Gnomon auto-edits auto-passes a wider set of read-only comma"
-    },
-    {
-      "timestamp": 1792551048201,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon turn pairing follow-ups (re-review of abbbec56..b49cf\""
-    },
-    {
-      "timestamp": 1792553200828,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Paradigm memory-management protocol (founder, 2026-10-21; th\""
-    },
-    {
-      "timestamp": 1792553359106,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon: Claude memory management as a key interface / first-\""
-    },
-    {
-      "timestamp": 1792561327751,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Gnomon voice: capture and send policy split; voice-sent turn"
-    },
-    {
-      "timestamp": 1792561490280,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon first-party mod: the Agents workbench (founder, 2026-\""
-    },
-    {
-      "timestamp": 1792561627664,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon Mods panel follow-ups (feat/gnomon-mods-panel @ d368b\""
-    },
-    {
-      "timestamp": 1792562258563,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon sandbox: scope the transcript carve-back per session \""
-    },
-    {
-      "timestamp": 1792563090489,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"packages/paradigm: `tsc --noEmit` reports 335 errors on feat\""
-    },
-    {
-      "timestamp": 1792568862531,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon voice UI/UX serious pass (founder, 2026-10-21, after \""
-    },
-    {
-      "timestamp": 1792594095906,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Gnomon GUI copy leftovers after the voice redesign (Luna fin\""
-    },
-    {
-      "timestamp": 1792594345177,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Mika runs a global UI build protocol on every UI change"
-    },
-    {
-      "timestamp": 1792594345274,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Wire Mika's ui-build-protocol (TD for 2026-10-21) into Parad\""
-    },
-    {
-      "timestamp": 1792594765551,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: agent-session"
-    },
-    {
-      "timestamp": 1792594942807,
+      "timestamp": 1792801243263,
       "action": "tool-call",
       "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-10-21-017"
+      "summary": "Updated task T-2026-10-23-004"
     },
     {
-      "timestamp": 1792595597573,
+      "timestamp": 1792801243520,
       "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: insight"
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-10-23-002"
     },
     {
-      "timestamp": 1792596737831,
+      "timestamp": 1792801243599,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=implementing, feat/gnomon (local, NOT pushed; ~200 commits ahead of origin"
-    },
-    {
-      "timestamp": 1792597243922,
-      "action": "tool-call",
-      "tool": "paradigm_session",
-      "summary": "session: checkpoint"
-    },
-    {
-      "timestamp": 1792597249677,
-      "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=gnomon-dogfood: voice copy and risk chip landed; ready for restart, Vocabulary retirement (6f986338), Aegis risk-chip fixes (a7c"
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-10-23-003"
     }
   ],
   "symbolsModified": [],

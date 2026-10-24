@@ -1,0 +1,28 @@
+id: TD-2026-10-23-268
+timestamp: '2026-10-23T00:59:52.257Z'
+title: Loops may use secrets the human trusts them with
+decision: >-
+  A loop file may declare `env: [NAME, ...]` on check and act nodes. The kernel passes exactly those variables from the
+  human's environment into that node's child. The names (never the values) appear on the loop-trust card and are part of
+  the trust hash, so changing the list needs a new trust. Output scrubbing stays on by default and can be switched off
+  per loop (`redact: off`), also shown on the trust card. Names that would let a child talk to the kernel or rewrite its
+  runtime (GNOMON_*, NODE_OPTIONS and the like) are still refused.
+rationale: >-
+  The founder said "if another user wants their loops to utilize secrets... that is on them. we shouldn't gate keep
+  these things", and chose "the proper way": the human decides per loop, visibly, on the card they already approve.
+  Scrubbing guards against accidental leaks into logs, prompts and cards without blocking anything a user chose.
+participants:
+  - id: founder
+    role: decider
+    stance: for
+alternatives_considered:
+  - option: No limits by default (full env, no scrubbing)
+    rejected_because: founder chose the explicit, per-loop opt-in
+  - option: Keep the env stripped
+    rejected_because: gatekeeps users' own choices
+symbols_affected:
+  - '#loop-check'
+  - '#loop-act'
+  - '#loop-trust'
+  - '#session-env'
+status: active

@@ -1,0 +1,16 @@
+id: L-2026-10-23-ascend-005952-381
+type: insight
+timestamp: '2026-10-23T00:59:52.258Z'
+author: ascend
+title: Decision TD-2026-10-23-268 recorded
+summary: Companion lore entry for decision record TD-2026-10-23-268. See .paradigm/decisions/TD-2026-10-23-268.yaml.
+symbols_touched:
+  - '#loop-check'
+  - '#loop-act'
+  - '#loop-trust'
+  - '#session-env'
+references:
+  decision_id: TD-2026-10-23-268
+tags:
+  - companion-lore
+  - decision-reference

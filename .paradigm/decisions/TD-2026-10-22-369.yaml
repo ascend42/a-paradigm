@@ -1,0 +1,28 @@
+id: TD-2026-10-22-369
+timestamp: '2026-10-22T21:12:00.221Z'
+title: 'Loops in 8.0 are approve-to-land: no auto-land'
+decision: >-
+  Every loop act change ends in a propose card; nothing lands on the human's branch until they accept it. The auto-land
+  path stays behind #autoLandBlockers and is revisited in 8.1 once revert scoring, the reviewer profile and an
+  *at()-based placement helper exist.
+rationale: >-
+  Founder chose "Always ask". Aegis concurred: the goal check is authored in the same trusted file, revert scoring (the
+  brake) lands in 8.1, the default strictness is L0, human-turn detection is partial, and the parent-swap race without
+  *at() calls is still open. Earn auto-land with calibration data on approved lands first.
+participants:
+  - id: founder
+    role: decider
+    stance: for
+  - id: security
+    role: reviewer
+    stance: for
+alternatives_considered:
+  - option: Auto-land at L0 per spec
+    rejected_because: no revert-scoring brake in 8.0; goal check is self-authored
+  - option: Per-loop opt-in auto-land
+    rejected_because: founder preferred always ask for the first release
+symbols_affected:
+  - '#loop-land'
+  - '#loop-runner'
+  - '#loop-act'
+status: active

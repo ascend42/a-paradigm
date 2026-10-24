@@ -1,0 +1,32 @@
+id: TD-2026-10-23-448
+timestamp: '2026-10-23T01:23:35.875Z'
+title: Loop secrets come from env files; network is a per-loop opt-in
+decision: >-
+  Values for a loop's named env vars are read by the kernel at resolve time from env files: files the loop links
+  (`envFiles: [.env.local, ...]`, repo-relative or absolute, shown on the trust card and bound into the trust hash) and
+  the home-level ~/.gnomon/loop-env (0600). Names stay declared in `env:`; values are never hashed or stored, so editing
+  a value needs no re-trust. The daemon's scrubbed launch env is unchanged. `network: on` lets a loop's checks reach the
+  network; it's off by default, shown on the trust card, and bound into the trust hash. The refusal list shrinks to
+  kernel-takeover names only (GNOMON_*, NODE_OPTIONS, NODE_PATH, DYLD_*, LD_*, kernel-set names).
+rationale: >-
+  Founder: "people will want to just link their existing env files or have a local loop env file", and chose network
+  opt-in per loop. Aegis F1: the daemon re-execs with a scrubbed env (S-H3), so named vars never resolved. Reading files
+  at resolve time keeps that protection and matches how people already keep secrets.
+participants:
+  - id: founder
+    role: decider
+    stance: for
+  - id: security
+    role: reviewer
+    stance: for
+alternatives_considered:
+  - option: Keychain-backed Gnomon secrets with a Settings UI
+    rejected_because: founder prefers linking existing env files
+  - option: Inherit the login shell env
+    rejected_because: undoes the scrubbed-launch protection (S-H3)
+symbols_affected:
+  - '#loop-check'
+  - '#loop-act'
+  - '#loop-trust'
+  - '#session-env'
+status: active
