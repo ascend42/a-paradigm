@@ -1,0 +1,41 @@
+id: L-2026-10-24-ascend-041208-001
+type: insight
+timestamp: '2026-10-24T04:12:08.100Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon orchestration vision: the conductor model, the roster map, Cid''s context lane and the context lifecycle'
+summary: |-
+  The founder set direction for Gnomon to "take Claude's orchestration to the next level" while cutting tokens.
+  - Arky's design (revisions 1-2) found that context size over time is the biggest token lever. Every model call re-reads the whole context, so a 150k session costs about 6x per call what a 25k one does. Phase 1 is therefore the context lifecycle: a recover slip on open (any recent checkpoint, any branch, 72 h), and a pre-compaction checkpoint, fresh session and recover handoff at 70% and 85% of the window.
+  - Phase 2 is Cid's deterministic context pack. It comes from a userland gnomon-cid child, because the kernel must have zero dependencies, and goes in the one per-turn guidance block.
+  - Phase 3 is routing. The founder reframed it: the session model the human picks is the conductor, and the Paradigm roster maps agents to models (explorer haiku, builder sonnet, reviewers opus). Gnomon's route is overridable advice filled with roster models. Law 7 means the kernel never calls Haiku; routing is deterministic first, with a local-model tiebreak.
+  - Loid's learning plan: quality-first settlement after 7 days or the next same-symbol edit; deterministic floors (^gate → reviewer); upward-only exploration with 10% → 3% shadow audits; no approval by silence; no moat claim before 150 settled routes beat always-review.
+  - A Constellation mic-ownership idea was raised and left for its own design: Gnomon owns the mic, and Constellation receives transcripts as notes.
+symbols_touched:
+  - '#gnomon'
+  - '#supervisor'
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#cid-lane'
+  - '#gnomon-cid'
+  - '#context-handoff'
+  - '#kernel-slips'
+  - '#learning-loop'
+learnings:
+  - 'Context size over time beats routing as a token lever: hand off early at a turn boundary rather than let auto-compaction run mid-task.'
+  - 'The kernel''s zero-dependency rule and law 7 shape the architecture: Paradigm logic runs in a supervised userland child, and the kernel never calls Anthropic models.'
+  - A classifier's keyword-share score is not a probability; calibrate any confidence band against outcomes before trusting it.
+  - 'Silence is not approval: implicit accepts must not count as route accuracy.'
+tags:
+  - gnomon
+  - orchestration
+  - tokens
+  - design
+linked_lore:
+  - L-2026-10-24-ascend-002038-001
+git_context:
+  ref: 4e33a722ea7e4f8a4bae33dffa61819aaad60c50
+  branch: feat/gnomon
+  dirty: true

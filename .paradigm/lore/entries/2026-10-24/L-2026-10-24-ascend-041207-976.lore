@@ -1,0 +1,17 @@
+id: L-2026-10-24-ascend-041207-976
+type: insight
+timestamp: '2026-10-24T04:12:07.991Z'
+author: ascend
+title: Decision TD-2026-10-24-341 recorded
+summary: Companion lore entry for decision record TD-2026-10-24-341. See .paradigm/decisions/TD-2026-10-24-341.yaml.
+symbols_touched:
+  - '#cid-lane'
+  - '#gnomon-cid'
+  - '#context-handoff'
+  - '#kernel-slips'
+  - '#supervisor'
+references:
+  decision_id: TD-2026-10-24-341
+tags:
+  - companion-lore
+  - decision-reference
