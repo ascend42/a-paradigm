@@ -342,7 +342,7 @@ components:
       - team-funnel
     file: packages/paradigm-mcp/src/utils/orchestration-marker.ts
   yaml-validator:
-    description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.
+    description: Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod (v4, ZodType) schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.
     type: utility
     tags:
       - security

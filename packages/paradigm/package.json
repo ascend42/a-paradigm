@@ -39,7 +39,7 @@
     "@a-company/premise-core": "*",
     "@a-company/registry-client": "^0.1.0",
     "@a-company/university-core": "*",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
     "express": "^5.2.1",
@@ -48,11 +48,10 @@
     "open": "^10.0.3",
     "ora": "^8.0.1",
     "prompts": "^2.4.2",
-    "simple-git": "^3.22.0",
+    "simple-git": "^4.0.2",
     "sql.js": "^1.10.3",
-    "uuid": "^9.0.0",
     "ws": "^8.19.0",
-    "zod": "^3.23.0"
+    "zod": "^4.6.7"
   },
   "optionalDependencies": {
     "@a-company/warpline": "*"

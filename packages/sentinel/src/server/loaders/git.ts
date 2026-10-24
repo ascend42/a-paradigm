@@ -2,7 +2,7 @@
  * Git integration for loading commit history
  */
 
-import simpleGit, { type SimpleGit, type LogResult } from 'simple-git';
+import { simpleGit, type SimpleGit, type LogResult } from 'simple-git';
 import * as path from 'path';
 
 export interface CommitInfo {

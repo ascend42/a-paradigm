@@ -34,7 +34,7 @@ components:
   pack-discovery:
     description: '#pack-discovery: Slim loadPackManifest/discoverPacks/normalizeSections/resolveEntryAddress using raw js-yaml. Single source of pack discovery since v7.11 (the paradigm-mcp pack-loader duplicate was deleted). v7.11 pack.yaml v2 (PACK_SCHEMA_VERSION 2, 1 still accepted): resolveSkillDirs validates the explicit skills: list (relative, no .., realpath inside root, no symlinks at/under the dir, kebab basename, SKILL.md present, SKILL.md frontmatter metadata.paradigm.id === basename so skillCount matches what the skill loader loads) — violations skipped with classifier-only warnings, never fatal; discoverPacks attaches PackLocation.skillDirs (re-resolved on every call, never cached).'
   pack-schema:
-    description: '#pack-schema: zod Section schema (canonical since v7.11 — the paradigm-mcp copy was deleted) + v7.11 PackSkillRefSchema/PackSkillsArraySchema (MAX_SKILLS_PER_PACK 64)'
+    description: '#pack-schema: zod Section schema (canonical since v7.11 — the paradigm-mcp copy was deleted) + v7.11 PackSkillRefSchema/PackSkillsArraySchema (MAX_SKILLS_PER_PACK 64). zod 4: custom messages use the unified `error` param (pinned by src/__tests__/pack-schema-messages.test.ts)'
   university-core-logger:
     description: '#university-core-logger: UniversityCoreLogger interface + setUniversityCoreLogger + NOOP default'
   pack-discovery-tests:

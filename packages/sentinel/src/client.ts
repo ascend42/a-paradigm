@@ -11,7 +11,6 @@
  *   await client.close();
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import type {
   LogEntryInput,
   LogLevel,
@@ -19,6 +18,21 @@ import type {
   ServiceRegistration,
   TraceSpanInput,
 } from './types.js';
+
+/**
+ * A v4 UUID from the Web Crypto global (not node:crypto), so the client SDK stays usable in
+ * browser bundles as well as Node. `crypto.randomUUID` exists only in secure contexts (HTTPS,
+ * localhost); on a plain-http page fall back to `crypto.getRandomValues`, which is always there.
+ */
+function newUuid(): string {
+  const c = globalThis.crypto;
+  if (typeof c.randomUUID === 'function') return c.randomUUID();
+  const b = c.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // PUBLIC INTERFACES
@@ -106,7 +120,7 @@ export class SentinelClient {
     this.retryBackoffMs = options.retryBackoffMs ?? DEFAULTS.retryBackoffMs;
     this.onDrop = options.onDrop;
     this.onError = options.onError;
-    this.sessionId = uuidv4();
+    this.sessionId = newUuid();
 
     // Start periodic flush
     const intervalMs = options.flushIntervalMs ?? DEFAULTS.flushIntervalMs;
@@ -225,8 +239,8 @@ export class SentinelClient {
 
   /** Start a trace span. Call end() on the returned SpanContext when the operation completes. */
   startSpan(symbol: string, operation: string, parentSpanId?: string): SpanContext {
-    const traceId = parentSpanId ? parentSpanId.split('-')[0] || uuidv4() : uuidv4();
-    const spanId = uuidv4();
+    const traceId = parentSpanId ? parentSpanId.split('-')[0] || newUuid() : newUuid();
+    const spanId = newUuid();
     const startTime = new Date().toISOString();
     const startMs = Date.now();
 

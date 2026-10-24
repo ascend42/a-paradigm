@@ -555,7 +555,7 @@ components:
     description: Validates project setup
     type: utility
   config-schema-validator:
-    description: Zod-based schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys
+    description: Zod-based (zod 4) schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys
     type: utility
   integrity-checker:
     description: CLI integrity check implementation — broken references, duplicate symbols, orphaned symbols, missing anchors
