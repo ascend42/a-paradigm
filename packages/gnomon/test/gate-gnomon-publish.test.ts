@@ -17,6 +17,8 @@ import { MIN_VOICE_IO_VERSION } from '../src/kernel/voice/voice-install.js';
 import { PKG_ROOT } from './helpers.js';
 
 const PACKAGES = path.resolve(PKG_ROOT, '..');
+// the release under test follows the package's own version, so a version bump never strands this suite
+const RELEASE = (JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as { version: string }).version;
 const ARCHES = ['arm64']; // Apple silicon only in 8.0 (TD-2026-10-22-310)
 let root = '';
 const sha = (f: string): string => createHash('sha256').update(fs.readFileSync(f)).digest('hex');
@@ -50,7 +52,7 @@ function buildDist(release: boolean): void {
   const voice = path.join(root, 'gnomon-voice-io');
   fs.writeFileSync(voice, `#!/bin/sh\necho "gnomon-voice-io ${MIN_VOICE_IO_VERSION}"\n`, { mode: 0o755 });
   const zips = ARCHES.flatMap((a) => ['--app-zip', `${a}=${path.join(root, 'packages', `gnomon-darwin-${a}`, 'Gnomon.app.zip')}`]);
-  const b = spawnSync(process.execPath, [path.join(PKG_ROOT, 'scripts', 'build-release.mjs'), '--out-dir', dist, '--helper', helper, '--voice-io', voice, '--arch', 'universal', '--no-codesign', '--release', '8.0.0', ...zips], { encoding: 'utf8', cwd: PKG_ROOT });
+  const b = spawnSync(process.execPath, [path.join(PKG_ROOT, 'scripts', 'build-release.mjs'), '--out-dir', dist, '--helper', helper, '--voice-io', voice, '--arch', 'universal', '--no-codesign', '--release', RELEASE, ...zips], { encoding: 'utf8', cwd: PKG_ROOT });
   if (b.status !== 0) throw new Error(b.stderr);
 }
 
@@ -85,7 +87,7 @@ describe('gate-gnomon-publish', () => {
     try {
       fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(orig), version: '7.0.0', scripts: { postinstall: 'echo hi' } }));
       const problems: string[] = await gateProblems(root);
-      expect(problems.join('\n')).toMatch(/lockstep: .*gnomon-darwin-arm64.* version is 7.0.0, want 8.0.0/);
+      expect(problems.join('\n')).toMatch(new RegExp(`lockstep: .*gnomon-darwin-arm64.* version is 7\\.0\\.0, want ${RELEASE.replace(/\./g, '\\.')}`));
       expect(problems.join('\n')).toMatch(/gnomon-darwin-arm64: has scripts \(postinstall\)/);
     } finally {
       fs.writeFileSync(f, orig);
@@ -101,7 +103,7 @@ describe('gate-gnomon-publish', () => {
       const j = JSON.parse(orig);
       fs.writeFileSync(f, JSON.stringify({ ...j, optionalDependencies: { ...j.optionalDependencies, '@a-company/gnomon-darwin-x64': j.version } }));
       const again: string[] = await gateProblems(root);
-      expect(again.join('\n')).toMatch(/lockstep: .*optionalDependencies\.@a-company\/gnomon-darwin-x64 is 8\.0\.0, want \(absent\)/);
+      expect(again.join('\n')).toMatch(new RegExp(`lockstep: .*optionalDependencies\\.@a-company/gnomon-darwin-x64 is ${RELEASE.replace(/\./g, '\\.')}, want \\(absent\\)`));
     } finally {
       fs.writeFileSync(f, orig);
     }
