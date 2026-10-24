@@ -24,9 +24,10 @@ type Cls = 'reversible' | 'gate' | 'judgment';
 
 /** Per kind and class: the decisions voice may take. Everything else is refused. */
 const EXPECTED: Record<string, Record<Cls, string[]>> = {
-  // toggle 1 (D58): permission allow/deny, ask-user answer, plan approve-plan; plan reject via D66
+  // toggle 1 (D58): permission allow/deny, plan approve-plan; plan reject via D66
   permission: { reversible: ['allow', 'deny', 'withdraw'], gate: ['allow', 'deny', 'withdraw'], judgment: ['allow', 'deny', 'withdraw'] },
-  'ask-user': { reversible: ['answer', 'withdraw'], gate: ['answer', 'withdraw'], judgment: ['answer', 'withdraw'] },
+  // Aegis L1 (2026-10-24): voice never answers a question: fully hand-only
+  'ask-user': { reversible: [], gate: [], judgment: [] },
   plan: { reversible: ['approve-plan', 'reject', 'withdraw'], gate: ['approve-plan', 'reject', 'withdraw'], judgment: ['approve-plan', 'reject', 'withdraw'] },
   // toggle 2 (D58): gate-class, fallback-cloud, resume; deny under toggle 1 (D66)
   'gate-class': { reversible: ['deny', 'withdraw'], gate: ['allow', 'deny', 'withdraw'], judgment: ['allow', 'deny', 'withdraw'] },
@@ -60,7 +61,6 @@ const EXPECTED: Record<string, Record<Cls, string[]>> = {
 /** Approving decisions take the hold; deny-direction and withdraw do not (§14.7 Hold, echo, undo; D66). */
 const HELD: Record<string, string[]> = {
   permission: ['allow'],
-  'ask-user': ['answer'],
   plan: ['approve-plan'],
   'gate-class': ['allow'],
   fallback: ['fallback-cloud'],

@@ -3359,7 +3359,17 @@ components:
       GUI verifies against contentHash; answers are null-prototype objects;
       every multi-line field body is fenced by fieldLines (FIELD_BODY_PREFIX
       + an end marker; model-chosen keys JSON-quoted), the shared helper
-      that replaces the hardening lane's T-032(2) copy. Accepted risk (spec
+      that replaces the hardening lane's T-032(2) copy. PREVIEWS
+      (#gui-ask-card, 2026-10-24, probe p-ask-2.1.309): claude 2.1.309 sends
+      `preview` on options, so it is a known option key (text ≤
+      ASK_MAX_PREVIEW_CHARS 4000, a fenced `preview N.M` card field, in the
+      detail only where given); a repeated label in one question is
+      bad-input. Aegis M1 (2026-10-24): any question, header, label,
+      description or preview the display sanitizer flags is bad-input.
+      Aegis L2: askAnswerCap (multi: every label + ', ' + Other) bounds each
+      answer and askNoteCap (worst JSON expansion, never below 4096) is the
+      card's broker maxNoteChars, so a full answer is never refused.
+      Accepted risk (spec
       §3.4, Aegis C3, T-2026-10-19-001): the note is in neither the
       decisionSig nor the presence binding. PLAN TEXT (item 3):
       claude 2.1.302 sends ExitPlanMode with input:{} (p01b planMode, after

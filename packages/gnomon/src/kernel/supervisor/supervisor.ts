@@ -119,7 +119,7 @@ import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, hookFactsOf, hookStoredLine, syntheticStoredLine, DEFAULT_SESSION_HOOKS, repoContextFor, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, mcpResponseLine, controlSetModelLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
 import { EDIT_RULE_TOOLS as EDIT_SCOPE_TOOLS } from './rules.js';
-import { answerFor, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCOPE_KINDS, inputHash, withEditScopes, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
+import { answerFor, askNoteCap, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCOPE_KINDS, inputHash, withEditScopes, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle } from './local-session.js';
@@ -1634,6 +1634,8 @@ export class SessionSupervisor {
       ? {
           timeoutMs: ASK_USER_TIMEOUT_MS,
           privateNote: true,
+          // Aegis L2: the note cap fits the longest answer these questions admit (never an unfixable refusal)
+          maxNoteChars: askNoteCap(qs),
           checkNote: (decision: string, note: string | undefined): string | null => {
             if (decision !== 'answer') return null;
             const a = parseAskAnswer(qs, note);

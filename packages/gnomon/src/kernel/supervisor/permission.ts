@@ -43,7 +43,7 @@
  * granted by the meter); only the human's decision on the card does.
  */
 import * as path from 'node:path';
-import { canonicalJson } from '@a-company/gnomon-contracts';
+import { canonicalJson, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { createHash } from 'node:crypto';
 import { realpathFollow, realpathLoose, UnresolvablePath, type PolicyPath } from '../manifest/policy.js';
 import { wrappedBlock } from '../manifest/install.js';
@@ -62,15 +62,29 @@ export const ASK_MAX_QUESTION_CHARS = 400;
 export const ASK_MAX_LABEL_CHARS = 150;
 export const ASK_MAX_TEXT_CHARS = 400;
 export const ASK_MAX_ANSWER_CHARS = 1000;
-/** The closed AskUserQuestion schema (p01b, claude 2.1.302): any other key is refused (Aegis C1). */
+/** The broker's default approve-note cap; an ask-user card raises its own (askNoteCap), never lower than this. */
+export const ASK_BASE_NOTE_CHARS = 4096;
+/**
+ * #gui-ask-card: an option's `preview` (claude 2.1.309 sends it, probe p-ask-2.1.309: multi-line text such as a code
+ * snippet, shown when the option is focused). Shown in FULL as fenced card lines and as plain text in the GUI, never
+ * as markup; over this bound the request is bad-input (never cut).
+ */
+export const ASK_MAX_PREVIEW_CHARS = 4000;
+/** The closed AskUserQuestion schema (p01b, claude 2.1.302; `preview` added from claude 2.1.309): any other key is refused (Aegis C1). */
 export const ASK_INPUT_KEYS = Object.freeze(['questions']);
 export const ASK_QUESTION_KEYS = Object.freeze(['question', 'header', 'options', 'multiSelect']);
-export const ASK_OPTION_KEYS = Object.freeze(['label', 'description']);
+export const ASK_OPTION_KEYS = Object.freeze(['label', 'description', 'preview']);
+/** One option as the kernel holds it: `preview` only when the request gave one (the detail of a preview-less request is unchanged). */
+export interface AskOption {
+  label: string;
+  description: string | null;
+  preview?: string;
+}
 /** A question as the kernel holds it (validated, from the request input). */
 export interface AskQuestion {
   question: string;
   header: string | null;
-  options: Array<{ label: string; description: string | null }>;
+  options: AskOption[];
   multiSelect: boolean;
 }
 export const PERMISSION_DECISIONS = Object.freeze(['allow', 'deny', 'always'] as const);
@@ -355,6 +369,9 @@ const cps = (t: string): number => Array.from(t).length;
 export function askQuestions(input: Record<string, unknown>): AskQuestion[] | string {
   // Aegis C1: a closed schema — any other key (at any level) is refused, never rendered
   const extra = (o: Record<string, unknown>, keys: readonly string[]): string | null => Object.keys(o).find((k) => !keys.includes(k)) ?? null;
+  // Aegis M1 (2026-10-24): text the ONE display sanitizer flags (bidi, hidden or tag characters, controls) is refused,
+  // fail closed, as table talk does: it would show altered on the card and could ride back inside the human's answer
+  const flagged = (t: unknown): boolean => typeof t === 'string' && sanitizeDisplayText(t).flags.length > 0;
   if (extra(input, ASK_INPUT_KEYS) !== null) return 'unknown input key (only questions)';
   const q = input.questions;
   if (!Array.isArray(q) || q.length === 0) return 'questions must be a non-empty list';
@@ -367,6 +384,7 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
     if (extra(o, ASK_QUESTION_KEYS) !== null) return `question ${i + 1} has an unknown key`;
     if (!oneLine(o.question) || cps(o.question) > ASK_MAX_QUESTION_CHARS) return `question ${i + 1} must be one line of at most ${ASK_MAX_QUESTION_CHARS} characters`;
     if (seen.has(o.question)) return `question ${i + 1} repeats an earlier question`;
+    if (flagged(o.question) || flagged(o.header)) return `question ${i + 1} has hidden, bidi or control characters`;
     seen.add(o.question);
     if (o.header !== undefined && (typeof o.header !== 'string' || !oneLine(o.header) || cps(o.header) > ASK_MAX_LABEL_CHARS)) return `question ${i + 1} header must be one short line`;
     if (o.multiSelect !== undefined && typeof o.multiSelect !== 'boolean') return `question ${i + 1} multiSelect must be true or false`;
@@ -378,7 +396,10 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
       if (p && extra(p, ASK_OPTION_KEYS) !== null) return `question ${i + 1} option ${j + 1} has an unknown key`;
       if (!p || typeof p.label !== 'string' || p.label.trim() === '' || !oneLine(p.label) || cps(p.label) > ASK_MAX_LABEL_CHARS) return `question ${i + 1} option ${j + 1} needs a one-line label of at most ${ASK_MAX_LABEL_CHARS} characters`;
       if (p.description !== undefined && (typeof p.description !== 'string' || !oneLine(p.description) || cps(p.description) > ASK_MAX_TEXT_CHARS)) return `question ${i + 1} option ${j + 1} description must be one line of at most ${ASK_MAX_TEXT_CHARS} characters`;
-      options.push({ label: p.label, description: typeof p.description === 'string' ? p.description : null });
+      if (p.preview !== undefined && (typeof p.preview !== 'string' || p.preview.trim() === '' || p.preview.includes('\0') || cps(p.preview) > ASK_MAX_PREVIEW_CHARS)) return `question ${i + 1} option ${j + 1} preview must be text of at most ${ASK_MAX_PREVIEW_CHARS} characters`;
+      if (options.some((x) => x.label === p.label)) return `question ${i + 1} option ${j + 1} repeats an earlier label`;
+      if (flagged(p.label) || flagged(p.description) || flagged(p.preview)) return `question ${i + 1} option ${j + 1} has hidden, bidi or control characters`;
+      options.push({ label: p.label, description: typeof p.description === 'string' ? p.description : null, ...(typeof p.preview === 'string' ? { preview: p.preview } : {}) });
     }
     out.push({ question: o.question, header: typeof o.header === 'string' ? o.header : null, options, multiSelect: o.multiSelect === true });
   }
@@ -386,10 +407,12 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
 }
 
 /**
- * The card lines of the questions: a FIXED line grammar the GUI picker reads
- * back (`question N: …`, `option N.M: …`). Every value is one line under the
- * wrap width, so no line is ever continued. The GUI's parse is display only:
- * the kernel validates every answer against the questions it holds.
+ * The card lines of the questions: a FIXED line grammar (`question N: …`,
+ * `option N.M: …`). Every value is one line under the wrap width, so no line
+ * is ever continued, except a `preview N.M` field: multi-line, every line
+ * fenced (fieldLines, Aegis L4). The GUI never parses these lines (its picker
+ * reads the contentHash-verified detail); the kernel validates every answer
+ * against the questions it holds.
  */
 export function askLines(qs: readonly AskQuestion[]): string[] {
   const out: string[] = [];
@@ -401,9 +424,32 @@ export function askLines(qs: readonly AskQuestion[]): string[] {
     for (const [j, o] of q.options.entries()) {
       out.push(`option ${n}.${j + 1}: ${o.label}`);
       if (o.description) out.push(`about ${n}.${j + 1}: ${o.description}`);
+      if (o.preview !== undefined) out.push(...fieldLines(`preview ${n}.${j + 1}`, o.preview));
     }
   }
   return out;
+}
+
+/**
+ * Aegis L2 (2026-10-24): the longest answer a question can take. One pick: ASK_MAX_ANSWER_CHARS (a label is shorter).
+ * Many: every label joined with ', ', then ', ' and an Other text of ASK_MAX_ANSWER_CHARS (the GUI's composition), so a
+ * full multi-select answer is never refused.
+ */
+export function askAnswerCap(q: AskQuestion): number {
+  if (!q.multiSelect) return ASK_MAX_ANSWER_CHARS;
+  return q.options.reduce((n, o) => n + cps(o.label) + 2, 0) + ASK_MAX_ANSWER_CHARS;
+}
+
+/**
+ * Aegis L2: the approve-note cap of an ask-user card (the broker's maxNoteChars), sized so the longest note the
+ * questions admit always fits: the JSON {answers} form with every question text and its askAnswerCap, at the worst
+ * JSON.stringify expansion (6 UTF-16 units per code point: a control or lone surrogate as \uXXXX), plus framing.
+ * Never below ASK_BASE_NOTE_CHARS. With the schema bounds (8 questions, 16 options) it stays under 300k units, far
+ * inside the transport's 4 MiB frame.
+ */
+export function askNoteCap(qs: readonly AskQuestion[]): number {
+  const worst = qs.reduce((n, q) => n + 6 * (cps(q.question) + askAnswerCap(q)) + 8, 16);
+  return Math.max(ASK_BASE_NOTE_CHARS, worst);
 }
 
 /**
@@ -441,7 +487,8 @@ export function parseAskAnswer(qs: readonly AskQuestion[], note: unknown): { ans
   const answers = Object.create(null) as Record<string, string>;
   for (const q of qs) {
     const a = obj[q.question];
-    if (typeof a !== 'string' || a.trim() === '' || cps(a) > ASK_MAX_ANSWER_CHARS) return { error: `each answer must be non-empty text of at most ${ASK_MAX_ANSWER_CHARS} characters` };
+    const capQ = askAnswerCap(q);
+    if (typeof a !== 'string' || a.trim() === '' || cps(a) > capQ) return { error: `each answer must be non-empty text of at most ${capQ} characters` };
     answers[q.question] = a;
   }
   return { answers };
