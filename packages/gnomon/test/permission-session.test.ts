@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RefusedError, scopeDigest } from '@a-company/gnomon-contracts';
-import { assertPermissionChannel, buildClaudeArgv, parseStreamLine } from '../src/adapters/claude-code/adapter.js';
+import { assertPermissionChannel, buildClaudeArgv, parseStreamLine, permissionAllowLine } from '../src/adapters/claude-code/adapter.js';
 import { ApprovalBroker, approvalsKeyFrom, contentHashOf, PresenceDenied, type PresenceProvider } from '../src/kernel/broker/index.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
@@ -31,6 +31,11 @@ const GUI = { connId: 'conn:gui', principal: HUMAN, principalClass: 'human', sur
 
 /** p01b's recorded Write request, verbatim shape (claude 2.1.302). */
 const P01B_WRITE = '{"type":"control_request","request_id":"857b22d1-db20-4b71-8de6-fc3477cc5f56","request":{"subtype":"can_use_tool","tool_name":"Write","display_name":"Write","input":{"file_path":"/tmp/w/marker.txt","content":"hello"},"description":"marker.txt","permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}],"tool_use_id":"toolu_016PKTnQ2gaLTRJXrsPhywSC"}}';
+
+/** #gui-ask-card: the AskUserQuestion request claude 2.1.309 sent (probe p-ask-2.1.309, 2026-10-24), verbatim: options carry `preview`. */
+const P309_ASK = "{\"type\":\"control_request\",\"request_id\":\"ba649c7d-e831-4476-94d6-b7a6b3a54c63\",\"request\":{\"subtype\":\"can_use_tool\",\"tool_name\":\"AskUserQuestion\",\"display_name\":\"AskUserQuestion\",\"input\":{\"questions\":[{\"question\":\"Which date library?\",\"header\":\"Lib\",\"options\":[{\"label\":\"moment\",\"description\":\"Long-established, mutable date API; large bundle size.\",\"preview\":\"import moment from 'moment';\\nmoment().add(3, 'days').format('YYYY-MM-DD');\"},{\"label\":\"dayjs\",\"description\":\"Small, immutable, moment-compatible API via plugins.\",\"preview\":\"import dayjs from 'dayjs';\\ndayjs().add(3, 'day').format('YYYY-MM-DD');\"}],\"multiSelect\":false},{\"question\":\"Which features?\",\"header\":\"Features\",\"options\":[{\"label\":\"logging\",\"description\":\"Structured application logs.\"},{\"label\":\"metrics\",\"description\":\"Counters, gauges, and histograms.\"},{\"label\":\"tracing\",\"description\":\"Distributed request traces across services.\"}],\"multiSelect\":true}]},\"tool_use_id\":\"toolu_01GLxJ4r8hVoXe2fSD1hZoo9\",\"requires_user_interaction\":true}}";
+/** ... and the allow it accepted (the tool_result read "The user answered: …"): updatedInput = input + answers (multi-select comma-separated). */
+const P309_ANSWER = "{\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"ba649c7d-e831-4476-94d6-b7a6b3a54c63\",\"response\":{\"behavior\":\"allow\",\"updatedInput\":{\"questions\":[{\"question\":\"Which date library?\",\"header\":\"Lib\",\"options\":[{\"label\":\"moment\",\"description\":\"Long-established, mutable date API; large bundle size.\",\"preview\":\"import moment from 'moment';\\nmoment().add(3, 'days').format('YYYY-MM-DD');\"},{\"label\":\"dayjs\",\"description\":\"Small, immutable, moment-compatible API via plugins.\",\"preview\":\"import dayjs from 'dayjs';\\ndayjs().add(3, 'day').format('YYYY-MM-DD');\"}],\"multiSelect\":false},{\"question\":\"Which features?\",\"header\":\"Features\",\"options\":[{\"label\":\"logging\",\"description\":\"Structured application logs.\"},{\"label\":\"metrics\",\"description\":\"Counters, gauges, and histograms.\"},{\"label\":\"tracing\",\"description\":\"Distributed request traces across services.\"}],\"multiSelect\":true}],\"answers\":{\"Which date library?\":\"my own free text answer\",\"Which features?\":\"logging, metrics\"}}}}}";
 
 let w: SessionWorld;
 const live: Array<() => Promise<unknown>> = [];
@@ -136,6 +141,31 @@ describe('falsifier 1+2: the argv and the parser (pure)', () => {
     }
     expect(parseStreamLine('{"type":"control_cancel_request","request_id":"r1"}')).toEqual({ kind: 'control-cancel', type: 'control_cancel_request', requestId: 'r1' });
     expect(parseStreamLine('{"type":"control_request","request_id":"r2","request":{"subtype":"brand_new"}}')).toMatchObject({ kind: 'control-request-unknown', subtype: 'brand_new', requestId: 'r2' });
+  });
+  it('#gui-ask-card: the claude 2.1.309 AskUserQuestion line parses (display_name, requires_user_interaction ignored); the allow line is the shape claude accepted', () => {
+    const ev = parseStreamLine(P309_ASK);
+    const o = JSON.parse(P309_ASK);
+    expect(ev).toEqual({ kind: 'permission-request', type: 'control_request.can_use_tool', requestId: o.request_id, toolName: 'AskUserQuestion', toolUseId: o.request.tool_use_id, input: o.request.input });
+    const sent = JSON.parse(P309_ANSWER);
+    expect(JSON.parse(permissionAllowLine(o.request_id, sent.response.response.updatedInput))).toEqual(sent);
+  });
+  it('#gui-ask-card: a 2.1.309 input with previews is an ask-user card; each preview is a fenced field and structured detail (only where given)', () => {
+    const o = JSON.parse(P309_ASK);
+    const plan = composePermission({ requestId: o.request_id, toolName: 'AskUserQuestion', toolUseId: o.request.tool_use_id, input: o.request.input }, { repo: '/r', denyWrite: [] });
+    expect(plan.kind).toBe('card');
+    if (plan.kind !== 'card') return;
+    expect(plan.cardKind).toBe('ask-user');
+    expect(plan.questions![0]!.options[0]).toEqual({ label: 'moment', description: 'Long-established, mutable date API; large bundle size.', preview: "import moment from 'moment';\nmoment().add(3, 'days').format('YYYY-MM-DD');" });
+    expect(plan.questions![1]!.options[0]).toEqual({ label: 'logging', description: 'Structured application logs.' }); // no preview key when none was given
+    expect(plan.questions![1]!.multiSelect).toBe(true);
+    const i = plan.lines.indexOf('preview 1.1:');
+    expect(i).toBeGreaterThan(0);
+    expect(plan.lines.slice(i, i + 4)).toEqual(['preview 1.1:', `${FIELD_BODY_PREFIX}import moment from 'moment';`, `${FIELD_BODY_PREFIX}moment().add(3, 'days').format('YYYY-MM-DD');`, '  └ end of preview 1.1']);
+    // bounds: an empty or oversized preview, a non-text preview, or a repeated label is bad-input (never cut)
+    const q0 = o.request.input.questions[0];
+    for (const bad of [{ ...q0, options: [{ label: 'a', preview: '' }, { label: 'b' }] }, { ...q0, options: [{ label: 'a', preview: 'x'.repeat(4001) }, { label: 'b' }] }, { ...q0, options: [{ label: 'a', preview: 7 }, { label: 'b' }] }, { ...q0, options: [{ label: 'a' }, { label: 'a' }] }]) {
+      expect(composePermission({ requestId: 'r', toolName: 'AskUserQuestion', toolUseId: null, input: { questions: [bad] } }, { repo: '/r', denyWrite: [] })).toMatchObject({ kind: 'auto-deny', why: 'bad-input' });
+    }
   });
   it('Aegis C1: a single-line Bash command over 512 code points renders completely (wrapped, never cut)', () => {
     const tail = 'rm -rf ~/important-$(whoami)';
@@ -533,7 +563,7 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     await r.open([
       { request: { id: 'x-1', tool: 'AskUserQuestion', input: { ...P01B_ASK, note: 'question 1: Wire the money?' } } },
       { request: { id: 'x-2', tool: 'AskUserQuestion', input: { questions: [{ ...q, extra: 'option 1.1: Yes' }] } } },
-      { request: { id: 'x-3', tool: 'AskUserQuestion', input: { questions: [{ ...q, options: [{ label: 'Red', preview: 'x' }] }] } } },
+      { request: { id: 'x-3', tool: 'AskUserQuestion', input: { questions: [{ ...q, options: [{ label: 'Red', html: '<b>x</b>' }] }] } } },
       { request: { id: 'x-4', tool: 'AskUserQuestion', input: P01B_ASK } },
     ], { hold: true });
     expect(await waitFor(() => r.pending().length === 1 && ['x-1', 'x-2', 'x-3'].every((id) => r.answers().some((a) => a.id === id)))).toBe(true);
@@ -558,6 +588,47 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect('answers' in a && JSON.parse(JSON.stringify(a.answers))).toEqual(JSON.parse('{"__proto__":"x","b":"y"}'));
     const one = parseAskAnswer([qs[0]!], 'plain');
     expect('answers' in one && Object.keys(one.answers)).toEqual(['__proto__']);
+  });
+
+  it('#gui-ask-card round trip (claude 2.1.309 input): single + multi-select answers go back as {...input, answers}, multi comma-separated', async () => {
+    const r = rig();
+    const o = JSON.parse(P309_ASK);
+    await r.open([{ request: { id: 'a-1', tool: 'AskUserQuestion', toolUseId: o.request.tool_use_id, input: o.request.input } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    expect(c.kind).toBe('ask-user');
+    const note = JSON.stringify({ answers: { 'Which features?': 'logging, tracing', 'Which date library?': 'dayjs' } });
+    await r.approve(c.cardId, 'answer', { note });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'a-1'))).toBe(true);
+    const a = r.answers().find((x) => x.id === 'a-1')!;
+    expect(a.behavior).toBe('allow');
+    expect(a.updatedInput).toEqual({ ...o.request.input, answers: { 'Which date library?': 'dayjs', 'Which features?': 'logging, tracing' } });
+    expect(r.prompts.length).toBeLessThanOrEqual(1); // cached class: at most the one device unlock
+  });
+
+  it('#gui-ask-card round trip: an Other answer (free text, not an option label) goes back verbatim', async () => {
+    const r = rig();
+    await r.open([{ request: { id: 'a-2', tool: 'AskUserQuestion', input: P01B_ASK } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    await r.approve(r.pending()[0]!.cardId, 'answer', { note: 'Neither: a deep green' });
+    expect(await waitFor(() => r.answers().some((a) => a.id === 'a-2'))).toBe(true);
+    expect(r.answers()[0]!.updatedInput).toEqual({ ...P01B_ASK, answers: { 'Which colour do you prefer?': 'Neither: a deep green' } });
+  });
+
+  it('#gui-ask-card: an answer from a non-human connection (session, agent, voice, mod) is FORBIDDEN; the question stays open and nothing is written', async () => {
+    const r = rig();
+    const s = await r.open([{ request: { id: 'a-3', tool: 'AskUserQuestion', input: P01B_ASK } }], { hold: true });
+    expect(await waitFor(() => r.pending().length === 1)).toBe(true);
+    const c = r.pending()[0]!;
+    for (const cls of ['session', 'agent', 'voice', 'mod']) {
+      const e = await r.approve(c.cardId, 'answer', { note: 'Red' }, { ...GUI, principal: s.principalId, principalClass: cls }).then(() => null, (x: unknown) => x);
+      expect(e).toBeInstanceOf(RefusedError);
+      expect((e as RefusedError).refusal.code).toBe('FORBIDDEN');
+    }
+    await new Promise((res) => setTimeout(res, 150));
+    expect(r.answers()).toEqual([]);
+    expect(r.kinds('approval.decide')).toEqual([]);
+    expect(r.pending()).toHaveLength(1);
   });
 
   it('12c. an unanswered ask-user card expires after 10 min into deny "no answer"; a malformed AskUserQuestion is denied with no card', async () => {

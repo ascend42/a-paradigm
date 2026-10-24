@@ -62,15 +62,27 @@ export const ASK_MAX_QUESTION_CHARS = 400;
 export const ASK_MAX_LABEL_CHARS = 150;
 export const ASK_MAX_TEXT_CHARS = 400;
 export const ASK_MAX_ANSWER_CHARS = 1000;
-/** The closed AskUserQuestion schema (p01b, claude 2.1.302): any other key is refused (Aegis C1). */
+/**
+ * #gui-ask-card: an option's `preview` (claude 2.1.309 sends it, probe p-ask-2.1.309: multi-line text such as a code
+ * snippet, shown when the option is focused). Shown in FULL as fenced card lines and as plain text in the GUI, never
+ * as markup; over this bound the request is bad-input (never cut).
+ */
+export const ASK_MAX_PREVIEW_CHARS = 4000;
+/** The closed AskUserQuestion schema (p01b, claude 2.1.302; `preview` added from claude 2.1.309): any other key is refused (Aegis C1). */
 export const ASK_INPUT_KEYS = Object.freeze(['questions']);
 export const ASK_QUESTION_KEYS = Object.freeze(['question', 'header', 'options', 'multiSelect']);
-export const ASK_OPTION_KEYS = Object.freeze(['label', 'description']);
+export const ASK_OPTION_KEYS = Object.freeze(['label', 'description', 'preview']);
+/** One option as the kernel holds it: `preview` only when the request gave one (the detail of a preview-less request is unchanged). */
+export interface AskOption {
+  label: string;
+  description: string | null;
+  preview?: string;
+}
 /** A question as the kernel holds it (validated, from the request input). */
 export interface AskQuestion {
   question: string;
   header: string | null;
-  options: Array<{ label: string; description: string | null }>;
+  options: AskOption[];
   multiSelect: boolean;
 }
 export const PERMISSION_DECISIONS = Object.freeze(['allow', 'deny', 'always'] as const);
@@ -378,7 +390,9 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
       if (p && extra(p, ASK_OPTION_KEYS) !== null) return `question ${i + 1} option ${j + 1} has an unknown key`;
       if (!p || typeof p.label !== 'string' || p.label.trim() === '' || !oneLine(p.label) || cps(p.label) > ASK_MAX_LABEL_CHARS) return `question ${i + 1} option ${j + 1} needs a one-line label of at most ${ASK_MAX_LABEL_CHARS} characters`;
       if (p.description !== undefined && (typeof p.description !== 'string' || !oneLine(p.description) || cps(p.description) > ASK_MAX_TEXT_CHARS)) return `question ${i + 1} option ${j + 1} description must be one line of at most ${ASK_MAX_TEXT_CHARS} characters`;
-      options.push({ label: p.label, description: typeof p.description === 'string' ? p.description : null });
+      if (p.preview !== undefined && (typeof p.preview !== 'string' || p.preview.trim() === '' || p.preview.includes('\0') || cps(p.preview) > ASK_MAX_PREVIEW_CHARS)) return `question ${i + 1} option ${j + 1} preview must be text of at most ${ASK_MAX_PREVIEW_CHARS} characters`;
+      if (options.some((x) => x.label === p.label)) return `question ${i + 1} option ${j + 1} repeats an earlier label`;
+      options.push({ label: p.label, description: typeof p.description === 'string' ? p.description : null, ...(typeof p.preview === 'string' ? { preview: p.preview } : {}) });
     }
     out.push({ question: o.question, header: typeof o.header === 'string' ? o.header : null, options, multiSelect: o.multiSelect === true });
   }
@@ -386,10 +400,12 @@ export function askQuestions(input: Record<string, unknown>): AskQuestion[] | st
 }
 
 /**
- * The card lines of the questions: a FIXED line grammar the GUI picker reads
- * back (`question N: …`, `option N.M: …`). Every value is one line under the
- * wrap width, so no line is ever continued. The GUI's parse is display only:
- * the kernel validates every answer against the questions it holds.
+ * The card lines of the questions: a FIXED line grammar (`question N: …`,
+ * `option N.M: …`). Every value is one line under the wrap width, so no line
+ * is ever continued, except a `preview N.M` field: multi-line, every line
+ * fenced (fieldLines, Aegis L4). The GUI never parses these lines (its picker
+ * reads the contentHash-verified detail); the kernel validates every answer
+ * against the questions it holds.
  */
 export function askLines(qs: readonly AskQuestion[]): string[] {
   const out: string[] = [];
@@ -401,6 +417,7 @@ export function askLines(qs: readonly AskQuestion[]): string[] {
     for (const [j, o] of q.options.entries()) {
       out.push(`option ${n}.${j + 1}: ${o.label}`);
       if (o.description) out.push(`about ${n}.${j + 1}: ${o.description}`);
+      if (o.preview !== undefined) out.push(...fieldLines(`preview ${n}.${j + 1}`, o.preview));
     }
   }
   return out;
