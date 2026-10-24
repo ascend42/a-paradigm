@@ -198,7 +198,9 @@ html, body {
 /* design-system migration keys (session 2026-10-22-gnomon-local-model F10): a disabled pri key (Run now, a busy Allow,
    Checking…) draws as a default key with --sec text, as .seg-key[disabled]; --sec on the ink fill was about 2.6:1 */
 .key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
-[data-theme="night"] .key.pri[disabled]::before, [data-theme="night"] .key.pri[disabled]::after { color: var(--sec); }
+/* Mika Delta 11: an aria-disabled pri key (the question card's Submit until every question is answered) draws the same */
+.key.pri[aria-disabled="true"], .key.pri[aria-disabled="true"]:hover { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
+[data-theme="night"] .key.pri[disabled]::before, [data-theme="night"] .key.pri[disabled]::after, [data-theme="night"] .key.pri[aria-disabled="true"]::before, [data-theme="night"] .key.pri[aria-disabled="true"]::after { color: var(--sec); }
 
 .field {
   font: inherit; color: var(--ink);
@@ -655,8 +657,19 @@ html, body {
 .ask-opt:focus-visible, .ask-free:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .ask-opt.picked { border-color: var(--ink2); }
 .ask-opt.picked .ask-k { color: var(--ink); font-weight: 600; }
-.ask-opt[role="radio"].picked .ask-l::before { content: "● "; }
-.ask-opt[role="checkbox"].picked .ask-l::before { content: "✓ "; }
+/* Mika Delta 11: the control is drawn at rest (a ring for one pick, a box for many) so the kind of choice reads before
+   the first press, and picking fills it in place (no glyph inserted, the label never shifts) */
+.ask-opt .ask-l::before {
+  content: ""; display: inline-block; box-sizing: border-box; width: 12px; height: 12px; margin-right: 8px; vertical-align: -1px;
+  border: 1px solid var(--sec); border-radius: 50%; background: var(--sheet);
+  font-size: var(--fs-label); line-height: 10px; text-align: center; color: var(--on-ink);
+}
+.ask-opt[role="checkbox"] .ask-l::before { border-radius: var(--radius); }
+/* a long label wraps under its own text, not under the control; the description lines up with the label */
+.ask-opt .ask-l { padding-left: 20px; text-indent: -20px; }
+.ask-opt .ask-d { padding-left: 20px; }
+.ask-opt[role="radio"].picked .ask-l::before { border-color: var(--ink); background: var(--ink); box-shadow: inset 0 0 0 2px var(--sheet); }
+.ask-opt[role="checkbox"].picked .ask-l::before { content: "✓"; border-color: var(--ink); background: var(--ink); }
 .ask-free { width: 100%; }
 .ask-preview {
   margin: 0; max-height: 240px; overflow: auto; padding: 8px 10px;
@@ -664,11 +677,26 @@ html, body {
   background: var(--ground); border: 1px solid var(--rule); border-radius: var(--radius);
   white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: isolate;
 }
+/* Mika Delta 11: with room (the pinned zone, a wide stack) a question's preview sits beside its options, top-aligned,
+   so the focused option and its preview are read together; narrow, it stays under them */
+.ask-picker { container-type: inline-size; }
+@container (min-width: 600px) {
+  .ask-q.has-preview { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 12px; align-items: start; }
+  .ask-q.has-preview .ask-head { grid-column: 1 / -1; }
+  .ask-q.has-preview .ask-preview { grid-column: 2; grid-row: 2; position: sticky; top: 0; }
+}
 /* a question card in the chat column may be taller than the usual pinned cap: its options stay reachable */
 .pinned:has(.ask-picker) { max-height: 55vh; }
 /* #gui-ask-card choice-multi: toggled chips (solid edge, ✓) and the one Send key after them */
 .choice.toggled { border-style: solid; border-color: var(--ink2); background: var(--sheet); }
-.choice.toggled .choice-t::before { content: "✓ "; }
+/* Mika Delta 11: a live multi chip draws its box at rest (it reads as a toggle before the first press); toggling fills
+   it in place, so the chips never reflow under the pointer */
+.choices.multi.live .choice .choice-t::before {
+  content: ""; display: inline-block; box-sizing: border-box; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
+  border: 1px solid var(--sec); border-radius: var(--radius); background: var(--sheet);
+  font-size: var(--fs-label); line-height: 10px; text-align: center; color: var(--on-ink);
+}
+.choices.multi.live .choice.toggled .choice-t::before { content: "✓"; border-color: var(--ink); background: var(--ink); }
 .choice-send {
   font: inherit; font-size: var(--fs-reading); color: var(--on-ink); background: var(--ink);
   border: 1px dashed var(--ink2); border-radius: var(--radius-pill); padding: 2px 12px; cursor: pointer; min-height: 24px;
@@ -676,6 +704,10 @@ html, body {
 .choice-send[aria-disabled="true"] { background: transparent; color: var(--sec); border-color: var(--rule); cursor: not-allowed; }
 .choice-send.armed { border-style: solid; border-color: var(--warn-edge); background: var(--warn-bg); color: var(--ink); }
 .choice-send .choice-again { color: var(--warn-ink); font-size: var(--fs-label); }
+/* Aegis L3: an armed Send shows the lines it will send, and what armed it, on its own row under the chips */
+.choice-compose { flex-basis: 100%; display: grid; gap: 4px; margin: 2px 0 0; padding: 6px 10px; border: 1px solid var(--warn-edge); border-radius: var(--radius); background: var(--warn-bg); }
+.choice-compose-why { color: var(--warn-ink); font-size: var(--fs-label); overflow-wrap: anywhere; }
+.choice-compose-lines { margin: 0; font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-control); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: isolate; }
 .choice-send:focus-visible { outline: 2px dashed var(--key-edge); outline-offset: 2px; }
 
 /* #gui-setup (spec §11.1): the first-run screens */

@@ -700,6 +700,8 @@ export interface ChatItem {
   /** #gui-turn-steps: the working key's steps so far, and whether its list is unfolded (the page sets it) */
   steps?: TurnStep[];
   open?: boolean;
+  /** Mika Delta 11: an approval.decide line's card (the page may say what it answered there) */
+  cardId?: string;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -1076,7 +1078,7 @@ function spokenFold(r: Row, p: Record<string, unknown> | null, open: SpokenGroup
 }
 
 /** A kernel row's chat item, or null when it is noise in the chat view. */
-function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
+function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: string }) | null {
   if (r.view === 'stub' || r.view === 'oversize' || r.payload === undefined) return null;
   const p = objOf(r.payload) ?? {};
   switch (r.kind) {
@@ -1099,7 +1101,7 @@ function kernelItem(r: Row): Pick<ChatItem, 'role' | 'text'> | null {
       return { role: 'card', text: `needs you · ${typeof card.kind === 'string' ? card.kind : 'card'} (decide it in the stack)` };
     }
     case 'approval.decide':
-      return { role: 'card', text: `decided · ${typeof p.decision === 'string' ? p.decision : '?'}` };
+      return { role: 'card', text: `decided · ${typeof p.decision === 'string' ? p.decision : '?'}`, ...(typeof p.cardId === 'string' ? { cardId: p.cardId } : {}) };
     case 'approval.expire':
       return { role: 'card', text: 'card expired' };
     case 'approval.auto': {
@@ -1226,9 +1228,9 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
     progress = undefined;
     steps.reset();
   };
-  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy']; sentLabel?: string }, how: Place = 'turn'): ChatItem => {
+  const push = (r: Row, part: number, it: Pick<ChatItem, 'role' | 'text'> & { speaker?: string; voice?: ChatItem['voice']; said?: string; saidBy?: ChatItem['saidBy']; sentLabel?: string; cardId?: string }, how: Place = 'turn'): ChatItem => {
     if (it.role === 'assistant') spoken = null; // a new reply closes the previous reply's 🔊 marker
-    const item: ChatItem = { key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}), ...(it.sentLabel !== undefined ? { sentLabel: it.sentLabel } : {}) };
+    const item: ChatItem = { key: part ? `${r.seq}.${part}` : String(r.seq), seq: r.seq, role: it.role, text: it.text, ...(r.at ? { at: r.at } : {}), ...(it.speaker !== undefined ? { speaker: it.speaker } : {}), ...(it.voice !== undefined ? { voice: it.voice } : {}), ...(it.said !== undefined ? { said: it.said, saidBy: it.saidBy ?? 'reply' } : {}), ...(it.sentLabel !== undefined ? { sentLabel: it.sentLabel } : {}), ...(it.cardId !== undefined ? { cardId: it.cardId } : {}) };
     place(item, how);
     return item;
   };

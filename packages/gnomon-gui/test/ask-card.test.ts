@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ASK_COPY, askAnswered, askComplete, askMove, askOptForKey, askPress, askPressOther, askPreviewOf, askType, emptyPicks, renderAskPicker } from '../src/core/ask-card.js';
+import { ASK_COPY, askAnswered, askComplete, askMissingText, askMove, askOptForKey, askPress, askPressOther, askPreviewOf, askSummary, askTabStop, askType, emptyPicks, renderAskPicker } from '../src/core/ask-card.js';
 import { askDetailOf, askNote, cardContentHash, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -196,5 +196,35 @@ describe('#gui-ask-card keyboard', () => {
     expect(key).toContain("'.ask-picker [data-ask-opt], .ask-picker [data-ask-other]'");
     expect(key).toMatch(/e\.key === 'Enter'[^\n]*e\.isTrusted/);
     expect(key).toContain("decide(f.dataset.askCard ?? '', 'answer'");
+  });
+});
+
+describe('#gui-ask-card Mika Delta 11: one tab stop per one-pick question, the early-Submit line, the answered line', () => {
+  it('a one-pick question is one tab stop that follows the pick (Other included); many-pick options stay a stop each', () => {
+    const picks = emptyPicks(ask);
+    expect(askTabStop(lib, picks)).toBe(0);
+    askPress(picks, lib, 1);
+    expect(askTabStop(lib, picks)).toBe(1);
+    askPressOther(picks, lib);
+    expect(askTabStop(lib, picks)).toBe(2);
+    expect(askTabStop(feat, picks)).toBeNull();
+    const el = renderAskPicker(fdoc, 'card:1', ask, picks) as FEl;
+    const stops = el.all().filter((e) => e.attrs.get('data-ask-q') === '1' && (e.attrs.has('data-ask-opt') || e.attrs.has('data-ask-other')));
+    expect(stops.map((e) => e.attrs.get('tabindex') ?? 'stop')).toEqual(['-1', '-1', 'stop']);
+    expect(el.all().filter((e) => e.attrs.get('data-ask-q') === '2' && e.attrs.has('data-ask-opt')).every((e) => !e.attrs.has('tabindex'))).toBe(true);
+  });
+  it('the early-Submit line names the open questions by header; the answered line says what was picked', () => {
+    const picks = emptyPicks(ask);
+    expect(askMissingText(ask, picks)).toBe(`${ASK_COPY.incomplete}. Not answered yet: Lib, Features.`);
+    askPress(picks, lib, 1);
+    askPress(picks, feat, 2);
+    askPress(picks, feat, 0);
+    expect(askMissingText(ask, picks)).toBe(ASK_COPY.incomplete);
+    expect(askSummary(ask, picks)).toBe('Lib: dayjs · Features: logging, tracing');
+  });
+  it('app.ts: the preview refresh goes through the display sanitizer (Aegis M2); the answered line is page-only', () => {
+    expect(APP).toMatch(/pre\.textContent = displayText\(askPreviewOf\(/);
+    expect(APP).toMatch(/`answered · \$\{askAnswers\.get\(it\.cardId\)!\}`/);
+    expect(APP).not.toMatch(/askAnswers[^\n]*(client\.call|log\.append|session\.send)/);
   });
 });

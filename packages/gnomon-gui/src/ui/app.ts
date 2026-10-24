@@ -27,11 +27,11 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, displayText, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
-import { choiceForKey, liveChoiceKey, pickChoice, pickChoices, renderChoices, replyChoices, toggleChoice } from '../core/choices.js';
-import { ASK_COPY, askComplete, askMove, askOptForKey, askPress, askPressOther, askPreviewOf, askType, emptyPicks, type AskPicks } from '../core/ask-card.js';
+import { choiceForKey, liveChoiceKey, pickChoice, pickChoices, renderChoices, replyChoices, replyHash, toggleChoice } from '../core/choices.js';
+import { ASK_COPY, askComplete, askMissingText, askMove, askOptForKey, askPress, askPressOther, askPreviewOf, askSummary, askTabStop, askType, emptyPicks, type AskPicks } from '../core/ask-card.js';
 import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
 import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
@@ -144,8 +144,9 @@ function checkCardWait(): void {
   }
 }
 
+// Mika Delta 11: a page-local line (the question card's early Submit) has no kernel code: just its words
 function refusalText(r: ShownRefusal): string {
-  return `${r.code}${r.reason ? ` ${r.reason}` : ''}  ${r.message}${r.next.length ? `\n  next: ${r.next.join(' · ')}` : ''}`;
+  return `${r.code ? `${r.code}${r.reason ? ` ${r.reason}` : ''}  ` : ''}${r.message}${r.next.length ? `\n  next: ${r.next.join(' · ')}` : ''}`;
 }
 
 /* ── theme / motion ─────────────────────────────────────────────── */
@@ -348,7 +349,7 @@ function replyBody(it: ChatItem): MiniEl {
   const text = ch ? ch.body : it.text;
   const parts = replyParts(text);
   const chips = ch
-    ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null, armed: armedChoice?.item === it.key ? armedChoice.key : null, multi: ch.multi, toggled: toggledChoices.get(it.key) ?? null, pickedSet: pickedMulti.get(it.key) ?? null, sendArmed: armedSend === it.key })
+    ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null, armed: armedChoice?.item === it.key ? armedChoice.key : null, multi: ch.multi, toggled: toggledChoices.get(it.key) ?? null, pickedSet: pickedMulti.get(it.key) ?? null, sendArmed: armedSend === it.key, painted: replyHash(it.text, it.said ?? null) })
     : null;
   if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body md' }, ...mdBlocks(doc, text), chips);
   return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'reply-part' }, h(doc, 'strong', { class: 'reply-part-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))), chips);
@@ -373,6 +374,11 @@ function remountItem(key: string | null): void {
       mounted.delete(i);
     }
 }
+/** Mika Delta 11: repaint the transcript rows about one card (its decided line learnt what was answered). */
+function remountCardRows(cardId: string): void {
+  for (const it of items) if (it.cardId === cardId) remountItem(it.key);
+  paintTranscript();
+}
 /** A chip pick: through the composer (send when empty, insert after a draft), only on a trusted gesture. */
 function onChoice(e: Event, b: HTMLElement): void {
   const itemKey = b.dataset.choiceItem ?? '';
@@ -386,7 +392,7 @@ function onChoice(e: Event, b: HTMLElement): void {
   const liveKey = focused && !rawMode ? liveChoiceKey(cur) : null;
   if (replyChoices(it.text, it.said ?? null)?.multi) {
     // multi-select: a chip toggles (trusted, live, one of the reply's own); nothing is sent until Send
-    const next = toggleChoice(e, { itemKey, liveKey, replyText: it.text, said: it.said ?? null, choiceKey: pick }, toggledChoices.get(itemKey) ?? new Set());
+    const next = toggleChoice(e, { itemKey, liveKey, replyText: it.text, said: it.said ?? null, choiceKey: pick, painted: b.dataset.replyHash ?? '' }, toggledChoices.get(itemKey) ?? new Set());
     if (!next) return;
     toggledChoices.set(itemKey, next);
     if (armedSend === itemKey) armedSend = null;
@@ -396,7 +402,7 @@ function onChoice(e: Event, b: HTMLElement): void {
     return;
   }
   const armed = armedChoice?.item === itemKey && armedChoice.key === pick;
-  const out = pickChoice(e, { itemKey, liveKey: focused && !rawMode ? liveChoiceKey(cur) : null, replyText: it.text, said: it.said ?? null, choiceKey: pick }, {
+  const out = pickChoice(e, { itemKey, liveKey: focused && !rawMode ? liveChoiceKey(cur) : null, replyText: it.text, said: it.said ?? null, choiceKey: pick, painted: b.dataset.replyHash ?? '' }, {
     get value() {
       return ta.value;
     },
@@ -432,7 +438,7 @@ function onChoiceSend(e: Event, b: HTMLElement): void {
   if (!it) return;
   const ta = $<HTMLTextAreaElement>('composer-text');
   const toggled = toggledChoices.get(itemKey) ?? new Set<string>();
-  const out = pickChoices(e, { itemKey, liveKey: focused && !rawMode ? liveChoiceKey(cur) : null, replyText: it.text, said: it.said ?? null }, toggled, {
+  const out = pickChoices(e, { itemKey, liveKey: focused && !rawMode ? liveChoiceKey(cur) : null, replyText: it.text, said: it.said ?? null, painted: b.dataset.replyHash ?? '' }, toggled, {
     get value() {
       return ta.value;
     },
@@ -538,7 +544,9 @@ function itemEl(it: FoldedItem): HTMLElement {
     ? [h(doc, 'div', { class: 'who' }, label, sentBy, h(doc, 'span', { class: 't' }, at), it.took !== undefined ? h(doc, 'span', { class: 'took' }, `took ${durationText(it.took)}`) : null), ...(it.said !== undefined ? [h(doc, 'div', { class: 'said' }, h(doc, 'span', { class: 'said-tag' }, saidTag(it.saidBy === 'kernel' ? 'kernel' : 'reply', replyModeOf(status))), ' ', it.said)] : []), replyBody(it)]
     : it.role === 'raw'
       ? [h(doc, 'span', { class: 't' }, at), it.text]
-      : [it.text];
+      : it.role === 'card' && it.cardId !== undefined && askAnswers.has(it.cardId)
+        ? [`answered · ${askAnswers.get(it.cardId)!}`] // Mika Delta 11: what this page answered (text node, sanitized by h)
+        : [it.text];
   if (it.role === 'raw' && it.detail !== undefined) {
     // the raw view: a row folds open to its whole line (the activity fold: ▸ / ▾, Enter or Space, the same expanded set)
     const k = rawFoldKey(it);
@@ -1299,6 +1307,13 @@ async function awaitRestart(): Promise<void> {
 /* ── #gui-ask-card: the question card (design-system question-card) ── */
 /** The page's picks per ask-user card (both zones show the same picks; dropped when the card leaves). */
 const askPicks = new Map<string, AskPicks>();
+/** Mika Delta 11: cards whose shown refusal is the page's own early-Submit line (cleared once complete) */
+const askRefused = new Set<string>();
+/**
+ * Mika Delta 11: what this page answered, by cardId, for the transcript's decided line ("answered · …"). Page-only and
+ * never sent anywhere: the kernel logs a noteHash only (privateNote), so after a reload the line is "decided · answer".
+ */
+const askAnswers = new Map<string, string>();
 function picksOf(cardId: string): { ask: NonNullable<ReturnType<typeof askDetailOf>>; picks: AskPicks } | null {
   const c = store.cards.get(cardId);
   const ask = c && c.kind === 'ask-user' ? askDetailOf(c.card) : null;
@@ -1332,16 +1347,30 @@ function syncAsk(cardId: string, focus: { q: number; opt: number } | null = null
         o.classList.toggle('picked', !!p?.other);
         o.setAttribute('aria-checked', String(!!p?.other));
       }
+      // Mika Delta 11: a one-pick question stays one tab stop, following the pick (or the focus, while moving)
+      const stop = askTabStop(q, x.picks);
+      if (stop !== null) {
+        const stops = [...pk.querySelectorAll<HTMLElement>(`[data-ask-q="${q.n}"][data-ask-opt], [data-ask-q="${q.n}"][data-ask-other]`)];
+        const at = focus && focus.q === q.n ? Math.min(focus.opt, stops.length - 1) : stop;
+        stops.forEach((b, i) => (i === at ? b.removeAttribute('tabindex') : b.setAttribute('tabindex', '-1')));
+      }
       const f = pk.querySelector<HTMLInputElement>(`[data-ask-q="${q.n}"][data-ask-free]`);
       if (f && f.value !== (p?.free ?? '')) f.value = p?.free ?? '';
       const pre = pk.querySelector<HTMLElement>(`[data-ask-preview="${q.n}"]`);
-      if (pre) pre.textContent = askPreviewOf(q, x.picks, focus && focus.q === q.n ? focus.opt : null) ?? (focus && focus.q === q.n && focus.opt < q.options.length ? ASK_COPY.noPreview : ASK_COPY.previewHint);
+      // Aegis M2: through THE display sanitizer (bidi and invisible characters never reach the screen)
+      if (pre) pre.textContent = displayText(askPreviewOf(q, x.picks, focus && focus.q === q.n ? focus.opt : null) ?? (focus && focus.q === q.n && focus.opt < q.options.length ? ASK_COPY.noPreview : ASK_COPY.previewHint));
     }
     const key = pk.closest('.card')?.querySelector<HTMLElement>('[data-decision="answer"]');
     if (key) {
       if (askComplete(x.ask, x.picks)) {
         key.removeAttribute('aria-disabled');
         key.removeAttribute('title');
+        // Mika Delta 11: the early-Submit line goes once every question has an answer
+        if (askRefused.has(cardId)) {
+          refusals.delete(cardId);
+          askRefused.delete(cardId);
+          pk.closest('.card')?.querySelector('.refusal')?.remove();
+        }
       } else {
         key.setAttribute('aria-disabled', 'true');
         key.title = 'answer every question first';
@@ -1364,7 +1393,6 @@ function onAskPress(e: Event, b: HTMLElement): void {
   }
   const opt = Number(b.dataset.askOpt);
   if (!askPress(x.picks, q, opt)) return;
-  refusals.delete(cardId);
   syncAsk(cardId, { q: q.n, opt });
 }
 /** Typing an Other answer (a trusted input event only). */
@@ -1409,8 +1437,11 @@ function onAskKey(e: KeyboardEvent): void {
 }
 /** A focused option shows its preview (display only). */
 function onAskFocus(e: FocusEvent): void {
-  const b = (e.target as HTMLElement).closest?.('.ask-picker [data-ask-opt]') as HTMLElement | null;
-  if (b) syncAsk(b.dataset.askCard ?? '', { q: Number(b.dataset.askQ), opt: Number(b.dataset.askOpt) });
+  const b = (e.target as HTMLElement).closest?.('.ask-picker [data-ask-opt], .ask-picker [data-ask-other]') as HTMLElement | null;
+  if (!b) return;
+  // Other is the stop after the options (Mika Delta 11: the one-pick tab stop follows it too)
+  const opt = b.dataset.askOther ? (b.closest('.ask-q')?.querySelectorAll('[data-ask-opt]').length ?? 0) : Number(b.dataset.askOpt);
+  syncAsk(b.dataset.askCard ?? '', { q: Number(b.dataset.askQ), opt });
 }
 /** Before a stack repaint: a function that puts focus (and the caret) back in the same question card, or null. */
 function askFocusOf(): (() => void) | null {
@@ -1434,11 +1465,22 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   if (decision === 'answer') {
     note = cardEl ? askNoteFrom(cardEl, cardId) : null;
     if (note === null) {
-      refusals.set(cardId, { code: 'BAD_REQUEST', reason: 'bad-params', message: ASK_COPY.incomplete, next: [], data: null });
-      void paintStack();
+      // Mika Delta 11: the page's own line (no kernel code) naming what is still open, under the Submit key; the
+      // Submit key in the same zone keeps the focus (it was rebuilt) and the line is scrolled into view with it
+      const x = picksOf(cardId);
+      refusals.set(cardId, { code: '', reason: '', message: x ? askMissingText(x.ask, x.picks) : ASK_COPY.incomplete, next: [], data: null });
+      askRefused.add(cardId);
+      const zone = cardEl?.closest('#pinned') ? 'pinned' : 'stack';
+      await paintStack();
+      const card = document.querySelector<HTMLElement>(`#${zone} .ask-picker[data-ask-card="${CSS.escape(cardId)}"]`)?.closest<HTMLElement>('.card');
+      card?.querySelector<HTMLElement>('[data-decision="answer"]')?.focus();
+      card?.querySelector<HTMLElement>('.refusal')?.scrollIntoView({ block: 'nearest' });
       return;
     }
   }
+  // Mika Delta 11: what is being answered, read now (the card leaves the store as its decided row arrives)
+  const asked = decision === 'answer' ? picksOf(cardId) : null;
+  const answered = asked ? askSummary(asked.ask, asked.picks) : null;
   const c0 = store.cards.get(cardId);
   const upgrade = decision === 'accept' && !!c0 && upgradeBannerOf([{ cardId, kind: c0.kind, card: c0.card as Record<string, unknown> }]) !== null;
   if (upgrade) markRestarting(sessionStorage, cardId);
@@ -1446,6 +1488,14 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
     await client.call('approve', approveParamsOf(cardId, decision, note, keyEl ? { ...(keyEl.dataset.scope !== undefined ? { scope: keyEl.dataset.scope } : {}), ...(keyEl.dataset.prefix !== undefined ? { prefix: keyEl.dataset.prefix } : {}) } : null));
     refusals.delete(cardId);
     fadeOff(cardId, decision); // S4: only after the kernel accepted the decision (a refusal throws before this)
+    askRefused.delete(cardId);
+    if (decision === 'answer') {
+      // Mika Delta 11: the transcript's decided line says what was answered (this page only), and the focus goes on to
+      // the composer: the card and its keys leave, and the session continues there
+      if (answered !== null) askAnswers.set(cardId, answered);
+      remountCardRows(cardId);
+      $<HTMLTextAreaElement>('composer-text').focus();
+    }
     // #gui-rules-view (Mika C1): an Always decision says where its rule lives
     if (decision === 'always') toasts().show('Always rule saved: no card next time', { kind: 'info', key: { label: 'see Rules', onPress: (e: MouseEvent) => e.isTrusted && settings.open('rules') } });
   } catch (err) {
@@ -3884,6 +3934,8 @@ function wire(): void {
         toggledChoices.delete(pm.item);
         remountItem(pm.item);
         paintTranscript();
+        // Mika Delta 11: the Send key was rebuilt inert under the focus; the conversation goes on in the composer
+        if (!document.activeElement || document.activeElement === document.body) t.focus();
       }
       if (!pp || !ok) return;
       pickedChoices.set(pp.item, pp.key);

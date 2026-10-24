@@ -1269,6 +1269,11 @@ components:
       apply", "one or more", ...) renders toggles plus one Send key;
       toggleChoice / pickChoices (trusted, live, own keys) send the toggled
       options as one message (multiMessage: one `K — label` line each).
+      Aegis L3: the Send key's title and aria-label carry the composed
+      lines; armed, a .choice-compose note shows them and which label armed
+      it (confirmWhy). Aegis L4: the chips carry data-reply-hash (replyHash
+      of the painted reply and said line); a toggle, pick or Send whose
+      painted hash no longer matches the current reply is refused.
     path: src/core/store.ts
     type: module
     tags: [gnomon, gui, voice, table-talk]
@@ -1280,7 +1285,8 @@ components:
       #gui-ask-card (founder request 2026-10-24: "regarding options that
       gnomon presents to the user, even multi selections, it would be nice
       to click them"; design-system question-card + model-text-control
-      choice-multi, proposed, Mika and Aegis pending). A session's
+      choice-multi, proposed; Mika Delta 11 approved-with-fixes, Aegis M2 /
+      L1 / L3 / L4 folded in). A session's
       AskUserQuestion (claude 2.1.309 can_use_tool, input.questions[] with
       header, options {label, description, preview?}, multiSelect) is the
       ask-user card; core/ask-card.ts renders its picker from the
@@ -1300,8 +1306,14 @@ components:
       {answers}. Keyboard: arrows / Home / End move, Space or Enter pick,
       1..9 or a..i pick that option of the focused question, Enter in Other
       submits. Every press needs isTrusted; approve is human-only at the
-      kernel (B4); voice adds no path. The multi-select table-talk half
-      lives in core/choices.ts (#gui-table-talk).
+      kernel (B4); voice never answers (broker #approve refuses voice).
+      Mika Delta 11: a one-pick question is one tab stop (askTabStop); the
+      early Submit keeps focus and names the open questions (askMissingText,
+      no kernel code); once answered, the transcript's decided line (store
+      ChatItem.cardId) reads "answered · …" from askSummary, page-only (the
+      kernel logs a noteHash only), and focus goes to the composer. Aegis
+      M2: the preview refresh goes through displayText. The multi-select
+      table-talk half lives in core/choices.ts (#gui-table-talk).
     path: src/core/ask-card.ts
     type: module
     tags: [gnomon, gui, ask-user, table-talk]

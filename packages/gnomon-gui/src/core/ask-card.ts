@@ -15,8 +15,8 @@
  * Trust (Aegis C1, unchanged): the picker is built ONLY from the card's contentHash-verified structured detail
  * (askDetailOf), every string goes through THE display sanitizer as a text node (a preview is plain text in a <pre>,
  * never markup), and the answer is checked by the kernel against the questions it holds. Every pick, toggle and the
- * Submit key need a trusted gesture (ui/app.ts checks isTrusted); approve is human-only at the kernel. Voice adds no
- * path here: a voice answer stays the voice decision rules' (the allowlist's reversible `answer`).
+ * Submit key need a trusted gesture (ui/app.ts checks isTrusted); approve is human-only at the kernel. Voice never
+ * answers (broker #approve refuses voice).
  *
  * State: the page keeps one AskPicks per card (ui/app.ts askPicks) so a stack repaint, or the same card pinned and in
  * the pile, shows the same picks; it is dropped when the card leaves.
@@ -119,6 +119,44 @@ export function askPreviewOf(q: AskCardQuestion, picks: ReadonlyMap<number, AskP
   return at === null ? null : (q.previews[at] ?? null);
 }
 
+/**
+ * Mika Delta 11: a one-pick question is ONE tab stop (the radio group pattern): the picked option, Other when the typed
+ * answer is the pick, else the first option; arrows move inside. Many-pick options stay a tab stop each (checkboxes).
+ * Returns the stop index (options 0..n-1, Other n), or null for a many-pick question.
+ */
+export function askTabStop(q: AskCardQuestion, picks: ReadonlyMap<number, AskPick>): number | null {
+  if (q.multiSelect) return null;
+  const p = picks.get(q.n);
+  if (p?.other) return q.options.length;
+  const at = p?.chosen.find((i) => i >= 0 && i < q.options.length);
+  return at ?? (q.options.length ? 0 : q.options.length);
+}
+
+/** A question's short name for a status line: its header, else "question n". */
+const askName = (q: AskCardQuestion): string => q.header ?? `question ${q.n}`;
+
+/** Mika Delta 11: the early-Submit line names what is still open: "… Not answered yet: Checks." */
+export function askMissingText(ask: AskCardDetail, picks: ReadonlyMap<number, AskPick>): string {
+  const open = ask.questions.filter((q) => !askAnswered(q, picks)).map(askName);
+  return open.length ? `${ASK_COPY.incomplete}. Not answered yet: ${open.join(', ')}.` : ASK_COPY.incomplete;
+}
+
+/**
+ * Mika Delta 11: what was answered, for the transcript's decided line on this page ("Rounding: Round once at the end ·
+ * Checks: unit tests, typecheck"). Page-only: the kernel keeps the answer out of the log (privateNote, noteHash only).
+ */
+export function askSummary(ask: AskCardDetail, picks: ReadonlyMap<number, AskPick>): string {
+  return ask.questions
+    .map((q) => {
+      const p = picks.get(q.n);
+      const free = p?.free.trim() ?? '';
+      const labels = [...new Set(p?.chosen ?? [])].sort((x, y) => x - y).map((i) => q.options[i]).filter((x): x is string => typeof x === 'string');
+      const a = q.multiSelect ? [...labels, ...(free !== '' && p?.other !== false ? [free] : [])].join(', ') : free !== '' ? free : (labels[0] ?? '');
+      return ask.questions.length > 1 ? `${askName(q)}: ${a}` : a;
+    })
+    .join(' · ');
+}
+
 export const ASK_COPY = Object.freeze({
   other: 'Other…',
   freeOne: 'or type your own answer',
@@ -150,12 +188,14 @@ export function renderAskPicker(doc: MiniDoc, cardId: string, ask: AskCardDetail
       const label = q.header ? `${q.header}: ${q.question}` : q.question;
       const hasPreview = q.previews.some((x) => x !== null);
       const shown = hasPreview ? askPreviewOf(q, picks, focus && focus.q === q.n ? focus.opt : null) : null;
+      const stop = askTabStop(q, picks);
+      const roving = (j: number): Record<string, string> => (stop === null || stop === j ? {} : { tabindex: '-1' });
       const opt = (j: number): MiniEl => {
         const on = p.chosen.includes(j);
         return h(
           doc,
           'button',
-          { class: `ask-opt${on ? ' picked' : ''}`, type: 'button', role, 'aria-checked': String(on), 'data-ask-card': cardId, 'data-ask-q': String(q.n), 'data-ask-opt': String(j), ...(q.about[j] ? { title: q.about[j]! } : {}) },
+          { class: `ask-opt${on ? ' picked' : ''}`, type: 'button', role, 'aria-checked': String(on), 'data-ask-card': cardId, 'data-ask-q': String(q.n), 'data-ask-opt': String(j), ...roving(j) },
           h(doc, 'kbd', { class: 'ask-k' }, j < NUM_KEYS.length ? NUM_KEYS[j]! : '·'),
           ' ',
           h(doc, 'span', { class: 'ask-l' }, q.options[j]!),
@@ -167,7 +207,7 @@ export function renderAskPicker(doc: MiniDoc, cardId: string, ask: AskCardDetail
       const other = h(
         doc,
         'button',
-        { class: `ask-opt ask-other${p.other ? ' picked' : ''}`, type: 'button', role, 'aria-checked': String(!!p.other), 'data-ask-card': cardId, 'data-ask-q': String(q.n), 'data-ask-other': '1' },
+        { class: `ask-opt ask-other${p.other ? ' picked' : ''}`, type: 'button', role, 'aria-checked': String(!!p.other), 'data-ask-card': cardId, 'data-ask-q': String(q.n), 'data-ask-other': '1', ...roving(n) },
         h(doc, 'kbd', { class: 'ask-k' }, n < NUM_KEYS.length ? NUM_KEYS[n]! : '·'),
         ' ',
         h(doc, 'span', { class: 'ask-l' }, ASK_COPY.other),

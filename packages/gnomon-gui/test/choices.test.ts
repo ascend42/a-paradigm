@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CHOICE_LABEL_MAX, choiceForKey, choiceMessage, liveChoiceKey, multiMessage, pickChoice, pickChoices, renderChoices, replyChoices, toggleChoice, type ChoiceComposer } from '../src/core/choices.js';
+import { CHOICE_LABEL_MAX, choiceForKey, choiceMessage, liveChoiceKey, multiMessage, pickChoice, pickChoices, renderChoices, replyChoices, replyHash, toggleChoice, type ChoiceComposer } from '../src/core/choices.js';
 import type { MiniDoc, MiniEl } from '../src/core/render.js';
 import { chatItems, type Row } from '../src/core/store.js';
 
@@ -285,5 +285,34 @@ describe('#gui-ask-card multi-select table-talk choices (design-system model-tex
     expect(APP).toMatch(/if \(pm && ok\) \{[\s\S]{0,200}pickedMulti\.set/);
     expect(APP).not.toMatch(/voice[^\n]*(pickChoices|toggleChoice)|(pickChoices|toggleChoice)[^\n]*voice/i);
     expect(CSS).toMatch(/\.choice-send \{[^}]*border: 1px dashed/); // model text: the dashed family, never .key
+  });
+});
+
+describe('#gui-ask-card Aegis L3/L4 (Mika Delta 11): the Send key names its message; a changed reply refuses', () => {
+  const composer = (): ChoiceComposer => ({ value: '', dictationDraft: false, submit: () => undefined, focus: () => undefined });
+  const MULTI2 = 'Which checks? Pick any of these:\n1. unit tests\n2. typecheck\n3. `rm -rf build` then rebuild';
+  it('the Send key title and aria-label carry the composed lines; armed, the lines and the arming label show beside it', () => {
+    const ch = replyChoices(MULTI2)!.choices;
+    const g = renderChoices(fdoc, '9', ch, { live: true, picked: null, multi: true, toggled: new Set(['1', '3']) }) as FEl;
+    const send = g.all().find((e) => e.attrs.has('data-choice-send'))!;
+    expect(send.attrs.get('title')).toContain(multiMessage(ch, new Set(['1', '3'])));
+    expect(send.attrs.get('aria-label')).toContain('1 \u2014 unit tests; 3 \u2014');
+    expect(g.all().some((e) => e.className === 'choice-compose')).toBe(false);
+    const armed = renderChoices(fdoc, '9', ch, { live: true, picked: null, multi: true, toggled: new Set(['1', '3']), sendArmed: true }) as FEl;
+    const box = armed.all().find((e) => e.className === 'choice-compose')!;
+    expect(box.text).toMatch(/check before sending: \u201c3 \u2014 [^\u201d]+\u201d (has code in it|looks like a shell command|is long)/);
+    expect(box.all().find((e) => e.tag === 'pre')!.text).toBe(multiMessage(ch, new Set(['1', '3'])));
+  });
+  it('chips carry the painted reply hash; a toggle, pick or Send against changed text is refused', () => {
+    const h0 = replyHash(MULTI2);
+    const g = renderChoices(fdoc, '9', replyChoices(MULTI2)!.choices, { live: true, picked: null, multi: true, toggled: null, painted: h0 }) as FEl;
+    expect(g.all().filter((e) => e.attrs.has('data-choice') || e.attrs.has('data-choice-send')).every((e) => e.attrs.get('data-reply-hash') === h0)).toBe(true);
+    const at = { itemKey: '9', liveKey: '9', replyText: MULTI2, choiceKey: '1' };
+    expect(toggleChoice({ isTrusted: true }, { ...at, painted: h0 }, new Set())).not.toBeNull();
+    expect(toggleChoice({ isTrusted: true }, { ...at, painted: replyHash('older text') }, new Set())).toBeNull();
+    expect(pickChoices({ isTrusted: true }, { ...at, painted: '' }, new Set(['1']), composer())).toBe('refused');
+    const one = 'Ship it?\nA Yes\nB No';
+    expect(pickChoice({ isTrusted: true }, { itemKey: '9', liveKey: '9', replyText: one, choiceKey: 'A', painted: replyHash(MULTI2) }, composer())).toBe('refused');
+    expect(APP).toContain("painted: b.dataset.replyHash ?? ''");
   });
 });
