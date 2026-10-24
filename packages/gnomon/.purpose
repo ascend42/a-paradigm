@@ -3524,6 +3524,28 @@ components:
       - test/voice-origin.test.ts
     oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
 
+  host-guidance:
+    description: >-
+      #host-guidance (founder request 2026-10-23; spec §6.6 "Host context";
+      src/kernel/supervisor/host-guidance.ts). HOST_GUIDANCE is a short
+      paragraph every Claude Code session the #supervisor spawns carries in
+      its --append-system-prompt (sessionSystemPrompt: the caller's
+      systemPrompt, then HOST_GUIDANCE, then GIT_VERBS_GUIDANCE when the
+      kernel verbs are on). It says the session runs inside Gnomon headless:
+      no slash commands (/plugin, /mcp, /config, /login), no TUI the human
+      can type into, no "restart the session" or interactive claude; prefer
+      Gnomon's tools (gnomon_git_*) and Settings screens (MCP servers,
+      Rules, Local model, Voice); for terminal-only work give the exact
+      shell command. Public text, never a security boundary. The GUI half
+      is #gui-host-hints (the reply stays verbatim, a host slip says the
+      Gnomon way).
+    path: src/kernel/supervisor/host-guidance.ts
+    type: module
+    tags: [gnomon, kernel, supervisor, guidance]
+    tests:
+      - test/host-guidance.test.ts
+      - test/kernel-mcp-session.test.ts
+
   shell-readonly:
     description: >-
       #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1, Aegis

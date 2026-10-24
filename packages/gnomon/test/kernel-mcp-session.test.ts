@@ -16,6 +16,7 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import { GitVerbs } from '../src/kernel/git/kernel-verbs.js';
+import { HOST_GUIDANCE } from '../src/kernel/supervisor/host-guidance.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
 const HUMAN = 'p:abcdefgh/founder';
@@ -61,6 +62,8 @@ describe.skipIf(!darwinFloor().ok)('#kernel-mcp through a session', () => {
     const mcpPath = argv[argv.indexOf('--mcp-config') + 1]!;
     expect(JSON.parse(fs.readFileSync(mcpPath, 'utf8')).mcpServers.gnomon).toEqual({ type: 'sdk', name: 'gnomon' });
     expect(argv[argv.indexOf('--append-system-prompt') + 1]).toMatch(/gnomon_git_init/);
+    // #host-guidance: every session is told it runs inside Gnomon (no slash commands, Gnomon's screens, exact shell commands)
+    expect(argv[argv.indexOf('--append-system-prompt') + 1]).toContain(HOST_GUIDANCE);
     const ans = Object.fromEntries(trace(w).filter((t) => t.t === 'mcp-answer').map((t) => [String(t.id), t]));
     expect(ans['m-init']!.mcp).toMatchObject({ id: 0, result: { serverInfo: { name: 'gnomon' } } });
     expect((ans['m-list']!.mcp as { result: { tools: unknown[] } }).result.tools).toHaveLength(5);
