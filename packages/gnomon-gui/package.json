@@ -19,9 +19,9 @@
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",
     "@types/node": "^24.0.0",
-    "esbuild": "0.27.3",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
+    "vitest": "^5.0.5"
   },
   "author": "ascend42",
   "license": "MIT",

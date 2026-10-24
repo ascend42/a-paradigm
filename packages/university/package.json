@@ -31,7 +31,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
     "js-yaml": "^4.1.1",
-    "tsup": "^8.0.1",
+    "tsup": "^9.0.0",
     "typescript": "^5.3.3"
   },
   "publishConfig": {
