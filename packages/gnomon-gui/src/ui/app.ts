@@ -27,10 +27,11 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type AskPick, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
-import { choiceForKey, liveChoiceKey, pickChoice, renderChoices, replyChoices } from '../core/choices.js';
+import { choiceForKey, liveChoiceKey, pickChoice, pickChoices, renderChoices, replyChoices, toggleChoice } from '../core/choices.js';
+import { ASK_COPY, askComplete, askMove, askOptForKey, askPress, askPressOther, askPreviewOf, askType, emptyPicks, type AskPicks } from '../core/ask-card.js';
 import { armStanding, decideRequest, OFFER_ARM_TTL_MS, openStep, slipViews, type OfferArm, type SlipView } from '../core/offers.js';
 import { publisherDisplayOf } from '../core/mod-label.js';
 import { renderOfferSlip, wireOfferSlips } from './offer-slip.js';
@@ -346,7 +347,9 @@ function replyBody(it: ChatItem): MiniEl {
   const ch = replyChoices(it.text, it.said ?? null);
   const text = ch ? ch.body : it.text;
   const parts = replyParts(text);
-  const chips = ch ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null, armed: armedChoice?.item === it.key ? armedChoice.key : null }) : null;
+  const chips = ch
+    ? renderChoices(doc, it.key, ch.choices, { live: it.key === liveChoice, picked: pickedChoices.get(it.key) ?? null, armed: armedChoice?.item === it.key ? armedChoice.key : null, multi: ch.multi, toggled: toggledChoices.get(it.key) ?? null, pickedSet: pickedMulti.get(it.key) ?? null, sendArmed: armedSend === it.key })
+    : null;
   if (!parts.some((x) => 'label' in x)) return h(doc, 'div', { class: 'body md' }, ...mdBlocks(doc, text), chips);
   return h(doc, 'div', { class: 'body md' }, ...parts.map((x) => ('label' in x ? h(doc, 'div', { class: 'reply-part' }, h(doc, 'strong', { class: 'reply-part-label' }, x.label), ' ', ...mdInline(doc, x.text)) : h(doc, 'div', { class: 'plain' }, ...mdBlocks(doc, x.text)))), chips);
 }
@@ -356,6 +359,11 @@ const pickedChoices = new Map<string, string>();
 /** Aegis M1: the chip waiting for its confirming second activation; L2: the pick riding the composer submit */
 let armedChoice: { item: string; key: string } | null = null;
 let pendingPick: { item: string; key: string } | null = null;
+/** #gui-ask-card multi-select: each live reply's toggled options, the reply whose Send key is armed, the sent sets */
+const toggledChoices = new Map<string, Set<string>>();
+let armedSend: string | null = null;
+const pickedMulti = new Map<string, Set<string>>();
+let pendingMulti: { item: string; keys: Set<string> } | null = null;
 /** Repaint one transcript item (its chips changed state). */
 function remountItem(key: string | null): void {
   if (key === null) return;
@@ -375,6 +383,18 @@ function onChoice(e: Event, b: HTMLElement): void {
   const it = cur.find((x) => x.key === itemKey);
   if (!it) return;
   const ta = $<HTMLTextAreaElement>('composer-text');
+  const liveKey = focused && !rawMode ? liveChoiceKey(cur) : null;
+  if (replyChoices(it.text, it.said ?? null)?.multi) {
+    // multi-select: a chip toggles (trusted, live, one of the reply's own); nothing is sent until Send
+    const next = toggleChoice(e, { itemKey, liveKey, replyText: it.text, said: it.said ?? null, choiceKey: pick }, toggledChoices.get(itemKey) ?? new Set());
+    if (!next) return;
+    toggledChoices.set(itemKey, next);
+    if (armedSend === itemKey) armedSend = null;
+    remountItem(itemKey);
+    paintTranscript();
+    ($('viewport').querySelector(`.choices.live [data-choice-item="${CSS.escape(itemKey)}"][data-choice="${CSS.escape(pick)}"]`) as HTMLElement | null)?.focus();
+    return;
+  }
   const armed = armedChoice?.item === itemKey && armedChoice.key === pick;
   const out = pickChoice(e, { itemKey, liveKey: focused && !rawMode ? liveChoiceKey(cur) : null, replyText: it.text, said: it.said ?? null, choiceKey: pick }, {
     get value() {
@@ -403,6 +423,39 @@ function onChoice(e: Event, b: HTMLElement): void {
   remountItem(itemKey);
   paintTranscript();
   if (out === 'confirm') ($('viewport').querySelector(`.choices.live [data-choice-item="${CSS.escape(itemKey)}"][data-choice="${CSS.escape(pick)}"]`) as HTMLElement | null)?.focus();
+}
+/** A multi-select group's Send key: the toggled options as ONE human message, through the composer (trusted only). */
+function onChoiceSend(e: Event, b: HTMLElement): void {
+  const itemKey = b.dataset.choiceSend ?? '';
+  const cur = currentItems().items;
+  const it = cur.find((x) => x.key === itemKey);
+  if (!it) return;
+  const ta = $<HTMLTextAreaElement>('composer-text');
+  const toggled = toggledChoices.get(itemKey) ?? new Set<string>();
+  const out = pickChoices(e, { itemKey, liveKey: focused && !rawMode ? liveChoiceKey(cur) : null, replyText: it.text, said: it.said ?? null }, toggled, {
+    get value() {
+      return ta.value;
+    },
+    set value(v: string) {
+      ta.value = v;
+      fitComposer();
+    },
+    dictationDraft: dictationOn() && dict.focusedHere && hasDraft(dict),
+    submit: () => {
+      pendingMulti = { item: itemKey, keys: new Set(toggled) };
+      $<HTMLFormElement>('composer').requestSubmit();
+    },
+    focus: () => ta.focus(),
+  }, armedSend === itemKey);
+  if (out === 'refused') return;
+  armedSend = out === 'confirm' ? itemKey : null;
+  if (out === 'inserted') {
+    if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'userEdit', text: ta.value, now: Date.now() });
+    notice('the options are in the composer after your draft; nothing was sent');
+  }
+  remountItem(itemKey);
+  paintTranscript();
+  if (out === 'confirm') ($('viewport').querySelector(`.choices.live [data-choice-send="${CSS.escape(itemKey)}"]`) as HTMLElement | null)?.focus();
 }
 /** #gui-turn-steps: the unfolded list's scroll per working key; a remount (a new step) keeps it, and follows the end while it was there. */
 const stepsScroll = new Map<string, { top: number; atEnd: boolean }>();
@@ -1007,6 +1060,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         decisions: verified.get(verifiedKey(c.cardId, String(c.card.contentHash ?? ''))) ?? [],
         decidable: isCardDecidable(c.card as never),
         ask: c.kind === 'ask-user' ? askDetailOf(c.card) : null,
+        askPicks: c.kind === 'ask-user' ? (askPicks.get(c.cardId) ?? null) : null, // #gui-ask-card: the page's picks survive a repaint
         prefixOptions: c.kind === 'permission' ? prefixOptionsOf(c.card) : null,
         editScopes: c.kind === 'permission' ? editScopesOf(c.card) : null, // TD-2026-10-23-939 follow-up: scoped edit always
         gitVerb: c.kind === 'permission' ? gitVerbOf(c.card) : null, // #git-verbs: push/create facts + the remote's Always
@@ -1041,7 +1095,8 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
     return el;
   };
   const pile = $('stack');
-  const refocus = alwaysFocusOf(); // a repaint keeps focus on an Always fold or choice (Mika 2026-10-23)
+  const refocus = alwaysFocusOf() ?? askFocusOf(); // a repaint keeps focus on an Always fold or choice (Mika 2026-10-23), or in a question card
+  for (const id of [...askPicks.keys()]) if (!store.cards.has(id)) askPicks.delete(id); // #gui-ask-card: picks go with their card
   bodyWatch?.disconnect(); // every card is rebuilt below (card.body-scroll)
   clear(pile);
   stackLaidOutAt = performance.now();
@@ -1241,22 +1296,134 @@ async function awaitRestart(): Promise<void> {
   location.reload();
 }
 
-/** ask-user: the picker's choices in the card element ⇒ the approve note (null = a question is unanswered). */
-function askNoteFrom(cardEl: HTMLElement, cardId: string): string | null {
+/* ── #gui-ask-card: the question card (design-system question-card) ── */
+/** The page's picks per ask-user card (both zones show the same picks; dropped when the card leaves). */
+const askPicks = new Map<string, AskPicks>();
+function picksOf(cardId: string): { ask: NonNullable<ReturnType<typeof askDetailOf>>; picks: AskPicks } | null {
   const c = store.cards.get(cardId);
-  if (!c) return null;
-  const ask = askDetailOf(c.card);
+  const ask = c && c.kind === 'ask-user' ? askDetailOf(c.card) : null;
   if (!ask) return null;
-  const qs = ask.questions;
-  const picks = new Map<number, AskPick>();
-  for (const q of qs) picks.set(q.n, { chosen: [], free: '' });
-  for (const el of Array.from(cardEl.querySelectorAll<HTMLInputElement>('input[data-ask-q]'))) {
-    const p = picks.get(Number(el.dataset.askQ));
-    if (!p) continue;
-    if (el.dataset.askFree) p.free = el.value;
-    else if (el.checked) p.chosen.push(Number(el.dataset.askOpt));
+  let picks = askPicks.get(cardId);
+  if (!picks) {
+    picks = emptyPicks(ask);
+    askPicks.set(cardId, picks);
   }
-  return askNote(qs, picks);
+  return { ask, picks };
+}
+/** ask-user: the page's picks ⇒ the approve note (null = a question is unanswered). */
+function askNoteFrom(_cardEl: HTMLElement, cardId: string): string | null {
+  const x = picksOf(cardId);
+  return x ? askNote(x.ask.questions, x.picks) : null;
+}
+/** Every rendered picker of the card (pinned and pile) follows the picks in place: no rebuild, so typing keeps its caret. */
+function syncAsk(cardId: string, focus: { q: number; opt: number } | null = null): void {
+  const x = picksOf(cardId);
+  if (!x) return;
+  for (const pk of document.querySelectorAll<HTMLElement>(`.ask-picker[data-ask-card="${CSS.escape(cardId)}"]`)) {
+    for (const q of x.ask.questions) {
+      const p = x.picks.get(q.n);
+      for (const b of pk.querySelectorAll<HTMLElement>(`[data-ask-q="${q.n}"][data-ask-opt]`)) {
+        const on = !!p?.chosen.includes(Number(b.dataset.askOpt));
+        b.classList.toggle('picked', on);
+        b.setAttribute('aria-checked', String(on));
+      }
+      const o = pk.querySelector<HTMLElement>(`[data-ask-q="${q.n}"][data-ask-other]`);
+      if (o) {
+        o.classList.toggle('picked', !!p?.other);
+        o.setAttribute('aria-checked', String(!!p?.other));
+      }
+      const f = pk.querySelector<HTMLInputElement>(`[data-ask-q="${q.n}"][data-ask-free]`);
+      if (f && f.value !== (p?.free ?? '')) f.value = p?.free ?? '';
+      const pre = pk.querySelector<HTMLElement>(`[data-ask-preview="${q.n}"]`);
+      if (pre) pre.textContent = askPreviewOf(q, x.picks, focus && focus.q === q.n ? focus.opt : null) ?? (focus && focus.q === q.n && focus.opt < q.options.length ? ASK_COPY.noPreview : ASK_COPY.previewHint);
+    }
+    const key = pk.closest('.card')?.querySelector<HTMLElement>('[data-decision="answer"]');
+    if (key) {
+      if (askComplete(x.ask, x.picks)) {
+        key.removeAttribute('aria-disabled');
+        key.removeAttribute('title');
+      } else {
+        key.setAttribute('aria-disabled', 'true');
+        key.title = 'answer every question first';
+      }
+    }
+  }
+}
+/** A trusted press on an option or Other: one pick picks it, many toggle it; Other then focuses its text field. */
+function onAskPress(e: Event, b: HTMLElement): void {
+  if (!e.isTrusted) return; // design-system question-card: never on a synthetic event
+  const cardId = b.dataset.askCard ?? '';
+  const x = picksOf(cardId);
+  const q = x?.ask.questions.find((y) => y.n === Number(b.dataset.askQ));
+  if (!x || !q) return;
+  if (b.dataset.askOther) {
+    askPressOther(x.picks, q);
+    syncAsk(cardId);
+    if (x.picks.get(q.n)?.other) (b.closest('.ask-q')?.querySelector('[data-ask-free]') as HTMLElement | null)?.focus();
+    return;
+  }
+  const opt = Number(b.dataset.askOpt);
+  if (!askPress(x.picks, q, opt)) return;
+  refusals.delete(cardId);
+  syncAsk(cardId, { q: q.n, opt });
+}
+/** Typing an Other answer (a trusted input event only). */
+function onAskInput(e: Event): void {
+  const f = e.target as HTMLInputElement;
+  if (!e.isTrusted || !f.dataset?.askFree) return;
+  const cardId = f.dataset.askCard ?? '';
+  const x = picksOf(cardId);
+  const q = x?.ask.questions.find((y) => y.n === Number(f.dataset.askQ));
+  if (!x || !q) return;
+  askType(x.picks, q, f.value);
+  syncAsk(cardId);
+  // the same card in the other zone shows the same text
+  for (const g of document.querySelectorAll<HTMLInputElement>(`[data-ask-card="${CSS.escape(cardId)}"][data-ask-q="${q.n}"][data-ask-free]`)) if (g !== f) g.value = f.value;
+}
+/** Keyboard inside a question (never while typing in its text field): arrows move, a number or letter picks or toggles. */
+function onAskKey(e: KeyboardEvent): void {
+  const f = e.target as HTMLInputElement;
+  if (e.key === 'Enter' && !e.isComposing && !e.shiftKey && f.dataset?.askFree && e.isTrusted) {
+    // Enter in an Other field submits the card (the Submit key's own path; refused there while a question is open)
+    e.preventDefault();
+    const key = f.closest('.card')?.querySelector<HTMLElement>('[data-decision="answer"]') ?? null;
+    return void decide(f.dataset.askCard ?? '', 'answer', f.closest('[data-card-id].card') as HTMLElement | null, key);
+  }
+  const b = (e.target as HTMLElement).closest?.('.ask-picker [data-ask-opt], .ask-picker [data-ask-other]') as HTMLElement | null;
+  if (!b || e.metaKey || e.ctrlKey || e.altKey) return;
+  const group = b.closest('.ask-q') as HTMLElement | null;
+  const stops = group ? [...group.querySelectorAll<HTMLElement>('[data-ask-opt], [data-ask-other]')] : [];
+  const to = askMove(e.key, stops.indexOf(b), stops.length);
+  if (to !== null) {
+    e.preventDefault();
+    return stops[to]?.focus();
+  }
+  const x = picksOf(b.dataset.askCard ?? '');
+  const q = x?.ask.questions.find((y) => y.n === Number(b.dataset.askQ));
+  const at = q ? askOptForKey(e.key, q) : null;
+  if (at === null || !q) return;
+  e.preventDefault();
+  const t = at === 'other' ? stops[stops.length - 1] : stops[at];
+  t?.focus();
+  if (t) onAskPress(e, t); // a key press is a trusted gesture: it picks (or toggles) like a click
+}
+/** A focused option shows its preview (display only). */
+function onAskFocus(e: FocusEvent): void {
+  const b = (e.target as HTMLElement).closest?.('.ask-picker [data-ask-opt]') as HTMLElement | null;
+  if (b) syncAsk(b.dataset.askCard ?? '', { q: Number(b.dataset.askQ), opt: Number(b.dataset.askOpt) });
+}
+/** Before a stack repaint: a function that puts focus (and the caret) back in the same question card, or null. */
+function askFocusOf(): (() => void) | null {
+  const a = document.activeElement as HTMLElement | null;
+  if (!a || !a.closest?.('.ask-picker')) return null;
+  const zone = a.closest('#pinned') ? 'pinned' : 'stack';
+  const sel = `[data-ask-card="${CSS.escape(a.dataset.askCard ?? '')}"][data-ask-q="${CSS.escape(a.dataset.askQ ?? '')}"]${a.dataset.askOpt !== undefined ? `[data-ask-opt="${CSS.escape(a.dataset.askOpt)}"]` : a.dataset.askOther ? '[data-ask-other]' : '[data-ask-free]'}`;
+  const caret = a instanceof HTMLInputElement ? [a.selectionStart, a.selectionEnd] : null;
+  return () => {
+    const el = document.querySelector<HTMLElement>(`#${zone} ${sel}`);
+    el?.focus();
+    if (caret && el instanceof HTMLInputElement && caret[0] !== null && caret[1] !== null) el.setSelectionRange(caret[0], caret[1]);
+  };
 }
 
 async function decide(cardId: string, decision: string, cardEl?: HTMLElement | null, keyEl?: HTMLElement | null): Promise<void> {
@@ -1267,7 +1434,7 @@ async function decide(cardId: string, decision: string, cardEl?: HTMLElement | n
   if (decision === 'answer') {
     note = cardEl ? askNoteFrom(cardEl, cardId) : null;
     if (note === null) {
-      refusals.set(cardId, { code: 'BAD_REQUEST', reason: 'bad-params', message: 'answer every question: pick an option or type an answer', next: [], data: null });
+      refusals.set(cardId, { code: 'BAD_REQUEST', reason: 'bad-params', message: ASK_COPY.incomplete, next: [], data: null });
       void paintStack();
       return;
     }
@@ -3468,6 +3635,8 @@ function onCardPress(e: Event): void {
   const t = e.target as HTMLElement;
   const fold = t.closest('[data-always-fold]') as HTMLElement | null;
   if (fold) return setAlwaysFold(fold, fold.getAttribute('aria-expanded') !== 'true');
+  const askOpt = t.closest('.ask-picker [data-ask-opt], .ask-picker [data-ask-other]') as HTMLElement | null;
+  if (askOpt) return onAskPress(e, askOpt); // #gui-ask-card
   const b = t.closest('[data-decision]') as HTMLElement | null;
   if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!, b.closest('[data-card-id].card') as HTMLElement | null, b);
   const k = t.closest('[data-command]') as HTMLElement | null;
@@ -3571,6 +3740,8 @@ function wire(): void {
   $('viewport').addEventListener('click', (e) => {
     const c = (e.target as HTMLElement).closest('.choices.live [data-choice]') as HTMLElement | null;
     if (c) return onChoice(e, c);
+    const send = (e.target as HTMLElement).closest('.choices.live [data-choice-send]') as HTMLElement | null;
+    if (send) return onChoiceSend(e, send); // #gui-ask-card multi-select
     toggleAct(e.target);
   });
   // #gui-table-talk: inside the live choices a letter / number picks (only with an empty composer); arrows move
@@ -3578,10 +3749,12 @@ function wire(): void {
     const g = (e.target as HTMLElement).closest('.choices.live') as HTMLElement | null;
     if (!g || e.metaKey || e.ctrlKey || e.altKey) return;
     const bs = [...g.querySelectorAll<HTMLElement>('[data-choice]')];
-    const at = bs.indexOf(e.target as HTMLElement);
+    // multi-select: the Send key is one more arrow stop after the chips
+    const stops = [...g.querySelectorAll<HTMLElement>('[data-choice], [data-choice-send]')];
+    const at = stops.indexOf(e.target as HTMLElement);
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
-      return bs[(at + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length]?.focus();
+      return stops[(at + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : stops.length - 1)) % stops.length]?.focus();
     }
     const ta = $<HTMLTextAreaElement>('composer-text');
     const c = choiceForKey(e.key, bs.map((b) => ({ key: b.dataset.choice ?? '', label: '' })), !ta.value.trim() && !(dictationOn() && dict.focusedHere && hasDraft(dict)));
@@ -3683,6 +3856,12 @@ function wire(): void {
   $('pinned').addEventListener('click', onCard);
   $('stack').addEventListener('keydown', onAlwaysKey);
   $('pinned').addEventListener('keydown', onAlwaysKey);
+  // #gui-ask-card: the question card's keys, typed Other answers and the focused option's preview, in both zones
+  for (const z of ['stack', 'pinned']) {
+    $(z).addEventListener('keydown', onAskKey);
+    $(z).addEventListener('input', onAskInput);
+    $(z).addEventListener('focusin', onAskFocus);
+  }
   $('stack-scope').addEventListener('click', (e) => run('stack.scope.toggle', e.isTrusted));
   $('loops-word').addEventListener('click', () => loopsView.open());
   $('composer').addEventListener('submit', (e) => {
@@ -3693,10 +3872,19 @@ function wire(): void {
     // L2: a chip pick is marked picked only once the kernel took it; the composer clears only when the message went out
     const pp = pendingPick;
     pendingPick = null;
+    const pm = pendingMulti;
+    pendingMulti = null;
     void send(t.value, () => {
       if (!viaDictation) t.value = '';
       fitComposer();
     }).then((ok) => {
+      if (pm && ok) {
+        // #gui-ask-card multi-select: the sent options are marked once the kernel took the message
+        pickedMulti.set(pm.item, pm.keys);
+        toggledChoices.delete(pm.item);
+        remountItem(pm.item);
+        paintTranscript();
+      }
       if (!pp || !ok) return;
       pickedChoices.set(pp.item, pp.key);
       remountItem(pp.item);

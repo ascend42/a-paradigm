@@ -633,11 +633,50 @@ html, body {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* ask-user picker (kernel card, #gui) */
-.ask-picker { display: grid; gap: 8px; margin: 8px 0; }
-.ask-q { border: 1px solid currentColor; border-radius: var(--radius); padding: 6px 10px; }
-.ask-opt { display: block; }
-.ask-free { width: 100%; margin-top: 4px; }
+/* #gui-ask-card: the question card (design-system question-card): a session's AskUserQuestion on its ask-user card,
+   from the verified detail only. Options are key-family buttons (kernel-owned, never the dashed model-text chip):
+   a number kbd, the label, the description under it; one pick = radio (● when picked), many = checkbox (✓). */
+.ask-picker { display: grid; gap: 12px; margin: 8px 0; }
+.ask-q { display: grid; gap: 6px; }
+.ask-head { margin: 0; font-size: var(--fs-reading); color: var(--ink); overflow-wrap: anywhere; }
+.ask-head .ask-h { font-size: var(--fs-label); color: var(--sec); }
+.ask-head .ask-many { color: var(--sec); }
+.ask-opts { display: grid; gap: 6px; }
+.ask-opt {
+  font: inherit; font-size: var(--fs-reading); text-align: left; color: var(--ink);
+  display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: baseline;
+  width: 100%; min-height: var(--key-h); padding: 6px 10px;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer;
+}
+.ask-opt .ask-k { font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-label); color: var(--sec); min-width: 14px; text-align: center; }
+.ask-opt .ask-l { overflow-wrap: anywhere; }
+.ask-opt .ask-d { grid-column: 2; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.ask-opt:hover { background: var(--fold); }
+.ask-opt:focus-visible, .ask-free:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.ask-opt.picked { border-color: var(--ink2); }
+.ask-opt.picked .ask-k { color: var(--ink); font-weight: 600; }
+.ask-opt[role="radio"].picked .ask-l::before { content: "● "; }
+.ask-opt[role="checkbox"].picked .ask-l::before { content: "✓ "; }
+.ask-free { width: 100%; }
+.ask-preview {
+  margin: 0; max-height: 240px; overflow: auto; padding: 8px 10px;
+  font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-control); color: var(--ink);
+  background: var(--ground); border: 1px solid var(--rule); border-radius: var(--radius);
+  white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: isolate;
+}
+/* a question card in the chat column may be taller than the usual pinned cap: its options stay reachable */
+.pinned:has(.ask-picker) { max-height: 55vh; }
+/* #gui-ask-card choice-multi: toggled chips (solid edge, ✓) and the one Send key after them */
+.choice.toggled { border-style: solid; border-color: var(--ink2); background: var(--sheet); }
+.choice.toggled .choice-t::before { content: "✓ "; }
+.choice-send {
+  font: inherit; font-size: var(--fs-reading); color: var(--on-ink); background: var(--ink);
+  border: 1px dashed var(--ink2); border-radius: var(--radius-pill); padding: 2px 12px; cursor: pointer; min-height: 24px;
+}
+.choice-send[aria-disabled="true"] { background: transparent; color: var(--sec); border-color: var(--rule); cursor: not-allowed; }
+.choice-send.armed { border-style: solid; border-color: var(--warn-edge); background: var(--warn-bg); color: var(--ink); }
+.choice-send .choice-again { color: var(--warn-ink); font-size: var(--fs-label); }
+.choice-send:focus-visible { outline: 2px dashed var(--key-edge); outline-offset: 2px; }
 
 /* #gui-setup (spec §11.1): the first-run screens */
 .setup { max-width: 68ch; margin: 0 auto; padding: 28px 18px; color: var(--ink); }

@@ -20,6 +20,14 @@
  *
  * Voice: saying the letter is out of scope here (a voice pick would need the kernel's readback/echo path, like a
  * card's voice decision); this module never listens to voice rows.
+ *
+ * Multi-select (#gui-ask-card, founder 2026-10-24: "even multi selections, it would be nice to click them"; design-system
+ * model-text-control choice-multi): when the line just above a recognised run, or the reply's said line, asks for
+ * several (MULTI_CUE: "pick any", "all that apply", "one or more", …), the chips toggle and one Send key sends the
+ * toggled options as ONE human message (multiMessage: one `K — label` line each, in list order). The cue only changes
+ * how a run replyChoices ALREADY recognised behaves; it never makes a list into options. The same trust rules hold: a
+ * trusted gesture for every toggle and the send, the sent text rebuilt from the parsed choices, a draft never
+ * overwritten, and a confirm-flagged label arms the Send key.
  */
 import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { displayText, h, type MiniDoc, type MiniEl } from './render.js';
@@ -45,7 +53,15 @@ export interface ReplyChoices {
   /** the reply without the option lines (rendered as before) */
   body: string;
   choices: Choice[];
+  /** the question asks for several (MULTI_CUE on the line above the run, or the said line): toggles + Send */
+  multi: boolean;
 }
+
+/**
+ * A question that asks for several options. Checked only on the last non-blank line above a recognised run and on the
+ * said line: "Pick any of these:", "Which apply? Select all that apply.", "Choose one or more:", "(multi-select)".
+ */
+export const MULTI_CUE = /\b(?:(?:pick|choose|select|tick|check)\s+(?:any|all|several|multiple|as many)\b|all\s+that\s+apply\b|any\s+(?:of\s+(?:these|them|the\s+following)|combination)\b|one\s+or\s+more\b|multi-?select\b|as\s+many\s+as\s+you\s+(?:like|want)\b)/i;
 
 // `A  text`, `A) text`, `A. text`, `A: text`, optionally bold (`**A.** text`, `**A** text`)
 const OPTION_LINE = /^[ \t]*(\*\*)?([A-F]|[1-6])(?:[).:](?:\*\*)?[ \t]+|(?:\*\*)?[ \t]+)(\S.*)$/;
@@ -78,6 +94,7 @@ export function replyChoices(text: string, said: string | null = null): ReplyCho
   const run = lines.slice(start, end);
   if (run.length < 2 || run.length > CHOICE_MAX) return null;
   const before = lines.slice(0, start).join('\n');
+  const above = lines.slice(0, start).reverse().find((l) => l.trim() !== '') ?? '';
   // table talk ends with ONE question: no question in the reply (or its said-aloud line) ⇒ a plain list, not options
   if (!before.includes('?') && !(said ?? '').includes('?')) return null;
   const scheme = /[A-F]/.test(OPTION_LINE.exec(run[0]!)![2]!) ? LETTERS : DIGITS;
@@ -94,7 +111,7 @@ export function replyChoices(text: string, said: string | null = null): ReplyCho
     if (!label || label.length > CHOICE_LABEL_MAX) return null;
     choices.push({ key, label, confirm: label.length > CHOICE_CONFIRM_LEN || raw.includes('`') || SHELL_LIKE.test(raw) });
   }
-  return { body: before.trimEnd(), choices };
+  return { body: before.trimEnd(), choices, multi: MULTI_CUE.test(above) || MULTI_CUE.test(said ?? '') };
 }
 
 /** The message a pick sends (or inserts): `A — Yes, keep going and finish the thought.` */
@@ -154,6 +171,59 @@ export function pickChoice(
   return 'sent';
 }
 
+/** The message a multi-select send composes: the toggled options in list order, one `K — label` line each. */
+export function multiMessage(choices: readonly Choice[], toggled: ReadonlySet<string>): string {
+  return choices.filter((c) => toggled.has(c.key)).map(choiceMessage).join('\n');
+}
+
+/**
+ * A toggle in a multi-select group: refused unless trusted, live, multi and one of the reply's own choices; returns
+ * the new toggled set (a copy), or null when refused.
+ */
+export function toggleChoice(
+  e: { isTrusted: boolean },
+  at: { itemKey: string; liveKey: string | null; replyText: string; said?: string | null; choiceKey: string },
+  toggled: ReadonlySet<string>,
+): Set<string> | null {
+  if (!e.isTrusted || at.liveKey === null || at.itemKey !== at.liveKey) return null;
+  const r = replyChoices(at.replyText, at.said ?? null);
+  if (!r?.multi || !r.choices.some((c) => c.key === at.choiceKey)) return null;
+  const next = new Set([...toggled].filter((k) => r.choices.some((c) => c.key === k)));
+  if (next.has(at.choiceKey)) next.delete(at.choiceKey);
+  else next.add(at.choiceKey);
+  return next;
+}
+
+/**
+ * The Send key of a multi-select group. Refused unless trusted, live, multi and at least one toggled option of the
+ * reply's own (the text is rebuilt from the parsed choices, never from the elements). A toggled confirm-flagged option
+ * answers 'confirm' until the Send key is activated again (`armed`). No draft ⇒ the composed lines go into the
+ * composer and it submits; a draft ⇒ they go after it and nothing is sent.
+ */
+export function pickChoices(
+  e: { isTrusted: boolean },
+  at: { itemKey: string; liveKey: string | null; replyText: string; said?: string | null },
+  toggled: ReadonlySet<string>,
+  composer: ChoiceComposer,
+  armed = false,
+): PickOutcome {
+  if (!e.isTrusted || at.liveKey === null || at.itemKey !== at.liveKey) return 'refused';
+  const r = replyChoices(at.replyText, at.said ?? null);
+  if (!r?.multi) return 'refused';
+  const picked = r.choices.filter((c) => toggled.has(c.key));
+  if (!picked.length) return 'refused';
+  if (picked.some((c) => c.confirm) && !armed) return 'confirm';
+  const msg = multiMessage(r.choices, toggled);
+  if (composer.value.trim() || composer.dictationDraft) {
+    composer.value = `${composer.value.replace(/\s+$/, '')}${composer.value.trim() ? '\n' : ''}${msg}`;
+    composer.focus();
+    return 'inserted';
+  }
+  composer.value = msg;
+  composer.submit();
+  return 'sent';
+}
+
 /** The chip a key press names in a live group (`a`/`A`, `1`), or null; Aegis M1: it only MOVES focus there (Enter or
  * Space confirms). Only when the composer is empty. */
 export function choiceForKey<T extends { key: string }>(key: string, choices: readonly T[], composerEmpty: boolean): T | null {
@@ -165,18 +235,32 @@ export function choiceForKey<T extends { key: string }>(key: string, choices: re
 /**
  * The chips. Live: focusable buttons with data-choice / data-choice-item (never data-decision, never the `key` class).
  * Inert (an older reply) or picked: disabled; the picked one is marked. The text is the sanitised label, as sent.
+ * Multi (`state.multi`): each live chip is a toggle (aria-pressed, `toggled`), followed by ONE Send key
+ * (data-choice-send) naming the count; once sent, every sent option is marked picked (`state.pickedSet`).
  */
-export function renderChoices(doc: MiniDoc, itemKey: string, choices: readonly Choice[], state: { live: boolean; picked: string | null; armed?: string | null }): MiniEl {
-  const on = state.live && state.picked === null;
+export function renderChoices(
+  doc: MiniDoc,
+  itemKey: string,
+  choices: readonly Choice[],
+  state: { live: boolean; picked: string | null; armed?: string | null; multi?: boolean; toggled?: ReadonlySet<string> | null; pickedSet?: ReadonlySet<string> | null; sendArmed?: boolean },
+): MiniEl {
+  const multi = !!state.multi;
+  const sent = multi ? (state.pickedSet ?? null) : null;
+  const on = state.live && state.picked === null && sent === null;
+  const toggled = on && multi ? (state.toggled ?? new Set<string>()) : new Set<string>();
+  const hint = on ? (multi ? 'pick any, then send' : 'reply with') : state.picked !== null || sent !== null ? 'you replied' : 'options';
   return h(
     doc,
     'div',
-    { class: `choices${on ? ' live' : ' inert'}`, role: 'group', 'aria-label': on ? 'Reply with one of these options' : 'Options (no longer live)' },
-    h(doc, 'small', { class: 'choices-hint' }, on ? 'reply with' : state.picked !== null ? 'you replied' : 'options'),
+    { class: `choices${multi ? ' multi' : ''}${on ? ' live' : ' inert'}`, role: 'group', 'aria-label': on ? (multi ? 'Reply with any of these options' : 'Reply with one of these options') : 'Options (no longer live)' },
+    h(doc, 'small', { class: 'choices-hint' }, hint),
     ...choices.map((c) => {
-      const picked = state.picked === c.key;
-      const armed = on && state.armed === c.key;
-      const attrs: Record<string, string> = { class: `choice${picked ? ' picked' : ''}${armed ? ' armed' : ''}`, type: 'button', 'data-choice': c.key, 'data-choice-item': itemKey, 'aria-label': `${armed ? 'Press again to send: ' : 'Reply '}${choiceMessage(c)}`, title: on ? (armed ? 'Click or press Enter again to send it' : `Send “${choiceMessage(c)}” as your reply`) : '' };
+      const picked = multi ? !!sent?.has(c.key) : state.picked === c.key;
+      const armed = on && !multi && state.armed === c.key;
+      const tog = toggled.has(c.key);
+      const title = on ? (multi ? `${tog ? 'Take out' : 'Add'} “${choiceMessage(c)}”` : armed ? 'Click or press Enter again to send it' : `Send “${choiceMessage(c)}” as your reply`) : '';
+      const attrs: Record<string, string> = { class: `choice${picked ? ' picked' : ''}${armed ? ' armed' : ''}${tog ? ' toggled' : ''}`, type: 'button', 'data-choice': c.key, 'data-choice-item': itemKey, 'aria-label': `${armed ? 'Press again to send: ' : multi ? '' : 'Reply '}${choiceMessage(c)}`, title };
+      if (on && multi) attrs['aria-pressed'] = String(tog);
       if (!on) attrs['aria-disabled'] = 'true';
       if (!on) attrs.tabindex = '-1';
       if (picked) attrs['aria-pressed'] = 'true';
@@ -184,5 +268,21 @@ export function renderChoices(doc: MiniDoc, itemKey: string, choices: readonly C
       if (!on) el.setAttribute('disabled', '');
       return el;
     }),
+    on && multi
+      ? h(
+          doc,
+          'button',
+          {
+            class: `choice-send${state.sendArmed ? ' armed' : ''}`,
+            type: 'button',
+            'data-choice-send': itemKey,
+            ...(toggled.size ? {} : { 'aria-disabled': 'true' }),
+            'aria-label': toggled.size ? `${state.sendArmed ? 'Press again to send ' : 'Send '}${toggled.size} option${toggled.size === 1 ? '' : 's'} as your reply` : 'Send: pick at least one option first',
+            title: toggled.size ? (state.sendArmed ? 'Click or press Enter again to send them' : 'Send the options you picked as your reply') : 'Pick at least one option first',
+          },
+          toggled.size ? `Send ${toggled.size}` : 'Send',
+          state.sendArmed ? h(doc, 'small', { class: 'choice-again' }, ' again to send') : null,
+        )
+      : null,
   );
 }

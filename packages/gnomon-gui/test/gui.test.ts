@@ -143,8 +143,8 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     const card = { ...base, block, contentHash: cardContentHash(base, detail) };
     const ask = askDetailOf(card)!;
     expect(ask.questions).toEqual([
-      { n: 1, question: 'Colour?', header: 'Pick', multiSelect: false, options: ['Red', 'Blue'] },
-      { n: 2, question: 'Toppings?', header: null, multiSelect: true, options: ['Ham', 'Egg'] },
+      { n: 1, question: 'Colour?', header: 'Pick', multiSelect: false, options: ['Red', 'Blue'], about: ['warm', null], previews: [null, null] },
+      { n: 2, question: 'Toppings?', header: null, multiSelect: true, options: ['Ham', 'Egg'], about: [null, null], previews: [null, null] },
     ]);
     // a tampered detail (the question swapped after hashing), a missing node, a second node, a wrong hash ⇒ no picker
     const swapped = structuredClone(detail);
@@ -157,25 +157,28 @@ describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never
     const v = { cardId: 'card:01J', kind: 'ask-user', requestedBy: base.requestedBy, hsid: null, repo: null, state: 'pending', contentHash: card.contentHash, flags: [], decisions: ['answer'], decidable: true, ask };
     const el = renderCard({ doc: fdoc }, v, block) as FEl;
     const inputs = el.all().filter((e) => e.tag === 'input');
-    expect(inputs.filter((e) => e.attrs.get('type') === 'radio')).toHaveLength(2);
-    expect(inputs.filter((e) => e.attrs.get('type') === 'checkbox')).toHaveLength(2);
+    // #gui-ask-card: options are buttons (radio for one pick, checkbox for many), plus Other per question
+    const opts = el.all().filter((e) => e.tag === 'button' && e.attrs.has('data-ask-opt'));
+    expect(opts.filter((e) => e.attrs.get('role') === 'radio')).toHaveLength(2);
+    expect(opts.filter((e) => e.attrs.get('role') === 'checkbox')).toHaveLength(2);
+    expect(el.all().filter((e) => e.attrs.has('data-ask-other'))).toHaveLength(2);
     const free = inputs.filter((e) => e.attrs.get('data-ask-free'));
     expect(free).toHaveLength(2);
     expect(free.map((e) => e.attrs.get('maxlength'))).toEqual(['1000', '1000']); // the kernel's ASK_MAX_ANSWER_CHARS, from detail
     expect(free[0]!.attrs.get('aria-label')).toContain('question 1: Colour?');
     expect(el.text).not.toContain('Wire money?'.repeat(2));
-    expect(el.all().filter((e) => e.tag === 'legend').map((e) => e.text)).toEqual(['Pick: Colour?', 'Toppings?']);
+    expect(el.all().filter((e) => e.className.startsWith('ask-q')).map((e) => e.attrs.get('aria-label'))).toEqual(['Pick: Colour?', 'Toppings?']);
     expect(el.all().filter((e) => e.attrs.has('data-decision')).map((e) => e.attrs.get('data-decision'))).toEqual(['answer']);
     // no verified answer key, or no verified detail ⇒ no picker
-    expect((renderCard({ doc: fdoc }, { ...v, decisions: [] }, block) as FEl).all().some((e) => e.tag === 'input')).toBe(false);
-    expect((renderCard({ doc: fdoc }, { ...v, ask: null }, block) as FEl).all().some((e) => e.tag === 'input')).toBe(false);
+    expect((renderCard({ doc: fdoc }, { ...v, decisions: [] }, block) as FEl).all().some((e) => e.tag === 'input' || e.attrs.has('data-ask-opt'))).toBe(false);
+    expect((renderCard({ doc: fdoc }, { ...v, ask: null }, block) as FEl).all().some((e) => e.tag === 'input' || e.attrs.has('data-ask-opt'))).toBe(false);
     const qs = ask.questions;
     expect(JSON.parse(askNote(qs, new Map([[1, { chosen: [1], free: '' }], [2, { chosen: [0, 1], free: '' }]]))!)).toEqual({ answers: { 'Colour?': 'Blue', 'Toppings?': 'Ham, Egg' } });
     expect(JSON.parse(askNote(qs, new Map([[1, { chosen: [0], free: 'teal' }], [2, { chosen: [0], free: '' }]]))!)).toEqual({ answers: { 'Colour?': 'teal', 'Toppings?': 'Ham' } });
     expect(askNote(qs, new Map([[1, { chosen: [0], free: '' }]]))).toBeNull(); // an unanswered question sends nothing
     expect(askNote([qs[0]!], new Map([[1, { chosen: [0], free: '' }]]))).toBe('Red'); // one question: plain text
     // Aegis L1: a question named __proto__ is an ordinary key
-    const proto = [{ n: 1, question: '__proto__', header: null, multiSelect: false, options: ['x'] }, { n: 2, question: 'b', header: null, multiSelect: false, options: ['y'] }];
+    const proto = [{ n: 1, question: '__proto__', header: null, multiSelect: false, options: ['x'], about: [null], previews: [null] }, { n: 2, question: 'b', header: null, multiSelect: false, options: ['y'], about: [null], previews: [null] }];
     expect(JSON.parse(askNote(proto, new Map([[1, { chosen: [0], free: '' }], [2, { chosen: [0], free: '' }]]))!)).toEqual(JSON.parse('{"answers":{"__proto__":"x","b":"y"}}'));
   });
   it('Bash permission card (TD-2026-10-20-294): always offers the exact command or the verified prefix choices', () => {

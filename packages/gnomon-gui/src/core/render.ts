@@ -25,6 +25,7 @@
  */
 import { BIDI_GLYPHS, canonicalJson, checkCap, hex, PRINCIPAL_ID_PATTERN, sanitizeDisplayText, sha256, type Cap } from '@a-company/gnomon-contracts';
 import { BLOCK_SAFE_COMMANDS } from './commands.js';
+import { askComplete, askSubmitLabel, renderAskPicker } from './ask-card.js';
 
 /** Legend for the `bidi` card flag chip: the glyphs the contracts sanitizer shows in place of bidi controls. */
 export const BIDI_LEGEND = Object.values(BIDI_GLYPHS).join(' ');
@@ -364,6 +365,8 @@ export interface CardView {
   decidable: boolean;
   /** ask-user: the questions from the card's contentHash-verified structured detail (askDetailOf); null ⇒ no picker */
   ask?: AskCardDetail | null;
+  /** #gui-ask-card: the page's picks for this card (ui/app.ts askPicks); absent ⇒ none picked yet */
+  askPicks?: ReadonlyMap<number, AskPick> | null;
   /** Bash permission: the prefix-scoped always choices from the contentHash-verified detail (prefixOptionsOf); null ⇒ exact only */
   prefixOptions?: string[][] | null;
   /** Edit/Write permission: the scoped always choices from the contentHash-verified detail (editScopesOf); null ⇒ exact only */
@@ -745,6 +748,10 @@ export interface AskCardQuestion {
   header: string | null;
   multiSelect: boolean;
   options: string[];
+  /** #gui-ask-card: each option's description (null: none), by index */
+  about: (string | null)[];
+  /** #gui-ask-card: each option's preview (plain text; null: none), by index */
+  previews: (string | null)[];
 }
 
 export interface AskCardDetail {
@@ -1062,19 +1069,31 @@ export function askDetailOf(card: Record<string, unknown>): AskCardDetail | null
     const q = raw as { question?: unknown; header?: unknown; multiSelect?: unknown; options?: unknown } | null;
     if (!q || typeof q.question !== 'string' || !Array.isArray(q.options) || typeof q.multiSelect !== 'boolean' || (q.header !== null && typeof q.header !== 'string')) return null;
     const options: string[] = [];
+    const about: (string | null)[] = [];
+    const previews: (string | null)[] = [];
     for (const o of q.options) {
-      if (!o || typeof (o as { label?: unknown }).label !== 'string') return null;
-      options.push((o as { label: string }).label);
+      const x = o as { label?: unknown; description?: unknown; preview?: unknown } | null;
+      if (!x || typeof x.label !== 'string') return null;
+      if (x.description !== undefined && x.description !== null && typeof x.description !== 'string') return null;
+      if (x.preview !== undefined && typeof x.preview !== 'string') return null;
+      options.push(x.label);
+      about.push(typeof x.description === 'string' ? x.description : null);
+      previews.push(typeof x.preview === 'string' ? x.preview : null);
     }
-    questions.push({ n: i + 1, question: q.question, header: (q.header as string | null) ?? null, multiSelect: q.multiSelect, options });
+    questions.push({ n: i + 1, question: q.question, header: (q.header as string | null) ?? null, multiSelect: q.multiSelect, options, about, previews });
   }
   return { questions, maxAnswerChars: d.maxAnswerChars };
 }
 
-/** A picker's choices per question: the chosen option indexes and the free text (free text wins when non-empty). */
+/**
+ * A picker's choices per question: the chosen option indexes, the free text and whether Other is picked. One pick: the
+ * free text wins when non-empty. Many (#gui-ask-card): the chosen labels, then the free text when Other is on, joined
+ * with ', ' (Claude Code's multi-select answer form).
+ */
 export interface AskPick {
   chosen: number[];
   free: string;
+  other?: boolean;
 }
 
 /**
@@ -1088,42 +1107,13 @@ export function askNote(qs: readonly AskCardQuestion[], picks: ReadonlyMap<numbe
   for (const q of qs) {
     const p = picks.get(q.n);
     const free = p?.free.trim() ?? '';
-    const labels = (p?.chosen ?? []).map((i) => q.options[i]).filter((x): x is string => typeof x === 'string');
-    const a = free !== '' ? free : labels.join(', ');
+    const labels = [...new Set(p?.chosen ?? [])].sort((x, y) => x - y).map((i) => q.options[i]).filter((x): x is string => typeof x === 'string');
+    const a = q.multiSelect ? [...labels, ...(free !== '' && p?.other !== false ? [free] : [])].join(', ') : free !== '' ? free : (labels[0] ?? '');
     if (a === '') return null;
     answers[q.question] = a;
   }
   if (!qs.length) return null;
   return qs.length === 1 ? answers[qs[0]!.question]! : JSON.stringify({ answers });
-}
-
-function askPicker(ctx: RenderCtx, cardId: string, ask: AskCardDetail): MiniEl {
-  const { doc } = ctx;
-  return h(
-    doc,
-    'div',
-    { class: 'ask-picker', 'data-ask-card': cardId },
-    ...ask.questions.map((q) =>
-      h(
-        doc,
-        'fieldset',
-        { class: 'ask-q', 'data-ask-q': String(q.n) },
-        h(doc, 'legend', null, q.header ? `${q.header}: ${q.question}` : q.question),
-        ...q.options.map((o, j) =>
-          h(doc, 'label', { class: 'ask-opt' }, h(doc, 'input', { type: q.multiSelect ? 'checkbox' : 'radio', name: `ask-${cardId}-${q.n}`, value: String(j), 'data-ask-q': String(q.n), 'data-ask-opt': String(j) }), ` ${o}`),
-        ),
-        h(doc, 'input', {
-          type: 'text',
-          class: 'ask-free',
-          maxlength: String(ask.maxAnswerChars),
-          'aria-label': `your own answer to question ${q.n}: ${q.question}`,
-          placeholder: q.options.length ? 'or type your own answer' : 'type your answer',
-          'data-ask-q': String(q.n),
-          'data-ask-free': '1',
-        }),
-      ),
-    ),
-  );
 }
 
 /**
@@ -1240,7 +1230,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     bodyShown ? bodyEl : null,
     bodyShown ? moreEl : null,
     raised ? h(doc, 'small', { class: `meta card-raised${v.held ? ' held-note kernel-owned' : ''}` }, raised) : null,
-    ask ? askPicker(ctx, v.cardId, ask) : null,
+    ask ? renderAskPicker(doc, v.cardId, ask, v.askPicks ?? new Map()) : null,
     v.rootRows
       ? h(doc, 'div', { class: 'card-root-rows kernel-owned' }, h(doc, 'p', { class: 'meta root-rows-title' }, 'This decision signs'), h(doc, 'ul', null, ...(v.rootRows.items ? v.rootRows.items.map((i) => h(doc, 'li', i.mark ? { class: i.mark } : null, i.mark ? h(doc, 'span', { class: 'sr-only' }, i.mark === 'add' ? 'new: ' : 'was: ') : null, i.text)) : v.rootRows.lines.length ? v.rootRows.lines.map((l) => h(doc, 'li', null, l)) : [h(doc, 'li', null, 'its decision row only (no other row)')])))
       : rootGated
@@ -1257,7 +1247,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
         // width); the key itself decides nothing, each choice below is the decision key
         d === 'always' && scoped
           ? h(doc, 'button', { class: `key key-always-fold${d === pri ? ' pri' : ''}`, type: 'button', 'data-always-fold': v.cardId, 'aria-expanded': String(!!v.alwaysOpen) }, `Always ${v.alwaysOpen ? '▴' : '▾'}`)
-          : h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}) }, d),
+          : h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}), ...(ask && d === 'answer' && !askComplete(ask, v.askPicks ?? new Map()) ? { 'aria-disabled': 'true', title: 'answer every question first' } : {}) }, ask && d === 'answer' ? askSubmitLabel(ask) : d),
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
