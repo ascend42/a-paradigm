@@ -717,6 +717,9 @@ html, body {
 .rung-line { display: block; color: var(--sec); font-size: var(--fs-control); }
 .rung-tag { font-size: var(--fs-label); color: var(--ink2); white-space: nowrap; }
 .rung-tag.tag { font-size: var(--fs-label); color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); padding: 0 6px; }
+/* #voice-reply-mode: replies · [Speak and show | Show only], the sheet's replies row in the ladder */
+.ladder-replies { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 6px 0; border-top: 1px dashed var(--rule); margin-top: 4px; }
+.ladder-replies .meta { font-size: var(--fs-label); color: var(--sec); }
 .ladder-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 6px 2px; font-size: var(--fs-label); color: var(--sec); }
 .link { background: none; border: 0; padding: 0; font: inherit; font-size: var(--fs-control); color: var(--ink2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .link:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }

@@ -136,7 +136,7 @@ describe('the ladder replaces the pill menu (design-system gnomon.voice.model)',
     expect(r.all((e) => e.className.includes('ladder-target'))[0]!.text).toBe('applies to BBBB · voice is on AAAA');
     expect(root(ladderEls(fdoc, L(), 'foot')).all((e) => e.className.includes('ladder-target'))).toHaveLength(0);
     expect(APP).toContain("menu.setAttribute('aria-label', ladderAria(target));");
-    expect(APP).toContain('ladderEls(doc, entries, foot, target)');
+    expect(APP).toContain('ladderEls(doc, entries, foot, target, replies)');
   });
   it('rungs map onto the existing mode × preset machinery', () => {
     expect(['off', 'talk', 'dictate', 'word', 'pieces'].map((r) => [stateOfRung(r as never), presetOfRung(r as never), sendOfRung(r as never)])).toEqual([
@@ -218,15 +218,15 @@ const view = (o: Partial<SheetView> = {}): SheetView => ({ rows: rows(), flow: n
 describe('the Voice settings sheet: one place for everything voice configures', () => {
   it('six rows: your voice, send word, keys, listen, timing, risk', () => {
     const r = rows();
-    expect(r.map((x) => x.label)).toEqual(['your voice', 'send word', 'keys', 'listen', 'timing', 'risk']);
+    expect(r.map((x) => x.label)).toEqual(['your voice', 'send word', 'keys', 'listen', 'replies', 'timing', 'risk']);
     expect(r[0]).toMatchObject({ value: 'taught · matt', tone: 'ok', action: { label: 'retrain', act: 'enrol' } });
     expect(r[1]).toMatchObject({ value: 'not set', tone: 'warn', action: { label: 'set up' } });
     expect(rows({ sendWord: { text: 'over', variants: ['ova', 'oh ver'] } })[1]).toMatchObject({ value: '“over” · 2 variants', action: { label: 'change' } });
     expect(r[2]!.value).toBe('talk ⌃⌥Space · mic ⌃` · send now ⌃⌥Return');
     expect(r[3]).toMatchObject({ value: 'always on (open-mic rungs)', action: { label: 'use mic key', act: 'listen.toggle' } });
     expect(PIECES_TIMING).toBe('pieces pause 1.5 s, up to 8 s');
-    expect(r[5]).toMatchObject({ value: 'not acknowledged', tone: 'warn' });
-    expect(rows({ acked: true })[5]).toMatchObject({ value: 'acknowledged', tone: 'ok', action: null });
+    expect(r[6]).toMatchObject({ value: 'not acknowledged', tone: 'warn' });
+    expect(rows({ acked: true })[6]).toMatchObject({ value: 'acknowledged', tone: 'ok', action: null });
     expect(rows({ enrolled: [] })[0]).toMatchObject({ tone: 'warn', action: { label: 'teach' } });
   });
   it('ok reads by its mark and weight (board gnomon-status-colour): an ok value carries ✓, warn and plain do not', () => {
@@ -243,7 +243,7 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     expect(keys.every((k) => k.attrs.get('role') === 'radio')).toBe(true);
     expect(r.all((e) => e.attrs.get('role') === 'radiogroup')[0]!.attrs.get('aria-label')).toBe('Talk sends after');
     expect(r.text).toContain('talk sends after 8 s · pieces pause 1.5 s, up to 8 s');
-    expect(rows({ delayMs: null })[4]!.value).toBe('talk sends after you press Enter · pieces pause 1.5 s, up to 8 s');
+    expect(rows({ delayMs: null })[5]!.value).toBe('talk sends after you press Enter · pieces pause 1.5 s, up to 8 s');
     // Luna #4: by night the chosen segment is [bracketed] and glows (not just the ink edge every key has)
     expect(CSS).toMatch(/\[data-theme="night"\] \.seg-key\[aria-checked="true"\]::before[^{]*\{ content: "\["/);
     expect(CSS).toMatch(/\[data-theme="night"\] \.seg-key\[aria-checked="true"\]::after[^{]*\{ content: "\]"/);
@@ -321,9 +321,9 @@ describe('the Voice settings sheet: one place for everything voice configures', 
     const review = root(sheetEls(fdoc, view({ flow: { kind: 'risk', rung: null, ack: false, word: 'over' } })));
     expect(review.all((e) => e.className === 'vs-risk-text')[0]!.text).toMatch(/^When you say “over”/);
     // the risk row says when
-    expect(rows({ acked: true, ackedAt: '2026-10-21T09:00:00.000Z', now: new Date('2026-10-21T15:00:00.000Z') })[5]!.value).toBe('acknowledged · today');
-    expect(rows({ acked: true, ackedAt: '2026-10-01T09:00:00.000Z', now: new Date('2026-10-21T15:00:00.000Z') })[5]!.value).toMatch(/^acknowledged · .*2026/);
-    expect(rows({ acked: true })[5]!.value).toBe('acknowledged');
+    expect(rows({ acked: true, ackedAt: '2026-10-21T09:00:00.000Z', now: new Date('2026-10-21T15:00:00.000Z') })[6]!.value).toBe('acknowledged · today');
+    expect(rows({ acked: true, ackedAt: '2026-10-01T09:00:00.000Z', now: new Date('2026-10-21T15:00:00.000Z') })[6]!.value).toMatch(/^acknowledged · .*2026/);
+    expect(rows({ acked: true })[6]!.value).toBe('acknowledged');
   });
   it('the page drives the kernel trial: start{word, trial}, save, clear{trial}; the sheet closing ends it', () => {
     expect(APP).toContain("payload: { op: 'start', word, trial: true }");
@@ -473,7 +473,7 @@ describe('founder request 2026-10-23: Voice settings › input says which mic is
   it('the input row names the device, transport, rate and echo cancelling, and whether it follows the default', () => {
     const c = st({ device: { name: 'AirPods Pro', transport: 'bluetooth', sampleRate: 24000 }, aec: 'headphones', on: true, inputs: [BUILTIN, AIRPODS], selected: null, missing: false });
     expect(inputRow(c, true)).toEqual({ id: 'input', label: 'input', value: 'AirPods Pro · bluetooth · 24 kHz · headphones, no echo · system default', tone: 'ok', action: { label: 'change', act: 'input' } });
-    expect(rows({ client: c }).map((x) => x.label)).toEqual(['input', 'your voice', 'send word', 'keys', 'listen', 'timing', 'risk']);
+    expect(rows({ client: c }).map((x) => x.label)).toEqual(['input', 'your voice', 'send word', 'keys', 'listen', 'replies', 'timing', 'risk']);
     expect(micTitleLine(c)).toBe('\nMic: AirPods Pro · bluetooth · 24 kHz · headphones, no echo');
     const vp = st({ device: { name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 }, aec: 'vpio', on: false, inputs: [BUILTIN], selected: BUILTIN.id }, { id: BUILTIN.id, name: BUILTIN.name });
     expect(inputRow(vp, true)!.value).toBe('MacBook Pro Microphone · built-in · 48 kHz · echo cancel on · chosen · mic off');

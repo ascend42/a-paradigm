@@ -70,8 +70,17 @@ export function rungOf(v: Pick<VoiceView, 'state' | 'send'>, preset: VoicePreset
 }
 
 /** The Voice settings sheet's sections, in order (design-system gnomon.voice.setup). */
-export type SheetSection = 'input' | 'voice' | 'sendword' | 'keys' | 'listen' | 'timing' | 'risk';
-export const SHEET_SECTIONS: readonly SheetSection[] = Object.freeze(['input', 'voice', 'sendword', 'keys', 'listen', 'timing', 'risk'] as const);
+export type SheetSection = 'input' | 'voice' | 'sendword' | 'keys' | 'listen' | 'replies' | 'timing' | 'risk';
+export const SHEET_SECTIONS: readonly SheetSection[] = Object.freeze(['input', 'voice', 'sendword', 'keys', 'listen', 'replies', 'timing', 'risk'] as const);
+
+/* ── #voice-reply-mode (founder 2026-10-23: "just type back and not speak") ── */
+/** 'speak' = Speak and show (the default); 'show' = Show only: replies are written, not played; voice input stays on. */
+export type ReplyMode = 'speak' | 'show';
+export const REPLY_MODE_NAME: Readonly<Record<ReplyMode, string>> = Object.freeze({ speak: 'Speak and show', show: 'Show only' });
+/** The kernel's status.voice.replyMode (anything else, or an older kernel, reads as speak). */
+export const replyModeOf = (status: unknown): ReplyMode => ((status as { voice?: { replyMode?: unknown } } | null)?.voice?.replyMode === 'show' ? 'show' : 'speak');
+/** The request a reply-mode choice sends (the kernel persists it per human). */
+export const replyModeRequest = (mode: ReplyMode): { kind: 'request.voice.client'; payload: { op: 'reply-mode'; mode: ReplyMode } } => ({ kind: 'request.voice.client', payload: { op: 'reply-mode', mode } });
 
 export interface Readiness {
   /** the one-time liability acknowledgement (per user, this machine) */
@@ -295,6 +304,8 @@ export interface SheetInput extends Readiness {
   now?: Date;
   /** founder request 2026-10-23: the voice app's mic (core/voice-client.ts clientOf); absent = no input row */
   client?: ClientView | null;
+  /** #voice-reply-mode: the kernel's reply mode (absent = speak) */
+  replyMode?: ReplyMode;
 }
 
 /**
@@ -366,6 +377,10 @@ export function sheetRows(i: SheetInput): SheetRowView[] {
     // a bare ` mic key is a warn (board gnomon-notices): while voice runs, ` types in no app; the row says so, not only the toast
     { id: 'keys', label: 'keys', value: `talk ${i.hotkey} · mic ${micKeyName(i.micKeyBare)} · send now ${SEND_NOW_KEY}${i.micKeyBare ? ' · while voice runs, ` types in no app' : ''}`, tone: i.micKeyBare ? 'warn' : 'plain', action: i.attachable ? { label: 'change', act: 'keys' } : null },
     { id: 'listen', label: 'listen', value: i.capture === 'toggle' ? `the mic key turns it on and off (${micKeyName(i.micKeyBare)})` : 'always on (open-mic rungs)', tone: 'plain', action: i.attachable ? { label: i.capture === 'toggle' ? 'keep always on' : 'use mic key', act: i.capture === 'toggle' ? 'listen.open' : 'listen.toggle' } : null },
+    // #voice-reply-mode: the arrangement (spoken part, body, choices, slips) stays either way; only playback is off
+    i.replyMode === 'show'
+      ? { id: 'replies', label: 'replies', value: 'shown only · not spoken · voice input stays on', tone: 'plain', action: i.attachable ? { label: 'speak them', act: 'reply.speak' } : null }
+      : { id: 'replies', label: 'replies', value: 'spoken and shown', tone: 'plain', action: i.attachable ? { label: 'show only', act: 'reply.show' } : null },
     { id: 'timing', label: 'timing', value: `talk sends after ${i.delayMs === null ? 'you press Enter' : secs(i.delayMs)} · ${PIECES_TIMING}`, tone: 'plain', action: null },
     { id: 'risk', label: 'risk', value: i.acked ? ackedLine(i.ackedAt ?? null, i.now) : 'not acknowledged', tone: i.acked ? 'ok' : 'warn', action: i.acked || !i.attachable ? null : { label: 'review', act: 'risk' } },
   ];
