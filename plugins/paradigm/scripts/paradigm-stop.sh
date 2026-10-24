@@ -19,12 +19,22 @@ command -v _pm_count >/dev/null 2>&1 || _pm_count() { :; }
 _pm_mark read-input
 INPUT=$(cat)
 
-# Extract cwd from input (try jq first, fallback to grep)
+# Extract cwd and stop_hook_active from input (try jq first, fallback to grep).
+# stop_hook_active=true: this Stop follows a turn that a Stop-hook block
+# continued (the agent already had one attempt at fixing the violations).
 if command -v jq >/dev/null 2>&1; then
   CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+  STOP_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)
 else
   CWD=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  if echo "$INPUT" | grep -q '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; then
+    STOP_ACTIVE=true
+  else
+    STOP_ACTIVE=false
+  fi
 fi
+[ "$STOP_ACTIVE" = "true" ] || STOP_ACTIVE=false
+STOP_FP_FILE=".paradigm/.stop-block-fingerprint"
 
 if [ -z "$CWD" ]; then
   CWD="$(pwd)"
@@ -44,6 +54,7 @@ if [ -z "$MODIFIED" ]; then
   # Clean up session markers on pass (no modifications)
   rm -f ".paradigm/.pending-review"
   rm -f ".paradigm/.session-started"
+  rm -f "$STOP_FP_FILE"
   exit 0
 fi
 
@@ -61,6 +72,36 @@ fi
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
+  # --- Loop guard: a fix attempt that changed nothing ends the turn ---
+  # Without this a violation the agent cannot resolve inside the turn blocks
+  # every stop forever. When this Stop follows a Stop-hook continuation
+  # (stop_hook_active) and the violation set is unchanged — or this is the 4th
+  # consecutive block — print the violations, log stop-block-unresolved and
+  # allow the stop. The marker stays, and the next turn (not active) blocks
+  # again. PARADIGM_OVERRIDE is unaffected: overridden remediations never
+  # reach VIOLATIONS.
+  STOP_FP=$(_pm_violation_fp)
+  PREV_FP=""
+  PREV_COUNT=0
+  if [ -f "$STOP_FP_FILE" ]; then
+    PREV_FP=$(sed -n 1p "$STOP_FP_FILE" 2>/dev/null)
+    PREV_COUNT=$(sed -n 2p "$STOP_FP_FILE" 2>/dev/null | tr -cd '0-9')
+    PREV_COUNT=${PREV_COUNT:-0}
+  fi
+  if [ "$STOP_ACTIVE" = "true" ] && { [ "$STOP_FP" = "$PREV_FP" ] || [ "$PREV_COUNT" -ge 3 ]; }; then
+    echo "" >&2
+    echo "Paradigm: unresolved after a fix attempt — ending the turn; these will block again next turn ($VIOLATION_COUNT violation(s)):" >&2
+    echo "$VIOLATIONS" >&2
+    _pm_record_unresolved "$STOP_FP" "$PREV_COUNT"
+    exit 0
+  fi
+  if [ "$STOP_ACTIVE" = "true" ]; then
+    STOP_COUNT=$((PREV_COUNT + 1))
+  else
+    STOP_COUNT=1
+  fi
+  printf '%s\n%s\n' "$STOP_FP" "$STOP_COUNT" > "$STOP_FP_FILE" 2>/dev/null
+
   # Emit compliance-violation event (fire-and-forget, backgrounded)
   # NOTE: Could be absorbed into compliance-check command in a future iteration.
   # FULLY detached: a background child that inherits the hook's stdout/stderr
@@ -121,6 +162,7 @@ rm -f ".paradigm/.pending-review"
 rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
+rm -f "$STOP_FP_FILE"
 # NOTE: .orchestrated / .solo-declared / .team-prompted / .team-reminded /
 # .team-bypass-recorded are deliberately NOT cleared here — Stop fires per assistant turn, and clearing
 # would erase solo declarations mid-session and re-nag every turn. They expire

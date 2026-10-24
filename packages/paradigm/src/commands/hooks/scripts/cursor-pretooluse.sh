@@ -66,7 +66,7 @@ esac
 
 # Skip .paradigm, .claude, and .cursor directories
 case "$REL_PATH" in
-  .paradigm/*|.claude/*|.cursor/*) exit 0 ;;
+  .paradigm/*|*/.paradigm/*|.claude/*|.cursor/*) exit 0 ;;
 esac
 
 # Check if target file has a covering .purpose file

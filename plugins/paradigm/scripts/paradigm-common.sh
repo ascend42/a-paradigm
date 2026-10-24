@@ -35,10 +35,11 @@
 #  15. Native memory hygiene nudge (advisory only, TD-2026-09-19-110)
 #
 # Generated-state scope: when every modified file is Paradigm's or Warpline's
-# own generated state (.paradigm/*, .warpline/* — the hooks, post-commit and
+# own generated state (.paradigm/*, .warpline/* — at the root or nested in a
+# package, e.g. packages/x/.paradigm/events — the hooks, post-commit and
 # MCP tools write these themselves), no code changed, so the checks that need
 # code (purpose discovery + anchors, the compliance-check CLI) are skipped.
-# .warpline/* is never counted as a source file.
+# Generated state (root or nested) is never counted as a source file.
 
 # Per-section timing (#hook-monitor): the Claude Code Stop hook sources
 # paradigm-hook-monitor.sh, which records each section's ms to
@@ -64,7 +65,7 @@ _MODIFIED_COUNT=0
 for file in $MODIFIED; do
   _MODIFIED_COUNT=$((_MODIFIED_COUNT + 1))
   case "$file" in
-    .paradigm/*|.warpline/*) ;;
+    .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;
     *) PARADIGM_GENERATED_ONLY=false ;;
   esac
 done
@@ -256,7 +257,7 @@ for file in $MODIFIED; do
     .paradigm/*|*.purpose|portal.yaml)
       PARADIGM_COUNT=$((PARADIGM_COUNT + 1))
       ;;
-    .warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
+    .warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
     *)
       SOURCE_COUNT=$((SOURCE_COUNT + 1))
       # Check if this file's directory has a covering .purpose that was modified
@@ -325,7 +326,7 @@ DIRS_WITHOUT_PURPOSE=""
 
 for file in $MODIFIED; do
   case "$file" in
-    .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+    .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
 
   _parent "$file"; dir=$_PD
@@ -533,7 +534,7 @@ fi
 # This catches cases where .pending-review is missing or out of sync.
 for file in $MODIFIED; do
   case "$file" in
-    .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+    .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
   [ -f "$file" ] || continue
 
@@ -661,7 +662,7 @@ if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ];
       LORE_SYMBOLS=""
       for file in $MODIFIED; do
         case "$file" in
-          .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+          .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
         esac
         sym_dir=$(basename "$(dirname "$file")")
         case "$LORE_SYMBOLS" in
@@ -1017,6 +1018,7 @@ if [ "$_SEV" != "off" ]; then
   SEEN_PKGS=""
   for file in $MODIFIED; do
     case "$file" in
+      */.paradigm/*|*/.warpline/*) ;;
       packages/*)
         _pkg=$(echo "$file" | cut -d'/' -f2)
         case "$SEEN_PKGS" in
@@ -1038,7 +1040,7 @@ if [ "$_SEV" != "off" ]; then
   SEC_ADJACENT=0
   for file in $MODIFIED; do
     case "$file" in
-      .paradigm/*|.warpline/*) ;;
+      .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;
       portal.yaml|*/portal.yaml) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
       *auth*|*permission*|*gate*|*security*|*token*|*session*) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
     esac
@@ -1236,3 +1238,30 @@ _compliance_snapshot() {
     "$_ts" "$VIOLATION_COUNT" "$_checks" >> "$_dir/compliance-history.jsonl" 2>/dev/null || true
 }
 _compliance_snapshot
+
+# --- Stop-hook loop guard helpers (called by the stop scripts' verdict) ---
+# Claude Code sets stop_hook_active=true on a Stop that follows a turn the
+# Stop hook itself continued; Cursor sends loop_count. A violation the agent
+# cannot fix inside the turn would otherwise block every stop forever. The
+# stop scripts compare this run's violation fingerprint with the one stored in
+# .paradigm/.stop-block-fingerprint (line 1 fingerprint, line 2 consecutive
+# blocks) and end the turn when a fix attempt changed nothing.
+#
+# _pm_violation_fp — prints a fingerprint of the violation SET. Only the
+# headline lines ("  - ...") count; digits are stripped because some lines
+# embed a magnitude or count that drifts without the violation changing.
+_pm_violation_fp() {
+  printf '%s' "$VIOLATIONS" | grep '^  - ' | sed 's/[0-9][0-9]*//g' | sort | cksum
+}
+
+# _pm_record_unresolved <fingerprint> <consecutive> — appends a
+# stop-block-unresolved row to .paradigm/events/team-funnel.jsonl (raw append,
+# same pattern as the bypass row in Check 13). Best-effort, never fails.
+_pm_record_unresolved() {
+  mkdir -p ".paradigm/events" 2>/dev/null
+  _UNRES_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
+  _UNRES_FP=$(printf '%s' "$1" | tr -cd '0-9 ')
+  _UNRES_K=$(printf '%s' "$2" | tr -cd '0-9')
+  echo "{\"timestamp\":\"$_UNRES_TS\",\"type\":\"stop-block-unresolved\",\"source\":\"stop-hook\",\"fingerprint\":\"$_UNRES_FP\",\"violations\":${VIOLATION_COUNT:-0},\"consecutive\":${_UNRES_K:-0}}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+  return 0
+}
