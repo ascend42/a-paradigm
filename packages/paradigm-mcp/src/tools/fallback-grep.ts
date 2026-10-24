@@ -4,7 +4,6 @@
  * Provides graceful degradation for paradigm_ripple when symbols aren't indexed.
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 

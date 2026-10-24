@@ -1,0 +1,42 @@
+id: TD-2026-10-23-496
+timestamp: '2026-10-23T18:50:33.905Z'
+title: The send word sends whatever is in the draft; the user owns their environment
+decision: >-
+  Once the human has set up a send word and accepted, once, that anyone near their mic can send with it, the send word
+  sends the whole draft whether or not each part was speaker-verified. Speaker verification no longer gates the send
+  word. What stays: (1) every voice-sent turn is stamped voice-unverified, i.e. clamped so edits and tools ask first
+  (TD-2026-10-21-514); (2) voice never approves anything (cards, grants, trust); (3) Talk/pieces auto-send and the voice
+  principal's direct send keep their existing rules; (4) the per-turn unverified marks stay visible in the draft as
+  information, not a block. This supersedes G-VOX-06's "only Enter sends an unverified draft" for the send-word path
+  only.
+rationale: >-
+  Founder, quoted: "the whole point of using the send words is the user knows it is subject to unwanted things happening
+  and it should just be on the user to have a quiet environment etc. we can't keep on hindering them if this is what
+  they want". Field evidence from 2026-10-23: short natural phrases ("How's it going?", "mm", "send") can't be verified
+  (scores for short clips don't separate speakers), so any one of them blocked voice-sending for the whole draft. Same
+  principle as TD-2026-10-23-268: don't gatekeep what the user has knowingly opted into. The edits-ask-first clamp keeps
+  a bystander's words from causing any action without the human.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Mostly-you threshold (2.5 s verified, majority of the draft verified)
+    rejected_because: Still hinders natural speech; the founder wants the opt-in to be the control
+  - option: Ignore filler only, with a longer continuity window
+    rejected_because: A short first phrase still blocks sending
+  - option: Keep strict G-VOX-06
+    rejected_because: Defeats voice-only use
+symbols_affected:
+  - '#gnomon-voice'
+  - '#voice-control'
+  - '#gui-voice'
+status: active
+tags:
+  - gnomon
+  - voice
+  - security
+  - send-word

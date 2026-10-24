@@ -1,0 +1,39 @@
+id: L-2026-10-16-ascend-210906-001
+type: human-note
+timestamp: '2026-10-16T21:09:06.397Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnome persona mod: founder endorses the guardrails'
+summary: 'Founder: "i like your points". Endorsed the five framing points for the gnome persona mod (concept doc in progress at docs/specs/gnomon-mods/gnome-persona.md). Founder is now reviewing the Atelier REVIEW.html.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D45
+    decision: 'Relay token claims stay honest: restyling does not cut generation tokens; savings come from brief-by-instruction, dialog choices that narrow follow-ups, and a local model doing the restyle'
+    rationale: Founder endorsed.
+  - id: P8-D46
+    decision: The relay never rephrases approval cards, refusals, billing, security or certification text; raw output is always one key away and logged; dialog lines mark quote vs paraphrase
+    rationale: Kernel regions are unreplaceable per spec; founder endorsed.
+  - id: P8-D47
+    decision: 'Personality without capability claims: ''understood'' means acknowledged receipt, never ''I understand'''
+    rationale: Calibrated-trust research (rules.yaml ai-agent space); founder endorsed.
+  - id: P8-D48
+    decision: Emotes are driven by kernel events first (approval, refusal, error, certify); custom phrase triggers are a secondary layer
+    rationale: Emotes must reflect what actually happened; founder endorsed.
+  - id: P8-D49
+    decision: 'A gnome is a skin plus protocol over the model: a persona:v1 manifest (tone, length budget, vocabulary, phrase-to-emote map, body + hat, palette) editable live by any agent through the mod ABI'
+    rationale: Founder's framing, endorsed.
+tags:
+  - paradigm-8
+  - gnomon
+  - mod
+  - persona
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-210726-001
+git_context:
+  ref: eddf85fcd1dfdd1a63d23c5879183815e16588c6
+  branch: ideate/paradigm-8
+  dirty: true

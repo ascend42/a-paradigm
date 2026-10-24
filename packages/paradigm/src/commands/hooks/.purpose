@@ -9,6 +9,20 @@ components:
     tags:
       - hooks
       - skills
+  delegation-hook:
+    description: 'Claude Code PostToolUse hook (matcher: Agent|Task) — scripts/claude-code-delegation.sh, copied to the plugin as paradigm-delegation.sh and installed by `paradigm hooks install --claude-code`. Credits Agent-tool delegation to the orchestration gates: when tool_input.subagent_type is a roster agent (`paradigm:*`, or $CWD/.claude/agents/<type>.md exists) AND tool_response is non-empty, writes .paradigm/.orchestrated with the #orchestration-marker payload shape (source delegation, plus subagent). Always appends a delegation row (credited true|false) to .paradigm/events/team-funnel.jsonl. Subagent string sanitized to [a-zA-Z0-9:._-]. jq with grep fallback; fail open, always exit 0, no output. Hook-monitor label PostToolUse-Agent.'
+    type: hook
+    file: scripts/claude-code-delegation.sh
+    components:
+      - '#team-funnel'
+      - '#orchestration-marker'
+    signals:
+      - '!delegation-recorded'
+      - '!team-funnel'
+    tags:
+      - hooks
+      - orchestration
+      - team-funnel
   paradigm-hooks:
     description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing .purpose stubs, missing lore entries). Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
     type: command
@@ -28,6 +42,15 @@ components:
       64 runs and deterministically at SessionStart. Fail open: no stdout,
       exit code preserved, every write best-effort; PARADIGM_HOOK_MONITOR_OFF=1
       disables it. Ring + marker are in the #session-markers-gitignore block.
+      Per-section timing (8.0): _pm_mark <section> closes the open section and
+      opens the next; _pm_count <name> <int> adds a counter. At exit ONE record
+      per Stop run goes to .paradigm/events/stop-timing.jsonl (total ms,
+      outcome, "inflight" = the section still open when the hook ended, so a
+      killed run names where it was stuck, every section's ms, counters
+      modified/source/purpose_files/anchors/pending_review/generated_only).
+      Capped to PARADIGM_STOP_TIMING_MAX (200) lines on the ring's trim cadence.
+      Cost: one date(1) per mark (~22 per Stop). paradigm-common.sh defines
+      no-op fallbacks, so the Cursor hook (no monitor) is unaffected.
     type: utility
     file: scripts/paradigm-hook-monitor.sh
     tags:
@@ -58,9 +81,15 @@ components:
       (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
       --exclude-standard` (nested agent worktrees and node_modules are skipped)
       and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
-      Check 4 anchors); (3) no network (npx --no-install). Enforced by
+      Check 4 anchors); (3) no network (npx --no-install); (4) generated-state
+      scope (8.0): when every modified file is .paradigm/* or .warpline/* (the
+      hooks, post-commit and MCP tools write these on every turn) no code
+      changed, so purpose discovery (Checks 4/6) and the compliance-check CLI
+      are skipped (~0.35 s instead of ~1.2-1.9 s); remediations, purpose-required
+      patterns and the memory nudge still run. .warpline/* never counts as a
+      source file (it inflated the orchestration magnitude). Enforced by
       tests/hooks-timing.test.ts (each hook under 2 s through a pipe, plus a
-      lint check on background jobs).
+      lint check on background jobs) and tests/hooks-monitor.test.ts.
     type: utility
     file: scripts/paradigm-common.sh
     tags:
@@ -87,10 +116,11 @@ components:
       injects a decision-time orchestration directive into model context, once
       per TTL window, telemetry on every match) and team-gate (PreToolUse
       Write|Edit; one-time stderr advisory before source edits in unresolved
-      sessions). Both honor .orchestrated / fresh .solo-declared markers and
-      the PARADIGM_TEAM_GATE=off kill switch. Markers expire by AGE
-      (PARADIGM_GATE_TTL_HOURS, default 4h) — never stop-cleared, because Stop
-      fires per assistant turn. Check 13 in paradigm-common.sh records deduped
+      sessions). Both honor fresh .orchestrated / .solo-declared markers and
+      the PARADIGM_TEAM_GATE=off kill switch. All gate markers, .orchestrated
+      included, are honored by AGE (PARADIGM_GATE_TTL_HOURS, default 4h) and
+      never stop-cleared, because Stop fires per assistant turn (Check 13 uses
+      the same TTL test). Check 13 in paradigm-common.sh records deduped
       bypass events to team-funnel telemetry at both warn and block severity.
     type: utility
     components:

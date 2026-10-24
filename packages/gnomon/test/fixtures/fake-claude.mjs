@@ -1,0 +1,228 @@
+// A FAKE `claude` for the M1.7 tests — never the real binary, never Anthropic. Launched through a generated
+// `#!/bin/sh` wrapper named `claude` (test/session-helpers.ts). Its behaviour comes from `mode.json` beside the
+// wrapper (the child env is allowlisted, so env vars cannot steer it). It records its argv, env NAMES and every
+// stdin line to `trace.jsonl` in the same dir, and speaks the stream-json shapes p10m-claude-compat-generated
+// observed from Claude Code 2.1.302 (system.init, stream_event.*, assistant, user, rate_limit_event, result).
+import { appendFileSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+
+const dir = path.dirname(path.dirname(process.argv[2] ?? process.argv[1])); // the wrapper lives in <stub>/bin/
+const self = process.argv[3];
+const args = process.argv.slice(4);
+let mode = {};
+try { mode = JSON.parse(readFileSync(path.join(dir, 'mode.json'), 'utf8')); } catch { mode = {}; }
+const trace = (o) => { try { appendFileSync(path.join(dir, 'trace.jsonl'), `${JSON.stringify(o)}\n`); } catch { /* sandboxed away */ } };
+const out = (o) => process.stdout.write(`${typeof o === 'string' ? o : JSON.stringify(o)}\n`);
+
+if (args[0] === '--version') {
+  let probe = null;
+  if (mode.probeWrite) { try { appendFileSync(mode.probeWrite, 'x'); probe = 'allowed'; } catch { probe = 'blocked'; } }
+  trace({ t: 'version', self, probe });
+  out(`${mode.version ?? '2.1.302'} (Claude Code)`);
+  process.exit(0);
+}
+if (args[0] === 'auth') {
+  out(JSON.stringify(mode.auth ?? { loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty', subscriptionType: 'max' }));
+  process.exit(0);
+}
+if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' })); // first: before any startup work
+// identity values (never secrets) so the session-env tests can check they came from the OS, not the daemon
+const ident = Object.fromEntries(['USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'PATH'].filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]]));
+trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(process.env).sort(), ident, pid: process.pid });
+// P8-D94: emulate Claude's SessionStart command hooks — from --settings, and from the repo's project/local
+// layers ONLY when --setting-sources names them (the semantics the audited mode relies on)
+{
+  const at = (f) => (args.indexOf(f) >= 0 ? args[args.indexOf(f) + 1] : undefined);
+  const sources = (at('--setting-sources') ?? '').split(',').filter(Boolean);
+  const files = [at('--settings'), ...(sources.includes('project') ? [path.join(process.cwd(), '.claude', 'settings.json')] : []), ...(sources.includes('local') ? [path.join(process.cwd(), '.claude', 'settings.local.json')] : [])];
+  for (const f of files) {
+    if (!f) continue;
+    let doc;
+    try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
+    for (const g of doc?.hooks?.SessionStart ?? []) for (const h of g.hooks ?? []) {
+      if (h.type !== 'command') continue;
+      const r = spawnSync('/bin/sh', ['-c', h.command], { stdio: 'ignore', timeout: 5000 });
+      trace({ t: 'hook', event: 'SessionStart', command: h.command, from: f, status: r.status });
+    }
+  }
+}
+// P8-D97: emulate what p10m-repo-context measured. (1) A --plugin-dir's skill/agent/command frontmatter hooks FIRE
+// (here: every `command:` line inside a frontmatter `hooks:` block runs at start). (2) --add-dir memory loads only
+// with CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 (CLAUDE.md + one level of @imports, traced). (3) the effective
+// permissions.allow is the --settings file's plus the project/local layers' only when --setting-sources names them.
+{
+  const all = (f) => args.flatMap((a, i) => (a === f ? [args[i + 1]] : []));
+  const at = (f) => (args.indexOf(f) >= 0 ? args[args.indexOf(f) + 1] : undefined);
+  const sources = (at('--setting-sources') ?? '').split(',').filter(Boolean);
+  const walk = (d) => { try { return readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])); } catch { return []; } };
+  for (const pd of all('--plugin-dir')) {
+    const files = walk(pd).filter((f) => f.endsWith('.md'));
+    trace({ t: 'plugin', dir: pd, files: files.map((f) => path.relative(pd, f)) });
+    for (const f of files) {
+      const text = readFileSync(f, 'utf8');
+      const fm = text.startsWith('---\n') ? text.slice(4, text.indexOf('\n---', 4)) : '';
+      const block = /^hooks:\n((?:[ -].*\n?)*)/m.exec(fm);
+      for (const m of block ? block[1].matchAll(/command:\s*(.+)$/gm) : []) {
+        const r = spawnSync('/bin/sh', ['-c', m[1]], { stdio: 'ignore', timeout: 5000 });
+        trace({ t: 'hook', event: 'frontmatter', command: m[1], from: f, status: r.status });
+      }
+    }
+  }
+  if (process.env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD === '1') {
+    // --add-dir is variadic (commander `<directories...>`): every value up to the next flag
+    const addDirs = args.flatMap((a, i) => { if (a !== '--add-dir') return []; const out = []; for (let j = i + 1; j < args.length && !args[j].startsWith('-'); j++) out.push(args[j]); return out; });
+    for (const d of addDirs) {
+      let text;
+      try { text = readFileSync(path.join(d, 'CLAUDE.md'), 'utf8'); } catch { continue; }
+      for (const m of text.matchAll(/^@(\S+)$/gm)) { try { text += readFileSync(path.resolve(d, m[1]), 'utf8'); } catch { /* missing import */ } }
+      trace({ t: 'memory', dir: d, text });
+    }
+  }
+  const allow = [];
+  const layers = [at('--settings'), ...(sources.includes('project') ? [path.join(process.cwd(), '.claude', 'settings.json')] : []), ...(sources.includes('local') ? [path.join(process.cwd(), '.claude', 'settings.local.json')] : [])];
+  for (const f of layers) { try { allow.push(...(JSON.parse(readFileSync(f, 'utf8'))?.permissions?.allow ?? [])); } catch { /* none */ } }
+  trace({ t: 'allow', allow });
+}
+// M2: try writes at start (under the session profile): each path is reported allowed or blocked
+for (const f of mode.startReads ?? []) { try { readFileSync(f); trace({ t: 'start-read', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-read', path: f, result: e?.code === 'ENOENT' ? 'missing' : 'blocked', code: e?.code ?? null }); } }
+for (const f of mode.startWrites ?? []) { try { appendFileSync(f, 'planted\n'); trace({ t: 'start-write', path: f, result: 'allowed' }); } catch (e) { trace({ t: 'start-write', path: f, result: 'blocked', code: e?.code ?? null }); } }
+for (const [from, to] of mode.startRenames ?? []) { try { renameSync(from, to); trace({ t: 'start-rename', path: from, result: 'allowed' }); } catch (e) { trace({ t: 'start-rename', path: from, result: 'blocked', code: e?.code ?? null }); } }
+if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
+// §2.4 rule 11 (B2): `--resume <uuid>` keeps the session id (probe p-resume); traced so a test can tell a resume from a new session
+const resumeAt = args.indexOf('--resume');
+const session = resumeAt >= 0 ? args[resumeAt + 1] : args.indexOf('--session-id') >= 0 ? args[args.indexOf('--session-id') + 1] : 'none';
+if (resumeAt >= 0) trace({ t: 'resume', uuid: session });
+out({ type: 'system', subtype: 'hook_started', hook: 'x', futureField: { a: 1 } });
+// 8.0:model-switch: the model that runs (init + every assistant message.model); --model / set_model move it
+const modelId = (m) => (m === undefined || m === 'default' ? 'fake-model' : m.startsWith('claude-') ? m.replace('[1m]', '') : `claude-${m.replace('[1m]', '')}-9`);
+let currentModel = modelId(args.indexOf('--model') >= 0 ? args[args.indexOf('--model') + 1] : undefined);
+out({ type: 'system', subtype: 'init', session_id: session, model: currentModel, apiKeySource: 'apiKeySource' in mode ? mode.apiKeySource : 'none', tools: ['Bash'], brandNewField: true });
+for (const l of mode.extraLines ?? []) out(l);
+if (mode.bigLine) out({ type: 'assistant', message: { id: 'big', content: [{ type: 'text', text: 'x'.repeat(mode.bigLine) }] } });
+let n = 0;
+let buf = '';
+// P8-D96 permissionAsk: after a user message, emit each step — {request:{id, tool, input}} as a p01b-shaped
+// control_request{subtype:'can_use_tool'}, or {line} verbatim — then wait for an answer to every request. An allowed
+// Write writes updatedInput.content to updatedInput.file_path (the real tool effect, under the session profile);
+// an allowed Bash runs updatedInput.command. `hold: true` never finishes the turn.
+const perm = { open: new Map(), denied: [], turnDone: null };
+const finishPerm = () => {
+  if (perm.open.size || !perm.turnDone) return;
+  const done = perm.turnDone;
+  perm.turnDone = null;
+  done();
+};
+const runAllowed = (req, updatedInput) => {
+  try {
+    if (req.tool === 'Write') { writeFileSync(updatedInput.file_path, String(updatedInput.content)); trace({ t: 'tool-ran', tool: 'Write', path: updatedInput.file_path }); }
+    else if (req.tool === 'Bash') { const r = spawnSync('/bin/sh', ['-c', String(updatedInput.command)], { stdio: 'ignore', timeout: 5000 }); trace({ t: 'tool-ran', tool: 'Bash', status: r.status }); }
+    else trace({ t: 'tool-ran', tool: req.tool });
+  } catch (e) { trace({ t: 'tool-failed', tool: req.tool, error: String(e?.message ?? e) }); }
+};
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (c) => {
+  buf += c;
+  for (let i = buf.indexOf('\n'); i >= 0; i = buf.indexOf('\n')) {
+    const line = buf.slice(0, i);
+    buf = buf.slice(i + 1);
+    let m;
+    try { m = JSON.parse(line); } catch { trace({ t: 'bad-stdin', line }); continue; }
+    trace({ t: 'stdin', m });
+    if (m.type === 'control_request') {
+      // set_model (claude 2.1.304 shape, probe p-set-model): mode.setModel = 'error' | 'silent' (switches, answer lost)
+      // | 'silent-keep' (never switches, never answers) | absent (success); mode.setModelDelayMs delays the answer
+      if (m.request?.subtype === 'set_model') {
+        trace({ t: 'set-model', model: m.request.model });
+        if (mode.setModel === 'silent-keep') continue;
+        if (mode.setModel === 'silent') { currentModel = modelId(m.request.model); continue; }
+        if (mode.setModel === 'error') { out({ type: 'control_response', response: { subtype: 'error', request_id: m.request_id, error: `Model '${m.request.model}' not found`, error_code: 'catalog_unknown' } }); continue; }
+        currentModel = modelId(m.request.model);
+        const answer = { type: 'control_response', response: { subtype: 'success', request_id: m.request_id } };
+        if (mode.setModelDelayMs) setTimeout(() => out(answer), mode.setModelDelayMs);
+        else out(answer);
+        continue;
+      }
+      out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id } });
+      continue;
+    }
+    if (m.type === 'control_response') {
+      const id = m.response?.request_id;
+      const req = perm.open.get(id);
+      // #kernel-mcp: an SDK mcp_message answer carries response.mcp_response (traced whole: it is the kernel's JSON-RPC answer)
+      if (m.response?.response?.mcp_response !== undefined || m.response?.subtype === 'error') trace({ t: 'mcp-answer', id, subtype: m.response?.subtype, mcp: m.response?.response?.mcp_response ?? null, error: m.response?.error ?? null });
+      trace({ t: 'perm-answer', id, known: !!req, subtype: m.response?.subtype, behavior: m.response?.response?.behavior ?? null, updatedInput: m.response?.response?.updatedInput, message: m.response?.response?.message, keys: Object.keys(m.response?.response ?? {}).sort() });
+      if (!req) continue;
+      perm.open.delete(id);
+      const allowed = m.response?.subtype === 'success' && m.response?.response?.behavior === 'allow';
+      if (allowed) runAllowed(req, m.response.response.updatedInput ?? {});
+      else perm.denied.push({ tool_name: req.tool, tool_use_id: req.toolUseId, tool_input: req.input });
+      // the tool_result line real claude writes after the decision (p01b: permission_decision user_temporary / user_reject)
+      out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: req.toolUseId, content: allowed ? 'ok' : 'denied', ...(allowed ? {} : { is_error: true }) }] }, tool_result_meta: [{ id: req.toolUseId, permission_decision: { decision: allowed ? 'accept' : 'reject', source: allowed ? 'user_temporary' : 'user_reject' } }] });
+      finishPerm();
+      continue;
+    }
+    if (m.type !== 'user') continue;
+    n++;
+    const id = `msg_${n}`;
+    out({ ...m, isReplay: true });
+    // mode.foldPairs (review M2): a queued message folded into the running turn, as Claude Code does (founder log,
+    // seq 4863): an odd message is replayed and held; the next one is replayed mid-turn and ONE result answers both
+    if (mode.foldPairs && n % 2 === 1) continue;
+    if (mode.permissionAsk) {
+      let k = 0;
+      for (const st of mode.permissionAsk.steps ?? []) {
+        if (st.line !== undefined) { out(st.line); continue; }
+        if (st.ungated) {
+          // a gated tool that runs with NO can_use_tool request (an allow rule / hook would do this in real claude)
+          const u = st.ungated;
+          const tu = u.toolUseId ?? `toolu_ungated_${n}_${++k}`;
+          out({ type: 'assistant', message: { id: `${id}_u${k}`, content: [{ type: 'tool_use', id: tu, name: u.tool, input: u.input }], usage: { input_tokens: 1, output_tokens: 1 } } });
+          runAllowed({ tool: u.tool }, u.input);
+          out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: tu, content: 'ok' }] }, tool_result_meta: [{ id: tu, permission_decision: { decision: 'accept', source: 'config', reason_type: 'rule' } }] });
+          continue;
+        }
+        const r = st.request;
+        const reqId = r.id ?? `req-${n}-${++k}`;
+        const toolUseId = r.toolUseId ?? `toolu_${n}_${k}`;
+        out({ type: 'assistant', message: { id: `${id}_t${k}`, content: [{ type: 'tool_use', id: toolUseId, name: r.tool, input: r.input }], usage: { input_tokens: 1, output_tokens: 1 } } });
+        if (!perm.open.has(reqId)) perm.open.set(reqId, { tool: r.tool, input: r.input, toolUseId });
+        out({ type: 'control_request', request_id: reqId, request: { subtype: 'can_use_tool', tool_name: r.tool, display_name: r.tool, input: r.input, permission_suggestions: [{ type: 'addRules', rules: [{ toolName: r.tool }], behavior: 'allow', destination: 'localSettings' }], tool_use_id: toolUseId } });
+      }
+      if (mode.permissionAsk.exitAfterMs !== undefined) setTimeout(() => { trace({ t: 'self-exit' }); process.exit(0); }, mode.permissionAsk.exitAfterMs);
+      if (mode.permissionAsk.hold) continue;
+      perm.turnDone = () => {
+        out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 }, permission_denials: perm.denied.splice(0), result: 'ok' });
+      };
+      finishPerm();
+      continue;
+    }
+    out({ type: 'stream_event', event: { type: 'message_start', message: { id, usage: { input_tokens: 10, output_tokens: 1 } } } });
+    out({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hi' } } });
+    const tool = mode.tool ? [{ type: 'tool_use', id: `tu_${n}`, name: mode.tool, input: { question: 'Which?' } }] : [];
+    // the same message id twice with cumulative usage: the meter charges the delta once
+    out({ type: 'assistant', message: { id, model: currentModel, content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 10, output_tokens: 5 } } });
+    // mode.subagentTokens: a subagent's message (parent_tool_use_id set) — never the main chain's context
+    if (mode.subagentTokens) out({ type: 'assistant', parent_tool_use_id: `tu_parent_${n}`, message: { id: `${id}_sub`, model: currentModel, content: [{ type: 'text', text: 'sub' }], usage: { input_tokens: mode.subagentTokens, output_tokens: 0 } } });
+    // mode.contextTokens: the LAST main-chain message's in+cacheRead+cacheWrite+out (the kernel's context meter)
+    out({ type: 'assistant', message: { id, model: currentModel, content: tool, usage: { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: mode.contextTokens ? Math.max(0, mode.contextTokens - 30) : 100 } } });
+    out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } });
+    // mode.endTurn (voice busy guard): the reply ends at its main-chain message_stop (end_turn), and the result comes
+    // resultDelayMs later (Claude Code's Stop hook). continueAtMs / continueEndMs: a Stop-hook continuation, a new
+    // main-chain message that starts and ends before the result. A sub-agent's end_turn (parent set) is emitted first.
+    if (mode.endTurn) {
+      const e = mode.endTurn;
+      const stop = (extra = {}) => { out({ type: 'stream_event', event: { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }, ...extra }); out({ type: 'stream_event', event: { type: 'message_stop' }, ...extra }); };
+      stop({ parent_tool_use_id: `tu_parent_${n}` });
+      if (!e.noMainStop) stop();
+      if (e.continueAtMs !== undefined) setTimeout(() => out({ type: 'stream_event', event: { type: 'message_start', message: { id: `${id}_c`, usage: { input_tokens: 1, output_tokens: 1 } } } }), e.continueAtMs);
+      if (e.continueEndMs !== undefined) setTimeout(() => stop(), e.continueEndMs);
+      setTimeout(() => out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, total_cost_usd: 0.01, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [], result: 'ok' }), e.resultDelayMs ?? 0);
+      continue;
+    }
+    if (mode.resultThenExit) { out({ type: 'result', subtype: 'success', is_error: false, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [] }); process.exit(0); }
+    out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, total_cost_usd: 0.01, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [], result: 'ok' });
+  }
+});
+process.stdin.on('end', () => { trace({ t: 'stdin-end' }); if (!mode.ignoreStdinEnd) process.exit(0); });
+setInterval(() => undefined, 1 << 30);

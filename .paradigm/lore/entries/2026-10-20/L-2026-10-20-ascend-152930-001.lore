@@ -1,0 +1,43 @@
+id: L-2026-10-20-ascend-152930-001
+type: agent-session
+timestamp: '2026-10-20T15:29:30.972Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Founder test round 1: voice regression found, Settings + theme switch built, clickable options + single spoken marker built'
+summary: |-
+  The founder's live test of 3b5c7139 surfaced several issues.
+  - (1) A voice speaker-verification regression: the enrolled founder was rejected as unknown, and after re-enrol a nearby VIDEO was accepted as "matt". Turns lag ~60 s and all carry an identical textHash. Verification worked at 07:14Z on the old build. I ruled out decodeAsync mutating samples (identical embeddings before and after). A debugging builder is reproducing with real models and bisecting. I advised the founder to turn ambient off meanwhile.
+  - (2) No visible light mode or settings: theme lived only in ⌘K and memory. Built (19716538/374403c2/58d0f241):
+    - a header ☀Day/☾Night/◐Auto switch, persisted per browser;
+    - a Settings sheet (⚙, ⌘,) covering Appearance/Layout/Voice/Permissions/About, every control an existing command or read-only with a how-to.
+    It also fixed the standing feed's inline styles, which the CSP had silently blocked.
+  - (3) Lettered options as clickable chips (895193b2): they send exactly the shown text via the composer path and are dashed, never key-styled.
+  - (4) Pipelined TTS produced N "spoken aloud" rows per reply; now one marker per reply, with duration and · stopped (c54144af).
+  - (5) A model picker plus a resume-preserving switch is in progress.
+  - (6) Context meter designed (see previous lore).
+  Aegis reviews launched for (2) and (3).
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-settings'
+  - '#gui-table-talk'
+  - '#gui'
+  - '#session-runner'
+learnings:
+  - The CSP (style-src 'self') silently drops inline style attributes; a GUI module that set style= never rendered as designed. Test visible output, not just DOM structure.
+  - 'Dogfooding found the speaker regression within minutes, where 2400 unit tests did not: voice needs an end-to-end real-model regression test.'
+tags:
+  - gnomon
+  - dogfood
+  - marathon-2026-10-20
+linked_commits:
+  - '19716538'
+  - 374403c2
+  - 58d0f241
+  - c54144af
+  - 895193b2
+git_context:
+  ref: 3b5c71396f52a71bc825aeb653ed599013c2fa91
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,34 @@
+id: TD-2026-10-21-162
+timestamp: '2026-10-21T01:14:43.094Z'
+title: 'Gnomon: sessions can''t write into PATH tool dirs; a Homebrew install goes through a card'
+decision: >-
+  Sessions are write-denied in every user-writable directory on the session PATH: ~/.local/bin, the node dir when it
+  lives under the home, and the Homebrew prefix (/opt/homebrew as a whole subpath, since bin entries are symlinks into
+  Cellar; /usr/local/bin likewise where it is user-writable). A session that needs `brew install`/`upgrade` raises a
+  card for that one command (one presence) and runs it only on approval. Until that card exists, the deny applies.
+rationale: >-
+  Aegis M on 3b755ae8: a session that can write into a PATH dir can plant `ls`/`git` there, and later sessions'
+  auto-passed read-only commands would run it with no card. This is the same class as the .zshrc/LaunchAgents
+  persistence denies. The founder chose a card over a blanket deny or a blanket allow.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: aegis
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Deny brew writes only, no card
+    rejected_because: the founder wants sessions able to install, attended
+  - option: Allow brew writes
+    rejected_because: it leaves the planting persistence vector open
+symbols_affected:
+  - '#session-runner'
+  - '#manifest-loader'
+status: active
+tags:
+  - gnomon
+  - sandbox
+  - session-env
+  - founder
+  - security

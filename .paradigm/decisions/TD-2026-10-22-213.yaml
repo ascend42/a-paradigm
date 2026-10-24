@@ -1,0 +1,39 @@
+id: TD-2026-10-22-213
+timestamp: '2026-10-22T09:40:38.447Z'
+title: 'Gnomon loops: scope and founder choices'
+decision: >-
+  Loops (docs/specs/gnomon-loops.md) are graphs of nodes (check, model, notify/decide, call) run by the Gnomon kernel
+  for flow health checks, fix-until-green, watchers and routine chores. Triggers: schedule, events, continuous, manual.
+  Storage: repo and personal. Autonomy defaults to act; per-node local-first models; per-node exit conditions; results
+  in a GUI Loops view plus cards only when needed; agents may create and edit loops over MCP. Safety: nothing runs until
+  a human trusts its exact content hash (loop-trust card, no default envelope); goals rest on deterministic checks with
+  protected inputs; loops work in a scratch worktree and land on the working branch only path-disjoint under a lock;
+  commits authored by Gnomon Loop with On-Behalf-Of and Trusted-By trailers; local only by default, with an opt-in to
+  the founder's Claude subscription under caps; no API tokens (law 7 unchanged); the daemon stays up while loops are
+  enabled; a kill switch pauses all.
+rationale: >-
+  Founder answers across three question rounds (2026-10-22); Arky's architecture with six tensions resolved; Aegis
+  review (ready-with-edits).
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Human as commit author
+    rejected_because: 'Aegis: misstates authorship in blame; founder agreed'
+  - option: API token for loops
+    rejected_because: would break law 7
+  - option: Starter envelope
+    rejected_because: founder chose no default envelope
+status: active
+tags:
+  - gnomon
+  - loops
+  - spec
+  - local-models

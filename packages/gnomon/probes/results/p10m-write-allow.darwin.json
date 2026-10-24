@@ -1,0 +1,90 @@
+{
+  "probe": "p10m-write-allow",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "claude": "2.1.309",
+    "audit": {
+      "exit": [
+        0,
+        0
+      ],
+      "first": {
+        "isError": false,
+        "text": "ok"
+      },
+      "resumed": {
+        "isError": false,
+        "text": "ok"
+      },
+      "mcp": [
+        "probe:connected"
+      ],
+      "hookRan": true,
+      "transcript": true,
+      "controlWritten": true,
+      "written": [
+        "~/.claude.json",
+        "~/.npm/_logs/2026-10-23T23_46_47_552Z-debug-0.log",
+        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-48-341Z.jsonl",
+        "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-58-576Z.jsonl",
+        "~/gnomon-probe-denied.txt"
+      ],
+      "tmpClaude": [
+        "/private/tmp/claude-501",
+        "/private/tmp/claude-501/-Users-ascend-Documents-GitHub-a-paradigm/044e2c72-aeaf-42a5-b5f6-f37cf2b959eb/tasks",
+        "/private/tmp/claude-501/-Users-ascend-Documents-GitHub-a-paradigm/044e2c72-aeaf-42a5-b5f6-f37cf2b959eb/tasks/b6nmzqrz2.output",
+        "/private/tmp/claude-501/<enc-cwd>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks/bvf5xgti3.output",
+        "/private/tmp/claude-501/bash-edit-diff/9227558431963848980-14151642351115288804-ce3ee96a7fae12a6"
+      ],
+      "stderr": ""
+    },
+    "enforce": {
+      "exit": [
+        0,
+        0
+      ],
+      "first": {
+        "isError": false,
+        "text": "ok"
+      },
+      "resumed": {
+        "isError": false,
+        "text": "ok"
+      },
+      "mcp": [
+        "probe:connected"
+      ],
+      "hookRan": true,
+      "transcript": true,
+      "controlWritten": false,
+      "written": [],
+      "tmpClaude": [
+        "/private/tmp/claude-501",
+        "/private/tmp/claude-501/<enc-cwd>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks",
+        "/private/tmp/claude-501/<enc-cwd>/<uuid>/tasks/bgsa6z236.output"
+      ],
+      "stderr": ""
+    },
+    "unexplained": [
+      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-48-341Z.jsonl",
+      "~/Library/Caches/claude-cli-nodejs/-private-var-folders-gq-nt2kdpsj39dc8vpq6cfzx8gw0000gn-T-gnomon-pwa-6AoLqc-repo/mcp-logs-probe/2026-10-23T23-46-58-576Z.jsonl"
+    ]
+  },
+  "specRefs": [
+    "§15.5 session profile",
+    "T-2026-10-23-004 deny-by-default writes",
+    "Aegis round 2 L4"
+  ],
+  "at": "2026-10-23T23:49:06.325Z"
+}

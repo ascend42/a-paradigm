@@ -1,0 +1,52 @@
+id: L-2026-10-20-ascend-090326-001
+type: agent-session
+timestamp: '2026-10-20T09:03:26.474Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Voice B1 live words built: the founder''s words appear as they speak, verified-speaker only, never logged'
+summary: |-
+  Branch worktree-agent-a053fd62fda179e98:
+  - 5a5ea8a2: the final STT moves to decodeAsync, fixing the event-loop block.
+  - c912156f + e920fb32: partials.ts agreed-prefix commit; a 600 ms tail re-decode with an anchored 6→4 s window (never past 8 s); skip-if-busy; the V1 provisional-speaker gate on the first 1.5 s.
+  - 8ec7b284: a ghost line in the composer with committed words solid and the tail dim, never in the textarea.
+  - 2ce14c98: docs.
+  Bugs found in flight:
+  - the anchored window began with a fragment of the last frozen word, which stalled commits; fixed by dropping that fragment;
+  - the first kernel version leaked text to the human DEVICE credential; the test caught it, and a separate gui-only allow-list fixed it.
+  No ids moved. Tests: voice 123, gnomon 2409, gui 312, contracts 455.
+  Aegis review launched.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+  - $voice-turn
+errors_encountered:
+  - description: capture.text exposed to the human device credential via the accepted-keys list
+    resolution: Separate gui-only allow-list; the kernel test pins it
+  - description: The anchored window started mid-word, so agreement never advanced
+    resolution: Drop the leading fragment of the last frozen word in that window
+verification:
+  status: pass
+  details:
+    voice: 123
+    gnomon: 2409
+    gui: 312
+    contracts: 455
+    aegis: pending
+tags:
+  - gnomon
+  - voice
+  - marathon-2026-10-20
+linked_tasks:
+  - T-2026-10-20-005
+linked_commits:
+  - 5a5ea8a2
+  - c912156f
+  - e920fb32
+  - 8ec7b284
+  - 2ce14c98
+git_context:
+  ref: 8df49d05914bbd8c82e4ba666b12c983680fb6e9
+  branch: feat/gnomon
+  dirty: true

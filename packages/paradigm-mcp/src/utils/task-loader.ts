@@ -689,10 +689,10 @@ export async function rebuildTaskIndex(rootDir: string): Promise<TaskIndex> {
 // ── Helpers ───────────────────────────────────────────────
 
 /** Strip undefined-valued keys so emitted YAML stays clean (old behavior parity). */
-function pruneUndefined<T extends Record<string, unknown>>(obj: T): T {
-  const out = {} as T;
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) (out as Record<string, unknown>)[k] = v;
+function pruneUndefined<T extends object>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const key of Object.keys(obj) as Array<keyof T>) {
+    if (obj[key] !== undefined) out[key] = obj[key];
   }
   return out;
 }

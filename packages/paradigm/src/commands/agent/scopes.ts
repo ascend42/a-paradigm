@@ -209,7 +209,7 @@ export async function approveScopes(
   agentId: string,
   scopes: AgentScopes,
 ): Promise<void> {
-  const tracker = log.component('#scopes-approval').info('Approving scopes', { agentId });
+  log.component('#scopes-approval').info('Approving scopes', { agentId });
 
   // Update adoptions.yaml
   let adoptions = await loadAdoptionsFile(rootDir);

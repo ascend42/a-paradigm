@@ -1,0 +1,38 @@
+id: TD-2026-10-23-815
+timestamp: '2026-10-23T20:45:20.479Z'
+title: A standing grant can form Always rules
+decision: >-
+  While the human's standing grant (F6, "Make it standing") is in force on their GUI device, pressing Always on a
+  permission card forms the saved rule (exact, prefix, file or repo-edits) without a fresh password or Touch ID prompt.
+  The rule fold accepts approval.rule.learned rows whose presence is a kernel-recorded standing:<id> for a grant that
+  was valid at decide time. The rule is logged, appears in the Rules view and the mode chip, and is revocable like any
+  other. Voice still never approves; strictness ceilings and the emergency brake still bound what a rule can pass.
+rationale: >-
+  Aegis M1 found that with a standing grant on, Always allowed once and formed no rule (the fold required fresh
+  presence), which is why the founder's Always "didn't stick". The founder's Touch ID fails, so every presence is a
+  typed password; they chose standing to stop retyping it and expect Always to save the rule. Founder ruling 2026-10-23:
+  "Standing forms the rule". Aegis noted that rules learned this way can outlive the 12 h grant; accepted, because rules
+  are visible and revocable in the Rules view and bounded by the strictness ceiling (H1 fix).
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+  - id: aegis
+    role: agent
+    stance: neutral
+alternatives_considered:
+  - option: Refuse standing for Always, so every new rule prompts for a password
+    rejected_because: A typed password for every new rule; the founder prefers notify-and-proceed
+symbols_affected:
+  - '#always-rules'
+  - '#standing-grant'
+  - '#broker'
+status: active
+tags:
+  - gnomon
+  - permissions
+  - standing-grant
+  - always-rules

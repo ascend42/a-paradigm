@@ -77,6 +77,25 @@ describe('hooksInstallCommand - Claude Code', () => {
     }
   });
 
+  it('registers the PostToolUse Agent|Task delegation hook once, kept on reinstall', async () => {
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ claudeCode: true });
+    await hooksInstallCommand({ claudeCode: true }); // idempotent
+    await hooksInstallCommand({ claudeCode: true, force: true }); // force keeps it, no duplicate
+    const settings = JSON.parse(fs.readFileSync(path.join(rootDir, '.claude', 'settings.json'), 'utf8'));
+    const post = settings.hooks.PostToolUse as Array<{ matcher: string; hooks: Array<{ command: string; timeout: number }> }>;
+    const entries = post.filter((h) => JSON.stringify(h).includes('paradigm-delegation.sh'));
+    expect(entries).toHaveLength(1);
+    expect(entries[0].matcher).toBe('Agent|Task');
+    expect(entries[0].hooks[0]).toMatchObject({
+      command: 'bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-delegation.sh"',
+      timeout: 10,
+    });
+    const script = path.join(rootDir, '.claude', 'hooks', 'paradigm-delegation.sh');
+    expect(fs.existsSync(script)).toBe(true);
+    expect(fs.statSync(script).mode & 0o111).not.toBe(0);
+  });
+
   it('merges with existing Claude settings (non-destructive)', async () => {
     // Create existing settings
     const claudeDir = path.join(rootDir, '.claude');

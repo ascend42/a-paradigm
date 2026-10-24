@@ -1,6 +1,6 @@
 {
   "name": "@a-company/sentinel",
-  "version": "3.9.0",
+  "version": "3.9.1",
   "description": "Semantic error monitoring — errors that speak your language",
   "type": "module",
   "main": "./dist/index.js",
@@ -107,6 +107,6 @@
     "paradigm"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   }
 }

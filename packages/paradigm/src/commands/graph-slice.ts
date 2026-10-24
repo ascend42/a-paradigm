@@ -80,7 +80,7 @@ export async function graphSliceCommand(
       }
       out('');
     } else {
-      dim('  No similar symbols found. Run `paradigm scan` to (re)build the index.');
+      dim('  No similar symbols found. Run `paradigm index` to (re)build the index.');
     }
     process.exit(1);
     return;
@@ -132,7 +132,7 @@ function renderSummary(slice: GraphSlice, mode: SliceMode, radius: number): void
   kv('edges', String(slice.edges.length));
   kv('generated', slice.freshness.generatedAt || 'unknown');
   if (slice.freshness.stale) {
-    warn('  scan-index is STALE — a .purpose is newer than the index. Run `paradigm scan`.');
+    warn('  scan-index is STALE — a .purpose is newer than the index. Run `paradigm index`.');
   }
   if (slice.truncated) {
     warn('  slice truncated — some nodes have >8 neighbors (collapsed to +N more).');

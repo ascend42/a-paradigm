@@ -33,13 +33,13 @@ echo -e "${BLUE}Checking prerequisites...${NC}"
 
 if ! command -v node &> /dev/null; then
     echo -e "${RED}❌ Node.js is not installed${NC}"
-    echo "Please install Node.js 18+ from https://nodejs.org"
+    echo "Please install Node.js 24+ from https://nodejs.org"
     exit 1
 fi
 
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "${RED}❌ Node.js version 18+ required (found v$NODE_VERSION)${NC}"
+if [ "$NODE_VERSION" -lt 24 ]; then
+    echo -e "${RED}❌ Node.js version 24+ required (found v$NODE_VERSION)${NC}"
     exit 1
 fi
 
@@ -179,7 +179,7 @@ echo "  • Generate IDE files (CLAUDE.md, .cursor/rules/, etc.)"
 echo "  • Configure MCP for AI tools"
 echo "  • Set up the auto-documenting protocol"
 echo ""
-echo "To update:  curl -fsSL https://a-company.org/paradigm/install.sh | bash"
+echo "To update:  run this script again (bash install.sh from a clone of $REPO_URL)"
 echo "To uninstall: npm uninstall -g @a-company/paradigm @a-company/paradigm-mcp && rm -rf $INSTALL_DIR"
 echo ""
 echo "Documentation: https://github.com/ascend42/a-paradigm"

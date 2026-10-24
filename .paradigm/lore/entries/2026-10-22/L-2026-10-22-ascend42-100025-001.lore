@@ -1,0 +1,74 @@
+id: L-2026-10-22-ascend42-100025-001
+type: agent-session
+timestamp: '2026-10-22T10:00:25.014Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon on Windows: W0 test fixes, P03, Rust helper, kernel on a named pipe, sandbox design validated'
+summary: Took over the Windows parity pass on the founder's Windows machine (branch feat/gnomon-windows off feat/gnomon). Fixed the Windows CI test failures (CRLF shebang, 8.3 temp paths, POSIX fixtures), ran probe P03, built the Rust platform helper (pipe/home DACLs, job launcher, durable rename, boot id, ShellExecute), moved the kernel onto an owner-only named pipe with an owner-only home, and validated the W5 session-sandbox design (restricted token + session-SID deny ACEs + Low integrity + private Low desktop + job UI limits) with Claude Code running under it. Aegis approve-with-fixes, all Medium/Low fixes folded in. `gnomon dev init` and `dev up` now run on Windows.
+symbols_touched:
+  - '#gnomon-helper'
+  - '#gnomon-helper-win32'
+  - '#gnomon-kernel'
+  - '#socket'
+  - $daemon-lifecycle
+  - '#identity'
+  - '#gnomon-probes'
+  - '#local-runner'
+  - '#prefix-policy'
+  - '#mcp-passthrough'
+symbols_created:
+  - '#gnomon-helper-win32'
+commit: 301e9031
+decisions:
+  - id: pipe-ownership
+    decision: The kernel binds the pipe; the helper tightens its DACL through a WRITE_DAC client handle; nothing is served before the owner-only read-back with serverPid === kernel
+    rationale: 'P03: Node cannot adopt a foreign pipe on Windows; the DACL is pipe-wide; libuv FIRST_PIPE_INSTANCE makes a squat fail closed'
+  - id: verified-root
+    decision: On win32 a path inside a verified owner-only home inherits owner-only; key material is always read back per file and nlink>1 is refused
+    rationale: Avoids a helper round trip per file while keeping key custody on a read-back (Aegis M3)
+  - id: w5-sandbox-shape
+    decision: Windows session sandbox = restricted token (user groups + user + GNOMON_SESSION_SID) with session-SID deny ACEs for reads, Low integrity with Low-labelled writable roots for writes and process isolation, private Low desktop, job UI limits
+    rationale: Restricted token alone lets a session inject into the user's Medium processes; Low IL blocks VM/thread/dup access and UIPI input while the deny ACEs carry the read deny list; founder asked for the proper sandbox, not an interim
+errors_encountered:
+  - description: Lockfile from the Mac lacks win32 native optional deps (rollup/rolldown/lightningcss)
+    resolution: Same no-save install as .github/actions/install-deps
+  - description: Double free in sd_from_sddl (struct update copied a raw pointer from a Drop type) crashed the helper with 0xC0000374
+    resolution: Single owner of the SD
+  - description: REVOKE_ACCESS does not remove deny ACEs
+    resolution: Walk the ACL and drop explicit session-SID ACEs by hand
+  - description: Low IL child failed DLL init (0xC0000142) on a Medium-labelled private desktop
+    resolution: Label the desktop Low
+  - description: 'A probe reported an injection ''escape'' that was a false positive: Add-Type cannot compile at Low IL (TEMP not writable) so the test type never existed'
+    resolution: 'Point TEMP at a Low-labelled dir; real result: VM/thread/dup access denied'
+learnings:
+  - libuv binds a Windows pipe's first instance exclusively; the default pipe DACL grants Everyone/Anonymous FILE_READ
+  - A restricted token with the user SID among restricting SIDs can still open the user's Medium processes; Low integrity is what stops injection
+  - The owner's implicit WRITE_DAC defeats deny ACEs inside a session unless an OWNER RIGHTS ACE is present
+  - Vitest cannot import a CRLF-shebang .mjs; pin *.mjs eol=lf
+  - icacls cannot name an unmapped SID like S-1-9-…; use the .NET or Win32 ACL APIs
+verification:
+  status: partial
+  details:
+    kernel: 1977 pass; 13 machine-only (Developer Mode symlinks, Node 24.13 SQLite warning)
+    helper: cargo test 7 pass; win32-helper.test.ts 8 pass
+    manual: dev init + dev up on Windows; pipe DACL D:P(A;;FA;;;<user>)
+tags:
+  - gnomon
+  - windows
+  - paradigm-8
+  - security
+linked_tasks:
+  - T-2026-10-22-001
+  - T-2026-10-22-002
+  - T-2026-10-22-003
+  - T-2026-10-22-004
+  - T-2026-10-22-008
+linked_commits:
+  - 8cb2e54a
+  - 301e9031
+git_context:
+  ref: 301e90313c232df9112650fffd3cd22d900e33d8
+  branch: feat/gnomon-windows
+  dirty: true

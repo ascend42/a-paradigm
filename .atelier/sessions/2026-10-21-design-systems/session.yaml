@@ -1,0 +1,103 @@
+id: 2026-10-21-design-systems
+verb: system
+scope: "Design system per product for a-paradigm: Gnomon console, Warpline console, Paradigm Platform, useparadigm.dev"
+products: [gnomon]
+parked:
+  products: [warpline, platform, site]
+  note: "for now we can ignore all of design systems other than gnomon for paradigm"
+  state: "Drafts kept in .atelier/systems/<id>/ (warpline 7, platform 6, site 5 contested decisions undecided); removed from systems.yaml so nothing checks against them. Repo-wide .atelier/design-system.yaml stays as-is for non-Gnomon paths."
+depth: deep
+surface: terminal
+started: 2026-10-21T16:00:00Z
+products_board:
+  decision:
+    decided_by: creator
+    map: { gnomon: Gnomon console, warpline: Warpline console, platform: "Paradigm Platform (live, own system)", site: "useparadigm.dev (keeps its Obsidian/Academia identity)" }
+    shared_base: none                       # creator rejected a thin shared base; every product extends: none
+    shell_chrome: platform                  # Platform governs the shell around the Warpline section
+    skipped: ["packages/sentinel/ui (folded into platform-ui)", "packages/portal/viewer (dev tool)", "packages/paradigm-vscode (no webview)", "packages/conductor (SwiftUI)"]
+bulk_confirm:
+  gnomon: { decided_by: creator, note: "confirm the clear entries for gnomon" }   # 71 tokens, 17 components, 6 zones, 18 terms, 28 rules + migration list
+  warpline: parked
+  platform: parked
+  site: parked
+boards:
+  - id: gnomon-notices
+    product: gnomon
+    question: "Where does a notice go?"
+    decision: { kind: pick, choice: band-for-alerts, decided_by: creator }
+  - id: gnomon-narrow-header
+    product: gnomon
+    question: "What changes at narrow widths when the header overflows?"
+    references_rendered: [compact-header, bottom-bar, wordmark-menu]
+    decision:
+      kind: skip
+      choice: out-of-scope
+      decided_by: creator
+      notes:
+        - "gnomon is only to be utilized on desktop for now"
+        - "we will make a true mobile version friendly for gnomon later"
+      writes: { rules: [ { id: desktop-only, rule: "Gnomon targets desktop widths only for now; phone layouts are out of scope. Narrow-width fixes are deferred, not designed." } ] }
+  - id: gnomon-chip
+    product: gnomon
+    question: "Which style is the chip?"
+    references_rendered: [now, chip-not-key, one-chip, per-zone]   # refs/gnomon-chip.html
+    decision: { kind: pick, choice: chip-not-key, decided_by: creator }   # 8 looks -> 3; clickables -> 24px keys
+  - id: gnomon-type-scale
+    product: gnomon
+    question: "Which scale do the 17 type sizes snap to?"
+    decision:
+      kind: note
+      decided_by: null
+      notes:
+        - "we have too many usages in our typography we need a more consolidated "
+    references_rendered: [four-steps, three-steps, two-plus-wordmark]   # refs/gnomon-type.html
+    redraft_decision: { kind: pick, choice: four-steps, scale: [10.5, 11.5, 13.5, 17], roles: [label, control, reading, title], decided_by: creator }
+    concerns: ["Workshop 76px column 9/9.5 text grows to 10.5", "setup digest drops 34 -> 17"]
+  - id: gnomon-spacing
+    product: gnomon
+    question: "How strict is spacing?"
+    decision: { kind: pick, choice: 2px-grid, decided_by: creator }
+  - id: gnomon-status-colour
+    product: gnomon
+    question: "What colour does status use, now that project colours are reserved?"
+    references_rendered: [now, ink, sea-grey-fourth, amber]   # refs/gnomon-status-colour.html
+    decision: { kind: pick, choice: ink, decided_by: creator }
+  - id: gnomon-field-border
+    product: gnomon
+    question: "What is the field border (1.35:1 today, 3:1 minimum)?"
+    references_rendered: [now, sec-edge, key-edge]            # refs/gnomon-field-border.html
+    decision: { kind: pick, choice: sec-edge, decided_by: creator }   # 5.8:1 on page, 6.5:1 on sheet
+  - id: gnomon-voice-tag
+    product: gnomon
+    question: "The card head reads 'by claude voice · reversible · card 3': how does a card say your voice can decide it?"
+    references_rendered: [now, say-instruction, move-to-keys, separate-line]   # refs/gnomon-voice-tag.html
+    decision:
+      kind: pick
+      choice: say-instruction
+      decided_by: creator
+      refinement: "Tag quotes the exact phrase the voice grammar accepts for that card (the two-word challenge on gate cards), then '· reversible'. Same position."   # Luna's catch, accepted with the pick
+  - id: gnomon-standing-offer-key
+    product: gnomon
+    raised_by: "Aegis review of the notices-and-toasts batch"
+    question: "Should 'Make it standing' approve the grant from the toast, or open the card?"
+    decision: { kind: pick, choice: open-the-card, decided_by: creator, writes: "The toast key files the request and focuses the grant card; the decision happens on the card (a toast is never a decision key)." }
+  - id: gnomon-toast-placement
+    product: gnomon
+    raised_by: "Mika review of the notices-and-toasts batch: toasts under the pill cover the stack head's decision keys"
+    question: "Where do toasts sit?"
+    references_rendered: [now, chat-right-edge, under-pill-push, chat-bottom]   # refs/gnomon-toast-placement.html
+    decision:
+      kind: pick
+      choice: chat-right-edge
+      decided_by: creator
+      refinement: "Below the chat header row (clear of ask/⋯); with a sheet open, top right above the scrim (Luna)."
+      open: "At 1024 the 720px sheet leaves no room; in-sheet results inline in the row (T-2026-10-21-024)."
+amendments:                                 # Mika's adjustments while codifying, accepted by the creator
+  - { board: gnomon-voice-tag, decided_by: creator, change: "Gate cards read 'say \u201c<prefix> approve <handle>\u201d \u00b7 gate' (no 'reversible'); the two-word challenge is issued only after the handle is spoken (spec \u00a714.7)." }
+  - { board: gnomon-notices, decided_by: creator, change: "Toast edge by kind: ink info, amber asks-first, vermilion error (replaces header-5b's amber-for-all, which broke one-meaning-per-hue)." }
+specimen: { path: .atelier/systems/gnomon/specimen.html, confirmed_by: creator, answer: "Yes, this is it" }
+unconfirmed: [offer-slip, one-offer-per-reply]   # owned by the open 2026-10-20-gnomon-mod-invitations session
+check_baseline: { product: gnomon, fail: 1, warn: 174, migration_entries: 39, migration_uses: 305 }
+closed: 2026-10-21
+summary: "Four products mapped; warpline, platform and site drafted then parked. Gnomon codified: 8 contested decisions by the creator (desktop-only, band-for-alerts + one toast, chip != key, 4-step type 10.5/11.5/13.5/17, 2px grid, ink status, secondary-text field edge, exact-phrase voice tag), clear entries bulk-confirmed, specimen confirmed. Migration of 305 uses pending in batches."

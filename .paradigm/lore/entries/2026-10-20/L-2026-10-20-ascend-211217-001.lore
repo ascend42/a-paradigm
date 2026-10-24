@@ -1,0 +1,42 @@
+id: L-2026-10-20-ascend-211217-001
+type: agent-session
+timestamp: '2026-10-20T21:12:17.107Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 8: S0 committed (new clientApiId 40efb725), S3 slips fixed after Aegis; S1+S2 launched'
+summary: |-
+  S0 is 0206d9a5 on feat/gnomon-desk-s0.
+  - clientApiId moved 69e8db86 → 40efb725. Contracts 523 tests, gnomon 2566.
+  - Contents: offerBlockOf (strict JSON, no regex), CONTEXT_SOURCES (recent-messages, open-files, repo-path, selection, session-summary), isOfferQuestion, RESERVED_MOD_NAMES, and the mcp user override (validated; not yet wired).
+  - Aegis's S0 review is running.
+
+  S3 is 77cfe259 plus b571aab0, after Aegis's APPROVE-WITH-FIXES:
+  - M1: anti-double-gesture (repeat/detail refused, 400ms wait, 15s arm expiry).
+  - M2: voice not-now is push-to-talk only and live-only.
+  - M3: takes comes from the row's contextIn.
+  - L1: the dev hook is build-gated (needed esbuild minifySyntax; accepted).
+  - L4: the focus ring is no longer the key colour.
+  - gui 452 tests.
+  - INTEGRATION NOTE: S3's local CONTEXT_SOURCES placeholders (last-reply, repo-diff, repo-summary) do NOT match S0's list. Switch to the contracts import.
+
+  S1 (kernel Desk core) and S2 (Neurons and Constellation mods) were launched from S0.
+  Turn-limit hits so far: Arky 30, S0 50, S3 50, Aegis 20 (each resumed).
+symbols_touched:
+  - '#gnomon-contracts'
+  - '#gui-offer-slip'
+  - '#offer-router'
+commit: 0206d9a5
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - build
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-205314-001
+git_context:
+  ref: cd3ef9b545ea5b0e24115daba2e00c9cc4290716
+  branch: feat/gnomon
+  dirty: true

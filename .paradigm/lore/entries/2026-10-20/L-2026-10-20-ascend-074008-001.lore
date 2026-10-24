@@ -1,0 +1,39 @@
+id: L-2026-10-20-ascend-074008-001
+type: incident
+timestamp: '2026-10-20T07:40:08.460Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon is more cumbersome than plain Claude Code: the read-only auto-pass never fired'
+summary: 'The founder kept getting Bash approval prompts under auto-edits. Their words: "the fact that using gnomon is more cumbersome than using claude code naturally is a direct failure of the tool". Forensics on ~/.gnomon/kernel.db found 14 Bash approval.request rows and ZERO approval.auto rows: the shipped #shell-readonly pass had never fired in real use. Arky traced six root causes: RC0, Gnomon writes permissions.ask:[Bash] so native read-only is off in every mode; RC1, the cwd is unknown unless the command starts with `cd ABS &&`, which Claude rarely writes; RC2, grammar refusals (case, braces, `x=$(…)`); RC3, git worktree list is not allowlisted; RC4, misses are not logged; RC5, exact "always" rules hash Claude''s fresh `description`, so they never re-match; RC6, the mode is per-session, so every new session costs a loosen card. The founder''s Touch ID doesn''t work, so each presence prompt is a typed password.'
+symbols_touched:
+  - '#shell-readonly'
+  - '#always-rules'
+  - '#approval-broker'
+  - '#supervisor'
+decisions:
+  - id: TD-2026-10-20-086
+    decision: F1–F7 parity and notify-not-ask, plus V1–V5 voice rulings, founder yes to all
+    rationale: Remove friction while keeping the kernel the single gate
+learnings:
+  - A security gate that is never measured in real use can be 100% refuse while every test passes. Log misses (RC4) from day one.
+  - Proof-oriented classifiers need the real execution context (cwd). Anchor the command the kernel proved via updatedInput instead of guessing.
+  - Hashing free-text model fields (description) into a rule key silently kills the rule.
+  - 'UX bar for Gnomon: never prompt more than native Claude Code in the equivalent mode.'
+verification:
+  status: partial
+  details:
+    note: K1 anchored cwd plus grammar (2745fd3f) and RC5 (32b4a08e) landed; RC3, F1, F7 and RC4 are in progress; F2–F6 are blocked by the Claude Code auto-mode classifier pending the founder
+tags:
+  - gnomon
+  - dogfood
+  - permissions
+  - marathon-2026-10-20
+linked_commits:
+  - 2745fd3f
+  - 32b4a08e
+git_context:
+  ref: 32b4a08e6207f43a45ebe3f6bda36848d22f7ffc
+  branch: feat/gnomon
+  dirty: true

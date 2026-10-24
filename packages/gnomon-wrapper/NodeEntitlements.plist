@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- #gnomon-wrapper: the BUNDLED node (Contents/Resources/node/bin/node, T-2026-10-21-029), re-signed with the
+     release identity (identifier gnomon.node) under the hardened runtime. ONE entitlement: V8 needs MAP_JIT.
+     Measured 2026-10-21 on arm64 (Aegis M2 low 5): node v24.22.1 with allow-jit only runs JIT-heavy JS and
+     WebAssembly; allow-unsigned-executable-memory is NOT needed there and is dropped. x64 is unmeasured: if node
+     faults under the hardened runtime on an x64 Mac, add allow-unsigned-executable-memory for x64 ONLY (a separate
+     NodeEntitlements-x64.plist) and record why here.
+     No library-validation opt-out: the sherpa addons are signed by the same team, which library validation accepts
+     (an ad-hoc addon is refused, measured). No DYLD environment, no get-task-allow. The wrapper itself keeps its
+     EMPTY Entitlements.plist. An unsigned (ad-hoc) release signs node WITHOUT the hardened runtime: ad-hoc code
+     has no team, so library validation would refuse the ad-hoc sherpa addons (CI and tests only). -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+</dict>
+</plist>

@@ -1,0 +1,42 @@
+id: L-2026-10-20-ascend-215926-001
+type: agent-session
+timestamp: '2026-10-20T21:59:26.056Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 13: Desk O1 S0 to S3 integrated on feat/gnomon-desk-o1 (all suites green); S0b naming and versioning build started'
+summary: |-
+  feat/gnomon-desk-o1 is at 2ef0385d. Merges:
+  - 1d777336: S0+S1
+  - fa4e1fac: S2
+  - cc688679: S3
+  - 2ef0385d: the fixup. The GUI moved onto the real contracts (CONTEXT_SOURCES corrected), PENDING_DESK_KINDS was removed, and stripOfferBlocks hides the ```offer block only under a matching kernel offer.shown row. It also carries an honesty-test rewording.
+  Tests: contracts 528, gnomon 2660, gui 456, voice 137, perf passed. Appendix A is 71+1 nodes.
+  S1's Aegis fixes, 0545f0cc:
+  - the repo server-name prefix is reserved
+  - offers and kept go only through servers actually added to the session
+  - titles refuse markup
+  - the launch hash is an HMAC
+  - secret env is refused
+  - the stale offer is retired on the next turn
+  S0b (naming and versioning per .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md) is building on feat/gnomon-desk-s0b.
+symbols_touched:
+  - '#offer-router'
+  - '#gui-offer-slip'
+  - '#neurons-mod'
+  - '#constellation-mod'
+  - '#manifest-loader'
+commit: 2ef0385d
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - integration
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-214718-001
+git_context:
+  ref: dc19ec9cfb4f79a991842fc09af34082264ef0fb
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,26 @@
+id: L-2026-10-18-ascend-041752-001
+type: human-note
+timestamp: '2026-10-18T04:17:52.558Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D92: the fuse tracks everything and enforces only law 7'
+summary: 'Founder ruling (2026-10-18): tokens/USD are for knowing the spend — never deny the founder''s subscription use. Sessions on local LLMs are tracked by model and project(s). Track everything, enforce nothing: no token/USD/compute caps, no concurrency caps, no quota-error breaker pause, no 30 % human reserve. Only law 7 (never bill an API key / no base-URL override for kernel-spawned sessions) stays enforced. Supersedes the enforcing parts of §3.4 #budget-fuse, the 30 % reserve (OPEN 6 / G-SUB-04) and the user-rung reserve added for Aegis N1; P8-D91''s single bucket stays as the attribution for tracking.'
+symbols_touched:
+  - '#budget-fuse'
+  - '#approval-broker'
+decisions:
+  - id: P8-D92
+    decision: The budget fuse becomes tracking-only (permits always granted, usage recorded per user/repo/session/model/backend, ladder notifications informational); law 7 is the only enforcement
+    rationale: 'Founder: tokens are to know the spend; let me spend my subscription as needed; local LLM sessions just tracked by model and project. Chosen over ''safety rails only'' and ''keep 30 % reserve'' when asked.'
+tags:
+  - paradigm-8
+  - gnomon
+  - ruling
+  - m1.6
+  - budget
+git_context:
+  ref: 481489f9a6648e3ecc13738361172b3f9f0c52c3
+  branch: feat/gnomon
+  dirty: true

@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import type { MigrationStep, MigrateOptions, MigrationCheckResult, MigrationApplyResult } from './types.js';
+import type { MigrationStep } from './types.js';
 import { getTemplatesDir } from './detector.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -521,7 +521,7 @@ const refreshHooks: MigrationStep = {
 
     return { needed: true, reason: 'No paradigm hooks found' };
   },
-  async apply(rootDir, opts) {
+  async apply(_rootDir, opts) {
     if (opts.dryRun) return { status: 'skipped', message: 'Would reinstall hooks' };
     try {
       const { hooksInstallCommand } = await import('../hooks/index.js');

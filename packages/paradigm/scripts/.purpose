@@ -1,12 +1,15 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
 name: scripts
-description: "TODO: describe what this directory/module does"
+description: "Build and packaging scripts for @a-company/paradigm"
 context:
-  - "Stub created by Cid during coverage audit — update with real context"
-# Key files touched:
-# - generate-hooks.mjs
+  - "generate-hooks.mjs: regenerates the bundled hook scripts (build, check:hooks)"
+  - "sync-readme.mjs: copies the root README.md to packages/paradigm/README.md at prepack (TD-2026-10-22-220)"
 components:
-  scripts:
-    description: "TODO: describe this component"
-    tags: []
+  generate-hooks:
+    description: "Generates the bundled hook scripts from their sources; --check fails on drift"
+    tags: [build]
+  readme-sync:
+    description: >-
+      The root README.md is the single source; prepack copies it to packages/paradigm/README.md so npm
+      and GitHub match, rewriting relative links to absolute github.com/ascend42/a-paradigm/blob/main URLs.
+      A committed copy keeps npm pack working from a fresh clone; --check and tests/readme-sync.test.ts fail on drift.
+    tags: [build, docs, release]

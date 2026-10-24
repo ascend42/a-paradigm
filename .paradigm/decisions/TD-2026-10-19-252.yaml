@@ -1,0 +1,39 @@
+id: TD-2026-10-19-252
+timestamp: '2026-10-19T08:52:04.687Z'
+title: 'Backends: Claude and local models only for now; other agents get dedicated support later (Orca Adapt 9)'
+decision: >-
+  Gnomon supports only Claude (subscription, law 7) and local models (gnomon-local) for now. Other agents such as
+  opencode and grok will get specific, proper support later, as planned work rather than a generic ACP passthrough. Each
+  one gets its own law-7 billing ruling when it is added.
+rationale: >-
+  Founder ruling, 2026-10-19 decision dialog. Focus on the core backends. Other agents are wanted later with proper
+  support per backend. Team input: Arky said defer and rule on law 7 first. Loid noted the §1 Loom non-goal and that law
+  7 applies only to Claude. Aegis's invariants for any future backend: sandboxed child, pinned binary sha, the broker
+  owns permissions, and no credentials in the child's env.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: arky
+    role: agent
+    stance: supported
+  - id: aegis
+    role: agent
+    stance: neutral
+  - id: loid
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: ACP for LAN agents in Move 2
+    rejected_because: not a priority; the founder wants proper support per backend instead
+  - option: Full ACP including cloud
+    rejected_because: it would loosen law 7 without a ruling
+symbols_affected:
+  - '#backend-adapter'
+status: active
+tags:
+  - gnomon
+  - orca-audit
+  - backend-adapter
+  - law-7
+  - T-2026-10-19-010

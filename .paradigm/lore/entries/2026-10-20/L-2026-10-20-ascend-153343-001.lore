@@ -1,0 +1,39 @@
+id: L-2026-10-20-ascend-153343-001
+type: milestone
+timestamp: '2026-10-20T15:33:43.917Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Settings sheet + header theme switch merged into feat/gnomon
+summary: |-
+  Settings (19716538…58d0f241 + 2b4e1b40 Aegis fixes) merged cleanly.
+  - Header: ☀Day/☾Night/◐Auto, persisted per browser.
+  - Settings sheet (⚙, ⌘,, palette): Appearance/Layout/Voice/Permissions/About.
+  - Aegis fixes:
+    - the unlock row states only what was observed;
+    - the standing feed sits below dialogs, is hidden while one is open, has a non-key offer button, and the stack reserves bottom space;
+    - kernel rows are pinned to this home's kernel principal;
+    - trust is threaded through run(id, trusted).
+  - Suites: gui 367, check:bundle ok, web-units + symbols-drift 88.
+  - Not yet verified: the body:has() hide rule in the wrapper WebView.
+  - Not merged: chips (fix pass), the model picker (in progress), the voice speaker fix (in progress), Paradigm Context (unreviewed).
+symbols_touched:
+  - '#gui-settings'
+  - '#gui'
+verification:
+  status: pass
+  details:
+    gui: 367
+    web_units_drift: 88
+tags:
+  - gnomon
+  - gui
+  - merge
+  - marathon-2026-10-20
+linked_commits:
+  - 2b4e1b40
+git_context:
+  ref: a15e6039cd2146daf075ba153aa00db1cc338a30
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,26 @@
+id: L-2026-10-17-ascend-191448-001
+type: human-note
+timestamp: '2026-10-17T19:14:48.785Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D83: re-cut the critical anchor budget at human cadence and evaluate a cheaper flush'
+summary: The founder chose to measure critical log entries at human cadence (about 1 per second alongside bulk load) instead of 1-in-64, and to have Aegis judge whether a cheaper ordering flush (F_BARRIERFSYNC, or plain fsync) suffices for critical commits. The 25 ms critical p99 budget is kept.
+symbols_touched:
+  - '#kernel-log'
+decisions:
+  - id: P8-D83
+    decision: G-LOG-04's critical class is measured at human cadence (1 critical/s wall time under the bulk load), the budget stays critical p99 < 25 ms, and the critical-commit durability mechanism (F_FULLFSYNC vs F_BARRIERFSYNC vs plain fsync) is chosen by Aegis from probe evidence
+    rationale: Arm G's 1-in-64 rate is far above real decision rates; full flush at that rate cost a 490 ms p99.
+tags:
+  - paradigm-8
+  - gnomon
+  - kernel-log
+  - decision
+linked_lore:
+  - L-2026-10-17-ascend-190536-001
+git_context:
+  ref: f7a1eb51bbda86178f0c67b76a6515d5883fef10
+  branch: feat/gnomon
+  dirty: true

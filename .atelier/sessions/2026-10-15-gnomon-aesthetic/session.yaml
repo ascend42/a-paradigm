@@ -1,0 +1,117 @@
+id: 2026-10-15-gnomon-aesthetic
+verb: direct
+scope: "The full aesthetic for Gnomon (Paradigm 8.0): identity/wordmark, the Shuttle band inside Claude Code, CLI voice, human inbox/console, kernel status views, and the pitch page that follows."
+depth: deep
+surface: terminal
+mode: greenfield
+preserve_from: [".atelier/design-system.yaml preserve list (Warpline system rules, tokens, nomenclature) applies inside Warpline surfaces"]
+read: "An instrument for one operator running an armada: glanced at many times a day in the Claude Code band, opened a few times a day to decide; exact, calm, quietly beautiful, a made object that reads a larger order."
+inputs:
+  - "Warpline loom: ink/linen ground, warp amber = branch A, weft teal = branch B, seam violet = git-blind only, Fraunces/Inter/JetBrains Mono, motion only on events"
+  - "Constellation observatory: #050505 ground, paper #f5f4f2, gold #d8a858 = decisions/Claude activity, star classes in cool blues, Space Grotesk/Inter/Geist Mono, register plain-instrument"
+  - "Open items from 2026-10-14-warpline-console: v2 look so the two-level shell doesn't read as generic GitHub; a failure colour"
+  - "Gnomon = sundial shadow-caster, carpenter's square, 'one who knows; judge; indicator'"
+started: 2026-10-15T00:00:00Z
+boards:
+  - id: world
+    question: "Which material world does Gnomon belong to?"
+    options:
+      - { id: shadow-instrument, label: "Shadow instrument", recommended: true, why: "The only world that is Gnomon's own; loom and sky live inside it" }
+      - { id: loom-ledger, label: "Loom ledger" }
+      - { id: observatory, label: "Observatory" }
+    references_rendered: [shadow-instrument, loom-ledger, observatory]
+    decision:
+      kind: pick
+      choice: shadow-instrument
+      decided_by: creator
+      notes:
+        - "the page has elements that all overlap (fixed: base .card grid collision)"
+  - id: iconography
+    question: "Mark & iconography: how far should the gnome go?"
+    options:
+      - { id: cap-gnomon, label: "Cap = gnomon", recommended: true }
+      - { id: sundial-only, label: "Sundial only" }
+      - { id: gnome-guild, label: "Gnome guild" }
+    references_rendered: [iconography, workshop, workshop-mod]
+    decision:
+      kind: mix
+      choice: "cap-gnomon, alive: Workshop as a minimal optional mod view (vertical sidebar or horizontal footer) with two zones: caps lined up in 'needs you' with their question; caps in 'working' bob only while their session streams; idle still; hat shape = work type, filled = Claude, outlined = local, soft hue = project, violet only for KNOT"
+      decided_by: creator
+      overrides:
+        - { rule: motion-on-events-only, scope: "workshop mod", reason: "creator wants caps visibly working; motion limited to sessions actively streaming" }
+      notes:
+        - "there is something to the idea of these little hats moving around as the running operations and them working taht acan be visualized, with shadows and them moving around in view like they are orchestratinig and working. maybe some soft hued colors, shaped hats for the type of work happening, colored differentiation per the project/flow they are grouped working on"
+        - "part of me feels this is disjointed in a way and i would want to see them just lined up for those that need answers and a separate space where they are just moving or bouncing around to show they are doing something and what they are doing. it should be a minimal optional mod view that could be skinny and vertical or short and horizontal"
+  - id: style
+    question: "Which style does Gnomon wear? (reopened world after neumorphism exploration)"
+    options: [shadow-instrument, soft-instrument, phosphor-terminal, blueprint, paper-atelier, glass-observatory]
+    references_rendered: [material, styles, papercraft]
+    decision:
+      kind: mix
+      choice: "light mode = papercraft (Paper atelier: cut-paper sheets, grain, ink lines, folded paper caps, pressable ink keys); dark mode = phosphor terminal (mono, glow, bracketed keys, glyph caps); optional automatic day/night swap"
+      decided_by: creator
+      supersedes: { board: world, choice: shadow-instrument }
+      overrides:
+        - { tell: default-warm-paper, scope: light mode, reason: "creator wants a papercraft feel" }
+      notes:
+        - "maybe not ust neumorphism but i want to explore other design styles for the tool instead of the current"
+        - "there is something super iteresing to the idea of paper atelier as i like the idea of a papercraft feel to the tool, i like it and phosphor terminal"
+        - "lets just have it as a light and dark mode with option for night/day swapping"
+      findings:
+        - "Current mock's key edges measured under 3:1; every style needs a >=3:1 key edge"
+        - "Sage project hue is 3.96:1 on paper: cap fills only, never text"
+  - id: decisions-and-navigation
+    question: "How do decisions and sessions live in the shell?"
+    references_rendered: [walkthrough]
+    decision:
+      kind: note
+      decided_by: creator
+      notes:
+        - "i like the idea of flying in pieces of paper and chips for decisions that pile up like a stack of decisions and maybe looking between them in case anohter decision matters to hit first, but in the chats it makes sense to see the decisions that pertain to that specific project, probably want a left side bar of active/past chats and making new sessions"
+        - "lets be tasteful with the header and footer and side bars / mod utilization so that people can see what is necessary/helpful, access anything easily, and can reorganize to their pref"
+  - id: colour
+    question: "How do project hues, failure and warning work across papercraft (day) and phosphor (night)?"
+    options:
+      - { id: pigment-set, label: "Pigment set", recommended: true, why: "keeps the soft project hues from the Workshop note while every text use passes AA through ink pairs" }
+      - { id: two-ink, label: "Two-ink restraint" }
+      - { id: sundial-wheel, label: "Sundial wheel" }
+    references_rendered: [colour]
+    decision: { kind: pick, choice: pigment-set, decided_by: creator }
+  - id: type
+    question: "How do papercraft (day) and phosphor (night) set text?"
+    options:
+      - { id: serif-day-mono-night, label: "Serif day, mono night", recommended: true, why: "each mode fully coherent" }
+      - { id: mono-spine, label: "Mono spine, both modes" }
+      - { id: one-sans, label: "One sans, both modes" }
+    references_rendered: [type]
+    decision: { kind: pick, choice: "mono-spine + JetBrains Mono everywhere", decided_by: creator, note: "departs from Luna's recommendation on both facets" }
+  - id: motion
+    question: "How do decisions, failures and the Workshop move?"
+    options:
+      - { id: paper-physics, label: "Paper physics, events only", recommended: true, why: "keeps the calm register while honouring the paper fly-in" }
+      - { id: ink-only, label: "Ink only" }
+      - { id: lively-workshop, label: "Lively workshop" }
+    references_rendered: [motion]
+    decision: { kind: pick, choice: lively-workshop, decided_by: creator }
+  - id: cli-voice
+    question: "How does gnomon talk in the terminal?"
+    options:
+      - { id: instrument-readout, label: "Instrument readout", recommended: true, why: "matches the instrument read and refusal:v1 next[] teaching" }
+      - { id: workshop-narrator, label: "Workshop narrator" }
+      - { id: ledger-log, label: "Ledger log" }
+    references_rendered: []
+    decision: { kind: pick, choice: instrument-readout, decided_by: creator }
+  - id: decision-stack-and-sidebar
+    question: "Where do the decision stack, chats and sessions live?"
+    options:
+      - { id: desk, label: "Desk", recommended: true, why: "chat, per-project cards and the global stack all visible at once; matches both decisions-and-navigation notes" }
+      - { id: inbox-first, label: "Inbox-first" }
+      - { id: overlay-stack, label: "Overlay stack" }
+    references_rendered: [layout]
+    decision: { kind: pick, choice: desk, decided_by: creator, notes: ["desk is totally it"] }
+status: closed
+closed: 2026-10-17
+direction: refs/direction.html
+direction_approved: "so far this looks right"
+paused_for: "deep UX-design research for the agent team and neurons (founder has links)"
+open_boards: []

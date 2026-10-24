@@ -1,0 +1,24 @@
+id: L-2026-10-18-ascend-035310-001
+type: human-note
+timestamp: '2026-10-18T03:53:10.637Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D91: agent spend shares the human''s budget bucket'
+summary: 'Founder ruling: agent spend counts in the same user-rung bucket as the human it runs for; no separate p:<ns>/* agent bucket (which would double the per-user day limit). Pre-M1.7, when the parent human is unknown at dispatch, attribute to the root''s human principal (single-human 8.0).'
+symbols_touched:
+  - '#budget-fuse'
+decisions:
+  - id: P8-D91
+    decision: Merge agent spend into the human's user bucket
+    rationale: A separate agent bucket doubled the effective per-user daily limit (M1.6 review note 10); founder chose one bucket
+tags:
+  - paradigm-8
+  - gnomon
+  - ruling
+  - m1.6
+git_context:
+  ref: 481489f9a6648e3ecc13738361172b3f9f0c52c3
+  branch: feat/gnomon
+  dirty: true

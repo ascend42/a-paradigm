@@ -1,0 +1,75 @@
+id: L-2026-10-24-ascend-002038-001
+type: agent-session
+timestamp: '2026-10-24T00:20:38.626Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon field run, day 2: voice like typing, Rules, MCP servers, git verbs, and a deny-by-default sandbox'
+summary: |-
+  The founder's live use of Gnomon (voice-only builds in a-platform-fighter) drove a batch merged into feat/gnomon, each part Mika- and Aegis-reviewed:
+  - Voice:
+    - the AirPods VPIO restart loop is fixed;
+    - speaker continuity is added;
+    - the send word sends the whole draft (TD-2026-10-23-496);
+    - voice-sent turns follow the run mode and Always rules (TD-2026-10-23-939).
+  - Always rules: scoped Always (file, repo, 3-word prefix), and a standing grant forms rules (TD-2026-10-23-815).
+  - Rules view: off for a time, one save.
+  - MCP servers: Paradigm's MCP is on by default; the human's servers are enabled by card (TD-2026-10-23-361); a batch card covers several servers with one presence.
+  - Git: kernel-run git verbs over a kernel MCP channel (init, push, repo create, worktrees).
+  - Sandbox: Aegis found the session profile was allow-default for writes (T-2026-10-23-004). It is now deny-by-default, with:
+    - per-session caches and TMPDIR;
+    - credential stores read-denied, and agent sockets and the keychain helper denied;
+    - pinned push config and pinned shas.
+  - Two kernel races fixed: drain vs exit work, and shutdown vs the push-config capture.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#voice-io'
+  - '#voice-origin'
+  - '#always-rules'
+  - '#rules-apply'
+  - '#gui-rules-view'
+  - '#mcp-servers'
+  - '#gui-mcp-servers'
+  - '#batch-card'
+  - '#git-verbs'
+  - '#kernel-mcp'
+  - '#session-supervisor'
+  - '#gui-turn-steps'
+  - '#claude-adapter'
+  - '#hooks'
+  - '#mod-fence'
+commit: 53f612f5
+decisions:
+  - id: TD-2026-10-23-496
+    decision: The send word sends the whole draft
+    rationale: The user owns their environment
+  - id: TD-2026-10-23-939
+    decision: Voice turns run like typed turns
+    rationale: The founder explicitly accepted the bystander risk
+  - id: TD-2026-10-23-815
+    decision: A standing grant forms Always rules
+    rationale: Always didn't stick under standing; the founder types passwords
+  - id: TD-2026-10-23-361
+    decision: Honor the human's MCP allow rules and run the linked Paradigm live
+    rationale: The founder's choice over Aegis's force-ask and pinning
+learnings:
+  - Gnomon's session sandbox was allow-default for writes; every 'deny X' finding was a symptom. Audit the default before adding denies.
+  - Builders running in parallel worktrees merge cleanly when each one owns distinct files; clientApiId pins and the GUI bundle hash always conflict and must be recomputed after the merge.
+  - Unawaited startup work in the daemon (refreshPushConfig) showed up as an unrelated test flake; teardown races hide in afterEach errors.
+  - 'The founder''s consistent principle: don''t gatekeep what they knowingly opted into. Make it visible, not blocked.'
+verification:
+  status: pass
+  details:
+    gnomon: 3865 passed
+    gnomon-gui: 974 passed
+    contracts: 610 passed
+linked_tasks:
+  - T-2026-10-23-001
+  - T-2026-10-23-002
+  - T-2026-10-23-003
+  - T-2026-10-23-004
+git_context:
+  ref: 53f612f5f3bcfdf393836e09e9922235231fc07f
+  branch: feat/gnomon
+  dirty: true

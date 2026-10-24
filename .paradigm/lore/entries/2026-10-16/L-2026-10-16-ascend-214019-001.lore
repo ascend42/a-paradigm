@@ -1,0 +1,30 @@
+id: L-2026-10-16-ascend-214019-001
+type: human-note
+timestamp: '2026-10-16T21:40:19.019Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Mods linked from a folder on disk; community GUIs and tools
+summary: 'Founder: "mods should be able to be linked via folder location on disk that way when people make mods online and want to share them people just download their repo and link folders. that would allow us to create a community of supports making their own guis and other tools that can easily be interchanged". Recorded as requirement P8-R7 for spec v3.2.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-R7
+    decision: 'Requirement: mods install by linking a folder on disk (e.g. a cloned repo); whole alternative GUIs and tools are interchangeable clients of the kernel''s published API'
+    rationale: 'Founder: community sharing by downloading a repo and linking its folder.'
+learnings:
+  - 'Alternative GUIs are just clients: if the localhost API (gnomon-rpc + display/card contracts) is stable and documented, a community shell is a peer of the first-party GUI, held to the same auth and card rules.'
+  - A linked folder is live code that changes as its author edits it; packageHash pinning (Aegis H6) needs a dev-link mode that re-pins on change and shows that the mod is linked.
+tags:
+  - paradigm-8
+  - gnomon
+  - mods
+  - community
+  - requirement
+linked_lore:
+  - L-2026-10-16-ascend-211936-001
+git_context:
+  ref: 4ebae982a28a804953e3e4994f0c9d54308e372a
+  branch: ideate/paradigm-8
+  dirty: true

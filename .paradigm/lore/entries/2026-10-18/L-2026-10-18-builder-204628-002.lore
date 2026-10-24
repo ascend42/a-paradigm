@@ -1,0 +1,17 @@
+id: L-2026-10-18-builder-204628-002
+type: insight
+timestamp: '2026-10-18T20:46:28.649Z'
+author: builder
+title: Hardlink of a key into the worktree is blocked at ln
+summary: 'Aegis C4: ln <home>/keys/device.key <cwd>/k fails under the session profile; mutation shows either the home read-deny or the home write-deny alone blocks link creation, so the falsifier fails only with both removed.'
+symbols_touched:
+  - '#session-runner'
+commit: 26deab77
+tags:
+  - decision
+  - gnomon
+  - m1.7
+git_context:
+  ref: 1a39430031f74253480c7795bab3450e60794d51
+  branch: gnomon/m17-slice2
+  dirty: true

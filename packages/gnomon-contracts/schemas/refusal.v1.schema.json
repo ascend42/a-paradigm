@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/refusal.v1.schema.json",
+  "title": "refusal:v1",
+  "description": "Gnomon superset of Warpline refusal:v1 (spec §4.6). Every Warpline refusal validates (G-CON-02).",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "refusal:v1"
+    },
+    "code": {
+      "type": "string",
+      "enum": [
+        "GATE_REFUSED",
+        "CLAIM_BREACH",
+        "TRUST_HELD",
+        "STALE_BASE",
+        "INTEGRITY_BROKEN",
+        "AUTH",
+        "FORBIDDEN",
+        "BAD_REQUEST",
+        "UNKNOWN_VERB",
+        "NOT_FOUND",
+        "UNSUPPORTED",
+        "ENGINE",
+        "BUDGET_DENIED",
+        "PERMIT_REQUIRED",
+        "CAS_LOST",
+        "BILLING_REFUSED",
+        "MODEL_UNAVAILABLE"
+      ]
+    },
+    "verdict": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gate": {
+      "type": "string",
+      "enum": [
+        "meaning",
+        "claim",
+        "trust",
+        "pick",
+        "transport",
+        "usage",
+        "budget",
+        "billing",
+        "model",
+        "voice",
+        "link",
+        "review",
+        "strictness"
+      ],
+      "x-gnomon-additive": true
+    },
+    "retriable": {
+      "type": "string",
+      "enum": [
+        "retry-identical",
+        "retry-corrected",
+        "retry-after-rebase",
+        "retry-after-resolve",
+        "retry-with-override",
+        "never"
+      ]
+    },
+    "contested": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stableKey": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "rule": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conflictingSlots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rank": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "ripple"
+            ]
+          }
+        },
+        "required": [
+          "stableKey",
+          "symbol",
+          "rule",
+          "conflictingSlots",
+          "rank"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 32
+    },
+    "contestedTotal": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pointers": {
+      "type": "object",
+      "properties": {
+        "knotPayloadId": {
+          "type": "string"
+        },
+        "proposedStateId": {
+          "type": "string"
+        },
+        "rebasedOnto": {
+          "type": "string"
+        },
+        "claimId": {
+          "type": "string"
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "next": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "verb": {
+            "type": "string",
+            "minLength": 1
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "principal": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "human"
+            ]
+          }
+        },
+        "required": [
+          "verb",
+          "params",
+          "requires",
+          "principal"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "override": {
+      "type": "object",
+      "properties": {
+        "flag": {
+          "type": "string",
+          "enum": [
+            "acceptBreach",
+            "acceptRisk"
+          ]
+        },
+        "principal": {
+          "const": "human"
+        }
+      },
+      "required": [
+        "flag",
+        "principal"
+      ],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "voice-off",
+            "voice-not-armed",
+            "voice-custody",
+            "voice-peer",
+            "voice-surface",
+            "voice-conn",
+            "voice-project",
+            "voice-class",
+            "voice-hand-only",
+            "voice-ineligible",
+            "voice-target",
+            "voice-ambiguous",
+            "voice-handle",
+            "voice-stale-utterance",
+            "voice-grammar",
+            "voice-speaker",
+            "voice-echo",
+            "voice-playback",
+            "voice-readback-missing",
+            "voice-challenge",
+            "voice-confirm-expired",
+            "voice-route",
+            "voice-focus",
+            "voice-rate",
+            "held",
+            "voice-strictness",
+            "link-unpaired",
+            "link-scope",
+            "link-expired",
+            "link-revoked",
+            "link-paused",
+            "link-rate",
+            "audience",
+            "sensitivity",
+            "secret-found",
+            "brief-replayed",
+            "brief-expired",
+            "brief-misaddressed",
+            "peer-always",
+            "peer-presence",
+            "peer-via",
+            "warpline-sync-absent",
+            "review-cap",
+            "strictness-presence",
+            "strictness-paused",
+            "strictness-mode",
+            "strictness-evidence",
+            "note-missing",
+            "presence",
+            "hello-not-offered",
+            "client-nonce-mismatch",
+            "frame-too-large",
+            "malformed-utf8",
+            "malformed-json",
+            "malformed-not-object",
+            "jsonrpc-version",
+            "rpc-tag",
+            "request-id",
+            "method-missing",
+            "hello-repeated",
+            "hello-params",
+            "no-shared-client-api",
+            "already-authenticated",
+            "no-hello",
+            "nonce-used",
+            "nonce-expired",
+            "auth-params",
+            "token-not-implemented",
+            "web-auth-not-implemented",
+            "replayed-transcript",
+            "foreign-principal",
+            "root-unprovisioned",
+            "unknown-device",
+            "principal-mismatch",
+            "peer-not-client",
+            "bad-signature",
+            "unknown-token",
+            "token-expired",
+            "token-revoked",
+            "token-in-use",
+            "token-not-yet-valid",
+            "token-store-untrusted",
+            "unknown-verb",
+            "unauthenticated",
+            "matrix",
+            "not-implemented",
+            "log-write-failed",
+            "gone",
+            "kernel-owned",
+            "ungranted",
+            "modns-not-own",
+            "bad-kind",
+            "bad-params",
+            "follow-needs-id",
+            "backlog-too-large",
+            "bad-since",
+            "bad-until",
+            "bad-limit",
+            "bad-follow",
+            "bad-kinds",
+            "bad-scope",
+            "since-ahead",
+            "subscription-cap",
+            "mod-principal-name",
+            "reader-unsupported",
+            "bad-ref",
+            "rev-not-applicable",
+            "unknown-scheme",
+            "peer-ref",
+            "no-resolver",
+            "not-found",
+            "row-integrity",
+            "closed",
+            "response-too-large",
+            "internal",
+            "stale-claim",
+            "claim-expired",
+            "claim-superseded",
+            "cursor-epoch",
+            "draining",
+            "cwd-hint-too-long",
+            "connection-gone",
+            "turn-running",
+            "model-switching",
+            "local-session",
+            "context-too-large",
+            "model-switch-failed",
+            "model-switch-timeout",
+            "already-on",
+            "would-loosen",
+            "until-past",
+            "until-too-far",
+            "too-many",
+            "too-large",
+            "card-pending",
+            "partial"
+          ],
+          "x-gnomon-additive": true
+        },
+        "offered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cardId": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "code",
+    "verdict",
+    "gate",
+    "retriable",
+    "contested",
+    "contestedTotal",
+    "pointers",
+    "next"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,51 @@
+id: L-2026-10-17-ascend-075432-001
+type: human-note
+timestamp: '2026-10-17T07:54:32.161Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Move 1 kickoff plans landed (29 Arky, 30 Aegis); Aegis flags a critical custody claim before code
+summary: |-
+  Research 29 (Arky) covers:
+  - the package scaffold: contracts, kernel, helper and a wrapper skeleton now; the GUI, local runner and mods later; voice not yet;
+  - the kernel has no dependencies key, with fence and SEC tests;
+  - 14 M1.0 probes ordered by spec risk;
+  - a Windows CI matrix plus an install-deps rollup fix;
+  - PR-0 to PR-5.
+
+  Research 30 (Aegis) lists spec claims believed false before any code:
+  - K1 (critical): macOS kernel-key custody "full" fails, because any same-user process can run the helper. The fix is a signed Node SEA kernel plus an XPC peer check, or custody partial.
+  - K2: presence prompts can be phished by a same-user process.
+  - K3: no WFP job-object condition exists, and filter creation needs admin.
+  - K4: the Windows wording should name the Passport KSP, not the Platform provider.
+  - K5: unlocks live in the helper, not in kernel memory.
+  - K6: the pipe PID check adds nothing.
+  - K7: the launch token may persist in browser history.
+  - K8: capture exclusion needs a native panel.
+
+  Aegis also wrote ten probes, S29-01..10. Founder decisions pending:
+  - a Developer ID provisioning profile for <TEAM>.gnomon.helper;
+  - Windows hardware or a VM;
+  - notarization now or later;
+  - Windows code signing;
+  - the Windows helper language (Arky proposes Rust);
+  - K1 fix (a) or (b);
+  - Node >=24 for Gnomon only.
+symbols_touched:
+  - '#paradigm-harness'
+files_created:
+  - .paradigm/research/paradigm-8/29-arky-move1-kickoff.md
+  - .paradigm/research/paradigm-8/30-aegis-m10-security-probes.md
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - security
+  - state
+linked_lore:
+  - L-2026-10-17-ascend-074909-001
+git_context:
+  ref: 9e99e8d727ecab3d636d7dc8463b789b4262302f
+  branch: feat/gnomon
+  dirty: true

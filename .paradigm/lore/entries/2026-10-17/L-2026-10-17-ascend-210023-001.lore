@@ -1,0 +1,29 @@
+id: L-2026-10-17-ascend-210023-001
+type: human-note
+timestamp: '2026-10-17T21:00:23.031Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D84/D85: stub-keystore no-recovery window accepted dev-only; file-anchor lag after reboot becomes a warning'
+summary: The founder ruled on the two power-loss questions from the D83 reviews. Round 3 of the D83 build is complete (gnomon 168 tests, contracts 125; critical p99 2.1 ms). The final Aegis diff-only review is the last of the 3 review rounds.
+symbols_touched:
+  - '#kernel-log'
+decisions:
+  - id: P8-D84
+    decision: 'Accept the stub-keystore no-recovery window as dev-only: while the keystore anchor is a stub (until M1.3), every truncation classifies as tamper and cannot be acknowledged. Gnomon is not shippable to anyone but the founder until T-2026-10-17-009 (quarantine + authenticated keystore anchors + seam hardening) lands. Today''s escape is deleting ~/.gnomon, since no keys exist yet.'
+    rationale: 'Founder: accept, dev-only. Any in-place downgrade would be the attack itself.'
+  - id: P8-D85
+    decision: 'File-anchor lag bound (S33-07): keep the strict >63-row refusal only when the boot session is unchanged; after a reboot, a file-anchor lag beyond the bound becomes a kernel-signed warning row (the keystore anchor remains the tamper check). Aegis confirms the exact rule before implementation.'
+    rationale: Un-fsynced anchor renames can roll back on power loss, so a strict bound would brick logs on benign power cuts. The file anchor is the accident detector, not the adversary check (S33-02).
+tags:
+  - paradigm-8
+  - gnomon
+  - kernel-log
+  - decision
+linked_lore:
+  - L-2026-10-17-ascend-191448-001
+git_context:
+  ref: a88a1506a173c68fbff60bca2f2861d8f4e423c6
+  branch: feat/gnomon
+  dirty: true

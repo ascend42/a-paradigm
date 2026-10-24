@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-210357-002
+type: milestone
+timestamp: '2026-10-18T21:03:57.385Z'
+author: builder
+title: 'Gnomon M1.3 slice 1 round 2: Aegis H1-H5 + M1 and reviewer fixes'
+summary: Rebased on feat/gnomon 274cab1b (dogfood merge). Probe helper re-identified; production access group; version floor + pid check; hash-verify-rehash; presence to delete keys and a root-signed rotate statement to create another generation; helper-owned prompt line; root signs rows only, cached signs decisions only; rotate signed by the old root, --recover, purge-keys; restore-on-failure, no orphan registry row, cleanup through a fresh helper and on Ctrl-C; Appendix A rows + M1.3 Status. gnomon 1082 passed (1 timing flake in mod-host passes alone), contracts 324, gui 28.
+symbols_touched:
+  - '#gnomon-helper'
+  - '#gnomon-helper-build'
+  - '#identity'
+  - '#gnomon-probes'
+tags:
+  - gnomon
+  - m1.3
+  - milestone
+linked_commits:
+  - '103e0431'
+  - d6f4456e
+  - b3e25ed5
+  - 85c09187
+  - f8f324cf
+  - 1737c8b5
+git_context:
+  ref: 93ab4b2f784eecf8cbd970e6764e416f74f40042
+  branch: gnomon/m13-slice1
+  dirty: true

@@ -20,7 +20,6 @@ import * as yaml from 'js-yaml';
 import { log } from './mcp-logger.js';
 import type {
   AgentProfile,
-  AgentPermissions,
   AgentExpertiseEntry,
   AgentPersonality,
   AgentProjectContext,
@@ -520,7 +519,7 @@ export function updateExpertiseFromAssessment(
  * Returns enriched data for prompt building.
  */
 export function mergeAgentProfileWithManifest(
-  agentDef: { name: string; role: string; defaultModel?: string },
+  _agentDef: { name: string; role: string; defaultModel?: string },
   profile: AgentProfile | null,
   projectName: string
 ): {

@@ -1,0 +1,40 @@
+id: L-2026-10-20-ascend-084023-001
+type: milestone
+timestamp: '2026-10-20T08:40:23.223Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: The Atelier-faithful GUI (slices S1–S4) merged into feat/gnomon
+summary: |-
+  Merge 6967c287 plus fix 463ca37d.
+  - What it brings: papercraft day and phosphor night materials (bundled OFL fonts, grain, ink keys); the desk structure (named sessions grouped by project, Active and Past, a quiet centre, folded activity, safe markdown, a palette field, Layout); card layout and the fanned paper pile; motion (fly-in, a decision stamp, fly-off, droop). All Aegis-approved, including the S2/S3 fixes.
+  - Post-merge suites: gui 307; gnomon 2403, with two failures:
+    - wrapper-channel G-GUI-12 failed under concurrent builder load (its ps scan picks up other processes) and passed when run alone;
+    - G-HON-07 flagged design-constant ms values in the gnomon-gui .purpose as unmeasured latency claims; reworded (463ca37d).
+  - Open: S5 Workshop caps (in progress, with the stamp label, inert and ask-user follow-ups); the voice countdown has no kernel source.
+  - In flight: B1 live words started, F6/F3, and the Paradigm Context mod.
+symbols_touched:
+  - '#gui'
+  - '#contract-project-hue'
+learnings:
+  - The honesty gate (G-HON-07) treats any 'N ms' in docs/.purpose as a latency claim; describe timers as named design constants.
+  - Process-scanning falsifiers (G-GUI-12) are sensitive to parallel test runs; rerun alone before trusting a failure.
+verification:
+  status: pass
+  details:
+    gui: 307
+    gnomon: 2403 + 2 fixed or isolated
+tags:
+  - gnomon
+  - design
+  - atelier
+  - merge
+  - marathon-2026-10-20
+linked_commits:
+  - 6967c287
+  - 463ca37d
+git_context:
+  ref: 463ca37d0611ca2fb9e5276bdb94eeac0604e70f
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,86 @@
+id: L-2026-10-19-ascend-172052-001
+type: milestone
+timestamp: '2026-10-19T17:20:52.306Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon: Orca follow-ups, P8-D98 client-API move, and drain/resume all built and merged to feat/gnomon'
+summary: |-
+  A single orchestrated session on 2026-10-19 cleared the remaining Gnomon backlog. Every slice was reviewed by Aegis, fixed, and run through all three suites before merging.
+
+  Work merged:
+  - Hardening follow-ups (T-011): Linux ready FIFO, pidfile reclaim, re-probe, pre-auth AUTH.
+  - Security cleanups (T-016): daemon status pins the kernel key; client-pinning audit.
+  - Onboarding follow-ups (T-006): Cmd-Q cleanup, setup routing tests, portal gates, headless Chrome smoke test.
+  - gnomon guide (T-015): compiled in, with honesty check G-HON-08.
+  - Flakes fixed: T-008 and T-012.
+  - The P8-D98 batched client-API move (T-001), in slices:
+    - A0: contracts.
+    - A1: rules revoke.
+    - A2: effect.failed and decisionSig v2.
+    - A3: gui.open with a fair launch cap.
+    - A4: {logId, seq} cursor.
+    - B0: daemon.stop verb plus the Touch ID card.
+  - Session sandbox: transcripts can be written under ~/.claude/projects. The projects dir itself can't be deleted, and hardlinks were measured as refused.
+  - Drain/resume (T-014):
+    - B1: drain on upgrade, recording clean vs interrupted turns.
+    - B2: resume before the orphan sweep via --resume. Interrupted sessions come back idle. A permit live at drain carries over. Old cards expire.
+
+  Founder decision dialogs: TD-2026-10-19-946, 908, 252, 648, 528, 947, 814, 339, 476, 739. The P-resume probe was run by the founder and recorded as evidence. The final unreleased clientApiId is sha256:7c006597…5a40. A decision-id collision bug was found and filed as T-020; the overwritten decision was restored.
+symbols_touched:
+  - $daemon-lifecycle
+  - '#socket'
+  - '#gnomon-contracts'
+  - '#approval-broker'
+  - '#budget-fuse'
+  - '#session-sandbox'
+  - '#gnomon-guide'
+  - '#setup-endpoint'
+  - '#web-endpoint'
+  - '#rules-revoke'
+  - '#bare-entry'
+decisions:
+  - id: TD-2026-10-19-947
+    decision: 'Law 3 gets a human-device tier: 12 kernel verbs + 3 human-device verbs + 2 relays'
+    rationale: Keeps abiId and modAbiId stable; human-only verbs never widen agent reach
+  - id: TD-2026-10-19-814
+    decision: Sessions may write ~/.claude/projects; turns cut at the deadline resume idle
+    rationale: The probe showed no transcript means no resume, and that a mid-tool kill re-runs the tool on continue
+  - id: TD-2026-10-19-739
+    decision: A permit live at drain carries over with a fresh expiry, never minted
+    rationale: The 60-minute TTL would otherwise stop most real sessions on every upgrade
+errors_encountered:
+  - description: A stale GUI bundle after the contracts move failed CI on every platform
+    resolution: Re-embedded; the GUI suite now always runs before a push
+  - description: paradigm_decision overwrote TD-946 on an id collision
+    resolution: Restored by hand, law-3 moved to 947, filed T-2026-10-19-020
+  - description: 'Linux CI: libuv''s stdio pipe is a socketpair, which cannot be re-opened via /proc'
+    resolution: A private FIFO channel on linux
+learnings:
+  - 'Run the gnomon-gui suite, including its bundle --check, before every push: gnomon-gui bundles gnomon-contracts'
+  - 'Builders hit 50 turns on almost every slice: brief them at ~30 turns of scope or expect a resume'
+  - Every security-touching slice got Aegis findings worth fixing; review before merge paid off every time
+  - Merging parallel branches needs a hand check of daemon.ts humanVerbs wiring and of duplicate imports
+verification:
+  status: partial
+  details:
+    local: contracts, gui and gnomon green on each merge
+    ci: green through 5e19d7b9; the drain/resume push is pending
+tags:
+  - gnomon
+  - arc:paradigm-8
+  - milestone
+linked_tasks:
+  - T-2026-10-19-001
+  - T-2026-10-19-006
+  - T-2026-10-19-008
+  - T-2026-10-19-011
+  - T-2026-10-19-014
+  - T-2026-10-19-015
+  - T-2026-10-19-016
+  - T-2026-10-19-020
+git_context:
+  ref: 9285fd74c1613473d421fb4d88694da5ee8ccdbe
+  branch: feat/gnomon
+  dirty: true

@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { StreamEvent, EventType, EventSource, AttentionScore, EventStreamConfig } from '../types/ambient.js';
+import type { StreamEvent, EventType, EventSource, AttentionScore } from '../types/ambient.js';
 import type { AgentAttention } from '../types/agents.js';
 
 const EVENTS_DIR = '.paradigm/events';

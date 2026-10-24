@@ -1,0 +1,475 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Warpline console — what you have</title><style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1b1c1e;--muted:#5d6066;--line:#e3e3df;--warn:#9a5b00;--warn-bg:#fff4e0;--ok:#1f6b3a;--ok-bg:#e6f4ea;--accent:#2b59c3;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:28px;line-height:1.2;margin:0 0 4px}
+h2{font-size:19px;margin:40px 0 12px;padding-top:16px;border-top:1px solid var(--line)}
+h3{font-size:15px;margin:20px 0 8px}
+p,li{max-width:72ch}
+.meta{color:var(--muted);font-size:13px}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.swatch{height:56px;border-radius:6px;border:1px solid var(--line);margin-bottom:8px;background-image:linear-gradient(var(--c),var(--c)),conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0);background-size:auto,12px 12px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.off{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.badge.on{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:20px}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto}
+.bar{height:12px;background:var(--accent);border-radius:2px}
+.where{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.callout{background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:12px 14px;margin:12px 0}
+iframe{width:100%;border:1px solid var(--line);border-radius:6px;background:transparent;height:72px;display:block}
+nav.toc{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;margin-top:12px}
+nav.toc a{color:var(--accent)}
+.theme-toggle{position:fixed;top:12px;right:12px;font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+</style></head><body><button class="theme-toggle" type="button" onclick="(function(r){var d=r.getAttribute('data-theme');var dark=d?d==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.setAttribute('data-theme',dark?'light':'dark')})(document.documentElement)">Theme</button><main><h1>Warpline console: what you have</h1>
+<p class="meta">Extracted from 9 UI files (product <code>warpline</code>) on 2026-10-21. Compared with the product's current design system.</p>
+<div class="stats"><div class="card stat"><b>49</b><span>distinct colours</span></div><div class="card stat"><b>0</b><span>font families</span></div><div class="card stat"><b>23</b><span>font sizes</span></div><div class="card stat"><b>41</b><span>spacing values</span></div><div class="card stat"><b>17</b><span>radii</span></div><div class="card stat"><b>25</b><span>tokens defined</span></div><div class="card stat"><b>34</b><span>near-duplicate groups</span></div><div class="card stat"><b>0</b><span>off-system uses</span></div></div>
+<nav class="toc"><a href="#near">Near-duplicates</a><a href="#color">Colour</a><a href="#type">Type</a><a href="#space">Spacing</a><a href="#radius">Radius</a><a href="#effects">Shadow and motion</a><a href="#tokens">Tokens</a><a href="#components">Components</a><a href="#copy">Copy</a></nav>
+<h2 id="near">Near-duplicates: decisions the system hasn't made</h2>
+<p>Each group is values close enough to read as the same thing. Usually one should win.</p><div class="grid">
+<div class="card"><div class="meta">color · 20 uses</div><div class="row"><div title="#e9a23b4d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b4d"></div><div title="#e9a23b40" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b40"></div><div title="#e9a23b47" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b47"></div><div title="#e9a23bb3" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23bb3"></div><div title="#e9a23b00" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b00"></div><div title="#e9a23b80" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b80"></div><div title="#e9a23b0a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b0a"></div><div title="#e9a23b14" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b14"></div><div title="#e9a23b66" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b66"></div><div title="#e9a23b12" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b12"></div><div title="#e9a23b59" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#e9a23b59"></div></div><div class="mono">#e9a23b4d, #e9a23b40, #e9a23b47, #e9a23bb3, #e9a23b00, #e9a23b80, #e9a23b0a, #e9a23b14, #e9a23b66, #e9a23b12, #e9a23b59</div></div>
+<div class="card"><div class="meta">color · 13 uses</div><div class="row"><div title="#2dd4bf4d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bf4d"></div><div title="#2dd4bf47" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bf47"></div><div title="#2dd4bfb3" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bfb3"></div><div title="#2dd4bf0f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bf0f"></div><div title="#2dd4bf38" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bf38"></div><div title="#2dd4bf40" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bf40"></div><div title="#2dd4bf52" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bf52"></div><div title="#2dd4bf59" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#2dd4bf59"></div></div><div class="mono">#2dd4bf4d, #2dd4bf47, #2dd4bfb3, #2dd4bf0f, #2dd4bf38, #2dd4bf40, #2dd4bf52, #2dd4bf59</div></div>
+<div class="card"><div class="meta">color · 5 uses</div><div class="row"><div title="#00000080" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#00000080"></div><div title="#00000066" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#00000066"></div></div><div class="mono">#00000080, #00000066</div></div>
+<div class="card"><div class="meta">color · 4 uses</div><div class="row"><div title="#0b0d14cc" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#0b0d14cc"></div><div title="#0f12208c" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#0f12208c"></div></div><div class="mono">#0b0d14cc, #0f12208c</div></div>
+<div class="card"><div class="meta">color · 12 uses</div><div class="row"><div title="#7c6ff066" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff066"></div><div title="#7c6ff0cc" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff0cc"></div><div title="#7c6ff01a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff01a"></div><div title="#7c6ff059" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff059"></div><div title="#7c6ff080" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff080"></div><div title="#7c6ff04d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff04d"></div><div title="#7c6ff0b3" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff0b3"></div><div title="#7c6ff02e" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7c6ff02e"></div></div><div class="mono">#7c6ff066, #7c6ff0cc, #7c6ff01a, #7c6ff059, #7c6ff080, #7c6ff04d, #7c6ff0b3, #7c6ff02e</div></div>
+<div class="card"><div class="meta">color · 5 uses</div><div class="row"><div title="#34d8a059" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#34d8a059"></div><div title="#34d8a01a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#34d8a01a"></div><div title="#34d8a04d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#34d8a04d"></div></div><div class="mono">#34d8a059, #34d8a01a, #34d8a04d</div></div>
+<div class="card"><div class="meta">font-size · 51 uses</div><div class="mono">12, 11.5</div></div>
+<div class="card"><div class="meta">font-size · 34 uses</div><div class="mono">11, 10.5</div></div>
+<div class="card"><div class="meta">font-size · 33 uses</div><div class="mono">13, 12.5</div></div>
+<div class="card"><div class="meta">font-size · 14 uses</div><div class="mono">15, 15.5</div></div>
+<div class="card"><div class="meta">font-size · 19 uses</div><div class="mono">13.5, 14</div></div>
+<div class="card"><div class="meta">font-size · 10 uses</div><div class="mono">16, 16.5</div></div>
+<div class="card"><div class="meta">spacing · 51 uses</div><div class="mono">8, 9</div></div>
+<div class="card"><div class="meta">spacing · 48 uses</div><div class="mono">16, 14</div></div>
+<div class="card"><div class="meta">spacing · 26 uses</div><div class="mono">10, 11</div></div>
+<div class="card"><div class="meta">spacing · 31 uses</div><div class="mono">18, 20, 21</div></div>
+<div class="card"><div class="meta">spacing · 34 uses</div><div class="mono">22, 24, 23</div></div>
+<div class="card"><div class="meta">spacing · 19 uses</div><div class="mono">12, 13</div></div>
+<div class="card"><div class="meta">spacing · 21 uses</div><div class="mono">4, 3</div></div>
+<div class="card"><div class="meta">spacing · 19 uses</div><div class="mono">6, 7</div></div>
+<div class="card"><div class="meta">spacing · 24 uses</div><div class="mono">26, 30, 28</div></div>
+<div class="card"><div class="meta">spacing · 15 uses</div><div class="mono">56, 64, 60</div></div>
+<div class="card"><div class="meta">spacing · 9 uses</div><div class="mono">40, 44, 38</div></div>
+<div class="card"><div class="meta">spacing · 7 uses</div><div class="mono">36, 34, 32</div></div>
+<div class="card"><div class="meta">spacing · 5 uses</div><div class="mono">48, 52</div></div>
+<div class="card"><div class="meta">spacing · 4 uses</div><div class="mono">80, 72</div></div>
+<div class="card"><div class="meta">spacing · 3 uses</div><div class="mono">120, 130, 132</div></div>
+<div class="card"><div class="meta">spacing · 2 uses</div><div class="mono">96, 90</div></div>
+<div class="card"><div class="meta">radius · 10 uses</div><div class="mono">6, 5</div></div>
+<div class="card"><div class="meta">radius · 8 uses</div><div class="mono">2, 3</div></div>
+<div class="card"><div class="meta">radius · 17 uses</div><div class="mono">14, 16, 15</div></div>
+<div class="card"><div class="meta">radius · 7 uses</div><div class="mono">12, 13</div></div>
+<div class="card"><div class="meta">radius · 3 uses</div><div class="mono">8, 7</div></div>
+<div class="card"><div class="meta">radius · 3 uses</div><div class="mono">10, 11</div></div>
+</div>
+<h2 id="color">Colour</h2><div class="grid">
+<div class="card"><div class="swatch" style="--c:#e9a23b4d"></div><div class="mono">#e9a23b4d</div><div class="row meta">5 uses </div><div class="where mono">docs/warpline/index.html:267<br>docs/warpline/pov.html:104<br>docs/warpline/pov.html:108<br>docs/warpline/system.html:217<br>docs/warpline/system.html:412</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b40"></div><div class="mono">#e9a23b40</div><div class="row meta">4 uses </div><div class="where mono">docs/warpline/index.html:61<br>docs/warpline/index.html:739<br>docs/warpline/pov.html:31<br>docs/warpline/system.html:69</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf4d"></div><div class="mono">#2dd4bf4d</div><div class="row meta">4 uses </div><div class="where mono">docs/warpline/index.html:268<br>docs/warpline/pov.html:103<br>docs/warpline/pov.html:109<br>docs/warpline/system.html:218</div></div>
+<div class="card"><div class="swatch" style="--c:#00000080"></div><div class="mono">#00000080</div><div class="row meta">4 uses </div><div class="where mono">docs/warpline/index.html:523<br>docs/warpline/index.html:524<br>docs/warpline/system.html:486<br>docs/warpline/system.html:487</div></div>
+<div class="card"><div class="swatch" style="--c:#0b0d14cc"></div><div class="mono">#0b0d14cc</div><div class="row meta">3 uses </div><div class="where mono">docs/warpline/index.html:117<br>docs/warpline/pov.html:51<br>docs/warpline/system.html:125</div></div>
+<div class="card"><div class="swatch" style="--c:#000000"></div><div class="mono">#000000</div><div class="row meta">3 uses </div><div class="where mono">docs/warpline/index.html:513<br>docs/warpline/pov.html:136<br>docs/warpline/system.html:476</div></div>
+<div class="card"><div class="swatch" style="--c:#aa11ff00"></div><div class="mono">#aa11ff00</div><div class="row meta">3 uses </div><div class="where mono">docs/warpline/index.html:650<br>docs/warpline/system.html:820<br>docs/warpline/system.html:822</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff066"></div><div class="mono">#7c6ff066</div><div class="row meta">3 uses </div><div class="where mono">docs/warpline/index.html:874<br>docs/warpline/index.html:898<br>docs/warpline/system.html:220</div></div>
+<div class="card"><div class="swatch" style="--c:#34d8a059"></div><div class="mono">#34d8a059</div><div class="row meta">3 uses </div><div class="where mono">docs/warpline/pov.html:102<br>docs/warpline/system.html:219<br>docs/warpline/system.html:466</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b47"></div><div class="mono">#e9a23b47</div><div class="row meta">2 uses </div><div class="where mono">docs/warpline/index.html:180<br>docs/warpline/system.html:270</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf47"></div><div class="mono">#2dd4bf47</div><div class="row meta">2 uses </div><div class="where mono">docs/warpline/index.html:449<br>docs/warpline/system.html:271</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23bb3"></div><div class="mono">#e9a23bb3</div><div class="row meta">2 uses </div><div class="where mono">docs/warpline/index.html:530<br>docs/warpline/system.html:223</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bfb3"></div><div class="mono">#2dd4bfb3</div><div class="row meta">2 uses </div><div class="where mono">docs/warpline/index.html:531<br>docs/warpline/system.html:224</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff0cc"></div><div class="mono">#7c6ff0cc</div><div class="row meta">2 uses </div><div class="where mono">docs/warpline/index.html:532<br>docs/warpline/system.html:225</div></div>
+<div class="card"><div class="swatch" style="--c:#bb3300ff"></div><div class="mono">#bb3300ff</div><div class="row meta">2 uses </div><div class="where mono">docs/warpline/index.html:794<br>docs/warpline/index.html:796</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff01a"></div><div class="mono">#7c6ff01a</div><div class="row meta">2 uses </div><div class="where mono">docs/warpline/index.html:874<br>docs/warpline/index.html:898</div></div>
+<div class="card"><div class="swatch" style="--c:#00000066"></div><div class="mono">#00000066</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:345</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b00"></div><div class="mono">#e9a23b00</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:176</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b80"></div><div class="mono">#e9a23b80</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:289</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b0a"></div><div class="mono">#e9a23b0a</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:329</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf0f"></div><div class="mono">#2dd4bf0f</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:329</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf38"></div><div class="mono">#2dd4bf38</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:361</div></div>
+<div class="card"><div class="swatch" style="--c:#99cc33bb"></div><div class="mono">#99cc33bb</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:656</div></div>
+<div class="card"><div class="swatch" style="--c:#44ee7711"></div><div class="mono">#44ee7711</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:662</div></div>
+<div class="card"><div class="swatch" style="--c:#2222ddaa"></div><div class="mono">#2222ddaa</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:668</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b14"></div><div class="mono">#e9a23b14</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:739</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf40"></div><div class="mono">#2dd4bf40</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:788</div></div>
+<div class="card"><div class="swatch" style="--c:#34d8a0"></div><div class="mono">#34d8a0</div><div class="row meta">1 uses </div><div class="mono meta">--clean</div><div class="where mono">docs/warpline/index.html:904</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b"></div><div class="mono">#e9a23b</div><div class="row meta">1 uses </div><div class="mono meta">--warp --weave-grad</div><div class="where mono">docs/warpline/index.html:1741</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf"></div><div class="mono">#2dd4bf</div><div class="row meta">1 uses </div><div class="mono meta">--weft --weave-grad</div><div class="where mono">docs/warpline/index.html:1745</div></div>
+<div class="card"><div class="swatch" style="--c:#f2c078"></div><div class="mono">#f2c078</div><div class="row meta">1 uses </div><div class="mono meta">--warp-soft</div><div class="where mono">docs/warpline/index.html:1753</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(233,162,59,&quot; + (0.5 * meaningfront)"></div><div class="mono">rgba(233,162,59,&quot; + (0.5 * meaningfront)</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:1850</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(233,162,59,&quot; + (0.15 + 0.4 * meaningfront)"></div><div class="mono">rgba(233,162,59,&quot; + (0.15 + 0.4 * meaningfront)</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:1851</div></div>
+<div class="card"><div class="swatch" style="--c:rgba(28,33,56,&quot; + (1)"></div><div class="mono">rgba(28,33,56,&quot; + (1)</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/index.html:1852</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff059"></div><div class="mono">#7c6ff059</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/pov.html:110</div></div>
+<div class="card"><div class="swatch" style="--c:#34d8a01a"></div><div class="mono">#34d8a01a</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/pov.html:127</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff080"></div><div class="mono">#7c6ff080</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/pov.html:128</div></div>
+<div class="card"><div class="swatch" style="--c:#8b8a8266"></div><div class="mono">#8b8a8266</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:250</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b66"></div><div class="mono">#e9a23b66</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:252</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b12"></div><div class="mono">#e9a23b12</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:252</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf52"></div><div class="mono">#2dd4bf52</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:254</div></div>
+<div class="card"><div class="swatch" style="--c:#34d8a04d"></div><div class="mono">#34d8a04d</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:272</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff04d"></div><div class="mono">#7c6ff04d</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:342</div></div>
+<div class="card"><div class="swatch" style="--c:#0f12208c"></div><div class="mono">#0f12208c</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:392</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff0b3"></div><div class="mono">#7c6ff0b3</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:402</div></div>
+<div class="card"><div class="swatch" style="--c:#7c6ff02e"></div><div class="mono">#7c6ff02e</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:410</div></div>
+<div class="card"><div class="swatch" style="--c:#e9a23b59"></div><div class="mono">#e9a23b59</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:467</div></div>
+<div class="card"><div class="swatch" style="--c:#2dd4bf59"></div><div class="mono">#2dd4bf59</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:468</div></div>
+<div class="card"><div class="swatch" style="--c:#5e5c5499"></div><div class="mono">#5e5c5499</div><div class="row meta">1 uses </div><div class="where mono">docs/warpline/system.html:469</div></div>
+</div>
+<h2 id="type">Type</h2><h3>Families</h3><div class="scroll"><table><tr><th>Family</th><th>Uses</th><th></th><th>Where</th></tr>
+</table></div><h3>Sizes</h3><div class="scroll"><table><tr><th>Size</th><th>Sample</th><th>Uses</th><th></th></tr>
+<tr><td class="mono">10px</td><td style="font-size:10px;line-height:1.2">Ambient voice off</td><td>7</td><td></td></tr>
+<tr><td class="mono">10.5px</td><td style="font-size:10.5px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">11px</td><td style="font-size:11px;line-height:1.2">Ambient voice off</td><td>32</td><td></td></tr>
+<tr><td class="mono">11.5px</td><td style="font-size:11.5px;line-height:1.2">Ambient voice off</td><td>13</td><td></td></tr>
+<tr><td class="mono">12px</td><td style="font-size:12px;line-height:1.2">Ambient voice off</td><td>38</td><td></td></tr>
+<tr><td class="mono">12.5px</td><td style="font-size:12.5px;line-height:1.2">Ambient voice off</td><td>12</td><td></td></tr>
+<tr><td class="mono">13px</td><td style="font-size:13px;line-height:1.2">Ambient voice off</td><td>21</td><td></td></tr>
+<tr><td class="mono">13.5px</td><td style="font-size:13.5px;line-height:1.2">Ambient voice off</td><td>11</td><td></td></tr>
+<tr><td class="mono">14px</td><td style="font-size:14px;line-height:1.2">Ambient voice off</td><td>8</td><td></td></tr>
+<tr><td class="mono">14.5px</td><td style="font-size:14.5px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">15px</td><td style="font-size:15px;line-height:1.2">Ambient voice off</td><td>11</td><td></td></tr>
+<tr><td class="mono">15.5px</td><td style="font-size:15.5px;line-height:1.2">Ambient voice off</td><td>3</td><td></td></tr>
+<tr><td class="mono">16px</td><td style="font-size:16px;line-height:1.2">Ambient voice off</td><td>8</td><td></td></tr>
+<tr><td class="mono">16.5px</td><td style="font-size:16.5px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">17px</td><td style="font-size:17px;line-height:1.2">Ambient voice off</td><td>3</td><td></td></tr>
+<tr><td class="mono">18px</td><td style="font-size:18px;line-height:1.2">Ambient voice off</td><td>5</td><td></td></tr>
+<tr><td class="mono">19px</td><td style="font-size:19px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">20px</td><td style="font-size:20px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">21px</td><td style="font-size:21px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">22px</td><td style="font-size:22px;line-height:1.2">Ambient voice off</td><td>5</td><td></td></tr>
+<tr><td class="mono">23px</td><td style="font-size:23px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">26px</td><td style="font-size:26px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">40px</td><td style="font-size:40px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+</table></div>
+<h2 id="space">Spacing</h2><div class="scroll"><table><tr><th>Value</th><th></th><th>Uses</th><th></th></tr>
+<tr><td class="mono">2px</td><td style="width:50%"><div class="bar" style="width:2px;max-width:100%"></div></td><td>3</td><td></td></tr>
+<tr><td class="mono">3px</td><td style="width:50%"><div class="bar" style="width:3px;max-width:100%"></div></td><td>8</td><td></td></tr>
+<tr><td class="mono">4px</td><td style="width:50%"><div class="bar" style="width:4px;max-width:100%"></div></td><td>13</td><td></td></tr>
+<tr><td class="mono">5px</td><td style="width:50%"><div class="bar" style="width:5px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">6px</td><td style="width:50%"><div class="bar" style="width:6px;max-width:100%"></div></td><td>12</td><td></td></tr>
+<tr><td class="mono">7px</td><td style="width:50%"><div class="bar" style="width:7px;max-width:100%"></div></td><td>7</td><td></td></tr>
+<tr><td class="mono">8px</td><td style="width:50%"><div class="bar" style="width:8px;max-width:100%"></div></td><td>38</td><td></td></tr>
+<tr><td class="mono">9px</td><td style="width:50%"><div class="bar" style="width:9px;max-width:100%"></div></td><td>13</td><td></td></tr>
+<tr><td class="mono">10px</td><td style="width:50%"><div class="bar" style="width:10px;max-width:100%"></div></td><td>20</td><td></td></tr>
+<tr><td class="mono">11px</td><td style="width:50%"><div class="bar" style="width:11px;max-width:100%"></div></td><td>6</td><td></td></tr>
+<tr><td class="mono">12px</td><td style="width:50%"><div class="bar" style="width:12px;max-width:100%"></div></td><td>17</td><td></td></tr>
+<tr><td class="mono">13px</td><td style="width:50%"><div class="bar" style="width:13px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">14px</td><td style="width:50%"><div class="bar" style="width:14px;max-width:100%"></div></td><td>23</td><td></td></tr>
+<tr><td class="mono">16px</td><td style="width:50%"><div class="bar" style="width:16px;max-width:100%"></div></td><td>25</td><td></td></tr>
+<tr><td class="mono">18px</td><td style="width:50%"><div class="bar" style="width:18px;max-width:100%"></div></td><td>20</td><td></td></tr>
+<tr><td class="mono">20px</td><td style="width:50%"><div class="bar" style="width:20px;max-width:100%"></div></td><td>10</td><td></td></tr>
+<tr><td class="mono">21px</td><td style="width:50%"><div class="bar" style="width:21px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">22px</td><td style="width:50%"><div class="bar" style="width:22px;max-width:100%"></div></td><td>18</td><td></td></tr>
+<tr><td class="mono">23px</td><td style="width:50%"><div class="bar" style="width:23px;max-width:100%"></div></td><td>3</td><td></td></tr>
+<tr><td class="mono">24px</td><td style="width:50%"><div class="bar" style="width:24px;max-width:100%"></div></td><td>13</td><td></td></tr>
+<tr><td class="mono">26px</td><td style="width:50%"><div class="bar" style="width:26px;max-width:100%"></div></td><td>9</td><td></td></tr>
+<tr><td class="mono">28px</td><td style="width:50%"><div class="bar" style="width:28px;max-width:100%"></div></td><td>6</td><td></td></tr>
+<tr><td class="mono">30px</td><td style="width:50%"><div class="bar" style="width:30px;max-width:100%"></div></td><td>9</td><td></td></tr>
+<tr><td class="mono">32px</td><td style="width:50%"><div class="bar" style="width:32px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">34px</td><td style="width:50%"><div class="bar" style="width:34px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">36px</td><td style="width:50%"><div class="bar" style="width:36px;max-width:100%"></div></td><td>4</td><td></td></tr>
+<tr><td class="mono">38px</td><td style="width:50%"><div class="bar" style="width:38px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">40px</td><td style="width:50%"><div class="bar" style="width:40px;max-width:100%"></div></td><td>4</td><td></td></tr>
+<tr><td class="mono">44px</td><td style="width:50%"><div class="bar" style="width:44px;max-width:100%"></div></td><td>4</td><td></td></tr>
+<tr><td class="mono">48px</td><td style="width:50%"><div class="bar" style="width:48px;max-width:100%"></div></td><td>4</td><td></td></tr>
+<tr><td class="mono">52px</td><td style="width:50%"><div class="bar" style="width:52px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">56px</td><td style="width:50%"><div class="bar" style="width:56px;max-width:100%"></div></td><td>9</td><td></td></tr>
+<tr><td class="mono">60px</td><td style="width:50%"><div class="bar" style="width:60px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">64px</td><td style="width:50%"><div class="bar" style="width:64px;max-width:100%"></div></td><td>5</td><td></td></tr>
+<tr><td class="mono">72px</td><td style="width:50%"><div class="bar" style="width:72px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">80px</td><td style="width:50%"><div class="bar" style="width:80px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">90px</td><td style="width:50%"><div class="bar" style="width:90px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">96px</td><td style="width:50%"><div class="bar" style="width:96px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">120px</td><td style="width:50%"><div class="bar" style="width:120px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">130px</td><td style="width:50%"><div class="bar" style="width:130px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">132px</td><td style="width:50%"><div class="bar" style="width:132px;max-width:100%"></div></td><td>1</td><td></td></tr>
+</table></div>
+<h2 id="radius">Radius</h2><div class="grid">
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:6px;margin-bottom:8px"></div><div class="mono">6px</div><div class="row meta">8 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:24px;margin-bottom:8px"></div><div class="mono">999px</div><div class="row meta">8 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:2px;margin-bottom:8px"></div><div class="mono">2px</div><div class="row meta">7 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:14px;margin-bottom:8px"></div><div class="mono">14px</div><div class="row meta">7 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:16px;margin-bottom:8px"></div><div class="mono">16px</div><div class="row meta">7 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:12px;margin-bottom:8px"></div><div class="mono">12px</div><div class="row meta">6 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:15px;margin-bottom:8px"></div><div class="mono">15px</div><div class="row meta">3 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:4px;margin-bottom:8px"></div><div class="mono">4px</div><div class="row meta">3 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:8px;margin-bottom:8px"></div><div class="mono">8px</div><div class="row meta">2 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:10px;margin-bottom:8px"></div><div class="mono">10px</div><div class="row meta">2 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:5px;margin-bottom:8px"></div><div class="mono">5px</div><div class="row meta">2 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:0px;margin-bottom:8px"></div><div class="mono">0px</div><div class="row meta">2 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:13px;margin-bottom:8px"></div><div class="mono">13px</div><div class="row meta">1 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:3px;margin-bottom:8px"></div><div class="mono">3px</div><div class="row meta">1 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:7px;margin-bottom:8px"></div><div class="mono">7px</div><div class="row meta">1 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:18px;margin-bottom:8px"></div><div class="mono">18px</div><div class="row meta">1 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:11px;margin-bottom:8px"></div><div class="mono">11px</div><div class="row meta">1 uses </div></div>
+</div>
+<h2 id="effects">Shadow and motion</h2><div class="scroll"><table><tr><th>Kind</th><th>Value</th><th>Uses</th><th></th></tr>
+<tr><td>shadow</td><td class="mono">0 0 30px rgba(124,111,240,0.1)&quot;&gt;</td><td>2</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 0 rgba(233, 162, 59, 0)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 8px 30px rgba(233, 162, 59, 0.28)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 14px rgba(233,162,59,0.5)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 0 4px rgba(52,216,160,0.1)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 14px rgba(124,111,240,0.5)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 32px rgba(233,162,59,0.07)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 8px rgba(124,111,240,0.7)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">inset 0 0 14px rgba(124,111,240,0.18)</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">600ms</td><td>2</td><td></td></tr>
+<tr><td>duration</td><td class="mono">0.001ms</td><td>2</td><td></td></tr>
+<tr><td>duration</td><td class="mono">300ms</td><td>2</td><td></td></tr>
+<tr><td>duration</td><td class="mono">2400ms</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">2000ms</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">200ms</td><td>1</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease-in-out</td><td>2</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease-out</td><td>2</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease</td><td>2</td><td></td></tr>
+<tr><td>easing</td><td class="mono">linear</td><td>1</td><td></td></tr>
+</table></div>
+<h2 id="tokens">Tokens (custom properties)</h2>
+<div class="callout"><b>1 defined but never used:</b> <span class="mono">--weave-grad</span></div>
+<div class="callout"><b>11 used but never defined here:</b> <span class="mono">--p-accent-red --p-border --p-text-primary --p-bg-panel --p-bg-tertiary --p-text-secondary --p-border-active --p-bg-hover --p-text-muted --p-accent-orange --p-bg-card</span></div>
+<div class="scroll"><table><tr><th>Token</th><th>Value</th><th>Uses</th><th>Defined</th></tr>
+<tr><td class="mono">--linen-400</td><td class="mono">#8B8A82</td><td>155</td><td class="where mono">docs/warpline/index.html:24</td></tr>
+<tr><td class="mono">--mono</td><td class="mono">JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, monospace</td><td>146</td><td class="where mono">docs/warpline/index.html:39</td></tr>
+<tr><td class="mono">--warp</td><td class="mono">#e9a23b</td><td>104</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:12</td></tr>
+<tr><td class="mono">--weft</td><td class="mono">#2dd4bf</td><td>104</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:13</td></tr>
+<tr><td class="mono">--seam</td><td class="mono">#7c6ff0</td><td>79</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:14</td></tr>
+<tr><td class="mono">--ease</td><td class="mono">cubic-bezier(0.22, 1, 0.36, 1)</td><td>73</td><td class="where mono">docs/warpline/index.html:36</td></tr>
+<tr><td class="mono">--linen-200</td><td class="mono">#CFCABE</td><td>59</td><td class="where mono">docs/warpline/index.html:23</td></tr>
+<tr><td class="mono">--ink-700</td><td class="mono">#1C2138</td><td>58</td><td class="where mono">docs/warpline/index.html:19</td></tr>
+<tr><td class="mono">--linen-50</td><td class="mono">#F4F1EA</td><td>52</td><td class="where mono">docs/warpline/index.html:22</td></tr>
+<tr><td class="mono">--warp-soft</td><td class="mono">#F2C078</td><td>51</td><td class="where mono">docs/warpline/index.html:27</td></tr>
+<tr><td class="mono">--ink-800</td><td class="mono">#141829</td><td>39</td><td class="where mono">docs/warpline/index.html:18</td></tr>
+<tr><td class="mono">--ink-850</td><td class="mono">#0F1220</td><td>25</td><td class="where mono">docs/warpline/index.html:17</td></tr>
+<tr><td class="mono">--display</td><td class="mono">Fraunces&quot;, Georgia, serif</td><td>23</td><td class="where mono">docs/warpline/index.html:40</td></tr>
+<tr><td class="mono">--weft-soft</td><td class="mono">#5EEAD4</td><td>20</td><td class="where mono">docs/warpline/index.html:29</td></tr>
+<tr><td class="mono">--cut</td><td class="mono">#5e5c54</td><td>19</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:16</td></tr>
+<tr><td class="mono">--clean</td><td class="mono">#34d8a0</td><td>17</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:15</td></tr>
+<tr><td class="mono">--textw</td><td class="mono">820px</td><td>17</td><td class="where mono">docs/warpline/index.html:35</td></tr>
+<tr><td class="mono">--ink-600</td><td class="mono">#2A3050</td><td>14</td><td class="where mono">docs/warpline/index.html:20</td></tr>
+<tr><td class="mono">--warp-mono</td><td class="mono">JetBrains Mono&#39;, &#39;SF Mono&#39;, &#39;Cascadia Code&#39;, Menlo, Consolas, monospace</td><td>13</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:19</td></tr>
+<tr><td class="mono">--ink-900</td><td class="mono">#0B0D14</td><td>12</td><td class="where mono">docs/warpline/index.html:16</td></tr>
+<tr><td class="mono">--ui</td><td class="mono">Inter&quot;, system-ui, -apple-system, sans-serif</td><td>12</td><td class="where mono">docs/warpline/index.html:41</td></tr>
+<tr><td class="mono">--warp-serif</td><td class="mono">Fraunces&#39;, &#39;Iowan Old Style&#39;, &#39;Palatino Linotype&#39;, Georgia, serif</td><td>11</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css:18</td></tr>
+<tr><td class="mono">--maxw</td><td class="mono">1120px</td><td>3</td><td class="where mono">docs/warpline/index.html:34</td></tr>
+<tr><td class="mono">--pad-sec</td><td class="mono">clamp(96px, 14vh, 180px)</td><td>3</td><td class="where mono">docs/warpline/index.html:37</td></tr>
+<tr><td class="mono">--weave-grad</td><td class="mono">linear-gradient(135deg, #E9A23B 0%, #2DD4BF 100%)</td><td>0</td><td class="where mono">docs/warpline/index.html:32</td></tr>
+</table></div>
+<h2 id="components">Components and class families</h2>
+<h3>Named components</h3><div class="scroll"><table><tr><th>Name</th><th>Where</th></tr>
+<tr><td class="mono">WarplineSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:26</td></tr>
+<tr><td class="mono">OracleDivergenceViewer</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:25</td></tr>
+<tr><td class="mono">OracleLedgerRail</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:14</td></tr>
+</table></div>
+<h3>Class families</h3><p class="meta">Classes grouped by their first word. A family with many classes and few uses is often one component written several ways.</p><div class="scroll"><table><tr><th>Family</th><th>Classes</th><th>Uses</th><th>Members</th></tr>
+<tr><td class="mono">reveal</td><td>1</td><td>149</td><td class="mono where">reveal</td></tr>
+<tr><td class="mono">wl</td><td>67</td><td>101</td><td class="mono where">wl-empty-viewer wl-empty-viewer__h wl-runheader wl-runheader__weave wl-runheader__a wl-runheader__verb wl-runheader__b wl-runheader__meta wl-split wl-split__side wl-split__side--bytes wl-split__title</td></tr>
+<tr><td class="mono">warpline</td><td>4</td><td>62</td><td class="mono where">warpline warpline__viewer warpline__rail warpline-col</td></tr>
+<tr><td class="mono">d2</td><td>1</td><td>53</td><td class="mono where">d2</td></tr>
+<tr><td class="mono">sec</td><td>2</td><td>50</td><td class="mono where">sec-deck sec-title</td></tr>
+<tr><td class="mono">emph</td><td>3</td><td>49</td><td class="mono where">emph emph-weft emph-seam</td></tr>
+<tr><td class="mono">git</td><td>2</td><td>46</td><td class="mono where">git git-eq</td></tr>
+<tr><td class="mono">section</td><td>3</td><td>42</td><td class="mono where">section section--bleed section--bleed-deep</td></tr>
+<tr><td class="mono">chip</td><td>1</td><td>35</td><td class="mono where">chip</td></tr>
+<tr><td class="mono">klass</td><td>1</td><td>33</td><td class="mono where">klass</td></tr>
+<tr><td class="mono">wrap</td><td>1</td><td>31</td><td class="mono where">wrap</td></tr>
+<tr><td class="mono">d1</td><td>1</td><td>30</td><td class="mono where">d1</td></tr>
+<tr><td class="mono">gui</td><td>2</td><td>30</td><td class="mono where">gui-col gui</td></tr>
+<tr><td class="mono">draw</td><td>1</td><td>29</td><td class="mono where">draw</td></tr>
+<tr><td class="mono">surface</td><td>4</td><td>28</td><td class="mono where">surface-tag surface surface-head surface-status</td></tr>
+<tr><td class="mono">eyebrow</td><td>1</td><td>27</td><td class="mono where">eyebrow</td></tr>
+<tr><td class="mono">warpgrid</td><td>1</td><td>26</td><td class="mono where">warpgrid</td></tr>
+<tr><td class="mono">k</td><td>1</td><td>25</td><td class="mono where">k</td></tr>
+<tr><td class="mono">d3</td><td>1</td><td>24</td><td class="mono where">d3</td></tr>
+<tr><td class="mono">layer</td><td>6</td><td>24</td><td class="mono where">layer layer-head layer-tag layer-name layer-body layer-pills</td></tr>
+<tr><td class="mono">svg</td><td>2</td><td>23</td><td class="mono where">svg-lbl-lit svg-lbl</td></tr>
+<tr><td class="mono">dim</td><td>1</td><td>22</td><td class="mono where">dim</td></tr>
+<tr><td class="mono">flow</td><td>7</td><td>21</td><td class="mono where">flow-down flow-block flow-bar flow-num flow-title flow-who flow-foot</td></tr>
+<tr><td class="mono">wire</td><td>9</td><td>19</td><td class="mono where">wire wire-split wire-2x2 wire-diff-row wire-bigzero wire-churn wire-bars wire-bar wire-skel</td></tr>
+<tr><td class="mono">none</td><td>1</td><td>19</td><td class="mono where">none</td></tr>
+<tr><td class="mono">term</td><td>4</td><td>18</td><td class="mono where">term-row term term-step term-bar</td></tr>
+<tr><td class="mono">l</td><td>2</td><td>18</td><td class="mono where">l l-lit</td></tr>
+<tr><td class="mono">lbl</td><td>1</td><td>17</td><td class="mono where">lbl</td></tr>
+<tr><td class="mono">glow</td><td>4</td><td>17</td><td class="mono where">glow-seam glow-amber glow-weft glow</td></tr>
+<tr><td class="mono">step</td><td>2</td><td>17</td><td class="mono where">step-cap step</td></tr>
+<tr><td class="mono">hero</td><td>7</td><td>16</td><td class="mono where">hero hero-canvas hero-inner hero-h1 hero-deck hero-sub hero-legend</td></tr>
+<tr><td class="mono">doescol</td><td>1</td><td>16</td><td class="mono where">doescol</td></tr>
+<tr><td class="mono">gitcol</td><td>1</td><td>16</td><td class="mono where">gitcol</td></tr>
+<tr><td class="mono">quiet</td><td>1</td><td>15</td><td class="mono where">quiet</td></tr>
+<tr><td class="mono">weft</td><td>2</td><td>15</td><td class="mono where">weft weft-anim</td></tr>
+<tr><td class="mono">card</td><td>1</td><td>15</td><td class="mono where">card</td></tr>
+<tr><td class="mono">row</td><td>1</td><td>15</td><td class="mono where">row</td></tr>
+<tr><td class="mono">lit</td><td>1</td><td>14</td><td class="mono where">lit</td></tr>
+<tr><td class="mono">pill</td><td>1</td><td>14</td><td class="mono where">pill</td></tr>
+<tr><td class="mono">diagram</td><td>2</td><td>13</td><td class="mono where">diagram diagram-cap</td></tr>
+<tr><td class="mono">gap</td><td>2</td><td>12</td><td class="mono where">gap-row gap</td></tr>
+<tr><td class="mono">arr</td><td>1</td><td>12</td><td class="mono where">arr</td></tr>
+<tr><td class="mono">phase</td><td>5</td><td>12</td><td class="mono where">phase-path phase-row phase-node phase-note phase</td></tr>
+<tr><td class="mono">ok</td><td>1</td><td>12</td><td class="mono where">ok</td></tr>
+<tr><td class="mono">foot</td><td>4</td><td>11</td><td class="mono where">foot-grid foot-inner foot-tag foot-links</td></tr>
+<tr><td class="mono">inv</td><td>7</td><td>10</td><td class="mono where">inv-cols inv-panel inv-left inv-eyebrow inv-note inv-axis inv-right</td></tr>
+<tr><td class="mono">axis</td><td>1</td><td>10</td><td class="mono where">axis</td></tr>
+<tr><td class="mono">uni</td><td>1</td><td>10</td><td class="mono where">uni</td></tr>
+<tr><td class="mono">s</td><td>1</td><td>10</td><td class="mono where">s-n</td></tr>
+<tr><td class="mono">maps</td><td>1</td><td>10</td><td class="mono where">maps</td></tr>
+<tr><td class="mono">new</td><td>1</td><td>10</td><td class="mono where">new</td></tr>
+<tr><td class="mono">hash</td><td>1</td><td>9</td><td class="mono where">hash</td></tr>
+<tr><td class="mono">banner</td><td>1</td><td>9</td><td class="mono where">banner</td></tr>
+<tr><td class="mono">prompt</td><td>1</td><td>9</td><td class="mono where">prompt</td></tr>
+<tr><td class="mono">cmd</td><td>1</td><td>9</td><td class="mono where">cmd</td></tr>
+<tr><td class="mono">cmp</td><td>3</td><td>8</td><td class="mono where">cmp-scroll cmp cmp-foot</td></tr>
+<tr><td class="mono">seam</td><td>2</td><td>8</td><td class="mono where">seam seam-bar</td></tr>
+<tr><td class="mono">transformed</td><td>1</td><td>8</td><td class="mono where">transformed</td></tr>
+<tr><td class="mono">in</td><td>1</td><td>7</td><td class="mono where">in-view</td></tr>
+<tr><td class="mono">warp</td><td>1</td><td>7</td><td class="mono where">warp</td></tr>
+<tr><td class="mono">cap</td><td>3</td><td>7</td><td class="mono where">cap-row cap-card cap-cmd</td></tr>
+<tr><td class="mono">ol</td><td>1</td><td>7</td><td class="mono where">ol</td></tr>
+<tr><td class="mono">terminal</td><td>1</td><td>7</td><td class="mono where">terminal</td></tr>
+<tr><td class="mono">wordmark</td><td>1</td><td>6</td><td class="mono where">wordmark</td></tr>
+<tr><td class="mono">key</td><td>1</td><td>6</td><td class="mono where">key-points</td></tr>
+<tr><td class="mono">fix</td><td>1</td><td>6</td><td class="mono where">fix</td></tr>
+<tr><td class="mono">built</td><td>1</td><td>6</td><td class="mono where">built</td></tr>
+<tr><td class="mono">purpose</td><td>1</td><td>6</td><td class="mono where">purpose</td></tr>
+<tr><td class="mono">wlabel</td><td>1</td><td>6</td><td class="mono where">wlabel</td></tr>
+<tr><td class="mono">w70</td><td>1</td><td>6</td><td class="mono where">w70</td></tr>
+<tr><td class="mono">group</td><td>1</td><td>6</td><td class="mono where">group-head</td></tr>
+<tr><td class="mono">parity</td><td>4</td><td>5</td><td class="mono where">parity parity-keep parity-h parity-close</td></tr>
+<tr><td class="mono">om</td><td>1</td><td>5</td><td class="mono where">om-edge</td></tr>
+<tr><td class="mono">knot</td><td>1</td><td>5</td><td class="mono where">knot</td></tr>
+<tr><td class="mono">stat</td><td>1</td><td>5</td><td class="mono where">stat</td></tr>
+<tr><td class="mono">v</td><td>1</td><td>5</td><td class="mono where">v</td></tr>
+<tr><td class="mono">tag</td><td>1</td><td>5</td><td class="mono where">tag</td></tr>
+<tr><td class="mono">rung</td><td>1</td><td>5</td><td class="mono where">rung</td></tr>
+<tr><td class="mono">meta</td><td>1</td><td>5</td><td class="mono where">meta</td></tr>
+<tr><td class="mono">is</td><td>5</td><td>5</td><td class="mono where">is-git is-warp is-engine is-surface is-divergence</td></tr>
+</table></div>
+<h2 id="copy">Copy</h2><p class="meta">1027 distinct user-visible strings. The vocabulary layer is decided from these.</p><div class="scroll"><table><tr><th>Text</th><th>Where</th></tr>
+<tr><td>1px solid var(--p-border)</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx:140</td></tr>
+<tr><td>Select an Oracle run</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:34</td></tr>
+<tr><td>or pick two branches and Run / Preview to weave one.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:35</td></tr>
+<tr><td>◀ weave ▶</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:64</td></tr>
+<tr><td>wl-seam wl-seam--divergence</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:83</td></tr>
+<tr><td>wl-seam wl-seam--both-caught</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:85</td></tr>
+<tr><td>git · bytes</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:92</td></tr>
+<tr><td>warpline · meaning</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:107</td></tr>
+<tr><td>Confusion matrix — git × meaning</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:172</td></tr>
+<tr><td>meaning · clean</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:175</td></tr>
+<tr><td>meaning · knot</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:176</td></tr>
+<tr><td>git · clean</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:178</td></tr>
+<tr><td>git · conflict</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:182</td></tr>
+<tr><td>The weave</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:229</td></tr>
+<tr><td>The break</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:237</td></tr>
+<tr><td> · retired by </td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:304</td></tr>
+<tr><td>essence A</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:330</td></tr>
+<tr><td>essence B</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:334</td></tr>
+<tr><td>conflicting slots</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:338</td></tr>
+<tr><td>from</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:346</td></tr>
+<tr><td>edge</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:350</td></tr>
+<tr><td>severed target</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:354</td></tr>
+<tr><td>retired by</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx:358</td></tr>
+<tr><td>branch A</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:99</td></tr>
+<tr><td>branch B</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:109</td></tr>
+<tr><td>POST /oracle — full git-reality, appends the ledger</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:122</td></tr>
+<tr><td>POST /forecast — ephemeral meaning forecast, no ledger write</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx:130</td></tr>
+<tr><td>git only</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:87</td></tr>
+<tr><td>meaning only ★</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:96</td></tr>
+<tr><td>No knots. No dangles. The weave is clean.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:142</td></tr>
+<tr><td>A scored disagreement git could not see.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts:144</td></tr>
+<tr><td>WARPLINE — Version control for meaning</td><td class="where mono">docs/warpline/index.html:6</td></tr>
+<tr><td>WARPLINE</td><td class="where mono">docs/warpline/index.html:562</td></tr>
+<tr><td>The Inversion</td><td class="where mono">docs/warpline/index.html:564</td></tr>
+<tr><td>Weaving</td><td class="where mono">docs/warpline/index.html:565</td></tr>
+<tr><td>Tapestry</td><td class="where mono">docs/warpline/index.html:566</td></tr>
+<tr><td>vs Git</td><td class="where mono">docs/warpline/index.html:567</td></tr>
+<tr><td>The CLI</td><td class="where mono">docs/warpline/index.html:568</td></tr>
+<tr><td>Follow the build &amp;rarr;</td><td class="where mono">docs/warpline/index.html:569</td></tr>
+<tr><td>WARPLINE · A successor to Git</td><td class="where mono">docs/warpline/index.html:580</td></tr>
+<tr><td>Version control for meaning,&amp;nbsp;not&amp;nbsp;bytes.</td><td class="where mono">docs/warpline/index.html:581</td></tr>
+<tr><td>The first version control that knows who changed what, why,&amp;nbsp;and what&amp;nbsp;it&amp;nbsp;cost.</td><td class="where mono">docs/warpline/index.html:582</td></tr>
+<tr><td>Now it reads your actual&amp;nbsp;code. Warpline lifts every function into meaning — so a rename costs&amp;nbsp;nothing, and a call into a deleted one can&#39;t&amp;nbsp;hide. Experimental, and being woven&amp;nbsp;now.</td><td class="where mono">docs/warpline/index.html:583</td></tr>
+<tr><td>Read the thesis</td><td class="where mono">docs/warpline/index.html:585</td></tr>
+<tr><td>See it weave &amp;darr;</td><td class="where mono">docs/warpline/index.html:586</td></tr>
+<tr><td>02 · The problem</td><td class="where mono">docs/warpline/index.html:596</td></tr>
+<tr><td>Git took a photograph. It froze the&amp;nbsp;bytes.</td><td class="where mono">docs/warpline/index.html:597</td></tr>
+<tr><td>artifact</td><td class="where mono">docs/warpline/index.html:599</td></tr>
+<tr><td>03 · The inversion · the worldview</td><td class="where mono">docs/warpline/index.html:610</td></tr>
+<tr><td>Bytes were never the&amp;nbsp;point.</td><td class="where mono">docs/warpline/index.html:611</td></tr>
+<tr><td>projection</td><td class="where mono">docs/warpline/index.html:613</td></tr>
+<tr><td>bytes</td><td class="where mono">docs/warpline/index.html:622</td></tr>
+<tr><td>function</td><td class="where mono">docs/warpline/index.html:623</td></tr>
+<tr><td>return</td><td class="where mono">docs/warpline/index.html:624</td></tr>
+<tr><td>the file on disk · authoritative today</td><td class="where mono">docs/warpline/index.html:628</td></tr>
+<tr><td>meaning</td><td class="where mono">docs/warpline/index.html:635</td></tr>
+<tr><td>fn</td><td class="where mono">docs/warpline/index.html:648</td></tr>
+<tr><td>totalDue</td><td class="where mono">docs/warpline/index.html:649</td></tr>
+<tr><td>Cart</td><td class="where mono">docs/warpline/index.html:655</td></tr>
+<tr><td>price</td><td class="where mono">docs/warpline/index.html:661</td></tr>
+<tr><td>Money</td><td class="where mono">docs/warpline/index.html:667</td></tr>
+<tr><td>#22da</td><td class="where mono">docs/warpline/index.html:668</td></tr>
+<tr><td>kind + contract + typed edges · ghosted</td><td class="where mono">docs/warpline/index.html:672</td></tr>
+<tr><td>WEAVE ↓  (meaning → code · roadmap)</td><td class="where mono">docs/warpline/index.html:687</td></tr>
+<tr><td>ABSORB ↑  (edits → semantic delta, lossless)</td><td class="where mono">docs/warpline/index.html:689</td></tr>
+<tr><td>absorb( weave( W ) ) &amp;nbsp;≡&amp;nbsp; W</td><td class="where mono">docs/warpline/index.html:692</td></tr>
+<tr><td>WARP</td><td class="where mono">docs/warpline/index.html:698</td></tr>
+<tr><td>The store of meaning. The source of truth — kind, contract, and typed edges, content-addressed.</td><td class="where mono">docs/warpline/index.html:699</td></tr>
+<tr><td>WEAVE</td><td class="where mono">docs/warpline/index.html:702</td></tr>
+<tr><td>Project the warp back into code — the roadmap direction. Today, bytes are materialized from Warpline&#39;s own content-addressed store.</td><td class="where mono">docs/warpline/index.html:703</td></tr>
+<tr><td>ABSORB</td><td class="where mono">docs/warpline/index.html:706</td></tr>
+<tr><td>Re-ingest hand edits as a semantic delta — losslessly, back into the warp.</td><td class="where mono">docs/warpline/index.html:707</td></tr>
+<tr><td>04 · The atom of change</td><td class="where mono">docs/warpline/index.html:717</td></tr>
+<tr><td>Every change carries its own&amp;nbsp;conscience.</td><td class="where mono">docs/warpline/index.html:718</td></tr>
+<tr><td>A Git commit makes no claim about consequences. A Warpline</td><td class="where mono">docs/warpline/index.html:719</td></tr>
+<tr><td>justification</td><td class="where mono">docs/warpline/index.html:719</td></tr>
+<tr><td>is the atom — and it can be checked.</td><td class="where mono">docs/warpline/index.html:719</td></tr>
+<tr><td>Git commit · thin</td><td class="where mono">docs/warpline/index.html:725</td></tr>
+<tr><td>byte-diff</td><td class="where mono">docs/warpline/index.html:733</td></tr>
+<tr><td>author string</td><td class="where mono">docs/warpline/index.html:733</td></tr>
+<tr><td>free-text message</td><td class="where mono">docs/warpline/index.html:733</td></tr>
+<tr><td>Makes no claim about consequences.</td><td class="where mono">docs/warpline/index.html:735</td></tr>
+<tr><td>Warpline justification · rich</td><td class="where mono">docs/warpline/index.html:740</td></tr>
+<tr><td>actor</td><td class="where mono">docs/warpline/index.html:742</td></tr>
+<tr><td>&amp;nbsp; agent:rune#7c2 · sealed into the pickId</td><td class="where mono">docs/warpline/index.html:742</td></tr>
+<tr><td>intent</td><td class="where mono">docs/warpline/index.html:743</td></tr>
+<tr><td>&amp;nbsp; correct rounding on multi-currency carts</td><td class="where mono">docs/warpline/index.html:743</td></tr>
+<tr><td>semantic-delta</td><td class="where mono">docs/warpline/index.html:744</td></tr>
+<tr><td>&amp;nbsp; totalDue: ℤ → Money(ccy)</td><td class="where mono">docs/warpline/index.html:744</td></tr>
+<tr><td>ripple-closure</td><td class="where mono">docs/warpline/index.html:746</td></tr>
+<tr><td>🔒 computed by the store, not claimed</td><td class="where mono">docs/warpline/index.html:753</td></tr>
+<tr><td>witness</td><td class="where mono">docs/warpline/index.html:755</td></tr>
+<tr><td>&amp;nbsp; hash-chained ✓ &amp;nbsp;</td><td class="where mono">docs/warpline/index.html:755</td></tr>
+<tr><td>tamper-evident</td><td class="where mono">docs/warpline/index.html:755</td></tr>
+<tr><td>(signatures: roadmap)</td><td class="where mono">docs/warpline/index.html:755</td></tr>
+<tr><td>A change is malformed if it lies about what it&amp;nbsp;touches.</td><td class="where mono">docs/warpline/index.html:759</td></tr>
+<tr><td>05 · Structural identity</td><td class="where mono">docs/warpline/index.html:768</td></tr>
+<tr><td>A rename is not a&amp;nbsp;conflict. It&#39;s nothing&amp;nbsp;at&amp;nbsp;all.</td><td class="where mono">docs/warpline/index.html:769</td></tr>
+<tr><td>When meaning is the identity, a label change moves nothing. The</td><td class="where mono">docs/warpline/index.html:770</td></tr>
+<tr><td>hash</td><td class="where mono">docs/warpline/index.html:770</td></tr>
+<tr><td>moves only when the meaning does.</td><td class="where mono">docs/warpline/index.html:770</td></tr>
+<tr><td>Git · text-diff</td><td class="where mono">docs/warpline/index.html:776</td></tr>
+<tr><td>3 files dirtied · review required.</td><td class="where mono">docs/warpline/index.html:784</td></tr>
+<tr><td>Warpline · structural identity</td><td class="where mono">docs/warpline/index.html:789</td></tr>
+<tr><td>label:</td><td class="where mono">docs/warpline/index.html:791</td></tr>
+<tr><td>getUser</td><td class="where mono">docs/warpline/index.html:791</td></tr>
+<tr><td>fetchUser</td><td class="where mono">docs/warpline/index.html:791</td></tr>
+<tr><td>hash(kind + contract + edges):</td><td class="where mono">docs/warpline/index.html:792</td></tr>
+<tr><td>#b30f-77ac-e1</td><td class="where mono">docs/warpline/index.html:794</td></tr>
+<tr><td>edges addressed by target-hash → stay attached</td><td class="where mono">docs/warpline/index.html:798</td></tr>
+<tr><td>diff counter:</td><td class="where mono">docs/warpline/index.html:799</td></tr>
+<tr><td>The hash moves iff the meaning&amp;nbsp;moves.</td><td class="where mono">docs/warpline/index.html:803</td></tr>
+<tr><td>Down to the function.</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+<tr><td>Warpline doesn&#39;t stop at components — it lifts every TypeScript function, method, and class into the same&amp;nbsp;WARP. A function&#39;s identity is its structure and written types, never its name or its&amp;nbsp;formatting. Rename</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+<tr><td>&amp;nbsp;→&amp;nbsp;</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+<tr><td>, move it to another file, reformat it: same essence, zero&amp;nbsp;delta. Change what it</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+<tr><td>does</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+<tr><td>— one operator, one missing</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+<tr><td>await</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+<tr><td>— and the essence&amp;nbsp;moves. Code becomes meaning the same way symbols do, and the two share one&amp;nbsp;fabric.</td><td class="where mono">docs/warpline/index.html:805</td></tr>
+</table></div></main></body></html>

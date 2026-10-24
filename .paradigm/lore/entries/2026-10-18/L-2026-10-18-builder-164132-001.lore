@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-164132-001
+type: insight
+timestamp: '2026-10-18T16:41:32.888Z'
+author: builder
+title: SBPL localhost is any local interface address, not loopback (T-2026-10-18-017)
+summary: The transport profile's (local ip "localhost:*") admits LAN and wildcard listens; SBPL cannot express a numeric loopback rule; the macos-14 EPERM flake was not reproduced
+symbols_touched:
+  - '#oracle-sandbox'
+  - '#web-endpoint'
+files_modified:
+  - packages/gnomon/test/web-sandbox.test.ts
+  - packages/gnomon/.purpose
+commit: 882684eb
+learnings:
+  - SBPL network host must be * or localhost
+  - 'localhost in a local filter matches configured interface addresses (LAN 0.0.0.0 :: allowed; 127.0.0.2 denied)'
+  - TCP listen is gated by network-inbound not network-bind
+  - fd-passing a pre-bound socket does not avoid the network-inbound check
+  - the transport profile is not loopback-only and needs an Aegis decision
+body: 'Probe matrix under the generated deny-default profile on macOS 15.7.3: 127.0.0.1 ok, ::1 ok, 0.0.0.0 ok, :: ok, LAN 192.168.x ok, 127.0.0.2 EPERM. 0 of 170 runs reproduced the CI listen EPERM. The suspected mechanism is that localhost is evaluated against live interface state on the CI VM (unproven). Response: a test-only retry of the listen leg (at most 3, each annotated), denials asserted on every attempt, profile unchanged, an it.todo falsifier for loopback-only. Aegis must decide the mechanism (for example an application-level bind check in the child, or a different platform primitive).'
+git_context:
+  ref: 882684eb23b351cafeaedbdc304cdb6d54a943ea
+  branch: gnomon/fixes-015-017
+  dirty: false

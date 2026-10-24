@@ -37,7 +37,7 @@ NOW=$_pm_t
 # (Aegis M-A) no ring text reaches stdout except numbers printed with %d and
 # hook names from this exact allowlist; a record with any other `hook` value
 # is dropped whole. Keep in sync with HOOK_NAMES in doctor/hook-health.ts.
-HOOK_ALLOW="SessionStart Stop PreToolUse-Bash PreToolUse-Glob PreToolUse-Write UserPromptSubmit PostToolUse-Write PostToolUse-Skill"
+HOOK_ALLOW="SessionStart Stop PreToolUse-Bash PreToolUse-Glob PreToolUse-Write UserPromptSubmit PostToolUse-Write PostToolUse-Skill PostToolUse-Agent"
 
 # One awk pass: per hook, killed and over-budget counts after SINCE, earliest time, total lines.
 SUMMARY=$(awk -v now="$NOW" -v since="$SINCE" -v grace=5000 -v allow="$HOOK_ALLOW" '

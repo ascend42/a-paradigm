@@ -1,0 +1,47 @@
+id: L-2026-10-24-ascend-085950-001
+type: agent-session
+timestamp: '2026-10-24T08:59:50.351Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon 8.0.1: orchestration Phase 0 closes, loops ship disabled for testers'
+summary: Resumed from the day-2 checkpoint. Arky broke orchestration Phase 0 into briefs; builders built the turn.economy fold and the routing backfill; Aegis and a Loid-lens reviewer found the baselines not yet pre-registerable and the fixes landed. The founder then chose to pause at the closure point and release for testers, with loops disabled (TD-2026-10-24-447). Built the loops gate (kernel + GUI), Aegis found a build-pipeline gap (nothing verified the staged kernel is a release build), fixed with assertReleaseKernel. Mika approved the loops-off UI with fixes (hidden stale cards were still counted). Versions bumped to 8.0.1 with the 8.0.0 skip explained in the CHANGELOG. Probes P1-P4 and the item 4 emitters are deferred.
+symbols_touched:
+  - '#turn-economy'
+  - '#loops-gate'
+  - '#loop-registry'
+  - '#gui-loops'
+  - '#routing-backfill'
+  - '#gnomon-npm-packaging'
+symbols_created:
+  - '#turn-economy'
+  - '#loops-gate'
+  - '#routing-backfill'
+decisions:
+  - id: TD-2026-10-24-447
+    decision: 8.0.1 ships with loops disabled; Phase 0 is the orchestration closure point
+    rationale: The signed app bundles no paradigm CLI, so builtin loop checks fail; testers get the Mac build sooner.
+learnings:
+  - Gate on the compiled release define, never a user file or the log; the env override must be ignored in release builds.
+  - Add a release-script assertion that the staged kernel is a release build, since a dev dist wrapped into the app would ship loops on.
+  - 'Counts and lists must filter from one source: hiding a card in the stack but counting it elsewhere leaves a number with nothing behind it.'
+  - turn.economy rows need a per-call context series and the conductor model, or the Phase 1 metrics cannot be computed from them.
+  - Local packages/gnomon/dist is a release build on the founder's machine, which makes release-pins, gate-gnomon-publish, version and daemon-lifecycle tests fail until the next release build.
+verification:
+  status: partial
+  details:
+    note: Targeted tests pass in all three packages; full gnomon suite has 11 failures that read the local release dist or stale dist version; not proven on a clean checkout.
+tags:
+  - gnomon
+  - release
+  - 8.0.1
+  - loops
+  - orchestration
+linked_tasks:
+  - T-2026-10-22-016
+  - T-2026-10-22-014
+git_context:
+  ref: e9fb52f942fc464242ff45326e551c62e4d207e3
+  branch: feat/gnomon
+  dirty: true

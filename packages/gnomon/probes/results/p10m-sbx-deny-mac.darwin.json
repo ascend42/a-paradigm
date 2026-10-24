@@ -1,0 +1,457 @@
+{
+  "probe": "p10m-sbx-deny-mac",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "macOS": "15.7.3",
+    "curl": "curl 8.7.1 (x86_64-apple-darwin24.0) libcurl/8.7.1 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.64.0",
+    "tmux": "tmux 3.7b",
+    "node": "v26.0.0"
+  },
+  "verdict": "fail",
+  "evidence": {
+    "macOS": "15.7.3",
+    "build": "24G419",
+    "kernel": "24.6.0",
+    "sandboxExec": true,
+    "portDeny": {
+      "profile": "(version 1)(allow default)(deny network-outbound (remote ip \"localhost:54409\"))",
+      "port": 54409,
+      "curl": {
+        "deniedPort": {
+          "status": 7,
+          "signal": null,
+          "stdout": "000",
+          "stderr": "curl: (7) Failed to connect to 127.0.0.1 port 54409 after 0 ms: Couldn't connect to server",
+          "httpCode": "000"
+        },
+        "portPlus1": {
+          "status": 0,
+          "signal": null,
+          "stdout": "200",
+          "stderr": "",
+          "httpCode": "200"
+        }
+      },
+      "nodeNet": {
+        "deniedPort": {
+          "connected": false,
+          "code": "EPERM",
+          "message": "connect EPERM 127.0.0.1:54409 - Local (0.0.0.0:0)"
+        },
+        "portPlus1": {
+          "connected": true
+        },
+        "ipv6LoopbackSamePort": {
+          "connected": false,
+          "code": "EPERM",
+          "message": "connect EPERM ::1:54409 - Local (:::0)"
+        }
+      },
+      "nodeWebSocket": {
+        "deniedPort": {
+          "open": false,
+          "error": ""
+        },
+        "portPlus1": {
+          "open": true
+        }
+      },
+      "unsandboxedControlToDeniedPort": {
+        "connected": true
+      },
+      "serverHitsOnDeniedPortSoFar": 0,
+      "holds": true
+    },
+    "sessionProfile": "(version 1)(allow default)(deny network-outbound (remote ip \"localhost:54409\"))(deny process-info*)(allow process-info* (target self))(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))(deny file-write* (subpath \"<tmp>/gnomon-p10m-71c757f9/linked-denied\"))(deny file-read* (subpath \"<tmp>/gnomon-p10m-71c757f9/browser-profile\"))",
+    "processInfoDeny": {
+      "rules": "(deny process-info*)(allow process-info* (target self))(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))",
+      "markerPid": "64605",
+      "unsandboxedControl": {
+        "psAxwwMarkerLines": "1",
+        "psStderr": "",
+        "pgrepFlFoundMarker": true,
+        "pgrepRc": "0",
+        "pgrepProcessCount": 585,
+        "lsofOther": "COMMAND   PID   USER   FD     TYPE             DEVICE SIZE/OFF                NODE NAME\nnode    64605 ascend  cwd      DIR               1,16     1696            14209816 ~/Documents/GitHub/a-paradigm",
+        "launchctlListPidRows": 181,
+        "ownChildKill0": true,
+        "ownChildWaitRc": "143"
+      },
+      "sessionProfile": {
+        "psAxwwMarkerLines": "0",
+        "psStderr": "",
+        "pgrepFlFoundMarker": true,
+        "pgrepRc": "0",
+        "pgrepProcessCount": 585,
+        "lsofOther": "lsof: can't get PID byte count: Operation not permitted",
+        "launchctlListPidRows": 0,
+        "ownChildKill0": true,
+        "ownChildWaitRc": "143"
+      },
+      "allowDefaultOnlyProfile": {
+        "psAxwwMarkerLines": "0",
+        "psStderr": "",
+        "pgrepFlFoundMarker": true,
+        "pgrepRc": "0",
+        "pgrepProcessCount": 585,
+        "lsofOther": "COMMAND   PID   USER   FD     TYPE             DEVICE SIZE/OFF                NODE NAME\nnode    64605 ascend  cwd      DIR               1,16     1696            14209816 ~/Documents/GitHub/a-paradigm",
+        "launchctlListPidRows": 0,
+        "ownChildKill0": true,
+        "ownChildWaitRc": "143"
+      },
+      "nodeInsideSessionProfile": {
+        "signal0ToOther": "allowed",
+        "psInNode": "error:EPERM:spawnSync /bin/ps EPERM",
+        "pgrepInNode": "markerVisible",
+        "childSpawned": true,
+        "childKillReturned": true,
+        "childExit": {
+          "code": null,
+          "sig": "SIGTERM"
+        }
+      },
+      "pgrepUnderAlternativeRules": {
+        "kern.procargs prefix": {
+          "pgrepRc": 0,
+          "markerVisible": true,
+          "stderr": ""
+        },
+        "kern.procargs2 exact": {
+          "pgrepRc": 0,
+          "markerVisible": true,
+          "stderr": ""
+        },
+        "kern. prefix": {
+          "pgrepRc": 0,
+          "markerVisible": true,
+          "stderr": ""
+        },
+        "sysmond mach-lookup deny": {
+          "pgrepRc": 3,
+          "markerVisible": false,
+          "stderr": "sysmon request failed with error: sysmond service not found\npgrep: Cannot get process list"
+        }
+      },
+      "pgrepEntitlements": "[Dict]\n\t[Key] com.apple.sysmond.client\n\t[Value]\n\t\t[Bool] true",
+      "hardenedProfileAddition": "(deny mach-lookup (global-name \"com.apple.sysmond\"))",
+      "hardenedShell": {
+        "psAxwwMarkerLines": "0",
+        "psStderr": "",
+        "pgrepFlFoundMarker": false,
+        "pgrepRc": "3",
+        "pgrepProcessCount": 0,
+        "lsofOther": "lsof: can't get PID byte count: Operation not permitted",
+        "launchctlListPidRows": 0,
+        "ownChildKill0": true,
+        "ownChildWaitRc": "143"
+      },
+      "hardenedNode": {
+        "signal0ToOther": "allowed",
+        "psInNode": "error:EPERM:spawnSync /bin/ps EPERM",
+        "pgrepInNode": "error:status=3",
+        "childSpawned": true,
+        "childKillReturned": true,
+        "childExit": {
+          "code": null,
+          "sig": "SIGTERM"
+        }
+      },
+      "kernProcargs2ViaPython": {
+        "python": "/usr/bin/python3",
+        "unsandboxed": {
+          "ok": true,
+          "bytes": 2356,
+          "argvMarker": true,
+          "envMarker": true,
+          "stderr": ""
+        },
+        "allowDefaultOnly": {
+          "ok": true,
+          "bytes": 2356,
+          "argvMarker": true,
+          "envMarker": true,
+          "stderr": ""
+        },
+        "processInfoOnly": {
+          "ok": true,
+          "bytes": 2356,
+          "argvMarker": true,
+          "envMarker": true,
+          "stderr": ""
+        },
+        "sysctlKernProcOnly": {
+          "ok": true,
+          "bytes": 2356,
+          "argvMarker": true,
+          "envMarker": true,
+          "stderr": ""
+        },
+        "sessionProfile": {
+          "ok": false,
+          "errno": 1,
+          "stage": "size",
+          "stderr": ""
+        }
+      },
+      "otherProcessArgvHidden": false,
+      "otherProcessArgvHiddenWithSysmondDeny": true,
+      "notes": [
+        "/bin/ps is setuid root on macOS; sandbox-exec refuses to exec setuid binaries under ANY profile (even allow default), so ps \"denial\" is not evidence of the process-info rule.",
+        "pgrep (entitlement com.apple.sysmond.client) gets the process table incl. argv from the root sysmond daemon over XPC, so neither process-info* nor any sysctl-read rule hides it; a mach-lookup deny of com.apple.sysmond does.",
+        "Direct sysctl KERN_PROCARGS2 (python ctypes) is denied under the full session profile; see kernProcargs2ViaPython for which rule does it."
+      ]
+    },
+    "fsDeny": {
+      "linkedFolderWrite": {
+        "nodeDenied": {
+          "status": 1,
+          "signal": null,
+          "stdout": "",
+          "stderr": "node:fs:2398\n    return binding.writeFileUtf8(\n                   ^\n\nError: EPERM: operation not permitted, open '<tmp>/gnomon-p10m-71c757f9/linked-denied/f.txt'\n    at Object.writeFileSync (node:fs:2398:20)\n    at [eval]:1:15\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:483:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:481:60)\n    at evalFunction (node:internal/process/execution:315:30)\n    at evalTypeScript (node:internal/process/execution:327:3)\n   …[817 chars]"
+        },
+        "shellDenied": {
+          "status": 1,
+          "signal": null,
+          "stdout": "",
+          "stderr": "/bin/sh: <tmp>/gnomon-p10m-71c757f9/linked-denied/g.txt: Operation not permitted"
+        },
+        "allowedDirWrite": {
+          "status": 0,
+          "signal": null,
+          "stdout": "wrote",
+          "stderr": ""
+        },
+        "deniedFileExists": false
+      },
+      "browserProfileRead": {
+        "denied": {
+          "status": 1,
+          "signal": null,
+          "stdout": "",
+          "stderr": "cat: <tmp>/gnomon-p10m-71c757f9/browser-profile/History: Operation not permitted"
+        }
+      },
+      "realBrowserProfileDirsPresent": {
+        "safari": true,
+        "chrome": true,
+        "edge": true,
+        "firefox": false,
+        "arc": true
+      },
+      "holds": true
+    },
+    "escapeMatrix": {
+      "launchctlSubmit": {
+        "control": {
+          "status": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": true
+        },
+        "inSession": {
+          "status": 1,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": false
+        }
+      },
+      "launchServicesOpenApp": {
+        "control": {
+          "status": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": true
+        },
+        "inSession": {
+          "status": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": true
+        },
+        "openArgsSurvived": {
+          "control": true,
+          "inSession": false
+        },
+        "fixCandidates": {
+          "(deny mach-lookup (global-name \"com.apple.coreservices.launchservicesd\"))": {
+            "openStatus": 0,
+            "reachedDeniedPort": true
+          },
+          "(deny mach-lookup (global-name-prefix \"com.apple.lsd.\"))": {
+            "openStatus": 0,
+            "reachedDeniedPort": true
+          }
+        }
+      },
+      "tmuxPrivateServer": {
+        "tmux": "tmux 3.7b",
+        "started": true,
+        "control": {
+          "status": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": true
+        },
+        "inSession": {
+          "status": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": true
+        },
+        "withUnixSocketDenyRule": {
+          "status": 1,
+          "signal": null,
+          "stdout": "",
+          "stderr": "error connecting to /private/tmp/gp10m-71c757f9/tmux/s (Operation not permitted)",
+          "reachedDeniedPort": false
+        }
+      },
+      "userTmuxDefaultSocket": {
+        "path": "/private/tmp/tmux-501/default",
+        "present": false
+      },
+      "screenPrivateSession": {
+        "version": "Screen version 4.00.03 (FAU) 23-Oct-06",
+        "started": true,
+        "control": {
+          "status": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": true
+        },
+        "inSession": {
+          "status": 0,
+          "signal": null,
+          "stdout": "",
+          "stderr": "",
+          "reachedDeniedPort": true
+        }
+      },
+      "userSocketsReachability": [
+        {
+          "kind": "docker",
+          "path": "~/.docker/run/docker.sock",
+          "reachableFromSession": "no-listener",
+          "detail": {
+            "connected": false,
+            "code": "ECONNREFUSED"
+          }
+        },
+        {
+          "kind": "docker(/var/run)",
+          "path": "/var/run/docker.sock",
+          "reachableFromSession": "no-listener",
+          "detail": {
+            "connected": false,
+            "code": "ECONNREFUSED"
+          }
+        },
+        {
+          "kind": "ssh-agent",
+          "path": "/private/tmp/com.apple.launchd.a1p5uSr7uJ/Listeners",
+          "reachableFromSession": "yes",
+          "detail": {
+            "connected": true
+          }
+        },
+        {
+          "kind": "cursor-main",
+          "path": "~/Library/Application Support/Cursor/3.5.-main.sock",
+          "reachableFromSession": "no-listener",
+          "detail": {
+            "connected": false,
+            "code": "ECONNREFUSED"
+          }
+        },
+        {
+          "kind": "chrome-singleton",
+          "path": "<tmp>/com.google.Chrome.10U5cU/SingletonSocket",
+          "reachableFromSession": "yes",
+          "detail": {
+            "connected": true
+          }
+        },
+        {
+          "kind": "chrome-singleton",
+          "path": "<tmp>/scoped_dir4ylhAd/SingletonSocket",
+          "reachableFromSession": "yes",
+          "detail": {
+            "connected": true
+          }
+        },
+        {
+          "kind": "chrome-singleton",
+          "path": "<tmp>/scoped_dirK7boWh/SingletonSocket",
+          "reachableFromSession": "yes",
+          "detail": {
+            "connected": true
+          }
+        },
+        {
+          "kind": "chrome-singleton",
+          "path": "<tmp>/scoped_dirLbLeHd/SingletonSocket",
+          "reachableFromSession": "yes",
+          "detail": {
+            "connected": true
+          }
+        }
+      ],
+      "notTested": [
+        "`ssh -L` through ssh-agent (needs an ssh server; agent socket reachability recorded above)",
+        "`open` of a real browser at the endpoint (would open user-visible windows; D1b uses a background stand-in app instead)",
+        "osascript / Apple Events to Terminal or iTerm (would drive the user's apps; TCC-gated)"
+      ],
+      "unixSocketDenyRule_denied": {
+        "connected": false,
+        "code": "EPERM"
+      },
+      "unixSocketDenyRule_allowed": {
+        "connected": true
+      }
+    },
+    "escapesFound": [
+      "open (LaunchServices launches an app unsandboxed, which reaches the denied port)",
+      "tmux send-keys to an unsandboxed tmux server",
+      "screen -X stuff to an unsandboxed screen session",
+      "ssh-agent socket reachable (/private/tmp/com.apple.launchd.a1p5uSr7uJ/Listeners)",
+      "chrome-singleton socket reachable (<tmp>/com.google.Chrome.10U5cU/SingletonSocket)",
+      "chrome-singleton socket reachable (<tmp>/scoped_dir4ylhAd/SingletonSocket)",
+      "chrome-singleton socket reachable (<tmp>/scoped_dirK7boWh/SingletonSocket)",
+      "chrome-singleton socket reachable (<tmp>/scoped_dirLbLeHd/SingletonSocket)"
+    ],
+    "claudeCompat": {
+      "status": "pending-manual",
+      "step": "Run a real `claude -p` turn that uses the Bash tool (incl. spawning and killing a child, and `ps`) under the session profile above; record whether Claude works. Skipped here for cost. Note: /bin/ps (setuid) cannot be exec'd under any sandbox-exec profile on this machine, so a Bash tool call that runs ps will fail regardless of process-info rules."
+    },
+    "summary": {
+      "portDenyHolds": true,
+      "otherProcessArgvHiddenAsSpecified": false,
+      "otherProcessArgvHiddenWithSysmondDeny": true,
+      "fsDenyHolds": true,
+      "escapesFound": 8,
+      "claudeCompat": "pending-manual"
+    }
+  },
+  "specRefs": [
+    "§11.2 rule 2b",
+    "§15.1 row 19",
+    "§15.5 session",
+    "§16 session denies row",
+    "§19.1 M1.0 P10m / S29-03 + S29-04",
+    "G-SBX-08",
+    "OPEN 5",
+    "research 29 §2 P10m",
+    "research 30 S29-03",
+    "research 30 S29-04"
+  ],
+  "at": "2026-10-17T08:22:20.281Z"
+}

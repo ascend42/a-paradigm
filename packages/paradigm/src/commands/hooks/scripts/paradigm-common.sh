@@ -33,6 +33,19 @@
 #  13. Orchestration required for complex tasks
 #  14. Active remediations from agent-authored .paradigm/remediations/ (v6.1)
 #  15. Native memory hygiene nudge (advisory only, TD-2026-09-19-110)
+#
+# Generated-state scope: when every modified file is Paradigm's or Warpline's
+# own generated state (.paradigm/*, .warpline/* — the hooks, post-commit and
+# MCP tools write these themselves), no code changed, so the checks that need
+# code (purpose discovery + anchors, the compliance-check CLI) are skipped.
+# .warpline/* is never counted as a source file.
+
+# Per-section timing (#hook-monitor): the Claude Code Stop hook sources
+# paradigm-hook-monitor.sh, which records each section's ms to
+# .paradigm/events/stop-timing.jsonl. Callers without the monitor (Cursor) get
+# no-ops, so every _pm_mark below costs nothing there.
+command -v _pm_mark >/dev/null 2>&1 || _pm_mark() { :; }
+command -v _pm_count >/dev/null 2>&1 || _pm_count() { :; }
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
@@ -40,6 +53,28 @@ AUTO_FIXED=""
 AUTO_FIX_COUNT=0
 PARADIGM_AUTO_FIX="${PARADIGM_AUTO_FIX:-0}"
 
+# --- Scope: only Paradigm's own generated state modified? ---
+# .paradigm/* (events, indexes, history, lore, curriculum) and .warpline/*
+# (fabric, refs) are rewritten by the hooks, post-commit and MCP tools on every
+# turn, so `git diff` is almost never empty. When nothing else changed there is
+# no code to check: the expensive, code-driven steps below are skipped. Cheap
+# state checks (remediations, purpose-required patterns, memory) still run.
+PARADIGM_GENERATED_ONLY=true
+_MODIFIED_COUNT=0
+for file in $MODIFIED; do
+  _MODIFIED_COUNT=$((_MODIFIED_COUNT + 1))
+  case "$file" in
+    .paradigm/*|.warpline/*) ;;
+    *) PARADIGM_GENERATED_ONLY=false ;;
+  esac
+done
+# An empty list is not "generated only": callers that reach here with nothing
+# modified (the Claude Code hook exits before sourcing) keep the full pass.
+[ "$_MODIFIED_COUNT" -eq 0 ] && PARADIGM_GENERATED_ONLY=false
+_pm_count modified "$_MODIFIED_COUNT"
+[ "$PARADIGM_GENERATED_ONLY" = "true" ] && _pm_count generated_only 1
+
+_pm_mark cli-resolve
 # --- Resolve the paradigm CLI once (fail-closed on absence) ---
 # Every compliance check below runs through $PARADIGM_BIN. If NO real paradigm
 # CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
@@ -59,6 +94,7 @@ if [ "$PARADIGM_AVAILABLE" != "true" ]; then
   printf '%s\n' "[paradigm] WARNING: paradigm CLI not found — compliance checks were SKIPPED, this is NOT a clean pass. Install with 'npm i -g @a-company/paradigm' or add it as a devDependency." >&2
 fi
 
+_pm_mark enforcement-resolve
 # --- Load enforcement config ---
 ENFORCEMENT_MAP=""
 if [ "$PARADIGM_AVAILABLE" = "true" ]; then
@@ -111,6 +147,7 @@ if [ -n "$ENFORCEMENT_MAP" ]; then
   [ -n "$_ot" ] && ORCH_THRESHOLD="$_ot"
 fi
 
+_pm_mark roster
 # --- Missing-CLI enforcement (fail-closed) ---
 # When no paradigm CLI is resolvable, none of the compliance checks below can
 # run — a missing tool is NOT a clean pass. Record a blocking violation by
@@ -147,6 +184,7 @@ if [ -f "$_ROSTER_FILE" ]; then
   fi
 fi
 
+_pm_mark remediations-fetch
 # --- Cache active remediations JSON (v6.1, consumed by Check 14) ---
 # Single shell-out per stop-hook run. Helper outputs `[]` on every error path
 # (missing dir, parse failure, missing binary) so this never breaks the hook.
@@ -177,6 +215,7 @@ _is_modified() {
   return 1
 }
 
+_pm_mark purpose-discovery
 # --- Discover .purpose files (fresh every run, never a persisted cache) ---
 # Ask git, not find: `git ls-files` lists tracked + untracked-not-ignored files
 # in milliseconds and does NOT descend into nested repositories — in particular
@@ -189,11 +228,21 @@ _is_modified() {
 # read: it was only cleared on a passing run, so a killed or blocked run left a
 # stale list behind forever. Outside git (not reachable from the Stop hook,
 # which needs `git diff`), fall back to a find that PRUNES those trees.
-PURPOSE_PATHS=$(git ls-files -co --exclude-standard 2>/dev/null | grep -E '(^|/)\.purpose$' | sed 's|^|./|')
-if [ -z "$PURPOSE_PATHS" ] && ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  PURPOSE_PATHS=$(find . \( -name node_modules -o -name .git -o -path ./.claude/worktrees \) -prune -o -name ".purpose" -type f -print 2>/dev/null)
+# Generated-state scope: no code changed, so no anchor can have broken (a
+# deleted source file is itself a non-generated change) — skip discovery, which
+# also turns Checks 4 and 6 into no-ops.
+PURPOSE_PATHS=""
+if [ "$PARADIGM_GENERATED_ONLY" != "true" ]; then
+  PURPOSE_PATHS=$(git ls-files -co --exclude-standard 2>/dev/null | grep -E '(^|/)\.purpose$' | sed 's|^|./|')
+  if [ -z "$PURPOSE_PATHS" ] && ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    PURPOSE_PATHS=$(find . \( -name node_modules -o -name .git -o -path ./.claude/worktrees \) -prune -o -name ".purpose" -type f -print 2>/dev/null)
+  fi
 fi
+_pm_nwords() { _PM_NW=$#; }
+_pm_nwords $PURPOSE_PATHS
+_pm_count purpose_files "$_PM_NW"
 
+_pm_mark check1-purpose-coverage
 # --- Check 1: Source files modified without .purpose updates ---
 # Instead of counting total source files globally, check per-directory:
 # only flag directories where source files were modified but no .purpose
@@ -207,7 +256,7 @@ for file in $MODIFIED; do
     .paradigm/*|*.purpose|portal.yaml)
       PARADIGM_COUNT=$((PARADIGM_COUNT + 1))
       ;;
-    *.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
+    .warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json) ;;
     *)
       SOURCE_COUNT=$((SOURCE_COUNT + 1))
       # Check if this file's directory has a covering .purpose that was modified
@@ -248,6 +297,7 @@ for file in $MODIFIED; do
   esac
 done
 
+_pm_count source "$SOURCE_COUNT"
 # Only flag if there are uncovered directories AND zero paradigm files were touched
 _SEV=$(_check_severity "purpose-coverage" "block")
 if [ "$_SEV" != "off" ] && [ -n "$UNCOVERED_SOURCE_DIRS" ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
@@ -269,12 +319,13 @@ if [ "$_SEV" != "off" ] && [ -n "$UNCOVERED_SOURCE_DIRS" ] && [ "$PARADIGM_COUNT
   fi
 fi
 
+_pm_mark check2-purpose-exists
 # --- Check 2: Modified source directories missing .purpose files ---
 DIRS_WITHOUT_PURPOSE=""
 
 for file in $MODIFIED; do
   case "$file" in
-    .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+    .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
 
   _parent "$file"; dir=$_PD
@@ -332,6 +383,7 @@ PURPOSEEOF
   fi
 fi
 
+_pm_mark check3-portal-routes
 # --- Check 3: Route patterns added without portal.yaml ---
 _SEV=$(_check_severity "portal-gates" "block")
 if [ "$_SEV" != "off" ]; then
@@ -385,6 +437,7 @@ if [ "$_SEV" != "off" ]; then
   fi
 fi
 
+_pm_mark check4-aspect-anchors
 # --- Check 4: Aspect anchor files that no longer exist ---
 _SEV=$(_check_severity "aspect-anchors" "block")
 if [ "$_SEV" != "off" ] && [ -n "$PURPOSE_PATHS" ]; then
@@ -407,8 +460,10 @@ if [ "$_SEV" != "off" ] && [ -n "$PURPOSE_PATHS" ]; then
     { in_a = 0 }
   ' $PURPOSE_PATHS 2>/dev/null)
   _TAB=$(printf '\t')
+  _ANCHOR_N=0
   while IFS="$_TAB" read -r purpose_file anchor_path; do
     [ -n "$anchor_path" ] || continue
+    _ANCHOR_N=$((_ANCHOR_N + 1))
     _parent "$purpose_file"; purpose_dir=$_PD
     # Try relative to .purpose dir first, then project root
     if [ ! -f "$purpose_dir/$anchor_path" ] && [ ! -f "./$anchor_path" ]; then
@@ -425,8 +480,10 @@ if [ "$_SEV" != "off" ] && [ -n "$PURPOSE_PATHS" ]; then
   done <<ANCHOREOF
 $_ANCHOR_PAIRS
 ANCHOREOF
+  _pm_count anchors "$_ANCHOR_N"
 fi
 
+_pm_mark check5-purpose-freshness
 # --- Check 5: Per-directory .purpose freshness ---
 # Uses .pending-review if available, plus a git-based fallback that cross-references
 # modified source files against .purpose modification times.
@@ -444,8 +501,10 @@ _record_stale_purpose() {
 
 # Strategy A: Use .pending-review tracking file if present
 if [ -f "$PENDING_FILE" ]; then
+  _PENDING_N=0
   while IFS= read -r tracked_file; do
     [ -z "$tracked_file" ] && continue
+    _PENDING_N=$((_PENDING_N + 1))
     # Find covering .purpose for this tracked file
     _parent "$tracked_file"; check_dir=$_PD
     covering_purpose=""
@@ -466,6 +525,7 @@ if [ -f "$PENDING_FILE" ]; then
       fi
     fi
   done < "$PENDING_FILE"
+  _pm_count pending_review "$_PENDING_N"
 fi
 
 # Strategy B: Git-based fallback — for each modified source file, check whether
@@ -473,7 +533,7 @@ fi
 # This catches cases where .pending-review is missing or out of sync.
 for file in $MODIFIED; do
   case "$file" in
-    .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+    .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
   [ -f "$file" ] || continue
 
@@ -524,6 +584,7 @@ if [ "$_SEV" != "off" ] && [ -n "$STALE_PURPOSES" ]; then
   fi
 fi
 
+_pm_mark check6-aspect-advisory
 # --- Check 6: Aspect coverage advisory ---
 ADVISORY=""
 _SEV=$(_check_severity "aspect-advisory" "warn")
@@ -559,6 +620,7 @@ if [ "$_SEV" != "off" ]; then
   fi
 fi
 
+_pm_mark check7-lore
 # --- Check 7: Lore entry expected for significant sessions ---
 _SEV=$(_check_severity "lore-required" "block")
 if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ]; then
@@ -599,7 +661,7 @@ if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ];
       LORE_SYMBOLS=""
       for file in $MODIFIED; do
         case "$file" in
-          .paradigm/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+          .paradigm/*|.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
         esac
         sym_dir=$(basename "$(dirname "$file")")
         case "$LORE_SYMBOLS" in
@@ -632,6 +694,7 @@ LOREEOF
   fi
 fi
 
+_pm_mark compliance-check-cli
 # --- Checks 8, 10, 11: Unified compliance check (single Node.js process) ---
 # Replaces 3 separate subprocess calls (habits check, drift check, portal check)
 # with a single `paradigm compliance-check` invocation.
@@ -644,7 +707,12 @@ fi
 # fall through to the habits-only branch.
 COMPLIANCE_RESULT=""
 COMPLIANCE_EXIT=0
-if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+if [ "$PARADIGM_GENERATED_ONLY" = "true" ]; then
+  # Generated-state scope: habits, drift, portal gates and postflight learning
+  # all read code changes; none happened. The next turn that changes code runs
+  # the full pass (pending verdicts wait in their durable store until then).
+  :
+elif [ "$PARADIGM_AVAILABLE" = "true" ]; then
   COMPLIANCE_RESULT=$($PARADIGM_BIN compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null)
   COMPLIANCE_EXIT=$?
 else
@@ -760,7 +828,7 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
       fi
     fi
   fi
-else
+elif [ "$PARADIGM_GENERATED_ONLY" != "true" ]; then
   # Fallback: check habits blocking marker even if compliance-check unavailable
   _SEV=$(_check_severity "habits-blocking" "block")
   if [ "$_SEV" != "off" ] && [ -f ".paradigm/.habits-blocking" ]; then
@@ -778,6 +846,7 @@ else
   fi
 fi
 
+_pm_mark check9-required-patterns
 # --- Check 9: Purpose-required patterns from config.yaml ---
 _SEV=$(_check_severity "purpose-required-patterns" "block")
 CONFIG_FILE=".paradigm/config.yaml"
@@ -881,6 +950,7 @@ PURPOSEEOF
   fi
 fi
 
+_pm_mark check12-graduation
 # --- Check 12: Graduation failure tracking ---
 # When violations occur for graduated habits, record failures for auto-demotion.
 _SEV=$(_check_severity "graduation-tracking" "warn")
@@ -930,6 +1000,7 @@ if [ "$_SEV" != "off" ] && [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/gradu
   done
 fi
 
+_pm_mark check13-orchestration
 # --- Check 13: Orchestration required for complex tasks (magnitude-based) ---
 _SEV=$(_check_severity "orchestration-required" "warn")
 if [ "$_SEV" != "off" ]; then
@@ -967,6 +1038,7 @@ if [ "$_SEV" != "off" ]; then
   SEC_ADJACENT=0
   for file in $MODIFIED; do
     case "$file" in
+      .paradigm/*|.warpline/*) ;;
       portal.yaml|*/portal.yaml) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
       *auth*|*permission*|*gate*|*security*|*token*|*session*) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
     esac
@@ -997,9 +1069,11 @@ if [ "$_SEV" != "off" ]; then
       [ -f "$1" ] || return 1
       [ -n "$(find "$1" -mmin "-$_GATE_TTL_MIN" 2>/dev/null)" ]
     }
-    # A structured solo declaration (paradigm solo <reason>) satisfies the gate —
-    # bypass becomes a legible recorded choice instead of silent drift.
-    if [ ! -f ".paradigm/.orchestrated" ] && ! _marker_fresh ".paradigm/.solo-declared"; then
+    # A fresh orchestration marker (settlement, debrief, or a roster-agent
+    # delegation via the PostToolUse Agent|Task hook) or a structured solo
+    # declaration (paradigm solo <reason>) satisfies the gate — bypass becomes a
+    # legible recorded choice instead of silent drift.
+    if ! _marker_fresh ".paradigm/.orchestrated" && ! _marker_fresh ".paradigm/.solo-declared"; then
       # Record the bypass to the team-funnel telemetry regardless of severity —
       # the invocation-rate metric needs the event even when only warning.
       # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
@@ -1015,19 +1089,20 @@ if [ "$_SEV" != "off" ]; then
       if [ "$_SEV" = "block" ]; then
         VIOLATIONS="$VIOLATIONS
   - Task magnitude $MAGNITUDE >= $ORCH_THRESHOLD without orchestration ($MAGNITUDE_REASONS).
-    Run paradigm_orchestrate_inline mode=\"quick\" for fast pre-check.
-    Or declare solo explicitly: paradigm solo <trivial|hotfix|user-directed|exploratory>
+    Delegate to a roster agent, run a debrief, or declare solo explicitly:
+    paradigm solo <trivial|hotfix|user-directed|exploratory>
     Override: paradigm enforcement override orchestration-required warn"
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
   - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration.
-    Bypass recorded to team-funnel telemetry. Next time: orchestrate, or declare \`paradigm solo <reason>\`."
+    Bypass recorded to team-funnel telemetry. Next time: delegate to a roster agent, run a debrief, or declare \`paradigm solo <reason>\`."
       fi
     fi
   fi
 fi
 
+_pm_mark check14-remediations
 # --- Check 14: Active remediations (v6.1 soft-block primitive) ---
 # Iterates the cached _REMEDIATIONS_JSON array. severity=guard adds to
 # VIOLATIONS (block); advise|auto-author goes to ADVISORY. PARADIGM_OVERRIDE
@@ -1081,6 +1156,7 @@ if [ "$_REMEDIATIONS_JSON" != "[]" ] && [ -n "$_REMEDIATIONS_JSON" ]; then
   rm -f "$_RMD_TMP"
 fi
 
+_pm_mark check15-memory
 # --- Check 15: Native memory hygiene nudge (advisory only, TD-2026-09-19-110) ---
 # Cheap O(1)/O(entries) heuristic that nudges `paradigm memory review` when the
 # native Claude Code memory store looks due for curation. This block is
@@ -1146,6 +1222,7 @@ if [ -n "$HOME" ] && [ -n "$CWD" ]; then
 fi
 # --- END Check 15 ---
 
+_pm_mark snapshot
 # --- Compliance snapshot (non-fatal, fire-and-forget) ---
 # Record this stop-hook run to .paradigm/events/compliance-history.jsonl for trend analysis.
 # VIOLATION_COUNT and SOURCE_COUNT are now final at this point.

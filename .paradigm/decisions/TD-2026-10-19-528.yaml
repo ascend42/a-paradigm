@@ -1,0 +1,45 @@
+id: TD-2026-10-19-528
+timestamp: '2026-10-19T09:16:48.766Z'
+title: 'Batched clientApiId move and drain/resume: rule patterns, revoke auth, daemon stop, cards dropped at drain'
+decision: >-
+  F2: reserve a `match` field on always-rules, accepting only 'exact', in the T-2026-10-19-001 move. Bash prefix
+  patterns and Edit/Write path globs are built later, after a dedicated Aegis design pass.
+
+  F1: `gnomon rules revoke` is a socket verb, available to a verified human device only, with no Touch ID. Revoking only
+  removes power. The kernel writes `approval.rule.revoked`, and the kernel signs it.
+
+  F3: `gnomon daemon stop`, including stop for an update, raises a signed daemon-stop approval card that needs Touch ID
+  (spec §3.1 I3). The card kind is reserved in the same T-001 move, so drain/resume needs no second id move.
+
+  F4: at drain, pending session-bound cards (permission, ask-user, plan) expire with why 'session-drained'. Cards not
+  tied to a session (install, api-token, fallback) are raised again after resume. This amends spec §2.4 rule 11.
+rationale: >-
+  These are founder rulings from the 2026-10-19 decision dialog, on Arky's plan for T-2026-10-19-001 and -014.
+
+  F2: reserving the field avoids a second clientApiId move. Patterns are a separate security design job: `npm test; rm
+  -rf` must not match `npm test`.
+
+  F1: revoking only reduces what is allowed, so its worst misuse is one extra card.
+
+  F3: `gnomon daemon stop` was never built (daemon-cli.ts:256 refuses not-implemented). A signed card keeps agents and
+  other same-user processes from stopping the kernel or draining its sessions.
+
+  F4: a card bound to a session answers a request inside a Claude process that drain kills. After resume that request id
+  is dead, so re-raising the card would offer an answer that has no effect.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#approval-broker'
+  - $daemon-lifecycle
+  - '#socket'
+status: active
+tags:
+  - gnomon
+  - clientApiId
+  - T-2026-10-19-001
+  - T-2026-10-19-014

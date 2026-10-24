@@ -1,0 +1,16 @@
+{
+  "manifest": 2,
+  "kind": "mod",
+  "publisher": "gnomon",
+  "name": "ledger",
+  "version": "1.1.0",
+  "abi": "mod-abi:v1",
+  "description": "The Ledger: a context and budget meter (tokens in and out, cache share, cost, compactions, budget rungs and breakers), every number from the kernel's numbers-only feed.",
+  "provides": {
+    "views": [
+      { "id": "ledger.strip", "slot": "composer.footer", "placement": "append", "fixtures": ["fixtures/strip.json", "fixtures/strip-reduced.json", "fixtures/over-budget.json", "fixtures/breaker.json"] },
+      { "id": "ledger.sheet", "slot": "sidebar", "placement": "append", "fixtures": ["fixtures/compacted.json"] }
+    ]
+  },
+  "requires": { "capabilities": ["log.read", "log.read:usage"], "egress": "none" }
+}

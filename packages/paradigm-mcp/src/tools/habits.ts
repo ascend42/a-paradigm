@@ -23,13 +23,13 @@ import {
   saveHabit,
   removeHabit,
   isSeedHabit,
-  invalidateHabitsCache,
   lastGraduatedSkipCount,
   type HabitTrigger,
   type HabitCategory,
   type HabitDefinition,
   type EvaluationResult,
 } from '../utils/habits-loader.js';
+import { portalRoutes } from '../utils/portal-routes.js';
 import {
   recordEvaluationResults,
   getComplianceRate,
@@ -436,7 +436,7 @@ async function handleHabitsCheck(
     filesModified,
     symbolsTouched,
     loreRecorded,
-    hasPortalRoutes: ctx.gateConfig !== null && (ctx.gateConfig as unknown as Record<string, unknown>).routes != null,
+    hasPortalRoutes: portalRoutes(ctx.gateConfig).length > 0, // T-2026-10-22-002
     taskAddsRoutes,
     taskDescription,
     gitClean,

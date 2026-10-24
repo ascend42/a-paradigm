@@ -1,0 +1,37 @@
+id: L-2026-10-18-ascend-004226-001
+type: human-note
+timestamp: '2026-10-18T00:42:26.405Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Checkpoint before context compaction: Move 1 state'
+summary: |-
+  The founder asked for a checkpoint before compaction. Branch feat/gnomon (draft PR #49 for CI); spec v3.9 complete (rulings to P8-D88). CI last green at 5beb4a7f on all three OSes.
+
+  Committed and reviewed:
+  - scaffold, contracts, daemon lifecycle, kernel log with the D82/D83/D85 anchor policy and checks-before-writes;
+  - Windows hygiene;
+  - M1.1 reservations (clientApiId pinned sha256:8e30f400);
+  - M1.4 slice 1 (hello, mutual auth, status).
+
+  In flight (uncommitted): M1.4 slice 2 (log.read, released head, hash-free limited views, subscriptions, ref.resolve). The reviewer approved; the final round 3 is with the builder for Aegis's condition (drop idem/refHash from limited views, inputHash labelled sensitive).
+
+  Next: commit and push slice 2, then slice 3 (read tokens + full G-ABI/G-SOCK), #web-endpoint, M1.6 approval broker, M1.7 sessions.
+
+  Blocked on the founder: the provisioning profile and notarization key for M1.3. The process is unchanged: builder, then reviewer plus Aegis, at most 3 rounds, stringent symbols, lore every decision.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#socket'
+  - '#kernel-log'
+tags:
+  - paradigm-8
+  - gnomon
+  - checkpoint
+  - state
+linked_lore:
+  - L-2026-10-18-ascend-000939-001
+git_context:
+  ref: 5beb4a7f82f068423b71febb05a6bff302d39df1
+  branch: feat/gnomon
+  dirty: true

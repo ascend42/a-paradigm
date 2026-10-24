@@ -1,0 +1,36 @@
+id: L-2026-10-20-ascend-074008-002
+type: agent-session
+timestamp: '2026-10-20T07:40:08.667Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Voice GUI dogfood bugs fixed (T-2026-10-20-002); live capture designed (T-2026-10-20-005)
+summary: 'Builder fixed three founder-hit voice GUI bugs in 862ef85a: the attached pill hid voice-app crashes and went stale (no phase rows reach the GUI, so there is now a 2 s client poll while attached); a stale "decide the pending card" banner; no enrol nudge while attached. Aegis APPROVED, with L1 (title not sanitised) and L2 (polls don''t clear on disconnect) folded into the A1 build. Suites: gnomon 2238 (one flaky failure on the first run, green on re-run), gui 222. The founder then asked for live feedback while speaking, plus the words as they speak. Arky found the level meter is decorative (the Swift level is never consumed), voice.turn.partial is dead code, and STT is offline Parakeet. The recommended path is A1 capture states, then a B0 benchmark, then B1 tail-window re-decode. The founder ruled V1–V5 (TD-2026-10-20-086). A1 is building in a worktree.'
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-dictation'
+  - '#gui-voice-capture'
+  - $voice-turn
+learnings:
+  - V2d's never-under-report rule was implemented as "hide the client lifecycle while attached", which under-reported the crash instead. Show the live state AND the failure tail.
+  - Kernel-side state with no log row (voice-client phase) needs a GUI poll or a push channel; motion-on-events alone goes stale.
+verification:
+  status: pass
+  details:
+    gui: 222
+    gnomon: 2238
+tags:
+  - gnomon
+  - voice
+  - dogfood
+  - marathon-2026-10-20
+linked_tasks:
+  - T-2026-10-20-002
+  - T-2026-10-20-005
+linked_commits:
+  - 862ef85a
+git_context:
+  ref: 32b4a08e6207f43a45ebe3f6bda36848d22f7ffc
+  branch: feat/gnomon
+  dirty: true

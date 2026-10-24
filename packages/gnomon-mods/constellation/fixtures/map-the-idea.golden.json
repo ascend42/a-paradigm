@@ -1,0 +1,19 @@
+{
+  "offer": {
+    "mod": "gnomon.constellation",
+    "kind": "map-the-idea",
+    "question": "Want me to map these four options on the Constellation board?"
+  },
+  "body": "There are four ways to split the router: by phase, by mod, by context source, or a hybrid. Each trades latency for clarity differently.",
+  "shown": {
+    "mod": "gnomon.constellation",
+    "kind": "map-the-idea",
+    "phase": "diverge",
+    "title": "Map this on the board",
+    "contextIn": [
+      "recent-messages"
+    ],
+    "question": "Want me to map these four options on the Constellation board?",
+    "handoffTool": "apply"
+  }
+}

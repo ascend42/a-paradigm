@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-201912-001
+type: insight
+timestamp: '2026-10-18T20:19:12.636Z'
+author: builder
+title: Session profile read-denies the whole Gnomon home; carve-backs by allow-list
+summary: 'T-010 L3: instead of naming keys/kernel.db/sessions one by one, the session profile denies reading the whole Gnomon home and carves back only sessions/<own>, the exec''d bin/ copy and the runners/<tree> copy, each validated by realpath against HOME_READABLE_ROOTS (fail closed). SBPL last-match-wins: deny home, allow own, metadata on literal ancestors (realpath lstat needs it, measured EPERM without), re-deny keys + kernel log. Unix-socket connect to GNOMON_SOCK in the home is unaffected by file-read denies (measured).'
+symbols_touched:
+  - '#session-runner'
+  - '#manifest-loader'
+  - '#supervisor'
+commit: e460ab4c
+tags:
+  - decision
+  - gnomon
+  - m1.7
+git_context:
+  ref: 6ffa897e44992c263e69041db5392e7f89b87b47
+  branch: gnomon/m17-slice2
+  dirty: false

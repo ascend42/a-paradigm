@@ -1,0 +1,676 @@
+id: 2026-10-22-gnomon-loops-ui
+verb: direct
+scope: 'Gnomon Loops UI/UX: the Loops view (list, detail with node graph, runs timeline, trust and budgets), loop-trust and loop-choice cards, notify toasts, kill switch and keep-alive indicator, how agents''
+  loop edits surface (docs/specs/gnomon-loops.md §6)'
+product: gnomon
+depth: deep
+surface: terminal
+mode: greenfield
+change: redesign
+read: A background-work control room inside the Gnomon console, for the founder alone, glanced at all day and opened a few times a day to trust, steer or stop loops; calm, exact papercraft/phosphor register,
+  loud only when a loop needs a decision.
+known:
+- fact: single operator (the founder), desktop only
+  evidence: TD gnomon desktop-only; founder answers 2026-10-22
+- fact: cards only when needed; loops can notify or require a choice
+  evidence: founder answer, loops spec round 2
+- fact: agents create and edit loops freely; nothing runs until trusted
+  evidence: TD-2026-10-22-213
+assumed:
+- claim: the founder checks loops a few times a day, not continuously
+  check: watch usage in the one-week field run (LP9)
+- claim: a node graph is readable at desktop widths for loops of 3–8 nodes
+  check: render the four spec examples in the reference
+flow: 'trigger fires or agent creates loop → (untrusted: trust card) → runs in background → notify toast or loop-choice card → founder opens Loops view to see run, steer, pause, or kill all'
+started: 2026-10-22 17:30:00+00:00
+boards:
+- id: loops-zone
+  question: Where do loops live on the desk, and how do you get there?
+  testing: the zone and entry only; the list and detail inside it are placeholders
+  fidelity: structure
+  axis: which existing zone hosts the view
+  options:
+  - id: centre-leaf
+    label: Centre leaf
+    description: The Loops view slides in as a leaf over the centre column (the mod-leaf pattern); sessions and stack stay visible; esc folds it to an edge tab 'loops · 2 running'.
+    recommended: true
+    why: Keeps the desk the founder chose ('desk is totally it'), so loop-choice cards in the stack and toasts stay beside the view while you steer.
+    tradeoff: gains side-by-side deciding and inspecting; gives up the chat while the leaf is open
+    assumes:
+    - the founder checks loops a few times a day, not continuously
+    writes:
+      zones:
+        centre:
+          holds:
+          - the Loops leaf (palette loops.open, wordmark menu Loops…)
+      components:
+        loops-leaf: 'GUI-owned fence: tab (loops, n running, esc, ⤢), body list|detail'
+    facets:
+    - host-zone
+    - entry
+    - return-path
+    concerns: []
+    tells: []
+  - id: sheet
+    label: Modal sheet
+    description: Loops… in the wordmark menu and palette opens a 720px sheet over the scrim, like Settings and Mods.
+    why: Simplest, matches the rare-tools rule.
+    tradeoff: gains a known pattern and zero new zone; gives up the stack and toasts (hidden under overlays) while you work in it
+    assumes:
+    - the founder checks loops a few times a day, not continuously
+    writes:
+      zones:
+        overlays:
+          holds:
+          - Loops sheet
+    facets:
+    - host-zone
+    - entry
+    - return-path
+    concerns:
+    - 'Mika: a loop-choice card or fail toast cannot be seen while the sheet is open; at 1024 the 720px sheet leaves no room for in-sheet results (T-2026-10-21-024)'
+    tells: []
+  - id: layout-preset
+    label: Loops layout preset
+    description: 'A fourth preset, Layout: Loops: the left rail becomes the loop list, the centre the loop detail, the stack stays right.'
+    why: Turns the whole desk into a control room when you want one; one key back to Desk.
+    tradeoff: gains the most room for list plus detail at once; gives up the sessions rail and costs a layout switch each visit
+    assumes:
+    - the founder checks loops a few times a day, not continuously
+    writes:
+      components:
+        layout-preset:
+          loops: rail = loop list, centre = loop detail, stack unchanged
+    facets:
+    - host-zone
+    - entry
+    - return-path
+    concerns: []
+    tells: []
+  references_rendered:
+  - centre-leaf
+  - sheet
+  - layout-preset
+  decision:
+    kind: pick
+    choice: centre leaf
+    decided_by: creator
+    problem: where loops live without hiding sessions or the stack
+- id: agent-loops-surface
+  question: How does an agent-created or agent-changed loop tell you it is waiting for trust, without nagging?
+  testing: where the 'waiting for trust' fact appears; the trust card itself is the next board
+  fidelity: structure
+  axis: where the waiting fact lands (the authoring session, the notice layer, or the stack)
+  options:
+  - id: session-row-plus-count
+    label: In the authoring session, plus a count
+    description: The agent's session logs a tool row '↳ wrote loop green-typecheck-gnomon · waiting for trust · Review'; the loops indicator adds '1 waiting for trust'. No card and no toast until you press
+      Review.
+    recommended: true
+    why: It surfaces where the agent did the work, in the session you are already reading, which keeps 'cards only when needed' literally true.
+    tradeoff: gains zero interruption; a loop that arrives by git pull (authoredBy file) has no session and shows only in the count
+    assumes:
+    - the founder checks loops a few times a day, not continuously
+    writes:
+      components:
+        transcript-row:
+          variants:
+            loop-saved: ↳ wrote loop <id> · waiting for trust · Review (24px quiet key; raises the loop-trust card)
+      content:
+        vocabulary:
+          use:
+            waiting for trust: a loop definition no human has trusted at this hash
+    facets:
+    - where
+    - persistence
+    - file-origin-path
+    concerns: []
+    tells: []
+  - id: batched-toast
+    label: One persistent toast per batch
+    description: A persistent ink toast 'arky wrote 2 loops · waiting for trust · Review' that stays until you open or close it.
+    why: Hard to miss, including git-pull arrivals.
+    tradeoff: gains visibility everywhere; gives up calm, since a toast is 'something happened' and these accumulate
+    assumes: []
+    writes:
+      zones:
+        toasts:
+          holds:
+          - loops waiting for trust (persistent, Review opens the card)
+    facets:
+    - where
+    - persistence
+    - file-origin-path
+    concerns: []
+    tells: []
+  - id: stack-slip
+    label: A slip at the foot of the stack
+    description: 'A dashed, non-card slip under the pile: ''2 loops waiting for trust · no card yet · Review''.'
+    why: Sits where decisions live, so you find it when you decide.
+    tradeoff: gains proximity to deciding; blurs 'the stack holds only cards'
+    assumes: []
+    writes:
+      zones:
+        stack:
+          holds:
+          - waiting-for-trust slip (not a card)
+    facets:
+    - where
+    - persistence
+    - file-origin-path
+    concerns:
+    - 'Mika would reject: the stack zone holds cards only, and a slip that looks like a card weakens the card meaning'
+    tells: []
+  references_rendered:
+  - session-row-plus-count
+  - batched-toast
+  - stack-slip
+  decision:
+    kind: pick
+    choice: slip at the stack foot
+    decided_by: creator
+    problem: agent-made loops waiting for trust, without nagging
+    notes:
+    - slip at stack's foot because i think i like the idea of the stack being a stack of alerts and other decision cards and decision cards canbe styled a certain way depending on what they relate to
+    overrides:
+    - rule: stack holds only cards (gnomon zones)
+      by: creator
+      why: the stack becomes alerts plus decision cards, styled by what they relate to; codify as a zone change
+- id: trust-card
+  question: How does a whole loop definition read on one trust card, so you can trust it with the root key in one sitting?
+  testing: reading the definition and deciding it; colour and motion follow the card component
+  fidelity: styled
+  axis: where the full definition is read relative to the card's keys
+  options:
+  - id: card-unfolds
+    label: Card unfolds into the centre
+    description: 'A short loop-trust card in the stack (title, by, hash8, ''4 nodes · 1 argv · lands packages/gnomon/src/**'', hand only · root key) whose Read key unfolds the same card full-width in the
+      centre: triggers, every node as a numbered listing with argv, realpath, sha8 and interpreter, tools, models, budgets, land paths with gate-class called out, protected inputs; Trust and Don''t trust
+      sit at the end. A changed loop opens on the diff, unchanged lines folded.'
+    recommended: true
+    why: The card stays the one decision (in the stack and unfolded), and an 80ch centre column is the only place a full argv listing reads without wrapping.
+    tradeoff: gains a readable whole definition; costs one extra press before Trust
+    assumes: []
+    writes:
+      components:
+        card:
+          variants:
+            loop-trust: short in the pile; unfolds to the centre with the loop listing; keys after the listing; diff-first on change
+    facets:
+    - read-location
+    - change-view
+    - key-placement
+    - presence-line
+    concerns: []
+    tells: []
+  - id: long-card
+    label: Everything inside the stack card
+    description: The card's details disclosure holds the full listing and diff, scrolling inside the pile column.
+    why: Identical to every other card; no new behaviour.
+    tradeoff: gains consistency; argv lines wrap or truncate in a narrow pile and the keys scroll away from what they decide
+    assumes: []
+    writes:
+      components:
+        card:
+          variants:
+            loop-trust: full listing in details
+    facets:
+    - read-location
+    - change-view
+    - key-placement
+    - presence-line
+    concerns:
+    - 'Mika: argv and paths wrap past legibility at the pile width; the card height breaks the fan'
+    tells: []
+  - id: sectioned-checklist
+    label: Sectioned read, then trust
+    description: Unfolded card in sections (runs, reads and writes, models, spends, lands); each section folds closed with a ✓ once read; Trust enables when all are open-read, with the reason written beside
+      it.
+    why: Makes reading every section the price of trusting, which suits a root-key decision.
+    tradeoff: gains forced thoroughness; adds friction for a two-node loop you already know
+    assumes: []
+    writes:
+      components:
+        card:
+          variants:
+            loop-trust: sectioned, Trust enabled after all sections read
+    facets:
+    - read-location
+    - change-view
+    - key-placement
+    - presence-line
+    concerns:
+    - 'Mika: the disabled Trust key must say why in words (rule disabled-without-reason)'
+    tells: []
+  references_rendered:
+  - card-unfolds
+  - long-card
+  - sectioned-checklist
+  decision:
+    kind: pick
+    choice: card unfolds into the centre
+    decided_by: creator
+    problem: a full loop definition is too long for a stack card
+- id: running-indicator
+  question: Where do 'loops 2 running', 'Loops are keeping Gnomon running' and Pause all live, unhideable?
+  testing: placement and wording of the indicator and the kill switch
+  fidelity: styled
+  axis: which always-visible region carries it
+  options:
+  - id: header-kernel-status
+    label: In the header's kernel status
+    description: 'The kernel status gains a word while any loop is enabled: ''● loops 2 · 1 waiting'', a 28px quiet key that opens the Loops view; its second line (tooltip and the Loops view head) reads
+      ''Loops are keeping Gnomon running''. Pause all sits in the view head, the palette and the wordmark menu.'
+    recommended: true
+    why: Kernel status is already kernel-owned and unhideable, so the spec's unhideable rule holds without a new zone.
+    tradeoff: gains no new chrome; Pause all is two presses away (open, Pause all) or ⌘K
+    assumes: []
+    writes:
+      zones:
+        header:
+          holds:
+          - 'kernel status: link dot, browser-risk chip, loops n (when any loop is enabled)'
+          overflow: the loops word drops to its count before the palette words truncate
+    facets:
+    - region
+    - kill-switch-reach
+    - keep-alive-line
+    concerns:
+    - 'Mika: check the header row at 1024 and 760 never wraps with the loops word added'
+    tells: []
+  - id: status-bar
+    label: A kernel-owned loops bar
+    description: 'A thin full-width kernel bar above the Workshop footer: ''LOOPS 2 running · next flow-health-checkout 07:30 · Gnomon stays up for loops · Pause all''.'
+    why: Pause all is one press from anywhere.
+    tradeoff: gains the fastest kill switch and the next-due fact; costs 28px of desk height and a new zone
+    assumes: []
+    writes:
+      zones:
+        loops-bar:
+          holds:
+          - LOOPS n running, next due, keep-alive line, Pause all
+          never:
+          - hidden by a preset or mod
+    facets:
+    - region
+    - kill-switch-reach
+    - keep-alive-line
+    concerns: []
+    tells: []
+  - id: workshop-status-line
+    label: In the Workshop status line
+    description: Append 'loops 2 · keeping Gnomon up' to the Workshop's quiet status line; Pause all in the view and palette.
+    why: Uses the old Shuttle readout, as the spec names it.
+    tradeoff: gains zero new chrome; disappears when the Workshop is hidden
+    assumes: []
+    writes:
+      zones:
+        workshop:
+          holds:
+          - loops n in the status line
+    facets:
+    - region
+    - kill-switch-reach
+    - keep-alive-line
+    concerns:
+    - 'Mika and Aegis would reject: the Workshop is hideable (pane.workshop.toggle), and the spec requires the indicator to be unhideable'
+    tells: []
+  references_rendered:
+  - header-kernel-status
+  - status-bar
+  - workshop-status-line
+  decision:
+    kind: pick
+    choice: header kernel status
+    decided_by: creator
+    problem: an always-visible loops count, keep-alive line and Pause all
+- id: notify-decide
+  question: How does a loop tell you something and ask you something, now that the stack holds alerts and decision cards?
+  testing: which loop events become stack alerts, which stay toasts, and how loop-styled alerts and decision cards read
+  fidelity: styled
+  axis: how much of a loop's voice moves into the stack
+  rewritten: '2026-10-22, after agent-loops-surface: the stack holds alerts plus decision cards, styled by what they relate to (creator note)'
+  stays_toast:
+  - goal and landed outcomes (option A)
+  - Pause all confirmation
+  - Run now started
+  - budget tightened (applied)
+  - GUI outcomes and refusals
+  options:
+  - id: stack-alerts-toast-outcomes
+    label: Stuck in the stack, done as a toast
+    description: Fail, stop and kernel pause become loop alerts in the stack (↻ loop head, state mark, run path, Open run and Dismiss; fail on a vermilion edge, kernel pause on a dashed amber edge); loop-choice
+      is a loop-styled decision card above them; goal and landed stay 6s toasts with Open run.
+    recommended: true
+    why: The stack holds what still needs you and toasts say what just happened, so nothing that needs you can time out.
+    tradeoff: gains a clear split; loop news lives in two places and a success toast can be missed (it stays in the run timeline)
+    assumes:
+    - the founder checks loops a few times a day
+    - not continuously
+    writes:
+      zones:
+        stack:
+          holds:
+          - decision cards first, then alerts, then the waiting-for-trust slip
+      components:
+        alert: 'stack sheet that decides nothing: flat (no fold shadow), family head (↻ loop), quiet keys only (Open run, Dismiss)'
+        card:
+          variants:
+            loop-choice: ↻ loop family head, Raised by line, path trace, Continue hand only, Stop
+    facets:
+    - where-fail-goes
+    - where-success-goes
+    - family-styling
+    concerns:
+    - 'Mika: family must read by glyph and word, never a family hue (colour means one thing); alerts must sort below decisions so a buried decision key stays reachable'
+    tells: []
+  - id: all-in-stack
+    label: Everything in the stack
+    description: Every loop notify is a stack alert; successes fold into one rolling alert '↻ loops · 2 done since 14:00'; loops never toast.
+    why: One place for all loop news, next to the decisions.
+    tradeoff: gains one place; the stack grows with things that don't need you
+    assumes: []
+    writes:
+      components:
+        alert:
+          variants:
+            loop-digest: rolling '↻ loops · n done since hh:mm'
+    facets:
+    - where-fail-goes
+    - where-success-goes
+    - family-styling
+    concerns:
+    - 'Mika: the pile''s 140px reserve and fan must still reach decision keys under a growing alert tail'
+    tells: []
+  - id: toasts-and-cards
+    label: Toasts tell, cards ask
+    description: 'The spec as written: notify nodes toast (fail sticks until closed, goal and landed leave after 6s); only loop-choice enters the stack, as a loop-styled decision card.'
+    why: No new stack kind; the toast system already handles sticky failures.
+    tradeoff: gains no new component; a sticky fail takes one of three toast slots and ignores the stack-of-alerts rule
+    assumes: []
+    writes:
+      components:
+        toast:
+          variants:
+            loop: ↻ loop:<id>, outcome, Open run
+    facets:
+    - where-fail-goes
+    - where-success-goes
+    - family-styling
+    concerns: []
+    tells: []
+  references_rendered:
+  - stack-alerts-toast-outcomes
+  - all-in-stack
+  - toasts-and-cards
+  decision:
+    kind: pick
+    choice: stuck to the stack, done to a toast
+    decided_by: creator
+    problem: what a loop tells vs asks, under the stack-of-alerts rule
+- id: loop-list
+  question: What does one loop row show, and how is the list grouped?
+  testing: row anatomy and grouping; detail and keys are placeholders
+  fidelity: styled
+  axis: the list's organising dimension
+  options:
+  - id: project-groups-needs-you
+    label: By project, needs-you pinned
+    description: 'Grouped by project and scope (swatch heads), with a pinned ''needs you'' group on top (waiting-trust, kernel-paused, waiting-land). Two-line row: ''● running · green-typecheck-gnomon ·
+      next 02:00 · last ✕'' then ''3/24 runs · 18m/120m compute · local only · act → propose (L2) · by arky''.'
+    recommended: true
+    why: It keeps the spec's grouping and still puts what needs you first, in the instrument readout voice.
+    tradeoff: gains spec fit and a needs-you lane; a loop can appear twice (pinned and in its project)
+    assumes: []
+    writes:
+      components:
+        loop-row:
+          anatomy:
+          - state mark + word
+          - id
+          - next due
+          - last outcome mark
+          - spend vs caps
+          - effective autonomy + cap reason
+          - authoredBy
+          states:
+          - running
+          - idle
+          - paused
+          - waiting-trust
+          - waiting-land
+          - parked
+    facets:
+    - grouping
+    - row-lines
+    - spend-format
+    - autonomy-format
+    concerns: []
+    tells: []
+  - id: state-lanes
+    label: By state, like the Workshop
+    description: Lanes Needs you · Running · Idle · Paused · Parked, each row with a project swatch; same two-line row.
+    why: Mirrors the Workshop's Needs you | Working, so the eye already knows it.
+    tradeoff: gains a state-first read; loses the per-project view the spec asks for (§6 change)
+    assumes: []
+    writes:
+      components:
+        loop-row: as first option, grouped by state
+    facets:
+    - grouping
+    - row-lines
+    - spend-format
+    - autonomy-format
+    concerns: []
+    tells: []
+  - id: day-ruler
+    label: Today's ruler
+    description: 'One row per loop on a 24h ruler: past runs as ✓ ✕ ticks, the next fire as a hollow tick, a now line; state and spend at the row''s left.'
+    why: Answers 'what ran and what's next' at a glance.
+    tradeoff: gains schedule shape; event and continuous loops have no next tick, and caps and autonomy move to the detail
+    assumes: []
+    writes:
+      components:
+        loop-ruler: 24h ruler row
+    facets:
+    - grouping
+    - row-lines
+    - spend-format
+    - autonomy-format
+    concerns:
+    - 'Mika: ticks need a mark as well as colour (tell hue-only-contrast); 10.5 minimum for time labels'
+    tells: []
+  references_rendered:
+  - project-groups-needs-you
+  - state-lanes
+  - day-ruler
+  decision:
+    kind: pick
+    choice: by project, needs-you pinned
+    decided_by: creator
+    problem: what one row shows and how the list groups
+    notes:
+    - option 1 for today, but i like the idea of a future where Today's ruler is accessible
+    future:
+    - Today's ruler (24h ruler of runs) as an alternate list view
+- id: loop-detail
+  question: How does the detail show a loop's graph and its last run?
+  testing: graph representation and the run timeline; keys are the next board
+  fidelity: structure
+  axis: graph drawing vs listing vs run trace first
+  options:
+  - id: listing
+    label: Ordered listing with branches
+    description: 'Nodes as a mono listing in start order: ''1 tsc  check  tsc -p packages/gnomon  pass → @goal · fail → fix'', back-edges marked ↺, with a left margin of the last run''s verdict per node
+      (✓ ✕ ? marks, vermilion fail, amber unsure) and visit counts; the run timeline and rounds ledger below.'
+    recommended: true
+    why: It reads at 80ch in the mono spine, handles cycles without crossing lines, and is the same listing the trust card uses, so what you trusted is what you watch.
+    tradeoff: gains one shape for trust and watch; gives up the at-a-glance shape of branches
+    assumes: []
+    writes:
+      components:
+        loop-listing: shared by detail and loop-trust card
+    facets:
+    - graph-form
+    - verdict-marks
+    - timeline-position
+    concerns: []
+    tells: []
+  - id: node-graph
+    label: Node graph
+    description: Boxes and edges laid out left to right, cycles as arcs, each node edged by its last verdict.
+    why: Shows the branches as shape.
+    tradeoff: gains shape; layout for 6–8 nodes with cycles crowds at 1024, and the trust card needs a second form
+    assumes:
+    - a node graph is readable at desktop widths for loops of 3–8 nodes
+    writes:
+      components:
+        loop-graph: box-and-edge graph
+    facets:
+    - graph-form
+    - verdict-marks
+    - timeline-position
+    concerns:
+    - 'Mika: edge lines and 10.5 labels must hold contrast in night; verdict needs a mark, not only an edge hue'
+    tells: []
+  - id: run-trace-first
+    label: Last run first
+    description: The latest run as a vertical trace of visits (tsc ✕ → fix ✓ → tsc ✕ → … → tsc ✓ @goal), with evidence, model and landed sha (revert key) per step; the definition in a second tab.
+    why: Answers 'what happened' before 'what is it'.
+    tradeoff: gains the story of a run; the definition is a tab away
+    assumes: []
+    writes:
+      components:
+        loop-trace: visit-by-visit run trace
+    facets:
+    - graph-form
+    - verdict-marks
+    - timeline-position
+    concerns: []
+    tells: []
+  references_rendered:
+  - listing
+  - node-graph
+  - run-trace-first
+  decision:
+    kind: pick
+    choice: node graph
+    decided_by: creator
+    problem: how a loop graph and its last run read
+    requirements_from_mika:
+    - fits at 1024 (fit-to-width plus zoom, no page sideways scroll)
+    - edge labels never collide with boxes
+    - verdicts by mark, not colour alone
+    - night contrast AA
+    notes:
+    - the trust card keeps the ordered listing (board 3); the detail shows the graph
+- id: steer-stop
+  question: 'How do you steer a loop: run now, pause, resume, budgets, untrust, delete, revert?'
+  testing: where the keys live and how tighten vs loosen behaves
+  fidelity: interactive
+  axis: where steering happens
+  options:
+  - id: detail-head-keys
+    label: Keys in the detail head, inline budgets
+    description: The detail head holds Run now (pri), Pause or Resume, and quiet Untrust and Delete; budgets are fields where lowering applies at once ('applied') and raising turns Save into 'Loosen · needs
+      trust'; a kernel-paused loop's Resume reads 'Resume · presence'; each landed sha in the timeline has Revert.
+    recommended: true
+    why: Every key says its cost in its label, and tightening stays one move as the spec requires.
+    tradeoff: gains clarity of cost; steering a loop always means opening it
+    assumes: []
+    writes:
+      components:
+        key:
+          variants:
+            cost-label: label · cost (needs trust, presence)
+    facets:
+    - key-location
+    - budget-edit
+    - cost-wording
+    concerns: []
+    tells: []
+  - id: row-keys
+    label: Pause and Run on every row
+    description: Each list row ends with two 24px keys (Pause or Resume, Run now), always visible; everything else in the detail.
+    why: The two common moves need no drill-in.
+    tradeoff: gains speed; doubles the keys on a dense list
+    assumes: []
+    writes:
+      components:
+        loop-row:
+          keys:
+          - Pause|Resume
+          - Run now
+    facets:
+    - key-location
+    - budget-edit
+    - cost-wording
+    concerns:
+    - 'Mika: keys must be always visible (tell hover-only-reveal) and 24px with 2px-grid gaps'
+    tells: []
+  - id: palette-first
+    label: Palette first
+    description: 'Steering is palette verbs (''loop: pause green-typecheck'', ''loop: tighten budget''); the view is read-only apart from Pause all.'
+    why: Keeps the view an instrument, and every verb is listed with its key.
+    tradeoff: gains a calm view; discoverability depends on knowing the verbs
+    assumes: []
+    writes:
+      components:
+        palette:
+          commands:
+          - loop.run
+          - loop.pause
+          - loop.resume
+          - loop.budget
+          - loop.untrust
+          - loop.delete
+    facets:
+    - key-location
+    - budget-edit
+    - cost-wording
+    concerns: []
+    tells: []
+  references_rendered:
+  - detail-head-keys
+  - row-keys
+  - palette-first
+  decision:
+    kind: pick
+    choice: keys in the detail head, inline budgets
+    decided_by: creator
+    problem: run, pause, resume, budgets, untrust, delete, revert
+    requirements_from_mika:
+    - the header indicator updates right after Pause all
+direction: refs/direction.html
+direction_narrative: DIRECTION.md
+closed: 2026-10-22
+approved: { by: creator, words: "Yes, that's it", what: refs/direction.html }
+codified: { by: Mika, date: 2026-10-22, into: .atelier/systems/gnomon/design-system.yaml, narrative: .atelier/systems/gnomon/DESIGN.md }
+summary:
+  decided:
+  - 'loops-zone: centre leaf over the chat; Esc folds it to an edge tab'
+  - 'agent-loops-surface: the waiting-for-trust slip at the stack''s foot; founder override makes the stack decision cards plus alerts, styled by family (↻ loop, ◇ session) by glyph and word'
+  - 'trust-card: the short loop-trust card unfolds into the centre; diff first for a change (marks, weight, strike, no hue); Trust last, hand only, root key'
+  - 'running-indicator: the header loops word (''loops 1 · 2 waiting'') in the kernel status; keep-alive line in its tooltip and the leaf head; Pause all in the leaf head, Gnomon ▾ and ⌘K'
+  - 'notify-decide: fail, stop and kernel pause are stack alerts under the decisions; loop-choice is a loop-styled card; goal and landed are 6s toasts'
+  - 'loop-list: by project with needs-you pinned, two-line rows, name first; Today''s ruler recorded as future'
+  - 'loop-detail: node graph (over the recommended listing), to Mika''s requirements: fits at 1024, labels never on boxes, verdicts by mark, night AA'
+  - 'steer-stop: keys in the detail head, each naming its cost; inline budgets (Apply · tighter, Loosen · needs trust, Resume · presence)'
+  decided_by_recommendation:
+  - 'vocabulary: keep ''run'' (a loop run; ''loop run'' outside loop surfaces) and ''run mode'' (always both words; loops say ''autonomy'', never ''mode''); no rename'
+  - 'the loops word has no dot of its own (the board''s ● is the link dot); idle reads ''loops idle · n'', paused ''loops paused · n'''
+  - 'row marks: ◆ in the needs-you group; ● running, ○ idle, ‖ paused, kernel-paused, parked or waiting for trust, … waiting to land in project groups'
+  - 'graph node running mark ● with a 1.5px key-edge box; Esc order menu → unfolded trust card → leaf'
+  - 'toast placement recorded at the chat column''s edge (what styles.css:956 ships), superseding ''under the voice pill'''
+  - 'alert stop and kernel-pause markup, composed from the drawn fail alert'
+  open:
+  - 'graph fit at 1024: green-typecheck-gnomon fits; flow-health-checkout, triage-on-commit and evening-tidy break label or box rules as the direction draws them; build requirements in components.loop-graph.build_requirements'
+  - 'loop-choice voice tag: the spec makes Stop voice-eligible; the card shows ''hand only'' until the grammar has a Stop phrase'
+  - 'the voice family''s glyph, and when ✦ mod cards arrive (Luna or the founder)'
+  - 'which family the upgrade card and other kernel-raised cards carry'
+  - 'Delete and Untrust confirmation and their copy are not designed'
+  - 'existing: the voice tag chip overflows the 300-340px stack; loop card titles truncate there (build: wrap to two lines)'
+  - 'the stack head count drops the '' · '' before ''hover to fan'' (copy, build)'
+  - 'specimen: the loop components draw with a bridge stylesheet (.atelier/systems/gnomon/loops-direction.css) until styles.css carries them'
+  future:
+  - 'Today''s ruler as an alternate Loops list view'

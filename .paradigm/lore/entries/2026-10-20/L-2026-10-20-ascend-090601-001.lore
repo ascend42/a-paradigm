@@ -1,0 +1,40 @@
+id: L-2026-10-20-ascend-090601-001
+type: review
+timestamp: '2026-10-20T09:06:01.525Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Aegis APPROVE voice B1 live words; S5 fixes in, knot/incident titles stay quoted (they come from external raisers)
+summary: |-
+  B1 verified:
+  - the V1 gate (no words without a provisional enrolled match; reject is sticky; PTT included);
+  - text only for human+gui, with the earlier device-credential leak closed and tested end to end;
+  - never logged (dispatcher-only, a 5 s in-memory slot cleared on connection close);
+  - sanitisation and caps; the ghost line is aria-hidden and isolated from the textarea;
+  - no other status consumer or logger leaks it.
+  Lows: no liveness check on the 1.5 s gate (a replay can flash words); no decodeAsync watchdog; tag/variation/filler chars missing from the sanitisers; live words linger until the final verify. Sent back as one fix commit before merge.
+  S5 fix 4f3c6e9a: Buttons refused in the Workshop region, cap re-check after sanitise, violet only for knot, pane/workshop commands not mod-callable. The builder correctly declined to add knot/incident to KERNEL_TITLED_KINDS: the kernel never composes those lines (warpline and other raisers do), so the quoted treatment is the right M1 behaviour. Proper titles would need a kernel-composed line 1 at a raise site.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gui-voice-capture'
+  - '#gui'
+learnings:
+  - 'My visual ''regression'' call was wrong: the italic quoting of knot/incident bodies is the correct trust signal because those lines are not kernel-composed. Check provenance before calling a security-driven visual change a bug.'
+verification:
+  status: pass
+  details:
+    b1: APPROVE (4 low)
+    s5_fix: awaiting re-check
+tags:
+  - gnomon
+  - voice
+  - design
+  - aegis
+  - marathon-2026-10-20
+linked_commits:
+  - 4f3c6e9a
+git_context:
+  ref: 8df49d05914bbd8c82e4ba666b12c983680fb6e9
+  branch: feat/gnomon
+  dirty: true

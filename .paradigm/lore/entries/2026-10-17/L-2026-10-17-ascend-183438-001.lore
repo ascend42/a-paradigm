@@ -1,0 +1,27 @@
+id: L-2026-10-17-ascend-183438-001
+type: human-note
+timestamp: '2026-10-17T18:34:38.277Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D82: adopt Aegis anchor policy (research 33) for the kernel log'
+summary: 'The founder adopted research 33. Next, in parallel: a builder implements it in #kernel-log (coalesced anchors, the forced critical path, bounded lag on open, G-LOG-06 cases, the new G-LOG-10, probe arm G at 1e6 rows), and spec v3.8 folds in D80, D82 and the builder-resolved ambiguities from PR-3/4/5.'
+symbols_touched:
+  - '#kernel-log'
+decisions:
+  - id: P8-D82
+    decision: 'Kernel-log anchor policy per research 33. File anchor coalesced to 64 rows / 50 ms; keystore anchor 1024 rows / 1 s (provisional until P04). Critical kinds commit with F_FULLFSYNC and write both anchors before append returns and before any effect is released. On open: file-anchor lag > 63 rows, or any lag after a clean close, is INTEGRITY_BROKEN{anchor-lag}. G-LOG-04 is restated as bulk p99 < 5 ms and <= 0.1% over 5 ms at 1e6 rows, critical p99 < 25 ms, with p99.9 and max reported, not asserted. New G-LOG-10. New §A.1(g) residual: up to 1023 non-critical rows / 1 s deletable undetected on macOS by an unsandboxed same-user process.'
+    rationale: 'Evidence p-log-fsync (3 runs): per-commit rename triples WAL fsync stalls; per-commit anchoring never closed the pause-between-commit-and-anchor window; only effect-after-anchor closes it for the events that matter.'
+tags:
+  - paradigm-8
+  - gnomon
+  - kernel-log
+  - security
+  - decision
+linked_lore:
+  - L-2026-10-17-ascend-180323-001
+git_context:
+  ref: 00280f376e8af4d5ec2f931425b4c42dc460696f
+  branch: feat/gnomon
+  dirty: true

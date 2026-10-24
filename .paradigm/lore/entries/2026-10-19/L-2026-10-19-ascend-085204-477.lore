@@ -1,0 +1,15 @@
+id: L-2026-10-19-ascend-085204-477
+type: insight
+timestamp: '2026-10-19T08:52:04.701Z'
+author: ascend
+title: Decision TD-2026-10-19-648 recorded
+summary: Companion lore entry for decision record TD-2026-10-19-648. See .paradigm/decisions/TD-2026-10-19-648.yaml.
+symbols_touched:
+  - '#socket'
+  - '#peer-link'
+  - '#armada'
+references:
+  decision_id: TD-2026-10-19-648
+tags:
+  - companion-lore
+  - decision-reference

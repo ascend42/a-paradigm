@@ -1,0 +1,32 @@
+id: L-2026-10-18-ascend-012625-001
+type: agent-session
+timestamp: '2026-10-18T01:26:25.605Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'M1.4 slice 3 review: read tokens become proof-of-possession; P8-D89 bump lands with slice 3'
+summary: 'Aegis found a bearer read token is harvestable by a same-user relaying impostor (rename the socket, relay hello so serverSig verifies, receive the plaintext token; reusable up to 24 h) and that revocations roll back by deleting a jsonl line. Orchestrator decision inside the spec-silent issuance area: read tokens become Ed25519 proof-of-possession credentials (mint row stores the public key; auth signs nonce‖serverKeyId‖endpointPath‖negotiated), revocation sticky + tamper-detected. Seam hardening T-009(c) merged (78be43ec, a141957a) after reviewer + Aegis round-2 APPROVE. The P8-D89 single clientApiId bump is folded into slice 3 round 2.'
+symbols_touched:
+  - '#identity'
+  - '#socket'
+  - '#kernel-log'
+  - '#contract-event-v1'
+commit: a141957a
+decisions:
+  - id: P8-D89a
+    decision: Read tokens are proof-of-possession (Ed25519 seed held by the client, public key in the root-signed mint row), not bearer secrets; revocations are sticky in the kernel and a shrinking/edited token file fails closed
+    rationale: Spec §3.1/§4.9 is silent on read-token issuance; a bearer token defeats serverSig against a relaying impostor and survives in dumps/logs; PoP matches device auth and keeps 'the file holds no secret' true
+tags:
+  - paradigm-8
+  - gnomon
+  - m1.4
+  - security
+linked_tasks:
+  - T-2026-10-17-009
+  - T-2026-10-18-002
+  - T-2026-10-18-003
+git_context:
+  ref: a141957a116e0528ab8205cde03a2808f41f8b50
+  branch: feat/gnomon
+  dirty: true

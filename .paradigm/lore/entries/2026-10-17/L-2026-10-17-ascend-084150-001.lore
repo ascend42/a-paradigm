@@ -1,0 +1,45 @@
+id: L-2026-10-17-ascend-084150-001
+type: milestone
+timestamp: '2026-10-17T08:41:50.782Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'PASS: Claude Code works inside the hardened macOS session sandbox and the denies hold'
+summary: |-
+  p10m-claude-compat passes on macOS 15.7.3 with claude 2.1.302. Three paid turns, about $0.63 on the founder's subscription.
+
+  Under the hardened session profile (§15.5 plus the sysmond mach-lookup deny plus the tmux unix-socket deny), `claude -p` authenticated and answered (exit 0, 2 turns). Its Bash tool ran node v26, git and python, wrote in the workdir, and spawned and killed a child. Meanwhile:
+  - the stand-in endpoint port was unreachable (curl 000/exit 7, 0 server hits);
+  - pgrep saw 0 processes, against 567 in the control;
+  - the denied directory was unwritable;
+  - ps fails, as expected for setuid binaries.
+
+  The control run (unsandboxed) reached the port (HTTP 200) and saw every process. One probe bug was found and fixed: SBPL path rules match resolved paths, so temp dirs must be realpath'd (/var -> /private/var). That trap applies to the kernel's real profile generator too.
+
+  Conclusion: the M1.7 session sandbox approach is viable on macOS once the p10m fixes are adopted in the spec.
+symbols_touched:
+  - '#gnomon-probes'
+  - '#paradigm-harness'
+files_created:
+  - packages/gnomon/probes/p10m-claude-compat/probe.mjs
+learnings:
+  - 'SBPL subpath rules match resolved paths: always realpath a directory (e.g. /var/folders -> /private/var/folders) before writing it into a sandbox profile, or the deny silently doesn''t apply.'
+verification:
+  status: pass
+  details:
+    probe: p10m-claude-compat
+    costUsd: 0.63
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - probes
+  - security
+  - milestone
+linked_lore:
+  - L-2026-10-17-ascend-084053-001
+git_context:
+  ref: 77357bc2118f63c0bbcbbfa0e3de23b9f36b5997
+  branch: feat/gnomon
+  dirty: true

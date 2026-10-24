@@ -1,0 +1,27 @@
+id: L-2026-10-16-ascend-071254-001
+type: human-note
+timestamp: '2026-10-16T07:12:54.571Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Subscription only; API-token use must be blatantly explicit
+summary: 'Founder: "i definitely want it to just use my subscrition and if there is ever a cause to use my api tokens i need it to be blatantly explicit as i dont want it to use that". Recorded as law P8-D35. Spec v3 dispatched.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D35
+    decision: Subscription-only law. Every Claude call runs on the founder's subscription. Preflight refuses to start any session whose environment or settings would route billing to API credits (ANTHROPIC_API_KEY, apiKeyHelper, custom base URLs that bill). API-token use happens only through a dedicated human-only card, approved per use, never by fallback, default or agent action; it is shown persistently in the band while active and logged as a kernel event. The budget fuse tracks the subscription's usage windows so the armada cannot lock the founder out of interactive use.
+    rationale: Founder's explicit requirement.
+tags:
+  - paradigm-8
+  - gnomon
+  - billing
+  - law
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-071116-001
+git_context:
+  ref: 3b3523687a485bdcedfadc7070d5f33c2043ff97
+  branch: ideate/paradigm-8
+  dirty: true

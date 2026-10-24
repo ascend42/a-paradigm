@@ -32,7 +32,6 @@ import {
   checkComponentAnchors,
   checkPurposeHealth,
   type IntegrityReport,
-  type ComponentAnchorReport,
   type PurposeHealthReport,
 } from '../utils/integrity-checker.js';
 import { parsePurposeFile, validateCrossFile, type PurposeFile } from '@a-company/purpose-core';
@@ -186,6 +185,8 @@ export interface RebuildResult {
   symbolCount: number;
   breakdown: Record<string, number>;
   flowCount: number;
+  /** Personas indexed into .paradigm/personas/index.yaml */
+  personaCount?: number;
   aspectGraphStats?: {
     aspects: number;
     anchors: number;
@@ -293,7 +294,7 @@ export async function rebuildStaticFiles(
     const db = await openAspectGraph(rootDir);
     materializeAspects(db, aggregation.symbols, rootDir);
     const loreLinks = await materializeLoreLinks(db, rootDir);
-    const inferredEdges = await inferLoreEdges(db, rootDir);
+    await inferLoreEdges(db, rootDir);
 
     // Query counts from the materialized tables
     const aspectCount = db.exec('SELECT COUNT(*) FROM aspects')[0]?.values[0]?.[0] as number ?? 0;
@@ -647,6 +648,8 @@ function auditPurposeTransformations(
 
 interface SymbolInfo {
   id: string;
+  /** Full symbol with prefix (e.g. "#checkout") */
+  symbol: string;
   type: string;
   filePath?: string;
   data?: unknown;

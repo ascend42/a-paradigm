@@ -45,6 +45,13 @@ Use these prefixes in documentation and commits:
 - **Logging:** Library code (packages/paradigm-mcp, packages/sentinel, etc.) — use Paradigm logger, never console.log
 - **CLI output:** CLI commands (packages/paradigm/src/commands/) — use `cli-output.ts` helpers (`out()`, `success()`, `warn()`, `error()`, `dim()`, `header()`, `kv()`, `json()`) for user-facing output. Raw console.log is acceptable but helpers are preferred for consistency
 
+## UI Design Systems (Atelier)
+
+- **Gnomon console** (`packages/gnomon-gui/{src,static}`, `packages/gnomon-wrapper/static`, `packages/gnomon-mods/workshop`) is governed by `.atelier/systems/gnomon/` (`design-system.yaml`, `DESIGN.md`, `specimen.html`). Gnomon is desktop-only for now.
+- Find a file's system with `atelier system which <file>`. Run `atelier check <files>` on every UI change before calling it done, and have `atelier-mika` review it.
+- New UI uses the existing components and zones. A new pattern is proposed to the system first, never shipped as a one-off.
+- Warpline, Platform and the site have parked drafts in `.atelier/systems/<id>/` and are not enforced yet.
+
 ## Commit Messages
 
 Use v2 symbols in commits for history tracking:

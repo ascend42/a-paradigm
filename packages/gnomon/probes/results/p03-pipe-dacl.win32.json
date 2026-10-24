@@ -1,0 +1,35 @@
+{
+  "probe": "p03-pipe-dacl",
+  "os": "win32",
+  "osVersion": "Windows 11 Home (10.0.26200)",
+  "arch": "x64",
+  "toolVersions": {
+    "powershell": "5.1.26100.9711",
+    "node": "v24.13.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "userSid": "S-1-5-21-…",
+    "adopt": {
+      "supported": false,
+      "error": "EINVAL"
+    },
+    "defaultDacl": "O:<user>D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<user>)(A;;FR;;;WD)(A;;FR;;;AN)",
+    "defaultGrantsEveryone": true,
+    "tighten": "OK",
+    "afterDacl": "O:<user>D:P(A;;FA;;;<user>)",
+    "afterIsOwnerOnly": true,
+    "connectionsSeenByServer": 0,
+    "secondNodeListen": "EADDRINUSE",
+    "listenAfterForeignSquat": "EADDRINUSE",
+    "decision": "Node cannot adopt a helper-created pipe; the kernel creates it (libuv FIRST_PIPE_INSTANCE, so a squatter fails the listen closed), the helper replaces the default DACL (Everyone/Anonymous read) with a protected owner-only one through a WRITE_DAC client handle, the DACL is pipe-wide (new instances carry it), and the kernel drops every connection accepted before the helper reports the read-back."
+  },
+  "specRefs": [
+    "§16 Kernel endpoint",
+    "S22-H7",
+    "G-WIN-01",
+    "P8-D71",
+    "docs/plans/gnomon-windows.md W1"
+  ],
+  "at": "2026-10-22T09:25:44.582Z"
+}

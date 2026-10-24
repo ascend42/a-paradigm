@@ -525,7 +525,8 @@ export async function handleLoreTool(
       // so downstream agents can auto-retry against paradigm_decision_record.
       // The companion lore insight entry is written automatically by
       // recordDecision (.paradigm/decisions/...), preserving the timeline.
-      if (type === 'decision') {
+      // `decision` is no longer a LoreType, so check the raw caller input.
+      if (args.type === 'decision') {
         log.component('#lore').warn(
           "rejected paradigm_lore_record({type:'decision'}) — removed in v6.0",
           {

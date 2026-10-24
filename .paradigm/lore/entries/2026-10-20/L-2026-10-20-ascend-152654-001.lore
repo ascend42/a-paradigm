@@ -1,0 +1,35 @@
+id: L-2026-10-20-ascend-152654-001
+type: agent-session
+timestamp: '2026-10-20T15:26:54.804Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Context meter + auto-checkpoint designed (Arky): kernel-owned gauge, a kernel-authored checkpoint turn, checkpointed model switch'
+summary: |-
+  The founder asked for a "context remaining %" with auto-checkpoint for Paradigm repos (and plain compaction otherwise), and for a model switch that checkpoints and recovers so nothing is lost. Arky's design:
+  - Measurement: context = the per-message usage (in+cacheRead+cacheWrite+out) of the last main-chain assistant message, NOT the result.usage totals (those sum all calls in a turn; they would overstate ~10x and are also why Ledger cost may overcount). Sub-agent messages (parent_tool_use_id) are excluded.
+  - Window: from modelUsage.contextWindow (unprobed), else a model table (≈), else unknown.
+  - Ownership: the kernel owns a session.context row, the threshold policy (default 0.80) and the action. The GUI shows a core gauge plus a Checkpoint button; Ledger keeps the history.
+  - Checkpoint trigger: a constant, kernel-authored inject at an idle boundary asking the session to call paradigm_session checkpoint, with a ONE-TURN scoped allow for exactly that tool+op (needs Aegis). Confirmed by watching the tool call; once per context epoch. Recovery: a constant recover inject after compact_boundary; later a Paradigm SessionStart hook plus a `paradigm session recover --brief` CLI.
+  - Model switch: drain + resume({model}), probe-gated, since resume across models is unproven.
+  - Contract changes: session.context, session.checkpoint, session.compacted for Claude, the model-switch drain reason.
+  Open founder decision: should the kernel also run /compact at idle right after the checkpoint?
+symbols_touched:
+  - '#context-meter'
+  - $context-checkpoint
+  - $model-switch
+  - '#claude-code-adapter'
+  - '#supervisor'
+  - '#ledger-mod'
+learnings:
+  - result.usage in stream-json sums every API call in a turn; per-message usage is the only correct context measure.
+tags:
+  - gnomon
+  - context
+  - paradigm
+  - marathon-2026-10-20
+git_context:
+  ref: 3b5c71396f52a71bc825aeb653ed599013c2fa91
+  branch: feat/gnomon
+  dirty: true

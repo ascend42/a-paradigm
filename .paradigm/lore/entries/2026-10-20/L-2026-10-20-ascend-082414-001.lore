@@ -1,0 +1,39 @@
+id: L-2026-10-20-ascend-082414-001
+type: milestone
+timestamp: '2026-10-20T08:24:14.058Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Ledger mod merged into feat/gnomon: the first Paradigm-aligned mod, the context and budget meter'
+summary: |-
+  The Ledger branch merged cleanly after Aegis approved the M1/M2/L2 fixes:
+  - a log.read:usage capability gates the usage feed, and a local tier can't pair it with egress;
+  - the panel region sits outside the stack and refuses Buttons;
+  - hue chips are not key-styled;
+  - the split is clamped at the source.
+  Ids unchanged. After rebuilding gnomon-contracts (stale dist caused 3 transient failures), the merged branch passes: gnomon 2402/2402 (the ledger and feed tests pass after the rebuild), gui 265, contracts 453. Follow-ups in a task: the host-level falsifier, signed-tier egress, mod auto-start at boot, re-render on focus, and checking whether cost is cumulative. Mistake to note: `git checkout -- .paradigm` before the merge discarded the regenerated index state, including lore/timeline.yaml; a reindex restores it.
+symbols_touched:
+  - '#ledger-mod'
+  - '#mod-host'
+  - '#gui'
+errors_encountered:
+  - description: 3 ledger/feed tests failed on the merged branch
+    resolution: gnomon-contracts dist was stale (new capability form); rebuilt contracts then gnomon and all passed
+learnings:
+  - After merging a branch that changes gnomon-contracts, rebuild contracts dist before running gnomon tests.
+verification:
+  status: pass
+  details:
+    gui: 265
+    contracts: 453
+    ledger_feed_tests: 18
+tags:
+  - gnomon
+  - mods
+  - merge
+  - marathon-2026-10-20
+git_context:
+  ref: 4d0ec8d0dd822989b3af520a0634318c1a8c2dc2
+  branch: feat/gnomon
+  dirty: true

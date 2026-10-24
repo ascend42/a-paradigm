@@ -1,0 +1,17 @@
+id: L-2026-10-18-ascend-174450-003
+type: insight
+timestamp: '2026-10-18T17:44:50.769Z'
+author: ascend
+title: 'M1.6 slice 2 reading: presence refusal before decisionSig shape'
+summary: 'When no approvals key exists (before M1.3), approve answers UNSUPPORTED{presence, milestone M1.3} before checking that decisionSig is present, but after the card and decision checks (NOT_FOUND and BAD_REQUEST for a wrong card or decision still win). Once a key exists, a missing decisionSig is BAD_REQUEST again. Mechanism: optional ApprovalsKey.available().'
+symbols_touched:
+  - '#approval-broker'
+commit: 40ffb886
+tags:
+  - decision
+  - gnomon
+  - m1.6
+git_context:
+  ref: 40ffb88685a960df85148ab668497408864701b5
+  branch: gnomon/m16-slice2
+  dirty: true

@@ -2,6 +2,7 @@ version: 2.0.0
 description: |
   #paradigm-cli - The unified CLI for the Paradigm framework.
   Entry point for all Paradigm commands including shift, init, scan, sync, team, mcp, and more.
+  Requires Node 24 or newer (engines >=24.0.0, 8.0).
 features:
   shift-command:
     description: Full project setup in one command (init → team init → scan → sync → doctor)
@@ -356,6 +357,57 @@ features:
       - '#pipeline-abort'
       - '#pipeline-list'
 components:
+  gnomon-shim:
+    description: >-
+      The `gnomon` bin of @a-company/paradigm (T-2026-10-21-030 M3, T-2026-10-21-031 M4; TD-2026-10-21-758). npm does
+      not link a dependency's bins on a global install, so this shim resolves the exact-version
+      @a-company/gnomon dependency, then that package's @a-company/gnomon-darwin-<arch> optional dependency (same
+      version, else refused), and hands off to #gnomon-app-installer: install or upgrade Gnomon.app, then launch the
+      INSTALLED app. It NEVER runs Gnomon on the user's Node and imports only node: built-ins and its sibling (never
+      the kernel). Off macOS, or when npm skipped the platform package, it prints one plain line ("Gnomon runs
+      on macOS only in 8.0; Windows and Linux are planned") and exits 69; an install or verify refusal exits 77.
+      Gnomon 8.0 ships for Apple silicon Macs only (TD-2026-10-22-310): macArch reads the MAC's arch, not Node's (an
+      x64 Node under Rosetta, sysctl.proc_translated or hw.optional.arm64 = 1, still gets the arm64 app; when npm
+      skipped the arm64 package for that Node it says so), and a genuine Intel Mac gets "Gnomon 8.0 runs on Apple
+      silicon Macs; Intel support is planned." (UNSUPPORTED_INTEL) and exits 69.
+      Aegis M3 medium 3: each resolved package is realpath'd and must sit under allowedRoots (paradigm's own
+      node_modules, the node_modules it is hoisted into, or the monorepo's node_modules / packages in dev) with the
+      expected package.json name, so a package planted higher in the path or reached through NODE_PATH is refused.
+      run(args, o) is the whole command; `o` (resolve, installDir, verifyApp, open) is for tests only and the CLI entry
+      passes none (falsified statically). Plain JS outside tsup; ships via files: bin.
+    type: bin
+    file: bin/gnomon.js
+    related: ["#gnomon-app-installer", "#gnomon-npm-packaging", "#gnomon-darwin-arm64"]
+    tests:
+      - tests/gnomon-shim.test.ts
+      - tests/gnomon-shim-install.test.ts
+  gnomon-app-installer:
+    description: >-
+      bin/gnomon-app.js (T-2026-10-21-031, TD-2026-10-21-758; 8.0 M4): installs and launches the signed Gnomon.app
+      for #gnomon-shim, node: built-ins only. compiledAppZipPin reads this arch's zip sha256 from
+      @a-company/gnomon's RELEASE build stamp (dist/build-id.json release.appZips; a dev build is refused), never the
+      platform package's .sha256. ensureApp: a present, complete app of this version or newer is used as is (no lock,
+      no copy); else under acquireInstallLock (<installDir>/.Gnomon.app.lock, mkdir-atomic, owner pid + nonce, a dead
+      owner's lock renamed aside and broken) it restores an app a crashed swap left aside, refuses a Gnomon.app that is
+      not ours, checks the zip hash BEFORE unpacking, `ditto -x -k` into a staging dir beside the target (one volume),
+      requires exactly Gnomon.app with the release layout, no top-level symlink and exactly this version, runs
+      verifyApp (codesignVerifyApp: codesign --verify --strict --deep -R=WRAPPER_REQUIREMENT, team SW4BMQ8PNL,
+      identifier gnomon.wrapper), then renames the old app aside, the new one into place, and removes the old; any
+      failure keeps the old app. Target: appInstallDir (/Applications when writable without sudo, else
+      ~/Applications; the kernel's app-bundle.ts rule). No postinstall, no sudo. Aegis M4 review: every path ends in
+      a VERIFIED app (a present app is codesign-verified before every launch; one that fails is never opened, moved
+      aside to .Gnomon.app.rejected-<time>, reported and reinstalled); recovery restores an aside copy only if it
+      verifies; the lock owner is pid + process start time (ps lstart), an ownerless lock is stale after 30 s, a
+      waiter gives up after 5 min naming the lock. launchApp: bare `gnomon` opens the app via /usr/bin/open (a fresh
+      Mac lands on setup, two Touch ID prompts, the desk); with arguments it runs `gnomon-wrapper --cli -- <args>`,
+      so the Rust wrapper is the ONE trust root (hashes, designated requirement, env scrub, then exec of the bundled
+      node). Every child gets scrubbedEnv() (the wrapper's ENV_ALLOWLIST + a fixed PATH), never process.env. ALLOW_UNSIGNED_FOR_TESTS is the tests-only verifier seam. WRAPPER_REQUIREMENT and LAYOUT are kept
+      equal to gnomon-wrapper's build-darwin.mjs and release-darwin.mjs by test.
+    type: module
+    file: bin/gnomon-app.js
+    related: ["#gnomon-shim", "#app-bundle", "#release-darwin", "#gnomon-npm-packaging", "#gnomon-wrapper"]
+    tests:
+      - tests/gnomon-shim-install.test.ts
   migration-detector:
     description: Detects project state by reading migrate.yaml, config.yaml, and filesystem to determine pending migrations
     type: detector
@@ -582,6 +634,14 @@ components:
   calibrate-command:
     description: v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing.
     file: src/commands/calibrate.ts
+    type: command
+  routing-backfill:
+    description: Gnomon orchestration Phase 0 — routing cold start. Mines git history (90 days anchored to the HEAD commit date, no merges) for `Symbols:` trailers, maps each symbol to the nearest .purpose that defines it (area = POSIX dir of that .purpose; unresolved -> "(unowned)"), and counts commits, fix( rework and reverts per area into .paradigm/learned/routing.json as a kind:'history-only' risk-ordering prior (NOT Beta arm outcomes), with cutoffSha/cutoffDate, per-area lastCommitDate + settledCommits (14-day settle lag), a coverage block (commitsTotal/WithTrailer/SkippedNoTrailer/commitsUnique/purposeFilesSkipped) and the (unowned) bucket flagged unowned:true. Trailers and reverts honoured only in the final message block; .purpose parsing is lstat+regular-file+1MiB capped. Counts only (no subjects/authors/prompt text; headSha/cutoffSha persisted), deterministic and idempotent (sorted keys, no timestamps). A revert without its own trailer inherits the reverted commit's symbols. Git via argv with NUL/\x01 delimiters. Does not write ~/.paradigm/learned/routing-prior.json.
+    file: src/core/routing-backfill.ts
+    type: utility
+  learn-routing-command:
+    description: `paradigm learn routing --backfill` — runs #routing-backfill and reports areas via cli-output helpers.
+    file: src/commands/learn-routing.ts
     type: command
 signals:
   init-success:

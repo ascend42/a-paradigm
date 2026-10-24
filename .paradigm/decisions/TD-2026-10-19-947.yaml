@@ -1,0 +1,33 @@
+id: TD-2026-10-19-947
+timestamp: '2026-10-19T15:00:02.005Z'
+title: 'Law 3: human-device verbs form a separate tier outside the 12 kernel verbs (P8-D98)'
+decision: >-
+  `gui.open` and `rules.revoke` are human-device verbs (HUMAN_DEVICE_VERBS, numbered 13 and 14). They are not part of
+  law 3's twelve kernel verbs. Law 3 now reads "12 kernel verbs + 2 human-device verbs + 2 client relays". Dispatch
+  refuses them for every non-human principal class and for GUI launch-token connections. The kernel abiId and modAbiId
+  stay the same; only clientApiId moves, and only once.
+rationale: >-
+  Founder ruling, 2026-10-19 decision dialog, on slice A0 of T-2026-10-19-001. A separate tier keeps the kernel ABI and
+  the mod ABI stable and avoids a second id move. Both verbs are restricted to human devices, so they never widen what
+  an agent can reach.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: builder
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Raise law 3 to 14 kernel verbs
+    rejected_because: it moves abiId, which means a second id move
+  - option: Make them CLI or wrapper-only operations
+    rejected_because: it would redesign gui.open (§2.4 rule 8) and F1
+symbols_affected:
+  - '#socket'
+  - '#gnomon-contracts'
+status: active
+tags:
+  - gnomon
+  - law-3
+  - clientApiId
+  - T-2026-10-19-001

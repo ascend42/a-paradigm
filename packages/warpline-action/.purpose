@@ -42,7 +42,7 @@ components:
       confined to this file.
   guard-action-packaging:
     description: >-
-      action.yml (composite, node20 runtime via the caller's setup-node) +
+      action.yml (composite, Node 24 runtime via the caller's setup-node) +
       .github/workflows/warpline-guard.yml (the repo self-test: advisory,
       continue-on-error, fail-on-flag false). test/action-packaging.test.ts is
       the packaging lint: YAML validity, every input threaded to

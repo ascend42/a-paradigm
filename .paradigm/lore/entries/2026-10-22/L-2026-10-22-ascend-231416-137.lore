@@ -1,0 +1,18 @@
+id: L-2026-10-22-ascend-231416-137
+type: insight
+timestamp: '2026-10-22T23:14:16.033Z'
+author: ascend
+title: Decision TD-2026-10-22-769 recorded
+summary: Companion lore entry for decision record TD-2026-10-22-769. See .paradigm/decisions/TD-2026-10-22-769.yaml.
+symbols_touched:
+  - '#local-runner'
+  - '#local-config-request'
+  - '#approval-broker'
+  - '#decision-batch'
+  - '#gui-settings'
+  - $local-config-flow
+references:
+  decision_id: TD-2026-10-22-769
+tags:
+  - companion-lore
+  - decision-reference

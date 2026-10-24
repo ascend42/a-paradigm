@@ -1,0 +1,40 @@
+id: L-2026-10-20-ascend-185421-001
+type: agent-session
+timestamp: '2026-10-20T18:54:21.579Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Paradigm Context mod (#2) built: the focused repo''s tasks/decisions/lore in the desk via a kernel slice; two builders were stuck on never-ending background jobs'
+summary: |-
+  Branch worktree-agent-a55d2eac28b152613, built 8f387409 → 1c986bd4.
+  - K1, paradigm-slice: a bounded, sanitised kernel projection of .paradigm/{tasks,decisions,lore} for a live session's repo. lstat/O_NOFOLLOW/realpath containment, 64 KiB cap, a strict YAML subset, secrets dropped, paths scrubbed.
+  - K3: a server-side focus join; the GUI sends only {focus:{hsid}}.
+  - Capability: paradigm.read:summary, never with egress.
+  - Host-level falsifiers prove both capability gates.
+  - First-party pin; ids unchanged.
+  Suites on the branch: gnomon 2430, gui 310, contracts 455 (on an older base).
+  Process incident: both this builder and the fidelity builder sat for hours "waiting on background work". The fidelity builder had a preview server that never exits; this one had a `cat > /dev/null` waiting on stdin (10 h). I killed both.
+  Aegis review launched. The merge into current feat/gnomon needs conflict handling (the bundle and id pins moved since).
+symbols_touched:
+  - '#paradigm-context-mod'
+  - '#mod-host'
+  - '#gui'
+  - '#gui-preview'
+errors_encountered:
+  - description: Builders blocked for hours on background jobs that never exit (a preview server; cat waiting on stdin)
+    resolution: Killed the processes; told builders to use the exiting preview-shots script and to avoid background jobs. Lead should check `ps` when a builder reports 'waiting on background work'
+tags:
+  - gnomon
+  - mods
+  - marathon-2026-10-20
+linked_commits:
+  - dd406b26
+  - 3f1be891
+  - c5ea2b0b
+  - 6cfe9190
+  - 1c986bd4
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,24 @@
+id: L-2026-10-17-ascend-233047-001
+type: human-note
+timestamp: '2026-10-17T23:30:47.596Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: M1.1 reservations and M1.4 hello/auth slice dispatched; no bypass mode for now
+summary: 'The founder approved starting the M1.1 contract reservations (every value listed in spec v3.9 §4.11 and §19.1 M1.1; clientApiId expected to move once now) and the first M1.4 slice: real hello negotiation, serverSig plus device-key mutual auth, an authenticated dispatch skeleton, a real status verb, and auth events in the kernel log. Root and device registration go behind a RootAuthority seam, because hardware root keys (M1.3) are blocked on the founder''s provisioning profile. Both pass through reviewer plus Aegis. The bypass-mode question was not answered, so the spec default stands: no bypass run mode (manual/ask/auto-edits only), revisitable.'
+symbols_touched:
+  - '#socket'
+  - '#gnomon-contracts'
+  - '#identity'
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - state
+linked_lore:
+  - L-2026-10-17-ascend-231917-001
+git_context:
+  ref: 9260d9def73516bb9d2d9233531df5834549e294
+  branch: feat/gnomon
+  dirty: true

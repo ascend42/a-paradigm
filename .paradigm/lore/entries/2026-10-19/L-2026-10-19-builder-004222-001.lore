@@ -1,0 +1,20 @@
+id: L-2026-10-19-builder-004222-001
+type: insight
+timestamp: '2026-10-19T00:42:22.591Z'
+author: builder
+title: 'Decision P8-D97: repo context loads normally, repo hooks stay audited; repo non-hook settings not loaded'
+summary: 'Founder ruling 2026-10-18. audited keeps --setting-sources user. It adds --add-dir memory dirs with CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1 and a kernel-staged --plugin-dir named project holding the repo''s skills/agents/commands, with frontmatter allow-listed (hooks, allowed-tools, permissionMode, mcpServers dropped). Approved repo hooks stay in the kernel --settings. Builder decision (asked to decide and report): the repo''s non-hook settings (permissions, env, the rest) are NOT loaded. A repo allow would skip the P8-D96 card, and a malformed repo rule merged into policy.json could make Claude ignore the whole kernel policy. They are shown informationally on repo-hook cards and on the gate-class.detected repo-context row. Frontmatter hooks are stripped and never approvable in this slice.'
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+tags:
+  - gnomon
+  - p8-d97
+  - decision
+linked_lore:
+  - L-2026-10-19-builder-004151-001
+confidence: 0.85
+git_context:
+  ref: f13713a205ff38c5e05597b865fa4b553a5a95b5
+  branch: gnomon/repo-context
+  dirty: true

@@ -1,0 +1,42 @@
+{
+  "name": "@a-company/gnomon-darwin-arm64",
+  "version": "8.0.1",
+  "description": "Gnomon for macOS on arm64: the signed, notarized, relocatable Gnomon.app (bundled Node, kernel, helper, voice I/O) as a ditto zip with its sha256 (TD-2026-10-21-758). Installed as an optional dependency of @a-company/gnomon; you never install it directly.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "Gnomon.app.zip",
+    "Gnomon.app.zip.sha256"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-darwin-arm64"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-paradigm/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-paradigm#readme",
+  "keywords": [
+    "paradigm",
+    "gnomon",
+    "macos",
+    "arm64"
+  ]
+}

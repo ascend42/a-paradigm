@@ -9,7 +9,7 @@ features:
       - '#context-audit'
 components:
   doctor-hook-health:
-    description: 7.15.2 hook-health section (hook-health.ts). Per-hook p50/p95/max wall time, kills (a start with no end older than timeout + 5 s, or a killed end) and over-budget runs from the #hook-monitor ring; repo traits that slow hooks (nested git repos/worktrees under the root, .purpose count, aspect-anchor lines, untracked-file count); plugin cache staleness (user-scope install vs marketplace/repo plugin.json, project-scope pins older than the user install, from ~/.claude/plugins/installed_plugins.json). Every non-ok line carries a concrete remedy. Advisory, never throws.
+    description: 7.15.2 hook-health section (hook-health.ts). Per-hook p50/p95/max wall time, kills (a start with no end older than timeout + 5 s, or a killed end) and over-budget runs from the #hook-monitor ring; repo traits that slow hooks (nested git repos/worktrees under the root, .purpose count, aspect-anchor lines, untracked-file count); plugin cache staleness (user-scope install vs marketplace/repo plugin.json, project-scope pins older than the user install, from ~/.claude/plugins/installed_plugins.json). 8.0: "Stop sections" explains the latest slow or killed Stop run from .paradigm/events/stop-timing.jsonl (top sections, the section it was stuck in; section names allowlisted by shape, Aegis M-A); "Hook version in running sessions" warns when .paradigm/.purpose-paths was written in the last 24 h, which only the pre-7.15.2 Stop hook does, i.e. a session started before a plugin update still runs the old hooks. Every non-ok line carries a concrete remedy. Advisory, never throws.
     file: hook-health.ts
     type: utility
     tags:

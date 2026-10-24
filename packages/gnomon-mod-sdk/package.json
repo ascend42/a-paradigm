@@ -1,0 +1,41 @@
+{
+  "name": "@a-company/gnomon-mod-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gnomon mod SDK (spec §12, §18): mod-abi:v1 types, the zero-dependency mod runtime (serveMod) and the example mod. M1.11 slice 1; the test harness, link/dev tooling and the gnomon-mods MCP bridge are slice 2.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "example"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@a-company/gnomon-contracts": "1.0.0",
+    "@types/node": "^24.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-mod-sdk"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

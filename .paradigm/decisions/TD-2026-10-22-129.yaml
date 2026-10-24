@@ -1,0 +1,24 @@
+id: TD-2026-10-22-129
+timestamp: '2026-10-22T09:43:27.265Z'
+title: Loops ship in 8.0, built with their Move 2 dependencies on feat/gnomon-loops
+decision: >-
+  Gnomon loops (TD-2026-10-22-213, docs/specs/gnomon-loops.md) ship in 8.0 together with Windows (TD-2026-10-22-197).
+  The bar is "works to a degree"; 8.0 is the starting point, and testing and upgrades continue as normal. Build
+  everything, including the unbuilt dependencies (the gnomon-oracle read-only sandbox profile M2.3, scratch git
+  worktrees M2.5, strictness levels M2.11, and local-model routing where incomplete), on branch feat/gnomon-loops cut
+  from feat/gnomon, in a separate worktree. Merge feat/gnomon into it regularly to absorb the Windows work; merge back
+  when both are done. Conflict rules: re-embed the GUI bundle after every merge, keep one clientApiId bump, merge the
+  class tables carefully, give loops their own sandbox profile names.
+rationale: >-
+  Founder: "fold into 8.0, it doesn't need to be perfect ... if we feel like it does work to a degree then 8.0 is our
+  jumping off point" and "All, including the dependencies".
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+status: active
+tags:
+  - gnomon
+  - loops
+  - '8.0'
+  - release

@@ -1,0 +1,31 @@
+id: L-2026-10-20-ascend-081240-001
+type: review
+timestamp: '2026-10-20T08:12:40.429Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Aegis APPROVE Ledger mod + K0/K2, with two mediums: usage telemetry reaches every log.read mod; mod panels share the decision pane'
+summary: 'The K2 projection''s shape is sound: ids, enums and clamped integers only, a 5000-case property test, and no paths or text. The problem is breadth (M1): every log.read mod, including local ones that may hold egress, now gets per-turn cost and token deltas across all sessions, a spend and activity side channel. Fix: a narrower log.read:usage capability named on the install card, refused together with egress for the local tier. M2: the right-pane mod panel sits under the decision stack behind only a dashed fence, and a hue-toned Text chip looks like a decision key. Clicks are inert there, but it is a visual-spoofing risk. Fix: a separator outside the stack scroll, a non-key chip border, and no Buttons in the panel slot. L2: clamp the adapter split at the source. L3: the first-party pin is OK once approved (a content hash). The founder asked to launch the F2–F6 builder; it is running. M1/M2/L2 were sent back to the Ledger builder, with a stop-if-the-id-moves guard so clientApiId moves only once.'
+symbols_touched:
+  - '#ledger-mod'
+  - '#mod-host'
+  - '#gui'
+learnings:
+  - 'Projection shape is not enough: what matters is who receives it. Widening a feed that every holder of a broad capability gets needs a new, narrower capability.'
+  - Plugin UI placed next to trusted controls needs a strong visual boundary even when clicks are inert.
+verification:
+  status: pass
+  details:
+    verdict: APPROVE
+    medium: 2
+    low: 3
+tags:
+  - gnomon
+  - mods
+  - aegis
+  - marathon-2026-10-20
+git_context:
+  ref: 744946df90112d93d1ee94906f9f2d6631862270
+  branch: feat/gnomon
+  dirty: true

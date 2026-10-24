@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-210357-001
+type: insight
+timestamp: '2026-10-18T21:03:57.224Z'
+author: builder
+title: 'M1.3 round 2 (H3): the helper appends its own prompt line computed from what it signs; the kernel names the same digest'
+summary: 'Caller prompt text cannot be trusted to describe the signature, so the helper adds a line after it: key, count and sha256(message)[0..12] per message, plus schemaVersion/kind and cardId+contentHash for root rows and the decision fields for approve messages. The kernel ends its own text with [check <digests>] (never clipped) and the CLI prints the digest before each touch, so the human can match two independent sources. The XPC peer check that would stop a same-user caller from talking to the helper at all stays a slice-2 task.'
+symbols_touched:
+  - '#gnomon-helper'
+  - '#identity'
+commit: b3e25ed5
+tags:
+  - decision
+  - gnomon
+  - m1.3
+  - security
+git_context:
+  ref: 93ab4b2f784eecf8cbd970e6764e416f74f40042
+  branch: gnomon/m13-slice1
+  dirty: true

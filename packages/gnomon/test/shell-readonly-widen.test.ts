@@ -1,0 +1,461 @@
+// @gnomon-platform: darwin, linux
+/**
+ * #shell-readonly RW — the read-only widening (founder decision 2026-10-20: auto-edits never prompts more than native
+ * Claude Code in the same mode). On a real tmp git repo, ANCHORED (ctx.cwd = the root's realpath, as autoBashReadOnly
+ * classifies it): the founder's three dogfood commands verbatim, every widened family, and every refusal that keeps
+ * the widening fail-closed. Unanchored and win32 callers keep the earlier rules (asserted here and in the pure table,
+ * shell-readonly.test.ts).
+ */
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { execFileSync, spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { autoBashReadOnly } from '../src/kernel/supervisor/auto-edits.js';
+import { anchorCommand, classifyReadOnly, paradigmOnPath, resetParadigmVersionCacheForTests } from '../src/kernel/supervisor/shell-readonly.js';
+
+let base = '';
+let repo = '';
+let home = '';
+let outside = '';
+let real = '';
+let binDir = '';
+const ctxOf = (cwd: string | null, gnomonHome = path.join(home, '.gnomon')) => ({ roots: [repo], home, gnomonHome, platform: process.platform, readRoots: [], searchPath: `${binDir}:/usr/bin:/bin`, ...(cwd !== null ? { cwd } : {}) });
+const ro = (c: string) => classifyReadOnly(c, ctxOf(real));
+const roUnanchored = (c: string) => classifyReadOnly(c, ctxOf(null));
+
+/** The founder's three dogfood commands, verbatim. */
+const FOUNDER_GREP = String.raw`grep -rn "desk stats\|'stats'" --include=*.ts --include=*.py --include=*.rs -l . 2>/dev/null | grep -v node_modules | head; which gnomon`;
+const FOUNDER_DESK = 'gnomon desk stats 2>&1 | head -80';
+const FOUNDER_PARADIGM = 'paradigm status 2>&1 | head -60';
+const HASH = `sha256:${'a'.repeat(64)}`;
+
+beforeAll(() => {
+  base = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-ro-widen-'));
+  repo = path.join(base, 'repo');
+  home = path.join(base, 'home');
+  outside = path.join(base, 'outside');
+  for (const d of [repo, home, outside, path.join(repo, 'src'), path.join(repo, 'sub')]) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(repo, 'src', 'a.ts'), "export const x = 'stats';\n");
+  fs.writeFileSync(path.join(repo, 'x'), 'b\na\na\n');
+  fs.writeFileSync(path.join(repo, 'package.json'), '{"name":"t"}\n');
+  fs.writeFileSync(path.join(outside, 'secret'), 'secret');
+  fs.symlinkSync(outside, path.join(repo, 'link'));
+  execFileSync('git', ['init', '-q'], { cwd: repo });
+  execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: repo });
+  real = fs.realpathSync.native(repo);
+  binDir = fakeParadigm(path.join(base, 'paradigm-7.15.2'), '7.15.2');
+});
+
+/** An npm-style install: <pkg>/package.json + <pkg>/dist/index.js, and <bin>/paradigm a symlink to it. Returns <bin>. */
+function fakeParadigm(prefix: string, version: string, name = '@a-company/paradigm'): string {
+  fs.mkdirSync(path.join(prefix, 'pkg', 'dist'), { recursive: true });
+  fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(prefix, 'pkg', 'package.json'), JSON.stringify({ name, version }));
+  fs.writeFileSync(path.join(prefix, 'pkg', 'dist', 'index.js'), '#!/usr/bin/env node\n', { mode: 0o755 });
+  fs.symlinkSync(path.join(prefix, 'pkg', 'dist', 'index.js'), path.join(prefix, 'bin', 'paradigm'));
+  return path.join(prefix, 'bin');
+}
+afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
+
+describe("#shell-readonly RW: the founder's three commands pass verbatim", () => {
+  it.each([FOUNDER_GREP, FOUNDER_DESK, FOUNDER_PARADIGM])('%j', (c) => {
+    expect(ro(c)).toEqual({ ok: true });
+  });
+  it('through autoBashReadOnly they pass ANCHORED (the run is the K1 anchored form)', () => {
+    for (const c of [FOUNDER_GREP, FOUNDER_DESK, FOUNDER_PARADIGM]) {
+      const p = autoBashReadOnly('Bash', { command: c, description: 'd' }, [repo], ['x'], path.join(home, '.gnomon'), process.platform, home, { root: repo, shell: '/bin/zsh', path: `${binDir}:/usr/bin:/bin` });
+      expect(p).toEqual({ ok: true, command: anchorCommand(c, real, 'zsh'), root: real });
+    }
+  });
+  it('unanchored they still raise the card (the earlier rules hold)', () => {
+    expect(roUnanchored(`cd ${repo} && ${FOUNDER_GREP}`)).toMatchObject({ ok: false, why: 'grep -r: only in an anchored run' });
+    expect(roUnanchored(FOUNDER_DESK)).toMatchObject({ ok: false, why: 'gnomon: only in an anchored run' });
+    expect(roUnanchored(FOUNDER_PARADIGM)).toMatchObject({ ok: false, why: 'paradigm: only in an anchored run' });
+  });
+  it('win32 keeps the earlier rules even with a cwd', () => {
+    const w = { roots: ['C:\\w\\repo'], home: 'C:\\Users\\me', gnomonHome: 'C:\\Users\\me\\.gnomon', platform: 'win32', cwd: 'C:\\w\\repo' };
+    expect(classifyReadOnly('gnomon desk stats', w)).toMatchObject({ ok: false, why: 'gnomon: only in an anchored run' });
+    expect(classifyReadOnly('rg foo', w)).toMatchObject({ ok: false, why: 'rg: only in an anchored run' });
+  });
+});
+
+const FAMILIES: string[] = [
+  // readers and text
+  'grep -n stats src/a.ts',
+  'grep -rn stats src',
+  'grep -r stats',
+  'grep --recursive -l stats .',
+  'grep --recur stats src',
+  'egrep -r "a|b" src',
+  'fgrep -rl stats src',
+  'rg -n stats src',
+  'rg stats',
+  'rg --files',
+  "rg -g '*.ts' -l stats",
+  'rg -i --hidden --no-ignore stats src',
+  "find . -name '*.ts' -type f",
+  'fd ts src',
+  'fd -e ts',
+  'ls -la',
+  'cat x',
+  'head -5 x',
+  'tail -3 x',
+  'wc -l x src/a.ts',
+  'sort x | uniq -c',
+  'cut -d: -f1 x',
+  'which node',
+  'file x',
+  'stat x',
+  'du -sh src',
+  'tree',
+  'tree -L 2 src',
+  'echo hi',
+  'pwd',
+  'basename /a/b.ts',
+  'dirname src/a.ts',
+  'realpath x',
+  'jq -r .name package.json',
+  // git read verbs
+  'git status',
+  'git log --oneline -5',
+  'git diff HEAD',
+  'git show HEAD',
+  'git branch -a',
+  'git blame x',
+  'git rev-parse HEAD',
+  'git ls-files',
+  'git remote -v',
+  'git remote',
+  'git config --get user.name',
+  // the project CLIs' read verbs
+  'paradigm status',
+  'paradigm st',
+  'paradigm doctor',
+  'paradigm doctor --context --explain',
+  "paradigm ripple '#supervisor'",
+  "paradigm ripple '#supervisor' src --json -d 2",
+  'paradigm purpose validate',
+  'paradigm purpose validate src',
+  'paradigm task ls',
+  'paradigm task ls open --json -n 5 -p high --mine',
+  'paradigm task show 004',
+  'paradigm task show @last --json',
+  'paradigm task show T-2026-10-20-001',
+  'paradigm lore list',
+  'paradigm lore ls --json',
+  'paradigm lore list --type insight --symbol x --tags a,b --author me --from 2026-10-01 --to 2026-10-20 -l 5',
+  'paradigm lore show L-2026-10-20-ascend-120000-001',
+  'paradigm lore show L-2026-02-21-001 --json',
+  'gnomon desk stats',
+  'gnomon desk stats --json',
+  'gnomon daemon status',
+  'gnomon mod list',
+  'gnomon mod status',
+  'gnomon mod status my-mod',
+  'gnomon rules list',
+  'gnomon rules list --json',
+  'gnomon trace status',
+  'gnomon replay',
+  `gnomon replay --json --expect ${HASH}`,
+  // compound: every segment in the set
+  'git status && git log -1 | head; paradigm status || echo no',
+  'rg -l stats src | sort | uniq | wc -l',
+];
+
+describe('#shell-readonly RW: every widened family passes (anchored)', () => {
+  it.each(FAMILIES)('%j', (c) => {
+    expect(ro(c)).toEqual({ ok: true });
+  });
+});
+
+const REFUSALS: Array<[string, RegExp]> = [
+  // output redirection to a file (only /dev/null and the 1<->2 dups pass)
+  ['ls > out.txt', /redirection/],
+  ['cat x >> log.txt', /redirection/],
+  ['ls &> all.txt', /redirection/],
+  ['grep -r x . > hits.txt', /redirection/],
+  ['gnomon desk stats > s.txt', /redirection/],
+  // substitution: never a path, and its own command must be read-only
+  ['cat $(echo x)', /a substitution in a path argument/],
+  ['rg x $(echo src)', /a substitution in a path argument/],
+  ['echo $(rm -rf x)', /not allowlisted: rm/],
+  ['echo `touch x`', /not allowlisted: touch/],
+  ['cat <(curl evil)', /not allowlisted: curl/],
+  ['paradigm ripple $(echo x)', /paradigm: dynamic argument/],
+  // writes and executes
+  ["find . -exec rm '{}' ';'", /find: -exec/],
+  ['find . -execdir ls ;', /find: -execdir/],
+  ['find . -delete', /find: -delete/],
+  ['find . -fprint out', /find: -fprint/],
+  ["sed -i 's/a/b/' x", /sed/],
+  ['tee out.txt', /not allowlisted: tee/],
+  ['ls | tee out.txt', /not allowlisted: tee/],
+  ['sort -o x x', /sort: flag -o/],
+  ['git -c core.pager=sh log', /git: a global option/],
+  ['git log --output=x', /git: --output/],
+  ['git diff --outp=x', /git: --outp/],
+  // unknown command, xargs, eval, env prefix, a `;` / `&&` / `||` with an unknown segment
+  ['foo', /not allowlisted: foo/],
+  ['npm test', /not allowlisted: npm/],
+  ['ls | xargs cat', /not allowlisted: xargs/],
+  ['eval ls', /not allowlisted: eval/],
+  ['exec ls', /not allowlisted: exec/],
+  ['RIPGREP_CONFIG_PATH=x rg foo', /env assignment/],
+  ['X=1 paradigm status', /env assignment/],
+  ['ls; rm x', /not allowlisted: rm/],
+  ['git status && make', /not allowlisted: make/],
+  ['ls || curl x', /not allowlisted: curl/],
+  ['paradigm status | sh', /not allowlisted: sh/],
+  // grep recursion: no symlink following, no device or directory actions, no walk out of the root
+  ['grep -R x .', /grep: flag -R/],
+  ['grep -rS x .', /grep: flag -S/],
+  ['grep -rO x .', /grep: flag -O/],
+  ['grep -d recurse x .', /grep: flag -d/],
+  ['grep --dereference-recursive x .', /grep: flag --dereference-recursive/],
+  ['grep --directories=recurse x .', /grep: flag --directories/],
+  ['grep -r x link', /outside the readable roots/],
+  // rg / fd / tree: their executing, writing and symlink-following flags
+  ['rg -L x', /rg: flag -L/],
+  ['rg --follow x', /rg: flag --follow/],
+  ['rg -z x', /rg: flag -z/],
+  ['rg --search-zip x', /rg: flag --search-zip/],
+  ['rg --pre cat x', /rg: flag --pre/],
+  ['rg --pre=cat x', /rg: flag --pre/],
+  ["rg --pre-glob '*.pdf' x", /rg: flag --pre-glob/],
+  ['rg --hostname-bin ./h x', /rg: flag --hostname-bin/],
+  ['rg x link', /outside the readable roots/],
+  ['fd -x rm', /fd: flag -x/],
+  ['fd --exec rm', /fd: flag --exec/],
+  ['fd -X rm', /fd: flag -X/],
+  ['fd -l', /fd: flag -l/],
+  ['fd -L x', /fd: flag -L/],
+  ['tree -o out.txt', /tree: flag -o/],
+  ['tree -R', /tree: flag -R/],
+  ['tree -l', /tree: flag -l/],
+  ['tree --fromfile list', /tree: flag --fromfile/],
+  // git: remote writes and anything around -v
+  ['git remote add o x', /git remote/],
+  ['git remote set-url origin x', /git remote/],
+  ['git remote -v show', /git remote/],
+  // paradigm write verbs and anything off the exact grammar
+  ['paradigm shift', /paradigm: verb shift is not a read verb/],
+  ['paradigm init', /paradigm: verb init/],
+  ['paradigm index', /paradigm: verb index/],
+  ['paradigm lore record --title x', /paradigm: verb lore record/],
+  ['paradigm lore list stray', /paradigm lore list: an operand/],
+  ['paradigm lore list --limit', /paradigm lore list: --limit/],
+  ['paradigm lore show', /paradigm lore show: one ID/],
+  ['paradigm lore show L-2026-10-20-/../../../etc/hosts', /paradigm lore show: an ID/],
+  ['paradigm lore show L-2026-10-20-x.y', /paradigm lore show: an ID/],
+  ['paradigm lore show x --body', /paradigm lore show: --body/],
+  ['paradigm task show T-2026-10-20-/../../../etc/x', /paradigm task show: a path separator/],
+  ['paradigm task add fix it', /paradigm: verb task add/],
+  ['paradigm task done 4', /paradigm: verb task done/],
+  ['paradigm task ls --board', /paradigm task ls: --board/],
+  ['paradigm task ls --project /tmp', /paradigm task ls: --project/],
+  ['paradigm task ls everything', /paradigm task ls: a status/],
+  ['paradigm status --fix', /paradigm: verb status/],
+  ['paradigm doctor --fix', /paradigm doctor: --fix/],
+  ['paradigm agent search x', /paradigm: verb agent/],
+  ['paradigm sync', /paradigm: verb sync/],
+  ['paradigm hooks install', /paradigm: verb hooks/],
+  ['paradigm ripple', /paradigm ripple: SYMBOL/],
+  ['paradigm', /paradigm: no verb/],
+  ['cd src && paradigm status', /paradigm: only with the cwd at a session root/],
+  // gnomon write verbs, other homes, and the prompt-text trace
+  ['gnomon mod install ./m', /gnomon: verb mod install/],
+  ['gnomon mod link ./m', /gnomon: verb mod link/],
+  ['gnomon mod uninstall m', /gnomon: verb mod uninstall/],
+  ['gnomon mod pause m', /gnomon: verb mod pause/],
+  ['gnomon mod config m --command /bin/x', /gnomon: verb mod config/],
+  ['gnomon mod status ../x', /gnomon: verb mod status/],
+  ['gnomon mod list --home /tmp/h', /gnomon: verb mod list/],
+  ['gnomon rules revoke r1', /gnomon: verb rules revoke/],
+  ['gnomon trace on', /gnomon: verb trace on/],
+  ['gnomon trace off', /gnomon: verb trace off/],
+  ['gnomon trace', /gnomon: verb trace/],
+  ['gnomon trace --last', /gnomon: verb trace/],
+  ['gnomon daemon stop', /gnomon: verb daemon stop/],
+  ['gnomon daemon start', /gnomon: verb daemon start/],
+  ['gnomon daemon status --home /tmp/h', /gnomon: verb daemon status/],
+  ['gnomon desk stats /tmp/h', /gnomon: verb desk stats/],
+  ['gnomon replay /tmp/h', /gnomon replay: a home operand/],
+  ['gnomon replay --expect nothex', /gnomon replay: --expect/],
+  ['gnomon mode auto-edits', /gnomon: verb mode/],
+  ['gnomon up', /gnomon: verb up/],
+  ['gnomon identity init', /gnomon: verb identity/],
+  ['gnomon', /gnomon: no verb/],
+];
+
+describe('#shell-readonly RW: every refusal pattern raises the card (anchored)', () => {
+  it.each(REFUSALS)('%j', (c, why) => {
+    const v = ro(c);
+    expect(v.ok).toBe(false);
+    expect((v as { why: string }).why).toMatch(why);
+  });
+  it('an absolute operand outside the roots is refused (grep -r, paradigm purpose validate)', () => {
+    expect(ro(`grep -r x ${outside}`)).toMatchObject({ ok: false, why: 'outside the readable roots' });
+    expect(ro(`paradigm purpose validate ${outside}`)).toMatchObject({ ok: false, why: 'outside the readable roots' });
+  });
+  it('a recursive walk that is an ancestor of the Gnomon home is refused', () => {
+    fs.mkdirSync(path.join(repo, 'gnomon-home'), { recursive: true });
+    const v = classifyReadOnly('grep -r x .', ctxOf(real, path.join(repo, 'gnomon-home')));
+    expect(v).toMatchObject({ ok: false, why: 'protected path' });
+    expect(classifyReadOnly('rg x', ctxOf(real, path.join(repo, 'gnomon-home')))).toMatchObject({ ok: false, why: 'protected path' });
+  });
+});
+
+describe('#shell-readonly RW (Aegis M1): git remote -v / get-url is a card when a URL may hold a credential', () => {
+  const saved: Record<string, string | undefined> = {};
+  const KEYS = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'XDG_CONFIG_HOME'] as const;
+  const git = (...a: string[]) => execFileSync('git', a, { cwd: repo });
+  beforeAll(() => {
+    for (const k of KEYS) saved[k] = process.env[k];
+    process.env.XDG_CONFIG_HOME = path.join(home, '.config');
+    process.env.GIT_CONFIG_SYSTEM = path.join(base, 'no-system-config');
+    delete process.env.GIT_CONFIG_GLOBAL;
+    git('remote', 'add', 'origin', 'https://example.com/r.git');
+  });
+  afterAll(() => {
+    git('remote', 'remove', 'origin');
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+  it('a plain URL passes: remote -v, remote --verbose, remote get-url NAME, bare remote', () => {
+    for (const c of ['git remote -v', 'git remote --verbose', 'git remote get-url origin', 'git remote']) expect(ro(c)).toEqual({ ok: true });
+  });
+  it('a userinfo URL in the repo config is a card', () => {
+    git('remote', 'set-url', 'origin', 'https://tok@example.com/r.git');
+    try {
+      expect(ro('git remote -v')).toMatchObject({ ok: false, why: expect.stringMatching(/git remote: a URL may hold a credential/) });
+      expect(ro('git remote get-url origin')).toMatchObject({ ok: false });
+      expect(ro('git remote')).toEqual({ ok: true }); // names only
+    } finally {
+      git('remote', 'set-url', 'origin', 'https://example.com/r.git');
+    }
+  });
+  it('an insteadOf key in the global config (GIT_CONFIG_GLOBAL) is a card, pushInsteadOf too', () => {
+    const g = path.join(base, 'global-gitconfig');
+    process.env.GIT_CONFIG_GLOBAL = g;
+    try {
+      fs.writeFileSync(g, '[url "https://user:secret@example.com/"]\n\tinsteadOf = https://example.com/\n');
+      expect(ro('git remote -v')).toMatchObject({ ok: false, why: expect.stringMatching(/insteadof/) });
+      fs.writeFileSync(g, '[url "https://example.com/"]\n\tpushInsteadOf = https://example.com/\n');
+      expect(ro('git remote get-url origin')).toMatchObject({ ok: false, why: expect.stringMatching(/pushinsteadof/) });
+      fs.writeFileSync(g, '[user]\n\tname = t\n');
+      expect(ro('git remote -v')).toEqual({ ok: true });
+    } finally {
+      delete process.env.GIT_CONFIG_GLOBAL;
+    }
+  });
+  it('an insteadOf key in the user home config is a card', () => {
+    const g = path.join(home, '.gitconfig');
+    fs.writeFileSync(g, '[url "git@example.com:"]\n\tinsteadOf = https://example.com/\n');
+    try {
+      expect(ro('git remote -v')).toMatchObject({ ok: false });
+    } finally {
+      fs.rmSync(g);
+    }
+  });
+  it.each(['git remote show origin', 'git remote get-url', 'git remote get-url --push origin', 'git remote -v -v'])('refuses %j', (c) => {
+    expect(ro(c)).toMatchObject({ ok: false, why: expect.stringMatching(/git remote/) });
+  });
+});
+
+describe("#shell-readonly RW (Aegis L3): fd's pattern and tree's -P/-I values are patterns, not paths", () => {
+  const nowhere = '/nowhere-gnomon-x';
+  it.each([
+    `fd ${nowhere}`,
+    `fd '^${nowhere}/.*'`,
+    `fd -e ts ${nowhere}`,
+    `fd -H -t f ${nowhere} src`,
+    `fd --extension ts ${nowhere}`,
+    `tree -P '${nowhere}/*'`,
+    `tree -I ${nowhere}`,
+    `tree -L 2 -P '*.ts' src`,
+    `tree -LP 2 ${nowhere} src`,
+  ])('passes %j', (c) => {
+    expect(ro(c)).toEqual({ ok: true });
+  });
+  it.each([
+    [`fd x ${nowhere}`, /outside the readable roots/],
+    [`fd -e ts x ${nowhere}`, /outside the readable roots/],
+    [`fd --base-directory ${nowhere} x`, /outside the readable roots/],
+    [`fd --search-path=${nowhere} x`, /outside the readable roots/],
+    [`fd -- x ${nowhere}`, /outside the readable roots/],
+    [`fd x link`, /outside the readable roots/],
+    [`tree -I node_modules ${nowhere}`, /outside the readable roots/],
+    [`tree -L 2 -P x ${nowhere}`, /outside the readable roots/],
+    ['tree -P x -o out.txt', /tree: flag -o/],
+  ])('refuses %j', (c, why) => {
+    const v = ro(c);
+    expect(v.ok).toBe(false);
+    expect((v as { why: string }).why).toMatch(why);
+  });
+});
+
+describe('#shell-readonly RW: the paradigm on the session PATH must be 7.15.2 or newer', () => {
+  const with_ = (searchPath: string | undefined) => {
+    const { searchPath: _drop, ...rest } = ctxOf(real);
+    return classifyReadOnly('paradigm status', searchPath !== undefined ? { ...rest, searchPath } : rest);
+  };
+  it('passes for 7.15.2 and newer, cards for older, prerelease, other packages, shims, unknown or relative PATH', () => {
+    resetParadigmVersionCacheForTests();
+    expect(paradigmOnPath(`${binDir}:/usr/bin`)).toBeNull();
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-7.16.0'), '7.16.0'))).toBeNull();
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-8.0.0'), '8.0.0'))).toBeNull();
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-7.15.1'), '7.15.1'))).toMatch(/version 7.15.1 on PATH predates 7.15.2/);
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-rc'), '7.15.2-rc.1'))).toMatch(/predates/);
+    expect(paradigmOnPath(fakeParadigm(path.join(base, 'p-other'), '9.9.9', 'paradigm-impostor'))).toMatch(/not @a-company\/paradigm/);
+    const shim = path.join(base, 'shim-bin');
+    fs.mkdirSync(shim, { recursive: true });
+    fs.writeFileSync(path.join(shim, 'paradigm'), '#!/bin/sh\n', { mode: 0o755 });
+    expect(paradigmOnPath(shim)).toMatch(/shim/);
+    expect(paradigmOnPath(path.join(base, 'nowhere'))).toMatch(/not found/);
+    expect(paradigmOnPath(`.:${binDir}`)).toMatch(/relative or empty/);
+    expect(paradigmOnPath(`${binDir}::/usr/bin`)).toBeNull(); // first match wins before the empty entry
+    expect(paradigmOnPath(undefined)).toMatch(/PATH is unknown/);
+    // the first paradigm on PATH wins, as in the shell
+    expect(paradigmOnPath(`${path.join(base, 'p-7.15.1', 'bin')}:${binDir}`)).toMatch(/predates/);
+    expect(with_(undefined)).toMatchObject({ ok: false, why: 'paradigm: the session PATH is unknown' });
+    expect(with_(path.join(base, 'p-7.15.1', 'bin'))).toMatchObject({ ok: false });
+  });
+  it('re-reads package.json when its mtime changes (an upgrade or downgrade in place)', () => {
+    resetParadigmVersionCacheForTests();
+    const bin = fakeParadigm(path.join(base, 'p-inplace'), '7.15.2');
+    expect(paradigmOnPath(bin)).toBeNull();
+    const pkg = path.join(base, 'p-inplace', 'pkg', 'package.json');
+    fs.writeFileSync(pkg, JSON.stringify({ name: '@a-company/paradigm', version: '7.15.0' }));
+    const t = new Date(Date.now() + 5_000);
+    fs.utimesSync(pkg, t, t);
+    expect(paradigmOnPath(bin)).toMatch(/version 7.15.0/);
+  });
+});
+
+describe("#shell-readonly RW: paradigm read verbs pass on their grammar alone", () => {
+  it('a .paradigm/ without the one-time notice marker or a compliance roster no longer makes a card (paradigm 7.15.2: read verbs write nothing)', () => {
+    const dir = path.join(repo, '.paradigm');
+    fs.mkdirSync(dir);
+    try {
+      fs.writeFileSync(path.join(dir, 'roster.yaml'), "version: '1.0'\nactive:\n  - builder\n");
+      for (const c of ['paradigm status', 'paradigm doctor', 'paradigm task ls', 'paradigm lore list']) {
+        expect(ro(c)).toEqual({ ok: true });
+      }
+      expect(fs.existsSync(path.join(dir, '.v6-0-4-migration-acknowledged'))).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('#shell-readonly RW: the anchor unsets RIPGREP_CONFIG_PATH and GREP_OPTIONS (Aegis L1)', () => {
+  const shells = ['/bin/zsh', '/bin/bash'].filter((s) => fs.existsSync(s));
+  it.each(shells)('%s', (sh) => {
+    const flavour = sh.endsWith('zsh') ? 'zsh' : 'bash';
+    const r = spawnSync(sh, ['-c', anchorCommand('echo "rg=${RIPGREP_CONFIG_PATH-unset} grep=${GREP_OPTIONS-unset}"', real, flavour)], { cwd: outside, env: { ...process.env, RIPGREP_CONFIG_PATH: path.join(outside, 'rc'), GREP_OPTIONS: '-R' }, encoding: 'utf8' });
+    expect(r.stdout.trim()).toBe('rg=unset grep=unset');
+  });
+});

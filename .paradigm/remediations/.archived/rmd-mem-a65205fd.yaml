@@ -1,0 +1,13 @@
+id: rmd-mem-a65205fd
+claimant: memory
+severity: advise
+reason: >-
+  Native memory: Agent create defaults to project scope — Feedback/tip memory belongs in the habits
+  system.
+unblock_hint: >-
+  Curate with: paradigm memory route mem-a65205fd --to habits (or ignore; this advisory self-clears
+  after ~14 days).
+created: '2026-10-24T01:13:30.766Z'
+expires_at: '2026-11-07T17:40:28.401Z'
+target:
+  file: feedback_agent_create_scope.md

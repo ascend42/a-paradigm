@@ -52,7 +52,10 @@ import {
 } from './field-failures.js';
 // The metric lives in premise-core (the canonical rollup). We prove honesty
 // through the SAME ledger the decay pass writes.
-import { computeRepeatFailureRate } from '@a-company/premise-core';
+import {
+  computeRepeatFailureRate,
+  readClassroomCertifications as readCertsForRollup,
+} from '@a-company/premise-core';
 import type { NotebookEntry } from '../types/notebooks.js';
 
 // ────────────────────────────────────────────────────────
@@ -214,7 +217,7 @@ describe('runDecayPass — metric honesty (the denominator is real)', () => {
     }
 
     // BEFORE decay: resolved == overturned only ⇒ rate is a structural 1.0.
-    const before = computeRepeatFailureRate(readClassroomCertifications(projectDir));
+    const before = computeRepeatFailureRate(readCertsForRollup(projectDir));
     expect(before.overall).toBe(1);
 
     // Decay flips the three survivors.
@@ -222,7 +225,7 @@ describe('runDecayPass — metric honesty (the denominator is real)', () => {
     expect(result.certsSurvived).toBe(3);
 
     // AFTER decay: resolved = 1 overturned + 3 survived = 4 ⇒ rate = 1/4 = 0.25.
-    const after = computeRepeatFailureRate(readClassroomCertifications(projectDir));
+    const after = computeRepeatFailureRate(readCertsForRollup(projectDir));
     expect(after.overall).toBe(0.25);
     expect(after.perAgent[AGENT].resolved).toBe(4);
     expect(after.perAgent[AGENT].overturned).toBe(1);

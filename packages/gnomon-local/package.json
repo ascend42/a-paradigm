@@ -1,0 +1,42 @@
+{
+  "name": "@a-company/gnomon-local",
+  "version": "8.0.0",
+  "private": true,
+  "description": "gnomon-local — the Gnomon local-model session child (spec §13.1): a separate executable the kernel's #local-runner drives over stdio in pi's --mode rpc JSONL shape; OpenAI-compatible LOCAL transports only (no cloud providers), loopback/LAN endpoints only. ZERO runtime dependencies.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "gnomon-local": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-local"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

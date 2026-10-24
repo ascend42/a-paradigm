@@ -2,9 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    // The CLI imports sibling workspace sources directly (../paradigm-mcp/src,
+    // which tsup bundles), so the source root spans packages/, not just ./src.
+    "rootDir": ".."
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
-

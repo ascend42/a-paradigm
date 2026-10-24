@@ -343,7 +343,7 @@ export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
         try { return JSON.parse(line) as SessionWorkEntry & { consumed?: boolean }; }
         catch { return null; }
       })
-      .filter((e): e is SessionWorkEntry => e !== null && !(e as Record<string, unknown>).consumed);
+      .filter((e): e is SessionWorkEntry => e !== null && !e.consumed);
   } catch {
     return [];
   }

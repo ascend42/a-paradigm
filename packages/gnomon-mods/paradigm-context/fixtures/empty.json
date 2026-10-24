@@ -1,0 +1,48 @@
+{
+  "view": "paradigm-context.sheet",
+  "input": {
+    "paradigm": {
+      "v": "paradigm-slice:v1",
+      "state": "ok",
+      "project": 5,
+      "name": "fresh-repo",
+      "at": "2026-10-20",
+      "newest": null,
+      "tasks": {
+        "open": 0,
+        "high": 0,
+        "items": [],
+        "count": {
+          "n": 0,
+          "of": 0
+        }
+      },
+      "decisions": {
+        "items": [],
+        "count": {
+          "n": 0,
+          "of": 0
+        }
+      },
+      "lore": {
+        "items": [],
+        "count": {
+          "n": 0,
+          "of": 0
+        }
+      },
+      "symbols": [],
+      "skipped": {
+        "malformed": 0,
+        "refused": 0,
+        "secret": 0,
+        "truncated": false
+      }
+    }
+  },
+  "width": 40,
+  "prefs": {
+    "motion": "full",
+    "theme": "day"
+  }
+}

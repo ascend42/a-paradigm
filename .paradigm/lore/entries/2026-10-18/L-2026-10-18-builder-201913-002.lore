@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-201913-002
+type: insight
+timestamp: '2026-10-18T20:19:13.405Z'
+author: builder
+title: Hooks-in-sessions is a root-config switch; default unchanged
+summary: 'T-010 L4: founder has not decided. config.sessions.hooks = all (default, user+project+local) | user-only | none. Only root-signed config selects it. Never configured => all; a signed config that later fails to apply (rollback/missing/unsigned/invalid) => none (fail closed). Empty --setting-sources behaviour is unprobed (p01 residual).'
+symbols_touched:
+  - '#claude-adapter'
+  - '#supervisor'
+  - '#budget-fuse'
+commit: 6ffa897e
+tags:
+  - decision
+  - gnomon
+  - m1.7
+git_context:
+  ref: 6ffa897e44992c263e69041db5392e7f89b87b47
+  branch: gnomon/m17-slice2
+  dirty: true

@@ -1,0 +1,45 @@
+id: L-2026-10-17-ascend-062138-001
+type: human-note
+timestamp: '2026-10-17T06:21:38.193Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'State: voice-approval reviews (26 Aegis, 27 Arky) and librarian panel (28) landed; founder rulings pending'
+summary: |-
+  Research 26 (Aegis), 27 (Arky) and 28 (librarian panel) are saved. Aegis and Arky agree on the following:
+  - a fresh-presence "voice arm" that binds the approvals-key unlock to one voice connection;
+  - the broker signs voice decisions in a separate domain, gnomon:approve-voice:v1, with no new verb;
+  - the toggles are root-signed, keyed by repo, never in project.yaml, and turning them off needs no presence;
+  - every voice decision has a hold with undo;
+  - TTS phrase masking and half-duplex prevent agent self-approval;
+  - install, use-api-token, always and voice settings stay hand-only;
+  - screen lock drops the arm.
+
+  They diverge on five points, which need the founder:
+  - (a) Targeting: Aegis wants secret per-card handle words, shown only on screen or spoken in headphones, which the kernel can verify. Arky wants spoken ordinals and labels against a read-back deck, which works eyes-free but relies on checks the voice client asserts.
+  - (b) Gate arm: Aegis wants 5 min, at most 3 decisions, headphones and a 2-word challenge. Arky wants up to 60 min with readback plus confirm, conversation mode allowed.
+  - (c) Reversible arm: Aegis wants a 60 min hard cap and 30 decisions. Arky wants 240 min.
+  - (d) KNOT resolve and verdicts by voice: Aegis wants a separate sub-opt-in, default off. Arky includes them in toggle 2.
+  - (e) Toggle storage: Aegis wants config.yaml; Arky wants grant rows. Recommendation: Arky's grant rows.
+
+  The librarian panel (28) recommends no new agent: activate the existing archivist "Index", widen Loid's memory review to research, specs, lore and decisions, add Rune's dead-reference test, and put branches and stashes on Cid's board. That also awaits the founder. Next: rulings, then spec v3.4, then the aesthetic boards.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gnomon-voice'
+files_created:
+  - .paradigm/research/paradigm-8/26-aegis-voice-approvals.md
+  - .paradigm/research/paradigm-8/27-arky-voice-approvals.md
+  - .paradigm/research/paradigm-8/28-panel-librarian-agent.md
+tags:
+  - paradigm-8
+  - gnomon
+  - state
+  - voice
+  - librarian
+linked_lore:
+  - L-2026-10-17-ascend-061158-001
+git_context:
+  ref: 02d0c89115a180d1a85a10fab3f943336d80afaa
+  branch: ideate/paradigm-8
+  dirty: true

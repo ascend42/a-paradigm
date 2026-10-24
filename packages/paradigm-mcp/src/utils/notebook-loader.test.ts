@@ -549,7 +549,7 @@ describe('addNotebookEntry', () => {
   });
 
   it('disambiguates distinct learnings that collide on the concept slug', () => {
-    const common = { context: 'c', concepts: ['typescript', 'architecture'], tags: [], confidence: 0.5 } as const;
+    const common = { context: 'c', concepts: ['typescript', 'architecture'], tags: [] as string[], confidence: 0.5 };
     const a = addNotebookEntry(
       'arch',
       { ...common, snippet: 'Feature-slicing wins for product code.', provenance: { source: 'lore', loreEntryId: 'LJ-a' } },

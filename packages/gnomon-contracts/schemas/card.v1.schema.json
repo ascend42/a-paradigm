@@ -1,0 +1,559 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/card.v1.schema.json",
+  "title": "card:v1",
+  "description": "Broker decision card (spec §3.4). Enums additive per §4.9; unknown state = not decidable.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "card:v1"
+    },
+    "cardId": {
+      "type": "string",
+      "pattern": "^card:[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "permission",
+        "budget",
+        "knot",
+        "tend",
+        "verdict",
+        "merge-conflict",
+        "gate-class",
+        "install",
+        "fallback",
+        "ask-user",
+        "plan",
+        "api-token",
+        "voice-share",
+        "voice-arm",
+        "grant",
+        "handoff",
+        "declassify",
+        "peer-pair",
+        "reconsider",
+        "strictness",
+        "incident",
+        "daemon-stop",
+        "loop-trust",
+        "loop-choice"
+      ],
+      "x-gnomon-additive": true
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "out",
+        "in"
+      ]
+    },
+    "requestedBy": {
+      "type": "string",
+      "pattern": "^p:[0-9a-hjkmnp-tv-z]{8}\\/[a-z0-9][a-z0-9._-]{0,63}(@[0-9a-f]{8})?$"
+    },
+    "hsid": {
+      "type": "string",
+      "pattern": "^hsid:(v1:[0-7][0-9A-HJKMNP-TV-Z]{25}|v1d:[0-9A-HJKMNP-TV-Z]{26})$"
+    },
+    "contractId": {
+      "type": "string",
+      "pattern": "^contract:v1:[0-9a-f]{64}$"
+    },
+    "nodeId": {
+      "type": "string"
+    },
+    "attended": {
+      "type": "boolean"
+    },
+    "approverPolicy": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "self"
+          ],
+          "x-gnomon-additive": true
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "block": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "display-block:v1"
+        }
+      },
+      "required": [
+        "schemaVersion"
+      ]
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "hidden-chars",
+          "bidi",
+          "voice-phrase",
+          "peer",
+          "irreversible",
+          "claim-mismatch"
+        ],
+        "x-gnomon-additive": true
+      }
+    },
+    "actions": {
+      "type": "array"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "held",
+        "decided",
+        "expired"
+      ],
+      "x-gnomon-additive": true
+    },
+    "heldUntil": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "heldDecision": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "always",
+        "deny",
+        "resume",
+        "resolve",
+        "accept",
+        "reject",
+        "install",
+        "answer",
+        "approve-plan",
+        "fallback-cloud",
+        "use-api-token",
+        "withdraw",
+        "extend",
+        "restart",
+        "continue",
+        "stop"
+      ],
+      "x-gnomon-additive": true
+    },
+    "voice": {
+      "type": "object",
+      "properties": {
+        "eligible": {
+          "type": "string",
+          "enum": [
+            "none",
+            "reversible",
+            "gate",
+            "judgment"
+          ],
+          "x-gnomon-additive": true
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "hand-only",
+            "class",
+            "flagged",
+            "voice-phrase",
+            "policy"
+          ],
+          "x-gnomon-additive": true
+        },
+        "label": {
+          "type": "string"
+        },
+        "readback": {
+          "type": "string"
+        },
+        "readbackHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "echo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "eligible",
+        "label",
+        "readback",
+        "readbackHash",
+        "echo"
+      ]
+    },
+    "decidedBy": {
+      "type": "string",
+      "pattern": "^p:[0-9a-hjkmnp-tv-z]{8}\\/[a-z0-9][a-z0-9._-]{0,63}(@[0-9a-f]{8})?$"
+    },
+    "decidedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "decisionSig": {
+      "type": "string"
+    },
+    "presence": {
+      "type": "string",
+      "enum": [
+        "fresh",
+        "cached",
+        "cli",
+        "voice-armed"
+      ],
+      "x-gnomon-additive": true
+    },
+    "via": {
+      "type": "string",
+      "enum": [
+        "gui",
+        "wrapper",
+        "cli",
+        "client",
+        "voice",
+        "link"
+      ],
+      "x-gnomon-additive": true
+    },
+    "voiceDecision": {
+      "type": "object",
+      "properties": {
+        "armId": {
+          "type": "string",
+          "pattern": "^arm:[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        "armClass": {
+          "type": "string",
+          "enum": [
+            "reversible",
+            "gate"
+          ],
+          "x-gnomon-additive": true
+        },
+        "humanConnId": {
+          "type": "string",
+          "pattern": "^conn:[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        "voiceConnId": {
+          "type": "string",
+          "pattern": "^conn:[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+        },
+        "turnId": {
+          "type": "string"
+        },
+        "confirmTurnId": {
+          "type": "string"
+        },
+        "deckId": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "handleHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "challengeHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "readbackHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "speakerId": {
+          "type": "string"
+        },
+        "asrConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "ptt",
+            "conversation"
+          ],
+          "x-gnomon-additive": true
+        }
+      },
+      "required": [
+        "armId",
+        "armClass",
+        "humanConnId",
+        "voiceConnId",
+        "turnId",
+        "speakerId",
+        "asrConfidence",
+        "mode"
+      ]
+    },
+    "note": {
+      "type": "object",
+      "properties": {
+        "agentClaims": {
+          "type": "object",
+          "properties": {
+            "testedHow": {
+              "type": "object",
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "x-gnomon-max-utf8-bytes": 1024
+                },
+                "refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|doodle):[^\\s]+$"
+                  }
+                }
+              },
+              "required": [
+                "summary",
+                "refs"
+              ],
+              "additionalProperties": false
+            },
+            "risk": {
+              "type": "object",
+              "properties": {
+                "tier": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high"
+                  ],
+                  "x-gnomon-additive": true
+                },
+                "why": {
+                  "type": "string",
+                  "x-gnomon-max-utf8-bytes": 512
+                },
+                "blast": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^sym:.+$"
+                  }
+                }
+              },
+              "required": [
+                "tier",
+                "why",
+                "blast"
+              ],
+              "additionalProperties": false
+            },
+            "revert": {
+              "type": "object",
+              "properties": {
+                "how": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "command",
+                    "manual"
+                  ],
+                  "x-gnomon-additive": true
+                },
+                "steps": {
+                  "type": "string",
+                  "x-gnomon-max-utf8-bytes": 1024
+                },
+                "reversible": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "how",
+                "steps",
+                "reversible"
+              ],
+              "additionalProperties": false
+            },
+            "draftedBy": {
+              "type": "string",
+              "pattern": "^p:[0-9a-hjkmnp-tv-z]{8}\\/[a-z0-9][a-z0-9._-]{0,63}(@[0-9a-f]{8})?$"
+            }
+          },
+          "required": [
+            "testedHow",
+            "risk",
+            "revert",
+            "draftedBy"
+          ],
+          "additionalProperties": false,
+          "x-gnomon-trust": "untrusted: agent-claimed, sanitized (§4.5), never executed, never authority (B16)"
+        },
+        "kernel": {
+          "type": "object",
+          "properties": {
+            "verified": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "of": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "n",
+                "of"
+              ],
+              "additionalProperties": false
+            },
+            "risk": {
+              "type": "object",
+              "properties": {
+                "floor": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high"
+                  ],
+                  "x-gnomon-additive": true
+                },
+                "effective": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high"
+                  ],
+                  "x-gnomon-additive": true
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "floor",
+                "effective",
+                "reasons"
+              ],
+              "additionalProperties": false
+            },
+            "revert": {
+              "type": "object",
+              "properties": {
+                "how": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "none"
+                  ],
+                  "x-gnomon-additive": true
+                },
+                "ref": {
+                  "type": "string",
+                  "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|doodle):[^\\s]+$"
+                }
+              },
+              "required": [
+                "how"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "verified",
+            "risk",
+            "revert"
+          ],
+          "additionalProperties": false,
+          "x-gnomon-trust": "kernel-computed; never written by the agent"
+        }
+      },
+      "required": [
+        "agentClaims",
+        "kernel"
+      ],
+      "additionalProperties": false
+    },
+    "strictness": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "L0",
+            "L1",
+            "L2",
+            "L3"
+          ],
+          "x-gnomon-additive": true
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "ask",
+            "auto-edits"
+          ],
+          "x-gnomon-additive": true
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "mode",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "cli": {
+      "type": "object"
+    },
+    "timeoutAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "cardId",
+    "kind",
+    "requestedBy",
+    "attended",
+    "approverPolicy",
+    "block",
+    "contentHash",
+    "actions",
+    "state"
+  ],
+  "additionalProperties": false
+}

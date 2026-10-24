@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm-mcp",
-  "version": "7.15.2",
+  "version": "8.0.1",
   "private": true,
   "description": "MCP server for Paradigm - exposes symbols, gates, flows to AI assistants",
   "type": "module",
@@ -23,6 +23,7 @@
     "context"
   ],
   "dependencies": {
+    "@a-company/gnomon": "8.0.1",
     "@a-company/paradigm-logger": "*",
     "@a-company/portal-core": "*",
     "@a-company/premise-core": "*",
@@ -50,6 +51,6 @@
     "directory": "packages/paradigm-mcp"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   }
 }

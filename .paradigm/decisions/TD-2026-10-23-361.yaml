@@ -1,0 +1,41 @@
+id: TD-2026-10-23-361
+timestamp: '2026-10-23T22:13:43.810Z'
+title: MCP servers in Gnomon honor the human's own allow rules and run linked code live
+decision: >-
+  (1) In Gnomon sessions, the human's existing Claude Code permission rules for MCP tools (e.g. allow mcp__paradigm__*)
+  apply as they do in Claude Code; Gnomon does not force an ask rule over them. The enable card and the Settings row
+  list which of that server's tools the human's settings auto-allow, so it is never silent, and the enable card no
+  longer claims "nothing is allowed automatically". (2) The first-party Paradigm MCP runs from the installed (possibly
+  npm-linked) package as-is, with no content pin; a session in the linked checkout can change what later sessions'
+  Paradigm server runs, and the founder accepts that for development convenience. The resolved path is shown in
+  Settings. Aegis's other findings (M1 ${VAR} URL bypass, M2 law-7 on references, symlinked .mcp.json, secret-shaped
+  args, inline-code flags, event ordering) are fixed regardless.
+rationale: >-
+  The founder chose both on 2026-10-23 after Aegis H1 and M3 were explained: "Honor my rules, show them" and "Run it
+  live". This is the same principle as TD-2026-10-23-939, -496 and -268: the human's own choices and environment are the
+  control. Aegis's alternatives (force ask for every mcp__ tool; a pinned copy, or a card on change) were offered and
+  declined.
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: aegis
+    role: agent
+    stance: dissented
+  - id: claude
+    role: agent
+    stance: neutral
+alternatives_considered:
+  - option: Force an ask rule for every mcp__ tool via policy.json
+    rejected_because: Overrides the human's own Claude Code rules
+  - option: A pinned copy of Paradigm's MCP, with a one-click update on a new build
+    rejected_because: The founder prefers dev builds to reach sessions immediately
+symbols_affected:
+  - '#mcp-servers'
+  - ^mcp-server-enable
+status: active
+tags:
+  - gnomon
+  - mcp
+  - security
+  - permissions

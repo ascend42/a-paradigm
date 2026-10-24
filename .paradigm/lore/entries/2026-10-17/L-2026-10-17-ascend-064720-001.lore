@@ -1,0 +1,41 @@
+id: L-2026-10-17-ascend-064720-001
+type: human-note
+timestamp: '2026-10-17T06:47:20.122Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon spec v3.4: voice approvals (P8-D58..D62) written; OPEN 14 awaits founder'
+summary: |-
+  docs/specs/gnomon.md is now v3.4, up from 1148 to 1284 lines. The main addition is the new §14.7 Voice approvals:
+  - separate reversible and gate arms, each opened by fresh presence;
+  - reversible cards are targeted by deck ordinal or label; gate cards need a secret handle plus a 2-word challenge;
+  - hold, echo and undo;
+  - the TTS phrase mask, interception and the 750 ms mute;
+  - grant-row toggles with a judgment sub-class for D61;
+  - the never-by-voice list.
+
+  The changes ripple through §0, §3.1, §3.4, §4–5, §9, §11, §12.6, §14, §15, §19 (M4.5 and M4.6), §20, §22, §A.4 and a §16 Windows row. Appendix A was regenerated with compile71.py (zero unoracled). The builder took the stricter Aegis option where the reviews were silent: separate arms, no implicit single-card target, arming only from the wrapper or a native client, a playback gate on both classes. It also fixed a contradiction in Aegis's design: handles are shown or spoken by the arming connection, never by the voice child.
+
+  OPEN 14 for the founder:
+  - (a) Decision-count ceilings: the defaults of 30 and 3 are the maxima until ruled.
+  - (b) Conversation mode for gate class.
+  - (c) S26-L3, deny-by-voice on every card kind.
+  - (d) Whether companion presence (Watch) replaces the gate arm.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gnomon-voice'
+  - '#approval-broker'
+files_modified:
+  - docs/specs/gnomon.md
+tags:
+  - paradigm-8
+  - gnomon
+  - spec
+  - voice
+linked_lore:
+  - L-2026-10-17-ascend-063541-001
+git_context:
+  ref: 382646a973d90a8f6a9511f3cedee1cc08c39863
+  branch: ideate/paradigm-8
+  dirty: true

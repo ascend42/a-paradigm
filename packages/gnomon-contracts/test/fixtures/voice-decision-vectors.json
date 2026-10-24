@@ -1,0 +1,184 @@
+{
+  "schema": "gnomon-voice-decision-vectors:v1",
+  "note": "Shared by packages/gnomon-contracts/test/voice-decision.test.ts and packages/gnomon-helper/darwin/Tests (Swift). `message` excludes the domain line gnomon:approve-voice:v1\\n. LF-pinned (.gitattributes).",
+  "valid": [
+    {
+      "name": "minimal: every optional hash absent",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-",
+      "fields": {
+        "cardId": "card:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "decision": "allow",
+        "cardContentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approverPrincipalId": "p:abcdefgh/matt",
+        "armId": "arm:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "humanConnId": "conn:h",
+        "voiceConnId": "conn:v",
+        "turnId": "turn:1",
+        "utteranceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "handleHash": "-",
+        "challengeHash": "-",
+        "readbackHash": "-",
+        "confirmHash": "-",
+        "answerDigest": "-"
+      }
+    },
+    {
+      "name": "every optional hash present",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fields": {
+        "cardId": "card:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "decision": "allow",
+        "cardContentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approverPrincipalId": "p:abcdefgh/matt",
+        "armId": "arm:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "humanConnId": "conn:h",
+        "voiceConnId": "conn:v",
+        "turnId": "turn:1",
+        "utteranceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "handleHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challengeHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "readbackHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "confirmHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "answerDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "turnId of 256 UTF-16 units (2-byte UTF-8 é)",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\néééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-",
+      "fields": {
+        "cardId": "card:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "decision": "allow",
+        "cardContentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approverPrincipalId": "p:abcdefgh/matt",
+        "armId": "arm:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "humanConnId": "conn:h",
+        "voiceConnId": "conn:v",
+        "turnId": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+        "utteranceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "handleHash": "-",
+        "challengeHash": "-",
+        "readbackHash": "-",
+        "confirmHash": "-",
+        "answerDigest": "-"
+      }
+    },
+    {
+      "name": "turnId of 256 UTF-16 units (128 surrogate-pair emoji)",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\n😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-",
+      "fields": {
+        "cardId": "card:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "decision": "allow",
+        "cardContentHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approverPrincipalId": "p:abcdefgh/matt",
+        "armId": "arm:01HZZZZZZZZZZZZZZZZZZZZZZZ",
+        "humanConnId": "conn:h",
+        "voiceConnId": "conn:v",
+        "turnId": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "utteranceHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "handleHash": "-",
+        "challengeHash": "-",
+        "readbackHash": "-",
+        "confirmHash": "-",
+        "answerDigest": "-"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "trailing newline",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-\n"
+    },
+    {
+      "name": "extra line",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-\nextra"
+    },
+    {
+      "name": "missing line",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-"
+    },
+    {
+      "name": "wrong marker",
+      "message": "gnomon:voice-decision:v2\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "CR at a line end (CRLF)",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\r\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "CR inside a field",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abc\rdefgh\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "NUL in a field",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:\u0000h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "TAB in a field",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\t\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "ESC in a field",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:\u001bv\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "DEL in a field",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:x\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "empty field",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\n\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "turnId of 257 UTF-16 units (2-byte UTF-8 é)",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "turnId of 257 UTF-16 units (128 emoji + 1)",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\n😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀a\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "bad hash in utteranceHash",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:zz\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "uppercase hex in an optional hash",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in cardId",
+      "message": "gnomon:voice-decision:v1\n-\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in decision",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\n-\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in cardContentHash",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\n-\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in approverPrincipalId",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in armId",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\n-\nconn:h\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in humanConnId",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\n-\nconn:v\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in voiceConnId",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\n-\nturn:1\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in turnId",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\n-\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-\n-\n-\n-\n-"
+    },
+    {
+      "name": "'-' in utteranceHash",
+      "message": "gnomon:voice-decision:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nallow\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt\narm:01HZZZZZZZZZZZZZZZZZZZZZZZ\nconn:h\nconn:v\nturn:1\n-\n-\n-\n-\n-\n-"
+    }
+  ]
+}

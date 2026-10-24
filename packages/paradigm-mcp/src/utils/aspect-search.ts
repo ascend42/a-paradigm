@@ -13,6 +13,7 @@
 
 import type { Database } from 'sql.js';
 import type { AspectSearchResult } from '../types/aspect-graph.js';
+import type { AspectCategory, AspectSeverity } from '@a-company/premise-core';
 
 // ============================================
 // Stop Words
@@ -227,8 +228,8 @@ function searchTier1Learned(
       const row = stmt.getAsObject() as {
         id: string;
         description: string;
-        category: string;
-        severity: string;
+        category: AspectCategory;
+        severity: AspectSeverity;
         tags: string | null;
         weight: number;
         anchor_count: number;
@@ -309,8 +310,8 @@ function searchTier2Fts(
       const row = stmt.getAsObject() as {
         id: string;
         description: string;
-        category: string;
-        severity: string;
+        category: AspectCategory;
+        severity: AspectSeverity;
         tags: string | null;
         fts_rank: number;
         anchor_count: number;
@@ -376,8 +377,8 @@ function searchTier3Fuzzy(
     const candidates: Array<{
       id: string;
       description: string;
-      category: string;
-      severity: string;
+      category: AspectCategory;
+      severity: AspectSeverity;
       tags: string | null;
       anchorCount: number;
     }> = [];
@@ -386,8 +387,8 @@ function searchTier3Fuzzy(
       const row = stmt.getAsObject() as {
         id: string;
         description: string;
-        category: string;
-        severity: string;
+        category: AspectCategory;
+        severity: AspectSeverity;
         tags: string | null;
         anchor_count: number;
       };

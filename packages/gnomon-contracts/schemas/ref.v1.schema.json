@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/ref.v1.schema.json",
+  "title": "ref:v1",
+  "description": "ref = scheme \":\" id [\"@\" rev] (spec §4.4); canonical (alias-expanded) form.",
+  "x-gnomon-schemes": [
+    "ev",
+    "hsid",
+    "cc",
+    "gkey",
+    "dev",
+    "permit",
+    "card",
+    "contract",
+    "node",
+    "pev",
+    "peer",
+    "turn",
+    "spec",
+    "sym",
+    "wl",
+    "n",
+    "s",
+    "td",
+    "l",
+    "t",
+    "knot",
+    "doodle"
+  ],
+  "type": "string",
+  "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|doodle):[^\\s]+$"
+}

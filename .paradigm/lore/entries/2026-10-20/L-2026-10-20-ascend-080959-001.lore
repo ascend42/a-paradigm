@@ -1,0 +1,46 @@
+id: L-2026-10-20-ascend-080959-001
+type: milestone
+timestamp: '2026-10-20T08:09:59.743Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Merged into feat/gnomon: read-only parity (Aegis approved after C1/H1), stale-tab relaunch, voice capture A1/A2; the Ledger mod is built'
+summary: |-
+  feat/gnomon now carries:
+  - Read-only parity with the C1/H1/M1/M2/L1/L2 fixes (cb4ce62e…c1afbaba). Aegis re-review APPROVE; remaining lows are win32 unanchored and pager keys being over-refused.
+  - The stale-tab relaunch merge 47ab9c07.
+  - The voice capture merge 744946df.
+  Merge conflicts: the GUI bundle pin (re-embedded each time); the symbol allowlist and gnomon-gui .purpose (union); the post-commit hook's history log, which re-dirties after every commit and blocks merges (set aside, then union). Suites on the merged branch: gnomon 2384, gui 255, voice 103.
+  The Ledger mod (four commits on its branch): K2 numbers-only feed (9 kinds), the Claude adapter now records an in/out/cache split, K0 GUI mod panels, and the first-party pin. The dev-home e2e is blocked because dev approvals are UNSUPPORTED until M1.3; no shortcut added. Spec-vs-reality: turn.usage had no in/out split, budget.breaker has no emitter, and cost may be cumulative per session (to verify). Aegis review launched.
+symbols_touched:
+  - '#shell-readonly'
+  - '#gui-relaunch'
+  - '#gui-voice-capture'
+  - '#ledger-mod'
+  - '#mod-host'
+  - '#gui'
+learnings:
+  - The paradigm post-commit hook re-dirties .paradigm/history/log.jsonl after every commit, which blocks `git merge`; set it aside, merge, then union-resolve.
+  - 'Designs written from specs drift from emitters: always read the emitter before projecting a field (turn.usage had only a total).'
+verification:
+  status: pass
+  details:
+    gnomon: 2384
+    gui: 255
+    voice: 103
+tags:
+  - gnomon
+  - merge
+  - marathon-2026-10-20
+linked_commits:
+  - 47ab9c07
+  - 744946df
+  - 122e066b
+  - aeb00e54
+  - f9ae43e7
+  - 7ab827c8
+git_context:
+  ref: 744946df90112d93d1ee94906f9f2d6631862270
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,600 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Paradigm Platform — what you have</title><style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1b1c1e;--muted:#5d6066;--line:#e3e3df;--warn:#9a5b00;--warn-bg:#fff4e0;--ok:#1f6b3a;--ok-bg:#e6f4ea;--accent:#2b59c3;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141518;--panel:#1c1d21;--ink:#ececea;--muted:#a3a6ad;--line:#2e3036;--warn:#f0b35a;--warn-bg:#3a2a12;--ok:#7fd29a;--ok-bg:#163222;--accent:#8fb0ff;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:28px;line-height:1.2;margin:0 0 4px}
+h2{font-size:19px;margin:40px 0 12px;padding-top:16px;border-top:1px solid var(--line)}
+h3{font-size:15px;margin:20px 0 8px}
+p,li{max-width:72ch}
+.meta{color:var(--muted);font-size:13px}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;min-width:0}
+.swatch{height:56px;border-radius:6px;border:1px solid var(--line);margin-bottom:8px;background-image:linear-gradient(var(--c),var(--c)),conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0);background-size:auto,12px 12px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.off{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.badge.on{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:20px}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto}
+.bar{height:12px;background:var(--accent);border-radius:2px}
+.where{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.callout{background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:12px 14px;margin:12px 0}
+iframe{width:100%;border:1px solid var(--line);border-radius:6px;background:transparent;height:72px;display:block}
+nav.toc{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;margin-top:12px}
+nav.toc a{color:var(--accent)}
+.theme-toggle{position:fixed;top:12px;right:12px;font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+</style></head><body><button class="theme-toggle" type="button" onclick="(function(r){var d=r.getAttribute('data-theme');var dark=d?d==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.setAttribute('data-theme',dark?'light':'dark')})(document.documentElement)">Theme</button><main><h1>Paradigm Platform: what you have</h1>
+<p class="meta">Extracted from 152 UI files (product <code>platform</code>) on 2026-10-21. Compared with the product's current design system.</p>
+<div class="stats"><div class="card stat"><b>67</b><span>distinct colours</span></div><div class="card stat"><b>2</b><span>font families</span></div><div class="card stat"><b>24</b><span>font sizes</span></div><div class="card stat"><b>27</b><span>spacing values</span></div><div class="card stat"><b>11</b><span>radii</span></div><div class="card stat"><b>45</b><span>tokens defined</span></div><div class="card stat"><b>34</b><span>near-duplicate groups</span></div><div class="card stat"><b>0</b><span>off-system uses</span></div></div>
+<nav class="toc"><a href="#near">Near-duplicates</a><a href="#color">Colour</a><a href="#type">Type</a><a href="#space">Spacing</a><a href="#radius">Radius</a><a href="#effects">Shadow and motion</a><a href="#tokens">Tokens</a><a href="#components">Components</a><a href="#copy">Copy</a></nav>
+<h2 id="near">Near-duplicates: decisions the system hasn't made</h2>
+<p>Each group is values close enough to read as the same thing. Usually one should win.</p><div class="grid">
+<div class="card"><div class="meta">color · 8 uses</div><div class="row"><div title="#f851491a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f851491a"></div><div title="#f851490f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f851490f"></div><div title="#f851490d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f851490d"></div></div><div class="mono">#f851491a, #f851490f, #f851490d</div></div>
+<div class="card"><div class="meta">color · 12 uses</div><div class="row"><div title="#ffffff0d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ffffff0d"></div><div title="#ffffff08" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ffffff08"></div><div title="#ffffff0a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ffffff0a"></div><div title="#ffffff0f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ffffff0f"></div><div title="#ffffff14" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ffffff14"></div></div><div class="mono">#ffffff0d, #ffffff08, #ffffff0a, #ffffff0f, #ffffff14</div></div>
+<div class="card"><div class="meta">color · 5 uses</div><div class="row"><div title="#3fb9501a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#3fb9501a"></div><div title="#3fb9501f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#3fb9501f"></div><div title="#3fb95066" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#3fb95066"></div></div><div class="mono">#3fb9501a, #3fb9501f, #3fb95066</div></div>
+<div class="card"><div class="meta">color · 9 uses</div><div class="row"><div title="#00000066" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#00000066"></div><div title="#0000004d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#0000004d"></div><div title="#00000099" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#00000099"></div><div title="#00000033" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#00000033"></div><div title="#0000002e" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#0000002e"></div><div title="#00000040" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#00000040"></div></div><div class="mono">#00000066, #0000004d, #00000099, #00000033, #0000002e, #00000040</div></div>
+<div class="card"><div class="meta">color · 3 uses</div><div class="row"><div title="#ff4d4f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#ff4d4f"></div><div title="#f85149" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f85149"></div></div><div class="mono">#ff4d4f, #f85149</div></div>
+<div class="card"><div class="meta">color · 3 uses</div><div class="row"><div title="#34d3991a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#34d3991a"></div><div title="#34d39926" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#34d39926"></div></div><div class="mono">#34d3991a, #34d39926</div></div>
+<div class="card"><div class="meta">color · 4 uses</div><div class="row"><div title="#818cf81a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#818cf81a"></div><div title="#818cf826" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#818cf826"></div></div><div class="mono">#818cf81a, #818cf826</div></div>
+<div class="card"><div class="meta">color · 10 uses</div><div class="row"><div title="#58a6ff08" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#58a6ff08"></div><div title="#58a6ff26" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#58a6ff26"></div><div title="#58a6ff14" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#58a6ff14"></div><div title="#60a5fa26" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#60a5fa26"></div><div title="#58a6ff40" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#58a6ff40"></div><div title="#58a6ff0d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#58a6ff0d"></div><div title="#58a6ff1f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#58a6ff1f"></div><div title="#58a6ff0f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#58a6ff0f"></div></div><div class="mono">#58a6ff08, #58a6ff26, #58a6ff14, #60a5fa26, #58a6ff40, #58a6ff0d, #58a6ff1f, #58a6ff0f</div></div>
+<div class="card"><div class="meta">color · 3 uses</div><div class="row"><div title="#f871711a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f871711a"></div><div title="#f8717133" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f8717133"></div><div title="#f8717126" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#f8717126"></div></div><div class="mono">#f871711a, #f8717133, #f8717126</div></div>
+<div class="card"><div class="meta">color · 3 uses</div><div class="row"><div title="#86efac1a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#86efac1a"></div><div title="#86efac33" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#86efac33"></div><div title="#86efac1f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#86efac1f"></div></div><div class="mono">#86efac1a, #86efac33, #86efac1f</div></div>
+<div class="card"><div class="meta">color · 2 uses</div><div class="row"><div title="#7dd3fc4d" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7dd3fc4d"></div><div title="#7dd3fc1f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#7dd3fc1f"></div></div><div class="mono">#7dd3fc4d, #7dd3fc1f</div></div>
+<div class="card"><div class="meta">color · 3 uses</div><div class="row"><div title="#fbbf2426" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#fbbf2426"></div><div title="#fbbf241f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#fbbf241f"></div><div title="#fbbf241a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#fbbf241a"></div></div><div class="mono">#fbbf2426, #fbbf241f, #fbbf241a</div></div>
+<div class="card"><div class="meta">color · 4 uses</div><div class="row"><div title="#d299220a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#d299220a"></div><div title="#d2992208" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#d2992208"></div><div title="#d299221f" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#d299221f"></div><div title="#d299221a" style="width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:#d299221a"></div></div><div class="mono">#d299220a, #d2992208, #d299221f, #d299221a</div></div>
+<div class="card"><div class="meta">font-size · 145 uses</div><div class="mono">13, 12.8</div></div>
+<div class="card"><div class="meta">font-size · 107 uses</div><div class="mono">11, 11.2</div></div>
+<div class="card"><div class="meta">font-size · 43 uses</div><div class="mono">10, 10.4</div></div>
+<div class="card"><div class="meta">font-size · 34 uses</div><div class="mono">14, 13.6</div></div>
+<div class="card"><div class="meta">spacing · 237 uses</div><div class="mono">8, 7</div></div>
+<div class="card"><div class="meta">spacing · 160 uses</div><div class="mono">12, 14</div></div>
+<div class="card"><div class="meta">spacing · 156 uses</div><div class="mono">6, 5</div></div>
+<div class="card"><div class="meta">spacing · 147 uses</div><div class="mono">4, 3</div></div>
+<div class="card"><div class="meta">spacing · 124 uses</div><div class="mono">16, 18</div></div>
+<div class="card"><div class="meta">spacing · 76 uses</div><div class="mono">10, 9</div></div>
+<div class="card"><div class="meta">spacing · 51 uses</div><div class="mono">24, 22</div></div>
+<div class="card"><div class="meta">spacing · 26 uses</div><div class="mono">20, 19</div></div>
+<div class="card"><div class="meta">spacing · 7 uses</div><div class="mono">32, 28</div></div>
+<div class="card"><div class="meta">spacing · 5 uses</div><div class="mono">40, 36</div></div>
+<div class="card"><div class="meta">spacing · 3 uses</div><div class="mono">80, 90</div></div>
+<div class="card"><div class="meta">spacing · 2 uses</div><div class="mono">64, 60</div></div>
+<div class="card"><div class="meta">radius · 60 uses</div><div class="mono">4, 3</div></div>
+<div class="card"><div class="meta">radius · 31 uses</div><div class="mono">8, 9</div></div>
+<div class="card"><div class="meta">radius · 26 uses</div><div class="mono">6, 5</div></div>
+<div class="card"><div class="meta">duration · 8 uses</div><div class="mono">100, 120</div></div>
+<div class="card"><div class="meta">duration · 2 uses</div><div class="mono">1400, 1500</div></div>
+</div>
+<h2 id="color">Colour</h2><div class="grid">
+<div class="card"><div class="swatch" style="--c:#ffffff"></div><div class="mono">#ffffff</div><div class="row meta">11 uses </div><div class="mono meta">--p-bg-primary</div><div class="where mono">packages/paradigm/platform-ui/src/sections/git/styles/git.css:392<br>packages/paradigm/platform-ui/src/sections/git/styles/git.css:397<br>packages/paradigm/platform-ui/src/sections/graph/styles/index.css:203<br>packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1101<br>packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1153<br>+6 more</div></div>
+<div class="card"><div class="swatch" style="--c:#e0586b"></div><div class="mono">#e0586b</div><div class="row meta">8 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:206<br>packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:270<br>packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:319<br>packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:394<br>packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css:394<br>+3 more</div></div>
+<div class="card"><div class="swatch" style="--c:#f851491a"></div><div class="mono">#f851491a</div><div class="row meta">6 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/git/styles/git.css:279<br>packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:276<br>packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:566<br>packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1383<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:779<br>+1 more</div></div>
+<div class="card"><div class="swatch" style="--c:#ffffff0d"></div><div class="mono">#ffffff0d</div><div class="row meta">6 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:489<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:212<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:344<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:413<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:784<br>+1 more</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff"></div><div class="mono">#58a6ff</div><div class="row meta">5 uses </div><div class="mono meta">--p-border-active --p-accent-blue --p-symbol-component</div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:365<br>packages/paradigm/platform-ui/src/styles/agent.css:229<br>packages/paradigm/platform-ui/src/styles/agent.css:232<br>packages/paradigm/platform-ui/src/styles/agent.css:233<br>packages/paradigm/platform-ui/src/styles/agent.css:239</div></div>
+<div class="card"><div class="swatch" style="--c:#d29922"></div><div class="mono">#d29922</div><div class="row meta">4 uses </div><div class="mono meta">--p-accent-orange --p-symbol-signal</div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:375<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:459<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:470<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:770</div></div>
+<div class="card"><div class="swatch" style="--c:#3fb9501a"></div><div class="mono">#3fb9501a</div><div class="row meta">3 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/git/styles/git.css:274<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:207<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:349</div></div>
+<div class="card"><div class="swatch" style="--c:#00000066"></div><div class="mono">#00000066</div><div class="row meta">3 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:158<br>packages/paradigm/platform-ui/src/styles/agent.css:124<br>packages/paradigm/platform-ui/src/styles/command-palette.css:20</div></div>
+<div class="card"><div class="swatch" style="--c:#ff4d4f"></div><div class="mono">#ff4d4f</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:301<br>packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:302</div></div>
+<div class="card"><div class="swatch" style="--c:#faad14"></div><div class="mono">#faad14</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:311<br>packages/paradigm/platform-ui/src/sections/ambient/styles/ambient.css:312</div></div>
+<div class="card"><div class="swatch" style="--c:#2563eb"></div><div class="mono">#2563eb</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:202<br>packages/paradigm/platform-ui/src/sections/graph/styles/index.css:207</div></div>
+<div class="card"><div class="swatch" style="--c:#ffffff08"></div><div class="mono">#ffffff08</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:510<br>packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:261</div></div>
+<div class="card"><div class="swatch" style="--c:#34d3991a"></div><div class="mono">#34d3991a</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:43<br>packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:126</div></div>
+<div class="card"><div class="swatch" style="--c:#818cf81a"></div><div class="mono">#818cf81a</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:52<br>packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:131</div></div>
+<div class="card"><div class="swatch" style="--c:#818cf826"></div><div class="mono">#818cf826</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:68<br>packages/paradigm/platform-ui/src/sections/lore/styles/thread.css:87</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff08"></div><div class="mono">#58a6ff08</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:322<br>packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1245</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff26"></div><div class="mono">#58a6ff26</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:438<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:65</div></div>
+<div class="card"><div class="swatch" style="--c:#ffffff0a"></div><div class="mono">#ffffff0a</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:763<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:130</div></div>
+<div class="card"><div class="swatch" style="--c:#0000004d"></div><div class="mono">#0000004d</div><div class="row meta">2 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1345<br>packages/paradigm/platform-ui/src/styles/agent.css:27</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff14"></div><div class="mono">#58a6ff14</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/git/styles/git.css:284</div></div>
+<div class="card"><div class="swatch" style="--c:#1d4ed8"></div><div class="mono">#1d4ed8</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:201</div></div>
+<div class="card"><div class="swatch" style="--c:#1e293b80"></div><div class="mono">#1e293b80</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:304</div></div>
+<div class="card"><div class="swatch" style="--c:#0f172acc"></div><div class="mono">#0f172acc</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:316</div></div>
+<div class="card"><div class="swatch" style="--c:#00000099"></div><div class="mono">#00000099</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:361</div></div>
+<div class="card"><div class="swatch" style="--c:#f871711a"></div><div class="mono">#f871711a</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:479</div></div>
+<div class="card"><div class="swatch" style="--c:#f8717133"></div><div class="mono">#f8717133</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:481</div></div>
+<div class="card"><div class="swatch" style="--c:#86efac1a"></div><div class="mono">#86efac1a</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:485</div></div>
+<div class="card"><div class="swatch" style="--c:#86efac33"></div><div class="mono">#86efac33</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:487</div></div>
+<div class="card"><div class="swatch" style="--c:#ffffff0f"></div><div class="mono">#ffffff0f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:511</div></div>
+<div class="card"><div class="swatch" style="--c:#ffffff14"></div><div class="mono">#ffffff14</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:521</div></div>
+<div class="card"><div class="swatch" style="--c:#7dd3fc4d"></div><div class="mono">#7dd3fc4d</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/graph/styles/index.css:522</div></div>
+<div class="card"><div class="swatch" style="--c:#20c9971f"></div><div class="mono">#20c9971f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:48</div></div>
+<div class="card"><div class="swatch" style="--c:#5c7cfa1f"></div><div class="mono">#5c7cfa1f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:57</div></div>
+<div class="card"><div class="swatch" style="--c:#34d39926"></div><div class="mono">#34d39926</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:69</div></div>
+<div class="card"><div class="swatch" style="--c:#fbbf2426"></div><div class="mono">#fbbf2426</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:70</div></div>
+<div class="card"><div class="swatch" style="--c:#c084fc26"></div><div class="mono">#c084fc26</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:71</div></div>
+<div class="card"><div class="swatch" style="--c:#f8717126"></div><div class="mono">#f8717126</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:72</div></div>
+<div class="card"><div class="swatch" style="--c:#60a5fa26"></div><div class="mono">#60a5fa26</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:73</div></div>
+<div class="card"><div class="swatch" style="--c:#7dd3fc1f"></div><div class="mono">#7dd3fc1f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:137</div></div>
+<div class="card"><div class="swatch" style="--c:#86efac1f"></div><div class="mono">#86efac1f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:138</div></div>
+<div class="card"><div class="swatch" style="--c:#fbbf241f"></div><div class="mono">#fbbf241f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:139</div></div>
+<div class="card"><div class="swatch" style="--c:#fde0471f"></div><div class="mono">#fde0471f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:140</div></div>
+<div class="card"><div class="swatch" style="--c:#a78bfa1f"></div><div class="mono">#a78bfa1f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:141</div></div>
+<div class="card"><div class="swatch" style="--c:#00000033"></div><div class="mono">#00000033</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:162</div></div>
+<div class="card"><div class="swatch" style="--c:#fbbf241a"></div><div class="mono">#fbbf241a</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/lore/styles/cards.css:600</div></div>
+<div class="card"><div class="swatch" style="--c:#f851490f"></div><div class="mono">#f851490f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:272</div></div>
+<div class="card"><div class="swatch" style="--c:#d299220a"></div><div class="mono">#d299220a</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:280</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff40"></div><div class="mono">#58a6ff40</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:899</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff0d"></div><div class="mono">#58a6ff0d</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1233</div></div>
+<div class="card"><div class="swatch" style="--c:#f851490d"></div><div class="mono">#f851490d</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1237</div></div>
+<div class="card"><div class="swatch" style="--c:#d2992208"></div><div class="mono">#d2992208</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:1241</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff1f"></div><div class="mono">#58a6ff1f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:364</div></div>
+<div class="card"><div class="swatch" style="--c:#8be9fd"></div><div class="mono">#8be9fd</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:370</div></div>
+<div class="card"><div class="swatch" style="--c:#d299221f"></div><div class="mono">#d299221f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:374</div></div>
+<div class="card"><div class="swatch" style="--c:#f85149"></div><div class="mono">#f85149</div><div class="row meta">1 uses </div><div class="mono meta">--p-accent-red --p-symbol-gate</div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:380</div></div>
+<div class="card"><div class="swatch" style="--c:#bd93f9"></div><div class="mono">#bd93f9</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:385</div></div>
+<div class="card"><div class="swatch" style="--c:#3fb9501f"></div><div class="mono">#3fb9501f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:389</div></div>
+<div class="card"><div class="swatch" style="--c:#3fb950"></div><div class="mono">#3fb950</div><div class="row meta">1 uses </div><div class="mono meta">--p-accent-green --p-symbol-flow</div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:390</div></div>
+<div class="card"><div class="swatch" style="--c:#3fb95066"></div><div class="mono">#3fb95066</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:637</div></div>
+<div class="card"><div class="swatch" style="--c:#58a6ff0f"></div><div class="mono">#58a6ff0f</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:660</div></div>
+<div class="card"><div class="swatch" style="--c:#d299221a"></div><div class="mono">#d299221a</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:769</div></div>
+<div class="card"><div class="swatch" style="--c:hsl(${math.abs(hashcode(ref)"></div><div class="mono">hsl(${math.abs(hashcode(ref)</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/TaskCard.tsx:28</div></div>
+<div class="card"><div class="swatch" style="--c:#0000002e"></div><div class="mono">#0000002e</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1013</div></div>
+<div class="card"><div class="swatch" style="--c:#00000040"></div><div class="mono">#00000040</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css:1261</div></div>
+<div class="card"><div class="swatch" style="--c:hsl(${hue}, ${sat}%, ${light}%)"></div><div class="mono">hsl(${hue}, ${sat}%, ${light}%)</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/tasks/utils/board.ts:59</div></div>
+<div class="card"><div class="swatch" style="--c:hsl(${math.abs(hashcode(role)"></div><div class="mono">hsl(${math.abs(hashcode(role)</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/team/TeamSection.tsx:16</div></div>
+<div class="card"><div class="swatch" style="--c:#eab3081a"></div><div class="mono">#eab3081a</div><div class="row meta">1 uses </div><div class="where mono">packages/paradigm/platform-ui/src/sections/team/styles/team.css:238</div></div>
+</div>
+<h2 id="type">Type</h2><h3>Families</h3><div class="scroll"><table><tr><th>Family</th><th>Uses</th><th></th><th>Where</th></tr>
+<tr><td style="font-family:&quot;SF Mono&quot;,system-ui">SF Mono</td><td>37</td><td></td><td><div class="where mono">packages/paradigm/platform-ui/src/sections/git/styles/git.css:261<br>packages/paradigm/platform-ui/src/sections/git/styles/git.css:436<br>packages/paradigm/platform-ui/src/sections/graph/styles/index.css:138<br>packages/paradigm/platform-ui/src/sections/graph/styles/index.css:290<br>packages/paradigm/platform-ui/src/sections/graph/styles/index.css:415<br>+32 more</div></td></tr>
+<tr><td style="font-family:&quot;Segoe UI&quot;,system-ui">Segoe UI</td><td>3</td><td></td><td><div class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/styles/sentinel.css:16<br>packages/paradigm/platform-ui/src/sections/symphony/styles/symphony.css:15<br>packages/paradigm/platform-ui/src/styles/shell.css:18</div></td></tr>
+</table></div><h3>Sizes</h3><div class="scroll"><table><tr><th>Size</th><th>Sample</th><th>Uses</th><th></th></tr>
+<tr><td class="mono">8px</td><td style="font-size:8px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">9px</td><td style="font-size:9px;line-height:1.2">Ambient voice off</td><td>6</td><td></td></tr>
+<tr><td class="mono">10px</td><td style="font-size:10px;line-height:1.2">Ambient voice off</td><td>42</td><td></td></tr>
+<tr><td class="mono">10.4px</td><td style="font-size:10.4px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">11px</td><td style="font-size:11px;line-height:1.2">Ambient voice off</td><td>104</td><td></td></tr>
+<tr><td class="mono">11.2px</td><td style="font-size:11.2px;line-height:1.2">Ambient voice off</td><td>3</td><td></td></tr>
+<tr><td class="mono">12px</td><td style="font-size:12px;line-height:1.2">Ambient voice off</td><td>163</td><td></td></tr>
+<tr><td class="mono">12.8px</td><td style="font-size:12.8px;line-height:1.2">Ambient voice off</td><td>3</td><td></td></tr>
+<tr><td class="mono">13px</td><td style="font-size:13px;line-height:1.2">Ambient voice off</td><td>142</td><td></td></tr>
+<tr><td class="mono">13.6px</td><td style="font-size:13.6px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">14px</td><td style="font-size:14px;line-height:1.2">Ambient voice off</td><td>32</td><td></td></tr>
+<tr><td class="mono">14.4px</td><td style="font-size:14.4px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">15px</td><td style="font-size:15px;line-height:1.2">Ambient voice off</td><td>5</td><td></td></tr>
+<tr><td class="mono">16px</td><td style="font-size:16px;line-height:1.2">Ambient voice off</td><td>23</td><td></td></tr>
+<tr><td class="mono">17px</td><td style="font-size:17px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">18px</td><td style="font-size:18px;line-height:1.2">Ambient voice off</td><td>16</td><td></td></tr>
+<tr><td class="mono">20px</td><td style="font-size:20px;line-height:1.2">Ambient voice off</td><td>6</td><td></td></tr>
+<tr><td class="mono">22px</td><td style="font-size:22px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">24px</td><td style="font-size:24px;line-height:1.2">Ambient voice off</td><td>7</td><td></td></tr>
+<tr><td class="mono">28px</td><td style="font-size:28px;line-height:1.2">Ambient voice off</td><td>2</td><td></td></tr>
+<tr><td class="mono">32px</td><td style="font-size:32px;line-height:1.2">Ambient voice off</td><td>3</td><td></td></tr>
+<tr><td class="mono">40px</td><td style="font-size:40px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">42px</td><td style="font-size:42px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+<tr><td class="mono">48px</td><td style="font-size:48px;line-height:1.2">Ambient voice off</td><td>1</td><td></td></tr>
+</table></div>
+<h2 id="space">Spacing</h2><div class="scroll"><table><tr><th>Value</th><th></th><th>Uses</th><th></th></tr>
+<tr><td class="mono">2px</td><td style="width:50%"><div class="bar" style="width:2px;max-width:100%"></div></td><td>86</td><td></td></tr>
+<tr><td class="mono">3px</td><td style="width:50%"><div class="bar" style="width:3px;max-width:100%"></div></td><td>13</td><td></td></tr>
+<tr><td class="mono">4px</td><td style="width:50%"><div class="bar" style="width:4px;max-width:100%"></div></td><td>134</td><td></td></tr>
+<tr><td class="mono">5px</td><td style="width:50%"><div class="bar" style="width:5px;max-width:100%"></div></td><td>15</td><td></td></tr>
+<tr><td class="mono">6px</td><td style="width:50%"><div class="bar" style="width:6px;max-width:100%"></div></td><td>141</td><td></td></tr>
+<tr><td class="mono">7px</td><td style="width:50%"><div class="bar" style="width:7px;max-width:100%"></div></td><td>5</td><td></td></tr>
+<tr><td class="mono">8px</td><td style="width:50%"><div class="bar" style="width:8px;max-width:100%"></div></td><td>232</td><td></td></tr>
+<tr><td class="mono">9px</td><td style="width:50%"><div class="bar" style="width:9px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">10px</td><td style="width:50%"><div class="bar" style="width:10px;max-width:100%"></div></td><td>75</td><td></td></tr>
+<tr><td class="mono">12px</td><td style="width:50%"><div class="bar" style="width:12px;max-width:100%"></div></td><td>144</td><td></td></tr>
+<tr><td class="mono">14px</td><td style="width:50%"><div class="bar" style="width:14px;max-width:100%"></div></td><td>16</td><td></td></tr>
+<tr><td class="mono">16px</td><td style="width:50%"><div class="bar" style="width:16px;max-width:100%"></div></td><td>121</td><td></td></tr>
+<tr><td class="mono">18px</td><td style="width:50%"><div class="bar" style="width:18px;max-width:100%"></div></td><td>3</td><td></td></tr>
+<tr><td class="mono">19px</td><td style="width:50%"><div class="bar" style="width:19px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">20px</td><td style="width:50%"><div class="bar" style="width:20px;max-width:100%"></div></td><td>25</td><td></td></tr>
+<tr><td class="mono">22px</td><td style="width:50%"><div class="bar" style="width:22px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">24px</td><td style="width:50%"><div class="bar" style="width:24px;max-width:100%"></div></td><td>49</td><td></td></tr>
+<tr><td class="mono">26px</td><td style="width:50%"><div class="bar" style="width:26px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">28px</td><td style="width:50%"><div class="bar" style="width:28px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">32px</td><td style="width:50%"><div class="bar" style="width:32px;max-width:100%"></div></td><td>6</td><td></td></tr>
+<tr><td class="mono">36px</td><td style="width:50%"><div class="bar" style="width:36px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">40px</td><td style="width:50%"><div class="bar" style="width:40px;max-width:100%"></div></td><td>4</td><td></td></tr>
+<tr><td class="mono">48px</td><td style="width:50%"><div class="bar" style="width:48px;max-width:100%"></div></td><td>7</td><td></td></tr>
+<tr><td class="mono">60px</td><td style="width:50%"><div class="bar" style="width:60px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">64px</td><td style="width:50%"><div class="bar" style="width:64px;max-width:100%"></div></td><td>1</td><td></td></tr>
+<tr><td class="mono">80px</td><td style="width:50%"><div class="bar" style="width:80px;max-width:100%"></div></td><td>2</td><td></td></tr>
+<tr><td class="mono">90px</td><td style="width:50%"><div class="bar" style="width:90px;max-width:100%"></div></td><td>1</td><td></td></tr>
+</table></div>
+<h2 id="radius">Radius</h2><div class="grid">
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:4px;margin-bottom:8px"></div><div class="mono">4px</div><div class="row meta">41 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:8px;margin-bottom:8px"></div><div class="mono">8px</div><div class="row meta">30 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:6px;margin-bottom:8px"></div><div class="mono">6px</div><div class="row meta">23 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:3px;margin-bottom:8px"></div><div class="mono">3px</div><div class="row meta">19 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:10px;margin-bottom:8px"></div><div class="mono">10px</div><div class="row meta">13 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:24px;margin-bottom:8px"></div><div class="mono">999px</div><div class="row meta">12 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:12px;margin-bottom:8px"></div><div class="mono">12px</div><div class="row meta">12 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:2px;margin-bottom:8px"></div><div class="mono">2px</div><div class="row meta">4 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:5px;margin-bottom:8px"></div><div class="mono">5px</div><div class="row meta">3 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:0px;margin-bottom:8px"></div><div class="mono">0px</div><div class="row meta">2 uses </div></div>
+<div class="card"><div style="height:48px;border:2px solid var(--accent);border-radius:9px;margin-bottom:8px"></div><div class="mono">9px</div><div class="row meta">1 uses </div></div>
+</div>
+<h2 id="effects">Shadow and motion</h2><div class="scroll"><table><tr><th>Kind</th><th>Value</th><th>Uses</th><th></th></tr>
+<tr><td>shadow</td><td class="mono">0 0 0 3px color-mix(in srgb, currentColor 18%, transparent)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 16px rgba(88, 166, 255, 0.15)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 16px rgba(88, 166, 255, 0.25)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 8px 24px rgba(0, 0, 0, 0.3)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 6px rgba(63, 185, 80, 0.4)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 2px 12px rgba(0, 0, 0, 0.18)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 6px 24px rgba(0, 0, 0, 0.25)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 4px 12px rgba(0, 0, 0, 0.3)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 4px 16px rgba(0, 0, 0, 0.4)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 0 4px var(--agent-highlight-color, #58a6ff)</td><td>1</td><td></td></tr>
+<tr><td>shadow</td><td class="mono">0 16px 48px rgba(0, 0, 0, 0.4)</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">150ms</td><td>32</td><td></td></tr>
+<tr><td>duration</td><td class="mono">100ms</td><td>4</td><td></td></tr>
+<tr><td>duration</td><td class="mono">120ms</td><td>4</td><td></td></tr>
+<tr><td>duration</td><td class="mono">2000ms</td><td>3</td><td></td></tr>
+<tr><td>duration</td><td class="mono">300ms</td><td>3</td><td></td></tr>
+<tr><td>duration</td><td class="mono">200ms</td><td>2</td><td></td></tr>
+<tr><td>duration</td><td class="mono">1000ms</td><td>2</td><td></td></tr>
+<tr><td>duration</td><td class="mono">400ms</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">1400ms</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">700ms</td><td>1</td><td></td></tr>
+<tr><td>duration</td><td class="mono">1500ms</td><td>1</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease</td><td>10</td><td></td></tr>
+<tr><td>easing</td><td class="mono">linear</td><td>2</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease-in-out</td><td>2</td><td></td></tr>
+<tr><td>easing</td><td class="mono">ease-out</td><td>1</td><td></td></tr>
+</table></div>
+<h2 id="tokens">Tokens (custom properties)</h2>
+<div class="callout"><b>16 used but never defined here:</b> <span class="mono">--p-accent --p-border-subtle --log-cols --evt-cols --p-symbol-component-rgb --p-symbol-aspect-rgb --lane-color --cell-color --cell-progress --pill-color --p-font-mono --agent-color --p-space-lg --p-bg-subtle --p-green --agent-highlight-color</span></div>
+<div class="scroll"><table><tr><th>Token</th><th>Value</th><th>Uses</th><th>Defined</th></tr>
+<tr><td class="mono">--p-text-muted</td><td class="mono">#484f58</td><td>261</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:14</td></tr>
+<tr><td class="mono">--p-border</td><td class="mono">#30363d</td><td>191</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:17</td></tr>
+<tr><td class="mono">--p-text-primary</td><td class="mono">#e6edf3</td><td>171</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:12</td></tr>
+<tr><td class="mono">--p-text-secondary</td><td class="mono">#8b949e</td><td>137</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:13</td></tr>
+<tr><td class="mono">--p-accent-green</td><td class="mono">#3fb950</td><td>101</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:22</td></tr>
+<tr><td class="mono">--p-accent-blue</td><td class="mono">#58a6ff</td><td>92</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:21</td></tr>
+<tr><td class="mono">--p-bg-tertiary</td><td class="mono">#21262d</td><td>80</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:8</td></tr>
+<tr><td class="mono">--p-radius</td><td class="mono">6px</td><td>69</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:69</td></tr>
+<tr><td class="mono">--p-accent-red</td><td class="mono">#f85149</td><td>55</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:23</td></tr>
+<tr><td class="mono">--p-bg-secondary</td><td class="mono">#161b22</td><td>54</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:7</td></tr>
+<tr><td class="mono">--p-accent-orange</td><td class="mono">#d29922</td><td>41</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:24</td></tr>
+<tr><td class="mono">--p-bg-hover</td><td class="mono">#30363d</td><td>38</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:9</td></tr>
+<tr><td class="mono">--p-transition</td><td class="mono">150ms ease</td><td>35</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:70</td></tr>
+<tr><td class="mono">--p-accent-purple</td><td class="mono">#bc8cff</td><td>34</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:25</td></tr>
+<tr><td class="mono">--p-symbol-component</td><td class="mono">#58a6ff</td><td>33</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:37</td></tr>
+<tr><td class="mono">--p-accent-amber</td><td class="mono">#f59e0b</td><td>28</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:29</td></tr>
+<tr><td class="mono">--p-bg-primary</td><td class="mono">#0d1117</td><td>27</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:6</td></tr>
+<tr><td class="mono">--p-border-active</td><td class="mono">#58a6ff</td><td>23</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:18</td></tr>
+<tr><td class="mono">--p-bg-card</td><td class="mono">#21262d</td><td>23</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:51</td></tr>
+<tr><td class="mono">--p-symbol-flow</td><td class="mono">#3fb950</td><td>17</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:38</td></tr>
+<tr><td class="mono">--p-symbol-gate</td><td class="mono">#f85149</td><td>17</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:39</td></tr>
+<tr><td class="mono">--p-symbol-signal</td><td class="mono">#d29922</td><td>15</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:40</td></tr>
+<tr><td class="mono">--p-bg-panel</td><td class="mono">#161b22</td><td>13</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:52</td></tr>
+<tr><td class="mono">--p-lore-agent-session</td><td class="mono">#818cf8</td><td>10</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:55</td></tr>
+<tr><td class="mono">--p-symbol-aspect</td><td class="mono">#bc8cff</td><td>8</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:41</td></tr>
+<tr><td class="mono">--p-lore-human-note</td><td class="mono">#34d399</td><td>8</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:56</td></tr>
+<tr><td class="mono">--p-lore-milestone</td><td class="mono">#60a5fa</td><td>7</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:60</td></tr>
+<tr><td class="mono">--p-lore-incident</td><td class="mono">#f87171</td><td>5</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:59</td></tr>
+<tr><td class="mono">--p-accent-cyan</td><td class="mono">#06b6d4</td><td>4</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:28</td></tr>
+<tr><td class="mono">--p-symbol-node-component</td><td class="mono">#86efac</td><td>3</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:44</td></tr>
+<tr><td class="mono">--p-accent-slate</td><td class="mono">#94a3b8</td><td>2</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:34</td></tr>
+<tr><td class="mono">--p-lore-decision</td><td class="mono">#fbbf24</td><td>2</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:57</td></tr>
+<tr><td class="mono">--p-spine-color</td><td class="mono">#30363d</td><td>2</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:63</td></tr>
+<tr><td class="mono">--p-sidebar-width</td><td class="mono">56px</td><td>2</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:67</td></tr>
+<tr><td class="mono">--p-header-height</td><td class="mono">44px</td><td>2</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:68</td></tr>
+<tr><td class="mono">--p-accent-yellow</td><td class="mono">#eab308</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:30</td></tr>
+<tr><td class="mono">--p-accent-emerald</td><td class="mono">#34d399</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:31</td></tr>
+<tr><td class="mono">--p-accent-pink</td><td class="mono">#ec4899</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:32</td></tr>
+<tr><td class="mono">--p-accent-lime</td><td class="mono">#84cc16</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:33</td></tr>
+<tr><td class="mono">--p-symbol-node-flow</td><td class="mono">#fbbf24</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:45</td></tr>
+<tr><td class="mono">--p-symbol-node-gate</td><td class="mono">#f87171</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:46</td></tr>
+<tr><td class="mono">--p-symbol-node-signal</td><td class="mono">#fde047</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:47</td></tr>
+<tr><td class="mono">--p-symbol-node-aspect</td><td class="mono">#a78bfa</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:48</td></tr>
+<tr><td class="mono">--p-lore-review</td><td class="mono">#c084fc</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:58</td></tr>
+<tr><td class="mono">--p-spine-width</td><td class="mono">2px</td><td>1</td><td class="where mono">packages/paradigm/platform-ui/src/styles/tokens.css:64</td></tr>
+</table></div>
+<h2 id="components">Components and class families</h2>
+<h3>Named components</h3><div class="scroll"><table><tr><th>Name</th><th>Where</th></tr>
+<tr><td class="mono">App</td><td class="where mono">packages/paradigm/platform-ui/src/App.tsx:50</td></tr>
+<tr><td class="mono">AgentCalloutOverlay</td><td class="where mono">packages/paradigm/platform-ui/src/components/AgentCallout.tsx:11</td></tr>
+<tr><td class="mono">AgentNavigationPrompt</td><td class="where mono">packages/paradigm/platform-ui/src/components/AgentCallout.tsx:33</td></tr>
+<tr><td class="mono">AgentToastContainer</td><td class="where mono">packages/paradigm/platform-ui/src/components/AgentToast.tsx:30</td></tr>
+<tr><td class="mono">CommandPalette</td><td class="where mono">packages/paradigm/platform-ui/src/components/CommandPalette.tsx:37</td></tr>
+<tr><td class="mono">ErrorBoundary</td><td class="where mono">packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:13</td></tr>
+<tr><td class="mono">PlatformHeader</td><td class="where mono">packages/paradigm/platform-ui/src/components/PlatformHeader.tsx:5</td></tr>
+<tr><td class="mono">SidebarNav</td><td class="where mono">packages/paradigm/platform-ui/src/components/SidebarNav.tsx:23</td></tr>
+<tr><td class="mono">Badge</td><td class="where mono">packages/paradigm/platform-ui/src/components/shared/Badge.tsx:9</td></tr>
+<tr><td class="mono">EmptyState</td><td class="where mono">packages/paradigm/platform-ui/src/components/shared/EmptyState.tsx:13</td></tr>
+<tr><td class="mono">StatCard</td><td class="where mono">packages/paradigm/platform-ui/src/components/shared/StatCard.tsx:13</td></tr>
+<tr><td class="mono">AcademySection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:14</td></tr>
+<tr><td class="mono">NoteView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/NoteView.tsx:6</td></tr>
+<tr><td class="mono">PackList</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:11</td></tr>
+<tr><td class="mono">PackSkills</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:8</td></tr>
+<tr><td class="mono">PathList</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:13</td></tr>
+<tr><td class="mono">PathView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:45</td></tr>
+<tr><td class="mono">QuizRunner</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:9</td></tr>
+<tr><td class="mono">AmbientSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:133</td></tr>
+<tr><td class="mono">BrainSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:18</td></tr>
+<tr><td class="mono">BrainMapPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:29</td></tr>
+<tr><td class="mono">FindPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:7</td></tr>
+<tr><td class="mono">HealthPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:24</td></tr>
+<tr><td class="mono">LockedPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/LockedPanel.tsx:7</td></tr>
+<tr><td class="mono">PrivacyBadge</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:7</td></tr>
+<tr><td class="mono">SuggestionsPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:15</td></tr>
+<tr><td class="mono">ClassroomSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:538</td></tr>
+<tr><td class="mono">DocsSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/DocsSection.tsx:11</td></tr>
+<tr><td class="mono">DocsCustomPage</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/DocsCustomPage.tsx:5</td></tr>
+<tr><td class="mono">DocsFlowPage</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/DocsFlowPage.tsx:6</td></tr>
+<tr><td class="mono">DocsPortalPage</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/DocsPortalPage.tsx:6</td></tr>
+<tr><td class="mono">DocsSearch</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/DocsSearch.tsx:5</td></tr>
+<tr><td class="mono">DocsSidebar</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/DocsSidebar.tsx:24</td></tr>
+<tr><td class="mono">DocsSymbolPage</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/DocsSymbolPage.tsx:6</td></tr>
+<tr><td class="mono">FlowSteps</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/FlowSteps.tsx:18</td></tr>
+<tr><td class="mono">GateChain</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/GateChain.tsx:6</td></tr>
+<tr><td class="mono">PropertyTable</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/PropertyTable.tsx:5</td></tr>
+<tr><td class="mono">SymbolLink</td><td class="where mono">packages/paradigm/platform-ui/src/sections/docs/components/SymbolLink.tsx:12</td></tr>
+<tr><td class="mono">GitSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/git/GitSection.tsx:15</td></tr>
+<tr><td class="mono">BranchBar</td><td class="where mono">packages/paradigm/platform-ui/src/sections/git/components/BranchBar.tsx:4</td></tr>
+<tr><td class="mono">CommitComposer</td><td class="where mono">packages/paradigm/platform-ui/src/sections/git/components/CommitComposer.tsx:6</td></tr>
+<tr><td class="mono">CommitLog</td><td class="where mono">packages/paradigm/platform-ui/src/sections/git/components/CommitLog.tsx:26</td></tr>
+<tr><td class="mono">DiffViewer</td><td class="where mono">packages/paradigm/platform-ui/src/sections/git/components/DiffViewer.tsx:43</td></tr>
+<tr><td class="mono">FileList</td><td class="where mono">packages/paradigm/platform-ui/src/sections/git/components/FileList.tsx:44</td></tr>
+<tr><td class="mono">GraphSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/graph/GraphSection.tsx:11</td></tr>
+<tr><td class="mono">Canvas</td><td class="where mono">packages/paradigm/platform-ui/src/sections/graph/components/Canvas.tsx:24</td></tr>
+<tr><td class="mono">ExportDialog</td><td class="where mono">packages/paradigm/platform-ui/src/sections/graph/components/ExportDialog.tsx:4</td></tr>
+<tr><td class="mono">LoadDialog</td><td class="where mono">packages/paradigm/platform-ui/src/sections/graph/components/LoadDialog.tsx:15</td></tr>
+<tr><td class="mono">SymbolPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/graph/components/SymbolPanel.tsx:8</td></tr>
+<tr><td class="mono">Toolbar</td><td class="where mono">packages/paradigm/platform-ui/src/sections/graph/components/Toolbar.tsx:4</td></tr>
+<tr><td class="mono">LoreSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/LoreSection.tsx:14</td></tr>
+<tr><td class="mono">DateSeparator</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/DateSeparator.tsx:9</td></tr>
+<tr><td class="mono">DetailPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/DetailPanel.tsx:9</td></tr>
+<tr><td class="mono">FilterBar</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/FilterBar.tsx:16</td></tr>
+<tr><td class="mono">LoreCard</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/LoreCard.tsx:17</td></tr>
+<tr><td class="mono">ReviewStars</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/ReviewStars.tsx:3</td></tr>
+<tr><td class="mono">SymbolTag</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/SymbolTag.tsx:11</td></tr>
+<tr><td class="mono">VerificationBadge</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/VerificationBadge.tsx:3</td></tr>
+<tr><td class="mono">ViewSwitcher</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/ViewSwitcher.tsx:11</td></tr>
+<tr><td class="mono">DetailBody</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailBody.tsx:10</td></tr>
+<tr><td class="mono">DetailDecisions</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailDecisions.tsx:8</td></tr>
+<tr><td class="mono">DetailFiles</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailFiles.tsx:8</td></tr>
+<tr><td class="mono">DetailMeta</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailMeta.tsx:8</td></tr>
+<tr><td class="mono">DetailReview</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/components/detail/DetailReview.tsx:10</td></tr>
+<tr><td class="mono">AuthorView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/views/AuthorView.tsx:5</td></tr>
+<tr><td class="mono">SessionView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/views/SessionView.tsx:115</td></tr>
+<tr><td class="mono">SymbolView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/views/SymbolView.tsx:6</td></tr>
+<tr><td class="mono">ThreadView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/lore/views/ThreadView.tsx:6</td></tr>
+<tr><td class="mono">MemorySection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/memory/MemorySection.tsx:14</td></tr>
+<tr><td class="mono">SUGGESTION_HEADINGS</td><td class="where mono">packages/paradigm/platform-ui/src/sections/memory/components/LedgerGroup.tsx:7</td></tr>
+<tr><td class="mono">LedgerGroup</td><td class="where mono">packages/paradigm/platform-ui/src/sections/memory/components/LedgerGroup.tsx:17</td></tr>
+<tr><td class="mono">LedgerRow</td><td class="where mono">packages/paradigm/platform-ui/src/sections/memory/components/LedgerRow.tsx:20</td></tr>
+<tr><td class="mono">SyncPreviewPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/memory/components/SyncPreviewPanel.tsx:10</td></tr>
+<tr><td class="mono">OverviewSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/overview/OverviewSection.tsx:23</td></tr>
+<tr><td class="mono">ActivityFeed</td><td class="where mono">packages/paradigm/platform-ui/src/sections/overview/components/ActivityFeed.tsx:23</td></tr>
+<tr><td class="mono">HealthBar</td><td class="where mono">packages/paradigm/platform-ui/src/sections/overview/components/HealthBar.tsx:15</td></tr>
+<tr><td class="mono">SentinelSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/SentinelSection.tsx:25</td></tr>
+<tr><td class="mono">EventsTab</td><td class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/components/EventsTab.tsx:395</td></tr>
+<tr><td class="mono">FlowsTab</td><td class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/components/FlowsTab.tsx:235</td></tr>
+<tr><td class="mono">IncidentsTab</td><td class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/components/IncidentsTab.tsx:24</td></tr>
+<tr><td class="mono">LogsTab</td><td class="where mono">packages/paradigm/platform-ui/src/sections/sentinel/components/LogsTab.tsx:120</td></tr>
+<tr><td class="mono">SymphonySection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/symphony/SymphonySection.tsx:23</td></tr>
+<tr><td class="mono">FilesTab</td><td class="where mono">packages/paradigm/platform-ui/src/sections/symphony/components/FilesTab.tsx:109</td></tr>
+<tr><td class="mono">NetworkTab</td><td class="where mono">packages/paradigm/platform-ui/src/sections/symphony/components/NetworkTab.tsx:20</td></tr>
+<tr><td class="mono">ThreadsTab</td><td class="where mono">packages/paradigm/platform-ui/src/sections/symphony/components/ThreadsTab.tsx:292</td></tr>
+<tr><td class="mono">TasksSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/TasksSection.tsx:20</td></tr>
+<tr><td class="mono">BoardHealth</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/BoardHealth.tsx:29</td></tr>
+<tr><td class="mono">BoardTabs</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/BoardTabs.tsx:15</td></tr>
+<tr><td class="mono">BoardView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/BoardView.tsx:46</td></tr>
+<tr><td class="mono">CalibrationBlock</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationBlock.tsx:40</td></tr>
+<tr><td class="mono">CalibrationStrip</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationStrip.tsx:26</td></tr>
+<tr><td class="mono">CellGrid</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/CellGrid.tsx:107</td></tr>
+<tr><td class="mono">FilterBar</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/FilterBar.tsx:15</td></tr>
+<tr><td class="mono">GitHubSyncStrip</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/GitHubSyncStrip.tsx:46</td></tr>
+<tr><td class="mono">InboxView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/InboxView.tsx:130</td></tr>
+<tr><td class="mono">ListView</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/ListView.tsx:12</td></tr>
+<tr><td class="mono">SwimLane</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/SwimLane.tsx:39</td></tr>
+<tr><td class="mono">TaskActions</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/TaskActions.tsx:26</td></tr>
+<tr><td class="mono">TaskCard</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/TaskCard.tsx:37</td></tr>
+<tr><td class="mono">TaskDetailPanel</td><td class="where mono">packages/paradigm/platform-ui/src/sections/tasks/components/TaskDetailPanel.tsx:32</td></tr>
+<tr><td class="mono">TeamSection</td><td class="where mono">packages/paradigm/platform-ui/src/sections/team/TeamSection.tsx:62</td></tr>
+</table></div>
+<h3>Class families</h3><p class="meta">Classes grouped by their first word. A family with many classes and few uses is often one component written several ways.</p><div class="scroll"><table><tr><th>Family</th><th>Classes</th><th>Uses</th><th>Members</th></tr>
+<tr><td class="mono">classroom</td><td>68</td><td>114</td><td class="mono where">classroom__badge classroom__badge--survived classroom__badge--overturned classroom__badge--pending classroom__card-top classroom__card-agent classroom__card-line classroom__card classroom__card-role classroom__card-meta classroom__track classroom__track--ghost</td></tr>
+<tr><td class="mono">docs</td><td>53</td><td>85</td><td class="mono where">docs-page__body docs__loading docs__welcome docs__stats docs__stat-item docs docs__content docs-page docs-page--custom docs-page__header docs-page__title docs-page__description</td></tr>
+<tr><td class="mono">detail</td><td>15</td><td>54</td><td class="mono where">detail-overlay detail-backdrop detail-panel detail-header detail-close detail-body detail-section detail-meta detail-error detail-learning detail-decision detail-files</td></tr>
+<tr><td class="mono">git</td><td>48</td><td>50</td><td class="mono where">git-section git-tabs git-files-layout git-files-layout__sidebar git-files-layout__main git-log-layout git-branch-bar git-branch-bar__left git-branch-bar__icon git-branch-bar__name git-branch-bar__badge git-branch-bar__badge--ahead</td></tr>
+<tr><td class="mono">task</td><td>34</td><td>45</td><td class="mono where">task-calibration task-calibration__meta task-calibration__meta--prior task-calibration__prior-label task-calibration__points task-calibration__badge task-calibration__n task-calibration__band task-calibration__cell task-calibration__prior-row task-calibration__points--prior task-actions</td></tr>
+<tr><td class="mono">ambient</td><td>33</td><td>38</td><td class="mono where">ambient__event-item ambient__event-body ambient__event-top-row ambient__event-context ambient__event-path ambient__event-symbols ambient__event-symbol ambient__event-time ambient__nom-item ambient__nom-header ambient__nom-agent ambient__nom-type</td></tr>
+<tr><td class="mono">team</td><td>30</td><td>37</td><td class="mono where">team team__title team__roster team__roster-header team__roster-label team__roster-count team__empty team__agent-grid team__benched team__benched-label team__threads team__threads-header</td></tr>
+<tr><td class="mono">agent</td><td>27</td><td>36</td><td class="mono where">agent-callout-overlay agent-callout agent-callout__symbol agent-callout__message agent-nav-prompt agent-nav-prompt__icon agent-nav-prompt__text agent-nav-prompt__accept agent-nav-prompt__dismiss agent-toast agent-toast__icon agent-toast__message</td></tr>
+<tr><td class="mono">symbol</td><td>24</td><td>28</td><td class="mono where">symbol-link symbol-node symbol-node__name symbol-node__desc symbol-panel symbol-panel__header symbol-panel__count symbol-panel__search symbol-panel__list symbol-panel__section symbol-panel__section-header symbol-panel__section-arrow</td></tr>
+<tr><td class="mono">flow</td><td>25</td><td>26</td><td class="mono where">flow-steps flow-steps__step flow-steps__connector flow-steps__dot flow-steps__line flow-steps__content flow-steps__type flow-steps__desc flow-card-header flow-card-id flow-card-trigger flow-card-name</td></tr>
+<tr><td class="mono">tdp</td><td>22</td><td>26</td><td class="mono where">tdp tdp__id-row tdp__id tdp__actions tdp__blurb tdp-estimate__points tdp-estimate__band tdp-estimate__prov tdp-estimate__prov--learned tdp-estimate__prov--prior tdp-deps tdp-dep</td></tr>
+<tr><td class="mono">board</td><td>16</td><td>25</td><td class="mono where">board-health board-health__bar board-health__chevron board-health__icon board-health__title board-health__summary board-health__detail board-health__group board-health__group-label board-health__row board-health__kind board-health__row-detail</td></tr>
+<tr><td class="mono">sync</td><td>22</td><td>24</td><td class="mono where">sync-strip sync-strip__counts sync-strip__provider sync-strip__stat sync-strip__stat--synced sync-strip__sep sync-strip__stat--pending sync-strip__action sync-strip__sync sync-strip__spinner sync-strip__cli-toggle sync-strip__backdrop</td></tr>
+<tr><td class="mono">sidebar</td><td>10</td><td>23</td><td class="mono where">sidebar sidebar__nav sidebar__item-icon sidebar__item-label sidebar__bottom sidebar__item sidebar-view sidebar-item-name sidebar-item-count sidebar-content</td></tr>
+<tr><td class="mono">calib</td><td>19</td><td>21</td><td class="mono where">calib-tab__header calib-tab__stat calib-tab__pct calib-tab__stat-label calib-strip__badge calib-strip__cta calib-tab__grid calib-strip__header calib-strip__chevron calib-strip__title calib-strip__summary calib-strip__summary-pct</td></tr>
+<tr><td class="mono">toolbar</td><td>6</td><td>19</td><td class="mono where">toolbar__btn toolbar__btn--primary toolbar toolbar__name toolbar__actions toolbar__divider</td></tr>
+<tr><td class="mono">network</td><td>6</td><td>18</td><td class="mono where">network-view network-status-bar network-stat network-stat-value network-stat-label network-empty</td></tr>
+<tr><td class="mono">events</td><td>14</td><td>17</td><td class="mono where">events-loading events-empty-state events-schema-select events-scope-nav events-scope-label events-scope-list events-category-filters events-table events-table-actions events-count events-table-header events-table-body</td></tr>
+<tr><td class="mono">tasks</td><td>8</td><td>16</td><td class="mono where">tasks tasks__header tasks__title tasks__stat tasks__board-tabs tasks__empty tasks-filter-bar tasks__list</td></tr>
+<tr><td class="mono">inbox</td><td>15</td><td>16</td><td class="mono where">inbox inbox__pill-row inbox-pill__glyph inbox__column inbox__calib-header inbox__calib-who inbox__calib-stat inbox__zero inbox__zero-glyph inbox__zero-title inbox__zero-sub inbox__hero</td></tr>
+<tr><td class="mono">load</td><td>10</td><td>15</td><td class="mono where">load-dialog load-dialog__body load-dialog__section load-dialog__label load-dialog__loading load-dialog__graph-list load-dialog__graph-item load-dialog__graph-name load-dialog__graph-meta load-dialog__divider</td></tr>
+<tr><td class="mono">logs</td><td>12</td><td>15</td><td class="mono where">logs-view logs-toolbar logs-filters logs-select logs-search logs-actions logs-count logs-clear-btn logs-table logs-header logs-body logs-empty</td></tr>
+<tr><td class="mono">cell</td><td>14</td><td>15</td><td class="mono where">cell-grid__cell cell-grid__cell--empty cell-grid__band cell-grid__learned-dot cell-grid__n cell-grid__prior cell-grid__prior-ramp cell-grid__prior-tick cell-grid__loading cell-grid__scroll cell-grid cell-grid__corner</td></tr>
+<tr><td class="mono">event</td><td>8</td><td>13</td><td class="mono where">event-time event-severity event-type event-category-badge event-service event-scope event-depth event-data</td></tr>
+<tr><td class="mono">s</td><td>5</td><td>13</td><td class="mono where">s-loading-state s-loading-content s-loading-spinner s-error-state s-error-content</td></tr>
+<tr><td class="mono">export</td><td>6</td><td>12</td><td class="mono where">export-overlay export-dialog export-dialog__header export-dialog__close export-dialog__content export-dialog__actions</td></tr>
+<tr><td class="mono">log</td><td>7</td><td>12</td><td class="mono where">log-time log-level log-symbol log-service log-message log-duration log-data</td></tr>
+<tr><td class="mono">file</td><td>9</td><td>12</td><td class="mono where">file-request-card file-request-header file-request-path file-request-requester file-request-body file-request-snippet file-request-meta file-request-actions file-action-btn</td></tr>
+<tr><td class="mono">message</td><td>12</td><td>12</td><td class="mono where">message-bubble message-bubble-header message-sender message-text message-symbols message-symbol-tag message-diff message-diff-toggle message-diff-content message-decision message-decision-label message-time</td></tr>
+<tr><td class="mono">session</td><td>9</td><td>11</td><td class="mono where">session-sidebar-info session-sidebar-meta session-sidebar-stats session-detail session-detail-header session-detail-meta session-detail-section session-symbols session-date-header</td></tr>
+<tr><td class="mono">overview</td><td>6</td><td>11</td><td class="mono where">overview overview__title overview__cards overview__section-title overview__health overview__activity</td></tr>
+<tr><td class="mono">flows</td><td>10</td><td>11</td><td class="mono where">flows-view flows-toolbar flows-toolbar-left flows-count flows-toolbar-right flows-content flows-list flows-empty flows-detail flows-empty-detail</td></tr>
+<tr><td class="mono">exclusion</td><td>3</td><td>10</td><td class="mono where">exclusion-bar exclusion-chip exclusion-clear</td></tr>
+<tr><td class="mono">incident</td><td>10</td><td>10</td><td class="mono where">incident-header incident-id incident-status incident-error incident-meta incident-env incident-time incident-symbols incident-patterns incident-detail</td></tr>
+<tr><td class="mono">command</td><td>9</td><td>9</td><td class="mono where">command-palette-backdrop command-palette command-palette__input-wrapper command-palette__input command-palette__list command-palette__item-icon command-palette__item-label command-palette__item-shortcut command-palette__empty</td></tr>
+<tr><td class="mono">lore</td><td>8</td><td>9</td><td class="mono where">lore-card-title lore-card lore-card-header lore-card-author lore-card-summary lore-card-symbols lore-card-footer lore-card-stats</td></tr>
+<tr><td class="mono">thread</td><td>9</td><td>9</td><td class="mono where">thread-list-sidebar thread-list-toolbar thread-list-items thread-list-empty thread-card-topic thread-card-meta thread-card-participants thread-card-stats thread-card-count</td></tr>
+<tr><td class="mono">conversation</td><td>8</td><td>9</td><td class="mono where">conversation conversation-empty conversation-header conversation-header-left conversation-topic conversation-participants conversation-actions conversation-messages</td></tr>
+<tr><td class="mono">depends</td><td>6</td><td>8</td><td class="mono where">depends-chain depends-chain__arrow depends-chain__id depends-chain__dot depends-chain__dot--this depends-chain__id--this</td></tr>
+<tr><td class="mono">breadcrumb</td><td>7</td><td>7</td><td class="mono where">breadcrumb-list breadcrumb-item breadcrumb-phase breadcrumb-context breadcrumb-time breadcrumb-decisions breadcrumb-decision</td></tr>
+<tr><td class="mono">column</td><td>4</td><td>7</td><td class="mono where">column-label-group column-author-pill column-label-text column-author-selector</td></tr>
+<tr><td class="mono">activity</td><td>7</td><td>7</td><td class="mono where">activity-feed__empty activity-feed activity-feed__item activity-feed__content activity-feed__summary activity-feed__symbol activity-feed__time</td></tr>
+<tr><td class="mono">composer</td><td>6</td><td>7</td><td class="mono where">composer-field composer-steps composer-step composer-remove composer-add-buttons composer-actions</td></tr>
+<tr><td class="mono">incidents</td><td>5</td><td>7</td><td class="mono where">incidents-view incidents-filters incidents-content incidents-list incidents-empty</td></tr>
+<tr><td class="mono">swim</td><td>7</td><td>7</td><td class="mono where">swim-lane__header swim-lane__chevron swim-lane__label swim-lane__count swim-lane__points swim-lane__cards swim-lane__empty</td></tr>
+<tr><td class="mono">group</td><td>5</td><td>6</td><td class="mono where">group-node group-handle group-node__header group-node__input group-node__label</td></tr>
+<tr><td class="mono">filter</td><td>4</td><td>6</td><td class="mono where">filter-bar filter-clear filter-group filter-stats</td></tr>
+<tr><td class="mono">health</td><td>6</td><td>6</td><td class="mono where">health-bar health-bar__header health-bar__label health-bar__value health-bar__track health-bar__fill</td></tr>
+<tr><td class="mono">files</td><td>6</td><td>6</td><td class="mono where">files-view files-toolbar files-filter-group files-count files-list files-empty</td></tr>
+<tr><td class="mono">header</td><td>5</td><td>5</td><td class="mono where">header header__left header__title header__project header__right</td></tr>
+<tr><td class="mono">stat</td><td>5</td><td>5</td><td class="mono where">stat-card__value stat-card__icon stat-card__trend stat-card__label stat-card__detail</td></tr>
+<tr><td class="mono">hint</td><td>1</td><td>5</td><td class="mono where">hint</td></tr>
+<tr><td class="mono">compose</td><td>5</td><td>5</td><td class="mono where">compose-box compose-row compose-intent-select compose-textarea compose-send-btn</td></tr>
+<tr><td class="mono">gate</td><td>4</td><td>4</td><td class="mono where">gate-chain--empty gate-chain gate-chain__separator gate</td></tr>
+<tr><td class="mono">date</td><td>3</td><td>4</td><td class="mono where">date-separator date-count date-badge</td></tr>
+<tr><td class="mono">view</td><td>2</td><td>4</td><td class="mono where">view-switcher-row view-switcher</td></tr>
+<tr><td class="mono">empty</td><td>1</td><td>4</td><td class="mono where">empty-state</td></tr>
+<tr><td class="mono">action</td><td>1</td><td>4</td><td class="mono where">action-btn</td></tr>
+<tr><td class="mono">pattern</td><td>4</td><td>4</td><td class="mono where">pattern-match pattern-item pattern-name pattern-confidence</td></tr>
+<tr><td class="mono">sentinel</td><td>3</td><td>3</td><td class="mono where">sentinel-section sentinel-tabs sentinel-tab-content</td></tr>
+<tr><td class="mono">symphony</td><td>3</td><td>3</td><td class="mono where">symphony-section symphony-tabs symphony-tab-content</td></tr>
+<tr><td class="mono">deny</td><td>2</td><td>3</td><td class="mono where">deny deny-reason-input</td></tr>
+<tr><td class="mono">app</td><td>2</td><td>2</td><td class="mono where">app app__main</td></tr>
+<tr><td class="mono">component</td><td>1</td><td>2</td><td class="mono where">component</td></tr>
+<tr><td class="mono">decision</td><td>2</td><td>2</td><td class="mono where">decision-text decision-rationale</td></tr>
+<tr><td class="mono">timeline</td><td>2</td><td>2</td><td class="mono where">timeline-spine timeline-column-labels</td></tr>
+<tr><td class="mono">col</td><td>1</td><td>2</td><td class="mono where">col-resize-handle</td></tr>
+<tr><td class="mono">scope</td><td>2</td><td>2</td><td class="mono where">scope-value scope-count</td></tr>
+<tr><td class="mono">context</td><td>1</td><td>2</td><td class="mono where">context-menu</td></tr>
+<tr><td class="mono">error</td><td>2</td><td>2</td><td class="mono where">error-message error-type</td></tr>
+<tr><td class="mono">resolve</td><td>2</td><td>2</td><td class="mono where">resolve resolve-btn</td></tr>
+<tr><td class="mono">tab</td><td>1</td><td>2</td><td class="mono where">tab-badge</td></tr>
+<tr><td class="mono">approve</td><td>2</td><td>2</td><td class="mono where">approve approve-redacted</td></tr>
+<tr><td class="mono">shell</td><td>1</td><td>1</td><td class="mono where">shell</td></tr>
+<tr><td class="mono">main</td><td>1</td><td>1</td><td class="mono where">main</td></tr>
+<tr><td class="mono">content</td><td>1</td><td>1</td><td class="mono where">content</td></tr>
+<tr><td class="mono">canvas</td><td>1</td><td>1</td><td class="mono where">canvas-wrapper</td></tr>
+<tr><td class="mono">paradigm</td><td>1</td><td>1</td><td class="mono where">paradigm-flow</td></tr>
+<tr><td class="mono">human</td><td>1</td><td>1</td><td class="mono where">human</td></tr>
+<tr><td class="mono">author</td><td>1</td><td>1</td><td class="mono where">author-type-toggle</td></tr>
+</table></div>
+<h2 id="copy">Copy</h2><p class="meta">441 distinct user-visible strings. The vocabulary layer is decided from these.</p><div class="scroll"><table><tr><th>Text</th><th>Where</th></tr>
+<tr><td>Paradigm Platform</td><td class="where mono">packages/paradigm/platform-ui/index.html:6</td></tr>
+<tr><td>Coming in Platform Phase 2</td><td class="where mono">packages/paradigm/platform-ui/src/App.tsx:45</td></tr>
+<tr><td>Go to section...</td><td class="where mono">packages/paradigm/platform-ui/src/components/CommandPalette.tsx:132</td></tr>
+<tr><td>No matching sections</td><td class="where mono">packages/paradigm/platform-ui/src/components/CommandPalette.tsx:159</td></tr>
+<tr><td>An unexpected error occurred</td><td class="where mono">packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:33</td></tr>
+<tr><td>1px solid var(--p-border)</td><td class="where mono">packages/paradigm/platform-ui/src/components/ErrorBoundary.tsx:40</td></tr>
+<tr><td>Unmute agent actions</td><td class="where mono">packages/paradigm/platform-ui/src/components/PlatformHeader.tsx:37</td></tr>
+<tr><td>Mute agent actions</td><td class="where mono">packages/paradigm/platform-ui/src/components/PlatformHeader.tsx:37</td></tr>
+<tr><td>theme</td><td class="where mono">packages/paradigm/platform-ui/src/components/SidebarNav.tsx:52</td></tr>
+<tr><td>Academy</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:29</td></tr>
+<tr><td>learning packs for this project</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:33</td></tr>
+<tr><td>240px minmax(0, 1fr) minmax(0, 1.4fr)</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:41</td></tr>
+<tr><td>Packs</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:50</td></tr>
+<tr><td>Loading packs…</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:52</td></tr>
+<tr><td>paradigm university init</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:55</td></tr>
+<tr><td>Loading…</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:66</td></tr>
+<tr><td>Open a step to read it or take its quiz.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/AcademySection.tsx:83</td></tr>
+<tr><td>no content yet</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackList.tsx:8</td></tr>
+<tr><td>(external — not active)</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:14</td></tr>
+<tr><td>Skill</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:23</td></tr>
+<tr><td>Version</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:24</td></tr>
+<tr><td>Status</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:25</td></tr>
+<tr><td>Tools</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:26</td></tr>
+<tr><td>Scripts</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PackSkills.tsx:27</td></tr>
+<tr><td>This pack has no learning paths yet.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:15</td></tr>
+<tr><td> (not found in this pack)</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:89</td></tr>
+<tr><td>· optional</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/PathView.tsx:92</td></tr>
+<tr><td>Nice — you passed!</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:83</td></tr>
+<tr><td>Not quite yet.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:83</td></tr>
+<tr><td>Check my answers</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:91</td></tr>
+<tr><td>Answer every question to check</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/components/QuizRunner.tsx:91</td></tr>
+<tr><td>could not load packs</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:208</td></tr>
+<tr><td>could not load pack</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:235</td></tr>
+<tr><td>could not load path</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:247</td></tr>
+<tr><td>could not load note</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:265</td></tr>
+<tr><td>could not load quiz</td><td class="where mono">packages/paradigm/platform-ui/src/sections/academy/store/academyStore.ts:281</td></tr>
+<tr><td>just now</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:19</td></tr>
+<tr><td>Ambient</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:178</td></tr>
+<tr><td>Loading...</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:179</td></tr>
+<tr><td>Events (last hour)</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:192</td></tr>
+<tr><td>Pending Nominations</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:197</td></tr>
+<tr><td>Active Debates</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:202</td></tr>
+<tr><td>Event Stream</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:212</td></tr>
+<tr><td>All types</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:218</td></tr>
+<tr><td>No events recorded yet</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:226</td></tr>
+<tr><td>Nominations</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:236</td></tr>
+<tr><td>No pending nominations</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:239</td></tr>
+<tr><td>Debates</td><td class="where mono">packages/paradigm/platform-ui/src/sections/ambient/AmbientSection.tsx:252</td></tr>
+<tr><td>Brain</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:58</td></tr>
+<tr><td>your notes, organised on this Mac</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:65</td></tr>
+<tr><td>1px solid var(--p-accent-amber)</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:93</td></tr>
+<tr><td>No notes folder yet</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:109</td></tr>
+<tr><td>paradigm brain init &amp;lt;folder&amp;gt;</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/BrainSection.tsx:111</td></tr>
+<tr><td>; labels: Record</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:6</td></tr>
+<tr><td>Your notes at a glance</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:32</td></tr>
+<tr><td>Last changed</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/BrainMapPanel.tsx:36</td></tr>
+<tr><td>Find</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:16</td></tr>
+<tr><td>Ask for something, e.g. &quot;lease&quot;</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:21</td></tr>
+<tr><td>Searching…</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:33</td></tr>
+<tr><td>Nothing found.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/FindPanel.tsx:34</td></tr>
+<tr><td>0 &amp;&amp; count</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:7</td></tr>
+<tr><td>Health</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:27</td></tr>
+<tr><td>Checking…</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:29</td></tr>
+<tr><td>Broken links</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:32</td></tr>
+<tr><td>Links that point to a note that isn&#39;t there.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:32</td></tr>
+<tr><td>Loose notes</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:39</td></tr>
+<tr><td>Notes nothing links to and that link to nothing.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:39</td></tr>
+<tr><td>Same-name notes</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:44</td></tr>
+<tr><td>Different notes with the same name or title — links may land on the wrong one.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/HealthPanel.tsx:44</td></tr>
+<tr><td>Private &amp;amp; Locked</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/LockedPanel.tsx:10</td></tr>
+<tr><td>Nothing locked.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/LockedPanel.tsx:14</td></tr>
+<tr><td>see what left</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:32</td></tr>
+<tr><td>No details recorded.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:38</td></tr>
+<tr><td>a cloud helper</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:42</td></tr>
+<tr><td>an AI assistant on this Mac</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/PrivacyBadge.tsx:42</td></tr>
+<tr><td>Suggestions</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:48</td></tr>
+<tr><td>keep ·</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:50</td></tr>
+<tr><td>dismiss ·</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:50</td></tr>
+<tr><td>Looking for patterns…</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:55</td></tr>
+<tr><td>No suggestions right now — check back after you add notes.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:57</td></tr>
+<tr><td>top folder</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:84</td></tr>
+<tr><td>Not now</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/components/SuggestionsPanel.tsx:111</td></tr>
+<tr><td>Health records</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:8</td></tr>
+<tr><td>Other people&#39;s messages</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:10</td></tr>
+<tr><td>Individual files</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:21</td></tr>
+<tr><td>Text files</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:26</td></tr>
+<tr><td>Other files</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:26</td></tr>
+<tr><td>This week</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:29</td></tr>
+<tr><td>This month</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:30</td></tr>
+<tr><td>This year</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:31</td></tr>
+<tr><td>Nothing has left this Mac</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:40</td></tr>
+<tr><td>Suggestions paused (too many dismissed). Turn back on with `paradigm brain suggestions on`.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:71</td></tr>
+<tr><td>Suggestions are turned off for this folder. Turn back on with `paradigm brain suggestions on`.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/labels.ts:72</td></tr>
+<tr><td>could not load your notes</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:204</td></tr>
+<tr><td>could not check your notes</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:226</td></tr>
+<tr><td>could not load suggestions</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:246</td></tr>
+<tr><td>could not save that</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:292</td></tr>
+<tr><td>search failed</td><td class="where mono">packages/paradigm/platform-ui/src/sections/brain/store/brainStore.ts:331</td></tr>
+<tr><td>(url: string, fallback: T): Promise</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:108</td></tr>
+<tr><td>Unnamed learning</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:121</td></tr>
+<tr><td>SURVIVED</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:139</td></tr>
+<tr><td>OVERTURNED</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:140</td></tr>
+<tr><td>PENDING</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:141</td></tr>
+<tr><td>syllabus valid · cleared to study</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:254</td></tr>
+<tr><td>syllabus aged out · re-ratify the sources</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:255</td></tr>
+<tr><td>syllabus references missing — study-hall refuses</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:256</td></tr>
+<tr><td>term TTL elapsed · renew to resume</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:257</td></tr>
+<tr><td>No agents enrolled — author a syllabus to fill the roster.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:262</td></tr>
+<tr><td>no field breaks recorded — untested, not proven</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:333</td></tr>
+<tr><td>never applied — no field evidence yet</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:334</td></tr>
+<tr><td>untested</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:354</td></tr>
+<tr><td>private</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:382</td></tr>
+<tr><td>enrolled</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:399</td></tr>
+<tr><td>— provisional &amp;amp; external; the field hasn&#39;t earned these yet</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:417</td></tr>
+<tr><td>Nothing in the backlog.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:419</td></tr>
+<tr><td>Vetted</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:437</td></tr>
+<tr><td>Backlog</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:438</td></tr>
+<tr><td>Your team has been working — but never been to class.</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:451</td></tr>
+<tr><td>Seed a breaking scenario</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:459</td></tr>
+<tr><td>Author the process syllabus</td><td class="where mono">packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx:463</td></tr>
+</table></div></main></body></html>

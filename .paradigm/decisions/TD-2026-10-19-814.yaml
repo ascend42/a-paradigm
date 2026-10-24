@@ -1,0 +1,38 @@
+id: TD-2026-10-19-814
+timestamp: '2026-10-19T16:03:11.280Z'
+title: 'Drain/resume: sessions may write ~/.claude/projects; turns cut at the deadline resume idle'
+decision: >-
+  (1) The session sandbox profile allows file-write* under ~/.claude/projects, the whole subtree, so Claude Code can
+  save transcripts and --resume works. Everything else under ~/.claude stays denied for writes. (2) When the drain
+  deadline interrupts a turn mid-flight, the new kernel resumes that session IDLE with a visible 'turn interrupted by
+  update' note and does not auto-continue. The interrupted tool call re-runs only if the human sends a message. Turns
+  that finished cleanly at a boundary resume normally.
+rationale: >-
+  Founder rulings, 2026-10-19 decision dialog, on the P-resume probe (4c2d9431). The probe showed that the stock profile
+  denies the transcript write, so there is no resume without an allow. It also showed that a turn killed mid-tool-call
+  re-issues that call on resume+continue (q2). The founder chose the whole projects subtree over a per-session folder
+  rule, accepting that one session could write other projects' transcripts. Resuming idle means a half-done command (a
+  migration or a deploy) is never repeated automatically.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: arky
+    role: agent
+    stance: neutral
+alternatives_considered:
+  - option: Allow only the session's own encoded projects folder
+    rejected_because: the founder chose the simpler subtree rule
+  - option: Auto-continue after resume
+    rejected_because: the interrupted tool call would re-run without asking
+  - option: Never interrupt; drain waits indefinitely
+    rejected_because: a long turn could block an update forever
+symbols_affected:
+  - $daemon-lifecycle
+  - '#backend-adapter'
+status: active
+tags:
+  - gnomon
+  - sandbox
+  - drain-resume
+  - T-2026-10-19-014

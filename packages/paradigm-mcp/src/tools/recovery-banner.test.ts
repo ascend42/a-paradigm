@@ -18,7 +18,7 @@ import * as os from 'node:os';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
-import { getSessionTracker, resetSessionTracker, SessionTracker } from '../utils/session-tracker.js';
+import { resetSessionTracker, SessionTracker } from '../utils/session-tracker.js';
 import { buildRecoveryPreamble } from './context.js';
 
 let tmp: string;

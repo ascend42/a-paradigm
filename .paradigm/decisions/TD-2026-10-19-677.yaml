@@ -1,0 +1,27 @@
+id: TD-2026-10-19-677
+timestamp: '2026-10-19T21:35:19.857Z'
+title: 'Voice V0 rulings: incident/daemon-stop are hand-only; reserve disarm reasons + status.arms now'
+decision: >-
+  (1) Exception to D66: voice may not deny or reject `incident` or `daemon-stop` cards; both are fully hand-only,
+  because a voice reject would cancel a safety action the human started. (2) Reserve a closed VOICE_DISARM_REASONS list
+  and the status fields `arms` and `armCustody` in V0, moving clientApiId once, deliberately, before any client ships.
+rationale: >-
+  Aegis V0 review M2 + point 4. The D66 premise ("a deny fails closed") is false for human-initiated brakes. Forced
+  disarms are security events, and the 1 s falsifiers need a closed reason list. No client has shipped, so this is the
+  cheapest moment, following the A26-11 precedent.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: aegis
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#gnomon-voice'
+  - ^voice-armed
+  - '#approval-broker'
+status: active
+tags:
+  - gnomon
+  - voice
+  - paradigm-8

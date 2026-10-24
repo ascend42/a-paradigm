@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import type { GenericEvent } from '@a-company/sentinel';
 import type {
   Persona,
   PersonaFilter,
@@ -714,14 +715,6 @@ export async function getAffectedPersonas(
 
 // ── Sentinel Assertion Engine ────────────────────────────
 
-interface SentinelEvent {
-  id: string;
-  event_type: string;
-  timestamp: string;
-  scope_value?: string;
-  data_json: string;
-}
-
 function deepGet(obj: unknown, path: string): unknown {
   const parts = path.split(/[.\[\]]+/).filter(Boolean);
   let current: unknown = obj;
@@ -830,46 +823,31 @@ export async function validateAgainstSentinel(
     const { SentinelStorage } = await import('@a-company/sentinel');
     const storage = new SentinelStorage();
 
-    // Query Sentinel for step completion events for this persona
-    const events = (storage as { queryEvents?: (opts: Record<string, unknown>) => SentinelEvent[] }).queryEvents?.({
-      schemaId: 'paradigm-personas',
-      eventType: 'persona.step.complete',
-      scopeValue: persona.id,
-      limit: 500,
-    }) || [];
-
-    // Filter by run_id/chain_id/environment if specified
-    const filtered = events.filter((e: SentinelEvent) => {
-      const data = JSON.parse(e.data_json || '{}');
+    // Query Sentinel for this persona's step events: passes are emitted as
+    // `persona.step.complete`, failures as `persona.step.fail` (tools/personas.ts).
+    const matchesRun = (e: GenericEvent): boolean => {
+      const data = e.data ?? {};
       if (options.run_id && data.run_id !== options.run_id) return false;
       if (options.chain_id && data.chain_id !== options.chain_id) return false;
       if (options.environment && data.environment !== options.environment) return false;
       return true;
-    });
+    };
+    const stepEvents = (eventType: string): GenericEvent[] =>
+      storage
+        .queryEvents({ schemaId: 'paradigm-personas', eventType, scopeValue: persona.id, limit: 500 })
+        .filter(matchesRun);
+    const filtered = stepEvents('persona.step.complete');
+    const filteredFails = stepEvents('persona.step.fail');
 
-    // Also get failed events
-    const failEvents = (storage as { queryEvents?: (opts: Record<string, unknown>) => SentinelEvent[] }).queryEvents?.({
-      schemaId: 'paradigm-personas',
-      eventType: 'persona.step.fail',
-      scopeValue: persona.id,
-      limit: 500,
-    }) || [];
-
-    const filteredFails = failEvents.filter((e: SentinelEvent) => {
-      const data = JSON.parse(e.data_json || '{}');
-      if (options.run_id && data.run_id !== options.run_id) return false;
-      if (options.chain_id && data.chain_id !== options.chain_id) return false;
-      if (options.environment && data.environment !== options.environment) return false;
-      return true;
-    });
-
-    // Build event map by step_id (latest event per step wins)
+    // Build event map by step_id (latest event per step wins). queryEvents
+    // returns newest first, so replay both lists oldest → newest.
     const eventMap = new Map<string, Record<string, unknown>>();
+    const chronological = [...filtered, ...filteredFails].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
-    for (const e of [...filtered, ...filteredFails]) {
-      const data = JSON.parse(e.data_json || '{}');
-      if (data.step_id) {
-        eventMap.set(data.step_id as string, data);
+    for (const e of chronological) {
+      const data = e.data ?? {};
+      if (typeof data.step_id === 'string') {
+        eventMap.set(data.step_id, data);
       }
     }
 

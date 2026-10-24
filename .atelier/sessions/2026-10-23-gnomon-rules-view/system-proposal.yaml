@@ -1,0 +1,57 @@
+# Proposed amendment to .atelier/systems/gnomon/design-system.yaml (session 2026-10-23-gnomon-rules-view).
+# NOT applied: Mika (design) and Aegis (security) review first. No render yet.
+
+placement:
+  settings: "Settings › Permissions gains a 'Rules' block under 'Today's grant' (the standing-grant row stays where it is
+    and joins the same list as its first row). No second Permissions surface."
+  palette: "'Rules…' (id rules.open) opens Settings scrolled to Permissions › Rules, focus on the first row."
+  mode-menu: "While an 'edits in this repo' rule stands and the session is in ask, the mode chip reads
+    'ask · edits allowed by rule' and the mode menu's last entry is 'stop allowing edits by rule' (built, immediate, no
+    presence: it narrows). It is the same revoke the Rules view stages."
+
+components:
+  rule-row:
+    role: "One saved Always rule or the standing grant: what it allows, where, since when, from which card, and whether it is on."
+    anatomy:
+      - "what (11.5, 500): plain words from the kernel's rule: 'edits to src/app.ts' · 'edits in this repo (same as auto-edits)'
+        · 'Bash commands starting paradigm lore record …' · 'this exact command: npm run build' · 'this exact edit'
+        · standing: 'Let Gnomon handle these today'"
+      - "where (10.5 --sec): project swatch + repo name (from repoKey via the session list; else 'a repo not open now')"
+      - "since (10.5 --sec): 'today 12:53' · 'yesterday' · 'Oct 19', and 'from the card asked in <session name>' (cardId in
+        the title)"
+      - "state (10.5): on · off · 'off until 13:53' · 'off until tomorrow' (amber ◆ only while a change is staged)"
+      - "keys (quiet, --key-h): Turn off ▾ (menu: for 1 hour · until tomorrow · until I turn it on) | Turn on · Remove"
+    states: [on, off, off-until, staged-off, staged-on, staged-remove, saving, refused]
+    never: ["a hue for on/off (words carry it)", "Remove without the row staying visible, struck, until save"]
+  rules-save-bar:
+    role: "The staged batch: one line and one key, sticky at the foot of the Rules block while anything is staged."
+    copy:
+      tighten-only: "3 changes · turns off or removes rules · Save (no Touch ID)"
+      loosen: "4 changes · 1 turns a rule back on · Save · Touch ID once"
+      discard: "Discard changes"
+    behaviour:
+      - "Changes are staged in the page only; nothing reaches the kernel until Save."
+      - "Save sends ONE request.rules.apply{changes}. Tighten-only applies at once. A batch with any loosening comes back as ONE
+        strictness card listing every change (the card IS the batch); Save's same gesture decides it allow, so Touch ID is
+        asked once (the shipped mode-loosen pattern, app.ts setMode)."
+      - "A refusal leaves every staged change in place with the kernel's reason on the bar; nothing is half-applied."
+
+kernel:
+  request: "request.rules.apply{changes: [{ruleId, op: 'remove' | 'off' | 'on', until?: ISO | 'manual'}]} (dispatcher-only,
+    human on gui or device, like request.rules.revoke which ships now for the mode menu). At most 64 changes, one per rule."
+  atomic: "The kernel validates EVERY change against the RuleBook (exists, not revoked, op valid for its state) before
+    writing anything; then writes one row per change, each naming the batch id, under one lock. Rows:
+    approval.rule.revoked (remove, unchanged), approval.rule.disabled{ruleId, until|null, batch},
+    approval.rule.enabled{ruleId, batch}. The RuleBook folds them; match() skips a disabled rule until `until` passes
+    (kernel clock, never the page's)."
+  presence: "remove and off: none (narrowing, like rules.revoke F1). Any 'on' in the batch: ONE strictness card
+    (detail.op 'rules.apply', detail.changes in contentHash), fresh presence, never standing, never by voice; the rows are
+    written only on its allow."
+  status: "status.rules (human class): every rule with {ruleId, match, prefix?, path?, tool, repoKey, learnedAt, cardId,
+    state, until?} and the standing grant row; read by the view, never by another class."
+
+review_for_aegis:
+  - "request.rules.revoke / request.rules.apply open the narrowing path to the GUI credential (rules.revoke stays unix-only);
+    narrowing only, the same handler and queue."
+  - "Re-enabling counts as loosening (one presence per batch); an 'off for a time' expiring on its own takes none."
+  - "A disabled rule must also stop the mode chip's 'edits allowed by rule' (RuleBook.repoEditsRule skips it)."

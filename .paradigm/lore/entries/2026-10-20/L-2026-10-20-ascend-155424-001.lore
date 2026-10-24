@@ -1,0 +1,34 @@
+id: L-2026-10-20-ascend-155424-001
+type: insight
+timestamp: '2026-10-20T15:54:24.399Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Speaker verification calibrated: 0/284 human impostors after the pause-run gate, but ~50% same-speaker rejection; ambient voice cannot rely on it'
+summary: |-
+  Calibration on the local human data (only 2 genuinely human speakers; VoiceStudio wavs are TTS):
+  - The previous 30 dB "speech-only" gate made things WORSE (it chopped consonants).
+  - Chosen pause-run gate: quiet = below max(-55 dBFS, peak-25 dB); cut the edges plus inner quiet runs ≥200 ms. Padding-invariant (cos 1.000).
+  - At threshold 0.65 with ≥1500 ms of gated speech: human impostors accepted 0/284 (plain, -65 and -50 padding), synthetic 6–10/80, but same-speaker rejected ~52% (mostly the drifting long narration).
+  - Residuals: -40 dBFS pause noise defeats the gate (156/284); inner gaps 37/284; utterances under 1.5 s are unreliable.
+  Implication: under auto-edits, ambient speech acts as typed input, yet the speaker check either over-accepts (old) or under-accepts (new). It is a convenience filter, not a boundary.
+  Founder decision requested on ambient semantics.
+  Code WIP: 82014480 (gate, thresholds, enrol minimum, decode priority).
+symbols_touched:
+  - '#gnomon-voice'
+learnings:
+  - Energy gates must preserve consonants; gate on long quiet runs, not per-frame dB.
+  - With two human speakers there is no real FAR estimate; design the product so a misidentification is harmless.
+tags:
+  - gnomon
+  - voice
+  - security
+  - marathon-2026-10-20
+linked_commits:
+  - 0ae93349
+  - '82014480'
+git_context:
+  ref: 8a1a66693dc05a980ceeb72263346e32ade39175
+  branch: feat/gnomon
+  dirty: true

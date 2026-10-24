@@ -1,0 +1,77 @@
+id: L-2026-10-21-ascend-185847-001
+type: agent-session
+timestamp: '2026-10-21T18:58:47.167Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon design system per product, and the migration in batches
+summary: 'Ran an Atelier `system` session: mapped four products (Gnomon, Warpline, Platform, site), drafted all four, then parked all but Gnomon on founder direction. Gnomon codified (8 contested decisions by the founder, clear entries bulk-confirmed, specimen confirmed), then migrated in 7 commits, each builder → Mika rendered review (+ Aegis where security-relevant) → fixes → commit. atelier check --product gnomon: 1 fail/174 warn at codify → 0 fail/6 warn (false positives and comments). Voice-tag batch remains, blocked on T-2026-10-21-022.'
+symbols_touched:
+  - '#gnomon-gui'
+  - '#gui-toast'
+  - '#gui-space-radius'
+  - '#gui-type'
+  - '#gui-chip'
+  - '#gui-settings'
+  - '#designer-agent'
+symbols_created:
+  - '#gui-toast'
+  - '#gui-space-radius'
+decisions:
+  - id: d1
+    decision: No shared design-system base; Gnomon only for now, other drafts parked
+    rationale: 'Founder: rejected the thin base; ''for now we can ignore all of design systems other than gnomon for paradigm'''
+  - id: d2
+    decision: Gnomon is desktop-only; a true mobile version comes later as its own work
+    rationale: Founder direction during the narrow-header board
+  - id: d3
+    decision: '''Make it standing'' opens the grant card instead of approving from a toast'
+    rationale: A toast is never a decision key; Aegis found the one-gesture approval plus a focus-jump hazard
+  - id: d4
+    decision: Toasts anchor to the chat column's right edge below the chat header; top right above the scrim while a sheet is open
+    rationale: Under the pill they covered the stack head's decision keys (Mika); Luna refined the placement
+errors_encountered:
+  - description: Session thread ran git stash on the shared working tree to test a baseline while a builder was mid-batch; the pop failed on a hook log
+    resolution: Restored by checking out the hook file, popping, and re-appending its lines; warned the builder; no edits lost. Never stash a shared tree; read HEAD with git show instead
+  - description: focusCard fell back to any gate-class card when its own card was missing, so a toast key could put the user on the wrong decision
+    resolution: Caught in Mika's second review; focus targets only the exact cardId with a warn naming the missing card (ui/card-focus.ts)
+learnings:
+  - 'Rendered review catches what tests don''t: the toast/stack overlap, the 31px Workshop column, the voice-voice label, the missing key hover'
+  - 'The Atelier UI gate parses ## Rendered for absolute screenshot paths; globs fail it'
+  - atelier check (dev CLI) needs absolute paths; relative paths report 'No UI files' (a-atelier bug)
+  - 'Record outranks code: night titles snapped to the recorded 13.5 rather than the shipped 17'
+verification:
+  status: pass
+  details:
+    gnomon-gui: 659 passed
+    gnomon web-units/wrapper: 92 passed
+    atelier check gnomon: 0 fail, 6 warn
+tags:
+  - design-system
+  - atelier
+  - gnomon
+  - migration
+linked_tasks:
+  - T-2026-10-21-018
+  - T-2026-10-21-019
+  - T-2026-10-21-020
+  - T-2026-10-21-021
+  - T-2026-10-21-022
+  - T-2026-10-21-023
+  - T-2026-10-21-024
+  - T-2026-10-21-025
+linked_commits:
+  - 48adc5c1
+  - f2548aea
+  - 8fa90386
+  - 7e8faa9b
+  - 0111a25d
+  - 3cb522a5
+  - 62f5ab6e
+  - cccf74e5
+  - 71ff4277
+git_context:
+  ref: cccf74e5fe5f3867e405d52a62270676ea9bb0cf
+  branch: feat/gnomon
+  dirty: true

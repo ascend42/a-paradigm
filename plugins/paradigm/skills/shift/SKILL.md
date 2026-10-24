@@ -29,7 +29,7 @@ npx @a-company/paradigm shift
 This single command runs:
 1. `paradigm init` — creates `.paradigm/` directory structure
 2. `paradigm team init` — sets up multi-agent team configuration
-3. `paradigm scan` — scans codebase and builds symbol index
+3. `paradigm index` — scans codebase and builds symbol index
 4. `paradigm sync` — generates CLAUDE.md and other IDE files
 5. `paradigm doctor` — runs health check
 
@@ -78,7 +78,7 @@ entries when 3+ source files are modified in a session.
 
 ## Error Handling
 
-- If `npx` fails, check if Node.js >= 18 is installed
+- If `npx` fails, check if Node.js >= 24 is installed
 - If `paradigm shift` fails mid-way, read the error and help fix it
 - If specific steps fail (e.g., scan finds nothing), note it but continue
 - Always run doctor at the end even if earlier steps had issues

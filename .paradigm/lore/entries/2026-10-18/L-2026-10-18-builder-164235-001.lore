@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-164235-001
+type: insight
+timestamp: '2026-10-18T16:42:35.949Z'
+author: builder
+title: 'M1.8 slice 2: local lane config is a separate root-signed local.signed.json; unsigned means no local config'
+summary: The spec's root-signed local.yaml is <home>/local.signed.json (gnomon-root-local:v1), same envelope as config.signed.json; anything not root-verified, invalid or older than the high-water mark yields NO local config (fallback cards), never a weaker one
+symbols_touched:
+  - '#local-runner'
+  - ^subscription-only
+files_modified:
+  - packages/gnomon/src/kernel/local/config.ts
+  - packages/gnomon/src/kernel/lifecycle/daemon.ts
+commit: 77e59cf3
+learnings:
+  - A structurally valid signed config with a public endpoint is applied and refuses per open BILLING_REFUSED so poisoning is visible
+  - config.loaded rows now carry file; the meter's chain high-water must ignore rows naming another file
+  - In production the root is unprovisioned until M1.3 so the local lane has no config yet
+tags:
+  - decision
+body: 'Readings: separate file (spec §13.1 names local.yaml) rather than a local section in config.signed.json; runner path from root-signed config (§2.4) with an optional sha256 pin of the entry file (args[0] else command); rollback via local.seen.json sidecar plus signed config.loaded{file} rows on the chain.'
+git_context:
+  ref: 77e59cf30ba18c55d5a3277738748b5d62c3c5ba
+  branch: gnomon/m18-slice2
+  dirty: true

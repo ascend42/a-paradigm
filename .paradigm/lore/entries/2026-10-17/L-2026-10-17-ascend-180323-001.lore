@@ -1,0 +1,47 @@
+id: L-2026-10-17-ascend-180323-001
+type: agent-session
+timestamp: '2026-10-17T18:03:23.373Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: PR-4 kernel log landed; M1.2 p99 falsifier trips at 1e6 rows (anchor rename + WAL fsync suspected)
+summary: |-
+  PR-4 (cb56927b) adds #kernel-log and the symbol drift CI. Details:
+  - node:sqlite chain with segments and rotation;
+  - a Signer seam with a software Ed25519 kernel key and domain-separated signatures;
+  - a file head anchor written by atomic rename, plus a keystore anchor stub;
+  - verify catches flip, forge, truncate and reorder; crash and torn-tail recovery;
+  - per-kind default labels and the §9.3 read projection;
+  - oracles G-LOG-01..04 and 06..09, 130 kernel tests;
+  - the symbols-drift test: @symbol header tags in src/kernel/** must map to .purpose symbols and Appendix A or an allowlist with reasons (12 entries).
+
+  Perf at 10k rows: p50 0.17 ms, p99 0.3-0.9 ms, footprint 35 MB (pass). At 1e6 rows: p99 7.4 ms (FAILS the 5 ms falsifier); footprint is 74 MB after a checkpoint fix (it was 156 MB). About 2.3% of appends take around 7.5 ms. Raw SQLite and the head rename are each clean alone. Hypothesis: the WAL fsync flushes the APFS metadata from the per-commit anchor rename. The fix would write the anchor less often, a §3.2 policy change ('written after every commit') needing a founder decision with Aegis input, because an un-anchored tail can be truncated undetected.
+
+  Builder resolutions to confirm in v3.8:
+  - only daemon/socket/schedule events may be unsigned;
+  - the anchor is not fsynced per commit (F_FULLFSYNC ~5 ms);
+  - durability defaults to process-crash, with power-loss opt-in;
+  - the appender caps audience at private;
+  - agent/voice readers are UNSUPPORTED for now.
+symbols_touched:
+  - '#kernel-log'
+  - ~ample-internal-logs
+commit: cb56927b
+verification:
+  status: partial
+  details:
+    tests: 122 contracts + 130 kernel pass
+    falsifier: G-LOG-04 p99 fails at 1e6 rows
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - build
+  - perf
+linked_lore:
+  - L-2026-10-17-ascend-172952-001
+git_context:
+  ref: cb56927bfd765bb85cedcbbfe71b36d4ab6bcb8d
+  branch: feat/gnomon
+  dirty: true

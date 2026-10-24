@@ -1,0 +1,44 @@
+id: L-2026-10-20-ascend-175436-001
+type: agent-session
+timestamp: '2026-10-20T17:54:36.406Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 2: Arky''s design ("the Desk"): playbooks, offers, handoffs, trust tiers, sharing'
+summary: |-
+  Findings that shape the design:
+  1. Gnomon sessions can't see the user's MCP servers today (--strict-mcp-config, repo-generated mcp.json only), so integration mods are the only way in.
+  2. The per-session gnomon-mods MCP bridge is spec-only.
+  3. The mod ABI is at its 8-RPC cap; reuse command.run and kernel.call.
+  4. Reuse table-talk's frozen guidance block, choice-chip gestures, skill-pack and provides.mcp/skills, session taints, and §8.10 tiers.
+  Design:
+  - A mod = playbook (Agent Skills SKILL.md, portable, degrades to plain suggestions outside Gnomon) + structured offers in the manifest (offer-spec:v1: kind, phase, title = chip label, summary, contextIn classes, resultOut, reach mcp|bridge|client, handoff tool, related, restraint) + capabilities + optional sheet UI.
+  - Runtime, "the Desk": a per-turn frozen <gnomon-desk> guidance (~150 tokens), full playbook on demand, and the model emits an ```offer block. Propose/dispose/decide: the model proposes, a deterministic #offer-router disposes (budget, phase, card focus, mutes) and writes offer.shown, the human decides by gesture.
+  - Learning: the success metric is "kept/shown", not accept rate, and is per user. Falsifier: below 15% after two weeks means the thesis is false.
+  - Security: ^offer-accept gesture; ^handoff-egress card plus an optional standing grant with secret scan; results fenced <mod-result trust=T3>; third-party playbook prose is tier-gated (unsigned → structured-only; signed → tainted session and strictness raised).
+  - Sharing: folder/git/nevr.land; publisher keys plus countersignature; offer-fixture goldens.
+  Phases:
+  - O1: Constellation + Neurons offers with chips via MCP passthrough (clientApiId moves).
+  - O2: bridge, sheets, one-gesture accept, bring-back returns.
+  - O3: third-party authoring and registry.
+  Ten founder questions pending. Luna's UX boards still in flight.
+symbols_touched:
+  - '#mod-host'
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#constellation-mod'
+  - '#neurons-mod'
+  - $offer-handoff
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - design
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-175058-001
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

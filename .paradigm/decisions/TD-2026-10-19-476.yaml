@@ -1,0 +1,32 @@
+id: TD-2026-10-19-476
+timestamp: '2026-10-19T17:01:23.245Z'
+title: Old-kernel pending cards with no session expire after an upgrade (amends F4)
+decision: >-
+  After an upgrade, every card the old kernel left pending expires with why 'cancelled'. A decision on an old card id is
+  refused NOT_FOUND. The requesting action asks again if it still needs to. Install cards come back from their staged
+  record, through the existing mod pickup and with fresh presence. Spec §2.4 rule 11 changes from 're-raised' to this
+  behaviour. This amends TD-2026-10-19-528 F4.
+rationale: >-
+  Founder ruling, 2026-10-19 decision dialog, on slice B2. The approval.request row stores the card but not the detail
+  its effect needs. For example, a fallback card's cwd and request live only in the old process, so a new kernel cannot
+  rebuild it. Storing that detail would be a contracts change and another clientApiId move.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: builder
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Store card detail and re-raise
+    rejected_because: a contracts change and more work
+  - option: Block the upgrade while cards are pending
+    rejected_because: not chosen
+symbols_affected:
+  - '#approval-broker'
+  - $daemon-lifecycle
+status: active
+tags:
+  - gnomon
+  - drain-resume
+  - T-2026-10-19-014

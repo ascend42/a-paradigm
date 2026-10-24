@@ -1,0 +1,42 @@
+id: L-2026-10-20-ascend-191317-001
+type: agent-session
+timestamp: '2026-10-20T19:13:17.775Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Fidelity pass 2: Aegis fixes in (full command visible with ⏎ separators; local-namespace requester; night chip pill; h() id)'
+summary: |-
+  eb69ccf2…27be4dcb:
+  - H1: the composed permission title keeps lines, has no 240 cut, a 4000 hard cap that shows the kernel body on the face when hit, per-line ⏎ with separators marked, and wraps. Tests cover the long tail and newline/CR/U+2028.
+  - L2: requester shortened only in the local namespace, derived from the auth principal.
+  - L3: the night choice chips keep a filled pill.
+  - L4: `id` stays out of the h() allowlist; the banner and reconnect elements set .id directly.
+  - Mode rows remain visible.
+  - The darwin smoke test updated for the connection chip.
+  Merged current feat/gnomon. Suites: gui 426 (+bundle), gnomon 2511, contracts 471. A 38-failure detour was caused by the worktree missing built mod-sdk/gnomon-local.
+  Aegis re-check requested.
+symbols_touched:
+  - '#gui'
+verification:
+  status: pass
+  details:
+    gui: 426
+    gnomon: 2511
+    contracts: 471
+tags:
+  - gnomon
+  - design
+  - marathon-2026-10-20
+linked_commits:
+  - eb69ccf2
+  - da5cbd0f
+  - e7979082
+  - aee79300
+  - 4bf3e1a8
+  - d6c3b318
+  - 4d78c3b3
+git_context:
+  ref: 90f2c4191ad89ac671852112691de7f2e92a96f1
+  branch: feat/gnomon
+  dirty: true

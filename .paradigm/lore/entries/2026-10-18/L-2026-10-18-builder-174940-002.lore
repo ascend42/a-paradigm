@@ -1,0 +1,23 @@
+id: L-2026-10-18-builder-174940-002
+type: milestone
+timestamp: '2026-10-18T17:49:40.921Z'
+author: builder
+title: 'T-2026-10-18-016 shipped: hello replay gap closed, session.compacted typed'
+summary: 'Three commits on gnomon/t016-api-bump: contracts clientNonce (1/3), kernel + TS/CLI/GUI client verification + conformance real-hello replay (2/3), session.compacted + P8-D93 id move + spec + doc regeneration (3/3). Security gate before M1.3 Reconnect and the wrapper is cleared.'
+symbols_touched:
+  - '#socket'
+  - '#gnomon-ts-client'
+  - '#gui'
+  - '#client-conformance'
+  - '#kernel-log'
+  - '#local-runner'
+  - '#gnomon-contracts'
+tags:
+  - gnomon
+  - milestone
+  - T-2026-10-18-016
+confidence: 0.9
+git_context:
+  ref: 1500288bea1a91411760b92d4beaf5704ea50460
+  branch: gnomon/t016-api-bump
+  dirty: true

@@ -1,0 +1,34 @@
+id: L-2026-10-22-ascend42-202237-001
+type: agent-session
+timestamp: '2026-10-22T20:22:37.530Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'PR #52 review: Windows merge blockers fixed, CI ownership cause found'
+summary: 'Addressed PR #52 merge blockers on feat/gnomon-windows (7f4073e1, bc227d58, a709d871); CI now green on all 8 jobs. Blockers: win32SystemRoot replaces the ''C:\Windows'' literal (drive-rooted only, per Aegis); WINDOWS_EXTRA gated to win32 with a darwin test; strict device-key nlink proven intended on darwin/linux; partial sandbox fidelity reaches status and the win32 deny table claims only built mechanisms; rust-toolchain.toml pins 1.93.1. Windows CI root cause took three layers on the elevated-admin runner: (1) new objects owned by BA -> helper sets owner to the user; (2) the runner is the built-in Administrator, which SDDL spells LA -> verdicts compare in the SDDL spelling (info.userSddlSid); (3) children created by the kernel still BA-owned -> new helper op process.owner-default sets the token''s default owner to its user. Ubuntu self-update-e2e was pre-existing on feat/gnomon (linux has no transport profile, gui.open refuses) and is now scoped to darwin. Aegis approved each step.'
+symbols_touched:
+  - '#gnomon'
+  - '#gnomon-helper'
+  - '#session-runner'
+  - '#session-sandbox'
+  - '#session-env'
+  - '#device-key'
+symbols_created: []
+commit: a709d871
+learnings:
+  - 'GitHub windows-latest runs as the built-in Administrator, elevated: objects default to owner BA, and SDDL spells the user LA, so compare SIDs in the OS''s SDDL spelling and set TokenOwner to the user'
+  - Diff the PR's CI failures against the base branch's before chasing them; two were pre-existing
+  - Local symlink-fixture failures on this machine are environment (no symlink privilege), not regressions
+verification:
+  status: pass
+  details:
+    ci: run 39852267469 all 8 jobs green
+    local: windows suites pass; only symlink-privilege tests fail locally
+tags:
+  - windows
+  - pr-52
+git_context:
+  ref: 7f4073e1bf77f0ceb4c6fb2034471c10527ea42a
+  branch: feat/gnomon-windows
+  dirty: true

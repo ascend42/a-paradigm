@@ -1,0 +1,34 @@
+id: TD-2026-10-22-769
+timestamp: '2026-10-22T23:14:16.033Z'
+title: 'Real-home local model setup: bundled runner, full guided UI, root card'
+decision: >-
+  A real Gnomon home gets a root-signed local.signed.json through request.local.config: a never-standing root-class
+  grant card (detail.action local.config) signed with one fresh presence via decision.sign, written atomically and
+  hot-applied. gnomon-local ships inside the release, pinned, so no install needs building. The Settings "Local model"
+  section and form ship together with the kernel work; the field run waits for both. 8.0 endpoints are loopback-only,
+  dev homes included. The validator refuses effect: write as "lands in 8.1". The helper goes to 1.9.0 with per-kind
+  minimum versions.
+rationale: >-
+  Without this, no loop with a model node can start on a real home, and local attended sessions fall back. Founder chose
+  bundling (zero-build rule) and the full guided UI first (UI-first rule). Arky's design reuses the grant card kind, so
+  clientApiId does not move.
+participants:
+  - id: founder
+    role: decider
+    stance: for
+  - id: architect
+    role: designer
+    stance: for
+alternatives_considered:
+  - option: Discover gnomon-local in a clone for 8.0
+    rejected_because: breaks zero-build for anyone but the founder
+  - option: Card + CLI first, Settings later
+    rejected_because: founder wants the guided UI before the field run
+symbols_affected:
+  - '#local-runner'
+  - '#local-config-request'
+  - '#approval-broker'
+  - '#decision-batch'
+  - '#gui-settings'
+  - $local-config-flow
+status: active

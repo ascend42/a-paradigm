@@ -2,6 +2,7 @@ version: '1.0'
 active:
   - advocate
   - architect
+  - archivist
   - builder
   - cartographer
   - cid

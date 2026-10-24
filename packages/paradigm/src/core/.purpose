@@ -292,7 +292,7 @@ aspects:
     applies-to:
       - '#flow-validator'
   ~portal-language-agnostic-grep:
-    description: Portal compliance uses grep-based language-agnostic pattern matching to find gate references across ts/js/py/go files; searches for ^symbol patterns and function-based checks (checkGate, requireGate, @Gate)
+    description: Portal compliance uses grep-based language-agnostic pattern matching to find gate references across ts/js/py/go files; searches for caret-symbol (gate) patterns and function-based checks (checkGate, requireGate, @Gate)
     tags:
       - portal
       - compliance

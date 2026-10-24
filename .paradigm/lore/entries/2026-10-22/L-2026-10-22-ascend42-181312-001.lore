@@ -1,0 +1,44 @@
+id: L-2026-10-22-ascend42-181312-001
+type: agent-session
+timestamp: '2026-10-22T18:13:12.067Z'
+author: ascend42
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Local model on Windows: Ollama qwen3.5:9b end to end from the GUI'
+summary: Added `gnomon dev local` (the dev root signs the local lane config with a pinned gnomon-local runner). The probe now reads Ollama's context. The Windows local profile handles node in Program Files. The GUI renders gnomon-local replies and labels them "local model". On an RTX 4050 6 GB / 12 GB RAM laptop, qwen3.5:9b (Q4, ~6.6 GB, 45% CPU offload) with a 16K-context Modelfile variant routed as capable (tools + ctx), and in a Low sandboxed session ran list_files + read_file and answered in ~21 s.
+symbols_touched:
+  - '#local-runner'
+  - '#dev-launch'
+  - '#session-runner'
+  - '#gnomon-gui'
+decisions:
+  - id: WL-model
+    decision: qwen3.5:9b with num_ctx 16384 (qwen3.5-9b-16k) is the local model on the founder's Windows laptop
+    rationale: Founder asked for code + tool calls even if slow; it is the strongest tools/thinking model that runs on 6 GB VRAM + 12 GB RAM; Ollama's default 4096 context is below the lane's 8192 floor
+errors_encountered:
+  - description: Probe reported ctx unknown on Ollama (no /slots or /props), so the lane refused
+    resolution: Read /api/show num_ctx, else /api/ps context_length
+  - description: localRunnerDenies put the node prefix at C:\Program Files (POSIX two-up rule); the deny could not be placed and the session refused
+    resolution: Windows prefix is node.exe's dir; out-of-root write denies are soft at Low integrity
+  - description: GUI showed 'done · 0 tokens' and no reply for local sessions
+    resolution: lineItems renders message_end and tool_execution_start; re-embed the bundle (build.mjs --embed)
+  - description: Python edits on Windows rewrote files with CRLF, breaking source-text tests
+    resolution: Restore LF; prefer the Edit tool
+verification:
+  status: pass
+  details:
+    live: local session tool calls + reply in GUI
+    tests: dev-local 3/3, local-runner Ollama probe, GUI 671/671
+tags:
+  - windows
+  - gnomon
+  - local-model
+linked_tasks:
+  - T-2026-10-22-005
+linked_commits:
+  - 523ed66f
+git_context:
+  ref: 523ed66f39ddc34a55b0e0f32a7beec1f451d75f
+  branch: feat/gnomon-windows
+  dirty: true

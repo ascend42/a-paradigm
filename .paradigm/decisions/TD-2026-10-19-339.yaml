@@ -1,0 +1,36 @@
+id: TD-2026-10-19-339
+timestamp: '2026-10-19T16:17:43.208Z'
+title: daemon.stop{reason?} is a third human-device verb in the unreleased P8-D98 move
+decision: >-
+  Add `daemon.stop {reason?}` as a human-device verb, in the same tier as gui.open and rules.revoke: a verified human
+  device only, unix socket only. Its handler calls handle.requestStop(connId, reason), which raises the Touch ID
+  daemon-stop card (TD-2026-10-19-528 F3). It joins the still-unreleased P8-D98 clientApiId move, so the published id
+  still moves only once. Law 3 now reads "12 kernel verbs + 3 human-device verbs + 2 client relays". Drain-and-resume
+  triggers it with reason 'upgrade'.
+rationale: >-
+  Founder ruling, 2026-10-19 decision dialog, on slice B0 of T-2026-10-19-014. The CLI had no way to ask a running
+  gnomond to raise the stop card without a contracts change: approve needs an existing card, a request.* log kind moves
+  clientApiId too, and an in-process raise only works inside `gnomon up`. A human-device verb matches the existing
+  pattern, and riding the unreleased move avoids a second id bump.
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: builder
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: A request.daemon.stop kind via log.append
+    rejected_because: it also moves clientApiId, and human request.* appends are refused today
+  - option: No client stop
+    rejected_because: drain-and-resume would have no trigger
+symbols_affected:
+  - $daemon-lifecycle
+  - '#socket'
+  - '#gnomon-contracts'
+status: active
+tags:
+  - gnomon
+  - law-3
+  - clientApiId
+  - T-2026-10-19-014

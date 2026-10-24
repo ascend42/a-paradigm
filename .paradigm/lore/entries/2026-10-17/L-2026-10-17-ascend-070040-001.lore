@@ -1,0 +1,40 @@
+id: L-2026-10-17-ascend-070040-001
+type: human-note
+timestamp: '2026-10-17T07:00:40.717Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: OPEN 14 resolved (P8-D64..D67); gesture decisions recorded as idea P8-R8
+summary: The founder ruled on OPEN 14 in a decision dialog. Spec v3.4 is updated in §0, the §14.7 config and never-by-voice list, the G-VOX hand-only falsifier, §22 (14 resolved, 15 idea) and §A.4. The founder also raised gesture-based decision-making as a future intent source.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gnomon-voice'
+decisions:
+  - id: P8-D64
+    decision: Per-arm maxDecisions is configurable per class up to 'unlimited'; the hard minutes still bound every arm
+    rationale: 'Founder: raisable, unbounded to unlimited.'
+  - id: P8-D65
+    decision: Gate-class and judgment cards may be decided in conversation mode as well as push-to-talk; headphones, handle and challenge still apply
+    rationale: Founder chose both modes for hands-free use.
+  - id: P8-D66
+    decision: 'S26-L3 adopted: with toggle 1 on, deny/reject by voice is accepted on every card kind, including hand-only kinds, inside a reversible arm, with no hold; approving those kinds stays hand-only'
+    rationale: A deny fails closed; the worst case is a re-request.
+  - id: P8-D67
+    decision: Companion presence (Apple Watch double-press, macOS 15+) is an optional per-decision upgrade for gate cards if the M4.1 probe passes; the 2-word challenge stays the default and the Windows path
+    rationale: Founder picked the recommended optional upgrade.
+  - id: P8-R8
+    decision: 'IDEA, later: gesture-based decisions as a second intent source (camera hand-tracking) reusing the §14.7 arm/intent/handle/hold model under its own principal and sandbox profile; not in 8.0 scope'
+    rationale: Founder floated it. The model generalizes, but it needs camera capture, a hand-tracking engine and a camera privacy and sandbox story, so it is deferred.
+tags:
+  - paradigm-8
+  - gnomon
+  - voice
+  - decision
+  - gesture
+linked_lore:
+  - L-2026-10-17-ascend-064720-001
+git_context:
+  ref: 84f2379b810807b63eb5b60ad52c6639cf0e2d5b
+  branch: ideate/paradigm-8
+  dirty: true

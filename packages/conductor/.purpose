@@ -14,819 +14,820 @@ context:
   - Single-owner pattern — AppDelegate is the sole lifecycle owner of orchestrator and workspace
   - Video/voice toggle icons in header bar with Cmd+Shift+V / Cmd+Shift+M hotkeys
   - Targeted terminal close via AppleScript window IDs — closing one window no longer kills all terminals
-  - Symphony: file-based inter-agent messaging at ~/.paradigm/score/ with JSONL mailboxes
-  - Symphony: auto-link creates agent parts when CC sessions are detected
-  - Symphony: 5s relay poll routes notes between agent inboxes/outboxes
-  - Symphony: file approval with trust.yaml, hard-deny patterns, SHA-256 hashing
-  - Sprint 8: Session manager with recent projects, checkpoint reading, headless agent spawning via Process API
-  - Sprint 8: ProjectStore persists to ~/.paradigm/conductor/recent-projects.json (survives reinstall)
-  - Sprint 8: CheckpointReader reads .paradigm/session-checkpoint.json (wire-compat with paradigm-mcp SessionCheckpoint)
-  - Sprint 8: AgentProcessManager spawns claude as child process with stdin/stdout piping
-  - Sprint 9: Agent groups with cross-project membership, drag-and-drop reordering
-  - Sprint 9: SymphonyMonitor polls inboxes for unread counts, threads, and last activity
-  - Sprint 9: AgentNetworkView as primary orchestration dashboard with group panels
-  - Sprint 9: ThreadView chat-like thread viewer with message compose (Maestro sends as human)
-  - Sprint 10: Task protocol — 7 new intents (task, task-ack, progress, approval-request/response, task-complete/failed)
-  - Sprint 10: TaskComposerView for structured task assignment to agents/groups
-  - Sprint 10: ApprovalView + ApprovalNotificationBanner for approval-request gating
-  - Sprint 10: task-protocol.ts agent-side prompt generation for received tasks
-  - Sprint 11: TaskStore persists to ~/.paradigm/conductor/tasks.json, SymphonyMonitor routes task-intent notes
-  - Sprint 11: TaskDashboardView (kanban columns) + TaskDetailView (timeline, files, symbols, blockers)
-  - Sprint 12: AgentHealthMonitor computes per-agent success rate, avg time, sparklines from TaskStore
-  - Sprint 12: SentinelLiveView (real-time event viewer) + AgentHealthView (health dashboard) + Monitoring settings tab
-  - Sprint 12: SentinelWSClient buffers last 200 events with level field and Identifiable conformance
-  - Sprint 13: EyebrowBindingRegistry — user-customizable eyebrow→action with state machine bypass
-  - Sprint 13: HotKeyBindingRegistry + HotKeyRecorder — user-customizable hotkey→action with live Combine observation
-  - Sprint 13: BindingsManagerView fully wired with 5 sections (gestures, voice, built-in, eyebrow, hotkeys)
-  - Sprint 14: Task lifecycle completion — cancel, re-assign, archive. TaskArchive JSONL at ~/.paradigm/conductor/tasks-archive.jsonl
-  - Sprint 14: TaskDetailView gains Cancel, Re-assign, View Thread action buttons with confirmation dialogs
-  - Sprint 14: TaskDashboardView gains archive badge + menu (Archive Older than 7d, Archive All Completed)
-  - Sprint 15: SentinelWSClient gains metadata parsing, activeSymbols tracking (frequency-sorted), symbol filter, clear buffer
-  - Sprint 15: SentinelEventDetailView popover — full timestamp, level/type badges, metadata key-value, related tasks
-  - Sprint 15: SentinelSymbolFilterView — horizontal chip bar for top 10 symbols with toggle selection
-  - Sprint 15: SentinelLiveView enhanced — symbol filter, clickable symbols, event detail popover, clear button, filtered/total counts
-  - Sprint 16: BindingsManagerView decomposed into 6 sub-views in UI/Views/Bindings/ (~30 lines vs 302)
-  - Sprint 16: MainOverlayView mainContent decomposed into 12 named computed properties
-  - Sprint 17: Container Window mode — full-screen NSWindow workspace with binary split tiling engine
-  - Sprint 17: TilingEngine (recursive TileNode tree), 6 layout presets, cell split/remove/swap operations
-  - Sprint 17: ContainerView with header, tiling area, status bar. CellChromeView with status badges + actions
-  - Sprint 17: Menu bar switch between sidebar mode and container mode
-  - Sprint 18: DividerHandle (drag-to-resize with snap at 25/33/50/67/75%), LayoutPresetsView (mini layout icons)
-  - Sprint 18: CellActionMenu (split/maximize/close context menu), EmptyCellView (launch placeholder)
-  - Sprint 18: ContainerView gains divider handles, animated layout transitions, maximize/restore toggle
+  - "Symphony: file-based inter-agent messaging at ~/.paradigm/score/ with JSONL mailboxes"
+  - "Symphony: auto-link creates agent parts when CC sessions are detected"
+  - "Symphony: 5s relay poll routes notes between agent inboxes/outboxes"
+  - "Symphony: file approval with trust.yaml, hard-deny patterns, SHA-256 hashing"
+  - "Sprint 8: Session manager with recent projects, checkpoint reading, headless agent spawning via Process API"
+  - "Sprint 8: ProjectStore persists to ~/.paradigm/conductor/recent-projects.json (survives reinstall)"
+  - "Sprint 8: CheckpointReader reads .paradigm/session-checkpoint.json (wire-compat with paradigm-mcp SessionCheckpoint)"
+  - "Sprint 8: AgentProcessManager spawns claude as child process with stdin/stdout piping"
+  - "Sprint 9: Agent groups with cross-project membership, drag-and-drop reordering"
+  - "Sprint 9: SymphonyMonitor polls inboxes for unread counts, threads, and last activity"
+  - "Sprint 9: AgentNetworkView as primary orchestration dashboard with group panels"
+  - "Sprint 9: ThreadView chat-like thread viewer with message compose (Maestro sends as human)"
+  - "Sprint 10: Task protocol — 7 new intents (task, task-ack, progress, approval-request/response, task-complete/failed)"
+  - "Sprint 10: TaskComposerView for structured task assignment to agents/groups"
+  - "Sprint 10: ApprovalView + ApprovalNotificationBanner for approval-request gating"
+  - "Sprint 10: task-protocol.ts agent-side prompt generation for received tasks"
+  - "Sprint 11: TaskStore persists to ~/.paradigm/conductor/tasks.json, SymphonyMonitor routes task-intent notes"
+  - "Sprint 11: TaskDashboardView (kanban columns) + TaskDetailView (timeline, files, symbols, blockers)"
+  - "Sprint 12: AgentHealthMonitor computes per-agent success rate, avg time, sparklines from TaskStore"
+  - "Sprint 12: SentinelLiveView (real-time event viewer) + AgentHealthView (health dashboard) + Monitoring settings tab"
+  - "Sprint 12: SentinelWSClient buffers last 200 events with level field and Identifiable conformance"
+  - "Sprint 13: EyebrowBindingRegistry — user-customizable eyebrow→action with state machine bypass"
+  - "Sprint 13: HotKeyBindingRegistry + HotKeyRecorder — user-customizable hotkey→action with live Combine observation"
+  - "Sprint 13: BindingsManagerView fully wired with 5 sections (gestures, voice, built-in, eyebrow, hotkeys)"
+  - "Sprint 14: Task lifecycle completion — cancel, re-assign, archive. TaskArchive JSONL at ~/.paradigm/conductor/tasks-archive.jsonl"
+  - "Sprint 14: TaskDetailView gains Cancel, Re-assign, View Thread action buttons with confirmation dialogs"
+  - "Sprint 14: TaskDashboardView gains archive badge + menu (Archive Older than 7d, Archive All Completed)"
+  - "Sprint 15: SentinelWSClient gains metadata parsing, activeSymbols tracking (frequency-sorted), symbol filter, clear buffer"
+  - "Sprint 15: SentinelEventDetailView popover — full timestamp, level/type badges, metadata key-value, related tasks"
+  - "Sprint 15: SentinelSymbolFilterView — horizontal chip bar for top 10 symbols with toggle selection"
+  - "Sprint 15: SentinelLiveView enhanced — symbol filter, clickable symbols, event detail popover, clear button, filtered/total counts"
+  - "Sprint 16: BindingsManagerView decomposed into 6 sub-views in UI/Views/Bindings/ (~30 lines vs 302)"
+  - "Sprint 16: MainOverlayView mainContent decomposed into 12 named computed properties"
+  - "Sprint 17: Container Window mode — full-screen NSWindow workspace with binary split tiling engine"
+  - "Sprint 17: TilingEngine (recursive TileNode tree), 6 layout presets, cell split/remove/swap operations"
+  - "Sprint 17: ContainerView with header, tiling area, status bar. CellChromeView with status badges + actions"
+  - "Sprint 17: Menu bar switch between sidebar mode and container mode"
+  - "Sprint 18: DividerHandle (drag-to-resize with snap at 25/33/50/67/75%), LayoutPresetsView (mini layout icons)"
+  - "Sprint 18: CellActionMenu (split/maximize/close context menu), EmptyCellView (launch placeholder)"
+  - "Sprint 18: ContainerView gains divider handles, animated layout transitions, maximize/restore toggle"
   - "Sprint 19: ControlPanelContainer (4-tab collapsible overlay: Workspace/Orchestrate/Monitor/Settings)"
-  - Sprint 19: StatusBarView with clickable sections that open the corresponding control panel tab
-  - Sprint 20: CellFooterView (symbols, files, agent status per cell), border pulse animation for processing cells
-  - Sprint 20: 16 TilingEngine tests (cell count, frame computation, presets, split/remove/swap/ratio/dividers)
+  - "Sprint 19: StatusBarView with clickable sections that open the corresponding control panel tab"
+  - "Sprint 20: CellFooterView (symbols, files, agent status per cell), border pulse animation for processing cells"
+  - "Sprint 20: 16 TilingEngine tests (cell count, frame computation, presets, split/remove/swap/ratio/dividers)"
 
 # ============================================
 # Components (#)
 # ============================================
 
-#conductor-app:
-  description: Main app entry point, lifecycle, menu bar, orchestrator owner, provider lifecycle manager, global hotkey wiring (video/voice toggles)
-  type: config
-  tags: [app, lifecycle, macos, single-owner, hotkeys]
-  anchors:
-    - Sources/Conductor/App/AppDelegate.swift:1
+components:
+  conductor-app:
+    description: Main app entry point, lifecycle, menu bar, orchestrator owner, provider lifecycle manager, global hotkey wiring (video/voice toggles)
+    type: config
+    tags: [app, lifecycle, macos, single-owner, hotkeys]
+    anchors:
+      - Sources/Conductor/App/AppDelegate.swift:1
 
-#conductor-panel:
-  description: NSPanel floating overlay window — always-on-top, draggable, transparent
-  type: config
-  tags: [ui, overlay, macos]
-  anchors:
-    - Sources/Conductor/App/ConductorPanel.swift:1
+  conductor-panel:
+    description: NSPanel floating overlay window — always-on-top, draggable, transparent
+    type: config
+    tags: [ui, overlay, macos]
+    anchors:
+      - Sources/Conductor/App/ConductorPanel.swift:1
 
-#permissions-onboarding:
-  description: Camera/Mic/Accessibility permission request flow
-  type: manager
-  tags: [permissions, onboarding, macos]
-  anchors:
-    - Sources/Conductor/App/PermissionsManager.swift:1
+  permissions-onboarding:
+    description: Camera/Mic/Accessibility permission request flow
+    type: manager
+    tags: [permissions, onboarding, macos]
+    anchors:
+      - Sources/Conductor/App/PermissionsManager.swift:1
 
-#text-buffer:
-  description: Staged text buffer with cursor, undo/redo — convergence point for all inputs
-  type: engine
-  tags: [buffer, editing]
-  anchors:
-    - Sources/Conductor/Buffer/BufferEngine.swift:1
+  text-buffer:
+    description: Staged text buffer with cursor, undo/redo — convergence point for all inputs
+    type: engine
+    tags: [buffer, editing]
+    anchors:
+      - Sources/Conductor/Buffer/BufferEngine.swift:1
 
-#cursor-navigation:
-  description: Character/word/line boundary cursor movement
-  type: engine
-  tags: [buffer, navigation]
-  anchors:
-    - Sources/Conductor/Buffer/BufferEngine.swift:1
+  cursor-navigation:
+    description: Character/word/line boundary cursor movement
+    type: engine
+    tags: [buffer, navigation]
+    anchors:
+      - Sources/Conductor/Buffer/BufferEngine.swift:1
 
-#window-detector:
-  description: AXUIElement-based Claude Code instance discovery
-  type: detector
-  tags: [window, detection, macos]
-  anchors:
-    - Sources/Conductor/WindowManager/ClaudeCodeDetector.swift:1
+  window-detector:
+    description: AXUIElement-based Claude Code instance discovery
+    type: detector
+    tags: [window, detection, macos]
+    anchors:
+      - Sources/Conductor/WindowManager/ClaudeCodeDetector.swift:1
 
-#session-file-watcher:
-  description: Watches ~/.conductor/sessions/ for registration files from /conduct or paradigm_conductor_register
-  type: detector
-  tags: [window, detection, file-watcher, registration]
-  anchors:
-    - Sources/Conductor/WindowManager/SessionFileWatcher.swift:1
+  session-file-watcher:
+    description: Watches ~/.conductor/sessions/ for registration files from /conduct or paradigm_conductor_register
+    type: detector
+    tags: [window, detection, file-watcher, registration]
+    anchors:
+      - Sources/Conductor/WindowManager/SessionFileWatcher.swift:1
 
-#keyboard-input:
-  description: NSTextField keyboard input handler
-  type: provider
-  tags: [input, keyboard]
-  anchors:
-    - Sources/Conductor/Input/KeyboardInput/KeyboardInputHandler.swift:1
+  keyboard-input:
+    description: NSTextField keyboard input handler
+    type: provider
+    tags: [input, keyboard]
+    anchors:
+      - Sources/Conductor/Input/KeyboardInput/KeyboardInputHandler.swift:1
 
-#dispatch-target:
-  description: AX text injection to targeted CC window
-  type: router
-  tags: [dispatch, accessibility, macos]
-  anchors:
-    - Sources/Conductor/Dispatch/AXDispatchTarget.swift:1
+  dispatch-target:
+    description: AX text injection to targeted CC window
+    type: router
+    tags: [dispatch, accessibility, macos]
+    anchors:
+      - Sources/Conductor/Dispatch/AXDispatchTarget.swift:1
 
-#buffer-view:
-  description: SwiftUI text buffer display with cursor
-  type: view
-  parent: "#text-buffer"
-  tags: [ui, buffer]
-  anchors:
-    - Sources/Conductor/UI/Views/BufferView.swift:1
+  buffer-view:
+    description: SwiftUI text buffer display with cursor
+    type: view
+    parent: "#text-buffer"
+    tags: [ui, buffer]
+    anchors:
+      - Sources/Conductor/UI/Views/BufferView.swift:1
 
-#instance-list-view:
-  description: SwiftUI list of detected CC instances
-  type: view
-  tags: [ui, instances]
-  anchors:
-    - Sources/Conductor/UI/Views/InstanceListView.swift:1
+  instance-list-view:
+    description: SwiftUI list of detected CC instances
+    type: view
+    tags: [ui, instances]
+    anchors:
+      - Sources/Conductor/UI/Views/InstanceListView.swift:1
 
-#whisper-voice-provider:
-  description: WhisperKit speech-to-text — real CoreML transcription via WhisperKit 0.16.0
-  type: provider
-  tags: [voice, whisperkit, coreml]
-  anchors:
-    - Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift:1
+  whisper-voice-provider:
+    description: WhisperKit speech-to-text — real CoreML transcription via WhisperKit 0.16.0
+    type: provider
+    tags: [voice, whisperkit, coreml]
+    anchors:
+      - Sources/Conductor/Input/VoiceInput/WhisperVoiceProvider.swift:1
 
-#audio-capture:
-  description: AVCaptureSession microphone pipeline
-  type: provider
-  parent: "#whisper-voice-provider"
-  tags: [voice, audio, avfoundation]
-  anchors:
-    - Sources/Conductor/Input/VoiceInput/AudioCapture.swift:1
+  audio-capture:
+    description: AVCaptureSession microphone pipeline
+    type: provider
+    parent: "#whisper-voice-provider"
+    tags: [voice, audio, avfoundation]
+    anchors:
+      - Sources/Conductor/Input/VoiceInput/AudioCapture.swift:1
 
-#shared-camera:
-  description: "Single AVCaptureSession shared by all Vision providers — distributes frames to registered CameraFrameConsumer instances. Eliminates camera conflicts."
-  type: provider
-  tags: [input, camera, shared, avfoundation]
-  anchors:
-    - Sources/Conductor/Input/SharedCameraSession.swift:1
+  shared-camera:
+    description: "Single AVCaptureSession shared by all Vision providers — distributes frames to registered CameraFrameConsumer instances. Eliminates camera conflicts."
+    type: provider
+    tags: [input, camera, shared, avfoundation]
+    anchors:
+      - Sources/Conductor/Input/SharedCameraSession.swift:1
 
-#vision-gaze-provider:
-  description: "Native Vision framework gaze tracking — VNDetectFaceLandmarksRequest for pupil positions and eyebrow distances. Dual streams: calibrated (screen-space) + raw iris (0–1 normalized). Replaces MediaPipeGazeProvider (no Python dependency). Shares camera with gesture provider."
-  type: provider
-  tags: [gaze, vision, face-landmarks, native, dual-stream]
-  anchors:
-    - Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift:1
+  vision-gaze-provider:
+    description: "Native Vision framework gaze tracking — VNDetectFaceLandmarksRequest for pupil positions and eyebrow distances. Dual streams: calibrated (screen-space) + raw iris (0–1 normalized). Replaces MediaPipeGazeProvider (no Python dependency). Shares camera with gesture provider."
+    type: provider
+    tags: [gaze, vision, face-landmarks, native, dual-stream]
+    anchors:
+      - Sources/Conductor/Input/GazeInput/VisionGazeProvider.swift:1
 
-#vision-gesture-provider:
-  description: "Apple Vision hand pose detection — receives frames from SharedCameraSession instead of owning its own AVCaptureSession"
-  type: provider
-  tags: [gesture, vision, neural-engine, shared-camera]
-  anchors:
-    - Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift:1
+  vision-gesture-provider:
+    description: "Apple Vision hand pose detection — receives frames from SharedCameraSession instead of owning its own AVCaptureSession"
+    type: provider
+    tags: [gesture, vision, neural-engine, shared-camera]
+    anchors:
+      - Sources/Conductor/Input/GestureInput/VisionGestureProvider.swift:1
 
-#gesture-classifier:
-  description: Joint positions to GestureAction mapping
-  type: store
-  parent: "#vision-gesture-provider"
-  tags: [gesture, classification]
-  anchors:
-    - Sources/Conductor/Input/GestureInput/GestureClassifier.swift:1
+  gesture-classifier:
+    description: Joint positions to GestureAction mapping
+    type: store
+    parent: "#vision-gesture-provider"
+    tags: [gesture, classification]
+    anchors:
+      - Sources/Conductor/Input/GestureInput/GestureClassifier.swift:1
 
-#gesture-state-machine:
-  description: Debounce, cooldowns, state transitions
-  type: filter
-  parent: "#vision-gesture-provider"
-  tags: [gesture, state-machine]
-  anchors:
-    - Sources/Conductor/Input/GestureInput/GestureStateMachine.swift:1
+  gesture-state-machine:
+    description: Debounce, cooldowns, state transitions
+    type: filter
+    parent: "#vision-gesture-provider"
+    tags: [gesture, state-machine]
+    anchors:
+      - Sources/Conductor/Input/GestureInput/GestureStateMachine.swift:1
 
-#gesture-hud:
-  description: Hand state + gesture feedback overlay
-  type: view
-  parent: "#vision-gesture-provider"
-  tags: [ui, gesture, feedback]
-  anchors:
-    - Sources/Conductor/UI/Views/GestureHUDView.swift:1
+  gesture-hud:
+    description: Hand state + gesture feedback overlay
+    type: view
+    parent: "#vision-gesture-provider"
+    tags: [ui, gesture, feedback]
+    anchors:
+      - Sources/Conductor/UI/Views/GestureHUDView.swift:1
 
-#mediapipe-gaze-provider:
-  description: "LEGACY — MediaPipe FaceMesh gaze via Python subprocess. Replaced by #vision-gaze-provider. Retained as fallback reference."
-  type: provider
-  tags: [gaze, mediapipe, python, legacy]
-  anchors:
-    - Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift:1
+  mediapipe-gaze-provider:
+    description: "LEGACY — MediaPipe FaceMesh gaze via Python subprocess. Replaced by #vision-gaze-provider. Retained as fallback reference."
+    type: provider
+    tags: [gaze, mediapipe, python, legacy]
+    anchors:
+      - Sources/Conductor/Input/GazeInput/MediaPipeGazeProvider.swift:1
 
-#gaze-calibration:
-  description: "5-point calibration — least-squares affine over all points, raw iris collection, fullscreen overlay UI, calibration quality diagnostics"
-  type: store
-  parent: "#vision-gaze-provider"
-  tags: [gaze, calibration, ui, least-squares]
-  anchors:
-    - Sources/Conductor/Input/GazeInput/GazeCalibration.swift:1
-    - Sources/Conductor/UI/Views/GazeCalibrationView.swift:1
-    - Sources/Conductor/UI/CalibrationWindowController.swift:1
+  gaze-calibration:
+    description: "5-point calibration — least-squares affine over all points, raw iris collection, fullscreen overlay UI, calibration quality diagnostics"
+    type: store
+    parent: "#vision-gaze-provider"
+    tags: [gaze, calibration, ui, least-squares]
+    anchors:
+      - Sources/Conductor/Input/GazeInput/GazeCalibration.swift:1
+      - Sources/Conductor/UI/Views/GazeCalibrationView.swift:1
+      - Sources/Conductor/UI/CalibrationWindowController.swift:1
 
-#kalman-filter:
-  description: Gaze coordinate smoothing
-  type: filter
-  parent: "#vision-gaze-provider"
-  tags: [gaze, filter, math]
-  anchors:
-    - Sources/Conductor/Input/GazeInput/KalmanFilter.swift:1
+  kalman-filter:
+    description: Gaze coordinate smoothing
+    type: filter
+    parent: "#vision-gaze-provider"
+    tags: [gaze, filter, math]
+    anchors:
+      - Sources/Conductor/Input/GazeInput/KalmanFilter.swift:1
 
-#gaze-router:
-  description: Gaze point to target window mapping
-  type: router
-  tags: [gaze, dispatch, targeting]
-  anchors:
-    - Sources/Conductor/Dispatch/GazeRouter.swift:1
+  gaze-router:
+    description: Gaze point to target window mapping
+    type: router
+    tags: [gaze, dispatch, targeting]
+    anchors:
+      - Sources/Conductor/Dispatch/GazeRouter.swift:1
 
-#paradigm-mcp-client:
-  description: Spawn paradigm-mcp, call tools via stdio JSON-RPC
-  type: service
-  tags: [integration, mcp, json-rpc]
-  anchors:
-    - Sources/Conductor/Integration/ParadigmMCPClient.swift:1
+  paradigm-mcp-client:
+    description: Spawn paradigm-mcp, call tools via stdio JSON-RPC
+    type: service
+    tags: [integration, mcp, json-rpc]
+    anchors:
+      - Sources/Conductor/Integration/ParadigmMCPClient.swift:1
 
-#git-monitor:
-  description: Poll git diff for project context
-  type: service
-  tags: [integration, git]
-  anchors:
-    - Sources/Conductor/Integration/GitMonitor.swift:1
+  git-monitor:
+    description: Poll git diff for project context
+    type: service
+    tags: [integration, git]
+    anchors:
+      - Sources/Conductor/Integration/GitMonitor.swift:1
 
-#context-enricher:
-  description: Assemble Paradigm + git context for dispatch
-  type: service
-  tags: [dispatch, context, enrichment]
-  anchors:
-    - Sources/Conductor/Dispatch/ContextEnricher.swift:1
+  context-enricher:
+    description: Assemble Paradigm + git context for dispatch
+    type: service
+    tags: [dispatch, context, enrichment]
+    anchors:
+      - Sources/Conductor/Dispatch/ContextEnricher.swift:1
 
-#sentinel-ws-client:
-  description: WebSocket client for Sentinel events
-  type: service
-  tags: [integration, sentinel, websocket]
-  anchors:
-    - Sources/Conductor/Integration/SentinelWSClient.swift:1
+  sentinel-ws-client:
+    description: WebSocket client for Sentinel events
+    type: service
+    tags: [integration, sentinel, websocket]
+    anchors:
+      - Sources/Conductor/Integration/SentinelWSClient.swift:1
 
-#window-arranger:
-  description: Tile/snap/layout CC windows
-  type: store
-  tags: [window, layout, tiling]
-  anchors:
-    - Sources/Conductor/WindowManager/WindowArranger.swift:1
+  window-arranger:
+    description: Tile/snap/layout CC windows
+    type: store
+    tags: [window, layout, tiling]
+    anchors:
+      - Sources/Conductor/WindowManager/WindowArranger.swift:1
 
-#status-tracker:
-  description: Poll CC windows for idle/processing/finished. Combines per-project .paradigm/tasks/ counts with global ~/.paradigm/score/agents/ registry for accurate agent counts.
-  type: detector
-  tags: [window, status, monitoring, agents]
-  anchors:
-    - Sources/Conductor/WindowManager/StatusTracker.swift:1
+  status-tracker:
+    description: Poll CC windows for idle/processing/finished. Combines per-project .paradigm/tasks/ counts with global ~/.paradigm/score/agents/ registry for accurate agent counts.
+    type: detector
+    tags: [window, status, monitoring, agents]
+    anchors:
+      - Sources/Conductor/WindowManager/StatusTracker.swift:1
 
-#notification-bubble:
-  description: Per-instance status bubble overlay
-  type: view
-  tags: [ui, notification, status]
-  anchors:
-    - Sources/Conductor/UI/Views/NotificationBubbleView.swift:1
+  notification-bubble:
+    description: Per-instance status bubble overlay
+    type: view
+    tags: [ui, notification, status]
+    anchors:
+      - Sources/Conductor/UI/Views/NotificationBubbleView.swift:1
 
-#setup-wizard:
-  description: "Multi-step setup wizard — feature selection, dependency checking, model picker, workspace config, gaze calibration, eyebrow calibration"
-  type: view
-  tags: [ui, setup, onboarding]
-  anchors:
-    - Sources/Conductor/UI/Views/SetupWizardView.swift:1
+  setup-wizard:
+    description: "Multi-step setup wizard — feature selection, dependency checking, model picker, workspace config, gaze calibration, eyebrow calibration"
+    type: view
+    tags: [ui, setup, onboarding]
+    anchors:
+      - Sources/Conductor/UI/Views/SetupWizardView.swift:1
 
-#dependency-checker:
-  description: Downloads WhisperKit models during setup (Python/MediaPipe no longer required — gaze uses native Vision)
-  type: service
-  tags: [setup, dependencies]
-  anchors:
-    - Sources/Conductor/Utils/DependencyChecker.swift:1
+  dependency-checker:
+    description: Downloads WhisperKit models during setup (Python/MediaPipe no longer required — gaze uses native Vision)
+    type: service
+    tags: [setup, dependencies]
+    anchors:
+      - Sources/Conductor/Utils/DependencyChecker.swift:1
 
-#gaze-cursor:
-  description: "Transparent click-through overlay — cyan calibrated dot, yellow raw iris dot, coordinate label for gaze diagnostics"
-  type: view
-  parent: "#vision-gaze-provider"
-  tags: [ui, gaze, debug, overlay, diagnostics]
-  anchors:
-    - Sources/Conductor/UI/GazeCursorController.swift:1
+  gaze-cursor:
+    description: "Transparent click-through overlay — cyan calibrated dot, yellow raw iris dot, coordinate label for gaze diagnostics"
+    type: view
+    parent: "#vision-gaze-provider"
+    tags: [ui, gaze, debug, overlay, diagnostics]
+    anchors:
+      - Sources/Conductor/UI/GazeCursorController.swift:1
 
-#conductor-models:
-  description: "Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState, EyebrowEvent, ConductorAction (incl. toggleVideo/Voice, mute/unmute), ManagedInstance (with windowIdentifier), HandPoseFrame, LaunchedTerminal"
-  type: model
-  tags: [models, types]
-  anchors:
-    - Sources/Conductor/Models/ManagedInstance.swift:1
+  conductor-models:
+    description: "Shared data types — ClaudeCodeInstance, EnrichedPayload, GestureAction, HandState, EyebrowEvent, ConductorAction (incl. toggleVideo/Voice, mute/unmute), ManagedInstance (with windowIdentifier), HandPoseFrame, LaunchedTerminal"
+    type: model
+    tags: [models, types]
+    anchors:
+      - Sources/Conductor/Models/ManagedInstance.swift:1
 
-#eyebrow-detector:
-  description: Consumes eyebrow stream, KalmanFilter1D smoothing, threshold + hysteresis → emits EyebrowEvent
-  type: detector
-  tags: [input, eyebrow, detection]
-  anchors:
-    - Sources/Conductor/Input/EyebrowInput/EyebrowDetector.swift:1
+  eyebrow-detector:
+    description: Consumes eyebrow stream, KalmanFilter1D smoothing, threshold + hysteresis → emits EyebrowEvent
+    type: detector
+    tags: [input, eyebrow, detection]
+    anchors:
+      - Sources/Conductor/Input/EyebrowInput/EyebrowDetector.swift:1
 
-#eyebrow-state-machine:
-  description: "Pure state machine: idle → armed → recording → stopped → send for eyebrow-driven voice control"
-  type: filter
-  parent: "#eyebrow-detector"
-  tags: [input, eyebrow, state-machine]
-  anchors:
-    - Sources/Conductor/Input/EyebrowInput/EyebrowStateMachine.swift:1
+  eyebrow-state-machine:
+    description: "Pure state machine: idle → armed → recording → stopped → send for eyebrow-driven voice control"
+    type: filter
+    parent: "#eyebrow-detector"
+    tags: [input, eyebrow, state-machine]
+    anchors:
+      - Sources/Conductor/Input/EyebrowInput/EyebrowStateMachine.swift:1
 
-#eyebrow-calibration:
-  description: 4-step calibration flow learning user's eyebrow raise range
-  type: store
-  parent: "#eyebrow-detector"
-  tags: [input, eyebrow, calibration]
-  anchors:
-    - Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift:1
+  eyebrow-calibration:
+    description: 4-step calibration flow learning user's eyebrow raise range
+    type: store
+    parent: "#eyebrow-detector"
+    tags: [input, eyebrow, calibration]
+    anchors:
+      - Sources/Conductor/Input/EyebrowInput/EyebrowCalibration.swift:1
 
-#input-orchestrator:
-  description: "Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands. Owns SharedCameraSession for all vision providers. Publishes videoActive/voiceActive state. No camera conflict — both gaze and gesture run simultaneously."
-  type: service
-  tags: [orchestration, input, coordinator, toggle, shared-camera]
-  anchors:
-    - Sources/Conductor/Orchestration/InputOrchestrator.swift:1
+  input-orchestrator:
+    description: "Central coordinator wiring all input streams — eyebrow, voice, gesture, gaze, custom gestures, voice commands. Owns SharedCameraSession for all vision providers. Publishes videoActive/voiceActive state. No camera conflict — both gaze and gesture run simultaneously."
+    type: service
+    tags: [orchestration, input, coordinator, toggle, shared-camera]
+    anchors:
+      - Sources/Conductor/Orchestration/InputOrchestrator.swift:1
 
-#action-registry:
-  description: "Maps input events to ConductorAction values with persistence and custom bindings. Serializes all actions incl. toggleVideo/Voice, mute/unmute for UserDefaults storage."
-  type: service
-  tags: [orchestration, bindings, configuration]
-  anchors:
-    - Sources/Conductor/Orchestration/ActionRegistry.swift:1
+  action-registry:
+    description: "Maps input events to ConductorAction values with persistence and custom bindings. Serializes all actions incl. toggleVideo/Voice, mute/unmute for UserDefaults storage."
+    type: service
+    tags: [orchestration, bindings, configuration]
+    anchors:
+      - Sources/Conductor/Orchestration/ActionRegistry.swift:1
 
-#voice-control-coordinator:
-  description: "State machine coordinating eyebrow-triggered voice recording: idle → armed → recording → transcribing → readyToSend"
-  type: service
-  tags: [voice, orchestration, state-machine]
-  anchors:
-    - Sources/Conductor/Orchestration/VoiceControlCoordinator.swift:1
+  voice-control-coordinator:
+    description: "State machine coordinating eyebrow-triggered voice recording: idle → armed → recording → transcribing → readyToSend"
+    type: service
+    tags: [voice, orchestration, state-machine]
+    anchors:
+      - Sources/Conductor/Orchestration/VoiceControlCoordinator.swift:1
 
-#workspace-manager:
-  description: Owns managed CC instances, grid layout, terminal lifecycle. Uses targeted window close (AppleScript) instead of kill() to avoid destroying all terminal windows.
-  type: manager
-  tags: [workspace, management, terminal]
-  anchors:
-    - Sources/Conductor/Workspace/WorkspaceManager.swift:1
+  workspace-manager:
+    description: Owns managed CC instances, grid layout, terminal lifecycle. Uses targeted window close (AppleScript) instead of kill() to avoid destroying all terminal windows.
+    type: manager
+    tags: [workspace, management, terminal]
+    anchors:
+      - Sources/Conductor/Workspace/WorkspaceManager.swift:1
 
-#terminal-launcher:
-  description: "Launches and closes CC terminals. Returns LaunchedTerminal with windowIdentifier for targeted close. AppleScript for Terminal.app/iTerm2 (window ID / session ID), process-based for others."
-  type: service
-  parent: "#workspace-manager"
-  tags: [workspace, terminal, launch, close, applescript]
-  anchors:
-    - Sources/Conductor/Workspace/TerminalLauncher.swift:1
+  terminal-launcher:
+    description: "Launches and closes CC terminals. Returns LaunchedTerminal with windowIdentifier for targeted close. AppleScript for Terminal.app/iTerm2 (window ID / session ID), process-based for others."
+    type: service
+    parent: "#workspace-manager"
+    tags: [workspace, terminal, launch, close, applescript]
+    anchors:
+      - Sources/Conductor/Workspace/TerminalLauncher.swift:1
 
-#workspace-grid:
-  description: Pure struct computing deterministic grid cell frames from screen geometry
-  type: store
-  parent: "#workspace-manager"
-  tags: [workspace, grid, layout]
-  anchors:
-    - Sources/Conductor/Workspace/WorkspaceGrid.swift:1
+  workspace-grid:
+    description: Pure struct computing deterministic grid cell frames from screen geometry
+    type: store
+    parent: "#workspace-manager"
+    tags: [workspace, grid, layout]
+    anchors:
+      - Sources/Conductor/Workspace/WorkspaceGrid.swift:1
 
-#workspace-view:
-  description: Sidebar view with grid minimap, per-instance controls, add instance button
-  type: view
-  parent: "#workspace-manager"
-  tags: [ui, workspace, sidebar]
-  anchors:
-    - Sources/Conductor/UI/Views/WorkspaceView.swift:1
-    - Sources/Conductor/UI/Views/AddInstanceSheet.swift:1
+  workspace-view:
+    description: Sidebar view with grid minimap, per-instance controls, add instance button
+    type: view
+    parent: "#workspace-manager"
+    tags: [ui, workspace, sidebar]
+    anchors:
+      - Sources/Conductor/UI/Views/WorkspaceView.swift:1
+      - Sources/Conductor/UI/Views/AddInstanceSheet.swift:1
 
-#gaze-zone-router:
-  description: Maps gaze points to grid cells deterministically with dwell timer
-  type: view
-  parent: "#gaze-router"
-  tags: [gaze, dispatch, grid, targeting]
-  anchors:
-    - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
-    - Sources/Conductor/UI/Views/GazeZoneOverlay.swift:1
+  gaze-zone-router:
+    description: Maps gaze points to grid cells deterministically with dwell timer
+    type: view
+    parent: "#gaze-router"
+    tags: [gaze, dispatch, grid, targeting]
+    anchors:
+      - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
+      - Sources/Conductor/UI/Views/GazeZoneOverlay.swift:1
 
-#voice-control-hud:
-  description: Compact sidebar widget showing voice control state with visual indicators
-  type: view
-  parent: "#voice-control-coordinator"
-  tags: [ui, voice, feedback]
-  anchors:
-    - Sources/Conductor/UI/Views/VoiceControlHUD.swift:1
+  voice-control-hud:
+    description: Compact sidebar widget showing voice control state with visual indicators
+    type: view
+    parent: "#voice-control-coordinator"
+    tags: [ui, voice, feedback]
+    anchors:
+      - Sources/Conductor/UI/Views/VoiceControlHUD.swift:1
 
-#workspace-settings:
-  description: Settings tab for workspace configuration — terminal, sidebar, instances
-  type: view
-  parent: "#workspace-manager"
-  tags: [ui, settings, workspace]
-  anchors:
-    - Sources/Conductor/UI/Views/WorkspaceSettingsView.swift:1
+  workspace-settings:
+    description: Settings tab for workspace configuration — terminal, sidebar, instances
+    type: view
+    parent: "#workspace-manager"
+    tags: [ui, settings, workspace]
+    anchors:
+      - Sources/Conductor/UI/Views/WorkspaceSettingsView.swift:1
 
-#gesture-recorder:
-  description: Records hand pose time-series, normalizes, produces averaged GestureTemplate
-  type: store
-  tags: [input, gesture, recording, custom]
-  anchors:
-    - Sources/Conductor/Input/CustomGesture/GestureRecorder.swift:1
+  gesture-recorder:
+    description: Records hand pose time-series, normalizes, produces averaged GestureTemplate
+    type: store
+    tags: [input, gesture, recording, custom]
+    anchors:
+      - Sources/Conductor/Input/CustomGesture/GestureRecorder.swift:1
 
-#gesture-template:
-  description: Named custom gesture with normalized joint position sequence, persisted to ~/.conductor/gestures/
-  type: store
-  parent: "#gesture-recorder"
-  tags: [input, gesture, template, persistence]
-  anchors:
-    - Sources/Conductor/Input/CustomGesture/GestureTemplate.swift:1
+  gesture-template:
+    description: Named custom gesture with normalized joint position sequence, persisted to ~/.conductor/gestures/
+    type: store
+    parent: "#gesture-recorder"
+    tags: [input, gesture, template, persistence]
+    anchors:
+      - Sources/Conductor/Input/CustomGesture/GestureTemplate.swift:1
 
-#dtw-matcher:
-  description: Dynamic Time Warping implementation for comparing hand pose time-series
-  type: utility
-  parent: "#custom-gesture-classifier"
-  tags: [input, gesture, algorithm, matching]
-  anchors:
-    - Sources/Conductor/Input/CustomGesture/DTWMatcher.swift:1
+  dtw-matcher:
+    description: Dynamic Time Warping implementation for comparing hand pose time-series
+    type: utility
+    parent: "#custom-gesture-classifier"
+    tags: [input, gesture, algorithm, matching]
+    anchors:
+      - Sources/Conductor/Input/CustomGesture/DTWMatcher.swift:1
 
-#custom-gesture-classifier:
-  description: Sliding window DTW matching against registered custom gesture templates
-  type: store
-  tags: [input, gesture, classification, custom]
-  anchors:
-    - Sources/Conductor/Input/CustomGesture/CustomGestureClassifier.swift:1
+  custom-gesture-classifier:
+    description: Sliding window DTW matching against registered custom gesture templates
+    type: store
+    tags: [input, gesture, classification, custom]
+    anchors:
+      - Sources/Conductor/Input/CustomGesture/CustomGestureClassifier.swift:1
 
-#voice-command-matcher:
-  description: Scans transcription text for phrase→action bindings with fuzzy Levenshtein matching
-  type: utility
-  parent: "#voice-command-registry"
-  tags: [voice, command, matching, fuzzy]
-  anchors:
-    - Sources/Conductor/Input/VoiceCommand/VoiceCommandMatcher.swift:1
+  voice-command-matcher:
+    description: Scans transcription text for phrase→action bindings with fuzzy Levenshtein matching
+    type: utility
+    parent: "#voice-command-registry"
+    tags: [voice, command, matching, fuzzy]
+    anchors:
+      - Sources/Conductor/Input/VoiceCommand/VoiceCommandMatcher.swift:1
 
-#voice-command-registry:
-  description: CRUD for voice phrase→action mappings with persistence
-  type: store
-  tags: [voice, command, registry, persistence]
-  anchors:
-    - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
+  voice-command-registry:
+    description: CRUD for voice phrase→action mappings with persistence
+    type: store
+    tags: [voice, command, registry, persistence]
+    anchors:
+      - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
 
-#bindings-manager:
-  description: "Composed settings tab — delegates to 6 sub-views in UI/Views/Bindings/ for gestures, voice, built-in, eyebrow, hotkeys"
-  type: view
-  tags: [ui, settings, bindings, customization, decomposed]
-  anchors:
-    - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
+  bindings-manager:
+    description: "Composed settings tab — delegates to 6 sub-views in UI/Views/Bindings/ for gestures, voice, built-in, eyebrow, hotkeys"
+    type: view
+    tags: [ui, settings, bindings, customization, decomposed]
+    anchors:
+      - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
 
-#input-status:
-  description: "Live sidebar panel showing real-time status of all input modalities — gaze coords, eyebrow values, voice transcription, hand state. Color-coded dots for instant diagnosis."
-  type: view
-  tags: [ui, status, debug, feedback]
-  anchors:
-    - Sources/Conductor/UI/Views/InputStatusView.swift:1
+  input-status:
+    description: "Live sidebar panel showing real-time status of all input modalities — gaze coords, eyebrow values, voice transcription, hand state. Color-coded dots for instant diagnosis."
+    type: view
+    tags: [ui, status, debug, feedback]
+    anchors:
+      - Sources/Conductor/UI/Views/InputStatusView.swift:1
 
-#gesture-confirmation:
-  description: "Transparent click-through overlay showing top-center toast when a gesture, eyebrow event, or voice command fires. Auto-fades after 1.5s. Toggleable via Settings > Gestures."
-  type: view
-  tags: [ui, gesture, feedback, overlay, practice]
-  anchors:
-    - Sources/Conductor/UI/GestureConfirmationController.swift:1
+  gesture-confirmation:
+    description: "Transparent click-through overlay showing top-center toast when a gesture, eyebrow event, or voice command fires. Auto-fades after 1.5s. Toggleable via Settings > Gestures."
+    type: view
+    tags: [ui, gesture, feedback, overlay, practice]
+    anchors:
+      - Sources/Conductor/UI/GestureConfirmationController.swift:1
 
-#conductor-log:
-  description: Structured logging via os.Logger with symbol-based categories
-  type: config
-  tags: [logging, diagnostics]
-  anchors:
-    - Sources/Conductor/Utils/ConductorLog.swift:1
+  conductor-log:
+    description: Structured logging via os.Logger with symbol-based categories
+    type: config
+    tags: [logging, diagnostics]
+    anchors:
+      - Sources/Conductor/Utils/ConductorLog.swift:1
 
-#eyebrow-calibration-controller:
-  description: Fullscreen NSWindow hosting EyebrowCalibrationView, mirrors CalibrationWindowController pattern
-  type: view
-  parent: "#eyebrow-detector"
-  tags: [input, eyebrow, calibration, ui]
-  anchors:
-    - Sources/Conductor/UI/EyebrowCalibrationWindowController.swift:1
+  eyebrow-calibration-controller:
+    description: Fullscreen NSWindow hosting EyebrowCalibrationView, mirrors CalibrationWindowController pattern
+    type: view
+    parent: "#eyebrow-detector"
+    tags: [input, eyebrow, calibration, ui]
+    anchors:
+      - Sources/Conductor/UI/EyebrowCalibrationWindowController.swift:1
 
-#main-overlay:
-  description: "Root SwiftUI view composing onboarding, buffer, instance list, calibration banner, video/voice toggle icons in header — observes (not owns) orchestrator and workspace"
-  type: view
-  tags: [ui, layout, root, toggle]
-  anchors:
-    - Sources/Conductor/UI/Views/MainOverlayView.swift:1
+  main-overlay:
+    description: "Root SwiftUI view composing onboarding, buffer, instance list, calibration banner, video/voice toggle icons in header — observes (not owns) orchestrator and workspace"
+    type: view
+    tags: [ui, layout, root, toggle]
+    anchors:
+      - Sources/Conductor/UI/Views/MainOverlayView.swift:1
 
-#settings-panel:
-  description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger — fully wired with workspace, bindings, voice command tabs. Input tab includes a 'Voice Composer (ATRIUM)' section editing the #atrium-voice wake/send/cancel keywords (persisted to UserDefaults atriumWakeKeyword/atriumSendKeyword/atriumCancelKeywords via @AppStorage)."
-  type: view
-  tags: [ui, settings, preferences]
-  anchors:
-    - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
+  settings-panel:
+    description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger — fully wired with workspace, bindings, voice command tabs. Input tab includes a 'Voice Composer (ATRIUM)' section editing the #atrium-voice wake/send/cancel keywords (persisted to UserDefaults atriumWakeKeyword/atriumSendKeyword/atriumCancelKeywords via @AppStorage)."
+    type: view
+    tags: [ui, settings, preferences]
+    anchors:
+      - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
 
-#hotkey-manager:
-  description: "Global hotkey registration via CGEvent tap — Cmd+Shift+C (panel), Cmd+Shift+V (video toggle), Cmd+Shift+M (voice toggle), F5 (push-to-talk), Cmd+1–4 (layouts)"
-  type: manager
-  tags: [input, hotkeys, cgevent]
-  anchors:
-    - Sources/Conductor/Utils/HotKeyManager.swift:1
+  hotkey-manager:
+    description: "Global hotkey registration via CGEvent tap — Cmd+Shift+C (panel), Cmd+Shift+V (video toggle), Cmd+Shift+M (voice toggle), F5 (push-to-talk), Cmd+1–4 (layouts)"
+    type: manager
+    tags: [input, hotkeys, cgevent]
+    anchors:
+      - Sources/Conductor/Utils/HotKeyManager.swift:1
 
 # --- Symphony Phase 1-2 Components ---
 
-#symphony-types:
-  description: Wire-compatible Codable structs for The Score protocol matching TypeScript symphony-loader.ts
-  type: model
-  tags: [symphony, types, codable, wire-compat]
-  anchors:
-    - Sources/Conductor/Symphony/SymphonyTypes.swift:1
+  symphony-types:
+    description: Wire-compatible Codable structs for The Score protocol matching TypeScript symphony-loader.ts
+    type: model
+    tags: [symphony, types, codable, wire-compat]
+    anchors:
+      - Sources/Conductor/Symphony/SymphonyTypes.swift:1
 
-#score-io:
-  description: JSONL read/write + directory management at ~/.paradigm/score/
-  type: utility
-  tags: [symphony, io, jsonl, filesystem]
-  anchors:
-    - Sources/Conductor/Symphony/ScoreIO.swift:1
+  score-io:
+    description: JSONL read/write + directory management at ~/.paradigm/score/
+    type: utility
+    tags: [symphony, io, jsonl, filesystem]
+    anchors:
+      - Sources/Conductor/Symphony/ScoreIO.swift:1
 
-#agent-part-manager:
-  description: Agent registration/unregistration, scanning, stale cleanup
-  type: manager
-  tags: [symphony, agent, registration, lifecycle]
-  anchors:
-    - Sources/Conductor/Symphony/AgentPartManager.swift:1
+  agent-part-manager:
+    description: Agent registration/unregistration, scanning, stale cleanup
+    type: manager
+    tags: [symphony, agent, registration, lifecycle]
+    anchors:
+      - Sources/Conductor/Symphony/AgentPartManager.swift:1
 
-#note-relay:
-  description: 5-second polling relay routing notes from outboxes to inboxes with dedup
-  type: service
-  tags: [symphony, relay, polling, routing, dedup]
-  anchors:
-    - Sources/Conductor/Symphony/NoteRelay.swift:1
+  note-relay:
+    description: 5-second polling relay routing notes from outboxes to inboxes with dedup
+    type: service
+    tags: [symphony, relay, polling, routing, dedup]
+    anchors:
+      - Sources/Conductor/Symphony/NoteRelay.swift:1
 
-#file-approval-manager:
-  description: File request approval/denial with trust config, path safety checks, and SHA-256 hashing
-  type: manager
-  tags: [symphony, file-transfer, trust, security]
-  anchors:
-    - Sources/Conductor/Symphony/FileApprovalManager.swift:1
+  file-approval-manager:
+    description: File request approval/denial with trust config, path safety checks, and SHA-256 hashing
+    type: manager
+    tags: [symphony, file-transfer, trust, security]
+    anchors:
+      - Sources/Conductor/Symphony/FileApprovalManager.swift:1
 
-#auto-link-coordinator:
-  description: Auto-detect CC sessions via ClaudeCodeDetector, create agent parts, start relay
-  type: service
-  tags: [symphony, auto-link, detection, coordinator]
-  anchors:
-    - Sources/Conductor/Symphony/AutoLinkCoordinator.swift:1
+  auto-link-coordinator:
+    description: Auto-detect CC sessions via ClaudeCodeDetector, create agent parts, start relay
+    type: service
+    tags: [symphony, auto-link, detection, coordinator]
+    anchors:
+      - Sources/Conductor/Symphony/AutoLinkCoordinator.swift:1
 
-#thread-list-view:
-  description: Active threads displayed in Conductor overlay sidebar
-  type: view
-  tags: [symphony, ui, threads, sidebar]
-  anchors:
-    - Sources/Conductor/UI/Views/ThreadListView.swift:1
+  thread-list-view:
+    description: Active threads displayed in Conductor overlay sidebar
+    type: view
+    tags: [symphony, ui, threads, sidebar]
+    anchors:
+      - Sources/Conductor/UI/Views/ThreadListView.swift:1
 
-#file-request-notification:
-  description: Banner card for pending file requests with approve/deny actions
-  type: view
-  tags: [symphony, ui, file-transfer, notification, banner]
-  anchors:
-    - Sources/Conductor/UI/Views/FileRequestNotificationView.swift:1
+  file-request-notification:
+    description: Banner card for pending file requests with approve/deny actions
+    type: view
+    tags: [symphony, ui, file-transfer, notification, banner]
+    anchors:
+      - Sources/Conductor/UI/Views/FileRequestNotificationView.swift:1
 
-#symphony-settings:
-  description: Settings tab for Symphony configuration — relay interval, auto-link toggle, trust config
-  type: view
-  tags: [symphony, ui, settings, configuration]
-  anchors:
-    - Sources/Conductor/UI/Views/SymphonySettingsView.swift:1
+  symphony-settings:
+    description: Settings tab for Symphony configuration — relay interval, auto-link toggle, trust config
+    type: view
+    tags: [symphony, ui, settings, configuration]
+    anchors:
+      - Sources/Conductor/UI/Views/SymphonySettingsView.swift:1
 
 # --- Sprint 8: Session Manager Components ---
 
-#project-store:
-  description: Recent project persistence with pin management — stores to ~/.paradigm/conductor/recent-projects.json
-  type: store
-  tags: [session, persistence, projects]
-  anchors:
-    - Sources/Conductor/Models/ProjectStore.swift:1
+  project-store:
+    description: Recent project persistence with pin management — stores to ~/.paradigm/conductor/recent-projects.json
+    type: store
+    tags: [session, persistence, projects]
+    anchors:
+      - Sources/Conductor/Models/ProjectStore.swift:1
 
-#checkpoint-reader:
-  description: Reads .paradigm/session-checkpoint.json and pending handoff files — wire-compatible with paradigm-mcp SessionCheckpoint
-  type: service
-  tags: [session, checkpoint, recovery]
-  anchors:
-    - Sources/Conductor/Services/CheckpointReader.swift:1
+  checkpoint-reader:
+    description: Reads .paradigm/session-checkpoint.json and pending handoff files — wire-compatible with paradigm-mcp SessionCheckpoint
+    type: service
+    tags: [session, checkpoint, recovery]
+    anchors:
+      - Sources/Conductor/Services/CheckpointReader.swift:1
 
-#agent-process-manager:
-  description: Spawns and manages headless claude child processes with stdin/stdout piping and lifecycle control
-  type: manager
-  tags: [session, agent, process, headless]
-  anchors:
-    - Sources/Conductor/Services/AgentProcessManager.swift:1
+  agent-process-manager:
+    description: Spawns and manages headless claude child processes with stdin/stdout piping and lifecycle control
+    type: manager
+    tags: [session, agent, process, headless]
+    anchors:
+      - Sources/Conductor/Services/AgentProcessManager.swift:1
 
-#session-manager-view:
-  description: Dashboard view showing recent projects with checkpoint status, running headless agents, log viewer
-  type: view
-  tags: [ui, session, dashboard]
-  anchors:
-    - Sources/Conductor/UI/Views/SessionManagerView.swift:1
+  session-manager-view:
+    description: Dashboard view showing recent projects with checkpoint status, running headless agents, log viewer
+    type: view
+    tags: [ui, session, dashboard]
+    anchors:
+      - Sources/Conductor/UI/Views/SessionManagerView.swift:1
 
-#sessions-settings:
-  description: Settings tab for session/agent configuration — default roles, auto-launch, recent project management
-  type: view
-  tags: [ui, settings, session]
-  anchors:
-    - Sources/Conductor/UI/Views/SessionsSettingsView.swift:1
+  sessions-settings:
+    description: Settings tab for session/agent configuration — default roles, auto-launch, recent project management
+    type: view
+    tags: [ui, settings, session]
+    anchors:
+      - Sources/Conductor/UI/Views/SessionsSettingsView.swift:1
 
 # --- Sprint 9: Agent Network Components ---
 
-#agent-group:
-  description: Named agent groups with cross-project membership — persists to ~/.paradigm/conductor/groups.json
-  type: model
-  tags: [session, groups, orchestration]
-  anchors:
-    - Sources/Conductor/Models/AgentGroup.swift:1
+  agent-group:
+    description: Named agent groups with cross-project membership — persists to ~/.paradigm/conductor/groups.json
+    type: model
+    tags: [session, groups, orchestration]
+    anchors:
+      - Sources/Conductor/Models/AgentGroup.swift:1
 
-#agent-group-store:
-  description: CRUD for agent groups with drag-and-drop reordering, linked managed agent IDs
-  type: store
-  parent: "#agent-group"
-  tags: [session, groups, persistence]
-  anchors:
-    - Sources/Conductor/Models/AgentGroup.swift:35
+  agent-group-store:
+    description: CRUD for agent groups with drag-and-drop reordering, linked managed agent IDs
+    type: store
+    parent: "#agent-group"
+    tags: [session, groups, persistence]
+    anchors:
+      - Sources/Conductor/Models/AgentGroup.swift:35
 
-#symphony-monitor:
-  description: Polls Symphony inboxes/outboxes for grouped agents — unread counts, threads, last activity
-  type: service
-  tags: [symphony, monitoring, polling]
-  anchors:
-    - Sources/Conductor/Services/SymphonyMonitor.swift:1
+  symphony-monitor:
+    description: Polls Symphony inboxes/outboxes for grouped agents — unread counts, threads, last activity
+    type: service
+    tags: [symphony, monitoring, polling]
+    anchors:
+      - Sources/Conductor/Services/SymphonyMonitor.swift:1
 
-#agent-network-view:
-  description: Primary orchestration dashboard with group panels, agent status badges, thread access, add/remove agents
-  type: view
-  tags: [ui, orchestration, groups, dashboard]
-  anchors:
-    - Sources/Conductor/UI/Views/AgentNetworkView.swift:1
+  agent-network-view:
+    description: Primary orchestration dashboard with group panels, agent status badges, thread access, add/remove agents
+    type: view
+    tags: [ui, orchestration, groups, dashboard]
+    anchors:
+      - Sources/Conductor/UI/Views/AgentNetworkView.swift:1
 
-#thread-view:
-  description: Chat-like Symphony thread viewer with message compose — Conductor sends messages as Maestro
-  type: view
-  tags: [ui, symphony, threads, chat]
-  anchors:
-    - Sources/Conductor/UI/Views/ThreadView.swift:1
+  thread-view:
+    description: Chat-like Symphony thread viewer with message compose — Conductor sends messages as Maestro
+    type: view
+    tags: [ui, symphony, threads, chat]
+    anchors:
+      - Sources/Conductor/UI/Views/ThreadView.swift:1
 
 # --- Sprint 10: Task Protocol Components ---
 
-#task-composer-view:
-  description: UI for creating and assigning structured tasks to agents or groups — writes task intent notes to Symphony inboxes
-  type: view
-  tags: [ui, task, orchestration, composer]
-  anchors:
-    - Sources/Conductor/UI/Views/TaskComposerView.swift:1
+  task-composer-view:
+    description: UI for creating and assigning structured tasks to agents or groups — writes task intent notes to Symphony inboxes
+    type: view
+    tags: [ui, task, orchestration, composer]
+    anchors:
+      - Sources/Conductor/UI/Views/TaskComposerView.swift:1
 
-#approval-view:
-  description: Notification UI for agent approval requests with approve/reject/redirect actions
-  type: view
-  tags: [ui, task, approval, notification]
-  anchors:
-    - Sources/Conductor/UI/Views/ApprovalView.swift:1
+  approval-view:
+    description: Notification UI for agent approval requests with approve/reject/redirect actions
+    type: view
+    tags: [ui, task, approval, notification]
+    anchors:
+      - Sources/Conductor/UI/Views/ApprovalView.swift:1
 
 # --- Sprint 11: Task Dashboard Components ---
 
-#task-record:
-  description: Task lifecycle models — TaskStatus enum, TaskTimelineEvent, TaskRecord struct
-  type: model
-  tags: [task, models, lifecycle]
-  anchors:
-    - Sources/Conductor/Models/TaskRecord.swift:1
+  task-record:
+    description: Task lifecycle models — TaskStatus enum, TaskTimelineEvent, TaskRecord struct
+    type: model
+    tags: [task, models, lifecycle]
+    anchors:
+      - Sources/Conductor/Models/TaskRecord.swift:1
 
-#task-store:
-  description: Persistent task store tracking lifecycle from assigned→complete/failed — saves to ~/.paradigm/conductor/tasks.json
-  type: store
-  parent: "#task-record"
-  tags: [task, persistence, tracking]
-  anchors:
-    - Sources/Conductor/Models/TaskRecord.swift:55
+  task-store:
+    description: Persistent task store tracking lifecycle from assigned→complete/failed — saves to ~/.paradigm/conductor/tasks.json
+    type: store
+    parent: "#task-record"
+    tags: [task, persistence, tracking]
+    anchors:
+      - Sources/Conductor/Models/TaskRecord.swift:55
 
-#task-dashboard-view:
-  description: Kanban-style task dashboard with active/blocked/approval/complete columns, priority filter, and task cards
-  type: view
-  tags: [ui, task, dashboard, kanban]
-  anchors:
-    - Sources/Conductor/UI/Views/TaskDashboardView.swift:1
+  task-dashboard-view:
+    description: Kanban-style task dashboard with active/blocked/approval/complete columns, priority filter, and task cards
+    type: view
+    tags: [ui, task, dashboard, kanban]
+    anchors:
+      - Sources/Conductor/UI/Views/TaskDashboardView.swift:1
 
-#task-detail-view:
-  description: "Full task detail — timeline, files, symbols, blockers. Actions: Cancel (with confirm), Re-assign (agent picker sheet), View Thread"
-  type: view
-  parent: "#task-dashboard-view"
-  tags: [ui, task, detail, timeline, actions]
-  anchors:
-    - Sources/Conductor/UI/Views/TaskDetailView.swift:1
+  task-detail-view:
+    description: "Full task detail — timeline, files, symbols, blockers. Actions: Cancel (with confirm), Re-assign (agent picker sheet), View Thread"
+    type: view
+    parent: "#task-dashboard-view"
+    tags: [ui, task, detail, timeline, actions]
+    anchors:
+      - Sources/Conductor/UI/Views/TaskDetailView.swift:1
 
 # --- Sprint 12: Sentinel + Health Components ---
 
-#agent-health-monitor:
-  description: Computes per-agent health metrics (success rate, avg time, recent outcomes) from TaskStore task records
-  type: service
-  tags: [monitoring, health, metrics, agents]
-  anchors:
-    - Sources/Conductor/Services/AgentHealthMonitor.swift:1
+  agent-health-monitor:
+    description: Computes per-agent health metrics (success rate, avg time, recent outcomes) from TaskStore task records
+    type: service
+    tags: [monitoring, health, metrics, agents]
+    anchors:
+      - Sources/Conductor/Services/AgentHealthMonitor.swift:1
 
-#sentinel-live-view:
-  description: "Real-time Sentinel event viewer — symbol filter bar, clickable symbols, event detail popover with related tasks, search, level filter, clear, auto-scroll"
-  type: view
-  tags: [ui, sentinel, monitoring, live]
-  anchors:
-    - Sources/Conductor/UI/Views/SentinelLiveView.swift:1
+  sentinel-live-view:
+    description: "Real-time Sentinel event viewer — symbol filter bar, clickable symbols, event detail popover with related tasks, search, level filter, clear, auto-scroll"
+    type: view
+    tags: [ui, sentinel, monitoring, live]
+    anchors:
+      - Sources/Conductor/UI/Views/SentinelLiveView.swift:1
 
-#agent-health-view:
-  description: Aggregate and per-agent health dashboard — success rate circles, sparklines, best performer
-  type: view
-  tags: [ui, health, monitoring, dashboard]
-  anchors:
-    - Sources/Conductor/UI/Views/AgentHealthView.swift:1
+  agent-health-view:
+    description: Aggregate and per-agent health dashboard — success rate circles, sparklines, best performer
+    type: view
+    tags: [ui, health, monitoring, dashboard]
+    anchors:
+      - Sources/Conductor/UI/Views/AgentHealthView.swift:1
 
 # --- Sprint 13: Customizable Bindings Components ---
 
-#eyebrow-binding-registry:
-  description: User-customizable eyebrow event→action bindings with state machine bypass toggle
-  type: store
-  parent: "#eyebrow-detector"
-  tags: [input, eyebrow, bindings, customization]
-  anchors:
-    - Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift:1
+  eyebrow-binding-registry:
+    description: User-customizable eyebrow event→action bindings with state machine bypass toggle
+    type: store
+    parent: "#eyebrow-detector"
+    tags: [input, eyebrow, bindings, customization]
+    anchors:
+      - Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift:1
 
-#hotkey-binding-registry:
-  description: User-customizable hotkey→action bindings with persistence and live update observation
-  type: store
-  parent: "#hotkey-manager"
-  tags: [input, hotkeys, bindings, customization]
-  anchors:
-    - Sources/Conductor/Utils/HotKeyBindingRegistry.swift:1
+  hotkey-binding-registry:
+    description: User-customizable hotkey→action bindings with persistence and live update observation
+    type: store
+    parent: "#hotkey-manager"
+    tags: [input, hotkeys, bindings, customization]
+    anchors:
+      - Sources/Conductor/Utils/HotKeyBindingRegistry.swift:1
 
-#hotkey-recorder:
-  description: NSView-based key combination capture with SwiftUI wrapper for custom hotkey assignment
-  type: view
-  parent: "#hotkey-binding-registry"
-  tags: [input, hotkeys, recorder, ui]
-  anchors:
-    - Sources/Conductor/Utils/HotKeyRecorder.swift:1
+  hotkey-recorder:
+    description: NSView-based key combination capture with SwiftUI wrapper for custom hotkey assignment
+    type: view
+    parent: "#hotkey-binding-registry"
+    tags: [input, hotkeys, recorder, ui]
+    anchors:
+      - Sources/Conductor/Utils/HotKeyRecorder.swift:1
 
 # --- Sprint 14: Task Lifecycle Components ---
 
-#task-archive:
-  description: JSONL archive for completed/failed tasks at ~/.paradigm/conductor/tasks-archive.jsonl
-  type: utility
-  tags: [task, archive, persistence, jsonl]
-  anchors:
-    - Sources/Conductor/Models/TaskArchive.swift:1
+  task-archive:
+    description: JSONL archive for completed/failed tasks at ~/.paradigm/conductor/tasks-archive.jsonl
+    type: utility
+    tags: [task, archive, persistence, jsonl]
+    anchors:
+      - Sources/Conductor/Models/TaskArchive.swift:1
 
 # --- Sprint 15: Active Sentinel Components ---
 
-#sentinel-event-detail:
-  description: Popover for single SentinelEvent showing full metadata, related tasks, and level/type badges
-  type: view
-  parent: "#sentinel-live-view"
-  tags: [ui, sentinel, detail, popover]
-  anchors:
-    - Sources/Conductor/UI/Views/SentinelEventDetailView.swift:1
+  sentinel-event-detail:
+    description: Popover for single SentinelEvent showing full metadata, related tasks, and level/type badges
+    type: view
+    parent: "#sentinel-live-view"
+    tags: [ui, sentinel, detail, popover]
+    anchors:
+      - Sources/Conductor/UI/Views/SentinelEventDetailView.swift:1
 
-#sentinel-symbol-filter:
-  description: Horizontal scrollable chip bar for filtering events by symbol — top 10 by frequency
-  type: view
-  parent: "#sentinel-live-view"
-  tags: [ui, sentinel, filter, chips]
-  anchors:
-    - Sources/Conductor/UI/Views/SentinelSymbolFilterView.swift:1
+  sentinel-symbol-filter:
+    description: Horizontal scrollable chip bar for filtering events by symbol — top 10 by frequency
+    type: view
+    parent: "#sentinel-live-view"
+    tags: [ui, sentinel, filter, chips]
+    anchors:
+      - Sources/Conductor/UI/Views/SentinelSymbolFilterView.swift:1
 
 # --- Sprint 16: Decomposed Binding Views ---
 
-#custom-gesture-bindings:
-  description: Extracted from BindingsManagerView — custom gesture template management section
-  type: view
-  parent: "#bindings-manager"
-  tags: [ui, bindings, gestures, decomposed]
-  anchors:
-    - Sources/Conductor/UI/Views/Bindings/CustomGestureBindingsView.swift:1
+  custom-gesture-bindings:
+    description: Extracted from BindingsManagerView — custom gesture template management section
+    type: view
+    parent: "#bindings-manager"
+    tags: [ui, bindings, gestures, decomposed]
+    anchors:
+      - Sources/Conductor/UI/Views/Bindings/CustomGestureBindingsView.swift:1
 
-#voice-command-bindings:
-  description: Extracted from BindingsManagerView — voice command phrase binding section
-  type: view
-  parent: "#bindings-manager"
-  tags: [ui, bindings, voice, decomposed]
-  anchors:
-    - Sources/Conductor/UI/Views/Bindings/VoiceCommandBindingsView.swift:1
+  voice-command-bindings:
+    description: Extracted from BindingsManagerView — voice command phrase binding section
+    type: view
+    parent: "#bindings-manager"
+    tags: [ui, bindings, voice, decomposed]
+    anchors:
+      - Sources/Conductor/UI/Views/Bindings/VoiceCommandBindingsView.swift:1
 
-#builtin-gesture-bindings:
-  description: Extracted from BindingsManagerView — built-in gesture override section
-  type: view
-  parent: "#bindings-manager"
-  tags: [ui, bindings, gestures, decomposed]
-  anchors:
-    - Sources/Conductor/UI/Views/Bindings/BuiltInGestureBindingsView.swift:1
+  builtin-gesture-bindings:
+    description: Extracted from BindingsManagerView — built-in gesture override section
+    type: view
+    parent: "#bindings-manager"
+    tags: [ui, bindings, gestures, decomposed]
+    anchors:
+      - Sources/Conductor/UI/Views/Bindings/BuiltInGestureBindingsView.swift:1
 
-#eyebrow-bindings-view:
-  description: Extracted from BindingsManagerView — eyebrow event binding section
-  type: view
-  parent: "#bindings-manager"
-  tags: [ui, bindings, eyebrow, decomposed]
-  anchors:
-    - Sources/Conductor/UI/Views/Bindings/EyebrowBindingsView.swift:1
+  eyebrow-bindings-view:
+    description: Extracted from BindingsManagerView — eyebrow event binding section
+    type: view
+    parent: "#bindings-manager"
+    tags: [ui, bindings, eyebrow, decomposed]
+    anchors:
+      - Sources/Conductor/UI/Views/Bindings/EyebrowBindingsView.swift:1
 
-#hotkey-bindings-view:
-  description: Extracted from BindingsManagerView — hotkey binding section with recorder
-  type: view
-  parent: "#bindings-manager"
-  tags: [ui, bindings, hotkeys, decomposed]
-  anchors:
-    - Sources/Conductor/UI/Views/Bindings/HotkeyBindingsView.swift:1
+  hotkey-bindings-view:
+    description: Extracted from BindingsManagerView — hotkey binding section with recorder
+    type: view
+    parent: "#bindings-manager"
+    tags: [ui, bindings, hotkeys, decomposed]
+    anchors:
+      - Sources/Conductor/UI/Views/Bindings/HotkeyBindingsView.swift:1
 
-#action-picker-views:
-  description: Shared free functions — bindingActionPicker, bindingActionPickerWithNone, gestureDisplayName
-  type: utility
-  parent: "#bindings-manager"
-  tags: [ui, bindings, shared, utility]
-  anchors:
-    - Sources/Conductor/UI/Views/Bindings/ActionPickerViews.swift:1
+  action-picker-views:
+    description: Shared free functions — bindingActionPicker, bindingActionPickerWithNone, gestureDisplayName
+    type: utility
+    parent: "#bindings-manager"
+    tags: [ui, bindings, shared, utility]
+    anchors:
+      - Sources/Conductor/UI/Views/Bindings/ActionPickerViews.swift:1
 
 # ============================================
 # Flows ($)
@@ -1211,195 +1212,196 @@ signals:
 # Aspects (~)
 # ============================================
 
-~local-only:
-  description: All ML inference and camera processing runs locally — no cloud services
-  anchors:
-    - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
-    - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
-    - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
+aspects:
+  ~local-only:
+    description: All ML inference and camera processing runs locally — no cloud services
+    anchors:
+      - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
+      - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
+      - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
 
-~zero-cost:
-  description: No paid APIs, no subscriptions, no usage fees — all open-source ML models
-  anchors:
-    - Package.swift:1
+  ~zero-cost:
+    description: No paid APIs, no subscriptions, no usage fees — all open-source ML models
+    anchors:
+      - Package.swift:1
 
-~platform-abstracted:
-  description: 7 protocols isolate platform-specific code for future Windows portability
-  anchors:
-    - Sources/Conductor/Input/InputProvider.swift:1
-    - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
-    - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
-    - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
-    - Sources/Conductor/WindowManager/ClaudeCodeDetectorProtocol.swift:1
-    - Sources/Conductor/WindowManager/WindowArrangerProtocol.swift:1
-    - Sources/Conductor/Dispatch/DispatchTargetProtocol.swift:1
+  ~platform-abstracted:
+    description: 7 protocols isolate platform-specific code for future Windows portability
+    anchors:
+      - Sources/Conductor/Input/InputProvider.swift:1
+      - Sources/Conductor/Input/VoiceInput/VoiceInputProvider.swift:1
+      - Sources/Conductor/Input/GestureInput/GestureInputProvider.swift:1
+      - Sources/Conductor/Input/GazeInput/GazeTrackingProvider.swift:1
+      - Sources/Conductor/WindowManager/ClaudeCodeDetectorProtocol.swift:1
+      - Sources/Conductor/WindowManager/WindowArrangerProtocol.swift:1
+      - Sources/Conductor/Dispatch/DispatchTargetProtocol.swift:1
 
-~resource-conscious:
-  description: CPU/RAM budgets enforced, auto-throttle under load
-  anchors:
-    - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
+  ~resource-conscious:
+    description: CPU/RAM budgets enforced, auto-throttle under load
+    anchors:
+      - Sources/Conductor/UI/Views/SettingsPanelView.swift:1
 
-~single-owner:
-  description: Each stateful component has exactly one lifecycle owner — AppDelegate owns orchestrator and workspace
-  anchors:
-    - Sources/Conductor/App/AppDelegate.swift:1
+  ~single-owner:
+    description: Each stateful component has exactly one lifecycle owner — AppDelegate owns orchestrator and workspace
+    anchors:
+      - Sources/Conductor/App/AppDelegate.swift:1
 
-~zone-deterministic:
-  description: Gaze uses cell boundaries, not arbitrary window bounds — eliminates jitter via discrete grid cells
-  anchors:
-    - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
+  ~zone-deterministic:
+    description: Gaze uses cell boundaries, not arbitrary window bounds — eliminates jitter via discrete grid cells
+    anchors:
+      - Sources/Conductor/Dispatch/GazeZoneRouter.swift:1
 
-~user-configurable:
-  description: All input-to-action mappings are user-overridable via ActionRegistry, VoiceCommandRegistry, custom gestures, EyebrowBindingRegistry, and HotKeyBindingRegistry
-  anchors:
-    - Sources/Conductor/Orchestration/ActionRegistry.swift:1
-    - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
-    - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
-    - Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift:1
-    - Sources/Conductor/Utils/HotKeyBindingRegistry.swift:1
-    - Sources/Conductor/Utils/HotKeyRecorder.swift:1
+  ~user-configurable:
+    description: All input-to-action mappings are user-overridable via ActionRegistry, VoiceCommandRegistry, custom gestures, EyebrowBindingRegistry, and HotKeyBindingRegistry
+    anchors:
+      - Sources/Conductor/Orchestration/ActionRegistry.swift:1
+      - Sources/Conductor/Input/VoiceCommand/VoiceCommandRegistry.swift:1
+      - Sources/Conductor/UI/Views/BindingsManagerView.swift:1
+      - Sources/Conductor/Input/EyebrowInput/EyebrowBindingRegistry.swift:1
+      - Sources/Conductor/Utils/HotKeyBindingRegistry.swift:1
+      - Sources/Conductor/Utils/HotKeyRecorder.swift:1
 
 # --- Symphony Phase 1-2 Aspects ---
 
-~jsonl-compatible:
-  description: Swift Codable output is byte-compatible with TypeScript JSON.stringify — no pretty-print, consistent key ordering
-  anchors:
-    - Sources/Conductor/Symphony/SymphonyTypes.swift:1
-    - Sources/Conductor/Symphony/ScoreIO.swift:1
+  ~jsonl-compatible:
+    description: Swift Codable output is byte-compatible with TypeScript JSON.stringify — no pretty-print, consistent key ordering
+    anchors:
+      - Sources/Conductor/Symphony/SymphonyTypes.swift:1
+      - Sources/Conductor/Symphony/ScoreIO.swift:1
 
-~file-safety:
-  description: Path traversal checks + trust deny-lists block dangerous file access (.env, .key, .pem, credentials, secrets)
-  anchors:
-    - Sources/Conductor/Symphony/FileApprovalManager.swift:1
+  ~file-safety:
+    description: Path traversal checks + trust deny-lists block dangerous file access (.env, .key, .pem, credentials, secrets)
+    anchors:
+      - Sources/Conductor/Symphony/FileApprovalManager.swift:1
 
 # --- Maestro Phase 2: Team Display Components ---
 
-#symphony-thread-watcher:
-  description: Polls mailbox JSONL for thr-orch-* team threads at 3s intervals — feeds TeamThreadView
-  type: service
-  tags: [symphony, maestro, threads, polling]
-  anchors:
-    - Sources/Conductor/Services/SymphonyThreadWatcher.swift:1
+  symphony-thread-watcher:
+    description: Polls mailbox JSONL for thr-orch-* team threads at 3s intervals — feeds TeamThreadView
+    type: service
+    tags: [symphony, maestro, threads, polling]
+    anchors:
+      - Sources/Conductor/Services/SymphonyThreadWatcher.swift:1
 
-#team-thread-view:
-  description: Chat-style display of Maestro orchestration threads — colored role prefixes, intent badges, code diffs, decision highlights, thread picker
-  type: view
-  tags: [ui, maestro, threads, team]
-  anchors:
-    - Sources/Conductor/UI/Views/TeamThreadView.swift:1
+  team-thread-view:
+    description: Chat-style display of Maestro orchestration threads — colored role prefixes, intent badges, code diffs, decision highlights, thread picker
+    type: view
+    tags: [ui, maestro, threads, team]
+    anchors:
+      - Sources/Conductor/UI/Views/TeamThreadView.swift:1
 
-#agent-roster-view:
-  description: Agent roster with active/benched sections — acceptance rates, expertise counts, threshold display, bench/activate toggle buttons
-  type: view
-  tags: [ui, maestro, roster, agents]
-  anchors:
-    - Sources/Conductor/UI/Views/AgentRosterView.swift:1
+  agent-roster-view:
+    description: Agent roster with active/benched sections — acceptance rates, expertise counts, threshold display, bench/activate toggle buttons
+    type: view
+    tags: [ui, maestro, roster, agents]
+    anchors:
+      - Sources/Conductor/UI/Views/AgentRosterView.swift:1
 
 # --- Conductor Revival Phase 0: ATRIUM keystone spike ---
 
-#stream-event:
-  description: Typed Decodable model of the claude --output-format stream-json NDJSON event stream (system/init, system task_started/task_progress/task_updated/task_notification, assistant, user/tool_result, result) — unknown shapes degrade to .unknown rather than throwing. System events route by subtype — task_* subtypes decode into SystemTaskEvent (task lifecycle), all others into SystemInit. SystemTaskEvent decodes the RICH (VERIFIED via live CLI raw capture, 2026-06) task fields — probes id/status/command/output/output_file/tool_use_id/parent_tool_use_id/task_type/description/subagent_type/prompt + the usage block (total_tokens/tool_uses/duration_ms) across flat + nested objects (patch carries task_updated {status,end_time}; usage carries task_notification metrics) — and keeps the full raw JSONValue (logged at debug). CRITICAL — task_* events cover BOTH background bash shells (task_type "local_bash") AND Agent/Task sub-agents (task_type "local_agent"); they emit identical shapes, so task_type is the DETERMINISTIC typing discriminator and tool_use_id is the DETERMINISTIC correlation key consumers use to split bash shells (#atrium-shells) from the sub-agent CHORUS (#sub-agent / #atrium-chorus). The earlier "lossy transcript" conclusion (task_* carries only taskId → correlate by temporal adjacency) was WRONG: it was based on lossy SystemTaskEvent logging; the raw events carry tool_use_id + task_type + description + subagent_type + prompt + usage. parent_tool_use_id is still probed for forward-compat (interleaved sub-agent tool-call attribution) but the OPERATIVE correlation field tool_use_id IS present. JSONValue.subAgentDescription/.subAgentType/.subAgentPrompt extract those fields from the Agent tool_use input as a FALLBACK only; JSONValue.asInt extracts usage integers. JSONValue absorbs arbitrary tool_use input and heterogeneous tool_result content and can re-serialize to a compact jsonString for logging.
-  type: model
-  tags: [revival, atrium, stream-json, decode, background-shells]
-  anchors:
-    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
-    - Sources/Conductor/Models/Stream/JSONValue.swift:1
+  stream-event:
+    description: Typed Decodable model of the claude --output-format stream-json NDJSON event stream (system/init, system task_started/task_progress/task_updated/task_notification, assistant, user/tool_result, result) — unknown shapes degrade to .unknown rather than throwing. System events route by subtype — task_* subtypes decode into SystemTaskEvent (task lifecycle), all others into SystemInit. SystemTaskEvent decodes the RICH (VERIFIED via live CLI raw capture, 2026-06) task fields — probes id/status/command/output/output_file/tool_use_id/parent_tool_use_id/task_type/description/subagent_type/prompt + the usage block (total_tokens/tool_uses/duration_ms) across flat + nested objects (patch carries task_updated {status,end_time}; usage carries task_notification metrics) — and keeps the full raw JSONValue (logged at debug). CRITICAL — task_* events cover BOTH background bash shells (task_type "local_bash") AND Agent/Task sub-agents (task_type "local_agent"); they emit identical shapes, so task_type is the DETERMINISTIC typing discriminator and tool_use_id is the DETERMINISTIC correlation key consumers use to split bash shells (#atrium-shells) from the sub-agent CHORUS (#sub-agent / #atrium-chorus). The earlier "lossy transcript" conclusion (task_* carries only taskId → correlate by temporal adjacency) was WRONG: it was based on lossy SystemTaskEvent logging; the raw events carry tool_use_id + task_type + description + subagent_type + prompt + usage. parent_tool_use_id is still probed for forward-compat (interleaved sub-agent tool-call attribution) but the OPERATIVE correlation field tool_use_id IS present. JSONValue.subAgentDescription/.subAgentType/.subAgentPrompt extract those fields from the Agent tool_use input as a FALLBACK only; JSONValue.asInt extracts usage integers. JSONValue absorbs arbitrary tool_use input and heterogeneous tool_result content and can re-serialize to a compact jsonString for logging.
+    type: model
+    tags: [revival, atrium, stream-json, decode, background-shells]
+    anchors:
+      - Sources/Conductor/Models/Stream/StreamEvent.swift:1
+      - Sources/Conductor/Models/Stream/JSONValue.swift:1
 
-#atrium-stop:
-  description: "Stop control for the ATRIUM composer (#atrium-thread). Visible/enabled ONLY while the agent is mid-turn (status .running/.starting), coral/blocked-tinted stop.fill glyph beside Send. On click calls ClaudeStreamSession.interrupt(), which writes the stream-json CONTROL protocol line {\"type\":\"control_request\",\"request_id\":\"<uuid>\",\"request\":{\"subtype\":\"interrupt\"}} to the SAME claude stdin (does NOT close stdin). VERIFIED: the bare {\"type\":\"interrupt\"} line is IGNORED (a count-to-600 turn ran to completion); the control_request form halts the active turn (count stopped at 124) and emits {\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"<same>\"}} confirming it landed, then the turn ends with a terminal result subtype error_during_execution. The session stays alive; the next user turn is answered normally. interrupt() stops the in-flight caret immediately and tracks the pending request_id; applyControlResponse logs confirmation; applyResult settles status to .idle and treats the interrupt-initiated error_during_execution as a normal 'stopped' (NOT a scary error), with the silence watchdog as backstop. Logged under !claude-interrupt (e.g. 'interrupt control_request sent id=…', 'interrupt CONFIRMED — control_response success')."
-  type: view
-  tags: [atrium, ui, composer, interrupt, stop]
-  anchors:
-    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
-    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+  atrium-stop:
+    description: "Stop control for the ATRIUM composer (#atrium-thread). Visible/enabled ONLY while the agent is mid-turn (status .running/.starting), coral/blocked-tinted stop.fill glyph beside Send. On click calls ClaudeStreamSession.interrupt(), which writes the stream-json CONTROL protocol line {\"type\":\"control_request\",\"request_id\":\"<uuid>\",\"request\":{\"subtype\":\"interrupt\"}} to the SAME claude stdin (does NOT close stdin). VERIFIED: the bare {\"type\":\"interrupt\"} line is IGNORED (a count-to-600 turn ran to completion); the control_request form halts the active turn (count stopped at 124) and emits {\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"<same>\"}} confirming it landed, then the turn ends with a terminal result subtype error_during_execution. The session stays alive; the next user turn is answered normally. interrupt() stops the in-flight caret immediately and tracks the pending request_id; applyControlResponse logs confirmation; applyResult settles status to .idle and treats the interrupt-initiated error_during_execution as a normal 'stopped' (NOT a scary error), with the silence watchdog as backstop. Logged under !claude-interrupt (e.g. 'interrupt control_request sent id=…', 'interrupt CONFIRMED — control_response success')."
+    type: view
+    tags: [atrium, ui, composer, interrupt, stop]
+    anchors:
+      - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+      - Sources/Conductor/Services/ClaudeStreamSession.swift:1
 
-#atrium-shells:
-  description: "Background-shell inspector for the ATRIUM window. Background shells are commands the agent ran with run_in_background; Claude Code does NOT kill them on session exit (they orphan to PID 1), so the host tracks and reaps them. DETECTION: ClaudeStreamSession parses tool_result text 'Command running in background with ID: <id>' AND 'Output is being written to: <ABSOLUTE>.output' (correlating the command from the matching Bash tool_use id recorded in applyAssistant) AND/OR the system task_started/task_progress/task_updated/task_notification events (task_started gives early registration via task_id + tool_use_id correlation + description; task_updated carries patch.status); results upsert into @Published backgroundShells [BackgroundShell {id, command, startedAt, status running/finished/stopped/killed/failed, lastOutput, outputFile}]. SUB-AGENT FILTER (DETERMINISTIC, task_type-first): task_* events are emitted by BOTH background bash shells (task_type 'local_bash') AND Agent/Task sub-agents (task_type 'local_agent') with identical shapes — only REAL bash shells belong in this panel. On task_started for an untracked id, applySystemTask types by task_type: 'local_agent' routes to the CHORUS (#sub-agent), 'local_bash' admits to this panel; the originating tool_use name (traced via tool_use_id → toolNamesByToolUseId, recorded for EVERY tool_use in applyAssistant) is a FALLBACK only when task_type is absent (older CLI). A present-but-contradicting signal (task_type != local_bash, or fallback tool == 'Agent'/'Task') EXCLUDES the task (logged: 'ignoring non-bash task <id> type=<…> tool=<…>'). The temporal-adjacency FIFO is RETIRED. task_progress is a NON-TERMINAL running heartbeat (the model emits many per task) and is NEVER treated as terminal; only EXPLICIT terminal statuses (killed/stopped/failed/error/finished/completed/success/done/exited) move a shell out of .running — every other value (including empty/absent and progress-ish strings) stays running (the old 'unrecognized non-empty status → failed' rule was removed so progress can't falsely fail a live shell). There are NO pid files (verified) — only the .output file. UI: a right-aligned header button in AtriumThreadView shows a live count/'N live' and opens a popover (AtriumShellsPanel) listing each shell — command (mono, middle-truncated), id, status badge, startedAt, output, and [Inspect]/[Kill] actions; empty state when none. INSPECT (FIX 3, host-side): reads the shell's .output file directly via String(contentsOfFile:), stores it on the shell, and expands the row to a scrollable detail — NO message sent to the agent, NO thread mutation. KILL (FIX B, authoritative): the PRIMARY path is now a SUPPRESSED control turn (ConversationMessage.isControl 'Call the KillShell tool with shell_id <id>…') written to claude's stdin but EXCLUDED from the rendered thread by AtriumThreadView's filter — the agent owns the real task→PID mapping so it kills the CORRECT process. Status is NOT optimistically flipped (the old lsof-on-.output primary killed the file-writer wrapper, the WRONG PID, and LIED 'killed' while the real process lived → later exit 144/SIGURG); instead the real task_updated/task_notification patch.status (→killed/stopped) or the KillShell tool_result drives the panel status so it never lies. A non-authoritative best-effort host SIGTERM via `lsof -t -- <output_file>` remains only as a backstop and never sets the visible status. EXIT CLEANUP: shutdown() best-effort reaps the claude process tree BEFORE terminating claude — collectDescendants via pgrep -P, SIGTERM then SIGKILL survivors after a 300ms grace — preventing the orphan leak. Heavy ConductorLog under !background-shell (detection, raw task payloads, inspect/kill, lsof PIDs, reap)."
-  type: feature
-  tags: [atrium, ui, background-shells, process, cleanup]
-  anchors:
-    - Sources/Conductor/Models/BackgroundShell.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumShellsPanel.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
-    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
-    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
+  atrium-shells:
+    description: "Background-shell inspector for the ATRIUM window. Background shells are commands the agent ran with run_in_background; Claude Code does NOT kill them on session exit (they orphan to PID 1), so the host tracks and reaps them. DETECTION: ClaudeStreamSession parses tool_result text 'Command running in background with ID: <id>' AND 'Output is being written to: <ABSOLUTE>.output' (correlating the command from the matching Bash tool_use id recorded in applyAssistant) AND/OR the system task_started/task_progress/task_updated/task_notification events (task_started gives early registration via task_id + tool_use_id correlation + description; task_updated carries patch.status); results upsert into @Published backgroundShells [BackgroundShell {id, command, startedAt, status running/finished/stopped/killed/failed, lastOutput, outputFile}]. SUB-AGENT FILTER (DETERMINISTIC, task_type-first): task_* events are emitted by BOTH background bash shells (task_type 'local_bash') AND Agent/Task sub-agents (task_type 'local_agent') with identical shapes — only REAL bash shells belong in this panel. On task_started for an untracked id, applySystemTask types by task_type: 'local_agent' routes to the CHORUS (#sub-agent), 'local_bash' admits to this panel; the originating tool_use name (traced via tool_use_id → toolNamesByToolUseId, recorded for EVERY tool_use in applyAssistant) is a FALLBACK only when task_type is absent (older CLI). A present-but-contradicting signal (task_type != local_bash, or fallback tool == 'Agent'/'Task') EXCLUDES the task (logged: 'ignoring non-bash task <id> type=<…> tool=<…>'). The temporal-adjacency FIFO is RETIRED. task_progress is a NON-TERMINAL running heartbeat (the model emits many per task) and is NEVER treated as terminal; only EXPLICIT terminal statuses (killed/stopped/failed/error/finished/completed/success/done/exited) move a shell out of .running — every other value (including empty/absent and progress-ish strings) stays running (the old 'unrecognized non-empty status → failed' rule was removed so progress can't falsely fail a live shell). There are NO pid files (verified) — only the .output file. UI: a right-aligned header button in AtriumThreadView shows a live count/'N live' and opens a popover (AtriumShellsPanel) listing each shell — command (mono, middle-truncated), id, status badge, startedAt, output, and [Inspect]/[Kill] actions; empty state when none. INSPECT (FIX 3, host-side): reads the shell's .output file directly via String(contentsOfFile:), stores it on the shell, and expands the row to a scrollable detail — NO message sent to the agent, NO thread mutation. KILL (FIX B, authoritative): the PRIMARY path is now a SUPPRESSED control turn (ConversationMessage.isControl 'Call the KillShell tool with shell_id <id>…') written to claude's stdin but EXCLUDED from the rendered thread by AtriumThreadView's filter — the agent owns the real task→PID mapping so it kills the CORRECT process. Status is NOT optimistically flipped (the old lsof-on-.output primary killed the file-writer wrapper, the WRONG PID, and LIED 'killed' while the real process lived → later exit 144/SIGURG); instead the real task_updated/task_notification patch.status (→killed/stopped) or the KillShell tool_result drives the panel status so it never lies. A non-authoritative best-effort host SIGTERM via `lsof -t -- <output_file>` remains only as a backstop and never sets the visible status. EXIT CLEANUP: shutdown() best-effort reaps the claude process tree BEFORE terminating claude — collectDescendants via pgrep -P, SIGTERM then SIGKILL survivors after a 300ms grace — preventing the orphan leak. Heavy ConductorLog under !background-shell (detection, raw task payloads, inspect/kill, lsof PIDs, reap)."
+    type: feature
+    tags: [atrium, ui, background-shells, process, cleanup]
+    anchors:
+      - Sources/Conductor/Models/BackgroundShell.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumShellsPanel.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+      - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+      - Sources/Conductor/Models/Stream/StreamEvent.swift:1
 
-#conversation-model:
-  description: Observable projection of the stream-json event sequence into renderable ConversationMessage values (agent/user/system authors) with ToolCall chips (running/succeeded/failed) and an isControl flag for suppressed host→agent control turns (the authoritative KillShell control turn, #atrium-shells FIX B) that are written to claude's stdin but excluded from the rendered thread — decouples the UI from the wire format.
-  type: model
-  tags: [revival, atrium, conversation]
-  anchors:
-    - Sources/Conductor/Models/ConversationMessage.swift:1
+  conversation-model:
+    description: Observable projection of the stream-json event sequence into renderable ConversationMessage values (agent/user/system authors) with ToolCall chips (running/succeeded/failed) and an isControl flag for suppressed host→agent control turns (the authoritative KillShell control turn, #atrium-shells FIX B) that are written to claude's stdin but excluded from the rendered thread — decouples the UI from the wire format.
+    type: model
+    tags: [revival, atrium, conversation]
+    anchors:
+      - Sources/Conductor/Models/ConversationMessage.swift:1
 
-#claude-stream-session:
-  description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. SPAWN ENVIRONMENT (FIX 1): because Conductor is a Finder-launched GUI/bundled app, it inherits a MINIMAL PATH; the spawned claude would fail to find node/paradigm/hooks (exit 127). loginShellEnvironment() runs the user's login+interactive shell (`$SHELL -lic env`, cached once) and overlays its full environment (PATH + nvm/asdf/homebrew exports) onto the child's environment, with a hardcoded-PATH fallback if the probe fails; the resolved child PATH is logged at startup under #claude-stream-session. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns. Traces every applied event type (system/systemTask/assistant/user/result/unknown) and surfaces claude stderr to ConductorLog so stalls/errors are visible. A silence watchdog settles the UI out of .running if a result is missed (caret off, status idle), and applyResult flips status to idle + records cumulative total_cost_usd and authoritative end-of-turn usage. interrupt() (#atrium-stop) writes the stream-json CONTROL protocol line {\"type\":\"control_request\",\"request_id\":\"<uuid>\",\"request\":{\"subtype\":\"interrupt\"}} to the SAME stdin (NOT closed) to halt the active turn while keeping the session alive — the bare {\"type\":\"interrupt\"} form is VERIFIED IGNORED. Decodes control_response (applyControlResponse confirms the matching request_id) and settles the interrupt-initiated terminal result (subtype error_during_execution) cleanly as a normal stop, logging under !claude-interrupt. Tracks background shells (#atrium-shells) in @Published backgroundShells by parsing tool_result 'Command running in background with ID: <id>' + 'Output is being written to: <path>' (command correlated from the Bash tool_use id) and system task events; inspectShell reads the .output file host-side; killShell (FIX B) uses the AUTHORITATIVE path — a SUPPRESSED isControl KillShell control turn so the agent kills the correct PID via its task→PID mapping (the old lsof-on-output-file primary targeted the file-writer wrapper, killed the wrong PID, and LIED 'killed' while the process lived) — status is NOT optimistically flipped; the real task_updated/task_notification (patch.status) or KillShell tool_result drives the panel; a non-authoritative best-effort host SIGTERM via lsof remains only as a backstop. shutdown() reaps the claude process tree (pgrep -P → SIGTERM/SIGKILL) before terminating claude to prevent orphan-to-PID-1 leaks."
-  type: service
-  tags: [revival, atrium, process, concurrency]
-  anchors:
-    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
-    - Sources/Conductor/Services/LineFramer.swift:1
+  claude-stream-session:
+    description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. SPAWN ENVIRONMENT (FIX 1): because Conductor is a Finder-launched GUI/bundled app, it inherits a MINIMAL PATH; the spawned claude would fail to find node/paradigm/hooks (exit 127). loginShellEnvironment() runs the user's login+interactive shell (`$SHELL -lic env`, cached once) and overlays its full environment (PATH + nvm/asdf/homebrew exports) onto the child's environment, with a hardcoded-PATH fallback if the probe fails; the resolved child PATH is logged at startup under #claude-stream-session. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns. Traces every applied event type (system/systemTask/assistant/user/result/unknown) and surfaces claude stderr to ConductorLog so stalls/errors are visible. A silence watchdog settles the UI out of .running if a result is missed (caret off, status idle), and applyResult flips status to idle + records cumulative total_cost_usd and authoritative end-of-turn usage. interrupt() (#atrium-stop) writes the stream-json CONTROL protocol line {\"type\":\"control_request\",\"request_id\":\"<uuid>\",\"request\":{\"subtype\":\"interrupt\"}} to the SAME stdin (NOT closed) to halt the active turn while keeping the session alive — the bare {\"type\":\"interrupt\"} form is VERIFIED IGNORED. Decodes control_response (applyControlResponse confirms the matching request_id) and settles the interrupt-initiated terminal result (subtype error_during_execution) cleanly as a normal stop, logging under !claude-interrupt. Tracks background shells (#atrium-shells) in @Published backgroundShells by parsing tool_result 'Command running in background with ID: <id>' + 'Output is being written to: <path>' (command correlated from the Bash tool_use id) and system task events; inspectShell reads the .output file host-side; killShell (FIX B) uses the AUTHORITATIVE path — a SUPPRESSED isControl KillShell control turn so the agent kills the correct PID via its task→PID mapping (the old lsof-on-output-file primary targeted the file-writer wrapper, killed the wrong PID, and LIED 'killed' while the process lived) — status is NOT optimistically flipped; the real task_updated/task_notification (patch.status) or KillShell tool_result drives the panel; a non-authoritative best-effort host SIGTERM via lsof remains only as a backstop. shutdown() reaps the claude process tree (pgrep -P → SIGTERM/SIGKILL) before terminating claude to prevent orphan-to-PID-1 leaks."
+    type: service
+    tags: [revival, atrium, process, concurrency]
+    anchors:
+      - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+      - Sources/Conductor/Services/LineFramer.swift:1
 
-#atrium-theme:
-  description: Deep mono visual token system for the ATRIUM thread (void/surface/sunken surfaces, ink, amber/user/tool/running/blocked accents, monospaced body/chip/footer fonts) plus a Color(hex:) initializer.
-  type: theme
-  tags: [revival, atrium, ui, theme]
-  anchors:
-    - Sources/Conductor/UI/AtriumTheme.swift:1
+  atrium-theme:
+    description: Deep mono visual token system for the ATRIUM thread (void/surface/sunken surfaces, ink, amber/user/tool/running/blocked accents, monospaced body/chip/footer fonts) plus a Color(hex:) initializer.
+    type: theme
+    tags: [revival, atrium, ui, theme]
+    anchors:
+      - Sources/Conductor/UI/AtriumTheme.swift:1
 
-#atrium-thread:
-  description: "Custom SwiftUI thread surface — a thin top header carrying the background-shell inspector affordance (#atrium-shells), a scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (ALWAYS editable/focusable — never hard-disabled by session status; Send gated only on live-session + non-empty draft, so a stuck-running turn can never lock the founder out; mid-turn sends queue on claude stdin; a coral Stop button (#atrium-stop) appears beside Send while the agent is mid-turn), and a model·session·tokens·cost footer. THE CHORUS (#atrium-chorus): the body is an HStack of a conversation COLUMN + the right-side CHORUS RAIL using a PUSH layout — when ≥1 sub-agent is live (or the rail is pinned) the column narrows to make room and the rail slides in over 220ms ease (no overlay); it slides away when all sub-agents idle. The conversation column also renders the INLINE FAN-OUT block (#atrium-chorus) after the messages when subAgents is non-empty. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar — the window is resizable/zoomable/full-screen-capable (collectionBehavior .fullScreenPrimary) with a larger 1100x780 default, built toward the full-screen Conductor."
-  type: view
-  tags: [revival, atrium, ui, thread]
-  anchors:
-    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumMessageView.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumToolChip.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumFooter.swift:1
-    - Sources/Conductor/App/ConductorCockpitWindow.swift:1
+  atrium-thread:
+    description: "Custom SwiftUI thread surface — a thin top header carrying the background-shell inspector affordance (#atrium-shells), a scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (ALWAYS editable/focusable — never hard-disabled by session status; Send gated only on live-session + non-empty draft, so a stuck-running turn can never lock the founder out; mid-turn sends queue on claude stdin; a coral Stop button (#atrium-stop) appears beside Send while the agent is mid-turn), and a model·session·tokens·cost footer. THE CHORUS (#atrium-chorus): the body is an HStack of a conversation COLUMN + the right-side CHORUS RAIL using a PUSH layout — when ≥1 sub-agent is live (or the rail is pinned) the column narrows to make room and the rail slides in over 220ms ease (no overlay); it slides away when all sub-agents idle. The conversation column also renders the INLINE FAN-OUT block (#atrium-chorus) after the messages when subAgents is non-empty. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar — the window is resizable/zoomable/full-screen-capable (collectionBehavior .fullScreenPrimary) with a larger 1100x780 default, built toward the full-screen Conductor."
+    type: view
+    tags: [revival, atrium, ui, thread]
+    anchors:
+      - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumMessageView.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumToolChip.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumFooter.swift:1
+      - Sources/Conductor/App/ConductorCockpitWindow.swift:1
 
-#atrium-chorus:
-  description: "THE CHORUS — sub-agents (#sub-agent) rendered as a chorus of parallel voices, across TWO surfaces over the same @Published subAgents data. SURFACE 1, the INLINE FAN-OUT block (AtriumFanOutBlock): born in the conversation when the model fans out, lists the spawned voices grouped, settles to a one-line summary ('✓ N sub-agents · 2m14s · ▸ expand') when all idle, and lives in history. SURFACE 2, the CHORUS RAIL (AtriumChorusRail): a right-side panel that AUTO-APPEARS while ≥1 sub-agent is live, SLIDES AWAY when all idle, and is PINNABLE (a pin control keeps it open when idle); the conversation column narrows to make room (PUSH layout, 220ms ease, no overlay). ROW ANATOMY (AtriumChorusRow, shared by both surfaces) — prose over mechanics: [state glyph] + TASK DESCRIPTION (system font, ink, leads) + subagent_type (mono, inkMuted, subtitle) + heartbeat SPARKLINE (Canvas, driven by real task_progress ticks) + elapsed (mono, right, ticking via a shared TimelineView clock). TEMPERATURE LAW (founder-baked): running = teal #4ED7A0 (autonomous work needs NO attention — never amber), completed/killed/stopped = inkMuted, failed = coral #FF6B6B, amber #F2B765 ONLY for needsHuman (a sub-agent blocked on the founder; v2 — not yet detected); blue #7CC4FF left-edge = drill/selection focus. SETTLED ROW + DRILL-IN: a settled row shows the status label plus real usage from the terminal task_notification ('done · 12.2k tok · 1.4s'); the inline fan-out summary aggregates tokens across the voices. Clicking a rail row expands it IN PLACE — drill-in shows description + subagent_type + status + elapsed + tokens/tool-uses/duration + the sub-agent prompt + live last-activity. Full nested per-tool transcript is still v2 (interleaved sub-agent tool calls don't yet carry parent_tool_use_id) and is NOT faked. STOP: a rail row's Stop sends a suppressed isControl TaskStop turn (reuses #atrium-shells sendControl); status reflects the real task_updated/notification, not optimistic."
-  type: view
-  tags: [atrium, ui, chorus, sub-agents, rail, fanout]
-  anchors:
-    - Sources/Conductor/UI/Views/Atrium/AtriumChorusRail.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumFanOutBlock.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+  atrium-chorus:
+    description: "THE CHORUS — sub-agents (#sub-agent) rendered as a chorus of parallel voices, across TWO surfaces over the same @Published subAgents data. SURFACE 1, the INLINE FAN-OUT block (AtriumFanOutBlock): born in the conversation when the model fans out, lists the spawned voices grouped, settles to a one-line summary ('✓ N sub-agents · 2m14s · ▸ expand') when all idle, and lives in history. SURFACE 2, the CHORUS RAIL (AtriumChorusRail): a right-side panel that AUTO-APPEARS while ≥1 sub-agent is live, SLIDES AWAY when all idle, and is PINNABLE (a pin control keeps it open when idle); the conversation column narrows to make room (PUSH layout, 220ms ease, no overlay). ROW ANATOMY (AtriumChorusRow, shared by both surfaces) — prose over mechanics: [state glyph] + TASK DESCRIPTION (system font, ink, leads) + subagent_type (mono, inkMuted, subtitle) + heartbeat SPARKLINE (Canvas, driven by real task_progress ticks) + elapsed (mono, right, ticking via a shared TimelineView clock). TEMPERATURE LAW (founder-baked): running = teal #4ED7A0 (autonomous work needs NO attention — never amber), completed/killed/stopped = inkMuted, failed = coral #FF6B6B, amber #F2B765 ONLY for needsHuman (a sub-agent blocked on the founder; v2 — not yet detected); blue #7CC4FF left-edge = drill/selection focus. SETTLED ROW + DRILL-IN: a settled row shows the status label plus real usage from the terminal task_notification ('done · 12.2k tok · 1.4s'); the inline fan-out summary aggregates tokens across the voices. Clicking a rail row expands it IN PLACE — drill-in shows description + subagent_type + status + elapsed + tokens/tool-uses/duration + the sub-agent prompt + live last-activity. Full nested per-tool transcript is still v2 (interleaved sub-agent tool calls don't yet carry parent_tool_use_id) and is NOT faked. STOP: a rail row's Stop sends a suppressed isControl TaskStop turn (reuses #atrium-shells sendControl); status reflects the real task_updated/notification, not optimistic."
+    type: view
+    tags: [atrium, ui, chorus, sub-agents, rail, fanout]
+    anchors:
+      - Sources/Conductor/UI/Views/Atrium/AtriumChorusRail.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumFanOutBlock.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
 
-#sub-agent:
-  description: "Observable record of a sub-agent the model spawned via the Agent/Task tool for parallel work (THE CHORUS, #atrium-chorus). SubAgent {id (taskId), description, subagentType, status (running/completed/stopped/killed/failed/needsHuman), startedAt, endedAt, lastActivity, progressTicks (sparkline heartbeats), originatingToolUseId, prompt, totalTokens, toolUses, durationMs; usageSummary computed → '12.2k tok · 1.4s'}. TYPING + CORRELATION ARE DETERMINISTIC (corrected 2026-06 from the earlier wrong temporal-adjacency conclusion): task_* events carry task_type ('local_agent' → sub-agent; 'local_bash' → bash shell) AND tool_use_id (ties the task to the EXACT spawning Agent tool_use) — the temporal-adjacency FIFO is RETIRED. POPULATION (ClaudeStreamSession @Published subAgents): an Agent/Task tool_use in applyAssistant caches description/subagent_type/prompt in agentSpawnsByToolUseId keyed by tool_use_id (FALLBACK only). applySystemTask routes a task to the chorus instead of the shells panel (#atrium-shells) when task_type == 'local_agent' (or, on an old CLI with no task_type, the originating tool is Agent/Task). applySubAgentTask populates the SubAgent DIRECTLY from the task_started fields (description + subagent_type + prompt — all on the event), sets originatingToolUseId from the event's tool_use_id, appends a sparkline tick per task_progress, updates lastActivity, captures usage (total_tokens/tool_uses/duration_ms) from the terminal task_notification via applyUsage, and freezes the sub-agent (endedAt) on terminal task_updated/notification. STATUS: 'completed' maps to .completed → muted ✓ (terminal SUCCESS, distinct from .killed/.stopped/.failed). parent_tool_use_id is still probed for forward-compat (interleaved sub-agent tool-call attribution → full nested drill-in, v2). subAgentTaskIds is sticky so signal-less follow-up events stay routed to the chorus. stopSubAgent sends a suppressed isControl TaskStop turn (authoritative; real status drives the UI). Bash shells (#atrium-shells) stay a SEPARATE list."
-  type: model
-  tags: [atrium, chorus, sub-agents, stream-json, model]
-  anchors:
-    - Sources/Conductor/Models/SubAgent.swift:1
-    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
-    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
+  sub-agent:
+    description: "Observable record of a sub-agent the model spawned via the Agent/Task tool for parallel work (THE CHORUS, #atrium-chorus). SubAgent {id (taskId), description, subagentType, status (running/completed/stopped/killed/failed/needsHuman), startedAt, endedAt, lastActivity, progressTicks (sparkline heartbeats), originatingToolUseId, prompt, totalTokens, toolUses, durationMs; usageSummary computed → '12.2k tok · 1.4s'}. TYPING + CORRELATION ARE DETERMINISTIC (corrected 2026-06 from the earlier wrong temporal-adjacency conclusion): task_* events carry task_type ('local_agent' → sub-agent; 'local_bash' → bash shell) AND tool_use_id (ties the task to the EXACT spawning Agent tool_use) — the temporal-adjacency FIFO is RETIRED. POPULATION (ClaudeStreamSession @Published subAgents): an Agent/Task tool_use in applyAssistant caches description/subagent_type/prompt in agentSpawnsByToolUseId keyed by tool_use_id (FALLBACK only). applySystemTask routes a task to the chorus instead of the shells panel (#atrium-shells) when task_type == 'local_agent' (or, on an old CLI with no task_type, the originating tool is Agent/Task). applySubAgentTask populates the SubAgent DIRECTLY from the task_started fields (description + subagent_type + prompt — all on the event), sets originatingToolUseId from the event's tool_use_id, appends a sparkline tick per task_progress, updates lastActivity, captures usage (total_tokens/tool_uses/duration_ms) from the terminal task_notification via applyUsage, and freezes the sub-agent (endedAt) on terminal task_updated/notification. STATUS: 'completed' maps to .completed → muted ✓ (terminal SUCCESS, distinct from .killed/.stopped/.failed). parent_tool_use_id is still probed for forward-compat (interleaved sub-agent tool-call attribution → full nested drill-in, v2). subAgentTaskIds is sticky so signal-less follow-up events stay routed to the chorus. stopSubAgent sends a suppressed isControl TaskStop turn (authoritative; real status drives the UI). Bash shells (#atrium-shells) stay a SEPARATE list."
+    type: model
+    tags: [atrium, chorus, sub-agents, stream-json, model]
+    anchors:
+      - Sources/Conductor/Models/SubAgent.swift:1
+      - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+      - Sources/Conductor/Models/Stream/StreamEvent.swift:1
 
-#atrium-attachment:
-  description: Removable file-attachment chip for the ATRIUM composer — file-type SF Symbol + middle-truncated filename + ✕ remove, styled to the ATRIUM palette (surfaceRaised bg, tool-violet icon, mono ink filename). Files dragged onto the composer (.onDrop of .fileURL) become chips in a row above the field; on send the absolute paths are appended to the outgoing claude -p turn as a trailing "Attached files:" block so the agent can Read them, while the visible draft stays clean.
-  type: view
-  tags: [atrium, ui, composer, attachments, dragdrop]
-  anchors:
-    - Sources/Conductor/UI/Views/Atrium/AtriumAttachmentChip.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+  atrium-attachment:
+    description: Removable file-attachment chip for the ATRIUM composer — file-type SF Symbol + middle-truncated filename + ✕ remove, styled to the ATRIUM palette (surfaceRaised bg, tool-violet icon, mono ink filename). Files dragged onto the composer (.onDrop of .fileURL) become chips in a row above the field; on send the absolute paths are appended to the outgoing claude -p turn as a trailing "Attached files:" block so the agent can Read them, while the visible draft stays clean.
+    type: view
+    tags: [atrium, ui, composer, attachments, dragdrop]
+    anchors:
+      - Sources/Conductor/UI/Views/Atrium/AtriumAttachmentChip.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
 
-#atrium-voice:
-  description: Keyword-driven voice dictation loop for the ATRIUM composer, modeled on a-aloud's reply-window loop. REUSES WhisperVoiceProvider (WhisperKit CoreML STT + AVCaptureSession mic) — no new STT dependency. Mic-button path AUTHORIZES FIRST — checks AVCaptureDevice.authorizationStatus(for:.audio), on .notDetermined awaits requestAccess (fires the TCC prompt; Info.plist has NSMicrophoneUsageDescription), on .denied/.restricted surfaces a `blocked` state whose next click opens System Settings › Privacy › Microphone — THEN loads the WhisperKit model (`loading` state) and starts continuous capture. State machine off→requesting→loading→armed→composing→sending→armed (+blocked) driven by forgiving word-boundary-anchored keyword grammar (normalize, last-occurrence match, multi-word phrases). Keywords are USER-CONFIGURABLE in Settings › Input › "Voice Composer (ATRIUM)" and persist in UserDefaults (atriumWakeKeyword / atriumSendKeyword / atriumCancelKeywords — cancel is a comma-separated list); they are re-read fresh at each arm (loadAndArm → refreshKeywordsFromDefaults) so a Settings change takes effect on the next arm. Defaults (seeds + fallbacks) wake="respond", send="send it", cancel="scratch that, never mind, nevermind". Uses its OWN WhisperVoiceProvider instance — fully decoupled from the orchestrator's global `voiceEnabled` pref, so the explicit mic-button action starts regardless of that setting. Live transcript streams into the composer's NSTextView via the #atrium-textview handle. Heavy ConductorLog.component("atrium-voice") on every step (button click, auth status, requestAccess result, model load, capture start, state transitions, keyword matches) for screenless diagnosis.
-  type: controller
-  tags: [atrium, voice, whisper, dictation, statemachine, permissions]
-  anchors:
-    - Sources/Conductor/UI/Views/Atrium/AtriumVoiceController.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+  atrium-voice:
+    description: Keyword-driven voice dictation loop for the ATRIUM composer, modeled on a-aloud's reply-window loop. REUSES WhisperVoiceProvider (WhisperKit CoreML STT + AVCaptureSession mic) — no new STT dependency. Mic-button path AUTHORIZES FIRST — checks AVCaptureDevice.authorizationStatus(for:.audio), on .notDetermined awaits requestAccess (fires the TCC prompt; Info.plist has NSMicrophoneUsageDescription), on .denied/.restricted surfaces a `blocked` state whose next click opens System Settings › Privacy › Microphone — THEN loads the WhisperKit model (`loading` state) and starts continuous capture. State machine off→requesting→loading→armed→composing→sending→armed (+blocked) driven by forgiving word-boundary-anchored keyword grammar (normalize, last-occurrence match, multi-word phrases). Keywords are USER-CONFIGURABLE in Settings › Input › "Voice Composer (ATRIUM)" and persist in UserDefaults (atriumWakeKeyword / atriumSendKeyword / atriumCancelKeywords — cancel is a comma-separated list); they are re-read fresh at each arm (loadAndArm → refreshKeywordsFromDefaults) so a Settings change takes effect on the next arm. Defaults (seeds + fallbacks) wake="respond", send="send it", cancel="scratch that, never mind, nevermind". Uses its OWN WhisperVoiceProvider instance — fully decoupled from the orchestrator's global `voiceEnabled` pref, so the explicit mic-button action starts regardless of that setting. Live transcript streams into the composer's NSTextView via the #atrium-textview handle. Heavy ConductorLog.component("atrium-voice") on every step (button click, auth status, requestAccess result, model load, capture start, state transitions, keyword matches) for screenless diagnosis.
+    type: controller
+    tags: [atrium, voice, whisper, dictation, statemachine, permissions]
+    anchors:
+      - Sources/Conductor/UI/Views/Atrium/AtriumVoiceController.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
 
-#atrium-textview:
-  description: Custom NSViewRepresentable (AtriumTextView) wrapping an NSTextView subclass (AtriumNSTextView) in an NSScrollView — the ATRIUM composer's reply input. REPLACES the SwiftUI TextField that failed at runtime inside the manually-created AtriumSpikeWindow (NSHostingView in a bare NSWindow on an LSUIElement accessory app), where clipboard (⌘C/V/X) and .onKeyPress(.return) did not route. Clipboard/undo handled directly in performKeyEquivalent(with:) (menu-independent guarantee); Return-vs-Shift+Return handled by overriding insertNewline(_:) (plain Return → onSubmit callback, no newline; Shift+Return → real newline). Multiline, grows to ~6 lines then scrolls. ATRIUM styling (surface bg, ink text, monospaced 13, amber insertion point + selection). Two-way bound to the composer's draft via a Coordinator (textDidChange → binding); imperative AtriumTextViewHandle exposes appendText/clear/focus for the voice dictation path. A standard Edit menu is also registered via .commands in ConductorApp.swift as belt-and-suspenders.
-  type: view
-  tags: [atrium, ui, composer, nstextview, appkit, clipboard, multiline]
-  anchors:
-    - Sources/Conductor/UI/Views/Atrium/AtriumTextView.swift:1
-    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
-    - Sources/Conductor/App/ConductorApp.swift:1
+  atrium-textview:
+    description: Custom NSViewRepresentable (AtriumTextView) wrapping an NSTextView subclass (AtriumNSTextView) in an NSScrollView — the ATRIUM composer's reply input. REPLACES the SwiftUI TextField that failed at runtime inside the manually-created AtriumSpikeWindow (NSHostingView in a bare NSWindow on an LSUIElement accessory app), where clipboard (⌘C/V/X) and .onKeyPress(.return) did not route. Clipboard/undo handled directly in performKeyEquivalent(with:) (menu-independent guarantee); Return-vs-Shift+Return handled by overriding insertNewline(_:) (plain Return → onSubmit callback, no newline; Shift+Return → real newline). Multiline, grows to ~6 lines then scrolls. ATRIUM styling (surface bg, ink text, monospaced 13, amber insertion point + selection). Two-way bound to the composer's draft via a Coordinator (textDidChange → binding); imperative AtriumTextViewHandle exposes appendText/clear/focus for the voice dictation path. A standard Edit menu is also registered via .commands in ConductorApp.swift as belt-and-suspenders.
+    type: view
+    tags: [atrium, ui, composer, nstextview, appkit, clipboard, multiline]
+    anchors:
+      - Sources/Conductor/UI/Views/Atrium/AtriumTextView.swift:1
+      - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+      - Sources/Conductor/App/ConductorApp.swift:1
 
 tags:
   - conductor

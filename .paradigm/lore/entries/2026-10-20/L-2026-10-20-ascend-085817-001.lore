@@ -1,0 +1,45 @@
+id: L-2026-10-20-ascend-085817-001
+type: milestone
+timestamp: '2026-10-20T08:58:17.634Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Notify-not-ask (F2–F6) merged into feat/gnomon; clientApiId is now 795b3425…
+summary: |-
+  The F2–F6 branch merged cleanly after the Aegis re-check (APPROVE):
+  - standingGrant can only be set by StandingGrants;
+  - reconsider removed;
+  - repo-scoped tuples need a repo;
+  - the real presence is recorded on mode loosen;
+  - one-prompt standing grant (no rootSig);
+  - the unlock-joined notify;
+  - a kernel-principal-only feed.
+  clientApiId ac22e72f… → 795b3425… (one move vs main history, including approval.auto.miss and anchoredInputHash, which closes T-2026-10-20-007). Post-merge suites: contracts 459, gui 320, gnomon 2437, plus 1 codesign test that flaked under load and passed alone. Founder release steps are tracked in a task: re-sign and notarize helper 1.7.0 so the 12 h unlock applies, and root-sign the runModes default (F3).
+symbols_touched:
+  - '#approval-broker'
+  - '#standing-grant'
+  - '#gui'
+  - '#gnomon-helper'
+verification:
+  status: pass
+  details:
+    contracts: 459
+    gui: 320
+    gnomon: 2437
+tags:
+  - gnomon
+  - permissions
+  - merge
+  - marathon-2026-10-20
+linked_commits:
+  - '90229803'
+  - '754e9051'
+  - e06e340b
+  - 10bbb224
+  - a9226ed6
+  - 9eb0f926
+git_context:
+  ref: 8df49d05914bbd8c82e4ba666b12c983680fb6e9
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,40 @@
+id: L-2026-10-17-ascend-214000-001
+type: agent-session
+timestamp: '2026-10-17T21:40:00.715Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'D85 landed (approved round 2); first cross-OS CI: Ubuntu green, Windows parity failures triaged'
+summary: |-
+  PR-level: D85 is committed at 363862b1. Both reviewers approved in round 2 (rounds-to-pass: 2). Changes:
+  - the cross-boot file-anchor lag relax is driven only by the keystore boot;
+  - S34-24: keystore ahead plus file lag over 63 classifies as truncated with fileLag (also carried in the gap payload);
+  - evidence first: no anchor rewrite happens before the signed lag row commits.
+  Tests: gnomon 179, contracts 125. Aegis's S34-25 double-crash case is tracked as T-2026-10-17-012.
+
+  CI: feat/gnomon was pushed and draft PR #49 opened so CI would run (the workflow runs only on PRs and main). Four CI rounds:
+  1. Missing rolldown native binding.
+  2. A second `npm install --no-save` pruned the first binding; fixed by installing both in one call.
+  3. Windows CRLF broke the byte-equal schema check (fixed with an LF-pinned .gitattributes), and Ubuntu daemon tests made homes under world-writable /tmp, which the daemon correctly refuses (fixed with ~/.cache/gnomon-test).
+  4. Ubuntu fully green. Windows has 83 failures across 6 files: directory fsync EPERM, ESM path imports, platform markers not enforced at runtime, and POSIX-path assumptions. These are tracked as T-2026-10-17-011, and a builder is on them.
+symbols_touched:
+  - '#kernel-log'
+  - '#gnomon-ci'
+  - $daemon-lifecycle
+commit: 363862b1
+learnings:
+  - npm install --no-save prunes extraneous packages from earlier --no-save installs; install all platform binaries in one call.
+  - 'The first Windows CI run is where ''macOS-first'' code meets reality: directory fsync is refused on Windows (EPERM).'
+tags:
+  - paradigm-8
+  - gnomon
+  - ci
+  - windows
+  - kernel-log
+linked_lore:
+  - L-2026-10-17-ascend-210158-001
+git_context:
+  ref: 363862b15ebaeb230dd589091a9089295f12b18a
+  branch: feat/gnomon
+  dirty: true

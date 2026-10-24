@@ -1,0 +1,92 @@
+id: L-2026-10-20-ascend-053549-001
+type: milestone
+timestamp: '2026-10-20T05:35:49.361Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon voice works end to end; GUI re-pin, self-update and dictation shipped (2026-10-19)
+summary: |-
+  Voice was pulled forward from Move 4 and dogfooded the same night. Merged on feat/gnomon:
+  - V0: voice allowlist, closed disarm reasons, the one-time clientApiId move.
+  - V1: talk-only kernel principal.
+  - Helper 1.6: arm custody, signed and notarized.
+  - GUI re-pin: Claude binary re-pinned from a card with one Touch ID.
+  - Self-update: build stamp, upgrade card, fd hand-over restart, one-Touch-ID resume; clientApiId moved again.
+  - V2a/V2d: ambient ceiling, guards, mic pill.
+  - V2b: GnomonVoiceIO.app, signed, with VPIO echo cancellation and hotkeys.
+  - V2c/V2e: kernel-spawned client over a pre-authenticated fd, pinned to the build stamp; speakable replies; GUI enrolment.
+  - Dictation: speech fills the composer; a countdown ring auto-sends; ⌃⌥H hold.
+  Aegis reviewed every slice. Live proof in the log: the founder's enrolled voice turn was sent as voice, and Gnomon spoke the reply.
+symbols_touched:
+  - '#gnomon-voice'
+  - '#gnomon-voice-io'
+  - '#gui-dictation'
+  - '#gui'
+  - '#approval-broker'
+  - '#gnomon-helper'
+  - '#update-watch'
+  - '#gui-resume'
+  - '#session-runner'
+  - '#supervisor'
+  - $voice-turn
+  - ^voice-armed
+decisions:
+  - id: TD-2026-10-19-194
+    decision: 'Voice slice plan V0-V9. Founder: voice turns under auto-edits behave like typed turns; signed single executable; talk-only fallback'
+    rationale: The safest dogfoodable increment first
+  - id: TD-2026-10-19-677
+    decision: incident and daemon-stop are fully hand-only; reserve the disarm reasons and status.arms now
+    rationale: A voice deny would cancel a brake the human started; closed lists before any client ships
+  - id: TD-2026-10-19-063
+    decision: Seamless re-pin and self-update in the GUI; move clientApiId so a restart costs one Touch ID
+    rationale: 'Founder: terminal steps after an update are not seamless'
+  - id: TD-2026-10-19-298
+    decision: 'Ambient: no wake word; same as typed under auto-edits; Touch ID once per login'
+    rationale: Founder wants natural hands-free voice; Aegis dissented, residual risk recorded
+  - id: TD-2026-10-20-262
+    decision: Dictation into the composer with a 5 s countdown ring, hold, and edit-holds
+    rationale: 'Founder: review and batch before sending'
+errors_encountered:
+  - description: AVAudioEngine.start() failed with -10875 under voice processing whenever a player node was connected before start
+    resolution: Attach the player after start, and ignore our own AVAudioEngineConfigurationChange while the engine is running (6fb6e536)
+  - description: The client defaulted to push-to-talk, so an ambient attachment sat waiting for the talk key
+    resolution: A new attachment's mode is the client's mode (5f591008)
+  - description: The client read the attachment once at start; the Touch ID attach lands about 8 s later, so every utterance was dropped as not attached
+    resolution: Re-read status every 1.5 s (c3565edb); the e2e test had masked it with a manual refresh
+  - description: Update-watch compared distHash only, so a voice-only rebuild never offered a restart
+    resolution: buildKey covers the GUI bundle and voice manifest (f4bb2d7e)
+  - description: The GUI re-embed was missed after the clientApiId move (footer said clientApiId drift)
+    resolution: Re-embed after every contract move
+learnings:
+  - Builders hit the 50-turn limit about a dozen times; the plugin release with maxTurns 100 is overdue.
+  - 'Founder rule, extended: never hand the founder terminal steps after an update; the product restarts and re-pins itself.'
+  - E2e tests that force a manual refresh hide lifecycle bugs; test the real timing (start before attach).
+  - A disclaimed TCC child cannot launch from ~/Documents; install into a kernel-owned dir.
+  - The pill under-reported failure (Listening while the client crash-looped); the founder only saw nothing happen.
+verification:
+  status: pass
+  details:
+    gnomon: 1881+ pass
+    gui: '193'
+    voice: '71'
+    contracts: '449'
+    live: voice turn sent + spoken reply in kernel log
+tags:
+  - gnomon
+  - voice
+  - paradigm-8
+  - dogfood
+linked_tasks:
+  - T-2026-10-19-026
+  - T-2026-10-19-028
+  - T-2026-10-19-029
+  - T-2026-10-19-030
+  - T-2026-10-19-031
+  - T-2026-10-20-001
+  - T-2026-10-20-002
+  - T-2026-10-20-003
+git_context:
+  ref: 0a97add978989d353d6e783f8ca54ae7261ac68f
+  branch: feat/gnomon
+  dirty: true

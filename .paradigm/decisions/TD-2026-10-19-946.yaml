@@ -1,0 +1,47 @@
+id: TD-2026-10-19-946
+timestamp: '2026-10-19T08:52:04.627Z'
+title: 'Phone and remote approvals: enrolled devices only, planned well after the core loop is tested (Orca Adapt 13)'
+decision: >-
+  Plan for enrolled approval devices: Face ID on a phone, the Watch, and similar. Each holds its own hardware key, is
+  enrolled from the Mac with root presence, and runs a fresh biometric check on every decision. Do not build or spec
+  this in detail until long after Gnomon's core loop has been tested. Until then approvals happen only on the Mac
+  (Secure Enclave plus presence). The bearer-token model, where a phone token acts as approval authority with no
+  biometric, is rejected and must be closed in spec §22.
+rationale: >-
+  Founder ruling in the 2026-10-19 decision dialog. Approving away from the Mac is wanted, but it must keep presence: a
+  key per device and a fresh check each time, never a bearer token. It is sequenced after core-loop dogfooding. Team
+  input: Aegis said ship notify+deny now, then companion and enrolled devices only after item 12 and falsifiers. Arky
+  said no phone approvals in 8.0 and close the bearer token. Loid noted the precedents: voice per-project toggles
+  (P8-D58), companion presence (P8-D67), P8-D75, and that 'approve never crosses a link'. Prerequisite: item 12
+  transcript-bound device proofs. (Restored 2026-10-19 after a decision-id collision overwrote this file; the law-3
+  ruling that collided now lives at TD-2026-10-19-947.)
+participants:
+  - id: founder
+    role: human
+    stance: proposed
+  - id: aegis
+    role: agent
+    stance: supported
+  - id: arky
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Orca bearer-token phone approval
+    rejected_because: it removes presence; anyone holding the token can approve
+  - option: Never allow any phone path
+    rejected_because: the founder wants enrolled-device approval eventually
+  - option: Build an enrolled phone in Move 2
+    rejected_because: too early; the core loop has to be tested first
+symbols_affected:
+  - '#approval-broker'
+  - '#peer-link'
+status: active
+tags:
+  - gnomon
+  - orca-audit
+  - presence
+  - approvals
+  - T-2026-10-19-010

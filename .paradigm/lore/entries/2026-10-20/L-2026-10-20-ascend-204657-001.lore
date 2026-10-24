@@ -1,0 +1,39 @@
+id: L-2026-10-20-ascend-204657-001
+type: agent-session
+timestamp: '2026-10-20T20:46:57.486Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 6: Arky''s O1 build plan (S0–S5); S0 contracts batch started'
+summary: |-
+  Arky planned O1 as six slices:
+  - S0: a serial root that moves clientApiId once (offer.shown/decided/kept, request.offer.decide/mute, request.mod.install, request.session.restart, session.context.threshold, plus the manifest provides.offers key and a per-user mcp config override).
+  - After S0, four parallel slices:
+    - S1: kernel Desk core, made of #desk-guidance as ONE composite guidance block under a single guidanceHash (this keeps Aegis M2's one-extra-block trace invariant), #offer-router as a log.onCommit observer like the speakable projector, and MCP passthrough of granted mods' provides.mcp, namespaced gnomon-<mod>.
+    - S2: three first-party mods (neurons, constellation, claude-docs). Its repin is serialised.
+    - S3: GUI margin slips, drawn only from offer.shown rows; two trusted gestures.
+    - S4: git-URL install. https-only shallow clone with hooks off, no submodules and size caps, into the existing install card.
+  - S5: the context meter, after S1.
+  Critical path: S0 → S1+S2+S3 → install neurons via the CLI → slip → open.
+  Verified: the Neurons and Constellation MCP servers launch as `node <abs path>` from the a-neurons and a-constellation repos, so the manifests need a per-user command override (folded into S0).
+  Founder questions sent: dogfood without Claude Docs first (it is a remote connector, and --strict-mcp-config plus stdio-only ManifestMcp block it), and the definition of "kept".
+  Arky hit its 30-turn limit once and was resumed.
+symbols_touched:
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#mod-host'
+  - '#gnomon-contracts'
+  - '#context-meter'
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - plan
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-195307-001
+git_context:
+  ref: cd3ef9b545ea5b0e24115daba2e00c9cc4290716
+  branch: feat/gnomon
+  dirty: true

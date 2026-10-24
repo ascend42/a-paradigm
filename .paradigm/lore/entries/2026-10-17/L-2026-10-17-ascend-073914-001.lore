@@ -1,0 +1,36 @@
+id: L-2026-10-17-ascend-073914-001
+type: milestone
+timestamp: '2026-10-17T07:39:14.044Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon aesthetic session closed: desk, pigment set, mono spine, lively workshop, instrument CLI'
+summary: |-
+  The Atelier session 2026-10-15-gnomon-aesthetic is closed, which satisfies P8-D57: the aesthetic is finished before Move 1. The founder approved the direction render ("so far this looks right"). Decided:
+  - colour: pigment set (six project hues as identity only; vermilion fail, amber warn and GATE, violet KNOT);
+  - type: mono spine in JetBrains Mono everywhere, with Fraunces only for day titles (departs from the recommendation);
+  - motion: lively workshop (spring fly-in, stamp, droop on failure, cap walk; event-only; departs from the recommendation);
+  - CLI voice: instrument readout;
+  - layout: desk (sessions left, chat with pinned project cards, global paper stack right, Workshop footer).
+
+  Tokens and rules are in .atelier/design-system.yaml under gnomon:, the narrative is in .atelier/DESIGN.md, and the comp is at refs/direction.html. M1.10 contrast fixtures can now be built from these tokens.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gui'
+files_modified:
+  - .atelier/design-system.yaml
+  - .atelier/DESIGN.md
+  - .atelier/sessions/2026-10-15-gnomon-aesthetic/session.yaml
+tags:
+  - paradigm-8
+  - gnomon
+  - atelier
+  - design
+  - milestone
+linked_lore:
+  - L-2026-10-17-ascend-070040-001
+git_context:
+  ref: c93079063181ca07d24b960de6145177ea5948b3
+  branch: ideate/paradigm-8
+  dirty: true

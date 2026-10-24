@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ProjectContext } from './index-loader.js';
-import { getAllSymbols, getSymbolsByType } from '@a-company/premise-core';
+import { getSymbolsByType } from '@a-company/premise-core';
 import { log } from './mcp-logger.js';
 
 export const ARCH_FILE = '.paradigm/arch.yaml';

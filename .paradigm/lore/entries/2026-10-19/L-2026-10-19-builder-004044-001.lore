@@ -1,0 +1,23 @@
+id: L-2026-10-19-builder-004044-001
+type: insight
+timestamp: '2026-10-19T00:40:44.282Z'
+author: builder
+title: Always rules are derived from kernel-signed rows; revoke deferred to a new event kind
+summary: 'Standing always-allow rules are never stored: a RuleBook folds kernel-signed approval.request + approval.decide{always} + approval.rule.learned{repoKey} and matches (repoKey, tool, inputHash) exactly. inputHash is recomputed from the request row''s tool_input so no new digest lands in a normal row. Revoke needs approval.rule.revoked, which moves clientApiId, so it was not added. The ask-user answer note is checked against kernel-held questions before presence and logged only as noteHash; it is not inside the decisionSig preimage.'
+symbols_touched:
+  - '#always-rules'
+  - '#rules-cli'
+  - '#approval-broker'
+  - '#supervisor'
+tags:
+  - decision
+  - gnomon
+  - approvals
+linked_commits:
+  - 6464d943
+  - decc7b2f
+confidence: 0.8
+git_context:
+  ref: 8bc839535792a62154424d91cb13d24d2fc2fa14
+  branch: gnomon/gui-complete
+  dirty: false

@@ -1,0 +1,21 @@
+id: L-2026-10-19-builder-005530-002
+type: milestone
+timestamp: '2026-10-19T00:55:30.869Z'
+author: builder
+title: 'GUI completeness round 2: Aegis C1-C3 and L1-L5 plus reviewer items'
+summary: Closed AskUserQuestion schema, verified structured picker, fenced field bodies (shared fieldLines), null-prototype answers, RuleBook catchUp to the head, approval.auto fall-through, Bash always-rule caveat, plan-file label, pinned repoKey; bundle re-embedded.
+symbols_touched:
+  - '#supervisor'
+  - '#gui'
+  - '#always-rules'
+tags:
+  - gnomon
+  - move-1
+  - gui
+linked_commits:
+  - 59d963a9
+  - 6ee40ed1
+git_context:
+  ref: 6ee40ed138bb378d0289d87137f2eb84857954b9
+  branch: gnomon/gui-complete
+  dirty: true

@@ -1,0 +1,310 @@
+/**
+ * @symbol #manifest-loader
+ *
+ * #manifest-loader `layersHash` and `gitHash` (spec §3.3 "Settings layers",
+ * §15.7 gate-class, §16 "Paths + hashes"; A23-4, S16-2; G-WIN-04).
+ *
+ *   layersHash — every Claude settings layer the kernel can see: the managed
+ *     files (their paths come from the platform, passed in by the caller), the
+ *     user layer (`~/.claude/settings*.json`, `~/.claude/CLAUDE.md`, the NAME
+ *     listing of `skills/`, `plugins/`, `agents/`, `commands/`, and
+ *     `~/.claude.json` — its user-scope mcpServers run commands; the spec's
+ *     §3.3/§15.5 lists omit it, a gap to amend), the project layer
+ *     (`<cwd>/.claude/**` minus `.claude/worktrees/`, `CLAUDE.md`,
+ *     `CLAUDE.local.md`) and
+ *     the worktree layer (the same set under the worktree).
+ *   gitHash — `.git/config`, `.git/hooks/**`, `.git/info/**` (in the common
+ *     git dir; a linked worktree's `.git` file is followed, and its
+ *     `config.worktree` is included) and `<repo>/.gitattributes`. The kernel
+ *     never runs git for this: hashing is a file read.
+ *
+ * NORMALISATION, the same on every platform (no platform branch, G-WIN-05):
+ *   - content: every CRLF becomes LF before hashing;
+ *   - path key: scope label + posix path relative to the scope root, NFC,
+ *     lower-cased (case-fold), so `.Claude/Settings.json` on a case-insensitive
+ *     filesystem and `.claude/settings.json` on a case-sensitive one hash the
+ *     same. Two inputs that fold to one key are both kept, ordered by content
+ *     hash, so the digest never depends on the original case or on readdir order.
+ *   - absent files are hashed as `null`, so removing a layer changes the hash.
+ * A symlink contributes `symlink:<target>\n` followed by the TARGET's bytes
+ * (when it is a readable file), so retargeting and editing the target both move the hash.
+ *
+ *   digest = "sha256:" + hex(sha256(canonicalJson({ schema, entries: [[key, sha256hex | null], …] })))
+ */
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { canonicalJson } from '@a-company/gnomon-contracts';
+
+export const LAYERS_HASH_SCHEMA = 'gnomon-layers:v1' as const;
+export const GIT_HASH_SCHEMA = 'gnomon-git-layers:v1' as const;
+
+export interface HashInput {
+  /** `<scope>:<path>`; normalised by normalizeLayerKey. */
+  key: string;
+  /** null = absent. */
+  bytes: Uint8Array | null;
+  /** The absolute path read (not hashed; lets the policy test prove every layer is write-denied). */
+  abs?: string;
+}
+
+/** CRLF → LF (A23-4). */
+export function normalizeContent(b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(b.length);
+  let n = 0;
+  for (let i = 0; i < b.length; i++) {
+    if (b[i] === 0x0d && b[i + 1] === 0x0a) continue;
+    out[n++] = b[i]!;
+  }
+  return out.subarray(0, n);
+}
+
+/** Posix separators, no `./`, NFC, case-folded. */
+export function normalizeLayerKey(key: string): string {
+  return key
+    .replace(/\\/g, '/')
+    .replace(/\/\.\//g, '/')
+    .replace(/\/{2,}/g, '/')
+    .replace(/:\.\//, ':')
+    .normalize('NFC')
+    .toLowerCase();
+}
+
+export function digestInputs(schema: string, inputs: readonly HashInput[]): string {
+  const rows = inputs.map((i) => [normalizeLayerKey(i.key), i.bytes === null ? null : createHash('sha256').update(normalizeContent(i.bytes)).digest('hex')] as [string, string | null]);
+  rows.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : String(a[1]) < String(b[1]) ? -1 : String(a[1]) > String(b[1]) ? 1 : 0));
+  return `sha256:${createHash('sha256').update(canonicalJson({ schema, entries: rows }), 'utf8').digest('hex')}`;
+}
+
+function readInput(scope: string, rel: string, abs: string): HashInput {
+  try {
+    const st = fs.lstatSync(abs);
+    if (st.isSymbolicLink()) {
+      const head = new TextEncoder().encode(`symlink:${fs.readlinkSync(abs)}\n`);
+      let target: Uint8Array = new Uint8Array(0);
+      try {
+        if (fs.statSync(abs).isFile()) target = fs.readFileSync(abs);
+      } catch {
+        target = new Uint8Array(0); // dangling: the link text alone
+      }
+      const b = new Uint8Array(head.length + target.length);
+      b.set(head);
+      b.set(target, head.length);
+      return { key: `${scope}:${rel}`, bytes: b, abs };
+    }
+    if (st.isFile()) return { key: `${scope}:${rel}`, bytes: fs.readFileSync(abs), abs };
+    return { key: `${scope}:${rel}`, bytes: new TextEncoder().encode(`not-a-file:${st.isDirectory() ? 'dir' : 'special'}`), abs };
+  } catch {
+    return { key: `${scope}:${rel}`, bytes: null, abs };
+  }
+}
+
+/** Every file under `rootAbs/relDir` (recursive, links not followed); a missing dir yields one absent marker. */
+function readTree(scope: string, rootAbs: string, relDir: string, skip: (rel: string) => boolean = () => false): HashInput[] {
+  const out: HashInput[] = [];
+  const visit = (abs: string, rel: string): void => {
+    let names: string[];
+    try {
+      names = fs.readdirSync(abs);
+    } catch {
+      return;
+    }
+    for (const n of names) {
+      const a = path.join(abs, n);
+      const r = `${rel}/${n}`;
+      if (skip(r)) continue;
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(a);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) visit(a, r);
+      else out.push(readInput(scope, r, a));
+    }
+  };
+  const start = path.join(rootAbs, ...relDir.split('/'));
+  if (!fs.existsSync(start)) return [{ key: `${scope}:${relDir}/`, bytes: null, abs: start }];
+  visit(start, relDir);
+  return out;
+}
+
+/** Names only (one level): the user-scope skills/plugins listing. */
+function listing(scope: string, rootAbs: string, relDir: string): HashInput {
+  try {
+    const names = fs.readdirSync(path.join(rootAbs, relDir)).map((n) => n.normalize('NFC').toLowerCase()).sort();
+    return { key: `${scope}:${relDir}/`, bytes: new TextEncoder().encode(names.join('\n')), abs: path.join(rootAbs, relDir) };
+  } catch {
+    return { key: `${scope}:${relDir}/`, bytes: null, abs: path.join(rootAbs, relDir) };
+  }
+}
+
+function projectLayer(scope: string, root: string): HashInput[] {
+  // `.claude/worktrees/` holds Claude's own worktrees (whole checkouts), not settings
+  return [...readTree(scope, root, '.claude', (r) => r.toLowerCase() === '.claude/worktrees'), readInput(scope, 'CLAUDE.md', path.join(root, 'CLAUDE.md')), readInput(scope, 'CLAUDE.local.md', path.join(root, 'CLAUDE.local.md'))];
+}
+
+export interface LayersInput {
+  /** The session cwd (project layer). */
+  cwd: string;
+  /** The session worktree, when it differs from cwd. */
+  worktree?: string;
+  /** The user's `~/.claude` (platform-resolved by the caller). */
+  userClaudeDir: string;
+  /** Managed settings files (platform-specific paths, from the caller / root-signed config). */
+  managedPaths: readonly string[];
+  /** `~/.claude.json` (default: beside userClaudeDir). */
+  userClaudeJson?: string;
+  /** M1.7: leave ~/.claude.json out (the mid-session watch hashes only its law-7 projection). */
+  excludeClaudeJson?: boolean;
+}
+
+export function defaultClaudeJson(userClaudeDir: string): string {
+  return path.join(path.dirname(userClaudeDir), '.claude.json');
+}
+
+/** The inputs of `layersHash` (exposed for tests and for `session.layers.changed{which}`). */
+export function collectLayerInputs(inp: LayersInput): HashInput[] {
+  const u = inp.userClaudeDir;
+  const user: HashInput[] = [];
+  let userNames: string[] = [];
+  try {
+    userNames = fs.readdirSync(u);
+  } catch {
+    userNames = [];
+  }
+  const settings = userNames.filter((n) => /^settings.*\.json$/i.test(n));
+  for (const n of settings.length ? settings : ['settings.json']) user.push(readInput('user', n, path.join(u, n)));
+  user.push(readInput('user', 'CLAUDE.md', path.join(u, 'CLAUDE.md')));
+  for (const d of ['skills', 'plugins', 'agents', 'commands']) user.push(listing('user', u, d));
+  const cj = inp.userClaudeJson ?? defaultClaudeJson(u);
+  if (!inp.excludeClaudeJson) user.push(readInput('user', '.claude.json', cj));
+  const managed = inp.managedPaths.map((p) => readInput('managed', p, p));
+  const worktree = inp.worktree && path.resolve(inp.worktree) !== path.resolve(inp.cwd) ? projectLayer('worktree', inp.worktree) : [];
+  return [...managed, ...user, ...projectLayer('project', inp.cwd), ...worktree];
+}
+
+export function layersHash(inp: LayersInput): string {
+  return digestInputs(LAYERS_HASH_SCHEMA, collectLayerInputs(inp));
+}
+
+/** Resolve `<repo>/.git` to {gitDir, commonDir}; a `.git` file (`gitdir: …`) is followed. */
+export function resolveGitDirs(repo: string): { gitDir: string; commonDir: string } | null {
+  const dotgit = path.join(repo, '.git');
+  let st: fs.Stats;
+  try {
+    st = fs.lstatSync(dotgit);
+  } catch {
+    return null;
+  }
+  let gitDir = dotgit;
+  if (st.isFile()) {
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(dotgit, 'utf8'));
+    if (!m) return null;
+    gitDir = path.resolve(repo, m[1]!);
+  } else if (!st.isDirectory()) return null;
+  let commonDir = gitDir;
+  try {
+    commonDir = path.resolve(gitDir, fs.readFileSync(path.join(gitDir, 'commondir'), 'utf8').trim());
+  } catch {
+    commonDir = gitDir;
+  }
+  return { gitDir, commonDir };
+}
+
+export function collectGitInputs(repo: string): HashInput[] {
+  const dirs = resolveGitDirs(repo);
+  const out: HashInput[] = [readInput('repo', '.gitattributes', path.join(repo, '.gitattributes'))];
+  if (!dirs) return [...out, { key: 'git:.git', bytes: null }];
+  out.push(readInput('git', 'config', path.join(dirs.commonDir, 'config')));
+  out.push(...readTree('git', dirs.commonDir, 'hooks'), ...readTree('git', dirs.commonDir, 'info'));
+  if (dirs.gitDir !== dirs.commonDir) out.push(readInput('git', 'config.worktree', path.join(dirs.gitDir, 'config.worktree')));
+  return out;
+}
+
+export function gitHash(repo: string): string {
+  return digestInputs(GIT_HASH_SCHEMA, collectGitInputs(repo));
+}
+
+/**
+ * §15.7 gate-class, as a PATH test (P8-D87 run mode `auto-edits`): the hashes above detect a gate-class change
+ * after the fact; an edit the kernel is asked to pass with no card is tested BEFORE it runs, on its path relative
+ * to the session root. The set is the hashed layers' (`.claude/**`, `CLAUDE.md`, `CLAUDE.local.md`, `.git/**`,
+ * `.gitattributes`) plus the rest of §15.7's list (`.gnomon/**`, test config, `package.json` and lockfiles,
+ * pipeline files) and the files that run or route code at the repo's say (`.husky/**`, `.mcp.json`, npm/yarn rc;
+ * Aegis H2: editor/devcontainer/toolchain dirs, lint/format configs, hook and task runners, build scripts, env
+ * loaders, other agents' steering files; TD-2026-10-20-294 re-check C2: git/curl/pip config, credential files,
+ * interpreter and toolchain pins, build entry points, shell rc files, and `.env`/`.env.*` as `env-file`). A non-ASCII
+ * name anywhere is gate-class (`non-ascii`).
+ * Case-folded and segment-wise, so `.Claude/x`, `sub/.git/hooks/y` and `docs/Claude-notes.md` all count; every
+ * name the steering deny covers (`claude*.md`, any case, anywhere) counts. Returns the matched rule, or null.
+ * Conservative on purpose: a false positive costs one card, a false negative an unasked write.
+ */
+const GATE_DIRS: ReadonlySet<string> = new Set([
+  '.claude', '.gnomon', '.git', '.github', '.gitlab', '.circleci', '.husky', '.buildkite',
+  // Aegis H2: editor/devcontainer/toolchain dirs that run code or steer an agent (tasks.json, launch configs, plugins, hooks)
+  '.vscode', '.idea', '.cursor', '.devcontainer', '.yarn', '.cargo', '.paradigm', '.lefthook',
+]);
+const GATE_FILES: ReadonlySet<string> = new Set([
+  // loops step 11 (Aegis L8): portal.yaml is the repo's gate and route authority (Paradigm portal protocol)
+  'portal.yaml',
+  '.gitattributes', '.gitmodules', '.gitlab-ci.yml', '.travis.yml', 'azure-pipelines.yml', 'jenkinsfile', 'bitbucket-pipelines.yml',
+  'package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'bun.lock', 'bun.lockb',
+  '.npmrc', '.yarnrc', '.yarnrc.yml', '.mcp.json', 'pytest.ini', 'tox.ini', 'conftest.py', 'noxfile.py',
+  // Aegis H2: hook runners, build/task runners, package build scripts, env loaders and other agents' steering files
+  '.pnpmfile.cjs', '.pre-commit-config.yaml', 'lefthook.yml', 'lefthook.yaml',
+  'makefile', 'gnumakefile', 'justfile', 'taskfile.yml', 'taskfile.yaml',
+  'setup.py', 'setup.cfg', 'pyproject.toml', 'build.rs', 'cargo.toml', 'mise.toml', '.mise.toml', '.tool-versions', '.envrc',
+  'agents.md', 'gemini.md', '.cursorrules', '.windsurfrules',
+  // TD-2026-10-20-294 re-check (Aegis C2): repo-level files that change what a tool RUNS or SENDS when a session (or a
+  // command it was allowed to run) points that tool at the repo — git (a planted HOME's .gitconfig: core.fsmonitor,
+  // credential helpers), curl/wget/pip/conda config, interpreter and toolchain pins that pick (or download) the binary,
+  // ruby/bun/deno/go/gradle/maven build entry points, babel/swc plugin configs, and shell rc files
+  '.gitconfig', '.git-credentials', '.netrc', '_netrc', '.curlrc', '.wgetrc', '.pypirc', 'pip.conf', '.condarc',
+  '.python-version', '.nvmrc', '.node-version', '.ruby-version', 'rust-toolchain', 'rust-toolchain.toml', 'go.mod', 'go.work',
+  'gemfile', 'gemfile.lock', 'rakefile', '.irbrc', '.gemrc', 'bunfig.toml', 'deno.json', 'deno.jsonc', '.babelrc', '.swcrc',
+  'build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'gradlew', 'pom.xml',
+  '.bashrc', '.bash_profile', '.profile', '.zshrc', '.zshenv', '.zprofile', '.inputrc',
+]);
+/** `.env` and `.env.*`: loaded by bun, vite, dotenv and `node --env-file`, so `NODE_OPTIONS=--require …` in one runs code. */
+const GATE_ENV_FILE = /^\.env(\..+)?$/;
+const GATE_TEST_CONFIG = /^(vitest|vite|jest|playwright|cypress|karma|mocha|ava|wdio|nightwatch)\.(config|workspace)(\.[a-z0-9]+)+$|^\.mocharc(\.[a-z0-9]+)*$|^babel\.config(\.[a-z0-9]+)+$/;
+/** Aegis H2: config files that load and run code (lint/format plugins, staged-file hooks), any extension. */
+const GATE_CODE_CONFIG = /^(eslint\.config\..+|\.eslintrc.*|prettier\.config\..+|\.prettierrc.*|\.lintstagedrc.*|lint-staged\.config\..+|\.lefthook.*)$/;
+const GATE_MEMORY_NAME = /^claude[^/\\]*\.md$/;
+// eslint-disable-next-line no-control-regex
+const NON_ASCII = /[^\x00-\x7f]/;
+
+export function gateClassPathRule(relPath: string): string | null {
+  const raw = relPath.split(/[\\/]+/).filter((s) => s !== '' && s !== '.');
+  // Aegis H2 (L3): a non-ASCII name anywhere in the path (a lookalike `.gіt`, a fullwidth `ｍakefile`, a combining
+  // mark) is never judged by this list — it goes to a card
+  if (raw.some((s) => NON_ASCII.test(s))) return 'non-ascii';
+  // win32 aliases of a name: an 8.3 short name (`GIT~1`), an alternate data stream (`Makefile:x`) ⇒ a card; trailing
+  // dots and spaces (NTFS drops them: `Makefile.` IS `Makefile`) are dropped before matching, on every OS
+  if (raw.some((s) => s.includes(':') || /~\d/.test(s))) return 'win-alias';
+  const segs = raw.map((s) => s.replace(/[. ]+$/, '').toLowerCase()).map((s, i) => (s === '' ? raw[i]! : s));
+  if (segs.length === 0 || segs.includes('..')) return 'outside-root';
+  for (const s of segs.slice(0, -1)) if (GATE_DIRS.has(s)) return `dir:${s}`;
+  const base = segs[segs.length - 1]!;
+  if (GATE_DIRS.has(base)) return `dir:${base}`;
+  if (GATE_MEMORY_NAME.test(base)) return 'memory-file';
+  if (GATE_FILES.has(base)) return `file:${base}`;
+  if (GATE_ENV_FILE.test(base)) return 'env-file';
+  if (GATE_TEST_CONFIG.test(base)) return 'test-config';
+  if (GATE_CODE_CONFIG.test(base)) return 'code-config';
+  return null;
+}
+
+/** A gate-class file a loop check may read (the loop config closure): never a directory rule, a memory file or an alias. */
+export function isClosureName(name: string): boolean {
+  if (/^[tj]sconfig([.-][^/\\]*)?\.json$/i.test(name)) return true;
+  const rule = gateClassPathRule(name);
+  if (rule === null) return false;
+  return rule.startsWith('file:') || rule === 'test-config' || rule === 'code-config' || rule === 'env-file';
+}
+
+/** TD-2026-10-23-268 (Aegis L1): a loop env file may not be named like a config tools run (a `.env*` dotenv is fine). */
+export function isConfigNamedEnvFile(name: string): boolean {
+  return isClosureName(name) && gateClassPathRule(name) !== 'env-file';
+}

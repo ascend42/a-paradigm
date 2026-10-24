@@ -290,7 +290,7 @@ A repeatable sequence to follow on each project:
 
 ```bash
 # 1. Update the global CLI
-npm install -g @a-company/paradigm@6              # or use install.sh
+npm install -g @a-company/paradigm@6
 
 # 2. In each project, sync the new CLAUDE.md / hooks / config
 cd /path/to/your/project

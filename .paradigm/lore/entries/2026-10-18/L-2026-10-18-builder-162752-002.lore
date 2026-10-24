@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-162752-002
+type: insight
+timestamp: '2026-10-18T16:27:52.339Z'
+author: builder
+title: 'Decision: a block kit.Button is not a decision key and runs only a safe command subset'
+summary: A kit.Button inside a display block (agent or mod data) renders without the key class, dashed and distinct from kernel decision keys, and is live only for BLOCK_SAFE_COMMANDS (GUI commands minus diag.send and gui.reconnect); any other command renders inert.
+symbols_touched:
+  - '#gui'
+files_modified:
+  - packages/gnomon-gui/src/core/commands.ts
+  - packages/gnomon-gui/src/core/render.ts
+  - packages/gnomon-gui/src/ui/app.ts
+  - packages/gnomon-gui/static/styles.css
+commit: 673456ae
+learnings:
+  - Block data must never look like or trigger a kernel or presence action
+  - Enforce the subset both at render and in the click handler
+tags:
+  - decision
+  - gnomon
+  - m1-10
+  - aegis-c6
+git_context:
+  ref: 673456ae5eddef4e805e743fc5401a00f27e4927
+  branch: gnomon/m110-gui
+  dirty: true

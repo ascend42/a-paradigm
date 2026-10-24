@@ -168,7 +168,7 @@ export async function handlePlatformTool(
 ): Promise<{ handled: boolean; text: string }> {
   switch (name) {
     case 'paradigm_platform_navigate': {
-      const result = await sendAgentCommand(ctx.projectDir, 'navigate', {
+      const result = await sendAgentCommand(ctx.rootDir, 'navigate', {
         section: args.section === 'university' ? 'academy' : args.section,
         symbol: args.symbol,
         loreId: args.loreId,
@@ -190,7 +190,7 @@ export async function handlePlatformTool(
     }
 
     case 'paradigm_platform_highlight': {
-      const result = await sendAgentCommand(ctx.projectDir, 'highlight', {
+      const result = await sendAgentCommand(ctx.rootDir, 'highlight', {
         symbols: args.symbols,
         color: args.color,
         duration: args.duration,
@@ -210,7 +210,7 @@ export async function handlePlatformTool(
     }
 
     case 'paradigm_platform_annotate': {
-      const result = await sendAgentCommand(ctx.projectDir, 'annotate', {
+      const result = await sendAgentCommand(ctx.rootDir, 'annotate', {
         type: args.type,
         message: args.message,
         symbol: args.symbol,
@@ -230,7 +230,7 @@ export async function handlePlatformTool(
     }
 
     case 'paradigm_platform_observe': {
-      const result = await sendAgentCommand(ctx.projectDir, 'observe', {
+      const result = await sendAgentCommand(ctx.rootDir, 'observe', {
         detail: args.detail,
       });
 
@@ -271,7 +271,7 @@ export async function handlePlatformTool(
     }
 
     case 'paradigm_platform_clear': {
-      const result = await sendAgentCommand(ctx.projectDir, 'clear', {
+      const result = await sendAgentCommand(ctx.rootDir, 'clear', {
         target: args.target,
       });
 

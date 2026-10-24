@@ -1,0 +1,264 @@
+{
+  "probe": "p-replay-order",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "claude": "2.1.305 (Claude Code)",
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "model": "haiku",
+    "summary": {
+      "a-during-tool": {
+        "results": 1,
+        "replayBAfterSent": 4,
+        "replayBBeforeFirstResult": true,
+        "nextAfterReplayB": "6924ms system.status",
+        "hookResponse": false
+      },
+      "b-after-final-stop": {
+        "results": 2,
+        "replayBAfterSent": 5,
+        "replayBBeforeFirstResult": false,
+        "nextAfterReplayB": "2378ms message_start",
+        "hookResponse": false
+      },
+      "c-none-queued": {
+        "results": 1,
+        "replayBAfterSent": null,
+        "replayBBeforeFirstResult": null,
+        "nextAfterReplayB": null,
+        "hookResponse": false
+      },
+      "d-back-to-back": {
+        "results": 2,
+        "replayBAfterSent": 12,
+        "replayBBeforeFirstResult": false,
+        "nextAfterReplayB": "2797ms message_start",
+        "hookResponse": false
+      },
+      "e-stop-hook-adapter-flags": {
+        "results": 1,
+        "replayBAfterSent": null,
+        "replayBBeforeFirstResult": null,
+        "nextAfterReplayB": null,
+        "hookResponse": false
+      },
+      "g-during-stop-hook-continuation": {
+        "results": 2,
+        "replayBAfterSent": 10,
+        "replayBBeforeFirstResult": false,
+        "nextAfterReplayB": "3349ms message_start",
+        "hookResponse": false
+      },
+      "f-stop-hook-include-hook-events": {
+        "results": 1,
+        "replayBAfterSent": null,
+        "replayBBeforeFirstResult": null,
+        "nextAfterReplayB": null,
+        "hookResponse": true
+      }
+    },
+    "cases": [
+      {
+        "case": "a-during-tool",
+        "argvExtra": [],
+        "results": 1,
+        "stderrBytes": 0,
+        "order": [
+          "0ms SENT(A)",
+          "422ms init",
+          "424ms system.status",
+          "1392ms replay(A)",
+          "1393ms message_start",
+          "1393ms block_start(tool_use:Bash)",
+          "1582ms assistant(tool_use:Bash;stop=-)",
+          "1599ms delta(tool_use)",
+          "1599ms message_stop",
+          "1600ms other(rate_limit_event)",
+          "3085ms SENT(B)",
+          "4890ms system.task_started",
+          "6907ms system.task_notification",
+          "6918ms tool_result",
+          "6923ms replay(B)",
+          "6924ms system.status",
+          "7720ms message_start",
+          "7723ms assistant(text;stop=-)",
+          "7724ms delta(end_turn)",
+          "7724ms message_stop",
+          "7736ms result(success;turns=2)"
+        ]
+      },
+      {
+        "case": "b-after-final-stop",
+        "argvExtra": [],
+        "results": 2,
+        "stderrBytes": 0,
+        "order": [
+          "1ms SENT(A)",
+          "422ms init",
+          "424ms system.status",
+          "1281ms replay(A)",
+          "1281ms message_start",
+          "1284ms assistant(text;stop=-)",
+          "1292ms delta(end_turn)",
+          "1292ms message_stop",
+          "1293ms SENT(B)",
+          "1294ms other(rate_limit_event)",
+          "1303ms result(success;turns=1)",
+          "1314ms init",
+          "1314ms system.status",
+          "2378ms replay(B)",
+          "2378ms message_start",
+          "2380ms assistant(text;stop=-)",
+          "2389ms delta(end_turn)",
+          "2389ms message_stop",
+          "2396ms result(success;turns=1)"
+        ]
+      },
+      {
+        "case": "c-none-queued",
+        "argvExtra": [],
+        "results": 1,
+        "stderrBytes": 0,
+        "order": [
+          "0ms SENT(A)",
+          "404ms init",
+          "406ms system.status",
+          "1341ms replay(A)",
+          "1341ms message_start",
+          "1345ms assistant(text;stop=-)",
+          "1353ms delta(end_turn)",
+          "1354ms message_stop",
+          "1355ms other(rate_limit_event)",
+          "1364ms result(success;turns=1)"
+        ]
+      },
+      {
+        "case": "d-back-to-back",
+        "argvExtra": [],
+        "results": 2,
+        "stderrBytes": 0,
+        "order": [
+          "0ms SENT(A)",
+          "0ms SENT(B)",
+          "412ms init",
+          "414ms system.status",
+          "1567ms replay(A)",
+          "1567ms message_start",
+          "1568ms assistant(text;stop=-)",
+          "1593ms delta(end_turn)",
+          "1593ms message_stop",
+          "1593ms other(rate_limit_event)",
+          "1596ms result(success;turns=1)",
+          "1601ms init",
+          "1601ms system.status",
+          "2797ms replay(B)",
+          "2797ms message_start",
+          "2797ms assistant(text;stop=-)",
+          "2807ms delta(end_turn)",
+          "2807ms message_stop",
+          "2809ms result(success;turns=1)"
+        ]
+      },
+      {
+        "case": "e-stop-hook-adapter-flags",
+        "argvExtra": [],
+        "results": 1,
+        "stderrBytes": 0,
+        "order": [
+          "1ms SENT(A)",
+          "419ms init",
+          "421ms system.status",
+          "1525ms replay(A)",
+          "1525ms message_start",
+          "1528ms assistant(text;stop=-)",
+          "1531ms delta(end_turn)",
+          "1531ms message_stop",
+          "1532ms other(rate_limit_event)",
+          "1553ms user(C)",
+          "1554ms system.notification",
+          "1554ms system.status",
+          "2585ms message_start",
+          "2587ms assistant(text;stop=-)",
+          "2592ms delta(end_turn)",
+          "2592ms message_stop",
+          "2616ms result(success;turns=2)"
+        ]
+      },
+      {
+        "case": "g-during-stop-hook-continuation",
+        "argvExtra": [],
+        "results": 2,
+        "stderrBytes": 0,
+        "order": [
+          "0ms SENT(A)",
+          "395ms init",
+          "397ms system.status",
+          "1260ms replay(A)",
+          "1261ms message_start",
+          "1264ms assistant(text;stop=-)",
+          "1274ms delta(end_turn)",
+          "1274ms message_stop",
+          "1276ms other(rate_limit_event)",
+          "1297ms user(C)",
+          "1297ms SENT(B)",
+          "1299ms system.notification",
+          "1299ms system.status",
+          "2085ms message_start",
+          "2087ms assistant(text;stop=-)",
+          "2099ms delta(end_turn)",
+          "2099ms message_stop",
+          "2124ms result(success;turns=2)",
+          "2131ms init",
+          "2132ms system.status",
+          "3349ms replay(B)",
+          "3349ms message_start",
+          "3351ms assistant(text;stop=-)",
+          "3356ms delta(end_turn)",
+          "3356ms message_stop",
+          "3376ms result(success;turns=1)"
+        ]
+      },
+      {
+        "case": "f-stop-hook-include-hook-events",
+        "argvExtra": [
+          "--include-hook-events"
+        ],
+        "results": 1,
+        "stderrBytes": 0,
+        "order": [
+          "0ms SENT(A)",
+          "413ms init",
+          "415ms system.status",
+          "1435ms replay(A)",
+          "1435ms message_start",
+          "1437ms assistant(text;stop=-)",
+          "1444ms delta(end_turn)",
+          "1444ms message_stop",
+          "1445ms other(rate_limit_event)",
+          "1449ms hook_started(Stop;exit=-;outcome=-;decision=-)",
+          "1456ms hook_response(Stop;exit=2;outcome=error;decision=-)",
+          "1456ms user(C)",
+          "1457ms system.notification",
+          "1457ms system.status",
+          "2473ms message_start",
+          "2473ms assistant(text;stop=-)",
+          "2483ms delta(end_turn)",
+          "2483ms message_stop",
+          "2485ms hook_started(Stop;exit=-;outcome=-;decision=-)",
+          "2489ms hook_response(Stop;exit=0;outcome=success;decision=-)",
+          "2491ms result(success;turns=2)"
+        ]
+      }
+    ]
+  },
+  "specRefs": [
+    "§3.3 stream-json (replayed user messages)",
+    "§12.9 turn.result pairing",
+    "re-review M-1/M-4"
+  ],
+  "at": "2026-10-21T02:59:11.549Z"
+}

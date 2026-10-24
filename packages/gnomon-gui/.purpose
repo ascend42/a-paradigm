@@ -1,0 +1,1783 @@
+version: "2.0"
+description: >-
+  @a-company/gnomon-gui (spec §11; M1.10 slice 1) - the single-page app the
+  kernel's loopback #web-endpoint serves as a hash-pinned bundle. Dependency
+  light (no framework yet; React arrives with the Doodle canvas, §12.7);
+  everything self-hosted, no runtime CDN loads (rule-6 CSP). scripts/build.mjs
+  bundles src/main.ts with esbuild (gnomon-contracts inlined) into
+  dist/bundle/{index.html, boot.js, styles.css, app.js}, hashes the tree
+  (gnomon-bundle-tree:v1) and with --embed writes the generated
+  packages/gnomon/src/kernel/web/gui-bundle.ts (opaque base64 + pin literal);
+  --check (first step of `npm test`) fails when that file is stale.
+  The transcript (core/store.ts lineItems) reads Claude's stream-json AND
+  gnomon-local's lines (a message_end reply, a tool_execution_start tool
+  line); a local-model session's replies are labelled "local model"
+  (ui/app.ts agentLabel/backendWord; rows remount when the label changes).
+  TD-2026-10-19-063: a session.open refused claude_binary_changed shows in
+  the New session sheet (#gui-folder-field open-failed) in plain words with
+  ONE key, Review re-pin card, that closes the sheet and focuses the kernel's
+  pre-staged re-pin card (never decides); that card's allow reopens the sheet
+  on the same folder and model with Open focused (founder field test
+  2026-10-23); a claim-mismatch card renders its first line
+  red and marks Deny as the default (focused) key.
+
+components:
+  gui-rules-view:
+    description: >-
+      8.0:rules-view (founder: see the list of rules, revert a bad call,
+      toggle one for a time, one save; session 2026-10-23-gnomon-rules-view,
+      Mika C1-C3). core/rules.ts (PURE): rulesStatusOf (status.rules,
+      fail-safe), the staging reducers (stageOff with a kernel-clock preset,
+      stageOn, stageRemove, unstage, discard, reconcile), saveCost / saveLabel
+      ("Save · no Touch ID" when the batch only tightens, "Save · asks Touch ID
+      or your Mac password once" when any rule turns back on), beforeClose and
+      closePromptText ("3 changes not saved · Save · Discard"), applyRequest
+      (ONE request.rules.apply), refusedResult (plain words + next:, every
+      change stays staged), afterSave ("card waiting · Decide in the stack"
+      when the same press could not decide the card), rulesBlock (grouped by
+      repo with counts, newest first, filter above 12 rules, the empty state)
+      and expiryToastOf ("rule back on: <rule>", 6 s). Staged rows are marked
+      by word and weight, never amber; a removed row is struck with a keep
+      key. ui/rules-block.ts paints the block (rule-row, rules-save-bar;
+      design system .atelier/systems/gnomon/); ui/settings-sheet.ts routes
+      its trusted presses and asks before closing with changes staged;
+      ui/app.ts owns the staged state, saveRules (ONE log.append, then the
+      same press decides the card allow), the three entry points (palette
+      rules.open "Rules…", the mode menu's "Always rules…", the Always toast's
+      "see Rules"), the expiry toast and a status re-read on rule rows.
+      Preview fixtures rules-0/1/5/50/200, rules-off-open, rules-tighten,
+      rules-staged, rules-close, rules-refused, rules-waiting (DEV hook
+      devRulesState, dropped from the served bundle). Mika's review
+      (2026-10-23): a refusal line never carries the kernel's message, ids or
+      codes; the waiting line says what was saved and the waiting row offers
+      no second Turn on; the close prompt's Save names the bar's cost; Esc
+      folds an open Turn off ▾ first; the meta line drops the repo its group
+      heading names; the settings sheet keeps its scroll on a repaint (the
+      filter no longer scrolls away while typing). Test:
+      test/rules-view.test.ts.
+      Folding (founder 2026-10-23: "folded works"): at FOLD_AT (50) rules or
+      more every repo group starts folded with its heading and count; the
+      heading holds the fold key (data-rule-act fold, aria-expanded, ▸/▾;
+      toggleFold, ui.folds); the filter unfolds every group it matches; a
+      group holding a staged change, an open Turn off ▾ or a waiting rule
+      stays unfolded. Design system rule-row.folding.
+  gui-session-rename:
+    description: >-
+      8.0:session-rename (founder ask: rename a session). core/rename.ts
+      (PURE): renameRequest (log.append request.session.rename{hsid, name}),
+      planRename (contracts normalizeSessionName preview: unchanged sends
+      nothing, '' resets, a refused name is a notice), bindInlineRename
+      (Enter saves, Esc cancels, blur saves, settles once). core/store.ts
+      folds the kernel's session.renamed into SessionRow.name; sessionTitle
+      shows the name (cut to 28), sessionFullTitle is the tooltip text,
+      derivedTitle the placeholder; the transcript shows a "renamed" line.
+      ui/app.ts: double-click the header title or press the pencil
+      (#rename-btn, aria-label "Rename session") opens #rename-input
+      (aria-label "Session name", value = the name, placeholder = the
+      derived title); double-click or F2 on a session-list row renames it in
+      place (the rail does not repaint while it is open); palette command
+      session.rename "Rename session" (not in BLOCK_SAFE_COMMANDS). Trusted
+      gestures only. The title tooltip shows the full title and the hsid.
+      Test: test/rename.test.ts.
+  gui-model-picker:
+    description: >-
+      Founder ask 2026-10-20 ("is there no way to change the model of what
+      claude is in the tool?"). core/model-picker.ts (PURE): MODEL_CHOICES
+      (contracts CLAUDE_MODEL_ALIASES + custom), openModelOf (route claude
+      sends the alias/id or 'claude' for default; local/any unchanged),
+      pickerProblem (contracts claudeModelProblem), the per-folder memory
+      (localStorage gnomon.model.byFolder <= 64 folders + gnomon.model.last;
+      a stored value failing the check is never restored), sessionModelOf
+      (kernel rows only: the last session.model{outcome:switched}.to, else
+      session.open.model), switchRequest = log.append{kind:
+      request.session.model, payload:{hsid, model}}, switchConfirmText (the
+      conversation continues, the prompt cache restarts, a larger model uses
+      the plan faster; never says context is lost). ui/model-picker.ts (DOM,
+      mounted once by app.ts): the "claude model" select + custom id field
+      injected after #ns-model (hidden for the local route), the header chip
+      (model + ▾ menu) after the backend in #chead-meta (founder 2026-10-23
+      "default button when pressed does nothing": the menu opened inside
+      .chead-l, whose overflow: hidden clips it, and every streamed row's
+      header paint rebuilt the chip; now the same session's chip nodes carry
+      data-model-chip and paintChatHead keeps them in place, rebuilding the
+      parts around them, and the menu hangs from .pane-head.chead under the
+      key, right after .chead-l in the DOM so Tab goes key → items → the next
+      header key (Mika 2026-10-23); Esc or a click elsewhere closes it), the confirm sheet
+      #model-switch-dialog that sends only once armed by a trusted click on
+      its Switch key or a trusted Enter in its id field, recorded before the
+      submit (Aegis L1; never the submit event's isTrusted), and the
+      read-only Settings slot [data-gnomon-slot="session-model"]. Tests:
+      test/model-picker.test.ts.
+      8.0:model-switch wiring: sessionModelOf also folds
+      session.model{reconciled} (model = to) and {timeout} (uncertain = to,
+      kept until reconciled, never after the session ended: a timeout before
+      or after session.exited is not shown unconfirmed, Aegis L2); modelChipText shows "model: switching…
+      (unconfirmed)" and disables the ▾ meanwhile; sessionModelText feeds the
+      Settings Permissions row `session-model` (readonly, slot
+      session-model, settings.ts SettingsInput.sessionModel); store.ts
+      sessionModelLine writes one transcript line per outcome. Preview
+      fixture `model-switch` (preview/fixtures.ts).
+    tags: [gui, model]
+  gui:
+    loop-cards: >-
+      8.0:loops (gnomon-loops.md §3.1, §3.3; build step 2): the generic card
+      renderer shows the loop-trust and loop-choice kinds; core/render.ts
+      ROOT_CLASS_BY_KIND names loop-trust allow (no Approve without the kernel's
+      verified root-rows node), the stamp names continue (CONTINUED) and stop
+      (STOPPED). The Loops view is build step 13. Test: test/loop-cards.test.ts.
+    root-rows: >-
+      TD-2026-10-20-514 (Aegis C1e, G-ID-11): rootRowsOf verifies the card's root-rows node against contentHash;
+      renderCard shows "This decision signs" in full and NO root-class key without it; GuiStore.rootMismatches
+      flags a logged rowsDigest that is not the shown rows' digest; a notice when status.helper.batch is
+      unavailable (helper < 1.8.0). Aegis M1: rootDecisions come from the HASHED detail and must cover the kind
+      table; any root-rows node, or a root kind, without verified rows shows only deny/reject/withdraw.
+      TD-2026-10-22-769 (Mika F3): rootRowLine renders a gnomon-root-local:v1 row (localRootRowLine: the config
+      version, every endpoint with its server, base, model and who may use it, the runner folder, tree and node
+      sha) and returns null on ANY field it cannot render (unknown keys, a non-loopback base, a cloud compat, more
+      than 4 endpoints, a malformed pin), so the local.config card shows only deny. core/loops.ts: status.loops
+      startRefused becomes one `refused-start` stack alert per loop ("■ <id> didn’t start", ×n since), gone when
+      the kernel drops the refusal.
+    fidelity-2: >-
+      Design fidelity pass 2 (2026-10-20, comp .atelier/sessions/2026-10-15-gnomon-aesthetic/refs/direction.html).
+      Cards (core/render.ts renderCard): "■ project · kind · by <name>" + the bordered voice chip, a title
+      (one line for a kernel line 1; a composed permission title wraps, see fidelity-2-aegis), "raised HH:MM · waiting Nm", the keys, a quiet single-line contentHash (full hash in title=),
+      then a `details` disclosure (details/summary allowlisted in h()) with the full requester + session,
+      the kernel-composed body, and a requester's own words labelled as theirs. Always VISIBLE: the short
+      requester (shortRequester: a local p:<ns>/<name> shows its name, a foreign or odd principal shows
+      whole), the contentHash line, keys and flags, a held countdown, the ask picker, a claim-mismatch
+      card's whole body. A permission title ("Allow Bash <command>") is composed by permissionTitleOf ONLY
+      from the approval.request row's structured tool/tool_input (store StackCard.tool/toolInput),
+      cross-checked against the kernel's line 1 and, when present, the contentHash-verified detail's
+      inputHash (toolInputHash). Buried pile details are inert like buried keys. A stateless card's edge
+      is its project's ink (pe-hN). Rail: one line per session, no project heading rows; voice attaches
+      from the header pill menu only. Header: the connection readout is a quiet chip ("connected"; the
+      identity in its title= and Settings → About), glyph-only theme switch, night keys without [ ] caps
+      except + New session. Chat header: meta line kept whole, run mode as a compact kernel-owned 24px quiet key
+      (modes.ts modeChip; board gnomon-chip: a key, never a chip), counts and raw toggle in a ⋯ menu. Transcript: session.open (not resumed) and
+      voice.session.start are raw-only. Composer: one row, ⌘↵ hint, small send, the target/mode in title=.
+      Stack head: "Stack · N · hover to fan" + a small filter key. Footer: an "Install Workshop" key,
+      DISABLED with the CLI command in its tooltip because install has no GUI request kind
+      (mod-panels.ts WORKSHOP_INSTALL_KEY; modhost/control.ts), and ONE quiet status line (detail in
+      title=). Preview clock pinned to 14:07:10 (src/preview/env.ts PREVIEW_NOW).
+    fidelity-2-aegis: >-
+      Aegis BLOCK on fidelity pass 2 (2026-10-20). H1: a composed permission title never hides a
+      command's tail. permissionTitleOf keeps the command's lines (no whitespace collapse; only the ends
+      trimmed) and caps only at TITLE_ARG_MAX (4000 code points, `truncated: true`); renderCard's argEl
+      puts each line in its own .card-arg-line with a visible ⏎ (.card-nl), marks ; && || | & ` $( as
+      .card-sep, and the CSS wraps the composed title (pre-wrap, overflow-wrap: anywhere, no ellipsis).
+      A capped arg adds a "longer than N characters" note and shows the kernel body VISIBLY, outside
+      details (like a claim-mismatch card).
+      L2: shortRequester(requestedBy, localNs) shortens only when the principal's namespace is the local
+      trust set's (localNsOf the handshake principal, passed as CardView.localNs); else the principal shows
+      whole.
+      L3: a model-text choice chip keeps its filled choice-k pill at night too (two cues: dashed edge +
+      pill), never the dashed border alone.
+      L4: h() keeps `id` OFF its attribute allowlist (display data must not clobber getElementById); the
+      reconnect close key sets .id after h() (the update banner is a #gui-toast now). approval.mode.set rows stay visible as a
+      system line ("run mode a → b") and in the raw view.
+    workshop-caps: >-
+      S5 (critique 2026-10-20 §2 S5): the Workshop mod mounted as structured
+      SVG caps. core/render.ts renderCap draws a Text node's `cap` only after
+      contracts checkCap passes (else the text form shows): svg > path built
+      with createElementNS (allowlisted tags svg/path, attrs viewBox/d/
+      aria-hidden/focusable), path d from the GUI constant CAP_PATHS (tall/
+      wide/floppy), colour by classes only (.hN fill + --key-edge ring,
+      .outlined uses the hue ink, .knot violet), .bob only for state
+      working, reduced motion prints `working`; the label shows above a
+      needs/knot cap and the text is the aria-label. Text tones are the
+      closed TONES set. Mod fences render Box titles. core/mod-panels.ts
+      routes the workshop/workshop.strip sidebar view to its own `workshop`
+      region (#workshop-host); app.ts applyLayout places it in the footer
+      (#pane-workshop, default), the 76 px #workshop-col left or right, or
+      hidden (Layout.workshop, persisted via serializeLayout in
+      localStorage; always the footer under 900 px). workshopAbsence shows
+      one quiet line when the Workshop is not running. The old shuttle
+      readout is #status-line at the footer's right end (opens
+      view.kernel-feed). The strip's line (founder report 2026-10-23): in the
+      footer every word (mod label, zone titles, quiet notes, the paused line,
+      the status line) sits in one --key-h line box at the strip's floor, so
+      all baselines agree with each other and with the Install Workshop key;
+      hats stand on that floor; nothing wraps. The preview's workshop fixtures
+      name the mod gnomon.workshop (the S0b id the region routes on).
+      Tests: test/workshop.test.ts.
+    mod-panels: >-
+      K0 mod panels (#ledger-mod host slice). core/mod-panels.ts (PURE):
+      modPanelsOf(status) reads status.mods.views (the #mod-host declared
+      views of running mods; the non-human status has counts only, so none)
+      and maps slot to region: composer.footer -> desk footer (under the
+      composer), sidebar -> bottom of the left (sessions) pane, panel -> the
+      right (decisions) pane, below the kernel-owned stack. Every other slot
+      (status.mod, tool.view:*, card.detail:*) and every kernel-owned region
+      is never a mod slot. renderModFence wraps the kit renderer output in a
+      <section class=mod-fence> labelled mod:<name> with a warn `dev` chip for a
+      dev-linked (tier local) mod or a dev result; a refusal shows verbatim
+      in the fence. ModPanelScheduler: re-render only on a LIVE store row of
+      a MOD_FEED_KINDS kind (held equal to the kernel FEED_KINDS by test),
+      debounced by MOD_PANEL_DEBOUNCE_MS, one render in flight (rows during it queue exactly
+      one more), never on a timer. K3 (#paradigm-context-mod): mod.view input
+      is {focus:{hsid}} only (the HOST joins it to the live session repo;
+      the GUI never names a repo or path) and a focus change re-renders now
+      (ModPanelScheduler.focus, app.ts focus() -> modPanelsFocus; closes
+      T-2026-10-20-008 (4) for the Ledger). ui/mod-panels-mount.ts is the browser
+      glue (creates the slot containers next to their panes, no index.html
+      change, calls mod.view with input {hsid: focused} as display context);
+      app.ts only calls mountModPanels after each attach's status read and
+      feeds live rows to its hook. render.ts: Text tone -> class tone-<token>
+      (the closed TONES, now with the kit's head and chip), Box direction row
+      -> blk-row; a hue tone (hue-0..5) is the project's ■ swatch in the
+      hue's ink pair (□ for a hollow mark), the chat header's, never a ringed
+      dot. Fitted views (founder 2026-10-23, "these mods have terrible
+      display"): every fence but the Workshop's renders with ctx.fit (body
+      class mod-fit, an inline-size container): 11.5 body and 10.5 quiet,
+      a 2px-grid rhythm, an id (no whitespace, > FIT_TOKEN_MIN) on one line
+      with an ellipsis and its full text in title (never broken mid-token),
+      row prose clamped to two lines and starting its own line after an id,
+      and a Table fitted by tableFit (label-style heads, numbers right-aligned
+      and tabular, cells capped at FIT_CELL_MAX with title, a width bucket
+      tw-N from its natural width; one container query per FIT_TABLE_BUCKETS
+      entry lays a narrower table out as its first cell over key-value
+      pairs, empty cells left out, cells never wider than the column, 8px
+      between rows). Truncated items are keyboard-reachable (Mika
+      2026-10-23): markTruncated (core/mod-panels.ts) gives exactly the ids,
+      cells and clamped titles the CSS cut one tab stop each (tabindex 0,
+      full text in title), redone on render, column resize (ResizeObserver)
+      and fonts loading; :focus-visible shows the whole text in a 2px
+      --key-edge ring. A mod meter is ink on a --rule track.
+      Generic: no mod-name case. test/mod-fit.test.ts. Aegis M2:
+      the right-pane region is a sibling after #stack (outside its scroll),
+      ruled off by a 2px --rule top border and headed `mods`; a block holding
+      any kit.Button is refused in the panel slot (PANEL_BUTTON_REFUSAL shown
+      in the fence). test/mod-panels.test.ts.
+    self-update: >-
+      TD-2026-10-19-063 restart (core/restart.ts, PURE but injected storage
+      and fetch): a pending daemon-stop{reason:'upgrade'} card shows a
+      persistent toast (#gui-toast) "Gnomon was updated · Restart now", whose key only focuses
+      the card (the restart is the card's accept, one Touch ID). This page's
+      own accept sets a single-use sessionStorage marker; the kernel's
+      gui.resume{resumeToken, kernelPublicKey} (this connection only) is
+      stored into that marker only. On close the page polls its origin
+      (ORIGIN_POLL_MS cadence, ORIGIN_POLL_TRIES) and reloads; the reloaded
+      page takes the marker once and attaches with {resumeToken}, re-pinning
+      the successor key that came over the old verified channel. No answer:
+      plain-language guidance (Gnomon.app, or `gnomon`).
+    run-modes: >-
+      P8-D86/D87 run-mode control (spec §11.4, §11.5): core/modes.ts (PURE)
+      reads the focused session's mode ONLY from status.runModes (unknown
+      values fail safe to manual), plans a choice (same | tighten | loosen |
+      blocked with its ceiling reason), cycles ⇧Tab manual → ask →
+      auto-edits → manual (skipping a blocked one) and builds the request
+      log.append{kind:'request.mode.set', payload:{hsid, to} | {repo, to}}.
+      ui/app.ts: a kernel-owned `mode: <mode> ▾` button + menu in the
+      transcript header, ⇧Tab in the composer, palette mode.* (session) and
+      mode.repo.* (repo), all on trusted gestures only (G-GUI-04); a
+      loosening's pending strictness card is approved `allow` in the same
+      gesture (the kernel asks for Touch ID), a refusal is shown as given;
+      status is re-read when the store flags `modes` (approval.mode.set,
+      request.mode.set, session.open, session.exited rows), never on a timer.
+      mode.* commands are excluded from BLOCK_SAFE_COMMANDS. The transcript
+      shows approval.auto as a subtle `auto-approved edit · <path>` line
+      (`auto-approved · <tool> (always rule)` for a rule) and
+      approval.mode.set as a system line. F2 (TD-2026-10-20-086): the
+      switch, ⇧Tab and the menu default to FOLDER scope (the repo,
+      labelled "this folder"; defaultScope/planFor/scopeEntries/SCOPE_LABEL,
+      status repoMode) so a new session in the same folder starts in the
+      chosen mode; "this session only" is the secondary entry (palette
+      mode.*); a session that already has its own mode keeps session scope.
+      F3: a folder on the root-signed default (status source 'config')
+      is labelled `mode: auto-edits (default) ▾`. Tests: test/modes.test.ts.
+    standing-feed: >-
+      TD-2026-10-20-086 F6 (#standing-grant's GUI): core/standing.ts (PURE)
+      reads status.standing fail-safe, turns grant.standing / .used /
+      .revoked rows into feed lines (a use is also a toast naming what
+      Gnomon did), decides the once-a-day offer (shouldOffer: a pending
+      strictness/permission/voice-arm/daemon-stop card, no live
+      grant, not offered today) and builds request.grant.standing{tuples,
+      repos} / request.grant.standing.revoke{grantId}. ui/standing-feed.ts
+      (its own module; app.ts only mounts it and forwards live rows and
+      status reads) shows each use as an info toast on the page's one toast
+      region (#gui-toast; no bottom-right toasts of its own; a window joining
+      the unlock is a warn), today's list with Revoke (a tighten, no presence)
+      and the offer as a persistent toast with one key, "Make it standing",
+      which files the request on a trusted press and then focuses the grant
+      card in the stack (founder decision with Aegis: a toast never decides a
+      card; the person accepts it there, one password); its close key reads
+      "Not today". Tests: test/standing.test.ts.
+    voice-controls: >-
+      Voice slice V2d (TD-2026-10-19-298, T-2026-10-19-026; spec §11.4
+      header, §14.7 attachment). core/voice.ts (PURE): voiceStatusOf is the
+      one adapter over status.voice (V1 nested {attached: {voiceSessionId,
+      hsid, mode, turns} | null}; V2a flat {attached: boolean, hsid,
+      ceiling: ptt | conversation | null (the attachment's state, not a
+      cap), since, idleAt, voiceSessionId, turns, echoTailMs,
+      ambientIdleMs}, optional clientConnected, hotkey, level, maxMode);
+      V2a refusals voice-off (cause aec | ceiling | presence) and
+      voice-playback read as plain lines (voiceRefusalNote); an undecided
+      widen card (strictness, op voice.widen) is focused in the stack; an
+      attached session whose mode is not ptt reads as ambient
+      (the indicator never under-reports a live mic). Three states: Mic off
+      (grey), push-to-talk (neutral ink2 since S1, never slate, "Hold <hotkey> to talk"), ambient
+      (S1: amber warn-edge, static amber dot, "Listening", level meter that moves only on an audio event; vermilion only when crashed). clientConnected is
+      only an explicit kernel field (null when unsure; no client-name
+      guesses); attached with the app not connected keeps the attached
+      state's class, label and meter plus "· voice app not connected"
+      (never under-reports a live mic); "Voice app not running" only with
+      nothing attached. pillOf(v, clientTail) appends the voice-app
+      lifecycle's tail instead when the kernel reports one (see
+      voice-app-lifecycle; T-2026-10-20-002), and an attached ambient pill
+      keeps its warn colours under any client class (dashed edge).
+      planVoice: same | free (Off, narrowing, re-target) | presence (the
+      first widening to ambient in a GUI login) | blocked (ceiling, nothing
+      focused). voiceRequest builds log.append voice.session.start{hsid,
+      mode: ptt | conversation, continues?} or voice.session.end
+      {voiceSessionId?}. canAttach: only a human-class connection (a voice
+      connection never gets the controls). ui/app.ts: the kernel-owned
+      header pill + menu (Off / Push-to-talk / Ambient, Attach to focused),
+      [Voice ▾] on the focused live session row, palette voice.off /
+      voice.ptt / voice.ambient, all on trusted gestures (G-GUI-04); a
+      pending card from an ambient request is approved allow in the same
+      gesture only when isVoiceWidenCard (kind strictness, detail.op
+      voice.widen, the same hsid) holds for the card in the store; else it is
+      focused in the stack (the kernel asks for Touch ID); the "decide the
+      pending card in the stack" notice remembers that cardId and clears once
+      the card has been seen in the store and is no longer pending (decided,
+      expired or swept; cardNoticeStep, T-2026-10-20-002). Status is re-read when the
+      store flags `voice` (voice.session.start / .end / .mode, daemon.start),
+      plus the voice-app lifecycle poll (voice-app-lifecycle); voice.turn.* rows
+      only kick the meter. The kernel's
+      idle auto-off (voice.session.end with reason idle) is a warn toast
+      (#gui-toast, 10 s; store.voiceToast idle, "Dictate turned off after N min idle" in
+      ladder words, board header-5b); a new attachment drops one unshown. Transcript: a voice turn is the user message
+      (one line, tagged with a mic and the speaker, capped at 32 chars) only
+      when the kernel's turn.sent{source: voice, voiceTurnSeq} cites it;
+      claude's replay of it shows once; until then the app's refusal /
+      intercepted / forwarded claims are shown attributed ("voice app says:
+      ..."); turn.sent adds its own line only when the voice row is
+      unreadable, partials in grey while they are the latest word on their
+      turn, a speaker marker under a spoken reply, a refused voice turn's
+      reason inline and subtle. voice.* are excluded from
+      BLOCK_SAFE_COMMANDS. Contrast: ambient text is the fixture's
+      voice-armed pair (warn-ink on warn-bg), push-to-talk text the
+      fixture's slate token; the pulse and meter stop under reduced motion.
+      Tests: test/voice.test.ts; bundle pin in gnomon test/web-units.test.ts.
+    voice-app-lifecycle: >-
+      Voice slice V2e GUI (T-2026-10-19-026), SEAMLESS: no terminal step.
+      core/voice-client.ts (PURE) is the one adapter over
+      status.voice.clientConnected + status.voice.client {phase idle |
+      installing | downloading | starting | running | crashed | unavailable,
+      downloadMb {n, of}, devUnsigned, lastError, unavailable} and the
+      enrolled list (status.voice.enrolled; absent = unknown, never a false
+      nudge). Unknown phases fail toward not running.
+      With nothing attached the pill shows "Voice app not running" [Start
+      voice], "Setting up voice…", "Downloading voice models · N of M MB" with
+      a progress bar, "Starting…", "Voice crashed" [Restart], "Voice
+      unavailable · <why>", or (running, no enrolled voice) "Teach Gnomon your
+      voice first" [Teach], or (every enrolled name has only a stale print,
+      status.voice.prints.stale; enrolNudgeOf) "Re-teach Gnomon your voice
+      (the voice check was upgraded)" [Re-teach]. Attached (T-2026-10-20-002), the live mic keeps
+      its V2d class, label and meter and clientPillOf returns a `tail` that is
+      appended (first match): crashed / backoff "· voice crashed: <lastError>"
+      (one line, capped at 60 chars; title capped at 400) [Restart], the
+      setup phases ("· setting up voice…", "· downloading voice models…",
+      "· voice starting…"), "· voice unavailable: <why>", not connected "·
+      voice app not connected" [Start voice], or enrolled [] "· teach Gnomon
+      your voice first" [Teach] (enrolled null = unknown: no nudge). The
+      kernel logs no row on a client phase or connection change, so the page
+      re-reads status every 2 s (CLIENT_POLL_MS, one read in flight) while
+      clientPollWanted: a human connection, a known lifecycle, and voice
+      attached or the app installing / downloading / starting / in backoff. The pill
+      menu adds Start / Restart / Stop voice and "Teach Gnomon your voice…";
+      palette voice.client.start / voice.client.stop / voice.enrol (never
+      block-safe). Gestures are trusted-only log.append rows from a human
+      connection: request.voice.client{op: start | stop};
+      attach or Ambient while the app is idle or crashed sends start first in
+      the same gesture. A LOUD role=alert banner "Voice is running an unsigned
+      development build" shows when devUnsigned is true. The enrolment dialog:
+      name (kernel rule [a-z0-9][a-z0-9._-]{0,63}, normalized), plain consent
+      text, request.voice.enrol{name, consent} (answer {pending, cardId} =
+      the Touch ID card, A4), Confirm with Touch ID (approve allow) FIRST,
+      then the three phrases one at a time with a recording indicator folded
+      from status.voice.enrolment (A3: requested, ready, recording, recorded,
+      done, failed; reports stamped before the allow are ignored), re-read on
+      every status read plus a light 1 s poll only while the dialog waits;
+      closing while the card is pending denies it; enrolled voices with a
+      two-click [Forget] sending request.voice.forget{name} (no card).
+      Notices are status.voice.notice{text, code?, at}: a new `at` is a
+      warn toast (#gui-toast) prefixed "Voice app: ", never a decision or a backlog
+      replay (30 s). Aegis L2-L4: the dev-unsigned banner is a persistent
+      alert (no timer); "done" shows only once status.voice.enrolled lists
+      the name; during the phrases the dialog says "Recording <name> — only
+      <name> should speak"; isEnrolCard requires the card to name the voice.
+      The kernel's client phases (stopped, preparing, installing,
+      downloading-models, starting, running, backoff, failed, unavailable)
+      map onto the pill's (downloadMb may be a total in MB). Kernel
+      replies voice.turn.agent{source: kernel-speakable, items} show the
+      speaker marker and swallow the voice app's next playback row (never
+      shown twice). Tests: test/voice-client.test.ts.
+    journal-cursor: >-
+      Slice A4 (P8-D98): the hello offers journal.cursor; core/client.ts
+      followLog pages then follows with the store's {logId, seq} cursor
+      (GuiStore.cursor/advance/adopt); on BAD_REQUEST{cursor-epoch} (or a
+      page from another log) GuiStore.reset() clears every row-derived
+      state and the read starts over from the current log (once; a second
+      refusal surfaces). Tests: test/gui.test.ts (journal.cursor).
+    wire-rows: >-
+      Dogfood fix 2026-10-19: core/store.ts rowOf flattens each log.read
+      row as the kernel sends it (contracts LogRow: {seq, view:'full',
+      event} | {seq, view:'stub', stub:{kind, hsid?, at}} | {seq,
+      view:'oversize', kind, bytes}) before the reducers read kind, session
+      and payload; reading the nested row flat left every row in the kernel
+      feed (no session list, no transcript, and a TypeError painting the
+      feed). turnEventSummary renders a turn.event line as the assistant
+      text, its tool names and the result subtype. The composer says why
+      nothing was sent (no session focused / not connected) instead of
+      returning silently. Tests: test/gui.test.ts (wire rows, turn.event
+      lines); the real-kernel falsifier is gnomon
+      test/gui-session-e2e.test.ts; bundle pin in gnomon
+      test/web-units.test.ts.
+    session-resume: >-
+      T-2026-10-19-014 B2 (§2.4 rule 11): the hello also offers
+      session.resume (send/stop on a session the kernel resumed after an
+      upgrade). GuiStore drops every card it holds on a new daemon.start row,
+      so an old kernel's card id is never clickable (the new kernel refuses it
+      NOT_FOUND and retires it with approval.expire). Tests: test/gui.test.ts
+      (#gui store after an upgrade); bundle pin in gnomon test/web-units.test.ts.
+    materials-s1: >-
+      S1 papercraft/phosphor materials (critique 2026-10-20 §2 S1, Luna).
+      Self-hosted fonts in static/fonts/: JetBrains Mono 400/500/600 and one
+      Fraunces variable cut (opsz + wght, covers 460 and 600), Fontsource
+      5.3.0 latin subsets copied unmodified, each family with its OFL 1.1
+      licence beside it (OFL-JetBrainsMono.txt, OFL-Fraunces.txt; no
+      Reserved Font Name upstream); @font-face font-display swap, font-src
+      'self', no CDN, no data: URL. scripts/build.mjs walks static/
+      recursively: .html/.css/.js/.svg/.txt get LF, everything else (woff2)
+      is read raw; *.woff2 is binary in .gitattributes. Bundle files may sit
+      in sub-directories (fonts/...); the kernel materializes them under
+      <home>/gui/bundle/ and serves woff2 as font/woff2. Tests:
+      test/fonts.test.ts (pinned sha256, embed byte-exact, licences, CSS
+      sources), ../gnomon/test/gui-endpoint.test.ts (served byte-exact).
+      scripts/preview.mjs (dev only) serves grain.svg and fonts/* raw too.
+    desk-structure-s2: >-
+      S2 desk structure (critique 2026-10-20 §2 S2). Pure helpers in
+      core/store.ts: groupHue (projectHue of the session.open cwd, else of the
+      repo: the SAME function as the kernel's Workshop feed), sessionTitle (the
+      first user message cut to 28 chars, else repo basename · hsid tail 4;
+      SessionRow gains cwd, openedAt, firstUser), sessionNote (N card(s) /
+      KNOT in warn ink, failed in vermilion), splitActivePast, failedExit (a
+      session.exited with reason error, or no stop reason and a non-zero code
+      or a signal, is state "failed", terminal), foldActivity +
+      activitySummary + durationText (consecutive tool / auto rows fold into
+      ONE collapsible activity line "HH:MM–HH:MM · read N files · ran N
+      commands · Ns of work", key act:<first key>; a reply after a user
+      message gets "took Ns"). core/render.ts mdInline / mdBlocks: a SAFE
+      markdown subset for agent text (inline code, bold, italics, bullet and
+      numbered lists, fenced code) built as DOM nodes through h(); no HTML
+      passthrough, no links, no images. ui/app.ts: the rail is ACTIVE n
+      (project groups: swatch + project ink name) and ▸ PAST n (collapsed by
+      default, toggle kept in localStorage gnomon.gui.pastOpen; a failed session stays in ACTIVE); the kernel
+      feed is a palette view (view.kernel-feed), the default centre is a
+      quiet "No session open" sheet with + New session; the chat header is
+      the session name plus ■ project · backend · started · elapsed; pinned
+      cards carry "Pending in this session"; the header (board header-5b,
+      #gui-wordmark-menu) is the wordmark menu, the palette field, spacer,
+      the link dot + risk chip, the voice pill (Layout presets and pane
+      toggles live in the Gnomon menu; kernel-owned chrome is never listed); #inbox
+      sits in the stack head; the composer placeholder is "Reply to <name>…"
+      with the long hint in title=, and send is the filled primary key.
+      Tests: test/desk.test.ts.
+    card-body-scroll: >-
+      design-system card.body_scroll (founder 2026-10-23: "as long as the
+      card text is scrollable in the event it's too large that's fine"):
+      renderCard's .card-body (lines and field blocks) caps at
+      --card-body-max (min(42vh, 26em)) and scrolls inside the card; the
+      title, k-line, root rows, keys, presence line and contentHash stay
+      outside it, so Allow shows without scrolling. Only while it overflows
+      (markCardBody, measured by a ResizeObserver in app.ts paintStack and
+      on scroll) is the body one named tab stop (tabindex 0, role group,
+      CARD_BODY_LABEL) with the worded cue .card-more under it (CARD_MORE:
+      "↓ more below: scroll the card text" / "end of the card text"); Tab
+      moves on to the keys; a body that fits adds no stop. Covers the MCP enable and batch cards, the Rules batch card
+      and the git push card. Test: test/card-scroll.test.ts.
+    card-sheet-pile-s3: >-
+      S3 card sheet and stack pile (critique 2026-10-20 §2 S3). renderCard
+      anatomy (data only from kernel fields): header ■ <repo basename> in
+      the project ink (the ONE hue, groupHue) · kind · the voice tag from
+      the kernel's card.voice (🎙 reversible · <label>, 🎙 gate + the
+      .handle word, else hand only), requestedBy and the session in title=;
+      the title (the block's first Text line, splitCardBlock; a
+      claim-mismatch card keeps its block whole and is titled by its kind);
+      the body (kernel-owned); "raised HH:MM · waiting Nm" (raisedLine, from
+      the approval.request row at, StackCard.raisedAt); keys; .bar and
+      .stamp (S4 animates them); the contentHash line last. CSS: a sheet with
+      a --edge-w state edge on the left (knot / failed / gate-class + held /
+      claim-mismatch; a neutral card's edge is --key-edge, never --rule) and
+      --sheet-shadow (night: a 1px --rule ring, no shadow). The stack is a
+      pile: -64px overlap, rotation and z-order by :nth-child classes (no
+      inline style), fanned flat on :hover AND :focus-within (keyboard
+      reach) and .fan / .open; more than 6 cards ⇒ 6 piled + "+n more"
+      (opens the fanned pile); pinned cards lie flat. The pane head reads
+      Stack · n pending · hover to fan · scope key; rail minmax(300px,340px).
+      The preview (dev only) takes ?fan=1. Tests: test/desk.test.ts.
+    motion-s4: >-
+      S4 motion (critique 2026-10-20 §2 S4; founder 2026-10-23). Arrival is a
+      quick fade-in, opacity only (card-in on the --t-arrive motion token; no
+      flutter), at the pile rotation; the stamp lands straight; a pinned card
+      takes one of four preset tilts (.r-a..d by cardId; never inline
+      style). Approve: ONLY after the kernel accepted the decision (a
+      refusal throws first), fadeOff stamps APPROVED (--ink; board gnomon-status-colour), adds
+      .out after a fixed stamp hold: a fade-out, opacity only (card-fade on the --t-fade motion token, design-system tokens.motion; founder 2026-10-23,
+      no tilt or spin on the way out), then closeUp collapses its height on --reflow and removes it on that transitionend,
+      with a fixed fallback timer (a design constant, not a measurement); a departing card is kept out of fresh paints and
+      re-inserted at its place. Reduced motion (in-app or OS): nothing
+      animates and the card goes at once; the stamp's end state is styled to
+      show. A held voice decision (CardView.held {seconds, undo}) renders
+      .held (amber edge), the 3 s count bar and the kernel-owned text
+      "Allowing in N · say “undo”" (the kernel does not report holds yet, so
+      app.ts passes none). Droop: a failed card droops once as it lands, a
+      rail row droops once when its session flips to failed in this page;
+      never a shake. Tests: test/desk.test.ts.
+    live-turn: >-
+      T-2026-10-21-007 (founder dogfood 2026-10-21, session hsid:v1:01M5E2G1TRBTMST63ZAY9V0W7D seq 4683-4791).
+      Turn anchoring (core/store.ts chatItems): turn.sent carries the turn id and turn.result none, and the
+      backend answers turns in send order, so a result pairs with the OLDEST open turn.sent (FIFO). A message
+      sent while an earlier turn runs WAITS (composer echo, sent voice turn; a refused send stays with it); the
+      running turn's output, cards and result are placed before the first waiting message, so a result shows
+      under its own turn and never under the next message; the waiting message starts when the earlier result
+      lands (or claude replays it); session.exited / orphaned / drained / open settle everything. Nothing
+      waiting = plain append. Running state: chatItems({live}) (the page passes isLiveState of the session)
+      adds one `working` row (key work:<seq>) under the running turn with a LiveClock {since, progress} from
+      the turn start and the latest tool_progress heartbeat (elapsed_time_seconds, tool_name) or
+      system.task_started; foldActivity makes that turn's latest activity line live (no "of work" yet), and a
+      reply or result closes the segment so the line freezes at the real end (a card between the tool and the
+      reply no longer freezes it at the last tool row). core/live-turn.ts (pure): liveSecs / toolSecs /
+      liveText ("working… · 2m 6s"; " · running 2m 10s · Bash 1m 33s"), hasLive, LiveTicker (ONE interval
+      while the focused transcript has a running turn, cleared when it ends; each tick rewrites only the mounted
+      .live-clock spans). ui/app.ts paintTranscript keeps the common key prefix mounted and measured and
+      rebuilds only the changed tail (HeightIndex.truncate), so the working row moving down costs no full
+      remount. Review H1: in BOTH repaint branches the kept prefix is diffed by rendered signature
+      (core/live-turn.ts itemSig: role, text, live, took, said, voice marks; a card's decided state is its
+      text) and changedBefore's indices are remounted too, so an activity line frozen by the reply (same key,
+      live removed) never keeps a stale .live class or a frozen "running" span; re-review L-4: each such
+      remounted index is HeightIndex.invalidate'd (back to the estimate until measured). Review M1: the composer echo
+      (Row.turn) is stamped with the turn id session.send returns and pairs with turn.sent{turn} EXACTLY (an
+      unstamped echo, its send still in flight, pairs in send order with the first turn.sent no stamp claims);
+      a refused or network-failed send marks the echo unsent (Row.unsent): it never waits, never becomes the
+      running message, and its reason shows under it, so the next send gets the right clock and order.
+      Review M2: open turns are tracked by id (openTurns); turn.result{turn} closes every open turn up to the one
+      it names (a queued message Claude Code folded into the running turn settles with it, no working row left
+      ticking); a waiting message stamped for a closed turn is dropped, and the next waiting message starts only
+      when it is unstamped or its turn is the next open one; a row without turn (older logs) closes the oldest.
+      A11y: the working row is role=status, aria-label "Claude is working"; its .live-clock span is
+      aria-live=off (the per-second tick is never announced). CSS .trow.role-working
+      (spinner, still under reduced motion) and .role-activity.live.
+    dogfood-layout-chat: >-
+      Dogfood round 2 (2026-10-19). LAYOUT: the shell is a 100dvh flex
+      column (header, notices, desk grows, status line); the desk is a
+      three-column grid of panes that each scroll inside (sessions list,
+      chat viewport, decision pile); under 900px one column, and sessions /
+      decisions become drawers behind header toggles with a scrim (no
+      horizontal overflow). The grid-row layout it replaces put the desk in
+      an auto row once the hidden notices dropped out, so the app sat in
+      the top ~290px. CHAT: core/store.ts chatItems turns a session's rows
+      into the conversation: the user's message (this page's composer echo,
+      else claude's --replay-user-messages line; session.inject / turn.sent
+      carry only a hash), assistant text, one tool line per tool_use
+      (toolSummary: name + command/path/pattern…), cards inline, the
+      turn.result (subtype, cost, tokens) and lifecycle notes; hooks,
+      stream_event partials, rate limits, status, control frames, tool
+      results and bookkeeping rows are hidden and counted, and "show raw
+      events" shows every row. RAW VIEW (founder 2026-10-23 "is there a way
+      to know what is being shown here"): turnEventSummary says what each
+      claude-code line is (system lines by subtype and identifying fields:
+      hooks by hook_event/hook_name, short hook_id and outcome/exit code,
+      init by model and cwd; tool results by id, outcome and size; rate
+      limits; stream partials; control frames; results with turns, time and
+      cost); hook and tool output never enter the summary. Each raw row folds
+      (transcript-row variant raw, the activity fold's expanded set, foldRaw
+      + rawFoldKey) to its whole row (rowDetail: the line pretty-printed,
+      nested {redacted} values kept redacted, withheld/redacted/oversize rows
+      have no fold, capped at 20k) in a <pre class="raw-line"> text node that
+      scrolls inside itself. A composer echo hides the matching replay so
+      the list only grows at the end. STICKINESS: core/follow.ts
+      (isAtBottom, Follow) — at the bottom it stays stuck through new rows
+      and sends; scrolled up nothing moves it (not even a send), a
+      "↓ latest · N new" key jumps back, and scrolling to the bottom by hand
+      re-sticks. Founder report 2026-10-23 (it stopped following while he
+      spoke): stickiness changes ONLY on the user's own scroll (ScrollIntent:
+      a wheel, scroll keys, focus moving into the feed, a pointer or finger
+      held on it or its scrollbar); scrollEvent calls any other scroll
+      'layout' and leaves it alone. Root cause: WebKit (the Gnomon.app
+      wrapper) clamps the feed's scrollTop when the composer shrinks or
+      re-measures (fitComposer resets its height to measure) and fires that
+      scroll before the ResizeObserver repaint, so it read as the user moving
+      up. Mounted rows sit under a ResizeObserver (rowSizes, watched from the
+      next frame, dropRow unobserves) so a row that grows by itself repaints;
+      .viewport has overflow-anchor: none; an unfold refocuses its line with
+      preventScroll. app.ts paints incrementally (no innerHTML, no
+      replaceChildren) and anchors the row in view while heights are
+      measured. STALE SESSIONS: GuiStore counts daemon.start boots; a new
+      boot ends every live session the old kernel did not exit, the boot
+      sweep's session.orphaned marks orphans, a session.open in the new
+      boot (a resume) makes it live again, session.exited ends it (the old
+      reducer matched a `session.exit` kind that does not exist);
+      liveCount() feeds the Shuttle's live count. The kernel's
+      status.sessions is still the constant {n: 0}, so the log is the
+      source of truth. Tests: test/gui.test.ts (chat transcript, stale
+      sessions, stickiness, layout CSS); gnomon test/gui-session-e2e.test.ts
+      (real kernel: the chat is user/assistant in order, noise hidden) and
+      test/gui-browser-darwin.test.ts (headless Chrome: desk ≥ 80% of a
+      2000×1030 viewport, no horizontal overflow at 640px).
+    description: >-
+      #gui (spec §11.1-§11.5, §4.5). #bare-entry (§2.4 rule 8): the fragment
+      may carry an optional `cwd` folder hint (base64url UTF-8, ≤ 1024 bytes;
+      a malformed one drops the hint, never the launch); core/launch.ts
+      cwdHintOf escapes and caps it for display and applyCwdHint opens the
+      new-session form, shows it as text in #ns-hint, prefills #ns-cwd only
+      when clean and absolute, and never submits — session.open stays on the
+      human's click (test/gui.test.ts). Aegis round 1: the hint is applied
+      only inside attach() after the launch token verified (never on a failed
+      attach or Reconnect); clearCwdHint on cancel, trusted submit and "+ new";
+      the prefill rule is the strict L/N/P/S-or-space rule minus Cf and
+      default-ignorables, shared with the CLI via
+      packages/gnomon/test/fixtures/cwd-hint.v1.json. static/boot.js reads the launch fragment
+      (#launch=<token>&k=<spki>) and clears it with history.replaceState
+      before any other script, handing it to app.js once. core/launch.ts
+      decides the key pin (localStorage holds only the kernel public key;
+      a changed fragment key re-pins visibly; Reconnect verifies against the
+      pin; none ⇒ refuse); hostSurface() (T-2026-10-18-018 N1, M1.13) is
+      'wrapper' only for the frozen non-writable non-configurable
+      window.gnomonSurface the #gnomon-wrapper document-start script defines
+      (a plain browser cannot produce it under the kernel CSP), and then the
+      page sends hello surface wrapper and hides the extension-risk badge
+      (display only). core/server-sig.ts verifies hello.serverSig with
+      WebCrypto Ed25519 over authServerPreimage and binds serverKeyId; each
+      hello carries a fresh clientNonce (getRandomValues, 32 bytes) that the
+      result must echo (client-nonce-mismatch) and the signature must cover
+      (T-2026-10-18-016); card
+      decision keys only for kernel-signed actions that verify. core/client.ts
+      is a MINIMAL in-bundle gnomon-rpc:v1 client on gnomon-contracts (hello,
+      sig check, auth {launchToken}|{reconnect}, calls, notifications,
+      gnomonPost for POST /diag and /blob with X-Gnomon-Token and
+      referrerPolicy same-origin; per-call timeout; id:null error frames
+      surface as a notice + /diag; a call written and unanswered when the
+      socket closes rejects DELIVERY_UNKNOWN{delivery-unknown}, a call after
+      the close CLOSED{connection-closed} (B7: one client-local spelling with
+      the kernel + TS clients), T-2026-10-19-009 item 6; setup treats
+      both as stopped) - swapped for the published #client-ts
+      (M1.12) in slice 2. The GUI defines NO sanitizer (Aegis C1): every
+      string goes through gnomon-contracts sanitizeDisplayText (display.ts,
+      tested with conformance/display.v1.json through the render path, plus
+      a fence test); core/render.ts renders the closed kit and kernel cards
+      as DOM TEXT NODES only (no innerHTML); a block kit.Button is not a
+      decision key and is live only for BLOCK_SAFE_COMMANDS (never diag.send
+      or gui.reconnect). Card decision keys only for kernel-signed actions
+      whose keyId is the hello's serverKeyId, cached per (cardId,
+      contentHash) and cleared when the verify key changes. A re-pin is a
+      sticky kernel-owned notice with old/new keyIds and a /diag line.
+      core/store.ts reduces log.read rows into sessions by project, per-hsid
+      transcripts and the decision stack (order independent, per-project
+      filter); core/virtual.ts is the Fenwick-tree virtualized transcript
+      with per-width height caches; core/commands.ts the palette, layout
+      presets and theme/motion resolution. ui/app.ts wires the page: launch,
+      Reconnect, backlog paging + follow subscription, sessions sidebar with
+      new session (session.open), composer (session.send), decision stack
+      (approve on trusted gestures; an ask-user card with a verified
+      `answer` key gets a picker built ONLY from askDetailOf: the card block's
+      one {type:'ask-user', detail} node whose detail recomputes (with kind,
+      requester, hsid, flags; cardContentHash) to the card's contentHash —
+      display text is never parsed; missing/malformed/mismatched => no
+      picker (Aegis C1); radio/checkbox per option plus a free-text field
+      (aria-label, maxlength = detail.maxAnswerChars), askNote (null-
+      prototype answers) builds the
+      approve note: plain text for one question, JSON {answers} for several;
+      a Bash permission card (TD-2026-10-20-294) splits `always` into
+      "Always: this exact command" and one key per prefix choice, taken ONLY
+      from prefixOptionsOf (the one {type:'bash-prefix', detail} node whose
+      detail recomputes to the contentHash); approveParamsOf turns the
+      clicked key's data-scope/data-prefix into approve{scope} (only for
+      always; a malformed key sends no scope, so the exact rule); an
+      Edit/Write card with a verified {type:'edit-scope'} node (editScopesOf)
+      offers "this exact edit", "edits to this file" and "edits in this
+      repo" (noted "same as auto-edits for this repo"). On either card the
+      scoped choices fold under ONE "Always ▾" key (data-always-fold, no
+      decision; Mika 2026-10-23): the row stays Allow · Deny · Always ▾, and
+      the unfolded .always-choices group lists each choice as its own
+      decision key (accessible name "Always: …") with its note visible
+      under it; Esc folds back to the key, and the fold and focus survive a
+      stack repaint (per card and zone). The mode chip reads "ask · edits by
+      rule" (≤1040px "ask ✓", spoken "edits allowed by rule"; the full words
+      in its title) while status.runModes carries editsByRule; ask's menu
+      line says edits pass by the rule, and the menu's "stop edits by rule"
+      entry sends request.rules.revoke, returning focus to the run mode key
+      (TD-2026-10-23-939 follow-up); a kernel verb card (T-2026-10-23-002)
+      with a verified {type:'git-verb'} node (gitVerbOf) shows the kernel's
+      host line under its title (gitVerbLine: "github.com · owner/repo ·
+      private · branch main"), and a push card folds ONE Always choice
+      "push to <host>/<owner>/<repo>" (data-scope exact; noted "this remote
+      from this repo, any branch, never a force push"); a force push or a
+      lookalike host (claim-mismatch) offers none (design-system variant
+      git-push); a force push, a public repo or a force worktree remove
+      says what can't be taken back in one .card-warn line on the face
+      (gitVerbWarning, beside the irreversible chip, never only under
+      details), and a lookalike host shows no k-line so its red warning is
+      the first line under the title; a claim-mismatch card reds only its
+      first body line (Mika Delta 8);
+      refusals shown verbatim until M1.3
+      presence), Shuttle view, the kernel-owned extension-risk badge,
+      papercraft day / phosphor night / auto themes and reduced motion.
+    path: src/
+    type: module
+    tags: [gnomon, gui, paradigm-8, m1-10]
+    tests:
+      - test/gui.test.ts
+      - test/edit-scope.test.ts
+      - test/git-verb-card.test.ts
+      - test/modes.test.ts
+      - test/voice.test.ts
+      - test/voice-client.test.ts
+      - test/choices.test.ts
+      - test/fonts.test.ts
+      - test/desk.test.ts
+      - test/live-turn.test.ts
+      - ../gnomon/test/gui-endpoint.test.ts
+      - ../gnomon/test/web-units.test.ts
+  gui-setup:
+    description: >-
+      #gui-setup (spec §11.1, §11.2 rule 11; T-2026-10-19-005 MVP-b) — the
+      first-run setup screens over the #setup-endpoint's closed
+      gnomon-setup:v1 protocol: a `#setup=<tok>&k=<spki>[&cwd=…]` fragment
+      (core/launch.ts parseSetupFragment; never mixed with #launch=) runs
+      src/setup instead of the app. route.ts is the state machine (welcome →
+      preflight → name → identity 1 of 2 / 2 of 2 → success → handoff; any
+      refusal or a closed socket → aborted); hello is verified against the
+      fragment setup key with the launch path's verifyServerSig before auth,
+      and that key is never stored as the kernel pin. screens.ts renders by
+      textContent only; clicks only request steps; the page sends only the
+      name and a server-listed gen. digest.ts: the digest is the kernel's
+      setup.presence value, shown big and grouped; the copy says the Touch ID
+      dialog's last line must BEGIN with `Gnomon Helper: root key signs 1:
+      <d12>`, that exactly 2 prompts come, and that cancelling is safe.
+    path: src/setup/
+    type: module
+    gates: ["^setup-token"]
+    tags: [gnomon, gui, setup]
+    tests:
+      - test/setup.test.ts
+  gui-relaunch:
+    description: >-
+      #gui-relaunch page side (T-2026-10-20-001, core/stale.ts). A tab whose
+      connection ended outside the self-update path never points to a
+      terminal as the only way back and never suggests a reload. It polls its
+      own origin (GET /, no credential; 2 s for a minute, then 10 s, ~1 h cap):
+      an answer is NOT proof of Gnomon (Aegis L3, a squatter can answer), so it
+      says only "something is answering; use the window Gnomon opened", and listens on the same-origin BroadcastChannel
+      `gnomon.gui.v1` for a window that attached (`{t:'attached'}`; it asks
+      `{t:'who'}`). Exactly those two shapes, no token/key/connId. On
+      'attached' it says "Gnomon restarted in a new window" and offers one
+      trusted click: Close this tab. The restarted kernel opens its fresh
+      window on a NEW OS-chosen port (Aegis H1: no remembered port), so
+      across a restart 'attached' arrives only from same-origin tabs. It never rejoins in place: a restarted kernel has a new
+      ephemeral key that only a launch fragment delivers (decidePin).
+    tags: [gnomon, gui]
+    tests:
+      - test/stale.test.ts
+  gui-stop-speaking:
+    description: >-
+      #gui Stop speaking (T-2026-10-19-026). A ⏹ "Stop speaking" button beside
+      the mic pill (static/index.html #voice-stop), shown only for a human
+      connection with the voice app connected (status.voice.clientConnected)
+      and status.voice.playback.playing; a trusted click, or Esc when no menu
+      or dialog is open and focus is not in the composer, sends ONE log.append
+      request.voice.client{op:'stop-speaking'} (narrows: no card, no presence).
+      core/voice.ts holds the pure decisions (playbackPlaying,
+      stopSpeakingShown, speakPollWanted, escStopsSpeaking); app.ts re-reads
+      status every 300 ms (SPEAK_POLL_MS) only while speech plays, plus a 4 s
+      watch window after a voice row (playback reports are never logged, so
+      the page cannot otherwise see a reply start).
+    tags: [voice, gui]
+    signals: []
+  gui-dictation:
+    description: >-
+      UNVERIFIED VOICE (Dictate, the G-VOX-06 exception, founder bug
+      2026-10-21): a row the kernel stamped draftOnly fills the draft as a
+      part marked unverified; the pill note reads "draft · unverified voice ·
+      read it, then Enter sends" and the transcript row "in composer ·
+      unverified voice"; the send-now key holds such a draft for Enter
+      (HOTKEY_UNVERIFIED_NOTE); the word (wordReady and the grace), the piece
+      ring (pieceDue) and the countdown (armed) never send it, and a preset
+      switch holds it. Aegis privacy: the row is hash-only; app.ts queues live
+      voice rows and releaseTurnRows joins the words from
+      status.voice.unverified in seq order (a row waits at most
+      UNVERIFIED_WAIT_MS, then goes on wordless and never becomes a part).
+      sentLabel labels turn.sent origin voice-unverified ("spoken · unverified
+      voice · sent by you"); it runs like a typed turn (TD-2026-10-23-939). Mika:
+      a mixed draft's note quotes the unverified words (unverifiedQuote,
+      cut at UNVERIFIED_QUOTE_MAX with …, full words in the title); an
+      unverified row carries no speaker label ("voice · in composer ·
+      unverified voice"). A short refused turn (voice-speaker, cause
+      too-short) reads "too short to check it's you · say a few more words, or type it" (capture refusalPhrase).
+      VOICE SUBMODES (TD-2026-10-21-514, $send-by-word): presets Talk /
+      Dictate / Send word / Pieces (src/core/voice-presets.ts; a segmented
+      control in the pill menu; Send word and Pieces need the one-time
+      liability acknowledgement, recorded per user); the reducer's 'word'
+      policy treats a turn that IS the held send word (#send-word-matcher) as
+      a command, never appended, acting only on a draft visible ≥ 1 s
+      ('painted' via double rAF, page visible, focused, attached; any text
+      change resets it); a near miss asks "Did you say …?"; a 1 s grace
+      ("Sending… Esc keeps it", draft state word-grace) then
+      request.voice.send.claim and the one send path. An ambient attach asks
+      for the preset's send ceiling (with liabilityAck once the in-app
+      acknowledgement recorded it). Labels: sentLabel(turn.sent) on voice
+      messages ("spoken · sent by you / on release / by send word / as a
+      piece / by send-now"; the plain origin only since TD-2026-10-23-939,
+      which retired the "edits ask first" suffix, the header chip and the
+      voice card line with the kernel clamp); teaching the send word INLINE
+      under its row in the Voice settings sheet (core/send-word-teach.ts, a
+      pure reducer over the kernel's attended trial: pick send / send it /
+      over / your own, then "Say <word> once, on its own." and the ONE
+      counter "take n of up to 4" from status.voice.sendWordTrial, "I heard
+      …", a mishearing kept as a variant, the risk check with "I
+      understand" right before save via request.voice.sendword{op:'save'};
+      no lead-in, never the product name; Aegis R-1: keeping a mishearing is an
+      explicit opt-in, each collected variant an UNTICKED box at save
+      ("Saying “x” on its own will also send. You said “w”; I heard “x”.")
+      and the save carries every unticked one as dropVariants; only a LISTENING trial makes a turn a take,
+      and with the row open nothing heard becomes a draft; the heard text is
+      read only from status.voice.sendWordTrial.last);
+      a trialTake row is never a transcript line (store voiceItem) and never
+      a draft (dictation turnText); Pieces (gap 1500 / cap 8000 ms, hold
+      while busy, piece claim, piece ring); Mic key switch, Listening
+      (open / toggle) choice sent as the client's capture kind, voice.preset.*
+      palette commands, in-app bare `, send-now from the voice app.
+      ONE SEND CONTROL (founder report 2026-10-20): the composer's own send
+      (Enter / ⌘Enter / [send]) is the only send; the dictation bar has no
+      Send of its own. draftState / DRAFT_CONTROLS map the draft's state to
+      its controls: idle (none), ambient (no hold: nothing counts down),
+      ptt-countdown (ring + [Hold]), ptt-held ([Resume]), ptt-manual (auto-send
+      off: no hold). A new dictation mode adds a state and a row. The composer
+      is one container: the form carries the border and, while the textarea
+      has keyboard focus, the focus ring (:has); the textarea draws none.
+      #gui-dictation (TD-2026-10-20-262, T-2026-10-19-026) — voice dictation
+      into the composer. core/dictation.ts is a PURE reducer: a live
+      voice.turn.user row with the kernel-stamped `forwardable: true`,
+      non-empty text, no `intercepted`/refusal, for the attached session and
+      past the start seq (no backlog; each seq once) appends to the draft with
+      one space. One countdown ring runs over the per-machine delay
+      (localStorage gnomon.dictation.delayMs: 3/5/8/15 s/off, default 5 s;
+      pill menu picks and voice.delay.* palette commands) while the draft is
+      unheld, the voice app idle (status.voice.dictation.activity), the
+      session not streaming, and the attached session is the GUI's focused
+      one (else the pill says "draft waiting"); new speech, transcription, a
+      new turn or streaming resets it to the full delay. Hold: [Hold]/[Resume],
+      the voice app's ⌃⌥H (status.voice.dictation.holdToggles, by parity),
+      typing in or clicking into a draft. The composer send (Enter/⌘Enter/[send]) sends now. The
+      send is session.send{hsid, content: one part per turn | the edit as ONE
+      part, source: voice}. The #gui store reads turn.sent voiceTurnSeqs (and
+      the older voiceTurnSeq), shows 🎙 for voice and 🎙✎ for voice-edited,
+      and a forwardable unsent turn as "in composer". Only a human-class
+      connection (canAttach) gets these controls; a voice connection never.
+      Aegis conditions: hold records who set it (gui | voice | detached; a
+      voice toggle never clears a GUI-set or detached hold); no live
+      attachment for the draft's session ⇒ held 'detached', never
+      auto-sent; an edit while sending keeps hold and the edit; turn text is
+      sanitized by the contracts sanitizeDisplayText (sent as the voice app's
+      exact words only when sanitizing changed nothing); the holdToggles
+      baseline resets per voice connection (connEpoch, else
+      client.restarts); edited drafts echo as typed messages.
+      TD-2026-10-20-125 (founder ruling): ambient speech NEVER auto-sends. A
+      part whose turn's mode is not exactly 'ptt' (missing included) marks
+      the draft ambient (ambientDraft); an ambient draft never arms the ring
+      and only the composer send (Enter/⌘Enter/[send]) sends it (note "draft · Enter sends
+      (ambient never auto-sends)"). PTT drafts keep the countdown; the delay
+      picks say push-to-talk.
+      AT THE CARET (founder report 2026-10-23): turnRow carries the
+      composer's caret or selection (`at`, app.ts composerCaret: the focused
+      selection, else the last caret collapsed so a selection is never
+      replaced unseen, else the end; only while the composer shows this
+      draft). The plain end of an unedited draft keeps the in-order append
+      (plainAppend), so an unedited send is still one part per turn. Anywhere
+      else placeWords splices the words in (one space, never two; a capital
+      at a sentence start, a plainly capitalised first word lowered
+      mid-sentence, never "I" or an acronym; no full stop before the sentence
+      goes on) and the draft becomes edited and held: it sends as ONE part
+      (source voice; the kernel matches parts in order, so out-of-order parts
+      must never go as parts), never as a piece, and the voice send key holds
+      it for Enter. The part keeps its unverified / inherited / ambient marks.
+      `caret` is where app.ts puts the composer's caret after the turn
+      (setSelectionRange, never taking the focus) so speech flows on.
+    path: src/core/dictation.ts
+    type: module
+    tags: [gnomon, gui, voice, dictation]
+    tests:
+      - test/dictation.test.ts
+      - test/dictation-caret.test.ts
+  gui-preview:
+    description: >-
+      #gui-preview (DEV ONLY; never in the kernel-served bundle) - the GUI
+      fixture preview for designers and agents. scripts/preview.mjs serves
+      the REAL static/index.html, boot.js and styles.css on 127.0.0.1 only
+      (default port 8790, loopback Host check) with an app.js bundled from
+      src/preview/main.ts: the real ui/app.ts and core run over a fake
+      kernel Transport (src/preview/fake-kernel.ts) that answers hello with a
+      real Ed25519 serverSig from a per-page throwaway WebCrypto key, auth,
+      status, log.read (backlog + follow), approve (emits approval.decide),
+      log.append and session.send (no effect), and refuses session.open.
+      Card actions are signed with the same key, so the real GUI verifies
+      and renders the decision keys. Fixtures (src/preview/fixtures.ts:
+      contracts LogRow chains of registered kinds plus the status result;
+      desk, empty, voice-armed, voice-crashed, stack-heavy, workshop, spoken,
+      choices) are
+      chosen by URL ?fixture=&theme=day|night&motion=on|off[&surface=browser];
+      src/preview/env.ts stubs only the colour-scheme and reduced-motion
+      media queries and the wrapper surface marker. The workshop fixture runs
+      the real Workshop mod model (packages/gnomon-mods/workshop/model.mjs)
+      over the feed projection and draws it with renderBlock. / lists every
+      fixture x theme; --fixture-list prints the URLs.
+      scripts/preview-shots.mjs writes <fixture>-<theme>.png at 1440x900 with
+      Playwright or Puppeteer when one is already installed (none is added),
+      or an installed Chrome with --chrome; otherwise it skips.
+      Fixture paradigm-context (#paradigm-context-mod): status.mods.views
+      lists the sidebar sheet; the fake kernel answers mod.view like the
+      host (the GUI {focus:{hsid}} joined to a fixture K1 slice by hsid,
+      other keys ignored) through the REAL mod model
+      (src/preview/paradigm-context.ts), drawn by the real mod-panel path.
+    path: src/preview/
+    type: module
+    tags: [gnomon, gui, dev-tool, preview]
+    tests:
+      - test/preview.test.ts
+  gui-voice-capture:
+    description: >-
+      TD-2026-10-23-496: under Send word the word sends the whole draft,
+      unchecked parts included (wordReady no longer blocks on them, a switch
+      to Send word no longer holds the draft); the note reads "draft · some
+      words not checked as you · say '<word>' or press Enter"; the risk
+      sentence says the word sends everything, even unchecked words, and
+      that anyone near the mic can send with it. Send-now and pieces still
+      hold an unverified draft for Enter.
+      Aegis H-1 (2026-10-23): a turn that inherited its speaker
+      (speakerBasis 'continuity') is a draft part marked inherited: the row
+      reads "in composer · not checked as you", the draft note "draft ·
+      [“words”] not checked as you" (information: no clamp), a piece needs a part
+      checked as the human; the refusal causes inherited-only / inherited
+      read in plain words. A short unverified push-to-talk turn (draftOnly)
+      stops the Talk countdown. The input picker opens, renews (10 s) and
+      closes the mic meter (request.voice.client{op:'mic-meter'}).
+      2026-10-23: a refused voice send reads in plain words
+      (voiceRefusalText: "✕ not sent by voice · Gnomon couldn't confirm it
+      was you for part of this draft" + next: press Enter to send it · or
+      re-teach your voice on this mic), never the code, symbol or rule id.
+      Voice drops fix (2026-10-20): a drop names its reason in words
+      (dropLabelOf, refusalPhrase) and stays on the pill until the next capture
+      or a dismiss (captureDismiss on opening the voice menu); the store renders
+      kernel-refused hash-only voice.turn.user rows (refusedReason,
+      refusedCause) as voice-refused.
+      #gui-voice-capture (T-2026-10-20-005 A1, TD-2026-10-20-086 V3/V4) — live
+      capture feedback. core/capture.ts is PURE: captureStatusOf is the one
+      adapter over status.voice.capture{state, segId, reason?, level?, at}
+      (the voice app's per-segment state, relayed by the kernel with a 5 s
+      TTL); captureStep/captureDisplayOf give the pill words: idle keeps
+      "Listening" / "Hold … to talk" (meter still), hearing "Hearing you…"
+      (pulsing, the meter is the REAL level), transcribing "Catching that…",
+      captured "Got it" (1.2 s flash), dropped the reason only for 2.5 s
+      (no words, no count). capturePollMs is the V3 cadence (no push relay):
+      ~1 s at rest, 175 ms while hearing or transcribing, null when off,
+      detached, the voice app gone or disconnected; app.ts syncClientPoll
+      runs the one attached poll at that cadence (single flight,
+      pollStatusOnce) and stopStatusPolls clears every status poll and the
+      flash timer on disconnect (Aegis L2 of 862ef85a). The composer ghost
+      line "…" is its own element (#composer-ghost, never the textarea); the
+      polite caption (#voice-caption) changes on a state change only. The
+      decorative meter animation and row kick are gone, and the dead
+      voice.turn.partial path is removed. B1 live words (T-2026-10-20-005,
+      V1/V2): captureStatusOf reads capture.text{committed, tail} (hearing /
+      transcribing only; ghostTextOf: strings only, whitespace collapsed,
+      capped at GHOST_TEXT_MAX keeping the newest words), which the kernel
+      projects to the human gui credential only; app.ts paintGhost puts the
+      committed words solid (.ghost-committed) and the tail dim
+      (.ghost-tail) as text nodes into #composer-ghost (never the textarea,
+      so a send can never carry non-final words), "…" with no words, and
+      clears on captured / dropped / idle. Reduced motion: the global rule
+      makes the tail fade instant. AT THE CARET (founder report 2026-10-23):
+      #composer-ghost is now an aria-hidden mirror laid over the textarea
+      (placeGhost: same box, font and wrapping; scrolled with it) that draws
+      the composer text with the live words where the turn will land
+      (placeWords, the reducer's rule, at composerCaret); the textarea's own
+      text is transparent while it shows (.ghosting, caret kept) and still
+      never holds a live word. Committed words carry a dotted --sec
+      underline; fitComposer grows the composer to fit them.
+      Aegis follow-ups: a capture from a status received more than
+      CAPTURE_STALE_MS (5 s) ago is never shown (freshCapture, page clock);
+      a captured the kernel marks kernel:'unconfirmed' reads "Heard, not
+      confirmed", never "Got it".
+    path: src/core/capture.ts
+    type: module
+    tags: [gnomon, gui, voice, capture]
+    flows: [$voice-turn]
+    tests:
+      - test/capture.test.ts
+  gui-mods-panel:
+    description: >-
+      The Mods panel (founder dogfood 2026-10-21: "Install Workshop does
+      nothing; no way to see which mods are on"). core/mods.ts (PURE):
+      modsViewOf(status, stack cards) gives installed / available / pending;
+      request builders for request.mod.install|link|pause|start|uninstall|
+      config; folderPathError; configRequest (only manifest-declared fields,
+      secrets refused). ui/mods-panel.ts: the sheet (no header key since board header-5b: Gnomon menu, ⌘K, Workshop; created in
+      code, no index.html change), palette mods.open, Esc closes, trusted
+      presses only, every key busy then a result in words (refusals as
+      alerts), "decide in the stack" focuses the card. Install Workshop
+      (core/mod-panels.ts workshopInstallKey, ui/mod-panels-mount.ts
+      installWorkshop) now sends request.mod.install or opens the panel;
+      it was a disabled constant with the command in title= only.
+    tags: [gui, mods]
+    signals: []
+    tests:
+      - test/mods.test.ts
+      - test/workshop.test.ts
+
+  gui-loops:
+    description: >-
+      LP8, the GUI Loops view (docs/specs/gnomon-loops.md §6; Atelier
+      2026-10-22-gnomon-loops-ui, design-system loops-word, loops-leaf,
+      loop-row, loop-list, loop-detail, budget-field, loop-graph, run-trace,
+      loop-trust-unfolded, loop-diff, alert, trust-slip, toast loop-done).
+      core/loops.ts (PURE) reads the human class's status.loops (registry
+      list with each loop's drawable shape and authoredBy, the runner's
+      running set and run ledger, effective autonomy with capReason, the
+      uptime hold) into the header loops word, the leaf meta, keep-alive
+      line and edge tab, the needs-you-pinned project-grouped two-line
+      rows, detail keys that name their cost, budget keys (tighter /
+      looser), the run trace and run paths, stack alerts (fail, stop,
+      kernel pause), the waiting-for-trust slip, loop-done toasts from live
+      loop.run.ended{goal}, loop.landed and loop.notified rows, and the
+      unfolded trust card's sections. core/loop-graph.ts (PURE) lays the
+      graph out left to right when it fits, else top to bottom, with
+      collapsed labels (any / else), merged buses, boxes sized to their
+      type line, marks for verdicts; fit plus zoom inside the frame.
+      ui/loops-view.ts is the DOM (the centre leaf, Esc folds it to the
+      edge tab; Read unfolds a loop-trust card over the centre). Requests
+      are log.append of request.loop.* on a trusted press; Pause all is
+      request.loop.pause{all:true} (palette loops.pause-all, the leaf head,
+      the wordmark menu). Apply · tighter sends request.loop.budget (narrowing only, the kernel's loop.budget.tightened row); a looser cap is disabled as Loosen · needs trust. Loop cards are identified from the card:v1 the broker sends (the root-rows node, the kernel's loop.notified row, the kernel line), never a top-level detail.
+      TD-2026-10-24-447 (Gnomon 8.0.1, loops ship off): status.loops.enabled === false makes loopsOf return an empty model with enabled:false (reason not-in-this-build); the header loops word, loop alerts, the trust slip, loop toasts and the edge tab stay hidden, the Loops view shows one empty state (LOOPS_OFF_TEXT "Loops are off in this build. They arrive in Gnomon 8.1."), loops.pause-all leaves the palette and the Gnomon menu (Loops... stays, noted "off in this build"), pauseAllLoops is a no-op, and stale loop-trust / loop-choice cards from an 8.0.0 install are not drawn in the stack or pinned list (the broker still holds them; the inbox count leaves them out). A request.loop.* refused loops-disabled renders through refusalText with the kernel's message. Tests: test/loops-view.test.ts (loops off in this build).
+    tags: [gui, loops]
+    signals: []
+    tests:
+      - test/loops-view.test.ts
+      - test/loop-cards.test.ts
+      - test/desk.test.ts
+
+  gui-turn-steps:
+    description: >-
+      Founder 2026-10-23 ("with gnomon seeing what the stop hooks are doing
+      … in that little chip label and then after the result of it"; then
+      "just right there where that 'working label' area is just a little
+      bit of labeling on what is being called … clicking on it to expand
+      out to see what is being done"). core/turn-steps.ts (PURE):
+      StepTracker folds the running turn's full turn.event lines (main
+      chain only) into steps: thinking / writing (content blocks), a tool
+      call (calling <Tool>, then toolSummary's '<Tool> · <target>' until its
+      tool_result: ok | error), a hook (hook_started to hook_response under
+      #claude-adapter's --include-hook-events: '<Event> hook[ · matcher]',
+      outcome ok | blocked (exit 2 or stdout JSON decision block, the
+      reason's first line) | timed out (cancelled) | failed (exit N); Claude's
+      synthetic 'Stop hook feedback' line names a blocking hook's command
+      by its script basename), a status (compacting). now() is the working
+      key's words and clock start (running hooks first, else the latest open
+      step, else 'finishing' after the main-chain end_turn, else working…);
+      a running hook carries `under` (what the key named before it), and
+      live-turn.ts workNow shows it until the hook has run HOOK_DWELL_MS
+      (1 s), so a fast PreToolUse hook never flicks the key;
+      summary() is the turn's one hook-result line (notable hook groups:
+      not ok, or 2 s or more; failed tool calls; warn only when a hook
+      blocked, failed or timed out), placed by store.ts chatItems before the
+      turn's result line. withStepFolds attaches rowDetail (the raw fold's
+      redaction) to unfolded steps. store.ts lineItems never shows a
+      synthetic user line as the human's (hook feedback folds into the
+      hook-result line, other synthetic lines are a quiet system line).
+      ui/app.ts workingEl: the working row is a key (role=button,
+      aria-expanded, Enter / Space / click; data-act steps:<key>; its full
+      words in title) whose words ellipsize and whose clock never does
+      (live-turn.ts workParts); it unfolds an ol.steps (a labelled list,
+      clocks aria-hidden, 24px rows, max 40vh, scrolls inside itself, keeps
+      its scroll across remounts); each step's words ellipsize before its
+      time and outcome (stepParts); a finished step folds to its lines. The
+      row is no live region (it remounts per step): sayWork writes the
+      persistent #turn-say status ("Claude is waiting on a Stop hook") once
+      what the turn does has held 2 s. The ticker rewrites the key's words
+      and clocks; itemSig repaints on a step change, never per tick.
+      Preview fixtures turn-hook, turn-hooks, turn-steps replay the 2026-10-23
+      hook probes' lines. Design: .atelier/systems/gnomon transcript-row
+      variants working, step-list, hook-result (reviewed: atelier-mika
+      2026-10-23, amended), claude-note (Aegis M1).
+      Aegis review 2026-10-23: M1 a synthetic user line that is not
+      "<event>[:matcher] hook feedback:" is role claude-note ("Claude ·
+      <text>"), never 'system' (the kernel's notes); L1 Claude's feedback
+      names a blocked hook only when that step's own reason first line is
+      the same text (no reason, no name); M2 StepTracker.push takes the
+      kernel's turn.event.hook facts (kernel principal only) so a line
+      stored by hash still opens and ends its step, and hookOutcome takes
+      the outcome from them (a {bytes, sha256} field has no reason text).
+      Mika: a hook Claude cancelled reads "timed out" unless the turn was
+      interrupted ("[Request interrupted by user]" within 2 s after it,
+      measured on claude 2.1.309): then "cancelled", quiet (no warn).
+    tags: [gui, transcript, hooks]
+    signals: []
+    tests:
+      - test/turn-steps.test.ts
+      - test/live-turn.test.ts
+
+  gui-offer-slip:
+    description: >-
+      The Desk's margin slip (TD-2026-10-20-812 O1, Luna's comp
+      .atelier/sessions/2026-10-20-gnomon-mod-invitations refs/flow.html).
+      core/offers.ts (PURE): foldOffers folds ONLY the kernel's offer.shown /
+      offer.decided / offer.kept rows of one conversation (principal
+      p:<ns>/kernel, payload hsid = the conversation, offer:<ULID>, a
+      turn:<hsid>/<n> replyTurnId, single-line question <= 240 code points),
+      never reply text; slipViews mounts each slip under the last assistant
+      item before its offer.shown row and makes only the newest undecided slip
+      live, only while its reply is the latest and no human message follows;
+      openStep is the two-step open (A5: first trusted click/Enter arms and
+      shows "takes: <manifest contextIn> · ↵ to open", the second sends);
+      decideRequest = log.append{kind:request.offer.decide,
+      payload:{offerId, decision}}; offer.decided closes the slip, not-now
+      quiets that mod for the rest of the conversation (L4), stop-here
+      quiets all; voiceOfferIntent: a heard "not now" dismisses (one request
+      per offer, live rows only), a heard "open" only shows "click or ↵ to
+      open" (L1). Re-review M-2: a kernel offer.retired{why:'continued'}
+      closes an undecided slip (never live, no voice dismissal) and leaves
+      the trace "retired · the reply continued · mod:<name>". Aegis fixes: M1 openStep refuses key repeats and
+      multi-clicks, waits OFFER_ARM_GAP_MS (400) after the arm, and drops an
+      arm after OFFER_ARM_TTL_MS (15 s); M2 only a forwardable,
+      non-intercepted push-to-talk row (pttDismissable) dismisses, only the
+      slip live when it arrived, only rows after offerLiveSince; ambient
+      speech shows "click not now to dismiss"; M3 "takes:" comes from the
+      row's kernel-copied contextIn (contracts CONTEXT_SOURCES labelled by
+      CONTEXT_SOURCE_LABELS, unknown tokens shown as unknown, +N more past
+      8, missing = "unknown (not reported by the kernel)"); L1
+      devArmOfferOnce is dead code in the served bundle (__GNOMON_PREVIEW__
+      define false + minifySyntax in build.mjs). The offer kinds, patterns,
+      CONTEXT_SOURCES and the isOfferTitle / isOfferQuestion text rules are
+      imported from @a-company/gnomon-contracts. stripOfferBlocks (called by
+      store.ts chatItems) hides a reply's trailing ```offer block (contracts
+      offerBlockOf body) ONLY when a valid kernel offer.shown row anchors to
+      that reply and the block names the same mod and kind; otherwise the
+      reply text shows as-is (model text alone never hides anything).
+      ui/offer-slip.ts:
+      renderOfferSlip (dashed, soft shadow, never .key / data-decision; tab =
+      glyph + offer · mod:<name>, no per-mod hue, L2; the question a text
+      node) and wireOfferSlips (trusted click / Enter only). ui/app.ts mounts
+      the slips in itemEl and syncs them in paintTranscript; styles.css
+      .slip* (-0.7deg by day via --slip-tilt, flat at night, a slide-in of up to 320ms,
+      instant under reduced motion). Preview fixtures offer-slip,
+      offer-armed (devArmOfferOnce, DEV ONLY), offer-muted; the fake kernel
+      answers request.offer.decide with offer.decided. Tests:
+      test/offers.test.ts.
+    signals: []
+  gui-host-hints:
+    description: >-
+      #gui-host-hints (founder request 2026-10-23, the "pre-sanitization";
+      design-system host-slip, proposed). core/host-hints.ts (PURE) is the
+      ONE mapping table from an instruction a headless Gnomon session cannot
+      do to the Gnomon way: slash commands (HOST_SLASH_TABLE: /plugin … to
+      the `claude plugin …` CLI with a Copy key, /mcp to Settings › MCP
+      servers, /config and /settings to Settings, /permissions to Rules,
+      /clear /new /compact to New session, /login to `claude` then /login,
+      /doctor to `claude doctor`; BUILTINS and any /command after run, type,
+      use, enter or try, or a namespaced one, get the generic "Slash
+      commands don't run in Gnomon."), "restart the session / Claude Code"
+      (New session) and "run claude …" (`claude plugin …` copied, `claude
+      mcp …` to MCP servers, `claude` / --resume to New session). A slash
+      command counts in a code span that starts with it, at a line start
+      (fences, "$ " prompts, list bullets) or after a verb; paths, HTTP
+      routes, URLs and bare prose never count. Review round (Mika Delta 10,
+      Aegis M1/L1/L2): ONE slip per reply (tab "⊙ note · gnomon", up to 3
+      items parted by a dashed rule, a repeated line said once); the reply's
+      argument in a plugin command is underlined and labelled "named in the
+      reply", and add/install/enable/update carry the fixed warning
+      "Plugins run code on your machine: …"; the said text keeps recognised
+      tokens only, through the contracts sanitizer (no bidi survives); Copy
+      refuses unless the rendered command text equals the command, keeps
+      focus and is announced in #toast-say. A copied command is built
+      from the table plus a SAFE_ARG token (no spaces, quotes or shell
+      metacharacters), else the slip falls back to words; at most 3 hints
+      per reply, deduplicated. The reply text is NEVER rewritten: app.ts
+      itemEl draws the hints (hostHintsFor, cached per item and text) as
+      host slips after the unchanged body, not in the raw view.
+      ui/host-slip.ts: renderHostSlips (the offer-slip paper, flat, the ⊙
+      gnomon glyph, tab "in Gnomon · <instruction>" as code, the GUI line,
+      the command in a mono <code class=host-cmd>, one quiet key: Copy or the
+      screen's name) and wireHostSlips (trusted clicks only; open runs a
+      HOST_OPEN_IDS palette command; Copy writes the drawn hint's command,
+      the same string the <code> shows, with navigator.clipboard, else
+      selects it and says ⌘C). Recognition never sends, appends or runs
+      anything. Kernel half: #host-guidance. Tests: test/host-hints.test.ts.
+    signals: []
+  gui-table-talk:
+    description: >-
+      #gui-table-talk (TD-2026-10-20-294) — a reply's first speak fenced block
+      (store.ts splitSpeak, mirroring the kernel projector) shows as a
+      highlighted "said aloud" line at the top of the reply and is removed
+      from the body; a reply without one (heuristic) gets no highlight. Lines
+      that start with a bold label, in whatever scheme the agent chose
+      (letters, numbers, short names), render as .reply-part lines (replyParts: a quiet left rule and a bold
+      label; board gnomon-chip renamed them from .chip, they were never chips).
+      Aegis L3: when the kernel's speakable row (principal p:<ns>/kernel) for
+      that reply exists, the line is its text (from block, "said aloud";
+      heuristic shows none); otherwise the GUI's own parse ("spoken part").
+      Aegis M1: a replayed user message always keeps content[0]; a later text
+      block is hidden only when its sha256 is the kernel guidance hash
+      (TABLE_TALK_GUIDANCE_HASH, pinned to the kernel's) or the turn.sent
+      guidanceHash; a human-typed <gnomon-voice> stays visible.
+      One spoken-aloud marker per reply (founder bug 2026-10-20): pipelined
+      TTS logs one playback voice.turn.agent per sentence; chatItems
+      (spokenFold/spokenText) opens ONE 🔊 marker at the kernel's speakable
+      row (or the first playback row on an older kernel) and folds every
+      later playback row and voice.bargein into it until the next assistant
+      reply: "🔊 spoken aloud · 5s", "· stopped" when any chunk was cut off
+      (interrupted, shorter than planned, or a barge-in); a barge-in with no
+      marker stays the lone "🔊 interrupted". app.ts paintTranscript
+      repaints a mounted row whose text changed in place. Preview fixture
+      `spoken`.
+      Clickable reply options (core/choices.ts, PURE): replyChoices finds
+      2..6 option lines keyed A..F or 1..6 in order (separator space ) . :,
+      optional bold) at the END of a reply that asks a question (in the text
+      above or the said-aloud line); labels go through the contracts
+      sanitizer and are at most 120 chars, else no chips. liveChoiceKey: only
+      the last assistant item of the focused session, while the human has
+      not written after it; older replies render the chips disabled. Chips
+      are dashed buttons (.choice, ink keycap by day, [A] at night) with
+      data-choice / data-choice-item, never the key class or data-decision.
+      pickChoice: trusted gesture only; the sent text is rebuilt from the
+      parsed reply (`A — <label>`), put into the composer and sent via the
+      composer form's requestSubmit (the typed-message path); a draft
+      (typed or dictated) is kept and the option appended, nothing sent.
+      Keys: letter/number pick inside the live group when the composer is
+      empty, arrows move, Enter activates. Voice picking is out of scope.
+      Preview fixture `choices`. Tests: test/choices.test.ts.
+      Aegis review folded in: M1 a letter/number key only moves focus to its
+      chip (Enter/Space confirms); a label over 60 chars, with a backtick or
+      shell-like text needs a confirming second click/Enter (.choice.armed,
+      "again to send"). M2 any option the contracts sanitizer flags ⇒ no
+      chips. L1 night chips show a plain underlined letter, no [ ] brackets.
+      L2 send() returns whether the kernel took the message; a chip is marked
+      picked only then, and the composer clears only when the message went
+      out (never on an early return). L3 onChoice recomputes liveness from
+      currentItems(). L4 more than two combining marks on a base ⇒ no chips.
+      Multi-select (2026-10-24, with #gui-ask-card): a recognised run whose
+      line above (or said line) matches MULTI_CUE ("pick any", "all that
+      apply", "one or more", ...) renders toggles plus one Send key;
+      toggleChoice / pickChoices (trusted, live, own keys) send the toggled
+      options as one message (multiMessage: one `K — label` line each).
+      Aegis L3: the Send key's title and aria-label carry the composed
+      lines; armed, a .choice-compose note shows them and which label armed
+      it (confirmWhy). Aegis L4: the chips carry data-reply-hash (replyHash
+      of the painted reply and said line); a toggle, pick or Send whose
+      painted hash no longer matches the current reply is refused.
+    path: src/core/store.ts
+    type: module
+    tags: [gnomon, gui, voice, table-talk]
+    tests:
+      - test/table-talk.test.ts
+      - test/choices.test.ts
+  gui-ask-card:
+    description: >-
+      #gui-ask-card (founder request 2026-10-24: "regarding options that
+      gnomon presents to the user, even multi selections, it would be nice
+      to click them"; design-system question-card + model-text-control
+      choice-multi, proposed; Mika Delta 11 approved-with-fixes, Aegis M2 /
+      L1 / L3 / L4 folded in). A session's
+      AskUserQuestion (claude 2.1.309 can_use_tool, input.questions[] with
+      header, options {label, description, preview?}, multiSelect) is the
+      ask-user card; core/ask-card.ts renders its picker from the
+      contentHash-verified detail only (askDetailOf in core/render.ts reads
+      descriptions and previews): per question a radiogroup or group, the
+      header chip, options as buttons (number key, label, description;
+      role radio or checkbox, aria-checked), Other with a text field bounded
+      by the kernel's maxAnswerChars, a plain-text <pre> preview of the
+      focused (else picked) option, and the card's one decision key
+      relabelled Submit / Submit answers, aria-disabled until askComplete.
+      Reducers askPress / askPressOther / askType keep one AskPicks per card
+      (ui/app.ts askPicks, shared by the pinned and pile copies, kept across
+      repaints with focus and caret, dropped with the card); syncAsk updates
+      both copies in place. askNote (render.ts): one pick ⇒ the typed text
+      if any else the label; many ⇒ the toggled labels then Other's text,
+      comma-separated (Claude Code's form); several questions ⇒ JSON
+      {answers}. Keyboard: arrows / Home / End move, Space or Enter pick,
+      1..9 or a..i pick that option of the focused question, Enter in Other
+      submits. Every press needs isTrusted; approve is human-only at the
+      kernel (B4); voice never answers (broker #approve refuses voice).
+      Mika Delta 11: a one-pick question is one tab stop (askTabStop); the
+      early Submit keeps focus and names the open questions (askMissingText,
+      no kernel code); once answered, the transcript's decided line (store
+      ChatItem.cardId) reads "answered · …" from askSummary, page-only (the
+      kernel logs a noteHash only), and focus goes to the composer. Aegis
+      M2: the preview refresh goes through displayText. The multi-select
+      table-talk half lives in core/choices.ts (#gui-table-talk).
+    path: src/core/ask-card.ts
+    type: module
+    tags: [gnomon, gui, ask-user, table-talk]
+    tests:
+      - test/ask-card.test.ts
+      - test/choices.test.ts
+      - test/gui.test.ts
+    signals: []
+  gui-wordmark-menu:
+    description: >-
+      #gui-wordmark-menu (board header-5b, Atelier 2026-10-21-gnomon-voice
+      refs/header-5b.html option C; design-system gnomon.voice.header) - the
+      header row is four things: the wordmark menu "Gnomon ▾", the ⌘K palette
+      field, quiet kernel status (#conn link dot, word only when not
+      connected; #risk outlined amber chip, "browser · extension risk" wide
+      and "browser · risk" below 1040px (Aegis: the narrow chip still says
+      risk), full text in title and sr-only, shown from boot on the browser
+      surface before any attach and hidden only in the wrapper) and the
+      kernel-owned voice pill. Every control
+      28px, nowrap; the row never wraps (palette words, then the pill fact,
+      truncate). PURE core/header.ts: HEADER_ITEMS, appMenuModel (Layout
+      presets, "Panes and Workshop…" opening pane toggles + Workshop
+      placement in place, Day/Night/Auto radios, Mods…, Voice settings…,
+      Settings… ⌘,, who line), APP_MENU_RUNS (existing GUI commands only),
+      triggerKey / menuKey (Enter/Space are the click, ↓/↑ open on first /
+      last, arrows/Home/End move, Esc closes and focus returns, Tab closes),
+      linkView, whoLine. The theme switch, ⚙, Mods and ⊞ Layout header keys,
+      the separate Start voice key and the loose voice note are gone: while
+      the voice app can't run the pill IS the action (voice-client.ts
+      pillActionOf: "Start voice · app not running", aria-label says what a
+      click does); attached, the action is the ladder's first row; a draft
+      waiting elsewhere is the pill's fact; the idle auto-off is the 6 s
+      toast in ladder words. Palette: menu.gnomon "Gnomon menu: …" (not
+      block-safe). Preview fixture app-menu.
+    path: src/core/header.ts
+    type: module
+    tags: [gnomon, gui, header]
+    tests:
+      - test/header.test.ts
+  gui-voice-ladder:
+    description: >-
+      #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html;
+      design-system gnomon.voice.model + pill). #voice-reply-mode (founder
+      2026-10-23): Voice settings' replies row (after listen; "spoken and
+      shown" / "shown only · not spoken · voice input stays on", the link
+      show only / speak them) and the ladder's replies group (Speak and show
+      | Show only, menuitemradio seg keys, data-reply-mode) send
+      request.voice.client{op:'reply-mode', mode} on a trusted press only
+      (replyModeRequest; setReplyMode in app.ts); the mode is the kernel's
+      status.voice.replyMode (replyModeOf; older kernels read speak). Show
+      only keeps the reply's arrangement (the spoken part line, body,
+      choices, slips); saidTag says "voice · spoken part · not played".
+      Tests: test/voice-reply-mode.test.ts. Voice is ONE choice, a trust
+      ladder Off / Talk / Dictate / Send word / Pieces mapped onto the voice
+      state x send preset (Off = voice.session.end, Talk = ptt x countdown,
+      Dictate = open/toggle x key, Send word = word, Pieces = pieces). PURE
+      core/voice-ladder.ts: rungOf (the kernel's status.voice.send wins over
+      the page's preset), ladderEntries (one line each, cost tags), chooseRung
+      (a not-ready rung names the Voice settings section that readies it),
+      voicePillOf (the kernel-owned header pill: mic dot filled + ring when
+      open, rung name, ONE live fact: hold ⌃⌥Space / listening / say “word” /
+      mic off · ⌃` / heard Ns ago; vermilion "not sent · why"; no clamp
+      fact or edge since TD-2026-10-23-939), sheetRows.
+      The popover (role menu, rungs menuitemradio, arrows/Home/End, Esc back
+      to the pill) holds the ladder only plus a foot line (mic key · listen)
+      and "voice settings…"; the old Off/Push-to-talk/Ambient list, delay
+      buttons and Send preset buttons are gone. Luna finish-review: Pieces
+      reads "set up · Touch ID" while not ready; when the focused session is
+      not the attached one the ladder (and its aria name) says "applies to
+      <B> · voice is on <A>" (ladderTargetLine / ladderAria); a crash's fact is
+      just "voice crashed", its cause in the title and aria name
+      (crashCauseOf); the risk row says when it was acknowledged; the mic dot
+      and meter are --ink (board gnomon-status-colour retired --live and --stamp); the pill
+      meter shows only while capture is `hearing` (capture.ts meterShownOf);
+      night selected segments are [bracketed] with the glow; the tall-view
+      key has a pressed state. Copy retirement (T-2026-10-21-016): the
+      palette's voice.off / voice.ptt / voice.ambient are gone; the ladder's
+      voice.preset.off|talk|dictate|send-word|pieces are the only voice rung
+      commands (rungOfPresetCommand), the Talk hotkey rides voice.preset.talk,
+      and every user-facing string speaks the rungs (rungNameOf: Off, Talk,
+      Dictate, Send word, Pieces; "open mic" for the shared ambient state),
+      never "Ambient" / "push-to-talk"; the store's spoken markers ("spoken
+      aloud", "interrupted") and the card voice tag ("voice · reversible",
+      "voice · gate") are words, no emoji (gnomon cli-voice); the Gnomon
+      menu's theme row is Day / Night / Auto without glyphs. Wire values and
+      identifiers ('ambient', 'ptt', 'conversation', voice-ambient) are
+      unchanged. test/copy-vocabulary.test.ts walks every string literal in
+      core/ for the retired words and the emoji set.
+    path: src/core/voice-ladder.ts
+    type: module
+    tags: [gnomon, gui, voice]
+    tests:
+      - test/voice-ladder.test.ts
+      - test/voice.test.ts
+      - test/copy-vocabulary.test.ts
+  gui-voice-settings:
+    description: >-
+      2026-10-23 (founder request): an input row first (the mic in use:
+      name, transport, rate, echo cancelling, system default or chosen; warn
+      when the chosen mic is missing or the mic stopped) whose flow is the
+      picker (core/voice-ladder.ts inputRow / inputChoices: system default,
+      every input, a missing choice kept; the folder field's choice rows
+      .ff-row.plain with "in use", one Tab stop, arrows move focus and
+      Enter or Space chooses; a role=meter level from status.voice.mic.level,
+      re-read every INPUT_METER_POLL_MS while open) and
+      request.voice.client{op:'select-input'}. The pill's title names the mic
+      (micTitleLine); a chosen mic that is not connected appends "· chosen mic
+      missing", a mic fault "· mic stopped: <short cause>"
+      (micFaultFact; the whole sentence in the title, the aria name and the
+      ladder's Restart row; the dot hollow). voiceRefusalText applies on the
+      send path only (unsentEcho), not to every voice-* refusal.
+      #gui-voice-settings (Atelier 2026-10-21, setup-home.html + teach.html) -
+      the Voice settings sheet, a right-side drawer on the sheet component
+      (role dialog, Esc closes, focus returns): your voice (inline enrolment:
+      name + consent, Touch ID, "phrase N of 3" with the phrase and a REAL
+      level meter), send word (inline teaching over request.voice.sendword
+      start{trial} / save / clear{trial}), keys (talk ⌃⌥Space, mic ⌃` via
+      the existing mic-key op with the bare ` opt-in warning, send now
+      ⌃⌥Return), listen (always / mic key), timing (Talk auto-send 3/5/8/15/off
+      as a segmented control; pieces gap shown), risk (acknowledged or not; a
+      waiting Pieces turns on from here). ui/voice-settings.ts builds with
+      render.ts h() and routes every trusted press through one act callback;
+      the old sendword / ack / enrol dialogs are removed. The trial never
+      outlives the row or the sheet. The risk check is the render's sentence
+      naming the word (voice-presets riskSentence; Pieces names the pause)
+      with the ACK_TEXT box; once this user acknowledged it shows
+      "acknowledged · <date>" (recordAck keeps the date, ackedAt) instead of a
+      pre-ticked box. The recommended send words skip the common-word
+      warning. While open, Tab is trapped inside the aria-modal drawer
+      (trapNext) and focus returns on close.
+    path: src/ui/voice-settings.ts
+    type: module
+    tags: [gnomon, gui, voice, settings]
+    tests:
+      - test/voice-ladder.test.ts
+      - test/voice-client.test.ts
+  gui-chip:
+    description: >-
+      #gui-chip (board gnomon-chip, design-system rule chip-is-not-a-key,
+      migration batch chips-and-small-keys) - a chip is a status label nobody
+      clicks: <span class="chip">, 18px, 10.5, the faint --rule edge, radius 3
+      by day and square at night; tones plain (card voice tag, mod tier), ink
+      (.chip.ink and the mod-kit `chip` tone .tone-chip) and warn (.chip.warn:
+      card flags, mod pending, dev). The gate handle in the
+      voice tag keeps its warn fill at radius 3. It replaces .badge,
+      .card-voice's own edge and .tone-chip's own look (the clamp pill is gone with the clamp, TD-2026-10-23-939). Never
+      a <button>, never focusable. Anything clickable is a key: every
+      .key.quiet is at least 24 x 24 (⋯, ⤢, Hold, Stop speaking, close), and
+      ✎ rename, the run mode ▾ and the stack filter are 24px quiet keys with
+      the --key-edge at 11.5 (the chat header row grows 6px); all keep the
+      .key:focus-visible ring.
+    path: static/styles.css
+    type: module
+    tags: [gnomon, gui, design-system, chip]
+    tests:
+      - test/desk.test.ts
+  gui-type:
+    description: >-
+      #gui-type (board gnomon-type-scale, choice four-steps; design-system
+      foundations.type; migration batch type) - four type steps as tokens in
+      static/styles.css :root: --fs-label 10.5 (caps labels, card heads,
+      chips, timestamps, notes, the status line, Workshop words, kbd hints,
+      the .choice-k key),
+      --fs-control 11.5 (keys incl. .key.quiet, menu items,
+      session rows, field text, toasts, tool and result lines, the pill),
+      --fs-reading 13.5 (body, replies, reply choices, card titles, section
+      heads, night titles, the heard phrase at 600) and --fs-title 17
+      (wordmark, sheet and pane titles incl. the stack head, chat, empty and
+      setup titles, the setup digest); at night the stack, settings and
+      setup titles are 13.5, carried by typeface and case. A setup card's title is
+      13.5 at 600. Every font-size uses one; no literal
+      remains, and none is set inline from TS. Hierarchy beyond size is
+      weight, case and face (card title and settings section head at 600).
+      The Workshop 76px column's text is 10.5: titles, texts, labels and the
+      absent note wrap (overflow-wrap anywhere), a cap question truncates
+      with … at 64px and keeps its full text in title= and aria-label; the
+      host and slot drop their cap and padding inside the column. The setup
+      digest is 17, weight 600, .08em, one unbroken line of groups of four,
+      in var(--mono). Sheet titles (Settings, Voice settings, Mods) are
+      <h2 class=title> and their section heads <h3 class="title
+      settings-h"> (render.ts h() allows h2/h3), same look as before.
+      gnomon-wrapper/static/status.css carries --fs-reading and --fs-title
+      for its standalone page, plus copied ground/ink/fail and --mono.
+    path: static/styles.css
+    type: module
+    tags: [gnomon, gui, design-system, type]
+    tests:
+      - test/desk.test.ts
+  gui-space-radius:
+    description: >-
+      #gui-space-radius (board gnomon-spacing, choice 2px-grid; design-system
+      foundations.space and foundations.radius; migration batches spacing
+      and radius) - every padding, margin and gap in static/styles.css is an
+      even number of pixels (no odd px, no rem; .sr-only keeps its -1px clip).
+      A key is padding 4px 10px with an 18px line, 28px tall; quiet keys
+      2px 8px at min 24. Radius is var(--radius) 3 (keys, fields, cards,
+      sheets, menus, chips, toasts, code, swatches), var(--radius-pill) 999
+      only for the voice pill, reply choices, the slip's open key and their
+      kbd pills, 0 at night where the system squares them, and 50% for dots.
+      gnomon-wrapper/static/status.css declares its own --radius 3.
+    path: static/styles.css
+    type: module
+    tags: [gnomon, gui, design-system, spacing, radius]
+    tests:
+      - test/desk.test.ts
+  gui-toast:
+    description: >-
+      #gui-toast (board gnomon-notices, choice band-for-alerts; design-system
+      component toast, zone toasts, rule notices-by-kind; migration batch
+      notices-and-toasts) - every notice that is not a kernel alert, in one
+      style and one place: the #toasts region, a zero-height anchor that is
+      the first child of the chat column's .feed (founder's pick, option A of
+      Luna's gnomon-toast-placement reference): right-aligned at the chat
+      column's right edge under the chat header row, over the conversation,
+      never over the chat header's keys or any stack key. With a sheet open
+      it lifts above the scrim (z 45) to the window's top right, left of the
+      Voice settings drawer; if the desk is removed it moves to the shell
+      (.toast-anchor.lifted). One width, min(44ch + 26px, the column). A
+      clamped text opens on hover or focus (it is focusable) and a fail is
+      never clamped; announcements are appended to the live regions, so two
+      quick toasts are both read. A key focuses only its own card
+      (ui/card-focus.ts cardIn: the exact cardId, never another gate card);
+      when it has not arrived a warn names it (upgrade, grant, re-pin, voice,
+      Touch ID card) and clears when it does. Every card focus (focusCard,
+      focusCardGroup) first closes the modal New session sheet
+      (ui/card-focus.ts uncoverStack): a focus behind an aria-modal sheet
+      landed nowhere (founder field test 2026-10-23).
+      Known gap: at 1024 a 720px sheet leaves no room, so a toast can cover
+      the sheet's close key (tracked separately).
+      The band keeps #repin and #voice-dev only. core/toasts.ts (PURE) holds
+      the policy: kinds info / warn / fail with the left edge ink / amber /
+      vermilion; info leaves after 6 s and warn after 10 s, both paused while
+      hovered or focused; fail and persistent never leave by themselves;
+      kind is never hue alone: fail and warn carry a caps word in ink
+      ("failed", "warning", "asks first") and warn's edge is dashed;
+      announcements go through two live regions in index.html (#toast-say
+      polite, #toast-alert assertive for fail), the toasts are not live; at
+      most three, newest on top and always shown, an older info then warn
+      leaves for room, a fail or persistent one waits hidden; a refusal's next: line stays visible while the main
+      text clamps to 4 lines at 44ch (the rest in title=). ui/toasts.ts is
+      the DOM (text nodes only): an optional single key (Restart now, Make it
+      standing, Re-pin) that focuses a card or makes a request and never
+      decides a card; a 24px close key on fail and persistent toasts; Esc in
+      a toast closes it and the page's Esc closes the newest fail. Focus: a
+      new toast is inserted at the top and nothing moves; a focused toast
+      that leaves returns focus where it was before, never to another key.
+      Its callers: app.ts notice(msg, kind, {held, key, source}) over
+      noticeChannel (GUI outcomes; a new one replaces the last unless that
+      was a fail; a fail with a source clears when that source succeeds; an
+      asks-first step is a held warn; a re-pin "not arrived yet" warn clears
+      when the card arrives; "restarting" is held until reload), showToast (voice idle auto-off and
+      voice-app notices, warn), paintUpdateBanner (update available,
+      persistent, Restart now focuses the upgrade card; closing hides it for
+      that card) and ui/standing-feed.ts. A short CSS fade-in (styles.css
+      .toast animation toast-in, set only under data-motion="full"), so
+      reduced motion drops it.
+    path: src/ui/toasts.ts
+    type: module
+    tags: [gnomon, gui, design-system, toast, notice]
+    tests:
+      - test/toasts.test.ts
+  gui-composer:
+    description: >-
+      #gui-composer (Atelier 2026-10-21, gnomon.voice.composer) - the
+      composer wraps and grows with its text to 12 lines, then scrolls; the ⤢
+      key toggles a tall view capped at 24 lines (persisted per viewer,
+      gnomon.composer.tall); exactly one send control in the composer
+      region. The controls sit in ONE row at the bottom right (line count,
+      ⤢, send); the line count shows only from 2 lines up (lineCountShown),
+      so the empty composer is one key tall (founder report 2026-10-23).
+      Empty counts as one line whatever the placeholder (it stays on one
+      line with an ellipsis), and the tall view gives back room the window
+      lacks (fitTallRoom: send stays on screen, the conversation keeps 120 px,
+      never under 12 lines) (Mika 2026-10-23).
+      PURE core/composer.ts composerFit.
+    path: src/core/composer.ts
+    type: module
+    tags: [gnomon, gui, composer]
+    tests:
+      - test/voice-ladder.test.ts
+      - test/dictation.test.ts
+  gui-folder-field:
+    description: >-
+      #gui-folder-field (TD-2026-10-23-162; Atelier session
+      2026-10-23-gnomon-folder-picker, design-system component folder-field,
+      rule paths-are-chosen, migration batches folder-field and key-height).
+      A folder or file on this Mac is CHOSEN, not typed. core/folder-field.ts
+      (no DOM): FolderField controls one field over the kernel's
+      request.folder.choose | check | recent (the kernel opens the macOS
+      chooser, founder C1); every choice is checked before the key that uses
+      it is enabled; the value sent is the kernel's real path and every path
+      shown is the kernel's escaped display; the design copy (FF_COPY);
+      fieldView draws recents (New session: up to six, the centre session's
+      folder chosen else the most recent, C2, so cmd-N then Enter opens) or
+      compact (Settings › Local model runner with "Use …/dist"; Mods › Add
+      from folder; the file variant for Mods › Configure command). No drag
+      from Finder (C3); the home folder is allowed with the amber warning
+      (C4). ui/folder-field.ts draws it with h() (roving radios, arrows move
+      and choose, Home/End, Enter submits the sheet) and routes data-ff-act
+      presses (trusted only). The New session sheet is role=dialog with an
+      h2, stays open (Opening…) until session.open answers and shows a
+      refusal in place; every choice restores the folder's claude model
+      (#gui-model-picker onFolder). styles.css carries the folder-field
+      classes and --key-h (one key height, 28). Open-failed (setOpenFailed)
+      may carry ONE key (data-ff-act error-key, trusted presses only; dropped
+      with its error line). A changed claude binary (refusal.data.session
+      claude_binary_changed, binaryChangedLine) says "Claude Code updated
+      itself, so its binary no longer matches the one Gnomon pinned. next:
+      review the re-pin card." with the key Review re-pin card when the
+      refusal names its card, else the kernel's next and no key. The key
+      holds the choice (keep) against THAT cardId (RepinReturn), closes the
+      sheet and focuses the card; the store's card-outcome key for an allow
+      reopens the sheet on the kept choice (restore) with Open focused, never
+      opening the session; deny or expiry drops it.
+    path: src/core/folder-field.ts
+    type: module
+    tags: [gnomon, gui, atelier, paradigm-8, td-2026-10-23-162]
+    tests:
+      - test/folder-field.test.ts
+      - test/mods.test.ts
+      - test/desk.test.ts
+
+  gui-local-model:
+    description: >-
+      #gui-local-model (TD-2026-10-22-769; Atelier session
+      2026-10-22-gnomon-local-model, design-system settings-form, sheet
+      section-focused, card family gnomon, alert refused-start, loop-detail
+      cant_start). The Settings sheet's "Local model · kernel-owned" section
+      between Voice and Permissions. core/local-model.ts (PURE): localStatusOf
+      (status.local: not-connected | not-offered | windows | none | set),
+      the form (setupForm, changeForm, pickServer fills the address only until
+      typed), the page's checks (addressError: scheme, loopback host in lower
+      case, port 1..65535, no path; model; endpoint name; runner path),
+      probeRequest / setRequest / REMOVE_REQUEST, probeVerdict (C1 check-first:
+      only an answer with the model listed raises the card), checkRowOf, the
+      results (denied, expired, turned off) and toasts, localSection (every
+      state, rows kinds readonly, form, request, term). ui/local-model.ts
+      LocalModelController (no DOM): trusted presses only; one request at a
+      time; Save = page checks (focus the first invalid field), then
+      request.local.probe (rate-limited retry once), then request.local.config
+      {op:'set'} (the card; focus Decide in the stack, which closes the sheet
+      and focuses the card group, never Allow); the outcome from rows
+      (approval.decide allow -> checking until status.local.lastProbe, a toast
+      only when no sheet is open; deny / approval.expire / daemon.start -> the
+      form returns with the entries and a "Not changed" line); Turn off =
+      {op:'remove'}, an inline confirm only when loops use it (C2); Esc closes
+      the confirm or form first. ui/settings-sheet.ts paints the section
+      (heading "· kernel-owned" once, open(section) section-focused) and routes
+      data-lm-act / data-lm-field / submit. core/render.ts localRowOf mirrors
+      the kernel's and helper's gnomon-root-local:v1 row table (Aegis L4:
+      runnerSource, port 1..65535, paths <= 256, no control or bidi characters,
+      never compacted: a row whose helper line exceeds 1200 is refused) and
+      localRootItems renders one line per signed field with the loop-diff marks
+      on a change; the card head reads "⊙ gnomon". core/loops.ts startLine /
+      cantStart / runRefusalOf: the loop detail's can't-start line per kernel
+      why (none, sessions-only, no-runner, no-profile), Run now's reason, the
+      needs-you pin and the refused-start alert key. Palette local.setup.
+      Follow-ups: the Check row says "checking…" only from the kernel's
+      status.local.probing (or a Check again in flight), "not checked yet"
+      with Check again otherwise; Check again reads the refreshed
+      status.local.lastProbe (the kernel records it), ui.check holds only a
+      call that failed. A never-fired start refusal (count 0) is the same
+      one alert, worded "■ <id> can’t start". settings-sheet.ts
+      compositionGate: no repaint while an IME composition is active (owed,
+      run at compositionend). The card's signed lines say their diff mark in
+      sr-only "new: " / "was: " text (no aria-label on a list item).
+      Tests: test/local-model.test.ts, test/root-rows.test.ts,
+      test/loops-view.test.ts.
+  gui-mcp-servers:
+    description: >-
+      #gui-mcp-servers (T-2026-10-23-003): Settings › MCP servers ·
+      kernel-owned, after Local model. core/mcp-servers.ts (pure) paints
+      status.mcp: the first-party Paradigm MCP row (Turn off / Turn on, no
+      card), the human's user and plugin servers, and the focused session's
+      folder's local and repo .mcp.json servers; each readonly row shows a
+      mark (✓ on, ✕ the kernel's reason, ? changed), how it runs (command
+      and args, or transport and URL), env and header NAMES only, the
+      ~/.gnomon/loop-env names it takes, and the shell / fetch-at-launch
+      warnings. Keys `mcp:on-all`, `mcp:on-repo`, `mcp:off`, `mcp:fp-*`,
+      `mcp:decide` (data-lm-act, routed by ui/settings-sheet.ts to
+      ui/mcp-servers.ts McpServersController, never SETTINGS_RUNS); a repo
+      server never offers all repos; a server with a problem has no key;
+      Windows shows rows without keys. Enable sends request.mcp.enable and
+      shows the request row (card waiting, Decide in the stack); the card's
+      approval.decide / approval.expire row gives On / Not changed; disable
+      needs no card. The enable card is the ⊙ gnomon grant family
+      (render.ts gnomonFam for detail.action mcp.enable). Palette mcp.open
+      "MCP servers…". Tests: test/mcp-servers.test.ts.
+      TD-2026-10-23-361: rows and the Paradigm row name the human's own
+      Claude Code allow rules (autoAllowWords) and inline code; the Paradigm
+      row says where it runs from and "(linked: it runs live …)".
+      Tests: test/mcp-servers-allow.test.ts.
+      Mika's review (2026-10-23): the request or result row shows under the
+      pressed server and focus follows it; plain refusals (mcpRefusalText);
+      the Paradigm plugin copy reads "covered by the Paradigm MCP above"; a ✕
+      row ends with next: (problemNext); Windows' row comes first; the
+      folder's servers start a group; the allow words lead with "no card for
+      its tools" and close the how line; the enable card shows the kernel's
+      lines on its face and its title wraps (render.ts mcpFace). Preview
+      fixtures mcp-servers, mcp-waiting, mcp-none, mcp-fp-missing,
+      mcp-windows, mcp-not-offered.
+      #batch-card (founder 2026-10-23: "grouped cards of related things,
+      one password"): one server keeps one press (On for all repos / On in
+      <folder>, acts mcp:on-all / mcp:on-repo, its own card, its request
+      row under its row; Mika 2026-10-23, founder: fewer hurdles). "Mark
+      several" (act mcp:marking, the "Several at once" row after the list;
+      startMarking) turns the keys into Mark for all repos / Mark in
+      <folder> (acts mcp:mark-all / mcp:mark-repo), which STAGE a server in
+      the page (markMcp, unmarkMcp, clearMcp, reconcileMcp; value "marked
+      to turn on …", key Unmark; "none yet" + Stop marking before the
+      first mark; Mark keys also while a card waits; at
+      status.mcp.max marks the keys disable and say why); the "Marked to
+      turn on" row after the servers names them and the cost ("Turn on N
+      servers · asks Touch ID or your Mac password once") and sends ONE
+      request.mcp.enable{servers} (mcpBatchRequest); a refusal keeps every
+      mark. While a card waits its servers read "off until you allow its
+      card", the request row (one per waiting cardId, waitingCards) sits
+      with the batch, the other servers can be marked for the next card,
+      Turn on waits and says why; Turn off applies at once even then. An
+      allowed card that skipped a changed server names it (skippedResult
+      from this card's entry in status.mcp.skips, by cardId; its `on` names
+      what turned on; the skip line only when entry.connId is this page's
+      connection, else only what turned on). Preview fixtures mcp-batch-card (the card,
+      its body scrolling) and mcp-batch-waiting.
+    path: src/core/mcp-servers.ts
+    type: module
+    tags: [gnomon, gui, settings, mcp, paradigm-8]
+    tests:
+      - test/mcp-servers.test.ts
+      - test/mcp-servers-allow.test.ts
+  gui-settings:
+    description: >-
+      #gui-settings (founder UI-first rule) - the header Day / Night / Auto
+      theme switch and the Settings sheet (header gear key, Cmd-comma, the
+      palette's "Settings..."). core/settings.ts is PURE: parseTheme /
+      parseMotion (per-browser THEME_KEY / MOTION_KEY, like the Layout),
+      themeSwitchEntries, unlockSeenOf (the cached unlock folded from
+      kernel-principal approval.unlock / .dropped rows; daemon.start clears)
+      and settingsModel (Appearance, Layout, Voice, Permissions, About). The
+      sheet's theme row reads Day / Night / Auto without glyphs; the always-shown
+      regions name "the browser risk chip" (never "badge" in copy). Every
+      control names an existing GUI command in SETTINGS_RUNS (theme, motion,
+      layout presets, pane toggles, workshop placement, mode.repo.*, voice app
+      start/stop, voice.settings.open) or the standing Revoke
+      (core/standing.ts revokeRequest); no new kernel verb. The Voice section
+      only starts/stops the voice app, links the Voice settings sheet and
+      reads out the rung in force (RUNG_NAME); everything voice configures
+      lives in #gui-voice-settings. Kernel-owned values
+      (mode ceiling, unlock and bounds, connection, bundle pin, the voice
+      rung, the always-shown regions) are read-only rows with a how-to-change line,
+      never a terminal-only path. ui/settings-sheet.ts paints with render.ts
+      h() (text nodes, no inline style) and acts on trusted clicks only
+      (G-GUI-04). settings.* is not block-safe. Aegis fixes: kernel rows are
+      pinned to the connected home's kernel principal (standing.ts
+      kernelPrincipalOf / isKernelPrincipal, also for the standing feed); an
+      unseen unlock says only "no unlock seen since this page connected";
+      run(id, trusted) carries the gesture's isTrusted from every path and the
+      header switch checks it; the standing feed sits under overlays (hidden
+      while a dialog is open), its offer is a toast (#gui-toast), and the stack
+      pile reserves bottom room so today's list never covers a card key.
+    path: src/core/settings.ts
+    type: module
+    tags: [gnomon, gui, settings, theme]
+    tests:
+      - test/settings.test.ts
+      - test/voice-client.test.ts

@@ -1,0 +1,30 @@
+id: L-2026-10-17-ascend-084905-001
+type: human-note
+timestamp: '2026-10-17T08:49:05.883Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D78/D79: Mac-first full loop, Windows later; LaunchServices open escape accepted'
+summary: 'The founder sequenced Move 1 by platform and accepted the `open` residual. Next: spec v3.7 (probe evidence + D78/D79), PR-3 contracts and PR-5 daemon lifecycle in parallel, then PR-4 kernel log.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D78
+    decision: Build and test the full Move 1 loop on macOS first; Windows parity (helper, Hello/Passport KSP, WFP/AppContainer, pipes, the WebView2 wrapper, the Windows probes) is built when the founder is ready. Windows CI keeps running the platform-independent tests meanwhile. Move 1's pass is split by platform (macOS pass, then Windows parity pass). This is platform sequencing, not the alpha/beta/gamma checkpoints D57 declined.
+    rationale: 'Founder: build and test the full loop on Mac, then build Windows when ready; no Windows machine is ready now.'
+  - id: P8-D79
+    decision: The macOS LaunchServices `open` escape (a sandboxed session can launch an unsandboxed app that reaches the endpoint port; no SBPL rule blocks it, per p10m) is ACCEPTED as a stated residual in §A.2. Presence (Touch ID on Reconnect/attach and on every gate) is the boundary.
+    rationale: Founder accepted; no sandbox fix exists and the presence prompt already covers attach.
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - decision
+  - security
+linked_lore:
+  - L-2026-10-17-ascend-084643-001
+git_context:
+  ref: ffad9be1b1cd3b67e93986f98411976ff1df9175
+  branch: feat/gnomon
+  dirty: true

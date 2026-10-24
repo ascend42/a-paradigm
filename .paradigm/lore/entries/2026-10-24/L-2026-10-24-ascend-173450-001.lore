@@ -1,0 +1,52 @@
+id: L-2026-10-24-ascend-173450-001
+type: agent-session
+timestamp: '2026-10-24T17:34:50.821Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Gnomon 8.0.1 tester release: orchestration Phase 0 closed (turn.economy fold, ro'
+summary: 'Gnomon 8.0.1 tester release: orchestration Phase 0 closed (turn.economy fold, routing backfill, both reviewed by Aegis and a Loid-lens pass with fixes); loops disabled in release builds (#loops-gate, TD-2026-10-24-447) with a release-script assertion, GUI loops-off state reviewed by Mika; versions bumped to 8.0.1 with CHANGELOG; main (7.15.2) merged into feat/gnomon with 18 conflicts resolved; gate-gnomon-publish test made version-agnostic. PR #49 pushed at bbd04ee3, CI still red on pre-existing macOS sandbox, Ubuntu git-verbs and Windows tests; not merged pending founder call.'
+symbols_touched:
+  - '#loops-gate'
+  - '#turn-economy'
+  - '#routing-backfill'
+files_modified:
+  - packages/gnomon/src/kernel/loops/gate.ts
+  - packages/gnomon/src/kernel/loops/wire.ts
+  - packages/gnomon/src/kernel/socket/dispatch.ts
+  - packages/gnomon/src/kernel/lifecycle/daemon.ts
+  - packages/gnomon/src/cli/loop-cli.ts
+  - packages/gnomon/scripts/release-darwin.mjs
+  - packages/gnomon/src/kernel/desk/turn-economy.ts
+  - packages/gnomon/src/cli/economy-cli.ts
+  - packages/paradigm/src/core/routing-backfill.ts
+  - packages/paradigm/src/commands/learn-routing.ts
+  - packages/gnomon-gui/src/core/loops.ts
+  - packages/gnomon-gui/src/core/store.ts
+  - packages/gnomon-gui/src/ui/loops-view.ts
+  - packages/gnomon-gui/src/ui/app.ts
+  - packages/gnomon/test/gate-gnomon-publish.test.ts
+  - CHANGELOG.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-mvmoi9r1-trdi
+meta:
+  orchestrationId: orch-mvmoi9r1-trdi
+  coverageScore:
+    before: 0.18181818181818182
+    after: 1
+  coverageAdded:
+    - packages/gnomon/src/kernel/loops
+    - packages/gnomon/src/kernel/socket
+    - packages/gnomon/src/kernel/lifecycle
+    - packages/gnomon/src/cli
+    - packages/gnomon/scripts
+    - packages/gnomon/src/kernel/desk
+    - packages/gnomon-gui/src/core
+    - packages/gnomon-gui/src/ui
+    - packages/gnomon/test
+git_context:
+  ref: bbd04ee30d1785ab1cec33c7a78d3c0111279dfd
+  branch: feat/gnomon
+  dirty: true

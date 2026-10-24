@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" data-theme="day" data-motion="full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Gnomon</title>
+<script src="/boot.js"></script>
+<link rel="stylesheet" href="/styles.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<h1 class="sr-only">Gnomon</h1>
+<div id="gnomon" class="shell">
+<header class="chrome">
+<button id="toggle-sessions" class="key pane-toggle" type="button" aria-controls="pane-sessions" aria-expanded="false" title="Sessions">sessions</button>
+<span class="wm-wrap"><button id="wordmark-btn" class="wordmark-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="wordmark-menu" title="Gnomon: layout, theme, mods, voice settings, settings"><span class="wordmark">Gnomon</span><span class="wm-caret" aria-hidden="true">▾</span></button><div id="wordmark-menu" class="mode-menu wordmark-menu" role="menu" aria-label="Gnomon" hidden></div></span>
+<button id="palette-btn" class="palfield" type="button" title="Command palette (⌘K)"><span class="pal-ph">Search, run, jump<span class="pal-ph2">, or open anything</span>…</span><kbd>⌘K</kbd></button>
+<span class="spacer"></span>
+<span class="kstat kernel-owned"><span id="conn" class="link-dot kernel-owned" role="status" aria-live="polite" title="kernel connecting…"><i class="ld" aria-hidden="true"></i><span id="conn-word" class="link-word">connecting…</span></span><button id="loops-word" class="loops-word kernel-owned" type="button" hidden><span id="loops-word-text" class="lw-full"></span><span id="loops-word-narrow" class="lw-narrow" aria-hidden="true"></span></button><span id="risk" class="risk-chip kernel-owned" title="A browser extension with all-sites access can read this page, the launch fragment and this connection's cached unlock. The desktop wrapper has no extensions.">browser&nbsp;·&nbsp;<span class="risk-long" aria-hidden="true">extension&nbsp;</span>risk<span class="sr-only">: a browser extension with all-sites access can read this page, the launch fragment and this connection's cached unlock. The desktop wrapper has no extensions.</span></span></span>
+<span class="voice-wrap"><button id="voice-pill" class="voice-pill kernel-owned voice-off" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="voice-menu" data-state="off" title="Voice (kernel-owned: shows what the kernel says, never the voice app's claim)"><span class="voice-dot" aria-hidden="true"></span><span id="voice-label" class="voice-rung">Voice off</span><span id="voice-fact" class="voice-fact"></span><span id="voice-meter" class="voice-meter" aria-hidden="true" hidden><i></i><i></i><i></i><i></i></span><span id="voice-progress" class="voice-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" hidden><i></i></span></button><button id="voice-stop" class="key quiet voice-stop kernel-owned" type="button" title="Stop speaking (Esc, ⌃⌥.)" aria-label="Stop speaking" hidden>Stop speaking</button><div id="voice-menu" class="voice-ladder" role="menu" aria-label="Voice: the trust ladder" hidden></div><span id="voice-caption" class="sr-only" aria-live="polite"></span></span>
+<button id="toggle-stack" class="key pane-toggle" type="button" aria-controls="pane-stack" aria-expanded="false" title="Decisions">decisions</button>
+</header>
+<div id="repin" class="notice repin kernel-owned" role="alert" hidden><span id="repin-text"></span> <button id="repin-ack" class="key" type="button">understood</button></div>
+<div id="voice-dev" class="notice voice-dev kernel-owned" role="alert" hidden></div>
+<main class="desk">
+<nav id="pane-sessions" class="pane sessions" aria-label="sessions">
+<button id="new-session" class="key newb" type="button" title="New session (⌘N)"><span>+ New session</span><kbd>⌘N</kbd></button>
+<div id="session-search-wrap"><input id="session-search" class="field" type="search" placeholder="search sessions" aria-label="search sessions"></div>
+<div id="session-list" class="list"></div>
+</nav>
+<section id="pane-transcript" class="pane transcript" aria-label="transcript">
+<div class="pane-head chead"><span class="chead-l"><span id="transcript-title" class="title">No session open</span><button id="rename-btn" class="key quiet rename-btn" type="button" hidden aria-label="Rename session" title="Rename session (or double-click the title)">✎</button><input id="rename-input" class="field rename-input" type="text" hidden aria-label="Session name" maxlength="160" spellcheck="false" autocomplete="off"><span id="chead-meta" class="meta chead-meta"></span></span><span class="head-right"><span class="mode-wrap"><button id="mode-btn" class="key quiet mode-btn kernel-owned" type="button" hidden aria-haspopup="menu" aria-expanded="false" title="Run mode of this session (⇧Tab in the composer cycles it)">mode</button><span id="mode-menu" class="mode-menu" role="menu" hidden></span></span><span class="more-wrap"><button id="more-btn" class="key quiet more-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" title="More: item counts and the raw event view" aria-label="More">⋯</button><span id="more-menu" class="mode-menu more-menu" role="menu" hidden><span id="transcript-count" class="meta"></span><button id="raw-toggle" class="key quiet" type="button" role="menuitem" title="Show raw events (every row as its one-line summary)" hidden>raw</button></span></span></span></div>
+<div class="feed">
+<div class="toast-anchor"><span id="toast-say" class="sr-only" role="status" aria-live="polite"></span><span id="toast-alert" class="sr-only" role="alert" aria-live="assertive"></span><div id="toasts" class="toasts"></div></div>
+<div id="viewport" class="viewport" tabindex="0" aria-label="conversation"><div id="spacer" class="spacer-v"></div></div><span id="turn-say" class="sr-only" role="status" aria-live="polite"></span>
+<div id="empty" class="empty"><div class="empty-sheet"><p class="title empty-title">No session open</p><p id="empty-meta" class="meta"></p><button id="empty-new" class="key pri" type="button">+ New session <kbd>⌘N</kbd></button><p class="meta">The kernel feed is in the palette: ⌘K, then “kernel feed”.</p></div></div>
+<button id="jump-latest" class="key jump" type="button" hidden>↓ latest</button>
+</div>
+<div id="pinned" class="pinned" aria-label="this project's pending cards"></div>
+<form id="composer" class="composer" autocomplete="off">
+<div class="composer-main">
+<textarea id="composer-text" class="field" rows="1" placeholder="Reply…" title="Enter sends, Shift+Enter is a newline, Shift+Tab cycles the run mode." aria-label="composer"></textarea>
+<div id="composer-ghost" class="composer-ghost" aria-hidden="true" hidden>…</div>
+<div class="composer-foot"><span id="composer-mode" class="meta sr-only">no session focused</span><span id="dictation" class="dictation kernel-owned" hidden><span id="dictation-ring" class="dictation-ring" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" focusable="false"><circle class="ring-track" cx="10" cy="10" r="8"></circle><circle id="dictation-arc" class="ring-arc" cx="10" cy="10" r="8" pathLength="100"></circle></svg><span id="dictation-secs" class="ring-secs"></span></span><span id="dictation-live" class="meta dictation-live" role="status" aria-live="polite"></span><button id="dictation-hold" class="key quiet" type="button" aria-pressed="false" hidden title="Hold: no auto-send (⌃⌥H in the voice app toggles it too)">Hold</button></span></div>
+</div>
+<div class="composer-ctrls"><span id="composer-lines" class="meta composer-lines" hidden></span><button id="composer-tall" class="key quiet composer-tall" type="button" aria-pressed="false" aria-controls="composer-text" aria-label="Tall view" title="Tall view: up to 24 lines (again: back to 12)">⤢</button><button id="composer-send" class="key pri" type="submit" title="Send (Enter)">send</button></div>
+</form>
+</section>
+<aside id="pane-stack" class="pane stack" aria-label="decision stack">
+<div class="pane-head pilehead"><span class="title">Stack</span><span class="pile-meta meta"><span id="inbox" class="meta" title="the stack: cards pending across all projects">0</span><span id="stack-hint" class="meta"></span><button id="stack-scope" class="key quiet stack-scope" type="button" aria-pressed="false" title="Showing all projects (click: only this session's project)" aria-label="Filter the stack by project">▾</button></span></div>
+<div id="stack" class="pile"></div>
+</aside>
+<aside id="workshop-col" class="workshop-col" aria-label="Workshop column" hidden></aside>
+<div id="scrim" class="scrim" hidden></div>
+</main>
+<footer id="pane-workshop" class="workshop" aria-label="Workshop"><div id="workshop-host" class="workshop-host"></div><button id="status-line" class="status-line" type="button" title="Open the kernel feed (view.kernel-feed)"></button></footer>
+<div id="reconnect" class="overlay" hidden>
+<div class="sheet-card">
+<p id="reconnect-why" class="meta">This page has no GUI session.</p>
+<button id="reconnect-btn" class="key" type="button">Reconnect</button>
+</div>
+</div>
+<div id="palette" class="overlay" hidden>
+<div class="sheet-card palette-card" role="dialog" aria-label="command palette">
+<input id="palette-input" class="field" type="text" placeholder="command or verb" aria-label="command">
+<div id="palette-list" class="list" role="listbox"></div>
+</div>
+</div>
+<div id="new-session-dialog" class="overlay" hidden>
+<form id="new-session-form" class="sheet-card ns-card" role="dialog" aria-modal="true" aria-labelledby="ns-title" novalidate autocomplete="off">
+<h2 id="ns-title" class="title">New session</h2>
+<div id="ns-folder"></div>
+<label class="meta">model <select id="ns-model" class="field"><option value="claude">claude</option><option value="local">local model</option><option value="any">any</option></select></label>
+<div class="ns-foot"><button id="ns-cancel" class="key" type="button">cancel</button><span><span id="ns-why" class="ff-why"></span><button id="ns-open" class="key pri" type="submit">Open</button></span></div>
+</form>
+</div>
+<div id="settings" class="overlay" hidden>
+<div class="sheet-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+<div class="settings-head"><h2 id="settings-title" class="title">Settings</h2><span class="meta">kept in this browser unless it says the kernel owns it</span><button id="settings-close" class="key quiet" type="button" title="Close (Esc)">close</button></div>
+<div id="settings-body" class="settings-body"></div>
+</div>
+</div>
+<div id="voice-settings" class="overlay vs-drawer" hidden>
+<div class="sheet-card settings-card voice-sheet" role="dialog" aria-modal="true" aria-labelledby="voice-settings-title">
+<div class="settings-head"><h2 id="voice-settings-title" class="title">Voice settings</h2><span class="meta">kept on this Mac; the kernel holds the send word and your voice</span><button id="voice-settings-close" class="key quiet" type="button" title="Close (Esc)">done</button></div>
+<div id="voice-settings-body" class="settings-body vs-body"></div>
+</div>
+</div>
+</div>
+</body>
+</html>

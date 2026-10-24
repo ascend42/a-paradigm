@@ -76,14 +76,15 @@ import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getEnforcementToolsList, handleEnforcementTool } from './enforcement.js';
 import { getArchToolsList, handleArchTool } from './arch.js';
 import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
+import { getLoopsToolsList, handleLoopsTool } from './loops.js';
 import { ARCH_FILE } from '../utils/arch-loader.js';
-import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences } from './fallback-grep.js';
 import { findFuzzyMatches } from './fuzzy-match.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace } from '../utils/workspace-loader.js';
 import { loadProtocolIndex } from '../utils/protocol-loader.js';
 import { emitAndProcess } from '../utils/nomination-engine.js';
+import { portalRoutes, type PortalRoute } from '../utils/portal-routes.js';
 
 // ────────────────────────────────────────────────────────
 // Tool Registry Setup
@@ -348,6 +349,13 @@ function buildRegistry(rootDir: string, reloadContext?: ReloadContextFn): ToolRe
       handleTool: wrap(handleAssessmentTool),
     },
     {
+      // Gnomon loops (LP1): file ops on .paradigm/loops/*.yaml; on-demand paradigm_loop family.
+      key: 'loops',
+      tier: 'feature',
+      getToolsList: getLoopsToolsList,
+      handleTool: wrap(handleLoopsTool),
+    },
+    {
       key: 'arch',
       tier: 'feature',
       getToolsList: getArchToolsList,
@@ -533,7 +541,7 @@ function getInlineToolDefinitions() {
     },
     {
       name: 'paradigm_plugin_check',
-      description: 'Check for updates to installed Claude Code plugins. Reports which marketplace clones have newer remote commits and which cached versions are stale.',
+      description: 'Check for updates to installed Claude Code plugins. Returns JSON: notices[] ({kind:"plugin-update", plugin, marketplace, repo, from, to, reason, command}) and a host-aware summary.',
       inputSchema: { type: 'object', properties: {} },
       annotations: { readOnlyHint: true, destructiveHint: false },
     },
@@ -756,12 +764,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       // Auto-recovery: on the first tool call of a new session, surface checkpoint/handoff data
       const tracker = getSessionTracker();
       tracker.setRootDir(ctx.rootDir);
+      // Plugin-update facts are NOT surfaced here: third-party plugin state
+      // belongs to paradigm_status check:'plugins', not every first tool call.
       let recoveryPreamble: string | null = null;
-      let updateNotice: string | null = null;
       if (!tracker.hasRecoveredThisSession()) {
         recoveryPreamble = await buildRecoveryPreamble(ctx.rootDir);
-        updateNotice = getPluginUpdateNotice();
-        schedulePluginUpdateCheck();
         tracker.markRecovered();
       }
 
@@ -797,7 +804,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           });
 
           // If no exact results and fuzzy is enabled, try fuzzy matching
-          let fuzzyMatches: Array<{ symbol: string; distance: number }> = [];
+          let fuzzyMatches: Array<{ match: string; distance: number }> = [];
           if (results.length === 0 && fuzzy) {
             const allSymbols = getAllSymbols(ctx.index);
             const symbolNames = allSymbols.map(s => s.symbol);
@@ -1150,37 +1157,13 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
           const suggestions: Array<{ gate: string; reason: string; confidence: 'high' | 'medium' | 'low'; source?: string }> = [];
 
           // Learn from portal.yaml if available
-          const learnedPatterns: Array<{ route: string; gates: string[]; method?: string; source?: string }> = [];
-          if (ctx.gateConfig?.routes) {
-            for (const [routePattern, routeConfig] of Object.entries(ctx.gateConfig.routes)) {
-              if (routeConfig.gates) {
-                learnedPatterns.push({
-                  route: routePattern,
-                  gates: routeConfig.gates,
-                  method: routeConfig.method,
-                });
-              }
-            }
-          }
+          // Local routes come through portalRoutes(), empty until T-2026-10-22-002.
+          const learnedPatterns: Array<PortalRoute & { source?: string }> = [...portalRoutes(ctx.gateConfig)];
 
           // Learn from workspace sibling portal.yaml files
           if (ctx.workspace) {
             for (const [memberName, sibling] of ctx.workspace.siblingIndices) {
-              const siblingGateConfig = sibling.gateConfig as Record<string, unknown> | null;
-              if (siblingGateConfig?.routes) {
-                for (const [routePattern, routeConfig] of Object.entries(siblingGateConfig.routes as Record<string, unknown>)) {
-                  const rc = routeConfig as { gates?: string[]; method?: string } | string[];
-                  const gatesList = Array.isArray(rc) ? rc : rc?.gates;
-                  if (gatesList) {
-                    learnedPatterns.push({
-                      route: routePattern,
-                      gates: gatesList as string[],
-                      method: Array.isArray(rc) ? undefined : rc?.method,
-                      source: memberName,
-                    });
-                  }
-                }
-              }
+              for (const r of sibling.portalRoutes) learnedPatterns.push({ ...r, source: memberName });
             }
           }
 
@@ -1354,35 +1337,9 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_plugin_check': {
-          const { runPluginUpdateCheck } = await import('../utils/plugin-update-checker.js');
+          const { runPluginUpdateCheck, buildPluginCheckReport, detectPluginHost } = await import('../utils/plugin-update-checker.js');
           const results = await runPluginUpdateCheck();
-          const updatable = results.filter(r => r.hasRemoteUpdate || r.hasCacheStale);
-
-          if (updatable.length === 0) {
-            const msg = results.length === 0
-              ? 'No Claude Code plugins found in ~/.claude/plugins/marketplaces/.'
-              : 'All installed plugins are up to date.';
-            trackToolCall(msg.length, name);
-            return { content: [{ type: 'text', text: msg }] };
-          }
-
-          const lines = ['Plugin updates available:\n'];
-          const pullCmds: string[] = [];
-          for (const r of updatable) {
-            if (r.hasRemoteUpdate) {
-              lines.push(`  ${r.plugin} (${r.repo}): remote has newer commits`);
-              pullCmds.push(`git -C ${r.marketplacePath} pull origin main`);
-            } else if (r.hasCacheStale) {
-              lines.push(`  ${r.plugin} (${r.repo}): ${r.installedVersion} → ${r.localVersion} (restart needed)`);
-            }
-          }
-          if (pullCmds.length > 0) {
-            lines.push(`\nUpdate command:\n  ${pullCmds.join(' && \\\n  ')}`);
-            lines.push('\nAfter running, restart the session to apply updates.');
-          } else {
-            lines.push('\nRestart the session to apply cached updates.');
-          }
-          const pluginText = lines.join('\n');
+          const pluginText = JSON.stringify(buildPluginCheckReport(results, detectPluginHost()), null, 2);
           trackToolCall(pluginText.length, name);
           return { content: [{ type: 'text', text: pluginText }] };
         }
@@ -1513,12 +1470,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
       })(); // end IIFE for tool dispatch
 
-      // Prepend recovery preamble and/or plugin update notice to the first tool response
-      if (recoveryPreamble || updateNotice) {
+      // Prepend the recovery preamble to the first tool response
+      if (recoveryPreamble) {
         const first = toolResult.content?.[0];
         if (first && typeof first === 'object' && 'text' in first && typeof first.text === 'string') {
-          const preamble = [updateNotice, recoveryPreamble].filter(Boolean).join('\n\n');
-          first.text = preamble + '\n\n' + first.text;
+          first.text = recoveryPreamble + '\n\n' + first.text;
         }
       }
 
@@ -1536,13 +1492,21 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
  * These were previously inline in each if-branch; now centralized.
  * All emissions are fire-and-forget (non-fatal).
  */
+const STREAM_SEVERITIES = ['info', 'warning', 'error', 'critical'] as const;
+type StreamSeverity = (typeof STREAM_SEVERITIES)[number];
+
+/** Narrow a caller-supplied severity to the event-stream vocabulary (default `warning`). */
+function toStreamSeverity(value: unknown): StreamSeverity {
+  return STREAM_SEVERITIES.find((s) => s === value) ?? 'warning';
+}
+
 function emitPostDispatchEvents(name: string, args: Record<string, unknown>, rootDir: string): void {
   try {
     switch (name) {
       case 'paradigm_sentinel_record':
         emitAndProcess(rootDir, {
           type: 'error-encountered', source: 'mcp-tool-call', tool: name,
-          severity: (args.severity as string) || 'warning',
+          severity: toStreamSeverity(args.severity),
           context: `Sentinel: ${args.title || args.summary || 'incident recorded'}`,
         });
         break;

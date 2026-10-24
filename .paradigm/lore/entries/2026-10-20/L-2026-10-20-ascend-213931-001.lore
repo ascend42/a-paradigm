@@ -1,0 +1,55 @@
+id: L-2026-10-20-ascend-213931-001
+type: agent-session
+timestamp: '2026-10-20T21:39:31.444Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 11: S1 committed; Arky''s naming and versioning design; integration plan'
+summary: |-
+  S1 is b296fed5 on feat/gnomon-desk-s1, rebased on 5a40e28a:
+  - desk-guidance is a composite single block (the voice-only hash is unchanged)
+  - offer-router has D1 human-only, one decision per offer
+  - mcp-passthrough fails closed on a non-absolute command
+  - the override store is in the home dir (0600) with a root-class card
+  - gnomon desk stats
+  - 2626 tests
+  - Gap: Claude Code spawns the MCP servers, so Gnomon cannot enforce shell:false; override env values land in mcp.json. Aegis is reviewing.
+
+  S2 is e3d7b151 (Aegis fixes: automate-this dropped, brain writes confirmed first, fail-closed launch).
+
+  Arky's design, refining the founder-approved proposal:
+  - events stay modns.<publisher>.<name>.* (the kernel owns mod.*)
+  - MCP server gm_<pub>_<name> (underscore, unambiguous), with a gx_<name14>_<hash8> fallback, under the 64-char tool-name cap
+  - folders declare a publisher, shown unverified
+  - first-party env prefix is <NAME>_ (GNOMON_ is denied)
+  - Windows device names are reserved publishers
+  - manifest:2 with a pure v1 upgrader; manifestHash is over the raw bytes; engines.gnomon is a restricted range; future majors are refused FORMAT
+  - a fixed 3-name legacy alias table
+  - one more clientApiId move inside the same reservation
+  - request.offer.mute takes hsid (the kernel derives the repo, so it is unspoofable); unmuting from Settings is deferred
+
+  Integration plan: once Aegis rules on S1, merge S0→S1→S2→S3 into feat/gnomon-desk-o1, then apply naming and versioning as S0b on top (avoiding rebase conflicts), then merge into feat/gnomon.
+symbols_touched:
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#mcp-passthrough'
+  - '#manifest-loader'
+  - '#gnomon-contracts'
+  - '#neurons-mod'
+  - '#constellation-mod'
+commit: b296fed5
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - naming
+  - versioning
+  - build
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-213259-001
+git_context:
+  ref: cd3ef9b545ea5b0e24115daba2e00c9cc4290716
+  branch: feat/gnomon
+  dirty: true

@@ -1,0 +1,66 @@
+id: TD-2026-10-20-812
+timestamp: '2026-10-20T19:53:00.410Z'
+title: The Desk (mod playbooks) ratified, plus the context-meter checkpoint behaviour
+decision: >-
+  The founder ratified all 14 Desk decisions (map: https://claude.ai/artifact/Y5Bf5DZx4TdEaUAFjaCuar).
+
+  - A1: a <gnomon-desk> frozen per-turn note.
+
+  - A2: Constellation is a local MCP server.
+
+  - A3: Neurons on in every repo, mute per repo.
+
+  - A4: Claude Docs in phase 1.
+
+  - A5: two-step accept in O1.
+
+  - A6: kept/shown is the metric, with a 15% kill line after two weeks of daily use.
+
+  - A7: unsigned third-party playbooks are structured fields only.
+
+  - A8: NO registry for now. Mods are shared as git URLs that follow the package structure; Gnomon gets an EASY in-GUI
+  install flow for both local mods and external git-link mods (this also closes the "Install Workshop is CLI-only" gap).
+
+  - A9: voice yes only with a standing grant, and it fills the composer.
+
+  - A10: the names "the Desk", playbook, offer.
+
+  - L1: click/↵ now, voice later via readback.
+
+  - L2: glyph plus name.
+
+  - L3: worlds for first-party only, for now.
+
+  - L4: "not now" quiets that mod for the rest of the conversation.
+
+  CONTEXT METER: in a Paradigm repo at the threshold, Gnomon has Claude checkpoint, then ASKS the human whether to
+  restart the session and recover from the checkpoint (a fresh context), rather than auto-compacting.
+rationale: >-
+  The founder's vision of an agent and workspace "working with you… like someone next to you". Arky's protocol design
+  and Luna's UX boards (L-2026-10-20-ascend-175436-001, L-2026-10-20-ascend-175619-001). The founder prefers git-based
+  sharing with a first-class install UI over a central registry, and an explicit restart-and-recover over silent
+  compaction.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: luna
+    role: agent
+    stance: proposed
+symbols_affected:
+  - '#offer-router'
+  - '#desk-guidance'
+  - '#constellation-mod'
+  - '#neurons-mod'
+  - '#mod-host'
+  - '#context-meter'
+status: active
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - founder-ruling
+  - context

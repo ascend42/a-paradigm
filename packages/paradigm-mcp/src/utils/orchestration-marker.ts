@@ -9,8 +9,14 @@
  *
  * The fix: the marker is written ONLY from a real completion signal (a settlement
  * whose learning chain ran end-to-end, or a debrief that recorded real agent
- * verdicts). `recordOrchestrationCompletion` is the single best-effort writer both
- * sites import. A write failure NEVER breaks the caller.
+ * verdicts). `recordOrchestrationCompletion` is the single best-effort TS writer
+ * both sites import. A write failure NEVER breaks the caller.
+ *
+ * A third writer lives outside TS: the Claude Code PostToolUse `Agent|Task` hook
+ * (packages/paradigm/src/commands/hooks/scripts/claude-code-delegation.sh)
+ * writes the same payload shape with `source: 'delegation'` (plus a `subagent`
+ * field) when a roster agent returns a non-empty response. Readers honour the
+ * marker by age (PARADIGM_GATE_TTL_HOURS, default 4h); nothing deletes it.
  */
 
 import * as fs from 'fs';
@@ -21,7 +27,7 @@ export interface OrchestrationCompletion {
   /** Count of real verdicts/contributions/settled-stages this run produced. */
   verdicts: number;
   /** Which completion signal fired the write. */
-  source: 'settlement' | 'debrief';
+  source: 'settlement' | 'debrief' | 'delegation';
 }
 
 /**

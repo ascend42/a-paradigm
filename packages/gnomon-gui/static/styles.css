@@ -1,0 +1,1685 @@
+/* #gui themes (spec §11.3, .atelier/design-system.yaml gnomon.*): papercraft by day, phosphor by night, auto.
+   Tokens are the G-GUI-10 fixtures verbatim (docs/specs/gnomon-fixtures/contrast.json; test/theme.test.ts checks
+   them). `color:` only ever takes a TEXT token; project hues are fills only (--p-*-fill), never text.
+   Fonts: JetBrains Mono spine, Fraunces for day titles only. S1 (critique 2026-10-20) bundles them as self-hosted
+   latin woff2 under fonts/ (law 6, font-src 'self', no CDN), each family with its OFL 1.1 licence beside it
+   (fonts/OFL-*.txt; Fontsource 5.3.0 latin subsets, no Reserved Font Name declared upstream). */
+
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); }
+/* one variable cut (opsz 9-144 and the wght axis) covers the comp's 460 and 600 */
+@font-face { font-family: "Fraunces"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("fonts/Fraunces-opsz-wght.woff2") format("woff2"); }
+
+:root,
+[data-theme="day"] {
+  --ground: #EDE8DC;
+  --sheet: #F8F5EE;
+  --ink: #16150F;
+  --ink2: #2A2925;
+  --sec: #5A5850;
+  --rule: #D9D5CB;
+  --fold: #E1DBCC;
+  --fail: #B4382A;
+  --warn-ink: #6E4700;
+  --warn-bg: #F6E3B8;
+  --knot: #5B4FD6;
+  --key-edge: #2A2925;
+  --warn-edge: #A8730C;
+  --fail-edge: #B4382A;
+  --knot-edge: #5B4FD6;
+  --slate: #44577C;
+  --p-terracotta-fill: #C08A73;
+  --p-sage-fill: #9DAF8C;
+  --p-slate-fill: #8C9DBB;
+  --p-ochre-fill: #D2B074;
+  --p-rose-clay-fill: #C9949A;
+  --p-sea-grey-fill: #8FB0AE;
+  --p-terracotta-ink: #8E4E38;
+  --p-sage-ink: #56663F;
+  --p-slate-ink: #44577C;
+  --p-ochre-ink: #7A5A1C;
+  --p-rose-clay-ink: #874B54;
+  --p-sea-grey-ink: #3F6664;
+  --on-ink: #F8F5EE;
+  --shadow: 2px 3px 0 rgba(22, 21, 15, 0.18);
+  --key-shadow: 2px 2px 0 var(--key-edge);
+  --sheet-shadow: 0 1px 0 rgba(0, 0, 0, .06), 3px 4px 0 -1px var(--fold), 4px 6px 10px rgba(60, 48, 30, .14);
+  --edge-w: 4px;
+  --grain: url("grain.svg");
+  --grain-opacity: .3;
+  --wm-glow: none;
+  --cap-shadow: rgba(40, 30, 15, .22);
+  --cap-glow: none;
+  --title-font: "Fraunces", Georgia, serif;
+  --display-wght: 600;
+  --title-transform: none;
+  --title-spacing: 0;
+  --slip-shadow: 1px 2px 0 rgba(22, 21, 15, .08);
+  --slip-tilt: 1;
+}
+
+[data-theme="night"] {
+  --ground: #0F1116;
+  --sheet: #171A21;
+  --ink: #E8F4F0;
+  --ink2: #C9DCD6;
+  --sec: #86998F;
+  --rule: #2A2F38;
+  --fold: #23262E;
+  --fail: #FF7A66;
+  --warn-ink: #FFC15A;
+  --warn-bg: rgba(255, 193, 90, 0.10);
+  --knot: #A79CFF;
+  --key-edge: #C9DCD6;
+  --warn-edge: #FFC15A;
+  --fail-edge: #FF7A66;
+  --knot-edge: #A79CFF;
+  --slate: #A9B9DB;
+  --p-terracotta-fill: #E6A88F;
+  --p-sage-fill: #B7CCA3;
+  --p-slate-fill: #A9B9DB;
+  --p-ochre-fill: #E8C88C;
+  --p-rose-clay-fill: #E4AEB4;
+  --p-sea-grey-fill: #A8CFCB;
+  --p-terracotta-ink: #E6A88F;
+  --p-sage-ink: #B7CCA3;
+  --p-slate-ink: #A9B9DB;
+  --p-ochre-ink: #E8C88C;
+  --p-rose-clay-ink: #E4AEB4;
+  --p-sea-grey-ink: #A8CFCB;
+  --on-ink: #171A21;
+  --shadow: none;
+  --key-shadow: none;
+  --sheet-shadow: none;
+  --edge-w: 3px;
+  --grain: none;
+  --grain-opacity: 0;
+  --wm-glow: 0 0 6px rgba(200, 255, 235, .35);
+  --cap-shadow: transparent;
+  --cap-glow: 0 0 8px 1px rgba(160, 255, 220, .22);
+  --title-font: var(--mono);
+  --display-wght: 500;
+  --title-transform: uppercase;
+  --title-spacing: 0.08em;
+  --slip-shadow: none;
+  --slip-tilt: 0;
+}
+
+:root {
+  --scrim: rgba(15, 17, 22, 0.35); /* color.overlay.scrim: overlay sheets and the narrow drawer, both themes */
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --t-arrive: 160ms ease-out;
+  --reflow: 220ms;
+  --radius: 3px;
+  --key-h: 28px; /* design-system foundations.target.key-h: the ONE height of every key, any variant, any zone (session 2026-10-23-gnomon-folder-picker) */
+  --radius-pill: 999px; /* design-system foundations.radius.pill: the voice pill, reply choices, the slip's open key and their kbd pills */
+  /* type: four steps (design-system foundations.type, board gnomon-type-scale). Size carries four roles; every other
+     distinction is weight (400/500/600), case and face. There is no step between. */
+  --fs-label: 10.5px;    /* caps labels, card heads, chips, timestamps, notes, the status line, Workshop words, kbd hints */
+  --fs-control: 11.5px;  /* keys, menu items, session rows, field text, toasts, tool and result lines, the pill */
+  --fs-reading: 13.5px;  /* replies, card titles, reply choices, body, section heads, night titles */
+  --fs-title: 17px;      /* wordmark, sheet and pane titles, chat title, empty and setup titles, the setup digest */
+  --t-stamp: 400ms cubic-bezier(.3, 1.4, .5, 1);
+  --t-fade: 180ms ease-out;
+  --t-droop: 500ms ease-out;
+  --t-bob: 1.1s ease-in-out;
+  --t-hold: 3s linear;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--fs-reading);
+  line-height: 1.6;
+}
+
+/* the app fills the viewport: header, notices, the desk (grows), the status line; only panes scroll inside (the
+   page itself does not: the shell is exactly the viewport; the first-run setup screens still scroll the body) */
+.shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; position: relative; isolation: isolate; background: var(--ground); }
+/* S1 grain (papercraft day only): a bundled grain.svg (img-src 'self'; the comp's data: URL is CSP-blocked) tiled under
+   the content. isolation keeps it inside the shell's stacking context at z-index -1, so it sits above the ground and
+   below every pane, card and menu (never over text; no z-index juggling for the header menus). Night: --grain none. */
+.shell::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; background: var(--grain); opacity: var(--grain-opacity); mix-blend-mode: multiply; }
+.shell > .chrome, .shell > .notice, .shell > .workshop { flex: 0 0 auto; }
+.shell > .desk { flex: 1 1 auto; }
+
+.chrome {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 14px;
+  min-height: 44px;
+  background: transparent;
+  border-bottom: 1px solid var(--rule);
+}
+.wordmark { font-family: var(--title-font); font-weight: var(--display-wght); font-size: var(--fs-title); letter-spacing: -.01em; color: var(--ink); }
+/* night: mono caps, and the one glow besides the caps (--wm-glow; S1.2: no card or sheet glows) */
+[data-theme="night"] .wordmark { font-size: var(--fs-reading); text-transform: uppercase; letter-spacing: .1em; text-shadow: var(--wm-glow); }
+.spacer { flex: 1; }
+.readout, .meta { font-size: var(--fs-control); color: var(--sec); }
+.title { font-family: var(--title-font); font-weight: var(--display-wght); text-transform: var(--title-transform); letter-spacing: var(--title-spacing); color: var(--ink); }
+
+.notice { padding: 4px 14px; border-bottom: 1px solid var(--warn-edge); background: var(--warn-bg); color: var(--warn-ink); font-size: var(--fs-control); }
+
+/* S1 ink keys: a hard 2px ink offset (--key-shadow; none at night, where the --key-edge ring alone carries the key:
+   the comp's night keys have no [ ] caps, only + New session does), a --key-edge ring (>= 3:1 on both surfaces;
+   never --rule), var(--key-h) tall; .pri is the filled primary key (--on-ink on --ink). Migration key-height: the height
+   comes from min-height + inline-flex centring, not padding + line-height, so a glyph label (✎ ⋯ ⤢ ▸) and a word land
+   on the same box; a label that wraps still grows (min-height, not height); the day offset stays outside the box */
+.key {
+  font: inherit; font-size: var(--fs-control); font-weight: 500;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--key-edge);
+  border-radius: var(--radius);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; vertical-align: middle;
+  padding: 0 10px;
+  line-height: 18px;
+  min-height: var(--key-h);
+  box-shadow: var(--key-shadow);
+  cursor: pointer;
+}
+.key.pri { background: var(--ink); color: var(--on-ink); }
+/* hover (design-system migration menus-and-hover, pulled forward): a --fold fill, both themes; a filled key (pri, a
+   selected segment, the pressed ⤢) keeps a distinct hover: its ink lifts to --ink2, never flat --fold */
+.key:hover:not([disabled]):not([aria-disabled="true"]) { background: var(--fold); }
+.key.pri:hover:not([disabled]) { background: var(--ink2); }
+[data-theme="night"] .key.pri::before, [data-theme="night"] .key.pri::after { color: var(--on-ink); }
+[data-theme="night"] .key::before { content: "["; color: var(--sec); }
+[data-theme="night"] .key::after { content: "]"; color: var(--sec); }
+.key:active { transform: translate(2px, 2px); box-shadow: none; }
+.key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.key[disabled], .key[aria-disabled="true"] { color: var(--sec); cursor: not-allowed; } /* aria-disabled: a busy key that keeps its focus (folder-field Choosing…) */
+/* design-system migration keys (session 2026-10-22-gnomon-local-model F10): a disabled pri key (Run now, a busy Allow,
+   Checking…) draws as a default key with --sec text, as .seg-key[disabled]; --sec on the ink fill was about 2.6:1 */
+.key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
+/* Mika Delta 11: an aria-disabled pri key (the question card's Submit until every question is answered) draws the same */
+.key.pri[aria-disabled="true"], .key.pri[aria-disabled="true"]:hover { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
+[data-theme="night"] .key.pri[disabled]::before, [data-theme="night"] .key.pri[disabled]::after, [data-theme="night"] .key.pri[aria-disabled="true"]::before, [data-theme="night"] .key.pri[aria-disabled="true"]::after { color: var(--sec); }
+
+.field {
+  font: inherit; color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--sec);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  width: 100%;
+}
+/* field edge (board gnomon-field-border): --sec at rest (>= 3:1 on page and sheet), --key-edge on hover, the 2px
+   --key-edge focus ring above */
+.field:hover { border-color: var(--key-edge); }
+
+.desk { position: relative; display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(300px, 340px); grid-template-rows: minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; }
+.desk.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(300px, 340px); }
+.desk.no-stack { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) 0; }
+.desk.no-sessions.no-stack { grid-template-columns: 0 minmax(0, 1fr) 0; }
+.desk.stack-wide { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(320px, 460px); }
+.desk.stack-wide.no-sessions { grid-template-columns: 0 minmax(0, 1fr) minmax(320px, 460px); }
+.desk.no-sessions > .sessions, .desk.no-stack > .stack { display: none; }
+
+.pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; height: 100%; overflow: hidden; border-right: 1px solid var(--rule); }
+.pane-head, #session-search-wrap, .composer, .pinned { flex: 0 0 auto; }
+.head-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
+.sessions { background: var(--sheet); }
+#session-search-wrap { padding: 6px 10px; }
+.list { overflow-y: auto; }
+.sessions > .list { flex: 1 1 auto; min-height: 0; }
+
+.group-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px 2px; font-size: var(--fs-control); color: var(--sec); }
+.swatch { width: 10px; height: 10px; border: 1px solid var(--key-edge); border-radius: var(--radius); background: var(--p-slate-fill); }
+.swatch.h0 { background: var(--p-terracotta-fill); }
+.swatch.h1 { background: var(--p-sage-fill); }
+.swatch.h2 { background: var(--p-slate-fill); }
+.swatch.h3 { background: var(--p-ochre-fill); }
+.swatch.h4 { background: var(--p-rose-clay-fill); }
+.swatch.h5 { background: var(--p-sea-grey-fill); }
+.session-row { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; padding: 4px 10px; font: inherit; font-size: var(--fs-control); color: var(--ink2); background: transparent; border: 0; border-left: 2px solid transparent; cursor: pointer; }
+.session-row.active { border-left-color: var(--key-edge); color: var(--ink); background: var(--fold); }
+.session-row:hover { background: var(--fold); }
+.session-row.state-refused { border-left-color: var(--fail-edge); }
+.session-row.gone { color: var(--sec); }
+.session-row.gone .glyph { color: var(--sec); }
+.glyph { color: var(--ink2); }
+
+.transcript { background: transparent; }
+.feed { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; overflow-anchor: none; }
+.jump { position: absolute; right: 18px; bottom: 10px; }
+.key.quiet { box-shadow: none; color: var(--ink2); font-size: var(--fs-control); min-height: var(--key-h); min-width: var(--key-h); padding: 0 8px; } /* quiet is a look, not a size (key-height) */
+.spacer-v { width: 1px; }
+.trow { position: absolute; left: 0; right: 0; padding: 2px 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 96ch; }
+/* chat: the user's message and claude's text as blocks; tool calls, results and notes as quiet single lines */
+.trow.role-user, .trow.role-assistant { padding: 8px 14px 6px; }
+.trow .who { display: flex; gap: 8px; align-items: baseline; font-size: var(--fs-label); color: var(--sec); }
+.trow.role-user .body { color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); padding: 4px 8px; }
+.trow.role-assistant .body { color: var(--ink); }
+.trow.role-assistant .said { color: var(--ink); background: var(--sheet); border-left: 3px solid var(--ink2); border-radius: var(--radius); padding: 4px 8px; margin: 2px 0 6px; font-weight: 500; }
+.trow.role-assistant .said .said-tag { color: var(--sec); font-size: var(--fs-label); font-weight: 400; }
+/* Aegis L2: an agent's bold-label line (.reply-part, board gnomon-chip: never a .chip) is plain prose with a quiet left
+   rule and a bold label, never a box that could pass for a kernel chip */
+.trow.role-assistant .body .reply-part { border-left: 2px solid var(--rule); padding: 0 0 0 8px; margin: 4px 0; }
+.trow.role-assistant .body .reply-part-label { font-weight: 600; margin-right: 4px; }
+/* #gui-table-talk choices: an agent's trailing A/B options as clickable replies. Built from MODEL text, so never a
+   kernel key: no .key class, no hard ink offset, a DASHED edge AND a filled ink pill on the letter (.choice-k), by
+   day and at night alike (Aegis L3, fidelity 2: never the dashed border alone), plus the "reply with" hint on a live
+   group. No [ ] brackets (Aegis L1) */
+.trow.role-assistant .choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.trow.role-assistant .choices-hint { flex-basis: 100%; color: var(--sec); font-size: var(--fs-label); }
+.choice {
+  font: inherit; font-size: var(--fs-reading); text-align: left;
+  display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%;
+  color: var(--ink); background: transparent;
+  border: 1px dashed var(--ink2); border-radius: var(--radius-pill);
+  padding: 2px 10px 2px 4px; cursor: pointer;
+}
+.choice .choice-k { font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-label); font-weight: 600; min-width: 18px; text-align: center; border-radius: var(--radius-pill); padding: 0 4px; background: var(--ink); color: var(--on-ink); }
+.choice .choice-t { overflow-wrap: anywhere; }
+.choice:hover:not([disabled]) { background: var(--sheet); border-style: solid; }
+.choice:focus-visible { outline: 2px dashed var(--key-edge); outline-offset: 2px; }
+.choice[disabled] { cursor: default; color: var(--sec); border-color: var(--rule); }
+.choice[disabled] .choice-k { background: transparent; color: var(--sec); }
+.choice.picked { color: var(--ink); border: 1px solid var(--ink2); }
+.choice.picked .choice-k { background: var(--ink2); color: var(--on-ink); }
+.choice.armed { border-style: solid; border-color: var(--warn-edge); background: var(--warn-bg); }
+.choice .choice-again { color: var(--warn-ink); font-size: var(--fs-label); }
+.choice.picked::after { content: "✓ sent"; color: var(--sec); font-size: var(--fs-label); }
+[data-theme="night"] .choice { border-color: var(--sec); border-radius: var(--radius); padding-left: 8px; }
+/* Aegis L3: the night chip keeps its filled choice-k pill (the second cue besides the dashed edge) */
+[data-theme="night"] .choice .choice-k { background: var(--ink); color: var(--on-ink); }
+[data-theme="night"] .choice[disabled] { border-color: var(--rule); }
+[data-theme="night"] .choice[disabled] .choice-k { color: var(--sec); }
+[data-theme="night"] .choice.picked { border-color: var(--ink2); }
+.trow.role-tool { color: var(--ink2); font-size: var(--fs-control); padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trow.role-tool::before { content: "↳ "; color: var(--sec); }
+.trow.role-result, .trow.role-system { color: var(--sec); font-size: var(--fs-label); padding-top: 2px; padding-bottom: 4px; }
+.trow.role-card { color: var(--warn-ink); font-size: var(--fs-control); }
+.trow.role-auto { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trow.role-auto::before { content: "✓ "; color: var(--sec); }
+.trow.role-error { color: var(--fail); }
+.trow.role-raw { font-size: var(--fs-control); color: var(--ink2); }
+/* the raw view's fold (transcript-row variant raw, the activity fold's idiom): ▸ a row, ▾ its whole line below it,
+   pretty-printed; a long line scrolls inside the fold (both ways), never the page */
+.trow.role-raw.fold { cursor: pointer; }
+.trow.role-raw.fold .caret { color: var(--sec); }
+.trow.role-raw.fold:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.trow.role-raw-detail { padding: 0 14px 6px 28px; white-space: normal; }
+.raw-line { margin: 0; max-height: 40vh; overflow: auto; white-space: pre; overflow-wrap: normal; font-size: var(--fs-label); color: var(--ink2); border-left: 2px solid var(--rule); padding: 4px 10px; }
+.raw-line:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.trow .t { color: var(--sec); font-size: var(--fs-label); margin-right: 8px; }
+.pinned { border-top: 1px solid var(--rule); max-height: 30vh; overflow-y: auto; }
+.composer { border-top: 1px solid var(--rule); padding: 8px 14px; background: var(--sheet); }
+.composer textarea { resize: none; }
+.composer-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+
+/* S3 (critique 2026-10-20 §2 S3): the stack is a paper pile on the ground; a card is a sheet with a state edge on the
+   left (--edge-w: 4px day, 3px night) and a folded-paper shadow (--sheet-shadow; none at night, where a 1px --rule
+   ring draws the sheet). A neutral card's edge is --key-edge (>= 3:1), never --rule. Rotation and overlap come from
+   classes (inline style is banned); the pile fans on :hover AND :focus-within, so a keyboard user reaches every
+   buried key. */
+.stack { background: transparent; border-right: 0; border-left: 1px solid var(--rule); }
+.pilehead .title { font-size: var(--fs-title); }
+.pilehead #stack-hint { margin-left: auto; font-size: var(--fs-label); white-space: nowrap; }
+.pilehead #inbox { font-size: var(--fs-label); white-space: nowrap; }
+.pilehead #stack-scope { white-space: nowrap; }
+.pile { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; }
+.card {
+  position: relative;
+  margin: 0;
+  padding: 10px 12px 10px 14px;
+  background: var(--sheet);
+  border: 0;
+  border-left: var(--edge-w) solid var(--edge, var(--key-edge));
+  border-radius: var(--radius);
+  box-shadow: var(--sheet-shadow);
+  transform: rotate(var(--r, 0deg));
+  transition: margin var(--reflow) cubic-bezier(.2, .8, .2, 1), transform var(--reflow), top var(--reflow);
+}
+[data-theme="night"] .card { border: 1px solid var(--rule); border-left: var(--edge-w) solid var(--edge, var(--key-edge)); }
+.card.kind-knot { --edge: var(--knot-edge); }
+.card.failed { --edge: var(--fail-edge); }
+.card.kind-gate-class, .card.held { --edge: var(--warn-edge); }
+.card-head { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: center; font-size: var(--fs-label); color: var(--sec); }
+.card-project { font-weight: 500; }
+.card-kind { color: var(--sec); }
+/* the kernel's voice tag is a plain .chip (board gnomon-chip); the gate handle inside it keeps its warn fill at radius 3 */
+.card-voice .handle { display: inline-block; padding: 0 4px; line-height: 14px; border-radius: var(--radius); background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; letter-spacing: .04em; }
+.card-title { margin: 2px 0; font-size: var(--fs-reading); font-weight: 600; line-height: 1.45; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-title .card-arg { font: inherit; }
+/* Aegis H1: a composed permission title never hides a command's tail: it WRAPS (no ellipsis, no one-line clip), each
+   line of the command is its own line with a visible ⏎, and the shell separators are marked */
+.card-title.composed { white-space: normal; overflow: visible; text-overflow: clip; }
+/* #gui-mcp-servers (Mika): the MCP enable card's title carries its scope ("for all your repos"): it wraps, never cut */
+.card-title.wraps { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.card-title.composed .card-arg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.card-title.composed .card-arg-line { white-space: pre-wrap; }
+.card-title.composed .card-nl { color: var(--warn-ink); font-weight: 600; }
+.card-title.composed .card-sep { color: var(--warn-ink); font-weight: 600; }
+.card-arg-capped { display: block; color: var(--warn-ink); }
+.card.kind-knot .card-title { text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+/* fidelity 2: the quiet single-line contentHash under the keys (on every card) and the details disclosure */
+.card-keys { margin-top: 8px; }
+.card-keys .key:not(.key-always) { text-transform: capitalize; }
+.card-details > summary { position: absolute; right: 12px; bottom: 10px; font-size: var(--fs-label); color: var(--sec); cursor: pointer; list-style: none; }
+.card-details > summary::-webkit-details-marker { display: none; }
+.card-details > summary::after { content: " ▸"; }
+.card-details[open] > summary::after { content: " ▾"; }
+.card-details[open] > summary { position: static; text-align: right; margin-bottom: 2px; }
+.card-details[open] { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--rule); }
+.card-details .card-who { margin: 0 0 4px; font-size: var(--fs-label); overflow-wrap: anywhere; }
+.card-quote-label { display: block; font-style: normal; font-size: var(--fs-label); margin-bottom: 2px; }
+.card.kind-knot .card-title { color: var(--knot); }
+.card.failed .card-title { color: var(--fail); }
+.card-body { margin: 4px 0 6px; font-size: var(--fs-control); color: var(--ink2); }
+/* design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
+   large that's fine"): a body taller than its cap (lines and field blocks: the MCP batch card, the Rules batch card,
+   the git push card) scrolls INSIDE the card; the title, the keys and the presence line stay in view, so Allow never
+   needs a scroll. The body is a named tab stop (render.ts CARD_BODY_LABEL): arrow keys scroll it, Tab moves on. */
+.card-body { --card-body-max: min(42vh, 26em); max-height: var(--card-body-max); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.card-body:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+/* Mika 2026-10-23: macOS hides scrollbars at rest, so a body that scrolls says so: a rule at its cut edge and the cue
+   under it ("↓ more below: scroll the card text", then "end of the card text"; words, never only a fade or a hue) */
+.card-body.scrolls { border-bottom: 1px dashed var(--rule); padding-bottom: 2px; }
+.card-more { margin: -4px 0 6px; font-size: var(--fs-label); color: var(--sec); }
+.card-more.is-off { display: none; }
+.card-raised { display: block; font-size: var(--fs-label); }
+.card .bar { height: 3px; margin-top: 6px; border-radius: var(--radius); overflow: hidden; background: var(--rule); display: none; }
+.card.held .bar { display: block; }
+.card .bar-i { display: block; height: 100%; background: var(--warn-edge); transform-origin: left; }
+.card .stamp { position: absolute; right: 12px; top: 8px; font-size: var(--fs-label); font-weight: 600; letter-spacing: .12em; color: var(--sec); border: 2px solid currentColor; border-radius: var(--radius); padding: 0 6px; opacity: 0; pointer-events: none; }
+.card .content-hash { display: block; margin-top: 6px; padding-right: 64px; font-size: var(--fs-label); line-height: 1.3; color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the pile: overlap, a few degrees of rotation, z-order top-down; fanned flat on hover / focus-within / .fan / .open */
+.pile .card + .card { margin-top: -64px; }
+.pile .card:nth-child(1) { z-index: 4; }
+.pile .card:nth-child(2) { --r: 1.2deg; z-index: 3; }
+.pile .card:nth-child(3) { --r: -1deg; z-index: 2; }
+.pile .card:nth-child(4) { --r: .8deg; z-index: 1; }
+.pile .card:nth-child(n+5) { --r: 0deg; z-index: 0; }
+.pile:hover .card + .card, .pile:focus-within .card + .card, .pile.fan .card + .card, .pile.open .card + .card { margin-top: 10px; }
+.pile:hover .card, .pile:focus-within .card, .pile.fan .card, .pile.open .card { --r: 0deg; }
+.pile-more { align-self: center; margin-top: 12px; }
+/* Aegis M2: a buried card's keys take no click until the pile is fanned (hover, keyboard focus, .fan, .open) */
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .card-keys,
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .card-details { pointer-events: none; }
+.card-requester { color: var(--sec); }
+/* a card kind whose first line the kernel does not compose: its words read as the requester's quoted text */
+.card-body.quoted { padding-left: 8px; font-style: italic; color: var(--ink2); }
+.pinned .card { --r: 0deg; margin: 0; }
+.card-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Mika 2026-10-23: the scoped always choices, folded under "Always ▾": one row per choice, its note beside the key */
+.always-choices { display: none; margin-top: 6px; padding-left: 8px; border-left: 1px solid var(--rule); }
+.always-choices.open { display: grid; gap: 8px; }
+.always-h { font-size: var(--fs-label); color: var(--sec); }
+.always-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.always-row .key { text-transform: none; }
+.always-note { font-size: var(--fs-label); color: var(--sec); }
+.pile:not(:hover):not(:focus-within):not(.fan):not(.open) .card + .card .always-choices { pointer-events: none; }
+.card .refusal { color: var(--fail); font-size: var(--fs-control); white-space: pre-wrap; }
+.blk-text, .blk-md, .blk-diff { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.blk-opaque { color: var(--ink2); }
+/* C6: a block's button is data, never a decision key: dashed, no shadow, no bracket caps */
+.blk-button { font: inherit; font-size: var(--fs-control); color: var(--ink2); background: transparent; border: 1px dashed var(--key-edge); border-radius: var(--radius); padding: 0 6px; cursor: pointer; }
+.blk-button-inert { color: var(--sec); }
+.notice.repin { border-color: var(--warn-edge); }
+.notice .key { margin-left: 8px; }
+/* TD-2026-10-19-063: a claim-mismatch card's first line ("NOT signed by the expected publisher") is red */
+.card.claim-mismatch { --edge: var(--fail-edge); }
+.card.claim-mismatch .card-body > :first-child:not(.blk-box), .card.claim-mismatch .card-body > .blk-box > :first-child { color: var(--fail); font-weight: 600; }
+/* #git-verbs (Delta 8): what can't be taken back (a force push, a public repo, a force remove), on the face beside the irreversible chip */
+.card .card-warn { margin: 2px 0 0; font-size: var(--fs-control); font-weight: 600; color: var(--fail); white-space: pre-wrap; }
+
+/* ── S4 motion (critique 2026-10-20 §2 S4). Every motion is an event's (nothing idles); the global reduced-motion kill
+   above stays, and the rules at the end of this block keep the END states visible without motion. ── */
+.card.arriving { animation: card-in var(--t-arrive); }
+/* arrival is a quick fade-in, opacity only: no flutter, no slide (founder 2026-10-23); instant under reduced motion */
+@keyframes card-in { from { opacity: 0; } to { opacity: 1; } }
+/* a pinned card settles at one of four preset tilts (by cardId; classes, never inline style) */
+.pinned .card.r-a { --r: -.6deg; }
+.pinned .card.r-b { --r: .4deg; }
+.pinned .card.r-c { --r: -.3deg; }
+.pinned .card.r-d { --r: .7deg; }
+/* decided: the stamp lands, then the sheet fades out (opacity only) and the pile closes up over its height (founder
+   2026-10-23: "get rid of the whole card tilt and spin aspect and can go with a simple and tasteful fade out"; removed
+   after the close-up; at once under reduced motion) */
+.card .stamp { color: var(--ink); }
+.card .stamp.on { animation: stamp var(--t-stamp) forwards; }
+/* the stamp lands straight (no tilt; founder 2026-10-23), then the fade */
+@keyframes stamp {
+  0% { opacity: 0; transform: scale(1.6); }
+  60% { opacity: 1; transform: scale(.96); }
+  100% { opacity: 1; transform: none; }
+}
+.card.leaving { pointer-events: none; }
+.card.out { animation: card-fade var(--t-fade) forwards; }
+@keyframes card-fade { to { opacity: 0; } }
+/* the close-up: app.ts sets the card's measured height, then 0; the space it held closes on --reflow */
+.card.closing { overflow: hidden; padding-top: 0; padding-bottom: 0; margin-top: 0; border-top-width: 0; border-bottom-width: 0; opacity: 0; transition: height var(--reflow) ease-out, padding var(--reflow) ease-out, margin var(--reflow) ease-out; }
+.pinned .card.closing { margin-bottom: -8px; } /* its share of the pinned gap closes too */
+/* a held voice decision: the amber edge and a 3 s countdown bar (kernel-owned; the seconds are also in the text) */
+.card.held .bar-i { animation: count var(--t-hold) forwards; }
+@keyframes count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.card .held-note { color: var(--warn-ink); font-weight: 500; }
+/* a failure droops once (no shake, ever) */
+.card.failed.fx, .session-row.fx { animation: droop var(--t-droop) forwards; }
+.card.failed.fx.arriving { animation: card-in var(--t-arrive), droop var(--t-droop) 160ms forwards; }
+@keyframes droop { to { transform: rotate(2.2deg) translateY(3px); } }
+.session-row.fx { transform-origin: left center; }
+[data-motion="reduced"] .card .stamp.on { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .card .stamp.on { opacity: 1; transform: none; } }
+
+/* ── S5 the Workshop (critique 2026-10-20 §2 S5; comp workshop-placement.html): a 64 px footer strip (default) or a
+   76 px column on either edge (Layout). The fence label stays; the status line sits at the footer's right end.
+   The strip's line (founder report 2026-10-23, "strange alignment"): in the footer every word (the mod label, each
+   zone's title and quiet note, the status line) is set in ONE line box of --key-h at the strip's floor, so their
+   baselines agree with each other and with a key there (Install Workshop); the hats stand on that floor, a waiting
+   cap's question above its hat. Nothing in the strip wraps (1024 to 2560); the host clips, the status line clips. ── */
+.workshop { display: flex; align-items: flex-end; gap: 16px; min-height: 64px; padding: 6px 16px 8px; border-top: 1px solid var(--rule); }
+.workshop[hidden] { display: none; }
+.workshop.slim { min-height: 0; padding: 4px 16px; }
+.workshop-host { flex: 0 0 auto; max-width: 75%; overflow: hidden; }
+.workshop-col .workshop-host { max-width: none; }
+.status-line { flex: 1 1 0; min-width: 0; overflow: hidden; justify-content: flex-end; margin-left: auto; align-self: flex-end; font: inherit; font-size: var(--fs-label); color: var(--sec); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; display: flex; gap: 12px; }
+.status-line .v { color: var(--ink2); }
+.status-line:hover, .status-line:focus-visible { text-decoration: underline; }
+.desk.ws-left { padding-left: 76px; }
+.desk.ws-right { padding-right: 76px; }
+.workshop-col { position: absolute; top: 0; bottom: 0; width: 76px; overflow-y: auto; padding: 14px 6px; }
+.workshop-col[hidden] { display: none; }
+.desk.ws-left > .workshop-col { left: 0; border-right: 1px solid var(--rule); }
+.desk.ws-right > .workshop-col { right: 0; border-left: 1px solid var(--rule); }
+.mod-slot-workshop { padding: 0; }
+.mod-slot.mod-slot-workshop { padding: 0; }
+.mod-fence.mod-region-workshop { border: 0; background: transparent; padding: 0; display: flex; align-items: flex-end; gap: 12px; }
+.mod-region-workshop > .mod-fence-head { align-self: flex-end; }
+.mod-region-workshop .mod-fence-body > .blk-box { display: flex; align-items: flex-end; gap: 18px; }
+.mod-region-workshop .mod-fence-body > .blk-box > .blk-title { display: none; }
+.mod-region-workshop .mod-fence-body > .blk-box > .blk-box { display: flex; align-items: flex-end; gap: 10px; }
+.mod-region-workshop .mod-fence-body > .blk-box > .blk-box:first-of-type { padding-right: 18px; border-right: 1px dashed var(--rule); }
+.mod-region-workshop .blk-title { font-size: var(--fs-label); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); align-self: flex-end; white-space: nowrap; }
+.mod-region-workshop .blk-text { margin: 0; font-size: var(--fs-label); }
+.workshop-absent { color: var(--sec); font-size: var(--fs-label); }
+/* the strip's line (footer only; the column keeps its own stacked rules below) */
+.workshop .mod-region-workshop > .mod-fence-head, .workshop .mod-region-workshop .blk-title, .workshop .mod-region-workshop .blk-text, .workshop .workshop-absent, .workshop .status-line { height: var(--key-h); line-height: var(--key-h); white-space: nowrap; }
+.workshop .mod-region-workshop .blk-text { overflow: hidden; text-overflow: ellipsis; }
+.workshop .mod-slot-workshop { display: flex; align-items: center; min-height: var(--key-h); white-space: nowrap; }
+.workshop .workshop-absent { margin: 0; }
+/* the column: zones stack, centred; the need zone is ruled off below */
+.workshop-col .mod-fence.mod-region-workshop, .workshop-col .mod-region-workshop .mod-fence-body > .blk-box, .workshop-col .mod-region-workshop .mod-fence-body > .blk-box > .blk-box { flex-direction: column; align-items: center; gap: 14px; min-height: 0; }
+.workshop-col .mod-region-workshop > .mod-fence-head { align-self: center; padding-top: 0; }
+.workshop-col .mod-region-workshop .mod-fence-body > .blk-box > .blk-box:first-of-type { padding: 0 0 14px; border-right: 0; border-bottom: 1px dashed var(--rule); }
+.workshop-col .mod-region-workshop .blk-title { font-size: var(--fs-label); text-align: center; line-height: 1.3; white-space: normal; align-self: center; padding-top: 0; }
+.workshop-col .mod-region-workshop .blk-text { text-align: center; font-size: var(--fs-label); overflow-wrap: anywhere; }
+.workshop-col { overflow-x: hidden; }
+.workshop-col .mod-label { font-size: var(--fs-label); overflow-wrap: anywhere; text-align: center; }
+.workshop-col .mod-region-workshop, .workshop-col .mod-region-workshop .mod-fence-body, .workshop-col .mod-region-workshop .blk-box { width: 100%; }
+.workshop-col .mod-region-workshop .blk-title { overflow-wrap: anywhere; }
+.workshop-col .cap .q { max-width: 64px; }
+.workshop-col .workshop-absent { display: block; font-size: var(--fs-label); text-align: center; overflow-wrap: anywhere; }
+
+/* a cap: drawn by core/render.ts renderCap from the five checked fields; fill and stroke are classes only.
+   Hue fills carry no text; every fill keeps a --key-edge ring; violet only for a KNOT; outlined = local. */
+.cap { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 22px; height: 36px; flex: none; }
+.cap.st-needs, .cap.st-knot { height: 48px; }
+.cap svg { display: block; width: 22px; height: 28px; overflow: visible; }
+.cap path { stroke: var(--key-edge); stroke-width: 1.1; stroke-linejoin: round; }
+.cap.h0 path { fill: var(--p-terracotta-fill); }
+.cap.h1 path { fill: var(--p-sage-fill); }
+.cap.h2 path { fill: var(--p-slate-fill); }
+.cap.h3 path { fill: var(--p-ochre-fill); }
+.cap.h4 path { fill: var(--p-rose-clay-fill); }
+.cap.h5 path { fill: var(--p-sea-grey-fill); }
+/* outlined (local): the line is the hue's ink (an AA text token, so >= 3:1 as an edge) */
+.cap.outlined path { fill: none; stroke-width: 1.6; }
+.cap.outlined.h0 path { stroke: var(--p-terracotta-ink); }
+.cap.outlined.h1 path { stroke: var(--p-sage-ink); }
+.cap.outlined.h2 path { stroke: var(--p-slate-ink); }
+.cap.outlined.h3 path { stroke: var(--p-ochre-ink); }
+.cap.outlined.h4 path { stroke: var(--p-rose-clay-ink); }
+.cap.outlined.h5 path { stroke: var(--p-sea-grey-ink); }
+.cap.knot path { fill: var(--knot); stroke: var(--knot-edge); }
+.cap.knot.outlined path { fill: none; stroke: var(--knot-edge); }
+.cap .sh { width: 16px; height: 4px; border-radius: 50%; background: var(--cap-shadow); box-shadow: var(--cap-glow); margin-top: -2px; }
+.cap .q { font-size: var(--fs-label); line-height: 12px; color: var(--sec); max-width: 76px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap.knot .q { color: var(--knot); }
+.cap-word { display: none; font-size: var(--fs-label); line-height: 12px; color: var(--sec); }
+.cap-glyph { font-size: var(--fs-label); color: var(--ink2); }
+/* night: the hue is the line, with a soft glow; a Claude cap keeps a faint fill so filled vs outlined still reads */
+[data-theme="night"] .cap path { fill-opacity: .3; }
+[data-theme="night"] .cap.outlined path { fill-opacity: 0; }
+[data-theme="night"] .cap.h0 path { stroke: var(--p-terracotta-fill); filter: drop-shadow(0 0 3px var(--p-terracotta-fill)); }
+[data-theme="night"] .cap.h1 path { stroke: var(--p-sage-fill); filter: drop-shadow(0 0 3px var(--p-sage-fill)); }
+[data-theme="night"] .cap.h2 path { stroke: var(--p-slate-fill); filter: drop-shadow(0 0 3px var(--p-slate-fill)); }
+[data-theme="night"] .cap.h3 path { stroke: var(--p-ochre-fill); filter: drop-shadow(0 0 3px var(--p-ochre-fill)); }
+[data-theme="night"] .cap.h4 path { stroke: var(--p-rose-clay-fill); filter: drop-shadow(0 0 3px var(--p-rose-clay-fill)); }
+[data-theme="night"] .cap.h5 path { stroke: var(--p-sea-grey-fill); filter: drop-shadow(0 0 3px var(--p-sea-grey-fill)); }
+[data-theme="night"] .cap.knot path { stroke: var(--knot); filter: drop-shadow(0 0 3px var(--knot)); }
+/* motion: a cap bobs only while its session streams (state working); reduced motion prints `working` instead */
+.cap.bob svg { transform-origin: 50% 100%; animation: bob var(--t-bob) infinite; }
+@keyframes bob { 50% { transform: translateY(-4px) rotate(-3deg); } }
+[data-motion="reduced"] .cap.bob .cap-word { display: block; }
+[data-motion="reduced"] .cap.bob { height: 46px; }
+@media (prefers-reduced-motion: reduce) { .cap.bob .cap-word { display: block; } .cap.bob { height: 46px; } }
+/* the strip's line (Mika 2026-10-23): in the footer the reduced-motion word stands ABOVE its hat, where a waiting cap's
+   question stands, so the hat keeps the floor and no word hangs below the strip's line */
+.workshop .cap.bob .cap-word { order: -1; }
+
+.overlay { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh; background: var(--scrim); }
+.sheet-card { min-width: 380px; max-width: 640px; padding: 14px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+.palette-card .list { max-height: 50vh; }
+.pal-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 6px; color: var(--ink2); cursor: pointer; }
+.pal-row.sel { background: var(--fold); color: var(--ink); }
+.pal-row.unavailable { color: var(--sec); }
+
+/* #gui-offer-slip (TD-2026-10-20-812 O1, Luna's comp refs/flow.html): the margin slip under the reply that offered.
+   Model-adjacent, so NEVER a kernel key: a DASHED edge, a soft shadow (no hard ink offset), no .key class, no [ ].
+   Tilted -0.7deg by day (--slip-tilt 1), flat at night; slides in over 320ms, instant under reduced motion (the
+   global rule). The tab is GUI-drawn: glyph + offer · mod:<name>, ink only (L2: no per-mod hue). */
+.slip {
+  display: flex; flex-direction: column; width: fit-content; max-width: min(440px, 100%);
+  margin: 8px 0 2px 6px; background: var(--sheet); color: var(--ink);
+  border: 1px dashed var(--ink2); border-radius: var(--radius);
+  box-shadow: var(--slip-shadow); transform: rotate(calc(-0.7deg * var(--slip-tilt)));
+}
+[data-theme="night"] .slip { border-color: var(--sec); }
+.slip-tab { display: flex; gap: 6px; align-items: center; padding: 2px 8px; font-size: var(--fs-label); color: var(--sec); border-bottom: 1px dashed var(--rule); }
+.slip-g { color: var(--ink2); }
+.slip-q { padding: 6px 10px 2px; font-size: var(--fs-control); color: var(--ink); overflow-wrap: anywhere; }
+.slip-ctx, .slip-hint { padding: 0 10px; font-size: var(--fs-label); color: var(--sec); }
+.slip-hint { color: var(--warn-ink); }
+.slip-acts { display: flex; gap: 10px; align-items: center; padding: 6px 10px 8px; }
+.slip-open {
+  font: inherit; font-size: var(--fs-control); display: inline-flex; gap: 6px; align-items: baseline; cursor: pointer;
+  color: var(--ink); background: transparent; border: 1px dashed var(--ink2); border-radius: var(--radius-pill); padding: 2px 10px 2px 4px;
+}
+.slip-open kbd { font: inherit; font-size: var(--fs-label); font-weight: 600; background: var(--ink); color: var(--on-ink); border-radius: var(--radius-pill); padding: 0 4px; }
+.slip-open:hover:not([disabled]) { border-style: solid; background: var(--ground); }
+.slip-open:focus-visible, .slip-notnow:focus-visible { outline: 2px dashed var(--ink2); outline-offset: 2px; }
+.slip.armed .slip-open { border-style: solid; border-color: var(--warn-edge); background: var(--warn-bg); }
+.slip-notnow { font: inherit; font-size: var(--fs-control); color: var(--sec); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.slip-meta { font-size: var(--fs-label); color: var(--sec); }
+.slip.inert { opacity: .7; }
+.slip.inert button { cursor: default; }
+[data-theme="night"] .slip-open { border-color: var(--sec); }
+[data-theme="night"] .slip-open kbd { background: transparent; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding: 0; }
+.slip.gone { border: 0; box-shadow: none; transform: none; background: none; margin-left: 0; }
+.slip.gone .slip-tab { border: 0; padding: 0; }
+.slip.arrive { animation: slip-in 320ms cubic-bezier(.3, .7, .3, 1) both; }
+/* #gui-host-hints (design-system host-slip, founder 2026-10-23): the offer-slip paper, flat (no tilt: it decides
+   nothing and is not an invitation), the gnomon family glyph. ONE slip per reply (Mika, Delta 10): its items are
+   grouped by space and parted by a dashed rule; the command is the exact bytes Copy writes. */
+.host-slip { transform: none; }
+.host-item + .host-item { border-top: 1px dashed var(--rule); }
+.host-said { padding: 6px 10px 0; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.host-said code { font-size: inherit; background: var(--fold); padding: 0 4px; border-radius: var(--radius); color: var(--ink2); }
+.host-item .slip-q { padding-top: 2px; }
+.host-cmd { display: block; margin: 4px 10px 0; padding: 2px 6px; font-family: var(--mono); font-size: var(--fs-control); color: var(--ink); background: var(--ground); border: 1px solid var(--rule); border-radius: var(--radius); overflow-wrap: anywhere; user-select: all; }
+.host-slip [data-host-copy] { min-width: 8ch; }
+/* Aegis M1: the reply's argument inside the command, underlined (not a hue) and labelled by .host-note; L1: isolated */
+.host-arg { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.host-said code, .host-cmd, .host-warn { unicode-bidi: isolate; }
+.host-note { padding: 4px 10px 0; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.host-warn { color: var(--warn-ink); }
+@keyframes slip-in { from { opacity: 0; transform: translateY(-6px) rotate(0); } to { opacity: 1; transform: rotate(calc(-0.7deg * var(--slip-tilt))); } }
+
+/* reduced motion (OS or in-app): every transition and animation is instant (design-system motion rules) */
+[data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* #gui-ask-card: the question card (design-system question-card): a session's AskUserQuestion on its ask-user card,
+   from the verified detail only. Options are key-family buttons (kernel-owned, never the dashed model-text chip):
+   a number kbd, the label, the description under it; one pick = radio (● when picked), many = checkbox (✓). */
+.ask-picker { display: grid; gap: 12px; margin: 8px 0; }
+.ask-q { display: grid; gap: 6px; }
+.ask-head { margin: 0; font-size: var(--fs-reading); color: var(--ink); overflow-wrap: anywhere; }
+.ask-head .ask-h { font-size: var(--fs-label); color: var(--sec); }
+.ask-head .ask-many { color: var(--sec); }
+.ask-opts { display: grid; gap: 6px; }
+.ask-opt {
+  font: inherit; font-size: var(--fs-reading); text-align: left; color: var(--ink);
+  display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: baseline;
+  width: 100%; min-height: var(--key-h); padding: 6px 10px;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer;
+}
+.ask-opt .ask-k { font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-label); color: var(--sec); min-width: 14px; text-align: center; }
+.ask-opt .ask-l { overflow-wrap: anywhere; }
+.ask-opt .ask-d { grid-column: 2; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.ask-opt:hover { background: var(--fold); }
+.ask-opt:focus-visible, .ask-free:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.ask-opt.picked { border-color: var(--ink2); }
+.ask-opt.picked .ask-k { color: var(--ink); font-weight: 600; }
+/* Mika Delta 11: the control is drawn at rest (a ring for one pick, a box for many) so the kind of choice reads before
+   the first press, and picking fills it in place (no glyph inserted, the label never shifts) */
+.ask-opt .ask-l::before {
+  content: ""; display: inline-block; box-sizing: border-box; width: 12px; height: 12px; margin-right: 8px; vertical-align: -1px;
+  border: 1px solid var(--sec); border-radius: 50%; background: var(--sheet);
+  font-size: var(--fs-label); line-height: 10px; text-align: center; color: var(--on-ink);
+}
+.ask-opt[role="checkbox"] .ask-l::before { border-radius: var(--radius); }
+/* a long label wraps under its own text, not under the control; the description lines up with the label */
+.ask-opt .ask-l { padding-left: 20px; text-indent: -20px; }
+.ask-opt .ask-d { padding-left: 20px; }
+.ask-opt[role="radio"].picked .ask-l::before { border-color: var(--ink); background: var(--ink); box-shadow: inset 0 0 0 2px var(--sheet); }
+.ask-opt[role="checkbox"].picked .ask-l::before { content: "✓"; border-color: var(--ink); background: var(--ink); }
+.ask-free { width: 100%; }
+.ask-preview {
+  margin: 0; max-height: 240px; overflow: auto; padding: 8px 10px;
+  font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-control); color: var(--ink);
+  background: var(--ground); border: 1px solid var(--rule); border-radius: var(--radius);
+  white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: isolate;
+}
+/* Mika Delta 11: with room (the pinned zone, a wide stack) a question's preview sits beside its options, top-aligned,
+   so the focused option and its preview are read together; narrow, it stays under them */
+.ask-picker { container-type: inline-size; }
+@container (min-width: 600px) {
+  .ask-q.has-preview { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 12px; align-items: start; }
+  .ask-q.has-preview .ask-head { grid-column: 1 / -1; }
+  .ask-q.has-preview .ask-preview { grid-column: 2; grid-row: 2; position: sticky; top: 0; }
+}
+/* a question card in the chat column may be taller than the usual pinned cap: its options stay reachable */
+.pinned:has(.ask-picker) { max-height: 55vh; }
+/* #gui-ask-card choice-multi: toggled chips (solid edge, ✓) and the one Send key after them */
+.choice.toggled { border-style: solid; border-color: var(--ink2); background: var(--sheet); }
+/* Mika Delta 11: a live multi chip draws its box at rest (it reads as a toggle before the first press); toggling fills
+   it in place, so the chips never reflow under the pointer */
+.choices.multi.live .choice .choice-t::before {
+  content: ""; display: inline-block; box-sizing: border-box; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
+  border: 1px solid var(--sec); border-radius: var(--radius); background: var(--sheet);
+  font-size: var(--fs-label); line-height: 10px; text-align: center; color: var(--on-ink);
+}
+.choices.multi.live .choice.toggled .choice-t::before { content: "✓"; border-color: var(--ink); background: var(--ink); }
+.choice-send {
+  font: inherit; font-size: var(--fs-reading); color: var(--on-ink); background: var(--ink);
+  border: 1px dashed var(--ink2); border-radius: var(--radius-pill); padding: 2px 12px; cursor: pointer; min-height: 24px;
+}
+.choice-send[aria-disabled="true"] { background: transparent; color: var(--sec); border-color: var(--rule); cursor: not-allowed; }
+.choice-send.armed { border-style: solid; border-color: var(--warn-edge); background: var(--warn-bg); color: var(--ink); }
+.choice-send .choice-again { color: var(--warn-ink); font-size: var(--fs-label); }
+/* Aegis L3: an armed Send shows the lines it will send, and what armed it, on its own row under the chips */
+.choice-compose { flex-basis: 100%; display: grid; gap: 4px; margin: 2px 0 0; padding: 6px 10px; border: 1px solid var(--warn-edge); border-radius: var(--radius); background: var(--warn-bg); }
+.choice-compose-why { color: var(--warn-ink); font-size: var(--fs-label); overflow-wrap: anywhere; }
+.choice-compose-lines { margin: 0; font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-control); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: isolate; }
+.choice-send:focus-visible { outline: 2px dashed var(--key-edge); outline-offset: 2px; }
+
+/* #gui-setup (spec §11.1): the first-run screens */
+.setup { max-width: 68ch; margin: 0 auto; padding: 28px 18px; color: var(--ink); }
+.setup-title { font-size: var(--fs-title); margin: 0 0 14px; }
+.setup-text { line-height: 1.5; margin: 8px 0; }
+.setup-text.fail { color: var(--fail); }
+.setup-checks { list-style: none; padding: 0; margin: 12px 0; border-top: 1px solid var(--rule); }
+.setup-check { display: grid; grid-template-columns: 4em 9em 1fr; gap: 4px 10px; padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: var(--fs-control); }
+.setup-check.warn .setup-mark { color: var(--warn-ink); }
+.setup-check.fail .setup-mark { color: var(--fail); font-weight: 600; }
+.setup-fix { grid-column: 3; color: var(--sec); }
+.setup-card { border: 1px solid var(--rule); background: var(--sheet); padding: 12px 14px; margin: 12px 0; }
+.setup-card.live { border-color: var(--key-edge); }
+.setup-card > .title { font-size: var(--fs-reading); font-weight: 600; }
+.setup-digest { font-family: var(--mono); font-size: var(--fs-title); font-weight: 600; letter-spacing: 0.08em; white-space: nowrap; margin: 10px 0; color: var(--ink); }
+.setup-name { display: flex; flex-direction: column; gap: 8px; max-width: 32ch; }
+.setup-details { margin: 10px 0; }
+.setup-details summary { cursor: pointer; }
+
+/* narrow widths (< 900px): one column; sessions and decisions slide in as drawers from the header toggles */
+.pane-toggle, .scrim { display: none; }
+@media (max-width: 900px) {
+  .pane-toggle { display: inline-flex; }
+  .desk, .desk.no-sessions, .desk.no-stack, .desk.no-sessions.no-stack, .desk.stack-wide, .desk.stack-wide.no-sessions { grid-template-columns: minmax(0, 1fr); }
+  .desk > .transcript { grid-column: 1; grid-row: 1; border-right: 0; }
+  .desk > .sessions, .desk > .stack { display: none; position: absolute; top: 0; bottom: 0; z-index: 3; width: min(320px, 86vw); box-shadow: var(--shadow); }
+  .desk > .sessions { left: 0; }
+  .desk > .stack { right: 0; }
+  .desk.open-sessions > .sessions, .desk.open-stack > .stack { display: flex; }
+  .desk.open-sessions > .scrim, .desk.open-stack > .scrim { display: block; position: absolute; inset: 0; z-index: 2; background: var(--scrim); }
+  .sheet-card { min-width: 0; width: calc(100vw - 32px); }
+}
+
+/* run-mode control (§11.4, P8-D87): kernel-owned state, a small menu under the header button */
+.mode-wrap { position: relative; display: inline-flex; }
+.mode-btn { white-space: nowrap; }
+.mode-btn .mb-narrow { display: none; }
+@media (max-width: 1040px) { .mode-btn .mb-full { display: none; } .mode-btn .mb-narrow { display: inline; } }
+.mode-btn.mode-auto-edits { color: var(--warn-ink); }
+.mode-menu { position: absolute; top: 100%; right: 0; z-index: 20; min-width: 300px; max-width: min(420px, calc(100vw - 32px)); margin-top: 4px; padding: 4px; display: flex; flex-direction: column; gap: 2px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
+.mode-menu[hidden] { display: none; }
+.mode-item { display: flex; flex-direction: column; align-items: flex-start; gap: 0; text-align: left; padding: 6px 8px; background: none; border: 0; border-radius: var(--radius); color: var(--ink); font: inherit; cursor: pointer; }
+.mode-item:hover:not([disabled]), .mode-item:focus-visible { background: var(--fold); outline: none; }
+.mode-item:focus-visible { box-shadow: inset 0 0 0 2px var(--key-edge); } /* the fill alone is 1.27:1 day / 1.15:1 night: the ring is the .app-item focus */
+.mode-item[disabled] { color: var(--sec); cursor: not-allowed; }
+.mode-item.current .mode-name::after { content: "  ·  current"; color: var(--sec); font-size: var(--fs-label); }
+.mode-item .mode-name { font-size: var(--fs-control); }
+.mode-item .mode-note { font-size: var(--fs-label); color: var(--sec); }
+/* #gui-voice-ladder (Atelier 2026-10-21-gnomon-voice, direction.html; design-system gnomon.voice.pill): the header
+   pill is kernel-owned and names the rung plus ONE live fact. Existing tokens only: the open mic is a filled --ink
+   dot with a soft ring (status is ink, board gnomon-status-colour), speech not sent is a vermilion --fail fact; nothing else is coloured, and nothing idles (the meter moves
+   only with the REAL mic level, #gui-voice-capture). Day: a rounded paper pill; night: square, as every night key. */
+.voice-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.voice-pill { box-sizing: border-box; height: 28px; min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; font: inherit; font-size: var(--fs-control); font-weight: 500; white-space: nowrap; border-radius: var(--radius-pill); border: 1px solid var(--key-edge); background: var(--sheet); color: var(--ink); cursor: pointer; }
+[data-theme="night"] .voice-pill { border-radius: 0; }
+.voice-pill:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.voice-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--sec); background: transparent; flex: none; }
+.voice-pill.live .voice-dot { background: var(--ink); border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 22%, transparent); }
+.voice-fact { color: var(--sec); font-weight: 400; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.voice-fact:empty { display: none; }
+.voice-fact.fail { color: var(--fail); }
+/* the voice app's trouble (not running, crashed, setting up): the words carry it, in the fact (board header-5b: one
+   edge style in the row, so no dashed edge); while the app can't run the pill is the action itself, "Start voice ·
+   app not running" (.as-action: the key's pressed offset, the same paper pill) */
+.voice-pill:hover { background: var(--fold); }
+.voice-fact.note { color: var(--warn-ink); }
+/* T-2026-10-20-005 (#gui-voice-capture): the meter is the REAL mic level (status.voice.capture.level), shown ONLY while
+   the capture state is `hearing` (Luna #9: hidden otherwise, never a still meter); no decorative animation */
+.voice-meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 10px; --level: 0; }
+.voice-meter[hidden] { display: none; }
+.voice-meter i { display: block; width: 2px; background: var(--ink); height: calc(15% + 85% * var(--level)); transition: height 0.12s linear; }
+.voice-meter i:nth-child(1), .voice-meter i:nth-child(4) { height: calc(15% + 55% * var(--level)); }
+/* the ladder (the pill's popover, role menu): Off, Talk, Dictate, Send word, Pieces, one line each, a cost tag */
+.voice-ladder { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: 340px; max-width: calc(100vw - 24px); padding: 8px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
+.voice-ladder[hidden] { display: none; }
+/* Luna #6: the rung applies to the focused session; when voice is on another, the ladder says so first */
+.ladder-target { margin: 0 0 4px; padding: 2px 6px 6px; border-bottom: 1px dashed var(--rule); font-size: var(--fs-control); }
+.rung { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: start; width: 100%; padding: 8px 6px; border: 0; border-bottom: 1px dashed var(--rule); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.rung:hover:not([disabled]) { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.rung:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.rung[aria-checked="true"] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.rung[disabled] { cursor: not-allowed; }
+.rung[disabled] .rung-name { color: var(--sec); }
+.rung-r { width: 12px; height: 12px; margin-top: 2px; border: 1px solid var(--key-edge); border-radius: 50%; }
+.rung[aria-checked="true"] .rung-r { background: var(--ink); }
+.rung-name { font-weight: 600; font-size: var(--fs-control); }
+.rung-line { display: block; color: var(--sec); font-size: var(--fs-control); }
+.rung-tag { font-size: var(--fs-label); color: var(--ink2); white-space: nowrap; }
+.rung-tag.tag { font-size: var(--fs-label); color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-edge); padding: 0 6px; }
+/* #voice-reply-mode: replies · [Speak and show | Show only], the sheet's replies row in the ladder */
+.ladder-replies { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 6px 0; border-top: 1px dashed var(--rule); margin-top: 4px; }
+.ladder-replies .meta { font-size: var(--fs-label); color: var(--sec); }
+.ladder-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 6px 2px; font-size: var(--fs-label); color: var(--sec); }
+.link { background: none; border: 0; padding: 0; font: inherit; font-size: var(--fs-control); color: var(--ink2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.link:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.link[disabled] { color: var(--sec); cursor: not-allowed; }
+/* B1 live words AT THE CARET (founder report 2026-10-23): #composer-ghost is an aria-hidden mirror laid exactly over
+   the textarea (app.ts placeGhost: same box, same font, same wrapping), drawing the composer's text with the live words
+   where the turn will land. While it shows, the textarea's own text is transparent and its caret stays visible; the
+   textarea never holds a live word. */
+.composer-main { position: relative; }
+.composer-ghost { position: absolute; top: 0; left: 0; margin: 0; padding: 0; border: 0; overflow: hidden; pointer-events: none; white-space: pre-wrap; overflow-wrap: break-word; font: inherit; line-height: 1.6; color: var(--ink); }
+.composer-ghost[hidden] { display: none; }
+.composer-main > textarea.ghosting { color: transparent; caret-color: var(--ink); }
+.composer-main > textarea.ghosting::placeholder { color: transparent; }
+/* Mika 2026-10-23: the textarea's own selection sits where the human text was, under the words that replace it in the
+   mirror; while ghosting the mirror shows the replacement, so the stale highlight is not drawn. When the words push
+   the mirror past where the textarea can scroll, its caret would float over other text: hidden until they line up. */
+.composer-main > textarea.ghosting::selection { background: transparent; color: transparent; }
+.composer-main > textarea.ghosting.ghost-offset { caret-color: transparent; }
+/* forced colours repaint text: keep the transparent textarea transparent so the mirror is never doubled */
+@media (forced-colors: active) { .composer-main > textarea.ghosting { forced-color-adjust: none; color: transparent; } }
+.composer-ghost .ghost-wait { font-style: italic; color: var(--sec); }
+/* B1 live words: committed solid, the unfixed tail dim (reduced motion: the global rule makes the fade instant) */
+.composer-ghost .ghost-committed { font-style: normal; color: var(--ink); text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--sec); text-underline-offset: 3px; }
+/* the unfixed tail: --sec italic, full strength (Mika 2026-10-23: at 0.55 it was 2.4:1 day, 2.7:1 night; --sec is 6.6 and 5.8:1) */
+.composer-ghost .ghost-tail { font-style: italic; color: var(--sec); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* the transcript's voice turns: ink2 and the word "voice" (board gnomon-status-colour: status is ink, never a hue) */
+.trow.voice .who { color: var(--ink2); }
+.trow.role-voice-heard, .trow.role-spoken { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; }
+.trow.role-voice-refused { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; border-left: 2px solid var(--fail-edge); }
+.mode-item.scope { font-size: var(--fs-label); color: var(--ink2); border-top: 1px solid var(--rule); border-radius: 0; margin-top: 2px; padding-top: 6px; }
+/* V2e voice app lifecycle, dev banner, enrolment, notices (T-2026-10-19-026). Existing tokens only; reduced motion is
+   covered by the global [data-motion="reduced"] rule. */
+.voice-progress { display: inline-block; width: 60px; height: 4px; border-radius: var(--radius); background: var(--rule); overflow: hidden; --progress: 0; }
+.voice-progress[hidden] { display: none; }
+.voice-progress i { display: block; height: 100%; width: calc(100% * var(--progress)); background: var(--ink2); }
+.voice-stop { color: var(--fail); border-color: var(--fail-edge); }
+.voice-dev { border: 2px solid var(--fail-edge); background: var(--warn-bg); color: var(--fail); font-weight: 700; font-size: var(--fs-reading); text-align: center; }
+/* #gui-voice-settings: the Voice settings sheet, a right-side drawer on the sheet component (the Settings card);
+   rows are label | value | link, and teaching opens INLINE under its row (no modal over the sheet) */
+.overlay.vs-drawer { align-items: stretch; justify-content: flex-end; padding: 0; }
+.vs-drawer .voice-sheet { width: min(520px, 100vw); max-width: 520px; min-width: 0; max-height: none; height: 100%; border-radius: 0; border-width: 0 0 0 1px; box-shadow: var(--sheet-shadow); }
+.vs-body { padding: 4px 18px 18px; gap: 0; }
+.vs-sec { border-top: 1px solid var(--rule); padding: 10px 0; }
+.vs-sec:first-child { border-top: 0; }
+.vs-head { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.vs-k { color: var(--sec); font-size: var(--fs-control); }
+.vs-v { font-size: var(--fs-control); }
+/* ok reads by its mark and weight (✓ + 600), in ink (board gnomon-status-colour) */
+.vs-v.ok { color: var(--ink); font-weight: 600; }
+.vs-v.warn { color: var(--warn-ink); }
+.vs-flow { margin: 10px 0 2px 110px; display: flex; flex-direction: column; gap: 10px; border-left: 2px solid var(--ink); padding-left: 12px; }
+.vs-flow p, .vs-sec > p { margin: 0; }
+.vs-sec > .vs-timing { margin: 8px 0 0 110px; }
+.vs-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.vs-counter { font-size: var(--fs-control); color: var(--sec); }
+.vs-heard { font-size: var(--fs-reading); font-weight: 600; }
+.vs-heard.ok { color: var(--ink); }
+.vs-risk { font-size: var(--fs-control); color: var(--ink2); background: var(--warn-bg); border: 1px solid var(--warn-edge); padding: 8px 10px; border-radius: var(--radius); }
+.vs-risk .vs-risk-text { margin: 0 0 6px; }
+.vs-check { display: flex; gap: 6px; align-items: center; }
+.vs-check input:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.vs-custom { width: 14em; }
+.vs-label { display: flex; gap: 6px; align-items: center; }
+.vs-warn { color: var(--warn-ink); }
+.vs-variant-list { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-control); }
+.vs-voices { display: flex; flex-direction: column; gap: 2px; }
+.vs-voice { display: flex; justify-content: space-between; gap: 8px; }
+/* phrase N of 3: the REAL input level only (still otherwise; reduced motion: the global rule makes it instant) */
+.vs-meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; --level: 0; }
+.vs-meter span { display: block; width: 3px; height: calc(15% + 85% * var(--level)); background: var(--sec); transition: height 0.12s linear; }
+.vs-meter.recording span { background: var(--ink); }
+/* founder request 2026-10-23: Voice settings › input picker. Mika 2026-10-23: the folder field's choice rows (.ff-row,
+   the system's stacked radiogroup) with no swatch, and a long device name wraps instead of being cut */
+.ff-row.plain { grid-template-columns: 12px minmax(0, 1fr) auto; }
+.ff-row.plain .ff-name { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .vs-flow, .vs-sec > .vs-timing { margin-left: 0; } .vs-head { grid-template-columns: 80px minmax(0, 1fr) auto; } }
+
+/* voice dictation (#gui-dictation, TD-2026-10-20-262): ONE countdown ring by the composer; it drains over the
+   auto-send delay. Reduced motion (the setting or the OS) hides the draining ring and shows the seconds as text. */
+.dictation { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.dictation[hidden] { display: none; }
+.dictation-ring { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.dictation-ring[hidden] { display: none; }
+.dictation-ring svg { transform: rotate(-90deg); }
+.dictation-ring .ring-track { fill: none; stroke: var(--rule); stroke-width: 2.5; }
+.dictation-ring .ring-arc { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-dasharray: 100; stroke-dashoffset: 0; stroke-linecap: round; }
+.dictation-ring .ring-secs { display: none; font-size: var(--fs-control); font-variant-numeric: tabular-nums; }
+.dictation-live { min-width: 7ch; }
+.dictation.held .dictation-live { color: var(--warn-ink); }
+#dictation-hold[aria-pressed="true"] { color: var(--warn-ink); }
+.trow .who .voice-mark { color: var(--sec); }
+[data-motion="reduced"] .dictation-ring svg { display: none; }
+[data-motion="reduced"] .dictation-ring .ring-secs { display: inline; }
+@media (prefers-reduced-motion: reduce) {
+  .dictation-ring svg { display: none; }
+  .dictation-ring .ring-secs { display: inline; }
+}
+
+/* ── S2 desk structure (critique 2026-10-20 §2 S2). Text tokens only; project hue fills sit in a --key-edge ring and
+   project names use the INK pair (--p-*-ink, a fixture text token), never the fill. ── */
+.pink.h0 { color: var(--p-terracotta-ink); }
+.pink.h1 { color: var(--p-sage-ink); }
+.pink.h2 { color: var(--p-slate-ink); }
+.pink.h3 { color: var(--p-ochre-ink); }
+.pink.h4 { color: var(--p-rose-clay-ink); }
+.pink.h5 { color: var(--p-sea-grey-ink); }
+.sessions { background: transparent; padding: 12px 10px 0; }
+.key.newb { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; font-size: var(--fs-control); text-align: left; }
+.key.newb kbd { font: inherit; font-size: var(--fs-label); color: var(--sec); }
+#session-search-wrap { padding: 0 0 6px; }
+#session-search { background: transparent; }
+.sec-head { display: flex; justify-content: space-between; width: 100%; margin: 8px 0 4px; padding: 0 6px; font: inherit; font-size: var(--fs-label); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--sec); background: transparent; border: 0; text-align: left; }
+.sec-toggle { cursor: pointer; }
+.sessions .group-head { padding: 6px 6px 2px; font-size: var(--fs-control); }
+.sessions .swatch, .group-head .swatch { width: 12px; height: 12px; flex: none; }
+.session-row.sess { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: var(--radius); border-left: 0; font-size: var(--fs-control); }
+.session-row.sess.active { background: var(--sheet); color: var(--ink); }
+.session-row.sess.gone { color: var(--sec); }
+.sname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snote { font-size: var(--fs-label); color: var(--sec); white-space: nowrap; }
+.snote.tone-need { color: var(--warn-ink); font-weight: 500; }
+.snote.tone-fail { color: var(--fail); font-weight: 500; }
+.session-row.state-failed { border-left: 0; }
+
+/* ── header (board header-5b, design-system gnomon.voice.header; refs/header-5b.html option C): four things, the
+   wordmark menu · the ⌘K palette · quiet kernel status · the voice pill. ONE control height (28px), nothing wraps
+   inside a control (nowrap), the row itself never wraps (it truncates: the palette's words, then the pill's fact). */
+.chrome { flex-wrap: nowrap; min-width: 0; }
+.chrome .key { box-sizing: border-box; height: var(--key-h); padding: 0 10px; white-space: nowrap; flex: none; }
+.chrome .pane-toggle { display: none; }
+@media (max-width: 900px) { .chrome .pane-toggle { display: inline-flex; } }
+.wm-wrap { position: relative; display: inline-flex; flex: none; }
+.wordmark-btn { box-sizing: border-box; height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; margin-left: -8px; font: inherit; color: var(--ink); background: none; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; white-space: nowrap; }
+.wordmark-btn:hover { border-color: var(--rule); background: var(--sheet); }
+.wordmark-btn[aria-expanded="true"] { border-color: var(--key-edge); background: var(--sheet); }
+.wordmark-btn:active { transform: translate(1px, 1px); }
+.wordmark-btn:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.wm-caret { font-family: var(--mono); font-size: var(--fs-label); color: var(--sec); margin-top: 2px; }
+.wordmark-btn:hover .wm-caret, .wordmark-btn[aria-expanded="true"] .wm-caret { color: var(--ink); }
+/* the menu: the .mode-menu / .mode-item idiom (the run-mode and the old Layout menu), from the wordmark's left edge */
+.wordmark-menu { left: -8px; right: auto; width: 320px; border-color: var(--key-edge); }
+.menu-h { font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); padding: 6px 8px 2px; }
+.menu-rule { border-top: 1px dashed var(--rule); margin: 4px 0; }
+.menu-who { font-size: var(--fs-label); color: var(--sec); padding: 4px 8px 2px; overflow-wrap: anywhere; }
+.app-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; width: 100%; }
+.app-item .mode-name, .app-item .mode-note { grid-column: 1; }
+.app-item .mode-kbd { grid-column: 2; grid-row: 1; font: inherit; font-size: var(--fs-label); color: var(--sec); }
+.app-item:focus-visible { box-shadow: inset 0 0 0 2px var(--key-edge); }
+.app-item[aria-expanded="true"] .mode-name::after { content: " ▴"; color: var(--sec); }
+.app-item[aria-expanded="false"] .mode-name::after { content: " ▾"; color: var(--sec); }
+.menu-theme { display: flex; flex-wrap: nowrap; gap: 4px; padding: 2px 8px 6px; }
+.menu-theme .seg-key { flex: 1; box-sizing: border-box; height: var(--key-h); padding: 0 8px; white-space: nowrap; font-size: var(--fs-control); }
+.menu-theme .seg-key:hover:not(.current) { background: var(--fold); }
+.menu-theme .seg-key:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+/* the palette field: the most-used control, so it grows (to 460px) and only its words truncate */
+.palfield { box-sizing: border-box; height: 28px; flex: 0 1 460px; min-width: 150px; display: inline-flex; align-items: center; gap: 10px; padding: 0 10px; font: inherit; font-size: var(--fs-control); color: var(--sec); background: var(--sheet); border: 1px solid var(--sec); border-radius: var(--radius); cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; }
+.palfield:hover { border-color: var(--key-edge); }
+.palfield .pal-ph { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.palfield kbd { margin-left: auto; flex: none; font: inherit; font-size: var(--fs-label); color: var(--sec); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0 4px; }
+.palfield:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+/* quiet kernel status: the link is a dot (a word only when not connected); the browser risk an OUTLINED amber chip */
+.kstat { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.link-dot { height: 28px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-control); color: var(--ink2); white-space: nowrap; flex: none; }
+.link-dot .ld { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--sec); flex: none; }
+.link-dot.ok .ld { background: var(--ink); border-color: var(--ink); }
+.risk-chip { box-sizing: border-box; height: 28px; display: inline-flex; align-items: center; padding: 0 10px; font-size: var(--fs-control); color: var(--warn-ink); background: transparent; border: 1px solid var(--warn-edge); border-radius: var(--radius); white-space: nowrap; flex: none; }
+.risk-chip[hidden] { display: none; }
+.voice-wrap { flex: 0 1 auto; }
+/* attached, the voice app's fix (Restart, Start voice, Teach) is the ladder's first row, never a header key */
+.ladder-start { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 4px; padding: 2px 6px 8px; border-bottom: 1px dashed var(--rule); font-size: var(--fs-control); }
+.ladder-start .key { white-space: nowrap; flex: none; } /* never below the pill's rung: the palette's words give way first */
+@media (max-width: 1040px) { .risk-long, .pal-ph2 { display: none; } .voice-fact { max-width: 20ch; } }
+@media (max-width: 760px) { .palfield { min-width: 0; flex-basis: 90px; } .voice-fact { max-width: 10ch; } }
+
+/* chat header and the quiet empty centre */
+.pane-head.chead { padding: 10px 20px 8px; align-items: baseline; }
+.chead-l { display: flex; flex: 1 1 auto; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; }
+.chead .head-right { flex: none; }
+.chead #transcript-title { font-size: var(--fs-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-theme="night"] .chead #transcript-title { font-size: var(--fs-reading); }
+.chead-meta { font-size: var(--fs-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 0.2; } /* the title gives way first: the model chip stays readable */
+.chead #transcript-title { flex: 0 1 auto; min-width: 8ch; }
+#transcript-count, .head-right .key { white-space: nowrap; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.empty-sheet { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 36px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--sheet-shadow); text-align: center; }
+.empty-title { font-size: var(--fs-title); margin: 0; }
+.empty-sheet .meta { margin: 0; }
+.empty-sheet .key kbd { font: inherit; font-size: var(--fs-label); margin-left: 6px; }
+
+/* chat rows: measure 80ch, the user's message right-aligned, the activity fold, "took Ns", the markdown subset */
+.trow { max-width: none; }
+.trow > .body, .trow > .who, .trow > .said { max-width: 80ch; }
+.trow.role-user { display: flex; flex-direction: column; align-items: flex-end; }
+.trow.role-user .body { border-radius: var(--radius); padding: 8px 12px; }
+.trow.role-user, .trow.role-assistant { padding: 8px 20px 6px; } /* 2px grid: 8 over 6 keeps the 14px between turns */
+.trow.role-activity { padding: 4px 20px 4px 22px; margin-left: 20px; font-size: var(--fs-control); color: var(--sec); border-left: 2px solid var(--rule); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(80ch + 22px); }
+.trow.role-activity:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+/* T-2026-10-21-007: the running turn. Its activity line counts live (ink, not secondary, while it runs) and a
+   "working… · Ns" row with a small spinner sits under the turn's output until its result; reduced motion stills the
+   spinner (the ticking seconds still say it is running). */
+.trow.role-activity.live { color: var(--ink2); border-left-color: var(--key-edge); }
+.trow.role-activity .live-clock, .trow.role-working .live-clock { font-variant-numeric: tabular-nums; }
+.trow.role-working { display: flex; align-items: center; gap: 8px; padding: 4px 20px 6px 22px; margin-left: 20px; font-size: var(--fs-control); color: var(--ink2); }
+.trow.role-working .spin { width: 9px; height: 9px; flex: none; border: 1.5px solid var(--rule); border-top-color: var(--key-edge); border-radius: 50%; animation: turn-spin 0.9s linear infinite; }
+@keyframes turn-spin { to { transform: rotate(360deg); } }
+[data-motion="reduced"] .trow.role-working .spin { animation: none; }
+@media (prefers-reduced-motion: reduce) { .trow.role-working .spin { animation: none; } }
+/* #gui-turn-steps (founder 2026-10-23): the working row is a KEY naming what the turn does now (a tool and its target,
+   a hook, thinking, finishing) with its clock; it unfolds this turn's steps under it like the activity fold. The list
+   scrolls inside itself (max 40vh, never sideways); a finished step folds to its whole lines (the raw fold). */
+.trow.role-working { flex-direction: column; align-items: stretch; gap: 2px; }
+/* Mika: the words ellipsize, the clock never does (it is the one thing that says the turn is alive); 24px tall
+   at least (WCAG 2.5.8: the key and the step rows are stacked targets) */
+.trow.role-working .work-key { display: flex; align-items: center; gap: 0; min-height: 24px; cursor: pointer; white-space: nowrap; min-width: 0; max-width: calc(80ch + 22px); }
+.trow.role-working .work-key .spin { margin-right: 8px; }
+.trow.role-working .caret { flex: none; white-space: pre; }
+.trow.role-working .caret.blank { visibility: hidden; }
+.trow.role-working .work-label, .trow.role-working .step-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow.role-working .work-key .live-clock, .trow.role-working .step-tail { flex: none; white-space: pre; font-variant-numeric: tabular-nums; }
+.trow.role-working .work-key .caret, .trow.role-working .step .caret { color: var(--sec); }
+.trow.role-working .work-key:focus-visible, .trow.role-working .step.fold:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.trow.role-working .steps { list-style: none; margin: 2px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--rule); max-height: 40vh; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; max-width: calc(80ch + 22px); }
+.trow.role-working .step { display: flex; align-items: center; min-height: 24px; font-size: var(--fs-label); color: var(--sec); white-space: nowrap; }
+.trow.role-working .step.fold { cursor: pointer; }
+.trow.role-working .step.live { color: var(--ink2); }
+.trow.role-working .step.warn { color: var(--warn-ink); }
+.trow.role-working .step-detail { display: block; }
+.trow.role-working .step-detail .raw-line { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; }
+/* hook-result: the turn's one quiet summary under its reply; warn only when a hook blocked, failed or timed out */
+.trow.role-hook { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; }
+.trow.role-hook.warn { color: var(--warn-ink); border-left: 2px solid var(--warn-edge); }
+/* Aegis M1: Claude's own synthetic note ("Claude · …"), never styled as a kernel note (role-system) */
+.trow.role-claude-note { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; border-left: 2px solid var(--rule); }
+.trow .who .took { color: var(--sec); }
+.trow .body.md { white-space: normal; }
+.md-p { margin: 0 0 6px; white-space: pre-wrap; }
+.md-p:last-child { margin-bottom: 0; }
+.md-list { margin: 2px 0 6px; padding-left: 20px; }
+.md-pre { margin: 4px 0 6px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-code, .md-pre code { font: inherit; }
+.md-code { background: color-mix(in srgb, var(--rule) 50%, transparent); padding: 0 4px; border-radius: var(--radius); }
+
+/* pinned (pending in this session) and the composer */
+.pinned { padding: 10px 20px 0; display: flex; flex-direction: column; gap: 8px; }
+.pinned .lbl { font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); }
+.pinned .card { margin: 0; }
+.composer { margin: 10px 20px 14px; padding: 10px 12px; border: 1px solid var(--sec); border-radius: var(--radius); background: var(--sheet); }
+.composer:hover { border-color: var(--key-edge); }
+/* ONE container (founder report 2026-10-20, "box inside a box"): the composer carries the only border and the focus
+   ring; the textarea draws no border, outline or shadow of its own. The ring shows while the text field has keyboard
+   focus (a11y: a visible focus state), on the same token as every other focus ring. */
+.composer textarea.field { border: 0; padding: 0; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+.composer textarea.field:focus, .composer textarea.field:focus-visible { outline: none; box-shadow: none; }
+.composer:has(textarea.field:focus-visible) { outline: 2px solid var(--key-edge); outline-offset: -1px; }
+
+/* palette rows: title left, kbd hint right */
+.pal-row { padding: 6px 10px; border-radius: var(--radius); align-items: baseline; }
+.pal-kbd { font: inherit; font-size: var(--fs-label); color: var(--sec); white-space: nowrap; }
+/* ── K0 mod panels (core/mod-panels.ts, ui/mod-panels-mount.ts): a mod view sits in a labelled fence, apart from
+   kernel-owned regions; tones are tokens (.tone-*), the project hue only ever colours a cap glyph. ── */
+.mod-slot { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; }
+.mod-slot[hidden] { display: none; }
+/* #paradigm-context-mod: the sidebar region is bounded and scrolls, so a tall sheet never pushes the sessions list away */
+.mod-slot-left-bottom { flex: none; max-height: 45%; overflow-y: auto; }
+/* Aegis M2: the right-pane mod region is ruled off from the decision stack (outside its scroll), headed `mods` */
+.mod-slot-right { flex: none; max-height: 40%; overflow-y: auto; border-top: 2px solid var(--rule); margin-top: 6px; }
+.mod-slot-head { color: var(--sec); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.08em; }
+.mod-fence { border: 1px dashed var(--rule); border-radius: var(--radius); padding: 4px 8px; background: var(--sheet); }
+.mod-fence-head { display: flex; gap: 6px; align-items: center; }
+.mod-label { color: var(--sec); font-size: var(--fs-label); }
+.mod-fence .blk-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mod-fence .blk-progress { display: inline-flex; gap: 6px; align-items: center; }
+/* a mod meter is ink on a --rule track, like the voice meter (status-in-ink; never the platform's blue) */
+.mod-fence progress { transition: none; -webkit-appearance: none; appearance: none; height: 4px; border: 0; border-radius: var(--radius); background: var(--rule); color: var(--ink2); overflow: hidden; }
+.mod-fence progress::-webkit-progress-bar { background: var(--rule); }
+.mod-fence progress::-webkit-progress-value { background: var(--ink2); }
+.mod-fence progress::-moz-progress-bar { background: var(--ink2); }
+.tone-quiet { color: var(--sec); }
+/* #paradigm-context-mod: zone heads are the label style (caps, --sec); symbol chips (a mod's `chip` tone) are the
+   status .chip in ink (below, board gnomon-chip; never a hue) */
+.tone-head { color: var(--sec); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.06em; }
+.tone-warn { color: var(--warn-ink); }
+.tone-deny { color: var(--fail); font-weight: 600; }
+.tone-paused { color: var(--sec); }
+/* a project hue (Text tone hue-N) is the project's ■ swatch, the chat header's: the hue's ink pair, no ring, no dot */
+.blk-swatch { flex: none; display: inline-block; font-size: var(--fs-control); line-height: 1; }
+/* Fitted mod views (core/render.ts fit, every fence but the Workshop's; founder 2026-10-23): side-column type
+   (11.5 control, 10.5 label), a 2px grid rhythm, ids on one line with an ellipsis, row prose in two lines. */
+.mod-fit { container: mod-fit / inline-size; min-width: 0; font-size: var(--fs-control); line-height: 1.45; }
+.mod-fit .blk-box:not(.blk-row) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mod-fit > .blk-box:not(.blk-row) { gap: 8px; }
+.mod-fit .blk-title { font-weight: 600; }
+.mod-fit .blk-text { word-break: normal; overflow-wrap: break-word; }
+.mod-fit .tone-quiet, .mod-fit .tone-paused { font-size: var(--fs-label); }
+.mod-fit .blk-row { flex-wrap: wrap; align-items: baseline; gap: 0 6px; min-width: 0; }
+.mod-fit .blk-row > * { min-width: 0; }
+.mod-fit .blk-tok { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mod-fit .blk-row > .blk-tok { flex: 1 1 0; min-width: min(8ch, 100%); }
+.mod-fit .blk-word { white-space: nowrap; flex: none; }
+.mod-fit .blk-row > .blk-prose.blk-break { flex-basis: 100%; }
+.mod-fit .blk-row > .blk-prose { flex: 0 1 auto; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.mod-fit .blk-row > .tone-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+.mod-fit .blk-row:has(> .tone-chip) { gap: 4px; }
+.mod-fit .tone-chip + .tone-chip { margin-left: 0; }
+.mod-fit .blk-progress { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; font-size: var(--fs-label); color: var(--sec); }
+.mod-fit .blk-progress progress { width: 100%; }
+.mod-fit .blk-row > .blk-progress { flex: 1 1 12ch; }
+.mod-fit .blk-list { margin: 0; padding-left: 14px; }
+/* a table: label-style heads, numbers right-aligned and tabular, cells capped at 24ch with an ellipsis (full text in
+   title). Below its width bucket (tw-N, from its natural width) each row becomes its first cell over key-value pairs. */
+.mod-fit .blk-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mod-fit .blk-table th { font-size: var(--fs-label); font-weight: 400; color: var(--sec); text-align: left; white-space: nowrap; padding: 0 0 2px 8px; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+.mod-fit .blk-table td { white-space: nowrap; padding: 2px 0 0 8px; vertical-align: baseline; }
+.mod-fit .blk-table :is(th, td):first-child { padding-left: 0; }
+.mod-fit .blk-table .num { text-align: right; }
+.mod-fit .blk-table .blk-nil { color: var(--sec); }
+.mod-fit .blk-cell { display: inline-block; max-width: min(24ch, 100%); min-width: 0; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.mod-fit .blk-table td::before { content: attr(data-col); display: none; margin-right: 4px; color: var(--sec); font-size: var(--fs-label); }
+.mod-fit .blk-table td:first-child::before { content: none; }
+/* Mika 2026-10-23: in the key-value layout a field is a flex line no wider than the column: its label keeps its width and the
+   value ellipsizes (at the 200px rail a "↓ compactions 2 (190k → 41k)" field ran 6px past the fence) */
+.mod-fit .blk-table td::before { flex: none; }
+.mod-fit .blk-table tbody tr + tr { margin-top: 8px; }
+/* Mika 2026-10-23: a truncated id, cell or title (markTruncated: tabindex 0, full text in title) shows its whole text on keyboard focus */
+.mod-fit [data-trunc]:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip; -webkit-line-clamp: unset; line-clamp: none; }
+@container mod-fit (max-width: 20ch) { .mod-fit .tw-20 thead, .mod-fit .tw-20 td.blk-nil { display: none; } .mod-fit .tw-20, .mod-fit .tw-20 tbody, .mod-fit .tw-20 tr { display: block; } .mod-fit .tw-20 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-20 td:first-child { display: flex; } .mod-fit .tw-20 td::before { display: inline; } }
+@container mod-fit (max-width: 24ch) { .mod-fit .tw-24 thead, .mod-fit .tw-24 td.blk-nil { display: none; } .mod-fit .tw-24, .mod-fit .tw-24 tbody, .mod-fit .tw-24 tr { display: block; } .mod-fit .tw-24 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-24 td:first-child { display: flex; } .mod-fit .tw-24 td::before { display: inline; } }
+@container mod-fit (max-width: 28ch) { .mod-fit .tw-28 thead, .mod-fit .tw-28 td.blk-nil { display: none; } .mod-fit .tw-28, .mod-fit .tw-28 tbody, .mod-fit .tw-28 tr { display: block; } .mod-fit .tw-28 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-28 td:first-child { display: flex; } .mod-fit .tw-28 td::before { display: inline; } }
+@container mod-fit (max-width: 32ch) { .mod-fit .tw-32 thead, .mod-fit .tw-32 td.blk-nil { display: none; } .mod-fit .tw-32, .mod-fit .tw-32 tbody, .mod-fit .tw-32 tr { display: block; } .mod-fit .tw-32 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-32 td:first-child { display: flex; } .mod-fit .tw-32 td::before { display: inline; } }
+@container mod-fit (max-width: 36ch) { .mod-fit .tw-36 thead, .mod-fit .tw-36 td.blk-nil { display: none; } .mod-fit .tw-36, .mod-fit .tw-36 tbody, .mod-fit .tw-36 tr { display: block; } .mod-fit .tw-36 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-36 td:first-child { display: flex; } .mod-fit .tw-36 td::before { display: inline; } }
+@container mod-fit (max-width: 40ch) { .mod-fit .tw-40 thead, .mod-fit .tw-40 td.blk-nil { display: none; } .mod-fit .tw-40, .mod-fit .tw-40 tbody, .mod-fit .tw-40 tr { display: block; } .mod-fit .tw-40 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-40 td:first-child { display: flex; } .mod-fit .tw-40 td::before { display: inline; } }
+@container mod-fit (max-width: 44ch) { .mod-fit .tw-44 thead, .mod-fit .tw-44 td.blk-nil { display: none; } .mod-fit .tw-44, .mod-fit .tw-44 tbody, .mod-fit .tw-44 tr { display: block; } .mod-fit .tw-44 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-44 td:first-child { display: flex; } .mod-fit .tw-44 td::before { display: inline; } }
+@container mod-fit (max-width: 48ch) { .mod-fit .tw-48 thead, .mod-fit .tw-48 td.blk-nil { display: none; } .mod-fit .tw-48, .mod-fit .tw-48 tbody, .mod-fit .tw-48 tr { display: block; } .mod-fit .tw-48 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-48 td:first-child { display: flex; } .mod-fit .tw-48 td::before { display: inline; } }
+@container mod-fit (max-width: 52ch) { .mod-fit .tw-52 thead, .mod-fit .tw-52 td.blk-nil { display: none; } .mod-fit .tw-52, .mod-fit .tw-52 tbody, .mod-fit .tw-52 tr { display: block; } .mod-fit .tw-52 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-52 td:first-child { display: flex; } .mod-fit .tw-52 td::before { display: inline; } }
+@container mod-fit (max-width: 56ch) { .mod-fit .tw-56 thead, .mod-fit .tw-56 td.blk-nil { display: none; } .mod-fit .tw-56, .mod-fit .tw-56 tbody, .mod-fit .tw-56 tr { display: block; } .mod-fit .tw-56 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-56 td:first-child { display: flex; } .mod-fit .tw-56 td::before { display: inline; } }
+@container mod-fit (max-width: 60ch) { .mod-fit .tw-60 thead, .mod-fit .tw-60 td.blk-nil { display: none; } .mod-fit .tw-60, .mod-fit .tw-60 tbody, .mod-fit .tw-60 tr { display: block; } .mod-fit .tw-60 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-60 td:first-child { display: flex; } .mod-fit .tw-60 td::before { display: inline; } }
+@container mod-fit (max-width: 64ch) { .mod-fit .tw-64 thead, .mod-fit .tw-64 td.blk-nil { display: none; } .mod-fit .tw-64, .mod-fit .tw-64 tbody, .mod-fit .tw-64 tr { display: block; } .mod-fit .tw-64 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-64 td:first-child { display: flex; } .mod-fit .tw-64 td::before { display: inline; } }
+@container mod-fit (max-width: 72ch) { .mod-fit .tw-72 thead, .mod-fit .tw-72 td.blk-nil { display: none; } .mod-fit .tw-72, .mod-fit .tw-72 tbody, .mod-fit .tw-72 tr { display: block; } .mod-fit .tw-72 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-72 td:first-child { display: flex; } .mod-fit .tw-72 td::before { display: inline; } }
+@container mod-fit (max-width: 80ch) { .mod-fit .tw-80 thead, .mod-fit .tw-80 td.blk-nil { display: none; } .mod-fit .tw-80, .mod-fit .tw-80 tbody, .mod-fit .tw-80 tr { display: block; } .mod-fit .tw-80 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-80 td:first-child { display: flex; } .mod-fit .tw-80 td::before { display: inline; } }
+@container mod-fit (max-width: 96ch) { .mod-fit .tw-96 thead, .mod-fit .tw-96 td.blk-nil { display: none; } .mod-fit .tw-96, .mod-fit .tw-96 tbody, .mod-fit .tw-96 tr { display: block; } .mod-fit .tw-96 td { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; padding: 0 8px 0 0; } .mod-fit .tw-96 td:first-child { display: flex; } .mod-fit .tw-96 td::before { display: inline; } }
+/* #gui-model-picker: the New-session "claude model" select and the header model chip (ui/model-picker.ts) */
+.ns-claude { display: flex; flex-direction: column; gap: 6px; }
+.ns-claude[hidden], #ns-model-id[hidden], #ns-model-why[hidden] { display: none; }
+.model-wrap { vertical-align: baseline; }
+.model-btn { white-space: nowrap; padding: 0 6px; font-size: var(--fs-control); }
+.model-menu { left: 0; right: auto; min-width: 240px; }
+/* the header's left part clips (its title and meta ellipsize), so the model menu hangs from the header row itself,
+   under the key (ui/model-picker.ts sets its left); nothing in the row clips it */
+.pane-head.chead { position: relative; }
+.model-switch-lines p { margin: 0 0 4px; }
+
+/* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
+.seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.seg-key.current, .seg-key[aria-checked="true"], .seg-key[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); }
+.seg-key.current:hover:not([disabled]), .seg-key[aria-checked="true"]:hover:not([disabled]), .seg-key[aria-pressed="true"]:hover:not([disabled]) { background: var(--ink2); }
+[data-theme="night"] .seg-key.current:hover:not([disabled]), [data-theme="night"] .seg-key[aria-checked="true"]:hover:not([disabled]), [data-theme="night"] .seg-key[aria-pressed="true"]:hover:not([disabled]) { background: var(--fold); }
+[data-theme="night"] .seg-key.current::before, [data-theme="night"] .seg-key.current::after { color: var(--ink); }
+.seg-key[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); }
+.settings-card { width: min(720px, calc(100vw - 32px)); max-width: 720px; max-height: 78vh; padding: 0; gap: 0; }
+.settings-head { display: flex; align-items: baseline; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
+.settings-head .title { margin: 0; font-size: var(--fs-title); }
+/* night titles are carried by typeface and case at 13.5 (design-system foundations.type.night_titles) */
+[data-theme="night"] .pilehead .title, [data-theme="night"] .settings-head .title, [data-theme="night"] .setup-title { font-size: var(--fs-reading); }
+.settings-head .key { margin-left: auto; }
+.settings-body { overflow: auto; padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.settings-sec { border-bottom: 1px solid var(--rule); padding: 8px 0; }
+.settings-sec:last-child { border-bottom: 0; }
+.settings-h { margin: 4px 0 6px; font-size: var(--fs-reading); font-weight: 600; }
+.settings-row { display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); column-gap: 12px; row-gap: 2px; align-items: center; padding: 4px 0; }
+.settings-label { color: var(--ink2); font-size: var(--fs-control); }
+.settings-row > .seg, .settings-row > .key, .settings-row > .settings-value { grid-column: 2; justify-self: start; }
+.settings-note, .settings-how { grid-column: 2; margin: 0; }
+.settings-value { font-size: var(--fs-control); color: var(--ink); }
+.settings-readonly .settings-label::after { content: " · kernel-owned"; color: var(--sec); font-size: var(--fs-label); }
+/* the standing-grant feed (ui/standing-feed.ts): classes only, the CSP refuses style attributes */
+/* Aegis M2: under every overlay (z 40) and gone while a dialog is open; the stack's pile reserves room below its last
+   card so today's list never covers a decision key. Its toasts and the offer are #gui-toast (below). */
+.overlay { z-index: 40; }
+.standing-feed { position: fixed; right: 12px; bottom: 12px; max-width: 320px; z-index: 15; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-control); }
+body:has(.overlay:not([hidden])) .standing-feed, body:has([role="dialog"]:not([hidden]) :focus) .standing-feed { display: none; }
+.pile { padding-bottom: 140px; }
+.standing-items { margin: 4px 0; padding-left: 16px; max-height: 200px; overflow: auto; }
+.standing-list { padding: 6px 8px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--rule); color: var(--ink); }
+/* #gui-toast (board gnomon-notices, rule notices-by-kind; placement: the founder's pick from Luna's
+   gnomon-toast-placement reference, option A): every notice that is not a kernel alert, in one style. On the desk the
+   region hangs from the chat column's right edge, under the chat header row (index.html: the anchor is the first child
+   of #pane-transcript > .feed), so it never covers the chat header's keys (run mode ▾, ⋯) or any stack key; it is
+   over the conversation and never pushes it down. Newest on top, at most three (ui/toasts.ts); under the header menus
+   (z 20). The left edge goes by kind: ink info, amber warn, vermilion fail. */
+.feed > .toast-anchor { position: absolute; top: 8px; left: 20px; right: 20px; height: 0; z-index: 15; }
+/* the region spans its anchor (so a toast's width is one fixed measure, clamped to the column); it lets clicks through
+   between toasts, a toast takes them */
+.toasts { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+.toasts > .toast { pointer-events: auto; }
+/* a sheet open (Settings, Mods, palette): the region lifts above the scrim (z 45 over the overlays' 40) to the window's
+   top right, beside a centred sheet, so an outcome raised inside the sheet still shows; with the Voice settings
+   drawer (right, up to 520px) it sits left of the drawer, never over its done key. Known gap: a 720px-wide
+   sheet leaves no room beside it at the narrowest desktop width, so a toast can cover its close key (tracked separately). */
+body:has(.overlay:not([hidden])) .feed > .toast-anchor, .toast-anchor.lifted { position: fixed; top: 48px; right: 14px; left: auto; width: min(calc(44ch + 26px), calc(100vw - 28px)); height: 0; z-index: 45; }
+body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px, 100vw) + 14px); }
+.toast { box-sizing: border-box; width: min(calc(44ch + 26px), 100%); display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; font-size: var(--fs-control); line-height: 1.45; color: var(--ink); background: var(--sheet); border: 1px solid var(--key-edge); border-left: 3px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* kind never by hue alone (rule status-in-ink): fail and warn carry a word (.toast-tag: "failed", "warning", "asks
+   first") in ink, caps at the label step, and warn's edge is dashed where fail's is solid */
+.toast.warn { border-left: 3px dashed var(--warn-edge); }
+.toast.fail { border-left-color: var(--fail-edge); }
+.toast-tag { font-size: var(--fs-label); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); }
+.toast-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+/* the clamp opens on hover or focus (a clamped text is focusable), and a fail is never clamped */
+.toast:hover .toast-text, .toast-text:focus, .toast.fail .toast-text { display: block; -webkit-line-clamp: none; line-clamp: none; overflow: visible; }
+.toast-text:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.toast-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+[data-motion="full"] .toast { animation: toast-in 120ms ease-out both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ── fidelity 2 (comp direction.html), superseded for the header by board header-5b (above): the row's gap */
+.chrome { gap: 10px; }
+/* #gui-chip (board gnomon-chip, rule chip-is-not-a-key): a chip is a status label nobody clicks. 18px, 10.5, the faint
+   --rule edge (a dark --key-edge presses; a --rule edge does not), radius 3 by day and square at night; tones plain,
+   ink (a mod's symbol chips: .chip.ink, and the mod-kit `chip` tone) and warn (flags, dev). Never a <button>,
+   never focusable: anything clickable is a 24px .key.quiet. */
+.chip, .tone-chip { display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box; height: 18px; padding: 0 6px; font-family: var(--mono); font-size: var(--fs-label); font-weight: 400; line-height: 16px; letter-spacing: 0; text-transform: none; color: var(--sec); background: transparent; border: 1px solid var(--rule); border-radius: var(--radius); white-space: nowrap; vertical-align: middle; }
+[data-theme="night"] .chip, [data-theme="night"] .tone-chip { border-radius: 0; }
+.chip.ink, .tone-chip { color: var(--ink); }
+.chip.warn { color: var(--warn-ink); border-color: var(--warn-edge); background: var(--warn-bg); }
+.tone-chip + .tone-chip { margin-left: 4px; }
+/* night: the comp's keys carry no [ ] caps (only + New session does); a model-text choice is marked by its dashed
+   edge AND its filled choice-k pill (Aegis L3) */
+[data-theme="night"] .key::before, [data-theme="night"] .key::after { content: none; }
+[data-theme="night"] .key.newb::before { content: "["; color: var(--sec); }
+[data-theme="night"] .key.newb::after { content: "]"; color: var(--sec); }
+/* Luna #4: a chosen night segment is [bracketed] and glows (the night idiom), not just an ink edge every key has */
+[data-theme="night"] .seg-key.current::before, [data-theme="night"] .seg-key[aria-checked="true"]::before, [data-theme="night"] .seg-key[aria-pressed="true"]::before { content: "["; color: var(--ink); }
+[data-theme="night"] .seg-key.current::after, [data-theme="night"] .seg-key[aria-checked="true"]::after, [data-theme="night"] .seg-key[aria-pressed="true"]::after { content: "]"; color: var(--ink); }
+[data-theme="night"] .seg-key.current, [data-theme="night"] .seg-key[aria-checked="true"], [data-theme="night"] .seg-key[aria-pressed="true"] { text-shadow: var(--wm-glow); }
+
+/* fidelity 2 chat header: "title  ■ project · claude · started 13:58 · 9m" (meta never squeezed out by the title), the
+   kernel-owned run mode as a small chip (`ask ▾`), and a ⋯ menu holding the counts and the raw toggle */
+.chead #transcript-title { flex: 0 1 auto; min-width: 8ch; max-width: 55%; }
+/* #gui-session-rename: the ✎ beside the title and the inline name input (header and session list) */
+/* board gnomon-chip: ✎, the run mode ▾ and the stack filter are keys, not chips: 24px quiet keys with the --key-edge */
+.chead .rename-btn, .chead .mode-btn, .pilehead .stack-scope { box-sizing: border-box; height: var(--key-h); min-height: var(--key-h); min-width: var(--key-h); padding: 0 8px; font-size: var(--fs-control); line-height: 1; border-color: var(--key-edge); }
+.chead .rename-btn { flex: none; }
+.rename-input { box-sizing: border-box; height: var(--key-h); font: inherit; font-size: var(--fs-reading); color: var(--ink); background: var(--sheet); border: 1px solid var(--sec); border-radius: var(--radius); padding: 0 6px; min-width: 0; } /* border-box at var(--key-h): the height of the header keys beside it */
+.chead .rename-input { flex: 0 1 45%; min-width: 16ch; }
+.session-row.renaming { cursor: text; }
+.session-row.renaming .rename-input { width: 100%; font-size: var(--fs-control); }
+/* Mika 2026-10-23: at 1024 the "started · 9m" gives way first, then the title (to 5ch), then the backend word, and the
+   project name last (to "■ abc…", whole name in its title); the model key never shrinks. The meta's parts join the header row (display: contents) so the when can out-shrink the title. */
+.chead-meta { display: contents; white-space: pre; }
+.chead-l { gap: 0; }
+.chead-l > #transcript-title, .chead-l > .rename-btn, .chead-l > .rename-input { margin-right: 10px; }
+.chead #transcript-title { min-width: 5ch; flex-shrink: 100; }
+.chead-meta > * { flex: none; white-space: pre; }
+.chead-meta > .chead-when { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* " · claude" gives way before the project, whole or not at all (never "· cl"): the model key beside it names the model */
+.chead-l { container: chead-l / inline-size; }
+@container chead-l (max-width: 339px) { .chead-meta > .chead-backend { display: none; } }
+/* the project never shrinks (a flex share would nibble it to "billi…" while the title still had room); instead its NAME
+   is capped: 10ch below 1280px (fits 1024 with the model key whole), 24ch above; the whole name is in its title */
+.chead-meta > .pink { flex: none; display: inline-flex; align-items: baseline; }
+.chead-proj { display: block; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+@media (max-width: 1279px) { .chead-proj { max-width: 10ch; } }
+.more-wrap { position: relative; display: inline-flex; }
+.more-btn { font-size: var(--fs-reading); line-height: 18px; padding: 0 8px; border-color: transparent; }
+.more-menu { min-width: 200px; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
+
+/* #gui-composer (Atelier 2026-10-21 direction): the text wraps and grows to 12 lines, then scrolls; ⤢ raises the cap
+   to 24 (core/composer.ts fits the height, per viewer). The controls sit in ONE row at the bottom right: line count
+   (from 2 lines up; at 1 line it says nothing), ⤢, the ONE send key (founder report 2026-10-23: a column of them made
+   the empty composer about 3 keys tall). Empty, the composer is one key tall and its one line is centred on send; as it
+   grows the row stays pinned bottom right. Who it goes to and the run mode are in the textarea's title= (and the
+   sr-only #composer-mode line). */
+.composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 10px; }
+.composer-main { min-width: 0; min-height: var(--key-h); display: flex; flex-direction: column; justify-content: center; }
+.composer-main > textarea { resize: none; min-height: 21px; line-height: 1.6; overflow-y: hidden; }
+/* empty: the placeholder ("Reply to <title>…") stays on its one line and ends in an ellipsis; it never makes the empty
+   composer taller (Mika 2026-10-23: it wrapped to two lines at 1024; fitComposer counts an empty composer as one line) */
+.composer-main > textarea:placeholder-shown { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer-main > textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer-main > .composer-foot { margin-top: 0; justify-content: flex-start; }
+.composer-ctrls { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.composer-lines[hidden] { display: none; }
+.composer-tall { padding: 0 8px; line-height: 18px; }
+/* Luna #4: the tall view is ON: an ink key by day; [bracketed] with the glow by night */
+.composer-tall[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+[data-theme="night"] .composer-tall[aria-pressed="true"] { background: transparent; color: var(--ink); border-color: var(--ink); text-shadow: var(--wm-glow); }
+.composer-tall[aria-pressed="true"]:hover:not([disabled]) { background: var(--ink2); }
+[data-theme="night"] .composer-tall[aria-pressed="true"]:hover:not([disabled]) { background: var(--fold); }
+[data-theme="night"] .composer-tall[aria-pressed="true"]::before { content: "["; color: var(--ink); }
+[data-theme="night"] .composer-tall[aria-pressed="true"]::after { content: "]"; color: var(--ink); }
+.composer-lines { font-size: var(--fs-label); white-space: nowrap; }
+/* Luna #8: the ONE send key (11.5px; on the 2px grid it is a key's 4px 10px, 28px tall) */
+.composer-ctrls .key.pri { min-height: var(--key-h); padding: 0 10px; font-size: var(--fs-control); box-shadow: none; }
+
+/* fidelity 2 stack head (comp): "Stack" left, "4 · hover to fan" and a small filter key right */
+.pilehead { padding: 12px 14px 8px; align-items: baseline; }
+.pile-meta { display: inline-flex; align-items: baseline; gap: 6px; margin-left: auto; font-size: var(--fs-label); white-space: nowrap; }
+.pile-meta #inbox, .pile-meta #stack-hint { font-size: var(--fs-label); }
+.pilehead #stack-hint { margin-left: 0; }
+.stack-scope[aria-pressed="true"] { color: var(--ink); }
+
+/* fidelity 2 footer: the Install Workshop key (disabled until install has a GUI request kind) and ONE quiet status line */
+.workshop-install { font-size: var(--fs-control); }
+.workshop-install[disabled] { border-style: dashed; }
+.status-line { gap: 0; }
+
+/* fidelity 2 colour: a card with no state edge takes its project's pigment on the edge (the INK of the pair, >= 3:1 on
+   the sheet in both themes; the fill is for swatches only). State edges (knot, failed, gate, held, claim-mismatch) win. */
+.card.pe-h0:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-terracotta-ink); }
+.card.pe-h1:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sage-ink); }
+.card.pe-h2:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-slate-ink); }
+.card.pe-h3:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-ochre-ink); }
+.card.pe-h4:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-rose-clay-ink); }
+.card.pe-h5:not(.kind-knot):not(.failed):not(.kind-gate-class):not(.held):not(.claim-mismatch) { --edge: var(--p-sea-grey-ink); }
+/* #gui-mods-panel (ui/mods-panel.ts): the Mods sheet reuses the Settings sheet (.settings-card/-head/-body/-sec);
+   rows are plain sheets with quiet rules, state words in ink (never colour alone), failures in --fail */
+.mod-row { border-top: 1px solid var(--rule); padding: 8px 0 6px; display: flex; flex-direction: column; gap: 2px; }
+.mods-sec > .mod-row:first-of-type { border-top: 0; }
+.mod-row p { margin: 0; }
+.mod-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: var(--fs-control); color: var(--ink); }
+.mod-name { font-weight: 600; }
+.mod-run { margin-left: auto; font-size: var(--fs-control); color: var(--ink2); }
+.mod-state-paused .mod-run, .mod-state-stopped .mod-run { color: var(--sec); }
+.mod-state-error .mod-run { color: var(--fail); }
+.mod-facts code { font-size: var(--fs-label); }
+.mod-keys { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; align-items: center; } /* a why-off reason sits on the key's centre line */
+.mod-pending { display: flex; align-items: center; gap: 6px; }
+.mod-result { padding-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mod-result.fail, .workshop-install-result.fail { color: var(--fail); }
+.mod-config { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px; }
+.mod-field { display: flex; flex-direction: column; gap: 2px; }
+.mod-folder { display: flex; gap: 6px; align-items: center; }
+.mod-folder .field { flex: 1; min-width: 0; }
+.field[aria-invalid="true"] { border-color: var(--fail-edge); }
+.workshop-install-result { margin-left: 8px; }
+.key[aria-busy="true"] { cursor: progress; }
+
+/* TD-2026-10-21-514: "spoken · sent by …" on a voice-sent turn, in --sec (TD-2026-10-23-939: it runs like a typed
+   turn, so the row carries no other mark) */
+.who .sent-by { margin-left: 6px; color: var(--sec); font-size: var(--fs-label); }
+
+/* ── #gui-loops (LP8; Atelier 2026-10-22-gnomon-loops-ui, design-system loops-word, loops-leaf, loop-row, loop-list,
+   loop-detail, budget-field, loop-graph, run-trace, loop-trust-unfolded, loop-diff, alert, trust-slip). Moved from the
+   bridge .atelier/systems/gnomon/loops-direction.css onto the system tokens. ── */
+.transcript { position: relative; }
+.lp-leaf { position: absolute; inset: 0; z-index: 12; display: flex; background: var(--ground); border-left: 1px solid var(--rule); }
+.lp-leaf > .lp, .lp-leaf > .lp-detail { flex: 1 1 auto; min-width: 0; background: var(--sheet); }
+.lp-leaf > .leaf-split { flex: 1 1 auto; min-width: 0; }
+.sw.h0 { background: var(--p-terracotta-fill); }
+.sw.h1 { background: var(--p-sage-fill); }
+.sw.h2 { background: var(--p-slate-fill); }
+.sw.h3 { background: var(--p-ochre-fill); }
+.sw.h4 { background: var(--p-rose-clay-fill); }
+.sw.h5 { background: var(--p-sea-grey-fill); }
+.lp-row .sw, .lp-gh .sw { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: 0; }
+.lp-row .l1 strong, .lp-row .l1 b { font-weight: 600; }
+.lp-empty, .lp-pick { padding: 12px 14px; }
+.lp-dhead .spacer, .g-tools .spacer { flex: 1; }
+.lp-more { position: relative; }
+.lp-more > summary { list-style: none; cursor: pointer; }
+.lp-more > summary::-webkit-details-marker { display: none; }
+.lp-more-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column; min-width: 12ch; }
+.lst .hd strong { font-weight: 600; }
+.lt-wrap .lt-fold { margin: 0 auto 8px; display: block; max-width: 96ch; }
+.lp-tab-on .feed > .toast-anchor { right: 48px; }
+.loops-word .lw-narrow { display: none; }
+@media (max-width: 1040px) { .loops-word .lw-full { display: none; } .loops-word .lw-narrow { display: inline; } }
+@media (max-width: 1199px) { .lp-leaf > .lp-detail .lp-back { display: inline-flex; } }
+@media (min-width: 1200px) { .lp-back { display: none; } }
+[data-motion="reduced"] .lp-leaf.arrive { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lp-leaf.arrive { animation: none; } }
+.kstat .loops-word { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; font: inherit; font-size: var(--fs-control); color: var(--ink2); background: none; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; white-space: nowrap; }
+.kstat .loops-word:hover { border-color: var(--rule); background: var(--sheet); }
+.kstat .loops-word:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.lp { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.lp-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--rule); }
+.lp-head .title { font-size: var(--fs-title); }
+.lp-head .meta { font-size: var(--fs-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lp-head .spacer { flex: 1; }
+.lp-head .key { white-space: nowrap; flex: none; }
+.lp-keep { padding: 4px 14px; font-size: var(--fs-label); color: var(--sec); border-bottom: 1px dashed var(--rule); }
+.lp-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0 12px; }
+.lp-gh { display: flex; align-items: center; gap: 6px; padding: 10px 14px 2px; font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); }
+.lp-row { display: grid; grid-template-columns: 18px minmax(0, max-content) minmax(0, 1fr) auto; column-gap: 8px; row-gap: 0; width: 100%; text-align: left; padding: 6px 14px; font: inherit; color: var(--ink2); background: transparent; border: 0; border-left: 2px solid transparent; cursor: pointer; }
+.lp-row:hover { background: var(--fold); }
+.lp-row:focus-visible { outline: 2px solid var(--key-edge); outline-offset: -2px; }
+.lp-row.active { border-left-color: var(--key-edge); background: var(--fold); color: var(--ink); }
+.lp-row .mk { grid-row: 1 / span 2; font-size: var(--fs-control); color: var(--ink); line-height: 20px; }
+.lp-row .l1 { font-size: var(--fs-control); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
+.lp-row .l2 { grid-column: 2 / -1; font-size: var(--fs-label); color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-row .nx { font-size: var(--fs-label); color: var(--sec); white-space: nowrap; line-height: 20px; }
+.lp-row .x { color: var(--fail); font-weight: 600; }
+.lp-leaf .gut { flex: 0 0 8px; background: repeating-linear-gradient(135deg, var(--rule) 0 2px, transparent 2px 6px); border-right: 1px dashed var(--rule); }
+.lp-leaf .lp { flex: 1 1 auto; min-width: 0; background: var(--sheet); }
+.lp-leaf.arrive { animation: leaf-in 360ms cubic-bezier(.3, .7, .3, 1) both; }
+@keyframes leaf-in { from { transform: translateX(100%); } to { transform: none; } }
+[data-motion="reduced"] .lp-leaf.arrive { animation: none; }
+.lp-edgetab { position: absolute; top: 48px; right: 0; z-index: 11; writing-mode: vertical-rl; padding: 10px 4px; min-width: 24px; font: inherit; font-size: var(--fs-label); color: var(--ink2); background: var(--sheet); border: 1px solid var(--key-edge); border-right: 0; border-radius: var(--radius); cursor: pointer; background-image: repeating-linear-gradient(135deg, var(--rule) 0 2px, transparent 2px 6px); }
+.lp-edgetab:hover { background-color: var(--fold); }
+.lp-edgetab:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.lp-detail { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow-y: auto; padding: 0 0 16px; }
+.lp-dhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 20px; border-bottom: 1px solid var(--rule); }
+.lp-dhead .title { font-size: var(--fs-title); }
+.lp-dmeta { padding: 6px 20px; font-size: var(--fs-label); color: var(--sec); }
+.lp-sec { padding: 8px 20px 4px; }
+.lp-sec > h3 { margin: 0 0 4px; font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); font-weight: 500; }
+.lst { list-style: none; margin: 0; padding: 0; font-size: var(--fs-control); }
+.lst > li { display: grid; grid-template-columns: 20px 20px minmax(0, 1fr); column-gap: 6px; padding: 4px 0; border-top: 1px dashed var(--rule); }
+.lst > li:first-child { border-top: 0; }
+.lst .v { color: var(--ink); text-align: center; }
+.lst .v.fail { color: var(--fail); font-weight: 600; }
+.lst .v.unsure { color: var(--warn-ink); font-weight: 600; }
+.lst .n { color: var(--sec); text-align: right; }
+.lst .hd { color: var(--ink); }
+.lst .hd .ty { color: var(--sec); }
+.lst .ln { grid-column: 3; color: var(--ink2); overflow-wrap: anywhere; }
+.lst .ln code { font: inherit; color: var(--ink); background: var(--fold); border-radius: var(--radius); padding: 0 4px; }
+.lst .ln .k { color: var(--sec); display: inline-block; min-width: 10ch; }
+.lst .ed { grid-column: 3; color: var(--sec); font-size: var(--fs-label); }
+.kv { display: grid; grid-template-columns: 14ch minmax(0, 1fr); column-gap: 10px; row-gap: 2px; font-size: var(--fs-control); }
+.kv > dt { color: var(--sec); }
+.kv > dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.kv code { font: inherit; background: var(--fold); border-radius: var(--radius); padding: 0 4px; }
+.gate-note { color: var(--warn-ink); font-size: var(--fs-label); }
+.df { font-size: var(--fs-control); padding: 0 8px; border-left: 2px solid transparent; white-space: pre-wrap; overflow-wrap: anywhere; }
+.df.add { color: var(--ink); font-weight: 600; background: var(--fold); border-left-color: var(--key-edge); }
+.df.del { color: var(--sec); text-decoration: line-through; text-decoration-thickness: 1px; }
+.df.ctx { color: var(--ink2); }
+.df.fold { color: var(--sec); font-size: var(--fs-label); font-style: italic; }
+.df-file { font-size: var(--fs-label); color: var(--sec); margin: 6px 0 2px; }
+.lt-wrap { position: absolute; inset: 0; z-index: 12; overflow-y: auto; padding: 14px 20px 20px; background: var(--ground); }
+.lt-wrap .card { max-width: 96ch; margin: 0 auto; }
+.lt-wrap .card-title { white-space: normal; }
+.lt-sec { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--rule); }
+.lt-sec > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: var(--fs-label); letter-spacing: .08em; text-transform: uppercase; color: var(--sec); font-weight: 500; }
+.lt-sec > h3 .key { text-transform: none; letter-spacing: 0; margin-left: auto; }
+.lt-sec.done > h3 { color: var(--ink); }
+.lt-sec.done > h3::before { content: "✓"; color: var(--ink); font-weight: 600; }
+.lt-sec.closed > :not(h3) { display: none; }
+.lt-foot { position: static; margin: 12px -12px -10px -14px; padding: 10px 12px 10px 14px; background: var(--sheet); border-top: 1px solid var(--rule); }
+.lt-presence { font-size: var(--fs-label); color: var(--sec); margin-top: 4px; }
+.why-off { font-size: var(--fs-label); color: var(--sec); }
+.card.trusted { opacity: .92; }
+.card.kind-loop { --edge: var(--key-edge); }
+.card.loop-choice { --edge: var(--key-edge); }
+.card .k-line { display: block; font-size: var(--fs-label); color: var(--sec); }
+.card .path { font-size: var(--fs-control); color: var(--ink2); margin: 2px 0; }
+.card .path .x { color: var(--fail); font-weight: 600; }
+.card .path .u { color: var(--warn-ink); font-weight: 600; }
+.card .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; font-size: var(--fs-control); color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
+.card .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
+.card.long .card-details[open] { max-height: none; }
+.card.long .lt-scroll { max-height: 360px; overflow-y: auto; padding-right: 4px; }
+.card.long .lst > li { grid-template-columns: 14px 14px minmax(0, 1fr); }
+.wt-slip { margin-top: 16px; padding: 6px 10px 8px; border: 1px dashed var(--key-edge); border-radius: var(--radius); background: transparent; font-size: var(--fs-control); color: var(--ink2); }
+.wt-slip .tab { font-size: var(--fs-label); color: var(--sec); border-bottom: 1px dashed var(--rule); padding-bottom: 2px; margin-bottom: 4px; }
+.wt-slip .row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.wt-slip .row span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .fam { color: var(--ink); font-weight: 600; letter-spacing: .04em; }
+.card.alert { box-shadow: none; padding-top: 8px; padding-bottom: 8px; }
+[data-theme="day"] .card.alert { border: 1px solid var(--rule); border-left: var(--edge-w) solid var(--edge, var(--key-edge)); }
+.card.alert .card-title { font-size: var(--fs-control); }
+.card.alert.fail { --edge: var(--fail-edge); }
+.card.alert.fail .card-title { color: var(--fail); }
+.card.alert.kpause { --edge: var(--warn-edge); border-left-style: dashed; }
+.card.alert .card-keys .key { text-transform: none; }
+.pile .card.alert + .card.alert, .pile .card + .card.alert { margin-top: 8px; }
+.pile .card.alert { --r: 0deg; }
+.g-frame { border: 1px solid var(--rule); border-radius: var(--radius); background: var(--sheet); }
+.g-tools { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-bottom: 1px dashed var(--rule); }
+.g-tools .meta { font-size: var(--fs-label); }
+.g-view { overflow: auto; padding: 6px; }
+.g-frame .g-v { display: none; }
+.g-frame.vert .g-h { display: none; }
+.g-frame.vert .g-v { display: block; }
+.g-svg { display: block; }
+.g-box { fill: var(--sheet); stroke: var(--key-edge); stroke-width: 1; }
+.g-box.never { stroke: var(--sec); stroke-dasharray: 3 2; }
+.g-box.wait { stroke: var(--key-edge); stroke-dasharray: 1 2; stroke-width: 1.5; }
+.g-box.fail { stroke: var(--fail-edge); stroke-width: 2.5; }
+.g-term { fill: var(--sheet); stroke: var(--sec); stroke-width: 1; }
+.g-id { font-family: var(--mono); font-weight: 600; font-size: var(--fs-control); fill: var(--ink); }
+.g-ty, .g-vis, .g-t { font-family: var(--mono); font-weight: 400; font-size: var(--fs-label); fill: var(--sec); }
+.g-mk { font-family: var(--mono); font-weight: 600; font-size: var(--fs-control); fill: var(--ink); }
+.g-e { fill: none; stroke: var(--sec); stroke-width: 1; stroke-dasharray: 4 3; }
+.g-e.taken { stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: none; }
+.g-l { font-family: var(--mono); font-weight: 400; font-size: var(--fs-label); fill: var(--sec); paint-order: stroke; stroke: var(--sheet); stroke-width: 4px; }
+.g-l.taken { fill: var(--ink); font-weight: 600; }
+.g-ar { fill: var(--sec); }
+.g-ar.taken { fill: var(--ink); }
+g[tabindex]:focus-visible { outline: none; }
+g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
+.g-key { font-size: var(--fs-label); color: var(--sec); margin: 0; padding: 2px 8px 4px; }
+.leaf-split { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); height: 100%; min-height: 0; }
+.leaf-split > .lp { border-right: 1px solid var(--rule); }
+.leaf-split .lp-detail { background: var(--sheet); }
+.leaf-split .lp-back { display: none; }
+.lp-dhead .key { white-space: nowrap; }
+.bud .field { width: 8ch; padding: 2px 6px; min-height: 24px; }
+.bud .key { white-space: nowrap; }
+.dis-why { font-size: var(--fs-label); color: var(--sec); }
+.tr { list-style: none; margin: 0; padding: 0; font-size: var(--fs-control); }
+.tr > li { display: grid; grid-template-columns: 8ch 20px minmax(0, 1fr) auto; column-gap: 8px; padding: 4px 0; border-top: 1px dashed var(--rule); align-items: baseline; }
+.tr .tm, .tr .dur { color: var(--sec); font-size: var(--fs-label); white-space: nowrap; }
+.tr .m { text-align: center; font-weight: 600; }
+.tr .m.fail { color: var(--fail); }
+.tr .m.unsure { color: var(--warn-ink); }
+.tr .agent-claimed { display: block; margin-top: 2px; padding: 2px 8px; color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
+.tr .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
+.chip.ink { color: var(--ink); }
+/* LP8 rework (Mika 2026-10-22): the name is its own cell (never eaten by the facts; a long id is middle-ellipsed in
+   code, the full id in title=); budgets sit on one line with one note; ids are identifiers, never uppercased */
+.lp-row .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-control); font-weight: 600; color: var(--ink); white-space: nowrap; line-height: 20px; }
+/* the facts give way first (1fr, ellipsis); the name keeps its width unless the row cannot hold it, then it ellipsizes in its own cell */
+.lp-row { grid-template-columns: 18px minmax(min(30ch, max-content), max-content) minmax(0, 1fr) minmax(0, max-content); }
+.lp-row .nx { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lp-head .title, .lp-dhead .title { text-transform: none; letter-spacing: 0; }
+.bud { display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 6px; font-size: var(--fs-control); }
+.bud-f { display: inline-flex; align-items: center; gap: 6px; }
+.bud-l { color: var(--sec); font-size: var(--fs-label); white-space: nowrap; }
+.bud .bud-note { flex-basis: 100%; margin-top: 0; }
+
+/* #gui-local-model (session 2026-10-22-gnomon-local-model; moved from the specimen's local-model-bridge.css by the build):
+   component settings-form (.set-form .sf-*), the kernel-owned section heading, the section-focused rule, the loop
+   detail's can't-start line (.lp-refusal) and the root card's signed lines (.card-root-rows) with the loop-diff marks. */
+.settings-row > .set-form, .settings-row > .sf-request, .settings-row > .sf-result, .settings-row > .sf-keys { grid-column: 2; }
+.set-form { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 2px; padding: 2px 0 2px 12px; border-left: 2px solid var(--ink); }
+.set-form > p { margin: 0; }
+.sf-lead { font-size: var(--fs-control); color: var(--ink2); }
+.sf-field { display: flex; flex-direction: column; gap: 2px; margin: 0; border: 0; padding: 0; min-width: 0; }
+.sf-label { font-size: var(--fs-label); color: var(--sec); padding: 0; }
+.sf-field .field { font-size: var(--fs-control); min-height: 28px; max-width: 100%; }
+.sf-field .w-addr { width: 34ch; } .sf-field .w-model { width: min(100%, 60ch); } .sf-field .w-name { width: 16ch; } .sf-field .w-path { width: 100%; }
+.sf-note { margin: 0; font-size: var(--fs-label); color: var(--sec); }
+.sf-note code, .settings-how code, .sf-lead code, .sf-err code { font-size: inherit; background: var(--fold); padding: 0 4px; border-radius: var(--radius); }
+.sf-err { margin: 0; font-size: var(--fs-label); color: var(--fail); font-weight: 600; }
+.sf-field .field[aria-invalid="true"] { border-color: var(--fail-edge); box-shadow: inset 0 0 0 1px var(--fail-edge); }
+.sf-adv > summary { list-style: none; cursor: pointer; display: inline-flex; width: max-content; }
+.sf-adv > summary::-webkit-details-marker { display: none; }
+.sf-adv[open] > summary { margin-bottom: 8px; }
+.sf-adv > div { display: flex; flex-direction: column; gap: 10px; }
+.sf-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sf-request { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-control); color: var(--ink2); margin: 4px 0 0; }
+.sf-result { margin: 4px 0 0; font-size: var(--fs-label); color: var(--ink2); }
+.sf-result.fail { color: var(--fail); }
+.sf-result strong, .sf-note strong { font-weight: 600; }
+.settings-intro { margin: 0 0 4px; font-size: var(--fs-label); color: var(--sec); max-width: 80ch; }
+.settings-value .mk { font-weight: 600; }
+.settings-row.settings-form { align-items: start; }
+.settings-row.settings-form > .settings-label { padding-top: 6px; }
+.settings-row[data-grp="start"] { margin-top: 8px; }
+.settings-sec[data-kernel-owned] .settings-readonly .settings-label::after { content: none; }
+.settings-h .sec-owner { font-family: var(--mono); font-size: var(--fs-label); font-weight: 400; color: var(--sec); text-transform: none; letter-spacing: 0; }
+.settings-value { overflow-wrap: anywhere; }
+.settings-sec.focused { box-shadow: inset 2px 0 0 var(--key-edge); padding-left: 10px; margin-left: -12px; }
+/* the section heading takes focus (tabindex -1): in a section-focused open the key-edge rule is its indicator; any
+   other programmatic focus (a busy key went disabled under it) shows the system ring, never the browser's blue one */
+.settings-h:focus { outline: none; }
+.settings-h:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.settings-sec.focused .settings-h:focus-visible { outline: none; }
+/* a kernel-owned section's label sits on its value's first line when the value wraps (Last fallback) */
+.settings-sec[data-kernel-owned] .settings-row.settings-readonly { align-items: first baseline; }
+/* #gui-mcp-servers (Mika 2026-10-23): a long server name wraps in the label column without opening a gap between the
+   value and its how line (the label spans the row's value, how and keys) */
+.settings-sec[data-section="mcp-servers"] .settings-row[data-readonly] > .settings-label { grid-row: span 3; align-self: start; overflow-wrap: anywhere; }
+
+/* ── the loop detail's start-refusal line (loop-detail anatomy) ─────────────── */
+.lp-refusal { margin: 0 20px 6px; padding: 6px 10px; border: 1px solid var(--key-edge); border-left: var(--edge-w) solid var(--key-edge); border-radius: var(--radius); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-size: var(--fs-control); color: var(--ink2); background: var(--sheet); }
+.lp-refusal .rf-h { font-weight: 600; color: var(--ink); }
+.lp-refusal .key { margin-top: 4px; }
+
+/* ── the root card's signed lines for gnomon-root-local:v1 ─────────────────── */
+.card-root-rows { margin: 6px 0 0; padding: 4px 0 0; border-top: 1px dashed var(--rule); }
+.card-root-rows .root-rows-title { margin: 0; font-size: var(--fs-label); color: var(--sec); }
+.card-root-rows ul { margin: 2px 0 0; padding: 0; list-style: none; font-size: var(--fs-label); color: var(--ink2); }
+.card-root-rows li { padding-left: 12px; text-indent: -12px; overflow-wrap: anywhere; }
+.card-root-rows li::before { content: "· "; color: var(--sec); }
+.card-root-rows li.add { color: var(--ink); font-weight: 600; background: var(--fold); border-left: 2px solid var(--key-edge); padding-left: 12px; margin-left: -2px; }
+/* the marks are said by the sr-only "new:" / "was:"; the plain content first, so an engine without the alt-text
+   syntax (an older WKWebView) keeps the visible mark instead of dropping the declaration */
+.card-root-rows li.add::before { content: "+ "; content: "+ " / ""; }
+.card-root-rows li.del { color: var(--sec); text-decoration: line-through 1px; }
+.card-root-rows li.del::before { content: "− "; content: "− " / ""; }
+.card-head .fam { color: var(--ink); font-weight: 600; letter-spacing: .04em; }
+
+/* ── component folder-field (TD-2026-10-23-162, session 2026-10-23-gnomon-folder-picker, rule paths-are-chosen;
+   migration batch folder-field). Moved from .atelier/systems/gnomon/folder-field-bridge.css. Tokens only, even px,
+   the four type steps, no new colour. A folder is chosen, not typed: recents, then the Mac's chooser (the kernel
+   opens it), then a typed path folded under Type a path. */
+
+/* the New session sheet: wide enough for a recent row at 1024 (it was content-sized, ~380px) */
+.ns-card { width: min(560px, calc(100vw - 32px)); max-width: 560px; max-height: calc(86vh - 16px); overflow-y: auto; gap: 14px; } /* the overlay sits 14vh down: six recents and the model scroll inside the sheet at 720 tall */ /* 14 between groups, 2 to 6 inside one: rule group-by-space-before-boxes */
+.ns-card > .title { margin: 0; font-size: var(--fs-title); }
+[data-theme="night"] .ns-card > .title { font-size: var(--fs-reading); }
+.ns-card label.meta { display: flex; flex-direction: column; gap: 2px; }
+.ns-card .ns-claude { display: flex; flex-direction: column; gap: 6px; }
+
+/* the field: a fieldset whose legend matches its sibling labels in the sheet (.meta, 11.5 --sec) */
+.ff { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ff > legend { padding: 0; margin: 0 0 2px; float: left; width: 100%; }
+.ff > legend + * { clear: both; }
+
+/* recent folders: a radiogroup of rows (roving tabindex, arrows move and choose) */
+.ff-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; }
+.ff-row {
+  display: grid; grid-template-columns: 12px 10px minmax(0, 1fr) auto; column-gap: 8px; align-items: center;
+  width: 100%; min-height: 40px; padding: 4px 8px; text-align: left;
+  font: inherit; color: var(--ink); background: none;
+  border: 1px solid transparent; border-radius: var(--radius); cursor: pointer;
+}
+.ff-row:hover { background: var(--fold); }
+.ff-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--key-edge); }
+/* chosen: the key edge ring (>= 3:1), the ✓ mark and weight 600; never a hue (the swatch is the project, rule hue-is-identity) */
+.ff-row[aria-checked="true"] { border-color: var(--key-edge); background: var(--sheet); }
+.ff-row[aria-checked="true"]:hover { background: var(--fold); }
+.ff-mk { font-size: var(--fs-control); font-weight: 600; line-height: 16px; }
+.ff-text { display: flex; flex-direction: column; min-width: 0; line-height: 16px; }
+.ff-name { font-size: var(--fs-control); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-row[aria-checked="true"] .ff-name { font-weight: 600; }
+.ff-path { font-size: var(--fs-label); color: var(--sec); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-when { font-size: var(--fs-label); color: var(--sec); white-space: nowrap; }
+
+/* the lines under the list */
+.ff-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ff-opens, .ff-empty, .ff-warn, .ff-status { margin: 0; }
+.ff-opens { font-size: var(--fs-label); color: var(--ink2); overflow-wrap: anywhere; }
+.ff-opens strong { font-weight: 600; color: var(--ink); } /* the DOM draws <strong> (ui/folder-field.ts), not <b> */
+.ff-empty { font-size: var(--fs-control); color: var(--ink2); }
+.ff-warn { font-size: var(--fs-label); color: var(--warn-ink); overflow-wrap: anywhere; }
+.ff-warn strong { font-weight: 600; }
+.ff-status { font-size: var(--fs-label); color: var(--ink2); }
+.ff-typed { display: flex; flex-direction: column; gap: 2px; }
+.ff-typed .field { font-size: var(--fs-control); min-height: var(--key-h); }
+.sf-err, .sf-note { overflow-wrap: anywhere; }
+.ff-hint { margin: 0; font-size: var(--fs-label); color: var(--ink2); overflow-wrap: anywhere; }
+
+/* compact variant (one value, no recents): Settings › Local model runner, Mods › Add from folder, Configure command */
+.ff-value { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: var(--key-h); font-size: var(--fs-control); color: var(--ink); }
+.ff-value .ff-p { overflow-wrap: anywhere; min-width: 0; }
+.ff-value .ff-none { color: var(--sec); }
+
+/* the sheet foot: cancel left; the disabled reason sits beside Open, in words */
+.ns-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.ns-foot > span { display: flex; gap: 8px; align-items: center; }
+.ff-why { font-size: var(--fs-label); color: var(--sec); }
+
+/* #gui-rules-view (8.0:rules-view; session 2026-10-23-gnomon-rules-view, components rule-row + rules-save-bar).
+   Settings › Permissions › Rules. State is carried by words and weight, never by hue: a staged row's "→ off for 1 hour"
+   is 600 ink; a removed row is struck through with a keep key; no amber ◆ anywhere in the block. */
+.settings-row.rules-block { display: block; padding: 0; }
+.rules-sum { margin: 0 0 6px; font-size: var(--fs-label); color: var(--sec); }
+.rules-filter { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.rules-empty { margin: 4px 0 8px; font-size: var(--fs-control); color: var(--ink2); max-width: 60ch; }
+.rules-group { margin: 0 0 10px; }
+.rules-repo { margin: 6px 0 2px; font-size: var(--fs-control); font-weight: 600; color: var(--ink); }
+.rules-count { font-weight: 400; font-size: var(--fs-label); color: var(--sec); }
+/* founder 2026-10-23 ("folded works"): at 50 rules or more the repo heading is the group's fold key; it reads as the
+   heading (same size and weight), ▸ folded / ▾ open by glyph, never by hue; the count stays visible when folded */
+.rules-fold { all: unset; cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.5ch; min-height: 24px; border-radius: var(--radius); }
+.rules-fold:hover .rules-fold-mark { color: var(--ink); }
+.rules-fold:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
+.rules-fold-mark { display: inline-block; width: 1em; color: var(--sec); }
+.rules-group.is-folded { margin-bottom: 2px; }
+.rules-list { list-style: none; margin: 0; padding: 0; }
+.rule-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 6px 0; border-top: 1px solid var(--rule); }
+.rule-row:first-child { border-top: 0; }
+.rule-what { grid-column: 1; font-size: var(--fs-control); font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.rule-what.struck { text-decoration: line-through; color: var(--sec); }
+.rule-meta { grid-column: 1; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.rule-row.is-off .rule-state { font-weight: 600; color: var(--ink2); }
+.rule-staged { grid-column: 1; font-size: var(--fs-label); font-weight: 600; color: var(--ink); }
+.rule-keys { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 6px; align-items: center; justify-self: end; }
+/* Turn off ▾ opens inline under the row, like the card's Always ▾ (.always-choices) */
+.rule-offs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; padding-left: 8px; border-left: 1px solid var(--rule); }
+.rules-save-bar { position: sticky; bottom: -14px; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 0; padding: 8px 0; background: var(--sheet); border-top: 1px solid var(--rule); }
+.rules-save-bar .rsb-count { font-size: var(--fs-control); font-weight: 600; color: var(--ink); margin-right: auto; }
+.rules-save-bar .rules-result { flex: 1 1 100%; margin: 0; }
+.rules-next { display: block; margin-top: 2px; }
+.rules-close-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 8px; border: 1px solid var(--key-edge); border-radius: var(--radius); }
+.rules-close-prompt .rcp-text { font-size: var(--fs-control); font-weight: 600; margin-right: auto; }

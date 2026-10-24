@@ -120,7 +120,7 @@ Run the suggested commands to fix issues.
 ✓ .paradigm/specs/symbols.md   Present
 ✓ .paradigm/specs/probe.md     Present
   or
-○ .paradigm/specs/scan.md       Spec file not found
+○ .paradigm/specs/probe.md      Spec file not found
     └─ Fix: paradigm migrate
 ```
 

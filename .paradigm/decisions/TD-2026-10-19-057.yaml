@@ -1,0 +1,39 @@
+id: TD-2026-10-19-057
+timestamp: '2026-10-19T17:54:25.209Z'
+title: Trace captures live in the Gnomon home per project, not in the project (amends TD-2026-10-19-139)
+decision: >-
+  Captures are stored at <home>/trace/<project key>/<hsid file>.jsonl. Sessions are already fully denied there, renames
+  included. Everything else in TD-139 still holds:
+
+  - The human switches tracing per folder with `gnomon trace on|off|status`.
+
+  - `gnomon trace` shows the timeline from inside the project.
+
+  - `gnomon trace path` prints where the capture lives.
+
+  Nothing is written into the project tree, so no .gnomon/trace exists, captures can't be committed, and they don't sync
+  with the repo.
+rationale: >-
+  Founder ruling, 2026-10-19, after Aegis BLOCKED the in-project design. Under the allow-default session profile, other
+  sessions could reach a project's .gnomon/trace (H1). A session could rename its cwd or an ancestor to escape the path
+  deny (H2), and a case-variant .GNOMON may slip past it too (H3). Storing captures in the home removes all three for
+  traces, along with the repo-controlled disable path (M4).
+participants:
+  - id: founder
+    role: human
+    stance: supported
+  - id: aegis
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Keep captures in the project and harden them with regex, case-insensitive and ancestor-rename denies
+    rejected_because: fragile; still exposed to cloud sync and to renames
+symbols_affected:
+  - '#trace-capture'
+  - '#gnomon-trace'
+status: active
+tags:
+  - gnomon
+  - trace
+  - audit
+  - security

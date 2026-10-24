@@ -1,0 +1,40 @@
+id: L-2026-10-20-ascend-213259-001
+type: human-note
+timestamp: '2026-10-20T21:32:59.194Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Mod playbooks, checkpoint 10: founder approves the naming convention, mod-authoring skills and versioning; Arky designing for S0'
+summary: |-
+  The founder approved three things:
+  (1) The standardized mod naming. Mod id = publisher.name; first-party publisher = gnomon; git owner = publisher; folders = local; MCP server gm-<publisher>-<name>; env PUBLISHER_NAME_*; events mod.<publisher>.<name>.*. neurons-brain becomes gnomon.neurons.
+  (2) Mod-authoring skills (from-folder, from-api, offers, check), as T-2026-10-20-012, sequenced after the O1 dogfood.
+  (3) Versioning, so mods survive large changes and new formats as Gnomon evolves:
+  - mod semver
+  - git installs pinned to url#commit
+  - the kernel accepts the current and previous major manifest/offer-spec formats via pure load-time upgraders (never rewriting on disk) and refuses future majors with "needs Gnomon ≥ X"
+  - an engines compatibility declaration checked at install and at load
+  - a format upgrade is not a widening unless the effective grants grow
+  Plan: Arky designs naming and versioning against the code. Aegis reviews (publisher spoofing, homoglyphs, case, alias abuse). Fold it into S0 before merge, then rebase S1/S2/S3 at integration. Founder: "continue down this road".
+symbols_touched:
+  - '#mod-host'
+  - '#manifest-loader'
+  - '#gnomon-contracts'
+  - '#offer-router'
+tags:
+  - gnomon
+  - mods
+  - mod-playbooks
+  - founder-ruling
+  - naming
+  - versioning
+  - arc:paradigm-8
+linked_lore:
+  - L-2026-10-20-ascend-213127-001
+linked_tasks:
+  - T-2026-10-20-012
+git_context:
+  ref: cd3ef9b545ea5b0e24115daba2e00c9cc4290716
+  branch: feat/gnomon
+  dirty: true

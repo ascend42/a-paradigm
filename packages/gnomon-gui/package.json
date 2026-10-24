@@ -1,0 +1,36 @@
+{
+  "name": "@a-company/gnomon-gui",
+  "version": "8.0.0",
+  "private": true,
+  "description": "Gnomon GUI (#gui, spec §11): the single-page app the kernel's loopback #web-endpoint serves as a hash-pinned bundle. M1.10 slice 1: dependency-light DOM (no framework yet; React arrives with the Doodle canvas, §12.7), everything self-hosted, no runtime CDN loads.",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "embed": "node scripts/build.mjs --embed",
+    "check:bundle": "node scripts/build.mjs --check",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/build.mjs --check && vitest run",
+    "preview": "node scripts/preview.mjs",
+    "preview:shots": "node scripts/preview-shots.mjs"
+  },
+  "devDependencies": {
+    "@a-company/gnomon-contracts": "1.0.0",
+    "@types/node": "^24.0.0",
+    "esbuild": "0.27.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon-gui"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

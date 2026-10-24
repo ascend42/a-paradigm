@@ -1,0 +1,35 @@
+id: L-2026-10-23-ascend-003901-001
+type: agent-session
+timestamp: '2026-10-23T00:39:01.430Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Loops steps 10, 11 and 14, the Windows merge, and the real-home local model setup
+summary: |-
+  On feat/gnomon-loops:
+  - Step 10 (act nodes on a kernel-built scratch, park repo, loop-act sandbox with a real escape suite) and step 11 (approve-to-land per TD-2026-10-22-369), each through an Aegis review.
+  - feat/gnomon with Windows parity (PR #52, merged after the SDDL alias fix) merged into the loops branch.
+  - Step 14: templates and the field-run guide.
+  - The field-run work found that a real home could not sign a local model config. Built request.local.config/probe, the 1.9.0 helper row table, the bundled gnomon-local and the Settings → Local model UI (TD-2026-10-22-769), with Arky's design, Mika's design and review, and Aegis's review.
+symbols_touched:
+  - '#loop-act'
+  - '#loop-land'
+  - '#loop-templates'
+  - '#local-config-request'
+  - '#gui-local-model'
+  - '#gnomon-helper'
+linked_commits:
+  - 49dca7c1
+  - cb546290
+  - 6b423fbe
+  - 9439918c
+  - ce05c4e1
+  - 92982efd
+  - 83f6a287
+  - 31ab0eff
+  - 8030cb96
+git_context:
+  ref: c4b88624300c013d533fc86acbbe6b4a921f503a
+  branch: feat/gnomon
+  dirty: true

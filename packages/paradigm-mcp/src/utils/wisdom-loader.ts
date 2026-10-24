@@ -43,7 +43,6 @@ import type {
   WisdomDecision,
   WisdomAntipattern,
   SymbolWisdom,
-  SymbolPreference,
   ExpertEntry,
 } from '../types/wisdom.js';
 

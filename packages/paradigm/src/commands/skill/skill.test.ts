@@ -36,7 +36,7 @@ import { skillCertifyCommand, previewSkillScripts, CERTIFICATION_POSTURE } from 
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
-const SEEDS = ['a11y-audit', 'design-system-extract', 'ui-critique-loop'];
+const SEEDS = ['a11y-audit', 'design-options-protocol', 'design-system-extract', 'ui-build-protocol', 'ui-critique-loop'];
 
 let root: string;
 let home: string;
@@ -94,7 +94,7 @@ function stubSeedDependencies(): void {
 }
 
 describe('skill sync-global', () => {
-  it('resolves the bundled templates dir with all three seeds', () => {
+  it('resolves the bundled templates dir with all bundled seeds', () => {
     const entries = fs.readdirSync(bundledDir()).sort();
     expect(entries).toEqual(SEEDS);
   });
@@ -147,11 +147,15 @@ describe('bundled seeds', () => {
     expect(designer.skills).toEqual([
       { id: 'design-system-extract', role: 'owns' },
       { id: 'ui-critique-loop', role: 'owns' },
+      { id: 'ui-build-protocol', role: 'owns' },
+      { id: 'design-options-protocol', role: 'owns' },
       { id: 'a11y-audit', role: 'uses' },
     ]);
     expect(a11y.skills).toEqual([{ id: 'a11y-audit', role: 'owns' }]);
     expect(Object.keys(designer.behaviors)).not.toContain('design-system-maintenance');
     expect(Object.keys(designer.behaviors)).not.toContain('review-checklist');
+    expect(Object.keys(designer.behaviors)).not.toContain('ui-build-protocol');
+    expect(Object.keys(designer.behaviors)).not.toContain('design-options-protocol');
     expect(Object.keys(designer.behaviors)).toEqual(['design-foundations', 'platform-awareness', 'tool-fluency', 'anti-patterns']);
   });
 });

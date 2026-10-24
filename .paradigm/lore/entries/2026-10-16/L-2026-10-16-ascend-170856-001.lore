@@ -1,0 +1,30 @@
+id: L-2026-10-16-ascend-170856-001
+type: human-note
+timestamp: '2026-10-16T17:08:56.693Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon UX: decision paper stack, per-project decisions in chats, left sidebar of sessions'
+summary: 'Founder direction after the walkthrough: decisions arrive as pieces of paper and chips flying in and piling into a stack; you can look between them in case another decision matters more and should be hit first. Inside a chat, show only the decisions that pertain to that project. Add a left sidebar of active and past chats, with a way to start new sessions. Aesthetic session paused here; the founder wants deep UX-design research next, for the agent team and for neurons, with links ready.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D43
+    decision: 'Decisions as a papercraft stack: cards fly in as paper and chips and pile up; the stack can be fanned or browsed so a more important decision can be taken first; within a chat, only that project''s decisions show'
+    rationale: 'Founder: "i like the idea of flying in pieces of paper and chips for decisions that pile up like a stack of decisions and maybe looking between them in case anohter decision matters to hit first, but in the chats it makes sense to see the decisions that pertain to that specific project"'
+  - id: P8-D44
+    decision: Left sidebar of active and past chats with new-session creation
+    rationale: 'Founder: "probably want a left side bar of active/past chats and making new sessions"'
+tags:
+  - paradigm-8
+  - gnomon
+  - atelier
+  - ux
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-170531-001
+git_context:
+  ref: 87f0f5a27e83a7aeed5f1b51d725fb6f7dd14a90
+  branch: ideate/paradigm-8
+  dirty: true

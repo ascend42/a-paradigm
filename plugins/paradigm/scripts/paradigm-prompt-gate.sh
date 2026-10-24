@@ -57,7 +57,7 @@ marker_fresh() {
 }
 
 # Session already resolved the gate (team ran, or solo was declared) — pass
-if [ -f "$CWD/.paradigm/.orchestrated" ] || marker_fresh "$CWD/.paradigm/.solo-declared"; then
+if marker_fresh "$CWD/.paradigm/.orchestrated" || marker_fresh "$CWD/.paradigm/.solo-declared"; then
   exit 0
 fi
 

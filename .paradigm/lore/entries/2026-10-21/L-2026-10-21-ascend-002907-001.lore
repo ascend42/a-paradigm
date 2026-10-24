@@ -1,0 +1,26 @@
+id: L-2026-10-21-ascend-002907-001
+type: milestone
+timestamp: '2026-10-21T00:29:07.887Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'C4 hardware probe passed: one LAContext signs with both SE keys (helper 1.8.0)'
+summary: 'The founder built and signed gnomon-helper 1.8.0 and ran `probe-decision 4vfitutf8khm` on their Mac. Result: ok:true. One evaluated context signed with the approvals key and the root key, both signatures verified, and an unevaluated context was refused with no dialog in 0.007 s. This settles Aegis C4 for TD-2026-10-20-514. Aegis gave a dogfood GO for local single-user use. Before merge: GUI C1e, fixes for findings F1 (lock race), F2 (Swift isEqual type looseness, which needs one more helper re-sign) and F3 (voice.enrol wiring), plus replay C1f.'
+symbols_touched:
+  - '#gnomon-helper'
+  - '#identity'
+  - '#approval-broker'
+verification:
+  status: pass
+  details:
+    probe: approvalsVerifies true, rootVerifies true, unevaluatedRefused true
+tags:
+  - gnomon
+  - presence
+  - dogfood
+  - marathon-2026-10-20
+git_context:
+  ref: 47fc44576eb8bb0fab6aece513e63c3c0b29bfa2
+  branch: feat/gnomon
+  dirty: true

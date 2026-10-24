@@ -1,0 +1,86 @@
+{
+  "probe": "p10m-claude-compat",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "claudeBinary": "~/.local/bin/claude",
+    "criteria": {
+      "claudeWorks": true,
+      "bashWorks": true,
+      "deniesHold": true
+    },
+    "control": {
+      "sandboxed": false,
+      "ms": 10156,
+      "endpointHitsDuringRun": 1,
+      "claude": {
+        "exit": 0,
+        "killed": false,
+        "isError": false,
+        "subtype": "success",
+        "numTurns": 2,
+        "costUsd": 0.2094862,
+        "resultTail": "node=v26.0.0\ngit=git version 2.50.1 (Apple Git-155)\nwrite_work=ok\nwrite_denied=allowed\nchild_spawn_kill=ok\nport_http=200 curl_exit=0\npgrep_lines=567\nps=ok\npython=py_ok",
+        "stderrTail": "Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n"
+      },
+      "check": {
+        "node": "v26.0.0",
+        "git": "git version 2.50.1 (Apple Git-155)",
+        "write_work": "ok",
+        "write_denied": "allowed",
+        "child_spawn_kill": "ok",
+        "port_http": "200 curl_exit=0",
+        "pgrep_lines": "567",
+        "ps": "ok",
+        "python": "py_ok"
+      },
+      "profile": null,
+      "reused": true
+    },
+    "sandboxed": {
+      "sandboxed": true,
+      "ms": 13128,
+      "endpointHitsDuringRun": 0,
+      "claude": {
+        "exit": 0,
+        "killed": false,
+        "isError": false,
+        "subtype": "success",
+        "numTurns": 2,
+        "costUsd": 0.21109179999999997,
+        "resultTail": "node=v26.0.0\ngit=git version 2.50.1 (Apple Git-155)\nwrite_work=ok\nwrite_denied=blocked\nchild_spawn_kill=ok\nport_http=000 curl_exit=7\npgrep_lines=0\nps=fail\npython=py_ok",
+        "stderrTail": "Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n"
+      },
+      "check": {
+        "node": "v26.0.0",
+        "git": "git version 2.50.1 (Apple Git-155)",
+        "write_work": "ok",
+        "write_denied": "blocked",
+        "child_spawn_kill": "ok",
+        "port_http": "000 curl_exit=7",
+        "pgrep_lines": "0",
+        "ps": "fail",
+        "python": "py_ok"
+      },
+      "profile": "(version 1)(allow default)(deny network-outbound (remote ip \"localhost:54704\"))(deny process-info*)(allow process-info* (target self))(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))(deny mach-lookup (global-name \"com.apple.sysmond\"))(deny network-outbound (remote unix-socket (subpath \"/private/tmp/tmux-501\")))(deny file-write* (subpath \"<tmp>/sandboxed/denied\"))"
+    },
+    "notes": [
+      "ps is expected to fail under any sandbox-exec profile (setuid; see p10m-sbx-deny-mac).",
+      "Ground truth is out.txt written by check.sh, not the model reply."
+    ]
+  },
+  "specRefs": [
+    "§15.5 session profile",
+    "§11.2 rule 2b",
+    "§3.3",
+    "G-SBX-08",
+    "M1.7",
+    "p10m-sbx-deny-mac"
+  ],
+  "at": "2026-10-17T08:41:38.984Z"
+}

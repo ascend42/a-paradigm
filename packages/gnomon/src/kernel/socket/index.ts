@@ -1,0 +1,13 @@
+/** @symbol #socket */
+/** #socket (spec §4.9) — framing, rpc shapes (refusal:v1), server, mutual auth, dispatch, client helpers. */
+export * from './framing.js';
+export * from './rpc.js';
+export * from './server.js';
+export * from './auth.js';
+export * from './methods.js';
+export * from './dispatch.js';
+export * from './client.js';
+export * from './log-read.js';
+export * from './status-numbers.js';
+export * from './gui-open.js';
+export * from './daemon-stop-verb.js';

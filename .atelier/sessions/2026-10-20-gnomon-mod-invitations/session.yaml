@@ -1,0 +1,71 @@
+id: 2026-10-20-gnomon-mod-invitations
+verb: design
+scope: "How Gnomon's integration mods feel in the desk: the agent's offer, the handoff while a mod runs, results coming back with the next offer, and when and how a mod gets its own local UI."
+depth: short
+surface: gui
+mode: extend
+preserve_from:
+  - ".atelier/design-system.yaml gnomon.* (pigment set, mono spine, lively-workshop motion, desk layout) is approved and binding"
+  - "Aegis trust rules: offers are model text and never look like decision keys; accepting needs a trusted gesture; a mod's own UI is visually fenced as the mod's and never mimics kernel-owned regions; results coming back are labelled as tool output"
+read: "Working with someone next to you, not through the screen: the agent suggests one right next step, your hand opens it, the mod sits beside the chat while it works, and what it made comes back labelled."
+inputs:
+  - "Founder vision 2026-10-20: mods are agent-readable playbooks (Constellation voice mind-dump, Neurons, Atelier design/produce, Docs, Paradigm tasks); the agent OFFERS the right one at the right moment (diverge -> synthesize -> commit); accepting hands off context; the mod may show its own local UI in the Gnomon display 'for a more localised experience (at times)'; results flow back. 'like you're working with someone next to you and not through the screen'"
+  - ".atelier/DESIGN.md Gnomon section; design-system.yaml gnomon:; comps in sessions/2026-10-15-gnomon-aesthetic/refs (direction, workshop-mod, motion)"
+  - "Live GUI: packages/gnomon-gui/src/core/choices.ts (table-talk chips: dashed, no .key, isTrusted, live-only-on-latest-reply, draft never overwritten); src/core/mod-panels.ts (fence label mod:<name>, kit blocks only, Button refused in panel/workshop per Aegis M2); static/styles.css (cards = solid 4px edge; keys = hard ink offset / [ ] at night)"
+started: 2026-10-20T00:00:00Z
+references_rendered: [boards, flow]
+boards:
+  - id: invitation
+    question: "How does an offer appear in the chat and in voice, and how is it dismissed?"
+    options:
+      - { id: margin-slip, label: "Margin slip", recommended: true, why: "Same family as table-talk choices (dashed = model text). It comes out from under the reply that made it, so the reason for it stays visible. It moves less than a decision card, so the offer stays smaller than a decision." }
+      - { id: cap-walks-over, label: "The cap walks over", risk: "Caps stand for sessions, so a mod cap muddles who is working. The walk on every offer is nagging. It also depends on the Workshop panel being shown, and that panel can be hidden." }
+      - { id: composer-suggestion, label: "Composer suggestion", risk: "It sits next to the pinned kernel cards, the adjacency Aegis flagged as M2. It is also cut off from the reply that made the offer." }
+    recommendation_detail:
+      - "Shape: a sheet slip with a dashed ink edge, a soft shadow and a -0.7deg tilt by day; at night a dashed secondary-ink outline, no tilt, and no [ ] brackets. It never gets the hard ink offset."
+      - "The GUI draws the tab: ink glyph, 'offer · mod:<name>', and a 'takes:' line from the mod's manifest. Only the question is model text. If the named mod isn't installed and declared as offerable, the offer stays plain text."
+      - "Controls: Open (dashed pill with a ↵ keycap; trusted click or Enter) and 'not now' (quiet text). Like choices, the slip is live only on the latest reply and goes inert when you type. If a draft exists, it is never touched."
+      - "Restraint: at most one offer per reply; none while a reply is streaming; none while this session has a pinned card; after 'not now', no further offer of that mod in this thread."
+      - "Voice: the question is said aloud. Saying 'not now' dismisses it, which is safe because it only removes an offer. Saying 'open' only shows a 'needs a click or ↵' hint until a kernel readback path exists (founder question 1)."
+      - "Motion: slip-in 320ms cubic-bezier(.3,.7,.3,1), sliding down from under the reply. Instant with reduced motion."
+  - id: handoff
+    question: "What does the desk show while a mod session runs, and how do you get back?"
+    options:
+      - { id: companion-leaf, label: "Companion leaf", recommended: true, why: "The mod opens beside the chat inside the centre column, and every other region stays put. That's the literal 'someone next to you'." }
+      - { id: centre-sheet, label: "Centre sheet", risk: "Hides the chat, so it reads as leaving the desk. Kept as the escalation from the leaf (⤢), not as the default." }
+      - { id: headless-cap, label: "Headless, the cap works", risk: "Loses Constellation's point of watching thoughts sort themselves. It's the floor, for mods that declare no view (Docs filing, Paradigm task add)." }
+    recommendation_detail:
+      - "The chat logs the handoff as a tool row: '↳ handed to mod:<name> · N messages · 14:02'. The slip folds to 'opened mod:<name> · time'."
+      - "Your session's own cap wears a small dashed mod-glyph tag in the Workshop, and the sidebar state reads 'with mod:<name>'. No new cap appears, because caps stay sessions."
+      - "Getting back: esc or a click in the chat folds the leaf to a hatched edge tab ('mod:<name> · listening') that reopens it. 'done' ends the run and returns the result."
+      - "Leaf-in motion: 360ms slide from the right."
+  - id: results-and-next
+    question: "How does synthesis return into the chat, and how do chained offers read without nagging?"
+    options:
+      - { id: returned-sheet, label: "Returned sheet, one next slip", recommended: true, why: "The result keeps the mod's fence with the GUI label '↳ tool output · mod:<name> · took Ns'. The agent's synthesis follows as plain prose, ending in at most one next offer, plus a trail line." }
+      - { id: folded-into-reply, label: "Folded into the reply", risk: "The labelled output is easy to miss, so the agent's retelling becomes the only version you read and the tool-output rule only holds on paper." }
+      - { id: tray-of-next, label: "Tray of next steps", risk: "Four offers at once is a menu, which is nagging. It skips choosing the one right next step." }
+    recommendation_detail:
+      - "Trail: 'constellation ✓ → neurons ?' in secondary mono. It shows where you are in the chain and never lists what comes next."
+      - "The next slip adds 'stop offering here', which silences every offer in the thread until you ask."
+      - "The result body is kit blocks from the mod, with an 'open in <mod>' link out."
+  - id: mod-local-ui
+    question: "When does a mod get a fuller surface, and how is it fenced and themed?"
+    options:
+      - { id: gnomon-paper, label: "Gnomon paper throughout", risk: "Safe, but Constellation loses its sky, against the existing world rule 'Constellation views keep the sky'." }
+      - { id: framed-world, label: "Framed world", recommended: true, why: "The frame is always Gnomon's. Inside, a first-party mod can declare world: sky | loom, and the GUI applies its own palette (paper sky by day, real sky by night). Mods never ship CSS, and identity is an ink glyph plus the name, never a hue." }
+      - { id: mod-pigment, label: "Mod pigment", risk: "Breaks the pigment rule (hue means project identity only, three semantic colours at most). A blue mod next to the slate project reads as the same thing. Not recommended; it would need an override." }
+    recommendation_detail:
+      - "Ladder slip -> leaf -> sheet: every offerable mod gets a slip; a mod that declares a view gets the leaf; only a mod that declares surface: sheet can go to the sheet, and only on your ⤢. A mod surface never covers the header, stack, Workshop or pinned cards."
+      - "Fence anatomy, GUI-owned: a tab (glyph, mod:<name>, 'for <session>', ⤢, esc, done), a 7px hatched gutter on the left, a 3px project-hue top edge for the project the work is for, and the dev badge. Mod-owned: the body only, drawn as kit blocks via mod.view. Cards keep their solid edge, and the fence never uses one."
+      - "Buttons are allowed inside the leaf and sheet, which sit in the centre column away from the decision keys. They stay refused in the panel slot and Workshop (Aegis M2 unchanged)."
+open_boards: [invitation, handoff, results-and-next, mod-local-ui]
+status: open
+awaiting: "creator picks on all four boards"
+founder_questions:
+  - "Voice accept: should 'open it' by voice work through a kernel readback and 3s hold, the same path as voice card decisions? Or should opening a mod stay hand-only, with voice limited to dismissing? I recommend hand-only for v1, then readback once Aegis signs off. That matters most for Constellation, which is voice-first."
+  - "Should mods have a recognisable identity beyond glyph and name? I recommend glyph only. A per-mod hue (option C) would need an override of the pigment rule."
+  - "Should first-party worlds (Constellation sky, Warpline loom) carry into the mod surface, as option B? Or should every mod wear Gnomon paper, as option A?"
+  - "Anti-nag default: after 'not now', should the same mod stay quiet for the rest of the thread (my recommendation), or only for N turns?"
+handoff_to_mika:
+  - "Contract work outside this session, for Mika and Arky: a manifest 'offer' declaration (verb, takes:, surface: panel|leaf|sheet, world:); how the GUI recognises an offer in model text (like replyChoices); a leaf/sheet region in mod-panels.ts with its own slot; a result-return row kind. Aegis reviews the leaf Button allowance and the voice-accept path."

@@ -619,7 +619,7 @@ export class SymphonyRelay {
 
     // In server mode, relay to other connected peers
     if (this.mode === 'server') {
-      for (const [peerId, peerWs] of this.connectedPeers) {
+      for (const peerWs of this.connectedPeers.values()) {
         if (peerWs !== senderWs && peerWs.readyState === WebSocket.OPEN) {
           sendFrame(peerWs, { type: 'nomination_forward', nomination: tagged, origin });
         }

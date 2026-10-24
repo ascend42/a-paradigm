@@ -1,0 +1,632 @@
+version: "2.0"
+description: >-
+  Gnomon contracts — versioned TS types, hand-written zero-dependency
+  validators and JSON Schemas for the Gnomon kernel's hard contracts
+  (docs/specs/gnomon.md §4, §5, §9.1, §12.8, §18). Zero runtime deps and zero
+  imports (the kernel bundles it; platform-neutral, WebCrypto getRandomValues
+  only). Contracts change additively or with a version bump (§4.9). PR-0
+  shipped probeResult:v1; PR-3 (research 29 §4) adds event:v1, ids/hsid,
+  principals, ref:v1, refusal:v1, card:v1, the gnomon-rpc:v1 hello shape and
+  the frozen client surface, with the P8-D58 (voice) and P8-R9 (linking)
+  values reserved for M1.1. M1.1 part 2 (spec v3.9 §4.11, §19.1 M1.1) reserves
+  the P8-D86–D88 values (strictness L0–L3, run modes, review convergence,
+  change notes) and adds review-finding:v1 and change-note:v1, moving
+  clientApiId once now so it does not move in Move 2; no closed enumeration
+  (refusal code, retriable, audience, sensitivity) gains a value. Spec Appendix A names no contract-level nodes, so
+  every component below is a child of #gnomon-contracts named after the
+  contract id it implements; the spec owners it serves are #identity,
+  #kernel-log, #ref-resolver, #approval-broker, #socket, #peer-link and
+  ~ample-internal-logs (all in packages/gnomon). Gates it encodes values for:
+  ^voice-armed (§14.7), ^peer-paired (§3.9), ^certified (§7.3 review cap). The spec declares no signals.
+  Private, Node >= 24, outside the root build until the 8.0 cut.
+
+components:
+  gnomon-contracts:
+    desk-contract: >-
+      8.0:TD-2026-10-20-812 (the Desk + the context meter; ONE batched clientApiId
+      move, sha256:69e8db86c16575e54014e8fa00779e607b3ad34f575ca607c9958e9c0a48cc0e ->
+      sha256:40efb7259e10d288f08c951ea22af72c76d149a6bd38c395ae7df3dfa8942afd (S0) ->
+      sha256:4d8830585b5f676ee43c6d5d4a2cff35282344a0019526b2e66358c50599ccd8 (S0b, mod
+      naming, inside the same reservation: desk.modId, request.mod.install commit,
+      request.offer.mute{mod, scope, hsid, muted} + kernel-written offer.muted{mod, repo,
+      muted, hsid}, the offer-spec handoffTool pattern ^[A-Za-z][A-Za-z0-9_-]{0,63}$ and
+      title rule in the schema, the published refusal codes FORMAT/ENGINE/PUBLISHER/COLLISION)):
+      kernel-owned, normal kinds offer.shown{offerId, hsid, mod, kind, phase, title,
+      contextIn, question, replyTurnId}, offer.decided{offerId, hsid, decision},
+      offer.kept{offerId, hsid, mod, tool}, request.offer.decide{offerId, decision},
+      request.offer.mute{mod, scope:'repo', repo, muted}, request.mod.install{source
+      git|folder, url (https only, no userinfo) | path (absolute, no ..)},
+      request.session.restart{hsid, checkpointRef?}, session.context.threshold{hsid,
+      usedTokens, windowTokens, ratio} (KIND_PAYLOADS + KIND_PAYLOAD_OPTIONAL, closed
+      checks in validateKindPayload; no free text but the bounded model question and
+      the manifest-declared title); ID_PREFIXES.offer (offer:<ULID>); descriptor field
+      desk. src/offer.ts: offer-spec:v1 (OfferSpecV1, validateOfferSpecV1, published
+      schemas/offer-spec.v1.schema.json), closed OFFER_PHASES, OFFER_DECISIONS,
+      OFFER_REACHES, CONTEXT_SOURCES (recent-messages, open-files, repo-path,
+      selection, session-summary; at most 8), OFFERS_PER_MOD_MAX 6, THE shared text
+      rule isOfferText / isOfferQuestion (240 code points, no control/format/separator,
+      no edge whitespace), and offerBlockOf(text): the ONE strict, linear parser of a
+      model's ```offer block (strict JSON {mod, kind, question}, 1024-char body,
+      262144-char reply cap, the block must END the reply, bare CR refused, CommonMark-nested
+      fences ignored, other fences indentable up to 3 spaces; isInstallPath refuses UNC/device
+      prefixes, ':' past the drive and dot/space-only segments),
+      shared by the kernel and the GUI. 8.0:T-2026-10-21-006 (founder ruling, one
+      deliberate clientApiId move, sha256:4d883058...ccd8 ->
+      sha256:eda8c627b60d11408b7c21ee45db889eb068cf135e6a362e293a46880c561114):
+      kernel-owned, normal offer.suppressed{hsid, turn, why, name?, offerKind?}, why in
+      OFFER_SUPPRESS_REASONS (no-block, turn-streaming, pending-card, not-offerable,
+      kind-undeclared, malformed); name/offerKind present exactly when why is not in
+      OFFER_SUPPRESS_UNNAMED (no-block, malformed); descriptor desk.suppress.
+      Review M2 (one deliberate clientApiId move,
+      sha256:eda8c627...1114 ->
+      sha256:4c2b93711b219bff751f985286ba489bbc7015ad94627e954253186d3eeeaf2c):
+      TURN_RESULT_PAIRING, descriptor turnResult: turn.result{turn} names the LATEST
+      turn the result closes; every outstanding turn up to it closes too (a queued
+      message Claude Code folded into the running turn); absent on older rows = FIFO.
+      Test: test/turn-result.test.ts.
+      Review C1 (no id move): offer.suppressed's turn must embed the payload's
+      hsid (turn:<hsid>/<n>), checked in validateKindPayload.
+      8.0:T-2026-10-21-008 (re-review M-1/M-2, one deliberate clientApiId move,
+      sha256:4c2b9371...af2c ->
+      sha256:454cd632007a77540a4526bebb55384d40e7935ad677e5dd9bf185595c77e4de):
+      kernel-owned, normal offer.retired{offerId, hsid, why} (OFFER_RETIRE_REASONS:
+      continued; descriptor desk.retire) and session.anomaly{hsid, why}
+      (SESSION_ANOMALY_REASONS: result-without-turn; descriptor sessionAnomaly). Closed,
+      ids and reasons only; checked at append by #kernel-log.
+    session-name-contract: >-
+      8.0:session-rename (one deliberate clientApiId move,
+      sha256:454cd632...7de ->
+      sha256:c4e2c7d97cd09b0809eb2a1672e4bf37bf570b640abb0a6b9735bb4eeabfe2c9):
+      kernel-owned, normal request.session.rename{hsid, name} and
+      session.renamed{hsid, name}, name a sensitive field; closed payloads
+      checked by validateKindPayload with isSessionName (event.ts, a
+      structural check). display.ts normalizeSessionName is the ONE
+      normalisation (refuses non-strings, > SESSION_NAME_INPUT_MAX = 1024
+      code units, C0/C1 controls but tab/LF/CR; runs sanitizeDisplayText;
+      folds whitespace; trims; refuses > SESSION_NAME_MAX = 80 code points
+      and kept format characters); '' resets. Descriptor sessionRename.
+      Test: test/session-name.test.ts.
+    git-verbs-contract: >-
+      8.0:git-verbs (T-2026-10-23-002; one clientApiId move,
+      sha256:aa537e4c...79d4 -> sha256:b2d55aec0da8abf5369e895f5b85ae4d825d797151a0b7e64dab545f98aa1aaf):
+      the kernel-owned, sensitive kind git.verb{hsid, verb, phase, inputHash,
+      why?, cardId?, host?, exitCode?} with a closed payload
+      (validateKindPayload): GIT_VERBS (git.init, git.push, repo.create,
+      git.worktree.add, git.worktree.remove), GIT_VERB_PHASES (requested,
+      refused, ran, failed; why only on refused/failed), GIT_VERB_REASONS,
+      GIT_VERB_HOST_PATTERN (a lowercase DNS host, never a URL). Descriptor
+      gitVerbs. Tests: gnomon test/git-verbs.test.ts (every row validates).
+    edit-rules-contract: >-
+      TD-2026-10-23-939 follow-up (Aegis 2026-10-23; one clientApiId move,
+      sha256:a23b2c75...a1ce -> sha256:aa537e4c9af0efee02ebd5d03a734c4de915c5e02a58021d71a6fd892bf379d4):
+      APPROVE_SCOPE_KINDS adds file and repo-edits (parseApproveScope, scopeDigest
+      over canonicalJson of the scope); ALWAYS_RULE_MATCHES adds file and
+      repo-edits; approval.rule.learned reserves path (tag
+      8.0:TD-2026-10-23-939, sensitive). Tests: test/approve-scope.test.ts.
+    loops-contract: >-
+      8.0:loops (docs/specs/gnomon-loops.md §3-§5, build step 2; the ONE loops
+      clientApiId move, sha256:c4e2c7d9...e2c9 ->
+      sha256:a23b2c75c92df061c1dafa5d32e818a6ae788ef7153613d45be0ecae3c4ba1ce):
+      card kinds loop-trust (root class, never always/standing/voice) and
+      loop-choice, decisions continue/stop (LOOP_CHOICE_ONLY_DECISIONS: valid only
+      on loop-choice, isCardDecidable + strict heldDecision). Kernel-owned kinds
+      loop.trusted, untrusted, closure.changed, run.started, node, round, notified,
+      proposed, landed, land.waiting, parked, run.ended, trigger.fired, deleted,
+      resumed (loop.paused stays the kernel pause row) and request.loop.trust,
+      untrust, pause (all:true = kill switch), resume, run, delete; userland
+      loop.request (the agent ask). The runner's per-round row is the kernel-owned
+      loop.round: loop.row|open|closed stay the userland #learning-loop ledger.
+      Labels: loop.node evidence/evidenceRef sensitive (as oracle.result),
+      loop.landed/proposed paths sensitive. RESERVED_KIND_PAYLOADS documents every
+      loop kind; loop.paused and session.open (origin, loopRun) gain reserved
+      fields. Closed values LOOP_VERDICTS, LOOP_AUTONOMY, LOOP_SCOPES,
+      LOOP_REQUEST_OPS, LOOP_PAUSE_REASONS, LOOP_RUN_END_REASONS, LOOP_CLOSURE_BY,
+      LOOP_LAND_WAIT_REASONS in descriptor `loops`. VOICE_ALLOWLIST: both kinds
+      hand-only in 8.0 (stop by voice is 8.1). Test: test/loops-contracts.test.ts.
+    mod-id-contract: >-
+      S0b (the Desk O1, .paradigm/research/paradigm-8/gnomon-mod-naming-versioning.md):
+      src/mod-id.ts. A mod is <publisher>.<name>: PUBLISHER_PATTERN (1..39, GitHub-owner
+      shaped, ASCII, no u flag), MOD_NAME_PATTERN (1..24), MOD_ID_PATTERN with the 60-char
+      total checked separately (isModId), parseModId/formatModId; data the kernel applies:
+      RESERVED_PUBLISHERS, WINDOWS_DEVICE_NAMES, FIRST_PARTY_MOD_NAMES, FOUNDER_BRANDS
+      (ascend42 github.com-only; a-company/warpline/nevr/nevrland/conductor refused),
+      FIRST_PARTY_DISPLAY_NAMES, modSkeleton (fixed confusable transform); derived names:
+      mcpServerName (gm_<pub>_<name> <= 28 else gx_<name[0..13]>_<hash10>), qualifiedToolName
+      (<= 64), modEnvPrefix (<PUB>__<NAME>__, first-party <NAME>__), modEventPrefix
+      (modns.<id>.), modPrincipalLabel (mod-<id>); git sources: canonicalGitUrl,
+      gitOwnerOf, gitSourceString/parseGitSource (git:<canonical url>#<sha40>, 64-hex
+      refused); MOD_REFUSAL_ROUTES and MANIFEST_FORMAT {current 2, accepted [1, 2]}.
+    model-switch-contract: >-
+      8.0:model-switch (one deliberate clientApiId move,
+      sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f ->
+      sha256:69e8db86c16575e54014e8fa00779e607b3ad34f575ca607c9958e9c0a48cc0e):
+      kernel-owned kinds request.session.model{hsid, model} and
+      session.model{hsid, from, to, permitId, outcome} (KIND_PAYLOADS, closed
+      checks in validateKindPayload), SESSION_MODEL_OUTCOMES (switched,
+      backend-refused, timeout, permit-refused, reconciled: after a timeout the
+      next main-chain assistant message's message.model says which model runs), MODEL_SWITCH_CONTEXT_GUARD
+      (any session -> a target without [1m] above 160k tokens, or with the
+      context unknown, refused; doc-only change, ids unchanged), MODEL_SWITCH_REASON_ROUTES
+      (turn-running, model-switching, local-session, context-too-large,
+      model-switch-failed, model-switch-timeout) in REFUSAL_REASONS; descriptor
+      field modelSwitch.
+    claude-model: >-
+      src/claude-model.ts (model picker, 2026-10-20): CLAUDE_MODEL_ALIASES
+      (default, opus, sonnet, haiku, fable, opusplan, opus[1m], sonnet[1m];
+      claude --help 2.1.304 names the alias form), CLAUDE_MODEL_ID (strict
+      claude-[a-z0-9]+([.-][a-z0-9]+)*([1m])?, max 64), isClaudeModel and
+      claudeModelProblem (never echoes the value). Shared by the kernel
+      (session.open, request.session.model), the adapter (argv guard) and the
+      GUI picker. Pure functions: not an input of clientApiId.
+    description: >-
+      Package entry (src/index.ts, re-exports every module) plus schemas/.
+      probeResult:v1 = {probe, os, osVersion, arch, toolVersions{node,...},
+      verdict pass|fail|partial, evidence{}, specRefs[], at};
+      schemas/probeResult.v1.schema.json is its JSON Schema, src/probe-result.ts
+      the TS type plus validateProbeResultV1 / isProbeResultV1. The PR-3
+      schemas in schemas/ are GENERATED from src/schemas.ts
+      (`npm run schemas`, scripts/write-schemas.mjs) and a test keeps them a
+      byte-identical fixed point. src/internal.ts holds the shared pure helpers
+      (Checker with strict|tolerant modes, UTF-8, synchronous SHA-256,
+      Crockford base32, canonical JSON, deepFreeze). Also home (no allowlisted
+      sub-component yet; spec Appendix A has no node) of the M1.1-reserved
+      (P8-D86–D88, §4.11) schemas: src/change-note.ts = change-note:v1 —
+      agentClaims{testedHow{summary ≤1 KiB, refs[]}, risk{tier low|medium|high,
+      why ≤512 B, blast[sym:]}, revert{how auto|command|manual, steps ≤1 KiB
+      never executed, reversible}, draftedBy} UNTRUSTED and kept structurally
+      apart from kernel{verified{n, of}, risk{floor, effective, reasons[]},
+      revert{how auto|none, ref?}} (B16); validateChangeNoteV1 needs an explicit
+      form (no default): claim (contract.claim{note}: agentClaims only, a
+      kernel part refused in every mode) or card (kernel required; strict:
+      effective = max(floor, agent tier)); schemas/change-note.v1.schema.json
+      publishes both as $defs/claim (kernel: false) and $defs/card, with
+      x-gnomon-trust per part; failSafe* readings and changeNoteHasUnknownValue.
+      src/review-finding.ts = review-finding:v1 {fid, round >= 1, class,
+      severity important|nit|pre-existing (kernel-set), locus{path, lines?,
+      symbol?}, instances[], claim, fingerprint}; `lines` = "n" or "from-to"
+      (spec gives no grammar; judgment call); FINDING_RESPONSES fixed|wrong|
+      intentional|immaterial + validateFindingResponses for
+      contract.claim{responses}; schemas/review-finding.v1.schema.json. Tiers,
+      hows, severities and responses are ADDITIVE with fail-safe readings
+      (unknown tier ⇒ high, agent revert how ⇒ manual, kernel revert how ⇒
+      none, severity ⇒ important, response ⇒ no answer; round-2 ruling). They serve #approval-broker and ^certified convergence.
+      M1.12 slice 1 (§4.5, §4.9, §9.1, §12.8), additive and NOT inputs to
+      clientApiId (pin unchanged): src/display.ts = sanitizeDisplayText (the
+      client-side §4.5 rules as amended by Aegis round 2 and M1.12 slice 2:
+      a terminated OSC/DCS/SOS/PM/APC shown as ⟨OSC⟩payload⟨ST⟩ (payload
+      visible, Aegis M2), CSI and other ESC sequences removed, an
+      unterminated ESC shown as ⟨ESC⟩ with its tail visible; zero-width, tag,
+      VS-supplement and filler characters stripped, misplaced U+FE00–FE0F
+      (decided on the output, never after a mark) stripped, a kept
+      U+FE00–FE0D flagged (only VS15/VS16 silent), U+2028/2029 ⇒ \n, all ⇒
+      hidden-chars; bidi controls and marks ⇒ visible glyphs ⇒ bidi; remaining
+      C0/C1 removed ⇒ hidden-chars, CR unflagged; lone surrogates ⇒ U+FFFD; no
+      normalisation; text idempotent, flags idempotent except that a kept
+      U+FE00–FE0D re-flags hidden-chars; display.v1.json normative), eventRow (opaque
+      {kind, principal, at} rows for modns.* and kinds newer than the
+      package), renderDenominator ({n, of} or refused); src/conformance.ts =
+      the conformance catalog (CONFORMANCE_CHECKS, run vs slice-2), the
+      display vectors (conformance/display.v1.json, generated by
+      `npm run conformance`, fixed point) and conformanceReportHash;
+      src/client-types.ts = TYPE-ONLY params/results of the 12 verbs + 2 relays.
+      M1.12 slice 3: src/client-api-doc.ts = renderClientApiDoc(), a pure
+      render of the published surface (ids, verbs + access, relays, refusal
+      codes + reasons, additive enums, kinds, schema files, kit, sanitizer
+      sets, conformance catalog) into docs/specs/gnomon-client-api.md —
+      generated by `npm run client-api-doc`, never hand-maintained; the
+      committed file is its byte-identical fixed point (G-HON-04 rule, LF on
+      every OS via .gitattributes); not an input to clientApiId (pin unchanged).
+    path: src/
+    type: module
+    tags: [gnomon, contracts, json-schema, paradigm-8]
+    tests:
+      - test/offer.test.ts
+      - test/probe-result.test.ts
+      - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
+      - test/client-api-doc.test.ts
+
+  contract-event-v1:
+    description: >-
+      event:v1 envelope (§4.1) — P8-D98 (T-2026-10-19-001): reserves, tag
+      8.0:P8-D98, session.drained{uuid, reason} (DRAIN_REASONS = [upgrade],
+      closed), permit.reattributed{permitId, hsid, drainedEventId,
+      renewedByDrain:true, expiresAt} (founder carry-over ruling: a permit live
+      at the drain gets a fresh window, never minted),
+      approval.rule.revoked{ruleId, repoKey, tool, connId} and
+      approval.effect.failed{cardId, decision, effect, reason}, each with a
+      closed payload check (validateKindPayload; an extra field is refused, an
+      unchecked kind is an error); reserved payload fields contract.claimed
+      claimGen, approval.rule.learned match (ALWAYS_RULE_MATCHES = [exact],
+      validateAlwaysRuleMatch, TD-2026-10-19-528 F2) and approval.expire why.
+      Drain-and-resume (T-2026-10-19-014 B1/B2, Aegis M1 G-HON): reserved
+      session.open resume{drainedEventId, outcome} + principalClass,
+      session.sandbox resumedFrom/drainOutcome/note/drainedEventId,
+      session.inject deadlineMs/deadlineSource/failed, session.refused resume;
+      closed sets DRAIN_OUTCOMES, DRAIN_EXIT_REASONS [drain-clean,
+      drain-interrupted], DRAIN_INJECT_CHANNELS [drain],
+      DRAIN_DEADLINE_SOURCES, SANDBOX_D98_PHASES [resume-note], RESUME_NOTES,
+      RESUME_REFUSALS — all in D98_CLOSED_VALUES.
+      P8-D93 (T-2026-10-18-016): kernel-owned
+      session.compacted{hsid, turn, reason, summaryHash, tokensBefore,
+      tokensAfter} (summaryHash a sensitive field), KIND_PAYLOADS (published as
+      x-gnomon-kind-payloads) and validateSessionCompactedPayload. P8-D89
+      (M1.4): reserves daemon.log.quarantined
+      (evidencePath a sensitive field) and adds key.token.revoked{tokenId},
+      tag M1.4:P8-D89. EventV1 type, validateEventV1/isEventV1
+      (strict = registered kind + closed fields; tolerant = unknown kinds and
+      fields accepted, opaqueEventView renders {kind, principal, at}),
+      schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1,
+      owner kernel|userland, M1.1 reservations tagged M1.1:P8-D58 /
+      M1.1:P8-R9 / M1.1:P8-D86-D88 — the last: approval.strictness.raised|
+      proposed|lowered|held, approval.mode.set, approval.auto,
+      contract.review.returned|capped|extended|restarted, merge.reverted,
+      merge.ref.rewritten, verdict.incident, request.strictness.set|mode.set|
+      incident, all kernel-owned, private + normal) with RESERVED_PAYLOAD_FIELDS
+      (oracle.result round/range/findings, contract.knot reopenOf,
+      contract.built note/responses, verdict.founder override, session.inject
+      briefId/peerRootKeyId, session.tainted taint), SESSION_TAINTS and
+      APPROVAL_SUSPECT_REASONS (voice-* and strictness-class), and per-kind default labels: audience private, sensitivity
+      per §9.1 (session.inject, turn.event, voice.turn.* sensitive; voice.enrol
+      secret; field labels approval.request.tool_input and oracle.result.evidence
+      sensitive). defaultLabelsFor(kind) returns undefined for an unregistered
+      kind so the kernel refuses rather than guesses (S32 §6, L6, G-LOG-09
+      contract half). Serves #kernel-log and ~ample-internal-logs.
+    path: src/event.ts
+    type: module
+    tags: [gnomon, contracts, event-v1, paradigm-8]
+    tests:
+      - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
+
+  contract-project-hue:
+    description: >-
+      The ONE project-hue function (critique 2026-10-20 S2.1): projectHue(key)
+      = sha256(utf8(key))[0] mod PROJECT_HUES (6), the six pigments of
+      design-system.yaml gnomon.colour. The kernel's Workshop feed
+      (modhost/feed.ts session.open project) and the GUI's sessions rail both
+      call it with the session.open cwd, so a project never gets two hues. A
+      project hue is identity only, never state. Pure (in-house sha256), so it
+      runs in the browser bundle too.
+    path: src/hue.ts
+    type: module
+    tags: [gnomon, contracts, gui, paradigm-8]
+    tests:
+      - test/hue.test.ts
+  contract-workshop-cap:
+    description: >-
+      The Workshop cap (critique 2026-10-20 S5.3): a closed, minimal shape a
+      mod may put on a kit Text node, {shape tall|wide|floppy, hue
+      0..PROJECT_HUES-1, filled bool, state needs|working|idle|knot, label
+      1..40 code points, one line}. checkCap refuses any unknown, missing,
+      mistyped or out-of-range field and returns a fresh five-key object. The
+      kernel mod-block gate (modhost/block.ts) and the GUI renderer both call
+      it; a client draws the hat from these fields only (no mod SVG, path,
+      colour or attribute). Not an input to kitId, modAbiId or clientApiId.
+    path: src/cap.ts
+    type: module
+    tags: [gnomon, contracts, gui, workshop, paradigm-8]
+    tests:
+      - test/cap.test.ts
+  contract-ids:
+    description: >-
+      Ids (§4.2, §3.1, S32-13) — ULID (ulid, monotonicUlidFactory with
+      in-ms increment and overflow refusal, isUlid, ulidTime) over
+      globalThis.crypto.getRandomValues; prefixed ULID ids ev/log/conn/card/arm/
+      permit:v1/brief/msg/ds (mintId, isId); hsid:v1 (mintHsid, non-monotonic so
+      hsid-short stays fully random), hsid:v1d derivation (deriveHsidV1d),
+      hsid-short = lowercase Crockford of the ULID's 80 random bits, 16 chars
+      (hsidShort); turn ids turn:<hsid>/<n> (turnId, parseTurnId); keyId,
+      repo-scope and contract-id patterns. Serves #identity.
+    path: src/ids.ts
+    type: module
+    tags: [gnomon, contracts, ids, paradigm-8]
+    tests:
+      - test/ids-principal-ref.test.ts
+
+  contract-principal:
+    description: >-
+      Principals (§3.1, S32-02, P8-D75) — PRINCIPAL_KINDS human|agent|session|
+      kernel|mod|voice|peer; p:<ns>/<name> and the foreign display form
+      p:<ns>/<name>@<rootKeyId8> (parsePrincipalId marks it foreign, never
+      local); samePrincipal compares full rootKeyId + name and never ns;
+      isLocalPrincipal, foreignDisplayId, nsFromRootPublicKey,
+      peerKernelPrincipal. Also the closed-kind row vocabularies of §3.1/§15.4:
+      REGISTRY_ROW_KINDS (kernel, link), GRANT_ROW_KINDS (incl. reserved
+      grant.voice-approvals, grant.peer), CAPABILITY_FORMS (incl. log.read:usage, the #mod-host usage feed grant, Aegis M1; paradigm.read:summary, the #paradigm-context-mod slice grant, K1) and
+      FIRST_PARTY_ONLY_CAPABILITIES (link:send, knowledge:federate),
+      GRANT_DERIVED_ONLY_CAPABILITIES (voice.approve:<class>) — not
+      clientApiId inputs. Serves #identity and #peer-link (G-ID-08 contract
+      half).
+    path: src/principal.ts
+    type: module
+    tags: [gnomon, contracts, identity, paradigm-8]
+    tests:
+      - test/ids-principal-ref.test.ts
+
+  contract-ref-v1:
+    description: >-
+      ref:v1 grammar (§4.4, §3.7, §3.9) — scheme ":" id ["@" rev]; kernel and
+      package scheme lists, peer reserved (M1.1, P8-R9), voice dropped; aliases
+      # $ ^ ! ~ → sym:, TD-/L-/T- → td:/l:/t:; parseRef, formatRef, peerRef
+      (peer:<logId>/<ref>, never nested), validateRefV1, schemas/ref.v1.schema.json.
+      Serves #ref-resolver.
+    path: src/ref.ts
+    type: module
+    tags: [gnomon, contracts, ref-v1, paradigm-8]
+    tests:
+      - test/ids-principal-ref.test.ts
+
+  contract-refusal-v1:
+    description: >-
+      refusal:v1 Gnomon superset (§4.6) — P8-D89 (M1.4 slice 3) registers the
+      read-token reasons (unknown-token, token-expired, token-revoked,
+      token-in-use, token-not-yet-valid, token-store-untrusted), gone, the
+      log.append ownership reasons (kernel-owned, ungranted, modns-not-own,
+      bad-kind, bad-params), the slice-2 log.read / ref.resolve reasons
+      (follow-needs-id, backlog-too-large, bad-since/until/limit/follow/kinds/
+      scope, since-ahead, subscription-cap, mod-principal-name,
+      reader-unsupported, bad-ref, rev-not-applicable, unknown-scheme,
+      peer-ref, no-resolver, not-found, row-integrity, closed) and
+      CLIENT_LOCAL_REFUSAL_REASONS
+      (hello-not-offered); log.append's verb refusals gain ENGINE. copied (not imported) from
+      packages/warpline/src/fabric/refusal.ts: Warpline's 12 codes + BUDGET_DENIED,
+      PERMIT_REQUIRED, CAS_LOST, BILLING_REFUSED, MODEL_UNAVAILABLE; gates + budget,
+      billing, model, voice, link, and reserved review, strictness (P8-D86–D88);
+      Retriability; next[] steps; verdict and
+      contested[].rule widened to string|null; optional additive data{reason,
+      offered, cardId}; voice and link reason lists (M1.1); reserved
+      review-cap, strictness-presence|paused|mode|evidence, voice-strictness,
+      note-missing with RESERVED_REASON_ROUTES naming each one's code and gate;
+      SOCKET_REASON_ROUTES for the reasons the M1.4 kernel socket emits; exit codes and the
+      JSON-RPC code map (§4.9); refuse() single constructor, refusalOf()
+      accessor (+ the JSON-RPC error depth), RefusedError, validateRefusalV1,
+      schemas/refusal.v1.schema.json. G-CON-02 partial: every Warpline-shaped
+      refusal validates. P8-D98 (T-2026-10-19-001): D98_REASON_ROUTES reserve
+      CAS_LOST stale-claim | claim-expired | claim-superseded (§7.4),
+      BAD_REQUEST cursor-epoch (§5 log.read) and ENGINE draining (§2.4 rule 11),
+      all in REFUSAL_REASONS.
+    path: src/refusal.ts
+    type: module
+    tags: [gnomon, contracts, refusal-v1, paradigm-8]
+    tests:
+      - test/refusal-rpc.test.ts
+      - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
+
+  contract-card-v1:
+    description: >-
+      card:v1 (§3.4, §14.7, §3.9) — P8-D98 (T-2026-10-19-001): kind
+      daemon-stop (TD-2026-10-19-528 F3), CARD_EXPIRY_WHYS incl.
+      session-drained (F4), decisionSig v2 layout (decisionMessageV2, first
+      line DECISION_SIG_V2_MARKER gnomon:decision:v2, used for answer, carries
+      the answer digest; the kernel signer adopts it in slice A2). Kinds incl. reserved voice-arm, grant,
+      handoff, declassify, peer-pair, reconsider, strictness, incident; states
+      incl. held; flags incl. voice-phrase, peer, irreversible, claim-mismatch;
+      decisions incl. withdraw, extend, restart (reconsider cards only);
+      fields note (change-note:v1, card form) and strictness{level L0-L3,
+      mode manual|ask|auto-edits, reason} — level and mode ADDITIVE with
+      fail-safe readings (unknown level ⇒ L3, mode ⇒ manual; no bypass mode);
+      hasUnknownFailSafeValue ⇒ the card renders but is never decidable;
+      strict producer checks: extend/restart (also as heldDecision) only on
+      reconsider, claim-mismatch flag when agent tier < floor, irreversible
+      flag when reversible:false (G-CHG-01/04); ROOT_CONFIG_RESERVED_SECTIONS; presence incl. voice-armed;
+      via incl. voice, link; voice / voiceDecision blocks; signature domains
+      gnomon:approve:v1 and gnomon:approve-voice:v1; CARD_RESERVED_VALUES;
+      isCardDecidable (unknown state never decidable, held only withdraws);
+      validateCardV1, schemas/card.v1.schema.json. Serves #approval-broker,
+      ^voice-armed and ^peer-paired.
+    path: src/card.ts
+    type: module
+    tags: [gnomon, contracts, card-v1, paradigm-8]
+    tests:
+      - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
+
+  contract-gnomon-rpc-v1:
+    description: >-
+      gnomon-rpc:v1 (§4.9, §5, §12.3) — hello params/result types and
+      validators, auth preimage helpers (authServerMessage / authClientMessage /
+      authTokenMessage + their *Preimage forms, all binding the negotiated
+      clientApi + canonical features; no unbound form; AUTH_TOKEN_DOMAIN
+      gnomon:auth-token:v1 for read-token proof of possession — M1.4 slice 3,
+      T-2026-10-17-017, P8-D89a); hello clientNonce (T-2026-10-18-016,
+      P8-D93): HelloParams.clientNonce required (CLIENT_NONCE_PATTERN,
+      base64url 22..86 chars, CLIENT_NONCE_BYTES = 32), echoed in
+      HelloResult.clientNonce and bound into authServerMessage(nonce,
+      clientNonce, endpointPath, negotiated) so a recorded hello cannot be
+      replayed to another connection; client-local reason
+      client-nonce-mismatch; negotiateHello (highest shared
+      version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen
+      VERBS (12, with params, refusals and the §5 access matrix incl. the
+      all-refused peer column; session.open runMode?, contract.claim note? /
+      responses? + BAD_REQUEST, oracle.run FORBIDDEN per v3.9) and CLIENT_RELAYS
+      (mod.view, mod.command); VERB_PARAM_VALUES, RESERVED_CONTENT_PARTS
+      ({brief}), STATUS_RESERVED_FIELDS (links, strictness, review,
+      unobservedRefWrites) and FAIL_SAFE_VALUES (in clientApiId);
+      ADDITIVE_ENUMS + renderEnumValue implement the compatible-additive rule;
+      schemas/gnomon-rpc.v1.hello.schema.json. P8-D98 (T-2026-10-19-001):
+      HUMAN_DEVICE_VERBS gui.open{cwdHint?} (13) and rules.revoke{ruleId} (14)
+      — human class only, access 'verified human device', every other class
+      false; not among law 3's twelve kernel verbs; CLIENT_METHODS is 16;
+      RESERVED_HELLO_FEATURES (journal.cursor, session.resume; the kernel
+      advertises none until built); LogReadCursor {logId, seq} +
+      validateLogReadCursor; D98_CLOSED_VALUES (always-rule match, drain
+      reason); ADDITIVE_ENUMS gains approval.expire.why. Serves #socket and
+      #web-endpoint.
+    path: src/rpc.ts
+    type: module
+    tags: [gnomon, contracts, gnomon-rpc-v1, paradigm-8]
+    tests:
+      - test/refusal-rpc.test.ts
+      - test/m1-1-reservations.test.ts
+
+  contract-client-api-id:
+    description: >-
+      kitId and clientApiId (§12.3, §12.8). TD-2026-10-20-086 F6 + T-2026-10-20-007
+      (one deliberate move) moved clientApiId
+      sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4 →
+      sha256:795b342598244417473a3a8e77eb0ed5fea066ec337ce60511884f644ae6d63f:
+      grant.standing / .used / .revoked, request.grant.standing / .revoke,
+      approval.unlock.joined (Aegis M1; final id after the Aegis fold-ins below),
+      approval.auto.miss (sensitive; why + inputHash sensitive),
+      approval.auto{anchoredInputHash} (sensitive field), STANDING_TUPLES,
+      STANDING_REVOKE_REASONS, STANDING_PRESENCE_PREFIX, STANDING_GRANT_MAX_MS
+      (descriptor standingGrant); modAbiId unchanged
+      (test/standing-grant.test.ts). TD-2026-10-19-063 (self-update
+      pickup, founder ruling "ONE Touch ID", a deliberate move) moved
+      clientApiId sha256:99d5c152…97d1 →
+      sha256:ac22e72f26b673fae096b0495563c0c8029c8d37f9572526a1965b51eb0447e4
+      (AUTH_WIRE_DESCRIPTOR gains `resume`: the {resumeToken} web form, the
+      gui.resume notification, its TTL, single use, via 'resume' and its
+      refusals). Before it, TD-2026-10-19-194 (voice V0,
+      founder ruling, the one deliberate voice move before any client ships)
+      moved clientApiId sha256:f27ecb8b…11a4 →
+      sha256:99d5c1527bbbfadd7dca9cfa115e3fbaca227029cecd44c95843a86eb08197d1
+      (descriptor gains voiceClosedValues = VOICE_CLOSED_VALUES:
+      approval.voice.disarm.reason and refusal.voice-strictness.ceiling
+      [null-level, manual]; statusFields gain arms, armCustody); kitId,
+      modAbiId and abiId unchanged. P8-D98 (T-2026-10-19-001) moved
+      clientApiId once (re-moved inside the same unreleased move for the
+      drain-and-resume wire, Aegis M1, and once more for the #trace-capture
+      wire, TD-2026-10-19-057 / Aegis M5: session.sandbox{traced, traceRefused}
+      reserved, closedValues session.sandbox.traceRefused [trace-unsafe,
+      trace-unavailable]): sha256:1faf47f5…8720 →
+      sha256:f27ecb8b3ee5c1a4ad08d4c5eda427a63aebba8ba31963baed3c9d53e3e611a4
+      (descriptor gains humanDeviceVerbs — gui.open, rules.revoke and, with
+      TD-2026-10-19-339 inside the same unreleased move, daemon.stop{reason?}
+      with closedValues daemon.stop.reason [stop, upgrade] — helloFeatures.reserved,
+      logReadCursor, closedValues and DECISION_SIG_DESCRIPTOR — the decisionSig
+      v2 marker gnomon:decision:v2, its decisions [answer] and one fixed
+      message vector); kitId and modAbiId unchanged. P8-D93 moved clientApiId once
+      (hello clientNonce + session.compacted): sha256:fd576e6d… →
+      sha256:1faf47f5…8720 (round 2: server-sig domain v2, closed compaction-reason enum; round 3: AUTH_WIRE_DESCRIPTOR — the three auth domains and one fixed preimage vector per auth form — is a CLIENT_API_DESCRIPTOR input, so a domain or layout change moves the id); kitId unchanged. kitId = sha256(canonicalJson(kit:v1
+      block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) +
+      "\n" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC
+      code map, ADDITIVE_ENUMS, every published client JSON Schema and the
+      non-schema M1.1 reservations (verb param values, content parts, status
+      fields); modAbiId
+      is not an input. src/schemas.ts builds the schemas from the TS constants;
+      schemas/client-api.ids.json pins the values per release.
+    path: src/client-api.ts
+    type: module
+    tags: [gnomon, contracts, client-api, paradigm-8]
+    tests:
+      - test/refusal-rpc.test.ts
+      - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
+
+  contract-voice-allowlist:
+    description: >-
+      The voice allowlist (spec §14.7 "The allowlist", D58, D61, D62, D66;
+      TD-2026-10-19-194, T-2026-10-19-026 voice slice V0) — pure data plus
+      pure functions, the AUTHORITATIVE hand-only mechanism for #gnomon-voice
+      decisions in $voice-approval under ^voice-armed: VOICE_CLASSES
+      reversible ⊂ gate ⊂ judgment (cumulative, as the D62 grant sets);
+      VOICE_ALLOWLIST, one frozen row per CardKind {approve{class →
+      decisions it adds}, deny[]}: reversible = permission allow|deny,
+      ask-user answer, plan approve-plan; gate adds gate-class allow,
+      fallback fallback-cloud, budget resume; judgment adds knot resolve,
+      verdict accept|reject; deny[] = the D66 row (each kind's deny-direction
+      decision, deny or reject, under any class, no hold; founder ruling:
+      incident and daemon-stop have EMPTY deny rows — fully hand-only). Default deny:
+      anything not named (incl. every unknown kind or decision) is
+      hand-only; any card flag refuses every decision but withdraw, deny
+      included (voice-ineligible); flags is a REQUIRED argument (Aegis M1). voiceDecisionCheck(class, kind, decision, flags) →
+      {ok, hold, via} | {ok:false, reason voice-off|voice-class|
+      voice-hand-only|voice-ineligible} (all reserved in refusal.ts);
+      voiceMayDecide is its boolean form; voiceApprovingDecisions;
+      voiceAllowlistCoversCardKinds. withdraw (undo during the hold) is ok on
+      any kind with an approving row at any class, never blocked by flags;
+      the caller checks state held under the same armId. Also reserved here
+      (event.ts/rpc.ts): the closed VOICE_DISARM_REASONS (21 values, incl.
+      daemon-exit, helper-exit) and status.arms / status.armCustody. Callers pass the EFFECTIVE class; the
+      strictness overlay, null-level ceiling, manual-mode deny-only clamp and
+      every runtime broker check live in #approval-broker (later voice
+      slices). Not a clientApiId input (pin unchanged; test/voice-golden.test.ts
+      pins the clientApiId literal, packages/gnomon/test/voice-golden.test.ts
+      the abiId literal and that every allowlisted pair is a valid
+      KIND_DECISIONS pair in classes.ts).
+    path: src/voice-allowlist.ts
+    type: module
+    tags: [gnomon, contracts, voice, paradigm-8]
+    tests:
+      - test/voice-allowlist.test.ts
+      - test/voice-golden.test.ts
+  contract-release-manifest:
+    description: >-
+      release-manifest:v1 (T-2026-10-21-028, TD-2026-10-21-758 zero-build,
+      G-HLP-01): {schemaVersion, release, artifacts[{name gnomon-helper |
+      gnomon-voice-io, version a.b.c, sha256 hex, requirement, arch arm64 |
+      x64 | universal}]}, one entry per (name, arch), a universal entry
+      alone. validateReleaseManifestV1 / isReleaseManifestV1 (hand-written,
+      zero deps) mirror RELEASE_MANIFEST_V1_SCHEMA
+      (schemas/release-manifest.v1.schema.json, generated; in BUILD_SCHEMAS,
+      NOT CONTRACT_SCHEMAS, so it is not a clientApiId input);
+      releaseArtifactFor picks the exact-arch entry, else universal. Additive
+      (T-2026-10-21-030, Aegis M3 high 2): optional appZips[{arch arm64|x64,
+      sha256}] (one per arch, closed) = the published Gnomon.app.zip per arch,
+      compiled into the npm @a-company/gnomon; releaseAppZipFor reads it. Written
+      by packages/gnomon/scripts/write-release-manifest.mjs, compiled into the
+      kernel bundle by build-release.mjs (tsup define), enforced by the
+      kernel's #release-pins. Also VOICE_IO_TEAM / VOICE_IO_IDENTIFIER /
+      VOICE_IO_REQUIREMENT: the ONE designated requirement (Developer ID CA +
+      leaf, team SW4BMQ8PNL, gnomon.voice-io) shared by
+      gnomon-voice/scripts/build-voice-io.mjs and the kernel's voice-install.ts.
+    path: src/release-manifest.ts
+    type: module
+    tags: [gnomon, contracts, release, paradigm-8]
+    tests:
+      - test/release-manifest.test.ts
+  contract-voice-modes:
+    description: >-
+      Voice capture x send policy (TD-2026-10-21-514, spec §14.7 "Voice
+      submodes"), pure and frozen, NOT a clientApiId input: CAPTURE_KINDS
+      ptt|open|toggle, SEND_POLICIES key|countdown|word|pieces, SENT_BY
+      key|release|word|piece, VOICE_ORIGINS hand|voice|voice-unverified
+      (VOICE_SENT_BY adds 'unverified': a Dictate Enter send holding an
+      unverified voice's words, clamped), VOICE_PRESETS (Talk
+      ptt x countdown, Dictate, Send word, Pieces), validPair (a countdown is
+      never valid with ambient capture; word and pieces need ambient
+      capture), originOf, presetOf, the liability-ack text and the timing
+      constants (visible 1 s, grace 1 s, claim TTL 5 s, word age 30 s, short
+      word 1500 ms, adjacency 2 s, piece gap 1500 / cap 8000 ms), and
+      VOICE_MIN_VERIFY_SPEECH_MS (the speaker check's gated-speech floor,
+      shared by the voice app and the kernel's too-short refusal cause).
+    path: src/voice-modes.ts
+    type: module
+    tags: [gnomon, contracts, voice, paradigm-8]
+    tests:
+      - test/voice-modes.test.ts
+  send-word-matcher:
+    description: >-
+      The ONE send-word matcher (TD-2026-10-21-514), shared by the GUI
+      dictation reducer, the voice client (short words by adjacency) and the
+      kernel (claim check and fail-closed backstop): normalizeUtterance,
+      validateSendWord (1-3 words, never an approval or command phrase, warns
+      on very common words), canonicalSendWord (Aegis M-3: drops every
+      variant the variant guard refuses, on every path: trial save, raw CLI,
+      {op:'start', variants}, the send-word.json read-back in the kernel and
+      the voice client), matchSendWord gives exact,
+      variant, near (same word count, Metaphone key within Levenshtein 2;
+      never sent, never appended) or none (a sentence that merely contains
+      the word), isSendWord, acceptableVariant (the variant guard, Aegis H-1:
+      same word count, at least 3 characters, never a SEND_WORD_COMMON word
+      or a variant made only of SEND_WORD_VARIANT_STOP function words and
+      fillers, never an approval or command phrase, and a RELATIVE Metaphone
+      bound of 1 for a key of at most 3 characters, else 2; so "and", "so",
+      "of", "or", "for" are never variants of send / over, while "sand" for
+      send is kept). The attended
+      send-word trial (spec §14.7 trial semantics) is pure here too:
+      startSendWordTrial, classifyTrialTake (correct, variant when it passes
+      the variant guard, unlike, unclear when too long), the ONE take
+      counter recordTrialTake (at most SEND_WORD_TRIAL_MAX_TAKES = 4; stops at
+      ready or exhausted), trialTakeNumber ("Take n of up to 4") and the save
+      rule trialSaveable(state, dropVariants?) (at least one correct take;
+      the human's dropVariants are left out). SEND_WORD_SUGGESTIONS
+      never names the product.
+    path: src/voice-modes.ts
+    type: module
+    tags: [gnomon, contracts, voice, paradigm-8]
+    tests:
+      - test/voice-modes.test.ts

@@ -34,6 +34,7 @@ const HOOKS = [
   { file: 'claude-code-prompt-gate.sh',       exportName: 'CLAUDE_CODE_PROMPT_GATE_HOOK' },
   { file: 'claude-code-team-gate.sh',         exportName: 'CLAUDE_CODE_TEAM_GATE_HOOK' },
   { file: 'claude-code-skill-used.sh',        exportName: 'CLAUDE_CODE_SKILL_USED_HOOK' },
+  { file: 'claude-code-delegation.sh',        exportName: 'CLAUDE_CODE_DELEGATION_HOOK' },
   { file: 'claude-code-session-start.sh',     exportName: 'CLAUDE_CODE_SESSION_START_HOOK' },
   { file: 'paradigm-hook-monitor.sh',         exportName: 'HOOK_MONITOR' },
   { file: 'cursor-session-start.sh',          exportName: 'CURSOR_SESSION_START_HOOK' },
@@ -54,6 +55,7 @@ const PLUGIN_COPIES = [
   { src: 'claude-code-prompt-gate.sh',      dest: 'paradigm-prompt-gate.sh' },
   { src: 'claude-code-team-gate.sh',        dest: 'paradigm-team-gate.sh' },
   { src: 'claude-code-skill-used.sh',       dest: 'paradigm-skill-used.sh' },
+  { src: 'claude-code-delegation.sh',       dest: 'paradigm-delegation.sh' },
   { src: 'claude-code-session-start.sh',    dest: 'paradigm-session-start.sh' },
   { src: 'paradigm-hook-monitor.sh',        dest: 'paradigm-hook-monitor.sh' },
 ];

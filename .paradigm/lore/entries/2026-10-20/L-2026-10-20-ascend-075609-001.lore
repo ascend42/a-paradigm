@@ -1,0 +1,26 @@
+id: L-2026-10-20-ascend-075609-001
+type: milestone
+timestamp: '2026-10-20T07:56:09.460Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'The GUI fixture preview harness ships: a design-fidelity loop with no kernel'
+summary: '2777cf60 (plus 96191003, which fixed the symbols-drift failure from the WIP commits). `node packages/gnomon-gui/scripts/preview.mjs` renders the real GUI over a fake kernel transport, so the real auth and serverSig path runs. The cards are signed with a per-page throwaway key so their buttons render. Six fixtures, each in day and night with motion on or off: desk, empty, voice-armed, voice-crashed, stack-heavy and workshop. Workshop runs the real mod model. preview-shots.mjs --chrome writes all 12 PNGs in about 7 s using headless Chrome, with no new dependency. The preview code is proven absent from the pinned bundle, and the G-WEB-08 hash is unchanged. Baseline shots taken. The desk shows the remaining gaps: a ''Georgia'' title font, no activity folding, hsid names, markdown rendered raw (**bold**), a flat stack, and no Workshop slot.'
+symbols_touched:
+  - '#gui'
+  - '#gui-preview'
+learnings:
+  - A fake transport behind the real client exercises the real auth path and makes visual QA cheap; build it before any UI restyle.
+tags:
+  - gnomon
+  - design
+  - tooling
+  - marathon-2026-10-20
+linked_commits:
+  - 2777cf60
+  - '96191003'
+git_context:
+  ref: 2777cf6017d7e8ef109bea42a7d8d68199e250ac
+  branch: feat/gnomon
+  dirty: true
