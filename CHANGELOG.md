@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.3] — 2026-10-24
+
+**A clean `npm audit` for anyone installing Paradigm.** 8.0.2 listed packages it bundles into its own build (`@a-company/premise-core`, `@a-company/university-core`, `@a-company/portal-core`) as runtime dependencies with `"*"`, so npm installed old published copies that nothing loads, and those pulled zod 3 back into every user's audit. Gnomon is unchanged at 8.0.2.
+
+### Fixed
+- **Bundled packages are no longer runtime dependencies** (`#paradigm-cli`). They move to `devDependencies`. The only `@a-company` runtime dependencies left are `@a-company/gnomon` (the `gnomon` command) and `@a-company/warpline`, which is loaded from `node_modules` at runtime.
+- **No `"*"` ranges on the runtime chain.** paradigm now needs `@a-company/warpline ^0.2.2`, warpline needs `@a-company/premise-core ^3.12.0`, and premise-core needs `@a-company/purpose-core ^3.7.0` and `@a-company/portal-core ^3.5.0`, all on zod 4. A stale published version can no longer satisfy them. `tests/runtime-deps.test.ts` fails if a bundled package returns as a runtime dependency or a `"*"` range comes back.
+
 ## [8.0.2] — 2026-10-24
 
 **Gnomon 8.0 for testers, with loops switched off for this round.** 8.0.1 is skipped too: it reached only the Claude Code plugin, as a partial build for a few hours on 2026-10-24, and was never published to npm. 8.0.2 is the first npm release of 8.0, and its new version makes every plugin install refresh. 8.0.0 is skipped: `@a-company/paradigm@8.0.0` was published from the wrong checkout on 2026-10-22 and unpublished, and npm never reuses a version, so the real 8.0 ships as 8.0.2. Everything in the 8.0.0 notes below applies to 8.0.2. The 8.0.0 entry stays in this file as the feature list.

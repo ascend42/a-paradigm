@@ -24,8 +24,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@a-company/purpose-core": "*",
-    "@a-company/portal-core": "*",
+    "@a-company/purpose-core": "^3.7.0",
+    "@a-company/portal-core": "^3.5.0",
     "js-yaml": "^4.1.0",
     "zod": "^4.6.7"
   },
