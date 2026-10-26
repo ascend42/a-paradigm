@@ -54,8 +54,16 @@ async function chrome(): Promise<Cdp> {
       /* a lingering Chrome helper: the OS tmp reaper takes it */
     }
   });
-  const p: ChildProcess = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
-  cleanups.push(() => new Promise<void>((r) => (p.exitCode !== null ? r() : (p.once('exit', () => r()), p.kill('SIGKILL')))));
+  // --disable-features=MacAppCodeSignClone and a graceful Browser.close: macOS Chrome copies its ~1 GB app bundle into
+  // /var/folders/…/X/com.google.Chrome.code_sign_clone at launch and removes it only on a clean exit; the old SIGKILL
+  // cleanup leaked one copy per run until reboot (crbug.com/379125944; 99 GB on the founder's Mac, 2026-10-26).
+  const p: ChildProcess = spawn(CHROME, ['--headless=new', '--disable-features=MacAppCodeSignClone', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  // Runs after the CDP cleanup below (cleanups are LIFO), which asks Chrome to close: wait for it, SIGKILL only as a last resort.
+  cleanups.push(() => new Promise<void>((r) => {
+    if (p.exitCode !== null || p.signalCode !== null) return r();
+    const t = setTimeout(() => p.kill('SIGKILL'), 5000);
+    p.once('exit', () => (clearTimeout(t), r()));
+  }));
   const wsUrl = await new Promise<string>((resolve, reject) => {
     let err = '';
     const t = setTimeout(() => reject(new Error(`chrome gave no DevTools URL in at most 20 s: ${err}`)), 20_000);
@@ -71,7 +79,14 @@ async function chrome(): Promise<Cdp> {
   });
   const ws = new WebSocket(wsUrl);
   await new Promise<void>((r, j) => ((ws.onopen = () => r()), (ws.onerror = () => j(new Error('CDP connect failed')))));
-  cleanups.push(() => ws.close());
+  cleanups.push(() => {
+    try {
+      ws.send(JSON.stringify({ id: 0, method: 'Browser.close' }));
+    } catch {
+      /* already gone: the process cleanup still bounds the wait */
+    }
+    ws.close();
+  });
   let id = 0;
   const pending = new Map<number, (m: Record<string, unknown>) => void>();
   ws.onmessage = (e) => {

@@ -70,7 +70,8 @@ async function shootWithChrome(bin, jobs) {
   for (const j of jobs) {
     const profile = mkdtempSync(path.join(os.tmpdir(), 'gnomon-preview-'));
     try {
-      const code = await runChrome(bin, ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`, `--window-size=${W},${H}`, '--hide-scrollbars', '--virtual-time-budget=10000', `--screenshot=${j.file}`, j.url]);
+      // MacAppCodeSignClone off: Chrome's per-launch ~1 GB app-bundle copy leaks when a run is killed (crbug.com/379125944)
+      const code = await runChrome(bin, ['--headless=new', '--disable-features=MacAppCodeSignClone', '--disable-gpu', `--user-data-dir=${profile}`, `--window-size=${W},${H}`, '--hide-scrollbars', '--virtual-time-budget=10000', `--screenshot=${j.file}`, j.url]);
       process.stdout.write(code === 0 && existsSync(j.file) ? `✓ ${path.basename(j.file)}\n` : `✕ ${path.basename(j.file)} (chrome exit ${code})\n`);
     } finally {
       rmSync(profile, { recursive: true, force: true });
