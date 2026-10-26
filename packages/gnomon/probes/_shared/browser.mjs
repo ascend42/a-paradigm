@@ -164,8 +164,11 @@ function newestCached(prefix) {
   return hits.length ? path.join(cache, hits[0]) : null;
 }
 
+// --disable-features=MacAppCodeSignClone: on macOS, Chrome copies its whole app bundle (~1 GB) into
+// /var/folders/…/X/com.google.Chrome.code_sign_clone at every launch and deletes it only on a graceful exit, so each
+// killed automation run leaks a copy until reboot (crbug.com/379125944; 99 GB on the founder's Mac, 2026-10-26).
 function chromeArgs(profile, url) {
-  return ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync',
+  return ['--headless=new', '--disable-features=MacAppCodeSignClone', '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync',
     '--disable-background-networking', '--disable-component-update', `--user-data-dir=${profile}`, url];
 }
 
