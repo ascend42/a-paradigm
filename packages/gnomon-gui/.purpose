@@ -810,6 +810,7 @@ components:
       the page cannot otherwise see a reply start).
     tags: [voice, gui]
     signals: []
+    oracles: [G-GUI-16]
   gui-dictation:
     description: >-
       UNVERIFIED VOICE (Dictate, the G-VOX-06 exception, founder bug
@@ -1432,6 +1433,7 @@ components:
       - test/voice-ladder.test.ts
       - test/voice.test.ts
       - test/copy-vocabulary.test.ts
+    oracles: [G-GUI-14]
   gui-voice-settings:
     description: >-
       2026-10-23 (founder request): an input row first (the mic in use:
@@ -1473,6 +1475,7 @@ components:
     tests:
       - test/voice-ladder.test.ts
       - test/voice-client.test.ts
+    oracles: [G-GUI-15]
   gui-chip:
     description: >-
       #gui-chip (board gnomon-chip, design-system rule chip-is-not-a-key,
