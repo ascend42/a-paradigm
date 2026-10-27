@@ -5,6 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The Claude Code plugin's MCP server starts in repos that require pnpm** (`#paradigm-plugin`). The plugin launched `npx --package=@a-company/paradigm paradigm-mcp` from the project folder, and npm 11 applies the project's `devEngines` to `npx`. A repo with `devEngines.packageManager` set to pnpm and `onFail: "error"` made npx exit with `EBADDEVENGINES`, so the plugin server showed as `CONNECTION_CLOSED`. `plugins/paradigm/.mcp.json` now passes `--prefix=${CLAUDE_PLUGIN_ROOT}`, so npx checks the plugin folder (which has no `package.json`) instead of the project. The server still takes the project from its argument, so nothing else changes. Because the launch line changed, Gnomon asks once to approve the plugin server again. The Cursor plugin keeps its old launch line until Cursor's expansion of `${userHome}` in plugin configs is confirmed: an unexpanded variable makes npm fail with `ENOENT`.
+
 ## [8.0.3] — 2026-10-24
 
 **A clean `npm audit` for anyone installing Paradigm.** 8.0.2 listed packages it bundles into its own build (`@a-company/premise-core`, `@a-company/university-core`, `@a-company/portal-core`) as runtime dependencies with `"*"`, so npm installed old published copies that nothing loads, and those pulled zod 3 back into every user's audit. Gnomon is unchanged at 8.0.2.

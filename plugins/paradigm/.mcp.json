@@ -4,6 +4,7 @@
       "type": "stdio",
       "command": "npx",
       "args": [
+        "--prefix=${CLAUDE_PLUGIN_ROOT}",
         "--package=@a-company/paradigm",
         "-y",
         "paradigm-mcp",

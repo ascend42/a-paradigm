@@ -4,6 +4,7 @@ name: paradigm
 description: "TODO: describe what this directory/module does"
 context:
   - "Stub created by Cid during coverage audit — update with real context"
+  - ".mcp.json launches paradigm-mcp via npx with --prefix=${CLAUDE_PLUGIN_ROOT}: npm 11 applies the project's devEngines to npx, so running from the project folder fails in repos that require pnpm"
 # Key files touched:
 # - README.md
 components:
