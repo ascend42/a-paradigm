@@ -578,6 +578,8 @@ export type GitVerbPhase = (typeof GIT_VERB_PHASES)[number];
  *   timeout             git or gh ran past the kernel's limit
  *   worktree-exists     worktree add: a worktree (or anything) of that name, or that branch, already exists
  *   no-worktree         worktree remove: no kernel worktree of that name
+ *   cancelled           8.0:local-lane: a local session's brokered call was aborted, passed its deadline, or its session
+ *                       ended (before the card, while it was open, or after the decision; nothing ran)
  *   busy                the session already has the most verb calls in flight (Aegis L5)
  *   unguarded           worktree verbs: this session's profile has no kernel-worktree denies (win32/linux)
  *   secret-in-push      push: the kernel's secret scan hit in the pushed commits and the human denied the card
@@ -608,6 +610,7 @@ export const GIT_VERB_REASONS = [
   'busy',
   'unguarded',
   'secret-in-push',
+  'cancelled',
 ] as const;
 export type GitVerbReason = (typeof GIT_VERB_REASONS)[number];
 /** git.verb{host}: a lowercase DNS name (LDH labels; punycode stays visible as xn--), at most 253 characters. */
@@ -625,11 +628,15 @@ export type ToolBrokerClass = (typeof TOOL_BROKER_CLASSES)[number];
  *   bad-args            the args failed the full schema (unknown key, type, size, a control or bidi character)
  *   loop-session        a loop session never runs a brokered tool
  *   no-approval-surface no broker could take the card
- *   cancelled           the call was aborted or timed out before the target ran
+ *   cancelled           the call was aborted (abort, tool_cancel, the session's stop) before the target ran
+ *   expired             the call's kernel deadline passed (a pending card expired) before the target ran
+ *   allowed-cancelled   the card was ALLOWED but the call was cancelled or expired before the target ran
+ *   cooldown            the same args were denied moments ago (a deny cool-down)
+ *   suspended           this session's brokered calls are suspended after repeated denies
  *   busy                the session already has MAX_BROKERED_IN_FLIGHT calls in flight
  *   not-running         the session is not running
  */
-export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'busy', 'not-running'] as const;
+export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'expired', 'allowed-cancelled', 'cooldown', 'suspended', 'busy', 'not-running'] as const;
 export type ToolBrokeredDecision = (typeof TOOL_BROKERED_DECISIONS)[number];
 /** tool.brokered{server}: the MCP server name the call went to (`gnomon` = the kernel's own SDK server). */
 export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
