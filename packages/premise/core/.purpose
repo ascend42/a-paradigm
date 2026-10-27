@@ -63,6 +63,13 @@ components:
       - src/symbol-index.ts
       - src/integrity.ts
     tags: [symbol-index, integrity]
+  spill:
+    description: "#spill: src/spill.ts. Generic spill-and-handle large-output primitive — spillLargeOutput() writes over-threshold payloads to a spill dir and returns a bounded preview + handle; retrieveSpilled() rehydrates losslessly. Shared by paradigm-mcp (paradigm_retrieve) and warpline (admit changed-set). Moved here from a Cid stub at src/.purpose (T-2026-10-27-003)."
+    type: component
+    path: src/spill.ts
+    tags: [spill, primitive]
+    tests:
+      - src/spill.test.ts
   live-index:
     description: >-
       #live-index: src/live-index.ts (7.13.0) — incremental in-process cache of

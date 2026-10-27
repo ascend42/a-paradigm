@@ -1,15 +1,35 @@
-name: paradigm
+version: 2.0.0
 description: "The Paradigm Claude Code plugin: hooks (enforcement), skills, agent definitions and the plugin's MCP server launch. Hook scripts are generated from packages/paradigm/src/commands/hooks/scripts by scripts/generate-hooks.mjs; edit the canonical copies, not these."
 context:
   - ".claude-plugin/plugin.json version must equal @a-company/paradigm's (tests/plugin-version.test.ts): Claude Code caches installs by version"
   - "scripts/ is generated except paradigm-mcp-launch.cjs and migrate-to-plugin.sh (paradigm-resolve.sh, the hooks' CLI lookup, is generated like the other hook scripts)"
-# Key files touched:
-# - .mcp.json
-# - scripts/paradigm-mcp-launch.cjs
 components:
-  paradigm:
-    description: "The Claude Code plugin bundle (hooks/hooks.json, skills/, agents/, scripts/) installed from the a-paradigm marketplace"
-    tags: [plugin, claude-code]
+  claude-code-plugin:
+    description: >-
+      The Claude Code plugin bundle installed from the a-paradigm marketplace.
+      .claude-plugin/plugin.json is the manifest (name, version kept equal to
+      @a-company/paradigm's, keywords). hooks/hooks.json maps Claude Code hook
+      events to the scripts. scripts/*.sh are the hook scripts
+      (scripts/paradigm-common.sh, scripts/paradigm-resolve.sh,
+      scripts/paradigm-stop.sh and the rest), COPIES generated from
+      packages/paradigm/src/commands/hooks/scripts by
+      packages/paradigm/scripts/generate-hooks.mjs; edit the sources there and
+      run `node scripts/generate-hooks.mjs` (`--check` must be clean).
+      scripts/migrate-to-plugin.sh moves a pre-plugin install onto the plugin;
+      scripts/paradigm-mcp-launch.cjs is #paradigm-mcp-launch. .mcp.json starts
+      the MCP server, agents/*.md are the bundled subagent definitions and
+      skills/ the bundled skills. README.md is the user-facing install guide.
+    type: config
+    files:
+      - .claude-plugin/plugin.json
+      - hooks/hooks.json
+      - .mcp.json
+      - scripts/paradigm-common.sh
+      - scripts/migrate-to-plugin.sh
+    components:
+      - '#paradigm-hooks'
+      - '#paradigm-mcp-launch'
+    tags: [plugin, claude-code, hooks]
   paradigm-mcp-launch:
     description: |
       Starts the plugin's MCP server (.mcp.json runs `node scripts/paradigm-mcp-launch.cjs <project>`).
