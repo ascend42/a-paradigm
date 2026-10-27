@@ -36,7 +36,7 @@ describe('mod-abi:v1 (§12.3)', () => {
     expect(MOD_ABI_ID).toBe(PINNED_MOD_ABI_ID);
     const ids = JSON.parse(readFileSync(fileURLToPath(new URL('../schemas/client-api.ids.json', import.meta.url)), 'utf8'));
     expect(CLIENT_API_ID).toBe(ids.clientApiId);
-    expect(CLIENT_API_ID).toBe('sha256:c47ec0166d489630dc245926649fe966dd15add980d07db61bbdc64f73e18c55');
+    expect(CLIENT_API_ID).toBe('sha256:04cbb3581136ee3409f404d42648284fd392bdf8302131b39edd07fd414941ff');
   });
 
   it('A24-2: a mod-RPC change moves only modAbiId; a kit change moves both', () => {

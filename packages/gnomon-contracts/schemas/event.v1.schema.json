@@ -216,12 +216,14 @@
     "session.alias.rejected",
     "session.anomaly",
     "session.compacted",
+    "session.context",
     "session.context.threshold",
     "session.drained",
     "session.exited",
     "session.idle",
     "session.inject",
     "session.layers.changed",
+    "session.memory",
     "session.model",
     "session.open",
     "session.orphaned",
@@ -391,8 +393,10 @@
     "request.voice.arm": "M1.1:P8-D58",
     "request.voice.narrow": "M1.1:P8-D58",
     "session.anomaly": "8.0:T-2026-10-21-008",
+    "session.context": "8.0:local-lane",
     "session.context.threshold": "8.0:TD-2026-10-20-812",
     "session.drained": "8.0:P8-D98",
+    "session.memory": "8.0:local-lane",
     "session.model": "8.0:model-switch",
     "session.renamed": "8.0:session-rename",
     "tool.brokered": "8.0:local-lane",
@@ -941,6 +945,25 @@
       "bytes",
       "isError",
       "cardId"
+    ],
+    "session.memory": [
+      "hsid",
+      "op",
+      "id",
+      "source",
+      "kind",
+      "textHash",
+      "bytes",
+      "why"
+    ],
+    "session.context": [
+      "hsid",
+      "target",
+      "previous",
+      "requested",
+      "configTarget",
+      "nCtx",
+      "aboveConfig"
     ]
   },
   "x-gnomon-compaction-reasons": [

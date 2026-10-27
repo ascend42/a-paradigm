@@ -15,7 +15,7 @@ import { KIND_DECISIONS } from '../src/kernel/broker/classes.js';
 // 8.0:loops: loop-trust is never by voice, deny included (gnomon-loops.md §3.1, §7)
 const FULLY_HAND_ONLY: readonly string[] = ['incident', 'daemon-stop', 'loop-trust'];
 const GOLDEN_ABI_ID = 'sha256:f54aa03625d414234bce961059fb6584a9acc31ea8b97b3dc28b9afa0db26a35';
-const GOLDEN_CLIENT_API_ID = 'sha256:c47ec0166d489630dc245926649fe966dd15add980d07db61bbdc64f73e18c55';
+const GOLDEN_CLIENT_API_ID = 'sha256:04cbb3581136ee3409f404d42648284fd392bdf8302131b39edd07fd414941ff';
 
 describe('voice golden: abiId and clientApiId are unchanged by every voice slice', () => {
   it('ABI_ID and CLIENT_API_ID equal the pre-voice literals', () => {

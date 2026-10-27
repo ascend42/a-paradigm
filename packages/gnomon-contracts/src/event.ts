@@ -284,6 +284,11 @@ const TABLE: Row[] = [
   // decision, bytes, isError, cardId?} — one brokered tool call of a local session (the child's tool_request, answered
   // by the kernel): HASH-ONLY (the args are a digest, the result a byte count; never args, output, paths or model text).
   ['tool', 'kernel', 'brokered', LOCAL_LANE],
+  // 8.0:local-lane (TD-2026-10-27-833 slice B2, #local-working-memory): session.memory{hsid, op, id?, source?, kind?,
+  // textHash?, bytes, why?} — one change to a local session's kernel-owned working memory: HASH-ONLY (never the text).
+  // session.context{hsid, target, previous, requested, configTarget, nCtx, aboveConfig} — the human changed a local
+  // session's context target; aboveConfig labels a raise past the signed config (notify-and-proceed, founder Q4).
+  ['session', 'kernel', 'memory context', LOCAL_LANE],
 ];
 
 /** Per-kind sensitivity overrides from §9.1's last column. */
@@ -300,6 +305,8 @@ const SENSITIVE_KINDS: Record<string, Sensitivity> = {
   'git.verb': 'sensitive',
   // 8.0:local-lane: the args digest is of model-written text
   'tool.brokered': 'sensitive',
+  // 8.0:local-lane (B2): the text digest is of human or model text
+  'session.memory': 'sensitive',
 };
 
 /** Field-level labels stricter than the event's (§9.1 / §9.3 redaction matrix). */
@@ -532,6 +539,9 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'git.verb': Object.freeze(['hsid', 'verb', 'phase', 'inputHash', 'why', 'cardId', 'host', 'exitCode']),
   // 8.0:local-lane: closed and hash-only (tool and class absent when the name resolved to no offered tool)
   'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId']),
+  // 8.0:local-lane (B2): closed and hash-only; delete carries no entry fields, refused carries why
+  'session.memory': Object.freeze(['hsid', 'op', 'id', 'source', 'kind', 'textHash', 'bytes', 'why']),
+  'session.context': Object.freeze(['hsid', 'target', 'previous', 'requested', 'configTarget', 'nCtx', 'aboveConfig']),
 });
 
 /** Keys of a KIND_PAYLOADS entry that may be absent (every other key is required). */
@@ -541,6 +551,7 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
   'git.verb': Object.freeze(['why', 'cardId', 'host', 'exitCode']),
   'tool.brokered': Object.freeze(['tool', 'class', 'cardId']),
+  'session.memory': Object.freeze(['id', 'source', 'kind', 'textHash', 'why']),
   // 8.0:rules-view: cause 'human' carries batch, connId and cardId; cause 'expired' carries until (validateKindPayload)
   'approval.rule.enabled': Object.freeze(['batch', 'connId', 'cardId', 'until']),
 });
@@ -643,6 +654,36 @@ export type ToolBrokeredDecision = (typeof TOOL_BROKERED_DECISIONS)[number];
 export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** tool.brokered{tool}: an offered tool name (kernel-chosen, never model text). */
 export const TOOL_BROKER_TOOL_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+
+/**
+ * session.memory{op} (CLOSED, 8.0:local-lane slice B2): what changed in a local session's working memory.
+ *   add      a new entry (a model note, a file the session edited, the goal of a first prompt)
+ *   replace  a kernel entry replaced in place (the goal of a new prompt, the latest failing tool)
+ *   forget   the model forgot one of its own notes
+ *   evict    the oldest model note left to make room (human and kernel entries are never evicted)
+ *   refused  an entry was refused (why)
+ *   delete   the human deleted the session's whole memory (no entry fields)
+ */
+export const SESSION_MEMORY_OPS = ['add', 'replace', 'forget', 'evict', 'refused', 'delete'] as const;
+export type SessionMemoryOp = (typeof SESSION_MEMORY_OPS)[number];
+/** session.memory{kind} (CLOSED): the entry's kind. */
+export const SESSION_MEMORY_KINDS = ['goal', 'fact', 'note', 'file-ref', 'tool-pin'] as const;
+export type SessionMemoryKind = (typeof SESSION_MEMORY_KINDS)[number];
+/**
+ * session.memory{why} (CLOSED, op refused only):
+ *   full        the memory holds its cap of entries and none may be evicted
+ *   too-long    the text is over the entry's cap
+ *   empty       the text is empty
+ *   not-found   forget named an id that is not in memory
+ *   not-a-note  forget named an entry the model did not write
+ *   off         this session has no working memory (a loop session)
+ */
+export const SESSION_MEMORY_REFUSALS = ['full', 'too-long', 'empty', 'not-found', 'not-a-note', 'off'] as const;
+export type SessionMemoryRefusal = (typeof SESSION_MEMORY_REFUSALS)[number];
+/** session.memory{source}: who wrote the entry — the human, the kernel, the model, or a tool behind a named MCP server. */
+export const SESSION_MEMORY_SOURCE_PATTERN = /^(?:human|kernel|model|tool:[a-z0-9][a-z0-9_-]{0,63})$/;
+/** session.memory{id}: a working-memory entry id (kernel-minted, never reused in a session). */
+export const SESSION_MEMORY_ID_PATTERN = /^wm-[1-9]\d{0,8}$/;
 
 /**
  * turn.result{turn} (review M2, a deliberate clientApiId move): the id of the LATEST turn the result closes. The
@@ -985,6 +1026,28 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
       if (('tool' in v) !== ('class' in v)) c.fail('class', 'is present exactly when the tool resolved');
       break;
+    case 'session.memory': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('op' in v) c.closedEnum('op', v.op, SESSION_MEMORY_OPS);
+      if ('id' in v) c.str('id', v.id, SESSION_MEMORY_ID_PATTERN, 'wm-<n>');
+      if ('source' in v) c.str('source', v.source, SESSION_MEMORY_SOURCE_PATTERN, 'human | kernel | model | tool:<server>');
+      if ('kind' in v) c.closedEnum('kind', v.kind, SESSION_MEMORY_KINDS);
+      if ('textHash' in v) c.str('textHash', v.textHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('bytes' in v && (typeof v.bytes !== 'number' || !Number.isSafeInteger(v.bytes) || v.bytes < 0)) c.fail('bytes', 'must be a non-negative integer');
+      if ('why' in v) c.closedEnum('why', v.why, SESSION_MEMORY_REFUSALS);
+      if (('why' in v) !== (v.op === 'refused')) c.fail('why', 'is present exactly when op is refused');
+      if (v.op === 'delete' && ('id' in v || 'source' in v || 'kind' in v || 'textHash' in v)) c.fail('op', 'delete carries no entry fields');
+      if (v.op !== 'delete' && v.op !== 'refused' && !('id' in v && 'source' in v && 'kind' in v && 'textHash' in v)) c.fail('id', 'an entry change carries id, source, kind and textHash');
+      break;
+    }
+    case 'session.context': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      for (const k of ['target', 'previous', 'requested', 'configTarget'] as const) if (k in v) c.int(k, v[k], 1);
+      if ('nCtx' in v && v.nCtx !== null && (typeof v.nCtx !== 'number' || !Number.isSafeInteger(v.nCtx) || v.nCtx < 1)) c.fail('nCtx', 'must be a positive integer or null (unknown)');
+      if ('aboveConfig' in v && typeof v.aboveConfig !== 'boolean') c.fail('aboveConfig', 'must be a boolean');
+      if (typeof v.target === 'number' && typeof v.configTarget === 'number' && typeof v.aboveConfig === 'boolean' && v.aboveConfig !== v.target > v.configTarget) c.fail('aboveConfig', 'is true exactly when target is above configTarget');
+      break;
+    }
     case 'git.verb':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('verb' in v) c.closedEnum('verb', v.verb, GIT_VERBS);
