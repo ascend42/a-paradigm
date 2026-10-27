@@ -73,6 +73,65 @@ components:
     tags:
       - hooks
       - observability
+  hook-syntax-validation:
+    description: |
+      validateBashSyntax (index.ts) runs `bash -n` on every hook before `paradigm hooks install` writes them; only
+      a real syntax report (syntax error / unexpected EOF or token) blocks. No usable bash (Windows without Git
+      Bash on PATH, or the WSL stub bash.exe with no distro) counts as "can't validate", so install still works
+      there. Shipped .sh hooks, plugin .cjs scripts and generated-hooks.ts are pinned to LF in .gitattributes
+      (a CRLF checkout breaks bash and generate-hooks --check); the Windows workflow asserts it.
+    type: utility
+    file: index.ts
+    tags:
+      - hooks
+      - windows
+  git-hook-state:
+    description: |
+      git-hook-state.ts: classes .git/hooks/post-commit and pre-push as absent,
+      foreign (no "# Paradigm <name> hook" + "# Installed by: paradigm hooks
+      install" header: never touched), outdated (paradigm-hook-version below
+      GIT_HOOK_VERSION = 3, no marker = v1, or still running `npx paradigm`) or
+      current. `paradigm hooks install` upgrades an outdated Paradigm hook
+      without --force, keeping the old file as <name>.paradigm-v<N>.bak so
+      local edits survive; a current one is left alone; `hooks status` and
+      `paradigm doctor` report outdated ones. Free of chalk/generated-hooks so
+      doctor loads it cheaply. Bump GIT_HOOK_VERSION with the hook bodies'
+      marker in index.ts.
+    type: utility
+    file: git-hook-state.ts
+    tags:
+      - hooks
+      - git
+  paradigm-resolve:
+    description: |
+      Sourced POSIX-sh helper (scripts/paradigm-resolve.sh, copied to both
+      plugins and written by `paradigm hooks install` beside paradigm-common.sh;
+      the git post-commit / pre-push hooks embed it, hook version 3) that is the
+      one place the hooks find the paradigm CLI. Used by paradigm-common.sh
+      (Stop hooks, project root = the caller's $CWD), both pre-commit hooks
+      (project root = CLAUDE_PROJECT_DIR / Cursor input cwd, then the git
+      toplevel, then pwd; the hook cd's there before indexing) and the git hooks
+      (git toplevel). `_pm_resolve_paradigm <root>` normalises the root with
+      `CDPATH= cd -P -- root && pwd -P` and sets PARADIGM_BIN to a single
+      command word: (1) the project's own @a-company/paradigm: node runs the
+      `paradigm` bin entry read from
+      <root>/node_modules/@a-company/paradigm/package.json (never whatever
+      another package put at node_modules/.bin/paradigm), the root only (never
+      a parent or the subdirectory the hook ran from), never a copy committed to
+      git (`git ls-files` non-empty), and not when the root has a .git that git
+      fails on (dubious ownership, no git): it cannot be checked; quiet outside
+      a repo. No npx, because npm 11 applies the project's devEngines to npx
+      and a pnpm-only repo fails EBADDEVENGINES; (2) `paradigm` on PATH. No npx
+      step (Aegis P1). The plugin's MCP launcher (#paradigm-mcp-launch) uses the
+      same order. Aegis L3 is narrowed, not dropped: only @a-company/paradigm
+      at the project root runs (the trust of the workspace itself);
+      paradigm-skill-used.sh stays PATH-only (no project root).
+    type: utility
+    file: scripts/paradigm-resolve.sh
+    components:
+      - '#paradigm-mcp-launch'
+    tags:
+      - hooks
   stop-hook-timing:
     description: |
       7.15.2 timing contract for every plugin hook. Claude Code waits for EOF on
@@ -81,7 +140,8 @@ components:
       (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
       --exclude-standard` (nested agent worktrees and node_modules are skipped)
       and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
-      Check 4 anchors); (3) no network (npx --no-install); (4) generated-state
+      Check 4 anchors); (3) no network: the CLI resolves through
+      scripts/paradigm-resolve.sh (#paradigm-resolve), never a fetch; (4) generated-state
       scope (8.0): when every modified file is .paradigm/* or .warpline/*,
       at the root or nested in a package (packages/x/.paradigm/events; the
       hooks, post-commit and MCP tools write these on every turn) no code
@@ -192,6 +252,12 @@ components:
       since .paradigm/.memory-last-review > 30, or never-reviewed + entries > 15)
       — NO LLM, NO scan, NO content reads. Appends at most one line to ADVISORY;
       NEVER touches VIOLATIONS. Fail-open on missing HOME/dir/stat: emits nothing.
+      <slug> is Claude Code's project key: every character of $CWD other than
+      A-Z a-z 0-9 becomes '-' (Windows C:\Users\me\repo -> C--Users-me-repo;
+      under Git Bash a /c/... $CWD is first converted with cygpath -w). Before
+      PR #63 only '/' was replaced, so Windows paths (and POSIX paths with '.',
+      '_' or spaces) never found the memory dir. Same rule as nativeMemorySlug
+      in paradigm-mcp learning-stores.ts.
     type: utility
     file: scripts/paradigm-common.sh
     tags:

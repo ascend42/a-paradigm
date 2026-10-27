@@ -79,16 +79,24 @@ _pm_mark cli-resolve
 # --- Resolve the paradigm CLI once (fail-closed on absence) ---
 # Every compliance check below runs through $PARADIGM_BIN. If NO real paradigm
 # CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
-# loudly. The npx branch uses `--no-install` so npx never auto-installs the
-# unrelated public 'paradigm' registry package as a false positive.
+# loudly. paradigm-resolve.sh (shared with the pre-commit hooks) owns the order:
+# the project root's own @a-company/paradigm (never one committed to git), then
+# `paradigm` on PATH; no npx. The project root is $CWD (the caller contract
+# above), not $PWD.
+# Beside this file: bash knows where it was sourced from; the stop hooks also set
+# SCRIPT_DIR before sourcing.
+if [ -n "${BASH_SOURCE:-}" ]; then
+  _PM_LIB_DIR=$(dirname "$BASH_SOURCE")
+else
+  _PM_LIB_DIR="${SCRIPT_DIR:-$(dirname "$0")}"
+fi
 PARADIGM_BIN=""
 PARADIGM_AVAILABLE=false
-if command -v paradigm >/dev/null 2>&1; then
-  PARADIGM_BIN="paradigm"
-  PARADIGM_AVAILABLE=true
-elif command -v npx >/dev/null 2>&1 && npx --no-install paradigm --version >/dev/null 2>&1; then
-  PARADIGM_BIN="npx --no-install paradigm"
-  PARADIGM_AVAILABLE=true
+if [ -f "$_PM_LIB_DIR/paradigm-resolve.sh" ]; then
+  . "$_PM_LIB_DIR/paradigm-resolve.sh"
+  _pm_resolve_paradigm "${CWD:-$PWD}" && PARADIGM_AVAILABLE=true
+else
+  printf '%s\n' "[paradigm] WARNING: $_PM_LIB_DIR/paradigm-resolve.sh is missing; reinstall the hooks (paradigm hooks install)." >&2
 fi
 
 if [ "$PARADIGM_AVAILABLE" != "true" ]; then
@@ -1173,7 +1181,11 @@ _pm_mark check15-memory
 #
 # Native memory lives OUTSIDE the repo at:
 #   $HOME/.claude/projects/<slug>/memory/
-# where <slug> = the absolute repo path ($CWD) with every '/' replaced by '-'.
+# where <slug> is Claude Code's project key: the absolute repo path ($CWD) with
+# every character other than A-Z a-z 0-9 replaced by '-' (so '/', '.', '_',
+# spaces, and on Windows ':' and '\': C:\Users\me\repo -> C--Users-me-repo).
+# Under Git Bash / MSYS a POSIX-form $CWD (/c/Users/...) is first turned back
+# into the Windows path Claude Code keys on ($OSTYPE, no fork elsewhere).
 #
 # Tunable thresholds (edit these four vars to retune the nudge cadence):
 _MEM_MAX_ENTRIES=25    # nudge if memory/*.md count (excl. MEMORY.md) exceeds this
@@ -1181,7 +1193,11 @@ _MEM_MAX_BYTES=32768   # nudge if MEMORY.md byte size exceeds this (32 KiB)
 _MEM_MAX_DAYS=30       # nudge if days-since-review exceeds this
 _MEM_NEVER_ENTRIES=15  # if never reviewed, nudge once entry count exceeds this
 if [ -n "$HOME" ] && [ -n "$CWD" ]; then
-  _mem_slug=$(printf %s "$CWD" | sed 's:/:-:g' 2>/dev/null)
+  _mem_cwd=$CWD
+  case "${OSTYPE:-}" in
+    msys*|cygwin*) _mem_cwd=$(cygpath -w "$CWD" 2>/dev/null || printf %s "$CWD") ;;
+  esac
+  _mem_slug=$(printf %s "$_mem_cwd" | sed 's/[^A-Za-z0-9]/-/g' 2>/dev/null)
   _MEM_DIR="$HOME/.claude/projects/$_mem_slug/memory"
   if [ -n "$_mem_slug" ] && [ -d "$_MEM_DIR" ]; then
     # Entry count: memory/*.md excluding MEMORY.md (metadata only, O(entries)).

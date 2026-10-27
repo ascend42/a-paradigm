@@ -85,16 +85,24 @@ _pm_mark cli-resolve
 # --- Resolve the paradigm CLI once (fail-closed on absence) ---
 # Every compliance check below runs through $PARADIGM_BIN. If NO real paradigm
 # CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
-# loudly. The npx branch uses \`--no-install\` so npx never auto-installs the
-# unrelated public 'paradigm' registry package as a false positive.
+# loudly. paradigm-resolve.sh (shared with the pre-commit hooks) owns the order:
+# the project root's own @a-company/paradigm (never one committed to git), then
+# \`paradigm\` on PATH; no npx. The project root is $CWD (the caller contract
+# above), not $PWD.
+# Beside this file: bash knows where it was sourced from; the stop hooks also set
+# SCRIPT_DIR before sourcing.
+if [ -n "\${BASH_SOURCE:-}" ]; then
+  _PM_LIB_DIR=$(dirname "$BASH_SOURCE")
+else
+  _PM_LIB_DIR="\${SCRIPT_DIR:-$(dirname "$0")}"
+fi
 PARADIGM_BIN=""
 PARADIGM_AVAILABLE=false
-if command -v paradigm >/dev/null 2>&1; then
-  PARADIGM_BIN="paradigm"
-  PARADIGM_AVAILABLE=true
-elif command -v npx >/dev/null 2>&1 && npx --no-install paradigm --version >/dev/null 2>&1; then
-  PARADIGM_BIN="npx --no-install paradigm"
-  PARADIGM_AVAILABLE=true
+if [ -f "$_PM_LIB_DIR/paradigm-resolve.sh" ]; then
+  . "$_PM_LIB_DIR/paradigm-resolve.sh"
+  _pm_resolve_paradigm "\${CWD:-$PWD}" && PARADIGM_AVAILABLE=true
+else
+  printf '%s\\n' "[paradigm] WARNING: $_PM_LIB_DIR/paradigm-resolve.sh is missing; reinstall the hooks (paradigm hooks install)." >&2
 fi
 
 if [ "$PARADIGM_AVAILABLE" != "true" ]; then
@@ -1179,7 +1187,11 @@ _pm_mark check15-memory
 #
 # Native memory lives OUTSIDE the repo at:
 #   $HOME/.claude/projects/<slug>/memory/
-# where <slug> = the absolute repo path ($CWD) with every '/' replaced by '-'.
+# where <slug> is Claude Code's project key: the absolute repo path ($CWD) with
+# every character other than A-Z a-z 0-9 replaced by '-' (so '/', '.', '_',
+# spaces, and on Windows ':' and '\\': C:\\Users\\me\\repo -> C--Users-me-repo).
+# Under Git Bash / MSYS a POSIX-form $CWD (/c/Users/...) is first turned back
+# into the Windows path Claude Code keys on ($OSTYPE, no fork elsewhere).
 #
 # Tunable thresholds (edit these four vars to retune the nudge cadence):
 _MEM_MAX_ENTRIES=25    # nudge if memory/*.md count (excl. MEMORY.md) exceeds this
@@ -1187,7 +1199,11 @@ _MEM_MAX_BYTES=32768   # nudge if MEMORY.md byte size exceeds this (32 KiB)
 _MEM_MAX_DAYS=30       # nudge if days-since-review exceeds this
 _MEM_NEVER_ENTRIES=15  # if never reviewed, nudge once entry count exceeds this
 if [ -n "$HOME" ] && [ -n "$CWD" ]; then
-  _mem_slug=$(printf %s "$CWD" | sed 's:/:-:g' 2>/dev/null)
+  _mem_cwd=$CWD
+  case "\${OSTYPE:-}" in
+    msys*|cygwin*) _mem_cwd=$(cygpath -w "$CWD" 2>/dev/null || printf %s "$CWD") ;;
+  esac
+  _mem_slug=$(printf %s "$_mem_cwd" | sed 's/[^A-Za-z0-9]/-/g' 2>/dev/null)
   _MEM_DIR="$HOME/.claude/projects/$_mem_slug/memory"
   if [ -n "$_mem_slug" ] && [ -d "$_MEM_DIR" ]; then
     # Entry count: memory/*.md excluding MEMORY.md (metadata only, O(entries)).
@@ -1270,6 +1286,82 @@ _pm_record_unresolved() {
   _UNRES_K=$(printf '%s' "$2" | tr -cd '0-9')
   echo "{\\"timestamp\\":\\"$_UNRES_TS\\",\\"type\\":\\"stop-block-unresolved\\",\\"source\\":\\"stop-hook\\",\\"fingerprint\\":\\"$_UNRES_FP\\",\\"violations\\":\${VIOLATION_COUNT:-0},\\"consecutive\\":\${_UNRES_K:-0}}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
   return 0
+}
+`;
+
+export const RESOLVE_HOOK = `#!/bin/sh
+# paradigm-resolve.sh — finds the paradigm CLI for the hooks (sourced, POSIX sh).
+# Sourced by paradigm-common.sh (Stop hooks), claude-code-precommit.sh and
+# cursor-precommit.sh, and embedded in the git post-commit / pre-push hooks
+# \`paradigm hooks install\` writes, so every hook resolves the CLI the same way.
+# The plugin's MCP launcher (plugins/paradigm/scripts/paradigm-mcp-launch.cjs)
+# uses the same order for the paradigm-mcp server.
+#
+# Usage:
+#   _pm_resolve_paradigm <project-root>   # 0 = found, 1 = not found
+#   $PARADIGM_BIN <args...>
+#
+# Sets:
+#   PARADIGM_BIN — one command word: _pm_paradigm_local or paradigm; empty when
+#                  nothing resolves. A function name, so a project path with
+#                  spaces survives unquoted expansion.
+#
+# Order:
+#   1. The project's own @a-company/paradigm: node runs the package's own
+#      \`paradigm\` bin entry, read from <root>/node_modules/@a-company/paradigm/
+#      package.json (whatever another package put at node_modules/.bin/paradigm
+#      is never run). The project root only (normalised with cd -P / pwd -P,
+#      CDPATH ignored), never a parent folder or the subdirectory the hook ran
+#      from, and never a copy committed to git (\`git ls-files\` lists it; when
+#      the root has a .git and git fails, it is not run either). No npx: npm 11 applies the
+#      project's devEngines to npx, so in a repo that requires pnpm (onFail
+#      "error") npx exits EBADDEVENGINES.
+#   2. \`paradigm\` on PATH (a global install).
+# Nothing else: no npx step. With the project copy first, npx could only reach
+# its cache or apply the project's .npmrc, and never a network fetch in a hook.
+#
+# Trust (Aegis L3, narrowed): the hooks run only @a-company/paradigm at the
+# project root, the same trust as the workspace itself and the plugin's MCP
+# launch. paradigm-skill-used.sh stays PATH-only: it has no project root.
+
+_pm_paradigm_local() { node "$_PM_LOCAL_PARADIGM" "$@"; }
+
+# Sets _PM_LOCAL_PARADIGM to the project copy's paradigm entry; 1 when unusable.
+_pm_local_paradigm_entry() {
+  _PM_LOCAL_PARADIGM=""
+  [ -n "$1" ] || return 1
+  # CDPATH= : a relative root must not be redirected by the user's CDPATH.
+  _pm_root=$(CDPATH= cd -P -- "$1" 2>/dev/null && pwd -P) || return 1
+  _pm_pkg="$_pm_root/node_modules/@a-company/paradigm/package.json"
+  [ -f "$_pm_pkg" ] || return 1
+  command -v node >/dev/null 2>&1 || return 1
+  # Committed to git: never run it. With a .git at the root and git failing
+  # (not installed, dubious ownership) it cannot be checked: not run either.
+  # Outside a git repo: fine, quietly.
+  if _pm_tracked=$(git -C "$_pm_root" ls-files -- node_modules/@a-company/paradigm node_modules/.bin/paradigm 2>/dev/null); then
+    [ -z "$_pm_tracked" ] || return 1
+  elif [ -e "$_pm_root/.git" ]; then
+    return 1
+  fi
+  _PM_LOCAL_PARADIGM=$(node -e '
+const fs = require("fs"), path = require("path");
+const f = process.argv[1];
+const p = JSON.parse(fs.readFileSync(f, "utf8"));
+const b = typeof p.bin === "string" ? p.bin : p.bin && p.bin.paradigm;
+if (p.name !== "@a-company/paradigm" || typeof b !== "string") process.exit(1);
+process.stdout.write(path.resolve(path.dirname(f), b));
+' "$_pm_pkg" 2>/dev/null) || { _PM_LOCAL_PARADIGM=""; return 1; }
+  [ -f "$_PM_LOCAL_PARADIGM" ]
+}
+
+_pm_resolve_paradigm() {
+  PARADIGM_BIN=""
+  if _pm_local_paradigm_entry "$1"; then
+    PARADIGM_BIN="_pm_paradigm_local"
+  elif command -v paradigm >/dev/null 2>&1; then
+    PARADIGM_BIN="paradigm"
+  fi
+  [ -n "$PARADIGM_BIN" ]
 }
 `;
 
@@ -1490,18 +1582,23 @@ case "$COMMAND" in
   *) exit 0 ;;
 esac
 
+# The project root, not the directory the command runs in: Claude Code sets
+# CLAUDE_PROJECT_DIR; otherwise the git toplevel, then the current directory.
+ROOT="\${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+
 # If no .paradigm directory, not a paradigm project
-if [ ! -d ".paradigm" ]; then
+if [ ! -d "$ROOT/.paradigm" ]; then
   exit 0
 fi
+# Source before the cd: $_PM_DIR may be relative to where the hook started.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+cd "$ROOT" || exit 0
 
-# Run paradigm index --quiet (the existing CLI command)
-if command -v paradigm >/dev/null 2>&1; then
-  paradigm index --quiet 2>/dev/null || true
-elif command -v npx >/dev/null 2>&1; then
-  # --no-install: never let npx fetch the unrelated public "paradigm" package
-  # (a network round-trip inside a 15 s hook, and the wrong binary).
-  npx --no-install paradigm index --quiet 2>/dev/null || true
+# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
+# Stop hooks): the project root's own @a-company/paradigm (never one committed to
+# git), then \`paradigm\` on PATH. No npx: never a fetch inside a hook.
+if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+  $PARADIGM_BIN index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist
@@ -2412,6 +2509,9 @@ export const CURSOR_PRECOMMIT_HOOK = `#!/bin/sh
 # Hook type: beforeShellExecution (matcher: "git commit")
 # Exit 0 = allow (never blocks), just ensures index is fresh
 
+# Sibling scripts (paradigm-resolve.sh) sit beside this one.
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
 
@@ -2428,18 +2528,28 @@ case "$COMMAND" in
   *) exit 0 ;;
 esac
 
+# The project root, not a subdirectory: the input's cwd, otherwise the git
+# toplevel, then the current directory.
+if command -v jq >/dev/null 2>&1; then
+  ROOT=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+else
+  ROOT=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+[ -n "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
 # If no .paradigm directory, not a paradigm project
-if [ ! -d ".paradigm" ]; then
+if [ ! -d "$ROOT/.paradigm" ]; then
   exit 0
 fi
+# Source before the cd: $_PM_DIR may be relative to where the hook started.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+cd "$ROOT" || exit 0
 
-# Run paradigm index --quiet (the existing CLI command)
-if command -v paradigm >/dev/null 2>&1; then
-  paradigm index --quiet 2>/dev/null || true
-elif command -v npx >/dev/null 2>&1; then
-  # --no-install: never let npx fetch the unrelated public "paradigm" package
-  # (a network round-trip inside a 15 s hook, and the wrong binary).
-  npx --no-install paradigm index --quiet 2>/dev/null || true
+# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
+# Stop hooks): the project root's own @a-company/paradigm (never one committed to
+# git), then \`paradigm\` on PATH. No npx: never a fetch inside a hook.
+if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+  $PARADIGM_BIN index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist

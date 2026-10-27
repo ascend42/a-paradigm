@@ -17,6 +17,7 @@ import { execSync } from 'child_process';
 import chalk from 'chalk';
 import {
   COMMON_HOOK,
+  RESOLVE_HOOK,
   HOOK_MONITOR,
   CLAUDE_CODE_STOP_HOOK,
   CLAUDE_CODE_POSTWRITE_HOOK,
@@ -34,6 +35,7 @@ import {
   CURSOR_PRETOOLUSE_HOOK,
   CURSOR_POSTTOOLUSE_HOOK,
 } from './generated-hooks.js';
+import { GIT_HOOK_VERSION, gitHookState, gitHookVersion, type GitHookName } from './git-hook-state.js';
 
 /**
  * Detect whether the Paradigm plugin is active in Claude Code.
@@ -154,7 +156,7 @@ function cleanupProjectClaudeCodeHooks(rootDir: string): { cleaned: boolean; rem
   // Remove hook scripts
   const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
   if (fs.existsSync(claudeHooksDir)) {
-    for (const hookName of ['paradigm-common.sh', 'paradigm-hook-monitor.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh', 'paradigm-delegation.sh', 'paradigm-session-start.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-resolve.sh', 'paradigm-hook-monitor.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh', 'paradigm-delegation.sh', 'paradigm-session-start.sh']) {
       const hookPath = path.join(claudeHooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         fs.unlinkSync(hookPath);
@@ -229,7 +231,12 @@ function validateBashSyntax(scriptContent: string, scriptName: string): string |
       execSync(`bash -n "${tmpPath}" 2>&1`, { encoding: 'utf-8' });
       return null; // Syntax OK
     } catch (err) {
-      return `${scriptName}: bash syntax error — ${(err as Error).message?.split('\n')[0] || 'unknown error'}`;
+      // Only a real syntax report blocks. No usable bash (Windows without Git Bash on PATH, or the WSL stub
+      // bash.exe with no distro) is "can't validate", like the outer catch.
+      const e = err as Error & { stdout?: string };
+      const text = `${e.stdout ?? ''}\n${e.message ?? ''}`;
+      if (!/syntax error|unexpected (EOF|end of file|token)/i.test(text)) return null;
+      return `${scriptName}: bash syntax error — ${e.message?.split('\n')[0] || 'unknown error'}`;
     } finally {
       try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
     }
@@ -238,11 +245,26 @@ function validateBashSyntax(scriptContent: string, scriptName: string): string |
   }
 }
 
+/**
+ * The git hooks below are standalone files in .git/hooks, so they carry their own
+ * copy of paradigm-resolve.sh (RESOLVE_HOOK, the same source the Claude Code and
+ * Cursor hooks use): the project's own @a-company/paradigm, then `paradigm` on
+ * PATH. Never `npx paradigm`: without a TTY npx installs and runs whatever the
+ * public registry calls "paradigm", an unrelated package.
+ */
+const GIT_HOOK_RESOLVE = `# --- paradigm CLI lookup (paradigm-resolve.sh) ---
+${RESOLVE_HOOK.replace(/^#!.*\n/, '')}
+# The repository root: git runs these hooks there; the lookup is pinned to it.
+_PM_GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+`;
+
 const POST_COMMIT_HOOK = `#!/bin/sh
 # Paradigm post-commit hook - captures history from commits
 # Installed by: paradigm hooks install
-# paradigm-hook-version: 2   (v2 adds the provider-agnostic sync-commit delegate)
+# paradigm-hook-version: 3   (v2 adds the provider-agnostic sync-commit delegate;
+#                             v3 resolves the CLI like the other hooks, no npx)
 
+${GIT_HOOK_RESOLVE}
 # Get the commit message and hash
 COMMIT_HASH=$(git rev-parse HEAD)
 COMMIT_MSG=$(git log -1 --pretty=%B)
@@ -290,7 +312,9 @@ fi
 # commit is NEVER slowed-to-notice or blocked. The hook NEVER names a provider —
 # sync-commit resolves it abstractly from the task's external_ref via the registry.
 if [ -n "$MSG_SYMBOLS" ]; then
-  npx paradigm task sync-commit --hash "$COMMIT_HASH" --symbols "$MSG_SYMBOLS" >/dev/null 2>&1 || true
+  if _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
+    $PARADIGM_BIN task sync-commit --hash "$COMMIT_HASH" --symbols "$MSG_SYMBOLS" >/dev/null 2>&1 || true
+  fi
 fi
 
 # Determine intent from commit message
@@ -336,12 +360,60 @@ fi
 const PRE_PUSH_HOOK = `#!/bin/sh
 # Paradigm pre-push hook - reindex history before pushing
 # Installed by: paradigm hooks install
+# paradigm-hook-version: 3   (v3 resolves the CLI like the other hooks, no npx)
 
-if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ]; then
+${GIT_HOOK_RESOLVE}
+if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ] && _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
   echo "[paradigm] Reindexing history..."
-  npx paradigm history reindex 2>/dev/null || true
+  $PARADIGM_BIN history reindex 2>/dev/null || true
 fi
 `;
+
+/**
+ * Write one git hook. Without --force an existing hook is kept, except a
+ * Paradigm-owned one (its own header) that is outdated (below
+ * GIT_HOOK_VERSION, or still calling `npx paradigm`): that one is upgraded in
+ * place and the old file kept beside it as <name>.paradigm-v<N>.bak, so any
+ * local edits survive. A hook Paradigm did not write is never touched.
+ */
+function installGitHook(
+  hooksDir: string,
+  name: GitHookName,
+  body: string,
+  opts: { force?: boolean; dryRun?: boolean },
+  installed: string[],
+): void {
+  const hookPath = path.join(hooksDir, name);
+  const content = fs.existsSync(hookPath) ? fs.readFileSync(hookPath, 'utf8') : null;
+  const state = gitHookState(content, name);
+  const upgrade = !opts.force && state === 'outdated' && content !== null;
+  const from = content !== null ? gitHookVersion(content) : 0;
+
+  if (opts.dryRun) {
+    const action = state === 'absent' || opts.force
+      ? 'install'
+      : upgrade ? `upgrade (v${from} → v${GIT_HOOK_VERSION})` : 'skip (exists)';
+    console.log(chalk.gray(`  ${name}: ${action} → ${hookPath}`));
+    return;
+  }
+  if (state !== 'absent' && !opts.force && !upgrade) {
+    if (state === 'current') {
+      console.log(chalk.gray(`${name} hook already installed by paradigm`));
+    } else if (content !== null && content.includes('paradigm')) {
+      console.log(chalk.yellow(`${name} hook exists but was not written by \`paradigm hooks install\`; left as is. Use --force to overwrite.`));
+    } else {
+      console.log(chalk.yellow(`${name} hook exists. Use --force to overwrite.`));
+    }
+    return;
+  }
+  fs.mkdirSync(hooksDir, { recursive: true });
+  if (upgrade && content !== null) {
+    fs.writeFileSync(path.join(hooksDir, `${name}.paradigm-v${from}.bak`), content);
+  }
+  fs.writeFileSync(hookPath, body);
+  fs.chmodSync(hookPath, '755');
+  installed.push(upgrade ? `${name} (upgraded from v${from}; previous kept as ${name}.paradigm-v${from}.bak)` : name);
+}
 
 /**
  * paradigm hooks install
@@ -370,6 +442,7 @@ export async function hooksInstallCommand(options: {
       { name: 'post-commit', content: POST_COMMIT_HOOK },
       { name: 'pre-push', content: PRE_PUSH_HOOK },
       { name: 'paradigm-common', content: COMMON_HOOK },
+      { name: 'paradigm-resolve', content: RESOLVE_HOOK },
       { name: 'paradigm-hook-monitor', content: HOOK_MONITOR },
       { name: 'claude-code-stop', content: CLAUDE_CODE_STOP_HOOK },
       { name: 'claude-code-precommit', content: CLAUDE_CODE_PRECOMMIT_HOOK },
@@ -419,50 +492,11 @@ export async function hooksInstallCommand(options: {
     const installAllGit = !options.postCommit && !options.prePush && !options.claudeCode;
     const installed: string[] = [];
 
-    // Install post-commit hook
     if (installAllGit || options.postCommit) {
-      const hookPath = path.join(hooksDir, 'post-commit');
-      if (dryRun) {
-        const action = fs.existsSync(hookPath) && !options.force ? 'skip (exists)' : 'install';
-        console.log(chalk.gray(`  post-commit: ${action} → ${hookPath}`));
-      } else {
-        if (fs.existsSync(hookPath) && !options.force) {
-          const content = fs.readFileSync(hookPath, 'utf8');
-          if (!content.includes('paradigm')) {
-            console.log(chalk.yellow('post-commit hook exists. Use --force to overwrite.'));
-          } else {
-            console.log(chalk.gray('post-commit hook already installed by paradigm'));
-          }
-        } else {
-          fs.mkdirSync(hooksDir, { recursive: true });
-          fs.writeFileSync(hookPath, POST_COMMIT_HOOK);
-          fs.chmodSync(hookPath, '755');
-          installed.push('post-commit');
-        }
-      }
+      installGitHook(hooksDir, 'post-commit', POST_COMMIT_HOOK, { force: options.force, dryRun }, installed);
     }
-
-    // Install pre-push hook
     if (installAllGit || options.prePush) {
-      const hookPath = path.join(hooksDir, 'pre-push');
-      if (dryRun) {
-        const action = fs.existsSync(hookPath) && !options.force ? 'skip (exists)' : 'install';
-        console.log(chalk.gray(`  pre-push: ${action} → ${hookPath}`));
-      } else {
-        if (fs.existsSync(hookPath) && !options.force) {
-          const content = fs.readFileSync(hookPath, 'utf8');
-          if (!content.includes('paradigm')) {
-            console.log(chalk.yellow('pre-push hook exists. Use --force to overwrite.'));
-          } else {
-            console.log(chalk.gray('pre-push hook already installed by paradigm'));
-          }
-        } else {
-          fs.mkdirSync(hooksDir, { recursive: true });
-          fs.writeFileSync(hookPath, PRE_PUSH_HOOK);
-          fs.chmodSync(hookPath, '755');
-          installed.push('pre-push');
-        }
-      }
+      installGitHook(hooksDir, 'pre-push', PRE_PUSH_HOOK, { force: options.force, dryRun }, installed);
     }
 
     if (!dryRun && installed.length > 0) {
@@ -541,6 +575,11 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   const commonPath = path.join(claudeHooksDir, 'paradigm-common.sh');
   fs.writeFileSync(commonPath, COMMON_HOOK, 'utf8');
   fs.chmodSync(commonPath, '755');
+
+  // CLI resolution shared by paradigm-common.sh and the pre-commit hook
+  const resolvePath = path.join(claudeHooksDir, 'paradigm-resolve.sh');
+  fs.writeFileSync(resolvePath, RESOLVE_HOOK, 'utf8');
+  fs.chmodSync(resolvePath, '755');
 
   // Hook self-monitoring library (#hook-monitor), sourced by every hook script
   const monitorPath = path.join(claudeHooksDir, 'paradigm-hook-monitor.sh');
@@ -756,6 +795,11 @@ async function installCursorHooks(rootDir: string, force?: boolean): Promise<voi
   const cursorCommonPath = path.join(cursorHooksDir, 'paradigm-common.sh');
   fs.writeFileSync(cursorCommonPath, COMMON_HOOK, 'utf8');
   fs.chmodSync(cursorCommonPath, '755');
+
+  // CLI resolution shared by paradigm-common.sh and the pre-commit hook
+  const cursorResolvePath = path.join(cursorHooksDir, 'paradigm-resolve.sh');
+  fs.writeFileSync(cursorResolvePath, RESOLVE_HOOK, 'utf8');
+  fs.chmodSync(cursorResolvePath, '755');
 
   const hookScripts = [
     { name: 'paradigm-session-start.sh', content: CURSOR_SESSION_START_HOOK },
@@ -1024,7 +1068,10 @@ export async function hooksStatusCommand(): Promise<void> {
       const hookPath = path.join(hooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         const content = fs.readFileSync(hookPath, 'utf8');
-        if (content.includes('paradigm')) {
+        const state = gitHookState(content, hookName as GitHookName);
+        if (state === 'outdated') {
+          console.log(chalk.yellow(`  ${hookName}: outdated (paradigm v${gitHookVersion(content)}, current v${GIT_HOOK_VERSION}) — run \`paradigm hooks install\``));
+        } else if (content.includes('paradigm')) {
           console.log(chalk.green(`  ${hookName}: installed (paradigm)`));
         } else {
           console.log(chalk.yellow(`  ${hookName}: exists (other)`));
@@ -1064,7 +1111,7 @@ export async function hooksStatusCommand(): Promise<void> {
     // Warn about stale project hooks that shadow the plugin
     const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
     const staleHooks: string[] = [];
-    for (const hookName of ['paradigm-common.sh', 'paradigm-hook-monitor.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh', 'paradigm-delegation.sh', 'paradigm-session-start.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-resolve.sh', 'paradigm-hook-monitor.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh', 'paradigm-delegation.sh', 'paradigm-session-start.sh']) {
       if (fs.existsSync(path.join(claudeHooksDir, hookName))) {
         staleHooks.push(hookName);
       }

@@ -27,6 +27,7 @@ const isCheck = process.argv.includes('--check');
 // Map: script filename → TS export name
 const HOOKS = [
   { file: 'paradigm-common.sh',               exportName: 'COMMON_HOOK' },
+  { file: 'paradigm-resolve.sh',              exportName: 'RESOLVE_HOOK' },
   { file: 'claude-code-stop.sh',              exportName: 'CLAUDE_CODE_STOP_HOOK' },
   { file: 'claude-code-postwrite.sh',         exportName: 'CLAUDE_CODE_POSTWRITE_HOOK' },
   { file: 'claude-code-precommit.sh',         exportName: 'CLAUDE_CODE_PRECOMMIT_HOOK' },
@@ -48,6 +49,7 @@ const HOOKS = [
 // Map: claude-code script → Claude Code plugin destination filename
 const PLUGIN_COPIES = [
   { src: 'paradigm-common.sh',              dest: 'paradigm-common.sh' },
+  { src: 'paradigm-resolve.sh',             dest: 'paradigm-resolve.sh' },
   { src: 'claude-code-stop.sh',             dest: 'paradigm-stop.sh' },
   { src: 'claude-code-postwrite.sh',        dest: 'paradigm-postwrite.sh' },
   { src: 'claude-code-precommit.sh',        dest: 'paradigm-precommit.sh' },
@@ -63,6 +65,7 @@ const PLUGIN_COPIES = [
 // Map: cursor script → Cursor plugin destination filename
 const CURSOR_PLUGIN_COPIES = [
   { src: 'paradigm-common.sh',        dest: 'paradigm-common.sh' },
+  { src: 'paradigm-resolve.sh',       dest: 'paradigm-resolve.sh' },
   { src: 'cursor-session-start.sh',   dest: 'paradigm-session-start.sh' },
   { src: 'cursor-stop.sh',            dest: 'paradigm-stop.sh' },
   { src: 'cursor-postwrite.sh',       dest: 'paradigm-postwrite.sh' },

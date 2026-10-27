@@ -6,6 +6,9 @@
 # Hook type: beforeShellExecution (matcher: "git commit")
 # Exit 0 = allow (never blocks), just ensures index is fresh
 
+# Sibling scripts (paradigm-resolve.sh) sit beside this one.
+case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
+
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
 
@@ -22,18 +25,28 @@ case "$COMMAND" in
   *) exit 0 ;;
 esac
 
+# The project root, not a subdirectory: the input's cwd, otherwise the git
+# toplevel, then the current directory.
+if command -v jq >/dev/null 2>&1; then
+  ROOT=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+else
+  ROOT=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+[ -n "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
 # If no .paradigm directory, not a paradigm project
-if [ ! -d ".paradigm" ]; then
+if [ ! -d "$ROOT/.paradigm" ]; then
   exit 0
 fi
+# Source before the cd: $_PM_DIR may be relative to where the hook started.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+cd "$ROOT" || exit 0
 
-# Run paradigm index --quiet (the existing CLI command)
-if command -v paradigm >/dev/null 2>&1; then
-  paradigm index --quiet 2>/dev/null || true
-elif command -v npx >/dev/null 2>&1; then
-  # --no-install: never let npx fetch the unrelated public "paradigm" package
-  # (a network round-trip inside a 15 s hook, and the wrong binary).
-  npx --no-install paradigm index --quiet 2>/dev/null || true
+# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
+# Stop hooks): the project root's own @a-company/paradigm (never one committed to
+# git), then `paradigm` on PATH. No npx: never a fetch inside a hook.
+if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+  $PARADIGM_BIN index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist

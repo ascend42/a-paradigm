@@ -26,18 +26,23 @@ case "$COMMAND" in
   *) exit 0 ;;
 esac
 
+# The project root, not the directory the command runs in: Claude Code sets
+# CLAUDE_PROJECT_DIR; otherwise the git toplevel, then the current directory.
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+
 # If no .paradigm directory, not a paradigm project
-if [ ! -d ".paradigm" ]; then
+if [ ! -d "$ROOT/.paradigm" ]; then
   exit 0
 fi
+# Source before the cd: $_PM_DIR may be relative to where the hook started.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+cd "$ROOT" || exit 0
 
-# Run paradigm index --quiet (the existing CLI command)
-if command -v paradigm >/dev/null 2>&1; then
-  paradigm index --quiet 2>/dev/null || true
-elif command -v npx >/dev/null 2>&1; then
-  # --no-install: never let npx fetch the unrelated public "paradigm" package
-  # (a network round-trip inside a 15 s hook, and the wrong binary).
-  npx --no-install paradigm index --quiet 2>/dev/null || true
+# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
+# Stop hooks): the project root's own @a-company/paradigm (never one committed to
+# git), then `paradigm` on PATH. No npx: never a fetch inside a hook.
+if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+  $PARADIGM_BIN index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist

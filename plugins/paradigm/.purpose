@@ -1,12 +1,40 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
 name: paradigm
-description: "TODO: describe what this directory/module does"
+description: "The Paradigm Claude Code plugin: hooks (enforcement), skills, agent definitions and the plugin's MCP server launch. Hook scripts are generated from packages/paradigm/src/commands/hooks/scripts by scripts/generate-hooks.mjs; edit the canonical copies, not these."
 context:
-  - "Stub created by Cid during coverage audit — update with real context"
+  - ".claude-plugin/plugin.json version must equal @a-company/paradigm's (tests/plugin-version.test.ts): Claude Code caches installs by version"
+  - "scripts/ is generated except paradigm-mcp-launch.cjs and migrate-to-plugin.sh (paradigm-resolve.sh, the hooks' CLI lookup, is generated like the other hook scripts)"
 # Key files touched:
-# - README.md
+# - .mcp.json
+# - scripts/paradigm-mcp-launch.cjs
 components:
   paradigm:
-    description: "TODO: describe this component"
-    tags: []
+    description: "The Claude Code plugin bundle (hooks/hooks.json, skills/, agents/, scripts/) installed from the a-paradigm marketplace"
+    tags: [plugin, claude-code]
+  paradigm-mcp-launch:
+    description: |
+      Starts the plugin's MCP server (.mcp.json runs `node scripts/paradigm-mcp-launch.cjs <project>`).
+      The project is argv[2] if it is an existing directory, else an expanded CLAUDE_PROJECT_DIR, else
+      cwd (the fallback is said on stderr). Finds an @a-company/paradigm package in the hooks' order
+      (scripts/paradigm-resolve.sh): the project root's node_modules first (never a parent folder, never
+      a copy committed to git, nor one git cannot check because the project's .git fails; the
+      package.json must name @a-company/paradigm), so a project that pins Paradigm gets its version;
+      then paradigm-mcp on PATH; then `npx --yes --prefer-offline` pinned to plugin.json's version with
+      a 120 s timeout, failures (error / signal / exit status) on stderr.
+      npx folder: under os.tmpdir() as paradigm-mcp-npx-<uid>, or, when the temp dir is sticky and
+      world-writable (Linux /tmp), $XDG_CACHE_HOME/paradigm/npx or ~/.cache/paradigm/npx (0700), so no
+      ancestor is writable by others. Used only when lstat shows a real directory that is ours, not
+      group/world-writable, holding nothing but its {"private":true} package.json (which stops npm's
+      walk up); otherwise a fresh mkdtemp folder beside it.
+      npx only locates the package and resolves nothing on the PATH it builds (every ancestor's
+      node_modules/.bin precedes the system PATH there): `--script-shell` is /bin/sh (Windows:
+      <SystemRoot>\System32\cmd.exe, which keeps npm's /d /s /c handling) and `--call` names this node
+      and this launcher by absolute path (POSIX single quotes; Windows: npx-cli.js beside node started
+      directly, the call wrapped for cmd /s, paths with % " ^ ! refused). `--locate` prints the entry of
+      the pinned version, skipping any .bin that belongs to the npx cwd or an ancestor and (POSIX) any
+      package not owned by the user, world-writable, or group-writable by a group other than the user's
+      primary group (umask 002 caches are 0775). The launcher runs the entry with node in the project,
+      with its own env; a version that differs from the plugin's goes to stderr. Why: npm 11 applies the
+      nearest package.json's devEngines to npx, so npx run from a pnpm-only project (onFail "error")
+      exits EBADDEVENGINES; `--prefix` was rejected because it also moves npm's global prefix and
+      globalconfig.
+    tags: [plugin, mcp, launch]

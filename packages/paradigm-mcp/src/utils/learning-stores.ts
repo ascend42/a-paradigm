@@ -120,9 +120,13 @@ function countJournals(agentsDir: string): number {
 
 const isYaml = (f: string) => f.endsWith('.yaml') || f.endsWith('.yml');
 
-/** Claude Code's project slug: absolute path with every `/` (and `.`) → `-`. */
+/**
+ * Claude Code's project key: the absolute path with every character other than A-Z a-z 0-9 → `-` (`/`, `.`,
+ * `_`, spaces; on Windows `:` and `\`, so C:\Users\me\repo → C--Users-me-repo). Same rule as the Stop hook's
+ * memory nudge (paradigm-common.sh Check 15).
+ */
 export function nativeMemorySlug(rootDir: string): string {
-  return path.resolve(rootDir).replace(/[/.]/g, '-');
+  return path.resolve(rootDir).replace(/[^A-Za-z0-9]/g, '-');
 }
 
 /**

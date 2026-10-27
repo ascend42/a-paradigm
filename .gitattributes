@@ -31,3 +31,10 @@ packages/gnomon-contracts/test/fixtures/*.json text eol=lf
 
 # Node scripts start with a shebang; vitest cannot parse a CRLF shebang line when a test imports one (Windows checkout). Keep LF on every OS.
 *.mjs text eol=lf
+
+# Shell hooks run under bash (Git Bash on Windows): a CRLF checkout breaks them ($'\r': command not found).
+# Plugin scripts (.cjs) and the generated hook module are byte-compared against the canonical .sh by
+# generate-hooks.mjs --check. Keep LF on every OS.
+*.sh text eol=lf
+*.cjs text eol=lf
+packages/paradigm/src/commands/hooks/generated-hooks.ts text eol=lf
