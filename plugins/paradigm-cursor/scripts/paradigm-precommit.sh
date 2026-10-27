@@ -43,9 +43,8 @@ fi
 cd "$ROOT" || exit 0
 
 # Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
-# Stop hooks): the project root's own @a-company/paradigm, then `paradigm` on
-# PATH, then npx --no-install --package=@a-company/paradigm (never a fetch, never
-# the unrelated public "paradigm" package).
+# Stop hooks): the project root's own @a-company/paradigm (never one committed to
+# git), then `paradigm` on PATH. No npx: never a fetch inside a hook.
 if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
   $PARADIGM_BIN index --quiet 2>/dev/null || true
 fi

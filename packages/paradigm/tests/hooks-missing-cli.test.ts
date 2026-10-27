@@ -1,25 +1,19 @@
 /**
- * hooks-missing-cli.test — fail-closed behavior of paradigm-common.sh when the
- * paradigm CLI cannot be resolved.
+ * hooks-missing-cli.test — how the hooks find the paradigm CLI, and the
+ * fail-closed behavior of paradigm-common.sh when it cannot be resolved.
  *
  * paradigm-common.sh resolves the CLI once at the top through paradigm-resolve.sh
- * (shared with the pre-commit hooks):
- *   - the project root's own @a-company/paradigm ($CWD/node_modules/.bin/paradigm,
- *     no npx: npm 11 applies the project's devEngines to npx, so a pnpm-only repo
- *     fails EBADDEVENGINES; never a parent folder's install, never $PWD), else
- *   - `command -v paradigm`, else
- *   - `npx --no-install --package=@a-company/paradigm paradigm --version`
- *     (`--no-install`: npx NEVER auto-installs; `--package`: never the
- *     unrelated public `paradigm` registry package).
+ * (shared with the pre-commit hooks and the git hooks):
+ *   - the project root's own @a-company/paradigm: node runs the package's own
+ *     `paradigm` bin entry (never whatever sits at node_modules/.bin/paradigm),
+ *     at $CWD (never $PWD, never a parent folder), never a copy committed to
+ *     git. No npx: npm 11 applies the project's devEngines to npx, so a
+ *     pnpm-only repo fails EBADDEVENGINES. Else
+ *   - `command -v paradigm`. Nothing else: no npx step at all.
  * When neither resolves, PARADIGM_AVAILABLE stays false and the hook:
  *   1. prints a loud stderr banner ("compliance checks were SKIPPED … NOT a
  *      clean pass"), and
  *   2. records a BLOCKING violation (fail-closed), never a silent clean pass.
- *
- * Also pins the KNOWN double-report: with the CLI absent, TWO blocking
- * violations fire — the upfront missing-CLI one AND the existing exit-127
- * compliance-run branch. This test documents that as the current behavior so a
- * future dedup is a deliberate, visible change.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
@@ -32,6 +26,41 @@ const COMMON_SH = path.join(SCRIPTS, 'paradigm-common.sh');
 
 let cleanups: Array<() => void> = [];
 afterEach(() => { cleanups.forEach((fn) => fn()); cleanups = []; });
+
+/** A dir holding only `node` (the local copy runs through node), so PATH gains nothing else. */
+function nodeOnlyDir(): string {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-node-'));
+  fs.symlinkSync(process.execPath, path.join(d, 'node'));
+  cleanups.push(() => fs.rmSync(d, { recursive: true, force: true }));
+  return d;
+}
+
+/**
+ * <root>/node_modules/@a-company/paradigm with a `paradigm` bin entry (JS body),
+ * and optionally something else at node_modules/.bin/paradigm (sh body).
+ */
+function installLocal(root: string, entry?: string, dotBin?: string): void {
+  if (entry !== undefined) {
+    const pkgDir = path.join(root, 'node_modules', '@a-company', 'paradigm');
+    fs.mkdirSync(path.join(pkgDir, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@a-company/paradigm', bin: { paradigm: './dist/index.js' } }));
+    fs.writeFileSync(path.join(pkgDir, 'dist', 'index.js'), entry);
+  }
+  if (dotBin !== undefined) {
+    const p = path.join(root, 'node_modules', '.bin', 'paradigm');
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, dotBin, { mode: 0o755 });
+  }
+}
+
+/** A paradigm entry (JS) that answers compliance-check cleanly and drops `$HOME/<marker>` when it runs it. */
+const localEntry = (marker: string): string => `
+const a = process.argv[2];
+if (a === 'compliance-check') {
+  require('fs').writeFileSync(require('path').join(process.env.HOME, ${JSON.stringify(marker)}), '');
+  process.stdout.write('{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}');
+}
+`;
 
 interface RunResult {
   status: number | null;
@@ -46,16 +75,18 @@ interface RunResult {
 /**
  * Seed a minimal Paradigm project with a modified-source diff that WOULD block
  * only via a real compliance run, then source paradigm-common.sh with a chosen
- * PATH. `binDir` may hold stubbed `paradigm` / `npx` executables.
+ * PATH (plus a dir holding only node). `binDir` may hold stubbed `paradigm` /
+ * `npx` executables.
  */
 function run(opts: {
-  path: string;                       // PATH for the shell
+  path: string;                        // PATH for the shell
   binScripts?: Record<string, string>; // name → sh body (chmod +x)
-  localParadigm?: string;              // sh body for <root>/node_modules/.bin/paradigm
-  localPackage?: boolean;              // also write node_modules/@a-company/paradigm/package.json (default true)
+  localEntry?: string;                 // JS body of node_modules/@a-company/paradigm's paradigm bin
+  dotBin?: string;                     // sh body for node_modules/.bin/paradigm (another package's)
   rootPrefix?: string;
   modified?: string[];
   subdir?: string;                     // run from <root>/<subdir> (CWD stays the root)
+  gitTracked?: boolean;                // git init the root and `git add -f` the local package
 }): RunResult {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), opts.rootPrefix ?? 'paradigm-nocli-'));
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-nocli-bin-'));
@@ -70,17 +101,10 @@ function run(opts: {
   fs.mkdirSync(path.join(rootDir, 'src'), { recursive: true });
   fs.writeFileSync(path.join(rootDir, 'src', 'foo.ts'), 'export const x = 1;\n');
   if (opts.subdir) fs.mkdirSync(path.join(rootDir, opts.subdir), { recursive: true });
-
-  if (opts.localParadigm !== undefined) {
-    const p = path.join(rootDir, 'node_modules', '.bin', 'paradigm');
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, opts.localParadigm, 'utf8');
-    fs.chmodSync(p, 0o755);
-    if (opts.localPackage !== false) {
-      const pkg = path.join(rootDir, 'node_modules', '@a-company', 'paradigm', 'package.json');
-      fs.mkdirSync(path.dirname(pkg), { recursive: true });
-      fs.writeFileSync(pkg, JSON.stringify({ name: '@a-company/paradigm' }), 'utf8');
-    }
+  installLocal(rootDir, opts.localEntry, opts.dotBin);
+  if (opts.gitTracked) {
+    spawnSync('git', ['init', '-q', rootDir]);
+    spawnSync('git', ['add', '-f', 'node_modules/@a-company/paradigm'], { cwd: rootDir, env: { PATH: '/usr/bin:/bin', HOME: rootDir } });
   }
 
   for (const [name, body] of Object.entries(opts.binScripts ?? {})) {
@@ -103,7 +127,7 @@ echo "$VIOLATIONS"
   const res = spawnSync('bash', ['-c', script], {
     encoding: 'utf8',
     env: {
-      PATH: opts.binScripts ? `${binDir}:${opts.path}` : opts.path,
+      PATH: [...(opts.binScripts ? [binDir] : []), nodeOnlyDir(), opts.path].join(':'),
       HOME: rootDir,
       CWD: rootDir,
       MODIFIED: (opts.modified ?? ['src/foo.ts']).join('\n'),
@@ -124,9 +148,11 @@ echo "$VIOLATIONS"
   };
 }
 
+const ran = (r: RunResult, marker: string): boolean => fs.existsSync(path.join(r.rootDir, marker));
+
 describe('paradigm-common.sh — missing-CLI fail-closed', () => {
-  it('no paradigm AND no npx → loud banner + blocking violation (NOT a clean pass)', () => {
-    const r = run({ path: '/usr/bin:/bin' }); // neither paradigm nor npx resolvable
+  it('no paradigm → loud banner + blocking violation (NOT a clean pass)', () => {
+    const r = run({ path: '/usr/bin:/bin' });
     expect(r.paradigmAvailable).toBe('false');
     // Loud stderr banner.
     expect(r.stderr).toContain('paradigm CLI not found');
@@ -150,26 +176,16 @@ describe('paradigm-common.sh — missing-CLI fail-closed', () => {
     expect(skippedBullets).toBe(1);
   });
 
-  it('npx probe uses --no-install --package=@a-company/paradigm and NEVER auto-installs', () => {
-    // A stub npx that records the flags it was called with. If it is ever
-    // invoked WITHOUT --no-install (an auto-install attempt) or without pinning
-    // the package (the unrelated public "paradigm") it writes a marker.
-    const marker = 'AUTO_INSTALL_ATTEMPTED';
+  it('npx is never called: with only npx available the hook fails closed', () => {
+    // A stub npx that would "find" paradigm; it must never be asked.
     const npxStub = `#!/bin/sh
 echo "$*" >> "$HOME/.npx-calls"
-if [ "$1" != "--no-install" ] || [ "$2" != "--package=@a-company/paradigm" ] || [ "$3" != "paradigm" ]; then
-  echo "${marker}" > "$HOME/.npx-autoinstall-marker"
-fi
-# --no-install with no locally-installed paradigm → npx exits non-zero.
-exit 1
+exit 0
 `;
     const r = run({ path: '/usr/bin:/bin', binScripts: { npx: npxStub } });
-    // The probe ran, npx refused (exit 1) → CLI still unavailable, fail-closed.
     expect(r.paradigmAvailable).toBe('false');
     expect(r.violations).toContain('paradigm CLI not found');
-    // Crucially: npx was NEVER called without --no-install (no auto-install).
-    expect(fs.existsSync(path.join(r.rootDir, '.npx-autoinstall-marker'))).toBe(false);
-    expect(fs.readFileSync(path.join(r.rootDir, '.npx-calls'), 'utf8')).toContain('--no-install --package=@a-company/paradigm paradigm --version');
+    expect(ran(r, '.npx-calls')).toBe(false);
   });
 
   it('with a working paradigm stub present → no missing-CLI violation, PARADIGM_AVAILABLE=true', () => {
@@ -189,66 +205,66 @@ esac
     expect(r.violations).not.toContain('compliance checks were SKIPPED');
     expect(r.violations).not.toContain('compliance-check failed to run');
   });
+});
 
-  it("the project's own node_modules/.bin/paradigm resolves without npx, even under a path with spaces", () => {
+describe('paradigm-resolve.sh — the project copy', () => {
+  it("the project's own @a-company/paradigm runs without npx, even under a path with spaces", () => {
     // npx fails the way npm 11 does in a repo whose devEngines require pnpm.
     const npxStub = `#!/bin/sh
 echo "npm error EBADDEVENGINES" >&2
 exit 1
 `;
-    const local = `#!/bin/sh
-[ "$1" = "compliance-check" ] && : > "$HOME/.local-paradigm-ran"
-case "$1" in
-  compliance-check) echo '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}' ;;
-esac
-exit 0
-`;
-    const r = run({ path: '/usr/bin:/bin', binScripts: { npx: npxStub }, localParadigm: local, rootPrefix: 'paradigm local-' });
+    const r = run({ path: '/usr/bin:/bin', binScripts: { npx: npxStub }, localEntry: localEntry('.local-ran'), rootPrefix: 'paradigm local-' });
     expect(r.paradigmAvailable).toBe('true');
     expect(r.violations).not.toContain('compliance checks were SKIPPED');
     expect(r.violations).not.toContain('compliance-check failed to run');
-    expect(fs.existsSync(path.join(r.rootDir, '.local-paradigm-ran'))).toBe(true);
+    expect(ran(r, '.local-ran')).toBe(true);
   });
 
   it('a bare node_modules/.bin/paradigm without the @a-company/paradigm package is not run', () => {
-    const local = `#!/bin/sh
-: > "$HOME/.planted-ran"
-exit 0
-`;
-    const r = run({ path: '/usr/bin:/bin', localParadigm: local, localPackage: false });
+    const r = run({ path: '/usr/bin:/bin', dotBin: '#!/bin/sh\n: > "$HOME/.planted-ran"\nexit 0\n' });
     expect(r.paradigmAvailable).toBe('false');
-    expect(fs.existsSync(path.join(r.rootDir, '.planted-ran'))).toBe(false);
+    expect(ran(r, '.planted-ran')).toBe(false);
   });
 
-  it("the project's own @a-company/paradigm wins over a global paradigm on PATH", () => {
-    const globalStub = `#!/bin/sh
-: > "$HOME/.global-paradigm-ran"
-exit 0
-`;
-    const local = `#!/bin/sh
-[ "$1" = "compliance-check" ] && : > "$HOME/.local-paradigm-ran"
-case "$1" in
-  compliance-check) echo '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}' ;;
-esac
-exit 0
-`;
-    const r = run({ path: '/usr/bin:/bin', binScripts: { paradigm: globalStub }, localParadigm: local });
+  it("the package's own entry runs, not a .bin/paradigm another package put there", () => {
+    const r = run({
+      path: '/usr/bin:/bin',
+      localEntry: localEntry('.local-ran'),
+      dotBin: '#!/bin/sh\n: > "$HOME/.planted-ran"\nexit 0\n',
+    });
     expect(r.paradigmAvailable).toBe('true');
-    expect(fs.existsSync(path.join(r.rootDir, '.local-paradigm-ran'))).toBe(true);
-    expect(fs.existsSync(path.join(r.rootDir, '.global-paradigm-ran'))).toBe(false);
+    expect(ran(r, '.local-ran')).toBe(true);
+    expect(ran(r, '.planted-ran')).toBe(false);
+  });
+
+  it('wins over a global paradigm on PATH', () => {
+    const r = run({
+      path: '/usr/bin:/bin',
+      binScripts: { paradigm: '#!/bin/sh\n: > "$HOME/.global-ran"\nexit 0\n' },
+      localEntry: localEntry('.local-ran'),
+    });
+    expect(r.paradigmAvailable).toBe('true');
+    expect(ran(r, '.local-ran')).toBe(true);
+    expect(ran(r, '.global-ran')).toBe(false);
   });
 
   it('looks in the project root ($CWD), not the directory the hook runs in', () => {
-    const local = `#!/bin/sh
-[ "$1" = "compliance-check" ] && : > "$HOME/.local-paradigm-ran"
-case "$1" in
-  compliance-check) echo '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}' ;;
-esac
-exit 0
-`;
-    const r = run({ path: '/usr/bin:/bin', localParadigm: local, subdir: 'src/deep' });
+    const r = run({ path: '/usr/bin:/bin', localEntry: localEntry('.local-ran'), subdir: 'src/deep' });
     expect(r.paradigmAvailable).toBe('true');
-    expect(fs.existsSync(path.join(r.rootDir, '.local-paradigm-ran'))).toBe(true);
+    expect(ran(r, '.local-ran')).toBe(true);
+  });
+
+  it('a copy committed to git is never run (the global one is used instead)', () => {
+    const r = run({
+      path: '/usr/bin:/bin',
+      binScripts: { paradigm: '#!/bin/sh\n: > "$HOME/.global-ran"\nexit 0\n' },
+      localEntry: localEntry('.local-ran'),
+      gitTracked: true,
+    });
+    expect(r.paradigmAvailable).toBe('true');
+    expect(ran(r, '.local-ran')).toBe(false);
+    expect(ran(r, '.global-ran')).toBe(true);
   });
 });
 
@@ -257,9 +273,8 @@ exit 0
  * run from the project root, even when `git commit` runs in a subdirectory.
  */
 describe.skipIf(process.platform === 'win32')('pre-commit hooks — local CLI from the project root', () => {
-  const LOCAL = `#!/bin/sh
-[ "$1" = "index" ] && pwd -P > "$HOME/.local-index-ran"
-exit 0
+  const ENTRY = `
+if (process.argv[2] === 'index') require('fs').writeFileSync(require('path').join(process.env.HOME, '.local-index-ran'), process.cwd());
 `;
 
   function precommit(
@@ -272,21 +287,16 @@ exit 0
     cleanups.push(() => fs.rmSync(root, { recursive: true, force: true }));
     fs.mkdirSync(path.join(root, '.paradigm'), { recursive: true });
     fs.mkdirSync(path.join(root, 'packages', 'app'), { recursive: true });
-    const bin = path.join(root, 'node_modules', '.bin', 'paradigm');
-    fs.mkdirSync(path.dirname(bin), { recursive: true });
-    fs.writeFileSync(bin, LOCAL, { mode: 0o755 });
-    const pkg = path.join(root, 'node_modules', '@a-company', 'paradigm', 'package.json');
-    fs.mkdirSync(path.dirname(pkg), { recursive: true });
-    fs.writeFileSync(pkg, JSON.stringify({ name: '@a-company/paradigm' }));
+    installLocal(root, ENTRY);
     if (git) spawnSync('git', ['init', '-q', root]);
     const res = spawnSync('sh', [path.join(SCRIPTS, hook)], {
       cwd: path.join(root, 'packages', 'app'),
       input: JSON.stringify(input(root)),
       encoding: 'utf8',
-      env: { PATH: '/usr/bin:/bin', HOME: root, PARADIGM_HOOK_MONITOR_OFF: '1', ...env(root) },
+      env: { PATH: `${nodeOnlyDir()}:/usr/bin:/bin`, HOME: root, PARADIGM_HOOK_MONITOR_OFF: '1', ...env(root) },
     });
-    const ran = path.join(root, '.local-index-ran');
-    return { status: res.status, ranIn: fs.existsSync(ran) ? fs.readFileSync(ran, 'utf8').trim() : null, root };
+    const marker = path.join(root, '.local-index-ran');
+    return { status: res.status, ranIn: fs.existsSync(marker) ? fs.realpathSync(fs.readFileSync(marker, 'utf8').trim()) : null, root };
   }
 
   it('without a repo or project dir, a subdirectory is not mistaken for the root', () => {

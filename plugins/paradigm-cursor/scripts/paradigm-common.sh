@@ -80,9 +80,9 @@ _pm_mark cli-resolve
 # Every compliance check below runs through $PARADIGM_BIN. If NO real paradigm
 # CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
 # loudly. paradigm-resolve.sh (shared with the pre-commit hooks) owns the order:
-# the project root's own @a-company/paradigm, then `paradigm` on PATH, then
-# `npx --no-install --package=@a-company/paradigm paradigm`. The project root is
-# $CWD (the caller contract above), not $PWD.
+# the project root's own @a-company/paradigm (never one committed to git), then
+# `paradigm` on PATH; no npx. The project root is $CWD (the caller contract
+# above), not $PWD.
 # Beside this file: bash knows where it was sourced from; the stop hooks also set
 # SCRIPT_DIR before sourcing.
 if [ -n "${BASH_SOURCE:-}" ]; then

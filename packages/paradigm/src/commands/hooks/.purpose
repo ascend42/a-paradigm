@@ -76,22 +76,26 @@ components:
   paradigm-resolve:
     description: |
       Sourced POSIX-sh helper (scripts/paradigm-resolve.sh, copied to both
-      plugins and written by `paradigm hooks install` beside paradigm-common.sh)
-      that is the one place the hooks find the paradigm CLI. Used by
-      paradigm-common.sh (Stop hooks, project root = the caller's $CWD) and both
-      pre-commit hooks (project root = CLAUDE_PROJECT_DIR / Cursor input cwd,
-      then the git toplevel, then pwd; the hook cd's there before indexing).
-      `_pm_resolve_paradigm <root>` sets PARADIGM_BIN to a single command word:
-      (1) <root>/node_modules/.bin/paradigm when
-      <root>/node_modules/@a-company/paradigm/package.json exists (the root
-      only, never a parent or the subdirectory the hook ran from; no npx,
+      plugins and written by `paradigm hooks install` beside paradigm-common.sh;
+      the git post-commit / pre-push hooks embed it, hook version 3) that is the
+      one place the hooks find the paradigm CLI. Used by paradigm-common.sh
+      (Stop hooks, project root = the caller's $CWD), both pre-commit hooks
+      (project root = CLAUDE_PROJECT_DIR / Cursor input cwd, then the git
+      toplevel, then pwd; the hook cd's there before indexing) and the git hooks
+      (git toplevel). `_pm_resolve_paradigm <root>` normalises the root with
+      `cd && pwd -P` and sets PARADIGM_BIN to a single command word:
+      (1) the project's own @a-company/paradigm: node runs the `paradigm` bin
+      entry read from <root>/node_modules/@a-company/paradigm/package.json
+      (never whatever another package put at node_modules/.bin/paradigm), the
+      root only (never a parent or the subdirectory the hook ran from), and
+      never a copy committed to git (`git ls-files` non-empty); no npx,
       because npm 11 applies the project's devEngines to npx and a pnpm-only
-      repo fails EBADDEVENGINES), so a project that pins Paradigm gets its
-      version; (2) `paradigm` on PATH; (3) `npx --no-install
-      --package=@a-company/paradigm paradigm`, probed with --version (never a
-      fetch, never the unrelated public `paradigm` package). The plugin's MCP
-      launcher (#paradigm-mcp-launch) uses the same order.
-      paradigm-skill-used.sh deliberately stays PATH-only (Aegis L3).
+      repo fails EBADDEVENGINES; (2) `paradigm` on PATH. No npx step (Aegis
+      P1): with the project copy first it could only reach npx's cache or apply
+      the project's .npmrc. The plugin's MCP launcher (#paradigm-mcp-launch)
+      uses the same order. Aegis L3 is narrowed, not dropped: only
+      @a-company/paradigm at the project root runs (the trust of the workspace
+      itself); paradigm-skill-used.sh stays PATH-only (no project root).
     type: utility
     file: scripts/paradigm-resolve.sh
     components:

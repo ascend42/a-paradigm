@@ -239,11 +239,26 @@ function validateBashSyntax(scriptContent: string, scriptName: string): string |
   }
 }
 
+/**
+ * The git hooks below are standalone files in .git/hooks, so they carry their own
+ * copy of paradigm-resolve.sh (RESOLVE_HOOK, the same source the Claude Code and
+ * Cursor hooks use): the project's own @a-company/paradigm, then `paradigm` on
+ * PATH. Never `npx paradigm`: without a TTY npx installs and runs whatever the
+ * public registry calls "paradigm", an unrelated package.
+ */
+const GIT_HOOK_RESOLVE = `# --- paradigm CLI lookup (paradigm-resolve.sh) ---
+${RESOLVE_HOOK.replace(/^#!.*\n/, '')}
+# The repository root: git runs these hooks there; the lookup is pinned to it.
+_PM_GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+`;
+
 const POST_COMMIT_HOOK = `#!/bin/sh
 # Paradigm post-commit hook - captures history from commits
 # Installed by: paradigm hooks install
-# paradigm-hook-version: 2   (v2 adds the provider-agnostic sync-commit delegate)
+# paradigm-hook-version: 3   (v2 adds the provider-agnostic sync-commit delegate;
+#                             v3 resolves the CLI like the other hooks, no npx)
 
+${GIT_HOOK_RESOLVE}
 # Get the commit message and hash
 COMMIT_HASH=$(git rev-parse HEAD)
 COMMIT_MSG=$(git log -1 --pretty=%B)
@@ -291,7 +306,9 @@ fi
 # commit is NEVER slowed-to-notice or blocked. The hook NEVER names a provider —
 # sync-commit resolves it abstractly from the task's external_ref via the registry.
 if [ -n "$MSG_SYMBOLS" ]; then
-  npx paradigm task sync-commit --hash "$COMMIT_HASH" --symbols "$MSG_SYMBOLS" >/dev/null 2>&1 || true
+  if _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
+    $PARADIGM_BIN task sync-commit --hash "$COMMIT_HASH" --symbols "$MSG_SYMBOLS" >/dev/null 2>&1 || true
+  fi
 fi
 
 # Determine intent from commit message
@@ -337,10 +354,12 @@ fi
 const PRE_PUSH_HOOK = `#!/bin/sh
 # Paradigm pre-push hook - reindex history before pushing
 # Installed by: paradigm hooks install
+# paradigm-hook-version: 3   (v3 resolves the CLI like the other hooks, no npx)
 
-if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ]; then
+${GIT_HOOK_RESOLVE}
+if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ] && _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
   echo "[paradigm] Reindexing history..."
-  npx paradigm history reindex 2>/dev/null || true
+  $PARADIGM_BIN history reindex 2>/dev/null || true
 fi
 `;
 

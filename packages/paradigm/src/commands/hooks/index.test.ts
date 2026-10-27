@@ -216,7 +216,45 @@ describe('hooksInstallCommand - Git', () => {
     // It must NEVER name a provider (provider-agnostic).
     expect(content).not.toContain('gh ');
     // Version marker bumped so `hooks install --force` re-emits.
-    expect(content).toContain('paradigm-hook-version: 2');
+    expect(content).toContain('paradigm-hook-version: 3');
+  });
+
+  // The git hooks resolve the CLI like the other hooks (embedded paradigm-resolve.sh):
+  // the project's own @a-company/paradigm, then PATH. Never `npx paradigm`, which
+  // without a TTY installs and runs the unrelated public "paradigm" package.
+  it.skipIf(process.platform === 'win32')('post-commit and pre-push run the project copy and never npx', async () => {
+    execFileSync('git', ['init', '-q', rootDir]); // the fixture's .git is only a hooks folder
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ postCommit: true, prePush: true, force: true });
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    for (const f of ['post-commit', 'pre-push']) {
+      const content = fs.readFileSync(path.join(hooksDir, f), 'utf8');
+      expect(content, f).not.toMatch(/npx\s+(--\S+\s+)*paradigm/);
+      expect(content, f).toContain('_pm_resolve_paradigm "$_PM_GIT_ROOT"');
+    }
+
+    // The project's own copy records each call; a stub npx would mark any use.
+    const pkgDir = path.join(rootDir, 'node_modules', '@a-company', 'paradigm');
+    fs.mkdirSync(path.join(pkgDir, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@a-company/paradigm', bin: { paradigm: './dist/index.js' } }));
+    fs.writeFileSync(
+      path.join(pkgDir, 'dist', 'index.js'),
+      `require('fs').appendFileSync(${JSON.stringify(path.join(rootDir, 'calls.log'))}, process.argv.slice(2, 4).join(' ') + '\\n');\n`,
+    );
+    fs.writeFileSync(path.join(rootDir, '.gitignore'), 'node_modules/\ncalls.log\nnpx.log\nbin/\n');
+    const bin = path.join(rootDir, 'bin');
+    fs.mkdirSync(bin);
+    fs.symlinkSync(process.execPath, path.join(bin, 'node'));
+    fs.writeFileSync(path.join(bin, 'npx'), `#!/bin/sh\necho "$*" >> '${path.join(rootDir, 'npx.log')}'\n`, { mode: 0o755 });
+    fs.mkdirSync(path.join(rootDir, '.paradigm', 'history'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, '.paradigm', 'history', 'log.jsonl'), '');
+
+    const env = { PATH: `${bin}:/usr/bin:/bin`, HOME: homeDir, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+    execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'fix: x\n\nSymbols: #a'], { cwd: rootDir, env, stdio: 'pipe' });
+    execFileSync('sh', [path.join(hooksDir, 'pre-push')], { cwd: rootDir, env, stdio: 'ignore' });
+
+    expect(fs.readFileSync(path.join(rootDir, 'calls.log'), 'utf8').split('\n').filter(Boolean)).toEqual(['task sync-commit', 'history reindex']);
+    expect(fs.existsSync(path.join(rootDir, 'npx.log'))).toBe(false);
   });
 
   it('preserves existing git hooks (no overwrite)', async () => {
