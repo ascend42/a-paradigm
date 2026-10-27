@@ -124,7 +124,7 @@ import { EDIT_RULE_TOOLS as EDIT_SCOPE_TOOLS } from './rules.js';
 import { answerFor, askNoteCap, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCOPE_KINDS, inputHash, withEditScopes, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
-import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle } from './local-session.js';
+import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle, type LocalSessionAsker } from './local-session.js';
 import type { LocalProbeSink } from '../local/config-request.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
@@ -2130,6 +2130,14 @@ export class SessionSupervisor {
   /** The lane's probe state for request.local.probe (a Check again of a configured endpoint refreshes it). */
   localProbeSink(): LocalProbeSink {
     return this.#local;
+  }
+
+  /**
+   * Slice B2 (#local-working-memory): the human-only local-session requests (request.session.compact | .context |
+   * .memory.delete), dispatcher-only; LocalLane.humanRequest re-checks the asker and the owner.
+   */
+  localSessionRequest(asker: LocalSessionAsker, kind: string, payload: unknown): Promise<Record<string, unknown>> {
+    return this.#local.humanRequest(asker, kind, payload);
   }
 
   /** The local lane config new opens use (undefined = none). */

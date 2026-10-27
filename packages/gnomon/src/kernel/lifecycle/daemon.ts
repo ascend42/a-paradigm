@@ -1531,6 +1531,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
       // TD-2026-10-23-162 (#folder-picker): the folder field's three read-only asks (status.folders is the human's)
       folders: { choose: (asker: FolderAsker, payload: unknown) => folderPicker.choose(asker, payload), check: (asker: FolderAsker, payload: unknown) => folderPicker.check(asker, payload), recent: (asker: FolderAsker, payload: unknown) => folderPicker.recent(asker, payload), status: () => folderPicker.status(), connectionClosed: (connId: string) => folderPicker.connectionClosed(connId) },
       mcp: { request: (asker: Parameters<McpServers['request']>[0], kind: string, payload: unknown) => mcpServers.request(asker, kind, payload), status: () => mcpServers.status() },
+      localSession: { request: (asker: Parameters<SessionSupervisor['localSessionRequest']>[0], kind: string, payload: unknown) => supervisor.localSessionRequest(asker, kind, payload) },
       local: { request: (asker: Parameters<LocalConfigCards['request']>[0], payload: unknown) => localCards.request(asker, payload), probe: (asker: Parameters<LocalConfigCards['probe']>[0], payload: unknown) => localCards.probe(asker, payload), status: () => localStatus() },
     },
     reads: { log, hub },
