@@ -32,20 +32,35 @@
  *     (STEP_LIMIT_PROMPT) and that reply is the answer; stopReason stays
  *     'max_steps' (a failing final request ends max_steps with its error).
  *
+ * Slice B1 (TD-2026-10-27-833):
+ *   - the context LEDGER (budget.ts) replaces the ad hoc #budget: slots
+ *     system / memory (0 until B2) / tools (native schema or text-tool
+ *     prompt) / history / reply, same 0.85 headroom; every turn start emits
+ *     `context_report{turn, target, slots, historyUsed, compactions}`;
+ *   - every tool result is SHAPED (shape.ts) under min(1500 tokens, the
+ *     history slot's share of the turn); an over-cap result keeps its head and
+ *     a spill handle `@rN` read back with read_section; the read_file page is
+ *     sized under the same cap so its paging note survives;
+ *   - the session's spill store and the set of files the model wrote live on
+ *     the agent (session lifetime).
+ *
  * DEFERRED: the JSONL session tree (where it lives is open: the session
  * profile denies writes under the Gnomon home, so the kernel would have to
  * read it from the child's stdout or a worktree path).
  */
 import { createHash } from 'node:crypto';
-import { buildRequest, type ChatMessage, type CompatProfile, type ToolSurface } from './compat.js';
+import { buildRequest, orderTools, surfaceTools, type ChatMessage, type CompatProfile, type ToolSurface } from './compat.js';
 import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
+import { contextLedger, contextReport, resultCapChars, type ContextLedger } from './budget.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
+import { neutraliseResult, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
 import { runTool, TOOLS } from './tools.js';
-import { surfaceTools } from './compat.js';
 
-/** round 2: the history budget is 85 % of the target minus the native tools schema the request also carries */
-export const TARGET_HEADROOM = 0.85;
+export { TARGET_HEADROOM } from './budget.js';
+
+/** Slice B1: room a read_file page leaves under its shaping cap for the paging note. */
+const PAGE_NOTE_CHARS = 300;
 
 export type Emit = (ev: Record<string, unknown>) => void;
 
@@ -85,6 +100,8 @@ export class Agent {
   readonly #steer: string[] = [];
   readonly #follow: string[] = [];
   #abort: AbortController | null = null;
+  /** Aegis M2: one per prompt run, passed to the tools as ctx.signal; abort() fires it */
+  #runAbort = new AbortController();
   #running = false;
   /** sticky until the run ends: an abort during tools or steering is never lost */
   #aborted = false;
@@ -92,12 +109,21 @@ export class Agent {
   #compactions = 0;
   /** T-2026-10-26-003: the current prompt (the user message that started this run): compaction's Goal */
   #goal: string | undefined;
+  /** slice B1: the context ledger (fixed for the session: the system message, tools and reply budget do not change) */
+  readonly #ledger: ContextLedger;
+  /** slice B1: full text of shaped results (`@rN`), session lifetime */
+  readonly #spill = new SpillStore();
+  /** slice B1: realpaths the model wrote this session (reads of them are labelled model-generated) */
+  readonly #written = new Set<string>();
 
   constructor(o: AgentOptions) {
     this.#o = o;
-    this.#tools = o.allowTools ? TOOLS.filter((t) => o.allowTools!.includes(t.name)) : TOOLS;
-    const sys = [o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.', !o.nativeTools && o.surface !== 'none' ? textToolPrompt(this.#tools) : ''].filter(Boolean).join('\n\n');
+    this.#tools = orderTools(o.allowTools ? TOOLS.filter((t) => o.allowTools!.includes(t.name)) : TOOLS);
+    const textTools = !o.nativeTools && o.surface !== 'none' ? textToolPrompt(this.#tools) : '';
+    const sys = [o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.', textTools].filter(Boolean).join('\n\n');
     this.#messages.push({ role: 'system', content: sys });
+    const schema = o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(this.#tools, o.surface)).length / 4) : 0;
+    this.#ledger = contextLedger({ target: o.contextTarget ?? DEFAULT_CONTEXT_TARGET, systemMessageTokens: estimateTokens([this.#messages[0]!]), toolsTokens: o.nativeTools ? schema : Math.ceil(textTools.length / 4), toolsInSystem: !o.nativeTools, replyTokens: o.maxTokens });
   }
 
   get running(): boolean {
@@ -112,10 +138,14 @@ export class Agent {
     return this.#o.contextTarget ?? DEFAULT_CONTEXT_TARGET;
   }
 
-  /** tokens the history + reply may use: target × 0.85 minus the tools schema sent natively */
+  /** tokens the messages (system included) + reply may use: the ledger's messageBudget (target × 0.85 minus the native schema) */
   get #budget(): number {
-    const schema = this.#o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(this.#tools, this.#o.surface)).length / 4) : 0;
-    return Math.floor(this.#target * TARGET_HEADROOM) - schema;
+    return this.#ledger.messageBudget;
+  }
+
+  /** slice B1: the slot report at a turn start */
+  #report(turn: number): void {
+    this.#o.emit(contextReport(this.#ledger, turn, this.#compactions, estimateTokens(this.#messages.slice(1))));
   }
 
   /** `noTools`: the step-limit request — no tools offered (surface 'none', nativeTools false) */
@@ -164,6 +194,7 @@ export class Agent {
   async #finalAnswer(total: { input: number; output: number }): Promise<void> {
     const turn = ++this.#turn;
     this.#o.emit({ type: 'turn_start', turn, final: true });
+    this.#report(turn);
     const promptTokens = Math.ceil(STEP_LIMIT_PROMPT.length / 4) + 4;
     let compacted = false;
     if (this.#messages.length > 2 && estimateTokens(this.#messages) + promptTokens + this.#o.maxTokens > this.#budget) {
@@ -205,12 +236,15 @@ export class Agent {
   abort(): void {
     if (this.#running) this.#aborted = true;
     this.#abort?.abort();
+    // Aegis M2: the run's tools (grep's walk) see it too
+    if (this.#running) this.#runAbort.abort();
   }
 
   async prompt(text: string): Promise<void> {
     if (this.#running) throw new Error('agent is busy (use steer or follow_up)');
     this.#running = true;
     this.#aborted = false;
+    this.#runAbort = new AbortController();
     this.#messages.push({ role: 'user', content: text });
     this.#goal = text;
     const total = { input: 0, output: 0 };
@@ -237,6 +271,7 @@ export class Agent {
         }
         const turn = ++this.#turn;
         this.#o.emit({ type: 'turn_start', turn });
+        this.#report(turn);
         // ~8k working target: compact before a request that would not fit (there must be history to compact)
         // round 2: at most ONE compaction per step; still over the budget after it ⇒ a clear error, never a loop
         let compacted = false;
@@ -270,21 +305,30 @@ export class Agent {
         });
         this.#o.emit({ type: 'message_end', message: { role: 'assistant', content: c.content, toolCalls: calls.map((t) => ({ id: t.id, name: t.name })) }, usage: c.usage, finishReason: c.finishReason });
         if (calls.length > MAX_TOOL_CALLS_PER_TURN) throw new Error(`${calls.length} tool calls in one turn (cap ${MAX_TOOL_CALLS_PER_TURN})`);
-        // T-2026-10-26-003: one turn's read_file pages share a quarter of the budget (tokens × 4 chars ⇒ budget bytes)
-        const readCap = Math.floor(Math.max(this.#budget, 256) / Math.max(1, calls.filter((t) => t.name === 'read_file').length));
+        // slice B1: each result of this turn is shaped under min(1500 tokens, the history slot's share)
+        const resultCap = resultCapChars(this.#ledger, calls.length);
+        // T-2026-10-26-003: one turn's read_file pages share a quarter of the budget (tokens × 4 chars ⇒ budget bytes);
+        // slice B1: never more than the shaping cap less the paging note, so a page is never spilled
+        const reads = Math.max(1, calls.filter((t) => t.name === 'read_file').length);
+        const readCap = Math.min(Math.floor(Math.min(Math.max(this.#budget, 256), SHAPE_CAP_CHARS - PAGE_NOTE_CHARS) / reads), resultCap - PAGE_NOTE_CHARS);
         const results = await Promise.all(
           calls.map(async (t) => {
             const r = repairArguments(t.arguments);
             if (r.repaired) this.#o.emit({ type: 'model_repair', toolCallId: t.id, toolName: t.name, steps: r.steps });
             this.#o.emit({ type: 'tool_execution_start', toolCallId: t.id, toolName: t.name, args: r.ok ? r.value : null });
-            const res = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, readCap, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
+            const raw = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, readCap, resultCap, spill: this.#spill, written: this.#written, signal: this.#runAbort.signal, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
+            // slice B1: shaping is the final cap of every result (G-LCL-12)
+            const res = shapeResult(raw, { cap: resultCap, spill: this.#spill, tool: t.name.slice(0, 64) });
             this.#o.emit({ type: 'tool_execution_end', toolCallId: t.id, toolName: t.name, isError: res.isError, result: res.content.slice(0, 4096) });
             return { t, res };
           }),
         );
         for (const { t, res } of results) {
           if (this.#o.nativeTools) this.#messages.push({ role: 'tool', tool_call_id: t.id, content: res.content });
-          else this.#messages.push({ role: 'user', content: `<tool_result name="${t.name}"${res.isError ? ' error="true"' : ''}>\n${res.content}\n</tool_result>` });
+          // Aegis M5: the body can never close or forge the block (a repo file holding `</tool_result>`): a labelled result
+          // was neutralised inside its frame by shapeResult (its own frame must survive); any other body is neutralised
+          // here. The name is model text: reduced to [\w.-].
+          else this.#messages.push({ role: 'user', content: `<tool_result name="${t.name.slice(0, 64).replace(/[^\w.-]/g, '_')}"${res.isError ? ' error="true"' : ''}>\n${res.source ? res.content : neutraliseResult(res.content)}\n</tool_result>` });
         }
         this.#o.emit({ type: 'turn_end', turn, usage: c.usage });
         const steering = this.#steer.splice(0);

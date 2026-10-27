@@ -106,8 +106,10 @@ describe('history surgery', () => {
 });
 
 describe('the agent keeps its history under the working target', () => {
+  // slice B1: the native schema is part of the budget; these cases are sized for the slice-1 tool set
+  const SLICE1_TOOLS = ['list_dir', 'read_file', 'write_file'];
   const agent = (cwd: string, evs: Array<Record<string, unknown>>, contextTarget: number): Agent =>
-    new Agent({ base: srv!.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 6, maxTokens: 256, contextTarget, emit: (e) => evs.push(e) });
+    new Agent({ base: srv!.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 6, maxTokens: 256, contextTarget, allowTools: SLICE1_TOOLS, emit: (e) => evs.push(e) });
 
   // T-2026-10-26-003: read_file pages are capped at a quarter of the budget, so it takes several reads to fill it
   const READ = { toolCalls: [{ name: 'read_file', arguments: '{"path":"big.txt"}' }] };
@@ -278,9 +280,11 @@ describe('T-2026-10-26-003: compaction pins the current goal and keeps what was 
     fs.writeFileSync(path.join(cwd, '.paradigm', 'flow-index.json'), 'f'.repeat(60_000));
     fs.writeFileSync(path.join(cwd, '.paradigm', 'graduation.yaml'), 'g'.repeat(60_000));
     const reads = ['session-checkpoint.json', 'flow-index.json', 'graduation.yaml'].map((f) => ({ name: 'read_file', arguments: JSON.stringify({ path: path.join('.paradigm', f) }) }));
-    srv = await fakeOpenAI({ script: [{ content: 'Old work done.' }, { toolCalls: reads }, { content: '## Goal\nrecover a checkpoint' }, { content: 'Yes: FACT-cp-7.' }] });
+    // slice B1: one turn's results now fit the history slot (shaped to its share), so the old task's long reply is what
+    // pushes the history over the budget
+    srv = await fakeOpenAI({ script: [{ content: `Old work done. ${'o'.repeat(2400)}` }, { toolCalls: reads }, { content: '## Goal\nrecover a checkpoint' }, { content: 'Yes: FACT-cp-7.' }] });
     const evs: Array<Record<string, unknown>> = [];
-    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 6, maxTokens: 5600, contextTarget: 8192, emit: (e) => evs.push(e) });
+    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 6, maxTokens: 5600, contextTarget: 8192, allowTools: ['list_dir', 'read_file', 'write_file'], emit: (e) => evs.push(e) }); // slice B1: sized for the slice-1 tool schema
     await a.prompt('OLD TASK: refactor the parser');
     await a.prompt('can we see if there is a paradigm checkpoint we can recover');
     // three parallel reads share a quarter of the budget: none of them is a 64k-token page
