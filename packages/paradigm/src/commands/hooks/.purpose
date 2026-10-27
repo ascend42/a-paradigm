@@ -81,7 +81,10 @@ components:
       (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
       --exclude-standard` (nested agent worktrees and node_modules are skipped)
       and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
-      Check 4 anchors); (3) no network (npx --no-install); (4) generated-state
+      Check 4 anchors); (3) no network: the CLI resolves as `paradigm` on PATH,
+      then the project's node_modules/.bin/paradigm (found without npx, which
+      npm 11 fails with EBADDEVENGINES in pnpm-only repos), then
+      npx --no-install; (4) generated-state
       scope (8.0): when every modified file is .paradigm/* or .warpline/*,
       at the root or nested in a package (packages/x/.paradigm/events; the
       hooks, post-commit and MCP tools write these on every turn) no code

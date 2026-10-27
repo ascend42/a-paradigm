@@ -31,9 +31,26 @@ if [ ! -d ".paradigm" ]; then
   exit 0
 fi
 
+# The project's own install (node_modules/.bin from the project up), found
+# without npx: npm 11 applies the project's devEngines to npx, so
+# `npx --no-install paradigm` exits EBADDEVENGINES in a repo that requires pnpm.
+_pm_find_local_paradigm() {
+  _pm_d=$PWD
+  while :; do
+    if [ -x "$_pm_d/node_modules/.bin/paradigm" ]; then
+      _PM_LOCAL_PARADIGM="$_pm_d/node_modules/.bin/paradigm"
+      return 0
+    fi
+    [ -z "$_pm_d" ] && return 1
+    _pm_d=${_pm_d%/*}
+  done
+}
+
 # Run paradigm index --quiet (the existing CLI command)
 if command -v paradigm >/dev/null 2>&1; then
   paradigm index --quiet 2>/dev/null || true
+elif _pm_find_local_paradigm; then
+  "$_PM_LOCAL_PARADIGM" index --quiet 2>/dev/null || true
 elif command -v npx >/dev/null 2>&1; then
   # --no-install: never let npx fetch the unrelated public "paradigm" package
   # (a network round-trip inside a 15 s hook, and the wrong binary).

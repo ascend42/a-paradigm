@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **The Claude Code plugin's MCP server starts in repos that require pnpm** (`#paradigm-plugin`). The plugin launched `npx --package=@a-company/paradigm paradigm-mcp` from the project folder, and npm 11 applies the project's `devEngines` to `npx`. A repo with `devEngines.packageManager` set to pnpm and `onFail: "error"` made npx exit with `EBADDEVENGINES`, so the plugin server showed as `CONNECTION_CLOSED`. `plugins/paradigm/.mcp.json` now passes `--prefix=${CLAUDE_PLUGIN_ROOT}`, so npx checks the plugin folder (which has no `package.json`) instead of the project. The server still takes the project from its argument, so nothing else changes. Because the launch line changed, Gnomon asks once to approve the plugin server again. The Cursor plugin keeps its old launch line until Cursor's expansion of `${userHome}` in plugin configs is confirmed: an unexpanded variable makes npm fail with `ENOENT`.
+- **The plugin's MCP server and hooks work in repos that require pnpm** (`#paradigm-mcp-launch`). npm 11 applies the nearest `package.json`'s `devEngines` to `npx`, so in a repo with `devEngines.packageManager` set to pnpm and `onFail: "error"`, the plugin's `npx --package=@a-company/paradigm paradigm-mcp` exited with `EBADDEVENGINES` (the server showed as `CONNECTION_CLOSED`), and the hooks' `npx --no-install paradigm` failed silently (Stop reported the CLI as missing, pre-commit skipped the index rebuild).
+  - The MCP server now starts through `plugins/paradigm/scripts/paradigm-mcp-launch.cjs`: the project's `node_modules/.bin/paradigm-mcp`, then `paradigm-mcp` on `PATH`, then `npx` run from the plugin folder. The server always runs in the project, with the project as its argument. `npx --prefix` was not used: it also moves npm's global prefix and global config, so a global install and the global `npmrc` would be ignored.
+  - The hooks (`paradigm-common.sh`, both pre-commit hooks, and the copies `paradigm hooks install` writes) find the project's `node_modules/.bin/paradigm` before trying `npx --no-install`.
+  - The Cursor plugin gets the hook fix. Its MCP launch line is unchanged until a plugin-relative launcher path is confirmed in Cursor.
 
 ## [8.0.3] — 2026-10-24
 

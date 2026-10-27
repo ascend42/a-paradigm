@@ -4,6 +4,8 @@
  *
  * The fix (paradigm-common.sh:42-108) resolves the CLI once at the top:
  *   - `command -v paradigm`, else
+ *   - the project's own node_modules/.bin/paradigm (no npx: npm 11 applies the
+ *     project's devEngines to npx, so a pnpm-only repo fails EBADDEVENGINES), else
  *   - `npx --no-install paradigm --version` (the `--no-install` flag guarantees
  *     npx NEVER auto-installs the unrelated public `paradigm` registry package).
  * When neither resolves, PARADIGM_AVAILABLE stays false and the hook:
@@ -47,9 +49,11 @@ interface RunResult {
 function run(opts: {
   path: string;                       // PATH for the shell
   binScripts?: Record<string, string>; // name → sh body (chmod +x)
+  localParadigm?: string;              // sh body for <root>/node_modules/.bin/paradigm
+  rootPrefix?: string;
   modified?: string[];
 }): RunResult {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-nocli-'));
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), opts.rootPrefix ?? 'paradigm-nocli-'));
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-nocli-bin-'));
   cleanups.push(() => {
     fs.rmSync(rootDir, { recursive: true, force: true });
@@ -61,6 +65,13 @@ function run(opts: {
   // not what makes this block; the missing-CLI fail-closed path is.
   fs.mkdirSync(path.join(rootDir, 'src'), { recursive: true });
   fs.writeFileSync(path.join(rootDir, 'src', 'foo.ts'), 'export const x = 1;\n');
+
+  if (opts.localParadigm !== undefined) {
+    const p = path.join(rootDir, 'node_modules', '.bin', 'paradigm');
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, opts.localParadigm, 'utf8');
+    fs.chmodSync(p, 0o755);
+  }
 
   for (const [name, body] of Object.entries(opts.binScripts ?? {})) {
     const p = path.join(binDir, name);
@@ -164,5 +175,25 @@ esac
     expect(r.stderr).not.toContain('paradigm CLI not found');
     expect(r.violations).not.toContain('compliance checks were SKIPPED');
     expect(r.violations).not.toContain('compliance-check failed to run');
+  });
+
+  it("the project's own node_modules/.bin/paradigm resolves without npx, even under a path with spaces", () => {
+    // npx fails the way npm 11 does in a repo whose devEngines require pnpm.
+    const npxStub = `#!/bin/sh
+echo "npm error EBADDEVENGINES" >&2
+exit 1
+`;
+    const local = `#!/bin/sh
+[ "$1" = "compliance-check" ] && : > "$HOME/.local-paradigm-ran"
+case "$1" in
+  compliance-check) echo '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}' ;;
+esac
+exit 0
+`;
+    const r = run({ path: '/usr/bin:/bin', binScripts: { npx: npxStub }, localParadigm: local, rootPrefix: 'paradigm local-' });
+    expect(r.paradigmAvailable).toBe('true');
+    expect(r.violations).not.toContain('compliance checks were SKIPPED');
+    expect(r.violations).not.toContain('compliance-check failed to run');
+    expect(fs.existsSync(path.join(r.rootDir, '.local-paradigm-ran'))).toBe(true);
   });
 });

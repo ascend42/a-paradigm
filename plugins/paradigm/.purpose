@@ -1,13 +1,21 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
 name: paradigm
-description: "TODO: describe what this directory/module does"
+description: "The Paradigm Claude Code plugin: hooks (enforcement), skills, agent definitions and the plugin's MCP server launch. Hook scripts are generated from packages/paradigm/src/commands/hooks/scripts by scripts/generate-hooks.mjs; edit the canonical copies, not these."
 context:
-  - "Stub created by Cid during coverage audit — update with real context"
-  - ".mcp.json launches paradigm-mcp via npx with --prefix=${CLAUDE_PLUGIN_ROOT}: npm 11 applies the project's devEngines to npx, so running from the project folder fails in repos that require pnpm"
+  - ".claude-plugin/plugin.json version must equal @a-company/paradigm's (tests/plugin-version.test.ts): Claude Code caches installs by version"
+  - "scripts/ is generated except paradigm-mcp-launch.cjs and migrate-to-plugin.sh"
 # Key files touched:
-# - README.md
+# - .mcp.json
+# - scripts/paradigm-mcp-launch.cjs
 components:
   paradigm:
-    description: "TODO: describe this component"
-    tags: []
+    description: "The Claude Code plugin bundle (hooks/hooks.json, skills/, agents/, scripts/) installed from the a-paradigm marketplace"
+    tags: [plugin, claude-code]
+  paradigm-mcp-launch:
+    description: |
+      Starts the plugin's MCP server (.mcp.json runs `node scripts/paradigm-mcp-launch.cjs <project>`).
+      Order: the project's node_modules/.bin/paradigm-mcp, then paradigm-mcp on PATH, then npx run from
+      the plugin folder, which re-enters with --resolved to start the fetched copy. The server always runs
+      with the project as cwd and argument. Why: npm 11 applies the nearest package.json's devEngines to
+      npx, so npx run from a pnpm-only project (onFail "error") exits EBADDEVENGINES; `--prefix` was
+      rejected because it also moves npm's global prefix and globalconfig.
+    tags: [plugin, mcp, launch]
