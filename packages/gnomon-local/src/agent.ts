@@ -77,7 +77,7 @@ import { createHash } from 'node:crypto';
 import { buildRequest, orderTools, surfaceTools, type ChatMessage, type CompatProfile, type ToolSpec, type ToolSurface } from './compat.js';
 import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
-import { contextLedger, contextReport, memorySlotTokens, resultCapChars, TARGET_HEADROOM, type ContextLedger } from './budget.js';
+import { contextLedger, contextReport, memoryBlockTokens, memorySlotTokens, resultCapChars, TARGET_HEADROOM, type ContextLedger } from './budget.js';
 import { MEMORY_TOOLS } from './memory-tools.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
 import { neutraliseResult, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
@@ -138,7 +138,9 @@ export interface MemoryBlock {
 }
 
 /** Slice B2: a memory block's tokens in the system message (the estimate, plus its two-char separator). */
-const memoryTokensOf = (m: MemoryBlock | null): number => (m ? Math.ceil((m.render.length + 2) / 4) : 0);
+const memoryTokensOf = (m: MemoryBlock | null): number => (m ? memoryBlockTokens(m.render) : 0);
+/** Aegis B2 M1: the data section of a memory block (dropped once on a context overflow). */
+const MODEL_SECTION = '\n<working-memory source="model"';
 
 export class Agent {
   readonly #o: AgentOptions;
@@ -174,6 +176,8 @@ export class Agent {
   /** slice B2: the kernel's working-memory block (outside the history) and the one set for the next step */
   #memory: MemoryBlock | null = null;
   #nextMemory: MemoryBlock | null = null;
+  /** Aegis B2 M1: after a context overflow the block goes without its data section, until the next memory_set */
+  #memoryLean = false;
   /** slice B2: the human asked to compact (applied at the next model step) */
   #compactNext = false;
   /** slice B2: the system prompt and the text-tool prompt (the memory block goes between them at request time) */
@@ -211,7 +215,9 @@ export class Agent {
   /** The system message as the request carries it: the system prompt, the memory block, then the text-tool prompt. */
   #requestMessages(): ChatMessage[] {
     if (!this.#memory || this.#messages[0]?.role !== 'system') return this.#messages;
-    const sys: ChatMessage = { role: 'system', content: [this.#sysBase, this.#memory.render, this.#sysTools].filter(Boolean).join('\n\n') };
+    const cut = this.#memoryLean ? this.#memory.render.indexOf(MODEL_SECTION) : -1;
+    const render = cut >= 0 ? this.#memory.render.slice(0, cut) : this.#memory.render;
+    const sys: ChatMessage = { role: 'system', content: [this.#sysBase, render, this.#sysTools].filter(Boolean).join('\n\n') };
     return [sys, ...this.#messages.slice(1)];
   }
 
@@ -272,6 +278,7 @@ export class Agent {
     if (this.#nextMemory !== null) {
       this.#memory = this.#nextMemory;
       this.#nextMemory = null;
+      this.#memoryLean = false;
       changed = true;
     }
     if (this.#nextTarget !== null) {
@@ -318,7 +325,22 @@ export class Agent {
   }
 
   /** `noTools`: the step-limit request — no tools offered (surface 'none', nativeTools false) */
-  #request(noTools = false): Promise<Completion> {
+  /**
+   * Aegis B2 M1: one request; on a context overflow with a memory data section still sent, ONE retry without it
+   * (`memory_trimmed`), before the caller's compact-and-retry. Compaction cannot shrink the memory block; this can.
+   */
+  async #request(noTools = false): Promise<Completion> {
+    try {
+      return await this.#requestOnce(noTools);
+    } catch (err) {
+      if (this.#aborted || !isContextOverflow(err) || this.#memoryLean || !this.#memory?.render.includes(MODEL_SECTION)) throw err;
+      this.#memoryLean = true;
+      this.#o.emit({ type: 'memory_trimmed', reason: 'overflow' });
+      return this.#requestOnce(noTools);
+    }
+  }
+
+  #requestOnce(noTools = false): Promise<Completion> {
     this.#abort = new AbortController();
     const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#requestMessages(), tools: noTools ? [] : this.#tools, nativeTools: noTools ? false : this.#o.nativeTools, surface: noTools ? 'none' : this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
     return complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });

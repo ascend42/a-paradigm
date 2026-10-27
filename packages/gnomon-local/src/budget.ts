@@ -64,6 +64,14 @@ export interface ContextLedger {
 
 const nat = (n: number): number => (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
 
+/** Aegis B2 M1: the memory block is budgeted conservatively from UTF-8 bytes (CJK and emoji cannot overrun the slot). */
+export const MEMORY_BYTES_PER_TOKEN = 2.5;
+
+/** Slice B2: the memory block's tokens: ceil((bytes + 2) / 2.5) (its 2-char separator included); 0 when empty. */
+export function memoryBlockTokens(render: string): number {
+  return render ? Math.ceil((Buffer.byteLength(render, 'utf8') + 2) / MEMORY_BYTES_PER_TOKEN) : 0;
+}
+
 /** Slice B2: the working-memory slot is at most this many tokens … */
 export const MEMORY_SLOT_MAX_TOKENS = 1000;
 /** … and at most this share of the target. */

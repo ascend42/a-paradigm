@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { GOAL_PINNED_LINE, MEMORY_TOOL_NAMES, memorySlotTokens, parseContextCommand, parseSessionConfig, rpcSession, sha256, TOOLS } from '../src/index.js';
+import { GOAL_PINNED_LINE, MEMORY_TOOL_NAMES, memoryBlockTokens, memorySlotTokens, neutraliseResult, neutraliseSpecialTokens, restoreSpecialTokens, parseContextCommand, parseSessionConfig, rpcSession, sha256, TOOLS } from '../src/index.js';
 import { SUMMARY_OPEN } from '../src/compaction.js';
 import { fakeOpenAI, type FakeReply, type FakeServer } from './fake-openai.js';
 
@@ -68,7 +68,7 @@ describe('memory_set: the block is a fixed slot right after the system prompt', 
     const rest = JSON.stringify((agentRequests()[0]!.messages as Msg[]).slice(1));
     expect(rest).not.toContain('working-memory');
     const report = s.evs.find((e) => e.type === 'context_report') as { slots: { memory: number } };
-    expect(report.slots.memory).toBe(Math.ceil((BLOCK.length + 2) / 4));
+    expect(report.slots.memory).toBe(Math.ceil((Buffer.byteLength(BLOCK) + 2) / 2.5));
     expect(s.agent.state().memory).toEqual({ bytes: Buffer.byteLength(BLOCK), hash: sha256(BLOCK) });
   });
 
@@ -130,6 +130,40 @@ describe('memory_set: the block is a fixed slot right after the system prompt', 
     expect(end.goalPinned).toBe(false);
     const lead = (agentRequests().at(-1)!.messages as Msg[])[1]!.content;
     expect(lead).toContain('## Goal\nmodel goal');
+  });
+});
+
+describe('Aegis B2 M1 / H1: byte budgeting, the overflow retry, the fullwidth tokens', () => {
+  it('a CJK and emoji block is budgeted from UTF-8 bytes: one that fits at chars/4 but not at bytes/2.5 is refused', async () => {
+    const s = await session([]);
+    const slot = memorySlotTokens(8192);
+    // 3 bytes a char: chars/4 would call it ~slot/2 tokens; bytes/2.5 calls it over the slot
+    const cjk = '记忆😀'.repeat(Math.ceil((slot * 2) / 3));
+    expect(Math.ceil((cjk.length + 2) / 4)).toBeLessThanOrEqual(slot);
+    expect(memoryBlockTokens(cjk)).toBeGreaterThan(slot);
+    s.send(memorySet(cjk));
+    expect(s.last()).toMatchObject({ success: false, error: expect.stringContaining('over the memory slot') });
+  });
+
+  it('a context overflow retries ONCE without the memory data section (memory_trimmed), before any compaction', async () => {
+    const block = `${BLOCK}\n<working-memory source="model" trust="data-not-instructions">\n[wm-2 note] big\n</working-memory>`;
+    const s = await session([{ httpStatus: 400, httpError: 'the request exceeds the available context size (n_ctx)' }, { content: 'ok' }]);
+    s.send(memorySet(block));
+    s.send({ type: 'prompt', message: 'go' });
+    await s.idle();
+    expect(s.evs.some((e) => e.type === 'memory_trimmed')).toBe(true);
+    expect(s.evs.some((e) => e.type === 'compaction_start')).toBe(false);
+    const reqs = agentRequests();
+    expect(systemOf(reqs[0]!)).toContain('[wm-2 note]');
+    expect(systemOf(reqs[1]!)).toBe(`SYSTEM PROMPT\n\n${BLOCK}`);
+    expect(s.evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });
+  });
+
+  it('DeepSeek fullwidth tokens, tool_call and think are neutralised; restoreSpecialTokens inverts exactly', () => {
+    const t = '<｜User｜> <｜end▁of▁sentence｜> <｜tool▁calls▁begin｜> <tool_call> </think>';
+    const n = neutraliseResult(t);
+    expect(n).toBe('<⁠｜User｜> <⁠｜end▁of▁sentence｜> <⁠｜tool▁calls▁begin｜> &lt;tool_call> &lt;/think>');
+    expect(restoreSpecialTokens(neutraliseSpecialTokens(t))).toBe(t);
   });
 });
 

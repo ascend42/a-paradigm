@@ -66,7 +66,8 @@ export const DATA_CLOSE = '</tool-data>';
 export const escapeData = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 /** The block names whose open or close tag a result must never carry. */
-export const DELIMITER_NAMES: readonly string[] = Object.freeze(['tool-data', 'tool_result', 'tool-result-excerpt', 'compaction-summary']);
+// Aegis B2 H1: `tool_call` (the text-tool call block) and `think` (reasoning blocks) too
+export const DELIMITER_NAMES: readonly string[] = Object.freeze(['tool-data', 'tool_result', 'tool-result-excerpt', 'compaction-summary', 'tool_call', 'think']);
 
 const isSpace = (c: string): boolean => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 
@@ -103,8 +104,9 @@ export const WORD_JOINER = '⁠';
  * Mistral (`<s>`, `</s>`, `[INST]`, `[/INST]`, and the v3 control tokens), Gemma (`<start_of_turn>`, `<end_of_turn>`).
  * The opening `<` or `[` is followed by a lookahead of fixed literals: linear, no backtracking.
  */
-const SPECIAL_TOKEN = /([<[])(?=\||\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
-const JOINED_TOKEN = /([<[])⁠(?=\||\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
+// Aegis B2 H1: DeepSeek's fullwidth `<｜User｜>`, `<｜Assistant｜>`, `<｜end▁of▁sentence｜>`, `<｜tool▁…｜>` too
+const SPECIAL_TOKEN = /([<[])(?=\||｜|\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
+const JOINED_TOKEN = /([<[])⁠(?=\||｜|\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
 
 /** A word joiner after the `<` or `[` that opens a special token (module comment). Idempotent. */
 export const neutraliseSpecialTokens = (t: string): string => t.replace(SPECIAL_TOKEN, `$1${WORD_JOINER}`);
