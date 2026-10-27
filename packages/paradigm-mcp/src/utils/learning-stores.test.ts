@@ -4,6 +4,16 @@ import * as os from 'os';
 import * as path from 'path';
 import { listLearningStores, nativeMemorySlug } from './learning-stores.js';
 
+describe('nativeMemorySlug', () => {
+  it("matches Claude Code's project key: every non-alphanumeric character becomes '-'", () => {
+    const root = path.resolve('/tmp/my_repo.v2/a b');
+    expect(nativeMemorySlug(root)).toBe(root.replace(/[^A-Za-z0-9]/g, '-'));
+    expect(nativeMemorySlug(root)).toMatch(/^[A-Za-z0-9-]+$/);
+    if (process.platform === 'win32') expect(nativeMemorySlug('C:\\Users\\me\\repo')).toBe('C--Users-me-repo');
+    else expect(nativeMemorySlug('/Users/me/my_repo.v2')).toBe('-Users-me-my-repo-v2');
+  });
+});
+
 describe('listLearningStores (census)', () => {
   it('lists every store with a class, and counts without throwing', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ls-root-'));

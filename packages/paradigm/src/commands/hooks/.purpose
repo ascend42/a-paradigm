@@ -252,6 +252,12 @@ components:
       since .paradigm/.memory-last-review > 30, or never-reviewed + entries > 15)
       — NO LLM, NO scan, NO content reads. Appends at most one line to ADVISORY;
       NEVER touches VIOLATIONS. Fail-open on missing HOME/dir/stat: emits nothing.
+      <slug> is Claude Code's project key: every character of $CWD other than
+      A-Z a-z 0-9 becomes '-' (Windows C:\Users\me\repo -> C--Users-me-repo;
+      under Git Bash a /c/... $CWD is first converted with cygpath -w). Before
+      PR #63 only '/' was replaced, so Windows paths (and POSIX paths with '.',
+      '_' or spaces) never found the memory dir. Same rule as nativeMemorySlug
+      in paradigm-mcp learning-stores.ts.
     type: utility
     file: scripts/paradigm-common.sh
     tags:

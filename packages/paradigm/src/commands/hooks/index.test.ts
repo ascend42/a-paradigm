@@ -496,9 +496,10 @@ describe('Check 15 — Native memory hygiene nudge (advisory only, TD-2026-09-19
     return { rc, violationCount, violations, advisory };
   }
 
-  // Build the native-memory dir for a repo at `cwd` under a fake `home`.
+  // Build the native-memory dir for a repo at `cwd` under a fake `home`. Claude Code's project key: every
+  // character other than A-Z a-z 0-9 becomes '-' (Windows: C:\Users\x -> C--Users-x).
   function memoryDir(cwd: string, home: string): string {
-    const slug = cwd.replace(/\//g, '-');
+    const slug = cwd.replace(/[^A-Za-z0-9]/g, '-');
     return path.join(home, '.claude', 'projects', slug, 'memory');
   }
 

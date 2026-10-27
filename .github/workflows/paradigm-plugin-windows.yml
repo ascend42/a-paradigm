@@ -19,6 +19,7 @@ on:
       - 'packages/paradigm/tests/plugin-mcp-launch.test.ts'
       - 'packages/paradigm/tests/hooks-missing-cli.test.ts'
       - 'packages/paradigm/tests/e2e/**'
+      - 'packages/paradigm-mcp/src/utils/learning-stores*'
       - '.gitattributes'
       - '.github/workflows/paradigm-plugin-windows.yml'
   workflow_dispatch:
@@ -93,6 +94,11 @@ jobs:
         run: npx vitest run --testTimeout=180000 --hookTimeout=180000 tests/plugin-mcp-launch.test.ts tests/hooks-missing-cli.test.ts src/commands/hooks/index.test.ts src/commands/doctor.test.ts
 
       # No typecheck here: it needs the full workspace build (gnomon types); ci.yml runs it after `npm run build`.
+
+      # Claude Code's project key (C:\Users\x -> C--Users-x) for the native-memory store census.
+      - name: Test (learning-stores project key)
+        working-directory: packages/paradigm-mcp
+        run: npx vitest run src/utils/learning-stores.test.ts
 
       # Real npm 11 and the published @a-company/paradigm (pinned through a temp plugin copy, E2E_VERSION):
       # devEngines pnpm/onFail error above the npx folder, planted node/sh(/cmd) shims in that ancestor's
