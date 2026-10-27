@@ -184,8 +184,10 @@ describe('small items', () => {
     const cwd = scratch();
     fs.writeFileSync(path.join(cwd, 'f.txt'), 'a\n');
     const ctx: ToolContext = { cwd, roots: [cwd] };
-    const [x, y] = await Promise.all([runTool('edit', { path: 'F.TXT', old: 'a', new: 'b' }, ctx), runTool('edit', { path: 'f.txt', old: 'b', new: 'c' }, ctx)]);
-    expect([x.isError, y.isError]).toEqual([false, false]);
-    expect(fs.readFileSync(path.join(cwd, 'f.txt'), 'utf8')).toBe('c\n');
+    // both edits replace the same text: serialised under one lock, exactly one finds it (the order is not fixed);
+    // two locks would let both read 'a' and both "succeed" (a lost update)
+    const [x, y] = await Promise.all([runTool('edit', { path: 'F.TXT', old: 'a', new: 'b' }, ctx), runTool('edit', { path: 'f.txt', old: 'a', new: 'c' }, ctx)]);
+    expect([x.isError, y.isError].filter(Boolean)).toHaveLength(1);
+    expect(fs.readFileSync(path.join(cwd, 'f.txt'), 'utf8')).toBe(x.isError ? 'c\n' : 'b\n');
   });
 });
