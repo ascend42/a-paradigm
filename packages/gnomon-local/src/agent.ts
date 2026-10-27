@@ -140,7 +140,9 @@ export interface MemoryBlock {
 /** Slice B2: a memory block's tokens in the system message (the estimate, plus its two-char separator). */
 const memoryTokensOf = (m: MemoryBlock | null): number => (m ? memoryBlockTokens(m.render) : 0);
 /** Aegis B2 M1: the data section of a memory block (dropped once on a context overflow). */
-const MODEL_SECTION = '\n<working-memory source="model"';
+const MODEL_OPEN_PREFIX = '<working-memory source="model"';
+/** Where a block's data section starts (a data-only render starts at 0; Aegis B2 re-check), or -1 when it has none. */
+const dataSectionAt = (render: string): number => (render.startsWith(MODEL_OPEN_PREFIX) ? 0 : render.indexOf(`\n${MODEL_OPEN_PREFIX}`));
 
 export class Agent {
   readonly #o: AgentOptions;
@@ -215,7 +217,7 @@ export class Agent {
   /** The system message as the request carries it: the system prompt, the memory block, then the text-tool prompt. */
   #requestMessages(): ChatMessage[] {
     if (!this.#memory || this.#messages[0]?.role !== 'system') return this.#messages;
-    const cut = this.#memoryLean ? this.#memory.render.indexOf(MODEL_SECTION) : -1;
+    const cut = this.#memoryLean ? dataSectionAt(this.#memory.render) : -1;
     const render = cut >= 0 ? this.#memory.render.slice(0, cut) : this.#memory.render;
     const sys: ChatMessage = { role: 'system', content: [this.#sysBase, render, this.#sysTools].filter(Boolean).join('\n\n') };
     return [sys, ...this.#messages.slice(1)];
@@ -333,7 +335,7 @@ export class Agent {
     try {
       return await this.#requestOnce(noTools);
     } catch (err) {
-      if (this.#aborted || !isContextOverflow(err) || this.#memoryLean || !this.#memory?.render.includes(MODEL_SECTION)) throw err;
+      if (this.#aborted || !isContextOverflow(err) || this.#memoryLean || !this.#memory || dataSectionAt(this.#memory.render) < 0) throw err;
       this.#memoryLean = true;
       this.#o.emit({ type: 'memory_trimmed', reason: 'overflow' });
       return this.#requestOnce(noTools);
