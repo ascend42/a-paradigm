@@ -35,6 +35,7 @@ import {
   CURSOR_PRETOOLUSE_HOOK,
   CURSOR_POSTTOOLUSE_HOOK,
 } from './generated-hooks.js';
+import { GIT_HOOK_VERSION, gitHookState, gitHookVersion, type GitHookName } from './git-hook-state.js';
 
 /**
  * Detect whether the Paradigm plugin is active in Claude Code.
@@ -364,6 +365,52 @@ fi
 `;
 
 /**
+ * Write one git hook. Without --force an existing hook is kept, except a
+ * Paradigm-owned one (its own header) that is outdated (below
+ * GIT_HOOK_VERSION, or still calling `npx paradigm`): that one is upgraded in
+ * place and the old file kept beside it as <name>.paradigm-v<N>.bak, so any
+ * local edits survive. A hook Paradigm did not write is never touched.
+ */
+function installGitHook(
+  hooksDir: string,
+  name: GitHookName,
+  body: string,
+  opts: { force?: boolean; dryRun?: boolean },
+  installed: string[],
+): void {
+  const hookPath = path.join(hooksDir, name);
+  const content = fs.existsSync(hookPath) ? fs.readFileSync(hookPath, 'utf8') : null;
+  const state = gitHookState(content, name);
+  const upgrade = !opts.force && state === 'outdated' && content !== null;
+  const from = content !== null ? gitHookVersion(content) : 0;
+
+  if (opts.dryRun) {
+    const action = state === 'absent' || opts.force
+      ? 'install'
+      : upgrade ? `upgrade (v${from} → v${GIT_HOOK_VERSION})` : 'skip (exists)';
+    console.log(chalk.gray(`  ${name}: ${action} → ${hookPath}`));
+    return;
+  }
+  if (state !== 'absent' && !opts.force && !upgrade) {
+    if (state === 'current') {
+      console.log(chalk.gray(`${name} hook already installed by paradigm`));
+    } else if (content !== null && content.includes('paradigm')) {
+      console.log(chalk.yellow(`${name} hook exists but was not written by \`paradigm hooks install\`; left as is. Use --force to overwrite.`));
+    } else {
+      console.log(chalk.yellow(`${name} hook exists. Use --force to overwrite.`));
+    }
+    return;
+  }
+  fs.mkdirSync(hooksDir, { recursive: true });
+  if (upgrade && content !== null) {
+    fs.writeFileSync(path.join(hooksDir, `${name}.paradigm-v${from}.bak`), content);
+  }
+  fs.writeFileSync(hookPath, body);
+  fs.chmodSync(hookPath, '755');
+  installed.push(upgrade ? `${name} (upgraded from v${from}; previous kept as ${name}.paradigm-v${from}.bak)` : name);
+}
+
+/**
  * paradigm hooks install
  */
 export async function hooksInstallCommand(options: {
@@ -440,50 +487,11 @@ export async function hooksInstallCommand(options: {
     const installAllGit = !options.postCommit && !options.prePush && !options.claudeCode;
     const installed: string[] = [];
 
-    // Install post-commit hook
     if (installAllGit || options.postCommit) {
-      const hookPath = path.join(hooksDir, 'post-commit');
-      if (dryRun) {
-        const action = fs.existsSync(hookPath) && !options.force ? 'skip (exists)' : 'install';
-        console.log(chalk.gray(`  post-commit: ${action} → ${hookPath}`));
-      } else {
-        if (fs.existsSync(hookPath) && !options.force) {
-          const content = fs.readFileSync(hookPath, 'utf8');
-          if (!content.includes('paradigm')) {
-            console.log(chalk.yellow('post-commit hook exists. Use --force to overwrite.'));
-          } else {
-            console.log(chalk.gray('post-commit hook already installed by paradigm'));
-          }
-        } else {
-          fs.mkdirSync(hooksDir, { recursive: true });
-          fs.writeFileSync(hookPath, POST_COMMIT_HOOK);
-          fs.chmodSync(hookPath, '755');
-          installed.push('post-commit');
-        }
-      }
+      installGitHook(hooksDir, 'post-commit', POST_COMMIT_HOOK, { force: options.force, dryRun }, installed);
     }
-
-    // Install pre-push hook
     if (installAllGit || options.prePush) {
-      const hookPath = path.join(hooksDir, 'pre-push');
-      if (dryRun) {
-        const action = fs.existsSync(hookPath) && !options.force ? 'skip (exists)' : 'install';
-        console.log(chalk.gray(`  pre-push: ${action} → ${hookPath}`));
-      } else {
-        if (fs.existsSync(hookPath) && !options.force) {
-          const content = fs.readFileSync(hookPath, 'utf8');
-          if (!content.includes('paradigm')) {
-            console.log(chalk.yellow('pre-push hook exists. Use --force to overwrite.'));
-          } else {
-            console.log(chalk.gray('pre-push hook already installed by paradigm'));
-          }
-        } else {
-          fs.mkdirSync(hooksDir, { recursive: true });
-          fs.writeFileSync(hookPath, PRE_PUSH_HOOK);
-          fs.chmodSync(hookPath, '755');
-          installed.push('pre-push');
-        }
-      }
+      installGitHook(hooksDir, 'pre-push', PRE_PUSH_HOOK, { force: options.force, dryRun }, installed);
     }
 
     if (!dryRun && installed.length > 0) {
@@ -1055,7 +1063,10 @@ export async function hooksStatusCommand(): Promise<void> {
       const hookPath = path.join(hooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         const content = fs.readFileSync(hookPath, 'utf8');
-        if (content.includes('paradigm')) {
+        const state = gitHookState(content, hookName as GitHookName);
+        if (state === 'outdated') {
+          console.log(chalk.yellow(`  ${hookName}: outdated (paradigm v${gitHookVersion(content)}, current v${GIT_HOOK_VERSION}) — run \`paradigm hooks install\``));
+        } else if (content.includes('paradigm')) {
           console.log(chalk.green(`  ${hookName}: installed (paradigm)`));
         } else {
           console.log(chalk.yellow(`  ${hookName}: exists (other)`));

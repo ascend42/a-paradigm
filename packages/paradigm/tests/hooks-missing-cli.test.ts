@@ -87,6 +87,7 @@ function run(opts: {
   modified?: string[];
   subdir?: string;                     // run from <root>/<subdir> (CWD stays the root)
   gitTracked?: boolean;                // git init the root and `git add -f` the local package
+  gitBroken?: boolean;                 // a .git git cannot read (git ls-files fails)
 }): RunResult {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), opts.rootPrefix ?? 'paradigm-nocli-'));
   const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-nocli-bin-'));
@@ -102,6 +103,7 @@ function run(opts: {
   fs.writeFileSync(path.join(rootDir, 'src', 'foo.ts'), 'export const x = 1;\n');
   if (opts.subdir) fs.mkdirSync(path.join(rootDir, opts.subdir), { recursive: true });
   installLocal(rootDir, opts.localEntry, opts.dotBin);
+  if (opts.gitBroken) fs.writeFileSync(path.join(rootDir, '.git'), 'gitdir: /nonexistent/paradigm-test\n');
   if (opts.gitTracked) {
     spawnSync('git', ['init', '-q', rootDir]);
     spawnSync('git', ['add', '-f', 'node_modules/@a-company/paradigm'], { cwd: rootDir, env: { PATH: '/usr/bin:/bin', HOME: rootDir } });
@@ -265,6 +267,32 @@ exit 1
     expect(r.paradigmAvailable).toBe('true');
     expect(ran(r, '.local-ran')).toBe(false);
     expect(ran(r, '.global-ran')).toBe(true);
+  });
+});
+
+describe('paradigm-resolve.sh — git and cd edge cases', () => {
+  it('a .git that git cannot read: the project copy is not run (cannot tell if committed)', () => {
+    const r = run({
+      path: '/usr/bin:/bin',
+      binScripts: { paradigm: '#!/bin/sh\n: > "$HOME/.global-ran"\nexit 0\n' },
+      localEntry: localEntry('.local-ran'),
+      gitBroken: true,
+    });
+    expect(ran(r, '.local-ran')).toBe(false);
+    expect(ran(r, '.global-ran')).toBe(true);
+  });
+
+  it('CDPATH cannot redirect a relative root', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-cdpath-'));
+    cleanups.push(() => fs.rmSync(base, { recursive: true, force: true }));
+    const elsewhere = path.join(base, 'elsewhere');
+    installLocal(path.join(elsewhere, 'proj'), 'process.exit(0)\n');
+    fs.mkdirSync(path.join(base, 'work', 'proj'), { recursive: true });
+    const res = spawnSync('sh', ['-c', `cd "${path.join(base, 'work')}"; . "${path.join(SCRIPTS, 'paradigm-resolve.sh')}"; _pm_resolve_paradigm proj; echo "bin=$PARADIGM_BIN local=$_PM_LOCAL_PARADIGM"`], {
+      encoding: 'utf8',
+      env: { PATH: `${nodeOnlyDir()}:/usr/bin:/bin`, HOME: base, CDPATH: elsewhere },
+    });
+    expect(res.stdout.trim()).toBe('bin= local=');
   });
 });
 

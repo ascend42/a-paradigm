@@ -257,6 +257,68 @@ describe('hooksInstallCommand - Git', () => {
     expect(fs.existsSync(path.join(rootDir, 'npx.log'))).toBe(false);
   });
 
+  // Hooks written by older `paradigm hooks install` (v1 pre-push had no marker; v2
+  // post-commit ran `npx paradigm`) are upgraded without --force, old file kept.
+  const OLD_POST_COMMIT = `#!/bin/sh
+# Paradigm post-commit hook - captures history from commits
+# Installed by: paradigm hooks install
+# paradigm-hook-version: 2   (v2 adds the provider-agnostic sync-commit delegate)
+npx paradigm task sync-commit --hash "$COMMIT_HASH" >/dev/null 2>&1 || true
+# a local edit
+`;
+  const OLD_PRE_PUSH = `#!/bin/sh
+# Paradigm pre-push hook - reindex history before pushing
+# Installed by: paradigm hooks install
+npx paradigm history reindex 2>/dev/null || true
+`;
+
+  it('upgrades outdated Paradigm git hooks without --force and keeps the old file', async () => {
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    fs.writeFileSync(path.join(hooksDir, 'post-commit'), OLD_POST_COMMIT);
+    fs.writeFileSync(path.join(hooksDir, 'pre-push'), OLD_PRE_PUSH);
+    const { hooksInstallCommand } = await importHooks();
+    const { gitHookState } = await import('./git-hook-state.js');
+    await hooksInstallCommand({ postCommit: true, prePush: true });
+
+    const post = fs.readFileSync(path.join(hooksDir, 'post-commit'), 'utf8');
+    const push = fs.readFileSync(path.join(hooksDir, 'pre-push'), 'utf8');
+    expect(gitHookState(post, 'post-commit')).toBe('current');
+    expect(gitHookState(push, 'pre-push')).toBe('current');
+    expect(fs.readFileSync(path.join(hooksDir, 'post-commit.paradigm-v2.bak'), 'utf8')).toBe(OLD_POST_COMMIT);
+    expect(fs.readFileSync(path.join(hooksDir, 'pre-push.paradigm-v1.bak'), 'utf8')).toBe(OLD_PRE_PUSH);
+  });
+
+  it('never touches a hook Paradigm did not write, even one that calls paradigm', async () => {
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    const mine = '#!/bin/sh\n# my own hook\nnpx paradigm history reindex\n';
+    fs.writeFileSync(path.join(hooksDir, 'pre-push'), mine);
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ prePush: true });
+    expect(fs.readFileSync(path.join(hooksDir, 'pre-push'), 'utf8')).toBe(mine);
+    expect(fs.readdirSync(hooksDir).filter((f) => f.endsWith('.bak'))).toEqual([]);
+  });
+
+  it('leaves a current Paradigm hook alone (no rewrite, no backup)', async () => {
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ postCommit: true });
+    const hookPath = path.join(rootDir, '.git', 'hooks', 'post-commit');
+    fs.appendFileSync(hookPath, '# a local edit\n');
+    await hooksInstallCommand({ postCommit: true });
+    expect(fs.readFileSync(hookPath, 'utf8')).toContain('# a local edit');
+    expect(fs.readdirSync(path.join(rootDir, '.git', 'hooks')).filter((f) => f.endsWith('.bak'))).toEqual([]);
+  });
+
+  it('gitHookState / outdatedGitHooks classify hooks (shared with doctor)', async () => {
+    const { gitHookState, outdatedGitHooks } = await import('./git-hook-state.js');
+    expect(gitHookState(null, 'pre-push')).toBe('absent');
+    expect(gitHookState('#!/bin/sh\necho hi\n', 'pre-push')).toBe('foreign');
+    expect(gitHookState(OLD_PRE_PUSH, 'pre-push')).toBe('outdated');
+    expect(gitHookState(OLD_POST_COMMIT, 'post-commit')).toBe('outdated');
+    const hooksDir = path.join(rootDir, '.git', 'hooks');
+    fs.writeFileSync(path.join(hooksDir, 'post-commit'), OLD_POST_COMMIT);
+    expect(outdatedGitHooks(rootDir)).toEqual([{ name: 'post-commit', version: 2, npx: true }]);
+  });
+
   it('preserves existing git hooks (no overwrite)', async () => {
     // Create an existing hook
     const hookPath = path.join(rootDir, '.git', 'hooks', 'post-commit');

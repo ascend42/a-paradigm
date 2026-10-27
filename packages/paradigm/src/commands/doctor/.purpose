@@ -16,11 +16,12 @@ components:
       - doctor
       - hooks
   doctor-handler:
-    description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it).
+    description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. Warns on each Paradigm-owned git hook (.git/hooks/post-commit, pre-push) that #git-hook-state classes as outdated (below paradigm-hook-version 3, or still running `npx paradigm`), fix `paradigm hooks install`. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it).
     type: handler
     file: index.ts
     components:
       - '#gap-narrator'
+      - '#git-hook-state'
   info-status:
     description: |
       v6.0.4 CheckResult status added to the existing ok/warn/error/missing

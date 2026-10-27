@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { log } from '../../utils/logger.js';
+import { GIT_HOOK_VERSION, outdatedGitHooks } from '../hooks/git-hook-state.js';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
@@ -858,6 +859,19 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         name: 'Claude Code hooks',
         status: 'missing',
         message: 'No hooks installed',
+        fix: 'paradigm hooks install',
+      });
+    }
+
+    // Git hooks written by `paradigm hooks install` that are outdated (below the
+    // current paradigm-hook-version, or still calling `npx paradigm`, which can
+    // fetch and run the unrelated public "paradigm" package). Upgraded in place
+    // by `paradigm hooks install`, no --force needed.
+    for (const hook of outdatedGitHooks(cwd)) {
+      results.push({
+        name: `Git ${hook.name} hook`,
+        status: 'warn',
+        message: `Outdated (v${hook.version}, current v${GIT_HOOK_VERSION})${hook.npx ? ' and still runs `npx paradigm`' : ''}`,
         fix: 'paradigm hooks install',
       });
     }

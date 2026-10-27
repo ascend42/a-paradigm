@@ -19,9 +19,10 @@
 #   1. The project's own @a-company/paradigm: node runs the package's own
 #      `paradigm` bin entry, read from <root>/node_modules/@a-company/paradigm/
 #      package.json (whatever another package put at node_modules/.bin/paradigm
-#      is never run). The project root only (normalised with pwd -P), never a
-#      parent folder or the subdirectory the hook ran from, and never a copy
-#      committed to git (`git ls-files` lists it). No npx: npm 11 applies the
+#      is never run). The project root only (normalised with cd -P / pwd -P,
+#      CDPATH ignored), never a parent folder or the subdirectory the hook ran
+#      from, and never a copy committed to git (`git ls-files` lists it; when
+#      the root has a .git and git fails, it is not run either). No npx: npm 11 applies the
 #      project's devEngines to npx, so in a repo that requires pnpm (onFail
 #      "error") npx exits EBADDEVENGINES.
 #   2. `paradigm` on PATH (a global install).
@@ -38,11 +39,19 @@ _pm_paradigm_local() { node "$_PM_LOCAL_PARADIGM" "$@"; }
 _pm_local_paradigm_entry() {
   _PM_LOCAL_PARADIGM=""
   [ -n "$1" ] || return 1
-  _pm_root=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  # CDPATH= : a relative root must not be redirected by the user's CDPATH.
+  _pm_root=$(CDPATH= cd -P -- "$1" 2>/dev/null && pwd -P) || return 1
   _pm_pkg="$_pm_root/node_modules/@a-company/paradigm/package.json"
   [ -f "$_pm_pkg" ] || return 1
   command -v node >/dev/null 2>&1 || return 1
-  [ -z "$(git -C "$_pm_root" ls-files -- node_modules/@a-company/paradigm node_modules/.bin/paradigm 2>/dev/null)" ] || return 1
+  # Committed to git: never run it. With a .git at the root and git failing
+  # (not installed, dubious ownership) it cannot be checked: not run either.
+  # Outside a git repo: fine, quietly.
+  if _pm_tracked=$(git -C "$_pm_root" ls-files -- node_modules/@a-company/paradigm node_modules/.bin/paradigm 2>/dev/null); then
+    [ -z "$_pm_tracked" ] || return 1
+  elif [ -e "$_pm_root/.git" ]; then
+    return 1
+  fi
   _PM_LOCAL_PARADIGM=$(node -e '
 const fs = require("fs"), path = require("path");
 const f = process.argv[1];

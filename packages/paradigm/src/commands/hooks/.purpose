@@ -73,6 +73,23 @@ components:
     tags:
       - hooks
       - observability
+  git-hook-state:
+    description: |
+      git-hook-state.ts: classes .git/hooks/post-commit and pre-push as absent,
+      foreign (no "# Paradigm <name> hook" + "# Installed by: paradigm hooks
+      install" header: never touched), outdated (paradigm-hook-version below
+      GIT_HOOK_VERSION = 3, no marker = v1, or still running `npx paradigm`) or
+      current. `paradigm hooks install` upgrades an outdated Paradigm hook
+      without --force, keeping the old file as <name>.paradigm-v<N>.bak so
+      local edits survive; a current one is left alone; `hooks status` and
+      `paradigm doctor` report outdated ones. Free of chalk/generated-hooks so
+      doctor loads it cheaply. Bump GIT_HOOK_VERSION with the hook bodies'
+      marker in index.ts.
+    type: utility
+    file: git-hook-state.ts
+    tags:
+      - hooks
+      - git
   paradigm-resolve:
     description: |
       Sourced POSIX-sh helper (scripts/paradigm-resolve.sh, copied to both
@@ -83,19 +100,20 @@ components:
       (project root = CLAUDE_PROJECT_DIR / Cursor input cwd, then the git
       toplevel, then pwd; the hook cd's there before indexing) and the git hooks
       (git toplevel). `_pm_resolve_paradigm <root>` normalises the root with
-      `cd && pwd -P` and sets PARADIGM_BIN to a single command word:
-      (1) the project's own @a-company/paradigm: node runs the `paradigm` bin
-      entry read from <root>/node_modules/@a-company/paradigm/package.json
-      (never whatever another package put at node_modules/.bin/paradigm), the
-      root only (never a parent or the subdirectory the hook ran from), and
-      never a copy committed to git (`git ls-files` non-empty); no npx,
-      because npm 11 applies the project's devEngines to npx and a pnpm-only
-      repo fails EBADDEVENGINES; (2) `paradigm` on PATH. No npx step (Aegis
-      P1): with the project copy first it could only reach npx's cache or apply
-      the project's .npmrc. The plugin's MCP launcher (#paradigm-mcp-launch)
-      uses the same order. Aegis L3 is narrowed, not dropped: only
-      @a-company/paradigm at the project root runs (the trust of the workspace
-      itself); paradigm-skill-used.sh stays PATH-only (no project root).
+      `CDPATH= cd -P -- root && pwd -P` and sets PARADIGM_BIN to a single
+      command word: (1) the project's own @a-company/paradigm: node runs the
+      `paradigm` bin entry read from
+      <root>/node_modules/@a-company/paradigm/package.json (never whatever
+      another package put at node_modules/.bin/paradigm), the root only (never
+      a parent or the subdirectory the hook ran from), never a copy committed to
+      git (`git ls-files` non-empty), and not when the root has a .git that git
+      fails on (dubious ownership, no git): it cannot be checked; quiet outside
+      a repo. No npx, because npm 11 applies the project's devEngines to npx
+      and a pnpm-only repo fails EBADDEVENGINES; (2) `paradigm` on PATH. No npx
+      step (Aegis P1). The plugin's MCP launcher (#paradigm-mcp-launch) uses the
+      same order. Aegis L3 is narrowed, not dropped: only @a-company/paradigm
+      at the project root runs (the trust of the workspace itself);
+      paradigm-skill-used.sh stays PATH-only (no project root).
     type: utility
     file: scripts/paradigm-resolve.sh
     components:
