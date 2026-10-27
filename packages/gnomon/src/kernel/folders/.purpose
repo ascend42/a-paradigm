@@ -1,0 +1,52 @@
+version: "2.0"
+name: gnomon-kernel-folders
+description: >-
+  The folder picker on the kernel side: folders.ts serves folder choices and
+  display-path.ts shortens paths for display.
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  folder-picker:
+    description: >-
+      #folder-picker (TD-2026-10-23-162; Atelier session
+      2026-10-23-gnomon-folder-picker, rule paths-are-chosen; spec §11
+      "Folders are chosen"; G-FLD-01..G-FLD-03). The kernel half of the GUI's
+      folder field: src/kernel/folders/folders.ts. Three human requests,
+      dispatcher-only (log.append{kind, payload} like request.local.probe),
+      gui or device human connection only, never a row, so clientApiId does
+      not move. request.folder.choose{kind:'folder'|'file', purpose?,
+      startIn?}: the KERNEL opens the macOS chooser with osascript, brought
+      to the front (founder C1: the wrapper keeps zero page IPC); one at a
+      time (busy), {path, display, check} or {cancelled} (Esc, Cancel,
+      timeout after 5 min); {cancel:true} closes an open one. Aegis: the
+      prompt is FIXED copy chosen by purpose (no prompt field exists) and
+      startIn reaches AppleScript only as argv item 1, never as source. Not
+      offered off macOS (UNSUPPORTED no-chooser). request.folder.check{path,
+      kind?, expect?}: read-only (stat and access only), expands ~,
+      realpaths, classifies ok | not-absolute | missing | file | not-a-file |
+      not-executable | unreadable | wrong-contents (+ the runner's dist
+      suggest) | home (home folder or above: allowed with the amber warning,
+      C4) | outside-home; rate-limited (20 per 10 s). request.folder.recent:
+      up to 6 folders from the kernel's session.open rows of human sessions,
+      newest first, deduplicated by realpath, missing dropped. Every display
+      is ~-shortened and escaped by the ONE rule (folders/display-path.ts,
+      shared with bare `gnomon`). status.folders{chooser} is the human's on
+      a gui or device connection. Aegis review (pass with fixes): every fs
+      call is fs.promises under a 2 s deadline (why timeout); /net, /Network,
+      UNC and device paths are refused before any fs call (why network,
+      device); startIn and recent share the check limiter; recent scans the
+      newest 12 only; the chooser remembers its opener's connId (only it may
+      cancel; its close aborts the chooser) and opens at most once per 1.5 s
+      and 6 a minute (rate-limited, retryAfterMs); null-prototype purpose
+      tables; win32 home by path.relative, case-folded like run-mode; the
+      fold takes principalClass 'human' AND attended (the local lane now
+      writes principalClass on every session.open).
+    path: src/kernel/folders/folders.ts
+    type: module
+    tags: [gnomon, kernel, gui, paradigm-8, td-2026-10-23-162]
+    tests:
+      - test/folders.test.ts
+      - test/bare-entry.test.ts
+    oracles: [G-FLD-01, G-FLD-02, G-FLD-03]

@@ -1,0 +1,75 @@
+version: "2.0"
+name: gnomon-clients
+description: >-
+  Published Gnomon clients and their conformance: the TypeScript client (ts/),
+  the language-neutral conformance driver and runner (conformance/), and the
+  Python client (python/).
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  gnomon-ts-client:
+    journal-cursor: >-
+      Offers CLIENT_FEATURES = ['journal.cursor'] by default; subscribe
+      takes since as {logId, seq}, cursor() and end.cursor hand the cursor
+      back; isCursorEpoch(err) tells the caller to re-read from the start.
+      The conformance runner covers the bare-seq and cursor-epoch refusals
+      (refusal.bad-request) and resumes subscribe.since by cursor.
+    description: >-
+      #gnomon-ts-client (spec §4.9, §5, §12.8; §19.1 M1.12 slice 2).
+      src/clients/ts/ — the published TypeScript client, built ONLY on
+      @a-company/gnomon-contracts + node:* (fenced by test/m112-conformance):
+      hello with a fresh 32-byte clientNonce that the result must echo
+      (client-nonce-mismatch) and serverSig verified against the PINNED kernel
+      key over the SENT nonce before any credential is sent (T-2026-10-18-016); device-key auth (gnomon:auth:v1) or read-token proof
+      of possession (gnomon:auth-token:v1); call() typed for the 12 verbs + 2
+      relays (ClientMethodParams/Results); refusals reject with RefusedError;
+      subscribe() = log.read{follow} with rows in seq order and a visible end;
+      logging through an injected ClientLogPort (Paradigm-logger shaped).
+      Re-exports the one §4.5 sanitizer for UIs.
+    tags: [gnomon, m1.12, client]
+    oracles: [G-CLI-02]
+  client-conformance:
+    description: >-
+      #client-conformance (spec §12.8, G-CLI-02; M1.12 slice 2).
+      src/clients/conformance/ — driver.ts: the language-neutral JSON-lines
+      driver protocol (connect/call/subscribe/events/closed/close/sanitize/
+      row/denominator), TsClientDriver (in-process, JSON round-tripped) and
+      SubprocessDriver (any language over stdio); runner.ts: runs every
+      CONFORMANCE_CHECKS `run` check against a live kernel, `slice-2` checks
+      reported todo, report + conformanceReportHash; hello.server-sig-mismatch
+      runs an impostor endpoint that REPLAYS a real recorded hello (genuine
+      serverSig) verbatim and with clientNonce rewritten to the victim's
+      (T-2026-10-18-016): a conformant client refuses both, zero auth frames
+      (falsifier: a client that trusts the echoed nonce fails it); the
+      impostor listens on a private socket file (POSIX) or a random named
+      pipe (Windows) and a listen error fails the check instead of crashing
+      the runner. auth.device-refused also requires that the client keeps no
+      live connection after the AUTH refusal. subscribe.since checks the
+      backlog against a non-follow page (since+1, no gaps); contiguity
+      assumes the fixture's full-visibility principal, a restricted principal
+      must use the oracle-page comparison only. Falsifiers (T-2026-10-18-015):
+      a client that checks the pin's PEM hash and keyId but never serverSig
+      fails only hello.server-sig-mismatch, at case (c); a client that keeps a
+      connection after the refusal fails auth.device-refused. status.clients[] copies only
+      {suite, version, reportHash} (sanitized, capped) and labels a
+      declared tuple `declared` and reports clientConformance{n, of} (G-OBS-01).
+      M1.12 SLICE 3 honesty CI: test/honesty.ts scanners + test/honesty.test.ts
+      (the gate over packages/gnomon*/src, manifests and package docs, plus a
+      planted-violation falsifier per rule): G-HON-02 fabrication grep
+      (Math.random outside ids, simulated/simulation, sleep()/delay(),
+      hardcoded gains, mechanism words the code lacks), G-HON-05 no
+      Task-steering descriptions, G-HON-06 unscoped guard names refused,
+      G-HON-07 (round 2, B2): every ms/µs number in package docs — prose,
+      wrapped paragraphs and Markdown table cells, keyword or not — names a
+      concrete machine (chip, versioned OS or arch) and a named method in its
+      sentence or table row, unless it is a budget, bound or configured
+      interval (the BUDGET EXEMPTION, pending founder ratification); the
+      live status of a spawned kernel (device + read-token views) passes
+      checkStatusNumbers (#socket) in test/m112-conformance.test.ts.
+    tags: [gnomon, m1.12, client, conformance, honesty-ci]
+    tests:
+      - test/m112-conformance.test.ts
+      - test/honesty.test.ts
+    oracles: [G-CLI-02, G-OBS-01, G-HON-02, G-HON-03, G-HON-05, G-HON-06, G-HON-07]

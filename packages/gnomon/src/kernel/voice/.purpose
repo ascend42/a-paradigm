@@ -1,0 +1,251 @@
+version: "2.0"
+name: gnomon-kernel-voice
+description: >-
+  Kernel voice: the supervised voice child (voice-child.ts, voice-control.ts,
+  voice-install.ts), enrolment, voice requests, and the stores for reply mode,
+  input choice and the send word.
+context:
+  - >-
+    The send flows $send-by-word and $send-by-pieces stay in
+    packages/gnomon/.purpose; the darwin audio binary is packages/gnomon-voice.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  gnomon-voice:
+    description: >-
+      TD-2026-10-23-496 (supersedes G-VOX-06 on the send-word path only):
+      under a send-word or pieces ceiling (liability acknowledged on the
+      start row) the held word from the attached human's voice principal
+      counts whoever said it (wordAnyVoice: isWord, speakerEnrolled false,
+      speakerVerified false, never a draft part) and a word claim is accepted
+      over unverified or inherited draft turns; the send is stamped
+      voice-unverified (originFor: the consumed word came from any voice, or
+      the draft holds an unverified or inherited turn). Pieces, send-now,
+      Talk and the direct send keep the gate; intercepted turns are refused.
+      Aegis review 2026-10-23 (H-1, M-1, M-2, L-1..L-3): an inherited
+      (continuity) turn is NOT verification (UserTurn.basis 'continuity'):
+      every send that includes one is stamped voice-unverified (originFor,
+      attributed or a voice-hinted edit), it never anchors adjacency, the
+      voice principal never sends it directly (cause 'inherited'), and a
+      piece claim must cite a turn verified alone (cause 'inherited-only').
+      Inheritance is capped per anchor (VOICE_CONTINUITY_MAX_TURNS 2,
+      VOICE_CONTINUITY_MAX_MS of t1 - t0), the clip is at most
+      VOICE_CONTINUITY_CLIP_MS long, the gap and the stretch are also
+      checked on kernel receipt times (+ VOICE_CONTINUITY_RECEIPT_SLACK_MS,
+      anchorReceivedAt), t0 may not precede the previous t1 (50 ms grace), a voice.bargein row or
+      or model streaming since the previous turn breaks it. The send word never
+      rides continuity. Talk (narrow): a ptt clip with gated speech under the
+      minimum that is not verified is draftOnly (a long one keeps the gate).
+      status.voice.mic level and inputs reach the human class on the gui
+      credential only (voiceStatusFor); request.voice.client{op:'mic-meter',
+      open} sets status.voice.micMeterOpen (lapses after
+      VOICE_MIC_METER_TTL_MS) and the voice app relays the level only then.
+      appendCappedLog re-applies 0700/0600 on every write.
+      2026-10-23 (founder field bugs): speaker CONTINUITY at receipt
+      (#continuityOf; contracts VOICE_CONTINUITY_GAP_MS 3 s,
+      VOICE_CONTINUITY_STRETCH_MS 30 s): a voice.turn.user{speakerBasis:
+      'continuity'} with gatedSpeechMs under VOICE_MIN_VERIFY_SPEECH_MS is
+      its speaker's only when the turn right before it on the attachment is
+      an accepted turn of that speaker on the same connection (verified alone
+      or by continuity: UserTurn.anchorT1), within the gap, inside the
+      stretch of the last turn verified alone, with no agent playback between
+      and not intercepted; else it is unverified. A short send word needs
+      adjacency whatever basis it claims. Dictate's draft-only exception now
+      covers every send ceiling of a conversation attachment (short speech is
+      never thrown away; word, pieces and send-now stay refused while it is
+      in the draft). request.voice.report{mic} (MicReport: device, aec,
+      fault, on, inputs, selected, missing, level; a state per connection)
+      is status.voice.mic; request.voice.client{op:'select-input', id, name?}
+      (human, gui or device) sets status.voice.inputChoice, persisted at
+      <home>/voice/input.json (input-choice-store.ts, 0600). The held send
+      word lives in <home>/voice/send-word.json (send-word-store.ts, 0600,
+      atomic temp-and-rename, read through a stat-keyed cache; the stored word
+      is #send-word-matcher canonicalSendWord, and a file that does not parse
+      holds no word), written by request.voice.sendword and `gnomon voice
+      send-word set|clear` alike. The voice child's
+      stderr is appended to <home>/logs/voice.log (0600, rolls to voice.log.1
+      past 256 KiB) besides the 2000-char lastError tail.
+      Dictate, the G-VOX-06 exception (founder bug 2026-10-21): under a
+      conversation ceiling with send ceiling key, an unverified speaker's
+      ambient, non-intercepted turn of the attached human's voice principal is
+      not refused voice-speaker at receipt; the other guards run and an
+      accepted one is stamped forwardable, draftOnly:true and
+      speakerVerified:false (client claims of either are BAD_REQUEST). Aegis
+      privacy: its row is HASH-ONLY; its words stay in kernel memory
+      (UNVERIFIED_TEXT_TTL_MS, UNVERIFIED_TEXT_CAP) and reach only a human on
+      the gui credential, for sessions that human owns now:
+      VoiceControl.unverifiedFor(principal), added per viewer by the
+      dispatcher as status.voice.unverified (status() never carries them;
+      voiceStatusFor strips them for any other class or credential). It fills the draft only: the direct send is refused, and a
+      word, piece or send-now claim on that session is refused
+      voice-speaker{cause draft-only} while ANY attachment's unverified turn
+      there is unsent (a preset switch re-attaches); it is never the send
+      word nor an adjacency anchor; only a human session.send (Enter) carries
+      it, and originFor stamps that send sentBy 'unverified' (turn.sent
+      origin voice-unverified, a record only, #voice-origin) when its
+      attribution matched one or a source:'voice' send happens while one is
+      outstanding (consumed; releaseOrigin hands them back on a failed send). A refused unverified turn under
+      VOICE_MIN_VERIFY_SPEECH_MS (contracts) of gated speech carries cause
+      too-short.
+      Voice drops fix (2026-10-20): busy (voice-playback) ends at the main-chain
+      end_turn message_stop (supervisor turnBusy), re-armed by message_start;
+      the append result carries refused/refusedCause; capture reports carry
+      refusal/cause; voice.turn.user keeps speakerScore (bucket) and
+      gatedSpeechMs; the kernel stamps localDrops counts (VoiceReports
+      takeLocalDrops) on voice.turn.user and voice.session.end.
+      Aegis M2: every enrolments.jsonl write (CLI enrol/forget, card enrol) goes
+      through appendSignedEnrolRow (sig verified, seq recomputed under the
+      lock, moved seq refused loudly, durable append). A missing `consent` is
+      never "unconsented"; the text lives in voice/consents/<hex>.txt.
+      TD-2026-10-20-514 (Aegis Q3/F3): the GUI enrol card is ROOT class and
+      hand-only; prepareEnrol builds the voiceEnrolRow:v1 row (+cardId,
+      consentHash; seq under the enrolments lock), commitEnrol re-checks seq
+      and writes the consent text to voice/consents/<hex>.txt; the consent
+      never enters the card or the log. ONE presence.
+      Dictation (TD-2026-10-20-262): accepted voice.turn.user rows carry a
+      kernel-stamped forwardable (a client forwardable is BAD_REQUEST); a human
+      session.send{source:'voice'} is hash-matched against the attachment's
+      pending turns and tagged turn.sent{source voice|voice-edited, voiceSessionId,
+      voiceTurnSeqs, voiceTurnSeq} (attribution never refuses); request.voice.report
+      {dictation} is relayed as status.voice.dictation{activity, holdToggles, at}.
+      #gnomon-voice kernel side, slices V1 talk-only and V2a ambient (TD-2026-10-19-298:
+      the attachment mode is a ceiling, ptt under any, conversation only under
+      conversation; widening to conversation takes one fresh-presence strictness
+      card per GUI login; ambient turns need an aec claim, an enrolled speaker and
+      a not-busy session by the supervisor's own turn state plus the echo tail
+      (voice-playback, clock kernel); idle auto-off of a conversation ceiling after
+      voice.ambientIdleMs, default ten minutes, written voice.session.end reason idle;
+      receipt-refused and unknown-speaker turns are stored as a keyed text hash,
+      duration and reason, never text; status.voice attached, hsid, ceiling, since,
+      idleAt) (spec §14.1-14.4, §14.7
+      Forwarding guards and No level, run modes; §4.10; T-2026-10-19-026,
+      TD-2026-10-19-194, TD-2026-10-19-677). src/kernel/voice/voice-control.ts:
+      attachment ONLY by a human gesture (log.append voice.session.start|end on a
+      first-party GUI/device connection; the kernel mints voiceSessionId and
+      writes the row); voice session.send to the attached session only, source
+      voice forced, riding the attaching human's turn permit (never its own),
+      accepted only for the voice connection's latest voice.turn.user in this
+      attachment from an enrolled speaker, not intercepted, push-to-talk, outside
+      every voice.turn.agent playback window + echoTailMs (750). Refusals are
+      FORBIDDEN gate voice with reserved reasons: voice-target, voice-conn,
+      voice-stale-utterance, voice-speaker, voice-grammar, voice-echo, voice-off
+      (conversation mode). session.stop interrupt only; voice.* shape-validated;
+      the voice reader sees its attached session + voice.*, redacted. approve stays
+      voice-off in every form; request.voice.arm stays refused (V7).
+      src/kernel/voice/enrolment.ts + src/cli/voice-cli.ts: gnomon voice setup |
+      enrol | forget, root-signed rows (enrolments.jsonl, voice device key).
+      Aegis V1 conditions: kernel receipt time stamped on voice.turn.user|agent
+      (receivedAt); a turn is forwardable for VOICE_TURN_MAX_AGE_MS (30 s) after
+      receipt, never before the attachment, echo checked on kernel times too;
+      per-turn client mode claim cross-checked against the attachment (ptt is a
+      client claim, §A.4); voice follow subscriptions end on every attachment
+      change (SubscriptionHub.endReaderClass); turn.sent / session.inject carry
+      source voice + voiceSessionId, turnId, voiceTurnSeq (the link); the voice
+      reader sees only its attached session's rows; enrolment order is the
+      signed seq; windows bounded at VOICE_WINDOW_CAP.
+      Slice V2e (spec §14.4.1): src/kernel/voice/voice-child.ts VoiceChildSupervisor
+      spawns the voice client over an inherited socketpair (fd 3) the kernel
+      authenticates itself as p:<ns>/voice (SocketServerHandle.adopt +
+      dispatcher.adoptPreauthenticated, no hello/auth, no key in the child),
+      allow-list env, backoff restarts, dies on every daemon exit and drain
+      (TD-908). voice-install.ts copies + codesign-verifies GnomonVoiceIO.app
+      into <home>/bin/voice and fetches models; T-2026-10-21-028
+      (#release-pins): the copied executable is hashed before and after
+      codesign (VOICE_IO_REQUIREMENT from gnomon-contracts, the build's own),
+      must equal the release's compiled sha256 for this arch in a release
+      build (VoiceAppRefused 'checksum', dev flag or not) and answer
+      --version ≥ MIN_VOICE_IO_VERSION in every build ('version');
+      createVoicePrepare re-verifies it LAST, right before the spawn
+      (recheckVoiceApp: path, inode, size, mtime, sha256, the release pin,
+      codesign hash-verify-rehash), so the model-fetch window cannot swap it; the client entry resolves
+      lazily, darwin only. Aegis M2: at DAEMON START createVoicePrepare checks
+      the workspace gnomon-voice dist against dist/voice-client.manifest.json
+      and that manifest against the loaded build stamp's voiceClientManifest
+      (scripts/build-stamp.mjs; build gnomon-voice first), then copies all of
+      dist, voice-models.manifest.json, a module package.json and the optional
+      sherpa-onnx-node + platform packages into <home>/bin/voice/client
+      (0700/0600), pins a
+      sha256 of every file in memory, runs the model fetch and the spawn from
+      the COPY, and re-verifies the pin last in every prepare; a changed,
+      added or missing file is VoiceClientRefused, phase 'unavailable' with
+      the reason, never retried. Every exit (signal, stop, idle, upgrade after
+      its drain) goes through shutdown(), which awaits voiceChild.close(). voice-requests.ts: dispatcher-only request.voice.enrol
+      (fresh-presence strictness card, detail.op voice.enrol, writes the
+      root-signed row), request.voice.forget (no card), request.voice.report
+      (client progress + notices relayed in status.voice; 2026-10-20
+      prints{stale: names} = speakers whose print predates the client's
+      speech gate, held per voice connection with no TTL, cleared when it
+      closes, relayed as status.voice.prints; T-2026-10-20-005
+      A1 capture{state idle|hearing|transcribing|captured|dropped, segId,
+      reason? closed too-short|echo|not-attached|no-words|not-enrolled|
+      barge-in|refused on dropped only, level? 0..1 on hearing only} relayed
+      as status.voice.capture with VOICE_CAPTURE_TTL_MS 5 s; voiceStatusFor
+      projects B1's capture.text{committed, tail} (the live partial words,
+      hearing / transcribing only, voice principal only, sanitised, capped
+      at CAPTURE_TEXT_MAX 600, in memory with the capture TTL, never a row)
+      to a human-class connection on the gui credential only (V2; the shared
+      CAPTURE_STATUS_KEYS never include text); voice.capture.level declared in status-numbers.ts. Aegis
+      follow-ups: terminal states are marked claim:'client' and cross-checked
+      against the kernel's own acceptances on that voice connection
+      (VoiceControl onAccepted turn|send, 5 s window): a contradicted drop
+      shows captured with kernel:'accepted' and clientReason, a captured with
+      no acceptance is kernel:'unconfirmed'; text only for cls human on the
+      gui credential; the slot remembers its connId and clears when that
+      connection closes); request.voice.client
+      start|stop is human only. speakable.ts KernelSpeakable appends
+      voice.turn.agent{source kernel-speakable, turnSeq, items} for the attached
+      session; the voice reader is narrowed to voice.* rows. speakerEnrolled is
+      the kernel's call (readEnrolled). No §9.1 kind added; clientApiId unchanged.
+      TABLE TALK (TD-2026-10-20-294, docs/guides/table-talk.md): the reply item
+      prefers the first speak fenced block (markdown, URLs and long digit/hex runs
+      stripped, 300-char sentence cap, unclosed fence = its first paragraph)
+      as from:'block', else the gnome line / first paragraph as from:'heuristic';
+      kernel-written ask-waiting and edits items carry from:'kernel'.
+      table-talk.ts holds the frozen guidance (at most 160 words, pinned hash);
+      VoiceControl.guidanceFor(hsid) returns it only while voice is attached
+      to that session, and the #supervisor writes it as a second
+      <gnomon-voice> text block on every send (turn.sent guidanceHash;
+      contentHash stays the human text, replay unchanged). The spoken scrub
+      (scrubSpoken) also covers heuristic and ask items (Aegis L2); gnomon
+      trace allows one extra prompt block only when turn.sent names its
+      guidanceHash and the hash matches (Aegis M2).
+    path: src/kernel/voice/
+    type: module
+    tags: [gnomon, kernel, voice, paradigm-8, move-4]
+    flows: [$voice-turn]
+    tests:
+      - test/voice-v1.test.ts
+      - test/voice-v2e.test.ts
+      - test/voice-v2e-daemon.test.ts
+      - test/voice-v2e-enrol.test.ts
+      - test/voice-v2e-speak.test.ts
+      - test/table-talk.test.ts
+      - test/table-talk-session.test.ts
+      - test/voice-enrolment.test.ts
+      - test/voice-golden.test.ts
+      - test/socket-abi.test.ts
+      - test/socket-log-read.test.ts
+    oracles: [G-VOX-04, G-VOX-06]
+  voice-reply-mode:
+    description: >-
+      #voice-reply-mode (founder request 2026-10-23, "just type back and not
+      speak"; spec §14.4.1; src/kernel/voice/reply-mode-store.ts).
+      Speak and show ('speak', the default) or Show only ('show'). The human
+      sets it with request.voice.client{op:'reply-mode', mode} on a gui or
+      device connection (dispatcher, human only, no card: it only narrows
+      what the voice app does); VoiceReports holds it, status.voice.replyMode
+      reports it, and the daemon persists it per kernel home at
+      <home>/voice/reply.json (0600 in 0700, atomic; a missing or malformed
+      file reads as speak) and restores it at start. The kernel's speakable
+      projection, turn guidance and the GUI's arrangement are unchanged; the
+      voice app (gnomon-voice VoiceClient#checkReplyMode) plays no
+      kernel-speakable row under show and stops a reply being said when it
+      turns on. Voice input stays as it is.
+    path: src/kernel/voice/reply-mode-store.ts
+    type: module
+    tags: [gnomon, kernel, voice]
+    tests:
+      - test/voice-v2e-speak.test.ts
+      - test/voice-v2e.test.ts
+    oracles: [G-VOX-22]

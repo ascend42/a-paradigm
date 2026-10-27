@@ -1,0 +1,65 @@
+version: "2.0"
+name: gnomon-loops
+description: >-
+  The loop file format shared by the kernel and tools: the schema (schema.ts)
+  and the compiled form (compiled.ts).
+context:
+  - >-
+    The kernel side of loops is src/kernel/loops/.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  loop-schema:
+    description: >-
+      #loop-schema (docs/specs/gnomon-loops.md §2, §3.1, §3.4, §3.5; build
+      plan LP1) in src/loops/schema.ts, exported as @a-company/gnomon/loops.
+      The loop:v2 definition: types, validateLoop (precise {path, code,
+      message} issues) and compileLoop to the canonical JSON the kernel reads
+      (.paradigm/loops/<id>.loop.json; the kernel never parses YAML, zero
+      runtime deps). Rules: closed shape; kebab ids <= 64; every edge target a
+      node or terminal (@goal/@stop/@pause); goal names a check node, a run
+      goal declares goal.inputs, only check/call nodes reach @goal (LL2);
+      argv literal (no {{), argv0 never in the kernel INTERPRETER_DENYLIST
+      (imported from #prefix-policy) or python*, never .cmd/.bat; judge and
+      summarize nodes have no tools; continuous needs cooldown >= 60 s
+      (MIN_AUTOMATION_PERIOD_MS), a goal or run.rounds, and day.runs or
+      day.computeSec; call is id@hash8, cycles and depth > 3 refused given
+      the known loops. 8.0 subset: model.use claude|any, escalate other than
+      never, the claude opt-in block, cron, sentinel.incident.opened, bash
+      tools and envelope fields are refused LANDS_IN_8_1 ("lands in 8.1").
+      Compile fills every default (absent budget field = global default,
+      never unbounded), durations in seconds, edges expanded per verdict,
+      flows resolved to path globs from a flow index (else symbolic with a
+      FLOWS_UNRESOLVED warning); canonicalLoopJson is the sorted-key hashing
+      form, loopFileJson the indented file form. Aegis LP1 review: @goal only
+      from goal.node or a call, and any @goal edge needs a goal block; a call
+      pin must equal loopContentHash(callee) (sha256 of canonicalJson of the
+      parsed definition, never file bytes) and a call reaching @goal needs a
+      callee goal; argv0 never a BUILD_TOOLS entry except tsc/vitest/jest
+      (LOOP_ARGV0_CHECKER_ALLOW); programName strips trailing dots/spaces,
+      .exe and .com; land paths never under node_modules; NaN/Infinity
+      refused; compiled `protected` = node_modules + goal.inputs + repo
+      argv words across the call chain; `argv0Interpreter` recorded via
+      readShebang. The shared INTERPRETER_DENYLIST gained cmd, powershell,
+      pwsh, wscript, cscript, mshta, arch, script, stdbuf, setsid, chroot,
+      sandbox-exec and busybox; loop-choice joined NEVER_STANDING_KINDS.
+      LP2: compiled.sourceHash = loopContentHash(the parsed YAML), the hash a
+      caller's pin names; src/loops/compiled.ts validateCompiledLoop is the
+      kernel's re-validation of a .loop.json (decompile, validateLoop, compile
+      again with the file's own budgets/flowPaths/interpreters, byte compare;
+      protected and callsResolved are the kernel's own).
+      TD-2026-10-23-268/448: `env: [NAME, ...]` on check and act nodes (<= 32
+      names matching ^[A-Z_][A-Z0-9_]*$, no duplicates, never a hazard per
+      runner/env.ts loopEnvHazard: ENV_REFUSED; judge/summarize:
+      ENV_NOT_ALLOWED); loop-level `envFiles` (<= 8; repo-relative without ..,
+      ~/ or absolute; BAD_ENV_FILE, ENV_FILE_DUPLICATE, ENV_FILES_TOO_MANY),
+      `redact: on|off` and `network: on|off` (YAML 1.1 booleans accepted). All
+      compile only when used, so existing loops hash as before;
+      validateCompiledLoop keeps them.
+    path: src/loops/schema.ts
+    type: module
+    tags: [gnomon, loops, paradigm-8, security]
+    tests:
+      - test/loop-compiled.test.ts
+      - test/loop-schema.test.ts

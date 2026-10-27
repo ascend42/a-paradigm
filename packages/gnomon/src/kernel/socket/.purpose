@@ -1,0 +1,393 @@
+version: "2.0"
+name: gnomon-kernel-socket
+description: >-
+  The kernel socket: the local framed RPC endpoint clients connect to
+  (server.ts, framing.ts, rpc.ts, auth.ts), the dispatcher and its methods,
+  log.append / log.read, and the human rule requests (rules-apply.ts,
+  rules-revoke.ts).
+context:
+  - >-
+    dispatch.ts routes requests by connection class; methods.ts lists the verbs;
+    rules-apply.ts and rules-revoke.ts write approval.rule.* rows under the
+    rules lock.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  rules-apply:
+    description: >-
+      8.0:rules-view (session 2026-10-23-gnomon-rules-view; Aegis M2/L1/L2).
+      socket/rules-apply.ts: request.rules.apply{changes:[{ruleId, op,
+      until?}]} from the human on a gui or device connection (dispatcher-only,
+      no row of its own). Validates every change against the RuleBook before
+      any write (1..64, one per rule, rule stands, off takes an ISO until in the
+      future and <= 7 days ahead of the kernel clock or 'manual', an off of an
+      off rule only lengthens, on needs an off rule, the card measured against
+      MAX_CARD_CHARS and refused rather than cut). remove/off write
+      approval.rule.revoked / approval.rule.disabled at once under the rules
+      lock (shared with #rules-revoke and the expiry sweep); every `on` rides
+      ONE strictness card (detail.op rules.apply, detail.changes in
+      contentHash, lines = the kernel's ruleWords, handOnly, never standing)
+      whose fresh-presence allow re-validates each rule and writes
+      approval.rule.enabled{cause:'human'}. expireDue() writes
+      approval.rule.enabled{cause:'expired', until} for each passed off time
+      (the GUI feed shows it). status.rules (human class): every rule, its
+      words, state, until, and the kernel-clock presets. #always-rules folds
+      the rows: an off rule never matches, is not repoEditsRule (the mode
+      chip) and `gnomon rules list` says off. Tests: test/rules-view.test.ts,
+      test/socket-abi.test.ts (8.0:rules-view request.rules.apply).
+      The card block is the shared #batch-card helper (rulesOnBlock ->
+      batchCardBlock), the same batch semantics as #mcp-servers.
+    path: src/kernel/socket/rules-apply.ts
+    type: module
+    tags: [gnomon, kernel, socket, rules, paradigm-8]
+    signals: ["!approval.rule.disabled", "!approval.rule.enabled"]
+  socket:
+    windows-pipe: >-
+      BUILT (Windows parity W3, docs/plans/gnomon-windows.md; spec §16 Kernel endpoint, G-WIN-01, probe P03).
+      On win32 selectSocketPath returns the named pipe gnomon-<32 hex> (windowsPipePath: sha256 of the case-folded
+      realpath of the home; via 'pipe'). listenSocket binds it (libuv FIRST_PIPE_INSTANCE: a squatter fails the
+      listen, endpoint-busy) and REQUIRES opts.securePipe (else endpoint-acl): until it resolves every accepted
+      connection is destroyed unserved, then every earlier one is dropped. The daemon passes
+      platform/win32/pipe.ts secureKernelPipe: the helper's pipe.secure sets the protected current-user-only
+      DACL plus a DENY for the Gnomon session SID (a session token carries the user SID), and the kernel accepts
+      only an owner-only read-back with that deny AND serverPid === its own pid. Before it, the kernel shields its
+      own process (platform/win32/shield.ts: process, threads and default DACL deny the session SID).
+      The helper sets the OWNER to the current user as well (pipe.secure and the home's owner-only DACL): on an
+      elevated admin, new objects are owned by BUILTIN\Administrators, and the owner-only read-back requires the
+      user. The first ownerOnlyDir in a process calls the helper's process.owner-default (TokenOwner := the token's
+      own user), so what the kernel creates below the home passes the strict per-file check too. Verdicts compare
+      in the SDDL spelling of the user (info.userSddlSid: the built-in Administrator reads back as LA). platform/win32/system-root.ts win32SystemRoot is the ONE Windows-directory lookup (reg.exe, the helper
+      PATH, the transport child's env): the canonical SystemRoot first, then case-insensitive, and only a
+      drive-rooted absolute path (never relative or UNC); otherwise C:\Windows.
+    journal-cursor: >-
+      BUILT (slice A4, T-2026-10-19-001, TD-2026-10-19-648 item 8, §5):
+      SERVER_FEATURES = ['journal.cursor'] (inside the signed
+      canonical(features)). log.read `since` is the {logId, seq} cursor
+      (validateLogReadCursor); a cursor whose logId is not the current log
+      (another kernel, or a quarantined predecessor) is
+      BAD_REQUEST{cursor-epoch}; a bare-seq since is refused bad-since for
+      every view (no caller sends one; it is the epoch-blind resume the
+      cursor exists to stop); any resume on a connection that did not
+      negotiate journal.cursor is refused bad-since{needs}, never degraded.
+      A read with no since starts at the current log and needs no feature.
+      The cursor rides the envelope (page cursor/logId, subscription reply
+      logId, each event notification's cursor, end.cursor); limited-view
+      rows carry seq only (no hash, prev, sig or log). kernel.call (mods,
+      in-process) carries SERVER_FEATURES; connectGnomon offers
+      DEFAULT_FEATURES. Tests: test/socket-log-read.test.ts (journal.cursor).
+      GUI READER (dogfood fix 2026-10-19): readerFor gives a human
+      connection whose credential is `gui` (a web-endpoint launch-token
+      session or its Reconnect; never settable by a hello field) the HUMAN
+      (full) projection, per §9.3 "the one first-party human surface is the
+      GUI session that consumed a launch token". A human device key stays
+      community-client (fullView.needs names the GUI or a
+      log.read:sensitive grant); read tokens, mods and peers are unchanged.
+      Tests: test/socket-log-read.test.ts (credential gui row) and the
+      darwin falsifier test/gui-session-e2e.test.ts (real dev kernel + the
+      GUI client and store: session listed, reply text shown, second send
+      reaches the kernel).
+    planned-001-move: >-
+      PLANNED, not built (TD-2026-10-19-648; spec §5, §7.4, §3.9). In the
+      batched clientApiId move T-2026-10-19-001: the log.read cursor
+      becomes {logId, seq}, a cursor from another log is
+      BAD_REQUEST{reason:'cursor-epoch'}, limited views carry seq only (no
+      hash, no prev); reserved there too: hello features session.resume
+      and journal.cursor, the kind session.drained, claimGen on
+      contract.claimed and the CAS_LOST reasons stale-claim, claim-expired
+      and claim-superseded (built in M2.2, recorded in the kernel log).
+      Item 12 (a kernel-key signature over the link handshake hash,
+      verified against the ids pinned in peers.jsonl) is built in M2.8.
+      Item 10, `gnomon guide <topic>`: CLI-only, not a socket method;
+      topics compiled into the signed binary, pull-only, never injected; a
+      CI honesty check fails the build if a guide names a verb, flag or
+      reason the descriptors lack (T-2026-10-19-015, before Move 2).
+    backpressure: >-
+      T-2026-10-19-009 item 6 (spec §11.2 rule 12, Orca audit Adopt 6):
+      high/low watermarks — server.ts pauses reading above writeHighWater
+      (1 MiB) and resumes only at or below writeLowWater (256 KiB,
+      DEFAULT_WRITE_LOW_WATER, clamped to the high mark); the context
+      exposes writeLowWater; the log.read{follow} pump (log-read.ts) stopped
+      at the high mark re-waits a drain until the buffer is at or below the
+      low mark (no flapping). Delivery unknown: RpcConnection (client.ts)
+      answers every pending (written, unanswered) call with ENGINE
+      {reason:'delivery-unknown'} when the connection closes;
+      a call() timeout (ETIMEDOUT) is documented as equally
+      delivery-ambiguous (Reviewer B8: buffered bytes keep flushing after the
+      timer, so no timeout proves "unsent"; callers re-read state);
+      connection-closed for any call provably never sent (closed, or the
+      socket destroyed / not writable / ended — GUI: readyState !== OPEN —
+      or a write rejected with ERR_STREAM_DESTROYED/WRITE_AFTER_END).
+      Flood bounds (Aegis M1, test/socket-flood.test.ts): maxInFlight holds
+      inside one inbound chunk (excess frames held, admitted in order, never
+      refused); maxWriteBuffer (8 MiB) destroys a non-reading peer;
+      maxConnections (64). One high mark for ctx and pressure(); the low mark
+      is kept >= the socket writableHighWaterMark so a drain re-wait cannot
+      stall. Named pipes skip chmod/ACL read-back; close() unlinks the
+      public name BEFORE server.close() (traceClose pins the order).
+      Same in src/clients/ts/client.ts and the GUI client
+      (DELIVERY_UNKNOWN). Client-local, not wire reasons. Tests:
+      test/web-backpressure.test.ts (every platform), gnomon-gui
+      test/gui.test.ts.
+    method-registry: >-
+      T-2026-10-19-009 item 4 (spec §5, Orca audit Adopt 4): methods.ts
+      MethodRegistry — every gnomon-rpc:v1 method (12 verbs + 2 relays) is
+      REGISTERED with a tier for every matrix class (false or a non-empty
+      access string); a missing/undefined/empty tier, an unknown class key, a
+      duplicate or a post-seal registration throws MethodRegistrationError.
+      hello/auth are the pre-auth handshake, outside the tier registry
+      (handled first in dispatch.ts). MethodRegistry.uncheckedForTests is
+      the sealed test seam for planting malformed tiers (verb-access.test.ts).
+      KERNEL_METHODS is built from the contracts' VERBS + CLIENT_RELAYS
+      (RELAY_TIERS: caller principal, readToken/peer false) at module load
+      and sealed. tier()/accessOf FAIL CLOSED: unknown method, unknown class
+      or any stored tier that is not false/non-empty string ⇒ false; serve()
+      refuses FORBIDDEN{matrix} unless the tier is a non-empty string (Orca's
+      check fails open on undefined). DispatcherOptions.methods is a test
+      seam. Tests: test/verb-access.test.ts (every platform).
+    ownership: >-
+      T-2026-10-19-009 item 2 (spec §2.4 rule 1, Orca audit Adopt 2): never
+      treat "can't tell" as "dead". listenSocket refuses a socket directory
+      that is not ours and 0700 (assertPrivateDir: no bind-then-chmod
+      window), binds a private random sibling name (.s<8 hex>), chmods and
+      reads it back, then publishes: link() when the public name is free,
+      else rename() over it only after probeSocketHolder proved the old
+      holder dead (ECONNREFUSED, confirmed by a second probe after
+      HOLDER_REPROBE_DELAY_MS — Aegis L1: on Darwin a live listener with a
+      full accept queue also refuses). A connect = live holder; timeout, EPERM or
+      any other error = undecided; both refused endpoint-busy{holder} and the
+      old socket is left in place. Node's server.close() unlinks only the
+      private bind name; close() removes the public name only while its
+      dev+ino equal the socket we published (pinned by our live listener).
+      pidfile.ts no longer unlinks the socket (acquire or release). Peer uid:
+      Node has no getpeereid — 0700 dir + 0600 socket + M1.4 mutual auth are
+      the boundary. Tests: test/socket-ownership.test.ts (POSIX, registry row).
+    status-numbers: >-
+      M1.12 slice 3 (§9.1 G-HON-03, §9.6, G-HON-07): status-numbers.ts declares
+      every numeric status leaf that is neither {n, of} nor a gauge `n` —
+      gauge, ordinal, limit, duration, latency (needs sibling method + machine)
+      or subset-of-<path> (must not exceed its denominator); checkStatusNumbers
+      returns every bare or unprovenanced number, so a new status number
+      cannot ship undeclared. Round 2: an {n} without of passes only at a
+      path declared gauge. Tagged #socket (the declarations live beside the
+      status verb) AND #client-conformance (the check is the honesty CI gate's;
+      no kernel code calls it).
+    description: >-
+      #socket (spec §2.1, §4.9, §5) — the kernel's gnomon-rpc:v1 endpoint.
+      T-2026-10-18-016 (P8-D93): hello carries a client-chosen clientNonce
+      (validated, required); auth.ts echoes it in the result and signs
+      serverSig over nonce + clientNonce + endpointPath + negotiated hello;
+      connectGnomon (client.ts) sends a fresh 32-byte nonce, refuses a hello
+      that does not echo it (client-nonce-mismatch) and verifyServerHello
+      takes the SENT nonce, so a recorded genuine hello replayed from a
+      squatted socket never reaches auth.
+      PR-5 core: unix-socket server bound under a 0177 umask, chmod 0600 and
+      the ACL read back before serving; byte-based NDJSON framing (4 MiB max
+      inbound frame, UTF-8 safe partial lines, oversize discarded to its
+      newline and answered BAD_REQUEST once, malformed lines BAD_REQUEST,
+      connection kept); per-connection in-order replies; connIds are
+      conn:<ULID>. M1.4 SLICE 1: errors carry contracts refusal:v1 in
+      error.data with the §4.9 code map (rpc.ts). auth.ts — `hello`
+      negotiation via contracts negotiateHello (highest shared gnomon-rpc
+      version; none shared ⇒ UNSUPPORTED{offered[], supported[]}; tolerant
+      param validation; client strings capped at 128 chars) answering
+      {clientApi, features, nonce, serverKeyId, serverSig, clientApiId,
+      kitId}; serverSig = kernel key over gnomon:auth-server:v2 + nonce +
+      endpointPath; `auth {principal, deviceId, sig}` verified against the
+      ROOT-signed device registry (#identity), nonce single-use (any attempt
+      consumes it) and 30 s, accepted transcripts remembered so a replay is
+      socket.auth.replay; {token}/{launchToken}/{reconnect} refused
+      UNSUPPORTED (later M1.4 slices). Any failed auth = ONE AUTH refusal,
+      then the connection is closed. dispatch.ts — before auth only hello and
+      auth (every other name, known or unknown, AUTH{unauthenticated} then
+      closed — Aegis L6: no pre-auth method enumeration; UNKNOWN_VERB only
+      after auth); after auth the §5 verb × principal matrix
+      (contracts VERBS.access; peer refused everywhere) then `status` served
+      for real (principal, connId, surface, clientApi, clientApiId, kitId,
+      abiId, nextLegalVerbs from the §5 table, verbs/relays with
+      availability + milestone, daemon info, log head, sessions 0, cards 0,
+      kernelKeyCustody partial, root state, authenticated clients) under
+      50 ms (G-ABI-03), every other verb/relay ENGINE{not-implemented,
+      milestone} — no fake success, no extra verb (the PR-5 daemon.status /
+      daemon.stop placeholders are removed). Kernel-log rows before the
+      reply: socket.hello, socket.auth.ok, socket.auth.fail,
+      socket.auth.replay (+ socket.connect, socket.frame.refused as
+      diagnostics); a failed auth.ok write refuses the auth. client.ts —
+      rpcCall, RpcConnection, verifyServerHello (serverSig against the
+      registry's kernel key over the CLIENT-derived path), signAuth and
+      connectGnomon (never sends auth to an unverified server; reason
+      unverified-server). ROUND 2: both signatures also bind the negotiated
+      clientApi + canonical features (downgrade-proofing; a deviation from the
+      §4.9 preimage text, pending spec/contracts); the registry is cached by
+      size+mtime+sha256; qualified matrix access (e.g. mod 'own view') is
+      refused ENGINE not-implemented with its milestone, never the full view;
+      hello/auth.ok log failures close the connection (fail rows are
+      best-effort); pre-auth limits — no hello in 10 s or no auth by the 30 s
+      nonce TTL closes, at most 64 pre-auth connections; flow control pauses
+      reading at 32 queued requests or 1 MiB unsent replies; pre-auth
+      diagnostics are coalesced into one signed counter row per window.
+      ROUND 3: socket.hello and socket.auth.fail are rate-limited — the
+      first 8 per 10 s window individually, the rest folded into that
+      window's signed counter row (byOutcome / byReason); auth.ok/.replay stay
+      individual; inbound frames capped at 16 KiB until auth succeeds; the
+      client refuses a hello whose clientApi/features it did not offer
+      (hello-not-offered, client-local); RegistryCache parses the bytes it
+      hashed. Windows named pipe: parity phase (P8-D78).
+      M1.4 SLICE 2 (log-read.ts): `log.read` and `ref.resolve` served for
+      authenticated principals, each handled EXPLICITLY per reader class
+      (never the generic 'full'): human → the §9.3 COMMUNITY-CLIENT projection
+      (full minus sensitive and secret, sensitive-column kinds as {kind, hsid,
+      at, hash} stubs, registered sensitive fields → {redacted, hash}) because
+      a first-party surface / log.read:sensitive grant cannot be proven on
+      the socket yet (result names projection + fullView.needs); mod → own
+      modns.<name>.* + granted kinds (none yet); agent → UNSUPPORTED Move 2;
+      voice → UNSUPPORTED Move 4; session → ENGINE not-implemented M1.7 (no
+      principal → hsid binding); read tokens do not exist yet. Pages:
+      {since, until?, kinds? (exact or ns.*), scope? {hsid, repo, loop,
+      contract} applied to the PROJECTED view (a stub never matches a
+      repo/loop/contract filter), limit? ≤ 1000} → {rows, next (last scanned
+      seq, stable cursor), head, caughtUp, projection, withheld}; ≤ 10 000
+      rows scanned and ~2 MiB per page, a row > 1 MiB becomes {view:
+      'oversize', kind, hash, bytes}. Subscriptions (follow: true): reply
+      {subscription, since, head, projection, backlogCap} written first
+      (ctx.afterReply), then backlog + live rows as `event` notifications
+      {subscription, row} in seq order, read lazily from the log; the pump
+      writes only under the connection's write high-water mark and resumes on
+      'drain'; per subscription a queue of undelivered post-subscribe seqs
+      (numbers only) — beyond 10 000 the subscription is dropped, the client
+      gets event{subscription, end{reason:'dropped', lag, since}} and the
+      kernel logs socket.subscription.dropped{subscription, lag, since} with
+      the connId (deferred, never inside a commit); ≤ 8 subscriptions per
+      connection, 256 per kernel; each holds the idle monitor ('subscriber');
+      subscriptions end with their connection. server.ts gains ctx.notify /
+      writableLength / writeHighWater / onDrain / afterReply; client.ts
+      RpcConnection.onNotification. status adds subscriptions{n,
+      onThisConnection, perConnectionMax, backlogCap}. ROUND 2: limited
+      views (community-client, mod, read-token) carry no hash/sig/prev,
+      redacted fields are {redacted: true} and stubs {kind, hsid?, at} (no
+      confirmation oracle; ref.resolve returns no hash to them); only rows at
+      or below the log's RELEASED head are read or streamed (failed critical
+      rows never); lag = committed head − cursor, a subscribe with head −
+      since > 10 000 is BAD_REQUEST{backlog-too-large} (page first); the
+      commit-path fan-out is one metadata check per subscriber (mayBeVisible
+      + kind filter; no projection, copy or hash — projection happens lazily
+      in the pump); writeHighWater is clamped to ≥ the socket's
+      writableHighWaterMark; an unencodable frame ends the subscription with
+      end{reason:'internal'}; follow on a JSON-RPC notification (no id) is
+      refused follow-needs-id; queued requests of a closed connection never
+      run (server `closed` flag) and dispatch refuses ENGINE{gone} for a
+      closed ctx, so zombie pre-auth entries cannot fill maxPreAuth. ROUND
+      3: limited views also drop idem and refHash; lag = min(seq, released
+      head) − cursor; subscribe admits at most cap/2 backlog measured
+      against the released head (page until caughtUp, then follow).
+      M1.4 SLICE 3 (round 2: P8-D89 / D89a): read tokens are PROOF OF
+      POSSESSION — auth {tokenId, sig} (exactly those keys, after hello, inside
+      the nonce TTL), sig = the token's Ed25519 key over gnomon:auth-token:v1 +
+      contracts authTokenMessage(nonce, serverKeyId, tokenId, endpointPath,
+      negotiated hello), verified against the public key in #identity's
+      root-signed token file; a bearer {token} is auth-params; the seed never
+      crosses the wire. The connection binds to the token's principal with
+      credential 'read-token' and matrix class readToken: status, log.read
+      (the §9.3 read-token projection), ref.resolve; every other verb and both
+      relays FORBIDDEN{matrix}. Unknown / expired / not-yet-valid / revoked
+      (sticky) / bad or replayed proof / in use (one live connection per
+      token) / untrusted token file ⇒ AUTH + close; the token is re-checked on
+      every call, at its expiry and every 5 s; a dead token closes the
+      connection with a best-effort socket.disconnect{reason, tokenId}. A
+      connection that closes during the awaited auth.ok write is refused
+      ENGINE{gone} and gets no timers or lifted cap (timerCount() for tests).
+      Rows carry only tokenId. connectGnomon({readToken}) validates options
+      before connecting and proves possession only to a verified server.
+      G-SOCK-01: a known verb before auth is AUTH and CLOSES the connection.
+      log-append.ts — the §5 namespace-ownership gate (G-SOCK-04): unknown and
+      kernel-owned kinds FORBIDDEN{kernel-owned} for every class, the human
+      request.* exception too (needs: first-party human-class connection,
+      unprovable until #web-endpoint); voice request.voice.arm and voice.*
+      ENGINE Move 4; userland kinds FORBIDDEN{ungranted, M1.5 — grant.bind
+      needs M1.3 grants over M1.5 manifests} for human/agent; a mod's own
+      modns ENGINE M1.11, else modns-not-own; nothing is ever appended in M1.4.
+      status adds credential, token{tokenId, expiresAt}, relay access, and
+      nextLegalVerbs filtered to the caller's class. Preimages come from
+      contracts (T-2026-10-17-017). abiId pinned in test/abi.ids.json
+      (G-ABI-04). Suites: test/socket-abi.test.ts (G-ABI-01..05 incl. a literal
+      §5 matrix fixture and the userland-namespace list, G-SOCK-02..04, the
+      auth race; todos naming later milestones). ROUND 3: the PoP is verified
+      before any token state is told (no valid proof ⇒ uniform unknown-token,
+      no tokenId on the row); the daemon re-reads the token file at start and
+      every 60 s (tokenRefreshMs) so revocations reach the chain with no live
+      token connection, retrying a failed key.token.revoked write and keeping
+      it pending (daemon.token.revocation.unrecorded event) — never dropped;
+      every reason the kernel sends is registered (test/refusal-reasons.test.ts
+      scans socket/, web/, refs/, redaction.ts). M1.4 #web-endpoint: auth.ts
+      takes a `web` hook for {launchToken}/{reconnect} (credential 'gui',
+      human class); on the unix socket those forms stay UNSUPPORTED
+      web-auth-not-implemented. P8-D98 (T-2026-10-19-001 A0): the registry
+      (methods.ts) also registers the three human-device verbs gui.open,
+      rules.revoke and daemon.stop (human tier only, every other class false, deny by
+      default); dispatch.ts refuses any non-human class FORBIDDEN{matrix},
+      refuses a human GUI launch-token connection the same way, and routes a
+      human DEVICE connection to DispatcherOptions.humanVerbs (one handler
+      module per verb, wired by the daemon so dispatch.ts does not change
+      again) or ENGINE{not-implemented} when the port is absent; status lists
+      them as humanDeviceVerbs. SERVER_FEATURES stays [] (no reserved hello
+      feature advertised). abiId still hashes the twelve VERBS only.
+    module-map: >-
+      src/kernel/socket/ by file (2026-10-27 symbol audit; every file carries
+      its @symbol header). #socket: index.ts (the barrel), framing.ts
+      (length-safe NDJSON, 4 MiB frames, byte-based UTF-8 buffering,
+      malformed / oversize items), rpc.ts (gnomon-rpc:v1 shapes and
+      RpcRefusal), server.ts (listen, per-connection state, endpoint
+      ownership), auth.ts (mutual hello / auth, also #identity), methods.ts
+      (the verb x class registry), dispatch.ts (routing, human-device verbs
+      via DispatcherOptions.humanVerbs), client.ts (connectGnomon and the
+      kernel-key pin), log-append.ts (the §5 namespace-ownership gate),
+      log-read.ts (log.read views and the journal cursor, also
+      ~ample-internal-logs), status-numbers.ts (the numbers-only status
+      feed, also #client-conformance), gui-open.ts (the gui.open
+      human-device verb, the wire form of `gnomon open`; test/gui-open.test.ts)
+      and daemon-stop-verb.ts (the daemon.stop human-device verb that raises
+      the signed daemon-stop card, $daemon-lifecycle daemon-stop;
+      test/daemon-stop-verb.test.ts). Its own entries: rules-apply.ts
+      (#rules-apply) and rules-revoke.ts (#rules-revoke).
+    path: src/kernel/socket/
+    type: module
+    tags: [gnomon, kernel, socket, paradigm-8, pr-5]
+    tests:
+      - test/ndjson-framing.test.ts
+      - test/socket-server.test.ts
+      - test/socket-auth.test.ts
+      - test/socket-log-read.test.ts
+      - test/socket-abi.test.ts
+      - test/human-device-verbs.test.ts
+      - test/refusal-reasons.test.ts
+      - test/verb-access.test.ts
+      - test/web-backpressure.test.ts
+    aspects: ["~ample-internal-logs"]
+    oracles: [G-DMN-02, G-ABI-01, G-ABI-02, G-ABI-03, G-ABI-04, G-ABI-05, G-SOCK-01, G-SOCK-02, G-SOCK-03, G-SOCK-04]
+  rules-revoke:
+    description: >-
+      #rules-revoke (P8-D98 human-device verb 14, TD-2026-10-19-528 F1) in
+      src/kernel/socket/rules-revoke.ts (TD-2026-10-23-939 follow-up: the
+      same handler and queue also serve the dispatcher-only
+      request.rules.revoke{ruleId} from the human on a gui or device
+      connection, narrowing only, no presence): the rules.revoke{ruleId} handler the
+      daemon wires into DispatcherOptions.humanVerbs['rules.revoke'] (one
+      key per verb in daemon.ts `humanVerbs`). Reached only for a verified
+      human device connection (dispatch.ts refuses every other class, and a
+      connection whose credential is not explicitly 'device', Aegis L3); no
+      presence prompt (revoking only narrows). Params exactly {ruleId}
+      (RULE_ID_PATTERN) else BAD_REQUEST; the rule must stand in the
+      daemon's RuleBook (kernel-signed rows only, shared with the
+      supervisor's exact-match check via syncRuleBook) else NOT_FOUND; then
+      the kernel appends approval.rule.revoked{ruleId, repoKey, tool, connId}
+      (connId stamped from THIS connection; a CRITICAL kind, anchor-policy.ts
+      Aegis M1, so the append resolves only once anchored) and re-folds, so the next exact
+      match raises the card. Revokes run one at a time (a concurrent double
+      revoke writes one row). Result {ruleId, revoked: true}.
+    path: src/kernel/socket/rules-revoke.ts
+    type: module
+    tags: [gnomon, kernel, socket, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+      - test/human-device-verbs.test.ts
+    oracles: [G-BRK-05]

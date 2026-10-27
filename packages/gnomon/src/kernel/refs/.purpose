@@ -1,0 +1,31 @@
+version: "2.0"
+name: gnomon-kernel-refs
+description: >-
+  Reference resolution: resolve.ts is the kernel read-only resolver for its
+  built-in reference schemes (ev:<ULID> and the rest), answering with the
+  projected view the caller may read.
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  ref-resolver:
+    description: >-
+      #ref-resolver (spec §3.7, §4.4, §5 verb 12; M1.4 slice 2) —
+      src/kernel/refs/resolve.ts, the kernel's read-only resolver for its
+      built-in schemes. Served: `ev:<ULID>` → {ref, target: the §9.3
+      projected view for the caller's reader class, hash}; every row is
+      re-hashed (mismatch ⇒ ENGINE{row-integrity}, withheld); a missing row
+      and an invisible one are the same NOT_FOUND (no existence oracle); an
+      @rev on an event is BAD_REQUEST. Validated then ENGINE{not-implemented,
+      milestone}: turn:<hsid>/<n> and hsid: (M1.7), cc (M1.7), gkey/dev
+      (M1.3), permit/card (M1.6), contract/node (M2.1), pev (Move 2 — the
+      spec names none). UNSUPPORTED: peer: (only a brief's copy, §3.9),
+      package schemes (no-resolver: userland), unknown schemes. Malformed
+      refs, dropped schemes (voice) and refs over 512 chars are BAD_REQUEST.
+    path: src/kernel/refs/
+    type: module
+    tags: [gnomon, kernel, refs, paradigm-8, m1.4]
+    tests:
+      - test/socket-log-read.test.ts
+    oracles: [G-ABI-02]

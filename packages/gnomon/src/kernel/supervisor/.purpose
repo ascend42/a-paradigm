@@ -1,0 +1,535 @@
+version: "2.0"
+name: gnomon-kernel-supervisor
+description: >-
+  The kernel supervisor: it owns each agent session child, decides tool
+  permission requests (always-rules, prefix policy, the read-only shell parser,
+  the loop origin clamp), serves the kernel MCP server to sessions, folds
+  session names, and adds host guidance and voice-origin tagging to turns.
+context:
+  - >-
+    supervisor.ts runs sessions; permission.ts, rules.ts, prefix-policy.ts and
+    shell-readonly.ts decide tool calls; kernel-mcp.ts is the MCP server
+    sessions talk to.
+  - >-
+    session-names.ts folds session.open / session.renamed rows; host-guidance.ts
+    and voice-origin.ts shape what a turn carries.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  session-names:
+    description: >-
+      #session-names (8.0:session-rename, spec §3.3 "Session names").
+      src/kernel/supervisor/session-names.ts: a fold over the kernel-signed
+      session.open{hsid, by} (the owner) and session.renamed{hsid, name}
+      rows, seeded from log.read at boot (SESSION_NAME_SEED_KINDS) and fed
+      by log.onCommit, so a name survives a restart and a replay with no
+      store of its own (bounded, SESSION_NAMES_CAP). rename() serves the
+      human's log.append{kind:'request.session.rename', payload:{hsid, name}}
+      routed by the dispatcher from a gui or device human connection only
+      (FORBIDDEN{matrix} otherwise); closed {hsid, name}; the name goes
+      through contracts normalizeSessionName (the ONE section 4.5 sanitizer,
+      whitespace folded, trimmed, <= 80 code points; a control or format
+      character is BAD_REQUEST, never dropped); '' resets to the derived
+      title. The session must be one this human opened (NOT_FOUND
+      otherwise, live or ended). Writes request.session.rename then
+      session.renamed (checked at append by #kernel-log). status.sessionNames
+      lists the asker's names (human class only). A name is display text,
+      never a capability: nothing routes, grants or permits by it, and it
+      never reaches a path. The raw CLI form is `gnomon session rename`
+      (src/cli/session-cli.ts runSessionRename, the gnomon mode device
+      connection). Tests: test/session-names.test.ts, socket-abi.test.ts.
+  kernel-mcp:
+    description: >-
+      #kernel-mcp (T-2026-10-23-002; spec §6.6): the kernel's own MCP server
+      `gnomon`, an SDK-type server. The session mcp.json carries
+      {"type":"sdk","name":"gnomon"} (added last, so no distro or mod server
+      takes the name) and Claude Code sends each JSON-RPC message as
+      control_request{subtype:'mcp_message', server_name, message} on the
+      session's stdio; the supervisor answers
+      control_response{response:{mcp_response}} (adapter.ts mcpResponseLine)
+      outside the stdout queue, after session.inject{channel:'kernel-mcp'}.
+      No process, socket or port: the caller is the session the kernel
+      spawned, so the hsid never comes from the message. Methods:
+      initialize, notifications/*, ping, tools/list, tools/call (to
+      #git-verbs); others -32601; another server name is a control error.
+      The can_use_tool request for a kernel tool passes with an
+      approval.auto{modeRef:'kernel-verb'} row behind mayAuto (loop sessions
+      denied), never a second card: the verb carries its own gate. Present
+      only when SupervisorOptions.gitVerbs is set (the daemon sets it). The
+      sdk server type over --mcp-config with --strict-mcp-config is MEASURED
+      on claude 2.1.309 (probe p-kernel-mcp-sdk, pass, driven by this
+      module, the adapter and GitVerbs): init lists mcp__gnomon__* with
+      gnomon connected (source sdk); initialize (id 0),
+      notifications/initialized (no id), tools/list, then can_use_tool and
+      tools/call arrive as mcp_message; git.init made the fresh folder a repo. Slice C1: attended LOCAL sessions reach the same kernelMcpAnswer through #local-tool-broker (kernelSdkTarget: tools/list, tools/call; no control channel).
+    path: src/kernel/supervisor/kernel-mcp.ts
+    type: module
+    tags: [gnomon, kernel, mcp, paradigm-8]
+    signals: []
+    tests:
+      - test/git-verbs.test.ts
+      - test/kernel-mcp-session.test.ts
+    oracles: [G-GIT-08]
+  supervisor:
+    session-identity-env: >-
+      SupervisorOptions.identity (seam; default runner/env.ts
+      sessionIdentity()) is resolved ONCE in the constructor and passed to
+      buildSessionEnv for both lanes (LocalLaneOptions.identity), so a
+      session's USER/LOGNAME/SHELL/TMPDIR come from the OS whatever env the
+      daemon inherited (#session-runner session-identity-env). The darwin
+      profile extras.tmpdir is env.TMPDIR ?? os.tmpdir().
+    usage-split: >-
+      #ledger-mod (K2 feed v2): the Claude turn.result row additionally
+      records split {in, out, cacheRead, cacheWrite} (the turn's own totals
+      from result.usage) when the stream reported a usage object; additive,
+      numbers only, no budget/fuse behaviour change. The #mod-host feed
+      projects it as tokensIn/tokensOut/cacheRead/cacheWrite.
+    description: >-
+      AUTO-EDITS READ-ONLY BASH (TD-2026-10-20-294 part 1):
+      auto-edits.ts autoBashReadOnly passes a Bash request with no card,
+      after approval.auto{modeRef:'mode:auto-edits:read-only'} (log before
+      effect), only when its input keys are command/description/timeout, no
+      root is home-or-above, the card is not flagged and #shell-readonly
+      proves the command read-only; in auto-edits and (F1, TD-2026-10-20-086)
+      ask (modeRef mode:ask:read-only), never in manual. K1 ANCHOR: classified
+      with ctx.cwd = realpath(s.cwd); the allow sends updatedInput.command =
+      anchorCommand(command, root, shellFlavour(session env SHELL));
+      approval.auto{path: root, inputHash: the request's}; the session.inject
+      row of the allow carries inputHash and anchoredInputHash. F7: the
+      kernel-written policy.json carries env
+      CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1 (manifest/policy.ts
+      CLAUDE_SESSION_ENV). Misses are not logged yet (approval.auto.miss needs
+      a clientApiId move).
+      session.send accepts source 'voice' from a human only, as a dictation
+      attribution hint for #gnomon-voice (TD-2026-10-20-262).
+      #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
+      src/kernel/supervisor/. P8-D96 PERMISSION CHANNEL (probe p01b):
+      sessions run --permission-prompts host --permission-prompt-tool stdio;
+      each can_use_tool request is answered exactly once (pending map per
+      session, cap 64, entry deleted before the answer; card raised inside
+      the stdout queue, decision awaited outside it). permission.ts (pure)
+      composes the card (Bash full command; Edit path + old/new; Write path,
+      bytes, excerpt, inputHash; other tools capped canonical JSON; detail
+      {tool, toolUseId, requestId, inputHash, repo, path?}), auto-denies
+      writes under denyWrite and malformed AskUserQuestion input, and
+      maps the outcome: only allow / approve-plan / answer allow. ASK-USER
+      (gui-complete item 1): AskUserQuestion is an `ask-user` card (cached
+      class, decision `answer` only, 10 min timeout => deny "no answer");
+      the questions are validated (<= 8, <= 16 options, one-line bounded
+      text) and shown in a fixed line grammar (question N / option N.M) the
+      GUI picker reads; approve{decision:'answer', note} carries the plain
+      answer (one question) or JSON {answers:{question: answer}}, checked by
+      parseAskAnswer against the KERNEL-held questions before presence
+      (broker RaiseInput.checkNote, BAD_REQUEST bad-params); the allow is
+      updatedInput = {...kernel-held input, answers}; approval.decide logs
+      noteHash/noteBytes only (privateNote). ROUND 2 (Aegis C1/L1/L4): the
+      AskUserQuestion schema is closed (an extra key at any level is
+      bad-input); the questions are structured card detail (inside
+      contentHash) carried in one {type:'ask-user', detail} block node the
+      GUI verifies against contentHash; answers are null-prototype objects;
+      every multi-line field body is fenced by fieldLines (FIELD_BODY_PREFIX
+      + an end marker; model-chosen keys JSON-quoted), the shared helper
+      that replaces the hardening lane's T-032(2) copy. PREVIEWS
+      (#gui-ask-card, 2026-10-24, probe p-ask-2.1.309): claude 2.1.309 sends
+      `preview` on options, so it is a known option key (text ≤
+      ASK_MAX_PREVIEW_CHARS 4000, a fenced `preview N.M` card field, in the
+      detail only where given); a repeated label in one question is
+      bad-input. Aegis M1 (2026-10-24): any question, header, label,
+      description or preview the display sanitizer flags is bad-input.
+      Aegis L2: askAnswerCap (multi: every label + ', ' + Other) bounds each
+      answer and askNoteCap (worst JSON expansion, never below 4096) is the
+      card's broker maxNoteChars, so a full answer is never refused.
+      Accepted risk (spec
+      §3.4, Aegis C3, T-2026-10-19-001): the note is in neither the
+      decisionSig nor the presence binding. PLAN TEXT (item 3):
+      claude 2.1.302 sends ExitPlanMode with input:{} (p01b planMode, after
+      a plan-file Write the session policy denies); the supervisor keeps the
+      assistant tool_use ExitPlanMode input.plan (by tool_use id, bounded)
+      and the last `.claude/plans/*.md` Write content, and the plan card
+      shows it labelled "not in the request" with detail.planHash (so the
+      contentHash covers it); a plan in the request wins. updatedInput is the
+      kernel-held input; never updatedPermissions. Deny on no broker, raise
+      failure, expiry, cancel (control_cancel_request => expire
+      'cancelled'), duplicate requestId (both + approval.suspect), exit/stop
+      (expire 'session-exited', nothing written). Every answer is logged
+      session.inject{origin:'kernel', hash, bytes} first. A permit never
+      means allow (P8-D92). ROUND 2 (Aegis): the card block is wrappedBlock
+      (never cut); every input field shown (key=value); MultiEdit per edit,
+      NotebookEdit source in full, Write the only excerpt; auto-deny
+      sandbox-escape / bad-input / too-large; deniedWrite case-folds on
+      darwin+win32; policy.json permissions.ask for ALWAYS_ASK_TOOLS;
+      control_request turn.event rows hash-only; a malformed body under a
+      valid id is denied, a bad id logs approval.suspect
+      malformed-permission-request; the ungated-tool-use detector
+      (tool_result of a gated tool with no request); pending entries carry
+      closedWhy (the expire why); repo-hook cards for PreToolUse /
+      PermissionRequest carry TOOL_APPROVAL_WARNING. P8-D94 / G-SUB-07 (M1.7 slice 2, founder
+      ruling): repo-hooks.ts extracts the repo's project/local hooks (strict;
+      O_NOFOLLOW + fstat; events allow-listed to CLAUDE_HOOK_EVENTS;
+      COMMAND_UNSAFE, unknown keys, non-command types refused by id;
+      symlinked/oversized/unparseable layer or >64 hooks => none run; roots
+      deduped by realpath), raises one gate-class card per undecided hook
+      (install-card rendering via wrappedBlock, with the kernel warning line
+      REPO_HOOK_WARNING), pins decisions to (repoKey, setHash) — read back
+      by repoHookDecisionsFrom from KERNEL-signed gate-class.decided rows
+      only (allow|deny; a withdraw records nothing) — and writes only
+      approved hooks into the session's policy.json under
+      --setting-sources user (hooks mode `audited`, the default; probe
+      p10m-repo-surfaces). Pending cards bounded (MAX_PENDING_HOOK_CARDS).
+      P8-D97 / G-SUB-08 (founder ruling 2026-10-18; probe p10m-repo-context,
+      real claude 2.1.303, pass): repo-context.ts loads the repo's CONTEXT in
+      `audited` — memoryDirsOf (cwd up to the git top-level holding
+      CLAUDE.md / .claude/CLAUDE.md / .claude/rules, never the user home) ->
+      --add-dir + REPO_CONTEXT_ENV (CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1);
+      buildRepoContext copies .claude/{skills,agents,commands} into
+      <session dir>/context, a --plugin-dir named `project`, frontmatter
+      ALLOW-LISTED (sanitizeFrontmatter: hooks, allowed-tools, permissionMode,
+      mcpServers, unknown keys dropped; tabs/quoted/flow/merge/duplicate
+      keys or unterminated blocks refuse the file); symlinks refused; caps
+      MAX_CONTEXT_FILES / MAX_CONTEXT_BYTES / MAX_CONTEXT_FILE_BYTES.
+      Frontmatter hooks are stripped and listed, never approvable. The
+      repo's non-hook settings are NOT loaded: repoSettingsInfo /
+      repoSettingsLines put counts and key names (never values) on each
+      repo-hook card and on gate-class.detected{what:'repo-context'}.
+      ROUND 2 (Aegis): auditMemoryDir refuses a memory dir with a symlinked
+      memory file or an @ import (importTargets, Claude's grammar, depth 5)
+      reaching outside the git top-level (memoryRefused, on cards via
+      repoContextLines); hasShellPreprocessing refuses skills/commands with
+      !`...` or ```! and policy.json gets REPO_CONTEXT_SETTINGS
+      (disableSkillShellExecution); every SKILL.md at any depth sanitized; M3
+      continuation/control-character rules; memoryChainOf feeds the policy's
+      memoryDirs write-denies (M1); dotfiles skipped, readdir failures refused.
+      ROUND 3 (Aegis): memoryFilesUnder audits each memory dir's whole
+      SUBTREE (claude.md any case/depth, .claude/rules/**; symlinked
+      claude.md/.claude refuse; VCS dir + node_modules not walked; cap
+      MAX_SUBTREE_DIRS; outer walk reused by nested dirs); the policy's
+      `steering` match (memorySubtree) write-denies CLAUDE*.md and .claude/**
+      below the git top-level in any case (SBPL regex + Edit globs); imports
+      leaving the repo refuse before lstat, % tokens and entity-encoded @
+      refuse, an import still pending at depth 5 refuses; every .md in a skill
+      tree (SKILL.md any case) is sanitized and written sanitized.
+      FOLLOW-UPS (Aegis F1-F3): symlinked dirs in the subtree are realpath'd
+      (outside the git top or into node_modules refuses); `dep-steering`
+      read-denies CLAUDE*.md and .claude/** under any node_modules (SBPL
+      regex + Read rules); every in-repo import target (existing or not) is a
+      write-deny literal (memoryImports, MAX_IMPORT_TARGETS) and the repo
+      context is staged before the policy; permission.ts deniedWrite matches
+      `steering`, so those writes are auto-denied with no card.
+      F3a: an SBPL-inexpressible import target refuses only its dir; F4: the
+      subtree audit collects /^claude[^/]*\.md$/i (CLAUDE.local.md too); F1a:
+      dangling symlinked dirs resolved lexically (outside/node_modules refuse).
+      Residual: carded Bash can restructure ancestor dirs mid-session.
+      M1.8 slice 2: port.ts serves session.send{steer}
+      (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
+      probeLocal() is the daemon-start local probe; the daemon passes the
+      root-signed local config. The one place `claude -p` starts. Slice 1:
+      ATTENDED HUMAN-started Claude Code sessions only (others FORBIDDEN;
+      the scheduler run step still refuses). open: session.open -> preflight
+      -> session dir policy.json/mcp.json from generated plugin bytes
+      VERIFIED against the kernel-held record (T-008, manifest/generate.ts
+      verifiedGenerated) -> per-spawn law-7 scan (hit => billing.api.refused +
+      session.refused{api_billing_refused}, BILLING_REFUSED, before any
+      permit) -> permit.reserve{session.spawn, claude-code, kernelSpawn} ->
+      assertClaudePermit (Aegis: never claude without a live law-7-scanned
+      claude-code session.spawn permit for this hsid) -> generated session
+      profile -> DaemonChildren.intend (intent row BEFORE fork) -> spawn
+      detached -> track (boot + start-time witness) -> session.sandbox{hashes}.
+      stdout: every line a turn.event first (S2); usage only from stream
+      events against the SPAWN permit (fuse.recordStreamUsage); ask-user /
+      plan cards via the broker; init.apiKeySource != none kills the group;
+      quota recorded (P8-D92 tracking-only fuse). send: a turn permit (caller's
+      validated or kernel-reserved), law 7 re-scanned, session.inject{client}
+      -> turn.sent -> stream-json user line. stop: interrupt = control_request
+      only; else staged (control message, stdin close, DaemonChildren.stop
+      SIGTERM -> SIGKILL on the group). Mid-session watch (G-SUB-05):
+      layersHash + gitHash polled every 500 ms; a law-7 hit stops the session
+      within 2 s. port.ts: the dispatcher's session port (human class only);
+      daemon.ts wires it. ROUND 2: the exit listener is attached synchronously
+      at spawn (an early-exiting child is cleaned up: watch cleared, permits
+      released, moved to a bounded history); one catch from reserve to track
+      releases the permit, kills a stray child, removes the session dir;
+      layers hashed before the law-7 scan and re-checked right before spawn;
+      child HOME forced to the scanned user home; caller turn permits must be
+      live, unexpired, subscription and single-use; turn permits FIFO
+      (review M2: turnIds beside them and consumedTurns, the replayed human
+      messages; one result closes every consumed turn, a queued message folded
+      into the running turn included, releases each permit and writes
+      turn.result{turn} = the latest closed; no replay seen = the head only;
+      the local lane names the turn it closes too; re-review M-1: probe
+      p-replay-order shows the replay is written on consumption, so this
+      stands; a result with no outstanding turn writes
+      session.anomaly{hsid, why:'result-without-turn'}); the
+      watch hashes ~/.claude.json only through its law-7 projection;
+      stdout paused above a queue high-water mark and lines over 64 KiB
+      logged as {lineHash, bytes}; init without apiKeySource logged absent.
+      ROUND 3: 'exit' only resumes paused stdout; the release path runs on
+      'close' so a result written just before exit is recorded; #wire runs
+      before the post-track log row, and a failure after track stops the
+      group (the exit path releases the permits); a stray child before track
+      is SIGKILLed as a group; preflight spawns are async; used turn-permit
+      ids are pruned on expiry; status shows the claude pin.
+    path: src/kernel/supervisor/
+    type: module
+    tags: [gnomon, kernel, session, paradigm-8, m1.7]
+    tests:
+      - test/session-supervisor.test.ts
+      - test/repo-hooks.test.ts
+      - test/permission-session.test.ts
+      - test/repo-context.test.ts
+    oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
+  voice-origin:
+    description: >-
+      #voice-origin (TD-2026-10-23-939, superseding TD-2026-10-21-514's
+      edits-ask-first clamp; spec §14.7 "Voice submodes";
+      src/kernel/supervisor/voice-origin.ts). A voice-sent turn (Dictate's
+      Enter with unverified words, the send word, a piece, send-now) gets
+      EXACTLY a typed turn's permissions: #supervisor applies the run mode,
+      the human's saved always rules (exact and prefix) and standing grants
+      unchanged, and raises the same plain card a typed turn would (no
+      detail.origin 'voice', no voice line, no clamp field on the answer).
+      What stays: every turn.sent carries the kernel-stamped origin (hand |
+      voice | voice-unverified) and sentBy (word | piece | hotkey |
+      unverified) for the record; voice never approves anything
+      (#approval-broker refuses the voice principal and the voice intent
+      form voice-off, or voice-hand-only); a piece reaches the agent with the
+      piece note (pieceGuidance, numbered by VoicePieceCounter). The
+      remaining invariant is the portal gate ^voice-never-approves
+      (portal.yaml). The TD-2026-10-21-514 clamp, its signal and its
+      by-voice readback rule are retired.
+    path: src/kernel/supervisor/voice-origin.ts
+    type: module
+    tags: [gnomon, kernel, voice, security]
+    tests:
+      - test/voice-origin.test.ts
+    oracles: [G-VOX-17, G-VOX-18, G-VOX-19]
+  host-guidance:
+    description: >-
+      #host-guidance (founder request 2026-10-23; spec §6.6 "Host context";
+      src/kernel/supervisor/host-guidance.ts). HOST_GUIDANCE is a short
+      paragraph every Claude Code session the #supervisor spawns carries in
+      its --append-system-prompt (sessionSystemPrompt: the caller's
+      systemPrompt, then HOST_GUIDANCE, then GIT_VERBS_GUIDANCE when the
+      kernel verbs are on). It says the session runs inside Gnomon headless:
+      no slash commands (/plugin, /mcp, /config, /login), no TUI the human
+      can type into, no "restart the session" or interactive claude; prefer
+      Gnomon's tools (gnomon_git_*) and Settings screens (MCP servers,
+      Rules, Local model, Voice); for terminal-only work give the exact
+      shell command. Public text, never a security boundary. The GUI half
+      is #gui-host-hints (the reply stays verbatim, a host slip says the
+      Gnomon way).
+    path: src/kernel/supervisor/host-guidance.ts
+    type: module
+    tags: [gnomon, kernel, supervisor, guidance]
+    tests:
+      - test/host-guidance.test.ts
+      - test/kernel-mcp-session.test.ts
+  shell-readonly:
+    description: >-
+      #shell-readonly (spec §3.4 run modes, TD-2026-10-20-294 part 1, Aegis
+      re-check C1 C2 H1-H4 M1-M3 + Low closed) in
+      src/kernel/supervisor/shell-readonly.ts. Side-effect free, fails closed;
+      reads the filesystem (realpath, readdir) only to check symlinks and
+      expand globs. parseShell is a real tokenizer/parser for a shell subset
+      (quotes, escapes, line continuations, $NAME/${NAME}, $(...), backticks,
+      <(...), globs, tilde, comments, ; && || | & newline, subshells, for-in
+      loops, redirections with IO numbers, heredocs); it refuses $((...)),
+      $'...', $"...", >(...), |&, ;& and ;;&, ;; outside a case, (Aegis C1)
+      any line of an UNQUOTED heredoc (<< or <<-) ending in an odd run of
+      backslashes (the shell joins it before the delimiter match), braces
+      other than the safe brace expansion, ~user, zsh $= $~ $^ forms and every
+      other compound. TD-2026-10-20-086 grammar (each fail-closed): brace
+      expansion {a,b} (two or more safe literal items, no nesting, no $, = or ~)
+      and {N..M} (non-negative integers, at most 200), never right after a
+      $NAME; case WORD in pat) list ;; esac (patterns literal + glob chars
+      only, bodies walked, the subject is text); a local assignment name=$(...)
+      or name=lit with no command word (lowercase, not LOOP_VAR_DENY, not a
+      zsh hook array *_functions, not mapfile or a lowercase proxy variable
+      (Aegis L2; deniedVarName, also for loop names), not a loop variable) makes name TAINTED text for the later items of its list
+      when it ran unconditionally (first or after ; / newline): "$name" only
+      where a substitution may be (echo/printf args, <<<), unquoted only as
+      the case subject; X=1 cmd and uppercase/special names stay refused. classifyReadOnly proves read-only:
+      allowlisted command names with per-command flag rules; C1 a $(...) or
+      backtick word is only echo/printf text or a <<< word, never a path, and
+      a for loop iterates only literal words and literal globs (expanded now,
+      each value one safe token), so every path a reader gets is concrete and
+      checked; C2 printf takes no flag (printf -v), echo only -n/-e/-E, test
+      only POSIX operators, pwd/which/basename/dirname/tr tight flags; H1 awk
+      runs one `[PATTERN] { print ITEMS }` program; H2 globs expanded against
+      the filesystem with a superset matcher, every match realpath-checked,
+      > 200 matches or a match starting with - refused, no recursive or
+      symlink-following reader flags (grep -r/-R/-S/-O/-d/-D, ls -L/-R, du -L,
+      stat -L, diff -r, find -L/-follow), rg removed, diff takes no directory
+      operand, a leading unquoted = (zsh =cmd) is refused, test -a FILE is
+      path-checked; H3 + K1 (TD-2026-10-20-086) ctx.cwd is the anchored
+      root's realpath (the caller runs anchorCommand: builtin cd [-q] --
+      'root' && builtin unset CDPATH RIPGREP_CONFIG_PATH GREP_OPTIONS && {\n<cmd>\n}); a cd is a whole
+      top-level item to an absolute path or (with a known cwd) a relative
+      existing directory, no .. segment, never -, + or = led, inside a session
+      root as given and at realpath; the top-level list tracks the SET of
+      possible cwds (only the cd target along an unbroken && run, every cwd
+      seen after ; newline or ||; at most 8) and walks each item once per cwd;
+      git only while the cwd is a session root; H4 reads only
+      inside the session roots and /usr /opt/homebrew /etc /tmp /private/tmp
+      /private/etc (as given and at the deepest-existing-ancestor realpath;
+      ctx.readRoots may only narrow that system list),
+      plus the device/protected-root deny; M1 date display only; M2 the cwd
+      is known only along an unbroken && chain from that cd, else relative
+      paths, implicit-cwd reads and git raise the card; M3 no git remote -v (RW: anchored only),
+      no credential-bearing git config key; Low git branch NAME only after
+      the long --list. RC3 git also: show-ref ls-tree rev-list shortlog
+      merge-base for-each-ref, worktree list, stash list (flags only), reflog
+      show, cat-file -t/-s/-p OBJECT, tag -l/--list (listing flags only); all
+      through gitOptBad. Aegis H1 (both modes): git is refused when the repo
+      git would use from the cwd (nearest .git dir or gitdir: file, its
+      config, config.worktree, the commondir config, every include/includeIf
+      path) names an exec-class key (core.fsmonitor unless false, core.pager
+      sshCommand hooksPath alternateRefsCommand askPass gitProxy,
+      diff.external, diff.*.textconv/command, filter.*, pager.*,
+      remote.*.uploadpack/receivepack, gpg[.*].program,
+      uploadpack.packObjectsHook, credential.helper; repoGitExecKey); and
+      anchorCommand exports command-scope GIT_CONFIG_COUNT/KEY_n/VALUE_n
+      (ANCHOR_GIT_CONFIG: core.fsmonitor=false, core.pager=cat,
+      core.hooksPath=/dev/null, core.sshCommand=false, log.showSignature=false,
+      gpg[.ssh|.x509].program=false, credential.helper=) plus
+      GIT_NO_LAZY_FETCH=1 and GIT_PAGER=cat. Prelude hardening (Aegis M2,
+      L1): zsh unfunction chpwd cd, chpwd_functions=(), setopt
+      no_ignore_braces; bash unset -f cd, set -B; then a runtime guard
+      (set -- x{a,b}; test $# -eq 2) so the command runs only with brace
+      expansion really on. No background/negation/env assignment, output
+      redirection only to /dev/null. simpleArgv returns the argv of a single
+      literal simple command (prefix always rules; signature unchanged).
+      RW read-only widening (founder decision 2026-10-20: auto-edits never
+      prompts more than native Claude Code), ANCHORED posix runs only
+      (ctx.cwd set; win32 and unanchored callers keep the rules above):
+      grep/egrep/fgrep -r/--recursive (-R -S -O -d -D still refused, the walked
+      cwd checked); rg (no -L --follow -z --search-zip --pre --pre-glob
+      --hostname-bin; the anchor also unsets RIPGREP_CONFIG_PATH); fd (no -x
+      --exec -X --exec-batch -l --list-details -L --follow); tree (no -o -R -l
+      --fromfile --fromtabfile --output; fd's pattern and tree -P/-I values are patterns); git remote -v / get-url NAME (Aegis M1: a card when any repo/global/system config scope has an insteadOf/pushInsteadOf key or a userinfo URL; gitRemoteUrlRisk); paradigm status|st,
+      doctor [--context] [--explain], ripple SYMBOL [PATH], purpose validate
+      [PATH], task ls [STATUS], task show REF (no path separator), lore
+      list|ls [filters], lore show L-ID (cwd at a session root; they pass on
+      their grammar alone: paradigm's declared READ_ONLY_COMMANDS, proven
+      byte-identical by its readonly-commands harness from paradigm 7.15.2, and only when paradigmOnPath finds @a-company/paradigm >= 7.15.2 first on the session PATH (realpath + package.json, cached by mtime; otherwise a card);
+      never index, task ls --board/--project or a write verb); gnomon desk stats, daemon status, mod list, mod status
+      [NAME], rules list, trace status, replay [--json] [--expect H] (default
+      home only; never bare trace or a write verb).
+    tags: [kernel, security]
+    signals: []
+    tests:
+      - test/shell-readonly.test.ts
+      - test/shell-readonly-fs.test.ts
+      - test/shell-readonly-cwd.test.ts
+      - test/shell-readonly-widen.test.ts
+      - test/auto-edits-anchor.test.ts
+      - test/run-modes-session.test.ts
+  always-rules:
+    description: >-
+      #always-rules (spec §3.4 S-L1, S25-C2; gui-complete item 2) in
+      src/kernel/supervisor/rules.ts. TD-2026-10-23-939 follow-up (Aegis
+      2026-10-23): Bash cards offer the 2- AND 3-word prefixes #prefix-policy
+      allows; an Edit/Write card the auto-edits pass would allow offers
+      scoped always {kind:'file'} ("edits to this file", any content) and
+      {kind:'repo-edits'} ("edits in this repo", same as auto-edits), via
+      detail.editScopes/editPath inside contentHash (withEditScopes); the
+      broker takes them only on such a card; approval.rule.learned{match:
+      'file', path | 'repo-edits'}; they match only through the supervisor's
+      own autoEditPass (ctx.editPath), never in manual mode, never in a loop
+      session; RuleBook.repoEditsRule feeds status.runModes editsByRule.
+      Aegis H1: repo-edits is offered and matched only where the strictness
+      ceiling allows auto-edits (ctx.repoEdits; never at L2/L3, never in
+      manual); a REPO-scope approval.mode.set tightening (the emergency
+      brake) drops that repo's repo-edits rules in the fold; file rules stay
+      allowed at L2 and cover any edit tool on their path (L4).
+      TD-2026-10-23-815: a learned row with presence standing:<grantId> forms
+      a rule only when the fold's own grant.standing rows show that grant
+      live at the decide row (permission:always, not revoked before it, not
+      expired at its kernel time, the repo among its repos). Permission cards offer allow | deny |
+      always; `always` is fresh presence EVERY time (classes.ts, G-BRK-05)
+      and needs the card's ruleScope {repoKey} (else bad-params). The broker
+      logs approval.rule.learned{cardId, tool, matchExact, presence,
+      repoKey}. RuleBook folds KERNEL-signed rows only (kernel principal +
+      kernel key): approval.request (permission card, tool, tool_input) +
+      approval.decide{always} + approval.rule.learned (presence != cached,
+      same tool) => a rule keyed (repoKey, tool, inputHash of the canonical
+      tool_input); forged rows of any kind are ignored. The supervisor answers
+      an EXACT match allow with no card after broker.auto =>
+      approval.auto{hsid, tool, inputHash, modeRef:'rule:<cardId>'}; a
+      different input, tool or repo raises the card. updatedInput is the
+      kernel-held input; never updatedPermissions. Bounded (MAX_RULES 1024,
+      MAX_TRACKED_REQUESTS 4096; dropping fails closed). The daemon folds via catchUp over ruleSourceOf(log) (Aegis C2: lastSeq advances to the captured head, past every scanned row; Aegis H1: that head is the RELEASED head, never the committed tip, so rows hidden behind a critical row pending on its anchors are folded once released, never skipped; repoKey is repo-hooks.ts repoKeyOf, pinned in a test; a failed approval.auto falls through to the card)
+      incrementally from the chain (fromSeq). The learned row matches EXACT
+      only (TD-2026-10-19-528 F2: matchExact:true or match:'exact'; any other
+      match value forms no rule). Revoke (P8-D98, F1): a KERNEL-signed
+      approval.rule.revoked{ruleId, repoKey, tool, connId} removes the rule and
+      forgets the card's always decision (a replayed learned row never
+      resurrects it); a forged revoked row is ignored; a fresh always on a new
+      card learns a new rule. get(ruleId) serves #rules-revoke. Not built: the
+      strictness L1 suspension of rules (M2.10).
+      PREFIX RULES (TD-2026-10-20-294 part 3, F2 amended): a learned row
+      {match:'prefix', prefix:[1..3 words]} forms a rule ONLY when the
+      kernel-signed request is a Bash card whose command is one literal simple
+      command (#shell-readonly simpleArgv) starting with the prefix AND the
+      kernel-signed approval.decide{always} carries the same
+      scope{kind:'prefix', prefix}; an exact learned row after a scoped decision
+      (or vice versa) forms nothing. match(repoKey, tool, hash, input) answers a
+      prefix rule only for a Bash input whose command is again one literal
+      simple command (no ; && || | & newline, substitution, parameter, glob,
+      tilde, redirection or assignment) whose argv starts with the prefix word
+      for word, same repoKey and tool, input keys within command/description/
+      timeout. A prefix rule widens only within a single literal simple
+      command. gnomon rules list shows match + prefix. Aegis H1/M2/M3: the
+      fold forms no rule from a prefix #prefix-policy refuses, and
+      match(..., ctx{prefixRules, roots}) answers a prefix rule only with a
+      context (none => no prefix match), never in manual mode
+      (prefixRules:false; exact rules still match) and only when
+      #prefix-policy passes the argv against the session roots.
+      RC5 (TD-2026-10-20-086): an exact Bash rule also matches by
+      bashCommandHash = sha256 over canonical {command} (no description or
+      timeout), folded from the kernel-signed request (so older rules match
+      too), when both the learned and the later input have only command,
+      description, timeout keys; run_in_background or any other key on either
+      side leaves only the whole-input hash.
+    path: src/kernel/supervisor/rules.ts
+    type: module
+    tags: [gnomon, kernel, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+      - test/always-prefix-rules.test.ts
+      - test/approval-prefix-scope.test.ts
+      - test/rules-bash-hash.test.ts
+      - test/permission-session.test.ts
+    oracles: [G-BRK-05]
+  prefix-policy:
+    description: >-
+      #prefix-policy (TD-2026-10-20-294, Aegis H1/M1/M3) in
+      src/kernel/supervisor/prefix-policy.ts. Which prefixes may be a
+      prefix-scoped always rule, enforced at the card offer (permission.ts),
+      the broker accept (approve scope, bad-params before presence), the rule
+      fold and every match. Default deny: 2-3 printable-ASCII words, never
+      one; argv0 no path, never a shell/interpreter/runner; NO package
+      manager or build tool is ever a prefix rule (BUILD_TOOL_PREFIX_ALLOW is
+      empty after the second Aegis BLOCK: yarnPath, rustc-wrapper, go env -w,
+      .pnpmfile and npm view --registry make every subcommand code or
+      exfiltration; an entry needs a malicious-config falsifier;
+      ALLOW_NPM_TEST_PREFIX default off); git exactly two words with a
+      read-ish subcommand. prefixMatchRefusal re-checks at match time:
+      gitPrefixOptBad models git's option parsing (a --name that prefixes any
+      GIT_REFUSED_LONG option, so abbreviations like --outp/--ext-d/--open;
+      any short bundle containing O c C p u; plus shell-readonly gitOptBad),
+      non-listing git branch args, -C-style directory/config options, paths
+      that leave the session roots (.., ~, \, out-of-root absolute), and
+      gate-class paths (layers gateClassPathRule: .git/**, .claude/**,
+      package.json ...). shownPrefixWords renders each word quoted with
+      non-ASCII escaped \uXXXX for the presence prompt (M1; the GUI mirrors
+      it). Residual: Claude's persistent Bash cwd is unknown to the kernel;
+      git trusts repo config written before the rule or by a carded command.
+    path: src/kernel/supervisor/prefix-policy.ts
+    type: module
+    tags: [gnomon, kernel, approvals, security, paradigm-8, move-1]
+    tests:
+      - test/prefix-policy.test.ts
+      - test/approval-prefix-scope.test.ts
+      - test/always-prefix-rules.test.ts
+      - test/permission-session.test.ts

@@ -1,0 +1,64 @@
+version: "2.0"
+name: gnomon-kernel-budget
+description: >-
+  The budget fuse as a meter: billing.ts runs the API-billing scan behind the
+  subscription-only law, config.ts and fuse.ts track spend per permit.
+context:
+  - >-
+    The ^subscription-only gate stays in packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  budget-fuse:
+    description: >-
+      #budget-fuse as a METER (spec §3.4, §4.8, §10 laws 1/7; §19.1 M1.6;
+      founder ruling P8-D92 "track everything, enforce nothing"). Only law 7
+      is enforced: permit.reserve of every kind but tool.permission (Aegis L1) on claude-code runs the
+      billing scan (env, settings env blocks, apiKeyHelper, mcp.json env
+      blocks, any *_BASE_URL incl. loopback; unreadable layers are hits) and
+      refuses BILLING_REFUSED, unless the kernel's own spawn of the card's
+      hsid holds the per-use api-token (scan still run, only the injected key
+      ignored). Every other reserve is granted with a kernel-signed permit:v1
+      (attribution, law 1). Removed by P8-D92: day caps, compute and
+      concurrency caps, the window threshold and 30 % human reserve, the
+      breaker pause, the armada pause and budget card, the resume allowance.
+      Tracked per UTC day: tokens + USD per user (P8-D91: an agent's spend
+      in its human's bucket; before M1.7 attributed to the root's human
+      principal, recorded attributed: root-human on permit.reserve), repo,
+      loop, session, model, backend; local-LLM sessions with model and
+      projects; subscription-window usage; quota errors (budget.window
+      {quotaError}); ladder rungs 50/75/90/100 % as informational
+      budget.ladder rows; over-permit usage recorded once (budget.usage
+      {overPermit}). Usage only via recordStreamUsage(turn.usage|turn.result);
+      malformed ⇒ budget.usage{malformed} and dropped. status.budget exposes
+      the spend breakdown (byUser/byRepo/byLoop/bySession/byModel/byBackend,
+      local, subscriptionWindow, quotaErrors). config.ts: root-signed
+      tracking/display keys only (reference amounts, window shape) with a
+      version high-water mark (sidecar ⊔ last signed config.loaded on the
+      chain); unsigned/invalid/older/missing-after-signed ⇒ defaults + a
+      logged row; project.yaml fuse/budget/strictness/review keys ignored and
+      logged. parseReserveParams: no usage params; agents never name
+      repo/loop/session/machine (kernel-bound, M1.7). Slice 2: restore(rows)
+      at boot rebuilds today's counters, the window, local sessions and the
+      announced rungs from budget.usage rows joined to their permit.grant
+      (grant-less, malformed, over-permit and non-stream rows count nothing);
+      day and window from the chain's last event time (S-L2,
+      KernelLog.lastEventAt), never the wall clock. Round 2: restore counts
+      only rows whose principal is a kernel principal AND whose keyId is a
+      kernel key (KernelLog.isKernelKey; Aegis C1 — these kinds are not
+      reserved), and a usage row's user must equal its grant's scope.user;
+      a turn counts under its own budget.usage row's `at` (the row is
+      written first; runtime and restore agree); chain times beyond wall +
+      MAX_CLOCK_SKEW_MS (5 min) are clamped to the wall clock and reported
+      once (onClockSkew → daemon event daemon.fuse.clock.skew, no row);
+      restore runs before daemon.start, so its "today" is the day of the
+      chain's last event. M1.7 note: api-token session turn
+      permits are labelled subscription; per-turn billing.api.active needs
+      usage against the spawn permit (G-SUB-03).
+    path: src/kernel/budget/
+    type: module
+    tags: [gnomon, kernel, budget, fuse, law-7, paradigm-8, m1.6]
+    tests:
+      - test/budget-fuse.test.ts
+    oracles: [G-LAW-01, G-LAW-01b, G-BUD-01, G-BUD-02, G-BUD-03, G-SUB-04]

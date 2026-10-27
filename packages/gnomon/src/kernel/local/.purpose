@@ -1,0 +1,261 @@
+version: "2.0"
+name: gnomon-kernel-local
+description: >-
+  Local model sessions: the kernel side of running a local runner (the bundled
+  or pinned runner, its endpoint and routing), brokering its tool calls through
+  the supervisor, and the config request that changes the local model setup.
+context:
+  - >-
+    bundled-runner.ts, runner-pin.ts, endpoint.ts, probe.ts and routing.ts start
+    and reach the runner; tool-broker.ts brokers its tool calls;
+    config-request.ts serves the config change.
+  - >-
+    The flows $local-brokered-call and $local-config-flow, which cross into the
+    supervisor and the CLI, stay in packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  local-runner:
+    description: >-
+      #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Loops step 8:
+      LocalLane.openLoop(ref, req) (and supervisor.openLoop) is the ONE
+      unattended open: a trusted loop run's judge/summarize step, only with a
+      registry run reference; origin 'loop', surface none, maxSteps 1, no
+      kernel names in the env, permit scope.loop, model text hash-only in
+      turn.event, ask() returns the reply; no capable endpoint throws
+      LoopModelUnavailable (no card, never Claude); isLoopSession(hsid) for
+      step 12's loop.request pre-gate (see #loop-runner). Kernel side:
+      local-session.ts maps a SUCCESSFUL compaction_end (summaryHash + both
+      token counts, no error) onto the typed session.compacted{hsid, turn,
+      reason, summaryHash, tokensBefore, tokensAfter} row (compactedPayloadOf;
+      T-2026-10-18-016, P8-D93) after the raw turn.event line, which stays;
+      src/kernel/local/endpoint.ts (loopback/LAN rule on the normalised host;
+      hostnames, Anthropic hosts, link-local/metadata, public, userinfo,
+      forbidden web-endpoint port refused — G-SUB-06 BILLING_REFUSED via
+      config.ts), config.ts (compat names = gnomon-local allowlist, no cloud;
+      assertNotClaude: law 7 never runs claude under a backend:local permit),
+      probe.ts (/slots n_ctx, else /props, else Ollama /api/show num_ctx, else
+      the loaded context in /api/ps; tools only on a live tool call),
+      routing.ts (local|claude|any; capable = probe ok + tools (or text-tool
+      opt-in) + n_ctx >= floor 8192), src/adapters/local/runner.ts (pi rpc
+      JSONL driver, tolerant parse, LocalUsageMeter no double count),
+      src/kernel/supervisor/local-session.ts (LocalLane: incapable local =>
+      fallback card via the broker + model.fallback.requested +
+      MODEL_UNAVAILABLE{cardId}, no spawn; fallback-cloud decision opens
+      Claude, S7; any => session.routed; capable => local session.spawn
+      permit recorded with model + repo (P8-D92 meter, never capped) ->
+      session profile -> intend/track kind local-runner; stdout turn.event
+      first, model.capabilities/model.repair, usage against the spawn
+      permit). Round 2: tools confined to realpath roots (no .git, no symlink final component), probe bodies capped 1 MiB, configured model id preferred, assertNotClaude on realpaths + @anthropic-ai/claude-code, explicit backend pins the route, launchPlan TEST-RIG seam (test/local-lane-spawn.test.ts). Slice 2: config.ts loadLocalConfig reads the ROOT-SIGNED
+      <home>/local.signed.json (schema gnomon-root-local:v1; unsigned, tampered,
+      unparseable, invalid or older than the sidecar/chain high-water mark =>
+      NO local config, logged config.unsigned / config.loaded{file,
+      fallback:'none'}; a signed public endpoint is applied and refuses every
+      open BILLING_REFUSED), wired by the daemon; round 2 (Aegis H1): the
+      runner pin is MANDATORY (node + nodeSha256, package dir + treeSha256,
+      entry) — runner-pin.ts copies the tree into <home>/runners/<treeSha256>/,
+      hashes the COPY, verifies node and execs <realpath node> <realpath
+      copied entry> (PERMIT_REQUIRED runner-pin-mismatch{part}); residual:
+      node is not copied (Homebrew node loads ../lib) — round 3: EVERY session profile (Claude and local) denies writes to node, its install prefix and the pinned source dir (policy.ts localRunnerDenies, fed from the loaded local config), and node is re-hashed synchronously right before spawn; a concurrent staging rename (EEXIST/ENOTEMPTY) is success iff the dest verifies; turn.event rows for compaction lines keep summaryHash/summaryBytes even over the line cap; a signed config with maxTokens >= 0.85 x contextTarget is invalid; round 2 (M3): roots resolved ONCE by native realpath (fail closed) and only the resolved paths reach the policy, child config, darwin extras, repo id and spawn cwd; re-checked right before spawn; per-task endpoint choice = first endpoint in
+      signed order capable for the floor; probeAll at daemon start records
+      model.probe/model.capabilities; roots inside the Gnomon home refused;
+      the child gets contextTarget min(~8k, n_ctx); session.send{steer} with a
+      turn in flight writes the steer line under that turn's permit
+      (session.inject + turn.steer, no new permit), idle it is a plain send; round 2: the steer needs the in-flight turn permit live (else PERMIT_REQUIRED); the child refuses a steer that reaches it idle and the kernel logs turn.steer{phase:refused, by:child};
+      Claude sessions refuse steer BAD_REQUEST. T-2026-10-26-003: runner.ts
+      parses message_end.textBytes (the reply's size, never its text) and
+      agent_end input/output beside the total; local-session.ts turn.result
+      keeps usage.tokens as the meter's remainder (charged once) and adds
+      runUsage{tokens,input,output} (the run's whole agent_end usage) and
+      replyBytes (the last assistant text's size, 0 = no answer) beside
+      stopReason, so the GUI can say how the run ended; TD-2026-10-27-833:
+      turn.result also carries maxSteps, the step cap written to that
+      session's local.yaml (cfg.maxSteps ?? 16; a loop step its own cap), so
+      the GUI's step-limit line names its number. Slice C1: tool_request lines, tools_set at open and the answers are #local-tool-broker's (see it). Deferred: darwin sandboxed
+      e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
+      local CLI verb, the claude estimate on the card, attended/unattended
+      local automations (law 5). #backend-adapter: the DRIVER half is src/adapters/local/ (runner.ts: localAdapter, LocalAdapter = core + SteerChannel + ToolBrokerChannel, LocalArgvInput, LocalUsageMeter.charge(ev); fixtures/<gnomon-local version>-turn.jsonl), called as `drv` by src/kernel/supervisor/local-session.ts; the kernel half is src/kernel/local/.
+    driver-path: src/adapters/local/
+    path: src/kernel/local/
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, m1.8]
+    implements: "#backend-adapter"
+    related: ["#backend-adapter", "#claude-adapter", "#gnomon-local"]
+    tests:
+      - test/local-runner.test.ts
+      - test/local-config.test.ts
+      - test/local-lane-spawn.test.ts
+      - test/local-tool-broker.test.ts
+    oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
+  local-tool-broker:
+    description: >-
+      #local-tool-broker (TD-2026-10-27-833 slices S1 + C1; T-2026-10-26-003):
+      the kernel half of a local session's BROKERED tools,
+      src/kernel/local/tool-broker.ts, with the protocol in
+      src/adapters/local/runner.ts and the wiring in
+      src/kernel/supervisor/local-session.ts. S1 makes the child protocol
+      two-way: child -> kernel tool_request{id tr-N, toolCallId <= 128,
+      name (tool-name pattern), args (a JSON object <= 64 KiB)}, parsed into
+      a typed tool-request event (closed keys; a malformed one carries
+      error); kernel -> child tool_response{id, content <= 256 Ki chars,
+      isError, provenance kernel | mcp:<server>} and tools_set{tools:[{name,
+      description, parameters, class read|mutate|destructive}]} (the child
+      applies it from its next step on); memory_set / compact / set_context
+      are reserved for B2 (the child validates and parses them, applied:false).
+      Every request has a deadline: TOOL_TIMEOUT_MS 30 s for read,
+      CARD_TIMEOUT_MS 5 min for a carded class, the same numbers on both
+      sides; the child's abort and the kernel's stop/exit cancel calls in
+      flight as error results. $local-brokered-call: resolve the name in the
+      OFFERED set (else unknown-tool) -> validateBrokeredArgs against the full
+      schema (unknown keys always refused, types/required/enum, strings <=
+      min(maxLength, 4096), arrays <= 64, depth 6, 16 KiB, no C0/C1 control or
+      bidi character in keys or strings; G-LCL-15) -> class gate (read runs;
+      mutate/destructive raise a `permission` card via broker.raise with
+      composePermission's fenced lines, every argument shown, allow | deny,
+      no Always; no decisionOf => no-approval-surface; cancel/deadline expires
+      the card) -> the target (C1: the kernel's own SDK server through
+      kernelMcpAnswer, kernelSdkTarget, provenance kernel; the VerbSession of
+      a local session is mode ask, never plan-approved, never guarded
+      worktrees) -> shapeBrokeredResult (NULs dropped, <= 64 Ki chars) -> ONE
+      hash-only tool.brokered{hsid, server, tool?, class?, argsHash, decision,
+      bytes, isError, cardId?} row (contracts 8.0:local-lane, closed decision
+      enum, validateKindPayload) -> reply. At open LocalLane writes ONE
+      tools_set (after session.sandbox, whose brokeredTools names it) with the
+      C1 narrowing (offeredKernelTools: classed tools only, never the worktree
+      verbs, KERNEL_TOOL_CLASSES init=mutate, push/repo-create=destructive);
+      none when no kernel verbs are served (win32) and NEVER for a loop
+      session (its broker offers nothing and refuses loop-session). The
+      tool_request turn.event row is hash-only; requests are answered outside
+      the stdout queue; at most 16 in flight per session (busy). GAPS for
+      C2'/C5' (Aegis owns the class/trust grant design): no capability index
+      or narrowing beyond the worktree drop; kernel verbs keep their own gate,
+      so a carded verb can show the brokered card AND its own (git.push always
+      does); no Always/standing grants for brokered tools; no per-server trust
+      tiers (mcp:<server> provenance is plumbed but has no target yet); a card
+      approved just before the child's deadline may run after the child gave
+      up; control characters are refused outright (no newline in brokered
+      args). Aegis C1 review (fixed): H1 one gate per call — a target that
+      owns its gate (kernelSdkTarget.ownsGate: the kernel verbs) gets no broker
+      card; the verb's VerbSession carries local:true plus the call's
+      AbortSignal and deadline, so the queue wait, the verb card (timeoutMs =
+      deadline - now, expired on abort) and the moment before the effect all
+      honour them (git.verb why `cancelled`), and a local session never gets an
+      Always rule, an Always choice or an auto pass; M1 the receipt time is
+      stamped in the stdout handler, the kernel deadline is the child's minus
+      DEADLINE_MARGIN_MS (it answers `expired` first), and the child's
+      tool_cancel{id} cancels the call; M2 GitVerbs.closeSession marks the hsid
+      closed (refused before any card and after the decision); M3 the run-mode
+      book is read like a Claude session's (manual => the verbs refuse and no
+      mutate/destructive tool is offered at open); M4 one carded call in flight
+      (busy), a deny cool-down of DENY_COOLDOWN_MS per tool + args (cooldown),
+      SUSPEND_AFTER_DENIES denies in SUSPEND_WINDOW_MS suspend the session
+      (suspended; the row is the notice); L1 the validator refuses Cc/Cf/Co/Cn
+      and default-ignorable characters and non-NFC text, checks pattern,
+      minLength and type unions, and refuses a schema keyword it does not
+      know; L2 runner.ts measures nesting iteratively before stringify, a line
+      the parser throws on is still a hash-only row, inputHash's fallback is
+      guarded; L3 the card's argsHash is the canonical inputHash and the
+      tool_execution_* lines of a brokered tool are hash-only; L4 decisions
+      expired and allowed-cancelled (clientApiId moved again); L5 duplicate
+      in-flight ids are bad-args and toolCallId is [A-Za-z0-9_.:-]{1,128}; L6
+      broker cards name the tool `kernel:<tool>` / `mcp:<server>/<tool>`; L7
+      the broker exists before stdout is read (a backstop answers and logs),
+      and a child that stops reading its stdin (> CHILD_STDIN_HIGH_WATER
+      queued) is stopped. Aegis re-check (N1-N6, fixed): a verb's in-flight
+      slot is released when its queued run settles; carded calls the child
+      cancels count toward suspension and carded requests are capped at
+      CARDED_PER_MINUTE; the row's decision follows the verb's closed why
+      (refused for the rest, approved only on success) and carries the verb's
+      cardId (kernel-mcp _meta gnomon/cardId); a request received at or before
+      the session's last interrupt is cancelled; tool_cancel is honoured in the
+      stdout handler ahead of the queue, and once the effect starts the kernel
+      sends tool_progress{id, state running} (the child waits RUN_TIMEOUT_MS
+      more, the kernel deadline stops); GitVerbs.openSession clears a closed
+      hsid on open/resume; schema patterns pass unsafePattern first; the init
+      verb's last cancel check precedes the remnant .git removal.
+    path: src/kernel/local/tool-broker.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker]
+    signals: []
+    tests:
+      - test/local-tool-broker.test.ts
+      - test/local-lane-spawn.test.ts
+      - test/loop-model-e2e.test.ts
+      - test/git-verbs.test.ts
+    oracles: [G-LCL-15]
+  local-config-request:
+    description: >-
+      #local-config-request (TD-2026-10-22-769; spec §13.1 "Real homes";
+      G-LCL-07..G-LCL-10). A REAL home's local-model config:
+      src/kernel/local/config-request.ts. validateLocalConfigInput is the ONE
+      input check (shared with `gnomon dev local`): model required (<= 128),
+      compat a local transport, an endpoint id, validateLocalEndpoints with
+      the kernel's web port forbidden (BILLING_REFUSED), LOOPBACK ONLY in 8.0
+      (dev homes too; a LAN base is ENGINE not-implemented{milestone 8.1},
+      "LAN endpoints land in 8.1"), a runner dir absolute with cli.js, never
+      claude. LocalConfigCards.request{op:'set', endpoint, runner?} raises ONE
+      `grant` card (detail.action local.config; root class, hand only, never
+      standing or always) whose allow signs ONE gnomon-root-local:v1 row
+      (decision-batch.ts row table local.config: closed fields, <= 4 loopback
+      endpoints, a pinned runner; helper 1.9.0, refused at RAISE on an older
+      helper "update the Gnomon app", broker ROW_TABLE_MIN_HELPER); a set
+      edits ONE endpoint by id and keeps the others ("unchanged" on the card);
+      prepare re-pins the runner and recomputes the version (above the file,
+      the sidecar and the chain high-water) under beginRootDecision, else
+      "the config changed while the card was open: ask again"; the effect
+      writes local.signed.json through the ONE writer (config.ts
+      writeLocalConfigDoc: temp 0600, fsync, rename, never through a
+      symlink) and calls the daemon's hot reload. {op:'remove'} is
+      notify-and-proceed (no card): the file is deleted and the reload logs
+      config.loaded{fallback:'none', why:'removed'}. request.local.probe
+      {model, base?, compat?} is the read-only loopback check before a card
+      (Mika C1: no card, no row, human only, one in flight, one per 2 s).
+      Both are dispatcher-only (never rows; clientApiId unmoved);
+      status.local (extraStatus) carries the endpoints, the runner (bundled
+      or override, version, tree, node version and sha), signer, version and
+      signedAt, the last probe and the last fallback, the platform
+      (unsupported 'platform' on win32) and offered. bundled-runner.ts: the
+      gnomon-local cli.js ships inside the kernel's dist/gnomon-local
+      (tsup.config.ts bundle-gnomon-local; npm tarball and the app's
+      Resources/kernel/dist), its tree hash compiled in and verified at load;
+      a typed absolute runner dir overrides it. CLI raw form `gnomon local
+      set|status|remove` (src/cli/local-cli.ts); the guided form is Settings
+      → Local model (#gui, a separate design track).
+      Aegis review (merge after fixes): the helper line shows the runner dir
+      and node path in full (<= 256 chars each; never compacted; an
+      OVERRIDE runner marked through the row's runnerSource); status.local
+      in full to the human only (dispatch.ts localStatusFor); a remove writes
+      a tombstone sidecar under beginRootDecision before the unlink, logs
+      config.loaded{removed:true, version}, and no file at or below it
+      applies again (loadLocalConfig chainRemoved / tombstone floor);
+      nextLocalVersion counts the file only when its signature verifies; the
+      sidecar goes through writeHomeFileAtomic; the probe answers for the
+      configured model (listed) with one error word; no base path in 8.0,
+      localhost stored as 127.0.0.1; the kernel's web and mod egress ports
+      are forbidden; validateLocalEndpoints refuses non-loopback (lan-8.1);
+      a bundled runner must match the compiled pin and a release build fails
+      without it; an override runner must identify as gnomon-local; an
+      unknown helper version on a hardware root counts as too old.
+      Follow-ups: a request.local.probe of a CONFIGURED endpoint (Check
+      again; base, model and compat match) reports to the LocalLane
+      (LocalProbeSink: configuredEndpoint, probeGen, beginProbe,
+      recordProbe): it shows as status.local.probing{probingSince,
+      probingEndpoint} while it runs and refreshes status.local.lastProbe
+      and the probe cache like the automatic probe (model-missing kept as
+      the why); a probe begun under an older config records nothing. The
+      automatic probe (probeAll) shows as probing too. LoopRunner
+      status.loops.startRefused also lists every trusted loop that would be
+      refused NOW (count 0, trigger 'none'), recomputed at every status
+      build and config apply; still one per loop, the first fire keeps its
+      since.
+    path: src/kernel/local/config-request.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, td-2026-10-22-769]
+    signals: ['!config.loaded']
+    gates: ['^subscription-only']
+    tests:
+      - test/local-config-request.test.ts
+      - test/dev-local.test.ts
+      - test/decision-batch.test.ts
+    oracles: [G-SUB-06, G-LCL-07, G-LCL-08, G-LCL-09, G-LCL-10]

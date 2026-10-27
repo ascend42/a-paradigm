@@ -1,0 +1,467 @@
+version: "2.0"
+name: gnomon-cli
+description: >-
+  The gnomon and gnomond command-line entry points: bare `gnomon`, `gnomon up`,
+  setup, dev launch, the wrapper channel, rules / mode / strictness, guide,
+  trace, mod commands and the GUI relaunch after a start.
+context:
+  - >-
+    gnomon.ts and gnomond.ts are the bins; each *-cli.ts file is one verb
+    family. The $daemon-lifecycle and $first-run flows stay in
+    packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  dev-launch:
+    description: >-
+      #dev-launch (spec §2.4 rule 6) — the UNSIGNED, DEV-ONLY dogfood launch
+      path until #identity M1.3. src/cli/dev-home.ts + src/cli/dev-cli.ts.
+      `gnomon dev local --model <id> [--base] [--compat] [--id] [--runner] [--loops]` is the
+      dev root act that enables the local lane: it signs local.signed.json (one
+      loopback/LAN endpoint, default Ollama 127.0.0.1:11434; the gnomon-local
+      runner pinned by node + tree sha256, default this clone's
+      gnomon-local/dist), the version climbing past the last one (test/dev-local.test.ts).
+      --loops signs loops: true on the endpoint, the opt-in that lets trusted loops' model
+      steps use it (loops step 8; off by default; loops step 14 field run).
+      `gnomon dev init [--home <abs>]` provisions a DEV home (default
+      ~/.gnomon-dev): a software P-256 dev-test root (DevTestRootAuthority
+      behind DEV_TEST_ROOT_ACK, persisted 0600 as keys/DEV-ONLY-root-p256.pem),
+      a software kernel key (keys/DEV-ONLY-kernel-ed25519.pem), the device key
+      and the root-signed registry rows for the kernel key and ONE human
+      device (p:<ns>/founder); the marker DEV-ONLY-gnomon-home.json is written
+      LAST. Refuses (falsifiers in test/dev-launch.test.ts): the production
+      home ~/.gnomon, anything inside or containing it (production-home); a
+      home holding a registry it did not write (production-root); any other
+      non-empty unmarked home (home-not-empty). The production-home check
+      (Aegis C1) covers ~/.gnomon lexically and realpath'd, its symlink target
+      (dangling included), and on darwin compares case-folded (~/.GNOMON); a
+      symlinked dev home is refused (unsafe-home). TRIPWIRE: gnomond (both
+      paths) and `gnomon daemon start` refuse loudly a home holding the marker
+      (daemon-cli.ts refuseDevHome). Loading (dev up) refuses a
+      home without the ack-bearing marker (not-a-dev-home) and one whose keys
+      do not match the marker or whose registry has ANY rejected row
+      (dev-home-damaged). gnomond and a bare startDaemon never read these
+      files: the production root stays unprovisioned (falsifier: device auth
+      on a dev home without the dev root is refused root-unprovisioned). No
+      command prints key material. `gnomon dev up [--home <abs>]`
+      (startDevKernel) runs startDaemon IN THE CLI'S OWN PROCESS with the dev
+      root and dev kernel key, connects as the registered human device through
+      the published TS client (kernel key pinned, serverSig verified before the
+      device signs), and mints the launch token through the existing
+      in-process `gnomon open` path (DaemonHandle.requestWebLaunch, §11.2 rule
+      2; the web endpoint's rules are untouched). The URL is printed ONLY to an
+      interactive terminal (a pipe or file gets the port and no token); Enter
+      mints a fresh one (Reconnect is UNSUPPORTED until M1.3), q / Ctrl-C stop
+      the kernel. The CLI's device connection is held open, so the kernel does
+      not idle out while dev up runs.
+      SMOKE (test/dev-launch-session.test.ts, darwin): dev init → startDevKernel
+      → launch URL → a second device client → session.open on the FAKE claude
+      under the real session profile → session.send → turn.result, with no
+      approval card on the path. The one seam is the internal-seams `daemon`
+      slot (lifecycle/daemon.ts registers it; only testing.ts's
+      startDaemonForTest reads it): the supervisor's test-rig options (script
+      claude, its path, a throwaway user home and env) and the fuse's law-7
+      billing source. A socket device connection is a community-client reader,
+      so turn.event (the reply text) reaches it as {kind, hsid} stubs; the
+      GUI's launch-token session is the first-party surface that sees it.
+    path: src/cli/dev-cli.ts
+    type: cli
+    tags: [gnomon, dev-only, dogfood, identity, paradigm-8]
+    tests:
+      - test/dev-launch.test.ts
+      - test/dev-launch-session.test.ts
+  wrapper-channel:
+    description: >-
+      #wrapper-channel (spec §19.1 M1.13 row, Appendix A; G-GUI-12,
+      G-WEB-01..06, G-GUI-03) — the gnomon-wrapper-channel:v1 launch contract
+      between Gnomon.app (#gnomon-wrapper) and `gnomon up --wrapper` /
+      `gnomon dev up --wrapper`. The app spawns `node --disable-sigusr1
+      <gnomon.js> up --wrapper` with a clean env; the child writes NDJSON on
+      its stdout pipe (up, launch{port, launchToken, kernelPublicKey,
+      bundleHash, expiresAt}, launch-failed, refused{code, reason, message,
+      next}, down) and reads `launch` | `quit` on stdin (EOF = quit). The
+      token is on that pipe only. Child side: src/cli/launch-tty.ts
+      (serveWrapperChannel, wrapperChannelProblem, channelRefused,
+      WRAPPER_LAUNCH_CAP 8/min with one mint in flight, stopping re-checked
+      after each mint, WRAPPER_UNSAFE_ENV_NEXT). Wrapper side:
+      packages/gnomon-wrapper/src/contract.rs (parse_line, read_line_capped at
+      64 KiB, redacting Debug).
+    path: src/cli/launch-tty.ts
+    type: module
+    tags: [gnomon, wrapper, contract, M1.13]
+    related: ["#gnomon-up", "#dev-launch", "#gnomon-wrapper", "#web-endpoint"]
+    tests:
+      - test/wrapper-channel.test.ts
+  gui-relaunch:
+    description: >-
+      #gui-relaunch (T-2026-10-20-001) — a kernel restarted outside the
+      self-update path (stop, then start) reopens the GUI with no terminal.
+      (1) A start without a TTY opens it: printLaunch with no TTY hands the
+      launch URL to the browser opener ONLY (osascript stdin; never printed),
+      and `gnomon daemon start | --detach` / `gnomond` (activator) open it
+      after a FRESH ready through cli/relaunch.ts openGuiAfterStart — the same
+      gui.open path bare `gnomon` uses (home pin verifies the hello before the
+      device signs; one shared launch-grant cap; single use, 60 s). `--no-open`
+      / GNOMON_NO_OPEN=1 turn it off; `gnomond --foreground --no-open` is a
+      usage refusal (the foreground kernel never opens anything). (2) NO
+      remembered web port (Aegis H1, withdrawn from 945349a3): a port reused
+      across stop/start lets a local squatter serve the old origin while
+      Gnomon is down, so a reloaded stale tab could plant a service worker
+      that the next auto-opened `#launch=` would load into. Every plain start
+      binds an OS-chosen port and deletes any leftover `web-port.json`
+      without reading it; the upgrade successor keeps its inherited fd. The
+      stale tab cannot rejoin in place (each start has a new ephemeral key
+      that only a launch fragment delivers); see gnomon-gui core/stale.ts.
+    tags: [kernel, web, cli, lifecycle]
+  bare-entry:
+    description: >-
+      #bare-entry (spec §2.4 rule 8) — bare `gnomon` in a folder, like
+      `claude`: src/cli/bare-cli.ts runs #gnomon-up's runUp (every guard
+      unchanged and in order: unsafe-env, unprovisioned → `next: gnomon
+      identity init`, dev-home, …) with refusal code GNOMON and a FOLDER HINT
+      — folderOf(cwd) = the nearest ancestor holding .git, else the cwd
+      (said so) — carried ONLY as a launch URL fragment parameter
+      `&cwd=<base64url utf-8>` appended after the token on the same TTY line
+      (launch-tty.ts printLaunch urlSuffix; never argv, env, a file, the
+      wrapper channel or another line; over HINT_MAX_BYTES 1024 it is not
+      carried). displayPath escapes every code point that is not a letter,
+      number, punctuation, symbol or plain space, plus Cf, default-ignorables
+      (fillers, variation selectors, tags), U+FFFD and backslash, as \u{..},
+      and caps at 240 code points (shared vectors
+      test/fixtures/cwd-hint.v1.json, Aegis L3); the GUI
+      (#gui, core/launch.ts cwdHintOf/applyCwdHint) applies the same rule,
+      prefills only a clean absolute path and never submits. A kernel
+      already running on the home: no second one starts. On an interactive
+      terminal bare `gnomon` asks it for a launch grant over the P8-D98
+      human-device verb `gui.open {cwdHint}` (up-cli.ts requestRunningLaunch:
+      this home's device key + root-signed human row checked like
+      startUpKernel's deviceOf, the kernel hello verified against the home's
+      pin via kernelPinOf, then device auth; T-2026-10-19-001 A3) and
+      prints/opens that URL with the same `&cwd=` fragment (ATTACHED readout).
+      Not a terminal: the TTY check runs BEFORE the RPC, nothing on stdout,
+      no gui.open call, `REFUSED GNOMON already-running`, exit 3
+      (BARE_EXIT_ALREADY_RUNNING), naming the instance from the pidfile pid
+      classified via `ps -o command=` (diagnostic only). The kernel side is
+      #socket src/kernel/socket/gui-open.ts (createGuiOpenHandler, wired in
+      DispatcherOptions.humanVerbs by the daemon): verified human device
+      only; cwdHint ≤ 1024 UTF-8 bytes else BAD_REQUEST{cwd-hint-too-long},
+      returned verbatim, never read or logged; the grant is the in-process
+      requestWebLaunch's (single-use, at most 60 s) under the ONE shared
+      launch-grant cap src/kernel/web/launch-cap.ts (LaunchGrantCap on
+      WebEndpoint.requestLaunch: one in flight, 8 a minute across the
+      terminal, the wrapper channel and gui.open — shared, not added on
+      top; ENGINE{web-launch-capped}). Fairness (Aegis M2): gui.open is a
+      `socket` asker that may hold at most LAUNCH_GRANT_SOCKET_SHARE (4) of
+      the 8 window slots, so the in-process asker (terminal, wrapper) always
+      keeps the rest; a socket mint in flight (a cold start) makes ONE
+      in-process asker wait and go next, never refuses it; a mint that
+      throws refunds its slot (the token is the mint's last throwing step).
+      The human-device verbs are UNIX-SOCKET ONLY (Aegis L1): the daemon
+      builds them as their own `humanVerbs` object and hands it only to the
+      unix dispatcher (daemon.ts dispatcherOptionsFor), so the web
+      dispatcher reports them unavailable and refuses them. A grant whose
+      caller's connection closed during the mint is withdrawn
+      (GuiAccess.withdraw via WebEndpoint.withdrawLaunch, Aegis L2), never
+      left pending. Falsified in test/gui-open.test.ts and
+      test/human-device-verbs.test.ts. Hardening: requestRunningLaunch
+      refuses a gui.open grant whose url fails isOpenableUrl
+      (gui-open-bad-grant) and sanitizes the server's refusal text
+      (sanitizeDisplayText); bare entry builds `&cwd=` from its own capped
+      folder, never the kernel's echoed cwdHint (Aegis L3, L4). log.read's
+      one-page since-ahead is judged against releasedHead(), as subscribe
+      does (Aegis L6).
+      Also `gnomon help|--help|-h` (GNOMON_HELP, one line per verb) and an
+      unknown verb → usage exit 64 without echoing it.
+      scripts/install-darwin.mjs is the idempotent installer (build, link
+      `gnomon` into /opt/homebrew/bin or /usr/local/bin, refuse a
+      non-symlink or a link elsewhere, NODE_OPTIONS check, next steps; no
+      sudo, never touches ~/.gnomon). AUTO-OPEN (spec §2.4 rule 10):
+      src/cli/open-browser.ts openInDefaultBrowser hands every terminal
+      launch/setup URL to the default browser via LaunchServices — it runs
+      /usr/bin/osascript - (absolute, no shell, EMPTY env) and writes
+      `open location "<url>"` on its STDIN, so the token is on no argv or env
+      (`open <url>` is forbidden: argv is readable by ps); the URL is
+      validated first (loopback, fragment [A-Za-z0-9_=&%.-] only), 5 s
+      timeout, never throws. The TTY shows `opened in your browser` with the
+      URL kept below as the fallback, or the old copy line on failure /
+      non-darwin. Covers bare `gnomon`, `gnomon up`, `gnomon setup`, the
+      Enter fresh URL, the setup re-link on expiry and the setup→up hand-off.
+      Off with `--no-open` (all three verbs) or GNOMON_NO_OPEN=1; never
+      without a TTY; never on the wrapper channel (`up --wrapper`).
+    path: src/cli/bare-cli.ts
+    type: module
+    tags: [gnomon, cli, launch, dogfood]
+    related: ["#gnomon-up", "#gui", "#wrapper-channel", "#web-endpoint"]
+    tests:
+      - test/bare-entry.test.ts
+      - ../gnomon-gui/test/gui.test.ts
+      - test/open-browser.test.ts
+      - test/open-browser-darwin.test.ts
+  first-run:
+    description: >-
+      #first-run (spec §2.4 rule 9) — the guided first run. Default: the
+      setup SCREENS (#setup-endpoint, #gui-setup; `gnomon setup` and bare
+      `gnomon` print a one-shot setup URL and every expected digest, the
+      terminal being the surface to trust; Gnomon.app runs it in its
+      window). `gnomon setup --cli` keeps the plain readline prompts (no in-terminal UI, P8-D51): welcome paragraph,
+      #setup-preflight results with fixes, leftover generations offered for
+      purge, a name prompt prefilled from $USER (PRINCIPAL_NAME_PATTERN,
+      re-checked by #provisioner), "exactly 2 Touch ID prompts; a third is an
+      attack", then 1 of 2 / 2 of 2 each preceded by the expected digest shown
+      big and grouped on the terminal (I2), a summary (root keyId, principal,
+      device, files) and the hand-off to #gnomon-up's runUp in the same
+      process. Bare `gnomon` (#bare-entry) on a TTY with an unprovisioned
+      default home runs it first, then continues with the folder hint. Home
+      strict (I4: never GNOMON_HOME, lstat, symlink refused — the raw
+      `gnomon identity init` still honours GNOMON_HOME/--home). Gated by
+      ^unprovisioned-only. `up` / `up --wrapper` unprovisioned refusals now
+      name the first run. On a terminal each setup URL (and each re-link
+      after expiry) is also opened in the default browser (#bare-entry's
+      open-browser.ts, osascript stdin; `gnomon setup --no-open` or
+      GNOMON_NO_OPEN=1 prints only, and --no-open carries into the up
+      hand-off); the wrapper path never opens.
+    path: src/cli/setup-cli.ts
+    type: module
+    tags: [gnomon, cli, setup, onboarding]
+    related: ["#provisioner", "#setup-preflight", "#bare-entry", "#gnomon-up", "$first-run", "^unprovisioned-only"]
+    tests:
+      - test/setup.test.ts
+      - test/bare-entry.test.ts
+      - test/open-browser-darwin.test.ts
+  gnomon-up:
+    description: >-
+      #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>] [--wrapper]`, the
+      production counterpart of `gnomon dev up`: the REAL-HOME GUI launcher.
+      M1.13 (#gnomon-wrapper): `--wrapper` (also on `gnomon dev up`) is the
+      mode Gnomon.app spawns: launch-tty.ts serveWrapperChannel speaks
+      gnomon-wrapper-channel:v1 NDJSON on stdout (up / launch{port,
+      launchToken, kernelPublicKey, bundleHash, expiresAt} / launch-failed /
+      refused{code,reason,message,next} / down) and reads `launch` | `quit`
+      on stdin (EOF = quit); human lines go to stderr; a stdout or stdin that
+      is a terminal or a regular file is refused `wrapper-channel` before any
+      kernel starts. The token is on that pipe only — never argv, env, a file
+      or a log (test/wrapper-channel.test.ts, P07-style ps argv+env sampler
+      with a positive control).
+      src/cli/up-cli.ts; the in-process launcher and terminal loop are shared
+      with #dev-launch in src/cli/launch-tty.ts (attachInProcess, printLaunch,
+      serveInProcess: one copy of the launch rules). Runs startDaemon IN THE
+      CLI'S OWN PROCESS on a PROVISIONED home (default ~/.gnomon; never
+      GNOMON_HOME, like gnomond) with the hardware identity opened by
+      openHardwareIdentity — the same path gnomond takes (root + approvals key
+      behind the pinned signed helper; the helper is closed on every failure
+      and at shutdown) — connects as the home's registered human device
+      (loadDeviceCredential: one owner-only read) with the kernel key pinned
+      in-process, and mints the launch token through
+      DaemonHandle.requestWebLaunch. URL ONLY to an interactive terminal;
+      Enter re-mints; q / Ctrl-C stop. Approvals from the GUI: broker →
+      HelperApprovalsKey.signDecision (fresh presence, Touch ID) →
+      decisionSig + helper-se presence token. DESIGN (lore): in-process, NOT
+      `gnomon open` against a running gnomond — that needs a new wire verb
+      and moves clientApiId. GUARDS on a home resolved once (lstat plain
+      directory, then realpath), each with a falsifier in
+      test/up-cli.test.ts: FIRST (Aegis C1, also in dev up) a non-empty
+      NODE_OPTIONS or any node interpreter flag (process.execArgv) other
+      than exactly --disable-sigusr1, or that flag MISSING (T-2026-10-18-030:
+      the bin shebang `env -S node --disable-sigusr1` passes it) →
+      unsafe-env — refused, not re-executed, so no second process holds
+      the helper (scope: an AMBIENT unsafe runtime, not a hostile preload
+      already running as the user); a stdout/stderr 'error' (EIO after
+      SIGHUP) is handled as a stop so the shutdown sweep runs; the device
+      key opens O_NONBLOCK (a swapped-in FIFO cannot hang it,
+      test/device-key-fifo.test.ts); missing home / no identity.json → unprovisioned;
+      symlink / non-directory → unsafe-home; DEV-ONLY marker → dev-home; a
+      live pidfile holder or an answering socket → daemon-running (and the
+      O_EXCL lock as backstop); any IdentityError → identity-<reason> (fail
+      closed); a registry row this root does not verify → registry-damaged;
+      a device key without its matching human row → device-unregistered.
+      Never prints a key or a token. Known gap: the kernel key is still
+      ephemeral per start with no root-signed row, so OTHER socket clients
+      report serverVerified:false (the keystore item). Seams (UpDeps: start,
+      verifier, startHelper, userHome) are programmatic only; gnomon.ts
+      passes none (falsifier). END TO END (test/up-launch-session.test.ts,
+      darwin): identity init with the FakeHelper → gnomon up → launch URL →
+      the GUI WebSocket authenticates with the launch token → session.open on
+      the fake claude raises a plan card → GUI approve → one helper prompt →
+      approval.decide{presence:fresh, via:gui} whose decisionSig verifies
+      under the approvals key.
+    path: src/cli/up-cli.ts
+    type: cli
+    tags: [gnomon, identity, launcher, paradigm-8]
+    tests:
+      - test/up-cli.test.ts
+      - test/up-launch-session.test.ts
+  rules-cli:
+    description: >-
+      #rules-cli `gnomon rules list [<home>] [--json]` / `gnomon rules revoke
+      <id>` (src/cli/rules-cli.ts). list verifies the home's kernel log
+      read-only (verifyLog with the home's kernel pubs, like gnomon replay)
+      and folds the verified rows through #always-rules; an unverified log
+      is refused INTEGRITY_BROKEN; the kernel principal is namespaced by the
+      home's root (homeTrust ns), as the daemon's is. revoke (`gnomon rules
+      revoke <id> [--home <abs>] [--json]`) asks the RUNNING daemon: the
+      hello's key id is pinned from the home (kernelPinOf; an unpinned server
+      gets nothing), it authenticates as the home's human device (device.key +
+      its root-signed human registry row) and calls rules.revoke
+      (#rules-revoke); kernel refusals (NOT_FOUND, BAD_REQUEST, FORBIDDEN) are
+      printed as they come; no daemon => REFUSED ENGINE{not-running}.
+    path: src/cli/rules-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, paradigm-8, move-1]
+    tests:
+      - test/always-rules.test.ts
+    oracles: [G-BRK-05]
+  mode-cli:
+    description: >-
+      #mode-cli `gnomon mode [manual|ask|auto-edits] [--session <hsid>]
+      [--repo [<abs>]] [--home <abs>] [--json]` (src/cli/mode-cli.ts; spec
+      §3.4 run modes, P8-D86/D87). Connects to the RUNNING daemon exactly as
+      `gnomon rules revoke` does (hello key id pinned from the home via
+      kernelPinOf, an unpinned server gets nothing; auth as the home's human
+      device, humanDeviceOf). No mode: prints status.runModes (default,
+      strictness built or not, repos with a mode, every live session's
+      chosen/source/ceiling/effective and a pending loosening card). A mode:
+      log.append{kind:'request.mode.set', payload:{to, hsid | repo}} (repo =
+      --repo <abs>, default the cwd; the kernel turns a path into its repo
+      key). Tightening prints the applied change; loosening prints the
+      strictness card id to allow in Gnomon with Touch ID and does not wait.
+      An unknown mode is refused locally (BAD_REQUEST usage, exit 64);
+      kernel refusals print as they come.
+    path: src/cli/mode-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, paradigm-8, move-1]
+    tests:
+      - test/run-modes.test.ts
+    oracles: [G-BRK-05]
+  strictness-cli:
+    description: >-
+      #strictness-cli `gnomon strictness show [<repo>]` and `gnomon strictness
+      set <repo> <L0|L1|L2|L3>` [--home <abs>] [--json] (src/cli/
+      strictness-cli.ts; spec §3.4, M2.11-lite). Connects to the RUNNING
+      daemon as `gnomon mode` does (hello key id pinned from the home, auth as
+      the home's human device). show prints status.strictness (one repo when
+      named, its default level if none is set). set sends
+      log.append{kind:'request.strictness.set', payload:{repo, to}}; a raise applies at once and pauses the repo's running loops, a
+      lower level prints the strictness card to allow with Touch ID. <repo> is
+      a folder (resolved against the cwd) or a sha256 repo key. A bad verb or
+      level is refused locally (exit 64).
+    path: src/cli/strictness-cli.ts
+    type: module
+    tags: [gnomon, cli, approvals, strictness, paradigm-8]
+    tests:
+      - test/strictness-levels.test.ts
+  gnomon-guide:
+    description: >-
+      #gnomon-guide `gnomon guide [<topic>]` (src/cli/guide-cli.ts,
+      src/cli/guide-topics.ts; spec §5 "gnomon guide" paragraph and §9.7,
+      TD-2026-10-19-648 item 10, T-2026-10-19-015). A CLI-only, pull-only
+      verb: not a socket method, so abiId and clientApiId do not move
+      (§3.1 I3). Topics spawn, claims, cards and refusals are COMPILED IN:
+      built in guide-topics.ts from literals and from the frozen
+      @a-company/gnomon-contracts descriptors (verb refusal lists, card
+      kinds, decisions, refusal codes with gate, retriability, exit code and
+      default next step), bundled by tsup; no topic file exists on disk, in
+      the home or in a repo, and the guide modules read no file, env or cwd
+      (threat 11). Every rendered topic carries the abiId and clientApiId
+      this binary was built with. No topic lists the topics (exit 0); an
+      unknown topic or extra arguments are refused BAD_REQUEST usage,
+      exit 64, without echoing the argument. Nothing injects a guide into a
+      session, prompt, envelope or card, and a guide grants nothing; status
+      stays the man page (F4). Honesty check G-HON-08 (test/honesty.ts
+      scanGuides, gated in test/honesty.test.ts): a topic naming a verb,
+      param, refusal code or reason, or CLI flag the frozen descriptors lack
+      fails the build; durations go through the G-HON-07 docs scan. The id
+      G-HON-08 is named in the tests only; the spec assigns it when amended.
+    path: src/cli/guide-cli.ts
+    type: module
+    tags: [gnomon, cli, honesty, paradigm-8, move-1]
+    tests:
+      - test/guide-cli.test.ts
+      - test/honesty.test.ts
+  gnomon-trace:
+    description: >-
+      #gnomon-trace `gnomon trace [--home <abs>] [--last | --session <hsid> |
+      --since <ISO>] [--json] [--full]` (src/cli/trace-cli.ts) — a CLI-only,
+      READ-ONLY audit timeline of a session for dogfood audits by the founder
+      and by Claude. Not a socket method: abiId and clientApiId do not move.
+      Joins per hsid (a) the kernel-log rows of the session (envelope session
+      or payload hsid, approval rows of its cards by cardId, the daemon.start
+      before and daemon.exit after), read from the segment files with a
+      write-free open (immutable=1 when no -wal exists; readOnly beside a live
+      -wal) and a hash-chain check (envelope hash + prev link; signatures are
+      left to gnomon replay and the output says so); (b) the Claude Code
+      transcript <claude dir>/projects/<realpath cwd, non-alphanumerics to
+      '-'>/<uuid>.jsonl (prompts, replies, tool_use, tool_result); (c) the raw
+      capture traceDirOf(home, <realpath cwd>)/traceFileName(hsid) — that is
+      <home>/trace/<project key>/<hsid with ':' as '-'>.jsonl (TD-2026-10-19-057)
+      — when present and a regular file (unparsable lines skipped; span
+      redactions read [redacted:<kind>]; a legacy {redacted, hash, bytes}
+      record is shown as [redacted], never reconstructed). The header shows whether
+      the session was traced, from its session.sandbox row (traced /
+      traceRefused). src/kernel/trace/capture.ts mirrors the capture
+      builder's traceFileName/traceDirOf. Ordered by time, stable per source. Each turn.sent
+      contentHash is checked against the transcript prompt with the
+      supervisor's own turnContentHash: "✓ matches log" / "✗ hash mismatch";
+      a prompt the log never sent is "not in log". Human output uses the
+      readout helpers and sanitizeDisplayText on every shown string,
+      truncated unless --full; --json is one
+      {session:{hsid,uuid,cwd,principal}, log, transcript, capture, turns,
+      usage, events:[{t, source: log|transcript|capture, kind, ...}]} per
+      session per line. The output contains prompt text (help says so).
+      `gnomon trace path [--home] [--folder]` prints where the folder's
+      captures live and writes nothing; `on` says they live in the home and
+      hold prompt and tool text in the clear (Aegis L8).
+      Subcommands `gnomon trace on | off | status [--home] [--folder]` keep
+      per-project trace mode in <home>/trace-folders.json (0600, keyed by
+      realpath) via src/kernel/trace/mode.ts (setTraceMode, traceModeOf,
+      tracedFolders — a minimal copy reconciled at merge with the capture
+      builder's module); they are the only writes, and only to that file.
+    path: src/cli/trace-cli.ts
+    type: module
+    tags: [gnomon, cli, audit, read-only, paradigm-8, dogfood]
+    tests:
+      - test/trace-cli.test.ts
+  mod-cli:
+    description: >-
+      #mod-cli (spec §12.4, §12.5, §3.1 I3; §19.1 M1.11 slice 3) -
+      src/cli/mod-cli.ts `gnomon mod install|link|list|status|pause|start|
+      uninstall` over #manifest-loader, plus the kernel half in
+      src/kernel/modhost/control.ts. §5 has no install/pause/start verb and
+      adding one moves clientApiId, so the CLI and the kernel meet in the
+      home: install/link run stageInstall in the CLI (snapshot + pending card
+      record, signs nothing; staging from a session is NOT available yet: the
+      darwin session profile denies writes under the home, so it waits for the
+      gnomon-mods bridge; a GNOMON_HSID in the env is recorded only as a
+      claim, and the CLI's GNOMON_HSID refusals are advisory, the SBPL is the
+      boundary) and print the card lines from rederiveInstallDetail
+      (the hardened install path: one line per entry, kernel-composed count
+      line at index 2, COMMAND_UNSAFE linked-path refusal, linked-source
+      re-hash); a url source is refused. The daemon's StagedCardPickup
+      (scan every 2 s) raises every pending staged card through
+      #approval-broker raiseInstallCard (re-derived from the pinned snapshot;
+      install = fresh presence + root key, Touch ID via the M1.3 helper),
+      logs manifest.staged{via:cli} for cards the kernel did not stage
+      itself, starts the mod on mod.installed; bounded (MAX_PICKUP_CARDS 32
+      raised, 256 remembered refusals keyed by file stamp so a tampered
+      record is not retried until it changes; Aegis C5: files are listed by
+      readdir + lstat only (≤ 1024), raised / settled / refused-unchanged ids
+      are skipped before any read, ≤ 64 records READ per scan, 64 KiB per
+      record, manifest.refuse carries the ManifestRefusal code and is folded
+      8 per 10 s, and the grant table is read once per scan). pause writes the paused marker
+      (narrows; allowed from a session), the pickup stops a running paused
+      mod (mod.paused{reason:user}); start clears it and writes
+      start.request (operator start, lifts DOWN); uninstall writes
+      uninstall.request naming the pin, the pickup raises a root-class
+      `grant` card (allow|deny) whose allow appends a root-signed
+      grant.uninstall row (GRANT_ROW_KINDS, not a clientApiId input;
+      pin rows are stamped max(now, newest pin plus one millisecond) and read back - the
+      reader rejects a non-newer pin as replay - and the uninstall effect
+      reports nothing unless it took effect; junk staged files are
+      remembered by stamp; manifest.staged logs by/hsid under claimed),
+      stops the mod and logs manifest.uninstall{diff} (+ mod.unlinked);
+      effectiveInstall = the last install/uninstall pin row naming the mod.
+      start and uninstall are refused from a kernel-spawned shell. list and
+      status read the grant table offline (trust from identity.json or a
+      DEV home's root).
+    tags: [cli, mods, M1.11]
+    oracles: [G-MOD-04, G-MOD-08]

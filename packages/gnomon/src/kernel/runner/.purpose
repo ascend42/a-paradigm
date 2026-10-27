@@ -1,0 +1,261 @@
+version: "2.0"
+name: gnomon-kernel-runner
+description: >-
+  Spawning agent CLI sessions: finding and checking the CLI binary (binary.ts,
+  preflight.ts), building the session environment (env.ts), and the re-pin card
+  when the binary changes (repin-card.ts).
+context:
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  session-runner:
+    session-identity-env: >-
+      Fix 2026-10-20 (not_subscription_auth after a self-upgrade). runner/env.ts
+      resolveSessionIdentity / sessionIdentity (once per process; the
+      supervisor resolves it in its constructor and hands it to LocalLane):
+      on POSIX buildSessionEnv{identity} drops IDENTITY_KEYS (USER LOGNAME
+      SHELL TMPDIR) from the daemon-env copy and sets USER=LOGNAME=
+      os.userInfo().username, SHELL=os.userInfo().shell (absolute only),
+      TMPDIR (darwin) = /usr/bin/getconf DARWIN_USER_TEMP_DIR run with an
+      empty env, validTempDir: absolute, realpath a dir owned by the uid,
+      mode & 022 == 0. Anything the OS cannot give is OMITTED, never taken
+      from the env. win32: identity null, allowlist unchanged. The darwin
+      profile extras.tmpdir (screen-socket deny) is the session's TMPDIR,
+      else DARWIN_SCREEN_TMP_FALLBACK '/private/tmp' (Aegis L1). Identity
+      also carries home = os.userInfo().homedir: the user home is never $HOME
+      (Aegis L2). missingIdentity ⇒ one session.sandbox{phase:'identity',
+      missing} row at daemon start, names only; not_subscription_auth with
+      no USER names the cause (Aegis ruling 3). PATH (TD-2026-10-21-077):
+      buildSessionEnv{path} REPLACES any daemon PATH with sessionPathFor =
+      root-signed config.sessions.path (budget/config.ts parseSessionPath:
+      1..32 absolute dirs, <= 1024 chars, no NUL/CR/LF, no ':' POSIX / ';'
+      win32; invalid ⇒ whole config falls back, logged, default PATH) else
+      defaultSessionPath (darwin: node dir, <os home>/.local/bin,
+      /opt/homebrew/bin /usr/local/bin /usr/bin /bin /usr/sbin /sbin; linux
+      without /opt/homebrew/bin; win32 null = the allowlisted PATH). Tests:
+      test/session-env-identity.test.ts, test/session-supervisor.test.ts
+      ("session env identity from the OS"), test/local-lane-spawn.test.ts
+      (Aegis L1/L2), test/budget-fuse.test.ts (config.sessions.path).
+      TD-2026-10-21-162 (Aegis M): planSessionPath write-denies every
+      user-writable PATH dir (the supervisor's #pathDenies, passed to
+      LocalLane as the REQUIRED pathDenies with the REQUIRED sessionPath):
+      in-home dirs (~/.local/bin, nvm/volta node), a Homebrew prefix whole
+      (<prefix>/bin|sbin + <prefix>/Cellar, by realpath, never
+      HOMEBREW_PREFIX; /usr/local only bin/sbin/Cellar), any other
+      owner/W_OK dir; the home or its ancestors are dropped from PATH.
+      PERSISTENCE_PATHS gains .local/bin. sessionNodeDir = dirname of the
+      realpath of process.execPath (kept; denied when writable).
+      osUserHome() is the one home helper the daemon's law-7 user layer and
+      claude source use (never $HOME). Tests: session-env-identity
+      (planSessionPath), session-sandbox (EPERM rig: ~/.local/bin and a
+      brew-shaped prefix unwritable, read + exec ok), session-supervisor
+      (real /opt/homebrew where user-writable).
+    model-picker: >-
+      Founder ask 2026-10-20 ("is there no way to change the model?").
+      session.open{model}: anything other than the routing values
+      claude/local/any must pass contracts claudeModelProblem (an alias in
+      CLAUDE_MODEL_ALIASES or a strict claude-... id, never a value starting
+      with "-"), refused BAD_REQUEST{field:model} BEFORE any row, permit or
+      process; `default` opens with no --model. The live session keeps its
+      model (Session.model, status.sessions[].model, modelOf(hsid)); the
+      session.open row and the spawn permit carry it (the fuse's model
+      axis). Tests: test/model-picker.test.ts, test/session-model.test.ts.
+    model-switch: >-
+      8.0:model-switch (probe p-set-model PASS, claude 2.1.304). The human's
+      log.append{kind:'request.session.model', payload:{hsid, model}} from a
+      gui/device connection (dispatch.ts branch; HUMAN_REQUEST_KINDS) reaches
+      SessionPort.model -> SessionSupervisor.switchModel. Non-human refused
+      FORBIDDEN in the supervisor too; refused before any row: local-session,
+      turn-running, model-switching, context-too-large (ANY session toward a
+      target without [1m] above 160k tokens, the LAST main-chain assistant
+      message's usage, subagent messages excluded; a resumed session's
+      context is unknown until its first main-chain message and a 200k
+      target is refused "send one message first" meanwhile, Aegis M2). Then request row -> law 7 re-run -> a NEW
+      subscription session.spawn permit for the new model (assertClaudePermit)
+      -> session.inject{channel:model} -> adapter controlSetModelLine ->
+      control_response by request id (modelSwitchTimeoutMs, default 15 s).
+      switched: the new permit replaces the spawn permit, the old one is
+      released; backend-refused: MODEL_UNAVAILABLE{model-switch-failed};
+      timeout: ENGINE{model-switch-timeout}, the new permit HELD in
+      modelUncertain (Aegis M1), status.sessions[].modelUncertain until the
+      next main-chain message.model reconciles it (session.model{reconciled}):
+      to the new model the held permit replaces the spawn permit as on
+      success and the row cites it; to the old one, or the session exiting,
+      or a later switch, releases it. A failed permit release goes to the
+      injected Paradigm-logger-shaped SupervisorOptions.logger (Aegis L4).
+      The adapter passes claude's control_response error/error_code through
+      controlErrorText (contracts sanitizeDisplayText, one line, bounded;
+      Aegis L3). session.send refused model-switching while
+      in flight. planResume: a switched/reconciled session.model sets the
+      resumed model and permit. Tests: test/session-model.test.ts,
+      test/resume-plan.test.ts, test/socket-abi.test.ts.
+    description: >-
+      #session-runner (spec §3.3 Preflight/Environment, §3.4 law 7, §16;
+      M1.7 slice 1) in src/kernel/runner/. preflight.ts: the claude binary by
+      explicit path (root-signed config) else the platform registry's known
+      locations (src/platform/claude-code.ts), NEVER PATH (p01); realpath +
+      sha256; claude_binary_changed on a changed sha; version >= 2.1.288;
+      `auth status` = claude.ai/firstParty. law7Layers: EVERY layer the child
+      reads for THIS spawn's cwd (T-009 / Aegis C5) — managed sources per OS
+      (+ managed-settings.d/*.json; unscannable sources such as Windows policy
+      keys are hits), user settings*.json, project + worktree
+      .claude/settings(.local).json and .mcp.json, ~/.claude.json mcpServers
+      AND projects.<cwd>.mcpServers, the session's own policy.json/mcp.json —
+      scanned over the CHILD env (scanApiBilling). env.ts: allowlist + scrub +
+      GNOMON_HSID/SOCK/SESSION_KEY, envKeys names only (G-RUN-02). The
+      darwin `session` profile generator is src/platform/darwin/session-sbpl.ts
+      (from the M1.5 SessionPolicy + session-denies registry; T-008 git
+      denies: .git pointer file, config.worktree, modules/**/{hooks,config,
+      info}; launchers open/osascript/lsregister/launchctl by realpath),
+      SLICE 2 (T-2026-10-18-010): the WHOLE Gnomon home is read-denied
+      (keys/ incl. the device key, kernel.db*, log/** segments, every other
+      session dir, the pin); policy.ts homeReadable carves back only the
+      session's own sessions/<short> dir and the exec'd bin/ copy (or the
+      runners/<tree> copy), refusing anything outside HOME_READABLE_ROOTS
+      by realpath; SBPL order deny home, allow own, metadata on ancestors,
+      re-deny keys + kernel log (profile v3; test/session-sandbox EPERM rig).
+      registered in src/kernel/sandbox/session.ts (no backend => refused
+      sandbox-unavailable; status fidelity per platform, G-WIN-06).
+      p10m-claude-compat-generated (probes/) re-ran real Claude Code 2.1.302
+      under the GENERATED profile with the adapter argv: PASS, with writes to
+      the whole ~/.claude/** and ~/.claude.json denied and NO per-session
+      CLAUDE_CONFIG_DIR (a custom CLAUDE_CONFIG_DIR loses subscription auth).
+      ROUND 2 (Aegis H1/M1/M2/L2): binary.ts pins the claude sha256 in
+      <home>/claude-pin.json on first use (logged session.sandbox{phase:
+      'binary-pin'}); another hash is claude_binary_changed until an explicit
+      repinClaudeBinary (CLI/test seam until the gate-class card); the kernel
+      executes only a private copy <home>/bin/claude-<sha> written from the
+      same verified buffer, and preflight --version / auth status run that
+      copy UNDER the session profile. The profile also write-denies the
+      binary realpath, its versions dir and every known-location link
+      (supervisor binaryDenies) and the user persistence paths
+      (policy.ts PERSISTENCE_PATHS: LaunchAgents, shell rc files, git config,
+      ~/.ssh); shortcuts/automator join the launcher exec denies; copied
+      Apple launchers die by launch constraints (137, spec §A.2(iv)). Law 7
+      also flags ~/.claude.json primaryApiKey / customApiKeyResponses.approved
+      and forceLoginMethod 'console' (billing.ts). The p10m re-run with the
+      private copy and the new denies: PASS.
+      ROUND 3: trust on first use — the pin is written only after the
+      sandboxed preflight passes (N1); the copy (not the source) is hashed,
+      streamed, and not re-hashed when size+mtime match the pin record;
+      script installs (#!, the npm cli.js) are refused
+      claude_binary_unsupported; `gnomon session repin-claude`
+      (src/cli/session-cli.ts: TTY + typed last 8 of the new sha, daemon
+      stopped) writes a re-pin the supervisor logs session.sandbox{binary-pin,
+      by:'repin', from, to} at the next open; PERSISTENCE_PATHS adds
+      .bash_login, .zlogout, ~/.config/fish.
+      macOS FLOOR (P8 note, CI run 39100281741): SESSION_SANDBOX_MIN_MACOS = 15
+      (platform/darwin/session-sbpl.ts, read via platform/darwin/macos.ts
+      sw_vers); below it the darwin session backend refuses
+      sandbox-unavailable {floor:macos, have, need} and status shows the
+      session sandbox unavailable — on macos-14 a copied osascript reached
+      System Events from inside the profile. CI tests macos-15 (enforcement)
+      and macos-14 (floor refusal).
+      SIP FLOOR (CI run 39100811385, GitHub macos-15 runner, SIP off: a copied
+      launchctl not SIGKILLed): darwinSipEnabled (platform/darwin/macos.ts,
+      csrutil status, cached; Custom Configuration counts as disabled) — SIP
+      not plainly enabled ⇒ sandbox-unavailable {floor:sip, have:disabled|
+      unknown}, status unavailable reason sip-disabled; test seam
+      SupervisorOptions.sipEnabled / sessionLaunchPlan's 4th arg. Profile v2
+      adds (deny mach-lookup (global-name "com.apple.coreservices.appleevents"))
+      beside (deny appleevent-send) (APPLEEVENT_MACH_SERVICES); Claude verified
+      working (p10m-claude-compat-generated pass). Its coverage of a non-Apple
+      AppleEvent sender is UNPROVEN (spec OPEN 5): the existing copied-osascript
+      check (`get name` of System Events) is answered without sending an event,
+      so its exit is only RECORDED (test annotation), never asserted; the 137
+      launch-constraint kill is asserted on SIP-on macOS 15+ only.
+      Aegis conditions: darwin automation:apple-events fidelity is 'partial'
+      while spec OPEN 5 is open (status must not overclaim); inherited TCC
+      grants of the responsible process + the reachable pasteboard are spec
+      §A.2(v) / OPEN 22 (recommend launching gnomond by launchd or the signed
+      app); the csrutil parser test keeps the exact macOS 15 stdout fixture.
+      TRANSCRIPTS (TD-2026-10-19-814 item 1, probe p-resume darwin; profile
+      v6): a Claude Code session (supervisor claudeTranscripts: true; local
+      sessions never) gets policy.allowWrite = [<userClaudeDir>/projects,
+      subpath], rendered (allow file-write* ...) AFTER the ~/.claude write
+      deny (SBPL last match wins), then (deny file-write* ...) again on
+      policy.denyWriteAlways + the T-008 git regexes; no later rule allows
+      writes. denyWriteAlways = the projects dir itself as a LITERAL (Aegis
+      M1: no rm/rename/symlink swap of it; children still match the allow;
+      the supervisor's ensureTranscriptDir creates it before the spawn, never
+      over an existing entry), the denies inside it, and the steering regex
+      re-rooted AT projects (Aegis L3; the home-rooted one would re-close
+      ~/.claude). Hardlinks (Aegis M2): measured on macOS 15 that link(2)
+      into projects from a write-denied source (~/.claude/settings.json,
+      ~/.claude.json) is refused by the source's write deny; no file-link
+      rule needed, tests assert it. ~/.claude/settings*, plugins,
+      CLAUDE.md, the rest of ~/.claude and ~/.claude.json stay denied. The
+      allow is derived from the user Claude dir only (a flag, never an input
+      path: no manifest can widen it) and WITHHELD fail closed
+      (allowWriteRefused, logged session.sandbox{phase:'transcripts-withheld'})
+      when projects resolves elsewhere (symlink) or another deny covers it.
+      policy.json's Edit deny on ~/.claude/** is unchanged. Residual,
+      ACCEPTED by the founder (TD-2026-10-19-814): (a) a session can write
+      (and delete) memory and transcripts for ANY cwd's projects/<enc>/, not
+      only its own; (b) it can forge transcript history a later --resume
+      loads; (c) the readers include the user's own unsandboxed Claude Code;
+      (d) a link planted inside projects (e.g. MEMORY.md -> ~/.zshrc) can
+      redirect a later write by the host's Claude Code outside projects.
+      SESSION-ENV (hooks fix 2026-10-21; Aegis H1/M1 rework, profile v8): a
+      second carve-back scoped to THIS session only, ~/.claude/session-env/<uuid>
+      (subpath, class session-env), supervisor input claudeSessionEnv: <uuid>
+      (strict SESSION_UUID_RE), so Claude Code can mkdir session-env/<id> and
+      run command hooks. Never all of session-env: a sibling's CLAUDE_ENV_FILE
+      is sourced as shell by that session (host Claude Code included).
+      session-env and session-env/<uuid> are literal re-denied; siblings stay
+      under the ~/.claude deny. ensureSessionEnvDir pre-creates both at 0700,
+      lstat-refusing links, foreign-uid or group/world-writable dirs (L-2). Withheld fail closed (sessionEnvRefused, logged
+      session.sandbox{phase:'session-env-withheld'}). A new live id (/clear)
+      is logged session.sandbox{phase:'session-env-mismatch'}: hooks fail
+      closed again. Probe p-session-env: hook -> CLAUDE_ENV_FILE -> Bash sees
+      it; --resume keeps the uuid; B2: a LEFTOVER env file is sourced by a
+      later resume even without the carve, so (Aegis M-B) emptySessionEnvDir
+      empties session-env/<uuid> at every session end (#onExit: exited,
+      drained, killed; daemon orphan sweep via sweepOrphans onOrphaned + the
+      session.open uuid), lstat-only, never through a link, logged
+      session.sandbox{phase:'session-env-emptied'}. Tests:
+      test/session-sandbox.test.ts, test/session-env-cleanup.test.ts.
+      Linux: data only, no backend. Windows (W5, platform/win32/session-sandbox.ts; founder decision after the
+      Aegis W5 review): a LOW-integrity restricted token (gnomon-helper sandbox --low --desktop --session-sid),
+      Claude Code's PowerShell tool with Bash removed (claudePermissions(policy,'win32'): Git Bash cannot start
+      nested at Low), Low labels on the writable roots, deny ACEs for the Gnomon SID (read denies deny-all, the
+      parent of an in-root literal deny loses FILE_DELETE_CHILD), label-readable + allow-read carve-backs,
+      label-meta on their home ancestors (Claude vets its settings path), own-SID grants on this session's
+      session-env and home dir (released at exit), every read-back checked; ensureSessionEnvDir reads owner +
+      DACL there (privateToUser). Reported partial (prefix/steering existing-only, temp dir and transcripts shared
+      between sessions, no WFP loopback deny until P10w). Test: test/session-sandbox-win32.test.ts. repin-card.ts (TD-2026-10-19-063):
+      the GUI re-pin of the claude binary — ClaudeRepinCards pre-stages ONE
+      #approval-broker gate-class card per new sha (on an open refused
+      claude_binary_changed, and on a poll of the resolved source at
+      REPIN_POLL_MS cadence that never writes a pin); allow = fresh presence
+      (one prompt), card TTL 24 h, a deny suppresses the sha; the publisher
+      is checked on the private copy by src/platform/claude-verifier.ts
+      (codesign, team Q6L2SF6YDW) and anything else sets claim-mismatch; the
+      effect re-hashes the copy and writes the pin with signer + approval
+      {cardId, contentHash, decisionSig}; live sessions keep their copy.
+      Aegis fixes: the effect refuses unless the pin still equals the card's
+      `from` (no rollback) and expires every other pending re-pin card; the
+      card is voice-hand-only (broker, §14.7); binaryKind runs on the copy; a
+      denied sha's refusal says "re-pin denied; restart Gnomon to re-offer";
+      the offline CLI prints the codesign signer (loud on a mismatch).
+      TD-2026-10-23-268: runner/env.ts owns the loop env split (shrunk after
+      the Aegis review, TD-2026-10-23-448). loopEnvHazard refuses only
+      GNOMON_*, NODE_OPTIONS, NODE_PATH, DYLD_*, LD_* and the kernel-set names
+      (allowlist, Windows names, NO_COLOR); every secret and tool setting
+      (ANTHROPIC_*, CLAUDE_CODE_*, *_BASE_URL, BASH_ENV, PYTHON*, GIT_CONFIG*
+      …) is allowed when a trusted loop names it. applyLoopEnv and
+      buildCheckEnv{named} apply resolved values; buildSessionEnv is unchanged
+      for sessions. Values never come from the daemon env (cleanReexecEnv,
+      S-H3).
+    path: src/kernel/runner/
+    type: module
+    tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]
+    tests:
+      - test/claude-repin-card.test.ts
+      - test/claude-verifier-darwin.test.ts
+      - test/session-preflight.test.ts
+      - test/session-profile.test.ts
+      - test/session-sandbox.test.ts
+      - test/session-sandbox-win32.test.ts
+    oracles: [G-SUB-01, G-RUN-02, G-RUN-06, G-SBX-04, G-SBX-05, G-SBX-06, G-SBX-08, G-WIN-06]

@@ -1,0 +1,135 @@
+version: "2.0"
+name: gnomon-kernel-git
+description: >-
+  Kernel git verbs: the git operations the kernel runs for sessions and loops
+  (verbs.ts, kernel-verbs.ts, verb-exec.ts), the scratch worktrees loops work in
+  (scratch.ts) and landing their result (land.ts).
+context:
+  - >-
+    The ^git-init-gate and ^git-push-gate gates stay in
+    packages/gnomon/.purpose.
+  - >-
+    Split out of packages/gnomon/.purpose (2026-10-27); path: values stay
+    relative to packages/gnomon, the package root.
+components:
+  git-verbs:
+    description: >-
+      #git-verbs (T-2026-10-23-002; spec §6.6). The kernel runs git for a
+      session OUTSIDE its sandbox, because the session profile denies writes
+      to .git/config, .git/hooks and .git/info (a config or hook the agent
+      wrote would run unsandboxed under the human's own git) and has no
+      credential access. Verbs: git.init, git.push, repo.create (gh),
+      git.worktree.add, git.worktree.remove — reached through #kernel-mcp
+      (gnomon_git_init, gnomon_git_push, gnomon_repo_create,
+      gnomon_worktree_add, gnomon_worktree_remove). src/kernel/git/verbs.ts
+      (pure): initConfigText (the [core] template only: nothing executable,
+      branch main), initRefusal (a session root; not home, a system folder or
+      the Gnomon home; not already in a repo, an ancestor's .git included),
+      dotGitOf (lstat only: a symlinked .git or a gitfile pointer is never
+      followed; a remnant .git a failed sandboxed init left is cleared),
+      configProblems (push/create/worktree run only on a repo config of plain
+      keys, CONFIG_ALLOW; hooksPath, fsmonitor, sshCommand, credential.*,
+      include*, filter.*, url.*.insteadOf, receivepack… refuse
+      unsafe-config), parseRemote (https or ssh to a plain host only; ext::,
+      file, git://, http, local paths, userinfo, query refuse bad-remote),
+      hostWarning (punycode, non-ASCII, near misses of forge hosts: the card
+      is flagged claim-mismatch and offers no Always), argument validators
+      (no leading '-', no '..', no control characters; '--' before every
+      operand), the card composers. verb-exec.ts: async spawn (argv, no
+      shell, capped output, SIGKILL at the timeout); init uses the hardened
+      env (no global/system config: the human's templateDir or hooksPath
+      never reach the repo); push and gh use a SCRUBBED env (HOME = the
+      user's, so their credential helper and gh sign-in apply; never
+      GH_TOKEN, GIT_DIR, proxies, askpass or GIT_SSH_COMMAND from the daemon)
+      and PUSH_GIT_FLAGS (no hooks, no fsmonitor, protocols https/ssh only,
+      no redirects, no submodules, no follow-tags, GIT_ALLOW_PROTOCOL);
+      redactOutput (URL userinfo and token shapes). kernel-verbs.ts GitVerbs:
+      every call writes git.verb{phase:'requested'} first, then refused{why},
+      ran or failed{why, exitCode}; rows carry ids, closed values and the
+      kernel-resolved host only (never a URL, path, token or output). One
+      verb at a time per root. Kernel worktrees live at
+      <root>/.gnomon/worktrees/<name> (made with hooks off, excluded from the
+      main checkout's status); the session profile's kernelWorktrees denies
+      (manifest/policy.ts worktree-guard / worktree-gitdir + steering under
+      W) keep their steering, .git pointer, .mcp.json and git-dir pointers
+      kernel-only, and the supervisor judges an edit there against the
+      worktree as its root (#editRoots). Claude Code's own worktree
+      isolation (.claude/worktrees) and `git worktree add` stay refused by
+      the sandbox (measured); the session guidance names the verbs.
+      Darwin-first (win32: parity phase; no verb is served on win32).
+      Aegis review 2026-10-23: push/create run under a kernel config
+      snapshot (credential.* + core.sshCommand only, ssh -F a copied
+      ~/.ssh/config; GIT_CONFIG_NOSYSTEM, GIT_COMMON_DIR pinned); each root's
+      .git, commondir, remotes/ and branches/ are session-denied; legacy
+      remotes refuse; a worktree base with different steering files forces
+      the card (M1); gh only from fixed trusted locations (M4); pushed
+      commits are secret-scanned and a hit always takes a card (M5); an
+      explicit force-with-lease sha (L3); at most four verb calls in flight
+      per session (L5); gh api user is a `lookup` row (L6). Session file
+      writes are deny-by-default (T-2026-10-23-004, policy.writeAllow,
+      probe p10m-write-allow, test/write-allow-sandbox.test.ts).
+      GitVerbs.close() (daemon shutdown, $daemon-lifecycle): no snapshot
+      capture starts after it, and every capture in flight (the daemon's
+      fire-and-forget start-up refreshPushConfig spawns git several times and
+      writes <home>/git-verbs/{gitconfig.<pid>.<ms>, ssh_config, gitconfig})
+      settles before shutdown releases the daemon lock, so no write lands in
+      the home after shutdown resolves (it raced a successor kernel and the
+      tests' rmSync of the home: ENOTEMPTY in afterEach, leaked temp homes).
+    path: src/kernel/git/
+    type: module
+    tags: [gnomon, kernel, git, security, paradigm-8]
+    signals: []
+    tests:
+      - test/git-verbs.test.ts
+      - test/git-verbs-sandbox.test.ts
+      - test/write-allow-sandbox.test.ts
+      - test/daemon-lifecycle.test.ts
+    oracles: [G-GIT-04, G-GIT-05, G-GIT-06, G-GIT-07]
+  loop-git:
+    description: >-
+      #loop-git (docs/specs/gnomon-loops.md §3.2 where loops work, §3.3 kill
+      switch, §4 retention; build plan step 10, LP6a; G-GIT-01).
+      src/kernel/git/scratch.ts. The scratch worktree for a run with act
+      nodes is the HEAD tree, detached, written into the KERNEL-OWNED run dir
+      <home>/loop-work/act-<runId>/tree (0700, never inside the repo, no .git)
+      from hardened git plumbing only (rev-parse, ls-tree -r -z -l, cat-file
+      --batch: raw blobs, no filters, no textconv, no checkout, no hook;
+      HARDENED_GIT_FLAGS --no-optional-locks, core.hooksPath=/dev/null,
+      core.fsmonitor=false, core.sshCommand=false, protocol.allow=never,
+      credential.helper empty; hardenedGitEnv: a clean env with no inherited
+      GIT_*, GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM, GIT_ATTR_NOSYSTEM).
+      Not `git worktree add`: that writes the human's .git and runs a checkout
+      with the repo's filters and hooks. Files O_CREAT|O_EXCL|O_NOFOLLOW,
+      links last, node_modules linked only when their realpath is inside the
+      repo; caps 50 000 files and 500 MiB. liveScratch(runId) is the module
+      table LocalLane.openLoop checks (a forged path is never a scratch).
+      scratchChanges diffs in-kernel by git blob id against the HEAD
+      manifest. parkScratch writes the changed blobs (hash-object -w
+      --no-filters), a tree through a private GIT_INDEX_FILE and a commit
+      (Gnomon Loop <loop+<id>@gnomon.invalid>, trailers Gnomon-Loop and
+      Gnomon-Run after the stripped message) into a kernel-owned bare park
+      repo <home>/loop-work/park/<repoHash>.git whose objects borrow the
+      human's through alternates, at refs/gnomon/loops/<id>/<runId>; the
+      human repo gets no ref and no object until #loop-land moves them in
+      under the land lock (src/kernel/git/land.ts). diff-tree -p
+      --no-renames --no-ext-diff --no-textconv for the card. removeScratch at
+      run end; sweepLoopScratch (boot, LOOP_RETENTION_DAYS) removes stale run
+      dirs and parked refs past the window, never a live scratch. Aegis
+      review: case- and NFD-colliding trees refused, parents created one
+      component at a time and realpath-checked before every write or link;
+      reads O_NOFOLLOW|O_NONBLOCK with fstat (regular, nlink 1, capped), FIFOs
+      refused, park re-checks each blob against the scanned oid (PARK_LIMITS);
+      git resolved once to an absolute path, at least 2.39.4,
+      GIT_ALLOW_PROTOCOL=none, GIT_CEILING_DIRECTORIES, the uid check in place
+      of safe.directory, no gpg signing; names with control, format or bidi
+      characters refused. Residual: hash-object through alternates freshens
+      the mtime of an object the human store already has.
+    path: src/kernel/git/scratch.ts
+    type: module
+    tags: [gnomon, loops, git, paradigm-8, security]
+    tests:
+      - test/loop-act-e2e.test.ts
+      - test/loop-act.test.ts
+    anchors:
+      - src/kernel/git/scratch.ts
+      - src/kernel/git/index.ts
