@@ -5,6 +5,12 @@
  * Process; M1.7) — the ONE place that knows the shape of `claude -p`'s
  * stream-json (it is not a published contract, §2.2).
  *
+ *   claudeCodeAdapter — this file's #backend-adapter (../backend-adapter.ts):
+ *     the core codec (argv, parse, newMeter, turnLine, interruptLine) plus the
+ *     PermissionChannel, ControlChannel and SdkMcpChannel capabilities, wired
+ *     to the free functions below (which stay exported). The supervisor lane
+ *     calls it as `drv`. LineSplitter moved to ../line-splitter.ts (re-exported).
+ *
  *   buildClaudeArgv — the §3.3 argv: `-p`, stream-json in and out, verbose,
  *     replayed user messages, partial messages, hook events (`--include-hook-events`:
  *     hook_started / hook_response lines, probed on claude 2.1.309), `--permission-mode default`,
@@ -28,6 +34,7 @@
  *     repeated once per content block, so each message id is charged its
  *     DELTA; `result.usage` charges only what the messages did not (no double
  *     count). Tokens = input + output + cache creation + cache read.
+ *     charge(ev) is the #backend-adapter entry: partial/message → message, result → result, else 0.
  *   controlInterrupt / userMessage — the stdin lines: interrupt is the
  *     stream-json `control_request{subtype:'interrupt'}` on every OS, never a
  *     signal (A23-4).
@@ -55,6 +62,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { claudeModelProblem, sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import type { BackendAdapter, ControlChannel, PermissionChannel, SdkMcpChannel, TurnInput } from '../backend-adapter.js';
 
 export const FORBIDDEN_FLAGS = Object.freeze(['--dangerously-skip-permissions', '--allowedTools', '--allowed-tools', '--bare']);
 export const SETTING_SOURCES = Object.freeze(['user', 'project', 'local'] as const);
@@ -636,43 +644,37 @@ export class UsageMeter {
     this.#turn = 0;
     return delta;
   }
+
+  /**
+   * #backend-adapter: the tokens one event adds — a partial's usage or a message's tokens through `message`, a result
+   * through `result`, 0 for any other event (exactly where the supervisor's old guards skipped the meter).
+   */
+  charge(ev: AdapterEvent): number {
+    if (ev.kind === 'partial') return ev.usage ? this.message(ev.usage.messageId, ev.usage.tokens) : 0;
+    if (ev.kind === 'message') return ev.tokens !== null ? this.message(ev.messageId, ev.tokens) : 0;
+    if (ev.kind === 'result') return this.result(ev.tokens);
+    return 0;
+  }
 }
 
-/**
- * Line splitter with the §3.3 caps: a stdout line over `maxLine` bytes is
- * dropped and reported ONCE (with its total size, at its end), never buffered
- * without bound. Linear: each chunk is measured once (no re-measuring of the
- * accumulated buffer).
- */
-export class LineSplitter {
-  #parts: string[] = [];
-  #bytes = 0;
-  #dropping = false;
-  readonly #maxLine: number;
-  constructor(maxLine: number) {
-    this.#maxLine = maxLine;
-  }
-  push(chunk: string, onLine: (line: string) => void, onDropped: (bytes: number) => void): void {
-    const segs = chunk.split('\n');
-    for (let i = 0; i < segs.length; i++) {
-      const seg = segs[i]!;
-      const segBytes = Buffer.byteLength(seg);
-      this.#bytes += segBytes;
-      if (!this.#dropping) {
-        if (this.#bytes > this.#maxLine) {
-          this.#dropping = true;
-          this.#parts = [];
-        } else this.#parts.push(seg);
-      }
-      if (i === segs.length - 1) break; // no newline yet: the line continues in the next chunk
-      if (this.#dropping) onDropped(this.#bytes);
-      else {
-        const line = this.#parts.join('');
-        if (line.trim()) onLine(line);
-      }
-      this.#parts = [];
-      this.#bytes = 0;
-      this.#dropping = false;
-    }
-  }
-}
+/** Moved to ../line-splitter.ts (#backend-adapter); re-exported so existing importers keep working. */
+export { LineSplitter } from '../line-splitter.js';
+
+/** #backend-adapter: the claude-code driver — the core codec plus the permission, control and SDK MCP channels. */
+export interface ClaudeCodeAdapter extends BackendAdapter<'claude-code', ClaudeArgvInput, AdapterEvent, TurnInput & { guidance?: string | null }>, PermissionChannel, ControlChannel, SdkMcpChannel {}
+
+/** Wired to the free functions above (they stay exported). turnLine ignores `inFlight`: Claude Code queues a user line itself. */
+export const claudeCodeAdapter: ClaudeCodeAdapter = Object.freeze({
+  backend: 'claude-code' as const,
+  argv: (i: ClaudeArgvInput): string[] => buildClaudeArgv(i),
+  parse: (line: string): AdapterEvent => parseStreamLine(line),
+  newMeter: (): UsageMeter => new UsageMeter(),
+  turnLine: (t: TurnInput & { guidance?: string | null }): string => userMessageLine(t.text, t.guidance),
+  interruptLine: (): string => controlInterruptLine(),
+  allowLine: (requestId: string, updatedInput: unknown): string => permissionAllowLine(requestId, updatedInput),
+  denyLine: (requestId: string, message: string, interrupt?: boolean): string => permissionDenyLine(requestId, message, interrupt),
+  errorLine: (requestId: string, error: string): string => controlErrorLine(requestId, error),
+  setModelLine: (requestId: string, model: string): string => controlSetModelLine(requestId, model),
+  mcpResponseLine: (requestId: string, response: unknown): string => mcpResponseLine(requestId, response),
+});
+

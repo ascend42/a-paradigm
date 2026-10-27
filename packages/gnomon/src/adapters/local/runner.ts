@@ -29,9 +29,24 @@
  *     only what the messages did not (no double count).
  *   promptLine / followUpLine / steerLine / abortLine — the stdin commands;
  *     interrupt is the `abort` command, never a signal (A23-4).
+ *   localAdapter — this file's #backend-adapter (../backend-adapter.ts): the
+ *     core codec (argv, parse, newMeter, turnLine = prompt | follow_up by
+ *     inFlight, interruptLine = abort) plus the SteerChannel and
+ *     ToolBrokerChannel capabilities; local-session.ts calls it as `drv`.
+ *     OfferedTool / ToolResponse live in ../backend-adapter.ts (re-exported).
  */
 
-export function buildLocalArgv(i: { configPath: string; hsid: string }): string[] {
+import type { BackendAdapter, OfferedTool, SteerChannel, ToolBrokerChannel, ToolResponse } from '../backend-adapter.js';
+
+export type { OfferedTool, ToolResponse } from '../backend-adapter.js';
+
+/** The local child's argv input (#backend-adapter's `A` for the local backend). */
+export interface LocalArgvInput {
+  configPath: string;
+  hsid: string;
+}
+
+export function buildLocalArgv(i: LocalArgvInput): string[] {
   return ['--mode', 'rpc', '--config', i.configPath, '--session', i.hsid];
 }
 
@@ -183,6 +198,12 @@ export class LocalUsageMeter {
     this.#run = 0;
     return rest;
   }
+  /** #backend-adapter: `message` → message(tokens), `end` → end(tokens), any other event → 0. */
+  charge(ev: LocalEvent): number {
+    if (ev.kind === 'message') return this.message(ev.tokens);
+    if (ev.kind === 'end') return this.end(ev.tokens);
+    return 0;
+  }
 }
 
 const line = (o: Record<string, unknown>): string => `${JSON.stringify(o)}\n`;
@@ -191,8 +212,25 @@ export const followUpLine = (message: string, id?: string): string => line({ ...
 export const steerLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'steer', message });
 export const abortLine = (): string => line({ type: 'abort' });
 /** Slice S1: the kernel's answer to one tool_request (content capped at TOOL_RESPONSE_MAX_CHARS). */
-export const toolResponseLine = (r: { id: string; content: string; isError: boolean; provenance: string }): string => line({ type: 'tool_response', id: r.id, content: r.content.slice(0, TOOL_RESPONSE_MAX_CHARS), isError: r.isError, provenance: r.provenance });
+export const toolResponseLine = (r: ToolResponse): string => line({ type: 'tool_response', id: r.id, content: r.content.slice(0, TOOL_RESPONSE_MAX_CHARS), isError: r.isError, provenance: r.provenance });
 /** Aegis N4: the call's effect started (the child extends its wait for this id). */
 export const toolProgressLine = (id: string): string => line({ type: 'tool_progress', id, state: 'running' });
 /** Slice S1: the brokered tools offered from the child's next step on. */
-export const toolsSetLine = (tools: ReadonlyArray<{ name: string; description: string; parameters: Record<string, unknown>; class: string }>): string => line({ type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });
+export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>): string => line({ type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });
+
+/** #backend-adapter: the local driver — the core codec plus the steer and tool-broker channels. */
+export interface LocalAdapter extends BackendAdapter<'local', LocalArgvInput, LocalEvent>, SteerChannel, ToolBrokerChannel {}
+
+/** Wired to the free functions above (they stay exported). A turn sent while one runs is a follow_up, else a prompt. */
+export const localAdapter: LocalAdapter = Object.freeze({
+  backend: 'local' as const,
+  argv: (i: LocalArgvInput): string[] => buildLocalArgv(i),
+  parse: (line: string): LocalEvent => parseLocalLine(line),
+  newMeter: (): LocalUsageMeter => new LocalUsageMeter(),
+  turnLine: (t: { text: string; inFlight: boolean }): string => (t.inFlight ? followUpLine(t.text) : promptLine(t.text)),
+  interruptLine: (): string => abortLine(),
+  steerLine: (text: string): string => steerLine(text),
+  toolsSetLine: (tools: ReadonlyArray<OfferedTool>): string => toolsSetLine(tools),
+  toolResponseLine: (r: ToolResponse): string => toolResponseLine(r),
+  toolProgressLine: (id: string): string => toolProgressLine(id),
+});
