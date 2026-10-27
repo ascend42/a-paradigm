@@ -166,7 +166,7 @@ describe('storage: append-only memory.jsonl, 0600, reload, delete unlinks', () =
     const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
     expect(JSON.parse(lines[0]!)).toEqual({ op: 'meta', v: 1, hsid: HSID, owner: 'human:alice' });
     expect(memoryOwnerOf(file)).toEqual({ hsid: HSID, owner: 'human:alice' });
-    if (process.platform !== 'win32') expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    // the 0600 mode is checked on POSIX in test/local-memory-lane.test.ts (darwin, linux)
   });
 
   it('deleteAll unlinks the file (no old text stays on disk)', () => {

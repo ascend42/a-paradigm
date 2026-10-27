@@ -100,6 +100,11 @@ describe('#backend-adapter: BACKEND_ADAPTERS', () => {
     expect('toolsSetLine' in claudeCodeAdapter).toBe(false);
     expect('allowLine' in localAdapter || 'setModelLine' in localAdapter || 'mcpResponseLine' in localAdapter).toBe(false);
     expect(localAdapter.steerLine('s')).toBe(`${JSON.stringify({ type: 'steer', message: 's' })}\n`);
+    // slice B2: the ContextChannel is local-only
+    expect('memorySetLine' in claudeCodeAdapter || 'compactLine' in claudeCodeAdapter || 'setContextLine' in claudeCodeAdapter).toBe(false);
+    expect(localAdapter.compactLine()).toBe('{"type":"compact"}\n');
+    expect(localAdapter.setContextLine(4096)).toBe('{"type":"set_context","contextTarget":4096}\n');
+    expect(JSON.parse(localAdapter.memorySetLine({ render: 'r', hash: `sha256:${'a'.repeat(64)}`, bytes: 1 }))).toEqual({ type: 'memory_set', render: 'r', hash: `sha256:${'a'.repeat(64)}`, bytes: 1 });
   });
   it('turnLine: claude-code ignores inFlight; local sends a follow_up while a turn is in flight, else a prompt', () => {
     expect(claudeCodeAdapter.turnLine({ text: 'hi', inFlight: true })).toBe(claudeCodeAdapter.turnLine({ text: 'hi', inFlight: false }));
