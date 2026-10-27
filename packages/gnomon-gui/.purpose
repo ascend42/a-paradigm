@@ -582,7 +582,12 @@ components:
       else claude's --replay-user-messages line; session.inject / turn.sent
       carry only a hash), assistant text, one tool line per tool_use
       (toolSummary: name + command/path/pattern…), cards inline, the
-      turn.result (subtype, cost, tokens) and lifecycle notes; hooks,
+      turn.result (subtype, cost, tokens; T-2026-10-26-003: resultLine
+      reads a local run's stopReason — STOP_LABEL "stopped: step limit",
+      "error", "aborted", "no answer" when replyBytes is 0 — and its tokens
+      from runUsage, the run's whole input + output, never the meter's
+      remainder in usage.tokens; a step-limit or no-answer line takes the
+      existing warn tone, .trow.role-result.warn = --warn-ink) and lifecycle notes; hooks,
       stream_event partials, rate limits, status, control frames, tool
       results and bookkeeping rows are hidden and counted, and "show raw
       events" shows every row. RAW VIEW (founder 2026-10-23 "is there a way
@@ -738,6 +743,7 @@ components:
       - test/fonts.test.ts
       - test/desk.test.ts
       - test/live-turn.test.ts
+      - test/turn-result.test.ts
       - ../gnomon/test/gui-endpoint.test.ts
       - ../gnomon/test/web-units.test.ts
   gui-setup:

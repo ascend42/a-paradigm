@@ -915,13 +915,35 @@ function lineItems(line: string, guidanceHash: string | null = null): Array<Pick
   return [];
 }
 
-function resultText(p: Record<string, unknown>): string {
-  const parts = [p.isError === true ? 'error' : typeof p.subtype === 'string' ? p.subtype : 'done'];
+/**
+ * T-2026-10-26-003: how a local run ended, said honestly (the kernel's turn.result{stopReason}). A normal 'stop' reads
+ * as before; anything else names itself — never "done" for a run that hit the step limit.
+ */
+export const STOP_LABEL: Readonly<Record<string, string>> = Object.freeze({ max_steps: 'stopped: step limit', aborted: 'aborted', error: 'error' });
+
+const n = (v: number): string => v.toLocaleString('en-US');
+
+/**
+ * The turn's result line. A local run (turn.result{stopReason, runUsage, replyBytes}, T-2026-10-26-003) reads its end
+ * state from stopReason, says "no answer" when the final reply was empty, and its tokens from runUsage — the run's whole
+ * agent_end usage, input + output (usage.tokens on that row is only the meter's uncharged remainder). `warn` marks a
+ * run that did not end normally with an answer (the amber warning tone, DESIGN rule 1).
+ */
+export function resultLine(p: Record<string, unknown>): { text: string; warn: boolean } {
+  const reason = typeof p.stopReason === 'string' ? p.stopReason : null;
+  const abnormal = reason !== null && reason !== 'stop';
+  const parts = [p.isError === true ? 'error' : abnormal ? (STOP_LABEL[reason] ?? `stopped: ${reason}`) : typeof p.subtype === 'string' ? p.subtype : 'done'];
+  const noAnswer = reason !== null && reason !== 'aborted' && p.replyBytes === 0;
+  if (noAnswer) parts.push('no answer');
   if (typeof p.cost === 'number') parts.push(`$${p.cost.toFixed(4)}`);
+  const run = objOf(p.runUsage);
   const tokens = objOf(p.usage)?.tokens;
-  if (typeof tokens === 'number') parts.push(`${tokens.toLocaleString('en-US')} tokens`);
+  if (run && typeof run.tokens === 'number') {
+    parts.push(typeof run.input === 'number' && typeof run.output === 'number' ? `${n(run.tokens)} tokens (in ${n(run.input)} + out ${n(run.output)})` : `${n(run.tokens)} tokens (in + out)`);
+  } else if (typeof tokens === 'number') parts.push(`${n(tokens)} tokens`);
   if (typeof p.permission_denials === 'number' && p.permission_denials > 0) parts.push(`${p.permission_denials} denied`);
-  return parts.join(' · ');
+  if (abnormal && typeof p.error === 'string' && p.error.trim()) parts.push(cap(oneLine(p.error), TOOL_SUMMARY_MAX));
+  return { text: parts.join(' · '), warn: reason === 'max_steps' || noAnswer };
 }
 
 /**
@@ -1089,7 +1111,7 @@ function spokenFold(r: Row, p: Record<string, unknown> | null, open: SpokenGroup
 }
 
 /** A kernel row's chat item, or null when it is noise in the chat view. */
-function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: string }) | null {
+function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: string; tone?: ChatItem['tone'] }) | null {
   if (r.view === 'stub' || r.view === 'oversize' || r.payload === undefined) return null;
   const p = objOf(r.payload) ?? {};
   switch (r.kind) {
@@ -1105,8 +1127,10 @@ function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: strin
       return { role: 'system', text: 'session ended with the old kernel (orphaned at the next boot)' };
     case 'session.drained':
       return { role: 'system', text: 'session drained for a kernel restart' };
-    case 'turn.result':
-      return { role: 'result', text: resultText(p) };
+    case 'turn.result': {
+      const line = resultLine(p);
+      return { role: 'result', text: line.text, ...(line.warn ? { tone: 'warn' as const } : {}) };
+    }
     case 'approval.request': {
       const card = objOf(p.card) ?? {};
       return { role: 'card', text: `needs you · ${typeof card.kind === 'string' ? card.kind : 'card'} (decide it in the stack)` };
@@ -1345,8 +1369,11 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       }
       steps.reset();
       const it = kernelItem(r);
-      if (it) push(r, 0, it);
-      else hidden++;
+      if (it) {
+        const line = push(r, 0, it);
+        // T-2026-10-26-003: a run stopped at the step limit, or with no answer, reads in the warning tone
+        if (it.tone) line.tone = it.tone;
+      } else hidden++;
       // a folded turn's message no longer waits (its replay normally already started it)
       for (let i = waiting.length - 1; i >= 0; i--) if (waiting[i]!.turn !== undefined && closed.includes(waiting[i]!.turn!)) waiting.splice(i, 1);
       // the next waiting message starts, unless it is stamped for a later turn while another turn runs first

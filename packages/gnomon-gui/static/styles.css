@@ -298,6 +298,8 @@ html, body {
 .trow.role-tool { color: var(--ink2); font-size: var(--fs-control); padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trow.role-tool::before { content: "↳ "; color: var(--sec); }
 .trow.role-result, .trow.role-system { color: var(--sec); font-size: var(--fs-label); padding-top: 2px; padding-bottom: 4px; }
+/* T-2026-10-26-003: a run stopped at the step limit or with no answer: the amber warning ink (DESIGN rule 1) */
+.trow.role-result.warn { color: var(--warn-ink); }
 .trow.role-card { color: var(--warn-ink); font-size: var(--fs-control); }
 .trow.role-auto { color: var(--sec); font-size: var(--fs-label); padding-left: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trow.role-auto::before { content: "✓ "; color: var(--sec); }
