@@ -4909,7 +4909,34 @@ components:
       tiers (mcp:<server> provenance is plumbed but has no target yet); a card
       approved just before the child's deadline may run after the child gave
       up; control characters are refused outright (no newline in brokered
-      args).
+      args). Aegis C1 review (fixed): H1 one gate per call — a target that
+      owns its gate (kernelSdkTarget.ownsGate: the kernel verbs) gets no broker
+      card; the verb's VerbSession carries local:true plus the call's
+      AbortSignal and deadline, so the queue wait, the verb card (timeoutMs =
+      deadline - now, expired on abort) and the moment before the effect all
+      honour them (git.verb why `cancelled`), and a local session never gets an
+      Always rule, an Always choice or an auto pass; M1 the receipt time is
+      stamped in the stdout handler, the kernel deadline is the child's minus
+      DEADLINE_MARGIN_MS (it answers `expired` first), and the child's
+      tool_cancel{id} cancels the call; M2 GitVerbs.closeSession marks the hsid
+      closed (refused before any card and after the decision); M3 the run-mode
+      book is read like a Claude session's (manual => the verbs refuse and no
+      mutate/destructive tool is offered at open); M4 one carded call in flight
+      (busy), a deny cool-down of DENY_COOLDOWN_MS per tool + args (cooldown),
+      SUSPEND_AFTER_DENIES denies in SUSPEND_WINDOW_MS suspend the session
+      (suspended; the row is the notice); L1 the validator refuses Cc/Cf/Co/Cn
+      and default-ignorable characters and non-NFC text, checks pattern,
+      minLength and type unions, and refuses a schema keyword it does not
+      know; L2 runner.ts measures nesting iteratively before stringify, a line
+      the parser throws on is still a hash-only row, inputHash's fallback is
+      guarded; L3 the card's argsHash is the canonical inputHash and the
+      tool_execution_* lines of a brokered tool are hash-only; L4 decisions
+      expired and allowed-cancelled (clientApiId moved again); L5 duplicate
+      in-flight ids are bad-args and toolCallId is [A-Za-z0-9_.:-]{1,128}; L6
+      broker cards name the tool `kernel:<tool>` / `mcp:<server>/<tool>`; L7
+      the broker exists before stdout is read (a backstop answers and logs),
+      and a child that stops reading its stdin (> CHILD_STDIN_HIGH_WATER
+      queued) is stopped.
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
@@ -4918,6 +4945,7 @@ components:
       - test/local-tool-broker.test.ts
       - test/local-lane-spawn.test.ts
       - test/loop-model-e2e.test.ts
+      - test/git-verbs.test.ts
     oracles: [G-LCL-15]
 
   local-config-request:

@@ -48,6 +48,7 @@ export type LocalEvent =
   | { kind: 'end'; type: string; tokens: number | null; input: number | null; output: number | null; stopReason: string | null; error: string | null }
   | { kind: 'response'; type: string; command: string | null; success: boolean | null; error: string | null }
   | { kind: 'tool-request'; type: string; id: string | null; toolCallId: string | null; name: string | null; args: Record<string, unknown> | null; error: string | null }
+  | { kind: 'tool-cancel'; type: string; id: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: 'malformed' };
@@ -114,6 +115,9 @@ export function parseLocalLine(line: string): LocalEvent {
       return { kind: 'fatal', type, error: s(e.error, 500) };
     case 'tool_request':
       return toolRequestOf(type, e);
+    case 'tool_cancel':
+      // Aegis M1: the child gave up on a call (its timeout or abort); honouring it only removes privilege
+      return { kind: 'tool-cancel', type, id: typeof e.id === 'string' && TOOL_REQUEST_ID_RE.test(e.id) ? e.id : null };
     default:
       return { kind: 'unknown', type };
   }
@@ -123,6 +127,24 @@ export function parseLocalLine(line: string): LocalEvent {
 export const TOOL_REQUEST_ID_RE = /^tr-[1-9]\d{0,9}$/;
 export const TOOL_NAME_RE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 export const TOOL_CALL_ID_MAX = 128;
+/** Aegis L5: a toolCallId the kernel accepts (the child substitutes its own for anything else). */
+export const TOOL_CALL_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
+/** Aegis L2: the deepest args nesting measured before any stringify. */
+export const TOOL_ARGS_MAX_DEPTH = 16;
+
+/** Aegis L2: the nesting depth of a parsed value, iteratively (never recursion); stops counting past `max`. */
+export function nestingDepth(v: unknown, max = TOOL_ARGS_MAX_DEPTH): number {
+  let deepest = 0;
+  const stack: Array<[unknown, number]> = [[v, 1]];
+  while (stack.length) {
+    const [x, d] = stack.pop()!;
+    if (x === null || typeof x !== 'object') continue;
+    deepest = Math.max(deepest, d);
+    if (deepest > max) return deepest;
+    for (const y of Object.values(x as Record<string, unknown>)) stack.push([y, d + 1]);
+  }
+  return deepest;
+}
 export const TOOL_ARGS_MAX_BYTES = 64 * 1024;
 /** The most content one tool_response carries (the child refuses more). */
 export const TOOL_RESPONSE_MAX_CHARS = 256 * 1024;
@@ -133,11 +155,18 @@ function toolRequestOf(type: string, e: Record<string, unknown>): Extract<LocalE
   const extra = Object.keys(e).find((k) => !['type', 'id', 'toolCallId', 'name', 'args'].includes(k));
   if (!id) return { ...out, error: 'id is not a tool request id' };
   if (extra !== undefined) return { ...out, error: `unknown field ${extra.slice(0, 32)}` };
-  if (typeof e.toolCallId !== 'string' || e.toolCallId.length > TOOL_CALL_ID_MAX) return { ...out, error: 'toolCallId must be text of at most 128 chars' };
+  if (typeof e.toolCallId !== 'string' || !TOOL_CALL_ID_RE.test(e.toolCallId)) return { ...out, error: 'toolCallId must match [A-Za-z0-9_.:-]{1,128}' };
   if (typeof e.name !== 'string' || !TOOL_NAME_RE.test(e.name)) return { ...out, toolCallId: e.toolCallId, error: 'name is not a tool name' };
   const a = e.args;
   if (a === null || typeof a !== 'object' || Array.isArray(a)) return { ...out, toolCallId: e.toolCallId, name: e.name, error: 'args must be a JSON object' };
-  if (Buffer.byteLength(JSON.stringify(a), 'utf8') > TOOL_ARGS_MAX_BYTES) return { ...out, toolCallId: e.toolCallId, name: e.name, error: `args are over ${TOOL_ARGS_MAX_BYTES} bytes` };
+  if (nestingDepth(a) > TOOL_ARGS_MAX_DEPTH) return { ...out, toolCallId: e.toolCallId, name: e.name, error: `args are nested deeper than ${TOOL_ARGS_MAX_DEPTH}` };
+  let size: number;
+  try {
+    size = Buffer.byteLength(JSON.stringify(a), 'utf8');
+  } catch {
+    return { ...out, toolCallId: e.toolCallId, name: e.name, error: 'args are not plain JSON' };
+  }
+  if (size > TOOL_ARGS_MAX_BYTES) return { ...out, toolCallId: e.toolCallId, name: e.name, error: `args are over ${TOOL_ARGS_MAX_BYTES} bytes` };
   return { ...out, toolCallId: e.toolCallId, name: e.name, args: a as Record<string, unknown> };
 }
 

@@ -756,7 +756,7 @@ export class SessionSupervisor {
     const missing = missingIdentity(this.#identity);
     if (missing.length) void Promise.resolve().then(() => o.log('session.sandbox', { phase: 'identity', missing })).catch(() => undefined);
     this.#local = new LocalLane({
-      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), ...(this.#gitVerbs ? { gitVerbs: this.#gitVerbs } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity, sessionPath: this.#sessionPath, pathDenies: this.#pathDenies,
+      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), ...(this.#gitVerbs ? { gitVerbs: this.#gitVerbs } : {}), ...(o.runMode ? { runMode: o.runMode } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity, sessionPath: this.#sessionPath, pathDenies: this.#pathDenies,
       kernelPrincipal: o.kernelPrincipal, sock: o.sock, ...(o.env ? { env: o.env } : {}), ...(o.endpointPort ? { endpointPort: o.endpointPort } : {}),
       ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),

@@ -51,7 +51,8 @@ export async function kernelMcpAnswer(message: unknown, verbs: Pick<GitVerbs, 't
       const s = session();
       if (!s) return ok({ content: [{ type: 'text', text: 'The session is not running.' }], isError: true });
       const r = await verbs.call(name, params.arguments ?? {}, s);
-      return ok({ content: [{ type: 'text', text: r.text }], isError: !r.ok });
+      // slice C1: the verb's closed reason rides in _meta (the local broker reads it: denied, cancelled); clients ignore it
+      return ok({ content: [{ type: 'text', text: r.text }], isError: !r.ok, ...(r.why ? { _meta: { 'gnomon/why': r.why } } : {}) });
     }
     default:
       return { jsonrpc: '2.0', id, error: { code: -32601, message: `method not found: ${method.slice(0, 64)}` } };

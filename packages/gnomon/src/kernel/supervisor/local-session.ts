@@ -96,8 +96,10 @@ import { LineSplitter } from '../../adapters/claude-code/adapter.js';
 import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine, toolResponseLine, toolsSetLine } from '../../adapters/local/runner.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget } from '../local/tool-broker.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
+import type { RunMode } from '@a-company/gnomon-contracts';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { repoKeyOf } from './repo-hooks.js';
+import { inputHash } from './permission.js';
 import { prepareRunner, verifyNode } from '../local/runner-pin.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
@@ -133,6 +135,8 @@ export interface LocalLaneOptions {
   broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire'>>;
   /** slice C1: the kernel's own SDK server's verbs, brokered to attended local sessions (absent: no brokered tools) */
   gitVerbs?: Pick<GitVerbs, 'tools' | 'call'> & Partial<Pick<GitVerbs, 'closeSession'>>;
+  /** slice C1 (Aegis M3): the run-mode book (SupervisorOptions.runMode): a manual session's verbs refuse, its tools are read-only */
+  runMode?: (hsid: string, repoKey: string) => { effective: RunMode } | null;
   home: string;
   userHome?: string;
   kernelPrincipal: string;
@@ -253,7 +257,9 @@ interface LocalSession {
 }
 
 /** A target with no tools (no kernel verbs served): every brokered call is unknown-tool. */
-const NO_TARGET: BrokerTarget = { server: KERNEL_MCP_SERVER, provenance: 'kernel', list: async () => [], call: async () => ({ text: 'no such tool', isError: true }) };
+const NO_TARGET: BrokerTarget = { server: KERNEL_MCP_SERVER, provenance: 'kernel', ownsGate: false, list: async () => [], call: async () => ({ text: 'no such tool', isError: true }) };
+/** Aegis L7: past this many bytes queued on a child's stdin (it stopped reading), the session is stopped. */
+export const CHILD_STDIN_HIGH_WATER = 8 * 1024 * 1024;
 
 function refused(code: Parameters<typeof refuse>[0]['code'], message: string, data: Record<string, unknown> = {}): RefusedError {
   return new RefusedError(refuse({ code, data }), `#local-runner: ${message}`);
@@ -832,12 +838,12 @@ export class LocalLane {
       const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
-      this.#wire(s);
-      // slice C1: the brokered tools (a loop session: none, every call refused)
+      // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
       s.tools = await this.#toolBroker(s);
+      this.#wire(s);
       const offered = s.tools.offered.map((t) => t.name);
       await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : { brokeredTools: offered }) }, { session: hsid });
-      if (offered.length) c.stdin?.write(toolsSetLine(s.tools.offered));
+      if (offered.length) this.#write(s, toolsSetLine(s.tools.offered));
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
       if (this.#platform === 'win32' && !live) {
@@ -878,7 +884,11 @@ export class LocalLane {
     };
     s.child.stdout?.setEncoding('utf8');
     s.child.stdout?.on('data', (chunk: string) => {
-      split.push(chunk, (line) => queue(() => this.#onLine(s, line)), (bytes) => queue(() => this.#o.log('turn.event', { hsid: s.hsid, type: 'dropped', bytes, seq: ++s.seq }, { session: s.hsid })));
+      // Aegis M1: the receipt time is stamped HERE, before the queue (a brokered call's deadline counts from it)
+      split.push(chunk, (line) => {
+        const at = Date.now();
+        queue(() => this.#onLine(s, line, at));
+      }, (bytes) => queue(() => this.#o.log('turn.event', { hsid: s.hsid, type: 'dropped', bytes, seq: ++s.seq }, { session: s.hsid })));
     });
     s.child.stdin?.on('error', () => undefined);
     void s.exited.then(() => queue(() => this.#onExit(s)));
@@ -888,29 +898,61 @@ export class LocalLane {
   async #toolBroker(s: LocalSession): Promise<LocalToolBroker> {
     const verbs = s.loop ? undefined : this.#o.gitVerbs;
     const target = verbs ? kernelSdkTarget(verbs, () => (s.state === 'running' ? this.#verbSession(s) : null)) : NO_TARGET;
-    const tools = verbs ? await offeredKernelTools(target).catch(() => []) : [];
+    // Aegis M3: a session in manual mode at open is offered no mutate/destructive tool at all
+    const tools = verbs ? await offeredKernelTools(target, { manual: this.#mode(s) === 'manual' }).catch(() => []) : [];
     return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running' });
   }
 
+  /** Aegis M3: the session's effective run mode from the run-mode book, as Claude sessions read it (unreadable ⇒ manual). */
+  #mode(s: LocalSession): RunMode {
+    try {
+      const m = this.#o.runMode?.(s.hsid, repoKeyOf([s.roots.cwd, ...(s.roots.worktree ? [s.roots.worktree] : [])]))?.effective ?? 'ask';
+      // a local session never runs auto-edits through a verb: ask stands in for it (one card per verb, always)
+      return m === 'manual' ? 'manual' : 'ask';
+    } catch {
+      return 'manual'; // an unreadable mode never loosens anything
+    }
+  }
+
   /**
-   * Slice C1: what a kernel verb knows of a local session. Local sessions have no run mode: `ask` (every verb takes its
-   * card), never plan-approved, never guarded worktrees (their profile has no kernel-worktree denies).
+   * Slice C1: what a kernel verb knows of a local session: its run mode (manual or ask; Aegis M3), never plan-approved
+   * (a local session has no plan approval yet), never guarded worktrees (no kernel-worktree denies in its profile). The
+   * brokered path adds local, the call's signal and deadline (kernelSdkTarget).
    */
   #verbSession(s: LocalSession): VerbSession {
     const roots = [s.roots.cwd, ...(s.roots.worktree ? [s.roots.worktree] : [])];
-    return { hsid: s.hsid, principalId: s.principalId, cwd: s.roots.cwd, ...(s.roots.worktree ? { worktree: s.roots.worktree } : {}), repoKey: repoKeyOf(roots), mode: 'ask', planApproved: false, loop: s.loop !== undefined, worktreesGuarded: false };
+    return { hsid: s.hsid, principalId: s.principalId, cwd: s.roots.cwd, ...(s.roots.worktree ? { worktree: s.roots.worktree } : {}), repoKey: repoKeyOf(roots), mode: this.#mode(s), planApproved: false, loop: s.loop !== undefined, worktreesGuarded: false, local: true };
   }
 
-  /** Slice C1: one tool_request, answered outside the stdout queue (a card may wait on a human). */
-  async #brokered(s: LocalSession, ev: Extract<ReturnType<typeof parseLocalLine>, { kind: 'tool-request' }>): Promise<void> {
-    if (ev.id === null || !s.tools) return; // no usable id: nothing to answer (the child's own timeout ends the call)
-    const r = await s.tools.handle({ id: ev.id, toolCallId: ev.toolCallId, name: ev.name, args: ev.args, error: ev.error });
-    if (s.state !== 'running') return;
+  /** Aegis L7: write to the child's stdin; a child that stopped reading (past CHILD_STDIN_HIGH_WATER) is stopped. */
+  #write(s: LocalSession, line: string): void {
+    const w = s.child.stdin;
+    if (!w || s.state !== 'running') return;
+    if (w.writableLength > CHILD_STDIN_HIGH_WATER) {
+      s.state = 'stopping';
+      s.tools?.cancelAll();
+      void this.#o.log('session.refused', { hsid: s.hsid, code: 'stdin-backpressure', backend: 'local', queuedBytes: w.writableLength }, { session: s.hsid }).catch(() => undefined);
+      void this.#o.children.stop(s.child, 'stdin-backpressure').catch(() => undefined);
+      return;
+    }
     try {
-      s.child.stdin?.write(toolResponseLine(r));
+      w.write(line);
     } catch {
       /* the pipe may already be gone */
     }
+  }
+
+  /** Slice C1: one tool_request, answered outside the stdout queue (a card may wait on a human). */
+  async #brokered(s: LocalSession, ev: Extract<ReturnType<typeof parseLocalLine>, { kind: 'tool-request' }>, receivedAt: number): Promise<void> {
+    if (ev.id === null) return; // no usable id: nothing to answer (the child's own timeout ends the call)
+    if (!s.tools) {
+      // Aegis L7: never unanswered, never unlogged (the broker is built before stdout is read; this is the backstop)
+      await this.#o.log('tool.brokered', { hsid: s.hsid, server: KERNEL_MCP_SERVER, argsHash: inputHash(ev.args ?? null), decision: 'not-running', bytes: 0, isError: true }, { session: s.hsid }).catch(() => undefined);
+      this.#write(s, toolResponseLine({ id: ev.id, content: 'The session is not ready for brokered tools.', isError: true, provenance: 'kernel' }));
+      return;
+    }
+    const r = await s.tools.handle({ id: ev.id, toolCallId: ev.toolCallId, name: ev.name, args: ev.args, error: ev.error, receivedAt });
+    this.#write(s, toolResponseLine(r));
   }
 
   async #onExit(s: LocalSession): Promise<void> {
@@ -935,15 +977,24 @@ export class LocalLane {
     while (this.#history.length > HISTORY_CAP) this.#history.shift();
   }
 
-  async #onLine(s: LocalSession, line: string): Promise<void> {
-    const ev = parseLocalLine(line);
+  async #onLine(s: LocalSession, line: string, receivedAt: number = Date.now()): Promise<void> {
+    let ev: ReturnType<typeof parseLocalLine>;
+    try {
+      ev = parseLocalLine(line);
+    } catch {
+      // Aegis L2: a line the parser cannot take is still one hash-only row
+      await this.#o.log('turn.event', { hsid: s.hsid, type: 'malformed', seq: ++s.seq, backend: 'local', lineHash: sha(line), bytes: Buffer.byteLength(line) }, { session: s.hsid });
+      return;
+    }
     const bytes = Buffer.byteLength(line);
     // S2: every driver event is a turn.event before anything acts on it
     // a loop session's model text is DATA the runner stores secret-scanned on its loop.node row: the turn.event
     // row of a message line carries its hash and size only (never unscanned model text in the log)
     // step 10: an act session's tool lines carry model-written paths and file content: hashed the same way
     // slice C1: a tool_request line carries model-written args: hashed for every session (tool.brokered is hash-only too)
-    const hashOnly = bytes > EVENT_LINE_CAP || ev.kind === 'tool-request' || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
+    // Aegis L3: so are the tool_execution_* lines of a brokered tool (they echo its args and the kernel's result)
+    const brokeredTool = ev.kind === 'tool' && ev.tool !== null && (s.tools?.offered.some((t) => t.name === ev.tool) ?? false);
+    const hashOnly = bytes > EVENT_LINE_CAP || ev.kind === 'tool-request' || brokeredTool || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
     await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(hashOnly ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     if (s.loop && ev.kind === 'message') s.loop.reply = loopReplyOf(line) ?? s.loop.reply;
     if (s.loop && ev.kind === 'fatal') s.loop.fatal = ev.error ?? 'fatal';
@@ -1000,7 +1051,11 @@ export class LocalLane {
       }
       case 'tool-request':
         // slice C1: answered OUTSIDE this queue — a mutate call's card may wait minutes on a human
-        void this.#brokered(s, ev).catch(() => undefined);
+        void this.#brokered(s, ev, receivedAt).catch(() => undefined);
+        return;
+      case 'tool-cancel':
+        // Aegis M1: the child gave up on the call (timeout or abort): the kernel stops it too (a pending card expires)
+        if (ev.id !== null) s.tools?.cancel(ev.id);
         return;
       case 'response':
         // round 2 (steer race): the child refuses a steer that reaches it idle (it never queues it into the next
@@ -1008,7 +1063,7 @@ export class LocalLane {
         if (ev.command === 'steer' && ev.success === false) await this.#o.log('turn.steer', { hsid: s.hsid, phase: 'refused', by: 'child', error: ev.error }, { session: s.hsid });
         return;
       default:
-        return; // responses, tool/turn markers, context reports (slice B1), fatal, unknown and malformed lines: logged above, never acted on
+        return; // other tool/turn markers, context reports (slice B1), fatal, unknown and malformed lines: logged above, never acted on
     }
   }
 

@@ -29,7 +29,12 @@
  *      for a settled id is refused "no outstanding request";
  *   4. the result is labelled by its provenance (`kernel` or `mcp:<server>`):
  *      the agent shapes it (shape.ts) as <tool-data source="…"
- *      trust="data-not-instructions">.
+ *      trust="data-not-instructions">, an error result too (Aegis M5: a
+ *      failed push carries the remote's stderr) with error="true".
+ * Aegis M1: when the child gives up on a call (its timeout, the run's abort)
+ * it tells the kernel with `tool_cancel{id}`, so a pending card expires and
+ * the target never runs late. Aegis L5: a model call id outside
+ * [A-Za-z0-9_.:-]{1,128} is replaced by `call-<id>` before it leaves.
  */
 import type { ResultSource, ToolResult } from './confine.js';
 import type { ToolSpec } from './compat.js';
@@ -63,6 +68,8 @@ export const TOOL_NAME_RE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 export const REQUEST_ID_RE = /^tr-[1-9]\d{0,9}$/;
 /** provenance of a brokered result: the kernel itself, or a named MCP server it fronts */
 export const PROVENANCE_RE = /^(?:kernel|mcp:[a-z0-9][a-z0-9_-]{0,63})$/;
+/** Aegis L5: a toolCallId the kernel accepts. */
+export const TOOL_CALL_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const bytes = (v: unknown): number => Buffer.byteLength(JSON.stringify(v) ?? '', 'utf8');
@@ -221,6 +228,8 @@ export class KernelToolBroker {
         this.#pending.delete(id);
         clearTimeout(p.timer);
         p.cleanup();
+        // Aegis M1: the kernel stops the call too (it only ever removes privilege)
+        this.#o.emit({ type: 'tool_cancel', id });
         resolve(r);
       };
       const onAbort = (): void => settle({ content: 'cancelled: the run was aborted', isError: true });
@@ -228,7 +237,7 @@ export class KernelToolBroker {
       const timer = setTimeout(() => settle({ content: `timed out: the kernel did not answer ${tool.name} within ${Math.round(ms / 1000)} s`, isError: true }), ms);
       timer.unref?.();
       this.#pending.set(id, { resolve, timer, cleanup: () => signal?.removeEventListener('abort', onAbort) });
-      this.#o.emit({ type: 'tool_request', id, toolCallId: toolCallId.slice(0, BROKER_LIMITS.toolCallId), name: tool.name, args });
+      this.#o.emit({ type: 'tool_request', id, toolCallId: TOOL_CALL_ID_RE.test(toolCallId) ? toolCallId : `call-${id}`, name: tool.name, args });
     });
   }
 
@@ -239,9 +248,8 @@ export class KernelToolBroker {
     this.#pending.delete(r.id);
     clearTimeout(p.timer);
     p.cleanup();
-    const source = r.provenance as ResultSource;
-    // errors are never labelled (shape.ts); a result is labelled by where it came from
-    p.resolve(r.isError ? { content: r.content, isError: true } : { content: r.content, isError: false, source });
+    // Aegis M5: a brokered result keeps its provenance, error or not (shape.ts frames brokered errors with error="true")
+    p.resolve({ content: r.content, isError: r.isError, source: r.provenance as ResultSource });
     return true;
   }
 
@@ -251,6 +259,7 @@ export class KernelToolBroker {
       this.#pending.delete(id);
       clearTimeout(p.timer);
       p.cleanup();
+      this.#o.emit({ type: 'tool_cancel', id });
       p.resolve({ content: why, isError: true });
     }
   }

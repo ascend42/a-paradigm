@@ -33,7 +33,7 @@ afterEach(async () => {
 
 type Row = { kind: string; payload: Record<string, unknown> };
 
-function rig(o: { tools?: BrokeredTool[]; loop?: boolean; decision?: Promise<string> | string; broker?: boolean; target?: BrokerTarget; toolTimeoutMs?: number; cardTimeoutMs?: number } = {}) {
+function rig(o: { tools?: BrokeredTool[]; loop?: boolean; decision?: Promise<string> | string; broker?: boolean; target?: BrokerTarget; toolTimeoutMs?: number; cardTimeoutMs?: number; decisions?: string[] } = {}) {
   const rows: Row[] = [];
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const raised: Array<Record<string, unknown>> = [];
@@ -41,6 +41,7 @@ function rig(o: { tools?: BrokeredTool[]; loop?: boolean; decision?: Promise<str
   const target: BrokerTarget = o.target ?? {
     server: 'gnomon',
     provenance: 'kernel',
+    ownsGate: false,
     list: async () => [],
     call: async (name, args) => {
       calls.push({ name, args });
@@ -56,7 +57,7 @@ function rig(o: { tools?: BrokeredTool[]; loop?: boolean; decision?: Promise<str
       raised.push(i);
       return { cardId: CARD } as never;
     },
-    decisionOf: async () => (await o.decision) ?? 'allow',
+    decisionOf: async () => (o.decisions?.length ? o.decisions.shift()! : ((await o.decision) ?? 'allow')),
     expire: async (id: string) => {
       expired.push(id);
       return true;
@@ -97,9 +98,13 @@ describe('$local-brokered-call: resolve, validate, class, target, row, reply', (
     ['an unknown key', { bogus: 1 }, 'arguments has an unknown key "bogus"'],
     ['a wrong type', { verbose: 'yes' }, 'arguments.verbose must be a boolean'],
     ['over maxLength', { note: 'x'.repeat(51) }, 'arguments.note is longer than 50 chars'],
-    ['a control character', { note: 'a\u0007b' }, 'arguments.note holds a control or bidi character'],
-    ['a newline', { note: 'a\nb' }, 'arguments.note holds a control or bidi character'],
-    ['a bidi override', { note: 'abc‮def' }, 'arguments.note holds a control or bidi character'],
+    ['a control character', { note: 'a\u0007b' }, 'arguments.note holds a control, format, private-use, unassigned or ignorable character'],
+    ['a newline', { note: 'a\nb' }, 'arguments.note holds a control, format, private-use, unassigned or ignorable character'],
+    ['a bidi override', { note: 'abc‮def' }, 'arguments.note holds a control, format, private-use, unassigned or ignorable character'],
+    ['a zero-width joiner', { note: 'a\u200Db' }, 'arguments.note holds a control, format, private-use, unassigned or ignorable character'],
+    ['a private-use character', { note: 'a\uE000b' }, 'arguments.note holds a control, format, private-use, unassigned or ignorable character'],
+    ['a variation selector', { note: 'a\uFE0Fb' }, 'arguments.note holds a control, format, private-use, unassigned or ignorable character'],
+    ['a non-NFC string', { note: 'e\u0301' }, 'arguments.note is not in Unicode NFC'],
   ])('G-LCL-15: args with %s never reach the target', async (_n, args, why) => {
     const r = rig();
     const out = await r.b.handle(req('kernel_status', args));
@@ -121,7 +126,10 @@ describe('$local-brokered-call: resolve, validate, class, target, row, reply', (
     expect(out).toMatchObject({ isError: false, content: 'ran gnomon_git_push' });
     expect(r.raised).toHaveLength(1);
     const card = r.raised[0]!;
-    expect(card).toMatchObject({ kind: 'permission', hsid: HSID, attended: true, tool: 'gnomon_git_push', decisions: ['allow', 'deny'], toolInput: { remote: 'origin', branch: 'main', force: false } });
+    // Aegis L6: a namespaced name, so composePermission never special-cases a brokered tool
+    expect(card).toMatchObject({ kind: 'permission', hsid: HSID, attended: true, tool: 'kernel:gnomon_git_push', decisions: ['allow', 'deny'], toolInput: { remote: 'origin', branch: 'main', force: false } });
+    expect((card.lines as string[])[0]).toBe('The session asks to run kernel:gnomon_git_push');
+    expect((card.detail as { brokered: { argsHash: string } }).brokered.argsHash).toBe(r.rows[0]?.payload.argsHash ?? (card.detail as { inputHash: string }).inputHash);
     expect(card).not.toHaveProperty('ruleScope');
     const lines = (card.lines as string[]).join('\n');
     for (const k of ['"remote"', '"branch"', '"force"', 'origin', 'main', 'false']) expect(lines).toContain(k);
@@ -156,9 +164,10 @@ describe('$local-brokered-call: resolve, validate, class, target, row, reply', (
     expect(r.b.inflight).toBe(0);
   });
 
-  it('a card that outlives its deadline is cancelled (the same deadline the child waits)', async () => {
+  it('Aegis L4/M1: a card that outlives the kernel deadline (before the child\'s) is logged expired, not denied', async () => {
     const r = rig({ decision: new Promise<string>(() => undefined), cardTimeoutMs: 100 });
-    expect(await r.b.handle(req('gnomon_git_push', {}))).toMatchObject({ isError: true, content: expect.stringMatching(/^cancelled/) });
+    expect(await r.b.handle(req('gnomon_git_push', {}))).toMatchObject({ isError: true, content: expect.stringMatching(/^expired/) });
+    expect(r.rows[0]!.payload).toMatchObject({ decision: 'expired' });
     expect(r.calls).toEqual([]);
     expect(r.expired).toEqual([CARD]);
   });
@@ -177,7 +186,14 @@ describe('$local-brokered-call: resolve, validate, class, target, row, reply', (
     expect(validateBrokeredArgs(s, { t: 'x'.repeat(4097) })).toBe('arguments.t is longer than 4096 chars');
     expect(validateBrokeredArgs(s, { t: 'x'.repeat(17_000) })).toBe('arguments are over 16384 bytes');
     expect(validateBrokeredArgs(s, [])).toBe('arguments must be a JSON object');
-    expect(validateBrokeredArgs(s, { ['k‮']: 1 })).toBe('arguments has a key with a control or bidi character');
+    expect(validateBrokeredArgs(s, { ['k‮']: 1 })).toBe('arguments has a key that holds a control, format, private-use, unassigned or ignorable character');
+    // Aegis L1: pattern, minLength, null unions; an unknown keyword fails closed
+    const p = { type: 'object', properties: { n: { type: 'string', pattern: '^[a-z]+$', minLength: 2 }, o: { type: ['string', 'null'] } } };
+    expect(validateBrokeredArgs(p, { n: 'ab', o: null })).toBeNull();
+    expect(validateBrokeredArgs(p, { n: 'aB' })).toBe('arguments.n does not match its pattern');
+    expect(validateBrokeredArgs(p, { n: 'a' })).toBe('arguments.n is shorter than 2 chars');
+    expect(validateBrokeredArgs(p, { o: 3 })).toBe('arguments.o must be a string or null');
+    expect(validateBrokeredArgs({ type: 'object', properties: { x: { type: 'string', format: 'uri' } } }, { x: 'y' })).toMatch(/uses "format", which the kernel does not check: refused/);
   });
 });
 
@@ -189,9 +205,9 @@ describe('the kernel SDK server as the first target (kernelMcpAnswer)', () => {
     const t = kernelSdkTarget(verbs, session);
     const offered = await offeredKernelTools(t);
     expect(offered.map((x) => [x.name, x.class])).toEqual([['gnomon_git_init', 'mutate'], ['gnomon_git_push', 'destructive'], ['gnomon_repo_create', 'destructive']]);
-    expect(await t.call('gnomon_git_init', {})).toEqual({ text: 'not a repo', isError: true });
-    expect(seen[0]).toMatchObject({ tool: 'gnomon_git_init', args: {}, s: { mode: 'ask', loop: false } });
-    expect(await kernelSdkTarget(verbs, () => null).call('gnomon_git_init', {})).toEqual({ text: 'The session is not running.', isError: true });
+    expect(await t.call('gnomon_git_init', {}, { signal: new AbortController().signal, deadline: Date.now() + 1000 })).toEqual({ text: 'not a repo', isError: true });
+    expect(seen[0]).toMatchObject({ tool: 'gnomon_git_init', args: {}, s: { mode: 'ask', loop: false, local: true } });
+    expect(await kernelSdkTarget(verbs, () => null).call('gnomon_git_init', {}, { signal: new AbortController().signal, deadline: Date.now() + 1000 })).toEqual({ text: 'The session is not running.', isError: true });
   });
 });
 
@@ -219,7 +235,8 @@ describe('S1 round trip in process: gnomon-local rpcSession ↔ runner.ts ↔ Lo
     await new Promise((res) => setTimeout(res, 10));
     while (child.agent.running) await new Promise((res) => setTimeout(res, 10));
     expect(verbCalls).toEqual([{ tool: 'gnomon_git_push', args: { remote: 'origin' } }]);
-    expect(r.raised).toHaveLength(1);
+    // Aegis H1: one gate per call — the kernel verb owns its card, so the broker raises none
+    expect(r.raised).toHaveLength(0);
     expect(r.rows.map((x) => x.payload.decision)).toEqual(['approved']);
     const reqs = srv.requests.filter((q) => !JSON.stringify(q.tools ?? []).includes('get_time'));
     const toolMsg = (reqs[1]!.messages as Array<{ role: string; content: string }>).find((m) => m.role === 'tool')!;
@@ -229,11 +246,76 @@ describe('S1 round trip in process: gnomon-local rpcSession ↔ runner.ts ↔ Lo
 
   it('runner.ts bounds every tool_request field', () => {
     expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'x', toolCallId: 'c', name: 'n', args: {} }))).toMatchObject({ kind: 'tool-request', id: null, error: 'id is not a tool request id' });
-    expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'c'.repeat(129), name: 'n', args: {} }))).toMatchObject({ id: 'tr-2', error: 'toolCallId must be text of at most 128 chars' });
+    expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'c'.repeat(129), name: 'n', args: {} }))).toMatchObject({ id: 'tr-2', error: 'toolCallId must match [A-Za-z0-9_.:-]{1,128}' });
+    expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'a b', name: 'n', args: {} }))).toMatchObject({ error: 'toolCallId must match [A-Za-z0-9_.:-]{1,128}' });
+    let deep: Record<string, unknown> = {};
+    for (let i = 0; i < 40; i++) deep = { d: deep };
+    expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'c', name: 'n', args: deep }))).toMatchObject({ args: null, error: 'args are nested deeper than 16' });
+    expect(parseLocalLine(JSON.stringify({ type: 'tool_cancel', id: 'tr-9' }))).toEqual({ kind: 'tool-cancel', type: 'tool_cancel', id: 'tr-9' });
+    expect(parseLocalLine(JSON.stringify({ type: 'tool_cancel', id: 'x' }))).toMatchObject({ id: null });
     expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'c', name: '../x', args: {} }))).toMatchObject({ error: 'name is not a tool name' });
     expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'c', name: 'n', args: [1] }))).toMatchObject({ name: 'n', error: 'args must be a JSON object' });
     expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'c', name: 'n', args: { t: 'x'.repeat(70_000) } }))).toMatchObject({ args: null, error: 'args are over 65536 bytes' });
     expect(parseLocalLine(JSON.stringify({ type: 'tool_request', id: 'tr-2', toolCallId: 'c', name: 'n', args: {}, more: 1 }))).toMatchObject({ error: 'unknown field more' });
     expect(toolResponseLine({ id: 'tr-1', content: 'x'.repeat(300_000), isError: false, provenance: 'kernel' }).length).toBeLessThan(270_000);
+  });
+});
+
+describe('Aegis C1 review: card hygiene, ids, cancel, manual mode', () => {
+  it('M4: one carded call in flight per session (busy); a denied tool + args cools down; repeated denies suspend the session', async () => {
+    let decide: (d: string) => void = () => undefined;
+    const r = rig({ decision: new Promise<string>((res) => (decide = res)) });
+    const first = r.b.handle(req('gnomon_git_push', { remote: 'a' }));
+    for (let i = 0; i < 50 && r.raised.length === 0; i++) await new Promise((res) => setTimeout(res, 5));
+    expect(await r.b.handle({ ...req('gnomon_git_push', { remote: 'b' }), id: 'tr-2' })).toMatchObject({ isError: true, content: expect.stringMatching(/already waiting/) });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ decision: 'busy' });
+    decide('deny');
+    expect(await first).toMatchObject({ isError: true });
+    expect(await r.b.handle(req('gnomon_git_push', { remote: 'a' }))).toMatchObject({ content: expect.stringMatching(/just denied/) });
+    expect(r.rows.at(-1)!.payload).toMatchObject({ decision: 'cooldown' });
+    expect(r.raised).toHaveLength(1);
+    const s2 = rig({ decisions: ['deny', 'deny', 'deny'] });
+    for (const remote of ['x', 'y', 'z']) await s2.b.handle(req('gnomon_git_push', { remote }));
+    expect(s2.b.suspended).toBe(true);
+    expect(await s2.b.handle(req('kernel_status', {}))).toMatchObject({ isError: true, content: expect.stringMatching(/suspended/) });
+    expect(s2.rows.at(-1)!.payload).toMatchObject({ decision: 'suspended' });
+    expect(s2.calls).toEqual([]);
+  });
+
+  it('L4: an allow that is cancelled before the target runs is recorded allowed-cancelled', async () => {
+    const r = rig({ decision: 'allow', target: { server: 'gnomon', provenance: 'kernel', ownsGate: false, list: async () => [], call: async () => ({ text: 'ran', isError: false }) } });
+    const p = r.b.handle(req('gnomon_git_push', {}));
+    r.b.cancelAll();
+    expect(await p).toMatchObject({ isError: true });
+    expect(['allowed-cancelled', 'cancelled']).toContain(r.rows[0]!.payload.decision);
+    expect(validateKindPayload('tool.brokered', r.rows[0]!.payload)).toEqual([]);
+  });
+
+  it('L5: a request id already in flight is refused bad-args; M1: tool_cancel{id} cancels that one call', async () => {
+    let decide: (d: string) => void = () => undefined;
+    const r = rig({ decision: new Promise<string>((res) => (decide = res)) });
+    const p = r.b.handle(req('gnomon_git_push', {}));
+    for (let i = 0; i < 50 && r.raised.length === 0; i++) await new Promise((res) => setTimeout(res, 5));
+    expect(await r.b.handle(req('kernel_status', {}))).toMatchObject({ isError: true, content: 'request tr-1 is already in flight' });
+    expect(r.b.cancel('tr-1')).toBe(true);
+    expect(await p).toMatchObject({ content: expect.stringMatching(/^cancelled/) });
+    expect(r.expired).toEqual([CARD]);
+    decide('allow');
+    expect(r.calls).toEqual([]);
+  });
+
+  it('M1: the kernel deadline counts from the receipt and ends before the child\'s', async () => {
+    const r = rig({ decision: new Promise<string>(() => undefined), cardTimeoutMs: 3_000 });
+    const t0 = Date.now();
+    // received 2.5 s ago: the kernel deadline (3 s − 1.5 s margin cap) is already past
+    expect(await r.b.handle({ ...req('gnomon_git_push', {}), receivedAt: t0 - 2_500 })).toMatchObject({ content: expect.stringMatching(/^expired/) });
+    expect(Date.now() - t0).toBeLessThan(1_000);
+  });
+
+  it('M3: a manual session is offered no mutate or destructive tool', async () => {
+    const verbs = { tools: () => GIT_VERB_TOOL_SPECS, call: async () => ({ ok: true, text: '' }) };
+    const t = kernelSdkTarget(verbs, () => null);
+    expect(await offeredKernelTools(t, { manual: true })).toEqual([]);
+    expect(t.ownsGate).toBe(true);
   });
 });

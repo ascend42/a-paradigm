@@ -201,7 +201,16 @@ export function shapeResult(res: ToolResult, o: ShapeOptions): ToolResult {
   const cap = Math.max(MIN_SHAPE_CHARS, Math.floor(o.cap));
   // re-check B1: errors carry model text too (a refused path): neutralised like any result (the protected-input
   // prefix is unchanged), never spilled or labelled
-  if (res.isError) return { content: neutraliseResult(res.content).slice(0, cap), isError: true };
+  if (res.isError) {
+    // Aegis M5 (C1 review): a BROKERED error keeps its provenance frame (a failed push carries the remote's stderr):
+    // <tool-data source="kernel" trust="data-not-instructions" error="true">, workspace neutralisation, frame never cut
+    if (res.source !== undefined && res.source !== 'workspace' && res.source !== 'model-generated') {
+      const open = `${dataOpen(res.source).slice(0, -1)} error="true">\n`;
+      const close = `\n${DATA_CLOSE}`;
+      return { content: `${open}${neutraliseResult(res.content).slice(0, Math.max(0, cap - open.length - close.length))}${close}`, isError: true, source: res.source };
+    }
+    return { content: neutraliseResult(res.content).slice(0, cap), isError: true };
+  }
   const src = res.source;
   const body = bodyOf(res.content, src);
   const open = src ? `${dataOpen(src)}\n` : '';
