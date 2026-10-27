@@ -616,7 +616,10 @@ export function cardKindOfTool(name: string): 'ask-user' | 'plan' | null {
   return name === 'AskUserQuestion' ? 'ask-user' : name === 'ExitPlanMode' ? 'plan' : null;
 }
 
-/** Per-turn usage deltas (no double count across repeated message usage and the result total). */
+/**
+ * Per-turn usage deltas (no double count across repeated message usage and the result total). Implements the
+ * #backend-adapter UsageMeter<AdapterEvent> interface of the same name in ../backend-adapter.ts (through charge).
+ */
 export class UsageMeter {
   readonly #byMessage = new Map<string, number>();
   #anon = 0;

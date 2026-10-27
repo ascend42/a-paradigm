@@ -589,14 +589,14 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     expect(r.kinds('turn.event').map((x) => x.payload.type)).toEqual(expect.arrayContaining(['from_the_future', 'malformed', 'assistant']));
     expect(r.kinds('session.exited')).toEqual([]);
   });
-  it('G-GUI-05 (kernel half): a recorded claude turn replayed through a live session ⇒ its turn.event types in order, seq contiguous, the session still listed', async () => {
+  it('a replayed turn (the synthetic claude fixture): each driver line is a turn.event in order, seq contiguous, session still running', async () => {
     const fx = path.join(PKG_ROOT, 'src', 'adapters', 'claude-code', 'fixtures', '2.1.302-turn.jsonl');
     const lines = fs.readFileSync(fx, 'utf8').split(/\r?\n/).filter(Boolean);
     const want = lines.map((l) => claudeCodeAdapter.parse(l).type);
     const r = rig();
     setMode(w, { replay: lines });
     const s = await open(r.sup);
-    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'replay the recorded turn' });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'replay the fixture turn' });
     expect(await waitFor(() => r.kinds('turn.result').length === 1)).toBe(true);
     const events = r.kinds('turn.event').map((x) => x.payload);
     expect(events.slice(-want.length).map((e) => e.type)).toEqual(want);

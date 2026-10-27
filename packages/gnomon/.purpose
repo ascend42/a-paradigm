@@ -5164,12 +5164,12 @@ components:
       G-ADP-02 local), fuzzes parse (never throws), checks the tolerant
       kinds, and poisons every model-text string (text, content, delta,
       result, thinking) to show usage is never read from model text.
-      G-GUI-05 kernel half (session-supervisor.test.ts): fake claude's
-      mode.replay writes a recorded turn through a live session — its
-      turn.event types in order, seq contiguous, the session still listed.
+      session-supervisor.test.ts also replays the synthetic claude fixture
+      through a live session (fake claude's mode.replay): each driver line is
+      a turn.event in order, seq contiguous, the session still running.
       The nightly RECORDED re-record per backend version is a todo (needs a
-      trace extractor and scheduled CI; local needs a lane tee); the GUI
-      half of G-GUI-05 stays a todo in packages/gnomon-gui/test/gui.test.ts.
+      trace extractor and scheduled CI; local needs a lane tee); both
+      fixtures today are synthetic (their expect.json says source).
     path: src/adapters/
     type: module
     tags: [gnomon, adapter, backend, paradigm-8]
@@ -5179,7 +5179,7 @@ components:
       - test/claude-adapter.test.ts
       - test/local-runner.test.ts
       - test/session-supervisor.test.ts
-    oracles: [G-ADP-01, G-ADP-02, G-GUI-05]
+    oracles: [G-ADP-01, G-ADP-02]
 
   claude-adapter:
     model-guard: >-

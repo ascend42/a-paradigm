@@ -165,7 +165,7 @@ process.stdin.on('data', (c) => {
     if (m.type !== 'user') continue;
     n++;
     const id = `msg_${n}`;
-    // mode.replay (G-GUI-05 kernel half): a recorded turn's stdout lines, written verbatim in place of the canned turn
+    // mode.replay: a fixture turn's stdout lines, written verbatim in place of the canned turn
     if (Array.isArray(mode.replay)) { for (const l of mode.replay) out(String(l)); continue; }
     out({ ...m, isReplay: true });
     // mode.foldPairs (review M2): a queued message folded into the running turn, as Claude Code does (founder log,

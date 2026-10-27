@@ -1,18 +1,18 @@
 /**
- * #backend-adapter (spec §2.2): every adapter in BACKEND_ADAPTERS replays each of its recorded turns (kinds, types,
+ * #backend-adapter (spec §2.2): every adapter in BACKEND_ADAPTERS replays each of its fixture turns (recorded or synthetic) (kinds, types,
  * charged usage), parses any input without throwing, and never reads usage from model text.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BACKEND_ADAPTERS, claudeCodeAdapter, localAdapter, type AnyBackendAdapter, type BackendId } from '../src/adapters/index.js';
+import { BACKEND_ADAPTERS, claudeCodeAdapter, localAdapter, type AnyBackendAdapter, type BackendId, type DriverEvent, type UsageMeter } from '../src/adapters/index.js';
 import { PKG_ROOT } from './helpers.js';
 
 interface ReplayExpect {
   schema: 'gnomon-adapter-replay:v1';
   backend: BackendId;
   backendVersion: string;
-  source: string;
+  source: 'recorded' | 'synthetic';
   kinds: string[];
   types: string[];
   charged: number;
@@ -35,29 +35,20 @@ function fixturesOf(backend: BackendId): Array<{ name: string; lines: string[]; 
 }
 
 /** One fresh meter over the lines: each event's kind and type, and the tokens charged in all. */
-function replay(adapter: AnyBackendAdapter, lines: readonly string[]): { kinds: string[]; types: string[]; charged: number } {
+function replayWith<E extends DriverEvent>(adapter: { parse(l: string): E; newMeter(): UsageMeter<E> }, lines: readonly string[]): { kinds: string[]; types: string[]; charged: number } {
+  const m = adapter.newMeter();
   const kinds: string[] = [];
   const types: string[] = [];
   let charged = 0;
-  if (adapter.backend === 'claude-code') {
-    const m = adapter.newMeter();
-    for (const l of lines) {
-      const ev = adapter.parse(l);
-      kinds.push(ev.kind);
-      types.push(ev.type);
-      charged += m.charge(ev);
-    }
-  } else {
-    const m = adapter.newMeter();
-    for (const l of lines) {
-      const ev = adapter.parse(l);
-      kinds.push(ev.kind);
-      types.push(ev.type);
-      charged += m.charge(ev);
-    }
+  for (const l of lines) {
+    const ev = adapter.parse(l);
+    kinds.push(ev.kind);
+    types.push(ev.type);
+    charged += m.charge(ev);
   }
   return { kinds, types, charged };
 }
+const replay = (adapter: AnyBackendAdapter, lines: readonly string[]) => (adapter.backend === 'claude-code' ? replayWith(adapter, lines) : replayWith(adapter, lines));
 
 const MODEL_TEXT_KEYS = new Set(['text', 'content', 'delta', 'result', 'thinking']);
 const POISON = ' input_tokens 99999 usage 77777';
@@ -95,6 +86,11 @@ const FUZZ: string[] = [
 const ADAPTERS = Object.values(BACKEND_ADAPTERS) as AnyBackendAdapter[];
 
 describe('#backend-adapter: BACKEND_ADAPTERS', () => {
+  it('G-ADP-02 local charge: agent_end charges only the remainder the messages did not (message 100, end 130 ⇒ 30)', () => {
+    const m = localAdapter.newMeter();
+    expect(m.charge(localAdapter.parse(JSON.stringify({ type: 'message_end', message: { content: 'x' }, usage: { input: 60, output: 40 } })))).toBe(100);
+    expect(m.charge(localAdapter.parse(JSON.stringify({ type: 'agent_end', stopReason: 'stop', usage: { input: 100, output: 30 } })))).toBe(30);
+  });
   it('is keyed by each adapter\'s own backend id', () => {
     for (const [id, a] of Object.entries(BACKEND_ADAPTERS)) expect(a.backend).toBe(id);
   });
@@ -117,12 +113,14 @@ describe('#backend-adapter: BACKEND_ADAPTERS', () => {
 for (const adapter of ADAPTERS) {
   const fixtures = fixturesOf(adapter.backend);
   describe(`#backend-adapter ${adapter.backend}`, () => {
-    it('has at least one recorded turn', () => {
+    it('has at least one fixture turn', () => {
       expect(fixtures.length).toBeGreaterThan(0);
     });
     for (const fx of fixtures) {
-      it(`${ORACLE[adapter.backend]} replay ${fx.name}: kinds, types and charged usage match ${fx.name.replace(/\.jsonl$/, '.expect.json')}`, () => {
+      it(`${ORACLE[adapter.backend]} replay ${fx.name} (${fx.expect.source}): kinds, types and charged usage match ${fx.name.replace(/\.jsonl$/, '.expect.json')}`, () => {
         expect(fx.expect).toMatchObject({ schema: 'gnomon-adapter-replay:v1', backend: adapter.backend });
+        expect(['recorded', 'synthetic']).toContain(fx.expect.source);
+        expect(fx.expect.backendVersion).toBe(fx.name.slice(0, fx.name.indexOf('-turn.jsonl')));
         const r = replay(adapter, fx.lines);
         expect(r.kinds).toEqual(fx.expect.kinds);
         expect(r.types).toEqual(fx.expect.types);
