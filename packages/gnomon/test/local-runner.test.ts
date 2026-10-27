@@ -19,7 +19,7 @@ import { assertNotClaude, LOCAL_COMPAT_NAMES, validateLocalEndpoints } from '../
 import { probeLocalEndpoint } from '../src/kernel/local/probe.js';
 import { capability, routeModel } from '../src/kernel/local/routing.js';
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
-import { LocalUsageMeter, parseLocalLine } from '../src/adapters/local/runner.js';
+import { CONTEXT_NUM_MAX, LocalUsageMeter, parseLocalLine } from '../src/adapters/local/runner.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 
@@ -193,7 +193,11 @@ describe('G-ADP-02: a transcript CAPTURED from gnomon-local (rpcSession × fake 
     while (agent.running) await new Promise((r) => setTimeout(r, 10));
     fs.rmSync(cwd, { recursive: true, force: true });
     const evs = [...lines, '{"type":"some_future_event"}', '[1,2]', 'not json'].map(parseLocalLine);
-    expect(evs.map((e) => e.kind)).toEqual(['capabilities', 'response', 'start', 'turn', 'partial', 'partial', 'partial', 'message', 'repair', 'tool', 'tool', 'turn', 'turn', 'partial', 'partial', 'partial', 'message', 'turn', 'end', 'unknown', 'malformed', 'malformed']);
+    // slice B1: each turn start is followed by the child's context_report (a typed `context` event)
+    expect(evs.map((e) => e.kind)).toEqual(['capabilities', 'response', 'start', 'turn', 'context', 'partial', 'partial', 'partial', 'message', 'repair', 'tool', 'tool', 'turn', 'turn', 'context', 'partial', 'partial', 'partial', 'message', 'turn', 'end', 'unknown', 'malformed', 'malformed']);
+    const ctx = evs.find((e) => e.kind === 'context')!;
+    expect(ctx).toMatchObject({ kind: 'context', turn: 1, target: 8192, compactions: 0 });
+    if (ctx.kind === 'context') for (const v of Object.values(ctx.slots)) expect(typeof v).toBe('number');
     const m = new LocalUsageMeter();
     let charged = 0;
     for (const e of evs) {
@@ -201,6 +205,15 @@ describe('G-ADP-02: a transcript CAPTURED from gnomon-local (rpcSession × fake 
       if (e.kind === 'end') charged += m.end(e.tokens);
     }
     expect(charged).toBe(240);
+  });
+});
+
+describe('slice B1: context_report is parsed into bounded numbers (the kernel logs it, never acts on it)', () => {
+  it('numbers outside [0, CONTEXT_NUM_MAX] or not integers are null; non-object slots are all null', () => {
+    const ev = parseLocalLine(JSON.stringify({ type: 'context_report', turn: 2, target: 8192, slots: { system: 40, memory: 0, tools: 510, history: 5357, reply: 1024, extra: 'x'.repeat(10_000) }, historyUsed: 900, compactions: 1, junk: { deep: true } }));
+    expect(ev).toEqual({ kind: 'context', type: 'context_report', turn: 2, target: 8192, slots: { system: 40, memory: 0, tools: 510, history: 5357, reply: 1024 }, historyUsed: 900, compactions: 1 });
+    const bad = parseLocalLine(JSON.stringify({ type: 'context_report', turn: -1, target: 1.5, slots: [1, 2], historyUsed: CONTEXT_NUM_MAX + 1, compactions: '3' }));
+    expect(bad).toEqual({ kind: 'context', type: 'context_report', turn: null, target: null, slots: { system: null, memory: null, tools: null, history: null, reply: null }, historyUsed: null, compactions: null });
   });
 });
 

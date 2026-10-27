@@ -945,7 +945,7 @@ export class LocalLane {
         if (ev.command === 'steer' && ev.success === false) await this.#o.log('turn.steer', { hsid: s.hsid, phase: 'refused', by: 'child', error: ev.error }, { session: s.hsid });
         return;
       default:
-        return; // responses, tool/turn markers, fatal, unknown and malformed lines: logged above, never acted on
+        return; // responses, tool/turn markers, context reports (slice B1), fatal, unknown and malformed lines: logged above, never acted on
     }
   }
 

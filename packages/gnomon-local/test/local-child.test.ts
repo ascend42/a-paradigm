@@ -322,3 +322,72 @@ describe('Windows CI (8.3 names): roots and targets share one canonicalisation',
     expect(insideRoots('/a/repox/y', ['/a/repo'], 'linux')).toBeNull();
   });
 });
+
+describe('slice B1: context_report at each turn start; a retrieval flow through the agent with shaping', () => {
+  it('context_report follows every turn_start (the final one too) with the ledger slots', async () => {
+    const cwd = scratch();
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'list_dir', arguments: '{}' }] }, { content: 'Answer.' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'compact', cwd, roots: [cwd], maxSteps: 1, maxTokens: 512, contextTarget: 8192, emit: (e) => evs.push(e) }).prompt('look');
+    const reports = evs.filter((e) => e.type === 'context_report');
+    expect(reports).toHaveLength(2);
+    for (const r of reports) expect(evs[evs.indexOf(r) - 1]!.type).toBe('turn_start');
+    const r1 = reports[0] as { turn: number; target: number; slots: Record<string, number>; compactions: number; historyUsed: number };
+    expect(r1).toMatchObject({ turn: 1, target: 8192, compactions: 0 });
+    expect(r1.slots.reply).toBe(512);
+    expect(r1.slots.memory).toBe(0);
+    expect(r1.slots.tools).toBe(Math.ceil(JSON.stringify(surfaceTools(TOOLS, 'compact')).length / 4));
+    expect(Object.values(r1.slots).reduce((a, b) => a + b, 0)).toBe(Math.floor(8192 * 0.85));
+    expect((reports[1] as { historyUsed: number }).historyUsed).toBeGreaterThan(r1.historyUsed);
+  });
+
+  it('text-tool mode: the tools slot is the text-tool prompt, split out of the system message', async () => {
+    const cwd = scratch();
+    srv = await fakeOpenAI({ script: [{ content: 'hi' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST.ollama!, nativeTools: false, surface: 'compact', cwd, roots: [cwd], maxSteps: 2, maxTokens: 256, emit: (e) => evs.push(e) }).prompt('hi');
+    const r = evs.find((e) => e.type === 'context_report') as { slots: Record<string, number> };
+    expect(r.slots.tools).toBeGreaterThan(200);
+    expect(r.slots.system).toBeLessThan(40);
+  });
+
+  it('grep over the cap is shaped to a head + @r1; read_section of the handle continues where the head stopped', async () => {
+    const cwd = scratch();
+    fs.writeFileSync(path.join(cwd, 'log.txt'), Array.from({ length: 100 }, (_, i) => `needle ${i + 1} ${'x'.repeat(250)}`).join('\n'));
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'grep', arguments: '{"pattern":"needle"}' }] }, { toolCalls: [{ name: 'read_section', arguments: '{"handle":"@r1","from":5,"to":6}' }] }, { content: 'Found them.' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'compact', cwd, roots: [cwd], maxSteps: 6, maxTokens: 512, contextTarget: 8192, emit: (e) => evs.push(e) }).prompt('find the needles');
+    const first = (srv.requests[1]!.messages as Array<{ role: string; content: string }>).filter((m) => m.role === 'tool');
+    expect(first).toHaveLength(1);
+    expect(first[0]!.content.length).toBeLessThanOrEqual(6000);
+    expect(first[0]!.content.startsWith('log.txt:1: needle 1 ')).toBe(true);
+    expect(first[0]!.content).toMatch(/The full result is kept as @r1: call read_section handle="@r1" from=\d+/);
+    const second = (srv.requests[2]!.messages as Array<{ role: string; content: string }>).filter((m) => m.role === 'tool').at(-1)!;
+    expect(second.content.split('\n')[0]).toBe('[read_section @r1 (grep result): lines 5-6 of 61.]');
+    expect(second.content.split('\n')[1]!.startsWith('log.txt:5: needle 5 ')).toBe(true);
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });
+  });
+
+  it('outline → read_section{symbol} → edit through rpc; the config tools allow-list accepts the new names', async () => {
+    const cwd = scratch();
+    fs.writeFileSync(path.join(cwd, 'm.ts'), 'export function one() {\n  return 1;\n}\nexport function two() {\n  return 2;\n}\n');
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'outline', arguments: '{"path":"m.ts"}' }, { name: 'read_section', arguments: '{"path":"m.ts","symbol":"two"}' }] }, { toolCalls: [{ name: 'edit', arguments: '{"path":"m.ts","old":"return 2;","new":"return 22;"}' }] }, { content: 'Edited.' }] });
+    const raw = { schemaVersion: 'gnomon-local-session:v1', session: 'hsid:v1:x', cwd, endpoint: { base: srv.base, model: 'm', compat: 'llama.cpp' }, capabilities: { tools: true, nCtx: 8192 }, tools: ['outline', 'read_section', 'edit', 'grep'] };
+    const cfg = parseSessionConfig(JSON.stringify(raw));
+    expect(cfg.tools).toEqual(['outline', 'read_section', 'edit', 'grep']);
+    expect(() => parseSessionConfig(JSON.stringify({ ...raw, tools: ['bash'] }))).toThrow(/tools must be/);
+    const evs: Array<Record<string, unknown>> = [];
+    const { onLine, agent } = rpcSession(cfg, (e) => evs.push(e));
+    onLine('{"id":"1","type":"prompt","message":"bump two"}');
+    await new Promise((r) => setTimeout(r, 10));
+    while (agent.running) await new Promise((r) => setTimeout(r, 10));
+    // the offered tools are the allowed ones, in the fixed surface order
+    expect((srv.requests[0]!.tools as Array<{ function: { name: string } }>).map((t) => t.function.name)).toEqual(['read_section', 'grep', 'outline', 'edit']);
+    const tools = (srv.requests[1]!.messages as Array<{ role: string; content: string }>).filter((m) => m.role === 'tool').map((m) => m.content);
+    expect(tools[0]).toContain('4: export function two() {');
+    expect(tools[1]).toBe('[read_section m.ts (function two): lines 4-6 of 6.]\nexport function two() {\n  return 2;\n}');
+    expect(fs.readFileSync(path.join(cwd, 'm.ts'), 'utf8')).toContain('return 22;');
+    expect(evs.filter((e) => e.type === 'tool_execution_end').map((e) => e.isError)).toEqual([false, false, false]);
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });
+  });
+});
