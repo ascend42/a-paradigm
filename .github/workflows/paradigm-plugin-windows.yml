@@ -58,9 +58,13 @@ jobs:
       - name: Shipped hooks and launcher are LF
         shell: bash
         run: |
-          bad=$(git ls-files -z -- 'plugins/**/*.sh' 'plugins/**/*.cjs' 'packages/paradigm/src/commands/hooks/scripts/*.sh' \
-            'packages/paradigm/src/commands/hooks/generated-hooks.ts' | xargs -0 grep -l $'\r' || true)
-          if [ -n "$bad" ]; then echo "::error::CRLF in: $bad"; exit 1; fi
+          # git's own view of the working-tree line endings (w/crlf, w/mixed); a bare grep for $'\r' under Git Bash
+          # flagged an LF-only file on windows-latest, so ask git instead and print the evidence on failure
+          eol=$(git ls-files --eol -- 'plugins/**/*.sh' 'plugins/**/*.cjs' 'packages/paradigm/src/commands/hooks/scripts/*.sh' \
+            'packages/paradigm/src/commands/hooks/generated-hooks.ts')
+          echo "$eol"
+          bad=$(printf '%s\n' "$eol" | grep -E 'w/(crlf|mixed)' || true)
+          if [ -n "$bad" ]; then echo "::error::CRLF in working tree: $bad"; exit 1; fi
           echo "all LF"
 
       - name: Generated hooks are current
