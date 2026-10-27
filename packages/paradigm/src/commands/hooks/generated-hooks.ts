@@ -85,28 +85,24 @@ _pm_mark cli-resolve
 # --- Resolve the paradigm CLI once (fail-closed on absence) ---
 # Every compliance check below runs through $PARADIGM_BIN. If NO real paradigm
 # CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
-# loudly. The npx branch uses \`--no-install\` so npx never auto-installs the
-# unrelated public 'paradigm' registry package as a false positive.
-# The project's own @a-company/paradigm (the project root only, never a parent
-# folder), found without npx: npm 11 applies the project's devEngines to npx, so
-# \`npx --no-install paradigm\` exits EBADDEVENGINES in a repo that requires pnpm.
-_pm_find_local_paradigm() {
-  _PM_LOCAL_PARADIGM="$PWD/node_modules/.bin/paradigm"
-  [ -f "$PWD/node_modules/@a-company/paradigm/package.json" ] && [ -x "$_PM_LOCAL_PARADIGM" ]
-}
-# A function, so a project path with spaces survives $PARADIGM_BIN's word splitting.
-_pm_paradigm_local() { "$_PM_LOCAL_PARADIGM" "$@"; }
+# loudly. paradigm-resolve.sh (shared with the pre-commit hooks) owns the order:
+# the project root's own @a-company/paradigm, then \`paradigm\` on PATH, then
+# \`npx --no-install --package=@a-company/paradigm paradigm\`. The project root is
+# $CWD (the caller contract above), not $PWD.
+# Beside this file: bash knows where it was sourced from; the stop hooks also set
+# SCRIPT_DIR before sourcing.
+if [ -n "\${BASH_SOURCE:-}" ]; then
+  _PM_LIB_DIR=$(dirname "$BASH_SOURCE")
+else
+  _PM_LIB_DIR="\${SCRIPT_DIR:-$(dirname "$0")}"
+fi
 PARADIGM_BIN=""
 PARADIGM_AVAILABLE=false
-if command -v paradigm >/dev/null 2>&1; then
-  PARADIGM_BIN="paradigm"
-  PARADIGM_AVAILABLE=true
-elif _pm_find_local_paradigm; then
-  PARADIGM_BIN="_pm_paradigm_local"
-  PARADIGM_AVAILABLE=true
-elif command -v npx >/dev/null 2>&1 && npx --no-install paradigm --version >/dev/null 2>&1; then
-  PARADIGM_BIN="npx --no-install paradigm"
-  PARADIGM_AVAILABLE=true
+if [ -f "$_PM_LIB_DIR/paradigm-resolve.sh" ]; then
+  . "$_PM_LIB_DIR/paradigm-resolve.sh"
+  _pm_resolve_paradigm "\${CWD:-$PWD}" && PARADIGM_AVAILABLE=true
+else
+  printf '%s\\n' "[paradigm] WARNING: $_PM_LIB_DIR/paradigm-resolve.sh is missing; reinstall the hooks (paradigm hooks install)." >&2
 fi
 
 if [ "$PARADIGM_AVAILABLE" != "true" ]; then
@@ -1285,6 +1281,54 @@ _pm_record_unresolved() {
 }
 `;
 
+export const RESOLVE_HOOK = `#!/bin/sh
+# paradigm-resolve.sh — finds the paradigm CLI for the hooks (sourced, POSIX sh).
+# Sourced by paradigm-common.sh (Stop hooks), claude-code-precommit.sh and
+# cursor-precommit.sh, so every hook resolves the CLI the same way. The plugin's
+# MCP launcher (plugins/paradigm/scripts/paradigm-mcp-launch.cjs) uses the same
+# order for the paradigm-mcp server.
+#
+# Usage:
+#   _pm_resolve_paradigm <project-root>   # 0 = found, 1 = not found
+#   $PARADIGM_BIN <args...>
+#
+# Sets:
+#   PARADIGM_BIN — one command word: _pm_paradigm_local, paradigm or
+#                  _pm_paradigm_npx; empty when nothing resolves. A function name,
+#                  so a project path with spaces survives unquoted expansion.
+#
+# Order:
+#   1. The project's own @a-company/paradigm: <root>/node_modules/.bin/paradigm,
+#      only when <root>/node_modules/@a-company/paradigm/package.json exists (a
+#      bare .bin/paradigm from another package is never run). The project root
+#      only, never a parent folder or a subdirectory the hook ran from. No npx:
+#      npm 11 applies the project's devEngines to npx, so in a repo that requires
+#      pnpm (onFail "error") npx exits EBADDEVENGINES.
+#   2. \`paradigm\` on PATH (a global install).
+#   3. npx --no-install --package=@a-company/paradigm paradigm, probed with
+#      --version. --no-install: never a network fetch inside a hook; --package:
+#      never the unrelated public "paradigm" package.
+#
+# paradigm-skill-used.sh deliberately does NOT use this: it stays PATH-only
+# (Aegis L3).
+
+_pm_paradigm_local() { "$_PM_LOCAL_PARADIGM" "$@"; }
+_pm_paradigm_npx() { npx --no-install --package=@a-company/paradigm paradigm "$@"; }
+
+_pm_resolve_paradigm() {
+  PARADIGM_BIN=""
+  _PM_LOCAL_PARADIGM="$1/node_modules/.bin/paradigm"
+  if [ -n "$1" ] && [ -f "$1/node_modules/@a-company/paradigm/package.json" ] && [ -x "$_PM_LOCAL_PARADIGM" ]; then
+    PARADIGM_BIN="_pm_paradigm_local"
+  elif command -v paradigm >/dev/null 2>&1; then
+    PARADIGM_BIN="paradigm"
+  elif command -v npx >/dev/null 2>&1 && _pm_paradigm_npx --version >/dev/null 2>&1; then
+    PARADIGM_BIN="_pm_paradigm_npx"
+  fi
+  [ -n "$PARADIGM_BIN" ]
+}
+`;
+
 export const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
 # Paradigm Claude Code Stop Hook (v2)
 # Validates paradigm compliance before allowing the agent to finish.
@@ -1502,28 +1546,24 @@ case "$COMMAND" in
   *) exit 0 ;;
 esac
 
+# The project root, not the directory the command runs in: Claude Code sets
+# CLAUDE_PROJECT_DIR; otherwise the git toplevel, then the current directory.
+ROOT="\${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+
 # If no .paradigm directory, not a paradigm project
-if [ ! -d ".paradigm" ]; then
+if [ ! -d "$ROOT/.paradigm" ]; then
   exit 0
 fi
+# Source before the cd: $_PM_DIR may be relative to where the hook started.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+cd "$ROOT" || exit 0
 
-# The project's own @a-company/paradigm (the project root only, never a parent
-# folder), found without npx: npm 11 applies the project's devEngines to npx, so
-# \`npx --no-install paradigm\` exits EBADDEVENGINES in a repo that requires pnpm.
-_pm_find_local_paradigm() {
-  _PM_LOCAL_PARADIGM="$PWD/node_modules/.bin/paradigm"
-  [ -f "$PWD/node_modules/@a-company/paradigm/package.json" ] && [ -x "$_PM_LOCAL_PARADIGM" ]
-}
-
-# Run paradigm index --quiet (the existing CLI command)
-if command -v paradigm >/dev/null 2>&1; then
-  paradigm index --quiet 2>/dev/null || true
-elif _pm_find_local_paradigm; then
-  "$_PM_LOCAL_PARADIGM" index --quiet 2>/dev/null || true
-elif command -v npx >/dev/null 2>&1; then
-  # --no-install: never let npx fetch the unrelated public "paradigm" package
-  # (a network round-trip inside a 15 s hook, and the wrong binary).
-  npx --no-install paradigm index --quiet 2>/dev/null || true
+# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
+# Stop hooks): the project root's own @a-company/paradigm, then \`paradigm\` on
+# PATH, then npx --no-install --package=@a-company/paradigm (never a fetch, never
+# the unrelated public "paradigm" package).
+if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+  $PARADIGM_BIN index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist
@@ -2434,6 +2474,9 @@ export const CURSOR_PRECOMMIT_HOOK = `#!/bin/sh
 # Hook type: beforeShellExecution (matcher: "git commit")
 # Exit 0 = allow (never blocks), just ensures index is fresh
 
+# Sibling scripts (paradigm-resolve.sh) sit beside this one.
+case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+
 # Read JSON from stdin (hook input)
 INPUT=$(cat)
 
@@ -2450,28 +2493,29 @@ case "$COMMAND" in
   *) exit 0 ;;
 esac
 
+# The project root, not a subdirectory: the input's cwd, otherwise the git
+# toplevel, then the current directory.
+if command -v jq >/dev/null 2>&1; then
+  ROOT=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+else
+  ROOT=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+fi
+[ -n "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
 # If no .paradigm directory, not a paradigm project
-if [ ! -d ".paradigm" ]; then
+if [ ! -d "$ROOT/.paradigm" ]; then
   exit 0
 fi
+# Source before the cd: $_PM_DIR may be relative to where the hook started.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+cd "$ROOT" || exit 0
 
-# The project's own @a-company/paradigm (the project root only, never a parent
-# folder), found without npx: npm 11 applies the project's devEngines to npx, so
-# \`npx --no-install paradigm\` exits EBADDEVENGINES in a repo that requires pnpm.
-_pm_find_local_paradigm() {
-  _PM_LOCAL_PARADIGM="$PWD/node_modules/.bin/paradigm"
-  [ -f "$PWD/node_modules/@a-company/paradigm/package.json" ] && [ -x "$_PM_LOCAL_PARADIGM" ]
-}
-
-# Run paradigm index --quiet (the existing CLI command)
-if command -v paradigm >/dev/null 2>&1; then
-  paradigm index --quiet 2>/dev/null || true
-elif _pm_find_local_paradigm; then
-  "$_PM_LOCAL_PARADIGM" index --quiet 2>/dev/null || true
-elif command -v npx >/dev/null 2>&1; then
-  # --no-install: never let npx fetch the unrelated public "paradigm" package
-  # (a network round-trip inside a 15 s hook, and the wrong binary).
-  npx --no-install paradigm index --quiet 2>/dev/null || true
+# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
+# Stop hooks): the project root's own @a-company/paradigm, then \`paradigm\` on
+# PATH, then npx --no-install --package=@a-company/paradigm (never a fetch, never
+# the unrelated public "paradigm" package).
+if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+  $PARADIGM_BIN index --quiet 2>/dev/null || true
 fi
 
 # Stage the rebuilt files if they exist

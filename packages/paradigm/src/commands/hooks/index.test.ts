@@ -70,7 +70,8 @@ describe('hooksInstallCommand - Claude Code', () => {
     const entries = JSON.stringify(settings.hooks.SessionStart ?? []).match(/paradigm-session-start\.sh/g) ?? [];
     expect(entries).toHaveLength(1);
     expect(settings.hooks.SessionStart[0].hooks[0]).toMatchObject({ type: 'command', timeout: 10 });
-    for (const f of ['paradigm-session-start.sh', 'paradigm-hook-monitor.sh']) {
+    // paradigm-resolve.sh: the CLI lookup paradigm-common.sh and the pre-commit hook source
+    for (const f of ['paradigm-session-start.sh', 'paradigm-hook-monitor.sh', 'paradigm-resolve.sh']) {
       const p = path.join(rootDir, '.claude', 'hooks', f);
       expect(fs.existsSync(p), f).toBe(true);
       expect(fs.statSync(p).mode & 0o111, f).not.toBe(0);
@@ -155,6 +156,7 @@ describe('hooksInstallCommand - Cursor', () => {
     expect(fs.existsSync(path.join(hooksDir, 'paradigm-stop.sh'))).toBe(true);
     expect(fs.existsSync(path.join(hooksDir, 'paradigm-precommit.sh'))).toBe(true);
     expect(fs.existsSync(path.join(hooksDir, 'paradigm-postwrite.sh'))).toBe(true);
+    expect(fs.existsSync(path.join(hooksDir, 'paradigm-resolve.sh'))).toBe(true);
   });
 
   it('hook scripts are executable (mode 755)', async () => {

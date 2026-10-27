@@ -73,6 +73,31 @@ components:
     tags:
       - hooks
       - observability
+  paradigm-resolve:
+    description: |
+      Sourced POSIX-sh helper (scripts/paradigm-resolve.sh, copied to both
+      plugins and written by `paradigm hooks install` beside paradigm-common.sh)
+      that is the one place the hooks find the paradigm CLI. Used by
+      paradigm-common.sh (Stop hooks, project root = the caller's $CWD) and both
+      pre-commit hooks (project root = CLAUDE_PROJECT_DIR / Cursor input cwd,
+      then the git toplevel, then pwd; the hook cd's there before indexing).
+      `_pm_resolve_paradigm <root>` sets PARADIGM_BIN to a single command word:
+      (1) <root>/node_modules/.bin/paradigm when
+      <root>/node_modules/@a-company/paradigm/package.json exists (the root
+      only, never a parent or the subdirectory the hook ran from; no npx,
+      because npm 11 applies the project's devEngines to npx and a pnpm-only
+      repo fails EBADDEVENGINES), so a project that pins Paradigm gets its
+      version; (2) `paradigm` on PATH; (3) `npx --no-install
+      --package=@a-company/paradigm paradigm`, probed with --version (never a
+      fetch, never the unrelated public `paradigm` package). The plugin's MCP
+      launcher (#paradigm-mcp-launch) uses the same order.
+      paradigm-skill-used.sh deliberately stays PATH-only (Aegis L3).
+    type: utility
+    file: scripts/paradigm-resolve.sh
+    components:
+      - '#paradigm-mcp-launch'
+    tags:
+      - hooks
   stop-hook-timing:
     description: |
       7.15.2 timing contract for every plugin hook. Claude Code waits for EOF on
@@ -81,11 +106,8 @@ components:
       (2) paradigm-common.sh discovers .purpose files via `git ls-files -co
       --exclude-standard` (nested agent worktrees and node_modules are skipped)
       and keeps hot loops fork-free (_parent, _is_modified, one awk pass for
-      Check 4 anchors); (3) no network: the CLI resolves as `paradigm` on PATH,
-      then the project root's own @a-company/paradigm (never a parent folder;
-      found without npx, which npm 11 fails with EBADDEVENGINES in pnpm-only
-      repos), then
-      npx --no-install; (4) generated-state
+      Check 4 anchors); (3) no network: the CLI resolves through
+      scripts/paradigm-resolve.sh (#paradigm-resolve), never a fetch; (4) generated-state
       scope (8.0): when every modified file is .paradigm/* or .warpline/*,
       at the root or nested in a package (packages/x/.paradigm/events; the
       hooks, post-commit and MCP tools write these on every turn) no code

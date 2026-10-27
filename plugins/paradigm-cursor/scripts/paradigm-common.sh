@@ -79,28 +79,24 @@ _pm_mark cli-resolve
 # --- Resolve the paradigm CLI once (fail-closed on absence) ---
 # Every compliance check below runs through $PARADIGM_BIN. If NO real paradigm
 # CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
-# loudly. The npx branch uses `--no-install` so npx never auto-installs the
-# unrelated public 'paradigm' registry package as a false positive.
-# The project's own @a-company/paradigm (the project root only, never a parent
-# folder), found without npx: npm 11 applies the project's devEngines to npx, so
-# `npx --no-install paradigm` exits EBADDEVENGINES in a repo that requires pnpm.
-_pm_find_local_paradigm() {
-  _PM_LOCAL_PARADIGM="$PWD/node_modules/.bin/paradigm"
-  [ -f "$PWD/node_modules/@a-company/paradigm/package.json" ] && [ -x "$_PM_LOCAL_PARADIGM" ]
-}
-# A function, so a project path with spaces survives $PARADIGM_BIN's word splitting.
-_pm_paradigm_local() { "$_PM_LOCAL_PARADIGM" "$@"; }
+# loudly. paradigm-resolve.sh (shared with the pre-commit hooks) owns the order:
+# the project root's own @a-company/paradigm, then `paradigm` on PATH, then
+# `npx --no-install --package=@a-company/paradigm paradigm`. The project root is
+# $CWD (the caller contract above), not $PWD.
+# Beside this file: bash knows where it was sourced from; the stop hooks also set
+# SCRIPT_DIR before sourcing.
+if [ -n "${BASH_SOURCE:-}" ]; then
+  _PM_LIB_DIR=$(dirname "$BASH_SOURCE")
+else
+  _PM_LIB_DIR="${SCRIPT_DIR:-$(dirname "$0")}"
+fi
 PARADIGM_BIN=""
 PARADIGM_AVAILABLE=false
-if command -v paradigm >/dev/null 2>&1; then
-  PARADIGM_BIN="paradigm"
-  PARADIGM_AVAILABLE=true
-elif _pm_find_local_paradigm; then
-  PARADIGM_BIN="_pm_paradigm_local"
-  PARADIGM_AVAILABLE=true
-elif command -v npx >/dev/null 2>&1 && npx --no-install paradigm --version >/dev/null 2>&1; then
-  PARADIGM_BIN="npx --no-install paradigm"
-  PARADIGM_AVAILABLE=true
+if [ -f "$_PM_LIB_DIR/paradigm-resolve.sh" ]; then
+  . "$_PM_LIB_DIR/paradigm-resolve.sh"
+  _pm_resolve_paradigm "${CWD:-$PWD}" && PARADIGM_AVAILABLE=true
+else
+  printf '%s\n' "[paradigm] WARNING: $_PM_LIB_DIR/paradigm-resolve.sh is missing; reinstall the hooks (paradigm hooks install)." >&2
 fi
 
 if [ "$PARADIGM_AVAILABLE" != "true" ]; then
