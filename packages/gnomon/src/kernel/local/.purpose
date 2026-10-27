@@ -184,6 +184,46 @@ components:
       - test/loop-model-e2e.test.ts
       - test/git-verbs.test.ts
     oracles: [G-LCL-15]
+  capability-index:
+    description: >-
+      #capability-index (TD-2026-10-27-833 slice C2'): narrow(list, server,
+      {trust, opAnnotations}) turns ANY MCP server's tools/list into narrow
+      tools a small model can call; one global rule, never a per-server
+      pack. SPLIT: a required string enum param named op/action/operation/
+      command (or described as the operation, else the only required enum)
+      gives one tool per value, `<tool>.<op>`; the op is fixed by the kernel
+      and is never a narrow param. FLATTEN: nested objects become dotted
+      primitive params (two object levels), arrays of primitives one
+      comma-separated string; arrays of objects, unions, refs, free-form or
+      untyped values and unsafe property names are never offered (required
+      -> the tool is humanOnly, optional -> dropped). TRIM: required params
+      plus at most 3 optional ones (starred in the op's description segment,
+      then mentioned, then default/enum; an op with a segment keeps only the
+      params it names); the rest listed in `dropped`. DESCRIBE: first
+      sentence + op label, <= 100 chars. CLASS: annotations only for trust
+      trusted | first-party (readOnlyHint read, destructiveHint destructive,
+      else mutate); a split op takes its class from the server's
+      op-annotations resource (schema io.gnomon/op-annotations:v1, found
+      generically, size-bounded, shape-validated or ignored whole), else the
+      tool's _meta["io.gnomon/op-annotations"] map; an op neither names is
+      mutate (a destructive parent stays destructive); trust enabled is
+      always mutate. ID `<server>/<tool>[.<op>]@<sha256(schema)[:8]>`; the
+      entry keeps the FULL schema. reassemble() refuses any key that is not
+      a narrow param (the op included), sets the op, splits commas and
+      nests dotted params as own properties; the broker validates the result
+      against the full schema (safe-regex gate included) before any target
+      runs (G-LCL-16). The C2' offer rule (offerWithin): kernel verbs first,
+      then narrow tools in index order while their compact-surface tokens fit
+      toolsSlotTokens(contextTarget) = min(1500, 15 % of the target), at most
+      48 brokered tools; human-only and taken names skipped. C3' replaces it
+      with selection.
+    path: src/kernel/local/capability-index.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
+    signals: []
+    tests:
+      - test/capability-index.test.ts
+    oracles: [G-LCL-16]
   local-working-memory:
     description: >-
       #local-working-memory (TD-2026-10-27-833 slice B2; T-2026-10-26-003; spec §13.1 "Working memory and context
