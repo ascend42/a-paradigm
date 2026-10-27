@@ -15,15 +15,20 @@ components:
       Starts the plugin's MCP server (.mcp.json runs `node scripts/paradigm-mcp-launch.cjs <project>`).
       The project is argv[2] if it is an existing directory, else an expanded CLAUDE_PROJECT_DIR, else
       cwd (the fallback is said on stderr). Finds an @a-company/paradigm package in the hooks' order
-      (scripts/paradigm-resolve.sh): the project root's node_modules first (never a parent folder; the
-      package.json must name @a-company/paradigm), so a project that pins Paradigm gets its version; then
-      paradigm-mcp on PATH; then `npx --yes --prefer-offline` pinned to plugin.json's version, run from
-      <os.tmpdir()>/paradigm-mcp-npx-<uid> (created on demand with a {"private":true} package.json that
-      stops npm's walk up; a folder owned by someone else is replaced by a fresh mkdtemp one), 120 s
-      timeout, failures (error / signal / exit status) on stderr. npx only locates the package: it runs
-      `node <launcher> --locate` (node is the command word, the launcher an argument npm escapes), which
-      prints the entry. The launcher runs the entry with node in the project, with its own env; a version
-      that differs from the plugin's goes to stderr. Why: npm 11 applies the nearest package.json's
+      (scripts/paradigm-resolve.sh): the project root's node_modules first (never a parent folder, never
+      a copy committed to git; the package.json must name @a-company/paradigm), so a project that pins
+      Paradigm gets its version; then paradigm-mcp on PATH; then `npx --yes --prefer-offline` pinned to
+      plugin.json's version with a 120 s timeout, failures (error / signal / exit status) on stderr.
+      npx runs from <os.tmpdir()>/paradigm-mcp-npx-<uid>, used only when lstat shows a real directory
+      that is ours, not group/world-writable and holds nothing but its {"private":true} package.json
+      (which stops npm's walk up); otherwise a fresh mkdtemp folder. npx only locates the package:
+      `--call` runs this node and this launcher by absolute path, quoted by the launcher (POSIX single
+      quotes; Windows: npx-cli.js beside node started directly, the call wrapped for cmd /s, paths with
+      % " ^ refused), so npm resolves no command on PATH, where every ancestor's node_modules/.bin
+      comes first. `--locate` prints the entry of the pinned version, skipping any .bin that belongs
+      to the npx cwd or an ancestor and (POSIX) any package not owned by the user or group/world-
+      writable. The launcher runs the entry with node in the project, with its own env; a version that
+      differs from the plugin's goes to stderr. Why: npm 11 applies the nearest package.json's
       devEngines to npx, so npx run from a pnpm-only project (onFail "error") exits EBADDEVENGINES;
       `--prefix` was rejected because it also moves npm's global prefix and globalconfig.
     tags: [plugin, mcp, launch]
