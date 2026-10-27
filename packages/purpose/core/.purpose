@@ -51,7 +51,7 @@ components:
   schema-rules:
     description: '#schema-rules: Rules for validating symbol references'
   aggregator:
-    description: '#aggregator: Combines multiple .purpose files. Exports DEFAULT_PURPOSE_IGNORE (7.13.0) — the discovery ignore list findPurposeFiles uses. findPurposeFiles/getAllPurposeFiles take an opt-in { respectGitignore } (T-2026-10-27-003): drops .purpose files git check-ignore reports (build and release output such as a gitignored packages/gnomon/release/Gnomon.app copy), falling back to NON_GIT_RELEASE_IGNORE (**/release/**) outside a git work tree. Default off so the premise index discovery set is unchanged.'
+    description: '#aggregator: Combines multiple .purpose files. Exports DEFAULT_PURPOSE_IGNORE (7.13.0) — the discovery ignore list findPurposeFiles uses. findPurposeFiles/getAllPurposeFiles take an opt-in { respectGitignore } (T-2026-10-27-003): drops .purpose files git check-ignore reports (build and release output such as a gitignored packages/gnomon/release/Gnomon.app copy), falling back to NON_GIT_RELEASE_IGNORE (**/release/**) outside a git work tree. Default off; the premise index (INDEX_DISCOVERY), the MCP purpose validate and symbol rename, and `paradigm purpose validate` opt in. getAllPurposeFilesCached passes the same options through.'
   purpose-coverage:
     description: >-
       #purpose-coverage: src/coverage.ts (T-2026-10-27-003). One definition of
