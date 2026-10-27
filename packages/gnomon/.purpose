@@ -5795,6 +5795,21 @@ gates:
     prizes: []
     tags: [gnomon, loops, security]
     oracles: [G-LOOP-01, G-LOOP-02, G-LOOP-04, G-LOOP-18]
+  mcp-server-enable:
+    description: >-
+      ^mcp-server-enable (spec §12.10, T-2026-10-23-003; declared in the
+      2026-10-27 reconcile, already named in #mcp-servers' gates list): a
+      session reaches one of the human's own MCP servers only after the
+      human turns it on. request.mcp.enable{id, scope:'all'} or {id,
+      scope:'repo', repo} (or the #batch-card form {servers:[…]}) from a
+      human gui or device connection raises ONE `grant` card
+      (detail.action 'mcp.enable'): root class, hand-only, never standing
+      (`grant` is in NEVER_STANDING_KINDS). A server with a problem (a
+      law-7 name, a refused env name, a non-https remote, an Anthropic or
+      private host, …) cannot be turned on. request.mcp.disable is a
+      narrowing: notify-and-proceed, no card (mcp-server-cards.ts). Rows, cards and status carry names, never values.
+    prizes: []
+    tags: [gnomon, mcp, security]
   offer-accept:
     description: >-
       ^offer-accept (TD-2026-10-20-812, spec §12.9; Aegis D1): request.offer.decide
