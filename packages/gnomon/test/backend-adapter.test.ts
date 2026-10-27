@@ -105,6 +105,9 @@ describe('#backend-adapter: BACKEND_ADAPTERS', () => {
     expect(localAdapter.compactLine()).toBe('{"type":"compact"}\n');
     expect(localAdapter.setContextLine(4096)).toBe('{"type":"set_context","contextTarget":4096}\n');
     expect(JSON.parse(localAdapter.memorySetLine({ render: 'r', hash: `sha256:${'a'.repeat(64)}`, bytes: 1 }))).toEqual({ type: 'memory_set', render: 'r', hash: `sha256:${'a'.repeat(64)}`, bytes: 1 });
+    // Aegis L1 (a): the block's id rides the line and comes back on the child's response event
+    expect(JSON.parse(localAdapter.memorySetLine({ render: 'r', hash: `sha256:${'a'.repeat(64)}`, bytes: 1 }, 'ms-7')).id).toBe('ms-7');
+    expect(localAdapter.parse('{"type":"response","id":"ms-7","command":"memory_set","success":false,"error":"x"}')).toMatchObject({ kind: 'response', id: 'ms-7', command: 'memory_set', success: false });
   });
   it('turnLine: claude-code ignores inFlight; local sends a follow_up while a turn is in flight, else a prompt', () => {
     expect(claudeCodeAdapter.turnLine({ text: 'hi', inFlight: true })).toBe(claudeCodeAdapter.turnLine({ text: 'hi', inFlight: false }));

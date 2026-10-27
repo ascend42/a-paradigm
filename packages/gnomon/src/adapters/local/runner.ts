@@ -66,7 +66,7 @@ export type LocalEvent =
   | { kind: 'compaction'; type: string; phase: 'start' | 'end'; reason: string | null; tokensBefore: number | null; tokensAfter: number | null; summaryHash: string | null; summaryBytes: number | null; error: string | null }
   | { kind: 'context'; type: string; turn: number | null; target: number | null; slots: { system: number | null; memory: number | null; tools: number | null; history: number | null; reply: number | null }; historyUsed: number | null; compactions: number | null }
   | { kind: 'end'; type: string; tokens: number | null; input: number | null; output: number | null; stopReason: string | null; error: string | null }
-  | { kind: 'response'; type: string; command: string | null; success: boolean | null; error: string | null }
+  | { kind: 'response'; type: string; id: string | null; command: string | null; success: boolean | null; error: string | null }
   | { kind: 'tool-request'; type: string; id: string | null; toolCallId: string | null; name: string | null; args: Record<string, unknown> | null; error: string | null }
   | { kind: 'tool-cancel'; type: string; id: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
@@ -130,7 +130,7 @@ export function parseLocalLine(line: string): LocalEvent {
       return { kind: 'end', type, tokens: tokensOf(e.usage), input: num(u.input), output: num(u.output), stopReason: s(e.stopReason, 32), error: s(e.error, 500) };
     }
     case 'response':
-      return { kind: 'response', type, command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
+      return { kind: 'response', type, id: s(e.id, 64), command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
     case 'fatal':
       return { kind: 'fatal', type, error: s(e.error, 500) };
     case 'tool_request':
@@ -238,7 +238,7 @@ export const toolProgressLine = (id: string): string => line({ type: 'tool_progr
 export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>): string => line({ type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });
 
 /** Slice B2: the working-memory block (the kernel's render; goalHash only when it pins the goal whole). */
-export const memorySetLine = (m: MemorySet): string => line({ type: 'memory_set', render: m.render, hash: m.hash, bytes: m.bytes, ...(m.goalHash !== undefined ? { goalHash: m.goalHash } : {}) });
+export const memorySetLine = (m: MemorySet, id?: string): string => line({ ...(id ? { id } : {}), type: 'memory_set', render: m.render, hash: m.hash, bytes: m.bytes, ...(m.goalHash !== undefined ? { goalHash: m.goalHash } : {}) });
 /** Slice B2: compact at the child's next model step (the human's request.session.compact). */
 export const compactLine = (): string => line({ type: 'compact' });
 /** Slice B2: the context target (kernel-clamped; the child clamps again to n_ctx and the 0.85 rule). */
@@ -259,7 +259,7 @@ export const localAdapter: LocalAdapter = Object.freeze({
   toolsSetLine: (tools: ReadonlyArray<OfferedTool>): string => toolsSetLine(tools),
   toolResponseLine: (r: ToolResponse): string => toolResponseLine(r),
   toolProgressLine: (id: string): string => toolProgressLine(id),
-  memorySetLine: (m: MemorySet): string => memorySetLine(m),
+  memorySetLine: (m: MemorySet, id?: string): string => memorySetLine(m, id),
   compactLine: (): string => compactLine(),
   setContextLine: (contextTarget: number): string => setContextLine(contextTarget),
 });

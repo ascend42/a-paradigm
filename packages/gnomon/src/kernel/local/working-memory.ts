@@ -145,7 +145,7 @@ export const neutraliseKernelText = (t: string): string => neutraliseSpecialToke
  * Aegis L3: controls (TAB, LF kept for the goal), C1, zero-width, bidi, BOM and tag characters become U+FFFD; line
  * breaks other than LF are folded separately (LINE_BREAKS).
  */
-const UNSAFE = /[\u0000-\u0008\u000e-\u001f\u007f-\u0084\u0086-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]/gu;
+const UNSAFE = /[\u0000-\u0008\u000e-\u001f\u007f-\u0084\u0086-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2060-\u2064\u202a-\u202e\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]/gu;
 /** Every line break a template or a reader may honour: CR, VT, FF, NEL, LS, PS (and LF in oneLine). */
 const LINE_BREAKS = /[\r\u000b\u000c\u0085\u2028\u2029]/g;
 /** Look-alike `<` NFKC leaves alone. */
@@ -176,8 +176,10 @@ const trusted = (e: MemoryEntry): boolean => (e.source === 'human' || e.source =
 export function memoryOwnerOf(file: string): { hsid: string; owner: string } | null {
   let first: string;
   try {
-    const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    const fd = fs.openSync(file, READ_FLAGS);
     try {
+      // Aegis R2: a planted FIFO (or anything but a regular file) is refused before a read could block
+      if (!fs.fstatSync(fd).isFile()) return null;
       const buf = Buffer.alloc(4096);
       const n = fs.readSync(fd, buf, 0, buf.length, 0);
       first = buf.subarray(0, n).toString('utf8').split('\n')[0] ?? '';
@@ -194,6 +196,9 @@ export function memoryOwnerOf(file: string): { hsid: string; owner: string } | n
     return null;
   }
 }
+
+/** Aegis R2: reads never follow a link and never block on a FIFO (O_NONBLOCK; the fd is fstat'd as a regular file). */
+const READ_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
 
 /** Aegis L4: an fd we opened must be a regular file of our uid (POSIX), set to 0600. Throws otherwise. */
 function checkFd(fd: number): fs.Stats {
@@ -275,7 +280,7 @@ export class WorkingMemory {
   #load(): void {
     let raw: string;
     try {
-      const fd = fs.openSync(this.#o.file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+      const fd = fs.openSync(this.#o.file, READ_FLAGS);
       try {
         checkFd(fd);
         raw = fs.readFileSync(fd, 'utf8');
@@ -340,6 +345,15 @@ export class WorkingMemory {
     }
     fs.closeSync(fd);
     fs.renameSync(tmp, this.#o.file);
+    // Aegis M2: the rename is durable only once the directory is synced (POSIX; win32 cannot open a directory)
+    if (process.platform !== 'win32') {
+      const dfd = fs.openSync(path.dirname(this.#o.file), fs.constants.O_RDONLY);
+      try {
+        fs.fsyncSync(dfd);
+      } finally {
+        fs.closeSync(dfd);
+      }
+    }
   }
 
   /** Persist: removals and replacements rewrite the file, pure additions append. */
@@ -399,15 +413,18 @@ export class WorkingMemory {
 
   /**
    * The human's current prompt becomes the goal (replaced on each new prompt). Over the cap it is cut, with a marker.
-   * `trusted` (Aegis L8): a hand-typed or verified-voice turn renders in the kernel section; otherwise (unverified voice)
-   * the goal is `tool:voice` data and no goalHash is sent.
+   * `trust` (Aegis L8, R1): `true` for a hand-typed or verified-voice turn (the kernel section); otherwise the data
+   * source it renders under — `tool:voice` (unverified voice) or `tool:offer` (a kernel-composed Desk offer turn) — and
+   * no goalHash is sent.
    */
-  setGoal(prompt: string, trusted = true): MemoryChange[] {
+  setGoal(prompt: string, trust: true | `tool:${string}` = true): MemoryChange[] {
+    const trusted = trust === true;
     if (!prompt.trim()) return [];
     const clean = cleanText(prompt);
     const c = cut(clean, ENTRY_MAX_CHARS);
     this.#goalWhole = trusted && !c.cut && clean === prompt ? prompt : null;
-    return this.#replaceOne((e) => e.kind === 'goal', 'goal', trusted ? 'human' : 'tool:voice', c.text);
+    const src: MemorySource = trusted ? 'human' : SOURCE_RE.test(trust) ? trust : 'tool:untrusted';
+    return this.#replaceOne((e) => e.kind === 'goal', 'goal', src, c.text);
   }
 
   /**

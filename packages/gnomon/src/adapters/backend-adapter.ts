@@ -89,7 +89,8 @@ export interface ToolBrokerChannel {
 
 /** local (slice B2, #local-working-memory): the kernel's context commands — the memory block, compact, the target. */
 export interface ContextChannel {
-  memorySetLine(m: MemorySet): string;
+  /** `id` (Aegis B2 L1): the child echoes it on its response, so an ack is matched to the block it answers */
+  memorySetLine(m: MemorySet, id?: string): string;
   compactLine(): string;
   setContextLine(contextTarget: number): string;
 }
