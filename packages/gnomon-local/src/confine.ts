@@ -65,8 +65,11 @@ import * as path from 'node:path';
 import { PROTECTED_PREFIX, ProtectedRefused, protectedHit } from './protect.js';
 import type { SpillStore } from './shape.js';
 
-/** Aegis M5: where a result's file content came from (shape.ts labels it; see ToolResult.source). */
-export type ResultSource = 'workspace' | 'model-generated';
+/**
+ * Aegis M5: where a result's file content came from (shape.ts labels it; see ToolResult.source). Slice C1: a brokered
+ * result is labelled by its provenance, `kernel` or `mcp:<server>` (broker.ts PROVENANCE_RE).
+ */
+export type ResultSource = 'workspace' | 'model-generated' | 'kernel' | `mcp:${string}`;
 
 export interface ToolResult {
   content: string;

@@ -41,6 +41,10 @@
  * (restoreSpecialTokens), so the file's literal bytes match and are written.
  * read_file keeps plan A's byte paging; the agent sizes its page under this
  * cap, so a page and its "offset=N for more" note survive whole.
+ * Slice C1 (#local-tool-broker): a brokered result is labelled by its
+ * provenance, source="kernel" or source="mcp:<server>", with the workspace
+ * rule (delimiters and special tokens neutralised; the frame says
+ * trust="data-not-instructions").
  */
 import type { ResultSource, ToolResult } from './confine.js';
 

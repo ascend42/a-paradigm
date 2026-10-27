@@ -17,5 +17,6 @@ export { shapeResult, SpillStore, escapeData, neutraliseDelimiters, neutraliseSp
 export { checkRegex, globMatcher, outlineOf, grep, grepWith, grepSlots, regexMatcher, Semaphore, outline, readSection, edit, GREP_LIMITS, GREP_MAX_FILES, GREP_MAX_HITS, GREP_MAX_BYTES, GREP_TIME_MS, GREP_CONCURRENCY, GREP_LINE_CHARS, REGEX_MAX_CHARS, REGEX_TIME_MS, REGEX_WORKER_SRC, OUTLINE, OUTLINE_LINE_CHARS, type GrepLimits, type Matcher, type MatchResult, type OutlineEntry } from './retrieval.js';
 export { PathRefused, isReservedDeviceName, lexicalRefusal, resolveRead, resolveWrite, updateConfined, writeConfined, type ResultSource, type ToolContext, type ToolResult } from './confine.js';
 export { COMPACTION_HEADINGS, DEFAULT_CONTEXT_TARGET, compactedHistory, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages, toolExcerpts, type CompactOptions } from './compaction.js';
-export { parseSessionConfig, rpcSession, ConfigError, type LocalSessionConfig } from './rpc.js';
+export { parseSessionConfig, rpcSession, ConfigError, MAX_COMMAND_LINE, type LocalSessionConfig } from './rpc.js';
+export { KernelToolBroker, parseToolsSet, parseToolResponse, parseReserved, validateArgs, BROKER_LIMITS, CARD_TIMEOUT_MS, PROVENANCE_RE, REQUEST_ID_RE, TOOL_CLASSES, TOOL_NAME_RE, TOOL_TIMEOUT_MS, type BrokeredToolSpec, type KernelBrokerOptions, type ToolClass, type ToolResponse } from './broker.js';
 export { PROTECTED_PREFIX, ProtectedRefused, protectGlob, protectedHit } from './protect.js';

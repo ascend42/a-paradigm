@@ -13,6 +13,17 @@
  *                 compaction_start/_end (slice 2), agent_end{stopReason,
  *                 usage}; `fatal{error}` before exit.
  *
+ * Slice S1 (two-way protocol, TD-2026-10-27-833; broker.ts):
+ * stdin           {type:'tool_response', id, content, isError, provenance}
+ *                 {id?, type:'tools_set', tools:[{name, description,
+ *                   parameters, class}]} (from the next step on)
+ *                 reserved for B2, validated and answered {applied:false}:
+ *                 {id?, type:'memory_set', text} {id?, type:'compact'}
+ *                 {id?, type:'set_context', contextTarget}
+ * stdout          {type:'tool_request', id, toolCallId, name, args}
+ * A line over MAX_COMMAND_LINE chars is refused unread; unknown commands are
+ * refused; the new commands are closed (an unknown field refuses them).
+ *
  * The session config is the kernel-written `local.yaml` (the JSON subset of
  * YAML: every JSON document is YAML 1.2), validated strictly; an endpoint
  * outside loopback/LAN or a compat profile outside the allowlist is FATAL
@@ -24,6 +35,10 @@ import { COMPAT_ALLOWLIST, type ToolSurface } from './compat.js';
 import { classifyEndpoint } from './endpoint.js';
 import { protectGlob } from './protect.js';
 import { TOOLS } from './tools.js';
+import { KernelToolBroker, parseReserved, parseToolResponse, parseToolsSet } from './broker.js';
+
+/** Slice S1: the longest stdin line read (a tool_response carries at most 256 Ki chars of content, JSON-escaped). */
+export const MAX_COMMAND_LINE = 2 * 1024 * 1024;
 
 export interface LocalSessionConfig {
   schemaVersion: 'gnomon-local-session:v1';
@@ -44,6 +59,10 @@ export interface LocalSessionConfig {
   tools?: string[];
   /** Loops step 10 (an act session): protected repo-relative globs write_file refuses (no card) */
   protect?: string[];
+  /** Slice C1: how long a read-class brokered call waits for the kernel (ms; default broker.ts TOOL_TIMEOUT_MS) */
+  toolTimeoutMs?: number;
+  /** Slice C1: how long a mutate/destructive brokered call waits (a human card; default CARD_TIMEOUT_MS) */
+  cardTimeoutMs?: number;
 }
 
 export class ConfigError extends Error {}
@@ -98,7 +117,16 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
     ...(typeof c.systemPrompt === 'string' ? { systemPrompt: c.systemPrompt } : {}),
     ...strList(c.tools, 'tools', (t) => TOOLS.some((x) => x.name === t)),
     ...strList(c.protect, 'protect', (g) => g.length > 0 && g.length <= 512),
+    ...ms(c.toolTimeoutMs, 'toolTimeoutMs'),
+    ...ms(c.cardTimeoutMs, 'cardTimeoutMs'),
   };
+}
+
+/** Slice C1: an optional timeout in ms, an integer in 100..3 600 000, or a ConfigError. */
+function ms<K extends 'toolTimeoutMs' | 'cardTimeoutMs'>(v: unknown, key: K): Partial<Record<K, number>> {
+  if (v === undefined) return {};
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 100 || v > 3_600_000) throw new ConfigError(`${key} must be an integer in 100..3600000`);
+  return { [key]: v } as Partial<Record<K, number>>;
 }
 
 /** An optional list of strings, every one valid, or a ConfigError (fail closed: a malformed list never means "all"). */
@@ -109,7 +137,8 @@ function strList<K extends 'tools' | 'protect'>(v: unknown, key: K, ok: (s: stri
 }
 
 /** Wire an agent to a line source; returns the line handler. */
-export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line: string) => void; agent: Agent } {
+export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line: string) => void; agent: Agent; broker: KernelToolBroker } {
+  const broker = new KernelToolBroker({ emit, ...(cfg.toolTimeoutMs !== undefined ? { toolTimeoutMs: cfg.toolTimeoutMs } : {}), ...(cfg.cardTimeoutMs !== undefined ? { cardTimeoutMs: cfg.cardTimeoutMs } : {}) });
   const agent = new Agent({
     base: cfg.endpoint.base,
     model: cfg.endpoint.model,
@@ -125,10 +154,15 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
     ...(cfg.systemPrompt !== undefined ? { systemPrompt: cfg.systemPrompt } : {}),
     ...(cfg.tools ? { allowTools: cfg.tools } : {}),
     ...(cfg.protect ? { protect: cfg.protect.map(protectGlob) } : {}),
+    broker,
     emit,
   });
   emit({ type: 'model_capabilities', backend: 'local', model: cfg.endpoint.model, compat: cfg.endpoint.compat, tools: cfg.capabilities.tools, ctx: cfg.capabilities.nCtx, surface: cfg.surface, textTools: !cfg.capabilities.tools && cfg.surface !== 'none', contextTarget: cfg.contextTarget });
   const onLine = (line: string): void => {
+    if (line.length > MAX_COMMAND_LINE) {
+      emit({ type: 'response', command: 'unknown', success: false, error: `line over ${MAX_COMMAND_LINE} chars` });
+      return;
+    }
     let cmd: Record<string, unknown>;
     try {
       cmd = JSON.parse(line) as Record<string, unknown>;
@@ -136,8 +170,12 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
       emit({ type: 'response', command: 'unknown', success: false, error: 'malformed line' });
       return;
     }
-    const id = typeof cmd.id === 'string' ? { id: cmd.id } : {};
-    const command = typeof cmd.type === 'string' ? cmd.type : 'unknown';
+    if (cmd === null || typeof cmd !== 'object' || Array.isArray(cmd)) {
+      emit({ type: 'response', command: 'unknown', success: false, error: 'malformed line' });
+      return;
+    }
+    const id = typeof cmd.id === 'string' ? { id: cmd.id.slice(0, 64) } : {};
+    const command = typeof cmd.type === 'string' ? cmd.type.slice(0, 32) : 'unknown';
     const ok = (data?: unknown): void => emit({ type: 'response', ...id, command, success: true, ...(data !== undefined ? { data } : {}) });
     const no = (error: string): void => emit({ type: 'response', ...id, command, success: false, error });
     const msg = typeof cmd.message === 'string' && cmd.message.length > 0 ? cmd.message : null;
@@ -163,9 +201,29 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         return ok();
       case 'get_state':
         return ok(agent.state());
+      case 'tool_response': {
+        // a reply, not a command: no ack on success; a malformed or unmatched one is refused
+        const r = parseToolResponse(cmd);
+        if ('error' in r) return no(r.error);
+        if (!broker.respond(r)) return no(`no outstanding request ${r.id}`);
+        return;
+      }
+      case 'tools_set': {
+        const r = parseToolsSet(cmd, TOOLS.map((t) => t.name));
+        if ('error' in r) return no(r.error);
+        const why = agent.setBrokered(r.tools);
+        return why ? no(why) : ok({ tools: r.tools.length });
+      }
+      case 'memory_set':
+      case 'compact':
+      case 'set_context': {
+        // reserved for slice B2: validated and parsed, nothing applied yet
+        const r = parseReserved(cmd);
+        return 'error' in r ? no(r.error) : ok({ applied: false });
+      }
       default:
         return no(`unknown command ${command.slice(0, 32)}`);
     }
   };
-  return { onLine, agent };
+  return { onLine, agent, broker };
 }

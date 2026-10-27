@@ -9,7 +9,7 @@
  * once the agent is idle.
  */
 import { readFileSync } from 'node:fs';
-import { ConfigError, parseSessionConfig, rpcSession } from './rpc.js';
+import { ConfigError, MAX_COMMAND_LINE, parseSessionConfig, rpcSession } from './rpc.js';
 
 const emit = (ev: Record<string, unknown>): void => {
   process.stdout.write(`${JSON.stringify(ev)}\n`);
@@ -61,6 +61,11 @@ function main(argv: string[]): void {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       if (line) onLine(line);
+    }
+    // slice S1: a line that never ends is refused, never buffered without bound
+    if (buf.length > MAX_COMMAND_LINE) {
+      buf = '';
+      emit({ type: 'response', command: 'unknown', success: false, error: `line over ${MAX_COMMAND_LINE} chars` });
     }
   });
   process.stdin.on('end', () => {

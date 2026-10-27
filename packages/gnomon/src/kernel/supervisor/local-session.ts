@@ -62,6 +62,13 @@
  *   a write to one with no card (a `protected-input:` tool result the turn reports as protectedHits ⇒ the node
  *   fails, G-LOOP-22). Tool lines are hashed in turn.event like model text (they carry model-written content).
  *   A LAN endpoint cannot serve an act step in 8.0 (LoopModelUnavailable 'act-needs-loopback-endpoint').
+ * SLICE C1 (#local-tool-broker, TD-2026-10-27-833; kernel/local/tool-broker.ts): at open an attended session
+ *   gets ONE tools_set line (after its session.sandbox row, which names the offered tools) with the kernel SDK
+ *   tools the C1 narrowing allows (offeredKernelTools: classed, never the worktree verbs); none when the
+ *   supervisor serves no kernel verbs (win32) and NEVER for a loop session. The child's tool_request is a typed
+ *   tool-request event: its turn.event row is hash-only (the args are model text), and it is answered OUTSIDE the
+ *   stdout queue (a card may wait on a human) with tool_response; every call logs one hash-only tool.brokered row.
+ *   stop (interrupt or full) and exit cancel the calls in flight; exit also expires the session's verb cards.
  * DEFERRED (reported): unattended local automations other than loops (law 5;
  * the scheduler still refuses them), the claude estimate on the card (null: no per-task
  * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
@@ -86,7 +93,11 @@ import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LineSplitter } from '../../adapters/claude-code/adapter.js';
-import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine } from '../../adapters/local/runner.js';
+import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine, toolResponseLine, toolsSetLine } from '../../adapters/local/runner.js';
+import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget } from '../local/tool-broker.js';
+import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
+import { KERNEL_MCP_SERVER } from '../git/verbs.js';
+import { repoKeyOf } from './repo-hooks.js';
 import { prepareRunner, verifyNode } from '../local/runner-pin.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
@@ -119,7 +130,9 @@ export interface LocalLaneOptions {
   log: LocalLog;
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'permit'>;
-  broker?: Pick<ApprovalBroker, 'raise'>;
+  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire'>>;
+  /** slice C1: the kernel's own SDK server's verbs, brokered to attended local sessions (absent: no brokered tools) */
+  gitVerbs?: Pick<GitVerbs, 'tools' | 'call'> & Partial<Pick<GitVerbs, 'closeSession'>>;
   home: string;
   userHome?: string;
   kernelPrincipal: string;
@@ -233,7 +246,14 @@ interface LocalSession {
   replyBytes?: number | null;
   /** TD-2026-10-27-833: the step cap written to this session's local.yaml; turn.result carries it so "step limit" names its number */
   maxSteps: number;
+  /** slice C1: the resolved roots (the brokered kernel verbs see them as the session's cwd and worktree) */
+  roots: { cwd: string; worktree?: string };
+  /** slice C1: this session's brokered tools (a loop session's offers none and refuses every call) */
+  tools?: LocalToolBroker;
 }
+
+/** A target with no tools (no kernel verbs served): every brokered call is unknown-tool. */
+const NO_TARGET: BrokerTarget = { server: KERNEL_MCP_SERVER, provenance: 'kernel', list: async () => [], call: async () => ({ text: 'no such tool', isError: true }) };
 
 function refused(code: Parameters<typeof refuse>[0]['code'], message: string, data: Record<string, unknown> = {}): RefusedError {
   return new RefusedError(refuse({ code, data }), `#local-runner: ${message}`);
@@ -809,11 +829,15 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), maxSteps: sessionCfg.maxSteps, ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
-      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : {}) }, { session: hsid });
+      // slice C1: the brokered tools (a loop session: none, every call refused)
+      s.tools = await this.#toolBroker(s);
+      const offered = s.tools.offered.map((t) => t.name);
+      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : { brokeredTools: offered }) }, { session: hsid });
+      if (offered.length) c.stdin?.write(toolsSetLine(s.tools.offered));
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
       if (this.#platform === 'win32' && !live) {
@@ -860,9 +884,41 @@ export class LocalLane {
     void s.exited.then(() => queue(() => this.#onExit(s)));
   }
 
+  /** Slice C1: the session's brokered tools — the kernel SDK server's (C1 narrowing), none for a loop session. */
+  async #toolBroker(s: LocalSession): Promise<LocalToolBroker> {
+    const verbs = s.loop ? undefined : this.#o.gitVerbs;
+    const target = verbs ? kernelSdkTarget(verbs, () => (s.state === 'running' ? this.#verbSession(s) : null)) : NO_TARGET;
+    const tools = verbs ? await offeredKernelTools(target).catch(() => []) : [];
+    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running' });
+  }
+
+  /**
+   * Slice C1: what a kernel verb knows of a local session. Local sessions have no run mode: `ask` (every verb takes its
+   * card), never plan-approved, never guarded worktrees (their profile has no kernel-worktree denies).
+   */
+  #verbSession(s: LocalSession): VerbSession {
+    const roots = [s.roots.cwd, ...(s.roots.worktree ? [s.roots.worktree] : [])];
+    return { hsid: s.hsid, principalId: s.principalId, cwd: s.roots.cwd, ...(s.roots.worktree ? { worktree: s.roots.worktree } : {}), repoKey: repoKeyOf(roots), mode: 'ask', planApproved: false, loop: s.loop !== undefined, worktreesGuarded: false };
+  }
+
+  /** Slice C1: one tool_request, answered outside the stdout queue (a card may wait on a human). */
+  async #brokered(s: LocalSession, ev: Extract<ReturnType<typeof parseLocalLine>, { kind: 'tool-request' }>): Promise<void> {
+    if (ev.id === null || !s.tools) return; // no usable id: nothing to answer (the child's own timeout ends the call)
+    const r = await s.tools.handle({ id: ev.id, toolCallId: ev.toolCallId, name: ev.name, args: ev.args, error: ev.error });
+    if (s.state !== 'running') return;
+    try {
+      s.child.stdin?.write(toolResponseLine(r));
+    } catch {
+      /* the pipe may already be gone */
+    }
+  }
+
   async #onExit(s: LocalSession): Promise<void> {
     if (s.state === 'exited') return;
     s.state = 'exited';
+    // slice C1: calls in flight are cancelled (their cards expire, no target runs) and the session's verb cards expire
+    s.tools?.cancelAll();
+    if (s.tools?.offered.length) await this.#o.gitVerbs?.closeSession?.(s.hsid).catch(() => undefined);
     if (this.#platform === 'win32') {
       // W5: this session's win32 labels and grants (platform/win32/session-sandbox.ts releaseSession)
       try {
@@ -886,7 +942,8 @@ export class LocalLane {
     // a loop session's model text is DATA the runner stores secret-scanned on its loop.node row: the turn.event
     // row of a message line carries its hash and size only (never unscanned model text in the log)
     // step 10: an act session's tool lines carry model-written paths and file content: hashed the same way
-    const hashOnly = bytes > EVENT_LINE_CAP || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
+    // slice C1: a tool_request line carries model-written args: hashed for every session (tool.brokered is hash-only too)
+    const hashOnly = bytes > EVENT_LINE_CAP || ev.kind === 'tool-request' || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
     await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(hashOnly ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     if (s.loop && ev.kind === 'message') s.loop.reply = loopReplyOf(line) ?? s.loop.reply;
     if (s.loop && ev.kind === 'fatal') s.loop.fatal = ev.error ?? 'fatal';
@@ -941,6 +998,10 @@ export class LocalLane {
         if (s.loop?.pending) s.loop.pending({ text: s.loop.reply, tokens: s.loop.tokens, stopReason: ev.stopReason, error: ev.error ?? (ev.stopReason === 'error' ? 'the model call failed' : null), ...(s.loop.act ? { protectedHits: [...s.loop.act.hits] } : {}) });
         return;
       }
+      case 'tool-request':
+        // slice C1: answered OUTSIDE this queue — a mutate call's card may wait minutes on a human
+        void this.#brokered(s, ev).catch(() => undefined);
+        return;
       case 'response':
         // round 2 (steer race): the child refuses a steer that reaches it idle (it never queues it into the next
         // turn); the kernel records the refusal against the session — a steer that did not land
@@ -1017,10 +1078,13 @@ export class LocalLane {
     const s = this.#get(principal, p.hsid);
     if (p.interrupt) {
       if (s.state === 'running') s.child.stdin?.write(abortLine());
+      // slice C1 (G-LCL-15): the child cancels its brokered calls on abort; the kernel cancels its side too
+      s.tools?.cancelAll();
       return { signals: ['rpc:abort'], exited: false };
     }
     if (s.state === 'exited') return { signals: [], exited: true };
     s.state = 'stopping';
+    s.tools?.cancelAll();
     try {
       s.child.stdin?.write(abortLine());
       s.child.stdin?.end();

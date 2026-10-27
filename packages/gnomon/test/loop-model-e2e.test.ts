@@ -33,6 +33,7 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { repoKeyOf } from '../src/kernel/supervisor/repo-hooks.js';
+import { GIT_VERB_TOOL_SPECS } from '../src/kernel/git/kernel-verbs.js';
 import { PKG_ROOT } from './helpers.js';
 import { waitFor } from './session-helpers.js';
 
@@ -91,6 +92,8 @@ function rig(root: string, base: string, stdout = 'src/a.ts(3,1): error TS2322',
   const lane = new LocalLane({
     sessionPath: null, pathDenies: [], log: append, children, fuse, home, userHome: tmp('gnomon-user-'), kernelPrincipal: KERNEL, sock: path.join(home, 'k.sock'),
     broker: { raise: async (i: any) => { cards.push(i); return { cardId: 'card:x' } as any; } },
+    // slice C1: the lane serves the kernel verbs to attended sessions; a loop session must still get none
+    gitVerbs: { tools: () => GIT_VERB_TOOL_SPECS, call: async () => { throw new Error('a loop session never reaches a kernel verb'); } },
     env: () => ({ ...process.env, GNOMON_SOCK: '/should/not/leak' }), config, probeTtlMs: 0,
     launchPlan: (i) => {
       o.onLaunch?.();
@@ -144,6 +147,9 @@ describe('loop model nodes against a fake local endpoint (real gnomon-local, uns
     const sandbox = r.rows.find((x) => x.kind === 'session.sandbox' && x.payload.hsid === hsid)!.payload;
     expect(sandbox.envKeys).not.toContain('GNOMON_SOCK');
     expect(sandbox.envKeys).not.toContain('GNOMON_SESSION_KEY');
+    // slice C1: loop sessions get no brokered tools (no tools_set, nothing offered)
+    expect(sandbox).not.toHaveProperty('brokeredTools');
+    expect(r.rows.some((x) => x.kind === 'turn.event' && x.payload.hsid === hsid && x.payload.type === 'tool_request')).toBe(false);
     // the model request: no tools, the data fenced
     const req = srv.requests.filter((q) => !JSON.stringify(q.tools ?? []).includes('get_time')).at(-1)!;
     expect(req.tools ?? []).toEqual([]);

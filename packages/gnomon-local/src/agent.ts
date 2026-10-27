@@ -44,18 +44,31 @@
  *   - the session's spill store and the set of files the model wrote live on
  *     the agent (session lifetime).
  *
+ * Slice C1 (#local-tool-broker, TD-2026-10-27-833): BROKERED tools. The
+ * kernel offers them with tools_set (rpc.ts → setBrokered); the set takes
+ * effect at the next step start (the offered tools, the system message's
+ * text-tool prompt and the ledger's tools slot are rebuilt then). A call to a
+ * brokered tool validates its args against the OFFERED schema, emits
+ * tool_request and waits for tool_response (broker.ts: timeout, the run's
+ * abort ends it as an error result); the result is shaped like any other,
+ * labelled by its provenance. A name in neither the native nor the current
+ * brokered set is "unknown tool" (the allowTools rule). A session with an
+ * allowTools list (a loop act session) never takes brokered tools.
+ *
  * DEFERRED: the JSONL session tree (where it lives is open: the session
  * profile denies writes under the Gnomon home, so the kernel would have to
  * read it from the child's stdout or a worktree path).
  */
 import { createHash } from 'node:crypto';
-import { buildRequest, orderTools, surfaceTools, type ChatMessage, type CompatProfile, type ToolSurface } from './compat.js';
+import { buildRequest, orderTools, surfaceTools, type ChatMessage, type CompatProfile, type ToolSpec, type ToolSurface } from './compat.js';
 import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 import { contextLedger, contextReport, resultCapChars, type ContextLedger } from './budget.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
 import { neutraliseResult, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
 import { runTool, TOOLS } from './tools.js';
+import { validateArgs, type BrokeredToolSpec, type KernelToolBroker } from './broker.js';
+import type { ToolResult } from './confine.js';
 
 export { TARGET_HEADROOM } from './budget.js';
 
@@ -89,13 +102,20 @@ export interface AgentOptions {
   allowTools?: readonly string[];
   /** Loops step 10: protected globs write_file refuses */
   protect?: readonly RegExp[];
+  /** Slice C1: the kernel port brokered calls go through (absent: no brokered tools) */
+  broker?: KernelToolBroker;
   emit: Emit;
 }
 
 export class Agent {
   readonly #o: AgentOptions;
-  /** the tools offered (all, or a loop act session's allowed ones) */
-  readonly #tools: typeof TOOLS;
+  /** the native tools offered (all, or a loop act session's allowed ones) */
+  readonly #native: typeof TOOLS;
+  /** slice C1: what this step offers — the native tools, then the brokered ones (rebuilt at a step start) */
+  #tools: ToolSpec[] = [];
+  /** slice C1: the brokered set in effect (this step) and the one the kernel set for the next step */
+  #brokered: BrokeredToolSpec[] = [];
+  #nextBrokered: BrokeredToolSpec[] | null = null;
   readonly #messages: ChatMessage[] = [];
   readonly #steer: string[] = [];
   readonly #follow: string[] = [];
@@ -109,8 +129,8 @@ export class Agent {
   #compactions = 0;
   /** T-2026-10-26-003: the current prompt (the user message that started this run): compaction's Goal */
   #goal: string | undefined;
-  /** slice B1: the context ledger (fixed for the session: the system message, tools and reply budget do not change) */
-  readonly #ledger: ContextLedger;
+  /** slice B1: the context ledger (slice C1: rebuilt when the brokered set changes, at a step start) */
+  #ledger!: ContextLedger;
   /** slice B1: full text of shaped results (`@rN`), session lifetime */
   readonly #spill = new SpillStore();
   /** slice B1: realpaths the model wrote this session (reads of them are labelled model-generated) */
@@ -118,12 +138,45 @@ export class Agent {
 
   constructor(o: AgentOptions) {
     this.#o = o;
-    this.#tools = orderTools(o.allowTools ? TOOLS.filter((t) => o.allowTools!.includes(t.name)) : TOOLS);
+    this.#native = orderTools(o.allowTools ? TOOLS.filter((t) => o.allowTools!.includes(t.name)) : TOOLS);
+    this.#messages.push({ role: 'system', content: '' });
+    this.#applyTools();
+  }
+
+  /** The offered tools, the system message (its text-tool prompt) and the ledger, from the native + brokered sets. */
+  #applyTools(): void {
+    const o = this.#o;
+    // brokered tools follow the natives (orderTools keeps names outside TOOL_ORDER last, in the kernel's order)
+    this.#tools = orderTools([...this.#native, ...this.#brokered.map((b) => ({ name: b.name, description: b.description, parameters: b.parameters }))]);
     const textTools = !o.nativeTools && o.surface !== 'none' ? textToolPrompt(this.#tools) : '';
     const sys = [o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.', textTools].filter(Boolean).join('\n\n');
-    this.#messages.push({ role: 'system', content: sys });
+    if (this.#messages[0]?.role === 'system') this.#messages[0] = { role: 'system', content: sys };
     const schema = o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(this.#tools, o.surface)).length / 4) : 0;
     this.#ledger = contextLedger({ target: o.contextTarget ?? DEFAULT_CONTEXT_TARGET, systemMessageTokens: estimateTokens([this.#messages[0]!]), toolsTokens: o.nativeTools ? schema : Math.ceil(textTools.length / 4), toolsInSystem: !o.nativeTools, replyTokens: o.maxTokens });
+  }
+
+  /**
+   * Slice C1: the kernel's tools_set. Takes effect at the next step start. Refused (an error string) when this agent
+   * has no broker port or is a loop act session (allowTools).
+   */
+  setBrokered(tools: readonly BrokeredToolSpec[]): string | null {
+    if (!this.#o.broker) return 'this session has no kernel broker';
+    if (this.#o.allowTools) return 'a session with a tools allowlist takes no brokered tools';
+    this.#nextBrokered = tools.map((t) => ({ ...t }));
+    if (!this.#running) this.#takeBrokered();
+    return null;
+  }
+
+  /** The brokered names in effect (tests, get_state). */
+  get brokered(): string[] {
+    return this.#brokered.map((b) => b.name);
+  }
+
+  #takeBrokered(): void {
+    if (this.#nextBrokered === null) return;
+    this.#brokered = this.#nextBrokered;
+    this.#nextBrokered = null;
+    this.#applyTools();
   }
 
   get running(): boolean {
@@ -131,7 +184,7 @@ export class Agent {
   }
 
   state(): Record<string, unknown> {
-    return { running: this.#running, turns: this.#turn, messages: this.#messages.length, compactions: this.#compactions, contextTarget: this.#target, queued: { steer: this.#steer.length, followUp: this.#follow.length } };
+    return { running: this.#running, turns: this.#turn, messages: this.#messages.length, compactions: this.#compactions, contextTarget: this.#target, queued: { steer: this.#steer.length, followUp: this.#follow.length }, brokered: this.brokered.length, outstanding: this.#o.broker?.outstanding ?? 0 };
   }
 
   get #target(): number {
@@ -224,6 +277,13 @@ export class Agent {
     this.#o.emit({ type: 'turn_end', turn, usage: c.usage });
   }
 
+  /** Slice C1: one brokered call — the args against the OFFERED schema, then the kernel (broker.ts). */
+  async #brokeredCall(b: BrokeredToolSpec, toolCallId: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const bad = validateArgs(b.parameters, args);
+    if (bad) return { content: `${b.name}: ${bad}`, isError: true };
+    return this.#o.broker!.request(b, String(toolCallId ?? ''), args, this.#runAbort.signal);
+  }
+
   steer(text: string): void {
     this.#steer.push(text);
   }
@@ -236,8 +296,9 @@ export class Agent {
   abort(): void {
     if (this.#running) this.#aborted = true;
     this.#abort?.abort();
-    // Aegis M2: the run's tools (grep's walk) see it too
+    // Aegis M2: the run's tools (grep's walk) see it too; slice C1 (G-LCL-15): so do brokered calls in flight
     if (this.#running) this.#runAbort.abort();
+    this.#o.broker?.cancelAll();
   }
 
   async prompt(text: string): Promise<void> {
@@ -269,6 +330,9 @@ export class Agent {
           }
           break;
         }
+        // slice C1: a tools_set received during the last step applies from this step on
+        this.#takeBrokered();
+        const brokered = this.#brokered;
         const turn = ++this.#turn;
         this.#o.emit({ type: 'turn_start', turn });
         this.#report(turn);
@@ -316,7 +380,8 @@ export class Agent {
             const r = repairArguments(t.arguments);
             if (r.repaired) this.#o.emit({ type: 'model_repair', toolCallId: t.id, toolName: t.name, steps: r.steps });
             this.#o.emit({ type: 'tool_execution_start', toolCallId: t.id, toolName: t.name, args: r.ok ? r.value : null });
-            const raw = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, readCap, resultCap, spill: this.#spill, written: this.#written, signal: this.#runAbort.signal, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
+            const b = r.ok ? brokered.find((x) => x.name === t.name) : undefined;
+            const raw = b ? await this.#brokeredCall(b, t.id, r.value!) : r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, readCap, resultCap, spill: this.#spill, written: this.#written, signal: this.#runAbort.signal, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
             // slice B1: shaping is the final cap of every result (G-LCL-12)
             const res = shapeResult(raw, { cap: resultCap, spill: this.#spill, tool: t.name.slice(0, 64) });
             this.#o.emit({ type: 'tool_execution_end', toolCallId: t.id, toolName: t.name, isError: res.isError, result: res.content.slice(0, 4096) });

@@ -18,6 +18,13 @@
  *     ledger at each turn start) is a typed `context` event — bounded numbers
  *     only (each a non-negative integer ≤ CONTEXT_NUM_MAX, else null); the
  *     kernel logs the raw line as turn.event and does not act on it yet.
+ *   Slice S1 (TD-2026-10-27-833, the two-way protocol): `tool_request{id,
+ *     toolCallId, name, args}` is a typed `tool-request` event, every field
+ *     bounded (id tr-N, toolCallId <= 128 chars, a tool-name pattern, args a
+ *     JSON object of at most TOOL_ARGS_MAX_BYTES); a malformed one carries
+ *     `error` (the kernel answers it as an error when its id is usable).
+ *     toolResponseLine / toolsSetLine are the kernel's replies; the reserved
+ *     B2 commands (memory_set, compact, set_context) have no writer yet.
  *   LocalUsageMeter — each message's usage is charged once; agent_end charges
  *     only what the messages did not (no double count).
  *   promptLine / followUpLine / steerLine / abortLine — the stdin commands;
@@ -40,6 +47,7 @@ export type LocalEvent =
   | { kind: 'context'; type: string; turn: number | null; target: number | null; slots: { system: number | null; memory: number | null; tools: number | null; history: number | null; reply: number | null }; historyUsed: number | null; compactions: number | null }
   | { kind: 'end'; type: string; tokens: number | null; input: number | null; output: number | null; stopReason: string | null; error: string | null }
   | { kind: 'response'; type: string; command: string | null; success: boolean | null; error: string | null }
+  | { kind: 'tool-request'; type: string; id: string | null; toolCallId: string | null; name: string | null; args: Record<string, unknown> | null; error: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: 'malformed' };
@@ -104,9 +112,33 @@ export function parseLocalLine(line: string): LocalEvent {
       return { kind: 'response', type, command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
     case 'fatal':
       return { kind: 'fatal', type, error: s(e.error, 500) };
+    case 'tool_request':
+      return toolRequestOf(type, e);
     default:
       return { kind: 'unknown', type };
   }
+}
+
+/** Slice S1: bounds of a tool_request (the child's broker.ts mirrors them). */
+export const TOOL_REQUEST_ID_RE = /^tr-[1-9]\d{0,9}$/;
+export const TOOL_NAME_RE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+export const TOOL_CALL_ID_MAX = 128;
+export const TOOL_ARGS_MAX_BYTES = 64 * 1024;
+/** The most content one tool_response carries (the child refuses more). */
+export const TOOL_RESPONSE_MAX_CHARS = 256 * 1024;
+
+function toolRequestOf(type: string, e: Record<string, unknown>): Extract<LocalEvent, { kind: 'tool-request' }> {
+  const id = typeof e.id === 'string' && TOOL_REQUEST_ID_RE.test(e.id) ? e.id : null;
+  const out = { kind: 'tool-request' as const, type, id, toolCallId: null as string | null, name: null as string | null, args: null as Record<string, unknown> | null, error: null as string | null };
+  const extra = Object.keys(e).find((k) => !['type', 'id', 'toolCallId', 'name', 'args'].includes(k));
+  if (!id) return { ...out, error: 'id is not a tool request id' };
+  if (extra !== undefined) return { ...out, error: `unknown field ${extra.slice(0, 32)}` };
+  if (typeof e.toolCallId !== 'string' || e.toolCallId.length > TOOL_CALL_ID_MAX) return { ...out, error: 'toolCallId must be text of at most 128 chars' };
+  if (typeof e.name !== 'string' || !TOOL_NAME_RE.test(e.name)) return { ...out, toolCallId: e.toolCallId, error: 'name is not a tool name' };
+  const a = e.args;
+  if (a === null || typeof a !== 'object' || Array.isArray(a)) return { ...out, toolCallId: e.toolCallId, name: e.name, error: 'args must be a JSON object' };
+  if (Buffer.byteLength(JSON.stringify(a), 'utf8') > TOOL_ARGS_MAX_BYTES) return { ...out, toolCallId: e.toolCallId, name: e.name, error: `args are over ${TOOL_ARGS_MAX_BYTES} bytes` };
+  return { ...out, toolCallId: e.toolCallId, name: e.name, args: a as Record<string, unknown> };
 }
 
 /** Per run: messages charged as they end; agent_end charges only the remainder. */
@@ -129,3 +161,7 @@ export const promptLine = (message: string, id?: string): string => line({ ...(i
 export const followUpLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'follow_up', message });
 export const steerLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'steer', message });
 export const abortLine = (): string => line({ type: 'abort' });
+/** Slice S1: the kernel's answer to one tool_request (content capped at TOOL_RESPONSE_MAX_CHARS). */
+export const toolResponseLine = (r: { id: string; content: string; isError: boolean; provenance: string }): string => line({ type: 'tool_response', id: r.id, content: r.content.slice(0, TOOL_RESPONSE_MAX_CHARS), isError: r.isError, provenance: r.provenance });
+/** Slice S1: the brokered tools offered from the child's next step on. */
+export const toolsSetLine = (tools: ReadonlyArray<{ name: string; description: string; parameters: Record<string, unknown>; class: string }>): string => line({ type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });

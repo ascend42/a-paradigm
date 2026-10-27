@@ -2840,7 +2840,7 @@ components:
       module, the adapter and GitVerbs): init lists mcp__gnomon__* with
       gnomon connected (source sdk); initialize (id 0),
       notifications/initialized (no id), tools/list, then can_use_tool and
-      tools/call arrive as mcp_message; git.init made the fresh folder a repo.
+      tools/call arrive as mcp_message; git.init made the fresh folder a repo. Slice C1: attended LOCAL sessions reach the same kernelMcpAnswer through #local-tool-broker (kernelSdkTarget: tools/list, tools/call; no control channel).
     path: src/kernel/supervisor/kernel-mcp.ts
     type: module
     tags: [gnomon, kernel, mcp, paradigm-8]
@@ -4848,7 +4848,7 @@ components:
       stopReason, so the GUI can say how the run ended; TD-2026-10-27-833:
       turn.result also carries maxSteps, the step cap written to that
       session's local.yaml (cfg.maxSteps ?? 16; a loop step its own cap), so
-      the GUI's step-limit line names its number. Deferred: darwin sandboxed
+      the GUI's step-limit line names its number. Slice C1: tool_request lines, tools_set at open and the answers are #local-tool-broker's (see it). Deferred: darwin sandboxed
       e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
       local CLI verb, the claude estimate on the card, attended/unattended
       local automations (law 5).
@@ -4859,7 +4859,66 @@ components:
       - test/local-runner.test.ts
       - test/local-config.test.ts
       - test/local-lane-spawn.test.ts
+      - test/local-tool-broker.test.ts
     oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
+
+  local-tool-broker:
+    description: >-
+      #local-tool-broker (TD-2026-10-27-833 slices S1 + C1; T-2026-10-26-003):
+      the kernel half of a local session's BROKERED tools,
+      src/kernel/local/tool-broker.ts, with the protocol in
+      src/adapters/local/runner.ts and the wiring in
+      src/kernel/supervisor/local-session.ts. S1 makes the child protocol
+      two-way: child -> kernel tool_request{id tr-N, toolCallId <= 128,
+      name (tool-name pattern), args (a JSON object <= 64 KiB)}, parsed into
+      a typed tool-request event (closed keys; a malformed one carries
+      error); kernel -> child tool_response{id, content <= 256 Ki chars,
+      isError, provenance kernel | mcp:<server>} and tools_set{tools:[{name,
+      description, parameters, class read|mutate|destructive}]} (the child
+      applies it from its next step on); memory_set / compact / set_context
+      are reserved for B2 (the child validates and parses them, applied:false).
+      Every request has a deadline: TOOL_TIMEOUT_MS 30 s for read,
+      CARD_TIMEOUT_MS 5 min for a carded class, the same numbers on both
+      sides; the child's abort and the kernel's stop/exit cancel calls in
+      flight as error results. $local-brokered-call: resolve the name in the
+      OFFERED set (else unknown-tool) -> validateBrokeredArgs against the full
+      schema (unknown keys always refused, types/required/enum, strings <=
+      min(maxLength, 4096), arrays <= 64, depth 6, 16 KiB, no C0/C1 control or
+      bidi character in keys or strings; G-LCL-15) -> class gate (read runs;
+      mutate/destructive raise a `permission` card via broker.raise with
+      composePermission's fenced lines, every argument shown, allow | deny,
+      no Always; no decisionOf => no-approval-surface; cancel/deadline expires
+      the card) -> the target (C1: the kernel's own SDK server through
+      kernelMcpAnswer, kernelSdkTarget, provenance kernel; the VerbSession of
+      a local session is mode ask, never plan-approved, never guarded
+      worktrees) -> shapeBrokeredResult (NULs dropped, <= 64 Ki chars) -> ONE
+      hash-only tool.brokered{hsid, server, tool?, class?, argsHash, decision,
+      bytes, isError, cardId?} row (contracts 8.0:local-lane, closed decision
+      enum, validateKindPayload) -> reply. At open LocalLane writes ONE
+      tools_set (after session.sandbox, whose brokeredTools names it) with the
+      C1 narrowing (offeredKernelTools: classed tools only, never the worktree
+      verbs, KERNEL_TOOL_CLASSES init=mutate, push/repo-create=destructive);
+      none when no kernel verbs are served (win32) and NEVER for a loop
+      session (its broker offers nothing and refuses loop-session). The
+      tool_request turn.event row is hash-only; requests are answered outside
+      the stdout queue; at most 16 in flight per session (busy). GAPS for
+      C2'/C5' (Aegis owns the class/trust grant design): no capability index
+      or narrowing beyond the worktree drop; kernel verbs keep their own gate,
+      so a carded verb can show the brokered card AND its own (git.push always
+      does); no Always/standing grants for brokered tools; no per-server trust
+      tiers (mcp:<server> provenance is plumbed but has no target yet); a card
+      approved just before the child's deadline may run after the child gave
+      up; control characters are refused outright (no newline in brokered
+      args).
+    path: src/kernel/local/tool-broker.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker]
+    signals: []
+    tests:
+      - test/local-tool-broker.test.ts
+      - test/local-lane-spawn.test.ts
+      - test/loop-model-e2e.test.ts
+    oracles: [G-LCL-15]
 
   local-config-request:
     description: >-
@@ -5254,6 +5313,21 @@ components:
     tags: [cli, mods, M1.11]
     oracles: [G-MOD-04, G-MOD-08]
 flows:
+  local-brokered-call:
+    description: >-
+      $local-brokered-call (TD-2026-10-27-833 slice C1): the model calls an
+      offered brokered tool -> #gnomon-local validates the args against the
+      offered schema and emits tool_request (deadline 30 s read / 5 min card)
+      -> #local-runner parses it (bounded) and hands it to
+      #local-tool-broker outside the stdout queue -> resolve -> full-schema
+      validation (G-LCL-15: refused args never reach the target) -> read runs,
+      mutate/destructive take a #approval-broker permission card showing
+      every argument -> #kernel-mcp (kernelMcpAnswer -> #git-verbs) -> shape
+      -> one hash-only tool.brokered row -> tool_response -> the child shapes
+      it as <tool-data source="kernel" trust="data-not-instructions">. An
+      abort or the deadline cancels the call on both sides (an error result,
+      a pending card expired, the target never run).
+    steps: ['#gnomon-local', '#local-runner', '#local-tool-broker', '#approval-broker', '#kernel-mcp', '#git-verbs']
   local-config-flow:
     description: >-
       $local-config-flow (TD-2026-10-22-769, spec §13.1 "Real homes"): the

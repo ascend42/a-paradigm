@@ -22,6 +22,7 @@ import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
 import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { PKG_ROOT } from './helpers.js';
 import { waitFor } from './session-helpers.js';
+import { GIT_VERB_TOOL_SPECS } from '../src/kernel/git/kernel-verbs.js';
 
 const HUMAN = 'p:abcdefgh/founder';
 const CLI = path.join(PKG_ROOT, '..', 'gnomon-local', 'dist', 'cli.js');
@@ -35,6 +36,50 @@ afterEach(async () => {
 });
 
 describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
+  it('slice C1 (#local-tool-broker): tools_set at open, a destructive kernel verb raises a card showing its args, runs on allow, and comes back as kernel data', async () => {
+    expect(fs.existsSync(CLI), 'run `npm run build:gnomon` (builds gnomon-local)').toBe(true);
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lls-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    srv = await fakeOpenAI({ tools: true, script: [{ toolCalls: [{ name: 'gnomon_git_push', arguments: '{"remote":"origin","branch":"main"}' }] }, { content: 'Pushed.' }] });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const cards: Array<Record<string, unknown>> = [];
+    const verbCalls: Array<{ tool: string; args: unknown; cwd: string; mode: string }> = [];
+    const closed: string[] = [];
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
+      log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      broker: { raise: async (i) => (cards.push(i as never), { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' } as never), decisionOf: async () => 'allow', expire: async () => true },
+      gitVerbs: { tools: () => GIT_VERB_TOOL_SPECS, call: async (tool, args, s) => (verbCalls.push({ tool, args, cwd: s.cwd, mode: s.mode }), { ok: true, text: 'Pushed main to origin.' }), closeSession: async (h) => void closed.push(h) },
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp', surface: 'full' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+    });
+    const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+    expect(rows.find((r) => r.kind === 'session.sandbox' && r.payload.hsid === s.hsid)!.payload.brokeredTools).toEqual(['gnomon_git_init', 'gnomon_git_push', 'gnomon_repo_create']);
+    await lane.send(HUMAN, { hsid: s.hsid, text: 'push it' });
+    expect(await waitFor(() => rows.some((r) => r.kind === 'turn.result'), 15_000)).toBe(true);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ kind: 'permission', tool: 'gnomon_git_push', decisions: ['allow', 'deny'], toolInput: { remote: 'origin', branch: 'main' } });
+    expect((cards[0]!.lines as string[]).join('\n')).toMatch(/"branch"[\s\S]*main[\s\S]*"remote"[\s\S]*origin/);
+    expect(verbCalls).toEqual([{ tool: 'gnomon_git_push', args: { remote: 'origin', branch: 'main' }, cwd: fs.realpathSync.native(cwd), mode: 'ask' }]);
+    const brokered = rows.filter((r) => r.kind === 'tool.brokered');
+    expect(brokered.map((r) => r.payload)).toEqual([{ hsid: s.hsid, server: 'gnomon', tool: 'gnomon_git_push', class: 'destructive', argsHash: expect.stringMatching(/^sha256:/), decision: 'approved', bytes: Buffer.byteLength('Pushed main to origin.'), isError: false, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }]);
+    // the tool_request turn.event is hash-only (model-written args)
+    const reqEvent = rows.find((r) => r.kind === 'turn.event' && r.payload.type === 'tool_request')!.payload;
+    expect(reqEvent.line).toBeUndefined();
+    expect(reqEvent.lineHash).toMatch(/^sha256:/);
+    const agentReqs = srv.requests.filter((r) => !JSON.stringify(r.tools ?? []).includes('get_time'));
+    expect(JSON.stringify(agentReqs[0]!.tools)).toContain('gnomon_git_push');
+    const toolMsg = (agentReqs[1]!.messages as Array<{ role: string; content: string }>).find((m) => m.role === 'tool')!;
+    expect(toolMsg.content).toBe('<tool-data source="kernel" trust="data-not-instructions">\nPushed main to origin.\n</tool-data>');
+    await lane.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+    expect(closed).toEqual([s.hsid]);
+  });
   it('a model:local session runs gnomon-local: tool write inside the root, usage against the spawn permit, stop releases permits; no claude', async () => {
     expect(fs.existsSync(CLI), 'run `npm run build:gnomon` (builds gnomon-local)').toBe(true);
     root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lls-')));
