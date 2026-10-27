@@ -231,7 +231,12 @@ function validateBashSyntax(scriptContent: string, scriptName: string): string |
       execSync(`bash -n "${tmpPath}" 2>&1`, { encoding: 'utf-8' });
       return null; // Syntax OK
     } catch (err) {
-      return `${scriptName}: bash syntax error — ${(err as Error).message?.split('\n')[0] || 'unknown error'}`;
+      // Only a real syntax report blocks. No usable bash (Windows without Git Bash on PATH, or the WSL stub
+      // bash.exe with no distro) is "can't validate", like the outer catch.
+      const e = err as Error & { stdout?: string };
+      const text = `${e.stdout ?? ''}\n${e.message ?? ''}`;
+      if (!/syntax error|unexpected (EOF|end of file|token)/i.test(text)) return null;
+      return `${scriptName}: bash syntax error — ${e.message?.split('\n')[0] || 'unknown error'}`;
     } finally {
       try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
     }

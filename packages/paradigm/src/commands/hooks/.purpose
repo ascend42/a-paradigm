@@ -73,6 +73,18 @@ components:
     tags:
       - hooks
       - observability
+  hook-syntax-validation:
+    description: |
+      validateBashSyntax (index.ts) runs `bash -n` on every hook before `paradigm hooks install` writes them; only
+      a real syntax report (syntax error / unexpected EOF or token) blocks. No usable bash (Windows without Git
+      Bash on PATH, or the WSL stub bash.exe with no distro) counts as "can't validate", so install still works
+      there. Shipped .sh hooks, plugin .cjs scripts and generated-hooks.ts are pinned to LF in .gitattributes
+      (a CRLF checkout breaks bash and generate-hooks --check); the Windows workflow asserts it.
+    type: utility
+    file: index.ts
+    tags:
+      - hooks
+      - windows
   git-hook-state:
     description: |
       git-hook-state.ts: classes .git/hooks/post-commit and pre-push as absent,
