@@ -1,12 +1,27 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
-name: paradigm
-description: "TODO: describe what this directory/module does"
-context:
-  - "Stub created by Cid during coverage audit — update with real context"
-# Key files touched:
-# - README.md
+version: 2.0.0
+description: >-
+  The Paradigm Claude Code plugin (`paradigm@a-paradigm` marketplace install).
+  It wires the MCP server, the enforcement hooks, the agents and the skills into
+  every project. Users install it; nothing here is built at runtime.
 components:
-  paradigm:
-    description: "TODO: describe this component"
-    tags: []
+  claude-code-plugin:
+    description: >-
+      Plugin layout. .claude-plugin/plugin.json is the manifest (name, version
+      kept in step with @a-company/paradigm, keywords). hooks/hooks.json maps
+      Claude Code hook events to the scripts. scripts/*.sh are the hook scripts
+      (scripts/paradigm-common.sh, scripts/paradigm-stop.sh and the rest),
+      COPIES generated from packages/paradigm/src/commands/hooks/scripts by
+      packages/paradigm/scripts/generate-hooks.mjs; edit the sources there and
+      run `node scripts/generate-hooks.mjs` (`--check` must be clean).
+      scripts/migrate-to-plugin.sh moves a pre-plugin install onto the plugin.
+      agents/*.md are the bundled subagent definitions and skills/ the bundled
+      skills. README.md is the user-facing install guide.
+    type: config
+    files:
+      - .claude-plugin/plugin.json
+      - hooks/hooks.json
+      - scripts/paradigm-common.sh
+      - scripts/migrate-to-plugin.sh
+    components:
+      - '#paradigm-hooks'
+    tags: [plugin, claude-code, hooks]

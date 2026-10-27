@@ -272,8 +272,15 @@ features:
     components:
       - '#audit-logger'
   mcp-setup-command:
-    description: Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue, Cline)
+    description: >-
+      Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue,
+      Cline): src/commands/mcp/setup.ts. src/commands/mcp/switch.ts is
+      `paradigm mcp use-dev | use-prod`, which points MCP configs at the local
+      working tree's built packages or back at the global paradigm-mcp binary.
     type: command
+    files:
+      - src/commands/mcp/setup.ts
+      - src/commands/mcp/switch.ts
     signals:
       - '!mcp-configured'
     components:
