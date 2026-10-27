@@ -676,9 +676,10 @@ export type SessionMemoryKind = (typeof SESSION_MEMORY_KINDS)[number];
  *   empty       the text is empty
  *   not-found   forget named an id that is not in memory
  *   not-a-note  forget named an entry the model did not write
- *   off         this session has no working memory (a loop session)
+ *   off           this session has no working memory (a loop session)
+ *   child-refused the child refused the kernel's memory_set or set_context (Aegis B2 L1; no entry fields)
  */
-export const SESSION_MEMORY_REFUSALS = ['full', 'too-long', 'empty', 'not-found', 'not-a-note', 'off'] as const;
+export const SESSION_MEMORY_REFUSALS = ['full', 'too-long', 'empty', 'not-found', 'not-a-note', 'off', 'child-refused'] as const;
 export type SessionMemoryRefusal = (typeof SESSION_MEMORY_REFUSALS)[number];
 /** session.memory{source}: who wrote the entry — the human, the kernel, the model, or a tool behind a named MCP server. */
 export const SESSION_MEMORY_SOURCE_PATTERN = /^(?:human|kernel|model|tool:[a-z0-9][a-z0-9_-]{0,63})$/;

@@ -261,7 +261,8 @@ const COVERAGE: Record<string, Entry> = {
 // Moved again by 8.0:local-lane (Aegis C1 review: tool.brokered expired/allowed-cancelled/cooldown/suspended, git.verb why cancelled): was sha256:dea90210…85ea.
 // Moved again by 8.0:local-lane (Aegis C1 re-check N2: tool.brokered decision refused): was sha256:aac99220…12db.
 // Moved again by 8.0:local-lane (TD-2026-10-27-833 slice B2: session.memory + session.context, descriptor sessionMemory): was sha256:c47ec016…8c55.
-const PINNED_CLIENT_API_ID = 'sha256:04cbb3581136ee3409f404d42648284fd392bdf8302131b39edd07fd414941ff';
+// Moved again by 8.0:local-lane (Aegis B2 review L1: session.memory why child-refused): was sha256:04cbb358…41ff.
+const PINNED_CLIENT_API_ID = 'sha256:7302440487fd02d2a23ec4e64648be89c7554304d0b3b8b95946b235e8f09313';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
