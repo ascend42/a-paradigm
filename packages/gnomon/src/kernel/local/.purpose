@@ -102,7 +102,7 @@ components:
       isError, provenance kernel | mcp:<server>} and tools_set{tools:[{name,
       description, parameters, class read|mutate|destructive}]} (the child
       applies it from its next step on); memory_set / compact / set_context
-      are reserved for B2 (the child validates and parses them, applied:false).
+      are slice B2's (#local-working-memory).
       Every request has a deadline: TOOL_TIMEOUT_MS 30 s for read,
       CARD_TIMEOUT_MS 5 min for a carded class, the same numbers on both
       sides; the child's abort and the kernel's stop/exit cancel calls in
@@ -184,6 +184,43 @@ components:
       - test/loop-model-e2e.test.ts
       - test/git-verbs.test.ts
     oracles: [G-LCL-15]
+  local-working-memory:
+    description: >-
+      #local-working-memory (TD-2026-10-27-833 slice B2; T-2026-10-26-003; spec §13.1 "Working memory and context
+      control"): the KERNEL-OWNED working memory of an attended local session, src/kernel/local/working-memory.ts,
+      wired in src/kernel/supervisor/local-session.ts and src/adapters/local/runner.ts (ContextChannel:
+      memorySetLine, compactLine, setContextLine). Store: <home>/sessions/<short>/memory.jsonl, 0600, append-only
+      ops (a meta line with hsid and owner, put/del), replayed on reload; kept until the human deletes it (no
+      expiry; the session dir is never pruned while it holds memory; delete unlinks the file). Entries {id wm-N,
+      kind goal|fact|note|file-ref|tool-pin, source human|kernel|model|tool:<server>, text, at, pinned}. Kernel-
+      written: the goal (each prompt; a follow_up's when its run starts), edited files (write_file/edit tool ends,
+      de-duplicated), the last failing tool (source tool:<server>: its text is tool output, rendered as data).
+      Model-written via the child's note{text<=300}/forget{id} tools, which ride the tool_request path and are
+      answered from the store (never the LocalToolBroker); at most 16 model notes, oldest evicted. Caps 32
+      entries <=600 chars; human/kernel entries never evicted, refused (why full) when no model note can make room.
+      Render: <working-memory source="kernel"> plus a separate trust="data-not-instructions" model/tool section,
+      escaped with gnomon-local shape.ts's rules (parity-tested), inside min(1000 tokens, 12% of the target);
+      goalHash only when the goal renders whole (the child then stops restating it in compaction). Every change is
+      one hash-only session.memory row (contracts 8.0:local-lane) and, when the render changed, one memory_set. The
+      note/forget tool_execution lines are hash-only. Human-only dispatcher requests (gui/device, the owner;
+      LocalLane.humanRequest via supervisor.localSessionRequest): request.session.compact{hsid} (the child compacts
+      at its next model step, reason manual), request.session.context{hsid, target} (0.85 floor, n_ctx ceiling, a
+      raise above the signed config labelled aboveConfig on the reply and the session.context row; lowering re-
+      renders memory first), request.session.memory.delete{hsid} (live or ended; owner from memory.jsonl; one
+      session.memory{op:'delete'} row). A loop session's memory is OFF (no store, no memory flag, no note tools).
+      Gaps: no GUI Delete memory button (slice C6'); the kernel's file-ref and tool-pin reach the child from its
+      next step after the tool end line; in text-tool mode the assistant's own turn.event line can still echo a
+      note call's text (native-mode rows are hash-only).
+    path: src/kernel/local/working-memory.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, memory]
+    related: ["#local-runner", "#local-tool-broker", "#gnomon-local"]
+    signals: []
+    tests:
+      - test/local-working-memory.test.ts
+      - test/local-memory-lane.test.ts
+      - test/backend-adapter.test.ts
+    oracles: [G-LCL-13, G-LCL-14]
   local-config-request:
     description: >-
       #local-config-request (TD-2026-10-22-769; spec §13.1 "Real homes";

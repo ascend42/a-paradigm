@@ -81,3 +81,20 @@ components:
       - test/retrieval-recheck.test.ts
       - test/shape.test.ts
       - test/local-child.test.ts
+  local-working-memory:
+    description: >-
+      The child's half of #local-working-memory (TD-2026-10-27-833 slice B2; the store is the kernel's,
+      packages/gnomon/src/kernel/local/working-memory.ts). broker.ts parseContextCommand: memory_set{render, hash,
+      bytes, goalHash?} (hash and bytes checked), compact{}, set_context{contextTarget}, all closed. agent.ts places
+      the block as a fixed slot right after the system prompt, outside the history (compaction never touches it);
+      budget.ts memorySlotTokens = min(1000, 12% of the target), a bigger block is refused; memory-tools.ts note /
+      forget (offered only with memory: true, names reserved against tools_set, a tools allowlist with memory is a
+      ConfigError) ride the broker's tool_request path; compact runs at the next model step (reason manual; idle:
+      the next run's first step); set_context clamps to [1024, n_ctx] and the 0.85 rule at the next step start;
+      a goalHash matching the current goal makes compaction write Goal as pinned and drop the verbatim goal line.
+    path: src/memory-tools.ts
+    type: module
+    tags: [gnomon, local, paradigm-8, memory]
+    tests:
+      - test/memory.test.ts
+      - test/broker.test.ts
