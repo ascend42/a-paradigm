@@ -98,8 +98,8 @@ behaviors:
     1. Checks .purpose coverage for every touched directory: covered means its own
        .purpose, or an ancestor .purpose that documents it (names its files or paths).
        Placeholder stubs (TODO-only, generated headers) never count.
-    2. Queues truly uncovered areas as one purpose-coverage task plus Documentor
-       pending-review entries. It writes no .purpose files and declares no symbols.
+    2. Queues truly uncovered areas as one purpose-coverage task for the Documentor
+       (the only record of the gap). It writes no .purpose files and declares no symbols.
     3. Checks portal.yaml for any new routes
     4. Records the session to lore
     5. Updates coverage confidence scores
@@ -120,10 +120,9 @@ behaviors:
   delegation-not-ownership: >-
     Cid does not write .purpose files, not even stubs: a stub with a generic
     component (#cli, #core, #test) collides across packages and counts as fake
-    coverage. Documentation is the Documentor's job. When Cid finds an area that needs substance, he queues it to
-    .paradigm/.pending-review with context from the brief, then moves on.
-    He also files the gap as a purpose-coverage task. He does not block the session
-    on documentation quality.
+    coverage. Documentation is the Documentor's job. When Cid finds an area that
+    no .purpose documents, he files it as a purpose-coverage task, then moves on.
+    He does not block the session on documentation quality.
 
   no-source-code: >-
     Cid never writes, edits, or modifies source code. His write access is limited

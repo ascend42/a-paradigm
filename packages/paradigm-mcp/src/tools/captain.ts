@@ -578,9 +578,12 @@ async function handleCaptainDebrief(
   // Cid used to write a TODO .purpose stub declaring `components: <basename>`
   // into every uncovered dir. That counted itself as coverage and minted
   // generic, colliding symbols (#cli, #core, #test...). Uncovered dirs are now
-  // surfaced as one paradigm task + a Documentor pending-review entry each.
+  // surfaced as ONE purpose-coverage task — the only record of the gap. They
+  // are not appended to .pending-review: the Stop hook deletes that file at the
+  // end of every turn and reads it as a list of edited file paths.
   const delegatedToDocumentor: string[] = [];
   const uncoveredDirs = scoredDirs.filter(c => !c.covered).map(c => c.dir).sort();
+  delegatedToDocumentor.push(...uncoveredDirs);
 
   const appendPending = (entry: Record<string, unknown>) => {
     try {
@@ -590,18 +593,6 @@ async function handleCaptainDebrief(
       // Pending review append is non-fatal
     }
   };
-
-  for (const dir of uncoveredDirs) {
-    delegatedToDocumentor.push(dir);
-    const placeholders = coverage.get(dir)?.placeholders ?? [];
-    appendPending({
-      path: dir,
-      reason: 'captain-debrief-uncovered',
-      priority: 'high',
-      context: `Touched during orchestration ${orchestrationId}; no .purpose documents it (own or ancestor). Files: ${touchedFiles.filter(f => path.dirname(f) === dir).join(', ')}${placeholders.length ? `. Placeholder stubs (not coverage): ${placeholders.join(', ')}` : ''}`,
-      timestamp: new Date().toISOString(),
-    });
-  }
 
   for (const c of scoredDirs) {
     if (!c.covered) continue;

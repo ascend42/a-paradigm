@@ -539,7 +539,7 @@ describe('paradigm-common.sh — cohort gating (v6.0.4)', () => {
     cleanups.push(fx.cleanup);
     fs.writeFileSync(
       path.join(fx.rootDir, '.paradigm', '.pending-review'),
-      JSON.stringify({ path: 'pkg/scripts', reason: 'captain-debrief-uncovered', context: 'Files: pkg/scripts/b.ts' }) + '\n',
+      JSON.stringify({ path: 'pkg/scripts', reason: 'captain-debrief-new-symbols', context: 'New symbols: #x' }) + '\n',
     );
     const parsed = parseHookOutput(fx.run().stdout);
     expect(parsed.violations).not.toContain('./.purpose');

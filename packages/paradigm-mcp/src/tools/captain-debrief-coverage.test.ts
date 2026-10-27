@@ -4,7 +4,7 @@
  *  - A subdirectory documented by an ancestor .purpose counts as covered and
  *    gets no stub.
  *  - A truly uncovered directory: nothing is written into the tree; a paradigm
- *    task and a pending-review entry appear; coverage stays uncovered.
+ *    task is the only record (no .pending-review entry); coverage stays uncovered.
  *  - An existing TODO stub never counts as coverage.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -121,9 +121,8 @@ describe('debrief coverage — truly uncovered directory', () => {
     expect(tasks[0].blurb).toContain('pkg/scripts');
     expect(tasks[0].blurb).not.toContain('pkg/src/cli');
 
-    expect(pendingEntries()).toContainEqual(
-      expect.objectContaining({ path: 'pkg/scripts', reason: 'captain-debrief-uncovered' }),
-    );
+    // The task is the only record: nothing goes into .pending-review.
+    expect(pendingEntries()).toEqual([]);
   });
 
   it('a second debrief does not duplicate the open coverage task', async () => {

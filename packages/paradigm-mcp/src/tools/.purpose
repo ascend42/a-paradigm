@@ -256,7 +256,7 @@ components:
       - neverland
       - mcp
   CaptainTools:
-    description: '3 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt), paradigm_captain_debrief (post-task coverage audit via #purpose-coverage — own or documenting-ancestor .purpose, placeholder stubs never count; uncovered dirs become one purpose-coverage paradigm task + Documentor pending-review entries, never written stubs; pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid; v7 §3 adds a postflight-liveness check that self-heals — runs runPostflightLearning itself when the settlement-liveness probe shows no postflight ran, and on self-heal failure proposes an ADVISE block, never guard), and paradigm_captain_board (#captain-board — Cid''s owned run-DAG read+write artifact: read assembles the live orchestration DAG from non-terminal epic tasks + their stage-children ordered by stage/dependsOn, plus ripple-ranked unclaimed open tasks and a summary; claim writes a task claimant keeping status open with a human/peer-over-archetype override guard; advance records a Cid-owned blocked_on reason without changing status — v7.0 has no blocked status). Core-tier always loaded. Cid closes navigation; Loid closes learning. Ownership boundary: Cid writes claimant/blocked_on (present tense); Loid writes settledAt (past tense) — they never co-write a field.'
+    description: '3 MCP tools for Cid (the Captain agent) — paradigm_captain_brief (pre-task context discovery pipeline: search + navigate + ripple + wisdom + protocol + lore → Context Brief injected into every agent prompt), paradigm_captain_debrief (post-task coverage audit via #purpose-coverage — own or documenting-ancestor .purpose, placeholder stubs never count; uncovered dirs become one purpose-coverage paradigm task, never written stubs; new-symbol pending-review queueing, lore recording, .cid-briefed stop hook marker, sessionInsights object handed off to Loid; v7 §3 adds a postflight-liveness check that self-heals — runs runPostflightLearning itself when the settlement-liveness probe shows no postflight ran, and on self-heal failure proposes an ADVISE block, never guard), and paradigm_captain_board (#captain-board — Cid''s owned run-DAG read+write artifact: read assembles the live orchestration DAG from non-terminal epic tasks + their stage-children ordered by stage/dependsOn, plus ripple-ranked unclaimed open tasks and a summary; claim writes a task claimant keeping status open with a human/peer-over-archetype override guard; advance records a Cid-owned blocked_on reason without changing status — v7.0 has no blocked status). Core-tier always loaded. Cid closes navigation; Loid closes learning. Ownership boundary: Cid writes claimant/blocked_on (present tense); Loid writes settledAt (past tense) — they never co-write a field.'
     type: tool-group
     tags:
       - core
@@ -320,8 +320,10 @@ components:
       reported as placeholderPurposes. The debrief writes NO .purpose files: truly
       uncovered dirs go to uncoveredDirs, one paradigm task tagged purpose-coverage
       (#purpose-coverage-queue, the createTask writer paradigm_task_create uses,
-      deduped against active purpose-coverage tasks; coverageTaskId) and a captain-debrief-uncovered pending-review entry per
-      dir for the Documentor. coverageScore before == after (nothing is written);
+      deduped against active purpose-coverage tasks; coverageTaskId). That task is the
+      only record of the gap: nothing is appended to .pending-review for it (the
+      Stop hook deletes that file every turn and reads it as edited file paths).
+      Covered dirs with new symbols still get a captain-debrief-new-symbols entry. coverageScore before == after (nothing is written);
       coverageAdded is kept for compatibility and is always empty. The brief's
       coverage score uses the same resolver.
     file: src/tools/captain.ts

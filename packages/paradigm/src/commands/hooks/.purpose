@@ -202,7 +202,9 @@ components:
       (and Check 11 purpose-required calls --require-own --queue): uncovered dirs
       become one deduped purpose-coverage task, the block message names the dirs
       and the task id, and nothing is written into the tree. Check 5 skips the
-      JSON queue lines Cid appends to .pending-review (they are not file paths).
+      JSON lines Cid appends to .pending-review for new-symbol areas (they are not
+      file paths). Coverage gaps are never written there; the purpose-coverage
+      task is their only record.
       Tests: tests/hooks-stop.test.ts (shared rule and auto-fix cases).
     type: utility
     file: scripts/paradigm-common.sh
