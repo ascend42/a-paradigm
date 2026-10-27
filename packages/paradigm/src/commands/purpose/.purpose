@@ -8,5 +8,20 @@ description: >-
   name, and dist/, build/, node_modules/ are always skipped (DEFAULT_PURPOSE_IGNORE).
   remember.ts is #purpose-remember-command (aggregate and print purpose context).
   Both symbols are declared in packages/paradigm/.purpose.
+components:
+  purpose-coverage-command:
+    description: >-
+      `paradigm purpose coverage [dirs...] [--json] [--root]` (coverage.ts,
+      T-2026-10-27-003): the shared #purpose-coverage rule as a CLI. Prints
+      "<dir>\t(covered|uncovered)\t<covering .purpose|->" per directory (deduped)
+      or the PurposeCoverage records as JSON. The Stop hook's Checks 1 and 2 call
+      it once per run so they score directories exactly like Cid's debrief and
+      doctor.
+    type: command
+    path: coverage.ts
+    components:
+      - '#purpose-coverage'
+    tests:
+      - packages/paradigm/tests/purpose-coverage-command.test.ts
 context:
   - "Tests: packages/paradigm/tests/purpose-validate-path.test.ts (path shapes, release/gitignore skip)."

@@ -205,6 +205,16 @@ purposeCmd
     await purposeValidateCommand(path);
   });
 
+purposeCmd
+  .command('coverage [dirs...]')
+  .description('Is each directory covered? Own .purpose, or an ancestor that documents it; stubs never count')
+  .option('--json', 'Print the coverage records as JSON')
+  .option('--root <dir>', 'Project root the directories are relative to (default: cwd)')
+  .action(async (dirs: string[] = [], opts: { json?: boolean; root?: string }) => {
+    const { purposeCoverageCommand } = await import('./commands/purpose/coverage.js');
+    await purposeCoverageCommand(dirs, opts);
+  });
+
 // paradigm portal <command>
 const portalCmd = program
   .command('portal')
