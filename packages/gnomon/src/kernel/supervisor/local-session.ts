@@ -229,6 +229,8 @@ interface LocalSession {
   turns: number;
   seq: number;
   meter: LocalUsageMeter;
+  /** T-2026-10-26-003: the size of the run's latest assistant text (its last message is the reply); null = no message yet */
+  replyBytes?: number | null;
 }
 
 function refused(code: Parameters<typeof refuse>[0]['code'], message: string, data: Record<string, unknown> = {}): RefusedError {
@@ -916,6 +918,7 @@ export class LocalLane {
         return;
       }
       case 'message':
+        s.replyBytes = ev.textBytes;
         // a message without usage is recorded as such (never silently zero)
         if (ev.tokens === null) await this.#o.log('turn.usage', { hsid: s.hsid, usage: null, backend: 'local' }, { session: s.hsid });
         else await usage('turn.usage', s.meter.message(ev.tokens));
@@ -923,7 +926,13 @@ export class LocalLane {
       case 'end': {
         // review M2: turn.result{turn} names the turn it closes (the oldest in flight; the local lane never folds turns)
         const closing = s.turnPermits.length > 0 ? s.turns - s.turnPermits.length + 1 : 0;
-        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
+        // T-2026-10-26-003: usage.tokens stays the meter's remainder (charged once); runUsage is the run's whole
+        // agent_end usage (input + output, the summariser included) and replyBytes the final reply's size (0 = no
+        // answer), so the GUI can say how the turn really ended
+        const runUsage = { tokens: ev.tokens, input: ev.input, output: ev.output };
+        const replyBytes = s.replyBytes ?? 0;
+        s.replyBytes = null;
+        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', runUsage, replyBytes, ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
         const head = s.turnPermits.shift();
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);

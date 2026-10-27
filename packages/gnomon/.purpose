@@ -4839,7 +4839,13 @@ components:
       the child gets contextTarget min(~8k, n_ctx); session.send{steer} with a
       turn in flight writes the steer line under that turn's permit
       (session.inject + turn.steer, no new permit), idle it is a plain send; round 2: the steer needs the in-flight turn permit live (else PERMIT_REQUIRED); the child refuses a steer that reaches it idle and the kernel logs turn.steer{phase:refused, by:child};
-      Claude sessions refuse steer BAD_REQUEST. Deferred: darwin sandboxed
+      Claude sessions refuse steer BAD_REQUEST. T-2026-10-26-003: runner.ts
+      parses message_end.textBytes (the reply's size, never its text) and
+      agent_end input/output beside the total; local-session.ts turn.result
+      keeps usage.tokens as the meter's remainder (charged once) and adds
+      runUsage{tokens,input,output} (the run's whole agent_end usage) and
+      replyBytes (the last assistant text's size, 0 = no answer) beside
+      stopReason, so the GUI can say how the run ended. Deferred: darwin sandboxed
       e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
       local CLI verb, the claude estimate on the card, attended/unattended
       local automations (law 5).

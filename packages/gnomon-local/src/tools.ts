@@ -20,6 +20,13 @@
  *   - a regular file with more than one hard link is refused for reads and
  *     writes (round 3, R1: a hard link out of the root);
  *   - read_file reads at most MAX_READ bytes from an open handle (R6);
+ *     T-2026-10-26-003: it is PAGED in BYTES — optional `offset` (byte offset,
+ *     default 0) and `limit` (bytes, default and ceiling = the read cap). The
+ *     read cap is the session's share (ctx.readCap, set by the agent from the
+ *     working budget), never above MAX_READ (the absolute ceiling). A page
+ *     ends on a UTF-8 character boundary; a page that is not the whole file
+ *     ends with a note naming the total size, the bytes returned and the next
+ *     offset ("call read_file with offset=N for more");
  *   - ONE canonicalisation everywhere (Windows CI, 8.3 short names): roots,
  *     targets and the nearest-ancestor walk all go through the NATIVE
  *     realpath (fs.promises.realpath = uv_fs_realpath, which expands
@@ -53,11 +60,58 @@ export interface ToolContext {
   allow?: readonly string[];
   /** Loops step 10: protected globs (repo-relative to the root); a write that hits one is refused PROTECTED_PREFIX */
   protect?: readonly RegExp[];
+  /** T-2026-10-26-003: the most bytes one read_file returns (the agent's share of the working budget); capped at MAX_READ */
+  readCap?: number;
 }
 
 export type ToolImpl = (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
 
-const MAX_READ = 256 * 1024;
+/** The absolute ceiling of one read_file page, whatever the session's budget (R6). */
+export const MAX_READ = 256 * 1024;
+/** The smallest page a read cap may set (a tiny budget still reads something useful). */
+export const MIN_READ = 512;
+
+/** Byte offset/limit argument: absent ⇒ the default; else a non-negative integer. */
+const byteArg = (v: unknown, name: string): number | undefined => {
+  if (v === undefined || v === null) return undefined;
+  const n = typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v;
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) throw new Error(`${name} must be a non-negative integer (bytes)`);
+  return n;
+};
+
+/** End of a page at or before `end` that does not split a UTF-8 sequence (never before `start` + 1 when bytes remain). */
+export function utf8Boundary(buf: Buffer, end: number): number {
+  if (end >= buf.length) return buf.length;
+  let e = end;
+  // buf[e] is the first byte NOT returned: a continuation byte (10xxxxxx) means the cut splits a character
+  while (e > 0 && (buf[e]! & 0xc0) === 0x80) e--;
+  return e > 0 ? e : end;
+}
+
+/** One read_file page of `size`-byte `file`: `[offset, offset + limit)` within the cap, a note when there is more. */
+export async function readPage(file: string, a: Record<string, unknown>, ctx: ToolContext, shown: string): Promise<ToolResult> {
+  const cap = Math.min(MAX_READ, Math.max(MIN_READ, Math.floor(ctx.readCap ?? MAX_READ)));
+  const offset = byteArg(a.offset, 'offset') ?? 0;
+  const limit = Math.min(cap, byteArg(a.limit, 'limit') ?? cap);
+  const fh = await fsp.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const size = (await fh.stat()).size;
+    if (offset >= size && size > 0) return { content: `[read_file: ${shown} is ${size} bytes; offset=${offset} is past the end]`, isError: false };
+    // one byte more than the page tells whether a character continues past the cut
+    const want = Math.max(0, Math.min(limit, size - offset));
+    const buf = Buffer.alloc(want + 4);
+    const { bytesRead } = await fh.read(buf, 0, Math.min(want + 4, Math.max(0, size - offset)), offset);
+    const got = buf.subarray(0, bytesRead);
+    const end = bytesRead > want ? utf8Boundary(got, want) : bytesRead;
+    const text = got.subarray(0, end).toString('utf8');
+    const next = offset + end;
+    if (offset === 0 && next >= size) return { content: text, isError: false };
+    const more = next < size ? ` Call read_file with path="${shown}" offset=${next} for more.` : ' This is the end of the file.';
+    return { content: `${text}\n[read_file: ${shown} is ${size} bytes; returned bytes ${offset}-${next} (${end} bytes).${more}]`, isError: false };
+  } finally {
+    await fh.close();
+  }
+}
 
 export class PathRefused extends Error {}
 
@@ -146,17 +200,11 @@ export async function resolveWrite(raw: string, ctx: ToolContext): Promise<strin
 export const TOOLS: ReadonlyArray<ToolSpec & { run: ToolImpl }> = Object.freeze([
   {
     name: 'read_file',
-    description: 'Read a UTF-8 text file (path relative to the working directory).',
-    parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+    description: 'Read a UTF-8 file (path relative to the working dir), paged: offset/limit in BYTES; a partial page names the next offset.\nA page that is not the whole file ends with a note giving the total size, the bytes returned and the offset to pass for the next page. Read only the files the question needs.',
+    parameters: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'integer', description: 'byte offset to start at (default 0)' }, limit: { type: 'integer', description: 'most bytes to return (default and maximum: the session page size)' } }, required: ['path'] },
     run: async (a, ctx) => {
-      const fh = await fsp.open(await resolveRead(str(a.path, 'path'), ctx), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-      try {
-        const buf = Buffer.alloc(MAX_READ);
-        const { bytesRead } = await fh.read(buf, 0, MAX_READ, 0);
-        return { content: buf.subarray(0, bytesRead).toString('utf8'), isError: false };
-      } finally {
-        await fh.close();
-      }
+      const raw = str(a.path, 'path');
+      return readPage(await resolveRead(raw, ctx), a, ctx, raw.slice(0, 200));
     },
   },
   {

@@ -11,6 +11,9 @@
  *     fields ignored, an unknown `type` is `unknown` (logged, never acted on),
  *     a non-object is `malformed`. Usage only from `message_end.usage` and
  *     `agent_end.usage` — never model text (§2.2).
+ *   T-2026-10-26-003: `message` carries textBytes (the assistant text's size,
+ *     never the text) and `end` carries input/output beside the total, so the
+ *     kernel's turn.result can say "no answer" and the run's real usage.
  *   LocalUsageMeter — each message's usage is charged once; agent_end charges
  *     only what the messages did not (no double count).
  *   promptLine / followUpLine / steerLine / abortLine — the stdin commands;
@@ -24,13 +27,13 @@ export function buildLocalArgv(i: { configPath: string; hsid: string }): string[
 export type LocalEvent =
   | { kind: 'capabilities'; type: string; model: string | null; tools: boolean | null; ctx: number | null; compat: string | null; textTools: boolean | null }
   | { kind: 'partial'; type: string; bytes: number }
-  | { kind: 'message'; type: string; tokens: number | null; toolCalls: number }
+  | { kind: 'message'; type: string; tokens: number | null; toolCalls: number; textBytes: number }
   | { kind: 'repair'; type: string; tool: string | null; steps: string[] }
   | { kind: 'tool'; type: string; phase: 'start' | 'end'; tool: string | null; isError: boolean | null }
   | { kind: 'turn'; type: string; phase: 'start' | 'end' }
   | { kind: 'start'; type: string }
   | { kind: 'compaction'; type: string; phase: 'start' | 'end'; reason: string | null; tokensBefore: number | null; tokensAfter: number | null; summaryHash: string | null; summaryBytes: number | null; error: string | null }
-  | { kind: 'end'; type: string; tokens: number | null; stopReason: string | null; error: string | null }
+  | { kind: 'end'; type: string; tokens: number | null; input: number | null; output: number | null; stopReason: string | null; error: string | null }
   | { kind: 'response'; type: string; command: string | null; success: boolean | null; error: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
   | { kind: 'unknown'; type: string }
@@ -63,8 +66,8 @@ export function parseLocalLine(line: string): LocalEvent {
     case 'message_update':
       return { kind: 'partial', type, bytes: typeof e.delta === 'string' ? Buffer.byteLength(e.delta) : 0 };
     case 'message_end': {
-      const m = e.message as { toolCalls?: unknown } | undefined;
-      return { kind: 'message', type, tokens: tokensOf(e.usage), toolCalls: Array.isArray(m?.toolCalls) ? m.toolCalls.length : 0 };
+      const m = e.message as { toolCalls?: unknown; content?: unknown } | undefined;
+      return { kind: 'message', type, tokens: tokensOf(e.usage), toolCalls: Array.isArray(m?.toolCalls) ? m.toolCalls.length : 0, textBytes: typeof m?.content === 'string' ? Buffer.byteLength(m.content.trim()) : 0 };
     }
     case 'model_repair':
       return { kind: 'repair', type, tool: s(e.toolName, 64), steps: Array.isArray(e.steps) ? e.steps.filter((x): x is string => typeof x === 'string').slice(0, 16) : [] };
@@ -81,7 +84,10 @@ export function parseLocalLine(line: string): LocalEvent {
       // slice 2: logged (turn.event) and never acted on — its usage reaches the meter through agent_end's remainder
       return { kind: 'compaction', type, phase: type.endsWith('start') ? 'start' : 'end', reason: s(e.reason, 32), tokensBefore: num(e.tokensBefore), tokensAfter: num(e.tokensAfter), summaryHash: typeof e.summaryHash === 'string' && /^sha256:[0-9a-f]{64}$/.test(e.summaryHash) ? e.summaryHash : null, summaryBytes: num(e.summaryBytes), error: s(e.error, 500) };
     case 'agent_end':
-      return { kind: 'end', type, tokens: tokensOf(e.usage), stopReason: s(e.stopReason, 32), error: s(e.error, 500) };
+    {
+      const u = e.usage !== null && typeof e.usage === 'object' ? (e.usage as { input?: unknown; output?: unknown }) : {};
+      return { kind: 'end', type, tokens: tokensOf(e.usage), input: num(u.input), output: num(u.output), stopReason: s(e.stopReason, 32), error: s(e.error, 500) };
+    }
     case 'response':
       return { kind: 'response', type, command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
     case 'fatal':

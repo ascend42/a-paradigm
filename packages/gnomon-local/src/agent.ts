@@ -20,6 +20,18 @@
  * usage}` (or `{error}`); the summariser's usage is part of agent_end's
  * total (the kernel charges it as the run's remainder — tracked, never lost).
  *
+ * T-2026-10-26-003 (local lane fixes):
+ *   - read_file pages are capped at a quarter of the working budget
+ *     (budget/4 tokens ≈ budget bytes at 4 chars a token: ctx.readCap),
+ *     split across the read_file calls of one turn, never above MAX_READ;
+ *   - compaction pins the CURRENT prompt as the Goal (summariser and the
+ *     compacted lead message) and keeps excerpts of the newest tool results
+ *     the tail cannot hold; the tail and the excerpts share what is left of
+ *     the budget after the reply, the system prompt, the summary and the goal;
+ *   - at maxSteps the run makes ONE final request with tools disabled
+ *     (STEP_LIMIT_PROMPT) and that reply is the answer; stopReason stays
+ *     'max_steps' (a failing final request ends max_steps with its error).
+ *
  * DEFERRED: the JSONL session tree (where it lives is open: the session
  * profile denies writes under the Gnomon home, so the kernel would have to
  * read it from the child's stdout or a worktree path).
@@ -36,6 +48,9 @@ import { surfaceTools } from './compat.js';
 export const TARGET_HEADROOM = 0.85;
 
 export type Emit = (ev: Record<string, unknown>) => void;
+
+/** T-2026-10-26-003: the one tool-less request at the step limit asks for this */
+export const STEP_LIMIT_PROMPT = 'Step limit reached. Answer the question now from what you have found; say what is unresolved.';
 
 /** round 3 (R4): more tool calls than this in one turn ends the run with an error; none of them runs */
 export const MAX_TOOL_CALLS_PER_TURN = 32;
@@ -75,6 +90,8 @@ export class Agent {
   #aborted = false;
   #turn = 0;
   #compactions = 0;
+  /** T-2026-10-26-003: the current prompt (the user message that started this run): compaction's Goal */
+  #goal: string | undefined;
 
   constructor(o: AgentOptions) {
     this.#o = o;
@@ -101,9 +118,10 @@ export class Agent {
     return Math.floor(this.#target * TARGET_HEADROOM) - schema;
   }
 
-  #request(): Promise<Completion> {
+  /** `noTools`: the step-limit request — no tools offered (surface 'none', nativeTools false) */
+  #request(noTools = false): Promise<Completion> {
     this.#abort = new AbortController();
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#messages, tools: this.#tools, nativeTools: this.#o.nativeTools, surface: this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#messages, tools: noTools ? [] : this.#tools, nativeTools: noTools ? false : this.#o.nativeTools, surface: noTools ? 'none' : this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
     return complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
   }
 
@@ -114,7 +132,7 @@ export class Agent {
     this.#abort = new AbortController();
     // round 3: the caps derive from the budget (0.85 × target minus the tools schema), not the raw target
     const budget = Math.max(this.#budget, 256);
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget, this.#goal), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
     let c: Completion;
     try {
       c = await complete(this.#o.base, body, { signal: this.#abort.signal, ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
@@ -128,10 +146,51 @@ export class Agent {
       total.output += c.usage.output;
     }
     const summary = normaliseSummary(c.content, budget);
-    const { messages, kept } = compactedHistory(this.#messages, summary, Math.floor(budget / 4));
+    // T-2026-10-26-003: the tail and the tool-result excerpts share what the reply, system, summary and goal leave
+    const system = this.#messages[0]?.role === 'system' ? estimateTokens([this.#messages[0]]) : 0;
+    const fixed = this.#o.maxTokens + system + estimateTokens([{ role: 'user', content: summary }]) + (this.#goal !== undefined ? Math.ceil(this.#goal.length / 4) : 0) + 64;
+    const room = Math.max(0, budget - fixed);
+    const { messages, kept, excerpts } = compactedHistory(this.#messages, summary, Math.floor(room / 3), { ...(this.#goal !== undefined ? { goal: this.#goal } : {}), excerptTokens: Math.floor(room / 4) });
     this.#messages.splice(0, this.#messages.length, ...messages);
     this.#compactions++;
-    this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
+    this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, excerpts, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
+  }
+
+  /**
+   * The step limit's answer: STEP_LIMIT_PROMPT (merged into a trailing user message so roles keep alternating), at
+   * most one compaction to fit the budget (before the prompt is added), one compact-and-retry on an overflow, then
+   * ONE request with tools disabled whose text is the reply (a stray text-tool block is stripped, never run).
+   */
+  async #finalAnswer(total: { input: number; output: number }): Promise<void> {
+    const turn = ++this.#turn;
+    this.#o.emit({ type: 'turn_start', turn, final: true });
+    const promptTokens = Math.ceil(STEP_LIMIT_PROMPT.length / 4) + 4;
+    let compacted = false;
+    if (this.#messages.length > 2 && estimateTokens(this.#messages) + promptTokens + this.#o.maxTokens > this.#budget) {
+      await this.#compact('threshold', total);
+      compacted = true;
+    }
+    const last = this.#messages.at(-1);
+    if (last?.role === 'user') this.#messages.splice(-1, 1, { ...last, content: `${last.content}\n\n${STEP_LIMIT_PROMPT}` });
+    else this.#messages.push({ role: 'user', content: STEP_LIMIT_PROMPT });
+    if (estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) throw new Error(`history is over the context budget at the step limit (${estimateTokens(this.#messages)} + ${this.#o.maxTokens} > ${this.#budget} tokens)`);
+    let c: Completion;
+    try {
+      c = await this.#request(true);
+    } catch (err) {
+      if (this.#aborted || !isContextOverflow(err) || compacted) throw err;
+      await this.#compact('overflow', total);
+      c = await this.#request(true);
+    }
+    this.#abort = null;
+    if (c.usage) {
+      total.input += c.usage.input;
+      total.output += c.usage.output;
+    }
+    const content = this.#o.nativeTools ? c.content : parseTextToolCalls(c.content).rest;
+    this.#messages.push({ role: 'assistant', content });
+    this.#o.emit({ type: 'message_end', message: { role: 'assistant', content, toolCalls: [] }, usage: c.usage, finishReason: c.finishReason });
+    this.#o.emit({ type: 'turn_end', turn, usage: c.usage });
   }
 
   steer(text: string): void {
@@ -153,6 +212,7 @@ export class Agent {
     this.#running = true;
     this.#aborted = false;
     this.#messages.push({ role: 'user', content: text });
+    this.#goal = text;
     const total = { input: 0, output: 0 };
     let stopReason = 'stop';
     let error: string | undefined;
@@ -165,6 +225,14 @@ export class Agent {
         }
         if (step >= this.#o.maxSteps) {
           stopReason = 'max_steps';
+          // T-2026-10-26-003: one tool-less request for an answer; its failure ends max_steps with the error
+          try {
+            await this.#finalAnswer(total);
+          } catch (err) {
+            if (this.#aborted || (err as Error).name === 'AbortError') throw err;
+            this.#abort = null;
+            error = (err as Error).message.slice(0, 500);
+          }
           break;
         }
         const turn = ++this.#turn;
@@ -202,12 +270,14 @@ export class Agent {
         });
         this.#o.emit({ type: 'message_end', message: { role: 'assistant', content: c.content, toolCalls: calls.map((t) => ({ id: t.id, name: t.name })) }, usage: c.usage, finishReason: c.finishReason });
         if (calls.length > MAX_TOOL_CALLS_PER_TURN) throw new Error(`${calls.length} tool calls in one turn (cap ${MAX_TOOL_CALLS_PER_TURN})`);
+        // T-2026-10-26-003: one turn's read_file pages share a quarter of the budget (tokens × 4 chars ⇒ budget bytes)
+        const readCap = Math.floor(Math.max(this.#budget, 256) / Math.max(1, calls.filter((t) => t.name === 'read_file').length));
         const results = await Promise.all(
           calls.map(async (t) => {
             const r = repairArguments(t.arguments);
             if (r.repaired) this.#o.emit({ type: 'model_repair', toolCallId: t.id, toolName: t.name, steps: r.steps });
             this.#o.emit({ type: 'tool_execution_start', toolCallId: t.id, toolName: t.name, args: r.ok ? r.value : null });
-            const res = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
+            const res = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, readCap, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
             this.#o.emit({ type: 'tool_execution_end', toolCallId: t.id, toolName: t.name, isError: res.isError, result: res.content.slice(0, 4096) });
             return { t, res };
           }),

@@ -236,3 +236,12 @@ describe('deferred to slice 2 (manual oracles need a real model)', () => {
   // slice 2 shipped root-signed local.signed.json, the runner pin, per-task endpoint choice and the daemon-start probe (test/local-config.test.ts), compaction (gnomon-local test/compaction.test.ts) and session.send{steer} (test/local-lane-spawn.test.ts)
   it.todo('slice 3: `gnomon probe local` as a CLI verb (the daemon-start probe records model.probe/model.capabilities today); the claude estimate on the fallback card; the JSONL session tree; bash / edit tools');
 });
+
+describe('T-2026-10-26-003: the end of a local run says how it ended', () => {
+  it('agent_end carries input/output beside the total; message_end the reply size (never the text)', () => {
+    expect(parseLocalLine(JSON.stringify({ type: 'agent_end', stopReason: 'max_steps', usage: { input: 48000, output: 2712 } }))).toEqual({ kind: 'end', type: 'agent_end', tokens: 50712, input: 48000, output: 2712, stopReason: 'max_steps', error: null });
+    expect(parseLocalLine(JSON.stringify({ type: 'agent_end', stopReason: 'error' }))).toMatchObject({ kind: 'end', tokens: null, input: null, output: null });
+    expect(parseLocalLine(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: '  ', toolCalls: [{ id: 'a' }] }, usage: { input: 1, output: 2 } }))).toEqual({ kind: 'message', type: 'message_end', tokens: 3, toolCalls: 1, textBytes: 0 });
+    expect(parseLocalLine(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: 'é ok' } }))).toMatchObject({ kind: 'message', textBytes: 5 });
+  });
+});
