@@ -17,7 +17,8 @@
  *   - kernel-written (no model involved): the goal (the human's current
  *     prompt, REPLACED on each new prompt, source human), every file the
  *     session edited (write_file/edit, de-duplicated, source kernel), the last
- *     failing tool (replaced, source kernel);
+ *     failing tool (replaced; the kernel writes it but the text is tool
+ *     output, so its source is `tool:<server>` and it renders as DATA);
  *   - model-written: `note{text}` (≤ NOTE_MAX_CHARS) and `forget{id}` (model
  *     notes only). At most MAX_MODEL_NOTES model notes: the oldest is evicted.
  * Caps: at most MAX_ENTRIES entries of at most ENTRY_MAX_CHARS each. Human and
@@ -338,9 +339,14 @@ export class WorkingMemory {
     return out;
   }
 
-  /** The last failing tool (replaced each time). `detail` is the error's head, already bounded by the caller. */
-  setToolError(tool: string, detail: string): MemoryChange[] {
-    return this.#replaceOne((e) => e.kind === 'tool-pin' && e.source === 'kernel', 'tool-pin', 'kernel', cut(oneLine(`last failing tool: ${tool}${detail ? ` — ${detail}` : ''}`), ENTRY_MAX_CHARS).text);
+  /**
+   * The last failing tool (replaced each time). `detail` is the error's head, already bounded by the caller. The kernel
+   * writes the entry but its text is TOOL output, so it is labelled `tool:<server>` (`tool:local` for the child's own
+   * tools) and renders in the data section, escaped; like every non-model entry it is never evicted.
+   */
+  setToolError(tool: string, detail: string, source: `tool:${string}` = 'tool:local'): MemoryChange[] {
+    const src: MemorySource = SOURCE_RE.test(source) ? source : 'tool:local';
+    return this.#replaceOne((e) => e.kind === 'tool-pin', 'tool-pin', src, cut(oneLine(`last failing tool: ${tool}${detail ? ` — ${detail}` : ''}`), ENTRY_MAX_CHARS).text);
   }
 
   /** The model's note{text}: ≤ NOTE_MAX_CHARS; the oldest model note leaves past MAX_MODEL_NOTES. */

@@ -69,6 +69,19 @@
  *   tool-request event: its turn.event row is hash-only (the args are model text), and it is answered OUTSIDE the
  *   stdout queue (a card may wait on a human) with tool_response; every call logs one hash-only tool.brokered row.
  *   stop (interrupt or full) and exit cancel the calls in flight; exit also expires the session's verb cards.
+ * SLICE B2 (#local-working-memory, TD-2026-10-27-833; kernel/local/working-memory.ts): an ATTENDED session gets a
+ *   kernel-owned WorkingMemory (<session dir>/memory.jsonl, owner = the opener) and `memory: true` in its local.yaml
+ *   (the child offers note/forget). The kernel writes the goal (each new prompt; a follow_up's goal when the run
+ *   before it ends), every file the session edited (write_file/edit tool ends) and the last failing tool, and
+ *   answers note/forget tool_requests from the store (never the LocalToolBroker); every change is one hash-only
+ *   session.memory row and, when the render changed, one memory_set line. Their tool_execution_* lines are
+ *   hash-only (they carry the note text). A LOOP session has no memory (off): no store, no memory flag, no
+ *   memory tools — the loop clamps are unchanged. humanRequest serves the human-only dispatcher requests
+ *   request.session.compact{hsid} (compact line; the child compacts at its next model step), request.session.context
+ *   {hsid, target} (clamped to [the 0.85 floor, n_ctx]; above the signed config is notify-and-proceed, labelled
+ *   aboveConfig on the session.context row and the reply; a lower target re-renders memory first) and
+ *   request.session.memory.delete{hsid} (live or ended; the owner recorded in memory.jsonl; the file is unlinked;
+ *   one session.memory{op:'delete'} row). The session dir is never pruned while it holds memory.
  * DEFERRED (reported): unattended local automations other than loops (law 5;
  * the scheduler still refuses them), the claude estimate on the card (null: no per-task
  * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
@@ -80,7 +93,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { releaseSession, sessionSidFor } from '../../platform/win32/session-sandbox.js';
-import { hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -110,6 +123,7 @@ import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/vo
 import { loopRunRefInfo, type LoopRunRef, type LoopRunRefInfo } from '../loops/registry.js';
 import { LOOP_ORIGIN, LOOP_SESSION_ENV_DROPPED, loopActTools } from './loop-clamp.js';
 import { liveScratch, type Scratch } from '../git/scratch.js';
+import { answerMemoryTool, MEMORY_FILE, MEMORY_TOOL_NAMES, memoryOwnerOf, memoryRowsOf, memorySlotTokens, WorkingMemory, type MemoryChange } from '../local/working-memory.js';
 import { loopActLaunchPlan, type LoopActLaunchInput } from '../sandbox/loop-act.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -255,7 +269,37 @@ interface LocalSession {
   roots: { cwd: string; worktree?: string };
   /** slice C1: this session's brokered tools (a loop session's offers none and refuses every call) */
   tools?: LocalToolBroker;
+  /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
+  memory?: WorkingMemory;
+  /** slice B2: the hash of the last memory_set sent (a change that renders the same block sends nothing) */
+  memorySent?: string;
+  /** slice B2: goals of follow_ups queued behind the running turn (each becomes the goal when the run before it ends) */
+  pendingGoals: string[];
+  /** slice B2: write_file/edit paths by toolCallId, until their tool end (bounded) */
+  toolPaths: Map<string, string>;
+  /** slice B2: the context target in effect, the signed config's, the endpoint's n_ctx and the reply budget */
+  context: { target: number; config: number; nCtx: number | null; maxTokens: number };
 }
+
+/** Slice B2: the human-only dispatcher requests a local session serves (dispatcher-only: never §9.1 rows themselves). */
+export const LOCAL_SESSION_COMPACT_REQUEST = 'request.session.compact' as const;
+export const LOCAL_SESSION_CONTEXT_REQUEST = 'request.session.context' as const;
+export const LOCAL_SESSION_MEMORY_DELETE_REQUEST = 'request.session.memory.delete' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST]);
+/** Slice B2: the asker of a human request (stamped by the dispatcher). */
+export interface LocalSessionAsker {
+  connId: string;
+  principal: string | undefined;
+  principalClass: string;
+  credential: string | undefined;
+}
+/** Slice B2: the smallest context target (gnomon-local MIN_CONTEXT_TARGET) and the 0.85 headroom rule. */
+const MIN_CONTEXT_TARGET = 1024;
+const TARGET_HEADROOM = 0.85;
+const PENDING_GOALS_CAP = 32;
+const TOOL_PATHS_CAP = 256;
+/** The files whose successful tool end records a file-ref. */
+const EDIT_TOOLS: readonly string[] = Object.freeze(['write_file', 'edit']);
 
 /** A target with no tools (no kernel verbs served): every brokered call is unknown-tool. */
 const NO_TARGET: BrokerTarget = { server: KERNEL_MCP_SERVER, provenance: 'kernel', ownsGate: false, list: async () => [], call: async () => ({ text: 'no such tool', isError: true }) };
@@ -814,6 +858,8 @@ export class LocalLane {
         contextTarget: Math.min(cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET),
         forbiddenPorts: this.#forbiddenPorts(),
         ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}),
+        // slice B2: kernel working memory for attended sessions only (a loop session's memory is off)
+        ...(loop ? {} : { memory: true }),
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal };
@@ -838,7 +884,7 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
@@ -870,7 +916,8 @@ export class LocalLane {
           }
         }
         if (permit) await this.#o.fuse.release(permit.permitId, permit.principal).catch(() => undefined);
-        fs.rmSync(dir, { recursive: true, force: true });
+        // slice B2: the session dir is never pruned while it holds working memory (kept until the human deletes it)
+        if (!fs.existsSync(path.join(dir, MEMORY_FILE))) fs.rmSync(dir, { recursive: true, force: true });
       }
       await this.#o.log('session.refused', { hsid, code: 'spawn_failed', backend: 'local', ...(err instanceof RefusedError ? { refusal: err.refusal.code } : {}), ...(err instanceof LifecycleRefusal ? { sandbox: 'unavailable' } : {}) }, { session: hsid }).catch(() => undefined);
       if (err instanceof LifecycleRefusal) throw refused('UNSUPPORTED', err.message, { session: 'spawn_failed', sandbox: 'unavailable', ...err.detail });
@@ -953,9 +1000,118 @@ export class LocalLane {
     }
   }
 
+  /** Slice B2: one session.memory row per change (hash-only), then memory_set when the render changed. */
+  async #memoryChanged(s: LocalSession, changes: readonly MemoryChange[]): Promise<void> {
+    if (!s.memory || !changes.length) return;
+    for (const row of memoryRowsOf(s.hsid, changes)) await this.#o.log('session.memory', row, { session: s.hsid });
+    this.#pushMemory(s);
+  }
+
+  /** Slice B2: the memory block rendered for the session's target, written when it differs from the last one sent. */
+  #pushMemory(s: LocalSession, target = s.context.target): void {
+    if (!s.memory) return;
+    const r = s.memory.render(target);
+    if (r.hash === s.memorySent) return;
+    s.memorySent = r.hash;
+    this.#write(s, drv.memorySetLine(r));
+  }
+
+  /** Slice B2: a tool start/end of an attended session: the files it edited and the last failing tool. */
+  async #memoryTool(s: LocalSession, ev: Extract<LocalEvent, { kind: 'tool' }>): Promise<void> {
+    if (!s.memory || ev.tool === null || MEMORY_TOOL_NAMES.includes(ev.tool)) return;
+    if (ev.phase === 'start') {
+      if (ev.toolCallId !== null && ev.path !== null && EDIT_TOOLS.includes(ev.tool) && s.toolPaths.size < TOOL_PATHS_CAP) s.toolPaths.set(ev.toolCallId, ev.path);
+      return;
+    }
+    const p = ev.toolCallId !== null ? s.toolPaths.get(ev.toolCallId) : undefined;
+    if (ev.toolCallId !== null) s.toolPaths.delete(ev.toolCallId);
+    if (ev.isError === false && p !== undefined) await this.#memoryChanged(s, s.memory.addFileRef(p));
+    else if (ev.isError === true) {
+      // the error text is TOOL output: its entry is labelled tool:<server> and renders in the data section
+      const brokered = s.tools?.offered.some((t) => t.name === ev.tool) ?? false;
+      const head = (ev.errorHead ?? '').replace(/^<tool-data [^>]*>\n?/, '').slice(0, 200);
+      await this.#memoryChanged(s, s.memory.setToolError(ev.tool, head, brokered ? `tool:${KERNEL_MCP_SERVER}` : 'tool:local'));
+    }
+  }
+
+  /** Slice B2: note/forget answered from the session's working memory (never the LocalToolBroker). */
+  async #memoryRequest(s: LocalSession, ev: Extract<LocalEvent, { kind: 'tool-request' }>): Promise<void> {
+    const r = ev.error !== null || ev.name === null ? { content: `refused: ${ev.error ?? 'no tool name'}`, isError: true, changes: [] } : answerMemoryTool(s.memory!, ev.name, ev.args);
+    await this.#memoryChanged(s, r.changes);
+    this.#write(s, drv.toolResponseLine({ id: ev.id!, content: r.content, isError: r.isError, provenance: 'kernel' }));
+  }
+
+  /** Slice B2: a goal from the human's prompt (the render goes out before the prompt line, so the child has it at once). */
+  async #setGoal(s: LocalSession, text: string): Promise<void> {
+    if (s.memory) await this.#memoryChanged(s, s.memory.setGoal(text));
+  }
+
+  /**
+   * Slice B2: the human-only local-session requests (dispatcher-only; see LOCAL_SESSION_REQUESTS). The asker must be the
+   * human on a gui or device connection and the session's owner. Refusals are RefusedErrors (asRpcRefusal on the wire).
+   */
+  async humanRequest(asker: LocalSessionAsker, kind: string, payload: unknown): Promise<Record<string, unknown>> {
+    if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
+      throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
+    }
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : ['hsid'];
+    if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
+    const p = payload as Record<string, unknown>;
+    const extra = Object.keys(p).filter((k) => !keys.includes(k));
+    if (extra.length || typeof p.hsid !== 'string' || !HSID_PATTERN.test(p.hsid)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
+    const hsid = p.hsid;
+    if (kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST) return this.#deleteMemory(asker.principal, hsid);
+    const s = this.#sessions.get(hsid);
+    if (!s || s.owner !== asker.principal || s.state !== 'running') throw refused('NOT_FOUND', 'no such running local session for this principal', { reason: 'not-found' });
+    if (s.loop) throw refused('FORBIDDEN', 'a loop session takes no context requests', { reason: 'loop-session' });
+    if (kind === LOCAL_SESSION_COMPACT_REQUEST) {
+      this.#write(s, drv.compactLine());
+      return { hsid, when: s.turnPermits.length > 0 ? 'next-step' : 'next-run' };
+    }
+    if (kind !== LOCAL_SESSION_CONTEXT_REQUEST) throw refused('BAD_REQUEST', `unknown request ${kind.slice(0, 40)}`, { reason: 'bad-params' });
+    if (typeof p.target !== 'number' || !Number.isSafeInteger(p.target) || p.target < 1) throw refused('BAD_REQUEST', `${kind}: target must be a positive integer`, { reason: 'bad-params', field: 'target' });
+    const c = s.context;
+    // the human may raise past the signed config up to n_ctx (founder Q4: notify-and-proceed, labelled); with n_ctx
+    // unknown the config is the ceiling. Lowering is always free; the floor is the 0.85 rule for the reply budget.
+    const ceiling = c.nCtx ?? Math.max(c.config, c.target);
+    const floor = Math.max(MIN_CONTEXT_TARGET, Math.floor(c.maxTokens / TARGET_HEADROOM) + 1);
+    if (floor > ceiling) throw refused('BAD_REQUEST', `${kind}: the reply budget leaves no room under n_ctx`, { reason: 'bad-params', field: 'target' });
+    const target = Math.min(ceiling, Math.max(floor, p.target));
+    const previous = c.target;
+    const aboveConfig = target > c.config;
+    const row = { hsid, target, previous, requested: p.target, configTarget: c.config, nCtx: c.nCtx, aboveConfig };
+    await this.#o.log('session.context', row, { session: hsid });
+    c.target = target;
+    // a lower target shrinks the memory slot: the smaller block goes first (it fits both); a higher one after
+    if (target < previous) this.#pushMemory(s, target);
+    this.#write(s, drv.setContextLine(target));
+    if (target >= previous) this.#pushMemory(s, target);
+    return { hsid, target, previous, requested: p.target, clamped: target !== p.target, aboveConfig, configTarget: c.config, nCtx: c.nCtx, memorySlot: memorySlotTokens(target), ...(aboveConfig ? { notice: `the context target ${target} is above the signed config (${c.config}); it applies to this session only` } : {}) };
+  }
+
+  /** Slice B2: the human deletes a session's working memory (live or ended); the owner is the one memory.jsonl names. */
+  async #deleteMemory(principal: string, hsid: string): Promise<Record<string, unknown>> {
+    const s = this.#sessions.get(hsid);
+    if (s?.memory) {
+      if (s.owner !== principal) throw refused('NOT_FOUND', 'no such session memory for this principal', { reason: 'not-found' });
+      s.pendingGoals = [];
+      await this.#memoryChanged(s, s.memory.deleteAll());
+      return { hsid, deleted: true, live: true };
+    }
+    const file = path.join(this.#o.home, 'sessions', hsidShort(hsid), MEMORY_FILE);
+    const meta = memoryOwnerOf(file);
+    if (!meta || meta.hsid !== hsid || meta.owner !== principal) throw refused('NOT_FOUND', 'no such session memory for this principal', { reason: 'not-found' });
+    fs.rmSync(file, { force: true });
+    await this.#o.log('session.memory', { hsid, op: 'delete', bytes: 0 }, { session: hsid });
+    return { hsid, deleted: true, live: false };
+  }
+
   /** Slice C1: one tool_request, answered outside the stdout queue (a card may wait on a human). */
   async #brokered(s: LocalSession, ev: Extract<LocalEvent, { kind: 'tool-request' }>, receivedAt: number): Promise<void> {
     if (ev.id === null) return; // no usable id: nothing to answer (the child's own timeout ends the call)
+    // slice B2: the memory tools of an attended session are the kernel's own store (a loop session has none: they
+    // fall through to the broker, which refuses them)
+    if (s.memory && ev.name !== null && MEMORY_TOOL_NAMES.includes(ev.name)) return this.#memoryRequest(s, ev);
     if (!s.tools) {
       // Aegis L7: never unanswered, never unlogged (the broker is built before stdout is read; this is the backstop)
       await this.#o.log('tool.brokered', { hsid: s.hsid, server: KERNEL_MCP_SERVER, argsHash: inputHash(ev.args ?? null), decision: 'not-running', bytes: 0, isError: true }, { session: s.hsid }).catch(() => undefined);
@@ -1004,7 +1160,8 @@ export class LocalLane {
     // step 10: an act session's tool lines carry model-written paths and file content: hashed the same way
     // slice C1: a tool_request line carries model-written args: hashed for every session (tool.brokered is hash-only too)
     // Aegis L3: so are the tool_execution_* lines of a brokered tool (they echo its args and the kernel's result)
-    const brokeredTool = ev.kind === 'tool' && ev.tool !== null && (s.tools?.offered.some((t) => t.name === ev.tool) ?? false);
+    // slice B2: so are the memory tools' (note carries model-written text; session.memory rows are hash-only)
+    const brokeredTool = ev.kind === 'tool' && ev.tool !== null && ((s.tools?.offered.some((t) => t.name === ev.tool) ?? false) || (s.memory !== undefined && MEMORY_TOOL_NAMES.includes(ev.tool)));
     const hashOnly = bytes > EVENT_LINE_CAP || ev.kind === 'tool-request' || brokeredTool || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
     await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(hashOnly ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     if (s.loop && ev.kind === 'message') s.loop.reply = loopReplyOf(line) ?? s.loop.reply;
@@ -1057,9 +1214,16 @@ export class LocalLane {
         const head = s.turnPermits.shift();
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
+        // slice B2: the follow_up queued behind this run starts now: its text is the goal
+        const nextGoal = s.pendingGoals.shift();
+        if (nextGoal !== undefined) await this.#setGoal(s, nextGoal);
         if (s.loop?.pending) s.loop.pending({ text: s.loop.reply, tokens: s.loop.tokens, stopReason: ev.stopReason, error: ev.error ?? (ev.stopReason === 'error' ? 'the model call failed' : null), ...(s.loop.act ? { protectedHits: [...s.loop.act.hits] } : {}) });
         return;
       }
+      case 'tool':
+        // slice B2: edited files and the last failing tool (attended sessions)
+        await this.#memoryTool(s, ev);
+        return;
       case 'tool-request':
         // slice C1: answered OUTSIDE this queue — a mutate call's card may wait minutes on a human
         void this.#brokered(s, ev, receivedAt).catch(() => undefined);
@@ -1136,6 +1300,9 @@ export class LocalLane {
     const contentHash = sha(p.text);
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local', ...voiceTag(p), origin: p.voiceOrigin?.sentBy === 'unverified' ? 'voice-unverified' : p.voiceOrigin ? 'voice' : 'hand', ...(p.voiceOrigin ? { sentBy: p.voiceOrigin.sentBy } : {}) }, { session: s.hsid });
+    // slice B2: the prompt is the goal (memory_set goes out BEFORE the prompt line); a follow_up's when its run starts
+    if (!inFlight) await this.#setGoal(s, p.text);
+    else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(p.text);
     s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight }));
     return { turn: turnId(s.hsid, n) };
   }

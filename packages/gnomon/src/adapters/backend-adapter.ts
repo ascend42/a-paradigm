@@ -11,7 +11,7 @@
  * each lane.
  *
  * A backend's extra channels are CAPABILITY interfaces (PermissionChannel,
- * ControlChannel, SdkMcpChannel, SteerChannel, ToolBrokerChannel). A concrete
+ * ControlChannel, SdkMcpChannel, SteerChannel, ToolBrokerChannel, ContextChannel). A concrete
  * adapter type is the core intersected with only the capabilities that backend
  * really has: no optional members and no fake methods, so calling a channel a
  * backend lacks is a compile error. There is no normalized cross-backend event
@@ -85,6 +85,21 @@ export interface ToolBrokerChannel {
   toolsSetLine(tools: ReadonlyArray<OfferedTool>): string;
   toolResponseLine(r: ToolResponse): string;
   toolProgressLine(id: string): string;
+}
+
+/** local (slice B2, #local-working-memory): the kernel's context commands — the memory block, compact, the target. */
+export interface ContextChannel {
+  memorySetLine(m: MemorySet): string;
+  compactLine(): string;
+  setContextLine(contextTarget: number): string;
+}
+
+/** The working-memory block the kernel renders (kernel/local/working-memory.ts). */
+export interface MemorySet {
+  render: string;
+  hash: string;
+  bytes: number;
+  goalHash?: string;
 }
 
 /** A brokered tool offered to the child. */

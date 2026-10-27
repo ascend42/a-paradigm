@@ -23,8 +23,13 @@
  *     bounded (id tr-N, toolCallId <= 128 chars, a tool-name pattern, args a
  *     JSON object of at most TOOL_ARGS_MAX_BYTES); a malformed one carries
  *     `error` (the kernel answers it as an error when its id is usable).
- *     toolResponseLine / toolsSetLine are the kernel's replies; the reserved
- *     B2 commands (memory_set, compact, set_context) have no writer yet.
+ *     toolResponseLine / toolsSetLine are the kernel's replies.
+ *   Slice B2 (#local-working-memory): `tool` events also carry toolCallId,
+ *     the start's args.path (a string of at most TOOL_PATH_MAX chars: the
+ *     kernel records the files a session edited) and an error end's result
+ *     head (at most TOOL_ERROR_HEAD chars: the last failing tool);
+ *     memorySetLine / compactLine / setContextLine write the kernel's
+ *     context commands (the ContextChannel).
  *   LocalUsageMeter — each message's usage is charged once; agent_end charges
  *     only what the messages did not (no double count).
  *   promptLine / followUpLine / steerLine / abortLine — the stdin commands;
@@ -36,7 +41,7 @@
  *     OfferedTool / ToolResponse live in ../backend-adapter.ts (re-exported).
  */
 
-import type { BackendAdapter, OfferedTool, SteerChannel, ToolBrokerChannel, ToolResponse } from '../backend-adapter.js';
+import type { BackendAdapter, ContextChannel, MemorySet, OfferedTool, SteerChannel, ToolBrokerChannel, ToolResponse } from '../backend-adapter.js';
 
 export type { OfferedTool, ToolResponse } from '../backend-adapter.js';
 
@@ -55,7 +60,7 @@ export type LocalEvent =
   | { kind: 'partial'; type: string; bytes: number }
   | { kind: 'message'; type: string; tokens: number | null; toolCalls: number; textBytes: number }
   | { kind: 'repair'; type: string; tool: string | null; steps: string[] }
-  | { kind: 'tool'; type: string; phase: 'start' | 'end'; tool: string | null; isError: boolean | null }
+  | { kind: 'tool'; type: string; phase: 'start' | 'end'; tool: string | null; isError: boolean | null; toolCallId: string | null; path: string | null; errorHead: string | null }
   | { kind: 'turn'; type: string; phase: 'start' | 'end' }
   | { kind: 'start'; type: string }
   | { kind: 'compaction'; type: string; phase: 'start' | 'end'; reason: string | null; tokensBefore: number | null; tokensAfter: number | null; summaryHash: string | null; summaryBytes: number | null; error: string | null }
@@ -105,7 +110,7 @@ export function parseLocalLine(line: string): LocalEvent {
       return { kind: 'repair', type, tool: s(e.toolName, 64), steps: Array.isArray(e.steps) ? e.steps.filter((x): x is string => typeof x === 'string').slice(0, 16) : [] };
     case 'tool_execution_start':
     case 'tool_execution_end':
-      return { kind: 'tool', type, phase: type.endsWith('start') ? 'start' : 'end', tool: s(e.toolName, 64), isError: b(e.isError) };
+      return toolEventOf(type, e);
     case 'turn_start':
     case 'turn_end':
       return { kind: 'turn', type, phase: type.endsWith('start') ? 'start' : 'end' };
@@ -136,6 +141,20 @@ export function parseLocalLine(line: string): LocalEvent {
     default:
       return { kind: 'unknown', type };
   }
+}
+
+/** Slice B2: the longest tool path the kernel takes from a tool_execution_start (longer: null). */
+export const TOOL_PATH_MAX = 1024;
+/** Slice B2: how much of an error end's result the kernel keeps (the last failing tool). */
+export const TOOL_ERROR_HEAD = 300;
+
+function toolEventOf(type: string, e: Record<string, unknown>): Extract<LocalEvent, { kind: 'tool' }> {
+  const start = type.endsWith('start');
+  const args = e.args !== null && typeof e.args === 'object' && !Array.isArray(e.args) ? (e.args as Record<string, unknown>) : null;
+  const p = start && args && typeof args.path === 'string' && args.path.length > 0 && args.path.length <= TOOL_PATH_MAX ? args.path : null;
+  const isError = b(e.isError);
+  const errorHead = !start && isError === true && typeof e.result === 'string' ? e.result.slice(0, TOOL_ERROR_HEAD) : null;
+  return { kind: 'tool', type, phase: start ? 'start' : 'end', tool: s(e.toolName, 64), isError, toolCallId: typeof e.toolCallId === 'string' && TOOL_CALL_ID_RE.test(e.toolCallId) ? e.toolCallId : null, path: p, errorHead };
 }
 
 /** Slice S1: bounds of a tool_request (the child's broker.ts mirrors them). */
@@ -218,8 +237,15 @@ export const toolProgressLine = (id: string): string => line({ type: 'tool_progr
 /** Slice S1: the brokered tools offered from the child's next step on. */
 export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>): string => line({ type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });
 
-/** #backend-adapter: the local driver — the core codec plus the steer and tool-broker channels. */
-export interface LocalAdapter extends BackendAdapter<'local', LocalArgvInput, LocalEvent>, SteerChannel, ToolBrokerChannel {}
+/** Slice B2: the working-memory block (the kernel's render; goalHash only when it pins the goal whole). */
+export const memorySetLine = (m: MemorySet): string => line({ type: 'memory_set', render: m.render, hash: m.hash, bytes: m.bytes, ...(m.goalHash !== undefined ? { goalHash: m.goalHash } : {}) });
+/** Slice B2: compact at the child's next model step (the human's request.session.compact). */
+export const compactLine = (): string => line({ type: 'compact' });
+/** Slice B2: the context target (kernel-clamped; the child clamps again to n_ctx and the 0.85 rule). */
+export const setContextLine = (contextTarget: number): string => line({ type: 'set_context', contextTarget });
+
+/** #backend-adapter: the local driver — the core codec plus the steer, tool-broker and context channels. */
+export interface LocalAdapter extends BackendAdapter<'local', LocalArgvInput, LocalEvent>, SteerChannel, ToolBrokerChannel, ContextChannel {}
 
 /** Wired to the free functions above (they stay exported). A turn sent while one runs is a follow_up, else a prompt. */
 export const localAdapter: LocalAdapter = Object.freeze({
@@ -233,4 +259,7 @@ export const localAdapter: LocalAdapter = Object.freeze({
   toolsSetLine: (tools: ReadonlyArray<OfferedTool>): string => toolsSetLine(tools),
   toolResponseLine: (r: ToolResponse): string => toolResponseLine(r),
   toolProgressLine: (id: string): string => toolProgressLine(id),
+  memorySetLine: (m: MemorySet): string => memorySetLine(m),
+  compactLine: (): string => compactLine(),
+  setContextLine: (contextTarget: number): string => setContextLine(contextTarget),
 });
