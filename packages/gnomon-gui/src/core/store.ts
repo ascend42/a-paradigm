@@ -921,6 +921,8 @@ function lineItems(line: string, guidanceHash: string | null = null): Array<Pick
  * as before; anything else names itself — never "done" for a run that hit the step limit.
  */
 export const STOP_LABEL: Readonly<Record<string, string>> = Object.freeze({ max_steps: 'stopped: step limit', aborted: 'aborted', error: 'error' });
+/** A Claude result's subtype in words: a cap stop names its cap (the same event as the local step limit); any other error_* reads "error". */
+export const CLAUDE_RESULT_LABEL: Readonly<Record<string, string>> = Object.freeze({ error_max_turns: 'stopped: turn limit', error_max_budget_usd: 'stopped: budget limit', error_during_execution: 'error' });
 
 const n = (v: number): string => v.toLocaleString('en-US');
 
@@ -938,7 +940,11 @@ export function resultLine(p: Record<string, unknown>): { text: string; tone: 'w
   const abnormal = reason !== null && reason !== 'stop';
   const steps = typeof p.maxSteps === 'number' && Number.isInteger(p.maxSteps) && p.maxSteps > 0 ? ` ${p.maxSteps}` : '';
   const stopLabel = (r: string): string => (r === 'max_steps' ? `${STOP_LABEL[r]}${steps}` : (STOP_LABEL[r] ?? `stopped: ${r.replace(/_/g, ' ')}`));
-  const parts = [p.isError === true ? 'error' : abnormal ? stopLabel(reason) : typeof p.subtype === 'string' ? p.subtype : 'done'];
+  const sub = typeof p.subtype === 'string' ? p.subtype : null;
+  const subLabel = sub === null ? null : (CLAUDE_RESULT_LABEL[sub] ?? (sub.startsWith('error') ? 'error' : null));
+  // a Claude cap stop (error_max_*) is a limit reached, not a failure: amber like the local step limit
+  const capped = sub !== null && sub.startsWith('error_max_');
+  const parts = [subLabel ?? (p.isError === true ? 'error' : abnormal ? stopLabel(reason) : (sub ?? 'done'))];
   const noAnswer = reason !== null && reason !== 'aborted' && p.replyBytes === 0;
   if (noAnswer) parts.push('no answer');
   if (typeof p.cost === 'number') parts.push(`$${p.cost.toFixed(4)}`);
@@ -950,8 +956,8 @@ export function resultLine(p: Record<string, unknown>): { text: string; tone: 'w
   if (typeof p.permission_denials === 'number' && p.permission_denials > 0) parts.push(`${p.permission_denials} denied`);
   if (abnormal && typeof p.error === 'string' && p.error.trim()) parts.push(cap(oneLine(p.error), TOOL_SUMMARY_MAX));
   // DESIGN rule 1: vermilion = failed, amber = warning; an error is never amber, an aborted run is neither
-  const failed = p.isError === true || reason === 'error' || (typeof p.subtype === 'string' && p.subtype.startsWith('error'));
-  return { text: parts.join(' · '), tone: failed ? 'fail' : reason !== 'aborted' && (reason === 'max_steps' || noAnswer) ? 'warn' : null };
+  const failed = !capped && (p.isError === true || reason === 'error' || (sub !== null && sub.startsWith('error')));
+  return { text: parts.join(' · '), tone: failed ? 'fail' : capped || (reason !== 'aborted' && (reason === 'max_steps' || noAnswer)) ? 'warn' : null };
 }
 
 /**

@@ -76,7 +76,12 @@ describe('the local turn result line', () => {
     ]).items.find((i) => i.role === 'result')!;
     expect(claude.text).toBe('error · $0.0100 · 50 tokens');
     expect(claude.tone).toBe('fail');
-    expect(resultLine({ subtype: 'error_max_turns', isError: false }).tone).toBe('fail');
+    // a Claude cap stop is a limit reached, not a failure: amber like the local step limit, in words (Mika G1/G2)
+    expect(resultLine({ subtype: 'error_max_turns', isError: false })).toEqual({ text: 'stopped: turn limit', tone: 'warn' });
+    expect(resultLine({ subtype: 'error_max_turns', isError: true })).toEqual({ text: 'stopped: turn limit', tone: 'warn' });
+    expect(resultLine({ subtype: 'error_max_budget_usd', isError: true })).toEqual({ text: 'stopped: budget limit', tone: 'warn' });
+    expect(resultLine({ subtype: 'error_during_execution', isError: true })).toEqual({ text: 'error', tone: 'fail' });
+    expect(resultLine({ subtype: 'error_something_new', isError: false })).toEqual({ text: 'error', tone: 'fail' });
     expect(resultLine({ subtype: 'success', isError: false }).tone).toBeNull();
     // aborted: quiet, never fail or warn, even with no reply
     expect(resultOf({ stopReason: 'aborted', maxSteps: 16, replyBytes: 0 }).tone).toBeUndefined();
