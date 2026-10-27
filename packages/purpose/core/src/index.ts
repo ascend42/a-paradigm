@@ -38,7 +38,7 @@ export {
 } from './parser.js';
 
 // Aggregator
-export type { ParsedPurposeFile, ExtractedFlow, ExtractedSymbolRef, ShadowCallback } from './aggregator.js';
+export type { ParsedPurposeFile, ExtractedFlow, ExtractedSymbolRef, ShadowCallback, FindPurposeFilesOptions } from './aggregator.js';
 export {
   aggregatePurposes,
   findPurposeFiles,
@@ -46,6 +46,7 @@ export {
   aggregateForPath,
   getAllPurposeFiles,
   DEFAULT_PURPOSE_IGNORE,
+  NON_GIT_RELEASE_IGNORE,
   extractFeatures,
   extractComponents,
   extractGates,
@@ -69,6 +70,17 @@ export type {
   PurposeParseCacheStats,
   CachedParseResult,
 } from './parse-cache.js';
+
+// Coverage (#purpose-coverage)
+export type { PurposeCoverage } from './coverage.js';
+export {
+  resolvePurposeCoverage,
+  purposeDocumentsDir,
+  isPlaceholderPurposeContent,
+  filterGitIgnored,
+  PURPOSE_PLACEHOLDER_MARKERS,
+  MIN_PURPOSE_CONTENT_CHARS,
+} from './coverage.js';
 
 // Validator
 export {

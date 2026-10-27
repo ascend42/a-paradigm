@@ -31,7 +31,9 @@ export async function purposeValidateCommand(targetPath: string) {
 
     let files: ParsedPurposeFile[];
     if (stat!.isDirectory()) {
-      files = await getAllPurposeFiles(absolutePath);
+      // respectGitignore: build/release output (e.g. a gitignored
+      // packages/gnomon/release/Gnomon.app copy) is never a symbol source.
+      files = await getAllPurposeFiles(absolutePath, { respectGitignore: true });
     } else {
       // Single file: it must be a .purpose file to validate.
       if (path.basename(absolutePath) !== '.purpose') {
