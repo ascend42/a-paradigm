@@ -2,6 +2,18 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  purpose-coverage-queue:
+    description: >-
+      #purpose-coverage-queue: purpose-coverage-queue.ts (T-2026-10-27-003).
+      queueCoverageGapTask(rootDir, dirs, {source, placeholders, tags}) files
+      directories no .purpose documents as ONE open paradigm task tagged
+      purpose-coverage (createTask, the writer paradigm_task_create uses),
+      skipping dirs an active purpose-coverage task already names. Shared by
+      #captain's debrief and `paradigm purpose coverage --queue` (the Stop
+      hook under PARADIGM_AUTO_FIX=1). Replaces every .purpose stub writer.
+    path: purpose-coverage-queue.ts
+    type: utility
+    tags: [coverage, tasks]
   plugin-update-checker:
     description: >-
       #plugin-update-checker: detects stale Claude Code plugins (marketplace clones vs remote, cached

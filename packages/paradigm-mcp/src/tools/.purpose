@@ -319,8 +319,8 @@ components:
       hook's auto-fix stub, all-TODO descriptions, under 50 chars) never count and are
       reported as placeholderPurposes. The debrief writes NO .purpose files: truly
       uncovered dirs go to uncoveredDirs, one paradigm task tagged purpose-coverage
-      (created through paradigm_task_create, deduped against active purpose-coverage
-      tasks; coverageTaskId) and a captain-debrief-uncovered pending-review entry per
+      (#purpose-coverage-queue, the createTask writer paradigm_task_create uses,
+      deduped against active purpose-coverage tasks; coverageTaskId) and a captain-debrief-uncovered pending-review entry per
       dir for the Documentor. coverageScore before == after (nothing is written);
       coverageAdded is kept for compatibility and is always empty. The brief's
       coverage score uses the same resolver.

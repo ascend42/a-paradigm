@@ -7,6 +7,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { purposeCoverageCommand, computePurposeCoverage } from '../src/commands/purpose/coverage.js';
+import { loadTasks } from '../../paradigm-mcp/src/utils/task-loader.js';
+import { PURPOSE_COVERAGE_TASK_TAG } from '../../paradigm-mcp/src/utils/purpose-coverage-queue.js';
 
 let root: string;
 
@@ -45,6 +47,32 @@ describe('paradigm purpose coverage', () => {
       'pkg/scripts\tuncovered\t-',
       'pkg/core\tuncovered\t-',
     ]);
+  });
+
+  it('--queue files uncovered dirs as one deduped purpose-coverage task and writes no .purpose', async () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation(((c: unknown) => {
+      lines.push(...String(c).split('\n').filter(Boolean));
+      return true;
+    }) as never);
+    try {
+      await purposeCoverageCommand(['pkg/src/cli', 'pkg/scripts'], { root, queue: true, source: 'stop-hook' });
+      await purposeCoverageCommand(['pkg/scripts'], { root, queue: true, source: 'stop-hook' });
+    } finally {
+      spy.mockRestore();
+    }
+    const queued = lines.filter(l => l.startsWith('#queued\t'));
+    expect(queued).toHaveLength(1); // second call: already queued
+    const tasks = await loadTasks(root, { status: 'all', tag: PURPOSE_COVERAGE_TASK_TAG });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].blurb).toContain('pkg/scripts');
+    expect(tasks[0].blurb).not.toContain('pkg/src/cli');
+    expect(fs.existsSync(path.join(root, 'pkg/scripts/.purpose'))).toBe(false);
+  });
+
+  it('--require-own: an ancestor-documented dir is uncovered', () => {
+    const [cli] = computePurposeCoverage(root, ['pkg/src/cli'], { requireOwn: true });
+    expect(cli.covered).toBe(false);
   });
 
   it('reports placeholders in the JSON records', () => {

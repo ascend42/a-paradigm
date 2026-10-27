@@ -16,7 +16,8 @@ components:
       "<dir>\t(covered|uncovered)\t<covering .purpose|->" per directory (deduped)
       or the PurposeCoverage records as JSON. The Stop hook's Checks 1 and 2 call
       it once per run so they score directories exactly like Cid's debrief and
-      doctor.
+      doctor. --require-own counts only a dir's own .purpose; --queue [--source]
+      files uncovered dirs via #purpose-coverage-queue and prints "#queued\t<id>".
     type: command
     path: coverage.ts
     components:

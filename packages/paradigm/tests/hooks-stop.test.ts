@@ -86,6 +86,8 @@ interface FixtureOptions {
    * nothing, like a CLI without the command, so the hook falls back.
    */
   coverageTsv?: string;
+  /** Run with PARADIGM_AUTO_FIX=1. */
+  autoFix?: boolean;
 }
 
 interface FixtureResult {
@@ -224,6 +226,7 @@ esac
         HOME: rootDir,
         CWD: rootDir,
         MODIFIED: opts.modified.join('\n'),
+        ...(opts.autoFix ? { PARADIGM_AUTO_FIX: '1' } : {}),
       };
       // Use a single bash invocation that cd's into the fixture, sources
       // the script, then prints a structured tail we parse for assertions.
@@ -508,6 +511,39 @@ describe('paradigm-common.sh — cohort gating (v6.0.4)', () => {
     const parsed = parseHookOutput(fx.run().stdout);
     expect(parsed.violations).toContain('no .purpose documents them');
     expect(parsed.violations).toContain('core');
+  });
+
+  it('PARADIGM_AUTO_FIX=1 queues the gap as a task, writes no stub, and still names the dir', () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      sources: { 'lib/x.ts': 'export {};\n' },
+      modified: ['lib/x.ts'],
+      coverageTsv: 'lib\tuncovered\t-\n#queued\tT-2026-10-27-009\n',
+      autoFix: true,
+    });
+    cleanups.push(fx.cleanup);
+    const parsed = parseHookOutput(fx.run().stdout);
+    expect(fs.existsSync(path.join(fx.rootDir, 'lib', '.purpose'))).toBe(false);
+    expect(parsed.violations).toContain('no .purpose documents them');
+    expect(parsed.violations).toContain('lib');
+    expect(parsed.violations).toContain('Queued for the Documentor as task T-2026-10-27-009');
+    expect(parsed.raw).not.toContain('Created stub .purpose');
+  });
+
+  it("Cid's JSON queue lines in .pending-review never mark a .purpose stale", () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      purposes: { '.purpose': 'description: The whole project, documented at the root level.\n' },
+      modified: [],
+    });
+    cleanups.push(fx.cleanup);
+    fs.writeFileSync(
+      path.join(fx.rootDir, '.paradigm', '.pending-review'),
+      JSON.stringify({ path: 'pkg/scripts', reason: 'captain-debrief-uncovered', context: 'Files: pkg/scripts/b.ts' }) + '\n',
+    );
+    const parsed = parseHookOutput(fx.run().stdout);
+    expect(parsed.violations).not.toContain('./.purpose');
+    expect(parsed.violations + parsed.advisory).not.toContain("were NOT updated");
   });
 
   it('shared rule: a CLI without `purpose coverage` falls back to the nearest-.purpose walk', () => {

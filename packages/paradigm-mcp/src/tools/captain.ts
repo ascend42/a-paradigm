@@ -41,8 +41,7 @@ import type {
   RunStatus,
 } from '../types/captain.js';
 import type { Task, Claimant } from '../utils/task-loader.js';
-import { loadTasks } from '../utils/task-loader.js';
-import { handleTasksTool } from './tasks.js';
+import { queueCoverageGapTask, PURPOSE_COVERAGE_TASK_TAG } from '../utils/purpose-coverage-queue.js';
 
 // ────────────────────────────────────────────────────────
 // Tool Definitions
@@ -623,7 +622,11 @@ async function handleCaptainDebrief(
   let coverageTaskId: string | undefined;
   if (uncoveredDirs.length > 0) {
     try {
-      coverageTaskId = await queueCoverageTask(ctx, orchestrationId, uncoveredDirs, placeholderPurposes);
+      coverageTaskId = await queueCoverageGapTask(ctx.rootDir, uncoveredDirs, {
+        source: `orchestration ${orchestrationId}`,
+        placeholders: placeholderPurposes,
+        tags: ['captain-debrief'],
+      });
     } catch (err) {
       log.component('#captain').warn('Could not create purpose-coverage task', {
         orchestrationId, error: err instanceof Error ? err.message : String(err),
@@ -877,47 +880,7 @@ const LIVENESS_REL = path.join('events', 'settlement-liveness.jsonl');
 /** Window for "this session ran postflight" — recent settlements only. */
 const POSTFLIGHT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6h
 
-/** Tag carried by every debrief coverage-gap task (used to dedupe). */
-export const PURPOSE_COVERAGE_TASK_TAG = 'purpose-coverage';
-
-/**
- * Surface truly uncovered directories as ONE paradigm task, created through the
- * MCP task tool's own code path (paradigm_task_create). Directories already
- * named by an open purpose-coverage task are skipped, so repeated debriefs do
- * not pile up duplicates. Returns the new task id, or undefined when every
- * directory is already queued.
- */
-async function queueCoverageTask(
-  ctx: ProjectContext,
-  orchestrationId: string,
-  uncoveredDirs: string[],
-  placeholderPurposes: string[],
-): Promise<string | undefined> {
-  const open = await loadTasks(ctx.rootDir, { status: 'active', tag: PURPOSE_COVERAGE_TASK_TAG, limit: 500 });
-  const alreadyQueued = (dir: string) => open.some(t => t.blurb.split(/[\s,;]+/).includes(dir));
-  const dirs = uncoveredDirs.filter(d => !alreadyQueued(d));
-  if (dirs.length === 0) return undefined;
-
-  const placeholderNote = placeholderPurposes.length
-    ? ` Placeholder stubs that do not count as coverage (replace or delete): ${placeholderPurposes.join(', ')}.`
-    : '';
-  const blurb =
-    `Document .purpose coverage for ${dirs.length} director${dirs.length === 1 ? 'y' : 'ies'} touched in ${orchestrationId}: ` +
-    `${dirs.join(', ')} . Add a .purpose with real symbols, or name the files in an ancestor .purpose ` +
-    `(path/files/tests or a file mention).${placeholderNote}`;
-
-  const res = await handleTasksTool(
-    'paradigm_task_create',
-    {
-      blurb,
-      priority: 'medium',
-      tags: [PURPOSE_COVERAGE_TASK_TAG, 'captain-debrief', 'documentor'],
-    },
-    ctx,
-  );
-  const parsed = JSON.parse(res.text) as { created?: string };
-  return parsed.created;
-}
+export { PURPOSE_COVERAGE_TASK_TAG };
 
 /**
  * Did the learning chain's postflight stage actually run for this session?
