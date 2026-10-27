@@ -73,9 +73,9 @@ const npxHome = (): string => path.join(tmp, typeof process.getuid === 'function
 
 /**
  * A stub npx that behaves like npm 11's: it fails EBADDEVENGINES when the nearest package.json (walking up from its
- * cwd) has devEngines, then runs the --call string through sh with every ancestor's node_modules/.bin on PATH, put
- * ahead of the fetched package's .bin (npm puts them after it; this is the worst case), with npm's env. Logs
- * "<cwd>|<args>" to `log`.
+ * cwd) has devEngines, then runs the --call string with every ancestor's node_modules/.bin on PATH, put ahead of the
+ * fetched package's .bin (npm puts them after it; this is the worst case), with npm's env. Like npm, the shell is
+ * --script-shell when given, else the bare word `sh` looked up on that PATH. Logs "<cwd>|<args>" to `log`.
  */
 function stubNpx(bin: string, log: string, cache: string): void {
   write(
@@ -92,8 +92,12 @@ while :; do
   d=$(dirname "$d")
 done
 call=
+shell=sh
 while [ $# -gt 0 ]; do
-  if [ "$1" = --call ]; then call=$2; break; fi
+  case "$1" in
+    --script-shell=*) shell=\${1#--script-shell=} ;;
+    --call) call=$2; break ;;
+  esac
   shift
 done
 [ -n "$call" ] || { echo 'stub npx: no --call' >&2; exit 9; }
@@ -104,7 +108,9 @@ while :; do
   [ "$d" = / ] && break
   d=$(dirname "$d")
 done
-PATH="$anc"'${cache}/.bin':"$PATH" INIT_CWD="$(pwd -P)" npm_command=exec npm_config_local_prefix="$(pwd -P)" exec sh -c "$call"
+PATH="$anc"'${cache}/.bin':"$PATH"
+export PATH
+INIT_CWD="$(pwd -P)" npm_command=exec npm_config_local_prefix="$(pwd -P)" exec "$shell" -c "$call"
 `,
     0o755,
   );
@@ -159,6 +165,15 @@ describe('plugin MCP launch', () => {
       expect(stderr).toContain('it is committed to git');
     });
 
+    it('a project with a .git that git cannot read: the project copy is skipped, and said', () => {
+      stubPackage(path.join(project, 'node_modules'), 'local');
+      write(path.join(project, '.git'), 'gitdir: /nonexistent/paradigm-test\n');
+      const { status, seen, stderr } = launch([globalInstall(path.join(tmp, 'g'), 'global')]);
+      expect(status).toBe(0);
+      expect(seen?.who).toBe('global');
+      expect(stderr).toContain('git could not say whether it is committed');
+    });
+
     it('then a global install on PATH (the hooks resolve `paradigm` the same way), run in the project', () => {
       const { status, seen } = launch([globalInstall(path.join(tmp, 'g'), 'global')]);
       expect(status).toBe(0);
@@ -182,7 +197,9 @@ describe('plugin MCP launch', () => {
       write(path.join(tmp, 'package.json'), JSON.stringify({ name: 'pnpm-only', devEngines: { packageManager: { name: 'pnpm', onFail: 'error' } } }));
       const evil = path.join(tmp, 'evil.js');
       write(evil, `require('fs').writeFileSync(${JSON.stringify(path.join(tmp, 'evil-ran'))}, '')\n`);
-      write(path.join(tmp, 'node_modules', '.bin', 'node'), `#!/bin/sh\n: > '${path.join(tmp, 'planted-node-ran')}'\necho 'PARADIGM_MCP_ENTRY=${evil}'\n`, 0o755);
+      for (const planted of ['node', 'sh']) {
+        write(path.join(tmp, 'node_modules', '.bin', planted), `#!/bin/sh\n: > '${path.join(tmp, `planted-${planted}-ran`)}'\necho 'PARADIGM_MCP_ENTRY=${evil}'\n`, 0o755);
+      }
       stubPackage(path.join(tmp, 'node_modules'), 'ancestor');
       write(path.join(tmp, 'node_modules', '.bin', 'paradigm-mcp'), '#!/bin/sh\n', 0o755);
 
@@ -193,15 +210,65 @@ describe('plugin MCP launch', () => {
       expect(npxCwd).toBe(fs.realpathSync(npxHome()));
       expect(fs.readFileSync(path.join(npxHome(), 'package.json'), 'utf8')).toBe('{"private":true}\n');
       expect(npxArgs).toBe(
-        `--yes --prefer-offline --package=@a-company/paradigm@${PLUGIN_VERSION} --call ${quoted(process.execPath)} ${quoted(LAUNCHER)} --locate`,
+        `--yes --prefer-offline --script-shell=/bin/sh --package=@a-company/paradigm@${PLUGIN_VERSION} --call ${quoted(process.execPath)} ${quoted(LAUNCHER)} --locate`,
       );
       expect(fs.existsSync(path.join(tmp, 'planted-node-ran'))).toBe(false);
+      expect(fs.existsSync(path.join(tmp, 'planted-sh-ran'))).toBe(false);
       expect(fs.existsSync(path.join(tmp, 'evil-ran'))).toBe(false);
       // The fetched copy, not the ancestor's, started by the launcher in the project with none of npm's env.
       expect(seen).toEqual({ who: 'fetched', cwd: project, arg: project, npm: [] });
     });
 
-    it('a fetched copy that is group/world-writable is not used', () => {
+    it('without --script-shell the stub would run a planted ancestor sh (the stub is faithful)', () => {
+      const bin = path.join(tmp, 'bin');
+      const log = path.join(tmp, 'npx.log');
+      stubNpx(bin, log, path.join(tmp, 'npx-cache', 'node_modules'));
+      write(path.join(tmp, 'node_modules', '.bin', 'sh'), `#!/bin/sh\n: > '${path.join(tmp, 'planted-sh-ran')}'\n`, 0o755);
+      spawnSync(path.join(bin, 'npx'), ['--call', 'true'], { cwd: tmp, env: { PATH: '/usr/bin:/bin' } });
+      expect(fs.existsSync(path.join(tmp, 'planted-sh-ran'))).toBe(true);
+    });
+
+    it('a fetched copy that is group-writable is used when its group is the primary group (umask 002)', () => {
+      const { bin } = npxWithCache();
+      const pkgDir = path.join(tmp, 'npx-cache', 'node_modules', '@a-company', 'paradigm');
+      for (const p of [pkgDir, path.join(pkgDir, 'dist', 'mcp.js')]) {
+        fs.chownSync(p, process.getuid!(), process.getgid!());
+        fs.chmodSync(p, 0o775);
+      }
+      const { status, seen } = launch([bin]);
+      expect(status).toBe(0);
+      expect(seen?.who).toBe('fetched');
+    });
+
+    const otherGroup = typeof process.getgroups === 'function' ? process.getgroups().find((g) => g !== process.getgid!()) : undefined;
+    it.skipIf(otherGroup === undefined)('a fetched copy group-writable by another group is not used', () => {
+      const { bin } = npxWithCache();
+      const pkgDir = path.join(tmp, 'npx-cache', 'node_modules', '@a-company', 'paradigm');
+      fs.chownSync(pkgDir, process.getuid!(), otherGroup!);
+      fs.chmodSync(pkgDir, 0o775);
+      const { status, seen } = launch([bin]);
+      expect(seen).toBeNull();
+      expect(status).toBe(1);
+    });
+
+    it('with a shared sticky temp dir, npx runs from the per-user cache (XDG_CACHE_HOME, else ~/.cache)', () => {
+      const shared = path.join(tmp, 'shared-tmp');
+      fs.mkdirSync(shared);
+      fs.chmodSync(shared, 0o1777);
+      for (const [extra, expected] of [
+        [{ XDG_CACHE_HOME: path.join(tmp, 'xdg') }, path.join(tmp, 'xdg', 'paradigm', 'npx')],
+        [{}, path.join(tmp, '.cache', 'paradigm', 'npx')],
+      ] as const) {
+        const { bin, log } = npxWithCache();
+        const { status, seen } = launch([bin], { TMPDIR: shared, ...extra });
+        expect(status).toBe(0);
+        expect(seen?.who).toBe('fetched');
+        expect(fs.readFileSync(log, 'utf8').split('|')[0]).toBe(fs.realpathSync(expected));
+        expect(fs.statSync(path.dirname(expected)).mode & 0o777).toBe(0o700);
+      }
+    });
+
+    it('a fetched copy that is world-writable is not used', () => {
       const { bin } = npxWithCache();
       fs.chmodSync(path.join(tmp, 'npx-cache', 'node_modules', '@a-company', 'paradigm'), 0o777);
       const { status, seen, stderr } = launch([bin]);

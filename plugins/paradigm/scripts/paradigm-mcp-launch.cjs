@@ -12,11 +12,12 @@
  *   1. the project's own node_modules/@a-company/paradigm (the project root only, never a parent folder, and never
  *      a copy committed to git), so a project that pins Paradigm gets its version
  *   2. paradigm-mcp on PATH (a global install)
- *   3. npx pinned to the plugin's version (--prefer-offline), run from a folder of its own under the OS temp dir
- *      whose {"private":true} package.json stops npm's walk up to a project's devEngines. npx only resolves or
- *      fetches the package: through --call it runs this script with this node (both paths quoted here, so npm
- *      resolves no command on PATH, where every ancestor's node_modules/.bin comes first), and --locate prints
- *      the entry of the fetched package and exits.
+ *   3. npx pinned to the plugin's version (--prefer-offline), run from a folder of its own (under the OS temp
+ *      dir, or the per-user cache when the temp dir is a shared sticky one like /tmp) whose {"private":true}
+ *      package.json stops npm's walk up to a project's devEngines. npx only resolves or fetches the package:
+ *      through --call it runs this script with this node, and --script-shell names the shell, all by absolute
+ *      path, so npm resolves no command on the PATH it builds (every ancestor's node_modules/.bin comes before
+ *      the system PATH there); --locate prints the entry of the fetched package and exits.
  * This script then starts the entry with node, in the project, with its own environment (none of npm's). A
  * version that differs from the plugin's is reported on stderr.
  *
@@ -38,6 +39,7 @@ const BIN = 'paradigm-mcp';
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
 const LOCATED = 'PARADIGM_MCP_ENTRY=';
 const UID = typeof process.getuid === 'function' ? process.getuid() : null;
+const GID = typeof process.getgid === 'function' ? process.getgid() : null;
 
 const say = (msg) => process.stderr.write(`[paradigm] ${msg}\n`);
 
@@ -90,32 +92,42 @@ function fromPath(env) {
   return null;
 }
 
-/** True when git tracks a copy of the package in the project (quietly false outside a git repo). */
-function committedToGit(project) {
+/**
+ * Why the project's copy must not be used, or null. Committed to git: git lists it. When the project has a .git
+ * and git fails (not installed, dubious ownership), it cannot be checked, so it is not used either. Outside a
+ * git repo: null, quietly.
+ */
+function gitObjection(project) {
   const r = spawnSync('git', ['ls-files', '--', 'node_modules/@a-company/paradigm', `node_modules/.bin/${BIN}`], {
     cwd: project,
     stdio: ['ignore', 'pipe', 'ignore'],
     encoding: 'utf8',
   });
-  return r.status === 0 && (r.stdout || '').trim() !== '';
+  if (r.status === 0) return (r.stdout || '').trim() !== '' ? 'it is committed to git' : null;
+  return fs.existsSync(path.join(project, '.git')) ? 'git could not say whether it is committed' : null;
 }
 
 function fromProject(project) {
   const found = packageAt(path.join(project, 'node_modules', ...PKG.split('/')));
   if (!found) return null;
-  if (committedToGit(project)) {
-    say(`not using ${PKG} in ${project}/node_modules: it is committed to git`);
+  const why = gitObjection(project);
+  if (why) {
+    say(`not using ${PKG} in ${project}/node_modules: ${why}`);
     return null;
   }
   return found;
 }
 
-/** POSIX: the real path is ours and not writable by group or others. Windows has no such bits to check. */
+/**
+ * POSIX: the real path is ours, not world-writable, and group-writable only when its group is our primary group
+ * (umask 002 / user-private groups make npm's cache 0775). Windows has no such bits to check.
+ */
 function ownedAndPrivate(p) {
   if (WIN || UID === null) return true;
   try {
     const st = fs.statSync(fs.realpathSync(p));
-    return st.uid === UID && (st.mode & 0o022) === 0;
+    if (st.uid !== UID || (st.mode & 0o002) !== 0) return false;
+    return (st.mode & 0o020) === 0 || st.gid === GID;
   } catch {
     return false;
   }
@@ -188,8 +200,36 @@ const NPX_PKG_JSON = '{"private":true}\n';
  * not group/world-writable, and holds nothing but its package.json (npx writes nothing there, so a .npmrc or
  * node_modules was put there by someone else). On any problem a fresh mkdtemp folder is used instead.
  */
+/**
+ * Where the npx folder lives. The OS temp dir, unless it is shared: sticky and world-writable (Linux /tmp with
+ * TMPDIR unset), where anyone could plant <tmp>/node_modules/.bin in npm's walk up. Then the per-user cache:
+ * $XDG_CACHE_HOME/paradigm, else ~/.cache/paradigm (made 0700).
+ */
+function npxBase() {
+  const tmp = os.tmpdir();
+  if (WIN) return { dir: tmp, name: 'paradigm-mcp-npx' };
+  let shared = false;
+  try {
+    const st = fs.statSync(tmp);
+    shared = (st.mode & 0o1000) !== 0 && (st.mode & 0o002) !== 0;
+  } catch {
+    shared = true;
+  }
+  if (!shared) return { dir: tmp, name: UID === null ? 'paradigm-mcp-npx' : `paradigm-mcp-npx-${UID}` };
+  const xdg = process.env.XDG_CACHE_HOME;
+  const cache = path.join(xdg && path.isAbsolute(xdg) ? xdg : path.join(os.homedir(), '.cache'), 'paradigm');
+  try {
+    fs.mkdirSync(cache, { recursive: true, mode: 0o700 });
+    return { dir: cache, name: 'npx' };
+  } catch (e) {
+    say(`could not use ${cache} for npx (${e.message}); using ${tmp}`);
+    return { dir: tmp, name: UID === null ? 'paradigm-mcp-npx' : `paradigm-mcp-npx-${UID}` };
+  }
+}
+
 function npxDir() {
-  const fixed = path.join(os.tmpdir(), UID === null ? 'paradigm-mcp-npx' : `paradigm-mcp-npx-${UID}`);
+  const base = npxBase();
+  const fixed = path.join(base.dir, base.name);
   const prepare = (d) => {
     const pkg = path.join(d, 'package.json');
     let body = null;
@@ -220,24 +260,26 @@ function npxDir() {
     /* fall through to a fresh folder */
   }
   try {
-    return prepare(fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-mcp-npx-')));
+    return prepare(fs.mkdtempSync(path.join(base.dir, 'paradigm-mcp-npx-')));
   } catch (e) {
-    say(`could not make a folder for npx under ${os.tmpdir()}: ${e.message}`);
+    say(`could not make a folder for npx under ${base.dir}: ${e.message}`);
     return null;
   }
 }
 
 /**
- * How to start npx, and the --call string npm runs through its shell (sh on POSIX, cmd /d /s /c on Windows). The
- * string names this node and this file by absolute path, quoted for that shell, so npm resolves nothing on PATH.
- * Windows: npx-cli.js beside node is started with node directly (no cmd layer of our own); cmd then parses the
- * string once, and paths holding % " or ^ are refused rather than risk cmd reinterpreting them.
+ * How to start npx, the shell npm runs the --call string with, and that string. npm would otherwise spawn the bare
+ * word `sh` (Windows: ComSpec or `cmd.exe`) with the PATH it built, so --script-shell names the shell by absolute
+ * path; the string names this node and this file by absolute path, quoted for that shell. npm resolves nothing.
+ * Windows: npx-cli.js beside node is started with node directly (no cmd layer of our own); <SystemRoot>\System32\
+ * cmd.exe still matches npm's cmd test, so it keeps /d /s /c; paths holding % " ^ or ! are refused rather than
+ * risk cmd reinterpreting them (! under delayed expansion).
  */
 function npxLaunch() {
   if (WIN) {
     for (const p of [process.execPath, __filename]) {
-      if (/[%"^\r\n]/.test(p)) {
-        say(`not running npx: ${p} holds a character cmd would reinterpret (% " ^)`);
+      if (/[%"^!\r\n]/.test(p)) {
+        say(`not running npx: ${p} holds a character cmd would reinterpret (% " ^ !)`);
         return null;
       }
     }
@@ -247,10 +289,11 @@ function npxLaunch() {
       return null;
     }
     // cmd /s drops the first and last quote of the line, so the whole command gets one more pair around it.
-    return { file: process.execPath, pre: [cli], call: `""${process.execPath}" "${__filename}" --locate"` };
+    const shell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe');
+    return { file: process.execPath, pre: [cli], shell, call: `""${process.execPath}" "${__filename}" --locate"` };
   }
   const q = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
-  return { file: 'npx', pre: [], call: `${q(process.execPath)} ${q(__filename)} --locate` };
+  return { file: 'npx', pre: [], shell: '/bin/sh', call: `${q(process.execPath)} ${q(__filename)} --locate` };
 }
 
 function viaNpx() {
@@ -261,7 +304,7 @@ function viaNpx() {
   if (!cwd) return null;
   const r = spawnSync(
     launch.file,
-    [...launch.pre, '--yes', '--prefer-offline', `--package=${spec}`, '--call', launch.call],
+    [...launch.pre, '--yes', '--prefer-offline', `--script-shell=${launch.shell}`, `--package=${spec}`, '--call', launch.call],
     // stdout carries only the located entry; npm's own output goes to stderr (Claude Code's MCP log)
     {
       cwd,
