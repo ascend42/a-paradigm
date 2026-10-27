@@ -4897,7 +4897,8 @@ components:
       the GUI's step-limit line names its number. Slice C1: tool_request lines, tools_set at open and the answers are #local-tool-broker's (see it). Deferred: darwin sandboxed
       e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
       local CLI verb, the claude estimate on the card, attended/unattended
-      local automations (law 5).
+      local automations (law 5). #backend-adapter: the DRIVER half is src/adapters/local/ (runner.ts: localAdapter, LocalAdapter = core + SteerChannel + ToolBrokerChannel, LocalArgvInput, LocalUsageMeter.charge(ev); fixtures/<gnomon-local version>-turn.jsonl), called as `drv` by src/kernel/supervisor/local-session.ts; the kernel half is src/kernel/local/.
+    driver-path: src/adapters/local/
     path: src/kernel/local/
     type: module
     tags: [gnomon, kernel, local, paradigm-8, m1.8]
@@ -5129,35 +5130,55 @@ components:
   backend-adapter:
     description: >-
       #backend-adapter (spec §2.2 Backend drivers; declared by the 2026-10-27
-      founder decision) — the backend-driver INTERFACE that #claude-adapter
-      and #local-runner implement: start a stdio child, send a turn, steer,
-      stop with the backend's own control message (never a signal), and
-      typed events with usage read only from driver events, never model
-      text. In code there is no shared TypeScript interface file: the
-      contract is held by two symmetric driver modules under src/adapters/,
-      each the ONE place that knows its child's wire shape —
-      src/adapters/claude-code/adapter.ts (#claude-adapter: buildClaudeArgv,
-      parseStreamLine → AdapterEvent, UsageMeter, the stdin control lines)
-      and src/adapters/local/runner.ts (#local-runner's driver half:
-      buildLocalArgv, parseLocalLine → LocalEvent, LocalUsageMeter,
-      promptLine / followUpLine / steerLine / abortLine). Both parsers are
-      tolerant (an unknown type is `unknown`, a non-object `malformed`,
-      logged and never acted on). The process half lives with each
-      implementer (#supervisor for Claude, src/kernel/local/ for local);
-      session.open{backend: claude-code | local} picks one (supervisor
-      port.ts). Conformance: the parsers are tested against transcripts in
-      test/claude-adapter.test.ts (G-ADP-01) and test/local-runner.test.ts
-      (G-ADP-02); the nightly replay of RECORDED transcripts per backend
-      version is still a todo in test/session-supervisor.test.ts, and
-      G-GUI-05 (a session outlives its client) is a todo in
-      packages/gnomon-gui/test/gui.test.ts.
+      founder decision, built by T-2026-10-27-004) — the shared WIRE CODEC
+      every backend driver implements, in
+      src/adapters/backend-adapter.ts (types only, importing neither
+      adapter): BackendAdapter<B, A, E, T> = backend id, argv(input),
+      parse(line) → Tolerant<E> (the event union must have `unknown` and
+      `malformed` kinds), newMeter() → UsageMeter<E>{charge(ev)}, turnLine(
+      TurnInput{text, inFlight}) and interruptLine() (the backend's own
+      control message, never a signal). A backend's extra channels are
+      CAPABILITY interfaces — PermissionChannel (allowLine / denyLine),
+      ControlChannel (errorLine / setModelLine), SdkMcpChannel
+      (mcpResponseLine), SteerChannel (steerLine), ToolBrokerChannel
+      (toolsSetLine / toolResponseLine / toolProgressLine; OfferedTool,
+      ToolResponse) — and a concrete adapter type is the core intersected
+      with only the capabilities it really has: ClaudeCodeAdapter = core +
+      Permission + Control + SdkMcp (claudeCodeAdapter in
+      src/adapters/claude-code/adapter.ts, #claude-adapter), LocalAdapter =
+      core + Steer + ToolBroker (localAdapter in src/adapters/local/runner.ts,
+      #local-runner's driver half). No optional members and no fake methods:
+      claudeCodeAdapter.steerLine is a compile error. There is no
+      normalized cross-backend event vocabulary; each adapter keeps its own
+      event union. src/adapters/index.ts holds BACKEND_ADAPTERS (by id) and
+      AnyBackendAdapter; src/adapters/line-splitter.ts the §3.3 capped line
+      splitter both lanes use. The lanes carry out start / send / stop with
+      it, each binding `const drv` (src/kernel/supervisor/supervisor.ts for
+      claude-code, src/kernel/supervisor/local-session.ts for local); the
+      process halves (spawn, sandbox, permits, trace, broker) stay in each
+      lane; session.open{backend: claude-code | local} picks one (supervisor
+      port.ts). Conformance: test/backend-adapter.test.ts replays every
+      adapter over each of its fixtures (src/adapters/<backend>/fixtures/
+      <version>-turn.jsonl + .expect.json, schema
+      gnomon-adapter-replay:v1: kinds, types, charged; G-ADP-01 claude-code,
+      G-ADP-02 local), fuzzes parse (never throws), checks the tolerant
+      kinds, and poisons every model-text string (text, content, delta,
+      result, thinking) to show usage is never read from model text.
+      G-GUI-05 kernel half (session-supervisor.test.ts): fake claude's
+      mode.replay writes a recorded turn through a live session — its
+      turn.event types in order, seq contiguous, the session still listed.
+      The nightly RECORDED re-record per backend version is a todo (needs a
+      trace extractor and scheduled CI; local needs a lane tee); the GUI
+      half of G-GUI-05 stays a todo in packages/gnomon-gui/test/gui.test.ts.
     path: src/adapters/
     type: module
     tags: [gnomon, adapter, backend, paradigm-8]
     related: ["#claude-adapter", "#local-runner", "#supervisor"]
     tests:
+      - test/backend-adapter.test.ts
       - test/claude-adapter.test.ts
       - test/local-runner.test.ts
+      - test/session-supervisor.test.ts
     oracles: [G-ADP-01, G-ADP-02, G-GUI-05]
 
   claude-adapter:
@@ -5222,7 +5243,7 @@ components:
       and redacts each text block the same way, the row says
       `synthetic: true`, and the session-reader rule hides its line and
       lineHash (an older row is matched by "isSynthetic":true in the line);
-      a real user line is stored as received.
+      a real user line is stored as received. #backend-adapter: claudeCodeAdapter (ClaudeCodeAdapter = core + PermissionChannel + ControlChannel + SdkMcpChannel) wires these free functions, UsageMeter.charge(ev) is the meter entry the supervisor calls, and LineSplitter moved to src/adapters/line-splitter.ts (re-exported).
     path: src/adapters/claude-code/
     type: module
     tags: [gnomon, adapter, stream-json, paradigm-8, m1.7]
