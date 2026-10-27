@@ -257,7 +257,8 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by 8.0:loops (loop-trust/loop-choice cards, continue/stop, the loop.* + request.loop.* kinds, descriptor loops): was sha256:c4e2c7d9…e2c9.
 // Moved once by 8.0:rules-view (approval.rule.disabled + approval.rule.enabled + descriptor rulesView): was sha256:aa537e4c…79d4.
 // Moved once by 8.0:git-verbs (T-2026-10-23-002: the git.verb kind + descriptor gitVerbs, merged after 8.0:rules-view): was sha256:b4639c99…bd8b.
-const PINNED_CLIENT_API_ID = 'sha256:295c5ac772b6c621b465943a106c441a7572603090f96f7f01293f7af0cec298';
+// Moved once by 8.0:local-lane (TD-2026-10-27-833 slice C1: the tool.brokered kind + descriptor toolBrokered): was sha256:295c5ac7…c298.
+const PINNED_CLIENT_API_ID = 'sha256:dea90210b09701c82996176bf99a70473bb7f5e1eb1757bc159ca0f025cd85ea';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 

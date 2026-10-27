@@ -50,7 +50,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939', '8.0:rules-view', '8.0:git-verbs'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89', '8.0:P8-D98', '8.0:TD-2026-10-20-294', '8.0:TD-2026-10-20-086', '8.0:model-switch', '8.0:TD-2026-10-20-812', '8.0:T-2026-10-21-006', '8.0:T-2026-10-21-008', '8.0:session-rename', '8.0:loops', '8.0:TD-2026-10-23-939', '8.0:rules-view', '8.0:git-verbs', '8.0:local-lane'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -93,6 +93,8 @@ const SESSION_RENAME = '8.0:session-rename' as const;
 const LOOPS = '8.0:loops' as const;
 /** Kernel-run git verbs (T-2026-10-23-002: git.init, git.push, repo.create outside the session sandbox): one clientApiId move. */
 const GIT_VERB_TAG = '8.0:git-verbs' as const;
+/** The local lane (TD-2026-10-27-833, T-2026-10-26-003): the kernel-brokered tools of a local session (slice C1): one clientApiId move. */
+const LOCAL_LANE = '8.0:local-lane' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -278,6 +280,10 @@ const TABLE: Row[] = [
   // gnomon_repo_create): `requested` before any card or effect, then exactly one of `refused` (why), `ran` or `failed`
   // (exitCode). Never a URL, path, token or command output: the host is the kernel-resolved remote host only.
   ['git', 'kernel', 'verb', GIT_VERB_TAG],
+  // 8.0:local-lane (TD-2026-10-27-833 slice C1, #local-tool-broker): tool.brokered{hsid, server, tool?, class?, argsHash,
+  // decision, bytes, isError, cardId?} — one brokered tool call of a local session (the child's tool_request, answered
+  // by the kernel): HASH-ONLY (the args are a digest, the result a byte count; never args, output, paths or model text).
+  ['tool', 'kernel', 'brokered', LOCAL_LANE],
 ];
 
 /** Per-kind sensitivity overrides from §9.1's last column. */
@@ -292,6 +298,8 @@ const SENSITIVE_KINDS: Record<string, Sensitivity> = {
   'approval.auto.miss': 'sensitive',
   // 8.0:git-verbs: the remote host and the verb's input digest are project detail
   'git.verb': 'sensitive',
+  // 8.0:local-lane: the args digest is of model-written text
+  'tool.brokered': 'sensitive',
 };
 
 /** Field-level labels stricter than the event's (§9.1 / §9.3 redaction matrix). */
@@ -522,6 +530,8 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'session.context.threshold': Object.freeze(['hsid', 'usedTokens', 'windowTokens', 'ratio']),
   // 8.0:git-verbs: closed, ids and closed values only (host is a validated DNS name, never a URL)
   'git.verb': Object.freeze(['hsid', 'verb', 'phase', 'inputHash', 'why', 'cardId', 'host', 'exitCode']),
+  // 8.0:local-lane: closed and hash-only (tool and class absent when the name resolved to no offered tool)
+  'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId']),
 });
 
 /** Keys of a KIND_PAYLOADS entry that may be absent (every other key is required). */
@@ -530,6 +540,7 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'request.session.restart': Object.freeze(['checkpointRef']),
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
   'git.verb': Object.freeze(['why', 'cardId', 'host', 'exitCode']),
+  'tool.brokered': Object.freeze(['tool', 'class', 'cardId']),
   // 8.0:rules-view: cause 'human' carries batch, connId and cardId; cause 'expired' carries until (validateKindPayload)
   'approval.rule.enabled': Object.freeze(['batch', 'connId', 'cardId', 'until']),
 });
@@ -601,6 +612,29 @@ export const GIT_VERB_REASONS = [
 export type GitVerbReason = (typeof GIT_VERB_REASONS)[number];
 /** git.verb{host}: a lowercase DNS name (LDH labels; punycode stays visible as xn--), at most 253 characters. */
 export const GIT_VERB_HOST_PATTERN = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
+/** tool.brokered{class} (CLOSED, 8.0:local-lane): a brokered tool's grant class (read runs; mutate/destructive take a card). */
+export const TOOL_BROKER_CLASSES = ['read', 'mutate', 'destructive'] as const;
+export type ToolBrokerClass = (typeof TOOL_BROKER_CLASSES)[number];
+/**
+ * tool.brokered{decision} (CLOSED, 8.0:local-lane): what the kernel did with one brokered call.
+ *   ran                 a read-class tool ran
+ *   approved            a mutate/destructive tool's card was allowed and it ran
+ *   denied              the human denied the card (or it expired)
+ *   unknown-tool        the name is not in the session's offered set
+ *   bad-args            the args failed the full schema (unknown key, type, size, a control or bidi character)
+ *   loop-session        a loop session never runs a brokered tool
+ *   no-approval-surface no broker could take the card
+ *   cancelled           the call was aborted or timed out before the target ran
+ *   busy                the session already has MAX_BROKERED_IN_FLIGHT calls in flight
+ *   not-running         the session is not running
+ */
+export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'busy', 'not-running'] as const;
+export type ToolBrokeredDecision = (typeof TOOL_BROKERED_DECISIONS)[number];
+/** tool.brokered{server}: the MCP server name the call went to (`gnomon` = the kernel's own SDK server). */
+export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+/** tool.brokered{tool}: an offered tool name (kernel-chosen, never model text). */
+export const TOOL_BROKER_TOOL_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 
 /**
  * turn.result{turn} (review M2, a deliberate clientApiId move): the id of the LATEST turn the result closes. The
@@ -930,6 +964,18 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
     case 'session.anomaly':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('why' in v) c.closedEnum('why', v.why, SESSION_ANOMALY_REASONS);
+      break;
+    case 'tool.brokered':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('server' in v) c.str('server', v.server, TOOL_BROKER_SERVER_PATTERN, 'an MCP server name');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_BROKER_TOOL_PATTERN, 'a tool name');
+      if ('class' in v) c.closedEnum('class', v.class, TOOL_BROKER_CLASSES);
+      if ('argsHash' in v) c.str('argsHash', v.argsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('decision' in v) c.closedEnum('decision', v.decision, TOOL_BROKERED_DECISIONS);
+      if ('bytes' in v && (typeof v.bytes !== 'number' || !Number.isSafeInteger(v.bytes) || v.bytes < 0)) c.fail('bytes', 'must be a non-negative integer');
+      if ('isError' in v && typeof v.isError !== 'boolean') c.fail('isError', 'must be a boolean');
+      if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
+      if (('tool' in v) !== ('class' in v)) c.fail('class', 'is present exactly when the tool resolved');
       break;
     case 'git.verb':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');

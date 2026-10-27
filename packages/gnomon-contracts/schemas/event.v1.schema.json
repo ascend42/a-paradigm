@@ -253,6 +253,7 @@
     "tend.digest",
     "tend.proposal.fate",
     "tend.teacher.drafted",
+    "tool.brokered",
     "turn.ask-user",
     "turn.event",
     "turn.partial",
@@ -394,6 +395,7 @@
     "session.drained": "8.0:P8-D98",
     "session.model": "8.0:model-switch",
     "session.renamed": "8.0:session-rename",
+    "tool.brokered": "8.0:local-lane",
     "verdict.incident": "M1.1:P8-D86-D88"
   },
   "x-gnomon-reserved-payload-fields": {
@@ -928,6 +930,17 @@
       "cardId",
       "host",
       "exitCode"
+    ],
+    "tool.brokered": [
+      "hsid",
+      "server",
+      "tool",
+      "class",
+      "argsHash",
+      "decision",
+      "bytes",
+      "isError",
+      "cardId"
     ]
   },
   "x-gnomon-compaction-reasons": [
