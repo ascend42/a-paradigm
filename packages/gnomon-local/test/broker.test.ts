@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseReserved, parseSessionConfig, parseToolsSet, rpcSession, TOOLS, validateArgs } from '../src/index.js';
+import { parseContextCommand, parseSessionConfig, parseToolsSet, rpcSession, TOOLS, validateArgs } from '../src/index.js';
 import { fakeOpenAI, type FakeReply, type FakeServer } from './fake-openai.js';
 
 let srv: FakeServer | null = null;
@@ -216,15 +216,14 @@ describe('C1 refusals in the child', () => {
     expect(last()).toMatchObject({ success: false, error: expect.stringMatching(/^line over/) });
   });
 
-  it('the reserved B2 commands are validated and parsed, applied as no-ops', async () => {
+  it('the B2 context commands are closed and bounded (test/memory.test.ts covers what they do)', async () => {
     const s = await session([]);
-    for (const c of [{ type: 'memory_set', text: 'remember' }, { type: 'compact' }, { type: 'set_context', contextTarget: 4096 }]) {
-      s.send({ id: 'r', ...c });
-      expect(s.evs.at(-1)).toEqual({ type: 'response', id: 'r', command: c.type, success: true, data: { applied: false } });
-    }
-    expect(parseReserved({ type: 'set_context', contextTarget: 10 })).toEqual({ error: 'contextTarget must be an integer in 1024..131072' });
-    expect(parseReserved({ type: 'memory_set', text: 'x'.repeat(16 * 1024 + 1) })).toMatchObject({ error: expect.stringContaining('at most') });
-    expect(parseReserved({ type: 'compact', now: true })).toEqual({ error: 'unknown field now' });
+    s.send({ id: 'r', type: 'compact' });
+    expect(s.evs.at(-1)).toEqual({ type: 'response', id: 'r', command: 'compact', success: true, data: { when: 'next-run' } });
+    expect(parseContextCommand({ type: 'set_context', contextTarget: 1.5 })).toMatchObject({ error: expect.stringContaining('must be an integer') });
+    expect(parseContextCommand({ type: 'memory_set', render: 'x'.repeat(16 * 1024 + 1), hash: `sha256:${'0'.repeat(64)}`, bytes: 1 })).toMatchObject({ error: expect.stringContaining('at most') });
+    expect(parseContextCommand({ type: 'memory_set', text: 'remember' })).toEqual({ error: 'unknown field text' });
+    expect(parseContextCommand({ type: 'compact', now: true })).toEqual({ error: 'unknown field now' });
   });
 
   it('validateArgs and parseToolsSet are pure checks', () => {

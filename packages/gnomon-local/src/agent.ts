@@ -55,6 +55,20 @@
  * brokered set is "unknown tool" (the allowTools rule). A session with an
  * allowTools list (a loop act session) never takes brokered tools.
  *
+ * Slice B2 (#local-working-memory, TD-2026-10-27-833): the KERNEL owns the
+ * session's working memory and pushes its rendered block with memory_set; the
+ * agent keeps it OUTSIDE the history and places it at request time as a fixed
+ * slot right after the system prompt (inside the system message, before the
+ * text-tool prompt), so compaction never touches it. The ledger's memory slot
+ * is the block's estimate; a block over memorySlotTokens(target) (min(1000,
+ * 12 %)) is refused. With `memory: true` the model gets note/forget
+ * (memory-tools.ts), brokered to the kernel like any kernel tool. compact{}
+ * compacts at the next model step (a run in flight: its next step; idle: the
+ * first step of the next run, so the summariser always rides a turn's permit);
+ * set_context{target} clamps to [1024, n_ctx] and the 0.85 rule and applies at
+ * the next step start (at once when idle). A block that pins the current goal
+ * (goalHash) turns plan A's goal restatement off (compaction.ts).
+ *
  * DEFERRED: the JSONL session tree (where it lives is open: the session
  * profile denies writes under the Gnomon home, so the kernel would have to
  * read it from the child's stdout or a worktree path).
@@ -63,11 +77,12 @@ import { createHash } from 'node:crypto';
 import { buildRequest, orderTools, surfaceTools, type ChatMessage, type CompatProfile, type ToolSpec, type ToolSurface } from './compat.js';
 import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
-import { contextLedger, contextReport, resultCapChars, type ContextLedger } from './budget.js';
+import { contextLedger, contextReport, memorySlotTokens, resultCapChars, TARGET_HEADROOM, type ContextLedger } from './budget.js';
+import { MEMORY_TOOLS } from './memory-tools.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
 import { neutraliseResult, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
 import { runTool, TOOLS } from './tools.js';
-import { validateArgs, type BrokeredToolSpec, type KernelToolBroker } from './broker.js';
+import { CONTEXT_TARGET_MAX, sha256, validateArgs, type BrokeredToolSpec, type ContextCommand, type KernelToolBroker } from './broker.js';
 import type { ToolResult } from './confine.js';
 
 export { TARGET_HEADROOM } from './budget.js';
@@ -104,8 +119,26 @@ export interface AgentOptions {
   protect?: readonly RegExp[];
   /** Slice C1: the kernel port brokered calls go through (absent: no brokered tools) */
   broker?: KernelToolBroker;
+  /** Slice B2: the session has kernel working memory (memory_set accepted, note/forget offered; needs `broker`) */
+  memory?: boolean;
+  /** Slice B2: the endpoint's context (set_context never goes above it); null/absent = unknown */
+  nCtx?: number | null;
   emit: Emit;
 }
+
+/** Slice B2: the smallest context target set_context applies. */
+export const MIN_CONTEXT_TARGET = 1024;
+
+/** Slice B2: the working-memory block in effect (memory_set). */
+export interface MemoryBlock {
+  render: string;
+  hash: string;
+  bytes: number;
+  goalHash?: string;
+}
+
+/** Slice B2: a memory block's tokens in the system message (the estimate, plus its two-char separator). */
+const memoryTokensOf = (m: MemoryBlock | null): number => (m ? Math.ceil((m.render.length + 2) / 4) : 0);
 
 export class Agent {
   readonly #o: AgentOptions;
@@ -135,9 +168,21 @@ export class Agent {
   readonly #spill = new SpillStore();
   /** slice B1: realpaths the model wrote this session (reads of them are labelled model-generated) */
   readonly #written = new Set<string>();
+  /** slice B2: the working context target (set_context changes it at a step start) and the one set for the next step */
+  #target: number;
+  #nextTarget: number | null = null;
+  /** slice B2: the kernel's working-memory block (outside the history) and the one set for the next step */
+  #memory: MemoryBlock | null = null;
+  #nextMemory: MemoryBlock | null = null;
+  /** slice B2: the human asked to compact (applied at the next model step) */
+  #compactNext = false;
+  /** slice B2: the system prompt and the text-tool prompt (the memory block goes between them at request time) */
+  #sysBase = '';
+  #sysTools = '';
 
   constructor(o: AgentOptions) {
     this.#o = o;
+    this.#target = o.contextTarget ?? DEFAULT_CONTEXT_TARGET;
     this.#native = orderTools(o.allowTools ? TOOLS.filter((t) => o.allowTools!.includes(t.name)) : TOOLS);
     this.#messages.push({ role: 'system', content: '' });
     this.#applyTools();
@@ -146,13 +191,95 @@ export class Agent {
   /** The offered tools, the system message (its text-tool prompt) and the ledger, from the native + brokered sets. */
   #applyTools(): void {
     const o = this.#o;
-    // brokered tools follow the natives (orderTools keeps names outside TOOL_ORDER last, in the kernel's order)
-    this.#tools = orderTools([...this.#native, ...this.#brokered.map((b) => ({ name: b.name, description: b.description, parameters: b.parameters }))]);
+    // brokered tools follow the natives (orderTools keeps names outside TOOL_ORDER last, in the kernel's order);
+    // slice B2: the memory tools (note, forget) come before the kernel's brokered ones
+    this.#tools = orderTools([...this.#native, ...[...this.#memoryTools, ...this.#brokered].map((b) => ({ name: b.name, description: b.description, parameters: b.parameters }))]);
     const textTools = !o.nativeTools && o.surface !== 'none' ? textToolPrompt(this.#tools) : '';
-    const sys = [o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.', textTools].filter(Boolean).join('\n\n');
+    this.#sysBase = o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.';
+    this.#sysTools = textTools;
+    const sys = [this.#sysBase, textTools].filter(Boolean).join('\n\n');
     if (this.#messages[0]?.role === 'system') this.#messages[0] = { role: 'system', content: sys };
     const schema = o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(this.#tools, o.surface)).length / 4) : 0;
-    this.#ledger = contextLedger({ target: o.contextTarget ?? DEFAULT_CONTEXT_TARGET, systemMessageTokens: estimateTokens([this.#messages[0]!]), toolsTokens: o.nativeTools ? schema : Math.ceil(textTools.length / 4), toolsInSystem: !o.nativeTools, replyTokens: o.maxTokens });
+    this.#ledger = contextLedger({ target: this.#target, systemMessageTokens: estimateTokens([this.#messages[0]!]), toolsTokens: o.nativeTools ? schema : Math.ceil(textTools.length / 4), toolsInSystem: !o.nativeTools, replyTokens: o.maxTokens, memoryTokens: memoryTokensOf(this.#memory) });
+  }
+
+  /** Slice B2: the memory tools this session offers (none without memory, a broker, or with a tools allowlist). */
+  get #memoryTools(): readonly BrokeredToolSpec[] {
+    return this.#o.memory && this.#o.broker && !this.#o.allowTools && this.#o.surface !== 'none' ? MEMORY_TOOLS : [];
+  }
+
+  /** The system message as the request carries it: the system prompt, the memory block, then the text-tool prompt. */
+  #requestMessages(): ChatMessage[] {
+    if (!this.#memory || this.#messages[0]?.role !== 'system') return this.#messages;
+    const sys: ChatMessage = { role: 'system', content: [this.#sysBase, this.#memory.render, this.#sysTools].filter(Boolean).join('\n\n') };
+    return [sys, ...this.#messages.slice(1)];
+  }
+
+  /**
+   * Slice B2: the kernel's memory_set. Refused (an error string) when this session has no memory or the block is over
+   * the memory slot of the target in effect from the next step. Applied at the next step start (at once when idle).
+   */
+  setMemory(m: Extract<ContextCommand, { op: 'memory_set' }>): string | null {
+    if (!this.#o.memory) return 'this session has no working memory';
+    const block: MemoryBlock = { render: m.render, hash: m.hash, bytes: m.bytes, ...(m.goalHash !== undefined ? { goalHash: m.goalHash } : {}) };
+    const slot = memorySlotTokens(this.#nextTarget ?? this.#target);
+    const tokens = memoryTokensOf(block);
+    if (tokens > slot) return `the memory block is over the memory slot (${tokens} > ${slot} tokens)`;
+    this.#nextMemory = block;
+    if (!this.#running) this.#takePending();
+    return null;
+  }
+
+  /** Slice B2: compact{} — at the next model step: this run's next step, or the next run's first. */
+  requestCompact(): 'next-step' | 'next-run' {
+    this.#compactNext = true;
+    return this.#running ? 'next-step' : 'next-run';
+  }
+
+  /**
+   * Slice B2: set_context{target}. Clamped to [MIN_CONTEXT_TARGET, n_ctx] and raised to the least target the 0.85
+   * rule allows for the reply budget (maxTokens < 0.85 x target); refused when even n_ctx cannot hold the reply.
+   * Applied at the next step start (at once when idle).
+   */
+  setContextTarget(requested: number): { contextTarget: number; requested: number; clamped: boolean } | { error: string } {
+    const nCtx = typeof this.#o.nCtx === 'number' && this.#o.nCtx > 0 ? this.#o.nCtx : CONTEXT_TARGET_MAX;
+    const floor085 = Math.floor(this.#o.maxTokens / TARGET_HEADROOM) + 1;
+    if (floor085 > nCtx) return { error: `the reply budget (${this.#o.maxTokens}) leaves no room under 0.85 x n_ctx ${nCtx}` };
+    const t = Math.min(nCtx, Math.max(MIN_CONTEXT_TARGET, floor085, requested));
+    this.#nextTarget = t;
+    if (!this.#running) this.#takePending();
+    return { contextTarget: t, requested, clamped: t !== requested };
+  }
+
+  /** Slice B2: the context target in effect. */
+  get contextTarget(): number {
+    return this.#target;
+  }
+
+  /** Slice B2: the memory block in effect (tests, get_state). */
+  get memory(): Readonly<MemoryBlock> | null {
+    return this.#memory;
+  }
+
+  /** At a step start (or at once when idle): the brokered set, the memory block and the target the kernel set. */
+  #takePending(): void {
+    let changed = false;
+    if (this.#nextBrokered !== null) {
+      this.#brokered = this.#nextBrokered;
+      this.#nextBrokered = null;
+      changed = true;
+    }
+    if (this.#nextMemory !== null) {
+      this.#memory = this.#nextMemory;
+      this.#nextMemory = null;
+      changed = true;
+    }
+    if (this.#nextTarget !== null) {
+      this.#target = this.#nextTarget;
+      this.#nextTarget = null;
+      changed = true;
+    }
+    if (changed) this.#applyTools();
   }
 
   /**
@@ -163,7 +290,7 @@ export class Agent {
     if (!this.#o.broker) return 'this session has no kernel broker';
     if (this.#o.allowTools) return 'a session with a tools allowlist takes no brokered tools';
     this.#nextBrokered = tools.map((t) => ({ ...t }));
-    if (!this.#running) this.#takeBrokered();
+    if (!this.#running) this.#takePending();
     return null;
   }
 
@@ -172,23 +299,12 @@ export class Agent {
     return this.#brokered.map((b) => b.name);
   }
 
-  #takeBrokered(): void {
-    if (this.#nextBrokered === null) return;
-    this.#brokered = this.#nextBrokered;
-    this.#nextBrokered = null;
-    this.#applyTools();
-  }
-
   get running(): boolean {
     return this.#running;
   }
 
   state(): Record<string, unknown> {
-    return { running: this.#running, turns: this.#turn, messages: this.#messages.length, compactions: this.#compactions, contextTarget: this.#target, queued: { steer: this.#steer.length, followUp: this.#follow.length }, brokered: this.brokered.length, outstanding: this.#o.broker?.outstanding ?? 0 };
-  }
-
-  get #target(): number {
-    return this.#o.contextTarget ?? DEFAULT_CONTEXT_TARGET;
+    return { running: this.#running, turns: this.#turn, messages: this.#messages.length, compactions: this.#compactions, contextTarget: this.#target, queued: { steer: this.#steer.length, followUp: this.#follow.length }, brokered: this.brokered.length, outstanding: this.#o.broker?.outstanding ?? 0, memory: this.#memory ? { bytes: this.#memory.bytes, hash: this.#memory.hash } : null, compactNext: this.#compactNext };
   }
 
   /** tokens the messages (system included) + reply may use: the ledger's messageBudget (target × 0.85 minus the native schema) */
@@ -204,18 +320,20 @@ export class Agent {
   /** `noTools`: the step-limit request — no tools offered (surface 'none', nativeTools false) */
   #request(noTools = false): Promise<Completion> {
     this.#abort = new AbortController();
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#messages, tools: noTools ? [] : this.#tools, nativeTools: noTools ? false : this.#o.nativeTools, surface: noTools ? 'none' : this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#requestMessages(), tools: noTools ? [] : this.#tools, nativeTools: noTools ? false : this.#o.nativeTools, surface: noTools ? 'none' : this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
     return complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
   }
 
   /** One summarising completion, then the history is replaced by system + summary + a safe tail (compaction.ts). */
-  async #compact(reason: 'threshold' | 'overflow', total: { input: number; output: number }): Promise<void> {
+  async #compact(reason: 'threshold' | 'overflow' | 'manual', total: { input: number; output: number }): Promise<void> {
     const tokensBefore = estimateTokens(this.#messages);
     this.#o.emit({ type: 'compaction_start', reason, tokensBefore });
     this.#abort = new AbortController();
     // round 3: the caps derive from the budget (0.85 × target minus the tools schema), not the raw target
     const budget = Math.max(this.#budget, 256);
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget, this.#goal), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
+    // slice B2: working memory pins THIS goal verbatim => the summary and the lead message do not restate it
+    const goalPinned = this.#goal !== undefined && this.#memory?.goalHash !== undefined && this.#memory.goalHash === sha256(this.#goal);
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget, this.#goal, goalPinned), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
     let c: Completion;
     try {
       c = await complete(this.#o.base, body, { signal: this.#abort.signal, ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
@@ -228,15 +346,15 @@ export class Agent {
       total.input += c.usage.input;
       total.output += c.usage.output;
     }
-    const summary = normaliseSummary(c.content, budget);
+    const summary = normaliseSummary(c.content, budget, goalPinned);
     // T-2026-10-26-003: the tail and the tool-result excerpts share what the reply, system, summary and goal leave
     const system = this.#messages[0]?.role === 'system' ? estimateTokens([this.#messages[0]]) : 0;
-    const fixed = this.#o.maxTokens + system + estimateTokens([{ role: 'user', content: summary }]) + (this.#goal !== undefined ? Math.ceil(this.#goal.length / 4) : 0) + 64;
+    const fixed = this.#o.maxTokens + system + estimateTokens([{ role: 'user', content: summary }]) + (this.#goal !== undefined && !goalPinned ? Math.ceil(this.#goal.length / 4) : 0) + 64;
     const room = Math.max(0, budget - fixed);
-    const { messages, kept, excerpts } = compactedHistory(this.#messages, summary, Math.floor(room / 3), { ...(this.#goal !== undefined ? { goal: this.#goal } : {}), excerptTokens: Math.floor(room / 4) });
+    const { messages, kept, excerpts } = compactedHistory(this.#messages, summary, Math.floor(room / 3), { ...(this.#goal !== undefined ? { goal: this.#goal } : {}), excerptTokens: Math.floor(room / 4), ...(goalPinned ? { goalPinned } : {}) });
     this.#messages.splice(0, this.#messages.length, ...messages);
     this.#compactions++;
-    this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, excerpts, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
+    this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, excerpts, goalPinned, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
   }
 
   /**
@@ -330,18 +448,27 @@ export class Agent {
           }
           break;
         }
-        // slice C1: a tools_set received during the last step applies from this step on
-        this.#takeBrokered();
-        const brokered = this.#brokered;
+        // slice C1: a tools_set received during the last step applies from this step on (slice B2: and the memory
+        // block and the context target the kernel set)
+        this.#takePending();
+        const brokered = [...this.#memoryTools, ...this.#brokered];
         const turn = ++this.#turn;
         this.#o.emit({ type: 'turn_start', turn });
         this.#report(turn);
         // ~8k working target: compact before a request that would not fit (there must be history to compact)
         // round 2: at most ONE compaction per step; still over the budget after it ⇒ a clear error, never a loop
         let compacted = false;
-        if (this.#messages.length > 2 && estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) {
+        // slice B2: the human's compact{} — this step, before the request (one compaction per step still holds)
+        if (this.#compactNext && this.#messages.length > 2) {
+          this.#compactNext = false;
+          await this.#compact('manual', total);
+          compacted = true;
+        }
+        if (!compacted && this.#messages.length > 2 && estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) {
           await this.#compact('threshold', total);
           compacted = true;
+        }
+        if (compacted) {
           if (estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) throw new Error(`history is still over the context budget after compaction (${estimateTokens(this.#messages)} + ${this.#o.maxTokens} > ${this.#budget} tokens)`);
         }
         let c: Completion;

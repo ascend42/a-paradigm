@@ -17,9 +17,13 @@
  * stdin           {type:'tool_response', id, content, isError, provenance}
  *                 {id?, type:'tools_set', tools:[{name, description,
  *                   parameters, class}]} (from the next step on)
- *                 reserved for B2, validated and answered {applied:false}:
- *                 {id?, type:'memory_set', text} {id?, type:'compact'}
- *                 {id?, type:'set_context', contextTarget}
+ * Slice B2 (#local-working-memory; broker.ts parseContextCommand):
+ *                 {id?, type:'memory_set', render, hash, bytes, goalHash?}
+ *                   → {memory:{bytes}} (refused without `memory: true` or
+ *                   over the memory slot)
+ *                 {id?, type:'compact'} → {when:'next-step'|'next-run'}
+ *                 {id?, type:'set_context', contextTarget} → {contextTarget,
+ *                   requested, clamped} (clamped to [1024, n_ctx], 0.85 rule)
  * stdout          {type:'tool_request', id, toolCallId, name, args}
  * A line over MAX_COMMAND_LINE chars is refused unread; unknown commands are
  * refused; the new commands are closed (an unknown field refuses them).
@@ -35,7 +39,8 @@ import { COMPAT_ALLOWLIST, type ToolSurface } from './compat.js';
 import { classifyEndpoint } from './endpoint.js';
 import { protectGlob } from './protect.js';
 import { TOOLS } from './tools.js';
-import { KernelToolBroker, parseReserved, parseToolProgress, parseToolResponse, parseToolsSet } from './broker.js';
+import { KernelToolBroker, parseContextCommand, parseToolProgress, parseToolResponse, parseToolsSet } from './broker.js';
+import { MEMORY_TOOL_NAMES } from './memory-tools.js';
 
 /** Slice S1: the longest stdin line read (a tool_response carries at most 256 Ki chars of content, JSON-escaped). */
 export const MAX_COMMAND_LINE = 2 * 1024 * 1024;
@@ -63,6 +68,8 @@ export interface LocalSessionConfig {
   toolTimeoutMs?: number;
   /** Slice C1: how long a mutate/destructive brokered call waits (a human card; default CARD_TIMEOUT_MS) */
   cardTimeoutMs?: number;
+  /** Slice B2: the kernel keeps working memory for this session (memory_set accepted; note/forget offered) */
+  memory?: boolean;
 }
 
 export class ConfigError extends Error {}
@@ -119,7 +126,16 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
     ...strList(c.protect, 'protect', (g) => g.length > 0 && g.length <= 512),
     ...ms(c.toolTimeoutMs, 'toolTimeoutMs'),
     ...ms(c.cardTimeoutMs, 'cardTimeoutMs'),
+    ...memoryFlag(c.memory, c.tools !== undefined),
   };
+}
+
+/** Slice B2: `memory` is an optional boolean; a session with a tools allowlist (a loop act session) has none. */
+function memoryFlag(v: unknown, allowlist: boolean): { memory?: boolean } {
+  if (v === undefined) return {};
+  if (typeof v !== 'boolean') throw new ConfigError('memory must be a boolean');
+  if (v && allowlist) throw new ConfigError('a session with a tools allowlist has no working memory');
+  return { memory: v };
 }
 
 /** Slice C1: an optional timeout in ms, an integer in 100..3 600 000, or a ConfigError. */
@@ -155,6 +171,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
     ...(cfg.tools ? { allowTools: cfg.tools } : {}),
     ...(cfg.protect ? { protect: cfg.protect.map(protectGlob) } : {}),
     broker,
+    ...(cfg.memory ? { memory: true } : {}),
+    nCtx: cfg.capabilities.nCtx,
     emit,
   });
   emit({ type: 'model_capabilities', backend: 'local', model: cfg.endpoint.model, compat: cfg.endpoint.compat, tools: cfg.capabilities.tools, ctx: cfg.capabilities.nCtx, surface: cfg.surface, textTools: !cfg.capabilities.tools && cfg.surface !== 'none', contextTarget: cfg.contextTarget });
@@ -216,7 +234,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         return;
       }
       case 'tools_set': {
-        const r = parseToolsSet(cmd, TOOLS.map((t) => t.name));
+        // slice B2: the memory tools' names are reserved like the natives'
+        const r = parseToolsSet(cmd, [...TOOLS.map((t) => t.name), ...MEMORY_TOOL_NAMES]);
         if ('error' in r) return no(r.error);
         const why = agent.setBrokered(r.tools);
         return why ? no(why) : ok({ tools: r.tools.length });
@@ -224,9 +243,16 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
       case 'memory_set':
       case 'compact':
       case 'set_context': {
-        // reserved for slice B2: validated and parsed, nothing applied yet
-        const r = parseReserved(cmd);
-        return 'error' in r ? no(r.error) : ok({ applied: false });
+        // slice B2: the kernel's context commands (closed, bounded; the agent applies them at its next step start)
+        const r = parseContextCommand(cmd);
+        if ('error' in r) return no(r.error);
+        if (r.op === 'memory_set') {
+          const why = agent.setMemory(r);
+          return why ? no(why) : ok({ memory: { bytes: r.bytes } });
+        }
+        if (r.op === 'compact') return ok({ when: agent.requestCompact() });
+        const t = agent.setContextTarget(r.contextTarget);
+        return 'error' in t ? no(t.error) : ok(t);
       }
       default:
         return no(`unknown command ${command.slice(0, 32)}`);

@@ -11,9 +11,15 @@
  *   kernel → child  tool_response{id, content, isError, provenance}
  *                   tools_set{tools:[{name, description, parameters, class}]}
  *                     replaces the offered brokered set from the NEXT step on
- *                   memory_set{text} / compact{} / set_context{contextTarget}
- *                     RESERVED for slice B2: validated and parsed, answered
- *                     {applied:false} (no-ops until B2)
+ *                   memory_set{render, hash, bytes, goalHash?} / compact{} /
+ *                     set_context{contextTarget}: slice B2's context
+ *                     commands (parseContextCommand; agent.ts applies them)
+ *
+ * Slice B2 (#local-working-memory): the model's memory tools `note{text}` and
+ * `forget{id}` (memory-tools.ts) ride this SAME request path — a tool_request
+ * the kernel answers from its working-memory store — so they get the ids, the
+ * deadline, the abort and tool_cancel, the outstanding cap, and the kernel's
+ * hash-only tool_request row for free.
  *
  * Every field is bounded and validated (the runner.ts style: closed key sets
  * on these new commands, length caps, patterns). A brokered call:
@@ -36,6 +42,7 @@
  * the target never runs late. Aegis L5: a model call id outside
  * [A-Za-z0-9_.:-]{1,128} is replaced by `call-<id>` before it leaves.
  */
+import { createHash } from 'node:crypto';
 import type { ResultSource, ToolResult } from './confine.js';
 import type { ToolSpec } from './compat.js';
 
@@ -128,14 +135,35 @@ export function parseToolProgress(cmd: Record<string, unknown>): { id: string } 
   return { id: cmd.id };
 }
 
-/** The reserved B2 commands: validated and parsed (no-ops until B2). */
-export function parseReserved(cmd: Record<string, unknown>): { op: 'memory_set'; text: string } | { op: 'compact' } | { op: 'set_context'; contextTarget: number } | { error: string } {
+const SHA256_RE = /^sha256:[0-9a-f]{64}$/;
+/** Slice B2: the largest context target a set_context may name (the child then clamps it to n_ctx). */
+export const CONTEXT_TARGET_MAX = 1 << 24;
+
+export type ContextCommand =
+  | { op: 'memory_set'; render: string; hash: string; bytes: number; goalHash?: string }
+  | { op: 'compact' }
+  | { op: 'set_context'; contextTarget: number };
+
+/**
+ * Slice B2 (#local-working-memory): the kernel's context commands, closed and bounded.
+ *   memory_set{render, hash, bytes, goalHash?}  the rendered working-memory block (≤ BROKER_LIMITS.memory chars);
+ *     hash = sha256 of render and bytes its UTF-8 size, both checked (a torn or edited line is refused); goalHash is
+ *     the sha256 of the goal the block pins VERBATIM (absent when it pins none, or only a cut one).
+ *   compact{}                                    compact at the next model step
+ *   set_context{contextTarget}                   a positive integer; the agent clamps it (agent.setContextTarget)
+ */
+export function parseContextCommand(cmd: Record<string, unknown>): ContextCommand | { error: string } {
   switch (cmd.type) {
     case 'memory_set': {
-      const c = closed(cmd, ['id', 'type', 'text']);
+      const c = closed(cmd, ['id', 'type', 'render', 'hash', 'bytes', 'goalHash']);
       if (c) return { error: c };
-      if (typeof cmd.text !== 'string' || cmd.text.length > BROKER_LIMITS.memory) return { error: `text must be text of at most ${BROKER_LIMITS.memory} chars` };
-      return { op: 'memory_set', text: cmd.text };
+      if (typeof cmd.render !== 'string' || cmd.render.length > BROKER_LIMITS.memory) return { error: `render must be text of at most ${BROKER_LIMITS.memory} chars` };
+      if (typeof cmd.hash !== 'string' || !SHA256_RE.test(cmd.hash)) return { error: 'hash must be sha256:<hex>' };
+      if (typeof cmd.bytes !== 'number' || !Number.isInteger(cmd.bytes) || cmd.bytes < 0) return { error: 'bytes must be a non-negative integer' };
+      if (cmd.goalHash !== undefined && (typeof cmd.goalHash !== 'string' || !SHA256_RE.test(cmd.goalHash))) return { error: 'goalHash must be sha256:<hex>' };
+      if (sha256(cmd.render) !== cmd.hash) return { error: 'hash does not match render' };
+      if (Buffer.byteLength(cmd.render, 'utf8') !== cmd.bytes) return { error: 'bytes does not match render' };
+      return { op: 'memory_set', render: cmd.render, hash: cmd.hash, bytes: cmd.bytes, ...(cmd.goalHash !== undefined ? { goalHash: cmd.goalHash as string } : {}) };
     }
     case 'compact': {
       const c = closed(cmd, ['id', 'type']);
@@ -145,13 +173,16 @@ export function parseReserved(cmd: Record<string, unknown>): { op: 'memory_set';
       const c = closed(cmd, ['id', 'type', 'contextTarget']);
       if (c) return { error: c };
       const n = cmd.contextTarget;
-      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1024 || n > 131072) return { error: 'contextTarget must be an integer in 1024..131072' };
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > CONTEXT_TARGET_MAX) return { error: `contextTarget must be an integer in 1..${CONTEXT_TARGET_MAX}` };
       return { op: 'set_context', contextTarget: n };
     }
     default:
-      return { error: 'not a reserved command' };
+      return { error: 'not a context command' };
   }
 }
+
+/** `sha256:<hex>` of a string's UTF-8 bytes. */
+export const sha256 = (t: string): string => `sha256:${createHash('sha256').update(t, 'utf8').digest('hex')}`;
 
 const TYPE_OK: Record<string, (v: unknown) => boolean> = {
   string: (v) => typeof v === 'string',

@@ -8,7 +8,9 @@
  *
  *   usable  = floor(target × TARGET_HEADROOM)        (0.85, round 2)
  *   system  = the system message (its text-tool prompt NOT included)
- *   memory  = reserved for slice B2 (0 until then)
+ *   memory  = the kernel's working-memory block (slice B2, memory_set): its
+ *             estimate, never above memorySlotTokens(target) =
+ *             min(1000, 12 % of the target) (the child refuses a bigger one)
  *   tools   = the native tools schema sent with the request, or the
  *             text-tool prompt carried inside the system message
  *   reply   = maxTokens
@@ -61,6 +63,16 @@ export interface ContextLedger {
 }
 
 const nat = (n: number): number => (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+
+/** Slice B2: the working-memory slot is at most this many tokens … */
+export const MEMORY_SLOT_MAX_TOKENS = 1000;
+/** … and at most this share of the target. */
+export const MEMORY_SLOT_SHARE = 0.12;
+
+/** Slice B2 (#local-working-memory): the memory slot of a target: min(1000 tokens, 12 % of the target). */
+export function memorySlotTokens(target: number): number {
+  return Math.min(MEMORY_SLOT_MAX_TOKENS, Math.floor(nat(target) * MEMORY_SLOT_SHARE));
+}
 
 export function contextLedger(i: LedgerInput): ContextLedger {
   const usable = Math.floor(nat(i.target) * (i.headroom ?? TARGET_HEADROOM));
