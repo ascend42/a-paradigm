@@ -40,6 +40,7 @@ import type { ApprovalBroker } from '../broker/broker.js';
 import type { PolicyPath } from '../manifest/policy.js';
 import { RpcRefusal } from '../socket/rpc.js';
 import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
+import type { LocalMcpServer } from '../local/mcp-client.js';
 import { allowRuleWords, autoAllowRules, composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
 
 export const MCP_SERVERS_SCHEMA = 'gnomon-mcp-servers:v1' as const;
@@ -74,6 +75,12 @@ export interface McpEnabledEntry {
   launchHash: string;
   at: string;
   cardId: string;
+  /**
+   * TD-2026-10-27-833 slice C2': how much a LOCAL session believes this server's own annotations (#capability-index).
+   * Absent = `enabled` (annotations ignored, every tool mutate). `trusted` is set by the human only (C5' adds its UI);
+   * `first-party` is never stored (it is the Paradigm MCP's alone).
+   */
+  trust?: 'enabled' | 'trusted';
 }
 export interface McpServersStore {
   enabled: McpEnabledEntry[];
@@ -109,6 +116,8 @@ export function readMcpServersStore(home: string): McpServersStore {
       (e): e is McpEnabledEntry => isObj(e) && typeof e.id === 'string' && typeof e.launchHash === 'string' && typeof e.cardId === 'string' && typeof e.at === 'string' && (e.scope === 'all' || (isObj(e.scope) && typeof e.scope.repo === 'string' && path.isAbsolute(e.scope.repo))),
     );
     const fp = isObj(v.firstParty) && v.firstParty.paradigm === 'off' ? 'off' : 'on';
+    // slice C2': a trust value other than the two a store may hold is dropped (the entry stays, as `enabled`)
+    for (const e of enabled) if (e.trust !== undefined && e.trust !== 'enabled' && e.trust !== 'trusted') delete e.trust;
     return { enabled: enabled.slice(0, MAX_ENTRIES), firstParty: { paradigm: fp } };
   } catch {
     return empty;
@@ -337,6 +346,35 @@ export class McpServers {
     if (fp && !fp.available) this.#o.emit?.({ event: 'mcp.first-party.unavailable', hsid: ctx.hsid, why: fp.why });
     for (const s of r.skipped) this.#o.emit?.({ event: 'mcp.user.skipped', hsid: ctx.hsid, id: s.id, server: s.server, why: s.why, ...(s.names ? { names: s.names } : {}) });
     return r;
+  }
+
+  /**
+   * TD-2026-10-27-833 slice C2': the servers a LOCAL session in `ctx.cwd` may reach (#local-mcp-client): exactly the
+   * servers compose() gives a Claude session there (the first-party Paradigm MCP as trust `first-party`, then every
+   * enabled server at its current launch hash, a project or local server only in its own repo), each with its store
+   * entry's trust (default `enabled`; the narrowest of the applicable entries). Remote servers are listed as composed;
+   * the pool refuses them (remote-refused).
+   */
+  composeLocal(ctx: { hsid: string; cwd: string; worktree?: string }): LocalMcpServer[] {
+    const r = this.compose(ctx);
+    const store = readMcpServersStore(this.#o.home);
+    const out: LocalMcpServer[] = [];
+    for (const a of r.added) {
+      const e = r.servers[a.server] as Record<string, unknown> | undefined;
+      if (!e) continue;
+      const transport = e.type === 'http' || e.type === 'sse' ? e.type : 'stdio';
+      const entries = store.enabled.filter((x) => x.id === a.id && x.launchHash === a.launchHash);
+      const trust = a.source === 'first-party' ? 'first-party' : entries.length && entries.every((x) => x.trust === 'trusted') ? 'trusted' : 'enabled';
+      out.push({
+        id: a.id,
+        name: a.server,
+        transport,
+        ...(transport === 'stdio' && typeof e.command === 'string' ? { command: e.command, args: Array.isArray(e.args) ? e.args.map(String) : [] } : {}),
+        ...(transport === 'stdio' && e.env && typeof e.env === 'object' ? { env: { ...(e.env as Record<string, string>) } } : {}),
+        trust,
+      });
+    }
+    return out;
   }
 
   status(): Record<string, unknown> {

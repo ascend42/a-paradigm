@@ -224,6 +224,34 @@ components:
     tests:
       - test/capability-index.test.ts
     oracles: [G-LCL-16]
+  local-mcp-client:
+    description: >-
+      #local-mcp-client (TD-2026-10-27-833 slice C2'): the kernel's minimal
+      stdio MCP client (newline JSON-RPC: initialize, tools/list paged and
+      bounded, tools/call, resources/list + resources/read only to find an
+      io.gnomon/op-annotations:v1 document for a trusted server,
+      notifications/tools/list_changed -> re-list and re-read annotations,
+      notifications/cancelled on abort or timeout; server-to-client requests
+      answered not-supported). Bounds: 4 MiB per message (over it the server
+      is killed), per-request timeouts (the broker's deadline for calls),
+      256 tools, 32 requests in flight, 3 starts per server per session.
+      LocalMcpPool (one per local session): servers from
+      McpServers.composeLocal (#mcp-servers: first-party Paradigm as trust
+      first-party, then the servers enabled for this repo at their current
+      launch hash, project/local servers only in their own repo, trust from
+      the store entry, default enabled); http/sse servers refused with fit
+      remote-refused; each stdio server spawned lazily through the session's
+      own launch plan (sessionLaunchPlan with the session policy: the
+      session's files and network), with a kernel-lifetime tools/list cache
+      per launch + repo so a cache hit spawns nothing until the first call;
+      closeAll() reaps every server at session exit (process group on posix).
+    path: src/kernel/local/mcp-client.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
+    signals: []
+    tests:
+      - test/local-mcp-client.test.ts
+    oracles: [G-LCL-17]
   local-working-memory:
     description: >-
       #local-working-memory (TD-2026-10-27-833 slice B2; T-2026-10-26-003; spec §13.1 "Working memory and context
