@@ -932,18 +932,19 @@ const n = (v: number): string => v.toLocaleString('en-US');
 export function resultLine(p: Record<string, unknown>): { text: string; warn: boolean } {
   const reason = typeof p.stopReason === 'string' ? p.stopReason : null;
   const abnormal = reason !== null && reason !== 'stop';
-  const parts = [p.isError === true ? 'error' : abnormal ? (STOP_LABEL[reason] ?? `stopped: ${reason}`) : typeof p.subtype === 'string' ? p.subtype : 'done'];
+  const parts = [p.isError === true ? 'error' : abnormal ? (STOP_LABEL[reason] ?? `stopped: ${reason.replace(/_/g, ' ')}`) : typeof p.subtype === 'string' ? p.subtype : 'done'];
   const noAnswer = reason !== null && reason !== 'aborted' && p.replyBytes === 0;
   if (noAnswer) parts.push('no answer');
   if (typeof p.cost === 'number') parts.push(`$${p.cost.toFixed(4)}`);
   const run = objOf(p.runUsage);
   const tokens = objOf(p.usage)?.tokens;
   if (run && typeof run.tokens === 'number') {
-    parts.push(typeof run.input === 'number' && typeof run.output === 'number' ? `${n(run.tokens)} tokens (in ${n(run.input)} + out ${n(run.output)})` : `${n(run.tokens)} tokens (in + out)`);
+    parts.push(typeof run.input === 'number' && typeof run.output === 'number' ? `${n(run.tokens)} tokens (in ${n(run.input)} + out ${n(run.output)})` : `${n(run.tokens)} tokens`);
   } else if (typeof tokens === 'number') parts.push(`${n(tokens)} tokens`);
   if (typeof p.permission_denials === 'number' && p.permission_denials > 0) parts.push(`${p.permission_denials} denied`);
   if (abnormal && typeof p.error === 'string' && p.error.trim()) parts.push(cap(oneLine(p.error), TOOL_SUMMARY_MAX));
-  return { text: parts.join(' · '), warn: reason === 'max_steps' || noAnswer };
+  // an error is never amber (DESIGN rule 1: vermilion = failed, amber = warning)
+  return { text: parts.join(' · '), warn: p.isError !== true && reason !== 'error' && (reason === 'max_steps' || noAnswer) };
 }
 
 /**

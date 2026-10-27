@@ -32,11 +32,14 @@ describe('the local turn result line', () => {
   });
 
   it('error and aborted say so; an error shows its message', () => {
-    expect(resultOf({ stopReason: 'error', isError: true, error: 'completion failed:\n HTTP 500', runUsage: { tokens: 10, input: 10, output: 0 }, replyBytes: 0 }).text).toBe('error · no answer · 10 tokens (in 10 + out 0) · completion failed: HTTP 500');
+    const er = resultOf({ stopReason: 'error', isError: true, error: 'completion failed:\n HTTP 500', runUsage: { tokens: 10, input: 10, output: 0 }, replyBytes: 0 });
+    expect(er.text).toBe('error · no answer · 10 tokens (in 10 + out 0) · completion failed: HTTP 500');
+    // an error is never amber (DESIGN rule 1)
+    expect(er.tone).toBeUndefined();
     const ab = resultOf({ stopReason: 'aborted', runUsage: { tokens: 5, input: 5, output: 0 }, replyBytes: 0 });
     expect(ab.text).toBe('aborted · 5 tokens (in 5 + out 0)');
     expect(ab.tone).toBeUndefined();
-    expect(resultLine({ stopReason: 'length_cut' }).text).toBe('stopped: length_cut');
+    expect(resultLine({ stopReason: 'length_cut' }).text).toBe('stopped: length cut');
     expect(Object.keys(STOP_LABEL)).toEqual(['max_steps', 'aborted', 'error']);
   });
 
@@ -44,7 +47,7 @@ describe('the local turn result line', () => {
     const ok = resultOf({ stopReason: 'stop', isError: false, usage: { tokens: 0 }, runUsage: { tokens: 240, input: 200, output: 40 }, replyBytes: 5 });
     expect(ok.text).toBe('done · 240 tokens (in 200 + out 40)');
     expect(ok.tone).toBeUndefined();
-    expect(resultOf({ stopReason: 'stop', runUsage: { tokens: 240 }, replyBytes: 0 }).text).toBe('done · no answer · 240 tokens (in + out)');
+    expect(resultOf({ stopReason: 'stop', runUsage: { tokens: 240 }, replyBytes: 0 }).text).toBe('done · no answer · 240 tokens');
   });
 
   it('a row without the local fields (older logs, Claude) reads as before', () => {
