@@ -202,6 +202,13 @@ components:
       O_NOFOLLOW + fstat (regular file, our uid) + fchmod; request.session.memory.read / .list (owner-gated); a
       refused memory_set/set_context logs why child-refused and a refused delete stops the session; v1d hsids are
       NOT_FOUND; a reused in-flight toolCallId credits no file; an unverified-voice goal is tool:voice data.
+      Aegis re-check: a kernel-composed turn (a Desk offer's open text, origin kernel) is tool:offer data, logged
+      session.inject origin kernel; memory_set carries an id and the delete ack matches it, a refused delete stops
+      the session before any awaited write, delete{stop:true} also ends it and the reply says the history still
+      holds the text; file-refs check the lexical path under a root before realpath and refuse UNC, //host, /net/;
+      reads open O_NONBLOCK and fstat isFile (a FIFO cannot hang the kernel); the dir is fsynced after a rewrite.
+      GUI ADVISORY (slice C6'): request.session.memory.read returns model- and tool-written text; render it as
+      plain text only, never as markup.
       Model-written via the child's note{text<=300}/forget{id} tools, which ride the tool_request path and are
       answered from the store (never the LocalToolBroker); at most 16 model notes, oldest evicted. Caps 32
       entries <=600 chars; human/kernel entries never evicted, refused (why full) when no model note can make room.
