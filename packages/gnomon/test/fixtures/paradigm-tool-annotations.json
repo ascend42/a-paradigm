@@ -1,0 +1,422 @@
+{
+  "schema": "io.gnomon/op-annotations:v1",
+  "tools": {
+    "paradigm_lore": {
+      "assess": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "calibration": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "delete": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      },
+      "get": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "record": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "timeline": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "update": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_purpose": {
+      "portal_add_gate": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "portal_add_route": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "add_aspect": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "add_component": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "add_flow": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "add_gate": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "add_signal": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "add_state": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "init": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "link": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "remove": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      },
+      "rename": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "validate": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_wisdom": {
+      "context": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "expert": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "promote": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "record": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_history": {
+      "context": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "fragility": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "record": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "validate": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_decision": {
+      "record": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_journal": {
+      "record": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "work_log_record": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "work_log_search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_session": {
+      "context_check": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "handoff_prepare": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "checkpoint": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "health": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "recover": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "stats": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_task": {
+      "create": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "done": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "list": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "shelve": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "update": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_agent": {
+      "activate": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "bench": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "expertise": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "get": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "list": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "prompt": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_protocol": {
+      "get": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "record": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "update": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "validate": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_aspect": {
+      "check": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "confirm": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "drift": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "get": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "graph": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "heatmap": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "suggest_scan": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_tags": {
+      "list": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "suggest": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_flow": {
+      "check": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "affected": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_graph": {
+      "arch_diagram": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "arch_status": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "generate": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "slice": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_notebook": {
+      "add": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "promote": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_captain": {
+      "board": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "brief": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "debrief": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_pm": {
+      "postflight": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "preflight": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_docs": {
+      "manifest": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "page": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "search": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_ambient": {
+      "engage": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "events": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "health": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      },
+      "learn": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "learn_postflight": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "nominations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "promote": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "compose": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    "paradigm_compliance": {},
+    "paradigm_authority": {
+      "claim": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      },
+      "release": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    }
+  }
+}

@@ -11,10 +11,22 @@ import { validateBrokeredArgs } from '../src/kernel/local/tool-broker.js';
 import { surfaceTools } from '../../gnomon-local/src/compat.js';
 
 const PARADIGM = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'paradigm-tools-list.json'), 'utf8')) as { tools: Array<Record<string, unknown>> };
+const PARADIGM_ANN = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'paradigm-tool-annotations.json'), 'utf8')) as unknown;
 const byName = (es: CapabilityEntry[], n: string): CapabilityEntry => es.find((e) => e.name === n)!;
 
 describe('narrow(): Paradigm golden', () => {
-  const es = narrow(PARADIGM, 'paradigm', { trust: 'first-party' });
+  // Paradigm's op-annotations come from its paradigm://tool-annotations resource (S-P), as the MCP client reads it
+  const es = narrow(PARADIGM, 'paradigm', { trust: 'first-party', opAnnotations: PARADIGM_ANN });
+
+  it('per-op classes from the real paradigm://tool-annotations document', () => {
+    expect(byName(es, 'paradigm_lore.get').class).toBe('read');
+    expect(byName(es, 'paradigm_lore.delete').class).toBe('destructive');
+    expect(byName(es, 'paradigm_lore.record').class).toBe('mutate');
+    expect(byName(es, 'paradigm_task.list').class).toBe('read');
+    // without the resource a split op is never read
+    const bare = narrow(PARADIGM, 'paradigm', { trust: 'first-party' });
+    expect(bare.filter((e) => e.op !== null && e.class === 'read')).toEqual([]);
+  });
 
   it('snapshots the narrowed set', () => {
     const lines = es.map((e) => `${e.id} ${e.class}${e.humanOnly ? ' human-only' : ''} [${e.params.map((p) => `${p.name}${p.required ? '*' : ''}${p.kind === 'csv' ? ':csv' : ''}`).join(',')}] drop=${e.dropped.length} | ${e.description}`);

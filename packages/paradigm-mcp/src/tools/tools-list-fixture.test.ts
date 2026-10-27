@@ -1,7 +1,8 @@
 /**
  * Gnomon slice C2' (#capability-index): Paradigm's real tools/list is the golden input of the kernel's narrowing
  * (packages/gnomon/test/capability-index.test.ts). This test keeps that fixture honest: the fixture's tool names
- * must be the live worst-case list's (every feature detector on). Regenerate with
+ * must be the live worst-case list's (every feature detector on), and the paradigm://tool-annotations document
+ * (S-P) must be the live one. Regenerate with
  * `PARADIGM_TOOLS_FIXTURE=write npx vitest run src/tools/tools-list-fixture.test.ts`.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -14,6 +15,7 @@ import { invalidateFeatureCache } from '../utils/tool-registry.js';
 import type { ProjectContext } from '../utils/index-loader.js';
 
 const FIXTURE = path.resolve(__dirname, '../../../gnomon/test/fixtures/paradigm-tools-list.json');
+const ANN_FIXTURE = path.resolve(__dirname, '../../../gnomon/test/fixtures/paradigm-tool-annotations.json');
 
 function worstCaseProject(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fixture-worst-'));
@@ -33,15 +35,16 @@ function worstCaseProject(): string {
   return root;
 }
 
-async function liveList(): Promise<Array<Record<string, unknown>>> {
+async function liveList(): Promise<{ tools: Array<Record<string, unknown>>; annotations: unknown }> {
   const root = worstCaseProject();
   try {
     invalidateFeatureCache();
     const handlers = new Map<unknown, (req: { params: Record<string, unknown> }) => Promise<any>>();
     const server = { setRequestHandler: (s: unknown, h: any) => { handlers.set(s, h); }, sendToolListChanged: vi.fn(async () => {}) };
     const ctx = { rootDir: root, index: {}, aggregation: { purposeFiles: [], symbols: [] }, gateConfig: null, projectName: 'fixture', wisdom: null, history: null } as unknown as ProjectContext;
-    registerTools(server as any, () => ctx, async () => {});
-    return (await handlers.get(ListToolsRequestSchema)!({ params: {} })).tools;
+    const reg = registerTools(server as any, () => ctx, async () => {});
+    const tools = (await handlers.get(ListToolsRequestSchema)!({ params: {} })).tools;
+    return { tools, annotations: reg.opAnnotations() };
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -49,8 +52,12 @@ async function liveList(): Promise<Array<Record<string, unknown>>> {
 
 describe('gnomon capability-index fixture', () => {
   it('names the same tools as the live worst-case tools/list', async () => {
-    const tools = await liveList();
-    if (process.env.PARADIGM_TOOLS_FIXTURE === 'write') fs.writeFileSync(FIXTURE, `${JSON.stringify({ tools }, null, 2)}\n`);
+    const { tools, annotations } = await liveList();
+    if (process.env.PARADIGM_TOOLS_FIXTURE === 'write') {
+      fs.writeFileSync(FIXTURE, `${JSON.stringify({ tools }, null, 2)}\n`);
+      fs.writeFileSync(ANN_FIXTURE, `${JSON.stringify(annotations, null, 2)}\n`);
+    }
+    expect(JSON.parse(fs.readFileSync(ANN_FIXTURE, 'utf8'))).toEqual(annotations);
     const fixture = JSON.parse(fs.readFileSync(FIXTURE, 'utf8')) as { tools: Array<{ name: string }> };
     expect(fixture.tools.map((t) => t.name).sort()).toEqual(tools.map((t) => String(t.name)).sort());
   });
