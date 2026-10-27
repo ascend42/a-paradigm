@@ -18,6 +18,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import { purposeValidateCommand } from '../src/commands/purpose/validate.js';
 
 let root: string;
@@ -103,5 +104,44 @@ describe('paradigm purpose validate — path handling', () => {
     const r = await runValidate(path.join(root, 'package.json'));
     expect(r.out).toContain('not a .purpose file');
     expect(r.exitCode).toBe(1);
+  });
+});
+
+describe('paradigm purpose validate — release/build output is skipped', () => {
+  const hasGit = spawnSync('git', ['--version']).status === 0;
+  let repo: string;
+
+  beforeAll(() => {
+    repo = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-validate-git-'));
+    fs.writeFileSync(path.join(repo, '.purpose'), VALID_PURPOSE);
+    for (const rel of ['pkg/release/App.app/Contents/Resources', 'pkg/out-x', 'pkg/dist', 'pkg/build', 'pkg/node_modules/dep']) {
+      fs.mkdirSync(path.join(repo, rel), { recursive: true });
+      fs.writeFileSync(path.join(repo, rel, '.purpose'), VALID_PURPOSE);
+    }
+  });
+
+  afterAll(() => {
+    if (repo) fs.rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('outside git: dist/build/node_modules/release are never found', async () => {
+    const r = await runValidate(repo);
+    expect(r.out).toMatch(/Found 2 purpose file/); // root + pkg/out-x
+    expect(r.out).not.toContain('release');
+    expect(r.exitCode).toBeNull();
+  });
+
+  it('inside git: gitignored directories are skipped too', async () => {
+    if (!hasGit) return;
+    spawnSync('git', ['init', '-q'], { cwd: repo });
+    // Inside git, .gitignore is the authority (a tracked release/ source dir
+    // would be kept); the gnomon release output is gitignored like this.
+    fs.writeFileSync(path.join(repo, '.gitignore'), 'pkg/release/\nout-*/\n');
+    const r = await runValidate(repo);
+    expect(r.out).toMatch(/Found 1 purpose file/);
+    expect(r.out).not.toContain('out-x');
+    expect(r.out).not.toContain('release');
+    fs.rmSync(path.join(repo, '.git'), { recursive: true, force: true });
+    fs.rmSync(path.join(repo, '.gitignore'));
   });
 });

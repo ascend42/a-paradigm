@@ -271,9 +271,28 @@ features:
     type: command
     components:
       - '#audit-logger'
+  test-shell-utils:
+    description: |
+      src/test-shell-utils.ts: test-only helpers for running the shell hooks as Claude Code does on each OS. BASH / SH
+      are Git Bash on Windows (PARADIGM_TEST_BASH overrides C:\Program Files\Git\bin\bash.exe), bash / sh
+      elsewhere; SYS_PATH is the tools-only PATH (POSIX /usr/bin:/bin; Windows Git usr\bin + cmd + System32);
+      baseEnv() carries SystemRoot/ComSpec/PATHEXT that Windows children need; shellPath / msysPath embed paths in
+      scripts; realPath / tempDir avoid 8.3 names; nodeOnlyDir puts only node on PATH (symlink, or a Git Bash
+      wrapper on Windows); SHELL_TEST_TIMEOUT is longer on Windows. Not imported by shipped code. (Moved here
+      from the Cid placeholder stub at src/.purpose, T-2026-10-27-003.)
+    file: src/test-shell-utils.ts
+    type: utility
+    tags: [test, windows]
   mcp-setup-command:
-    description: Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue, Cline)
+    description: >-
+      Auto-configure MCP server for AI clients (Cursor, Claude Desktop, Continue,
+      Cline): src/commands/mcp/setup.ts. src/commands/mcp/switch.ts is
+      `paradigm mcp use-dev | use-prod`, which points MCP configs at the local
+      working tree's built packages or back at the global paradigm-mcp binary.
     type: command
+    files:
+      - src/commands/mcp/setup.ts
+      - src/commands/mcp/switch.ts
     signals:
       - '!mcp-configured'
     components:

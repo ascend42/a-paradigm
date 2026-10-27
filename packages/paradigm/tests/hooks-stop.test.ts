@@ -80,6 +80,14 @@ interface FixtureOptions {
    * check + override-event writer need real fs state.
    */
   remediationYamls?: Record<string, string>;
+  /**
+   * Stub answer for `paradigm purpose coverage <dirs...>` (tab-separated
+   * "<dir>\t(covered|uncovered)\t<file|->" lines). Undefined = the stub prints
+   * nothing, like a CLI without the command, so the hook falls back.
+   */
+  coverageTsv?: string;
+  /** Run with PARADIGM_AUTO_FIX=1. */
+  autoFix?: boolean;
 }
 
 interface FixtureResult {
@@ -175,6 +183,12 @@ JSON
     # Empty enforcement map → all checks fall back to defaults
     exit 0
     ;;
+  purpose)
+    if [ "$2" = "coverage" ] && [ -f "${binDir}/coverage.tsv" ]; then
+      cat "${binDir}/coverage.tsv"
+    fi
+    exit 0
+    ;;
   internal)
     if [ "$2" = "active-remediations" ]; then
       cat <<'JSON'
@@ -192,6 +206,9 @@ esac
       'utf8',
     );
     fs.chmodSync(stubPath, 0o755);
+    if (opts.coverageTsv !== undefined) {
+      fs.writeFileSync(path.join(binDir, 'coverage.tsv'), opts.coverageTsv, 'utf8');
+    }
   }
 
   return {
@@ -209,6 +226,7 @@ esac
         HOME: rootDir,
         CWD: rootDir,
         MODIFIED: opts.modified.join('\n'),
+        ...(opts.autoFix ? { PARADIGM_AUTO_FIX: '1' } : {}),
       };
       // Use a single bash invocation that cd's into the fixture, sources
       // the script, then prints a structured tail we parse for assertions.
@@ -438,6 +456,108 @@ describe('paradigm-common.sh — cohort gating (v6.0.4)', () => {
     // Check 1/2 emit messages mentioning missing .purpose / covering files.
     expect(parsed.violationCount).toBeGreaterThanOrEqual(1);
     expect(parsed.violations.toLowerCase()).toMatch(/\.purpose/);
+  });
+
+  // -------------------------------------------------------------------------
+  // Shared coverage rule (#purpose-coverage, T-2026-10-27-003): Checks 1/2 ask
+  // `paradigm purpose coverage`; an ancestor counts only if it documents the
+  // dir, placeholders never count.
+  // -------------------------------------------------------------------------
+  const PKG_PURPOSE = 'description: The pkg package.\ncomponents:\n  pkg-cli:\n    description: CLI in src/cli/a.ts.\n';
+
+  it('shared rule: an undocumented dir under an ancestor .purpose is a Check 2 gap', () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      purposes: { 'pkg/.purpose': PKG_PURPOSE },
+      sources: { 'pkg/src/cli/a.ts': 'export {};\n', 'pkg/scripts/b.ts': 'export {};\n' },
+      modified: ['pkg/src/cli/a.ts', 'pkg/scripts/b.ts'],
+      coverageTsv: 'pkg/src/cli\tcovered\tpkg/.purpose\npkg/scripts\tuncovered\t-\n',
+    });
+    cleanups.push(fx.cleanup);
+    const parsed = parseHookOutput(fx.run().stdout);
+    const [check1, check2] = parsed.violations.split('no .purpose documents them');
+    expect(check2).toBeDefined();
+    expect(check2).toContain('pkg/scripts');
+    expect(check2).not.toContain('pkg/src/cli');
+    // pkg/src/cli is covered by pkg/.purpose, which was not updated → Check 1.
+    expect(check1).toContain('pkg/src/cli');
+    expect(check1).not.toContain('pkg/scripts');
+  });
+
+  it('shared rule: a dir covered via its ancestor is clean once that ancestor is updated', () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      purposes: { 'pkg/.purpose': PKG_PURPOSE },
+      sources: { 'pkg/src/cli/a.ts': 'export {};\n' },
+      modified: ['pkg/src/cli/a.ts', 'pkg/.purpose'],
+      coverageTsv: 'pkg/src/cli\tcovered\tpkg/.purpose\n',
+    });
+    cleanups.push(fx.cleanup);
+    const parsed = parseHookOutput(fx.run().stdout);
+    expect(parsed.violations).not.toContain('pkg/src/cli');
+  });
+
+  it('shared rule: a placeholder own .purpose (reported uncovered) is a Check 2 gap', () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      purposes: {
+        'core/.purpose': '# Auto-generated .purpose stub — update with real descriptions\ncomponents:\n  core:\n    description: "TODO: describe this component"\n',
+      },
+      sources: { 'core/x.ts': 'export {};\n' },
+      modified: ['core/x.ts'],
+      coverageTsv: 'core\tuncovered\t-\n',
+    });
+    cleanups.push(fx.cleanup);
+    const parsed = parseHookOutput(fx.run().stdout);
+    expect(parsed.violations).toContain('no .purpose documents them');
+    expect(parsed.violations).toContain('core');
+  });
+
+  it('PARADIGM_AUTO_FIX=1 queues the gap as a task, writes no stub, and still names the dir', () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      sources: { 'lib/x.ts': 'export {};\n' },
+      modified: ['lib/x.ts'],
+      coverageTsv: 'lib\tuncovered\t-\n#queued\tT-2026-10-27-009\n',
+      autoFix: true,
+    });
+    cleanups.push(fx.cleanup);
+    const parsed = parseHookOutput(fx.run().stdout);
+    expect(fs.existsSync(path.join(fx.rootDir, 'lib', '.purpose'))).toBe(false);
+    expect(parsed.violations).toContain('no .purpose documents them');
+    expect(parsed.violations).toContain('lib');
+    expect(parsed.violations).toContain('Queued for the Documentor as task T-2026-10-27-009');
+    expect(parsed.raw).not.toContain('Created stub .purpose');
+  });
+
+  it("Cid's JSON queue lines in .pending-review never mark a .purpose stale", () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      purposes: { '.purpose': 'description: The whole project, documented at the root level.\n' },
+      modified: [],
+    });
+    cleanups.push(fx.cleanup);
+    fs.writeFileSync(
+      path.join(fx.rootDir, '.paradigm', '.pending-review'),
+      JSON.stringify({ path: 'pkg/scripts', reason: 'captain-debrief-new-symbols', context: 'New symbols: #x' }) + '\n',
+    );
+    const parsed = parseHookOutput(fx.run().stdout);
+    expect(parsed.violations).not.toContain('./.purpose');
+    expect(parsed.violations + parsed.advisory).not.toContain("were NOT updated");
+  });
+
+  it('shared rule: a CLI without `purpose coverage` falls back to the nearest-.purpose walk', () => {
+    const fx = seedFixture({
+      rosterCompliance: false,
+      purposes: { 'pkg/.purpose': PKG_PURPOSE },
+      sources: { 'pkg/scripts/b.ts': 'export {};\n' },
+      modified: ['pkg/scripts/b.ts'],
+    });
+    cleanups.push(fx.cleanup);
+    const parsed = parseHookOutput(fx.run().stdout);
+    // Fallback: pkg/.purpose is the nearest file → Check 1, not Check 2.
+    expect(parsed.violations).not.toContain('no .purpose documents them');
+    expect(parsed.violations).toContain('pkg/scripts');
   });
 
   // -------------------------------------------------------------------------

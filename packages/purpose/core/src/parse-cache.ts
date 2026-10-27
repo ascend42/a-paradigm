@@ -27,7 +27,7 @@ import * as path from 'path';
 import { createHash } from 'crypto';
 import type { PurposeFile } from './types.js';
 import { parseRawPurposeFileContent } from './parser.js';
-import { findPurposeFiles, type ParsedPurposeFile } from './aggregator.js';
+import { findPurposeFiles, type ParsedPurposeFile, type FindPurposeFilesOptions } from './aggregator.js';
 
 /**
  * Files modified this recently are never trusted on (mtime, size) alone: two
@@ -171,7 +171,8 @@ export function parsePurposeFilesCached(
 export async function getAllPurposeFilesCached(
   rootDir: string,
   cache: PurposeParseCache,
+  options: FindPurposeFilesOptions = {},
 ): Promise<ParsedPurposeFile[]> {
-  const files = await findPurposeFiles(rootDir);
+  const files = await findPurposeFiles(rootDir, options);
   return parsePurposeFilesCached(files, cache);
 }

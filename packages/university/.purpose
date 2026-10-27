@@ -15,3 +15,19 @@ components:
     type: config
     file: src/index.ts
     tags: [feature, university, pack]
+  university-content:
+    description: >-
+      The pack's content, read by @a-company/university-core: src/content/pack.yaml
+      (pack manifest), src/content/reference.json, src/content/notes/ (N-*.md
+      lesson notes), src/content/quizzes/ (Q-*.yaml quizzes, one per note) and
+      src/content/paths/ (LP-*.yaml learning paths that order notes and quizzes).
+      Data only, no code.
+    type: config
+    paths:
+      - src/content
+      - src/content/notes
+      - src/content/quizzes
+      - src/content/paths
+    components:
+      - '#university-pack'
+    tags: [university, pack, content]

@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import { runContextAudit, type ContextAuditResult } from './context-audit.js';
 import { createTempProject } from '../../test-utils.js';
 
@@ -173,15 +174,65 @@ describe('purpose-coverage', () => {
 
   it('reports ok when coverage is at or above 80%', async () => {
     suppressOutput();
-    const { rootDir, cleanup: c } = createTempProject({ withPurpose: true });
+    const { rootDir, cleanup: c } = createTempProject({
+      withPurpose: true,
+      purposeContent: 'description: The test project, with its source under src.\ncomponents:\n  test-app:\n    description: The app entry point.\n    path: src\n',
+    });
     cleanup = c;
-    // Create source dirs, all covered by root .purpose
+    // Create source dirs, all documented by the root .purpose (path: src)
     fs.mkdirSync(path.join(rootDir, 'src'), { recursive: true });
     fs.writeFileSync(path.join(rootDir, 'src', 'main.ts'), '// code', 'utf8');
     const results = await runContextAudit(rootDir, { quiet: true });
     const check = findCheck(results, 'purpose-coverage');
     expect(check).toBeDefined();
     expect(check!.status).toBe('ok');
+  });
+
+  it('an ancestor that does not document a dir, or a placeholder stub, is not coverage', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject({ withPurpose: true });
+    cleanup = c;
+    // Root .purpose (from createTempProject) names no paths; src/b has a Cid stub.
+    for (const dir of ['src/a', 'src/b']) {
+      fs.mkdirSync(path.join(rootDir, dir), { recursive: true });
+      fs.writeFileSync(path.join(rootDir, dir, 'index.ts'), '// code', 'utf8');
+    }
+    fs.writeFileSync(
+      path.join(rootDir, 'src/b', '.purpose'),
+      '# Auto-generated .purpose stub — update with real descriptions\ncomponents:\n  b:\n    description: "TODO: describe this component"\n',
+      'utf8',
+    );
+    const results = await runContextAudit(rootDir, { quiet: true });
+    const check = findCheck(results, 'purpose-coverage');
+    expect(check!.status).toBe('warn');
+    expect(check!.message).toContain('(0/2 ');
+  });
+
+  it('never counts release or gitignored output as source directories', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.mkdirSync(path.join(rootDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, 'src', 'main.ts'), '// code', 'utf8');
+    fs.writeFileSync(
+      path.join(rootDir, 'src', '.purpose'),
+      'description: The application source and its entry point main.ts.\n',
+      'utf8',
+    );
+    // Uncovered build output: would drag coverage to 1/3 if counted.
+    for (const rel of ['pkg/release/App.app/Contents/Resources', 'pkg/out-x']) {
+      fs.mkdirSync(path.join(rootDir, rel), { recursive: true });
+      fs.writeFileSync(path.join(rootDir, rel, 'bundle.js'), '// built', 'utf8');
+    }
+    const hasGit = spawnSync('git', ['--version']).status === 0;
+    if (hasGit) {
+      spawnSync('git', ['init', '-q'], { cwd: rootDir });
+      fs.writeFileSync(path.join(rootDir, '.gitignore'), 'pkg/release/\nout-*/\n', 'utf8');
+    }
+    const results = await runContextAudit(rootDir, { quiet: true });
+    const check = findCheck(results, 'purpose-coverage');
+    // Without git only release/ is skipped by name; out-x stays a source dir.
+    expect(check!.message).toContain(hasGit ? '(1/1 ' : '(1/2 ');
   });
 });
 

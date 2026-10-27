@@ -24,7 +24,7 @@ components:
       - orchestration
       - team-funnel
   paradigm-hooks:
-    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing .purpose stubs, missing lore entries). Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
+    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing lore entries); uncovered directories are filed as a purpose-coverage task (#purpose-coverage-queue) and still named in the block message, and no .purpose stub is ever written. Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
     type: command
     signals:
       - '!compliance-violation'
@@ -187,6 +187,30 @@ components:
       - hooks
       - stop-hook
       - team-funnel
+  stop-hook-purpose-coverage:
+    description: >-
+      Stop hook Checks 1 and 2 (paradigm-common.sh, section
+      purpose-coverage-resolve) use the shared #purpose-coverage rule (T-2026-10-27-003):
+      one `paradigm purpose coverage <dirs...>` call (~150 ms) scores every
+      modified source directory; _covering_purpose reads the tab-separated
+      answer. Covered = own .purpose or an ancestor that documents the dir;
+      placeholder stubs never count. Check 1 flags a covered dir whose
+      covering .purpose was not updated; Check 2 flags dirs no .purpose
+      documents. When the CLI cannot answer (missing, or an older CLI) it falls
+      back to the nearest-.purpose walk; the coverage_shared counter records
+      which rule ran. Under PARADIGM_AUTO_FIX=1 the same call adds --queue
+      (and Check 11 purpose-required calls --require-own --queue): uncovered dirs
+      become one deduped purpose-coverage task, the block message names the dirs
+      and the task id, and nothing is written into the tree. Check 5 skips the
+      JSON lines Cid appends to .pending-review for new-symbol areas (they are not
+      file paths). Coverage gaps are never written there; the purpose-coverage
+      task is their only record.
+      Tests: tests/hooks-stop.test.ts (shared rule and auto-fix cases).
+    type: utility
+    file: scripts/paradigm-common.sh
+    components:
+      - '#purpose-coverage'
+    tags: [hooks, stop-hook, coverage]
   has-compliance-claimant:
     description: |
       v6.0.4 POSIX sh helper in paradigm-common.sh that reads
