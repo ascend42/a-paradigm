@@ -37,7 +37,7 @@ describe('checkCap (#gnomon-contracts, S5)', () => {
     expect(computeKitId()).toBe(KIT_ID);
     expect(KIT_ID).toBe('sha256:3d3f917de8f745846f4e7216583bdb6bdef4a966aff62a152c26d730dccecf9a');
     expect(computeClientApiId()).toBe(CLIENT_API_ID);
-    expect(CLIENT_API_ID).toBe('sha256:aac99220f0b1db2564959be5dafcf13dd6ed7287ca71245c85133e653acf12db');
+    expect(CLIENT_API_ID).toBe('sha256:c47ec0166d489630dc245926649fe966dd15add980d07db61bbdc64f73e18c55');
     expect(computeModAbiId()).toBe(MOD_ABI_ID);
     expect(MOD_ABI_ID).toBe('sha256:7aaf92f46dc35fc35141557c1f89088958f220e6bf53ea31a630bb06430ba082');
   });

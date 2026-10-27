@@ -319,3 +319,73 @@ describe('Aegis C1 review: card hygiene, ids, cancel, manual mode', () => {
     expect(t.ownsGate).toBe(true);
   });
 });
+
+describe('Aegis C1 re-check (N1-N6)', () => {
+  const gated = (r: { text: string; isError: boolean; why?: string; cardId?: string }, onCall?: (o: { onRunning?: () => void }) => void): BrokerTarget => ({
+    server: 'gnomon', provenance: 'kernel', ownsGate: true, list: async () => [],
+    call: async (_n, _a, o) => (onCall?.(o), r),
+  });
+
+  it('N2: the row follows the target\'s closed why; approved only on success, with the target\'s cardId', async () => {
+    const cases: Array<[{ text: string; isError: boolean; why?: string; cardId?: string }, string]> = [
+      [{ text: 'pushed', isError: false, cardId: CARD }, 'approved'],
+      [{ text: 'manual', isError: true, why: 'mode-manual' }, 'refused'],
+      [{ text: 'no surface', isError: true, why: 'no-approval-surface' }, 'no-approval-surface'],
+      [{ text: 'busy', isError: true, why: 'busy' }, 'busy'],
+      [{ text: 'bad', isError: true, why: 'bad-input' }, 'bad-args'],
+      [{ text: 'changed', isError: true, why: 'remote-changed' }, 'refused'],
+      [{ text: 'The session is not running.', isError: true }, 'refused'],
+    ];
+    for (const [res, decision] of cases) {
+      const r = rig({ target: gated(res) });
+      await r.b.handle(req('gnomon_git_push', {}));
+      expect(r.rows[0]!.payload.decision, res.text).toBe(decision);
+      expect(validateKindPayload('tool.brokered', r.rows[0]!.payload)).toEqual([]);
+    }
+    const ok = rig({ target: gated({ text: 'pushed', isError: false, cardId: CARD }) });
+    await ok.b.handle(req('gnomon_git_push', {}));
+    expect(ok.rows[0]!.payload).toMatchObject({ decision: 'approved', cardId: CARD });
+    expect(ok.raised).toEqual([]);
+  });
+
+  it('N1: carded calls the child cancels count toward suspension; carded requests are rate-limited per minute', async () => {
+    const r = rig({ decision: new Promise<string>(() => undefined) });
+    for (let i = 1; i <= 3; i++) {
+      const p = r.b.handle({ ...req('gnomon_git_push', { remote: `r${i}` }), id: `tr-${i}` });
+      for (let k = 0; k < 50 && r.raised.length < i; k++) await new Promise((res) => setTimeout(res, 5));
+      r.b.cancel(`tr-${i}`);
+      await p;
+    }
+    expect(r.b.suspended).toBe(true);
+    let t = 0;
+    const q = new LocalToolBroker({ hsid: HSID, principalId: 'p:abcdefgh/s-x', repo: '/repo', loop: false, log: async () => undefined, target: gated({ text: 'x', isError: false }), tools: [{ name: 'gnomon_git_push', description: '', parameters: { type: 'object', properties: { remote: { type: 'string' } } }, class: 'destructive' }], running: () => true, now: () => t });
+    const out: string[] = [];
+    for (let i = 0; i < 7; i++) out.push((await q.handle({ ...req('gnomon_git_push', { remote: `x${i}` }), id: `tr-${i + 1}` })).content);
+    expect(out[6]).toMatch(/per minute/);
+  });
+
+  it('N3: a request received at or before the last interrupt is cancelled', async () => {
+    const r = rig();
+    r.b.cancelAll();
+    expect(await r.b.handle({ ...req('kernel_status', {}), receivedAt: Date.now() - 1_000 })).toMatchObject({ isError: true, content: expect.stringMatching(/interrupted/) });
+    expect(r.calls).toEqual([]);
+    expect(await r.b.handle({ ...req('kernel_status', {}), receivedAt: Date.now() + 1 })).toMatchObject({ isError: false });
+  });
+
+  it('N4: once the effect starts, the broker reports progress once and the kernel deadline stops', async () => {
+    const seen: string[] = [];
+    let run: (() => void) | undefined;
+    const b = new LocalToolBroker({ hsid: HSID, principalId: 'p', repo: '/repo', loop: false, log: async () => undefined, cardTimeoutMs: 100, progress: (id) => seen.push(id), running: () => true, tools: [{ name: 'gnomon_git_push', description: '', parameters: { type: 'object', properties: {} }, class: 'destructive' }],
+      target: { server: 'gnomon', provenance: 'kernel', ownsGate: true, list: async () => [], call: async (_n, _a, o) => { o.onRunning?.(); o.onRunning?.(); run = o.onRunning; await new Promise((res) => setTimeout(res, 300)); return { text: 'pushed', isError: false }; } } });
+    expect(await b.handle(req('gnomon_git_push', {}))).toMatchObject({ isError: false, content: 'pushed' });
+    expect(run).toBeDefined();
+    expect(seen).toEqual(['tr-1']);
+  });
+
+  it('N6: an unsafe schema pattern is refused before it runs', () => {
+    for (const pattern of ['(a+)+$', '(a|a*)*', '(.*){2,}', '(\\w)\\1', '(?=a)a', 'x'.repeat(300)]) {
+      expect(validateBrokeredArgs({ type: 'object', properties: { s: { type: 'string', pattern } } }, { s: 'aaaa' }), pattern).toMatch(/unsafe pattern/);
+    }
+    expect(validateBrokeredArgs({ type: 'object', properties: { s: { type: 'string', pattern: '^[a-z0-9._-]+$' } } }, { s: 'ok' })).toBeNull();
+  });
+});

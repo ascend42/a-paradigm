@@ -632,11 +632,12 @@ export type ToolBrokerClass = (typeof TOOL_BROKER_CLASSES)[number];
  *   expired             the call's kernel deadline passed (a pending card expired) before the target ran
  *   allowed-cancelled   the card was ALLOWED but the call was cancelled or expired before the target ran
  *   cooldown            the same args were denied moments ago (a deny cool-down)
- *   suspended           this session's brokered calls are suspended after repeated denies
+ *   suspended           this session's brokered calls are suspended after repeated denies or cancelled cards
+ *   refused             the target refused the call for another reason (manual mode, bad input, remote changed, …)
  *   busy                the session already has MAX_BROKERED_IN_FLIGHT calls in flight
  *   not-running         the session is not running
  */
-export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'expired', 'allowed-cancelled', 'cooldown', 'suspended', 'busy', 'not-running'] as const;
+export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'expired', 'allowed-cancelled', 'cooldown', 'suspended', 'refused', 'busy', 'not-running'] as const;
 export type ToolBrokeredDecision = (typeof TOOL_BROKERED_DECISIONS)[number];
 /** tool.brokered{server}: the MCP server name the call went to (`gnomon` = the kernel's own SDK server). */
 export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;

@@ -4936,7 +4936,18 @@ components:
       broker cards name the tool `kernel:<tool>` / `mcp:<server>/<tool>`; L7
       the broker exists before stdout is read (a backstop answers and logs),
       and a child that stops reading its stdin (> CHILD_STDIN_HIGH_WATER
-      queued) is stopped.
+      queued) is stopped. Aegis re-check (N1-N6, fixed): a verb's in-flight
+      slot is released when its queued run settles; carded calls the child
+      cancels count toward suspension and carded requests are capped at
+      CARDED_PER_MINUTE; the row's decision follows the verb's closed why
+      (refused for the rest, approved only on success) and carries the verb's
+      cardId (kernel-mcp _meta gnomon/cardId); a request received at or before
+      the session's last interrupt is cancelled; tool_cancel is honoured in the
+      stdout handler ahead of the queue, and once the effect starts the kernel
+      sends tool_progress{id, state running} (the child waits RUN_TIMEOUT_MS
+      more, the kernel deadline stops); GitVerbs.openSession clears a closed
+      hsid on open/resume; schema patterns pass unsafePattern first; the init
+      verb's last cancel check precedes the remnant .git removal.
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]

@@ -50,6 +50,8 @@ export interface BrokeredToolSpec extends ToolSpec {
 export const TOOL_TIMEOUT_MS = 30_000;
 /** A mutate/destructive request may wait on a human card: this long. */
 export const CARD_TIMEOUT_MS = 5 * 60_000;
+/** Aegis N4: once the kernel says the call's effect is running (tool_progress), the child waits this much longer. */
+export const RUN_TIMEOUT_MS = 10 * 60_000;
 /** Bounds of every field (both directions). */
 export const BROKER_LIMITS = Object.freeze({
   tools: 64,
@@ -115,6 +117,15 @@ export function parseToolResponse(cmd: Record<string, unknown>): ToolResponse | 
   if (typeof cmd.isError !== 'boolean') return { error: 'isError must be a boolean' };
   if (typeof cmd.provenance !== 'string' || !PROVENANCE_RE.test(cmd.provenance)) return { error: 'provenance must be kernel or mcp:<server>' };
   return { id: cmd.id, content: cmd.content, isError: cmd.isError, provenance: cmd.provenance };
+}
+
+/** Aegis N4: tool_progress{id, state:'running'} from the kernel. */
+export function parseToolProgress(cmd: Record<string, unknown>): { id: string } | { error: string } {
+  const c = closed(cmd, ['type', 'id', 'state']);
+  if (c) return { error: c };
+  if (typeof cmd.id !== 'string' || !REQUEST_ID_RE.test(cmd.id)) return { error: 'id is not a tool request id' };
+  if (cmd.state !== 'running') return { error: 'state must be running' };
+  return { id: cmd.id };
 }
 
 /** The reserved B2 commands: validated and parsed (no-ops until B2). */
@@ -193,12 +204,16 @@ interface Pending {
   resolve: (r: ToolResult) => void;
   timer: NodeJS.Timeout;
   cleanup: () => void;
+  /** Aegis N4: re-arm the wait (tool_progress) */
+  extend: (ms: number) => void;
+  running: boolean;
 }
 
 export interface KernelBrokerOptions {
   emit: (ev: Record<string, unknown>) => void;
   toolTimeoutMs?: number;
   cardTimeoutMs?: number;
+  runTimeoutMs?: number;
 }
 
 /** The child's brokered-call port: tool_request out, tool_response in, timeouts and abort. */
@@ -234,9 +249,22 @@ export class KernelToolBroker {
       };
       const onAbort = (): void => settle({ content: 'cancelled: the run was aborted', isError: true });
       signal?.addEventListener('abort', onAbort, { once: true });
-      const timer = setTimeout(() => settle({ content: `timed out: the kernel did not answer ${tool.name} within ${Math.round(ms / 1000)} s`, isError: true }), ms);
-      timer.unref?.();
-      this.#pending.set(id, { resolve, timer, cleanup: () => signal?.removeEventListener('abort', onAbort) });
+      const arm = (wait: number): NodeJS.Timeout => {
+        const t = setTimeout(() => settle({ content: `timed out: the kernel did not answer ${tool.name} within ${Math.round(wait / 1000)} s`, isError: true }), wait);
+        t.unref?.();
+        return t;
+      };
+      const entry: Pending = {
+        resolve,
+        timer: arm(ms),
+        cleanup: () => signal?.removeEventListener('abort', onAbort),
+        running: false,
+        extend: (wait) => {
+          clearTimeout(entry.timer);
+          entry.timer = arm(wait);
+        },
+      };
+      this.#pending.set(id, entry);
       this.#o.emit({ type: 'tool_request', id, toolCallId: TOOL_CALL_ID_RE.test(toolCallId) ? toolCallId : `call-${id}`, name: tool.name, args });
     });
   }
@@ -250,6 +278,15 @@ export class KernelToolBroker {
     p.cleanup();
     // Aegis M5: a brokered result keeps its provenance, error or not (shape.ts frames brokered errors with error="true")
     p.resolve({ content: r.content, isError: r.isError, source: r.provenance as ResultSource });
+    return true;
+  }
+
+  /** Aegis N4: the kernel's tool_progress{id, state:'running'}: the effect started, wait RUN_TIMEOUT_MS more (once). */
+  progress(id: string): boolean {
+    const p = this.#pending.get(id);
+    if (!p || p.running) return false;
+    p.running = true;
+    p.extend(this.#o.runTimeoutMs ?? RUN_TIMEOUT_MS);
     return true;
   }
 

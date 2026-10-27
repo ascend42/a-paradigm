@@ -192,5 +192,7 @@ export const steerLine = (message: string, id?: string): string => line({ ...(id
 export const abortLine = (): string => line({ type: 'abort' });
 /** Slice S1: the kernel's answer to one tool_request (content capped at TOOL_RESPONSE_MAX_CHARS). */
 export const toolResponseLine = (r: { id: string; content: string; isError: boolean; provenance: string }): string => line({ type: 'tool_response', id: r.id, content: r.content.slice(0, TOOL_RESPONSE_MAX_CHARS), isError: r.isError, provenance: r.provenance });
+/** Aegis N4: the call's effect started (the child extends its wait for this id). */
+export const toolProgressLine = (id: string): string => line({ type: 'tool_progress', id, state: 'running' });
 /** Slice S1: the brokered tools offered from the child's next step on. */
 export const toolsSetLine = (tools: ReadonlyArray<{ name: string; description: string; parameters: Record<string, unknown>; class: string }>): string => line({ type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });

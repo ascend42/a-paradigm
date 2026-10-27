@@ -41,6 +41,15 @@
  * so the kernel always answers `expired` before the child gives up; the
  * child's timer is the safety net. The child's `tool_cancel{id}` (its timeout
  * or abort) cancels the call here — it only ever removes privilege.
+ * Aegis re-check (N1-N6): a carded call the child cancels counts toward the
+ * suspension, and carded requests are rate-limited (CARDED_PER_MINUTE); the
+ * row's decision follows the target's closed `why` (refused for the rest;
+ * approved only when the call succeeded) and carries the target's cardId; a
+ * request received at or before the session's last interrupt is cancelled;
+ * once the effect starts the kernel sends tool_progress{id, state:'running'}
+ * (the child extends its wait, the kernel's deadline stops); a schema
+ * `pattern` must pass a safe-regex check (length, no nested quantifier, no
+ * backreference or lookaround).
  * GAPS left for C2'/C5' (documented in .purpose): no capability index or
  * narrowing beyond the worktree drop and manual mode; no Always/standing
  * grants for brokered tools; no per-server trust tiers (mcp:<server> is
@@ -69,6 +78,10 @@ export const DENY_COOLDOWN_MS = 60_000;
 /** Aegis M4: this many denies inside SUSPEND_WINDOW_MS suspend the session's brokered calls. */
 export const SUSPEND_AFTER_DENIES = 3;
 export const SUSPEND_WINDOW_MS = 10 * 60_000;
+/** Aegis N1: at most this many mutate/destructive requests per session per minute (past it, busy). */
+export const CARDED_PER_MINUTE = 6;
+/** Aegis N6: the longest schema pattern run. */
+export const PATTERN_MAX_CHARS = 256;
 /** The full-schema bounds (step 2). */
 export const ARG_LIMITS = Object.freeze({ bytes: 16 * 1024, string: 4096, array: 64, depth: 6, keys: 64 });
 /** The most chars of a result sent back (the child caps again under its own budget). */
@@ -85,6 +98,8 @@ export interface TargetCall {
   signal: AbortSignal;
   /** epoch ms */
   deadline: number;
+  /** Aegis N4: the target calls this once, right before its effect starts */
+  onRunning?: () => void;
 }
 
 /** A target the broker calls: one MCP server (C1: the kernel's own). */
@@ -97,7 +112,7 @@ export interface BrokerTarget {
   ownsGate: boolean;
   list(): Promise<Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>>;
   /** `why` is the target's closed reason when it refused (e.g. git.verb's `denied`, `cancelled`) */
-  call(name: string, args: Record<string, unknown>, o: TargetCall): Promise<{ text: string; isError: boolean; why?: string }>;
+  call(name: string, args: Record<string, unknown>, o: TargetCall): Promise<{ text: string; isError: boolean; why?: string; cardId?: string }>;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -121,14 +136,14 @@ export function kernelSdkTarget(verbs: Pick<GitVerbs, 'tools' | 'call'>, session
     async call(name, args, o) {
       const s = (): VerbSession | null => {
         const v = session();
-        return v ? { ...v, local: true, signal: o.signal, deadline: o.deadline } : null;
+        return v ? { ...v, local: true, signal: o.signal, deadline: o.deadline, ...(o.onRunning ? { onEffect: o.onRunning } : {}) } : null;
       };
       const r = await rpc('tools/call', { name, arguments: args }, s);
       if (isObj(r.error)) return { text: typeof r.error.message === 'string' ? r.error.message : 'the kernel tool call failed', isError: true };
       const res = isObj(r.result) ? r.result : {};
       const text = Array.isArray(res.content) ? res.content.filter(isObj).map((c) => (typeof c.text === 'string' ? c.text : '')).join('\n') : '';
       const meta = isObj(res._meta) ? res._meta : {};
-      return { text, isError: res.isError === true, ...(typeof meta['gnomon/why'] === 'string' ? { why: meta['gnomon/why'] } : {}) };
+      return { text, isError: res.isError === true, ...(typeof meta['gnomon/why'] === 'string' ? { why: meta['gnomon/why'] } : {}), ...(typeof meta['gnomon/cardId'] === 'string' ? { cardId: meta['gnomon/cardId'] } : {}) };
     },
   };
 }
@@ -219,6 +234,8 @@ function check(schema: unknown, v: unknown, at: string, depth: number): string |
     const bt = badText(v);
     if (bt) return `${at} ${bt}`;
     if (typeof sc.pattern === 'string') {
+      const unsafe = unsafePattern(sc.pattern);
+      if (unsafe) return `the schema of ${at} has an unsafe pattern (${unsafe}): refused`;
       let re: RegExp;
       try {
         re = new RegExp(sc.pattern, 'u');
@@ -251,6 +268,36 @@ function check(schema: unknown, v: unknown, at: string, depth: number): string |
       if (e) return e;
     }
   } else if (types === null && isObj(sc.properties)) return `${at} must be an object`;
+  return null;
+}
+
+/**
+ * Aegis N6: a schema pattern the kernel will run (it bounds the input at ARG_LIMITS.string already): at most
+ * PATTERN_MAX_CHARS, no backreference or lookaround, no quantified group that itself holds a quantifier (the classic
+ * catastrophic shapes `(a+)+`, `(a|a*)*`, `(.*){2,}`). Returns why it is unsafe, or null.
+ */
+export function unsafePattern(p: string): string | null {
+  if (p.length > PATTERN_MAX_CHARS) return `longer than ${PATTERN_MAX_CHARS} chars`;
+  if (/\\[1-9]|\\k</.test(p)) return 'a backreference';
+  if (/\(\?<?[=!]/.test(p)) return 'a lookaround';
+  // a group whose body holds a quantifier, itself followed by a quantifier
+  const stack: Array<{ quant: boolean }> = [];
+  let inClass = false;
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i]!;
+    if (c === '\\') { i++; continue; }
+    if (inClass) { if (c === ']') inClass = false; continue; }
+    if (c === '[') { inClass = true; continue; }
+    if (c === '(') { stack.push({ quant: false }); continue; }
+    if (c === ')') {
+      const g = stack.pop();
+      const next = p[i + 1];
+      if (g?.quant && (next === '*' || next === '+' || next === '{' || next === '?')) return 'a nested quantifier';
+      if (g?.quant && stack.length) stack[stack.length - 1]!.quant = true;
+      continue;
+    }
+    if ((c === '*' || c === '+' || c === '{') && stack.length) stack[stack.length - 1]!.quant = true;
+  }
   return null;
 }
 
@@ -301,6 +348,8 @@ export interface LocalToolBrokerOptions {
   cardTimeoutMs?: number;
   /** TEST SEAM: the clock */
   now?: () => number;
+  /** Aegis N4: tell the child the call's effect started (LocalLane writes tool_progress{id, state:'running'}) */
+  progress?: (id: string) => void;
 }
 
 /** Why a call's controller was aborted. */
@@ -317,6 +366,10 @@ export class LocalToolBroker {
   readonly #cooldown = new Map<string, number>();
   readonly #denies: number[] = [];
   #suspended = false;
+  /** Aegis N1: when the session's recent carded requests arrived */
+  readonly #carded: number[] = [];
+  /** Aegis N3: the last interrupt (cancelAll); a request received at or before it is cancelled */
+  #interruptedAt = -Infinity;
 
   constructor(o: LocalToolBrokerOptions) {
     this.#o = o;
@@ -343,13 +396,18 @@ export class LocalToolBroker {
 
   /** The session aborted, stopped or exited: every call in flight is cancelled (its card expires, the target never runs). */
   cancelAll(): void {
+    this.#interruptedAt = this.#now();
     for (const { ctl } of this.#inflight.values()) ctl.abort('cancel' satisfies StopWhy);
   }
 
   /** Aegis M1: the child's tool_cancel{id} (its timeout or abort). Only removes privilege. */
   cancel(id: string): boolean {
     const c = this.#inflight.get(id);
-    c?.ctl.abort('cancel' satisfies StopWhy);
+    if (c && !c.ctl.signal.aborted) {
+      c.ctl.abort('cancel' satisfies StopWhy);
+      // Aegis N1: a carded call the child walks away from counts toward the suspension (a request/cancel loop)
+      if (c.carded) this.#strike();
+    }
     return c !== undefined;
   }
 
@@ -357,6 +415,12 @@ export class LocalToolBroker {
     const now = this.#now();
     this.#cooldown.set(key, now + DENY_COOLDOWN_MS);
     if (this.#cooldown.size > 256) this.#cooldown.delete(this.#cooldown.keys().next().value as string);
+    this.#strike();
+  }
+
+  /** One deny (or a cancelled card) inside the window; SUSPEND_AFTER_DENIES of them suspend the session. */
+  #strike(): void {
+    const now = this.#now();
     this.#denies.push(now);
     while (this.#denies.length && this.#denies[0]! < now - SUSPEND_WINDOW_MS) this.#denies.shift();
     if (this.#denies.length >= SUSPEND_AFTER_DENIES) this.#suspended = true;
@@ -376,12 +440,19 @@ export class LocalToolBroker {
     if (!tool) return done('unknown-tool', `unknown tool ${String(req.name ?? '').slice(0, 64)}`, true);
     if (req.error !== null || req.args === null) return done('bad-args', `${tool.name}: ${req.error ?? 'arguments must be a JSON object'}`, true);
     if (!o.running()) return done('not-running', 'The session is not running.', true);
+    if (req.receivedAt !== undefined && req.receivedAt <= this.#interruptedAt) return done('cancelled', 'cancelled: the session was interrupted after this call was sent', true);
     if (this.#suspended) return done('suspended', 'Brokered tools are suspended for this session after repeated denies.', true);
     const bad = validateBrokeredArgs(tool.parameters, req.args);
     if (bad) return done('bad-args', `${tool.name}: ${bad}`, true);
     const key = `${tool.name}\u0000${argsHash}`;
     if ((this.#cooldown.get(key) ?? 0) > this.#now()) return done('cooldown', `${tool.name} with these arguments was just denied: ask the human differently or wait.`, true);
     const carded = tool.class !== 'read';
+    if (carded) {
+      const now = this.#now();
+      while (this.#carded.length && this.#carded[0]! <= now - 60_000) this.#carded.shift();
+      if (this.#carded.length >= CARDED_PER_MINUTE) return done('busy', `At most ${CARDED_PER_MINUTE} calls that need the human per minute: wait a moment.`, true);
+      this.#carded.push(now);
+    }
     if (this.#inflight.size >= MAX_BROKERED_IN_FLIGHT || (carded && [...this.#inflight.values()].filter((x) => x.carded).length >= MAX_CARDED_IN_FLIGHT)) return done('busy', carded ? 'Another call that needs the human is already waiting: wait for it.' : `This session already has ${this.#inflight.size} brokered calls in flight: wait for them.`, true);
     const ctl = new AbortController();
     const ms = carded ? (o.cardTimeoutMs ?? CARD_TIMEOUT_MS) : (o.toolTimeoutMs ?? TOOL_TIMEOUT_MS);
@@ -408,18 +479,33 @@ export class LocalToolBroker {
         allowed = true;
       }
       if (ctl.signal.aborted) return stopped(allowed, cardId);
-      let r: { text: string; isError: boolean; why?: string };
+      let running = false;
+      const onRunning = (): void => {
+        if (running) return;
+        running = true;
+        // Aegis N4: the effect started: the kernel deadline no longer applies, and the child extends its wait
+        clearTimeout(timer);
+        o.progress?.(req.id);
+      };
+      if (!o.target.ownsGate) onRunning();
+      let r: { text: string; isError: boolean; why?: string; cardId?: string };
       try {
-        r = await o.target.call(tool.name, req.args, { signal: ctl.signal, deadline });
+        r = await o.target.call(tool.name, req.args, { signal: ctl.signal, deadline, onRunning });
       } catch (err) {
         r = { text: `the ${tool.name} call failed: ${(err as Error).message.slice(0, 200)}`, isError: true };
       }
+      cardId = cardId ?? r.cardId;
+      const text = shapeBrokeredResult(r.text);
+      // Aegis N2: the decision follows the target's closed reason; `approved` only for a call that succeeded
       if (r.why === 'cancelled') return stopped(false, cardId);
       if (r.why === 'denied' || r.why === 'secret-in-push') {
         this.#denied(key);
-        return done('denied', shapeBrokeredResult(r.text), true, cardId);
+        return done('denied', text, true, cardId);
       }
-      return done(carded ? 'approved' : 'ran', shapeBrokeredResult(r.text), r.isError, cardId);
+      const mapped: Record<string, ToolBrokeredDecision> = { 'no-approval-surface': 'no-approval-surface', busy: 'busy', 'bad-input': 'bad-args', 'loop-session': 'loop-session' };
+      if (r.why !== undefined && Object.hasOwn(mapped, r.why)) return done(mapped[r.why]!, text, true, cardId);
+      if (r.isError && (carded || o.target.ownsGate)) return done('refused', text, true, cardId);
+      return done(carded ? 'approved' : 'ran', text, r.isError, cardId);
     } finally {
       clearTimeout(timer);
       this.#inflight.delete(req.id);

@@ -93,7 +93,7 @@ import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LineSplitter } from '../../adapters/claude-code/adapter.js';
-import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine, toolResponseLine, toolsSetLine } from '../../adapters/local/runner.js';
+import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine, toolProgressLine, toolResponseLine, toolsSetLine } from '../../adapters/local/runner.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget } from '../local/tool-broker.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
@@ -134,7 +134,7 @@ export interface LocalLaneOptions {
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'permit'>;
   broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire'>>;
   /** slice C1: the kernel's own SDK server's verbs, brokered to attended local sessions (absent: no brokered tools) */
-  gitVerbs?: Pick<GitVerbs, 'tools' | 'call'> & Partial<Pick<GitVerbs, 'closeSession'>>;
+  gitVerbs?: Pick<GitVerbs, 'tools' | 'call'> & Partial<Pick<GitVerbs, 'closeSession' | 'openSession'>>;
   /** slice C1 (Aegis M3): the run-mode book (SupervisorOptions.runMode): a manual session's verbs refuse, its tools are read-only */
   runMode?: (hsid: string, repoKey: string) => { effective: RunMode } | null;
   home: string;
@@ -887,6 +887,12 @@ export class LocalLane {
       // Aegis M1: the receipt time is stamped HERE, before the queue (a brokered call's deadline counts from it)
       split.push(chunk, (line) => {
         const at = Date.now();
+        // Aegis N4: a tool_cancel is honoured HERE, ahead of the serial queue (it only removes privilege); its
+        // turn.event row is still written in order below
+        if (line.length < 256 && line.includes('"tool_cancel"')) {
+          const ev = parseLocalLine(line);
+          if (ev.kind === 'tool-cancel' && ev.id !== null) s.tools?.cancel(ev.id);
+        }
         queue(() => this.#onLine(s, line, at));
       }, (bytes) => queue(() => this.#o.log('turn.event', { hsid: s.hsid, type: 'dropped', bytes, seq: ++s.seq }, { session: s.hsid })));
     });
@@ -900,7 +906,9 @@ export class LocalLane {
     const target = verbs ? kernelSdkTarget(verbs, () => (s.state === 'running' ? this.#verbSession(s) : null)) : NO_TARGET;
     // Aegis M3: a session in manual mode at open is offered no mutate/destructive tool at all
     const tools = verbs ? await offeredKernelTools(target, { manual: this.#mode(s) === 'manual' }).catch(() => []) : [];
-    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running' });
+    // Aegis N5: an hsid opened here is never a closed one (a same-process resume)
+    if (verbs) this.#o.gitVerbs?.openSession?.(s.hsid);
+    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, toolProgressLine(id)) });
   }
 
   /** Aegis M3: the session's effective run mode from the run-mode book, as Claude sessions read it (unreadable ⇒ manual). */
@@ -1054,7 +1062,7 @@ export class LocalLane {
         void this.#brokered(s, ev, receivedAt).catch(() => undefined);
         return;
       case 'tool-cancel':
-        // Aegis M1: the child gave up on the call (timeout or abort): the kernel stops it too (a pending card expires)
+        // Aegis M1/N4: already honoured in the stdout handler, ahead of the queue (cancel is idempotent)
         if (ev.id !== null) s.tools?.cancel(ev.id);
         return;
       case 'response':

@@ -68,6 +68,8 @@ export interface VerbSession {
   signal?: AbortSignal;
   /** slice C1 (Aegis H1): the brokered call's deadline (epoch ms); the card expires at it, nothing runs after it */
   deadline?: number;
+  /** slice C1 (Aegis N4): called once, right before the effect starts (the broker tells the child the call is running) */
+  onEffect?: () => void;
 }
 
 /** Aegis M2: hsids closeSession has closed (bounded; hsids are never reused). */
@@ -80,6 +82,8 @@ export interface VerbResult {
   ok: boolean;
   text: string;
   why?: GitVerbReason;
+  /** slice C1 (Aegis N2): the card this call raised, if any (kernel-mcp passes it in _meta) */
+  cardId?: string;
 }
 
 export interface McpToolSpec {
@@ -281,19 +285,37 @@ export class GitVerbs {
       return this.#refuse(s, verb, h, 'busy', `This session already has ${n} git verbs in flight: wait for them.`);
     }
     this.#inflight.set(s.hsid, n + 1);
-    try {
-      return await this.#queued(verb, args, s);
-    } finally {
+    // Aegis N1: the slot is released when the queued RUN settles (an abandoned wait still holds it), exactly once
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
       const m = (this.#inflight.get(s.hsid) ?? 1) - 1;
       if (m <= 0) this.#inflight.delete(s.hsid);
       else this.#inflight.set(s.hsid, m);
+    };
+    // Aegis N2: the card this call raised rides on the result
+    let card: string | undefined;
+    const sc: VerbSession & { onCard?: (id: string) => void } = { ...s, onCard: (id) => void (card = id) };
+    try {
+      const r = await this.#queued(verb, args, sc, release);
+      return card && !r.cardId ? { ...r, cardId: card } : r;
+    } catch (e) {
+      release();
+      throw e;
     }
   }
 
-  async #queued(verb: GitVerb, args: unknown, s: VerbSession): Promise<VerbResult> {
+  /** Aegis N5: a session (re)opened with this hsid (a resume in the same process) is no longer closed. */
+  openSession(hsid: string): void {
+    this.#closedSessions.delete(hsid);
+  }
+
+  async #queued(verb: GitVerb, args: unknown, s: VerbSession, settled: () => void = () => undefined): Promise<VerbResult> {
     const root = real(verb === 'git.init' ? s.cwd : (s.worktree ?? s.cwd));
     const prev = this.#queue.get(root) ?? Promise.resolve();
     const run = prev.catch(() => undefined).then(() => this.#run(verb, args, s, root));
+    void run.then(settled, settled);
     if (s.signal || s.deadline !== undefined) {
       // slice C1 (Aegis H1): a brokered call waiting in the queue stops waiting on abort or at its deadline; the queued
       // run itself re-checks #cancelled first and refuses, so nothing runs late
@@ -398,6 +420,7 @@ export class GitVerbs {
       const decisions = s.local ? card.decisions.filter((x) => x !== 'always') : [...card.decisions];
       const c = await b.raise({ kind: 'permission', requestedBy: s.principalId, hsid: s.hsid, attended: true, detail, lines: card.lines, block, ...(card.flags.length ? { flags: [...card.flags] } : {}), toolInput, tool, decisions, ...(decisions.includes('always') ? { ruleScope: { repoKey: s.repoKey } } : {}), ...(s.deadline !== undefined ? { timeoutMs: Math.max(1000, s.deadline - Date.now()) } : {}) });
       cardId = c.cardId;
+      (s as VerbSession & { onCard?: (id: string) => void }).onCard?.(cardId);
     } catch {
       return { decision: 'none', cardId: null };
     }
@@ -475,9 +498,11 @@ export class GitVerbs {
     const git = (this.#o.git ?? gitPath)();
     if (!git) return this.#fail(s, verb, hash, 'tool-missing', 'git is not installed where Gnomon looks for it.', cardId ? { cardId } : {});
     const gitDir = path.join(root, '.git');
+    // Aegis re-check: the last cancel check comes before ANY change (the remnant removal included)
+    if (this.#cancelled(s)) return this.#cancel(s, verb, hash, cardId ? { cardId } : {});
     if (dotGitOf(root) === 'remnant') fs.rmSync(gitDir, { recursive: true, force: true });
     else if (remnant) return this.#refuse(s, verb, hash, 'in-repo', 'The .git folder changed after the card: not made a repo.', cardId ? { cardId } : {});
-    if (this.#cancelled(s)) return this.#cancel(s, verb, hash, cardId ? { cardId } : {});
+    s.onEffect?.();
     const res = await this.#exec()(git, ['init', '--quiet', '--template=', `--initial-branch=${INIT_BRANCH}`, '--', root], { cwd: root, env: localGitEnv(this.#env()), timeoutMs: VERB_TIMEOUTS.init });
     if (res.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git init ran too long and was stopped.', { ...(cardId ? { cardId } : {}), exitCode: -1 });
     if (res.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git init failed: ${redactOutput(res.stderr, 400)}`, { ...(cardId ? { cardId } : {}), exitCode: res.code });
@@ -672,6 +697,7 @@ export class GitVerbs {
     const args = [...PUSH_GIT_FLAGS, '--git-dir', p.st.gitDir, 'push', '--porcelain', '--no-follow-tags', '--recurse-submodules=no', ...(p.force ? [`--force-with-lease=${ref}:${p.lease ?? ''}`] : []), '--', p.remote, `${p.st.sha}:${ref}`];
     const env = await this.#netEnv(path.dirname(git), p.st.gitDir);
     if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
     const r = await this.#exec()(git, args, { cwd: p.st.root, env, timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git push ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git push to ${p.info.slug} failed: ${redactOutput(`${r.stderr}\n${r.stdout}`, 800)}`, { ...ids, exitCode: r.code });
@@ -727,6 +753,7 @@ export class GitVerbs {
     if (isRefused(st2)) return this.#refuse(s, verb, hash, st2.refused, st2.text, ids);
     if (st2.branch !== st.branch || (await exists())) return this.#refuse(s, verb, hash, 'remote-changed', 'The repo changed after the card: nothing created. Ask again.', ids);
     if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
     const c = await this.#exec()(gh, ['repo', 'create', `${owner}/${a.name}`, visibility === 'public' ? '--public' : '--private'], { cwd: this.#o.userHome(), env: ghEnv, timeoutMs: VERB_TIMEOUTS.create });
     if (c.timedOut) return this.#fail(s, verb, hash, 'timeout', 'gh repo create ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (c.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `gh repo create failed: ${redactOutput(c.stderr, 600)}`, { ...ids, exitCode: c.code });
@@ -845,6 +872,7 @@ export class GitVerbs {
     if ('ok' in gate) return gate;
     const ids = gate.cardId ? { cardId: gate.cardId } : {};
     if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
     if (remove) {
       const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, 'worktree', 'remove', ...(force ? ['--force'] : []), '--', dir], { ...local, timeoutMs: VERB_TIMEOUTS.init });
       if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git worktree remove failed: ${redactOutput(r.stderr, 400)}`, { ...ids, exitCode: r.code });
@@ -856,6 +884,7 @@ export class GitVerbs {
     if (isRefused(w)) return this.#refuse(s, verb, hash, w.refused, w.text, ids);
     if (fs.existsSync(dir)) return this.#refuse(s, verb, hash, 'worktree-exists', `${dir} already exists.`, ids);
     if (this.#cancelled(s)) return this.#cancel(s, verb, hash, ids);
+    s.onEffect?.();
     const r = await this.#exec()(git, [...HARDENED_GIT_FLAGS, '--git-dir', st.gitDir, '--work-tree', root, 'worktree', 'add', '--quiet', '-b', branch, '--', dir, baseSha], { ...local, timeoutMs: VERB_TIMEOUTS.push });
     if (r.timedOut) return this.#fail(s, verb, hash, 'timeout', 'git worktree add ran too long and was stopped.', { ...ids, exitCode: -1 });
     if (r.code !== 0) return this.#fail(s, verb, hash, 'command-failed', `git worktree add failed: ${redactOutput(r.stderr, 400)}`, { ...ids, exitCode: r.code });

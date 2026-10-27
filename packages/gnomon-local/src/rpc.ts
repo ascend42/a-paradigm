@@ -35,7 +35,7 @@ import { COMPAT_ALLOWLIST, type ToolSurface } from './compat.js';
 import { classifyEndpoint } from './endpoint.js';
 import { protectGlob } from './protect.js';
 import { TOOLS } from './tools.js';
-import { KernelToolBroker, parseReserved, parseToolResponse, parseToolsSet } from './broker.js';
+import { KernelToolBroker, parseReserved, parseToolProgress, parseToolResponse, parseToolsSet } from './broker.js';
 
 /** Slice S1: the longest stdin line read (a tool_response carries at most 256 Ki chars of content, JSON-escaped). */
 export const MAX_COMMAND_LINE = 2 * 1024 * 1024;
@@ -206,6 +206,13 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         const r = parseToolResponse(cmd);
         if ('error' in r) return no(r.error);
         if (!broker.respond(r)) return no(`no outstanding request ${r.id}`);
+        return;
+      }
+      case 'tool_progress': {
+        // Aegis N4: the call's effect started in the kernel; no ack on success
+        const r = parseToolProgress(cmd);
+        if ('error' in r) return no(r.error);
+        if (!broker.progress(r.id)) return no(`no outstanding request ${r.id}`);
         return;
       }
       case 'tools_set': {

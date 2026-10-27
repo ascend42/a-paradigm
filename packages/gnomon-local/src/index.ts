@@ -18,5 +18,6 @@ export { checkRegex, globMatcher, outlineOf, grep, grepWith, grepSlots, regexMat
 export { PathRefused, isReservedDeviceName, lexicalRefusal, resolveRead, resolveWrite, updateConfined, writeConfined, type ResultSource, type ToolContext, type ToolResult } from './confine.js';
 export { COMPACTION_HEADINGS, DEFAULT_CONTEXT_TARGET, compactedHistory, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages, toolExcerpts, type CompactOptions } from './compaction.js';
 export { parseSessionConfig, rpcSession, ConfigError, MAX_COMMAND_LINE, type LocalSessionConfig } from './rpc.js';
+export { parseToolProgress, RUN_TIMEOUT_MS } from './broker.js';
 export { KernelToolBroker, parseToolsSet, parseToolResponse, parseReserved, validateArgs, BROKER_LIMITS, CARD_TIMEOUT_MS, PROVENANCE_RE, REQUEST_ID_RE, TOOL_CLASSES, TOOL_NAME_RE, TOOL_TIMEOUT_MS, type BrokeredToolSpec, type KernelBrokerOptions, type ToolClass, type ToolResponse } from './broker.js';
 export { PROTECTED_PREFIX, ProtectedRefused, protectGlob, protectedHit } from './protect.js';

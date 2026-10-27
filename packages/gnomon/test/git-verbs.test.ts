@@ -722,3 +722,35 @@ describe('slice C1 (#local-tool-broker, Aegis H1/M2): a local session\'s brokere
     expect(h.raised).toHaveLength(1);
   });
 });
+
+describe('Aegis C1 re-check: N1 and N5 in GitVerbs', () => {
+  it('N1: an abandoned queued wait keeps its verb slot until the run settles', async () => {
+    const w = world();
+    let release: (v: string) => void = () => undefined;
+    const held = new Promise<string>((res) => (release = res));
+    const verbs = new GitVerbs({ log: async () => undefined, broker: { raise: async () => ({ cardId: 'card:01JAAAAAAAAAAAAAAAAAAAAAAA' }), decisionOf: () => held, auto: async () => undefined, expire: async () => true } as never, gnomonHome: w.gnomonHome, userHome: () => w.userHome });
+    const first = verbs.call('gnomon_git_init', {}, sess(w));
+    const abandoned = [1, 2, 3].map(async () => {
+      const ctl = new AbortController();
+      const p = verbs.call('gnomon_git_init', {}, sess(w, { local: true, signal: ctl.signal }));
+      ctl.abort();
+      return p;
+    });
+    for (const p of abandoned) expect((await p).why).toBe('cancelled');
+    // four runs are still queued or waiting on the card: the session is at its cap
+    expect((await verbs.call('gnomon_git_init', {}, sess(w))).why).toBe('busy');
+    release('deny');
+    await first;
+    for (let i = 0; i < 100; i++) await new Promise((r) => setTimeout(r, 5));
+    expect((await verbs.call('gnomon_git_init', {}, sess(w, { cwd: w.root }))).why).not.toBe('busy');
+  });
+
+  it('N5: openSession clears a closed hsid (a same-process resume gets its verbs back)', async () => {
+    const w = world();
+    const r = rig(w);
+    await r.verbs.closeSession('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA');
+    expect((await r.verbs.call('gnomon_git_init', {}, sess(w))).why).toBe('cancelled');
+    r.verbs.openSession('hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA');
+    expect((await r.verbs.call('gnomon_git_init', {}, sess(w))).ok).toBe(true);
+  });
+});

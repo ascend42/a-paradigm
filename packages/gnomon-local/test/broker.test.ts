@@ -236,3 +236,22 @@ describe('C1 refusals in the child', () => {
     expect(parseToolsSet({ type: 'tools_set', tools: [ECHO] }, [])).toEqual({ tools: [ECHO] });
   });
 });
+
+describe('Aegis C1 re-check N4: tool_progress', () => {
+  it('a running effect extends the child\'s wait past its timeout; a bad progress line is refused', async () => {
+    const s = await session([{ toolCalls: [{ name: 'kernel_echo', arguments: '{"text":"x"}' }] }, { content: 'ok' }], {
+      extra: { toolTimeoutMs: 200 },
+      kernel: (req, reply) => {
+        reply({ type: 'tool_progress', id: req.id, state: 'running' });
+        setTimeout(() => reply({ type: 'tool_response', id: req.id, content: 'done late', isError: false, provenance: 'kernel' }), 400);
+      },
+    });
+    s.send({ type: 'tools_set', tools: [ECHO] });
+    s.send({ type: 'prompt', message: 'go' });
+    await s.idle();
+    expect(s.evs.find((e) => e.type === 'tool_execution_end')).toMatchObject({ isError: false });
+    expect(s.evs.some((e) => e.type === 'tool_cancel')).toBe(false);
+    s.send({ type: 'tool_progress', id: 'tr-1', state: 'done' });
+    expect(s.evs.at(-1)).toMatchObject({ success: false, error: 'state must be running' });
+  });
+});

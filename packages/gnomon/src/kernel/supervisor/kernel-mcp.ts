@@ -52,7 +52,7 @@ export async function kernelMcpAnswer(message: unknown, verbs: Pick<GitVerbs, 't
       if (!s) return ok({ content: [{ type: 'text', text: 'The session is not running.' }], isError: true });
       const r = await verbs.call(name, params.arguments ?? {}, s);
       // slice C1: the verb's closed reason rides in _meta (the local broker reads it: denied, cancelled); clients ignore it
-      return ok({ content: [{ type: 'text', text: r.text }], isError: !r.ok, ...(r.why ? { _meta: { 'gnomon/why': r.why } } : {}) });
+      return ok({ content: [{ type: 'text', text: r.text }], isError: !r.ok, ...(r.why || r.cardId ? { _meta: { ...(r.why ? { 'gnomon/why': r.why } : {}), ...(r.cardId ? { 'gnomon/cardId': r.cardId } : {}) } } : {}) });
     }
     default:
       return { jsonrpc: '2.0', id, error: { code: -32601, message: `method not found: ${method.slice(0, 64)}` } };

@@ -259,7 +259,8 @@ const COVERAGE: Record<string, Entry> = {
 // Moved once by 8.0:git-verbs (T-2026-10-23-002: the git.verb kind + descriptor gitVerbs, merged after 8.0:rules-view): was sha256:b4639c99…bd8b.
 // Moved once by 8.0:local-lane (TD-2026-10-27-833 slice C1: the tool.brokered kind + descriptor toolBrokered): was sha256:295c5ac7…c298.
 // Moved again by 8.0:local-lane (Aegis C1 review: tool.brokered expired/allowed-cancelled/cooldown/suspended, git.verb why cancelled): was sha256:dea90210…85ea.
-const PINNED_CLIENT_API_ID = 'sha256:aac99220f0b1db2564959be5dafcf13dd6ed7287ca71245c85133e653acf12db';
+// Moved again by 8.0:local-lane (Aegis C1 re-check N2: tool.brokered decision refused): was sha256:aac99220…12db.
+const PINNED_CLIENT_API_ID = 'sha256:c47ec0166d489630dc245926649fe966dd15add980d07db61bbdc64f73e18c55';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 

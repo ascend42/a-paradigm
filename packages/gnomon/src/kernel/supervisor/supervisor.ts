@@ -922,6 +922,8 @@ export class SessionSupervisor {
 
   async #spawnClaude(req: OpenRequest, r?: ResumeInput): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string; model?: string }> {
     const hsid = r?.hsid ?? mintHsid();
+    // Aegis N5: a resumed hsid closed earlier in this process (drain → resume) gets its kernel verbs back
+    if (r) this.#gitVerbs?.openSession(hsid);
     const principalId = this.#principalFor(hsid);
     const uuid = r?.uuid ?? randomUUID();
     const userHome = this.#userHome();
