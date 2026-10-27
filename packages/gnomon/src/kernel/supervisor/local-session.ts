@@ -92,8 +92,9 @@ import { applyLoopEnv, buildSessionEnv, loopEnvHazard, win32SessionTempDir, DARW
 import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
-import { LineSplitter } from '../../adapters/claude-code/adapter.js';
-import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine, toolProgressLine, toolResponseLine, toolsSetLine } from '../../adapters/local/runner.js';
+import { LineSplitter } from '../../adapters/line-splitter.js';
+import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
+import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget } from '../local/tool-broker.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
@@ -245,7 +246,7 @@ interface LocalSession {
   state: 'running' | 'stopping' | 'exited';
   turns: number;
   seq: number;
-  meter: LocalUsageMeter;
+  meter: UsageMeter<LocalEvent>;
   /** T-2026-10-26-003: the size of the run's latest assistant text (its last message is the reply); null = no message yet */
   replyBytes?: number | null;
   /** TD-2026-10-27-833: the step cap written to this session's local.yaml; turn.result carries it so "step limit" names its number */
@@ -265,6 +266,8 @@ function refused(code: Parameters<typeof refuse>[0]['code'], message: string, da
   return new RefusedError(refuse({ code, data }), `#local-runner: ${message}`);
 }
 
+/** #backend-adapter: this lane's wire codec (argv, parse, meter, turn / interrupt lines, steer and tool-broker channels). */
+const drv: LocalAdapter = localAdapter;
 const sha = (s: string): string => `sha256:${createHash('sha256').update(s).digest('hex')}`;
 
 /** The project a local session is recorded under (§4.1: project.yaml repoId when present). */
@@ -291,7 +294,7 @@ export function repoIdOf(cwd: string): string {
  * compaction_end carrying its summary hash and both token counts as safe
  * non-negative integers (anything else stays only the raw turn.event).
  */
-export function compactedPayloadOf(hsid: string, turn: string | null, ev: ReturnType<typeof parseLocalLine>): SessionCompactedPayload | null {
+export function compactedPayloadOf(hsid: string, turn: string | null, ev: LocalEvent): SessionCompactedPayload | null {
   if (ev.kind !== 'compaction' || ev.phase !== 'end' || ev.error !== null) return null;
   if (ev.summaryHash === null || ev.tokensBefore === null || ev.tokensAfter === null) return null;
   // reviewer r2: only safe non-negative integers, so the typed append can never throw on the runner's numbers
@@ -599,7 +602,7 @@ export class LocalLane {
       if (s.state === 'exited') return;
       s.state = 'stopping';
       try {
-        s.child.stdin?.write(abortLine());
+        s.child.stdin?.write(drv.interruptLine());
         s.child.stdin?.end();
       } catch {
         /* the pipe may already be gone */
@@ -640,7 +643,7 @@ export class LocalLane {
     // L2: kernel-added bytes are logged before the child reads them; the receipt names every fenced data block
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', channel: 'loop', hash: contentHash, bytes: Buffer.byteLength(text, 'utf8'), ...(o.receipt ? { receipt: o.receipt.slice(0, 32) } : {}) }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local', origin: LOOP_ORIGIN }, { session: s.hsid });
-    s.child.stdin?.write(promptLine(text));
+    s.child.stdin?.write(drv.turnLine({ text, inFlight: false }));
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<LoopTurn>((resolve) => {
       timer = setTimeout(() => resolve({ text: null, tokens: L.tokens, stopReason: null, error: 'timeout' }), Math.max(1, o.timeoutMs));
@@ -814,7 +817,7 @@ export class LocalLane {
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal };
-      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras, hsid };
+      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...drv.argv({ configPath, hsid })], extras, hsid };
       // step 10: an act step runs under `loop-act` (the session profile narrowed to its scratch and its endpoint port)
       const actLaunch: LoopActLaunchInput | null = loop?.act ? { ...launch, act: { home: this.#o.home, userHome, scratch: loop.act.scratch.tree, tmp: loop.act.scratch.tmp, repo: loop.act.scratch.repo, nodeModules: loop.act.scratch.nodeModules, endpointPort: loop.act.endpointPort, gitDeny: [loop.act.scratch.commonDir, ...loop.act.scratch.siblingWorktrees] } } : null;
       const plan = this.#o.launchPlan ? this.#o.launchPlan(actLaunch ?? launch) : actLaunch ? loopActLaunchPlan(actLaunch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
@@ -835,7 +838,7 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
@@ -843,7 +846,7 @@ export class LocalLane {
       this.#wire(s);
       const offered = s.tools.offered.map((t) => t.name);
       await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : { brokeredTools: offered }) }, { session: hsid });
-      if (offered.length) this.#write(s, toolsSetLine(s.tools.offered));
+      if (offered.length) this.#write(s, drv.toolsSetLine(s.tools.offered));
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
       if (this.#platform === 'win32' && !live) {
@@ -890,7 +893,7 @@ export class LocalLane {
         // Aegis N4: a tool_cancel is honoured HERE, ahead of the serial queue (it only removes privilege); its
         // turn.event row is still written in order below
         if (line.length < 256 && line.includes('"tool_cancel"')) {
-          const ev = parseLocalLine(line);
+          const ev = drv.parse(line);
           if (ev.kind === 'tool-cancel' && ev.id !== null) s.tools?.cancel(ev.id);
         }
         queue(() => this.#onLine(s, line, at));
@@ -908,7 +911,7 @@ export class LocalLane {
     const tools = verbs ? await offeredKernelTools(target, { manual: this.#mode(s) === 'manual' }).catch(() => []) : [];
     // Aegis N5: an hsid opened here is never a closed one (a same-process resume)
     if (verbs) this.#o.gitVerbs?.openSession?.(s.hsid);
-    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, toolProgressLine(id)) });
+    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)) });
   }
 
   /** Aegis M3: the session's effective run mode from the run-mode book, as Claude sessions read it (unreadable ⇒ manual). */
@@ -951,16 +954,16 @@ export class LocalLane {
   }
 
   /** Slice C1: one tool_request, answered outside the stdout queue (a card may wait on a human). */
-  async #brokered(s: LocalSession, ev: Extract<ReturnType<typeof parseLocalLine>, { kind: 'tool-request' }>, receivedAt: number): Promise<void> {
+  async #brokered(s: LocalSession, ev: Extract<LocalEvent, { kind: 'tool-request' }>, receivedAt: number): Promise<void> {
     if (ev.id === null) return; // no usable id: nothing to answer (the child's own timeout ends the call)
     if (!s.tools) {
       // Aegis L7: never unanswered, never unlogged (the broker is built before stdout is read; this is the backstop)
       await this.#o.log('tool.brokered', { hsid: s.hsid, server: KERNEL_MCP_SERVER, argsHash: inputHash(ev.args ?? null), decision: 'not-running', bytes: 0, isError: true }, { session: s.hsid }).catch(() => undefined);
-      this.#write(s, toolResponseLine({ id: ev.id, content: 'The session is not ready for brokered tools.', isError: true, provenance: 'kernel' }));
+      this.#write(s, drv.toolResponseLine({ id: ev.id, content: 'The session is not ready for brokered tools.', isError: true, provenance: 'kernel' }));
       return;
     }
     const r = await s.tools.handle({ id: ev.id, toolCallId: ev.toolCallId, name: ev.name, args: ev.args, error: ev.error, receivedAt });
-    this.#write(s, toolResponseLine(r));
+    this.#write(s, drv.toolResponseLine(r));
   }
 
   async #onExit(s: LocalSession): Promise<void> {
@@ -986,9 +989,9 @@ export class LocalLane {
   }
 
   async #onLine(s: LocalSession, line: string, receivedAt: number = Date.now()): Promise<void> {
-    let ev: ReturnType<typeof parseLocalLine>;
+    let ev: LocalEvent;
     try {
-      ev = parseLocalLine(line);
+      ev = drv.parse(line);
     } catch {
       // Aegis L2: a line the parser cannot take is still one hash-only row
       await this.#o.log('turn.event', { hsid: s.hsid, type: 'malformed', seq: ++s.seq, backend: 'local', lineHash: sha(line), bytes: Buffer.byteLength(line) }, { session: s.hsid });
@@ -1039,7 +1042,7 @@ export class LocalLane {
         s.replyBytes = ev.textBytes;
         // a message without usage is recorded as such (never silently zero)
         if (ev.tokens === null) await this.#o.log('turn.usage', { hsid: s.hsid, usage: null, backend: 'local' }, { session: s.hsid });
-        else await usage('turn.usage', s.meter.message(ev.tokens));
+        else await usage('turn.usage', s.meter.charge(ev));
         return;
       case 'end': {
         // review M2: turn.result{turn} names the turn it closes (the oldest in flight; the local lane never folds turns)
@@ -1050,7 +1053,7 @@ export class LocalLane {
         const runUsage = { tokens: ev.tokens, input: ev.input, output: ev.output };
         const replyBytes = s.replyBytes ?? 0;
         s.replyBytes = null;
-        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', runUsage, replyBytes, maxSteps: s.maxSteps, ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
+        await usage('turn.result', s.meter.charge(ev), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', runUsage, replyBytes, maxSteps: s.maxSteps, ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
         const head = s.turnPermits.shift();
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
@@ -1114,7 +1117,7 @@ export class LocalLane {
       const turn = turnId(s.hsid, s.turns - s.turnPermits.length + 1);
       await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
       await this.#o.log('turn.steer', { hsid: s.hsid, turn, contentHash, permitId: s.turnPermits[0], backend: 'local' }, { session: s.hsid });
-      s.child.stdin?.write(steerLine(p.text));
+      s.child.stdin?.write(drv.steerLine(p.text));
       return { turn, steered: true };
     }
     let permit: PermitV1 | undefined;
@@ -1133,14 +1136,14 @@ export class LocalLane {
     const contentHash = sha(p.text);
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local', ...voiceTag(p), origin: p.voiceOrigin?.sentBy === 'unverified' ? 'voice-unverified' : p.voiceOrigin ? 'voice' : 'hand', ...(p.voiceOrigin ? { sentBy: p.voiceOrigin.sentBy } : {}) }, { session: s.hsid });
-    s.child.stdin?.write(inFlight ? followUpLine(p.text) : promptLine(p.text));
+    s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight }));
     return { turn: turnId(s.hsid, n) };
   }
 
   async stop(principal: string, p: { hsid: string; interrupt?: boolean }): Promise<{ signals: string[]; exited: boolean }> {
     const s = this.#get(principal, p.hsid);
     if (p.interrupt) {
-      if (s.state === 'running') s.child.stdin?.write(abortLine());
+      if (s.state === 'running') s.child.stdin?.write(drv.interruptLine());
       // slice C1 (G-LCL-15): the child cancels its brokered calls on abort; the kernel cancels its side too
       s.tools?.cancelAll();
       return { signals: ['rpc:abort'], exited: false };
@@ -1149,7 +1152,7 @@ export class LocalLane {
     s.state = 'stopping';
     s.tools?.cancelAll();
     try {
-      s.child.stdin?.write(abortLine());
+      s.child.stdin?.write(drv.interruptLine());
       s.child.stdin?.end();
     } catch {
       /* the pipe may already be gone */
