@@ -48,7 +48,7 @@ describe('read_file is paged in bytes and capped at the session share', () => {
   it('a whole small file comes back bare (no note); limit narrows a page, never widens it past the cap', async () => {
     const cwd = scratch();
     fs.writeFileSync(path.join(cwd, 'small.txt'), 'fine');
-    expect(await runTool('read_file', { path: 'small.txt' }, { cwd, roots: [cwd], readCap: 1024 })).toEqual({ content: 'fine', isError: false });
+    expect(await runTool('read_file', { path: 'small.txt' }, { cwd, roots: [cwd], readCap: 1024 })).toEqual({ content: 'fine', isError: false, source: 'workspace' });
     fs.writeFileSync(path.join(cwd, 'big.txt'), 'b'.repeat(5000));
     const narrow = await runTool('read_file', { path: 'big.txt', limit: 600 }, { cwd, roots: [cwd], readCap: 1024 });
     expect(narrow.content).toMatch(/returned bytes 0-600 \(600 bytes\)\. Call read_file with path="big\.txt" offset=600 for more/);

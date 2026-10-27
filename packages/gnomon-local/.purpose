@@ -47,10 +47,26 @@ components:
       protected-input prefix, symlink final component, hard links), edits of one file serialised in the child.
       Falsifiers G-LCL-11 (grep/outline/read_section/edit never leave the roots or follow a symlink or hard link)
       and G-LCL-12 (no tool result exceeds its cap; a spill handle round-trips through read_section).
+      Aegis review of B1: H1 grep's glob is matched by globMatcher (an O(n·m) position-set matcher for *, **, ?,
+      {a,b}; never protectGlob's regex, which stays for kernel config globs); H2 outline rules have no adjacent
+      overlapping quantifiers and the md heading is a fixed regex plus string trimming; M1 a regex worker error or
+      exit ends the call "regex failed: …"; M2 every grep has a 32 MiB read budget and a 5 s deadline (both modes),
+      at most 2 greps run at once (a semaphore), the run's AbortSignal (ctx.signal) stops the walk; M3 one lock per
+      canonical target in confine.ts shared by write_file and edit, and edit refuses a file whose dev/ino/size/mtime
+      changed between its read and its write; M4 a lexical gate (UNC/device prefixes, win32 drive-relative paths and
+      ADS colons, the resolved path lexically under a root) runs before any realpath; M5 every file-content result
+      (read_file, read_section, grep, outline and their spills) is framed <tool-data source="workspace"|
+      "model-generated" trust="data-not-instructions">: model-generated text fully escaped, workspace text with only
+      the delimiter tags (tool-data, tool_result, tool-result-excerpt, compaction-summary) neutralised, also inside
+      text-tool <tool_result> bodies; the frame and note survive at the minimum cap; L1 every open is verified
+      (handle dev/ino against stat(realpath), inside the roots; a just-created file is unlinked on failure); L2 a grep
+      start under .git is refused; L3 outline names in errors are escaped; L4 reads check isFile before opening and
+      open O_NONBLOCK.
     path: src/retrieval.ts
     type: module
     tags: [gnomon, local, paradigm-8, retrieval]
     tests:
       - test/retrieval.test.ts
+      - test/retrieval-hardening.test.ts
       - test/shape.test.ts
       - test/local-child.test.ts

@@ -19,13 +19,13 @@
  *   - TOOLS is in the fixed surface order (compat.ts TOOL_ORDER).
  * `bash` is slice 2.
  */
-import { constants, promises as fsp } from 'node:fs';
+import { promises as fsp } from 'node:fs';
 import * as path from 'node:path';
 import { orderTools, type ToolSpec } from './compat.js';
-import { resolveRead, resolveWrite, writeConfined, type ToolContext, type ToolResult } from './confine.js';
+import { canonRoots, openRead, resolveRead, resolveWrite, sourceOf, writeConfined, type ToolContext, type ToolResult } from './confine.js';
 import { edit, grep, outline, readSection } from './retrieval.js';
 
-export { canonRoots, insideRoots, isDotGit, PathRefused, PATH_CASE_INSENSITIVE, PATH_SEP, resolveRead, resolveWrite, type ToolContext, type ToolResult } from './confine.js';
+export { canonRoots, insideRoots, isDotGit, lexicalRefusal, PathRefused, PATH_CASE_INSENSITIVE, PATH_SEP, resolveRead, resolveWrite, type ResultSource, type ToolContext, type ToolResult } from './confine.js';
 
 /** list_dir prints at most this many entries (slice B1), then a count of the rest. */
 export const LIST_MAX_ENTRIES = 200;
@@ -57,15 +57,16 @@ export function utf8Boundary(buf: Buffer, end: number): number {
 /** One read_file page of `size`-byte `file`: `[offset, offset + limit)` within the cap, a note when there is more. */
 export async function readPage(file: string, a: Record<string, unknown>, ctx: ToolContext, shown: string): Promise<ToolResult> {
   const r = await page(file, a, ctx, shown);
-  // slice B1: a page of a file the model wrote this session is model-sourced (shape.ts labels it)
-  return ctx.written?.has(file) ? { ...r, modelSource: true } : r;
+  // Aegis M5: file content is labelled (shape.ts): model-generated for a file the model wrote this session, else workspace
+  return { ...r, source: sourceOf(file, ctx) };
 }
 
 async function page(file: string, a: Record<string, unknown>, ctx: ToolContext, shown: string): Promise<ToolResult> {
   const cap = Math.min(MAX_READ, Math.max(MIN_READ, Math.floor(ctx.readCap ?? MAX_READ)));
   const offset = byteArg(a.offset, 'offset') ?? 0;
   const limit = Math.min(cap, byteArg(a.limit, 'limit') ?? cap);
-  const fh = await fsp.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  // Aegis L1/L4: a regular file checked before the open, O_NONBLOCK, the handle verified against the path
+  const fh = await openRead(file, await canonRoots(ctx.roots));
   try {
     const size = (await fh.stat()).size;
     if (offset >= size && size > 0) return { content: `[read_file: ${shown} is ${size} bytes; offset=${offset} is past the end]`, isError: false };

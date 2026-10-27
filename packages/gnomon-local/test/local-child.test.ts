@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Agent, buildRequest, insideRoots, runTool, classifyEndpoint, complete, COMPAT_ALLOWLIST, EndpointRefused, parseSessionConfig, parseTextToolCalls, repairArguments, rpcSession, surfaceTools, TOOLS } from '../src/index.js';
+import { Agent, buildRequest, DATA_CLOSE, dataOpen, insideRoots, runTool, classifyEndpoint, complete, COMPAT_ALLOWLIST, EndpointRefused, parseSessionConfig, parseTextToolCalls, repairArguments, rpcSession, surfaceTools, TOOLS } from '../src/index.js';
 import { ENDPOINT_TABLE } from './endpoint-table.js';
 import { fakeOpenAI, type FakeServer } from './fake-openai.js';
 
@@ -138,7 +138,8 @@ describe('the streaming client and the agent loop (fake server)', () => {
     expect(evs.find((e) => e.type === 'model_repair')).toMatchObject({ toolName: 'write_file', steps: ['single-quotes'] });
     expect(evs.at(-1)).toMatchObject({ stopReason: 'stop', usage: { input: 200, output: 40 } });
     const second = srv.requests[1]!.messages as Array<{ role: string; content: string }>;
-    expect(second.filter((m) => m.role === 'tool').map((m) => m.content)).toEqual(['forty-two', 'wrote 2 bytes to out.txt']);
+    // Aegis M5: file content is framed as workspace data; a write receipt is not
+    expect(second.filter((m) => m.role === 'tool').map((m) => m.content)).toEqual([`${dataOpen('workspace')}\nforty-two\n${DATA_CLOSE}`, 'wrote 2 bytes to out.txt']);
     expect(srv.requests[0]!.tools).toBeDefined();
   });
 
@@ -230,7 +231,7 @@ describe('Aegis H1 (round 2): tools confine paths to the realpath\'d session roo
   };
   it('reads inside the root work; reads outside (absolute, ../, symlinked dir) are refused', async () => {
     const { cwd, outside, ctx } = setup();
-    expect(await runTool('read_file', { path: 'ok.txt' }, ctx)).toEqual({ content: 'fine', isError: false });
+    expect(await runTool('read_file', { path: 'ok.txt' }, ctx)).toEqual({ content: 'fine', isError: false, source: 'workspace' });
     linkDir(outside, path.join(cwd, 'link'));
     for (const p of [path.join(outside, 'secret'), '../outside/secret', 'link/secret']) {
       const r = await runTool('read_file', { path: p }, ctx);
@@ -313,7 +314,7 @@ describe('Windows CI (8.3 names): roots and targets share one canonicalisation',
     const cwd = scratch();
     fs.writeFileSync(path.join(cwd, 'ok.txt'), 'fine');
     const jsFlavour = fs.realpathSync(cwd);
-    expect(await runTool('read_file', { path: 'ok.txt' }, { cwd: jsFlavour, roots: [jsFlavour] })).toEqual({ content: 'fine', isError: false });
+    expect(await runTool('read_file', { path: 'ok.txt' }, { cwd: jsFlavour, roots: [jsFlavour] })).toEqual({ content: 'fine', isError: false, source: 'workspace' });
     expect(await runTool('write_file', { path: 'n.txt', content: 'x' }, { cwd: jsFlavour, roots: [jsFlavour] })).toMatchObject({ isError: false });
   });
   it('the inside check folds case only where the platform registry says so', () => {
@@ -360,11 +361,11 @@ describe('slice B1: context_report at each turn start; a retrieval flow through 
     const first = (srv.requests[1]!.messages as Array<{ role: string; content: string }>).filter((m) => m.role === 'tool');
     expect(first).toHaveLength(1);
     expect(first[0]!.content.length).toBeLessThanOrEqual(6000);
-    expect(first[0]!.content.startsWith('log.txt:1: needle 1 ')).toBe(true);
-    expect(first[0]!.content).toMatch(/The full result is kept as @r1: call read_section handle="@r1" from=\d+/);
+    expect(first[0]!.content.startsWith(`${dataOpen('workspace')}\nlog.txt:1: needle 1 `)).toBe(true);
+    expect(first[0]!.content).toMatch(/\n<\/tool-data>\n\[shaped: .*The full result is kept as @r1: call read_section handle="@r1" from=\d+/);
     const second = (srv.requests[2]!.messages as Array<{ role: string; content: string }>).filter((m) => m.role === 'tool').at(-1)!;
-    expect(second.content.split('\n')[0]).toBe('[read_section @r1 (grep result): lines 5-6 of 61.]');
-    expect(second.content.split('\n')[1]!.startsWith('log.txt:5: needle 5 ')).toBe(true);
+    expect(second.content.split('\n').slice(0, 2)).toEqual([dataOpen('workspace'), '[read_section @r1 (grep result): lines 5-6 of 61.]']);
+    expect(second.content.split('\n')[2]!.startsWith('log.txt:5: needle 5 ')).toBe(true);
     expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });
   });
 
@@ -385,7 +386,7 @@ describe('slice B1: context_report at each turn start; a retrieval flow through 
     expect((srv.requests[0]!.tools as Array<{ function: { name: string } }>).map((t) => t.function.name)).toEqual(['read_section', 'grep', 'outline', 'edit']);
     const tools = (srv.requests[1]!.messages as Array<{ role: string; content: string }>).filter((m) => m.role === 'tool').map((m) => m.content);
     expect(tools[0]).toContain('4: export function two() {');
-    expect(tools[1]).toBe('[read_section m.ts (function two): lines 4-6 of 6.]\nexport function two() {\n  return 2;\n}');
+    expect(tools[1]).toBe(`${dataOpen('workspace')}\n[read_section m.ts (function two): lines 4-6 of 6.]\nexport function two() {\n  return 2;\n}\n${DATA_CLOSE}`);
     expect(fs.readFileSync(path.join(cwd, 'm.ts'), 'utf8')).toContain('return 22;');
     expect(evs.filter((e) => e.type === 'tool_execution_end').map((e) => e.isError)).toEqual([false, false, false]);
     expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });

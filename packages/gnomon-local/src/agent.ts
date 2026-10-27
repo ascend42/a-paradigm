@@ -54,7 +54,7 @@ import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 import { contextLedger, contextReport, resultCapChars, type ContextLedger } from './budget.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
-import { shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
+import { neutraliseDelimiters, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
 import { runTool, TOOLS } from './tools.js';
 
 export { TARGET_HEADROOM } from './budget.js';
@@ -100,6 +100,8 @@ export class Agent {
   readonly #steer: string[] = [];
   readonly #follow: string[] = [];
   #abort: AbortController | null = null;
+  /** Aegis M2: one per prompt run, passed to the tools as ctx.signal; abort() fires it */
+  #runAbort = new AbortController();
   #running = false;
   /** sticky until the run ends: an abort during tools or steering is never lost */
   #aborted = false;
@@ -234,12 +236,15 @@ export class Agent {
   abort(): void {
     if (this.#running) this.#aborted = true;
     this.#abort?.abort();
+    // Aegis M2: the run's tools (grep's walk) see it too
+    if (this.#running) this.#runAbort.abort();
   }
 
   async prompt(text: string): Promise<void> {
     if (this.#running) throw new Error('agent is busy (use steer or follow_up)');
     this.#running = true;
     this.#aborted = false;
+    this.#runAbort = new AbortController();
     this.#messages.push({ role: 'user', content: text });
     this.#goal = text;
     const total = { input: 0, output: 0 };
@@ -311,7 +316,7 @@ export class Agent {
             const r = repairArguments(t.arguments);
             if (r.repaired) this.#o.emit({ type: 'model_repair', toolCallId: t.id, toolName: t.name, steps: r.steps });
             this.#o.emit({ type: 'tool_execution_start', toolCallId: t.id, toolName: t.name, args: r.ok ? r.value : null });
-            const raw = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, readCap, resultCap, spill: this.#spill, written: this.#written, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
+            const raw = r.ok ? await runTool(t.name, r.value!, { cwd: this.#o.cwd, roots: this.#o.roots, readCap, resultCap, spill: this.#spill, written: this.#written, signal: this.#runAbort.signal, ...(this.#o.allowTools ? { allow: this.#o.allowTools } : {}), ...(this.#o.protect ? { protect: this.#o.protect } : {}) }) : { content: 'arguments are not a JSON object (repair failed)', isError: true };
             // slice B1: shaping is the final cap of every result (G-LCL-12)
             const res = shapeResult(raw, { cap: resultCap, spill: this.#spill, tool: t.name.slice(0, 64) });
             this.#o.emit({ type: 'tool_execution_end', toolCallId: t.id, toolName: t.name, isError: res.isError, result: res.content.slice(0, 4096) });
@@ -320,7 +325,10 @@ export class Agent {
         );
         for (const { t, res } of results) {
           if (this.#o.nativeTools) this.#messages.push({ role: 'tool', tool_call_id: t.id, content: res.content });
-          else this.#messages.push({ role: 'user', content: `<tool_result name="${t.name}"${res.isError ? ' error="true"' : ''}>\n${res.content}\n</tool_result>` });
+          // Aegis M5: the body can never close or forge the block (a repo file holding `</tool_result>`): a labelled result
+          // was neutralised inside its frame by shapeResult (its own frame must survive); any other body is neutralised
+          // here. The name is model text: reduced to [\w.-].
+          else this.#messages.push({ role: 'user', content: `<tool_result name="${t.name.slice(0, 64).replace(/[^\w.-]/g, '_')}"${res.isError ? ' error="true"' : ''}>\n${res.source ? res.content : neutraliseDelimiters(res.content)}\n</tool_result>` });
         }
         this.#o.emit({ type: 'turn_end', turn, usage: c.usage });
         const steering = this.#steer.splice(0);

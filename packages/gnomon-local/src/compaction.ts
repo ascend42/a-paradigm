@@ -172,7 +172,19 @@ function callOf(rest: readonly ChatMessage[], i: number): { name: string; args: 
 }
 
 /** A tool result's content without the text-tool wrapper. */
-const resultBody = (m: ChatMessage): string => (m.role === 'tool' ? m.content : m.content.replace(/^<tool_result[^>]*>\n?/, '').replace(/\n?<\/tool_result>$/, ''));
+const resultBody = (m: ChatMessage): string => unframe(m.role === 'tool' ? m.content : m.content.replace(/^<tool_result[^>]*>\n?/, '').replace(/\n?<\/tool_result>$/, ''));
+
+/**
+ * Slice B1 (Aegis M5): a labelled result's `<tool-data …>` frame is removed for the excerpt (which carries its own
+ * label); the frame's close is the first `</tool-data>` (the body's own were neutralised by shape.ts).
+ */
+function unframe(t: string): string {
+  if (!t.startsWith('<tool-data ')) return t;
+  const open = t.indexOf('>\n');
+  const close = t.indexOf('\n</tool-data>');
+  if (open < 0 || close < open) return t;
+  return t.slice(open + 2, close) + t.slice(close + '\n</tool-data>'.length);
+}
 
 /** The most excerpts one compaction carries. */
 export const MAX_EXCERPTS = 4;

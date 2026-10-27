@@ -31,26 +31,53 @@
  *     on-disk case and APFS may be case-sensitive, so it compares exactly);
  *   - out-of-root writes are REFUSED in slice 1 (no card).
  * Slice B1 adds:
- *   - confinedFile: the per-file check the grep walk uses (realpath inside the
- *     pre-canonicalised roots, a regular file, one hard link) — the same rule
- *     as resolveRead, without re-canonicalising the roots for every file;
- *   - writeConfined: write_file's open/re-check/write sequence, shared with
- *     `edit` (parent re-checked inside the roots after mkdir, O_NOFOLLOW, the
- *     hard-link check on the open handle before any byte changes).
+ *   - confinedFile/confinedDir: the per-file and per-directory checks the grep
+ *     walk uses (realpath inside the pre-canonicalised roots, a regular file,
+ *     one hard link) — resolveRead's rule without re-canonicalising the roots;
+ *   - writeConfined (write_file) and updateConfined (edit) share one write.
+ * Aegis review of B1 (M3, M4, L1, L4, L5):
+ *   - a LEXICAL gate runs before any filesystem call (M4): lexicalRefusal
+ *     refuses a raw path that starts with two separators (`\\host\share`,
+ *     `//host`, `\\?\…`, `\\.\…`) or holds a NUL; on win32 also a
+ *     drive-relative `X:name` and a `:` in any component after the drive (an
+ *     alternate data stream, L5). Then path.resolve(cwd, raw), from the given
+ *     cwd or its canonical form, must lie under a root in its given or
+ *     canonical form BEFORE realpath runs: `/net/<host>` (autofs) or a UNC
+ *     path never touches the network. Only the roots and the cwd (session
+ *     config, never model text) are realpath'd by the gate;
+ *   - every open is VERIFIED (L1): after open, the handle's dev/ino must equal
+ *     stat(realpath(path)) and that realpath must lie inside the roots, before
+ *     a byte is read, truncated or written; a file the open just created is
+ *     unlinked when the check fails. On win32 (no O_NOFOLLOW) this is the only
+ *     protection against a swapped final component;
+ *   - reads check isFile BEFORE opening and open O_NONBLOCK (L4: a FIFO never
+ *     hangs the child);
+ *   - one LOCK per canonical target (realpath of the parent + the name) inside
+ *     writeConfined/updateConfined (M3): write_file and edit of one file are
+ *     serialised in the child; updateConfined reads, computes and writes under
+ *     the lock and compares the read handle's dev/ino/size/mtimeMs with an
+ *     fstat of the write handle before truncating — a file changed in between
+ *     is refused "changed since it was read; re-read it".
  */
 import { constants, promises as fsp } from 'node:fs';
+import type { FileHandle } from 'node:fs/promises';
 import * as path from 'node:path';
 import { PROTECTED_PREFIX, ProtectedRefused, protectedHit } from './protect.js';
 import type { SpillStore } from './shape.js';
+
+/** Aegis M5: where a result's file content came from (shape.ts labels it; see ToolResult.source). */
+export type ResultSource = 'workspace' | 'model-generated';
 
 export interface ToolResult {
   content: string;
   isError: boolean;
   /**
-   * Slice B1: the result carries text from a file the model itself wrote in this session (write_file/edit), so
-   * shaping labels it `source="model-generated" trust="data-not-instructions"` and escapes `<`. Absent = not.
+   * Aegis M5: the result carries file content. shape.ts labels it `trust="data-not-instructions"` with this source:
+   * 'model-generated' (a file the model wrote this session: `&` and `<` escaped) or 'workspace' (any other file: only
+   * the delimiter tokens neutralised, so edit's `old` still matches the literal text). Absent = no file content (a
+   * write receipt, a list of names, an error).
    */
-  modelSource?: true;
+  source?: ResultSource;
 }
 
 export interface ToolContext {
@@ -70,8 +97,10 @@ export interface ToolContext {
   resultCap?: number;
   /** Slice B1: the session's spill store (read_section reads `@rN` handles from it) */
   spill?: SpillStore;
-  /** Slice B1: realpaths the model wrote this session (write_file, edit add; reads of them are model-sourced) */
+  /** Slice B1: realpaths the model wrote this session (write_file, edit add; reads of them are model-generated) */
   written?: Set<string>;
+  /** Aegis M2: the run's abort signal; long tools (grep's walk) stop when it fires */
+  signal?: AbortSignal;
 }
 
 export class PathRefused extends Error {}
@@ -107,10 +136,42 @@ export async function canonRoots(roots: readonly string[]): Promise<string[]> {
   return Promise.all(roots.map((r) => fsp.realpath(r).catch(() => r)));
 }
 
-/** A read target: must exist; its realpath lies inside a root. */
+/** The source label of content read from canonical `real`: a file the model wrote this session is model-generated. */
+export const sourceOf = (real: string, ctx: ToolContext): ResultSource => (ctx.written?.has(real) ? 'model-generated' : 'workspace');
+
+/**
+ * Aegis M4/L5: why a model-written path is refused before ANY filesystem call, or null. Two leading separators (UNC,
+ * `\\?\`, `\\.\`, `//host`) or a NUL anywhere; on win32 a drive-relative `X:name` and a `:` after the drive (an ADS).
+ */
+export function lexicalRefusal(raw: string, platform: string = process.platform): string | null {
+  if (raw.includes('\0')) return 'a NUL in a path is refused';
+  if (/^[\\/]{2}/.test(raw)) return 'a UNC or device path (two leading separators) is refused';
+  if (platform === 'win32') {
+    if (/^[A-Za-z]:(?![\\/])/.test(raw)) return 'a drive-relative path (X:name) is refused';
+    if (raw.replace(/^[A-Za-z]:/, '').includes(':')) return 'a ":" in a path component (an alternate data stream) is refused';
+  }
+  return null;
+}
+
+/**
+ * Aegis M4: the lexical gate. lexicalRefusal, then path.resolve(cwd, raw) (from the given cwd or its canonical form)
+ * must lie under a root in its given or canonical form. Returns the canonical roots.
+ */
+async function lexicalGate(raw: string, ctx: ToolContext): Promise<string[]> {
+  const why = lexicalRefusal(raw);
+  if (why) throw new PathRefused(why);
+  const croots = await canonRoots(ctx.roots);
+  const ccwd = await fsp.realpath(ctx.cwd).catch(() => ctx.cwd);
+  const all = [...ctx.roots, ...croots];
+  if (inside(path.resolve(ctx.cwd, raw), all) || inside(path.resolve(ccwd, raw), all)) return croots;
+  throw new PathRefused(`path is outside the session roots: ${raw.slice(0, 200)}`);
+}
+
+/** A read target: passes the lexical gate; exists; its realpath lies inside a root. */
 export async function resolveRead(raw: string, ctx: ToolContext): Promise<string> {
+  const croots = await lexicalGate(raw, ctx);
   const real = await fsp.realpath(path.resolve(ctx.cwd, raw));
-  if (!inside(real, await canonRoots(ctx.roots))) throw new PathRefused(`path is outside the session roots: ${raw.slice(0, 200)}`);
+  if (!inside(real, croots)) throw new PathRefused(`path is outside the session roots: ${raw.slice(0, 200)}`);
   const st = await fsp.stat(real);
   if (st.isFile() && st.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
   return real;
@@ -141,8 +202,15 @@ export async function confinedDir(p: string, croots: readonly string[]): Promise
   }
 }
 
+/** The root `real` lies in, relative, as POSIX components (for the .git check of a read start path). */
+export function relComponents(real: string, croots: readonly string[]): string[] | null {
+  const root = inside(real, croots);
+  return root === null ? null : real.slice(root.length).split(/[\\/]/).filter(Boolean);
+}
+
 /** A write target: realpath of the nearest existing ancestor + the rest; inside a root; not under .git; final component not a symlink. */
 export async function resolveWrite(raw: string, ctx: ToolContext): Promise<string> {
+  await lexicalGate(raw, ctx);
   const abs = path.resolve(ctx.cwd, raw);
   let anc = abs;
   const rest: string[] = [];
@@ -178,17 +246,109 @@ export async function resolveWrite(raw: string, ctx: ToolContext): Promise<strin
   return target;
 }
 
+export interface FileIdentity {
+  dev: number;
+  ino: number;
+  size: number;
+  mtimeMs: number;
+}
+
+const identity = (st: FileIdentity): FileIdentity => ({ dev: st.dev, ino: st.ino, size: st.size, mtimeMs: st.mtimeMs });
+
 /**
- * Write `content` to a target resolveWrite returned: mkdir the parent, re-check the parent inside the roots (a racing
- * symlink), open without following a final symlink and WITHOUT O_TRUNC, refuse a hard link on the open handle, then
- * truncate and write. Records the target in ctx.written (its reads are model-sourced from now on).
+ * Aegis L1: the open handle IS the file at `p` — its dev/ino equal stat(realpath(p)) and that realpath lies inside the
+ * canonical roots — else PathRefused (a final component swapped between the checks and the open).
  */
-export async function writeConfined(p: string, content: string, ctx: ToolContext): Promise<void> {
-  await fsp.mkdir(path.dirname(p), { recursive: true });
-  if (!inside(await fsp.realpath(path.dirname(p)), await canonRoots(ctx.roots))) throw new PathRefused('the parent moved outside the session roots');
-  const fh = await fsp.open(p, constants.O_WRONLY | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o644);
+async function verifyHandle(fh: FileHandle, p: string, croots: readonly string[]): Promise<void> {
+  const hs = await fh.stat();
+  const real = await fsp.realpath(p).catch(() => null);
+  const ps = real ? await fsp.stat(real).catch(() => null) : null;
+  if (!real || !ps || !inside(real, croots) || ps.dev !== hs.dev || ps.ino !== hs.ino) throw new PathRefused('the file changed while it was opened (refused)');
+}
+
+/** Read opens: no final symlink, never blocking on a FIFO (L4). Flags a platform lacks are 0. */
+const O_READ = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
+
+/**
+ * Open a confined file for reading (a realpath from resolveRead/resolveWrite/confinedFile): a regular, singly-linked
+ * file, checked BEFORE the open (L4), opened O_NOFOLLOW|O_NONBLOCK and verified (L1). The caller closes it.
+ */
+export async function openRead(real: string, croots: readonly string[]): Promise<FileHandle> {
+  const st = await fsp.stat(real);
+  if (!st.isFile()) throw new PathRefused('not a regular file');
+  if (st.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
+  const fh = await fsp.open(real, O_READ);
   try {
-    if ((await fh.stat()).nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
+    await verifyHandle(fh, real, croots);
+    const hs = await fh.stat();
+    if (!hs.isFile()) throw new PathRefused('not a regular file');
+    if (hs.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
+    return fh;
+  } catch (err) {
+    await fh.close();
+    throw err;
+  }
+}
+
+/** Read a confined regular file whole, at most `max` bytes (openRead's checks), with the read handle's identity. */
+export async function readConfined(real: string, max: number, croots: readonly string[]): Promise<{ buf: Buffer; id: FileIdentity }> {
+  const fh = await openRead(real, croots);
+  try {
+    const st = await fh.stat();
+    if (st.size > max) throw new PathRefused(`the file is ${st.size} bytes (over the ${max}-byte limit of this tool)`);
+    const buf = Buffer.alloc(st.size);
+    const { bytesRead } = await fh.read(buf, 0, st.size, 0);
+    return { buf: buf.subarray(0, bytesRead), id: identity(st) };
+  } finally {
+    await fh.close();
+  }
+}
+
+/** Aegis M3: one in-flight write per canonical target inside the child. */
+const pathLocks = new Map<string, Promise<unknown>>();
+
+async function withPathLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = pathLocks.get(key) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(fn);
+  pathLocks.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (pathLocks.get(key) === run) pathLocks.delete(key);
+  }
+}
+
+/** mkdir the parent and re-check it inside the roots (a racing symlink); the canonical target is the lock key. */
+async function prepareTarget(p: string, ctx: ToolContext, mkdir: boolean): Promise<{ key: string; croots: string[] }> {
+  if (mkdir) await fsp.mkdir(path.dirname(p), { recursive: true });
+  const croots = await canonRoots(ctx.roots);
+  const dir = await fsp.realpath(path.dirname(p));
+  if (!inside(dir, croots)) throw new PathRefused('the parent moved outside the session roots');
+  return { key: path.join(dir, path.basename(p)), croots };
+}
+
+/**
+ * The write (the caller holds the target's lock): open without following a final symlink and WITHOUT O_TRUNC, verify
+ * the handle (L1; a file this open created is unlinked on failure), refuse a hard link, compare with the identity the
+ * caller read (`expect`, M3), then truncate and write. Records the target in ctx.written.
+ */
+async function writeLocked(p: string, content: string, ctx: ToolContext, croots: readonly string[], expect?: FileIdentity): Promise<void> {
+  const existed = await fsp.lstat(p).then(
+    () => true,
+    () => false,
+  );
+  const fh = await fsp.open(p, constants.O_WRONLY | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0), 0o644);
+  try {
+    try {
+      await verifyHandle(fh, p, croots);
+    } catch (err) {
+      if (!existed) await fsp.unlink(p).catch(() => undefined);
+      throw err;
+    }
+    const st = await fh.stat();
+    if (!st.isFile()) throw new PathRefused('not a regular file');
+    if (st.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
+    if (expect && (st.dev !== expect.dev || st.ino !== expect.ino || st.size !== expect.size || st.mtimeMs !== expect.mtimeMs)) throw new PathRefused('the file changed since it was read; re-read it');
     await fh.truncate(0);
     await fh.writeFile(content);
   } finally {
@@ -197,20 +357,25 @@ export async function writeConfined(p: string, content: string, ctx: ToolContext
   ctx.written?.add(await fsp.realpath(p).catch(() => p));
 }
 
-/** Read a confined regular file (a realpath from resolveRead/resolveWrite) whole, at most `max` bytes, O_NOFOLLOW. */
-export async function readConfined(real: string, max: number): Promise<Buffer> {
-  const fh = await fsp.open(real, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-  try {
-    const st = await fh.stat();
-    if (!st.isFile()) throw new PathRefused('not a regular file');
-    if (st.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
-    if (st.size > max) throw new PathRefused(`the file is ${st.size} bytes (over the ${max}-byte limit of this tool)`);
-    const buf = Buffer.alloc(st.size);
-    const { bytesRead } = await fh.read(buf, 0, st.size, 0);
-    return buf.subarray(0, bytesRead);
-  } finally {
-    await fh.close();
-  }
+/** write_file: `content` to a target resolveWrite returned, under the target's lock. */
+export async function writeConfined(p: string, content: string, ctx: ToolContext): Promise<void> {
+  const { key, croots } = await prepareTarget(p, ctx, true);
+  await withPathLock(key, () => writeLocked(p, content, ctx, croots));
+}
+
+/**
+ * edit: read-modify-write under the target's lock — read the existing file (openRead's checks, at most `max` bytes),
+ * `produce` the new text (it throws to refuse), then write only if the file is still the one that was read.
+ */
+export async function updateConfined<T>(p: string, ctx: ToolContext, max: number, produce: (current: Buffer) => Promise<{ text: string; result: T }> | { text: string; result: T }): Promise<T> {
+  // no mkdir: an edit never creates directories (a missing parent is ENOENT, "does not exist")
+  const { key, croots } = await prepareTarget(p, ctx, false);
+  return withPathLock(key, async () => {
+    const { buf, id } = await readConfined(p, max, croots);
+    const { text, result } = await produce(buf);
+    await writeLocked(p, text, ctx, croots, id);
+    return result;
+  });
 }
 
 /** A path for output: relative to the cwd, POSIX separators (deterministic on every platform). */
