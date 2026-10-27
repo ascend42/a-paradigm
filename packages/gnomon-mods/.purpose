@@ -63,7 +63,9 @@ components:
       egress none, no tools or commands; tier first-party (packageHash pinned in FIRST_PARTY_PACKAGE_HASHES). Fixtures strip, strip-reduced,
       over-budget, breaker, compacted with golden renders
       (test/ledger-mod.test.ts, light and dark); goldens regenerate with
-      `npm run repin:first-party` in packages/gnomon.
+      `npm run repin:first-party` in packages/gnomon
+      (packages/gnomon/scripts/repin-first-party.mjs, which renders the
+      Workshop, Ledger and Paradigm Context goldens from their pure models).
     tags: [mods, first-party]
   paradigm-context-mod:
     description: >-
