@@ -13,9 +13,11 @@ components:
   paradigm-mcp-launch:
     description: |
       Starts the plugin's MCP server (.mcp.json runs `node scripts/paradigm-mcp-launch.cjs <project>`).
-      Order: the project's node_modules/.bin/paradigm-mcp, then paradigm-mcp on PATH, then npx run from
-      the plugin folder, which re-enters with --resolved to start the fetched copy. The server always runs
-      with the project as cwd and argument. Why: npm 11 applies the nearest package.json's devEngines to
-      npx, so npx run from a pnpm-only project (onFail "error") exits EBADDEVENGINES; `--prefix` was
+      Finds an @a-company/paradigm package in the hooks' order: paradigm-mcp on PATH, then the project
+      root's node_modules (never a parent folder; the package.json must name @a-company/paradigm), then
+      npx from the plugin folder pinned to plugin.json's version, which only locates it (--locate prints
+      the entry). The launcher runs the entry with node in the project, with its own env; a version that
+      differs from the plugin's goes to stderr. Why: npm 11 applies the nearest package.json's devEngines
+      to npx, so npx run from a pnpm-only project (onFail "error") exits EBADDEVENGINES; `--prefix` was
       rejected because it also moves npm's global prefix and globalconfig.
     tags: [plugin, mcp, launch]

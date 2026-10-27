@@ -4,8 +4,9 @@
  *
  * The fix (paradigm-common.sh:42-108) resolves the CLI once at the top:
  *   - `command -v paradigm`, else
- *   - the project's own node_modules/.bin/paradigm (no npx: npm 11 applies the
- *     project's devEngines to npx, so a pnpm-only repo fails EBADDEVENGINES), else
+ *   - the project root's own @a-company/paradigm (node_modules/.bin/paradigm, no
+ *     npx: npm 11 applies the project's devEngines to npx, so a pnpm-only repo
+ *     fails EBADDEVENGINES; never a parent folder's install), else
  *   - `npx --no-install paradigm --version` (the `--no-install` flag guarantees
  *     npx NEVER auto-installs the unrelated public `paradigm` registry package).
  * When neither resolves, PARADIGM_AVAILABLE stays false and the hook:
@@ -50,6 +51,7 @@ function run(opts: {
   path: string;                       // PATH for the shell
   binScripts?: Record<string, string>; // name → sh body (chmod +x)
   localParadigm?: string;              // sh body for <root>/node_modules/.bin/paradigm
+  localPackage?: boolean;              // also write node_modules/@a-company/paradigm/package.json (default true)
   rootPrefix?: string;
   modified?: string[];
 }): RunResult {
@@ -71,6 +73,11 @@ function run(opts: {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, opts.localParadigm, 'utf8');
     fs.chmodSync(p, 0o755);
+    if (opts.localPackage !== false) {
+      const pkg = path.join(rootDir, 'node_modules', '@a-company', 'paradigm', 'package.json');
+      fs.mkdirSync(path.dirname(pkg), { recursive: true });
+      fs.writeFileSync(pkg, JSON.stringify({ name: '@a-company/paradigm' }), 'utf8');
+    }
   }
 
   for (const [name, body] of Object.entries(opts.binScripts ?? {})) {
@@ -195,5 +202,15 @@ exit 0
     expect(r.violations).not.toContain('compliance checks were SKIPPED');
     expect(r.violations).not.toContain('compliance-check failed to run');
     expect(fs.existsSync(path.join(r.rootDir, '.local-paradigm-ran'))).toBe(true);
+  });
+
+  it('a bare node_modules/.bin/paradigm without the @a-company/paradigm package is not run', () => {
+    const local = `#!/bin/sh
+: > "$HOME/.planted-ran"
+exit 0
+`;
+    const r = run({ path: '/usr/bin:/bin', localParadigm: local, localPackage: false });
+    expect(r.paradigmAvailable).toBe('false');
+    expect(fs.existsSync(path.join(r.rootDir, '.planted-ran'))).toBe(false);
   });
 });

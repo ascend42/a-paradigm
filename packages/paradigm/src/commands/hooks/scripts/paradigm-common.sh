@@ -81,19 +81,12 @@ _pm_mark cli-resolve
 # CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
 # loudly. The npx branch uses `--no-install` so npx never auto-installs the
 # unrelated public 'paradigm' registry package as a false positive.
-# The project's own install (node_modules/.bin from the project up), found
-# without npx: npm 11 applies the project's devEngines to npx, so
+# The project's own @a-company/paradigm (the project root only, never a parent
+# folder), found without npx: npm 11 applies the project's devEngines to npx, so
 # `npx --no-install paradigm` exits EBADDEVENGINES in a repo that requires pnpm.
 _pm_find_local_paradigm() {
-  _pm_d=$PWD
-  while :; do
-    if [ -x "$_pm_d/node_modules/.bin/paradigm" ]; then
-      _PM_LOCAL_PARADIGM="$_pm_d/node_modules/.bin/paradigm"
-      return 0
-    fi
-    [ -z "$_pm_d" ] && return 1
-    _pm_d=${_pm_d%/*}
-  done
+  _PM_LOCAL_PARADIGM="$PWD/node_modules/.bin/paradigm"
+  [ -f "$PWD/node_modules/@a-company/paradigm/package.json" ] && [ -x "$_PM_LOCAL_PARADIGM" ]
 }
 # A function, so a project path with spaces survives $PARADIGM_BIN's word splitting.
 _pm_paradigm_local() { "$_PM_LOCAL_PARADIGM" "$@"; }
