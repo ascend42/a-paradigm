@@ -17,23 +17,17 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import {
+  BASH, SH, SYS_PATH, SHELL_TEST_TIMEOUT, baseEnv, msysPath, nodeOnlyDir, pathValue, realPath, shellPath, tempDir,
+} from '../src/test-shell-utils.js';
 
 const SCRIPTS = path.resolve(__dirname, '..', 'src', 'commands', 'hooks', 'scripts');
 const COMMON_SH = path.join(SCRIPTS, 'paradigm-common.sh');
 
 let cleanups: Array<() => void> = [];
 afterEach(() => { cleanups.forEach((fn) => fn()); cleanups = []; });
-
-/** A dir holding only `node` (the local copy runs through node), so PATH gains nothing else. */
-function nodeOnlyDir(): string {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-node-'));
-  fs.symlinkSync(process.execPath, path.join(d, 'node'));
-  cleanups.push(() => fs.rmSync(d, { recursive: true, force: true }));
-  return d;
-}
 
 /**
  * <root>/node_modules/@a-company/paradigm with a `paradigm` bin entry (JS body),
@@ -57,7 +51,7 @@ function installLocal(root: string, entry?: string, dotBin?: string): void {
 const localEntry = (marker: string): string => `
 const a = process.argv[2];
 if (a === 'compliance-check') {
-  require('fs').writeFileSync(require('path').join(process.env.HOME, ${JSON.stringify(marker)}), '');
+  require('fs').writeFileSync(require('path').join(process.env.PM_MARK_DIR, ${JSON.stringify(marker)}), '');
   process.stdout.write('{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}');
 }
 `;
@@ -79,7 +73,6 @@ interface RunResult {
  * `npx` executables.
  */
 function run(opts: {
-  path: string;                        // PATH for the shell
   binScripts?: Record<string, string>; // name → sh body (chmod +x)
   localEntry?: string;                 // JS body of node_modules/@a-company/paradigm's paradigm bin
   dotBin?: string;                     // sh body for node_modules/.bin/paradigm (another package's)
@@ -89,8 +82,8 @@ function run(opts: {
   gitTracked?: boolean;                // git init the root and `git add -f` the local package
   gitBroken?: boolean;                 // a .git git cannot read (git ls-files fails)
 }): RunResult {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), opts.rootPrefix ?? 'paradigm-nocli-'));
-  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-nocli-bin-'));
+  const rootDir = tempDir(opts.rootPrefix ?? 'paradigm-nocli-');
+  const binDir = tempDir('paradigm-nocli-bin-');
   cleanups.push(() => {
     fs.rmSync(rootDir, { recursive: true, force: true });
     fs.rmSync(binDir, { recursive: true, force: true });
@@ -106,7 +99,7 @@ function run(opts: {
   if (opts.gitBroken) fs.writeFileSync(path.join(rootDir, '.git'), 'gitdir: /nonexistent/paradigm-test\n');
   if (opts.gitTracked) {
     spawnSync('git', ['init', '-q', rootDir]);
-    spawnSync('git', ['add', '-f', 'node_modules/@a-company/paradigm'], { cwd: rootDir, env: { PATH: '/usr/bin:/bin', HOME: rootDir } });
+    spawnSync('git', ['add', '-f', 'node_modules/@a-company/paradigm'], { cwd: rootDir, env: { ...process.env, HOME: rootDir } });
   }
 
   for (const [name, body] of Object.entries(opts.binScripts ?? {})) {
@@ -117,8 +110,8 @@ function run(opts: {
 
   const script = `
 set +e
-cd "${opts.subdir ? path.join(rootDir, opts.subdir) : rootDir}"
-. "${COMMON_SH}"
+cd "${shellPath(opts.subdir ? path.join(rootDir, opts.subdir) : rootDir)}"
+. "${shellPath(COMMON_SH)}"
 echo "===PARADIGM_AVAILABLE==="
 echo "$PARADIGM_AVAILABLE"
 echo "===VIOLATION_COUNT==="
@@ -126,12 +119,15 @@ echo "$VIOLATION_COUNT"
 echo "===VIOLATIONS==="
 echo "$VIOLATIONS"
 `;
-  const res = spawnSync('bash', ['-c', script], {
+  const res = spawnSync(BASH, ['-c', script], {
     encoding: 'utf8',
+    timeout: SHELL_TEST_TIMEOUT,
     env: {
-      PATH: [...(opts.binScripts ? [binDir] : []), nodeOnlyDir(), opts.path].join(':'),
+      ...baseEnv(),
+      PATH: pathValue([...(opts.binScripts ? [binDir] : []), nodeOnlyDir(cleanups), ...SYS_PATH]),
       HOME: rootDir,
-      CWD: rootDir,
+      PM_MARK_DIR: rootDir,
+      CWD: shellPath(rootDir),
       MODIFIED: (opts.modified ?? ['src/foo.ts']).join('\n'),
     },
   });
@@ -152,9 +148,9 @@ echo "$VIOLATIONS"
 
 const ran = (r: RunResult, marker: string): boolean => fs.existsSync(path.join(r.rootDir, marker));
 
-describe('paradigm-common.sh — missing-CLI fail-closed', () => {
+describe('paradigm-common.sh — missing-CLI fail-closed', { timeout: SHELL_TEST_TIMEOUT }, () => {
   it('no paradigm → loud banner + blocking violation (NOT a clean pass)', () => {
-    const r = run({ path: '/usr/bin:/bin' });
+    const r = run({});
     expect(r.paradigmAvailable).toBe('false');
     // Loud stderr banner.
     expect(r.stderr).toContain('paradigm CLI not found');
@@ -165,7 +161,7 @@ describe('paradigm-common.sh — missing-CLI fail-closed', () => {
   });
 
   it('deduped: missing CLI reports ONCE (upfront), not the misleading exit-127 bullet', () => {
-    const r = run({ path: '/usr/bin:/bin' });
+    const r = run({});
     // The upfront missing-CLI violation fires, with an actionable install hint.
     expect(r.violations).toContain('compliance checks were SKIPPED');
     // The exit-127 compliance-run branch is gated on PARADIGM_AVAILABLE=true, so
@@ -184,7 +180,7 @@ describe('paradigm-common.sh — missing-CLI fail-closed', () => {
 echo "$*" >> "$HOME/.npx-calls"
 exit 0
 `;
-    const r = run({ path: '/usr/bin:/bin', binScripts: { npx: npxStub } });
+    const r = run({ binScripts: { npx: npxStub } });
     expect(r.paradigmAvailable).toBe('false');
     expect(r.violations).toContain('paradigm CLI not found');
     expect(ran(r, '.npx-calls')).toBe(false);
@@ -201,7 +197,7 @@ case "$1" in
   *) exit 0 ;;
 esac
 `;
-    const r = run({ path: '/usr/bin:/bin', binScripts: { paradigm: stub } });
+    const r = run({ binScripts: { paradigm: stub } });
     expect(r.paradigmAvailable).toBe('true');
     expect(r.stderr).not.toContain('paradigm CLI not found');
     expect(r.violations).not.toContain('compliance checks were SKIPPED');
@@ -209,14 +205,14 @@ esac
   });
 });
 
-describe('paradigm-resolve.sh — the project copy', () => {
+describe('paradigm-resolve.sh — the project copy', { timeout: SHELL_TEST_TIMEOUT }, () => {
   it("the project's own @a-company/paradigm runs without npx, even under a path with spaces", () => {
     // npx fails the way npm 11 does in a repo whose devEngines require pnpm.
     const npxStub = `#!/bin/sh
 echo "npm error EBADDEVENGINES" >&2
 exit 1
 `;
-    const r = run({ path: '/usr/bin:/bin', binScripts: { npx: npxStub }, localEntry: localEntry('.local-ran'), rootPrefix: 'paradigm local-' });
+    const r = run({ binScripts: { npx: npxStub }, localEntry: localEntry('.local-ran'), rootPrefix: 'paradigm local-' });
     expect(r.paradigmAvailable).toBe('true');
     expect(r.violations).not.toContain('compliance checks were SKIPPED');
     expect(r.violations).not.toContain('compliance-check failed to run');
@@ -224,14 +220,14 @@ exit 1
   });
 
   it('a bare node_modules/.bin/paradigm without the @a-company/paradigm package is not run', () => {
-    const r = run({ path: '/usr/bin:/bin', dotBin: '#!/bin/sh\n: > "$HOME/.planted-ran"\nexit 0\n' });
+    const r = run({ dotBin: '#!/bin/sh\n: > "$HOME/.planted-ran"\nexit 0\n' });
     expect(r.paradigmAvailable).toBe('false');
     expect(ran(r, '.planted-ran')).toBe(false);
   });
 
   it("the package's own entry runs, not a .bin/paradigm another package put there", () => {
     const r = run({
-      path: '/usr/bin:/bin',
+      
       localEntry: localEntry('.local-ran'),
       dotBin: '#!/bin/sh\n: > "$HOME/.planted-ran"\nexit 0\n',
     });
@@ -242,7 +238,7 @@ exit 1
 
   it('wins over a global paradigm on PATH', () => {
     const r = run({
-      path: '/usr/bin:/bin',
+      
       binScripts: { paradigm: '#!/bin/sh\n: > "$HOME/.global-ran"\nexit 0\n' },
       localEntry: localEntry('.local-ran'),
     });
@@ -252,14 +248,14 @@ exit 1
   });
 
   it('looks in the project root ($CWD), not the directory the hook runs in', () => {
-    const r = run({ path: '/usr/bin:/bin', localEntry: localEntry('.local-ran'), subdir: 'src/deep' });
+    const r = run({ localEntry: localEntry('.local-ran'), subdir: 'src/deep' });
     expect(r.paradigmAvailable).toBe('true');
     expect(ran(r, '.local-ran')).toBe(true);
   });
 
   it('a copy committed to git is never run (the global one is used instead)', () => {
     const r = run({
-      path: '/usr/bin:/bin',
+      
       binScripts: { paradigm: '#!/bin/sh\n: > "$HOME/.global-ran"\nexit 0\n' },
       localEntry: localEntry('.local-ran'),
       gitTracked: true,
@@ -270,10 +266,10 @@ exit 1
   });
 });
 
-describe('paradigm-resolve.sh — git and cd edge cases', () => {
+describe('paradigm-resolve.sh — git and cd edge cases', { timeout: SHELL_TEST_TIMEOUT }, () => {
   it('a .git that git cannot read: the project copy is not run (cannot tell if committed)', () => {
     const r = run({
-      path: '/usr/bin:/bin',
+      
       binScripts: { paradigm: '#!/bin/sh\n: > "$HOME/.global-ran"\nexit 0\n' },
       localEntry: localEntry('.local-ran'),
       gitBroken: true,
@@ -283,14 +279,15 @@ describe('paradigm-resolve.sh — git and cd edge cases', () => {
   });
 
   it('CDPATH cannot redirect a relative root', () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-cdpath-'));
+    const base = tempDir('paradigm-cdpath-');
     cleanups.push(() => fs.rmSync(base, { recursive: true, force: true }));
     const elsewhere = path.join(base, 'elsewhere');
     installLocal(path.join(elsewhere, 'proj'), 'process.exit(0)\n');
     fs.mkdirSync(path.join(base, 'work', 'proj'), { recursive: true });
-    const res = spawnSync('sh', ['-c', `cd "${path.join(base, 'work')}"; . "${path.join(SCRIPTS, 'paradigm-resolve.sh')}"; _pm_resolve_paradigm proj; echo "bin=$PARADIGM_BIN local=$_PM_LOCAL_PARADIGM"`], {
+    const res = spawnSync(SH, ['-c', `cd "${shellPath(path.join(base, 'work'))}"; . "${shellPath(path.join(SCRIPTS, 'paradigm-resolve.sh'))}"; _pm_resolve_paradigm proj; echo "bin=$PARADIGM_BIN local=$_PM_LOCAL_PARADIGM"`], {
       encoding: 'utf8',
-      env: { PATH: `${nodeOnlyDir()}:/usr/bin:/bin`, HOME: base, CDPATH: elsewhere },
+      timeout: SHELL_TEST_TIMEOUT,
+      env: { ...baseEnv(), PATH: pathValue([nodeOnlyDir(cleanups), ...SYS_PATH]), HOME: base, CDPATH: msysPath(elsewhere) },
     });
     expect(res.stdout.trim()).toBe('bin= local=');
   });
@@ -300,9 +297,9 @@ describe('paradigm-resolve.sh — git and cd edge cases', () => {
  * The pre-commit hooks resolve the CLI through the same paradigm-resolve.sh and
  * run from the project root, even when `git commit` runs in a subdirectory.
  */
-describe.skipIf(process.platform === 'win32')('pre-commit hooks — local CLI from the project root', () => {
+describe('pre-commit hooks — local CLI from the project root', { timeout: SHELL_TEST_TIMEOUT }, () => {
   const ENTRY = `
-if (process.argv[2] === 'index') require('fs').writeFileSync(require('path').join(process.env.HOME, '.local-index-ran'), process.cwd());
+if (process.argv[2] === 'index') require('fs').writeFileSync(require('path').join(process.env.PM_MARK_DIR, '.local-index-ran'), process.cwd());
 `;
 
   function precommit(
@@ -311,20 +308,28 @@ if (process.argv[2] === 'index') require('fs').writeFileSync(require('path').joi
     env: (root: string) => Record<string, string> = () => ({}),
     git = true, // false: no repo, so only the input / env can name the root
   ) {
-    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm precommit-')));
+    const root = tempDir('paradigm precommit-');
     cleanups.push(() => fs.rmSync(root, { recursive: true, force: true }));
     fs.mkdirSync(path.join(root, '.paradigm'), { recursive: true });
     fs.mkdirSync(path.join(root, 'packages', 'app'), { recursive: true });
     installLocal(root, ENTRY);
     if (git) spawnSync('git', ['init', '-q', root]);
-    const res = spawnSync('sh', [path.join(SCRIPTS, hook)], {
+    const res = spawnSync(SH, [shellPath(path.join(SCRIPTS, hook))], {
       cwd: path.join(root, 'packages', 'app'),
       input: JSON.stringify(input(root)),
       encoding: 'utf8',
-      env: { PATH: `${nodeOnlyDir()}:/usr/bin:/bin`, HOME: root, PARADIGM_HOOK_MONITOR_OFF: '1', ...env(root) },
+      timeout: SHELL_TEST_TIMEOUT,
+      env: {
+        ...baseEnv(),
+        PATH: pathValue([nodeOnlyDir(cleanups), ...SYS_PATH]),
+        HOME: root,
+        PM_MARK_DIR: root,
+        PARADIGM_HOOK_MONITOR_OFF: '1',
+        ...env(root),
+      },
     });
     const marker = path.join(root, '.local-index-ran');
-    return { status: res.status, ranIn: fs.existsSync(marker) ? fs.realpathSync(fs.readFileSync(marker, 'utf8').trim()) : null, root };
+    return { status: res.status, ranIn: fs.existsSync(marker) ? realPath(fs.readFileSync(marker, 'utf8').trim()) : null, root };
   }
 
   it('without a repo or project dir, a subdirectory is not mistaken for the root', () => {

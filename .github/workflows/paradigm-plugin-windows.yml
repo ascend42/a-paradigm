@@ -1,0 +1,99 @@
+# Paradigm plugin: the MCP launcher (plugins/paradigm/scripts/paradigm-mcp-launch.cjs) and the shell hooks on
+# Windows and Linux (PR #63). General CI (ci.yml) runs on ubuntu only and gnomon.yml covers packages/gnomon* only,
+# so this is the Windows test bed for the plugin.
+#
+# On Windows the hooks run through Git Bash, as Claude Code runs plugin hooks with bash: the hook suites spawn
+# PARADIGM_TEST_BASH (packages/paradigm/src/test-shell-utils.ts). The launcher suite starts real cmd.exe through
+# its stub npx; the e2e step uses real npm and a real published @a-company/paradigm.
+name: Paradigm plugin (Windows)
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/**'
+      - 'packages/paradigm/src/commands/hooks/**'
+      - 'packages/paradigm/src/commands/doctor/**'
+      - 'packages/paradigm/src/commands/doctor.test.ts'
+      - 'packages/paradigm/src/test-shell-utils.ts'
+      - 'packages/paradigm/scripts/generate-hooks.mjs'
+      - 'packages/paradigm/tests/plugin-mcp-launch.test.ts'
+      - 'packages/paradigm/tests/hooks-missing-cli.test.ts'
+      - 'packages/paradigm/tests/e2e/**'
+      - '.gitattributes'
+      - '.github/workflows/paradigm-plugin-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paradigm-plugin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: plugin launch + hooks (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        node: [24]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      # .gitattributes pins *.sh, *.cjs and generated-hooks.ts to LF: a CRLF checkout breaks bash ($'\r') and
+      # the byte-compare in generate-hooks --check. Fail loudly if the pin ever stops working.
+      - name: Shipped hooks and launcher are LF
+        shell: bash
+        run: |
+          bad=$(git ls-files -z -- 'plugins/**/*.sh' 'plugins/**/*.cjs' 'packages/paradigm/src/commands/hooks/scripts/*.sh' \
+            'packages/paradigm/src/commands/hooks/generated-hooks.ts' | xargs -0 grep -l $'\r' || true)
+          if [ -n "$bad" ]; then echo "::error::CRLF in: $bad"; exit 1; fi
+          echo "all LF"
+
+      - name: Generated hooks are current
+        working-directory: packages/paradigm
+        run: node scripts/generate-hooks.mjs --check
+
+      # The suites below load @a-company/premise-core (doctor) and portal-core; same chain as ci.yml's warpline job.
+      - name: Build workspace dependencies
+        run: |
+          npm run build --workspace=@a-company/purpose-core
+          npm run build --workspace=@a-company/portal-core
+          npm run build --workspace=@a-company/premise-core
+
+      - name: Git Bash for the hook suites
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bash = 'C:\Program Files\Git\bin\bash.exe'
+          & $bash --version
+          "PARADIGM_TEST_BASH=$bash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Test (launcher, hooks, hooks install, doctor)
+        working-directory: packages/paradigm
+        # Long timeouts: every hook spawn goes through Git Bash / cmd.exe on Windows (hooks install alone runs
+        # `bash -n` on ~20 scripts).
+        run: npx vitest run --testTimeout=180000 --hookTimeout=180000 tests/plugin-mcp-launch.test.ts tests/hooks-missing-cli.test.ts src/commands/hooks/index.test.ts src/commands/doctor.test.ts
+
+      # No typecheck here: it needs the full workspace build (gnomon types); ci.yml runs it after `npm run build`.
+
+      # Real npm 11 and the published @a-company/paradigm (pinned through a temp plugin copy, E2E_VERSION):
+      # devEngines pnpm/onFail error above the npx folder, planted node/sh(/cmd) shims in that ancestor's
+      # node_modules/.bin; expects an MCP initialize reply and no marker.
+      - name: End-to-end (real npx, MCP initialize)
+        env:
+          E2E_VERSION: '8.0.3'
+        run: node packages/paradigm/tests/e2e/plugin-mcp-launch-e2e.mjs

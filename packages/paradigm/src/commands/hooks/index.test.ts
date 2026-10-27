@@ -5,6 +5,12 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createTempProject } from '../../test-utils.js';
+import { SH, SYS_PATH, SHELL_TEST_TIMEOUT, WIN, baseEnv, nodeOnlyDir, pathValue, shellPath } from '../../test-shell-utils.js';
+
+// Windows has no execute bits (Git Bash runs a script by its shebang), so mode checks are POSIX-only.
+const expectExecutable = (p: string, label?: string): void => {
+  if (!WIN) expect(fs.statSync(p).mode & 0o111, label).not.toBe(0);
+};
 
 let cleanup: (() => void) | undefined;
 let rootDir: string;
@@ -74,7 +80,7 @@ describe('hooksInstallCommand - Claude Code', () => {
     for (const f of ['paradigm-session-start.sh', 'paradigm-hook-monitor.sh', 'paradigm-resolve.sh']) {
       const p = path.join(rootDir, '.claude', 'hooks', f);
       expect(fs.existsSync(p), f).toBe(true);
-      expect(fs.statSync(p).mode & 0o111, f).not.toBe(0);
+      expectExecutable(p, f);
     }
   });
 
@@ -94,7 +100,7 @@ describe('hooksInstallCommand - Claude Code', () => {
     });
     const script = path.join(rootDir, '.claude', 'hooks', 'paradigm-delegation.sh');
     expect(fs.existsSync(script)).toBe(true);
-    expect(fs.statSync(script).mode & 0o111).not.toBe(0);
+    expectExecutable(script);
   });
 
   it('merges with existing Claude settings (non-destructive)', async () => {
@@ -165,9 +171,8 @@ describe('hooksInstallCommand - Cursor', () => {
     await hooksInstallCommand({ cursor: true });
 
     const hookPath = path.join(rootDir, '.cursor', 'hooks', 'paradigm-stop.sh');
-    const stat = fs.statSync(hookPath);
     // Check that the file is executable (owner execute bit)
-    expect(stat.mode & 0o111).toBeGreaterThan(0);
+    expectExecutable(hookPath);
   });
 
   it('merges with existing .cursor/hooks.json', async () => {
@@ -222,7 +227,7 @@ describe('hooksInstallCommand - Git', () => {
   // The git hooks resolve the CLI like the other hooks (embedded paradigm-resolve.sh):
   // the project's own @a-company/paradigm, then PATH. Never `npx paradigm`, which
   // without a TTY installs and runs the unrelated public "paradigm" package.
-  it.skipIf(process.platform === 'win32')('post-commit and pre-push run the project copy and never npx', async () => {
+  it('post-commit and pre-push run the project copy and never npx', { timeout: SHELL_TEST_TIMEOUT }, async () => {
     execFileSync('git', ['init', '-q', rootDir]); // the fixture's .git is only a hooks folder
     const { hooksInstallCommand } = await importHooks();
     await hooksInstallCommand({ postCommit: true, prePush: true, force: true });
@@ -244,14 +249,27 @@ describe('hooksInstallCommand - Git', () => {
     fs.writeFileSync(path.join(rootDir, '.gitignore'), 'node_modules/\ncalls.log\nnpx.log\nbin/\n');
     const bin = path.join(rootDir, 'bin');
     fs.mkdirSync(bin);
-    fs.symlinkSync(process.execPath, path.join(bin, 'node'));
-    fs.writeFileSync(path.join(bin, 'npx'), `#!/bin/sh\necho "$*" >> '${path.join(rootDir, 'npx.log')}'\n`, { mode: 0o755 });
+    const cleanups: Array<() => void> = [];
+    const nodeDir = nodeOnlyDir(cleanups);
+    fs.writeFileSync(path.join(bin, 'npx'), `#!/bin/sh\necho "$*" >> '${shellPath(path.join(rootDir, 'npx.log'))}'\n`, { mode: 0o755 });
     fs.mkdirSync(path.join(rootDir, '.paradigm', 'history'), { recursive: true });
     fs.writeFileSync(path.join(rootDir, '.paradigm', 'history', 'log.jsonl'), '');
 
-    const env = { PATH: `${bin}:/usr/bin:/bin`, HOME: homeDir, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
-    execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'fix: x\n\nSymbols: #a'], { cwd: rootDir, env, stdio: 'pipe' });
-    execFileSync('sh', [path.join(hooksDir, 'pre-push')], { cwd: rootDir, env, stdio: 'ignore' });
+    const env = {
+      ...baseEnv(),
+      PATH: pathValue([bin, nodeDir, ...SYS_PATH]),
+      HOME: homeDir,
+      GIT_AUTHOR_NAME: 't',
+      GIT_AUTHOR_EMAIL: 't@t',
+      GIT_COMMITTER_NAME: 't',
+      GIT_COMMITTER_EMAIL: 't@t',
+    };
+    try {
+      execFileSync('git', ['commit', '-q', '--allow-empty', '-m', 'fix: x\n\nSymbols: #a'], { cwd: rootDir, env, stdio: 'pipe' });
+      execFileSync(SH, [shellPath(path.join(hooksDir, 'pre-push'))], { cwd: rootDir, env, stdio: 'pipe' });
+    } finally {
+      cleanups.forEach((fn) => fn());
+    }
 
     expect(fs.readFileSync(path.join(rootDir, 'calls.log'), 'utf8').split('\n').filter(Boolean)).toEqual(['task sync-commit', 'history reindex']);
     expect(fs.existsSync(path.join(rootDir, 'npx.log'))).toBe(false);
@@ -462,7 +480,7 @@ describe('Check 15 — Native memory hygiene nudge (advisory only, TD-2026-09-19
     ].join('\n');
     const harnessPath = path.join(rootDir, 'check15-harness.sh');
     fs.writeFileSync(harnessPath, harness, 'utf8');
-    const out = execFileSync('sh', [harnessPath], {
+    const out = execFileSync(SH, [shellPath(harnessPath)], {
       cwd,
       env: { ...process.env, HOME: home },
       encoding: 'utf8',
