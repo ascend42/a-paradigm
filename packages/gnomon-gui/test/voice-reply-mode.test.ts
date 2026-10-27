@@ -42,7 +42,7 @@ class FEl implements MiniEl {
 const fdoc: MiniDoc = { createElement: (t) => new FEl(t), createTextNode: (s) => new FText(s) };
 const rows = (o: Partial<Parameters<typeof sheetRows>[0]> = {}) => sheetRows({ acked: false, sendWord: null, enrolled: ['matt'], reteach: false, micKeyBare: false, capture: 'open', delayMs: 3000, hotkey: '⌃⌥Space', attachable: true, ...o });
 
-describe('#voice-reply-mode GUI', () => {
+describe('G-VOX-22 #voice-reply-mode GUI', () => {
   it('reads status.voice.replyMode; anything else (an older kernel) is Speak and show', () => {
     expect(replyModeOf({ voice: { replyMode: 'show' } })).toBe('show');
     for (const s of [{ voice: { replyMode: 'speak' } }, { voice: {} }, null, { voice: { replyMode: 'mute' } }]) expect(replyModeOf(s)).toBe('speak');
@@ -87,7 +87,7 @@ describe('#voice-reply-mode GUI', () => {
   });
 });
 
-describe('Mika Delta 10: the pill names Show only; the ladder keeps focus; mounted replies repaint', () => {
+describe('G-VOX-22 Mika Delta 10: the pill names Show only; the ladder keeps focus; mounted replies repaint', () => {
   const base = { rung: 'dictate' as const, hotkey: '⌃⌥Space', sendWord: null, attached: true, target: 'billing', clientConnected: true, clientFact: null, capture: null, micKeyBare: false, heardAgoS: null };
   it('the resting fact leads with "show only"; the accessible name and title say it in words', () => {
     const p = voicePillOf({ ...base, replyMode: 'show' });

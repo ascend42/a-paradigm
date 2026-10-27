@@ -1767,6 +1767,7 @@ components:
     tests:
       - test/mcp-servers.test.ts
       - test/mcp-servers-allow.test.ts
+    oracles: [G-MCP-08, G-MCP-09]
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto

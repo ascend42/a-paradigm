@@ -55,6 +55,7 @@ components:
     path: src/kernel/broker/batch-card.ts
     type: module
     tags: [gnomon, kernel, broker, cards, paradigm-8]
+    oracles: [G-MCP-07]
   gnomon-kernel:
     description: >-
       The kernel package. ZERO runtime deps (G-SEC-01): package.json has no
@@ -2862,6 +2863,7 @@ components:
       - test/git-verbs-sandbox.test.ts
       - test/write-allow-sandbox.test.ts
       - test/daemon-lifecycle.test.ts
+    oracles: [G-GIT-04, G-GIT-05, G-GIT-06, G-GIT-07]
 
   kernel-mcp:
     description: >-
@@ -2894,6 +2896,7 @@ components:
     tests:
       - test/git-verbs.test.ts
       - test/kernel-mcp-session.test.ts
+    oracles: [G-GIT-08]
 
   mcp-passthrough:
     description: >-
@@ -3015,6 +3018,7 @@ components:
     tests:
       - test/mcp-servers.test.ts
       - test/mcp-servers-sandbox.test.ts
+    oracles: [G-MCP-01, G-MCP-02, G-MCP-03, G-MCP-04, G-MCP-05, G-MCP-06, G-MCP-07]
 
   budget-fuse:
     description: >-
@@ -3629,6 +3633,7 @@ components:
     tests:
       - test/voice-v2e-speak.test.ts
       - test/voice-v2e.test.ts
+    oracles: [G-VOX-22]
 
   host-guidance:
     description: >-
@@ -5740,6 +5745,7 @@ gates:
       sessions refuse. The folder is re-checked after the decision.
     prizes: []
     tags: [gnomon, git, security]
+    oracles: [G-GIT-04]
   git-push-gate:
     description: >-
       ^git-push-gate (T-2026-10-23-002; #git-verbs): git.push and repo.create
@@ -5756,6 +5762,7 @@ gates:
       credentials in a scrubbed env; never tags, never a mirror.
     prizes: []
     tags: [gnomon, git, security]
+    oracles: [G-GIT-05]
   loop-origin-clamp:
     description: >-
       ^loop-origin-clamp (docs/specs/gnomon-loops.md §3.4, LL5; build plan
@@ -5810,6 +5817,7 @@ gates:
       narrowing: notify-and-proceed, no card (mcp-server-cards.ts). Rows, cards and status carry names, never values.
     prizes: []
     tags: [gnomon, mcp, security]
+    oracles: [G-MCP-05, G-MCP-07]
   offer-accept:
     description: >-
       ^offer-accept (TD-2026-10-20-812, spec §12.9; Aegis D1): request.offer.decide

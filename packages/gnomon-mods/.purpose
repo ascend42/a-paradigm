@@ -124,6 +124,7 @@ components:
       first-party (packageHash pinned in FIRST_PARTY_PACKAGE_HASHES); tested
       in test/neurons-mod.test.ts.
     tags: [mods, first-party, desk]
+    oracles: [G-DSK-06, G-DSK-07, G-DSK-08]
   constellation-mod:
     description: >-
       #constellation-mod - packages/gnomon-mods/constellation (the Desk,
@@ -143,3 +144,4 @@ components:
       first-party (packageHash pinned); tested in
       test/constellation-mod.test.ts.
     tags: [mods, first-party, desk]
+    oracles: [G-DSK-06, G-DSK-07, G-DSK-08]

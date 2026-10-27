@@ -21,7 +21,7 @@ const status = {
 };
 const how = (rs: SettingRow[], label: string): string => ((rs.find((r) => 'label' in r && r.label === label) as { how?: string } | undefined)?.how ?? '');
 
-describe('#gui-mcp-servers: your allow rules and the live Paradigm path', () => {
+describe('G-MCP-09 #gui-mcp-servers: your allow rules and the live Paradigm path', () => {
   it("a row names the human's own allow rules and inline code", () => {
     const h = how(mcpSection({ status, ui: emptyMcpUi(), hsid: null }).rows, 'github');
     expect(h).toContain('no card for its tools: your Claude Code settings allow mcp__github__* (all tools)');
