@@ -9,6 +9,10 @@ components:
     description: Main resource dispatcher — registers all resource handlers with the MCP server
     type: router
     tags: [mcp, resources]
+  ToolAnnotationsResources:
+    description: 'paradigm://tool-annotations (tool-annotations.ts, application/json) — { schema: "io.gnomon/op-annotations:v1", tools: { <family tool>: { <op>: { readOnlyHint?, destructiveHint?, idempotentHint?, openWorldHint? } } } } for the family tools in the CURRENT tools/list (on-demand families only once enabled/activated; re-read after tools/list_changed). Each op carries only the hints its per-op tool declares; undeclared ops are absent (consumers read them as mutate). Kept out of tools/list so it costs model-facing listings nothing. Consumer: Gnomon kernel per-op narrowing (TD-2026-10-27-833).'
+    type: service
+    tags: [mcp, resources, tool-surface, gnomon]
   GuidanceResources:
     description: "On-demand behavioral guidance — 12 topics previously baked into CLAUDE.md, now served via paradigm://guidance/{topic}"
     type: service

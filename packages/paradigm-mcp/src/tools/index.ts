@@ -32,7 +32,7 @@ import {
 } from '@a-company/premise-core';
 import { refreshContextSafely, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
 import { ToolRegistry, type ToolModule, type ToolDefinition, toListedTool, readMcpToolsConfig, FEATURE_DETECTORS } from '../utils/tool-registry.js';
-import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, type ToolFamily } from '../utils/tool-family.js';
+import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, OP_ANNOTATIONS_SCHEMA, type ToolFamily, type OpAnnotationsDocument } from '../utils/tool-family.js';
 import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
 import { ANCHOR_TOOLS, DEFAULT_FAMILIES, FAMILY_META, ON_DEMAND, findOnDemand } from './families.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
@@ -101,7 +101,7 @@ import { portalRoutes, type PortalRoute } from '../utils/portal-routes.js';
  * The registry provides tiered listing via getActiveTools() and
  * Map-based dispatch via dispatch().
  */
-function buildRegistry(rootDir: string, reloadContext?: ReloadContextFn): ToolRegistry {
+export function buildRegistry(rootDir: string, reloadContext?: ReloadContextFn): ToolRegistry {
   const registry = new ToolRegistry(rootDir);
 
   const reload: ReloadContextFn = reloadContext || (async () => {});
@@ -649,6 +649,27 @@ export function listSurfaceTools(
   return out;
 }
 
+/**
+ * Per-op annotations document (paradigm://tool-annotations) for the family
+ * tools present in `listed` — pass the current tools/list so the document
+ * covers exactly the families a client can see (on-demand ones only once
+ * enabled or activated).
+ */
+export function buildOpAnnotationsDocument(surface: ToolSurface, listed: ReadonlyArray<{ name: string }>): OpAnnotationsDocument {
+  const tools: OpAnnotationsDocument['tools'] = {};
+  for (const t of listed) {
+    const fam = surface.families.get(t.name);
+    if (fam) tools[fam.name] = fam.opAnnotations;
+  }
+  return { schema: OP_ANNOTATIONS_SCHEMA, tools };
+}
+
+/** What registerTools hands back to the server (resources read the live listing). */
+export interface RegisteredTools {
+  /** Op-annotations document for the families in the CURRENT tools/list. */
+  opAnnotations: () => OpAnnotationsDocument;
+}
+
 export type ResolvedToolCall =
   | { canonical: string; args: Record<string, unknown>; deprecatedAlias?: string }
   | { error: string };
@@ -719,7 +740,7 @@ export function listToolDefinitions(rootDir: string = process.cwd()): ToolDefini
   return out;
 }
 
-export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: ReloadContextFn) {
+export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: ReloadContextFn): RegisteredTools {
   // Build the tool registry with all modules organized by tier
   const ctx0 = getContext();
   const registry = buildRegistry(ctx0.rootDir, reloadContext);
@@ -1481,6 +1502,13 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       return toolResult;
     }
   );
+
+  return {
+    opAnnotations: () => buildOpAnnotationsDocument(
+      surface,
+      listSurfaceTools(surface, registry, getContext().rootDir, activatedOnDemand),
+    ),
+  };
 }
 
 // ────────────────────────────────────────────────────────

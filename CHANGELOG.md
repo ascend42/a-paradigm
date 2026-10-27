@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **The `paradigm://tool-annotations` resource** (`#tool-family`, `#paradigm-mcp`, TD-2026-10-27-833). The MCP server now serves the per-op annotations of its `paradigm_<family>` tools as a JSON resource: `{ schema: "io.gnomon/op-annotations:v1", tools: { <family tool>: { <op>: { readOnlyHint?, destructiveHint?, idempotentHint?, openWorldHint? } } } }`. Each op carries only the hints its underlying per-op tool already declares. An op that declares none is left out, and a client reads it as an op that writes. The resource covers the family tools in the current `tools/list`, so an on-demand family appears once it is enabled or activated. Gnomon's kernel uses it to split a family into one tool per op. It is a resource rather than `_meta` on each tool so that `tools/list` stays the same size for every client (about 7,675 tokens in this repo); the resource is about 5.8 KB.
+
+### Changed
+- **Family top-level annotations are true for every op.** `destructiveHint` is now `false` only when every op is read-only or declares itself non-destructive. An op that declares nothing counts as destructive, which is the MCP default, so `paradigm_compliance` and `paradigm_graduation` now report `destructiveHint: true`. A family reports `idempotentHint: true` only when all its ops do, and `openWorldHint` when any op does.
+
 ## [8.0.1] — 2026-10-24
 
 **Gnomon 8.0 for testers, with loops switched off for this round.** 8.0.0 is skipped: `@a-company/paradigm@8.0.0` was published from the wrong checkout on 2026-10-22 and unpublished, and npm never reuses a version, so the real 8.0 ships as 8.0.1. Everything in the 8.0.0 notes below applies to 8.0.1. The 8.0.0 entry stays in this file as the feature list.

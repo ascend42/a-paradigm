@@ -115,8 +115,8 @@ async function main() {
   );
 
   // Register resources and tools
-  registerResources(server, getContext);
-  registerTools(server, getContext, reloadContext);
+  const tools = registerTools(server, getContext, reloadContext);
+  registerResources(server, getContext, { opAnnotations: tools.opAnnotations });
 
   // Handle errors
   server.onerror = (error) => {

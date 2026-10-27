@@ -25,11 +25,17 @@ import { getPromptsResourcesList, handlePromptsResource } from './prompts.js';
 import { getSpecsResourcesList, handleSpecsResource } from './specs.js';
 import { getDocsResourcesList, handleDocsResource } from './docs.js';
 import { getGuidanceResourcesList, handleGuidanceResource } from './guidance.js';
+import { getToolAnnotationsResourcesList, handleToolAnnotationsResource, type OpAnnotationsProvider } from './tool-annotations.js';
+
+export interface ResourceOptions {
+  /** Live per-op annotations of the listed family tools (from registerTools). */
+  opAnnotations?: OpAnnotationsProvider;
+}
 
 /**
  * Register all MCP resources
  */
-export function registerResources(server: Server, getContext: () => ProjectContext) {
+export function registerResources(server: Server, getContext: () => ProjectContext, opts: ResourceOptions = {}) {
   // List available resources
   server.setRequestHandler(
     ListResourcesRequestSchema,
@@ -102,6 +108,8 @@ export function registerResources(server: Server, getContext: () => ProjectConte
           ...getDocsResourcesList(),
           // Guidance resources (on-demand behavioral guidance)
           ...getGuidanceResourcesList(),
+          // Per-op annotations of the listed family tools (io.gnomon/op-annotations:v1)
+          ...getToolAnnotationsResourcesList(opts.opAnnotations),
         ],
       };
     }
@@ -356,6 +364,15 @@ export function registerResources(server: Server, getContext: () => ProjectConte
               text: result.text,
             }],
           };
+        }
+      }
+
+      // paradigm://tool-annotations - per-op annotations of the listed family tools
+      if (resourcePath === 'tool-annotations') {
+        const result = handleToolAnnotationsResource(resourcePath, opts.opAnnotations);
+        if (result.handled) {
+          trackResourceRead(result.text.length, uri);
+          return { contents: [{ uri, mimeType: result.mimeType, text: result.text }] };
         }
       }
 

@@ -54,6 +54,12 @@ export interface ToolFamily {
   name: string;
   spec: FamilySpec;
   definition: ToolDefinition;
+  /**
+   * op -> the MCP hints that op's legacy definition DECLARES (ops declaring
+   * none are absent). Served via the paradigm://tool-annotations resource,
+   * never in tools/list.
+   */
+  opAnnotations: Record<string, OpAnnotations>;
   /** Resolve a family call to its legacy tool; returns `{ error }` on bad op / missing params. */
   resolve(args: Record<string, unknown>): ResolvedFamilyCall | { error: string };
 }
@@ -189,6 +195,57 @@ function mergeProp(a: JsonSchemaProp, b: JsonSchemaProp): JsonSchemaProp {
   return out;
 }
 
+/**
+ * Schema id of the per-op annotations document served at
+ * OP_ANNOTATIONS_RESOURCE_URI. Generic (not Paradigm-specific): a client that
+ * splits a family into one tool per op (Gnomon's kernel narrowing) reads it to
+ * classify each op. Consumers treat an op MISSING from the map as a mutating op.
+ * Kept out of tools/list so it costs model-facing listings nothing.
+ */
+export const OP_ANNOTATIONS_SCHEMA = 'io.gnomon/op-annotations:v1';
+export const OP_ANNOTATIONS_RESOURCE_URI = 'paradigm://tool-annotations';
+
+/** Document served at OP_ANNOTATIONS_RESOURCE_URI: family tool -> op -> declared hints. */
+export interface OpAnnotationsDocument {
+  schema: typeof OP_ANNOTATIONS_SCHEMA;
+  tools: Record<string, Record<string, OpAnnotations>>;
+}
+
+/** The MCP tool-annotation hints carried per op (`title` is not a hint). */
+export const OP_HINT_KEYS = ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint'] as const;
+export type OpHintKey = typeof OP_HINT_KEYS[number];
+export type OpAnnotations = Partial<Record<OpHintKey, boolean>>;
+
+/** The boolean hints a legacy definition DECLARES; undefined when it declares none. */
+export function declaredOpHints(def: ToolDefinition | undefined): OpAnnotations | undefined {
+  const ann = (def?.annotations ?? {}) as Record<string, unknown>;
+  const out: OpAnnotations = {};
+  for (const k of OP_HINT_KEYS) if (typeof ann[k] === 'boolean') out[k] = ann[k] as boolean;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Family-level annotations that hold for EVERY op (conservative):
+ *   readOnlyHint    true only if every op declares readOnlyHint: true;
+ *   destructiveHint false only if every op declares destructiveHint: false or
+ *                   is read-only (and not declared destructive) — an op that declares nothing gets
+ *                   the MCP default (destructive), so it makes the family destructive;
+ *   idempotentHint  published (true) only if every op declares it true;
+ *   openWorldHint   true if any op declares it true, false only if every op
+ *                   declares it false, otherwise omitted (MCP default applies).
+ */
+export function familyAnnotations(perOp: Array<OpAnnotations | undefined>): Record<string, boolean> {
+  const all = (p: (a: OpAnnotations) => boolean) => perOp.every(a => a !== undefined && p(a));
+  const out: Record<string, boolean> = {
+    readOnlyHint: all(a => a.readOnlyHint === true),
+    destructiveHint: !all(a => a.destructiveHint === false || (a.readOnlyHint === true && a.destructiveHint !== true)),
+  };
+  if (perOp.length > 0 && all(a => a.idempotentHint === true)) out.idempotentHint = true;
+  if (perOp.some(a => a?.openWorldHint === true)) out.openWorldHint = true;
+  else if (perOp.length > 0 && all(a => a.openWorldHint === false)) out.openWorldHint = false;
+  return out;
+}
+
 /** `op(req*,opt,nested[{a*,b}])` — required params first; `op` alone when paramless. */
 function opSignature(op: string, def: ToolDefinition | undefined, required: string[], detail: 'full' | 'required'): string {
   const props = propsOf(def);
@@ -211,9 +268,9 @@ export function defineFamily(spec: FamilySpec, legacyDefs: Map<string, ToolDefin
   const properties: Record<string, JsonSchemaProp> = {
     op: { type: 'string', enum: opNames },
   };
-  let allReadOnly = true;
-  let anyDestructive = false;
   const opSummaries: string[] = [];
+  const perOp: Array<OpAnnotations | undefined> = [];
+  const opAnnotations: Record<string, OpAnnotations> = {};
 
   for (const op of opNames) {
     const legacy = spec.ops[op];
@@ -227,9 +284,10 @@ export function defineFamily(spec: FamilySpec, legacyDefs: Map<string, ToolDefin
       const trimmed = trimProp(pschema, max);
       properties[pname] = properties[pname] ? mergeProp(properties[pname], trimmed) : trimmed;
     }
-    const ann = (def?.annotations ?? {}) as { readOnlyHint?: boolean; destructiveHint?: boolean };
-    if (ann.readOnlyHint !== true) allReadOnly = false;
-    if (ann.destructiveHint === true) anyDestructive = true;
+    // Only what the op itself declares; an op with no hints stays out of the map.
+    const hints = declaredOpHints(def);
+    perOp.push(hints);
+    if (hints) opAnnotations[op] = hints;
   }
 
   const definition: ToolDefinition = {
@@ -240,7 +298,7 @@ export function defineFamily(spec: FamilySpec, legacyDefs: Map<string, ToolDefin
       properties,
       ...(spec.defaultOp ? {} : { required: ['op'] }),
     },
-    annotations: { readOnlyHint: allReadOnly, destructiveHint: anyDestructive },
+    annotations: familyAnnotations(perOp),
   };
 
   const describeOpParams = (op: string): string => {
@@ -268,7 +326,7 @@ export function defineFamily(spec: FamilySpec, legacyDefs: Map<string, ToolDefin
     return { legacy, args: rest };
   };
 
-  return { name: spec.name, spec, definition, resolve };
+  return { name: spec.name, spec, definition, opAnnotations, resolve };
 }
 
 // ────────────────────────────────────────────────────────

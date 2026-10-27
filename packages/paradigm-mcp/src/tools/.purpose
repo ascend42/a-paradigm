@@ -12,7 +12,7 @@ components:
       - mcp
       - tool-surface
   tool-surface:
-    description: '7.13 MCP surface (families.ts + buildToolSurface/listSurfaceTools/resolveToolCall in index.ts) — tools/list = 11 anchors + 21 op families; 12 on-demand tools listed only via config.yaml mcp.tools.enable or paradigm_tool_activate (sends notifications/tools/list_changed); mcp.tools.legacy_listing relists the per-op surface. Calls resolve to the CANONICAL LEGACY NAME before dispatch so handlers, breadcrumbs and toolsCalled are unchanged; deprecated alias calls write a tool-deprecated-alias breadcrumb. paradigm_status reports detected on-demand features as hints. Budget test: ≤40 tools, <8000 tokens.'
+    description: '7.13 MCP surface (families.ts + buildToolSurface/listSurfaceTools/resolveToolCall in index.ts) — tools/list = 11 anchors + 21 op families; 12 on-demand tools listed only via config.yaml mcp.tools.enable or paradigm_tool_activate (sends notifications/tools/list_changed); mcp.tools.legacy_listing relists the per-op surface. Calls resolve to the CANONICAL LEGACY NAME before dispatch so handlers, breadcrumbs and toolsCalled are unchanged; deprecated alias calls write a tool-deprecated-alias breadcrumb. paradigm_status reports detected on-demand features as hints. Budget test: ≤40 tools, <8000 tokens (full tools/list JSON; no op-annotations _meta). registerTools returns { opAnnotations } — buildOpAnnotationsDocument over the CURRENT tools/list (same enable/activation filtering) — which src/index.ts hands to registerResources for paradigm://tool-annotations.'
     type: service
     parent: '#ToolHandlers'
     tags:
