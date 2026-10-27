@@ -232,7 +232,7 @@ describe('#gnomon-voice V2a privacy', () => {
     expect(p).not.toHaveProperty('text');
     expect(p).not.toHaveProperty('note');
     expect(p).toMatchObject({ textHash: expect.stringMatching(/^hmac-sha256:[0-9a-f]{64}$/), durationMs: 1000, refusedReason: 'voice-speaker', forwarded: false });
-    expect(await refusal(r.send('my bank pin is 1234'))).toMatchObject({ reason: 'voice-speaker' });
+    expect(await refusal(r.send('my bank pin is zebra-quokka'))).toMatchObject({ reason: 'voice-speaker' });
   });
   it('a turn refused at receipt stores a hash plus the reason; it stays unforwardable after the cause clears', async () => {
     const r = rig();
