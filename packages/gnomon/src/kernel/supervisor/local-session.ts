@@ -93,7 +93,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { releaseSession, sessionSidFor } from '../../platform/win32/session-sandbox.js';
-import { HSID_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, HSID_V1_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -274,9 +274,11 @@ interface LocalSession {
   /** slice B2: the hash of the last memory_set sent (a change that renders the same block sends nothing) */
   memorySent?: string;
   /** slice B2: goals of follow_ups queued behind the running turn (each becomes the goal when the run before it ends) */
-  pendingGoals: string[];
+  pendingGoals: Array<{ text: string; trusted: boolean }>;
   /** slice B2: write_file/edit paths by toolCallId, until their tool end (bounded) */
-  toolPaths: Map<string, string>;
+  toolPaths: Map<string, string | null>;
+  /** Aegis L1: a memory delete pushed an empty block the child has not yet acknowledged */
+  memoryDeletePending?: boolean;
   /** slice B2: the context target in effect, the signed config's, the endpoint's n_ctx and the reply budget */
   context: { target: number; config: number; nCtx: number | null; maxTokens: number };
 }
@@ -285,7 +287,10 @@ interface LocalSession {
 export const LOCAL_SESSION_COMPACT_REQUEST = 'request.session.compact' as const;
 export const LOCAL_SESSION_CONTEXT_REQUEST = 'request.session.context' as const;
 export const LOCAL_SESSION_MEMORY_DELETE_REQUEST = 'request.session.memory.delete' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST]);
+/** Aegis M2: the human reads a session's memory, and lists the sessions that hold memory. */
+export const LOCAL_SESSION_MEMORY_READ_REQUEST = 'request.session.memory.read' as const;
+export const LOCAL_SESSION_MEMORY_LIST_REQUEST = 'request.session.memory.list' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST]);
 /** Slice B2: the asker of a human request (stamped by the dispatcher). */
 export interface LocalSessionAsker {
   connId: string;
@@ -1016,22 +1021,48 @@ export class LocalLane {
     this.#write(s, drv.memorySetLine(r));
   }
 
-  /** Slice B2: a tool start/end of an attended session: the files it edited and the last failing tool. */
+  /**
+   * Slice B2: a tool start/end of an attended session: the files it edited and the last failing tool. Aegis L7: paths
+   * are keyed by toolCallId; a second start with an id already in flight poisons it (null), so a reused id never credits
+   * the wrong file. Aegis H1: the recorded path is the KERNEL's form (fileRefOf), never the model's raw string.
+   */
   async #memoryTool(s: LocalSession, ev: Extract<LocalEvent, { kind: 'tool' }>): Promise<void> {
     if (!s.memory || ev.tool === null || MEMORY_TOOL_NAMES.includes(ev.tool)) return;
     if (ev.phase === 'start') {
-      if (ev.toolCallId !== null && ev.path !== null && EDIT_TOOLS.includes(ev.tool) && s.toolPaths.size < TOOL_PATHS_CAP) s.toolPaths.set(ev.toolCallId, ev.path);
+      if (ev.toolCallId === null || !EDIT_TOOLS.includes(ev.tool)) return;
+      if (s.toolPaths.has(ev.toolCallId)) s.toolPaths.set(ev.toolCallId, null);
+      else if (ev.path !== null && s.toolPaths.size < TOOL_PATHS_CAP) s.toolPaths.set(ev.toolCallId, ev.path);
       return;
     }
     const p = ev.toolCallId !== null ? s.toolPaths.get(ev.toolCallId) : undefined;
     if (ev.toolCallId !== null) s.toolPaths.delete(ev.toolCallId);
-    if (ev.isError === false && p !== undefined) await this.#memoryChanged(s, s.memory.addFileRef(p));
-    else if (ev.isError === true) {
+    if (ev.isError === false && typeof p === 'string') {
+      const rel = this.#fileRefOf(s, p);
+      if (rel !== null) await this.#memoryChanged(s, s.memory.addFileRef(rel));
+    } else if (ev.isError === true) {
       // the error text is TOOL output: its entry is labelled tool:<server> and renders in the data section
       const brokered = s.tools?.offered.some((t) => t.name === ev.tool) ?? false;
       const head = (ev.errorHead ?? '').replace(/^<tool-data [^>]*>\n?/, '').slice(0, 200);
       await this.#memoryChanged(s, s.memory.setToolError(ev.tool, head, brokered ? `tool:${KERNEL_MCP_SERVER}` : 'tool:local'));
     }
+  }
+
+  /**
+   * Aegis H1: the kernel's form of an edited path — resolved against the session cwd, realpath'd, required to exist under
+   * one of the session roots, made relative to that root. Anything else records nothing.
+   */
+  #fileRefOf(s: LocalSession, raw: string): string | null {
+    try {
+      const real = fs.realpathSync.native(path.resolve(s.cwd, raw));
+      for (const root of [s.roots.worktree, s.roots.cwd]) {
+        if (root === undefined) continue;
+        const rel = path.relative(root, real);
+        if (rel && !rel.startsWith('..') && !path.isAbsolute(rel) && fs.statSync(real).isFile()) return rel;
+      }
+    } catch {
+      /* gone, or not resolvable: nothing to record */
+    }
+    return null;
   }
 
   /** Slice B2: note/forget answered from the session's working memory (never the LocalToolBroker). */
@@ -1041,9 +1072,24 @@ export class LocalLane {
     this.#write(s, drv.toolResponseLine({ id: ev.id!, content: r.content, isError: r.isError, provenance: 'kernel' }));
   }
 
-  /** Slice B2: a goal from the human's prompt (the render goes out before the prompt line, so the child has it at once). */
-  async #setGoal(s: LocalSession, text: string): Promise<void> {
-    if (s.memory) await this.#memoryChanged(s, s.memory.setGoal(text));
+  /**
+   * Slice B2: a goal from the human's prompt (the render goes out before the prompt line, so the child has it at once).
+   * Aegis L8: only a hand-typed or verified-voice turn is the trusted goal; unverified voice renders as data.
+   */
+  async #setGoal(s: LocalSession, g: { text: string; trusted: boolean }): Promise<void> {
+    if (s.memory) await this.#memoryChanged(s, s.memory.setGoal(g.text, g.trusted));
+  }
+
+  /** Aegis L2: an hsid's session dir, or null (hsidShort takes only hsid:v1:, never v1d:). */
+  #sessionDir(hsid: string): string | null {
+    if (!HSID_V1_PATTERN.test(hsid)) return null;
+    return path.join(this.#o.home, 'sessions', hsidShort(hsid));
+  }
+
+  /** Slice B2 / Aegis M2: an ended session's memory file and its meta-line owner, or null. */
+  #endedMemory(hsid: string): string | null {
+    const dir = this.#sessionDir(hsid);
+    return dir ? path.join(dir, MEMORY_FILE) : null;
   }
 
   /**
@@ -1054,13 +1100,16 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
-    if (extra.length || typeof p.hsid !== 'string' || !HSID_PATTERN.test(p.hsid)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
+    if (extra.length) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
+    if (kind === LOCAL_SESSION_MEMORY_LIST_REQUEST) return this.#listMemory(asker.principal);
+    if (typeof p.hsid !== 'string' || !HSID_PATTERN.test(p.hsid)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const hsid = p.hsid;
     if (kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST) return this.#deleteMemory(asker.principal, hsid);
+    if (kind === LOCAL_SESSION_MEMORY_READ_REQUEST) return this.#readMemory(asker.principal, hsid);
     const s = this.#sessions.get(hsid);
     if (!s || s.owner !== asker.principal || s.state !== 'running') throw refused('NOT_FOUND', 'no such running local session for this principal', { reason: 'not-found' });
     if (s.loop) throw refused('FORBIDDEN', 'a loop session takes no context requests', { reason: 'loop-session' });
@@ -1089,21 +1138,60 @@ export class LocalLane {
     return { hsid, target, previous, requested: p.target, clamped: target !== p.target, aboveConfig, configTarget: c.config, nCtx: c.nCtx, memorySlot: memorySlotTokens(target), ...(aboveConfig ? { notice: `the context target ${target} is above the signed config (${c.config}); it applies to this session only` } : {}) };
   }
 
-  /** Slice B2: the human deletes a session's working memory (live or ended); the owner is the one memory.jsonl names. */
+  /**
+   * Slice B2: the human deletes a session's working memory (live or ended); the owner is the one memory.jsonl names. A
+   * live session must acknowledge the empty block (Aegis L1): a child that refuses it is stopped.
+   */
   async #deleteMemory(principal: string, hsid: string): Promise<Record<string, unknown>> {
     const s = this.#sessions.get(hsid);
     if (s?.memory) {
       if (s.owner !== principal) throw refused('NOT_FOUND', 'no such session memory for this principal', { reason: 'not-found' });
       s.pendingGoals = [];
+      s.memoryDeletePending = true;
       await this.#memoryChanged(s, s.memory.deleteAll());
+      if (s.memorySent !== sha('')) {
+        // nothing new went out (an empty block was already in effect): no ack is owed
+        s.memoryDeletePending = false;
+      }
       return { hsid, deleted: true, live: true };
     }
-    const file = path.join(this.#o.home, 'sessions', hsidShort(hsid), MEMORY_FILE);
-    const meta = memoryOwnerOf(file);
-    if (!meta || meta.hsid !== hsid || meta.owner !== principal) throw refused('NOT_FOUND', 'no such session memory for this principal', { reason: 'not-found' });
+    const file = this.#endedMemory(hsid);
+    const meta = file ? memoryOwnerOf(file) : null;
+    if (!file || !meta || meta.hsid !== hsid || meta.owner !== principal) throw refused('NOT_FOUND', 'no such session memory for this principal', { reason: 'not-found' });
     fs.rmSync(file, { force: true });
     await this.#o.log('session.memory', { hsid, op: 'delete', bytes: 0 }, { session: hsid });
     return { hsid, deleted: true, live: false };
+  }
+
+  /** Aegis M2: request.session.memory.read — the current entries of a session the asker owns (live or ended). */
+  async #readMemory(principal: string, hsid: string): Promise<Record<string, unknown>> {
+    const s = this.#sessions.get(hsid);
+    if (s?.memory) {
+      if (s.owner !== principal) throw refused('NOT_FOUND', 'no such session memory for this principal', { reason: 'not-found' });
+      return { hsid, live: true, entries: s.memory.entries() };
+    }
+    const file = this.#endedMemory(hsid);
+    const meta = file ? memoryOwnerOf(file) : null;
+    if (!file || !meta || meta.hsid !== hsid || meta.owner !== principal) throw refused('NOT_FOUND', 'no such session memory for this principal', { reason: 'not-found' });
+    return { hsid, live: false, entries: new WorkingMemory({ file, hsid, owner: principal }).entries() };
+  }
+
+  /** Aegis M2: request.session.memory.list — the asker's sessions that hold working memory (meta-line owner), at most 256. */
+  async #listMemory(principal: string): Promise<Record<string, unknown>> {
+    const root = path.join(this.#o.home, 'sessions');
+    const out: Array<{ hsid: string; live: boolean }> = [];
+    let names: string[] = [];
+    try {
+      names = fs.readdirSync(root);
+    } catch {
+      /* no sessions yet */
+    }
+    for (const n of names.sort()) {
+      if (out.length >= 256) break;
+      const meta = memoryOwnerOf(path.join(root, n, MEMORY_FILE));
+      if (meta && meta.owner === principal && HSID_V1_PATTERN.test(meta.hsid) && hsidShort(meta.hsid) === n) out.push({ hsid: meta.hsid, live: this.#sessions.get(meta.hsid)?.state === 'running' });
+    }
+    return { sessions: out };
   }
 
   /** Slice C1: one tool_request, answered outside the stdout queue (a card may wait on a human). */
@@ -1236,6 +1324,19 @@ export class LocalLane {
         // round 2 (steer race): the child refuses a steer that reaches it idle (it never queues it into the next
         // turn); the kernel records the refusal against the session — a steer that did not land
         if (ev.command === 'steer' && ev.success === false) await this.#o.log('turn.steer', { hsid: s.hsid, phase: 'refused', by: 'child', error: ev.error }, { session: s.hsid });
+        // Aegis L1: the child refused a memory block or a target: the next change re-sends (memorySent cleared), one row
+        if ((ev.command === 'memory_set' || ev.command === 'set_context') && ev.success === false) {
+          s.memorySent = undefined;
+          await this.#o.log('session.memory', { hsid: s.hsid, op: 'refused', bytes: 0, why: 'child-refused' }, { session: s.hsid });
+          // a delete the child did not take is not a delete: the session stops
+          if (ev.command === 'memory_set' && s.memoryDeletePending) {
+            s.memoryDeletePending = false;
+            s.state = 'stopping';
+            s.tools?.cancelAll();
+            void this.#o.children.stop(s.child, 'memory-delete-refused').catch(() => undefined);
+          }
+        }
+        if (ev.command === 'memory_set' && ev.success === true) s.memoryDeletePending = false;
         return;
       default:
         return; // other tool/turn markers, context reports (slice B1), fatal, unknown and malformed lines: logged above, never acted on
@@ -1301,8 +1402,10 @@ export class LocalLane {
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local', ...voiceTag(p), origin: p.voiceOrigin?.sentBy === 'unverified' ? 'voice-unverified' : p.voiceOrigin ? 'voice' : 'hand', ...(p.voiceOrigin ? { sentBy: p.voiceOrigin.sentBy } : {}) }, { session: s.hsid });
     // slice B2: the prompt is the goal (memory_set goes out BEFORE the prompt line); a follow_up's when its run starts
-    if (!inFlight) await this.#setGoal(s, p.text);
-    else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(p.text);
+    // Aegis L8: a hand-typed turn or a verified voice send is the trusted goal; unverified voice is data
+    const goal = { text: p.text, trusted: p.voiceOrigin?.sentBy !== 'unverified' && (p.source !== 'voice' || p.voiceOrigin !== undefined) };
+    if (!inFlight) await this.#setGoal(s, goal);
+    else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(goal);
     s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight }));
     return { turn: turnId(s.hsid, n) };
   }

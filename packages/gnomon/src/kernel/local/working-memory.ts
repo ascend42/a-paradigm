@@ -6,44 +6,55 @@
  * the source of truth; the child (gnomon-local) only places the block this
  * renders and never writes the store.
  *
- * Storage: `<home>/sessions/<short>/memory.jsonl`, mode 0600, APPEND-ONLY ops
- * (a `meta` line naming the session and its owner, then `put` / `del` lines);
- * the state lives in memory and a reload replays the file. Retention (founder
- * decision): kept until the human deletes it, no expiry; `deleteAll` UNLINKS
- * the file (an append-only `clear` would keep the old text on disk).
+ * Storage: `<home>/sessions/<short>/memory.jsonl`, mode 0600 (POSIX: opened
+ * O_NOFOLLOW, fstat'd as a regular file of our uid, fchmod'd; Windows ignores
+ * the mode bits and the file inherits the home's DACL), a `meta` line naming
+ * the session and its owner, then `put` / `del` ops; the state lives in memory
+ * and a reload replays the file (a torn last line is skipped, and the next
+ * append starts on a fresh line). Pure additions APPEND; any change that
+ * replaces or removes text (the goal of a new prompt, forget, an eviction)
+ * REWRITES the file (temp file 0600, fsync, rename), so a replaced goal or a
+ * forgotten note does not stay on disk. Retention (founder decision): kept
+ * until the human deletes it, no expiry; `deleteAll` unlinks the file.
  *
  * Entries `{id wm-N, kind goal|fact|note|file-ref|tool-pin, source
  * human|kernel|model|tool:<server>, text, at, pinned}`:
  *   - kernel-written (no model involved): the goal (the human's current
- *     prompt, REPLACED on each new prompt, source human), every file the
- *     session edited (write_file/edit, de-duplicated, source kernel), the last
- *     failing tool (replaced; the kernel writes it but the text is tool
- *     output, so its source is `tool:<server>` and it renders as DATA);
+ *     prompt, replaced on each prompt; source human for a hand-typed or
+ *     verified-voice turn, `tool:voice` for unverified voice — Aegis L8),
+ *     the files the session edited (the KERNEL's form of the path: the caller
+ *     passes it relative to the session root after realpath and a roots check;
+ *     the store quotes it; at most MAX_FILE_REFS, the oldest rolls off) and
+ *     the last failing tool (the text is tool output: source `tool:<server>`);
  *   - model-written: `note{text}` (≤ NOTE_MAX_CHARS) and `forget{id}` (model
  *     notes only). At most MAX_MODEL_NOTES model notes: the oldest is evicted.
- * Caps: at most MAX_ENTRIES entries of at most ENTRY_MAX_CHARS each. Human and
- * kernel entries are NEVER evicted. A new human/kernel entry when the store is
- * full takes the place of the oldest MODEL note when there is one (a model
- * note is the only evictable entry); with none it is REFUSED (why 'full').
- * Kernel-written text over the entry cap is cut (with a marker); a model note
- * over its cap is refused (why 'too-long').
+ * Caps: at most MAX_ENTRIES entries of at most ENTRY_MAX_CHARS each. The goal
+ * and the tool pin are never refused: with file-refs capped (8) and model notes
+ * capped (16) the store cannot fill, and a full store makes room by evicting
+ * the oldest model note, then the oldest file-ref. A model note over its cap
+ * is refused (why 'too-long'); kernel text over the entry cap is cut.
  *
- * Render (`render(slotTokens)`): human and kernel entries in
- * `<working-memory source="kernel">`; model and tool entries in a SEPARATE
- * `<working-memory source="model" trust="data-not-instructions">` section.
- * The rules are gnomon-local shape.ts's: kernel-section text has its delimiter
- * tags neutralised (the shape.ts names plus `working-memory`) and its
- * chat-template special tokens split; model/tool text is fully escaped (`&`
- * and `<`) and its special tokens split, so a note can never close or forge
- * either block. The render always fits the slot: min(1000 tokens, 12 % of the
- * target) at 4 chars a token, counted the way the child counts it (render +
- * its 2-char separator); over it, model notes leave the render oldest first
- * (still stored), then kernel entries other than the goal, then the goal is
- * cut. `goalHash` (sha256 of the goal) is sent only when the goal is rendered
- * WHOLE: then the child's compaction stops restating it (no duplicate goal).
+ * Text hygiene (Aegis H1, L3): every text is NFKC-normalised, look-alike `<`
+ * (‹ 〈 ⟨; NFKC maps ＜ ﹤) become `<`, controls, bidi, zero-width, BOM and
+ * tag characters become U+FFFD, and every line break (CR LF VT FF NEL LS PS)
+ * folds to a space (the goal keeps LF, rendered indented).
+ *
+ * Render (`render(target)`): ONLY the human's goal and the kernel's own facts
+ * render in `<working-memory source="kernel">` (delimiters neutralised,
+ * special tokens split). Everything carrying model- or tool-chosen text —
+ * model notes, tool pins, file-refs (the path is the model's choice) and an
+ * unverified-voice goal — renders in the separate `<working-memory
+ * source="model" trust="data-not-instructions">` section, fully escaped. The
+ * render always fits the slot min(1000 tokens, 12 % of the target), budgeted
+ * CONSERVATIVELY from UTF-8 bytes (Aegis M1: tokens = ceil((bytes + 2) / 2.5),
+ * the child's count too, so CJK or emoji cannot overrun it); over it, the data
+ * section leaves the render oldest first (still stored), then kernel facts,
+ * then the goal is cut. `goalHash` is sent only when a human goal renders
+ * whole: then the child's compaction stops restating it.
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 export type MemoryKind = 'goal' | 'fact' | 'note' | 'file-ref' | 'tool-pin';
 export type MemorySource = 'human' | 'kernel' | 'model' | `tool:${string}`;
@@ -62,15 +73,21 @@ export const MAX_ENTRIES = 32;
 export const ENTRY_MAX_CHARS = 600;
 export const NOTE_MAX_CHARS = 300;
 export const MAX_MODEL_NOTES = 16;
+/** Aegis H1: the most file-refs kept (the oldest rolls off). */
+export const MAX_FILE_REFS = 8;
 /** The memory slot: min(MEMORY_SLOT_MAX_TOKENS, MEMORY_SLOT_SHARE × target) — gnomon-local budget.ts's numbers. */
 export const MEMORY_SLOT_MAX_TOKENS = 1000;
 export const MEMORY_SLOT_SHARE = 0.12;
+/** Aegis M1: bytes per token for the memory block's conservative estimate (gnomon-local budget.ts MEMORY_BYTES_PER_TOKEN). */
+export const MEMORY_BYTES_PER_TOKEN = 2.5;
 export const MEMORY_ID_RE = /^wm-[1-9]\d{0,8}$/;
 const CUT_MARK = ' […cut]';
 const KINDS: readonly MemoryKind[] = ['goal', 'fact', 'note', 'file-ref', 'tool-pin'];
 const SOURCE_RE = /^(?:human|kernel|model|tool:[a-z0-9][a-z0-9_-]{0,63})$/;
 
 export const memorySlotTokens = (target: number): number => Math.min(MEMORY_SLOT_MAX_TOKENS, Math.floor(Math.max(0, target) * MEMORY_SLOT_SHARE));
+/** Aegis M1: the block's tokens as the child counts them (the render plus its 2-char separator, from UTF-8 bytes). */
+export const memoryBlockTokens = (render: string): number => (render ? Math.ceil((Buffer.byteLength(render, 'utf8') + 2) / MEMORY_BYTES_PER_TOKEN) : 0);
 export const sha256 = (t: string): string => `sha256:${createHash('sha256').update(t, 'utf8').digest('hex')}`;
 
 /** Why a change was refused (contracts SESSION_MEMORY_REFUSALS). */
@@ -93,7 +110,7 @@ export interface MemoryRender {
 /* ── the shape.ts rules (kept in lockstep with gnomon-local; test/local-working-memory.test.ts checks parity) ── */
 
 /** Block names whose open or close tag memory text must never carry: shape.ts DELIMITER_NAMES plus our own. */
-export const MEMORY_DELIMITER_NAMES: readonly string[] = Object.freeze(['tool-data', 'tool_result', 'tool-result-excerpt', 'compaction-summary', 'working-memory']);
+export const MEMORY_DELIMITER_NAMES: readonly string[] = Object.freeze(['tool-data', 'tool_result', 'tool-result-excerpt', 'compaction-summary', 'tool_call', 'think', 'working-memory']);
 const isSpace = (c: string): boolean => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 /** `<` → `&lt;` where it opens a delimiter tag (shape.ts neutraliseDelimiters, linear scan). */
 export function neutraliseDelimiters(t: string, names: readonly string[] = MEMORY_DELIMITER_NAMES): string {
@@ -115,15 +132,28 @@ export function neutraliseDelimiters(t: string, names: readonly string[] = MEMOR
   return from === 0 ? t : out + t.slice(from);
 }
 const WORD_JOINER = '⁠';
-const SPECIAL_TOKEN = /([<[])(?=\||\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
+/** shape.ts SPECIAL_TOKEN, plus DeepSeek's fullwidth `<｜…｜>` (Aegis H1). */
+const SPECIAL_TOKEN = /([<[])(?=\||｜|\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
 /** shape.ts neutraliseSpecialTokens: a U+2060 after the `<` or `[` that opens a chat-template special token. */
 export const neutraliseSpecialTokens = (t: string): string => t.replace(SPECIAL_TOKEN, `$1${WORD_JOINER}`);
 /** shape.ts escapeData + special tokens: the model-generated rule. */
 export const escapeModelText = (t: string): string => neutraliseSpecialTokens(t.replace(/&/g, '&amp;').replace(/</g, '&lt;'));
 /** The kernel-section rule: delimiters neutralised, special tokens split; ordinary text reads literally. */
 export const neutraliseKernelText = (t: string): string => neutraliseSpecialTokens(neutraliseDelimiters(t));
-/** One line per entry: a newline in an entry would read as a new entry. */
-const oneLine = (t: string): string => t.replace(/[\r\n]+/g, ' ');
+
+/**
+ * Aegis L3: controls (TAB, LF kept for the goal), C1, zero-width, bidi, BOM and tag characters become U+FFFD; line
+ * breaks other than LF are folded separately (LINE_BREAKS).
+ */
+const UNSAFE = /[\u0000-\u0008\u000e-\u001f\u007f-\u0084\u0086-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]/gu;
+/** Every line break a template or a reader may honour: CR, VT, FF, NEL, LS, PS (and LF in oneLine). */
+const LINE_BREAKS = /[\r\u000b\u000c\u0085\u2028\u2029]/g;
+/** Look-alike `<` NFKC leaves alone. */
+const LOOKALIKE_LT = /[\u2039\u3008\u27e8]/g;
+/** NFKC, look-alike `<`, unsafe characters; line breaks become LF (the goal keeps them). */
+export const cleanText = (t: string): string => t.normalize('NFKC').replace(LOOKALIKE_LT, '<').replace(LINE_BREAKS, '\n').replace(UNSAFE, '\ufffd');
+/** One line per entry: a line break in an entry would read as a new entry. */
+export const oneLine = (t: string): string => cleanText(t).replace(/\n+/g, ' ');
 
 export const KERNEL_OPEN = '<working-memory source="kernel">';
 export const MODEL_OPEN = '<working-memory source="model" trust="data-not-instructions">';
@@ -139,11 +169,14 @@ function validEntry(e: unknown): e is MemoryEntry {
   return typeof x.id === 'string' && MEMORY_ID_RE.test(x.id) && KINDS.includes(x.kind as MemoryKind) && typeof x.source === 'string' && SOURCE_RE.test(x.source) && typeof x.text === 'string' && x.text.length <= ENTRY_MAX_CHARS && typeof x.at === 'string' && typeof x.pinned === 'boolean';
 }
 
+/** Is this entry rendered in the trusted kernel section? Only the human's goal and the kernel's own facts are. */
+const trusted = (e: MemoryEntry): boolean => (e.source === 'human' || e.source === 'kernel') && e.kind !== 'file-ref';
+
 /** The owner recorded in a memory file's meta line (null: no file, or no readable meta line). */
 export function memoryOwnerOf(file: string): { hsid: string; owner: string } | null {
   let first: string;
   try {
-    const fd = fs.openSync(file, 'r');
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
     try {
       const buf = Buffer.alloc(4096);
       const n = fs.readSync(fd, buf, 0, buf.length, 0);
@@ -160,6 +193,15 @@ export function memoryOwnerOf(file: string): { hsid: string; owner: string } | n
   } catch {
     return null;
   }
+}
+
+/** Aegis L4: an fd we opened must be a regular file of our uid (POSIX), set to 0600. Throws otherwise. */
+function checkFd(fd: number): fs.Stats {
+  const st = fs.fstatSync(fd);
+  const uid = process.getuid?.();
+  if (!st.isFile() || (uid !== undefined && st.uid !== uid)) throw new Error('memory.jsonl is not a regular file of this user');
+  if (process.platform !== 'win32') fs.fchmodSync(fd, 0o600);
+  return st;
 }
 
 export interface WorkingMemoryOptions {
@@ -182,9 +224,6 @@ export function memoryRowsOf(hsid: string, changes: readonly MemoryChange[]): Ar
 /** The model's memory tools (gnomon-local memory-tools.ts): answered by the kernel from this store, never brokered on. */
 export const MEMORY_TOOL_NAMES: readonly string[] = Object.freeze(['note', 'forget']);
 
-/** C0/C1 controls (newlines aside: oneLine folds them) and bidi controls in model text become U+FFFD. */
-const UNSAFE = /[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
-
 const WHY_TEXT: Record<MemoryRefusal, string> = {
   full: 'working memory is full (32 entries) and none of them is a note that may be dropped',
   'too-long': `a note is at most ${NOTE_MAX_CHARS} characters; shorten it`,
@@ -201,7 +240,7 @@ export function answerMemoryTool(m: WorkingMemory, name: string, args: Record<st
   const keys = args ? Object.keys(args) : [];
   if (name === 'note') {
     if (!args || keys.some((k) => k !== 'text') || typeof args.text !== 'string') return { content: 'note takes {text}', isError: true, changes: [] };
-    const r = m.note(args.text.replace(UNSAFE, '�'));
+    const r = m.note(args.text);
     return r.id ? { content: `noted as ${r.id}`, isError: false, changes: r.changes } : { content: `not noted: ${WHY_TEXT[r.why ?? 'empty']}`, isError: true, changes: r.changes };
   }
   if (name === 'forget') {
@@ -217,7 +256,7 @@ export class WorkingMemory {
   readonly #o: WorkingMemoryOptions;
   readonly #entries: MemoryEntry[] = [];
   #n = 0;
-  /** the goal's full text was cut to the entry cap (goalHash is never sent then) */
+  /** the human goal as the prompt gave it, when it is stored whole (goalHash is never sent otherwise) */
   #goalWhole: string | null = null;
 
   constructor(o: WorkingMemoryOptions) {
@@ -236,9 +275,15 @@ export class WorkingMemory {
   #load(): void {
     let raw: string;
     try {
-      raw = fs.readFileSync(this.#o.file, 'utf8');
+      const fd = fs.openSync(this.#o.file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+      try {
+        checkFd(fd);
+        raw = fs.readFileSync(fd, 'utf8');
+      } finally {
+        fs.closeSync(fd);
+      }
     } catch {
-      return; // no file yet: an empty memory (the meta line is written with the first entry)
+      return; // no file yet (or not ours): an empty memory; the meta line is written with the first entry
     }
     for (const line of raw.split('\n')) {
       if (!line) continue;
@@ -260,119 +305,161 @@ export class WorkingMemory {
     }
   }
 
+  /** Aegis L4/L5: append ops (O_APPEND|O_CREAT|O_NOFOLLOW, 0600, our regular file); a torn last line gets its newline first. */
   #append(ops: Op[]): void {
-    const fresh = !fs.existsSync(this.#o.file);
-    const lines = [...(fresh ? [{ op: 'meta', v: 1, hsid: this.#o.hsid, owner: this.#o.owner } as Op] : []), ...ops].map((o) => `${JSON.stringify(o)}\n`).join('');
-    fs.appendFileSync(this.#o.file, lines, { mode: 0o600 });
-    if (fresh && process.platform !== 'win32') fs.chmodSync(this.#o.file, 0o600);
+    const flags = fs.constants.O_RDWR | fs.constants.O_APPEND | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0);
+    const fd = fs.openSync(this.#o.file, flags, 0o600);
+    try {
+      const st = checkFd(fd);
+      let lead = '';
+      if (st.size === 0) lead = `${JSON.stringify({ op: 'meta', v: 1, hsid: this.#o.hsid, owner: this.#o.owner })}\n`;
+      else {
+        const last = Buffer.alloc(1);
+        fs.readSync(fd, last, 0, 1, st.size - 1);
+        if (last[0] !== 0x0a) lead = '\n';
+      }
+      fs.writeSync(fd, lead + ops.map((o) => `${JSON.stringify(o)}\n`).join(''));
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+
+  /** Aegis M2: the file rewritten from the live state (temp 0600, fsync, rename): replaced or removed text leaves the disk. */
+  #rewrite(): void {
+    const tmp = path.join(path.dirname(this.#o.file), `.${MEMORY_FILE}.${randomBytes(6).toString('hex')}.tmp`);
+    const fd = fs.openSync(tmp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
+    try {
+      checkFd(fd);
+      const ops: Op[] = [{ op: 'meta', v: 1, hsid: this.#o.hsid, owner: this.#o.owner }, ...this.#entries.map((entry) => ({ op: 'put' as const, entry }))];
+      fs.writeSync(fd, ops.map((o) => `${JSON.stringify(o)}\n`).join(''));
+      fs.fsyncSync(fd);
+    } catch (err) {
+      fs.closeSync(fd);
+      fs.rmSync(tmp, { force: true });
+      throw err;
+    }
+    fs.closeSync(fd);
+    fs.renameSync(tmp, this.#o.file);
+  }
+
+  /** Persist: removals and replacements rewrite the file, pure additions append. */
+  #persist(changes: readonly MemoryChange[], added: MemoryEntry[]): void {
+    if (changes.some((c) => c.op === 'replace' || c.op === 'forget' || c.op === 'evict')) this.#rewrite();
+    else if (added.length) this.#append(added.map((entry) => ({ op: 'put', entry })));
   }
 
   #mint(kind: MemoryKind, source: MemorySource, text: string, pinned: boolean): MemoryEntry {
     return { id: `wm-${++this.#n}`, kind, source, text, at: (this.#o.now?.() ?? new Date()).toISOString(), pinned };
   }
 
-  /** Room for one new entry of `source`: the oldest model note leaves for it when full (never a human/kernel entry). */
-  #room(source: MemorySource, kind: MemoryKind, text: string, out: MemoryChange[], ops: Op[]): boolean {
+  #evict(e: MemoryEntry, out: MemoryChange[]): void {
+    this.#entries.splice(this.#entries.indexOf(e), 1);
+    out.push({ op: 'evict', entry: e });
+  }
+
+  /**
+   * Room for one new entry: when full, the oldest model note leaves, else (for the goal and the tool pin, which are
+   * never refused) the oldest file-ref. Human/kernel facts are never evicted.
+   */
+  #room(source: MemorySource, kind: MemoryKind, text: string, out: MemoryChange[]): boolean {
     if (this.#entries.length < MAX_ENTRIES) return true;
-    const oldest = this.#entries.find((e) => e.source === 'model');
-    if (!oldest) {
+    const victim = this.#entries.find((e) => e.source === 'model') ?? (kind === 'goal' || kind === 'tool-pin' ? this.#entries.find((e) => e.kind === 'file-ref') : undefined);
+    if (!victim) {
       out.push({ op: 'refused', source, kind, bytes: Buffer.byteLength(text, 'utf8'), why: 'full' });
       return false;
     }
-    this.#entries.splice(this.#entries.indexOf(oldest), 1);
-    ops.push({ op: 'del', id: oldest.id });
-    out.push({ op: 'evict', entry: oldest });
+    this.#evict(victim, out);
     return true;
   }
 
   /** Replace (or add) the single entry `match` finds with `text`. */
   #replaceOne(match: (e: MemoryEntry) => boolean, kind: MemoryKind, source: MemorySource, text: string): MemoryChange[] {
     const out: MemoryChange[] = [];
-    const ops: Op[] = [];
     const old = this.#entries.find(match);
     if (old) {
       if (old.text === text && old.source === source) return [];
       const entry: MemoryEntry = { ...old, source, text, at: (this.#o.now?.() ?? new Date()).toISOString() };
       this.#entries[this.#entries.indexOf(old)] = entry;
-      ops.push({ op: 'put', entry });
       out.push({ op: 'replace', entry });
-    } else {
-      if (!this.#room(source, kind, text, out, ops)) {
-        if (ops.length) this.#append(ops);
-        return out;
-      }
-      const entry = this.#mint(kind, source, text, true);
-      // the goal leads the kernel section
-      if (kind === 'goal') this.#entries.unshift(entry);
-      else this.#entries.push(entry);
-      ops.push({ op: 'put', entry });
-      out.push({ op: 'add', entry });
+      this.#persist(out, []);
+      return out;
     }
-    this.#append(ops);
+    if (!this.#room(source, kind, text, out)) {
+      this.#persist(out, []);
+      return out;
+    }
+    const entry = this.#mint(kind, source, text, true);
+    // the goal leads the kernel section
+    if (kind === 'goal') this.#entries.unshift(entry);
+    else this.#entries.push(entry);
+    out.push({ op: 'add', entry });
+    this.#persist(out, [entry]);
     return out;
   }
 
-  /** The human's current prompt becomes the goal (replaced on each new prompt). Over the cap it is cut, with a marker. */
-  setGoal(prompt: string): MemoryChange[] {
+  /**
+   * The human's current prompt becomes the goal (replaced on each new prompt). Over the cap it is cut, with a marker.
+   * `trusted` (Aegis L8): a hand-typed or verified-voice turn renders in the kernel section; otherwise (unverified voice)
+   * the goal is `tool:voice` data and no goalHash is sent.
+   */
+  setGoal(prompt: string, trusted = true): MemoryChange[] {
     if (!prompt.trim()) return [];
-    // the goal keeps its line breaks (the render indents its continuation lines, so it cannot pose as an entry)
-    const c = cut(prompt.replace(/\r\n?/g, '\n'), ENTRY_MAX_CHARS);
-    this.#goalWhole = c.cut || c.text !== prompt ? null : prompt;
-    return this.#replaceOne((e) => e.kind === 'goal', 'goal', 'human', c.text);
+    const clean = cleanText(prompt);
+    const c = cut(clean, ENTRY_MAX_CHARS);
+    this.#goalWhole = trusted && !c.cut && clean === prompt ? prompt : null;
+    return this.#replaceOne((e) => e.kind === 'goal', 'goal', trusted ? 'human' : 'tool:voice', c.text);
   }
 
-  /** A file the session edited (write_file / edit), de-duplicated by its text. */
-  addFileRef(file: string): MemoryChange[] {
-    const text = cut(oneLine(`edited ${file}`), ENTRY_MAX_CHARS).text;
+  /**
+   * A file the session edited (write_file / edit). `rel` is the KERNEL's form of the path (Aegis H1): the caller resolved
+   * it by realpath, checked it is under the session roots and made it relative to the root. Stored quoted
+   * (JSON.stringify), de-duplicated; at most MAX_FILE_REFS, the oldest rolls off. It renders as DATA: the name is the
+   * model's choice.
+   */
+  addFileRef(rel: string): MemoryChange[] {
+    const text = cut(`edited ${JSON.stringify(oneLine(rel))}`, ENTRY_MAX_CHARS).text;
     if (this.#entries.some((e) => e.kind === 'file-ref' && e.text === text)) return [];
     const out: MemoryChange[] = [];
-    const ops: Op[] = [];
-    if (!this.#room('kernel', 'file-ref', text, out, ops)) {
-      if (ops.length) this.#append(ops);
+    const refs = this.#entries.filter((e) => e.kind === 'file-ref');
+    if (refs.length >= MAX_FILE_REFS) this.#evict(refs[0]!, out);
+    if (!this.#room('kernel', 'file-ref', text, out)) {
+      this.#persist(out, []);
       return out;
     }
     const entry = this.#mint('file-ref', 'kernel', text, true);
     this.#entries.push(entry);
-    ops.push({ op: 'put', entry });
     out.push({ op: 'add', entry });
-    this.#append(ops);
+    this.#persist(out, [entry]);
     return out;
   }
 
   /**
    * The last failing tool (replaced each time). `detail` is the error's head, already bounded by the caller. The kernel
    * writes the entry but its text is TOOL output, so it is labelled `tool:<server>` (`tool:local` for the child's own
-   * tools) and renders in the data section, escaped; like every non-model entry it is never evicted.
+   * tools; Aegis L6: a source that is not `tool:…` is `tool:local`) and renders in the data section, escaped.
    */
   setToolError(tool: string, detail: string, source: `tool:${string}` = 'tool:local'): MemoryChange[] {
-    const src: MemorySource = SOURCE_RE.test(source) ? source : 'tool:local';
+    const src: MemorySource = source.startsWith('tool:') && SOURCE_RE.test(source) ? source : 'tool:local';
     return this.#replaceOne((e) => e.kind === 'tool-pin', 'tool-pin', src, cut(oneLine(`last failing tool: ${tool}${detail ? ` — ${detail}` : ''}`), ENTRY_MAX_CHARS).text);
   }
 
-  /** The model's note{text}: ≤ NOTE_MAX_CHARS; the oldest model note leaves past MAX_MODEL_NOTES. */
+  /** The model's note{text}: ≤ NOTE_MAX_CHARS; NFKC and hygiene (cleanText); the oldest model note leaves past MAX_MODEL_NOTES. */
   note(text: unknown): { changes: MemoryChange[]; id?: string; why?: MemoryRefusal } {
-    const t = typeof text === 'string' ? oneLine(text).trim() : '';
     const bytes = typeof text === 'string' ? Buffer.byteLength(text, 'utf8') : 0;
+    const t = typeof text === 'string' ? oneLine(text).trim() : '';
     if (!t) return { changes: [{ op: 'refused', source: 'model', kind: 'note', bytes, why: 'empty' }], why: 'empty' };
-    if (typeof text === 'string' && text.length > NOTE_MAX_CHARS) return { changes: [{ op: 'refused', source: 'model', kind: 'note', bytes, why: 'too-long' }], why: 'too-long' };
+    if (typeof text === 'string' && (text.length > NOTE_MAX_CHARS || t.length > NOTE_MAX_CHARS)) return { changes: [{ op: 'refused', source: 'model', kind: 'note', bytes, why: 'too-long' }], why: 'too-long' };
     const out: MemoryChange[] = [];
-    const ops: Op[] = [];
     const notes = this.#entries.filter((e) => e.source === 'model');
-    if (notes.length >= MAX_MODEL_NOTES) {
-      const oldest = notes[0]!;
-      this.#entries.splice(this.#entries.indexOf(oldest), 1);
-      ops.push({ op: 'del', id: oldest.id });
-      out.push({ op: 'evict', entry: oldest });
-    }
-    if (!this.#room('model', 'note', t, out, ops)) {
-      if (ops.length) this.#append(ops);
+    if (notes.length >= MAX_MODEL_NOTES) this.#evict(notes[0]!, out);
+    if (!this.#room('model', 'note', t, out)) {
+      this.#persist(out, []);
       return { changes: out, why: 'full' };
     }
     const entry = this.#mint('note', 'model', t, false);
     this.#entries.push(entry);
-    ops.push({ op: 'put', entry });
     out.push({ op: 'add', entry });
-    this.#append(ops);
+    this.#persist(out, [entry]);
     return { changes: out, id: entry.id };
   }
 
@@ -382,8 +469,9 @@ export class WorkingMemory {
     if (!e) return { changes: [{ op: 'refused', source: 'model', kind: 'note', bytes: 0, why: 'not-found' }], why: 'not-found' };
     if (e.source !== 'model') return { changes: [{ op: 'refused', source: 'model', kind: e.kind, bytes: 0, why: 'not-a-note' }], why: 'not-a-note' };
     this.#entries.splice(this.#entries.indexOf(e), 1);
-    this.#append([{ op: 'del', id: e.id }]);
-    return { changes: [{ op: 'forget', entry: e }] };
+    const out: MemoryChange[] = [{ op: 'forget', entry: e }];
+    this.#persist(out, []);
+    return { changes: out };
   }
 
   /** The human deletes the whole memory: the file is UNLINKED (append-only history would otherwise keep the text). */
@@ -396,48 +484,52 @@ export class WorkingMemory {
 
   /** The rendered block within the memory slot of `target` (the module comment). Empty memory renders ''. */
   render(target: number): MemoryRender {
-    const maxChars = Math.max(0, memorySlotTokens(target) * 4 - 2);
-    const own = this.#entries.filter((e) => e.source === 'human' || e.source === 'kernel');
+    const slot = memorySlotTokens(target);
+    const fits = (t: string): boolean => memoryBlockTokens(t) <= slot;
+    const own = this.#entries.filter(trusted);
     // the goal leads the kernel section (a reloaded file keeps append order)
     const kernel = [...own.filter((e) => e.kind === 'goal'), ...own.filter((e) => e.kind !== 'goal')];
-    const model = this.#entries.filter((e) => e.source !== 'human' && e.source !== 'kernel');
+    const data = this.#entries.filter((e) => !trusted(e));
     const kLine = (e: MemoryEntry, text = e.text): string => (e.kind === 'goal' ? `Goal (the user's current request): ${neutraliseKernelText(text).replace(/\n/g, '\n  ')}` : `[${e.id} ${e.kind}] ${neutraliseKernelText(oneLine(text))}`);
-    const mLine = (e: MemoryEntry): string => `[${e.id} ${e.kind}${e.source === 'model' ? '' : ` ${e.source}`}] ${escapeModelText(e.text)}`;
+    const dLine = (e: MemoryEntry): string => `[${e.id} ${e.kind}${e.source === 'model' ? '' : ` ${e.source}`}] ${escapeModelText(oneLine(e.text))}`;
     const build = (k: string[], m: string[], hidden: number): string => {
       const parts: string[] = [];
       if (k.length) parts.push([KERNEL_OPEN, ...k, MEMORY_CLOSE].join('\n'));
-      if (m.length || hidden) parts.push([MODEL_OPEN, ...(hidden ? [`(${hidden} older notes not shown)`] : []), ...m, MEMORY_CLOSE].join('\n'));
+      if (m.length || hidden) parts.push([MODEL_OPEN, ...(hidden ? [`(${hidden} older entries not shown)`] : []), ...m, MEMORY_CLOSE].join('\n'));
       return parts.join('\n');
     };
     let kLines = kernel.map((e) => kLine(e));
-    let mLines = model.map(mLine);
+    let mLines = data.map(dLine);
     let hidden = 0;
     let goalCut = false;
     let out = build(kLines, mLines, hidden);
-    // over the slot: model notes leave the render oldest first, then kernel entries other than the goal (newest kept)
-    while (out.length > maxChars && mLines.length) {
+    // over the slot: the data section leaves the render oldest first, then kernel facts other than the goal
+    while (!fits(out) && mLines.length) {
       mLines = mLines.slice(1);
       hidden++;
       out = build(kLines, mLines, hidden);
     }
-    if (out.length > maxChars && hidden) {
-      hidden = 0; // the "not shown" line itself goes when nothing of the model section is left
+    if (!fits(out) && hidden) {
+      hidden = 0;
       out = build(kLines, mLines, hidden);
     }
     const goalFirst = kernel[0]?.kind === 'goal';
-    while (out.length > maxChars && kLines.length > (goalFirst ? 1 : 0)) {
+    while (!fits(out) && kLines.length > (goalFirst ? 1 : 0)) {
       kLines = [...kLines.slice(0, goalFirst ? 1 : 0), ...kLines.slice(goalFirst ? 2 : 1)];
       out = build(kLines, mLines, hidden);
     }
-    if (out.length > maxChars && goalFirst) {
-      const over = out.length - maxChars;
+    if (!fits(out) && goalFirst) {
       const g = kernel[0]!;
-      const room = g.text.length - over - CUT_MARK.length;
-      kLines = room > 0 ? [kLine(g, g.text.slice(0, room) + CUT_MARK)] : [];
+      let room = g.text.length;
+      while (!fits(out) && room > 0) {
+        const over = Buffer.byteLength(out, 'utf8') - Math.floor(slot * MEMORY_BYTES_PER_TOKEN) + 2;
+        room = Math.max(0, room - Math.max(over, 1) - CUT_MARK.length);
+        kLines = room > 0 ? [kLine(g, g.text.slice(0, room) + CUT_MARK)] : [];
+        out = build(kLines, mLines, hidden);
+      }
       goalCut = true;
-      out = build(kLines, mLines, hidden);
     }
-    if (out.length > maxChars) out = '';
+    if (!fits(out)) out = '';
     const goal = kernel.find((e) => e.kind === 'goal');
     const goalWhole = goal !== undefined && !goalCut && out !== '' && this.#goalWhole !== null && goal.text === this.#goalWhole ? this.#goalWhole : null;
     return { render: out, hash: sha256(out), bytes: Buffer.byteLength(out, 'utf8'), ...(goalWhole !== null ? { goalHash: sha256(goalWhole) } : {}) };

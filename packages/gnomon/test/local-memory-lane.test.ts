@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { hsidShort, validateKindPayload } from '@a-company/gnomon-contracts';
 import { fakeOpenAI, type FakeReply, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
-import { LocalLane, LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_REQUESTS } from '../src/kernel/supervisor/local-session.js';
+import { LocalLane, LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_REQUESTS } from '../src/kernel/supervisor/local-session.js';
 import { MEMORY_FILE } from '../src/kernel/local/working-memory.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
@@ -80,7 +80,7 @@ describe('kernel-owned working memory in a live local session', () => {
     const sys = systemOf(agentRequests()[1]!);
     expect(sys).toContain('<working-memory source="kernel">\nGoal (the user\'s current request): write out.txt and remember where the parser is');
     // the file-ref is kernel-written from the tool end line; the child applies it from its next step after receipt
-    expect(fs.readFileSync(path.join(r.dir, MEMORY_FILE), 'utf8')).toContain('edited out.txt');
+    expect(fs.readFileSync(path.join(r.dir, MEMORY_FILE), 'utf8')).toContain('"kind":"file-ref","source":"kernel","text":"edited \\"out.txt\\""');
     const data = sys.indexOf('<working-memory source="model" trust="data-not-instructions">');
     expect(data).toBeGreaterThan(0);
     expect(sys.indexOf('zebra-quartz')).toBeGreaterThan(data);
@@ -125,6 +125,16 @@ describe('kernel-owned working memory in a live local session', () => {
     expect(await waitFor(() => r.lane.stateOf(hsid) === 'exited', 5_000)).toBe(true);
     // the session dir (and its memory) outlives the session: kept until deleted
     expect(fs.existsSync(file)).toBe(true);
+    // Aegis M2: read and list, owner-gated, for an ended session too
+    const read = await r.lane.humanRequest(GUI, LOCAL_SESSION_MEMORY_READ_REQUEST, { hsid });
+    expect(read).toMatchObject({ hsid, live: false, entries: [expect.objectContaining({ kind: 'goal', source: 'human', text: 'remember this goal' })] });
+    expect(await r.lane.humanRequest(GUI, LOCAL_SESSION_MEMORY_LIST_REQUEST, {})).toEqual({ sessions: [{ hsid, live: false }] });
+    expect(await r.lane.humanRequest({ ...GUI, principal: 'p:abcdefgh/other' }, LOCAL_SESSION_MEMORY_LIST_REQUEST, {})).toEqual({ sessions: [] });
+    await expect(r.lane.humanRequest({ ...GUI, principal: 'p:abcdefgh/other' }, LOCAL_SESSION_MEMORY_READ_REQUEST, { hsid })).rejects.toThrow(/no such/);
+    await expect(r.lane.humanRequest({ ...GUI, credential: 'session-key' }, LOCAL_SESSION_MEMORY_READ_REQUEST, { hsid })).rejects.toThrow(/human/);
+    // Aegis L2: a v1d hsid never reaches hsidShort (NOT_FOUND, not a throw)
+    await expect(r.lane.humanRequest(GUI, LOCAL_SESSION_MEMORY_DELETE_REQUEST, { hsid: `hsid:v1d:${'A'.repeat(26)}` })).rejects.toThrow(/no such/);
+    await expect(r.lane.humanRequest(GUI, LOCAL_SESSION_MEMORY_READ_REQUEST, { hsid: `hsid:v1d:${'A'.repeat(26)}` })).rejects.toThrow(/no such/);
     await expect(r.lane.humanRequest({ ...GUI, principalClass: 'agent' }, LOCAL_SESSION_MEMORY_DELETE_REQUEST, { hsid })).rejects.toThrow(/human/);
     await expect(r.lane.humanRequest({ ...GUI, principal: 'p:abcdefgh/other' }, LOCAL_SESSION_MEMORY_DELETE_REQUEST, { hsid })).rejects.toThrow(/no such/);
     expect(await r.lane.humanRequest(GUI, LOCAL_SESSION_MEMORY_DELETE_REQUEST, { hsid })).toEqual({ hsid, deleted: true, live: false });
@@ -132,6 +142,6 @@ describe('kernel-owned working memory in a live local session', () => {
     const del = r.rows.filter((x) => x.kind === 'session.memory' && x.payload.op === 'delete');
     expect(del.map((x) => x.payload)).toEqual([{ hsid, op: 'delete', bytes: 0 }]);
     await expect(r.lane.humanRequest(GUI, LOCAL_SESSION_MEMORY_DELETE_REQUEST, { hsid })).rejects.toThrow(/no such/);
-    expect(LOCAL_SESSION_REQUESTS).toEqual(['request.session.compact', 'request.session.context', 'request.session.memory.delete']);
+    expect(LOCAL_SESSION_REQUESTS).toEqual(['request.session.compact', 'request.session.context', 'request.session.memory.delete', 'request.session.memory.read', 'request.session.memory.list']);
   });
 });
