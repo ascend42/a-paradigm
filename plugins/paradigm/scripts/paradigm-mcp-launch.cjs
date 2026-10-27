@@ -7,14 +7,19 @@
  * requires pnpm (devEngines.packageManager onFail "error") exits EBADDEVENGINES and the server never starts.
  * `npx --prefix=<elsewhere>` avoids that but also moves npm's global prefix and globalconfig.
  *
- * The server is the paradigm-mcp entry of an @a-company/paradigm package, found in the same order the hooks find
- * the `paradigm` CLI, so both come from one install:
- *   1. paradigm-mcp on PATH (a global install)
- *   2. the project's own node_modules/@a-company/paradigm (the project root only, never a parent folder)
- *   3. npx from the plugin folder (no package.json), pinned to the plugin's version. npx only resolves or fetches
- *      the package: it runs this script with --locate, which prints the entry and exits.
+ * The server is the paradigm-mcp entry of an @a-company/paradigm package, found in the order the hooks find the
+ * `paradigm` CLI (scripts/paradigm-resolve.sh), so both come from one install:
+ *   1. the project's own node_modules/@a-company/paradigm (the project root only, never a parent folder), so a
+ *      project that pins Paradigm gets its version
+ *   2. paradigm-mcp on PATH (a global install)
+ *   3. npx pinned to the plugin's version (--prefer-offline), run from a folder of its own under the OS temp dir
+ *      whose {"private":true} package.json stops npm's walk up to a project's devEngines. npx only resolves or
+ *      fetches the package: it runs this script (`node <this file> --locate`), which prints the entry and exits.
  * This script then starts the entry with node, in the project, with its own environment (none of npm's). A
  * version that differs from the plugin's is reported on stderr.
+ *
+ * The project is argv[2] when it is an existing directory; otherwise (missing, or an unexpanded ${...}) the
+ * expanded CLAUDE_PROJECT_DIR, then the current directory, and stderr says which.
  *
  * Usage: node paradigm-mcp-launch.cjs <project-dir>
  *        node paradigm-mcp-launch.cjs --locate   (from npx only)
@@ -102,24 +107,91 @@ if (process.argv[2] === '--locate') {
   process.exit(0);
 }
 
-const project = path.resolve(process.argv[2] || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+const isDir = (p) => {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+};
+const usableDir = (p) => typeof p === 'string' && p !== '' && !p.includes('${') && isDir(p);
+
+/** argv[2] when usable, else an expanded CLAUDE_PROJECT_DIR, else the current directory (said on stderr). */
+function projectDir(arg, env) {
+  if (usableDir(arg)) return path.resolve(arg);
+  const why = arg ? `project argument "${arg}" is not an existing directory` : 'no project argument';
+  if (usableDir(env.CLAUDE_PROJECT_DIR)) {
+    say(`${why}; using CLAUDE_PROJECT_DIR (${path.resolve(env.CLAUDE_PROJECT_DIR)})`);
+    return path.resolve(env.CLAUDE_PROJECT_DIR);
+  }
+  say(`${why}; using the current directory (${process.cwd()})`);
+  return process.cwd();
+}
+
+const project = projectDir(process.argv[2], process.env);
 const want = readJson(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'))?.version ?? null;
+
+/**
+ * Where npx runs: a folder of its own whose package.json ends npm's walk up, so no project's devEngines (or
+ * .npmrc) applies. Not PLUGIN_ROOT: a plugin checked out inside a pnpm-only repo would walk up into it. A folder
+ * someone else owns (a shared /tmp) is not used; a fresh private one is made instead.
+ */
+function npxDir() {
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  const ours = (d) => {
+    try {
+      const st = fs.lstatSync(d);
+      return st.isDirectory() && (uid === null || st.uid === uid);
+    } catch {
+      return false;
+    }
+  };
+  let dir = path.join(os.tmpdir(), uid === null ? 'paradigm-mcp-npx' : `paradigm-mcp-npx-${uid}`);
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    if (!ours(dir)) dir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-mcp-npx-'));
+    const pkg = path.join(dir, 'package.json');
+    if (readJson(pkg)?.private !== true) fs.writeFileSync(pkg, '{"private":true}\n');
+    return dir;
+  } catch (e) {
+    say(`could not prepare a folder for npx under ${os.tmpdir()}: ${e.message}`);
+    return null;
+  }
+}
 
 function viaNpx() {
   const spec = want ? `${PKG}@${want}` : PKG;
-  // npx.cmd only starts through the shell on Windows, so quote what may hold spaces (C:\Program Files\nodejs)
+  const cwd = npxDir();
+  if (!cwd) return null;
+  // npm runs `<command> <args>` through a shell and escapes only the args, so the command is the plain word
+  // `node` and this file is an argument. npx.cmd only starts through cmd on Windows, so quote what may hold
+  // spaces there.
   const q = (s) => (WIN ? `"${s}"` : s);
   const r = spawnSync(
     WIN ? 'npx.cmd' : 'npx',
-    ['--yes', `--package=${spec}`, '--', q(process.execPath), q(__filename), '--locate'],
+    ['--yes', '--prefer-offline', `--package=${spec}`, '--', 'node', q(__filename), '--locate'],
     // stdout carries only the located entry; npm's own output goes to stderr (Claude Code's MCP log)
-    { cwd: PLUGIN_ROOT, env: { ...process.env, PARADIGM_MCP_WANT: want ?? '' }, stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8', shell: WIN },
+    {
+      cwd,
+      env: { ...process.env, PARADIGM_MCP_WANT: want ?? '' },
+      stdio: ['ignore', 'pipe', 'inherit'],
+      encoding: 'utf8',
+      shell: WIN,
+      timeout: 120000,
+    },
   );
   const line = (r.stdout || '').split('\n').find((l) => l.startsWith(LOCATED));
-  return line ? { entry: line.slice(LOCATED.length).trim(), version: want } : null;
+  if (line) return { entry: line.slice(LOCATED.length).trim(), version: want };
+  const how = r.error
+    ? r.error.message
+    : r.signal
+      ? `killed by ${r.signal}`
+      : `exit ${r.status}${r.status === 0 ? ' without locating it' : ''}`;
+  say(`npx could not provide ${spec} (${how})`);
+  return null;
 }
 
-const found = fromPath(process.env) || fromProject(project) || viaNpx();
+const found = fromProject(project) || fromPath(process.env) || viaNpx();
 if (!found) {
   say(`could not find or fetch ${PKG}; install it with: npm i -g ${PKG}`);
   process.exit(1);

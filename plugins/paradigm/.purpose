@@ -2,7 +2,7 @@ name: paradigm
 description: "The Paradigm Claude Code plugin: hooks (enforcement), skills, agent definitions and the plugin's MCP server launch. Hook scripts are generated from packages/paradigm/src/commands/hooks/scripts by scripts/generate-hooks.mjs; edit the canonical copies, not these."
 context:
   - ".claude-plugin/plugin.json version must equal @a-company/paradigm's (tests/plugin-version.test.ts): Claude Code caches installs by version"
-  - "scripts/ is generated except paradigm-mcp-launch.cjs and migrate-to-plugin.sh"
+  - "scripts/ is generated except paradigm-mcp-launch.cjs and migrate-to-plugin.sh (paradigm-resolve.sh, the hooks' CLI lookup, is generated like the other hook scripts)"
 # Key files touched:
 # - .mcp.json
 # - scripts/paradigm-mcp-launch.cjs
@@ -13,11 +13,17 @@ components:
   paradigm-mcp-launch:
     description: |
       Starts the plugin's MCP server (.mcp.json runs `node scripts/paradigm-mcp-launch.cjs <project>`).
-      Finds an @a-company/paradigm package in the hooks' order: paradigm-mcp on PATH, then the project
-      root's node_modules (never a parent folder; the package.json must name @a-company/paradigm), then
-      npx from the plugin folder pinned to plugin.json's version, which only locates it (--locate prints
-      the entry). The launcher runs the entry with node in the project, with its own env; a version that
-      differs from the plugin's goes to stderr. Why: npm 11 applies the nearest package.json's devEngines
-      to npx, so npx run from a pnpm-only project (onFail "error") exits EBADDEVENGINES; `--prefix` was
-      rejected because it also moves npm's global prefix and globalconfig.
+      The project is argv[2] if it is an existing directory, else an expanded CLAUDE_PROJECT_DIR, else
+      cwd (the fallback is said on stderr). Finds an @a-company/paradigm package in the hooks' order
+      (scripts/paradigm-resolve.sh): the project root's node_modules first (never a parent folder; the
+      package.json must name @a-company/paradigm), so a project that pins Paradigm gets its version; then
+      paradigm-mcp on PATH; then `npx --yes --prefer-offline` pinned to plugin.json's version, run from
+      <os.tmpdir()>/paradigm-mcp-npx-<uid> (created on demand with a {"private":true} package.json that
+      stops npm's walk up; a folder owned by someone else is replaced by a fresh mkdtemp one), 120 s
+      timeout, failures (error / signal / exit status) on stderr. npx only locates the package: it runs
+      `node <launcher> --locate` (node is the command word, the launcher an argument npm escapes), which
+      prints the entry. The launcher runs the entry with node in the project, with its own env; a version
+      that differs from the plugin's goes to stderr. Why: npm 11 applies the nearest package.json's
+      devEngines to npx, so npx run from a pnpm-only project (onFail "error") exits EBADDEVENGINES;
+      `--prefix` was rejected because it also moves npm's global prefix and globalconfig.
     tags: [plugin, mcp, launch]

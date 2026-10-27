@@ -185,7 +185,7 @@ All agents default to `inherit` (your configured model). For optimal results:
 
 - Claude Code 1.0.33 or later
 - Node.js >= 24 (the hooks and the MCP server run on your Node; Paradigm 8.0 requires 24 or newer)
-- `@a-company/paradigm` npm package — the MCP server uses your installed copy (a global install on `PATH`, then the project's own `node_modules`) and otherwise fetches the plugin's version with `npx`. For skills like `/paradigm:shift`, also install the CLI globally: `npm install -g @a-company/paradigm`
+- `@a-company/paradigm` npm package — the MCP server uses your installed copy (the project's own `node_modules` first, then a global install on `PATH`) and otherwise fetches the plugin's version with `npx`. For skills like `/paradigm:shift`, also install the CLI globally: `npm install -g @a-company/paradigm`
 
 ## Links
 
