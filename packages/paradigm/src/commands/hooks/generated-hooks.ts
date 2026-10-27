@@ -249,11 +249,72 @@ _pm_nwords() { _PM_NW=$#; }
 _pm_nwords $PURPOSE_PATHS
 _pm_count purpose_files "$_PM_NW"
 
+_pm_mark purpose-coverage-resolve
+# --- Shared coverage rule (#purpose-coverage) for Checks 1 and 2 ---
+# A directory is covered by its own .purpose, or by an ANCESTOR .purpose that
+# documents it (names its files or paths); placeholder stubs never count. This
+# is the rule Cid's debrief and \`paradigm doctor\` use (purpose-core
+# resolvePurposeCoverage). One CLI call scores every modified source dir:
+#   paradigm purpose coverage <dirs...>  →  "<dir>\\t(covered|uncovered)\\t<file|->"
+# If the CLI cannot answer (missing, or an older CLI without the command), the
+# hook falls back to the nearest-.purpose walk so it never fails open silently;
+# a missing CLI is already a blocking violation above.
+_TAB=$(printf '\\t')
+_COV_DIRS=""
+for file in $MODIFIED; do
+  case "$file" in
+    .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
+  esac
+  _parent "$file"
+  case "$_NL$_COV_DIRS$_NL" in
+    *"$_NL$_PD$_NL"*) ;;
+    *) _COV_DIRS="$_COV_DIRS$_NL$_PD" ;;
+  esac
+done
+_COV_OUT=""
+if [ "$PARADIGM_AVAILABLE" = "true" ] && [ -n "$_COV_DIRS" ]; then
+  # shellcheck disable=SC2086
+  _COV_OUT=$($PARADIGM_BIN purpose coverage $_COV_DIRS 2>/dev/null) || _COV_OUT=""
+fi
+case "$_COV_OUT" in
+  *"\${_TAB}covered\${_TAB}"*|*"\${_TAB}uncovered\${_TAB}"*) _COV_SHARED=true ;;
+  *) _COV_SHARED=false ;;
+esac
+_COV_NLW="$_NL$_COV_OUT$_NL"
+if [ "$_COV_SHARED" = true ]; then _pm_count coverage_shared 1; else _pm_count coverage_shared 0; fi
+
+# _covering_purpose <dir> — sets _CP to the .purpose that covers <dir>
+# (repo-relative, as in $MODIFIED), or "" when nothing covers it.
+_covering_purpose() {
+  _CP=""
+  if [ "$_COV_SHARED" = true ]; then
+    _cov_rest=\${_COV_NLW#*"$_NL$1$_TAB"}
+    if [ "$_cov_rest" != "$_COV_NLW" ]; then
+      _cov_line=\${_cov_rest%%"$_NL"*}
+      case "$_cov_line" in
+        "covered$_TAB"*) _CP=\${_cov_line#"covered$_TAB"} ;;
+      esac
+      return 0
+    fi
+  fi
+  # Fallback: nearest .purpose in the ancestor chain (pre-8.0.4 rule).
+  _cov_walk="$1"
+  while [ "$_cov_walk" != "." ] && [ "$_cov_walk" != "" ] && [ "$_cov_walk" != "/" ]; do
+    if [ -f "$_cov_walk/.purpose" ]; then
+      _CP="$_cov_walk/.purpose"
+      return 0
+    fi
+    _parent "$_cov_walk"; _cov_walk=$_PD
+  done
+  [ -f ".purpose" ] && _CP=".purpose"
+  return 0
+}
+
 _pm_mark check1-purpose-coverage
 # --- Check 1: Source files modified without .purpose updates ---
-# Instead of counting total source files globally, check per-directory:
-# only flag directories where source files were modified but no .purpose
-# exists in that directory's ancestor chain OR the covering .purpose was not updated.
+# Per directory: flag a directory whose source files were modified when the
+# .purpose that covers it (shared rule above) was not updated. Directories that
+# nothing covers are Check 2's.
 SOURCE_COUNT=0
 PARADIGM_COUNT=0
 UNCOVERED_SOURCE_DIRS=""
@@ -268,18 +329,7 @@ for file in $MODIFIED; do
       SOURCE_COUNT=$((SOURCE_COUNT + 1))
       # Check if this file's directory has a covering .purpose that was modified
       _parent "$file"; src_dir=$_PD
-      covering=""
-      walk_dir="$src_dir"
-      while [ "$walk_dir" != "." ] && [ "$walk_dir" != "" ] && [ "$walk_dir" != "/" ]; do
-        if [ -f "$walk_dir/.purpose" ]; then
-          covering="$walk_dir/.purpose"
-          break
-        fi
-        _parent "$walk_dir"; walk_dir=$_PD
-      done
-      if [ -z "$covering" ] && [ -f ".purpose" ]; then
-        covering=".purpose"
-      fi
+      _covering_purpose "$src_dir"; covering=$_CP
       # If there IS a covering .purpose, check if it was modified too
       if [ -n "$covering" ]; then
         purpose_was_modified=false
@@ -327,7 +377,7 @@ if [ "$_SEV" != "off" ] && [ -n "$UNCOVERED_SOURCE_DIRS" ] && [ "$PARADIGM_COUNT
 fi
 
 _pm_mark check2-purpose-exists
-# --- Check 2: Modified source directories missing .purpose files ---
+# --- Check 2: Modified source directories no .purpose documents (shared rule) ---
 DIRS_WITHOUT_PURPOSE=""
 
 for file in $MODIFIED; do
@@ -336,22 +386,9 @@ for file in $MODIFIED; do
   esac
 
   _parent "$file"; dir=$_PD
-  # Walk up to find a .purpose file
-  found_purpose=false
-  check_dir="$dir"
-  while [ "$check_dir" != "." ] && [ "$check_dir" != "" ] && [ "$check_dir" != "/" ]; do
-    if [ -f "$check_dir/.purpose" ]; then
-      found_purpose=true
-      break
-    fi
-    _parent "$check_dir"; check_dir=$_PD
-  done
-  # Also check root
-  if [ "$found_purpose" = false ] && [ -f ".purpose" ]; then
-    found_purpose=true
-  fi
+  _covering_purpose "$dir"
 
-  if [ "$found_purpose" = false ]; then
+  if [ -z "$_CP" ]; then
     # Deduplicate directory names
     case "$DIRS_WITHOUT_PURPOSE" in
       *"$dir"*) ;;
@@ -379,13 +416,14 @@ PURPOSEEOF
     done
   elif [ "$_SEV" = "block" ]; then
     VIOLATIONS="$VIOLATIONS
-  - These directories have modified source files but no .purpose file anywhere in their path:
+  - These directories have modified source files but no .purpose documents them:
    $DIRS_WITHOUT_PURPOSE
-    Create a .purpose file using paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
+    Give each its own .purpose (paradigm_purpose op: init + add_component), or name its files
+    or path in an ancestor .purpose. Placeholder stubs (TODO-only, auto-generated) do not count."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   else
     ADVISORY="$ADVISORY
-  - (warn) Directories with modified source files but no .purpose file:
+  - (warn) Directories with modified source files that no .purpose documents:
    $DIRS_WITHOUT_PURPOSE"
   fi
 fi

@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { log } from '../../utils/logger.js';
-import { filterGitIgnored } from '@a-company/purpose-core';
+import { filterGitIgnored, resolvePurposeCoverage } from '@a-company/purpose-core';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,19 +107,13 @@ function walkSourceDirs(dir: string, extensions: string[]): Set<string> {
 }
 
 /**
- * Check if a directory has a .purpose file covering it — either in
- * the directory itself or in any parent up to (and including) rootDir.
+ * Is a directory covered? The shared rule (#purpose-coverage, purpose-core
+ * resolvePurposeCoverage), the same one Cid and the Stop hook use: its own
+ * .purpose, or an ancestor .purpose that documents it. Placeholder stubs never
+ * count.
  */
 function hasPurposeCoverage(dir: string, rootDir: string): boolean {
-  let current = dir;
-  while (true) {
-    if (fs.existsSync(path.join(current, '.purpose'))) return true;
-    if (current === rootDir) break;
-    const parent = path.dirname(current);
-    if (parent === current) break; // filesystem root
-    current = parent;
-  }
-  return false;
+  return resolvePurposeCoverage(rootDir, dir).covered;
 }
 
 
@@ -446,7 +440,7 @@ async function checkPurposeCoverage(rootDir: string): Promise<ContextAuditResult
       status: 'warn',
       message: `${pct}% purpose coverage (${covered}/${total} source directories) — below 80% threshold`,
       details: uncovered.slice(0, 15),
-      fix: 'Create .purpose files in uncovered source directories',
+      fix: 'Document uncovered source directories: a .purpose of their own, or name their files or paths in an ancestor .purpose (placeholder stubs do not count)',
     });
   } else {
     results.push({

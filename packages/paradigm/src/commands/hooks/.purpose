@@ -127,6 +127,23 @@ components:
       - hooks
       - stop-hook
       - team-funnel
+  stop-hook-purpose-coverage:
+    description: >-
+      Stop hook Checks 1 and 2 (paradigm-common.sh, section
+      purpose-coverage-resolve) use the shared #purpose-coverage rule (T-2026-10-27-003):
+      one `paradigm purpose coverage <dirs...>` call (~150 ms) scores every
+      modified source directory; _covering_purpose reads the tab-separated
+      answer. Covered = own .purpose or an ancestor that documents the dir;
+      placeholder stubs never count. Check 1 flags a covered dir whose
+      covering .purpose was not updated; Check 2 flags dirs no .purpose
+      documents. When the CLI cannot answer (missing, or an older CLI) it falls
+      back to the nearest-.purpose walk; the coverage_shared counter records
+      which rule ran. Tests: tests/hooks-stop.test.ts (shared rule cases).
+    type: utility
+    file: scripts/paradigm-common.sh
+    components:
+      - '#purpose-coverage'
+    tags: [hooks, stop-hook, coverage]
   has-compliance-claimant:
     description: |
       v6.0.4 POSIX sh helper in paradigm-common.sh that reads
