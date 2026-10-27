@@ -195,6 +195,13 @@ components:
       kind goal|fact|note|file-ref|tool-pin, source human|kernel|model|tool:<server>, text, at, pinned}. Kernel-
       written: the goal (each prompt; a follow_up's when its run starts), edited files (write_file/edit tool ends,
       de-duplicated), the last failing tool (source tool:<server>: its text is tool output, rendered as data).
+      Aegis B2 review: file-refs are the kernel's realpath-checked form relative to the root, quoted, at most 8, and
+      render as DATA; all text NFKC with look-alike <, controls, bidi, zero-width, tag characters and every line
+      separator neutralised; fullwidth DeepSeek tokens, tool_call and think neutralised (parity with shape.ts); the
+      render is budgeted from UTF-8 bytes; replacements and removals rewrite memory.jsonl (temp 0600, fsync, rename);
+      O_NOFOLLOW + fstat (regular file, our uid) + fchmod; request.session.memory.read / .list (owner-gated); a
+      refused memory_set/set_context logs why child-refused and a refused delete stops the session; v1d hsids are
+      NOT_FOUND; a reused in-flight toolCallId credits no file; an unverified-voice goal is tool:voice data.
       Model-written via the child's note{text<=300}/forget{id} tools, which ride the tool_request path and are
       answered from the store (never the LocalToolBroker); at most 16 model notes, oldest evicted. Caps 32
       entries <=600 chars; human/kernel entries never evicted, refused (why full) when no model note can make room.
