@@ -231,6 +231,8 @@ interface LocalSession {
   meter: LocalUsageMeter;
   /** T-2026-10-26-003: the size of the run's latest assistant text (its last message is the reply); null = no message yet */
   replyBytes?: number | null;
+  /** TD-2026-10-27-833: the step cap written to this session's local.yaml; turn.result carries it so "step limit" names its number */
+  maxSteps: number;
 }
 
 function refused(code: Parameters<typeof refuse>[0]['code'], message: string, data: Record<string, unknown> = {}): RefusedError {
@@ -807,7 +809,7 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter(), maxSteps: sessionCfg.maxSteps, ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
@@ -928,11 +930,11 @@ export class LocalLane {
         const closing = s.turnPermits.length > 0 ? s.turns - s.turnPermits.length + 1 : 0;
         // T-2026-10-26-003: usage.tokens stays the meter's remainder (charged once); runUsage is the run's whole
         // agent_end usage (input + output, the summariser included) and replyBytes the final reply's size (0 = no
-        // answer), so the GUI can say how the turn really ended
+        // answer), so the GUI can say how the turn really ended; maxSteps the session's step cap (TD-2026-10-27-833)
         const runUsage = { tokens: ev.tokens, input: ev.input, output: ev.output };
         const replyBytes = s.replyBytes ?? 0;
         s.replyBytes = null;
-        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', runUsage, replyBytes, ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
+        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', runUsage, replyBytes, maxSteps: s.maxSteps, ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
         const head = s.turnPermits.shift();
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);

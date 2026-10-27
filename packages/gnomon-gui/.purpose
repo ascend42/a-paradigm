@@ -587,7 +587,12 @@ components:
       "error", "aborted", "no answer" when replyBytes is 0 — and its tokens
       from runUsage, the run's whole input + output, never the meter's
       remainder in usage.tokens; a step-limit or no-answer line takes the
-      existing warn tone, .trow.role-result.warn = --warn-ink) and lifecycle notes; hooks,
+      existing warn tone, .trow.role-result.warn = --warn-ink; TD-2026-10-27-833:
+      a failed run, Claude (isError, an error_* subtype) or local (stopReason
+      error), takes the fail tone, .trow.role-result.fail = --fail (vermilion,
+      DESIGN rule 1), aborted stays quiet; the step limit names the
+      session's cap from turn.result.maxSteps, "stopped: step limit 20",
+      rows without it read as before) and lifecycle notes; hooks,
       stream_event partials, rate limits, status, control frames, tool
       results and bookkeeping rows are hidden and counted, and "show raw
       events" shows every row. RAW VIEW (founder 2026-10-23 "is there a way

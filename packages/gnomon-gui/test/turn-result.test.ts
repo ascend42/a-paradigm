@@ -34,8 +34,8 @@ describe('the local turn result line', () => {
   it('error and aborted say so; an error shows its message', () => {
     const er = resultOf({ stopReason: 'error', isError: true, error: 'completion failed:\n HTTP 500', runUsage: { tokens: 10, input: 10, output: 0 }, replyBytes: 0 });
     expect(er.text).toBe('error · no answer · 10 tokens (in 10 + out 0) · completion failed: HTTP 500');
-    // an error is never amber (DESIGN rule 1)
-    expect(er.tone).toBeUndefined();
+    // an error is never amber: it reads in the fail tone (DESIGN rule 1, TD-2026-10-27-833)
+    expect(er.tone).toBe('fail');
     const ab = resultOf({ stopReason: 'aborted', runUsage: { tokens: 5, input: 5, output: 0 }, replyBytes: 0 });
     expect(ab.text).toBe('aborted · 5 tokens (in 5 + out 0)');
     expect(ab.tone).toBeUndefined();
@@ -51,8 +51,43 @@ describe('the local turn result line', () => {
   });
 
   it('a row without the local fields (older logs, Claude) reads as before', () => {
-    expect(resultLine({ usage: { tokens: 1234 }, cost: 0.0123, subtype: 'success', isError: false })).toEqual({ text: 'success · $0.0123 · 1,234 tokens', warn: false });
+    expect(resultLine({ usage: { tokens: 1234 }, cost: 0.0123, subtype: 'success', isError: false })).toEqual({ text: 'success · $0.0123 · 1,234 tokens', tone: null });
     expect(resultLine({ hsid: H }).text).toBe('done');
+  });
+
+  it('TD-2026-10-27-833: the step limit names its number when the row carries maxSteps; older rows without it read as before', () => {
+    const it = resultOf({ stopReason: 'max_steps', maxSteps: 20, runUsage: { tokens: 900, input: 800, output: 100 }, replyBytes: 0 });
+    expect(it.text).toBe('stopped: step limit 20 · no answer · 900 tokens (in 800 + out 100)');
+    expect(it.tone).toBe('warn');
+    expect(resultLine({ stopReason: 'max_steps', replyBytes: 7 })).toEqual({ text: 'stopped: step limit', tone: 'warn' });
+    // a nonsense cap is not printed; a normal stop never mentions the cap
+    expect(resultLine({ stopReason: 'max_steps', maxSteps: 'x', replyBytes: 7 }).text).toBe('stopped: step limit');
+    expect(resultLine({ stopReason: 'stop', maxSteps: 20, replyBytes: 7 }).text).toBe('done');
+  });
+
+  it('TD-2026-10-27-833: a failed run reads in the fail tone, local or Claude; aborted stays quiet', () => {
+    // local: stopReason error (isError true), and stopReason error alone
+    expect(resultOf({ stopReason: 'error', isError: true, maxSteps: 16, replyBytes: 0 }).tone).toBe('fail');
+    expect(resultLine({ stopReason: 'error' }).tone).toBe('fail');
+    // Claude: is_error on the result (the kernel's turn.result{subtype, isError}), and an error_* subtype
+    const claude = chatItems([
+      { seq: 1, kind: 'turn.sent', view: 'full', session: H, payload: { hsid: H, turn: `turn:${H}/1`, contentHash: 'sha256:00' } },
+      { seq: 2, kind: 'turn.result', view: 'full', session: H, payload: { hsid: H, turn: `turn:${H}/1`, subtype: 'error_during_execution', isError: true, cost: 0.01, usage: { tokens: 50 } } },
+    ]).items.find((i) => i.role === 'result')!;
+    expect(claude.text).toBe('error · $0.0100 · 50 tokens');
+    expect(claude.tone).toBe('fail');
+    expect(resultLine({ subtype: 'error_max_turns', isError: false }).tone).toBe('fail');
+    expect(resultLine({ subtype: 'success', isError: false }).tone).toBeNull();
+    // aborted: quiet, never fail or warn, even with no reply
+    expect(resultOf({ stopReason: 'aborted', maxSteps: 16, replyBytes: 0 }).tone).toBeUndefined();
+  });
+
+  it('the fail tone has a style on the result row (the existing --fail token, as .trow.role-error)', () => {
+    const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'static', 'styles.css'), 'utf8');
+    expect(css).toMatch(/\.trow\.role-result\.fail \{ color: var\(--fail\); \}/);
+    expect(css).toMatch(/\.trow\.role-error \{ color: var\(--fail\); \}/);
+    const app = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'ui', 'app.ts'), 'utf8');
+    expect(app).toContain("it.tone === 'fail' ? ' fail' : ''");
   });
 
   it('the warning tone has a style on the result row (the existing --warn-ink token, no new colour)', () => {

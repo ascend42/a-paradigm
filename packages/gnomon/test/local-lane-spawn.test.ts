@@ -60,8 +60,8 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     await lane.send(HUMAN, { hsid, text: 'write out.txt' });
     expect(await waitFor(() => rows.some((r) => r.kind === 'turn.result'), 15_000)).toBe(true);
     expect(fs.readFileSync(path.join(cwd, 'out.txt'), 'utf8')).toBe('local ok');
-    // T-2026-10-26-003: the result carries how the run ended — its whole usage and the reply's size
-    expect(rows.find((r) => r.kind === 'turn.result')!.payload).toMatchObject({ stopReason: 'stop', isError: false, runUsage: { tokens: 240, input: 200, output: 40 }, replyBytes: Buffer.byteLength('Done.') });
+    // T-2026-10-26-003: the result carries how the run ended — its whole usage and the reply's size; TD-2026-10-27-833: and the session's step cap (local.yaml default 16)
+    expect(rows.find((r) => r.kind === 'turn.result')!.payload).toMatchObject({ stopReason: 'stop', isError: false, runUsage: { tokens: 240, input: 200, output: 40 }, replyBytes: Buffer.byteLength('Done.'), maxSteps: 16 });
     const kinds = rows.map((r) => r.kind);
     const grant = rows.find((r) => r.kind === 'permit.grant' && (r.payload.permit as { kind: string }).kind === 'session.spawn')!.payload.permit as Record<string, unknown>;
     expect(grant).toMatchObject({ backend: 'local', billing: 'local', model: 'fake-qwen-7b-q4', hsid });

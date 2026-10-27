@@ -4845,7 +4845,10 @@ components:
       keeps usage.tokens as the meter's remainder (charged once) and adds
       runUsage{tokens,input,output} (the run's whole agent_end usage) and
       replyBytes (the last assistant text's size, 0 = no answer) beside
-      stopReason, so the GUI can say how the run ended. Deferred: darwin sandboxed
+      stopReason, so the GUI can say how the run ended; TD-2026-10-27-833:
+      turn.result also carries maxSteps, the step cap written to that
+      session's local.yaml (cfg.maxSteps ?? 16; a loop step its own cap), so
+      the GUI's step-limit line names its number. Deferred: darwin sandboxed
       e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
       local CLI verb, the claude estimate on the card, attended/unattended
       local automations (law 5).

@@ -561,7 +561,7 @@ function itemEl(it: FoldedItem): HTMLElement {
   const slips = slipsAt.get(it.key) ?? [];
   // #gui-host-hints: the reply text above is shown verbatim; a host slip under it says the Gnomon way
   const host = it.role === 'assistant' && !rawMode ? hostHintsFor(it.key, it.text) : [];
-  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : ''}` }, ...body, ...renderHostSlips(doc, it.key, host, hostCopied), ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
+  return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : it.tone === 'fail' ? ' fail' : ''}` }, ...body, ...renderHostSlips(doc, it.key, host, hostCopied), ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
 }
 
 /* ── #gui-host-hints (founder 2026-10-23): host slips under a reply that names what does not run in Gnomon ── */

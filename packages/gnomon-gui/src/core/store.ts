@@ -706,8 +706,9 @@ export interface ChatItem {
   live?: LiveClock;
   /** raw rows: the whole row (rowDetail), shown by the row's fold */
   detail?: string;
-  /** #gui-turn-steps: the hook-result line draws attention (a hook blocked, failed or timed out) */
-  tone?: 'warn';
+  /** #gui-turn-steps: the hook-result line draws attention (a hook blocked, failed or timed out); a result line whose
+   * run stopped short is 'warn' (amber), one whose run failed is 'fail' (vermilion, TD-2026-10-27-833, DESIGN rule 1) */
+  tone?: 'warn' | 'fail';
   /** #gui-turn-steps: the working key's steps so far, and whether its list is unfolded (the page sets it) */
   steps?: TurnStep[];
   open?: boolean;
@@ -926,13 +927,18 @@ const n = (v: number): string => v.toLocaleString('en-US');
 /**
  * The turn's result line. A local run (turn.result{stopReason, runUsage, replyBytes}, T-2026-10-26-003) reads its end
  * state from stopReason, says "no answer" when the final reply was empty, and its tokens from runUsage — the run's whole
- * agent_end usage, input + output (usage.tokens on that row is only the meter's uncharged remainder). `warn` marks a
- * run that did not end normally with an answer (the amber warning tone, DESIGN rule 1).
+ * agent_end usage, input + output (usage.tokens on that row is only the meter's uncharged remainder). The step limit
+ * names its number when the row carries the session's maxSteps (TD-2026-10-27-833; older rows read as before).
+ * `tone`: 'fail' for a run that failed — a local isError / stopReason 'error', or a Claude result with is_error or an
+ * error_* subtype (vermilion, DESIGN rule 1, TD-2026-10-27-833); 'warn' for one that did not end normally with an
+ * answer (amber); null otherwise (an aborted run stays quiet).
  */
-export function resultLine(p: Record<string, unknown>): { text: string; warn: boolean } {
+export function resultLine(p: Record<string, unknown>): { text: string; tone: 'warn' | 'fail' | null } {
   const reason = typeof p.stopReason === 'string' ? p.stopReason : null;
   const abnormal = reason !== null && reason !== 'stop';
-  const parts = [p.isError === true ? 'error' : abnormal ? (STOP_LABEL[reason] ?? `stopped: ${reason.replace(/_/g, ' ')}`) : typeof p.subtype === 'string' ? p.subtype : 'done'];
+  const steps = typeof p.maxSteps === 'number' && Number.isInteger(p.maxSteps) && p.maxSteps > 0 ? ` ${p.maxSteps}` : '';
+  const stopLabel = (r: string): string => (r === 'max_steps' ? `${STOP_LABEL[r]}${steps}` : (STOP_LABEL[r] ?? `stopped: ${r.replace(/_/g, ' ')}`));
+  const parts = [p.isError === true ? 'error' : abnormal ? stopLabel(reason) : typeof p.subtype === 'string' ? p.subtype : 'done'];
   const noAnswer = reason !== null && reason !== 'aborted' && p.replyBytes === 0;
   if (noAnswer) parts.push('no answer');
   if (typeof p.cost === 'number') parts.push(`$${p.cost.toFixed(4)}`);
@@ -943,8 +949,9 @@ export function resultLine(p: Record<string, unknown>): { text: string; warn: bo
   } else if (typeof tokens === 'number') parts.push(`${n(tokens)} tokens`);
   if (typeof p.permission_denials === 'number' && p.permission_denials > 0) parts.push(`${p.permission_denials} denied`);
   if (abnormal && typeof p.error === 'string' && p.error.trim()) parts.push(cap(oneLine(p.error), TOOL_SUMMARY_MAX));
-  // an error is never amber (DESIGN rule 1: vermilion = failed, amber = warning)
-  return { text: parts.join(' · '), warn: p.isError !== true && reason !== 'error' && (reason === 'max_steps' || noAnswer) };
+  // DESIGN rule 1: vermilion = failed, amber = warning; an error is never amber, an aborted run is neither
+  const failed = p.isError === true || reason === 'error' || (typeof p.subtype === 'string' && p.subtype.startsWith('error'));
+  return { text: parts.join(' · '), tone: failed ? 'fail' : reason !== 'aborted' && (reason === 'max_steps' || noAnswer) ? 'warn' : null };
 }
 
 /**
@@ -1130,7 +1137,7 @@ function kernelItem(r: Row): (Pick<ChatItem, 'role' | 'text'> & { cardId?: strin
       return { role: 'system', text: 'session drained for a kernel restart' };
     case 'turn.result': {
       const line = resultLine(p);
-      return { role: 'result', text: line.text, ...(line.warn ? { tone: 'warn' as const } : {}) };
+      return { role: 'result', text: line.text, ...(line.tone ? { tone: line.tone } : {}) };
     }
     case 'approval.request': {
       const card = objOf(p.card) ?? {};
@@ -1372,7 +1379,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       const it = kernelItem(r);
       if (it) {
         const line = push(r, 0, it);
-        // T-2026-10-26-003: a run stopped at the step limit, or with no answer, reads in the warning tone
+        // T-2026-10-26-003: a run stopped at the step limit, or with no answer, reads in the warning tone;
+        // TD-2026-10-27-833: a failed run reads in the fail tone
         if (it.tone) line.tone = it.tone;
       } else hidden++;
       // a folded turn's message no longer waits (its replay normally already started it)
