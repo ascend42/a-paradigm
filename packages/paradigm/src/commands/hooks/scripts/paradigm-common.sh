@@ -7,7 +7,8 @@
 #   MODIFIED — Output of `git diff --name-only HEAD`
 #
 # Caller may set:
-#   PARADIGM_AUTO_FIX — Set to "1" to auto-fix trivial violations (missing .purpose stubs, missing lore)
+#   PARADIGM_AUTO_FIX — Set to "1" to auto-fix trivial violations (missing lore). Uncovered
+#                       directories are filed as a purpose-coverage task; no .purpose stub is ever written
 #
 # Sets:
 #   VIOLATIONS      — Newline-separated violation messages
@@ -275,9 +276,18 @@ for file in $MODIFIED; do
 done
 _COV_OUT=""
 if [ "$PARADIGM_AVAILABLE" = "true" ] && [ -n "$_COV_DIRS" ]; then
+  # PARADIGM_AUTO_FIX=1 files the uncovered dirs as one deduped purpose-coverage
+  # task (#purpose-coverage-queue). The hook never writes .purpose stubs.
+  _COV_QUEUE=""
+  [ "$PARADIGM_AUTO_FIX" = "1" ] && _COV_QUEUE="--queue --source stop-hook"
   # shellcheck disable=SC2086
-  _COV_OUT=$($PARADIGM_BIN purpose coverage $_COV_DIRS 2>/dev/null) || _COV_OUT=""
+  _COV_OUT=$($PARADIGM_BIN purpose coverage $_COV_QUEUE $_COV_DIRS 2>/dev/null) || _COV_OUT=""
 fi
+# "#queued\t<task id>" when --queue created a task.
+_COV_TASK=""
+case "$_NL$_COV_OUT" in
+  *"$_NL#queued$_TAB"*) _COV_TASK=${_COV_OUT##*"#queued$_TAB"}; _COV_TASK=${_COV_TASK%%"$_NL"*} ;;
+esac
 case "$_COV_OUT" in
   *"${_TAB}covered${_TAB}"*|*"${_TAB}uncovered${_TAB}"*) _COV_SHARED=true ;;
   *) _COV_SHARED=false ;;
@@ -401,32 +411,29 @@ done
 
 _SEV=$(_check_severity "purpose-exists" "block")
 if [ "$_SEV" != "off" ] && [ -n "$DIRS_WITHOUT_PURPOSE" ]; then
+  # Never write stubs into the tree. Under PARADIGM_AUTO_FIX=1 the resolver
+  # call above filed these dirs as a purpose-coverage task; say so.
+  _COV_QUEUED_NOTE=""
   if [ "$PARADIGM_AUTO_FIX" = "1" ]; then
-    # Auto-fix: create stub .purpose files for directories missing them
-    for dir in $DIRS_WITHOUT_PURPOSE; do
-      dir_basename=$(basename "$dir")
-      cat > "$dir/.purpose" <<PURPOSEEOF
-# Auto-generated .purpose stub — update with real descriptions
-components:
-  $dir_basename:
-    description: "TODO: describe this component"
-    tags: []
-PURPOSEEOF
-      AUTO_FIXED="$AUTO_FIXED
-  - Created stub .purpose in $dir (update descriptions)"
-      AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
-    done
-  elif [ "$_SEV" = "block" ]; then
+    if [ -n "$_COV_TASK" ]; then
+      _COV_QUEUED_NOTE="
+    Queued for the Documentor as task $_COV_TASK (purpose-coverage)."
+    else
+      _COV_QUEUED_NOTE="
+    Already queued for the Documentor (open purpose-coverage task), or queueing was unavailable."
+    fi
+  fi
+  if [ "$_SEV" = "block" ]; then
     VIOLATIONS="$VIOLATIONS
   - These directories have modified source files but no .purpose documents them:
    $DIRS_WITHOUT_PURPOSE
     Give each its own .purpose (paradigm_purpose op: init + add_component), or name its files
-    or path in an ancestor .purpose. Placeholder stubs (TODO-only, auto-generated) do not count."
+    or path in an ancestor .purpose. Placeholder stubs (TODO-only, auto-generated) do not count.$_COV_QUEUED_NOTE"
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   else
     ADVISORY="$ADVISORY
   - (warn) Directories with modified source files that no .purpose documents:
-   $DIRS_WITHOUT_PURPOSE"
+   $DIRS_WITHOUT_PURPOSE$_COV_QUEUED_NOTE"
   fi
 fi
 
@@ -551,6 +558,9 @@ if [ -f "$PENDING_FILE" ]; then
   _PENDING_N=0
   while IFS= read -r tracked_file; do
     [ -z "$tracked_file" ] && continue
+    # Cid's debrief appends JSON queue entries for the Documentor; they are
+    # not file paths, so they never mark a .purpose stale.
+    case "$tracked_file" in "{"*) continue ;; esac
     _PENDING_N=$((_PENDING_N + 1))
     # Find covering .purpose for this tracked file
     _parent "$tracked_file"; check_dir=$_PD
@@ -968,31 +978,29 @@ if [ "$_SEV" != "off" ] && [ -f "$CONFIG_FILE" ]; then
   fi
 
   if [ -n "$MISSING_REQUIRED" ]; then
-    if [ "$PARADIGM_AUTO_FIX" = "1" ]; then
-      # Auto-fix: create stub .purpose files for required patterns
-      for dir in $MISSING_REQUIRED; do
-        dir_basename=$(basename "$dir")
-        cat > "$dir/.purpose" <<PURPOSEEOF
-# Auto-generated .purpose stub (purpose-required) — update with real descriptions
-components:
-  $dir_basename:
-    description: "TODO: describe this component"
-    tags: []
-PURPOSEEOF
-        AUTO_FIXED="$AUTO_FIXED
-  - Created stub .purpose in $dir (purpose-required pattern)"
-        AUTO_FIX_COUNT=$((AUTO_FIX_COUNT + 1))
-      done
-    elif [ "$_SEV" = "block" ]; then
+    # Never write stubs into the tree. Under PARADIGM_AUTO_FIX=1 file the dirs
+    # as a purpose-coverage task (own .purpose required) and say so.
+    _REQ_QUEUED_NOTE=""
+    if [ "$PARADIGM_AUTO_FIX" = "1" ] && [ "$PARADIGM_AVAILABLE" = "true" ]; then
+      # shellcheck disable=SC2086
+      _REQ_OUT=$($PARADIGM_BIN purpose coverage --require-own --queue --source stop-hook-purpose-required $MISSING_REQUIRED 2>/dev/null) || _REQ_OUT=""
+      case "$_NL$_REQ_OUT" in
+        *"$_NL#queued$_TAB"*)
+          _REQ_TASK=${_REQ_OUT##*"#queued$_TAB"}; _REQ_TASK=${_REQ_TASK%%"$_NL"*}
+          _REQ_QUEUED_NOTE="
+    Queued for the Documentor as task $_REQ_TASK (purpose-coverage)." ;;
+      esac
+    fi
+    if [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - These directories match purpose-required patterns but have no .purpose file:
    $MISSING_REQUIRED
-    Create .purpose files: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
+    Create .purpose files: paradigm_purpose (op: init) + paradigm_purpose (op: add_component).$_REQ_QUEUED_NOTE"
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     else
       ADVISORY="$ADVISORY
   - (warn) Directories matching purpose-required patterns without .purpose file:
-   $MISSING_REQUIRED"
+   $MISSING_REQUIRED$_REQ_QUEUED_NOTE"
     fi
   fi
 fi

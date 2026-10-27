@@ -24,7 +24,7 @@ components:
       - orchestration
       - team-funnel
   paradigm-hooks:
-    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing .purpose stubs, missing lore entries). Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
+    description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing lore entries); uncovered directories are filed as a purpose-coverage task (#purpose-coverage-queue) and still named in the block message, and no .purpose stub is ever written. Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
     type: command
     signals:
       - '!compliance-violation'
@@ -198,7 +198,12 @@ components:
       covering .purpose was not updated; Check 2 flags dirs no .purpose
       documents. When the CLI cannot answer (missing, or an older CLI) it falls
       back to the nearest-.purpose walk; the coverage_shared counter records
-      which rule ran. Tests: tests/hooks-stop.test.ts (shared rule cases).
+      which rule ran. Under PARADIGM_AUTO_FIX=1 the same call adds --queue
+      (and Check 11 purpose-required calls --require-own --queue): uncovered dirs
+      become one deduped purpose-coverage task, the block message names the dirs
+      and the task id, and nothing is written into the tree. Check 5 skips the
+      JSON queue lines Cid appends to .pending-review (they are not file paths).
+      Tests: tests/hooks-stop.test.ts (shared rule and auto-fix cases).
     type: utility
     file: scripts/paradigm-common.sh
     components:
