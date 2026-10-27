@@ -34,7 +34,7 @@ components:
       - status
       - v6.0.4
   context-audit:
-    description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)
+    description: 7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md). purpose-coverage skips gitignored source dirs (purpose-core filterGitIgnored; release/ by name outside git) so build and release output never counts (T-2026-10-27-003).
     type: utility
     tags:
       - feature

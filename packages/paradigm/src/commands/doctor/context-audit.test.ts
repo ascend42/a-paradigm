@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import { runContextAudit, type ContextAuditResult } from './context-audit.js';
 import { createTempProject } from '../../test-utils.js';
 
@@ -182,6 +183,29 @@ describe('purpose-coverage', () => {
     const check = findCheck(results, 'purpose-coverage');
     expect(check).toBeDefined();
     expect(check!.status).toBe('ok');
+  });
+
+  it('never counts release or gitignored output as source directories', async () => {
+    suppressOutput();
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    fs.mkdirSync(path.join(rootDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, 'src', 'main.ts'), '// code', 'utf8');
+    fs.writeFileSync(path.join(rootDir, 'src', '.purpose'), 'version: 2.0.0', 'utf8');
+    // Uncovered build output: would drag coverage to 1/3 if counted.
+    for (const rel of ['pkg/release/App.app/Contents/Resources', 'pkg/out-x']) {
+      fs.mkdirSync(path.join(rootDir, rel), { recursive: true });
+      fs.writeFileSync(path.join(rootDir, rel, 'bundle.js'), '// built', 'utf8');
+    }
+    const hasGit = spawnSync('git', ['--version']).status === 0;
+    if (hasGit) {
+      spawnSync('git', ['init', '-q'], { cwd: rootDir });
+      fs.writeFileSync(path.join(rootDir, '.gitignore'), 'pkg/release/\nout-*/\n', 'utf8');
+    }
+    const results = await runContextAudit(rootDir, { quiet: true });
+    const check = findCheck(results, 'purpose-coverage');
+    // Without git only release/ is skipped by name; out-x stays a source dir.
+    expect(check!.message).toContain(hasGit ? '(1/1 ' : '(1/2 ');
   });
 });
 

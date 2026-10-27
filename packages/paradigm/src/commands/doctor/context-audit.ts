@@ -17,6 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { log } from '../../utils/logger.js';
+import { filterGitIgnored } from '@a-company/purpose-core';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,9 +55,25 @@ function loadInstructionFiles(rootDir: string): { name: string; content: string;
 
 /**
  * Recursively find directories that contain at least one source file.
- * Skips common non-source directories.
+ * Skips common non-source directories, and gitignored ones (build and release
+ * output such as packages/gnomon/release/Gnomon.app is never source). Outside
+ * a git work tree, release/ is skipped by name.
  */
 function findSourceDirs(dir: string, extensions: string[]): Set<string> {
+  const found = walkSourceDirs(dir, extensions);
+  // Trailing separator so directory-only patterns ("release/") match.
+  const ignored = filterGitIgnored(dir, Array.from(found, (d) => d + path.sep));
+  if (ignored) {
+    for (const d of ignored) found.delete(d);
+  } else {
+    for (const d of Array.from(found)) {
+      if (path.relative(dir, d).split(path.sep).includes('release')) found.delete(d);
+    }
+  }
+  return found;
+}
+
+function walkSourceDirs(dir: string, extensions: string[]): Set<string> {
   const dirs = new Set<string>();
   const skipDirs = new Set(['node_modules', 'dist', '.git', '.paradigm', 'coverage', 'build', '__pycache__', 'target', '.next', '.nuxt']);
 

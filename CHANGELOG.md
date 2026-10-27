@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Cid's debrief no longer writes placeholder `.purpose` stubs or invents generic symbols** (`#captain`, `#purpose-coverage`, T-2026-10-27-003). The debrief used to write a TODO `.purpose` declaring `components: <folder name>` into every touched folder without one of its own. That made symbols such as `#cli`, `#core`, `#ui` and `#test` that collide across packages, failed Gnomon's symbol-drift test, and counted itself as coverage. Now a folder counts as covered when its own `.purpose`, or a parent `.purpose` that names its files or paths, documents it. Placeholder stubs (Cid's old header, the stop hook's auto-fix stub, TODO-only descriptions) never count. The debrief writes nothing into your working tree: folders that really are undocumented go into one `purpose-coverage` task and a Documentor pending-review entry each. The report adds `uncoveredDirs`, `coverageTaskId` and `placeholderPurposes`; `coverageAdded` is always empty, and the before and after scores are the same real score. Cid's brief uses the same coverage rule.
+- **`paradigm purpose validate` and `paradigm doctor` skip build and release output** (`#purpose-validate-command`, `#context-audit`, `#aggregator`). Gitignored folders, such as the `packages/gnomon/release/Gnomon.app` copy of a `.purpose`, are no longer validated or counted as source. Outside a git checkout, `release/` is skipped by name. `findPurposeFiles` and `getAllPurposeFiles` in purpose-core take a new `{ respectGitignore: true }` option for this; it is off by default.
+
 ## [8.0.3] — 2026-10-24
 
 **A clean `npm audit` for anyone installing Paradigm.** 8.0.2 listed packages it bundles into its own build (`@a-company/premise-core`, `@a-company/university-core`, `@a-company/portal-core`) as runtime dependencies with `"*"`, so npm installed old published copies that nothing loads, and those pulled zod 3 back into every user's audit. Gnomon is unchanged at 8.0.2.
