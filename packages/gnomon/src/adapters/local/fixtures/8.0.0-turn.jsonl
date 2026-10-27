@@ -1,0 +1,21 @@
+{"type":"model_capabilities","backend":"local","model":"m","compat":"llama.cpp","tools":true,"ctx":8192,"surface":"compact","textTools":false,"contextTarget":8192}
+{"type":"response","id":"t1","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start","turn":1}
+{"type":"context_report","turn":1,"target":8192,"slots":{"system":20,"memory":0,"tools":509,"history":5410,"reply":1024},"historyUsed":8,"compactions":0}
+{"type":"message_update","delta":"I'll "}
+{"type":"message_update","delta":"write"}
+{"type":"message_update","delta":" it."}
+{"type":"message_end","message":{"role":"assistant","content":"I'll write it.","toolCalls":[{"id":"call_1_0","name":"write_file"}]},"usage":{"input":100,"output":20},"finishReason":"tool_calls"}
+{"type":"model_repair","toolCallId":"call_1_0","toolName":"write_file","steps":["single-quotes"]}
+{"type":"tool_execution_start","toolCallId":"call_1_0","toolName":"write_file","args":{"path":"out.txt","content":"ok"}}
+{"type":"tool_execution_end","toolCallId":"call_1_0","toolName":"write_file","isError":false,"result":"wrote 2 bytes to out.txt"}
+{"type":"turn_end","turn":1,"usage":{"input":100,"output":20}}
+{"type":"turn_start","turn":2}
+{"type":"context_report","turn":2,"target":8192,"slots":{"system":20,"memory":0,"tools":509,"history":5410,"reply":1024},"historyUsed":37,"compactions":0}
+{"type":"message_update","delta":"Do"}
+{"type":"message_update","delta":"ne"}
+{"type":"message_update","delta":"."}
+{"type":"message_end","message":{"role":"assistant","content":"Done.","toolCalls":[]},"usage":{"input":100,"output":20},"finishReason":"stop"}
+{"type":"turn_end","turn":2,"usage":{"input":100,"output":20}}
+{"type":"agent_end","stopReason":"stop","usage":{"input":200,"output":40}}

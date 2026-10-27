@@ -39,7 +39,8 @@ import { KernelLog } from '../src/kernel/log/index.js';
 /** capability, not platform: below the macOS floor or with SIP off every open is refused (asserted below) */
 const SANDBOX_OK = darwinFloor().ok;
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
-import type { SessionHooksMode } from '../src/adapters/claude-code/adapter.js';
+import { PKG_ROOT } from './helpers.js';
+import { claudeCodeAdapter, type SessionHooksMode } from '../src/adapters/claude-code/adapter.js';
 import { sessionIdentity, type SessionIdentity } from '../src/kernel/runner/env.js';
 
 const HUMAN = 'p:abcdefgh/founder';
@@ -588,6 +589,20 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     expect(r.kinds('turn.event').map((x) => x.payload.type)).toEqual(expect.arrayContaining(['from_the_future', 'malformed', 'assistant']));
     expect(r.kinds('session.exited')).toEqual([]);
   });
+  it('G-GUI-05 (kernel half): a recorded claude turn replayed through a live session ⇒ its turn.event types in order, seq contiguous, the session still listed', async () => {
+    const fx = path.join(PKG_ROOT, 'src', 'adapters', 'claude-code', 'fixtures', '2.1.302-turn.jsonl');
+    const lines = fs.readFileSync(fx, 'utf8').split(/\r?\n/).filter(Boolean);
+    const want = lines.map((l) => claudeCodeAdapter.parse(l).type);
+    const r = rig();
+    setMode(w, { replay: lines });
+    const s = await open(r.sup);
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'replay the recorded turn' });
+    expect(await waitFor(() => r.kinds('turn.result').length === 1)).toBe(true);
+    const events = r.kinds('turn.event').map((x) => x.payload);
+    expect(events.slice(-want.length).map((e) => e.type)).toEqual(want);
+    expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i + 1));
+    expect(r.sup.status().some((x) => x.hsid === s.hsid && x.state === 'running')).toBe(true);
+  });
   it('G-SUB-05 a settings layer written mid-session with an API key ⇒ stopped within 2 s, billing.api.refused', async () => {
     const r = rig({ watchMs: 200 });
     await open(r.sup);
@@ -946,7 +961,7 @@ describe('M1.7 slice 2 (deferred)', () => {
   it.todo('session principals (p:<ns>/s-<short>) authenticated on the socket: session.send/stop for agent/session classes, permit.reserve "own scope"');
   it.todo('the gnomon-mods MCP bridge spawned beside the session under the same profile (M1.11)');
   it.todo('§15.5 gate-class card to accept a partial session profile (Windows parity phase, G-WIN-06 refusal half)');
-  it.todo('G-ADP-01 nightly replay of RECORDED (not synthetic) transcripts per claude version; G-ADP-02 for gnomon-local (M1.8)');
+  it.todo('nightly RECORDED re-record per claude / gnomon-local version → test/backend-adapter.test.ts harness (needs trace extractor + scheduled CI; local needs a lane tee)');
   it.todo('the helper XPC service mach-lookup deny (ipc:helper-service) once the helper exists (M1.3)');
   it.todo('git hardening for kernel git calls (S16-2) — the `git` sandbox class (M2)');
 });
