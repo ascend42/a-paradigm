@@ -145,7 +145,10 @@ function launch(
     ...extraEnv,
   };
   const args = opts.args ?? [project];
-  const r = spawnSync(opts.node ?? process.execPath, [opts.launcher ?? LAUNCHER, ...args], {
+  // Default node: one with no npx reachable. On Windows the launcher starts npx-cli.js beside node, and the
+  // runner's own node has it, so without this a "nothing installed" case fetches the real package from npm
+  // (CI run 40561919605: 75 s, then the real server exits 0 on stdin EOF). POSIX: SYS_PATH has no npx.
+  const r = spawnSync(opts.node ?? nodeWithoutNpx, [opts.launcher ?? LAUNCHER, ...args], {
     cwd: opts.cwd ?? tmp,
     env,
     encoding: 'utf8',
@@ -263,6 +266,12 @@ describe('plugin MCP launch', { timeout: TIMEOUT }, () => {
       const { status, seen } = launch([globalInstall(path.join(tmp, 'g'), 'global')]);
       expect(status).toBe(0);
       expect(seen).toEqual({ who: 'global', cwd: project, arg: project, npm: [] });
+    });
+
+    it('no npx reachable by default in these tests (a real npm fetch would hide resolution bugs)', () => {
+      const { stderr } = launch([]);
+      if (WIN) expect(stderr).toContain('npx-cli.js not found beside node');
+      else expect(stderr).toMatch(/npx could not provide .*\(spawnSync npx ENOENT\)/);
     });
 
     it('never a parent folder, and never a bare paradigm-mcp that is not @a-company/paradigm', () => {
