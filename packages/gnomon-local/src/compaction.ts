@@ -44,6 +44,7 @@
  */
 import type { ChatMessage } from './compat.js';
 import { parseTextToolCalls } from './repair.js';
+import { neutraliseSpecialTokens } from './shape.js';
 
 export const COMPACTION_HEADINGS = Object.freeze(['Goal', 'Constraints', 'Progress', 'Decisions', 'Next', 'Critical'] as const);
 export const DEFAULT_CONTEXT_TARGET = 8192;
@@ -137,14 +138,15 @@ export function normaliseSummary(text: string, maxChars = DEFAULT_CONTEXT_TARGET
   if (loose.join('').trim()) sections.get('Progress')!.unshift(...loose);
   const out = COMPACTION_HEADINGS.map((h) => {
     // `<` escaped: model text can never close (`</compaction-summary>`) or open a block
-    const body = sections.get(h)!.join('\n').trim().replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const body = neutraliseSpecialTokens(sections.get(h)!.join('\n').trim().replace(/&/g, '&amp;').replace(/</g, '&lt;'));
     return `## ${h}\n${body || '(none)'}`;
   }).join('\n\n');
   return out.length > maxChars ? `${out.slice(0, maxChars)}\n[summary cut]` : out;
 }
 
 /** `<` and `&` escaped (an excerpt can never close or forge its block), `"` too inside an attribute. */
-const esc = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+// re-check B1 (M-a): `[INST]`-style special tokens survive `<` escaping: they get the word joiner too
+const esc = (t: string): string => neutraliseSpecialTokens(t.replace(/&/g, '&amp;').replace(/</g, '&lt;'));
 const attr = (t: string): string => esc(t).replace(/"/g, '&quot;');
 
 const isToolResult = (m: ChatMessage): boolean => m.role === 'tool' || (m.role === 'user' && m.content.startsWith('<tool_result'));

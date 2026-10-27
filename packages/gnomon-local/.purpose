@@ -61,12 +61,21 @@ components:
       text-tool <tool_result> bodies; the frame and note survive at the minimum cap; L1 every open is verified
       (handle dev/ino against stat(realpath), inside the roots; a just-created file is unlinked on failure); L2 a grep
       start under .git is refused; L3 outline names in errors are escaped; L4 reads check isFile before opening and
-      open O_NONBLOCK.
+      open O_NONBLOCK. Aegis re-check: L-a a missing target is opened O_CREAT|O_EXCL (EEXIST retries as an
+      existing file) and the failed-verify cleanup unlinks only when lstat shows the handle's own dev/ino; L-b the
+      grep slot is taken right before the try that releases it and the matcher is built inside it; M-a every result
+      (labelled, unlabelled, errors; native and text tools) and every compaction excerpt and summary gets a U+2060
+      word joiner after the opening < or [ of chat-template special tokens (ChatML <|…, Llama 3, Llama 2/Mistral <s>
+      </s> [INST] and v3 control tokens, Gemma <start_of_turn>); edit (old, new) and write_file (content) remove
+      exactly those joiners so a copied line matches and writes the literal bytes; L-c win32 reserved device names
+      (CON, NUL, AUX, PRN, COM0-9, LPT0-9, CONIN$, CONOUT$) are refused lexically; the lock key folds case on win32;
+      a backslash glob is a path glob; edit re-reads the bytes through the write handle before truncating.
     path: src/retrieval.ts
     type: module
     tags: [gnomon, local, paradigm-8, retrieval]
     tests:
       - test/retrieval.test.ts
       - test/retrieval-hardening.test.ts
+      - test/retrieval-recheck.test.ts
       - test/shape.test.ts
       - test/local-child.test.ts

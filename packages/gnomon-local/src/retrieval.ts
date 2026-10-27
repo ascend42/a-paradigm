@@ -61,7 +61,7 @@ import { promises as fsp } from 'node:fs';
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { canonRoots, confinedDir, confinedFile, isDotGit, PathRefused, readConfined, relComponents, resolveRead, resolveWrite, shownPath, sourceOf, updateConfined, type ResultSource, type ToolContext, type ToolResult } from './confine.js';
-import { bodyOf, escapeData, HANDLE_RE, MIN_SHAPE_CHARS, SHAPE_CAP_CHARS } from './shape.js';
+import { bodyOf, escapeData, HANDLE_RE, MIN_SHAPE_CHARS, restoreSpecialTokens, SHAPE_CAP_CHARS } from './shape.js';
 
 export const GREP_MAX_FILES = 2000;
 export const GREP_MAX_ENTRIES = 20_000;
@@ -244,7 +244,7 @@ parentPort.on('message', (lines) => {
 /** A matcher's answer: the matching line indexes, the regex budget spent, or a failed worker (Aegis M1). */
 export type MatchResult = number[] | 'timeout' | { failed: string };
 
-interface Matcher {
+export interface Matcher {
   match(lines: string[]): Promise<MatchResult>;
   close(): Promise<void>;
 }
@@ -311,6 +311,11 @@ export class Semaphore {
     this.#free = n;
   }
 
+  /** slots free right now (none held and none waiting ⇒ the count it was made with) */
+  get available(): number {
+    return this.#free;
+  }
+
   async acquire(signal?: AbortSignal): Promise<() => void> {
     if (this.#free > 0) this.#free--;
     else
@@ -363,8 +368,8 @@ export async function grep(a: Record<string, unknown>, ctx: ToolContext): Promis
   return grepWith(a, ctx, GREP_LIMITS);
 }
 
-/** grep with explicit limits (the tool uses GREP_LIMITS; tests lower them). */
-export async function grepWith(a: Record<string, unknown>, ctx: ToolContext, lim: Readonly<GrepLimits>): Promise<ToolResult> {
+/** grep with explicit limits (the tool uses GREP_LIMITS; tests lower them) and, for tests, the regex matcher factory. */
+export async function grepWith(a: Record<string, unknown>, ctx: ToolContext, lim: Readonly<GrepLimits>, makeRegex: (source: string, budgetMs: number) => Matcher = regexMatcher): Promise<ToolResult> {
   const pattern = str(a.pattern, 'pattern');
   if (pattern.length > REGEX_MAX_CHARS * 4) throw new Error(`pattern is over ${REGEX_MAX_CHARS * 4} chars`);
   const useRegex = a.regex === true || a.regex === 'true';
@@ -383,7 +388,8 @@ export async function grepWith(a: Record<string, unknown>, ctx: ToolContext, lim
   if (a.glob !== undefined && a.glob !== null && a.glob !== '') {
     const g = str(a.glob, 'glob');
     globOk = globMatcher(g);
-    globBase = !g.includes('/');
+    // re-check B1: the matcher reads `\` as `/`; the basename decision must too (`src\*.ts` is a path glob)
+    globBase = !g.replace(/\\/g, '/').includes('/');
   }
   const startRaw = typeof a.path === 'string' && a.path ? a.path : '.';
   const start = await resolveRead(startRaw, ctx);
@@ -393,7 +399,6 @@ export async function grepWith(a: Record<string, unknown>, ctx: ToolContext, lim
   const ccwd = await fsp.realpath(ctx.cwd).catch(() => ctx.cwd);
   const st = await fsp.stat(start);
 
-  const release = await grepSlots.acquire(ctx.signal);
   const deadline = Date.now() + lim.timeMs;
   const hits: string[] = [];
   const hitFiles = new Set<string>();
@@ -404,7 +409,8 @@ export async function grepWith(a: Record<string, unknown>, ctx: ToolContext, lim
   let entries = 0;
   let stop: string | null = null;
   let failed: string | null = null;
-  const matcher = useRegex ? regexMatcher(pattern, lim.regexMs) : literalMatcher(pattern);
+  // built inside the try below (re-check B1, L-b): a matcher that throws while starting never leaks a slot
+  let matcher: Matcher | null = null;
   const halt = (): boolean => {
     if (stop) return true;
     if (ctx.signal?.aborted) stop = 'an abort';
@@ -447,7 +453,7 @@ export async function grepWith(a: Record<string, unknown>, ctx: ToolContext, lim
       return;
     }
     const lines = splitLines(buf.toString('utf8'));
-    const found = await matcher.match(lines);
+    const found = await matcher!.match(lines);
     if (found === 'timeout') {
       stop = `the ${lim.regexMs / 1000} s regex time limit (simplify the pattern)`;
       return;
@@ -494,12 +500,18 @@ export async function grepWith(a: Record<string, unknown>, ctx: ToolContext, lim
     }
   };
 
+  // the slot is taken right before the try that always releases it, and the matcher is built inside it (L-b)
+  const release = await grepSlots.acquire(ctx.signal);
   try {
+    matcher = useRegex ? makeRegex(pattern, lim.regexMs) : literalMatcher(pattern);
     if (st.isDirectory()) await walk(start, '', 0);
     else await scanFile(start, path.basename(start));
   } finally {
-    await matcher.close();
-    release();
+    try {
+      await matcher?.close();
+    } finally {
+      release();
+    }
   }
   if (failed !== null) throw new Error(`regex failed: ${failed}`);
   const skip = Object.entries(skipped).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(', ');
@@ -701,9 +713,11 @@ export async function readSection(a: Record<string, unknown>, ctx: ToolContext):
 
 export async function edit(a: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const raw = str(a.path, 'path');
-  const old = str(a.old, 'old');
+  // re-check B1 (M-a): the model copies lines it read with special tokens split by a word joiner; restoring exactly
+  // those joiners makes `old` match the file's literal text and `new` write it
+  const old = restoreSpecialTokens(str(a.old, 'old'));
   if (typeof a.new !== 'string') throw new Error('new must be a string');
-  const next = a.new;
+  const next = restoreSpecialTokens(a.new);
   if (old === next) throw new Error('old and new are the same');
   const p = await resolveWrite(raw, ctx);
   const shown = raw.slice(0, 200);

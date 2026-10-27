@@ -31,6 +31,14 @@
  *     the same way. The agent applies neutraliseDelimiters to every text-tool
  *     `<tool_result>` body too (a repo file holding `</tool_result>` can no
  *     longer forge a turn).
+ * SPECIAL TOKENS (re-check B1, M-a): every result — labelled, unlabelled
+ * (list_dir names, write receipts) and errors, native or text tools — also
+ * gets a U+2060 word joiner after the `<` or `[` that opens a chat-template
+ * special token (ChatML `<|…`, Llama 3, Llama 2/Mistral `<s>` `</s>` `[INST]`,
+ * Gemma `<start_of_turn>`), so the server's template never sees a role
+ * boundary in data. To edit such a line, the model copies what it read: edit
+ * (old and new) and write_file (content) remove exactly those joiners first
+ * (restoreSpecialTokens), so the file's literal bytes match and are written.
  * read_file keeps plan A's byte paging; the agent sizes its page under this
  * cap, so a page and its "offset=N for more" note survive whole.
  */
@@ -82,8 +90,33 @@ export function neutraliseDelimiters(t: string): string {
   return from === 0 ? t : out + t.slice(from);
 }
 
-/** The body of a labelled result as it reaches the model. */
-export const bodyOf = (text: string, source: ResultSource | undefined): string => (source === 'model-generated' ? escapeData(text) : source === 'workspace' ? neutraliseDelimiters(text) : text);
+/** U+2060 WORD JOINER: invisible, keeps the bytes readable, splits a special token so the tokenizer never sees it. */
+export const WORD_JOINER = '⁠';
+
+/**
+ * Re-check B1 (M-a): chat-template special tokens the server's template may parse out of plain text — ChatML
+ * (`<|im_start|>`, `<|im_end|>` and every other `<|…`), Llama 3 (`<|eot_id|>`, `<|start_header_id|>`), Llama 2 /
+ * Mistral (`<s>`, `</s>`, `[INST]`, `[/INST]`, and the v3 control tokens), Gemma (`<start_of_turn>`, `<end_of_turn>`).
+ * The opening `<` or `[` is followed by a lookahead of fixed literals: linear, no backtracking.
+ */
+const SPECIAL_TOKEN = /([<[])(?=\||\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
+const JOINED_TOKEN = /([<[])⁠(?=\||\/?s>|(?:start|end)_of_turn>|\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\])/g;
+
+/** A word joiner after the `<` or `[` that opens a special token (module comment). Idempotent. */
+export const neutraliseSpecialTokens = (t: string): string => t.replace(SPECIAL_TOKEN, `$1${WORD_JOINER}`);
+
+/**
+ * The exact inverse, for text the model sends BACK (edit's old/new, write_file's content): a word joiner is removed
+ * only where neutraliseSpecialTokens put one, so a model copying a line it read writes the file's literal bytes. A
+ * file that itself holds `<` + U+2060 + `|` (or another such sequence) cannot be matched by edit; write the file whole.
+ */
+export const restoreSpecialTokens = (t: string): string => t.replace(JOINED_TOKEN, '$1');
+
+/** Everything a result may carry that a chat template or our own frames could read as structure. */
+export const neutraliseResult = (t: string): string => neutraliseSpecialTokens(neutraliseDelimiters(t));
+
+/** The body of a result as it reaches the model: model-generated fully escaped, every other kind neutralised. */
+export const bodyOf = (text: string, source: ResultSource | undefined): string => neutraliseSpecialTokens(source === 'model-generated' ? escapeData(text) : neutraliseDelimiters(text));
 
 export interface SpillEntry {
   text: string;
@@ -162,7 +195,9 @@ function headOf(text: string, room: number, entities: boolean): string {
 /** Shape one tool result under `o.cap` (module comment). Never returns content longer than the cap. */
 export function shapeResult(res: ToolResult, o: ShapeOptions): ToolResult {
   const cap = Math.max(MIN_SHAPE_CHARS, Math.floor(o.cap));
-  if (res.isError) return { content: res.content.slice(0, cap), isError: true };
+  // re-check B1: errors carry model text too (a refused path): neutralised like any result (the protected-input
+  // prefix is unchanged), never spilled or labelled
+  if (res.isError) return { content: neutraliseResult(res.content).slice(0, cap), isError: true };
   const src = res.source;
   const body = bodyOf(res.content, src);
   const open = src ? `${dataOpen(src)}\n` : '';

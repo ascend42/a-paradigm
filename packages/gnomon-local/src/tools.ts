@@ -24,6 +24,7 @@ import * as path from 'node:path';
 import { orderTools, type ToolSpec } from './compat.js';
 import { canonRoots, openRead, resolveRead, resolveWrite, sourceOf, writeConfined, type ToolContext, type ToolResult } from './confine.js';
 import { edit, grep, outline, readSection } from './retrieval.js';
+import { restoreSpecialTokens } from './shape.js';
 
 export { canonRoots, insideRoots, isDotGit, lexicalRefusal, PathRefused, PATH_CASE_INSENSITIVE, PATH_SEP, resolveRead, resolveWrite, type ResultSource, type ToolContext, type ToolResult } from './confine.js';
 
@@ -146,8 +147,10 @@ const TOOL_LIST: ReadonlyArray<ToolSpec & { run: ToolImpl }> = [
     run: async (a, ctx) => {
       if (typeof a.content !== 'string') throw new Error('content must be a string');
       const p = await resolveWrite(str(a.path, 'path'), ctx);
-      await writeConfined(p, a.content, ctx);
-      return { content: `wrote ${Buffer.byteLength(a.content)} bytes to ${path.relative(ctx.cwd, p) || p}`, isError: false };
+      // re-check B1 (M-a): the word joiners the model saw in special tokens are removed (the file gets literal bytes)
+      const content = restoreSpecialTokens(a.content);
+      await writeConfined(p, content, ctx);
+      return { content: `wrote ${Buffer.byteLength(content)} bytes to ${path.relative(ctx.cwd, p) || p}`, isError: false };
     },
   },
 ];

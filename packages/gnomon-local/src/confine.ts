@@ -107,7 +107,7 @@ export class PathRefused extends Error {}
 
 /** git's dotgit test, re-derived: lower-case, strip trailing dots/spaces; `.git` or the 8.3 alias `git~1`. */
 export function isDotGit(component: string): boolean {
-  const c = component.toLowerCase().replace(/[. ]+$/, '');
+  const c = trimEnd(component.toLowerCase(), '. ');
   return c === '.git' || c === 'git~1';
 }
 
@@ -149,8 +149,26 @@ export function lexicalRefusal(raw: string, platform: string = process.platform)
   if (platform === 'win32') {
     if (/^[A-Za-z]:(?![\\/])/.test(raw)) return 'a drive-relative path (X:name) is refused';
     if (raw.replace(/^[A-Za-z]:/, '').includes(':')) return 'a ":" in a path component (an alternate data stream) is refused';
+    // re-check B1 (L-c): a reserved device name opens the device, whatever the directory or extension
+    if (raw.split(/[\\/]/).some(isReservedDeviceName)) return 'a reserved device name (CON, NUL, AUX, PRN, COM0-9, LPT0-9, CONIN$, CONOUT$) is refused';
   }
   return null;
+}
+
+/**
+ * Re-check B1 (L-c): a win32 reserved device name as a path component — case-insensitive, with or without an
+ * extension, trailing dots or spaces (`nul`, `NUL.txt`, `con .log`, `com1.`, `CONIN$`).
+ */
+export function isReservedDeviceName(component: string): boolean {
+  const base = trimEnd(trimEnd(component, '. ').split('.')[0]!, ' ').toLowerCase();
+  return /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9]|conin\$|conout\$)$/.test(base);
+}
+
+/** `s` without trailing chars from `chars` — a loop, not `[. ]+$` (which is quadratic on a long run that fails). */
+function trimEnd(s: string, chars: string): string {
+  let e = s.length;
+  while (e > 0 && chars.includes(s[e - 1]!)) e--;
+  return s.slice(0, e);
 }
 
 /**
@@ -324,31 +342,69 @@ async function prepareTarget(p: string, ctx: ToolContext, mkdir: boolean): Promi
   const croots = await canonRoots(ctx.roots);
   const dir = await fsp.realpath(path.dirname(p));
   if (!inside(dir, croots)) throw new PathRefused('the parent moved outside the session roots');
-  return { key: path.join(dir, path.basename(p)), croots };
+  // re-check B1: the key folds case where the platform's paths do (win32), so `F.TXT` and `f.txt` share one lock
+  return { key: fold(path.join(dir, path.basename(p)), process.platform), croots };
 }
 
+/** What updateConfined read: the handle's identity and the bytes (re-compared before the write, coarse mtimes). */
+export interface ReadSnapshot {
+  id: FileIdentity;
+  bytes: Buffer;
+}
+
+const O_WRITE_BASE = (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
+
 /**
- * The write (the caller holds the target's lock): open without following a final symlink and WITHOUT O_TRUNC, verify
- * the handle (L1; a file this open created is unlinked on failure), refuse a hard link, compare with the identity the
- * caller read (`expect`, M3), then truncate and write. Records the target in ctx.written.
+ * Open the write handle. Re-check B1 (L-a): a target that did not exist is opened O_CREAT|O_EXCL, so `created` is
+ * true only when THIS open made the file; EEXIST (someone made it meanwhile, or a swapped parent holds one) retries
+ * as an existing file, never created. With a snapshot the handle is O_RDWR (its bytes are re-read).
  */
-async function writeLocked(p: string, content: string, ctx: ToolContext, croots: readonly string[], expect?: FileIdentity): Promise<void> {
+async function openWrite(p: string, rdwr: boolean): Promise<{ fh: FileHandle; created: boolean }> {
+  const access = rdwr ? constants.O_RDWR : constants.O_WRONLY;
   const existed = await fsp.lstat(p).then(
     () => true,
     () => false,
   );
-  const fh = await fsp.open(p, constants.O_WRONLY | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0), 0o644);
+  if (!existed) {
+    try {
+      return { fh: await fsp.open(p, access | constants.O_CREAT | constants.O_EXCL | O_WRITE_BASE, 0o644), created: true };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    }
+  }
+  return { fh: await fsp.open(p, access | O_WRITE_BASE), created: false };
+}
+
+/**
+ * The write (the caller holds the target's lock): open without following a final symlink and WITHOUT O_TRUNC, verify
+ * the handle (L1), refuse a hard link, compare with what the caller read (`snap`, M3: identity, then the bytes through
+ * the write handle itself — a coarse mtime cannot hide a change), then truncate and write. On a failed verify, a file
+ * THIS call created is unlinked — only after lstat(p) shows the handle's own dev/ino (re-check B1, L-a: never a file
+ * that already existed, wherever a swapped parent points). Records the target in ctx.written.
+ */
+async function writeLocked(p: string, content: string, ctx: ToolContext, croots: readonly string[], snap?: ReadSnapshot): Promise<void> {
+  const { fh, created } = await openWrite(p, snap !== undefined);
   try {
     try {
       await verifyHandle(fh, p, croots);
     } catch (err) {
-      if (!existed) await fsp.unlink(p).catch(() => undefined);
+      if (created) {
+        const hs = await fh.stat();
+        const ls = await fsp.lstat(p).catch(() => null);
+        if (ls && ls.dev === hs.dev && ls.ino === hs.ino) await fsp.unlink(p).catch(() => undefined);
+      }
       throw err;
     }
     const st = await fh.stat();
     if (!st.isFile()) throw new PathRefused('not a regular file');
     if (st.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
-    if (expect && (st.dev !== expect.dev || st.ino !== expect.ino || st.size !== expect.size || st.mtimeMs !== expect.mtimeMs)) throw new PathRefused('the file changed since it was read; re-read it');
+    if (snap) {
+      const e = snap.id;
+      if (st.dev !== e.dev || st.ino !== e.ino || st.size !== e.size || st.mtimeMs !== e.mtimeMs) throw new PathRefused('the file changed since it was read; re-read it');
+      const now = Buffer.alloc(st.size);
+      const { bytesRead } = await fh.read(now, 0, st.size, 0);
+      if (bytesRead !== snap.bytes.length || !now.subarray(0, bytesRead).equals(snap.bytes)) throw new PathRefused('the file changed since it was read; re-read it');
+    }
     await fh.truncate(0);
     await fh.writeFile(content);
   } finally {
@@ -373,7 +429,7 @@ export async function updateConfined<T>(p: string, ctx: ToolContext, max: number
   return withPathLock(key, async () => {
     const { buf, id } = await readConfined(p, max, croots);
     const { text, result } = await produce(buf);
-    await writeLocked(p, text, ctx, croots, id);
+    await writeLocked(p, text, ctx, croots, { id, bytes: buf });
     return result;
   });
 }

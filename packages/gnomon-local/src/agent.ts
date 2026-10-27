@@ -54,7 +54,7 @@ import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 import { contextLedger, contextReport, resultCapChars, type ContextLedger } from './budget.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
-import { neutraliseDelimiters, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
+import { neutraliseResult, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
 import { runTool, TOOLS } from './tools.js';
 
 export { TARGET_HEADROOM } from './budget.js';
@@ -328,7 +328,7 @@ export class Agent {
           // Aegis M5: the body can never close or forge the block (a repo file holding `</tool_result>`): a labelled result
           // was neutralised inside its frame by shapeResult (its own frame must survive); any other body is neutralised
           // here. The name is model text: reduced to [\w.-].
-          else this.#messages.push({ role: 'user', content: `<tool_result name="${t.name.slice(0, 64).replace(/[^\w.-]/g, '_')}"${res.isError ? ' error="true"' : ''}>\n${res.source ? res.content : neutraliseDelimiters(res.content)}\n</tool_result>` });
+          else this.#messages.push({ role: 'user', content: `<tool_result name="${t.name.slice(0, 64).replace(/[^\w.-]/g, '_')}"${res.isError ? ' error="true"' : ''}>\n${res.source ? res.content : neutraliseResult(res.content)}\n</tool_result>` });
         }
         this.#o.emit({ type: 'turn_end', turn, usage: c.usage });
         const steering = this.#steer.splice(0);
