@@ -30,7 +30,7 @@ features:
       - '#graph-builder'
 components:
   aggregator:
-    description: '#aggregator: Main aggregation logic — anchors: strings go through the shared #symbol-index parseAnchorString (heading/block section anchors since 7.12.0), and resolveReferences stringifies symbol data WITHOUT the anchors field so a section anchor like docs/x.md#setup never registers a reference to #setup — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols). DETERMINISM: the extract* helpers are last-write-wins keyed by symbol name, so the .purpose/portal discovery order decides which DUPLICATE wins. Discovery is sorted by repo-relative path (purpose-core findPurposeFiles depth-then-relpath; portal-core findGateFiles relpath) so resolution + downstream Merkle essences are stable across parses — load-bearing for the Loom Oracle (scan-index nondeterminism, T-2026-06-13-011).'
+    description: '#aggregator: Main aggregation logic — anchors: strings go through the shared #symbol-index parseAnchorString (heading/block section anchors since 7.12.0), and resolveReferences stringifies symbol data WITHOUT the anchors field so a section anchor like docs/x.md#setup never registers a reference to #setup — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols). DETERMINISM: the extract* helpers are last-write-wins keyed by symbol name, so the .purpose/portal discovery order decides which DUPLICATE wins. Discovery is sorted by repo-relative path (purpose-core findPurposeFiles depth-then-relpath; portal-core findGateFiles relpath) so resolution + downstream Merkle essences are stable across parses — load-bearing for the Loom Oracle (scan-index nondeterminism, T-2026-06-13-011). INDEX_DISCOVERY ({ respectGitignore: true }, T-2026-10-27-003): the default .purpose loader skips gitignored build/release output, so a packages/gnomon/release/Gnomon.app copy is never indexed and never wins duplicate resolution (test: src/index-discovery-gitignore.test.ts).'
   source-loader:
     description: '#source-loader: Loads symbols from .purpose and portal.yaml'
   symbol-index:
@@ -67,7 +67,8 @@ components:
     description: >-
       #live-index: src/live-index.ts (7.13.0) — incremental in-process cache of
       the LIVE SymbolIndex. getLiveIndex(rootDir) globs .purpose
-      (purpose-core findPurposeFiles) + portal.yaml (portal-core findGateFiles),
+      (purpose-core findPurposeFiles with INDEX_DISCOVERY, so gitignored
+      build/release output is skipped) + portal.yaml (portal-core findGateFiles),
       stats every file, and returns the SAME cached index when the ordered
       (path, mtimeMs, size) lists are unchanged; otherwise re-parses only changed
       .purpose files via #purpose-parse-cache and re-aggregates the FULL set in

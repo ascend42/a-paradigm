@@ -268,7 +268,8 @@ export async function renameSymbolAcrossFiles(
   const oldPrefixed = ensurePrefix(oldBare, prefix);
   const newPrefixed = ensurePrefix(newBare, prefix);
 
-  const files = await findPurposeFiles(rootDir);
+  // Never rename inside gitignored build/release copies.
+  const files = await findPurposeFiles(rootDir, { respectGitignore: true });
   const modifiedFiles: string[] = [];
 
   for (const filePath of files) {
