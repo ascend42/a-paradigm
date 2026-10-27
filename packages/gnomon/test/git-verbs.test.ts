@@ -102,7 +102,7 @@ function rig(w: ReturnType<typeof world>, o: { gh?: (args: readonly string[]) =>
 const sess = (w: ReturnType<typeof world>, x: Partial<VerbSession> = {}): VerbSession => ({ hsid: 'hsid:v1:01JAAAAAAAAAAAAAAAAAAAAAAA', principalId: 'p:abcdefgh/s-x', cwd: w.repo, repoKey: 'sha256:00', mode: 'ask', planApproved: false, loop: false, worktreesGuarded: true, ...x });
 const phases = (r: Rig) => r.rows.map((x) => `${String(x.phase)}${x.why ? `:${String(x.why)}` : ''}`);
 
-describe('git.init (^git-init-gate)', () => {
+describe('G-GIT-04 git.init (^git-init-gate)', () => {
   it('ask: a card, then a repo with the kernel template only (no hooks, no samples, branch main)', async () => {
     const w = world();
     const r = rig(w);
@@ -181,7 +181,7 @@ describe('git.init (^git-init-gate)', () => {
   });
 });
 
-describe('git.push (^git-push-gate)', () => {
+describe('G-GIT-05 git.push (^git-push-gate)', () => {
   it('the card is composed from the kernel\'s own reading: URL, host, branch; the push argv is hardened; rows carry no URL', async () => {
     const w = world();
     committed(w.repo);
@@ -407,7 +407,7 @@ describe('git.push (^git-push-gate)', () => {
   });
 });
 
-describe('remote parsing and egress (Aegis)', () => {
+describe('G-GIT-06 remote parsing and egress (Aegis)', () => {
   it('only https and ssh to a plain host; helpers, local paths, cleartext and passwords refuse', () => {
     for (const u of ['ext::sh -c x', 'fd::3', 'file:///tmp/r.git', '/tmp/r.git', '../r', 'git://github.com/o/r', 'http://github.com/o/r', 'https://u:p@github.com/o/r', 'https://tok@github.com/o/r', '-u', 'https://github.com/o/r?x=1', 'https://github.com/o', 'https://github.com/a/b/c']) {
       expect('error' in parseRemote(u), u).toBe(true);
@@ -442,7 +442,7 @@ describe('remote parsing and egress (Aegis)', () => {
   });
 });
 
-describe('repo.create', () => {
+describe('G-GIT-05 repo.create', () => {
   const gh = (owner = 'ascend42') => (args: readonly string[]) => (args[0] === 'api' ? { code: 0, stdout: `${owner}\n`, stderr: '' } : { code: 0, stdout: 'https://github.com/x\n', stderr: '' });
   it('private by default: one card (no Always), gh creates, the kernel adds the remote and pushes with --set-upstream', async () => {
     const w = world();
@@ -477,7 +477,7 @@ describe('repo.create', () => {
   });
 });
 
-describe('git.worktree.add / remove', () => {
+describe('G-GIT-04 git.worktree.add / remove', () => {
   it('makes .gnomon/worktrees/<name> on a new branch with no hooks, excludes it from status, and removes it', async () => {
     const w = world();
     committed(w.repo);
@@ -584,7 +584,7 @@ describe('Aegis M2: no git verbs on win32 (where the refusal lives: SessionSuper
   });
 });
 
-describe('#kernel-mcp', () => {
+describe('G-GIT-08 #kernel-mcp', () => {
   it('serves initialize, tools/list and tools/call; never routes another server or method', async () => {
     const w = world();
     const r = rig(w);

@@ -82,7 +82,7 @@ function world() {
 }
 const byName = (ds: McpServerDecl[], n: string): McpServerDecl => ds.find((d) => d.name === n)!;
 
-describe('#mcp-servers discovery', () => {
+describe('G-MCP-01 #mcp-servers discovery', () => {
   it('finds user, local, project and enabled plugin servers; plugin servers are named plugin_<plugin>_<server>', () => {
     const w = world();
     const ds = discoverMcpServers({ userHome: w.userHome, repos: [w.repo], pathDirs: w.pathDirs, platform: 'darwin' });
@@ -114,7 +114,7 @@ describe('#mcp-servers discovery', () => {
   });
 });
 
-describe('#mcp-servers rows: names, never values (Aegis: secret handling)', () => {
+describe('G-MCP-02 #mcp-servers rows: names, never values (Aegis: secret handling)', () => {
   it('a row carries env and header NAMES, hides secret-looking args, strips URL query; no value appears anywhere', () => {
     const w = world();
     const ds = discoverMcpServers({ userHome: w.userHome, repos: [w.repo], pathDirs: w.pathDirs });
@@ -141,7 +141,7 @@ describe('#mcp-servers rows: names, never values (Aegis: secret handling)', () =
   });
 });
 
-describe('#mcp-servers problems (Aegis: law 7, env names, shell wrappers, remote URLs)', () => {
+describe('G-MCP-03 #mcp-servers problems (Aegis: law 7, env names, shell wrappers, remote URLs)', () => {
   const c = { source: 'user' as const, owner: '', pathDirs: ['/usr/bin', '/bin'], platform: 'darwin' };
   const codes = (name: string, raw: unknown) => declOf(name, raw, c).problems.map((p) => p.code);
   it('law-7 and hazard env names are refused (the session would otherwise refuse, or run injected code)', () => {
@@ -180,7 +180,7 @@ describe('#mcp-servers problems (Aegis: law 7, env names, shell wrappers, remote
   });
 });
 
-describe('#mcp-servers composing a session (Aegis: untrusted repo .mcp.json, env injection, --strict-mcp-config)', () => {
+describe('G-MCP-04 #mcp-servers composing a session (Aegis: untrusted repo .mcp.json, env injection, --strict-mcp-config)', () => {
   it('only enabled servers whose launch still matches; a project server only for its own repo; changed is reported', () => {
     const w = world();
     const home = tmp('mcp-home-');
@@ -234,7 +234,7 @@ describe('#mcp-servers composing a session (Aegis: untrusted repo .mcp.json, env
   });
 });
 
-describe('#mcp-servers first party resolution', () => {
+describe('G-MCP-04 #mcp-servers first party resolution', () => {
   it('finds @a-company/paradigm by its package.json bin, inside the package only', () => {
     const root = tmp('mcp-np-');
     const pkg = path.join(root, '@a-company', 'paradigm');
@@ -248,7 +248,7 @@ describe('#mcp-servers first party resolution', () => {
   });
 });
 
-describe('#mcp-servers the enable card and requests', () => {
+describe('G-MCP-05 #mcp-servers the enable card and requests', () => {
   const human = { connId: 'c1', principal: 'p:abcdefgh/founder', principalClass: 'human', credential: 'gui' };
   function setup(platform = 'darwin') {
     const w = world();
@@ -345,7 +345,7 @@ describe('#mcp-servers the enable card and requests', () => {
   });
 });
 
-describe('Aegis review of #mcp-servers (TD-2026-10-23-361)', () => {
+describe('G-MCP-02, G-MCP-03, G-MCP-04: Aegis review of #mcp-servers (TD-2026-10-23-361)', () => {
   const c = { source: 'user' as const, owner: '', pathDirs: ['/usr/bin', '/bin'], platform: 'darwin' };
   it('M1: ${NAME} only in the path and query; a loopback port placeholder works; rows show placeholders, never x', () => {
     for (const bad of ['https://${HOST}/mcp', 'https://mcp.example.com:${PORT}/mcp', 'https://${U}@mcp.example.com/', 'https://u:p@mcp.example.com/', '${SCHEME}://mcp.example.com/', 'http${S}://mcp.example.com/'])
@@ -404,7 +404,7 @@ describe('Aegis review of #mcp-servers (TD-2026-10-23-361)', () => {
   });
 });
 
-describe('Aegis review: the card, the denies and the events', () => {
+describe('G-MCP-05 Aegis review: the card, the denies and the events', () => {
   const human = { connId: 'c1', principal: 'p:abcdefgh/founder', principalClass: 'human', credential: 'gui' };
   it('H1 card line, M3 denies for enabled `all` servers (overlap exempt and logged), L5 added only after the merge, linked first party', async () => {
     const w = world();
@@ -440,7 +440,7 @@ describe('Aegis review: the card, the denies and the events', () => {
   });
 });
 
-describe('#batch-card: several MCP servers on ONE card (founder 2026-10-23: one password)', () => {
+describe('G-MCP-07 #batch-card: several MCP servers on ONE card (founder 2026-10-23: one password)', () => {
   const human = { connId: 'c1', principal: 'p:abcdefgh/founder', principalClass: 'human', credential: 'gui' };
   function setup(maxCardChars?: number) {
     const w = world();

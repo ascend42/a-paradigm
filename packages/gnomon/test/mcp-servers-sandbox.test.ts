@@ -45,7 +45,7 @@ process.stdin.on('data', (d) => {
 // the enforced profile needs the session floor (macOS 15+ and SIP on); a host below it (a CI VM with SIP off) cannot run it
 const floor = darwinFloor();
 
-describe('#mcp-servers: a stdio server runs inside the session profile', () => {
+describe('G-MCP-06 #mcp-servers: a stdio server runs inside the session profile', () => {
   it.skipIf(!floor.ok)('answers tools/list under the profile; the first-party dir is write-denied and the Gnomon home unreadable', async () => {
     const home = tmp('gn-home-');
     const repo = tmp('gn-repo-');

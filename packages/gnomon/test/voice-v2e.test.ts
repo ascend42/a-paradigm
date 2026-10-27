@@ -388,7 +388,7 @@ describe('#gnomon-voice V2e: the adopted-fd principal is voice and nothing else'
 });
 
 describe('#gnomon-voice V2e: request.voice.client is human only', () => {
-  it("#voice-reply-mode: op 'reply-mode' {mode: speak|show} is human only; anything else is BAD_REQUEST", async () => {
+  it("G-VOX-22 #voice-reply-mode: op 'reply-mode' {mode: speak|show} is human only; anything else is BAD_REQUEST", async () => {
     const r = drig();
     const call = await r.connect({ kind: 'human', credential: 'gui' });
     expect(await call('log.append', { kind: 'request.voice.client', payload: { op: 'reply-mode', mode: 'show' } })).toEqual({ voiceClient: { replyMode: 'show' } });

@@ -39,7 +39,7 @@ const blockOf = (d: Record<string, unknown>, first = title) => ({ schemaVersion:
 const cardOf = (d: Record<string, unknown>, extra: Record<string, unknown> = {}, first = title) => ({ ...base, ...extra, block: blockOf(d, first), contentHash: cardContentHash({ ...base, ...extra }, d) });
 const view = (card: Record<string, unknown>, decisions: string[], flags: string[] = [], alwaysOpen = false) => ({ cardId: 'card:01J', kind: 'permission', requestedBy: base.requestedBy, hsid: null, repo: null, state: 'pending', contentHash: String(card.contentHash), flags, decisions, decidable: true, gitVerb: gitVerbOf(card), alwaysOpen });
 
-describe('git verb cards', () => {
+describe('G-GIT-05 git verb cards', () => {
   it('reads only a verified node', () => {
     const card = cardOf(detail);
     expect(gitVerbOf(card)).toMatchObject({ verb: 'git.push', host: 'github.com', slug: 'github.com/ascend42/a-platform-fighter', branch: 'main', force: false });

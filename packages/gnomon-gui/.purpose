@@ -592,7 +592,11 @@ components:
       error), takes the fail tone, .trow.role-result.fail = --fail (vermilion,
       DESIGN rule 1), aborted stays quiet; the step limit names the
       session's cap from turn.result.maxSteps, "stopped: step limit 20",
-      rows without it read as before) and lifecycle notes; hooks,
+      rows without it read as before; Mika review: a Claude cap stop is a
+      limit reached, not a failure, so error_max_turns / error_max_budget_usd
+      read "stopped: turn limit" / "stopped: budget limit" in the warn tone
+      like the local step limit (CLAUDE_RESULT_LABEL), and any other error_*
+      subtype reads "error" in the fail tone, never its raw id) and lifecycle notes; hooks,
       stream_event partials, rate limits, status, control frames, tool
       results and bookkeeping rows are hidden and counted, and "show raw
       events" shows every row. RAW VIEW (founder 2026-10-23 "is there a way
@@ -806,6 +810,7 @@ components:
       the page cannot otherwise see a reply start).
     tags: [voice, gui]
     signals: []
+    oracles: [G-GUI-16]
   gui-dictation:
     description: >-
       UNVERIFIED VOICE (Dictate, the G-VOX-06 exception, founder bug
@@ -1142,6 +1147,13 @@ components:
     description: >-
       The Desk's margin slip (TD-2026-10-20-812 O1, Luna's comp
       .atelier/sessions/2026-10-20-gnomon-mod-invitations refs/flow.html).
+      core/mod-label.ts (PURE, Aegis S0b §1 Display): modLabel names a mod id
+      <publisher>.<name>: a gnomon mod by its name alone, any other as `name
+      (pub)`, `name (pub @ host)` for a non-GitHub git host and `name (pub,
+      unverified)` for a folder or package install, from the kernel's
+      status.mods.publishers entry (publisherDisplayOf validates it; malformed
+      falls back to `name (pub)`); firstPartyName. Shared by the slip,
+      core/offers.ts, core/mod-panels.ts and ui/app.ts.
       core/offers.ts (PURE): foldOffers folds ONLY the kernel's offer.shown /
       offer.decided / offer.kept rows of one conversation (principal
       p:<ns>/kernel, payload hsid = the conversation, offer:<ULID>, a
@@ -1421,6 +1433,7 @@ components:
       - test/voice-ladder.test.ts
       - test/voice.test.ts
       - test/copy-vocabulary.test.ts
+    oracles: [G-GUI-14]
   gui-voice-settings:
     description: >-
       2026-10-23 (founder request): an input row first (the mic in use:
@@ -1462,6 +1475,7 @@ components:
     tests:
       - test/voice-ladder.test.ts
       - test/voice-client.test.ts
+    oracles: [G-GUI-15]
   gui-chip:
     description: >-
       #gui-chip (board gnomon-chip, design-system rule chip-is-not-a-key,
@@ -1756,6 +1770,7 @@ components:
     tests:
       - test/mcp-servers.test.ts
       - test/mcp-servers-allow.test.ts
+    oracles: [G-MCP-08, G-MCP-09]
   gui-settings:
     description: >-
       #gui-settings (founder UI-first rule) - the header Day / Night / Auto

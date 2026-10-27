@@ -1,4 +1,4 @@
-# Gnomon loops: recurring checks and fix loops for Paradigm flows (`#loop-runner`, `$loop-run`, `^loop-trusted`)
+# Gnomon loops: recurring checks and fix loops for Paradigm flows (`#loop-runner`, `^loop-trusted`)
 
 Status: reviewed by Aegis (ready-with-edits, applied); founder decisions applied 2026-10-22. Next: Luna and Mika (visuals). Branch `feat/gnomon`. Builds on `docs/specs/gnomon.md` (cited as G:line).
 
@@ -211,10 +211,10 @@ nodes:
 - **Session writes.** Repo writes are already gate-class for sessions (`.paradigm`, G:635). Sessions cannot write `~/.gnomon/**` (G:1599), so personal loops arrive only through the kernel request.
 - **Windows.** `loop-trust`, `grant.loop-envelope` and loop resume are Windows Hello classes in the hybrid design (docs/plans/gnomon-windows.md, TD-2026-10-22-278).
 
-### 3.2 Working-branch collisions (`#repo-lease`, `$loop-land`)
+### 3.2 Working-branch collisions (`#loop-land`, `#loop-git`)
 
 - **Where loops work.** Write steps and act nodes work in a scratch worktree detached at the branch head, in the kernel-owned run dir `<home>/loop-work/act-<runId>/tree`, outside the repo (build plan step 10; git hardening, G:1557). It is the HEAD tree read with hardened git plumbing, never `git worktree add`, and has no `.git`. Its work parks at `refs/gnomon/loops/<id>/<runId>` in a kernel-owned park repo. It reuses the trusted `node_modules` read-only; there is no network install.
-- **Landing**, under a per-repo land lock held for seconds:
+- **Landing** (`#loop-land`), under a per-repo land lock held for seconds (`withLandLock` in the kernel's git/land.ts, part of `#loop-land`; no separate lease component ships):
   1. If HEAD moved, rebase the loop commit in scratch and re-run the goal check.
   2. Refuse if:
      - any touched path is dirty in the human's index or worktree, or another loop holds it;

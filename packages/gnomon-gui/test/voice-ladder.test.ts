@@ -58,7 +58,7 @@ const base: PillInput = { rung: 'off', hotkey: '⌃⌥Space', sendWord: null, at
 const pill = (o: Partial<PillInput>) => voicePillOf({ ...base, ...o });
 const display = (state: 'idle' | 'hearing' | 'transcribing' | 'captured' | 'dropped', className = `capture-${state}`) => ({ state, label: state === 'idle' ? null : 'x', className, meter: 0, ghost: false, ghostText: null, caption: '', flashLeftMs: null });
 
-describe('the pill: rung name + ONE live fact (design-system gnomon.voice.pill)', () => {
+describe('G-GUI-14 the pill: rung name + ONE live fact (design-system gnomon.voice.pill)', () => {
   it('at rest per rung: Voice off, hold ⌃⌥Space, listening, say “send”, mic off · ⌃`, heard Ns ago', () => {
     expect(pill({})).toMatchObject({ name: 'Voice off', fact: '', live: false, tone: 'plain' });
     expect(pill({ rung: 'talk', attached: true })).toMatchObject({ name: 'Talk', fact: 'hold ⌃⌥Space', live: false });
@@ -109,7 +109,7 @@ describe('the pill: rung name + ONE live fact (design-system gnomon.voice.pill)'
   });
 });
 
-describe('the ladder replaces the pill menu (design-system gnomon.voice.model)', () => {
+describe('G-GUI-14 the ladder replaces the pill menu (design-system gnomon.voice.model)', () => {
   const L = (o: Partial<Parameters<typeof ladderEntries>[0]> = {}) => ladderEntries({ rung: 'dictate', hotkey: '⌃⌥Space', attachable: true, target: 'hs:A', ceiling: 'ambient', acked: false, sendWord: null, ...o });
   it('five rungs in trust order, one line each, cost tags', () => {
     const e = L();
@@ -215,7 +215,7 @@ const run = (s: TeachState, ...es: TeachEvent[]): TeachState => es.reduce(reduce
 const rows = (o: Partial<Parameters<typeof sheetRows>[0]> = {}) => sheetRows({ acked: false, sendWord: null, enrolled: ['matt'], reteach: false, micKeyBare: false, capture: 'open', delayMs: 3000, hotkey: '⌃⌥Space', attachable: true, ...o });
 const view = (o: Partial<SheetView> = {}): SheetView => ({ rows: rows(), flow: null, delayMs: 3000, attachable: true, ...o });
 
-describe('the Voice settings sheet: one place for everything voice configures', () => {
+describe('G-GUI-15 the Voice settings sheet: one place for everything voice configures', () => {
   it('six rows: your voice, send word, keys, listen, timing, risk', () => {
     const r = rows();
     expect(r.map((x) => x.label)).toEqual(['your voice', 'send word', 'keys', 'listen', 'replies', 'timing', 'risk']);
@@ -453,7 +453,7 @@ describe('labels: spoken · sent by … (the plain origin; no chip and no card l
   });
 });
 
-describe('the Voice settings drawer traps Tab (Luna #11)', () => {
+describe('G-GUI-15 the Voice settings drawer traps Tab (Luna #11)', () => {
   it('wraps at either end, enters from outside, and leaves the middle to the browser', () => {
     const items = ['close', 'teach', 'save'];
     expect(trapNext(items, 'save', false)).toBe('close'); // Tab off the last wraps to the first
@@ -466,7 +466,7 @@ describe('the Voice settings drawer traps Tab (Luna #11)', () => {
   });
 });
 
-describe('founder request 2026-10-23: Voice settings › input says which mic is in use and lets the human pick one', () => {
+describe('G-GUI-15 founder request 2026-10-23: Voice settings › input says which mic is in use and lets the human pick one', () => {
   const BUILTIN = { id: 'BuiltInMicrophoneDevice', name: 'MacBook Pro Microphone', transport: 'built-in', sampleRate: 48000 };
   const AIRPODS = { id: '30-7A:input', name: 'AirPods Pro', transport: 'bluetooth', sampleRate: 24000 };
   const st = (mic: Record<string, unknown>, choice: Record<string, unknown> = { id: null, name: null }) => clientOf({ voice: { clientConnected: true, client: { phase: 'running' }, mic: { device: null, aec: null, fault: null, at: 'x', ...mic }, inputChoice: choice } });

@@ -51,7 +51,7 @@ export function deskModSuite(spec: DeskModSpec): void {
     while (cleanups.length) await cleanups.pop()!();
   });
 
-  describe(`${spec.symbol} manifest`, () => {
+  describe(`G-DSK-06 ${spec.symbol} manifest`, () => {
     it('validates at the first-party tier only: a first-party mod name, never reserved, with the reserved floor intact', () => {
       const v = validateManifest(raw, { tier: 'first-party' });
       expect(`${v.publisher}.${v.name}`).toBe(spec.name);
@@ -123,7 +123,7 @@ export function deskModSuite(spec: DeskModSpec): void {
       expect(md).toContain('end that reply with at most one offer block (never more than one per reply across all mods)');
     });
 
-    it('every ```offer example in the playbook resolves to a declared offer of this mod', async () => {
+    it('G-DSK-07: every ```offer example in the playbook resolves to a declared offer of this mod', async () => {
       const { offerGolden } = (await import(pathToFileURL(path.join(PKG_ROOT, 'scripts', 'offer-golden.mjs')).href)) as { offerGolden: (m: unknown, reply: string) => Golden };
       const skills = raw.provides!.skills as Array<{ name: string; path: string }>;
       const md = fs.readFileSync(path.join(DIR, skills[0]!.path), 'utf8');
@@ -133,7 +133,7 @@ export function deskModSuite(spec: DeskModSpec): void {
     });
   });
 
-  describe(`${spec.symbol} offer fixtures`, async () => {
+  describe(`G-DSK-07 ${spec.symbol} offer fixtures`, async () => {
     const { offerGolden } = (await import(pathToFileURL(path.join(PKG_ROOT, 'scripts', 'offer-golden.mjs')).href)) as { offerGolden: (m: unknown, reply: string) => Golden };
     const fixtures = fs.readdirSync(path.join(DIR, 'fixtures')).filter((n) => n.endsWith('.json') && !n.endsWith('.golden.json')).map((n) => n.slice(0, -5)).sort();
 
@@ -156,7 +156,7 @@ export function deskModSuite(spec: DeskModSpec): void {
     }
   });
 
-  describe(`${spec.symbol} first-party pin`, () => {
+  describe(`G-DSK-08 ${spec.symbol} first-party pin`, () => {
     it('its packageHash is the pinned first-party hash (an edit to the package is a new install card)', () => {
       const h = hashSourceTree(DIR, spec.name, () => undefined).packageHash;
       if (process.env.GNOMON_PRINT_PINS) process.stdout.write(`PIN ${spec.dir} ${h}\n`);
