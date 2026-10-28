@@ -27,24 +27,24 @@ export function grepForReferences(
   const { maxResults = 20 } = options;
   const results: FallbackReference[] = [];
 
-  // Try ripgrep first (faster), fall back to grep. execFileSync with an argv, never a shell string
-  // (TD-2026-10-27-833: a local model reaches this through paradigm_ripple): a quote, backtick or `$(...)` in the
-  // symbol or the root is an argument, never run. Fixed-string matching, as the old regex escaping intended.
-  const excludes = ['node_modules', '.git', 'dist', 'build', 'coverage'];
+  // The symbol comes from a tool call (model input), so it is matched as a
+  // fixed string (-F) and passed in an argv array with no shell.
   const grepCommands: Array<[string, string[]]> = [
-    ['rg', ['-n', '--no-heading', '--fixed-strings', '--max-count', '50', ...excludes.flatMap((d) => ['--glob', `!${d}`]), '--', symbol, rootDir]],
-    ['grep', ['-rnF', ...excludes.map((d) => `--exclude-dir=${d}`), '--', symbol, rootDir]],
+    // ripgrep - exclude common directories
+    ['rg', ['-n', '--no-heading', '-F', '--glob', '!node_modules', '--glob', '!.git', '--glob', '!dist', '--glob', '!build', '--glob', '!coverage', '--max-count', '50', '-e', symbol, '--', rootDir]],
+    // fallback to grep
+    ['grep', ['-rn', '-F', '--exclude-dir=node_modules', '--exclude-dir=.git', '--exclude-dir=dist', '--exclude-dir=build', '--exclude-dir=coverage', '-e', symbol, '--', rootDir]],
   ];
 
   let output = '';
-  for (const [cmd, args] of grepCommands) {
+  for (const [bin, args] of grepCommands) {
     try {
-      output = execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
-      if (output.trim()) break;
-    } catch {
-      // grep/rg exit non-zero on no match (or a missing binary): try the next
-      continue;
+      output = execFileSync(bin, args, { encoding: 'utf8', maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (err) {
+      // non-zero on no match (1) or a partial error (2); keep any matches printed
+      output = String((err as { stdout?: string }).stdout ?? '');
     }
+    if (output.trim()) break;
   }
   output = output.split('\n').slice(0, 50).join('\n');
 

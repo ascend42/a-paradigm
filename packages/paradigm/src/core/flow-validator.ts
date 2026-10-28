@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import {
   FlowDefinition,
   FlowsConfig,
@@ -67,10 +67,7 @@ export function loadFlowsFromPurpose(rootDir: string): FlowDefinition[] {
 
   // Find all .purpose files
   try {
-    const result = execSync(
-      `find "${rootDir}" -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null || true`,
-      { encoding: 'utf-8' }
-    );
+    const result = findPurposeFiles(rootDir);
 
     for (const purposePath of result.split('\n').filter(Boolean)) {
       try {
@@ -135,31 +132,52 @@ export function getAllFlows(rootDir: string): FlowDefinition[] {
 // ============================================================================
 
 /**
+ * List .purpose files under rootDir (outside node_modules and .git), one per
+ * line. No shell: rootDir is passed as an argument.
+ */
+function findPurposeFiles(rootDir: string): string {
+  try {
+    return execFileSync('find', [rootDir, '-name', '.purpose', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'], {
+      encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch (err) {
+    // find exits non-zero on unreadable dirs but still prints what it found
+    return String((err as { stdout?: string }).stdout ?? '');
+  }
+}
+
+/**
+ * True when `grep -r -l <flags> -e <pattern> -- <rootDir>` lists at least one
+ * file. grep runs through execFileSync (no shell), so a pattern taken from a
+ * flow or .purpose file (repo content) is only ever a grep pattern.
+ */
+export function grepAnyFile(flags: readonly string[], pattern: string, rootDir: string): boolean {
+  try {
+    const out = execFileSync('grep', ['-r', '-l', ...flags, '-e', pattern, '--', rootDir], {
+      encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+    });
+    return out.trim().length > 0;
+  } catch (err) {
+    // exit 1 = no match; exit 2 = an error, but matches may still be on stdout
+    return String((err as { stdout?: string }).stdout ?? '').trim().length > 0;
+  }
+}
+
+/**
  * Check if a symbol exists in the codebase.
  * Checks both source code files and .purpose file declarations.
  */
 function symbolExistsInCode(symbol: string, rootDir: string): boolean {
   // 1. Check .purpose files for declared symbols (e.g. "#my-component:" at line start)
-  try {
-    const purposeResult = execSync(
-      `grep -r --include=".purpose" -l "^${symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:" "${rootDir}" 2>/dev/null | head -1`,
-      { encoding: 'utf-8' }
-    );
-    if (purposeResult.trim().length > 0) return true;
-  } catch {
-    // Not found in .purpose files, continue
-  }
+  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (grepAnyFile(['-E', '--include=.purpose'], `^${escaped}:`, rootDir)) return true;
 
-  // 2. Check source code files
-  try {
-    const result = execSync(
-      `grep -r --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" --include="*.py" --include="*.go" -l "${symbol}" "${rootDir}" 2>/dev/null | head -1`,
-      { encoding: 'utf-8' }
-    );
-    return result.trim().length > 0;
-  } catch {
-    return false;
-  }
+  // 2. Check source code files (fixed-string match)
+  return grepAnyFile(
+    ['-F', '--include=*.ts', '--include=*.js', '--include=*.tsx', '--include=*.jsx', '--include=*.py', '--include=*.go'],
+    symbol,
+    rootDir,
+  );
 }
 
 /**
@@ -175,15 +193,7 @@ function signalIsEmitted(signal: string, rootDir: string): boolean {
   ];
 
   for (const pattern of patterns) {
-    try {
-      const result = execSync(
-        `grep -r --include="*.ts" --include="*.js" -l "${pattern}" "${rootDir}" 2>/dev/null | head -1`,
-        { encoding: 'utf-8' }
-      );
-      if (result.trim().length > 0) return true;
-    } catch {
-      // Continue with next pattern
-    }
+    if (grepAnyFile(['--include=*.ts', '--include=*.js'], pattern, rootDir)) return true;
   }
 
   return false;

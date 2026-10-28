@@ -18,7 +18,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import * as yaml from 'js-yaml';
 import {
   aggregateFromDirectory,
@@ -61,6 +61,14 @@ const ROUTE_FILE_PATTERNS = [
   /export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)/gi,
 ];
 
+/**
+ * A `--pr` value gh accepts: a number, URL or branch name. One token, no
+ * whitespace, and no leading `-` so it can never be read as a gh option.
+ */
+export function isPrRef(pr: string): boolean {
+  return /^[^\s-][^\s]*$/.test(pr);
+}
+
 // ────────────────────────────────────────────────────────
 // Main Command
 // ────────────────────────────────────────────────────────
@@ -76,7 +84,10 @@ export async function reviewCommand(options: ReviewOptions = {}) {
   try {
     if (options.pr) {
       // PR mode — get files from gh CLI
-      const prFiles = execSync(`gh pr diff ${options.pr} --name-only`, {
+      // No shell: --pr is passed to gh as one argument, never parsed by a shell.
+      const pr = String(options.pr);
+      if (!isPrRef(pr)) throw new Error(`--pr must be a PR number, URL or branch name (got ${JSON.stringify(pr.slice(0, 80))})`);
+      const prFiles = execFileSync('gh', ['pr', 'diff', pr, '--name-only'], {
         cwd,
         encoding: 'utf8',
         timeout: 15000,

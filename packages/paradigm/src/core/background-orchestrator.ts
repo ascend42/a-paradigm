@@ -14,6 +14,21 @@ import * as yaml from 'js-yaml';
 import { spawn } from 'child_process';
 import { Orchestrator, OrchestrationOptions, OrchestrationResult } from './orchestrator.js';
 
+/**
+ * osascript argv for a desktop notification. The message (which carries task
+ * text from a user or model) is passed as a run argument, never spliced into
+ * AppleScript source, so a `"` in it cannot close the string and reach
+ * `do shell script`.
+ */
+export function notificationOsascriptArgs(message: string, title = 'Paradigm'): string[] {
+  return [
+    '-e', 'on run argv',
+    '-e', 'display notification (item 1 of argv) with title (item 2 of argv)',
+    '-e', 'end run',
+    '--', message, title,
+  ];
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -301,10 +316,7 @@ export class BackgroundOrchestrator {
           // Desktop notification (macOS/Linux)
           try {
             if (process.platform === 'darwin') {
-              spawn('osascript', [
-                '-e',
-                `display notification "Orchestration ${orch.status}: ${orch.task.slice(0, 50)}" with title "Paradigm"`,
-              ]);
+              spawn('osascript', notificationOsascriptArgs(`Orchestration ${orch.status}: ${orch.task.slice(0, 50)}`));
             } else {
               spawn('notify-send', [
                 'Paradigm',

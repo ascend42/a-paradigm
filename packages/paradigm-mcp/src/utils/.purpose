@@ -247,7 +247,7 @@ components:
       - graduation
       - automation
   aspect-fingerprint:
-    description: Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors
+    description: 'Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors. detectFileRename runs git log through #safe-git (argv, no shell), because the anchor path comes from a .purpose file.'
     type: engine
     tags:
       - feature
@@ -445,9 +445,14 @@ components:
       - $skill-certification
     tags: [feature, skills, classroom]
   aspect-graph:
-    description: 'SQLite aspect graph utils (.paradigm/aspect-graph.db): materializeAspects, ripple, heatmap, checkDrift. v7.12 (D9) section anchors: anchors table gains anchor_kind TEXT DEFAULT ''lines'' + anchor_key TEXT via idempotent ALTER migrations (PRAGMA table_info guard + catch; safe twice, safe on pre-7.12 DBs). Heading/block anchors resolve to the section''s CURRENT line range at materialize (premise-core resolveSectionAnchorLines; 0/0 when unresolvable) with baseline hashes; checkDrift re-resolves the KEY first then hashes the range — moved section = clean (row lines updated, .purpose untouched), whitespace = cosmetic, content change = modified, renamed/removed heading or block = missing (exists:true, drifted). No git line-shift or content-search heal for section anchors. Line anchors (anchor_kind lines) are byte-identical to before.'
+    description: 'SQLite aspect graph utils (.paradigm/aspect-graph.db): materializeAspects, ripple, heatmap, checkDrift. v7.12 (D9) section anchors: anchors table gains anchor_kind TEXT DEFAULT ''lines'' + anchor_key TEXT via idempotent ALTER migrations (PRAGMA table_info guard + catch; safe twice, safe on pre-7.12 DBs). Heading/block anchors resolve to the section''s CURRENT line range at materialize (premise-core resolveSectionAnchorLines; 0/0 when unresolvable) with baseline hashes; checkDrift re-resolves the KEY first then hashes the range — moved section = clean (row lines updated, .purpose untouched), whitespace = cosmetic, content change = modified, renamed/removed heading or block = missing (exists:true, drifted). No git line-shift or content-search heal for section anchors. Line anchors (anchor_kind lines) are byte-identical to before. Security (8.0.4): computeLineShift diffs through #safe-git gitDiffSinceCommit (execFileSync argv, no shell, --no-ext-diff --no-textconv, `--` before the path); anchor paths from .purpose and materialized_at_commit are repo content, and a non-hex commit id is refused (no mapping).'
     file: packages/paradigm-mcp/src/utils/aspect-graph.ts
     tags: [aspect-graph, drift, anchors]
+  safe-git:
+    description: 'git calls that never go through a shell. runGit(rootDir, args) is execFileSync(''git'', argv, shell false). gitDiffSinceCommit(rootDir, fromCommit, filePath) runs git diff --no-ext-diff --no-textconv <sha>..HEAD --unified=0 -- <path> and returns null when fromCommit fails COMMIT_SHA_RE (^[0-9a-f]{7,64}$; warns via the Paradigm logger) or git fails. gitRenameLog(rootDir, filePath) runs git log --follow --diff-filter=R --name-status -- <path>. Used by #aspect-graph, #aspect-fingerprint and the CLI `paradigm drift` command, whose paths and commit ids are repo content.'
+    type: utility
+    file: packages/paradigm-mcp/src/utils/safe-git.ts
+    tags: [security, git, drift]
   docs-loader:
     description: 'Docs section loader (config, portal, university index, markdown guides). v7.12 (D8): its private parseFrontmatter is a null-returning adapter over premise-core #frontmatter-parser (lenient) — no block or malformed YAML → null; non-mapping → frontmatter {}; now also accepts CRLF and a closing fence at EOF.'
     file: packages/paradigm-mcp/src/utils/docs-loader.ts

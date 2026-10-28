@@ -115,7 +115,7 @@ components:
     type: service
     path: context-builder.ts
   flow-validator:
-    description: Validate flow definitions against the actual codebase implementation and generate Mermaid flowchart diagrams
+    description: 'Validate flow definitions against the actual codebase implementation and generate Mermaid flowchart diagrams. Implementation checks run grep and find through execFileSync argv (grepAnyFile, findPurposeFiles; pattern after -e, path after --), because flow symbols and the project path are repo content; source matches are fixed-string (-F), .purpose declarations an escaped ERE.'
     type: service
     path: flow-validator.ts
   portal-compliance:
@@ -135,7 +135,7 @@ components:
     type: service
     path: audit-logger.ts
   background-orchestrator:
-    description: Run orchestration in background with progress reporting
+    description: 'Run orchestration in background with progress reporting. The macOS desktop notification passes the task text to osascript as a run argument (notificationOsascriptArgs), never as AppleScript source.'
     type: engine
     path: background-orchestrator.ts
   project-type:
@@ -288,7 +288,7 @@ aspects:
       - flows
       - visualization
     anchors:
-      - flow-validator.ts:603-668
+      - flow-validator.ts:613-678
     applies-to:
       - '#flow-validator'
   ~portal-language-agnostic-grep:
@@ -325,8 +325,8 @@ aspects:
       - orchestration
       - background
     anchors:
-      - background-orchestrator.ts:21-21
-      - background-orchestrator.ts:190-233
+      - background-orchestrator.ts:36-36
+      - background-orchestrator.ts:205-248
     applies-to:
       - '#background-orchestrator'
   habits-loader:

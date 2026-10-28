@@ -28,6 +28,7 @@ import type {
   DriftResult,
 } from '../types/aspect-graph.js';
 import { resolveAnchorPath } from './anchor-path.js';
+import { gitDiffSinceCommit } from './safe-git.js';
 
 export type { Database };
 
@@ -1284,15 +1285,10 @@ export function computeLineShift(
   originalStart: number,
   originalEnd: number,
 ): LineMapping | null {
-  let diff: string;
-  try {
-    diff = execSync(
-      `git diff ${fromCommit}..HEAD --unified=0 -- "${filePath}"`,
-      { cwd: rootDir, encoding: 'utf8', timeout: 5000 }
-    );
-  } catch {
-    return null; // git not available or file not tracked
-  }
+  // No shell: filePath comes from a .purpose anchor and fromCommit from the
+  // graph, both repo content. gitDiffSinceCommit refuses non-hex commit ids.
+  const diff = gitDiffSinceCommit(rootDir, fromCommit, filePath);
+  if (diff === null) return null; // refused, git not available, or file not tracked
 
   if (!diff.trim()) {
     // No changes to this file since commit — lines haven't shifted
