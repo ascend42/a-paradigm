@@ -23,6 +23,12 @@ components:
       - hooks
       - orchestration
       - team-funnel
+  precommit-hooks:
+    description: 'Retired pre-commit hooks (scripts/claude-code-precommit.sh PreToolUse Bash, scripts/cursor-precommit.sh beforeShellExecution). They used to rebuild the index on `git commit` and `git add` scan-index.json, navigator.yaml and flow-index.json, whose generatedAt stamp gave every commit an index diff (T-2026-10-28-002). Now no-ops that drain stdin and exit 0; the files stay because existing settings.json / hooks.json entries call them. The generated files are gitignored (#session-markers-gitignore); the MCP server serves a live index and SessionStart rebuilds on a fresh clone.'
+    type: hook
+    file: scripts/claude-code-precommit.sh
+    tags:
+      - hooks
   touched-files-ledger:
     description: 'Claude Code PostToolUse hook (matcher: Write|Edit) — scripts/claude-code-postwrite.sh, copied to the plugin as paradigm-postwrite.sh and installed by `paradigm hooks install --claude-code` (the installer upgrades the old never-matching ''Edit,Write'' matcher). Appends the edited file (tool_input.file_path or notebook_path), relative to the project root (logical or physical path), to <root>/.paradigm/.sessions/<session_id>.touched, deduped. The Claude Code Stop hook judges only `git diff --name-only HEAD` files in this ledger; other changed files (Bash edits, other sessions, worktrees) are listed as an advisory and never block. Without a session id the Stop hook judges the whole tree. Always exit 0, no output. Hook-monitor label PostToolUse-Write.'
     type: hook
@@ -75,6 +81,10 @@ components:
       (.paradigm/.hook-health-warned = "<session_id> <ms>"); also trims the
       ring to its cap. Always exits 0. Registered by the plugin hooks.json AND by
       the project-level `paradigm hooks install --claude-code` (.claude/settings.json).
+      Fresh-clone rebuild (T-2026-10-28-002): when .paradigm/scan-index.json or
+      navigator.yaml is missing (generated state is gitignored by
+      #session-markers-gitignore) it starts `paradigm index --quiet` through
+      #paradigm-resolve, fully detached; cursor-session-start.sh does the same.
     type: hook
     file: scripts/claude-code-session-start.sh
     tags:
