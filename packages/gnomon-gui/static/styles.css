@@ -1718,5 +1718,8 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .tools-sheet .td-notice .sf-result { font-size: var(--fs-control); }
 .tools-sheet .td-notice .sf-keys { margin-top: 6px; }
 .tools-sheet .agent-claimed .settings-row { padding: 2px 0; }
+/* Mika C6'b1 #1: model and tool text is never "kernel-owned"; its label sits at the top of a long entry */
+.tools-sheet .agent-claimed .settings-readonly .settings-label::after { content: none; }
+.tools-sheet .agent-claimed .settings-row > .settings-label { align-self: start; }
 .tools-sheet .rule-row .why-off { grid-column: 1; }
 .tools-sheet .td-foot { border-bottom: 0; }

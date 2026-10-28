@@ -59,8 +59,8 @@ export const TOOLS_COPY = Object.freeze({
   noOffered: 'Nothing offered yet: tools are picked at the model’s next step.',
   noPins: 'No pins. Pin a tool under All tools to keep it offered.',
   ended: 'This session has ended: its tools are gone. What it kept is under Memory.',
-  notOwner: 'Only the person who opened this session can see its tools',
-  notOwnerMemory: 'Only the person who opened this session can see its memory',
+  notOwner: 'Only the person who opened this session can see its tools.',
+  notOwnerMemory: 'Only the person who opened this session can see its memory.',
   unreachable: 'Can’t reach the kernel: nothing was read · next: Read again once Gnomon is connected',
   unreadable: 'The kernel’s answer was not one this page reads · next: Read again',
   again: 'Read again',
@@ -74,6 +74,9 @@ export const TOOLS_COPY = Object.freeze({
   stage: 'Stage in Settings',
   slashOnly: 'the model can’t use this one; run it from /',
   pinsFull: `${MAX_PINS} pins: unpin one first`,
+  /** Mika C6'b1 #4: said once, in the Pins heading; every disabled Pin points at it */
+  pinsFullHead: 'unpin one to pin another',
+  noClasses: 'no tools listed',
   memory: Object.freeze({
     empty: 'No working memory yet. It fills when you send a prompt.',
     yours: 'From you and Gnomon',
@@ -97,6 +100,7 @@ export const TOOLS_COPY = Object.freeze({
     delete: 'Delete',
     confirm: 'Delete this ended session’s working memory? The conversation stays.',
     none: 'none',
+    waits: 'waits: another delete is running',
   }),
 });
 
@@ -437,16 +441,21 @@ export function pinKeyOf(t: CapTool, ui: Pick<DrawerUi, 'pinBusy'>, pins: readon
   let why: string | null = null;
   if (t.availability === 'slash-only') why = TOOLS_COPY.slashOnly;
   else if (t.humanOnly && t.availability === 'not-at-tier') why = pinWhyWords('no-full-form', { tier: null, k: null });
-  else if (pins.length >= MAX_PINS) why = TOOLS_COPY.pinsFull;
+  // Mika C6'b1 #4: at 8 pins the reason is said once (the Pins heading); only a row's own reason gets a why line
+  else if (pins.length >= MAX_PINS) return { key: { act: 'pin', value: t.name, label: TOOLS_COPY.pin, quiet: true, pressed: false, ariaDisabled: true, describedBy: PINS_HEADING_ID }, why: null };
   return { key: { act: 'pin', value: t.name, label: TOOLS_COPY.pin, quiet: true, pressed: false, ...(why ? { ariaDisabled: true } : busy) }, why };
 }
 
-const countsWords = (c: CapServer['counts']): string => `${c.read} ${CLASS_WORD.read} · ${c.mutate} ${CLASS_WORD.mutate} · ${c.destructive} ${CLASS_WORD.destructive}`;
+/** Mika C6'b1 #5: the readout form, label then number, zero classes left out: "reads 4 · changes 1"; none: "no tools listed". */
+export const countsWords = (c: CapServer['counts']): string => (['read', 'mutate', 'destructive'] as const).filter((k) => c[k] > 0).map((k) => `${CLASS_WORD[k]} ${c[k]}`).join(' · ') || TOOLS_COPY.noClasses;
+/** The id of the Pins heading (a full Pins list's reason; every disabled Pin's aria-describedby). */
+export const PINS_HEADING_ID = 'td-h-pins';
 const trustLevel = (t: CapServer['trust']): 'untrusted' | 'trusted' | 'first-party' => (t === 'enabled' ? 'untrusted' : t);
 
 /** A server's row: its state in words (a refusal in plain words with next:), its trust chip, its class counts, its key. */
 export function serverRow(s: CapServer, ui: Pick<DrawerUi, 'restarting' | 'serverResult'>, n: number): SettingRow {
-  const chip = trustChipOf({ level: trustLevel(s.trust), why: null })!;
+  // Mika C6'b1 #2: a refused server never ran, so trust is no question there: no chip
+  const chip = s.state === 'refused' ? null : trustChipOf({ level: trustLevel(s.trust), why: null })!;
   const restarting = ui.restarting.has(s.label);
   let value: string;
   let how = countsWords(s.counts);
@@ -477,7 +486,7 @@ export function serverRow(s: CapServer, ui: Pick<DrawerUi, 'restarting' | 'serve
       how = `${how} · next: Restart server`;
       keys.push({ act: 'restart', value: s.label, label: restarting ? TOOLS_COPY.restarting : TOOLS_COPY.restart, ...(restarting ? { busy: true, ariaDisabled: true } : {}) });
   }
-  return { kind: 'readonly', id: `td-server-${n}`, label: s.label, value, how, chip, ...(mark ? { mark } : {}), ...(keys.length ? { keys } : {}) };
+  return { kind: 'readonly', id: `td-server-${n}`, label: s.label, value, how, ...(chip ? { chip } : {}), ...(mark ? { mark } : {}), ...(keys.length ? { keys } : {}) };
 }
 
 const matches = (q: string, ...xs: string[]): boolean => !q || xs.some((x) => x.toLowerCase().includes(q));
@@ -508,7 +517,7 @@ export function toolsView(ui: DrawerUi, hints: { found: Set<string>; recent: Set
     return { kind: 'readonly', id: `td-pin-${n}`, label: p.name, value: p.offered ? 'offered now' : pinWhyWords(p.why ?? (zero ? 'tier-0' : null), at), how: t ? t.server : '', keys: [{ act: 'unpin', value: p.name, label: TOOLS_COPY.unpin, quiet: true, pressed: true, ...busy }] };
   });
   if (!pinRows.length) pinRows.push({ kind: 'readonly', id: 'td-pin-none', label: '', value: TOOLS_COPY.noPins, how: '' });
-  sections.push({ id: 'pins', title: `Pins · ${c.pins.length} of ${MAX_PINS}`, rows: pinRows, result: ui.pinResult });
+  sections.push({ id: 'pins', title: `Pins · ${c.pins.length} of ${MAX_PINS}${c.pins.length >= MAX_PINS ? ` · ${TOOLS_COPY.pinsFullHead}` : ''}`, rows: pinRows, result: ui.pinResult });
   // 3. Servers
   const srvRows: SettingRow[] = c.servers.map((s, n) => serverRow(s, ui, n));
   if (!srvRows.length) srvRows.push({ kind: 'readonly', id: 'td-server-none', label: '', value: TOOLS_COPY.noServers, how: TOOLS_COPY.noServersHow });
@@ -519,7 +528,7 @@ export function toolsView(ui: DrawerUi, hints: { found: Set<string>; recent: Set
   const shownFilter = total >= TOOLS_FILTER_AT;
   const q = shownFilter ? ui.filter.trim().toLowerCase() : '';
   const groups: ToolGroupView[] = [];
-  const verbRows: ToolRowView[] = c.verbs.filter((v) => matches(q, v.name, GNOMON_GROUP)).map((v) => ({ name: v.name, meta: `${CLASS_WORD[v.class]} · ${availabilityWord(zero ? 'not-at-tier' : 'offered', c.tier)}`, description: 'Gnomon’s own verb', key: null, why: null }));
+  const verbRows: ToolRowView[] = c.verbs.filter((v) => matches(q, v.name, GNOMON_GROUP)).map((v) => ({ name: v.name, meta: `${CLASS_WORD[v.class]} · ${availabilityWord(zero ? 'not-at-tier' : 'offered', c.tier)}`, description: '', key: null, why: null }));
   if (c.verbs.length) groups.push(groupOf(GNOMON_GROUP, c.verbs.length, verbRows, ui, q));
   const servers = [...new Set(c.tools.map((t) => t.server))];
   for (const sv of servers) {
@@ -656,7 +665,11 @@ export function keptRows(k: KeptUi): SettingRow[] {
     if (k.confirm === s.hsid) {
       const busy = k.busy === s.hsid;
       rows.push({ kind: 'form', id: `kept-${i}`, label: s.title, keys: [], confirm: { label: `Delete the memory of ${s.title}`, text: TOOLS_COPY.kept.confirm, keys: [{ act: 'kept:delete-yes', value: s.hsid, label: busy ? TOOLS_COPY.memory.deleting : TOOLS_COPY.memory.yes, pri: true, ...(busy ? { busy: true, ariaDisabled: true } : {}) }, { act: 'kept:keep', value: s.hsid, label: TOOLS_COPY.memory.keep, quiet: true, ...(busy ? { ariaDisabled: true } : {}) }] } });
-    } else rows.push({ kind: 'readonly', id: `kept-${i}`, label: s.title, value: 'ended · memory kept', how: '', keys: [{ act: 'kept:open', value: s.hsid, label: TOOLS_COPY.kept.open, quiet: true }, { act: 'kept:delete', value: s.hsid, label: TOOLS_COPY.kept.delete, quiet: true, ...(k.busy ? { ariaDisabled: true } : {}) }] });
+    } else {
+      // Mika C6'b1 #3: a Delete that waits on another delete says why in a visible line, linked by aria-describedby
+      const waits = !!k.busy;
+      rows.push({ kind: 'readonly', id: `kept-${i}`, label: s.title, value: 'ended · memory kept', how: waits ? TOOLS_COPY.kept.waits : '', ...(waits ? { howId: `kept-why-${i}` } : {}), keys: [{ act: 'kept:open', value: s.hsid, label: TOOLS_COPY.kept.open, quiet: true }, { act: 'kept:delete', value: s.hsid, label: TOOLS_COPY.kept.delete, quiet: true, ...(waits ? { ariaDisabled: true, describedBy: `kept-why-${i}` } : {}) }] });
+    }
   });
   if (k.result) rows.push({ kind: 'form', id: 'kept-result', label: '', keys: [], result: k.result });
   return rows;

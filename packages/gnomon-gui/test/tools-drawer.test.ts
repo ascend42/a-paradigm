@@ -8,6 +8,7 @@ import {
   availabilityWord,
   capabilitiesOf,
   CLASS_WORD,
+  countsWords,
   drawerAccess,
   drawerMeta,
   emptyKeptUi,
@@ -138,7 +139,7 @@ describe('#gui-capability-browser: the Tools segment in every state', () => {
     expect(toolsView(ui({ phase: 'reading', caps: null })).notice).toEqual({ text: 'Reading this session’s tools…' });
     expect(toolsView(ui({ phase: 'unreachable', caps: null })).notice).toMatchObject({ text: TOOLS_COPY.unreachable, fail: true, key: { act: 'again', label: 'Read again' } });
     expect(toolsView(ui({ phase: 'unreadable', caps: null })).notice?.key?.act).toBe('again');
-    expect(toolsView(ui({ access: 'not-owner' })).notice?.text).toBe('Only the person who opened this session can see its tools');
+    expect(toolsView(ui({ access: 'not-owner' })).notice?.text).toBe('Only the person who opened this session can see its tools.');
     expect(toolsView(ui({ access: 'not-owner' })).sections).toEqual([]);
     expect(toolsView(ui({ access: 'ended' }))).toMatchObject({ notice: { text: TOOLS_COPY.ended, key: { act: 'seg-memory' } }, sections: [], all: null });
   });
@@ -149,6 +150,8 @@ describe('#gui-capability-browser: the Tools segment in every state', () => {
     expect(v.sections[0]!.rows.map((r) => (r.kind === 'readonly' ? `${r.label}: ${r.value}` : ''))).toEqual(['grep: fs · pinned', 'glob: fs · found']);
     expect(v.all?.title).toBe('All tools · 5');
     expect(v.all?.groups.map((g) => g.label)).toEqual(['Gnomon', 'fs']); // Gnomon's own verbs first
+    // Mika #6: a Gnomon verb repeats no description (its group heading says Gnomon)
+    expect(v.all?.groups[0]!.rows[0]).toMatchObject({ name: 'gnomon_edit', description: '' });
     expect(v.all?.groups[1]!.rows.map((r) => r.meta)).toEqual(['reads · offered now', 'reads · offered now', 'changes · findable', 'can’t be undone · / only']);
     expect(texts(v)).not.toMatch(RAW);
   });
@@ -221,7 +224,13 @@ describe('#gui-capability-browser: Pin keys', () => {
   it('aria-disabled with the reason shown: a slash-only tool; at 8 pins', () => {
     expect(pinKeyOf(caps.tools[3]!, { pinBusy: null }, caps.pins)).toMatchObject({ key: { ariaDisabled: true }, why: 'the model can’t use this one; run it from /' });
     const eight = Array.from({ length: 8 }, (_, n) => ({ name: `p${n}`, offered: true, why: null }));
-    expect(pinKeyOf(caps.tools[1]!, { pinBusy: null }, eight)).toMatchObject({ key: { ariaDisabled: true, label: 'Pin' }, why: '8 pins: unpin one first' });
+    // Mika #4: at 8 pins the reason is said once, in the Pins heading; every disabled Pin points at it, no row repeats it
+    expect(pinKeyOf(caps.tools[1]!, { pinBusy: null }, eight)).toEqual({ key: { act: 'pin', value: 'glob', label: 'Pin', quiet: true, pressed: false, ariaDisabled: true, describedBy: 'td-h-pins' }, why: null });
+    const full = toolsView(ui({ caps: capabilitiesOf(answer({ pins: eight }), H) }));
+    expect(full.sections.find((x) => x.id === 'pins')?.title).toBe('Pins · 8 of 8 · unpin one to pin another');
+    expect(full.all!.groups.flatMap((g) => g.rows).filter((r) => r.why === '8 pins: unpin one first')).toEqual([]);
+    // a row's own reason keeps its line
+    expect(full.all!.groups[1]!.rows.find((r) => r.name === 'rm')?.why).toBe('the model can’t use this one; run it from /');
     // a pinned tool can always be unpinned, even at 8
     expect(pinKeyOf(caps.tools[0]!, { pinBusy: null }, [...eight, { name: 'grep', offered: true, why: null }]).key).not.toHaveProperty('ariaDisabled');
   });
@@ -234,12 +243,19 @@ describe('#gui-capability-browser: server rows', () => {
   const srv = (o: Record<string, unknown>) => capabilitiesOf(answer({ servers: [{ label: 'fs', trust: 'enabled', state: 'running', starts: 1, counts: { read: 3, mutate: 1, destructive: 2 }, ...o }] }), H)!.servers[0]!;
   const base = { restarting: new Set<string>(), serverResult: null };
   it('running · starting · not started (tier 0); the trust chip by its word; the class counts', () => {
-    expect(serverRow(srv({}), base, 0)).toMatchObject({ label: 'fs', value: 'running', mark: '✓', how: '3 reads · 1 changes · 2 can’t be undone', chip: { text: 'untrusted' } });
+    expect(serverRow(srv({}), base, 0)).toMatchObject({ label: 'fs', value: 'running', mark: '✓', how: 'reads 3 · changes 1 · can’t be undone 2', chip: { text: 'untrusted' } });
+    // Mika #5: the readout form, zero classes left out; nothing in any class says so
+    expect(countsWords({ read: 0, mutate: 1, destructive: 0 })).toBe('changes 1');
+    expect(countsWords({ read: 4, mutate: 1, destructive: 1 })).toBe('reads 4 · changes 1 · can’t be undone 1');
+    expect(countsWords({ read: 0, mutate: 0, destructive: 0 })).toBe('no tools listed');
     expect(serverRow(srv({ state: 'starting' }), base, 0)).toMatchObject({ value: 'starting…' });
     expect(serverRow(srv({ state: 'not-started', trust: 'first-party' }), base, 0)).toMatchObject({ value: 'not started (tier 0)', chip: { text: 'first-party', ink: true } });
   });
   it('refused: plain words and next:; pin-mismatch gets Stage in Settings', () => {
     expect(serverRow(srv({ state: 'refused', fit: 'disabled' }), base, 0)).toMatchObject({ value: 'refused: it was turned off in Settings after this session opened', how: 'next: open a new session', mark: '✕' });
+    // Mika #2: a refused server carries no trust chip; the other states do
+    expect(serverRow(srv({ state: 'refused', fit: 'disabled', trust: 'trusted' }), base, 0)).not.toHaveProperty('chip');
+    for (const state of ['running', 'starting', 'failed', 'not-started']) expect(serverRow(srv({ state, error: 'x' }), base, 0)).toHaveProperty('chip');
     expect(serverRow(srv({ state: 'refused', fit: 'pin-mismatch' }), base, 0)).toMatchObject({ value: 'refused: Paradigm isn’t staged', how: 'next: Stage in Settings', keys: [{ act: 'stage', label: 'Stage in Settings' }] });
     for (const fit of ['remote-refused', 'launch-writable', 'label-reserved', 'trust-changed']) expect(texts(serverRow(srv({ state: 'refused', fit }), base, 0))).not.toMatch(RAW);
   });
@@ -269,7 +285,7 @@ describe('#gui-capability-browser: the Memory segment', () => {
     expect(memoryView(ui({ memory: emptyMemoryUi() })).notice?.text).toBe('Reading this session’s memory…');
     expect(mem({ entries: [] }).notice?.text).toBe('No working memory yet. It fills when you send a prompt.');
     expect(mem({ entries: [] }).foot.keys).toEqual([]);
-    expect(mem({}, { access: 'not-owner' }).notice?.text).toBe('Only the person who opened this session can see its memory');
+    expect(mem({}, { access: 'not-owner' }).notice?.text).toBe('Only the person who opened this session can see its memory.');
     expect(mem({ phase: 'unreachable' }).notice).toMatchObject({ fail: true, key: { act: 'again' } });
   });
   it('Delete: a quiet key at the foot, then the inline confirm: Delete memory · Delete and end session · Keep', () => {
@@ -344,6 +360,10 @@ describe('#gui-capability-browser: Settings › Local model › Kept memory', ()
     expect(rows[1]).toMatchObject({ label: 'old one', keys: [{ act: 'kept:open', value: 'h1', label: 'Open' }, { act: 'kept:delete', value: 'h1', label: 'Delete' }] });
     const c = keptRows({ ...k, confirm: 'h1' });
     expect(c[1]).toMatchObject({ kind: 'form', confirm: { text: 'Delete this ended session’s working memory? The conversation stays.', keys: [{ act: 'kept:delete-yes', label: 'Delete memory', pri: true }, { act: 'kept:keep', label: 'Keep' }] } });
+    // Mika #3: while another delete runs, the other rows' Delete says why in a visible line linked by aria-describedby
+    const waiting = keptRows({ ...k, confirm: 'h1', busy: 'h1' })[2]!;
+    expect(waiting).toMatchObject({ how: 'waits: another delete is running', howId: 'kept-why-1', keys: [{ act: 'kept:open' }, { act: 'kept:delete', ariaDisabled: true, describedBy: 'kept-why-1' }] });
+    expect(keptRows(k)[1]).not.toHaveProperty('howId');
     expect(keptRows({ ...k, confirm: 'h1', busy: 'h1' })[1]).toMatchObject({ confirm: { keys: [{ busy: true, ariaDisabled: true, label: 'Deleting…' }, { ariaDisabled: true }] } });
     // none kept: no row at all; after the last one was deleted, the count says none and the result shows
     expect(keptRows({ ...k, sessions: [] })).toEqual([]);

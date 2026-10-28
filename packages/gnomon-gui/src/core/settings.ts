@@ -128,7 +128,7 @@ export type SettingRow =
   | { kind: 'action'; id: string; label: string; run: string; note?: string }
   | { kind: 'revoke'; id: string; label: string; grantId: string; note?: string }
   // `how` may be '' (no how line); mark (✓ ✕ ?) leads the value in 600; grp starts a group by space; live = polite
-  | { kind: 'readonly'; id: string; label: string; value: string; how: string; slot?: string; mark?: string; grp?: boolean; live?: boolean; keys?: FormKey[]; title?: string; chip?: { text: string; ink?: boolean } }
+  | { kind: 'readonly'; id: string; label: string; value: string; how: string; howId?: string; slot?: string; mark?: string; grp?: boolean; live?: boolean; keys?: FormKey[]; title?: string; chip?: { text: string; ink?: boolean } }
   // component settings-form (session 2026-10-22-gnomon-local-model): closed = its keys; open = the form
   | { kind: 'form'; id: string; label: string; keys: FormKey[]; form?: FormView; confirm?: { label: string; text: string; keys: FormKey[]; lines?: string[]; list?: string[]; after?: string[]; result?: ResultView }; result?: ResultView }
   | { kind: 'request'; id: string; label: string; chip: string; line: string; keys: FormKey[]; how: string }

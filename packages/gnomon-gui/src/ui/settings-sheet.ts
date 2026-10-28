@@ -192,7 +192,7 @@ export function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     if (r.grp) row.setAttribute('data-grp', 'start');
     if (r.live) row.setAttribute('aria-live', 'polite');
     row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value, r.chip ? ' ' : null, r.chip ? h(doc, 'span', { class: `chip${r.chip.ink ? ' ink' : ''}` }, r.chip.text) : null));
-    if (r.how) row.appendChild(rich(doc, 'p', { class: 'meta settings-how' }, r.how));
+    if (r.how) row.appendChild(r.howId ? setId(rich(doc, 'p', { class: 'meta settings-how' }, r.how), r.howId) : rich(doc, 'p', { class: 'meta settings-how' }, r.how));
     // the keys are a group named by their row, so "Turn off" is heard with what it turns off (Mika 2026-10-23)
     if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys', role: 'group', 'aria-label': r.label }, ...r.keys.map((k) => keyEl(doc, k))));
   }
