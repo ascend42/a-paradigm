@@ -171,7 +171,7 @@ describe('#gui-slash-menu: the args panel and the Run key', () => {
     const f = argFieldsOf(it);
     expect(f.map((x) => x.kind)).toEqual(['text', 'number', 'bool', 'enum', 'json', 'json']);
     expect(f[3]!.options.map((o) => o.label)).toEqual(['x', 'y']);
-    expect(argsOf(f, {})).toEqual({ errors: { s: 'needed' } });
+    expect(argsOf(f, {})).toEqual({ errors: { s: 'needed: fill this in' } });
     expect(argsOf(f, { s: 'hi', n: '2.5' })).toEqual({ errors: { n: 'a whole number' } });
     expect(argsOf(f, { s: 'hi', o: '{bad' })).toEqual({ errors: { o: 'not valid JSON' } });
     expect(argsOf(f, { s: 'hi', n: '3', b: '1', e: '0', o: '{"a":1}', u: '' })).toEqual({ args: { s: 'hi', n: 3, b: false, e: 'x', o: { a: 1 } } });
@@ -186,7 +186,7 @@ describe('#gui-slash-menu: the args panel and the Run key', () => {
     expect(skillArgsProblem('a\nb')).toBe(SKILL_COPY.badArgs);
     expect(skillArgsProblem('run !`ls`')).toBe(SKILL_COPY.badArgs);
     expect(skillArgsProblem('é'.repeat(2049))).toBe(SKILL_COPY.badArgs);
-    expect(skillRefusalWords({ why: 'over-budget', tokens: 120000, limit: 100000 })).toBe('this skill is 120000 tokens; this model takes at most 100000 from one skill');
+    expect(skillRefusalWords({ why: 'over-budget', tokens: 120000, limit: 100000 })).toBe('this skill is 120,000 tokens; this model takes at most 100,000 from one skill');
     expect(skillRefusalWords({ why: 'bad-args' })).toBe('arguments must be one line, under 4 KB, with no !`');
     expect(skillRefusalWords({ why: 'not-listed' })).toBe('this skill isn’t in this session any more');
     expect(skillRefusalWords({ why: 'weird' })).not.toContain('weird');
@@ -204,5 +204,26 @@ describe('#gui-slash-menu: the args panel and the Run key', () => {
     expect(toolsRunRequest(H, { id: 'fs/g@0123abcd', humanOnly: false }, {}).payload.form).toBe('narrow');
     expect(toolsResultRequest(H, 'run-x')).toEqual({ kind: 'request.session.tools.result', payload: { hsid: H, runId: 'run-x' } });
     expect(skillRunRequest(H, 'review', 'main')).toEqual({ kind: 'request.session.skill.run', payload: { hsid: H, name: 'review', args: 'main' } });
+  });
+});
+
+describe("#gui-slash-menu: Mika's C6'b2-1 review (#4, #5, #6)", () => {
+  const it0 = (params: unknown[]) => slashItemsOf({ caps: caps({ tools: [tool('q', { params })] }), skills: null, commands: [] })[0]!;
+  it('#4: no type word as a placeholder; a number says what it takes; JSON keeps its brackets', () => {
+    const f = argFieldsOf(it0([{ name: 's', required: false, type: 'string' }, { name: 'n', required: false, type: 'number' }, { name: 'i', required: false, type: 'integer' }, { name: 'a', required: false, type: 'array' }, { name: 'o', required: false, type: 'object' }]));
+    expect(f.map((x) => x.placeholder)).toEqual(['', 'a number', 'a whole number', '[ … ]', '{ … }']);
+    for (const x of f) expect(x.placeholder).not.toMatch(/^(string|number|integer)$/);
+  });
+  it('#5: a skill panel says its description once (under the heading); its field is labelled Arguments', () => {
+    const sk = slashItemsOf({ caps: null, skills: skillsOf({ hsid: H, skills }, H), commands: [] }).find((i) => i.key === 'skill:review')!;
+    expect(sk.why).toBe('review the diff');
+    expect(argFieldsOf(sk)).toEqual([expect.objectContaining({ name: 'args', label: 'Arguments', description: '', placeholder: '<branch>' })]);
+    expect(argFieldsOf(it0([{ name: 'path', required: true, type: 'string' }]))[0]!.label).toBe('path');
+  });
+  it('#6: the error is not the marker word alone; over-budget numbers are grouped', () => {
+    const f = argFieldsOf(it0([{ name: 'p', required: true, type: 'string' }, { name: 'e', required: true, type: 'string', enum: ['x'] }]));
+    expect(argsOf(f, {})).toEqual({ errors: { p: 'needed: fill this in', e: 'needed: fill this in' } });
+    expect(SLASH_COPY.needed).toBe('needed');
+    expect(skillRefusalWords({ why: 'over-budget', tokens: 41200, limit: 16000 })).toBe('this skill is 41,200 tokens; this model takes at most 16,000 from one skill');
   });
 });

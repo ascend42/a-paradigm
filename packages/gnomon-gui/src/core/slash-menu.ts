@@ -52,6 +52,8 @@ export const SLASH_COPY = Object.freeze({
   args: 'Arguments',
   argsHint: 'one line',
   needed: 'needed',
+  /** a required field left empty (Mika C6'b2-1 #6: the marker says needed; the error says what to do) */
+  neededErr: 'needed: fill this in',
   notNumber: 'a number',
   notWhole: 'a whole number',
   notJson: 'not valid JSON',
@@ -230,6 +232,8 @@ export function runsOnEnter(it: SlashItem): boolean {
 export type FieldKind = 'text' | 'number' | 'bool' | 'enum' | 'json';
 export interface ArgField {
   name: string;
+  /** the field's label (a tool's argument name; a skill's one line is Arguments) */
+  label: string;
   required: boolean;
   kind: FieldKind;
   /** a seg's choices (enum, bool); the value of a seg field is the choice's index as a string */
@@ -249,11 +253,13 @@ const typeKind = (p: CapParam): FieldKind => {
 
 /** A tool's fields (one per argument), or a skill's one line. */
 export function argFieldsOf(it: Pick<SlashItem, 'kind' | 'tool' | 'skill'>): ArgField[] {
-  if (it.kind === 'skill') return [{ name: 'args', required: false, kind: 'text', options: [], integer: false, description: it.skill?.description ?? '', placeholder: it.skill?.argumentHint || SLASH_COPY.argsHint }];
+  if (it.kind === 'skill') return [{ name: 'args', label: SLASH_COPY.args, required: false, kind: 'text', options: [], integer: false, description: '', placeholder: it.skill?.argumentHint || SLASH_COPY.argsHint }];
   return (it.tool?.params ?? []).map((p) => {
     const kind = typeKind(p);
     const options = kind === 'enum' ? p.enum!.map((v) => ({ label: v === null ? 'null' : String(v), value: v })) : kind === 'bool' ? [{ label: 'true', value: true }, { label: 'false', value: false }] : [];
-    return { name: p.name, required: p.required, kind, options, integer: p.type === 'integer', description: p.description, placeholder: kind === 'json' ? (p.type === 'array' ? '[ … ]' : '{ … }') : p.type };
+    // Mika C6'b2-1 #4: no type word as a placeholder (text: none; a number says what it takes; JSON keeps its brackets)
+    const placeholder = kind === 'json' ? (p.type === 'array' ? '[ … ]' : '{ … }') : kind === 'number' ? (p.type === 'integer' ? SLASH_COPY.notWhole : SLASH_COPY.notNumber) : '';
+    return { name: p.name, label: p.name, required: p.required, kind, options, integer: p.type === 'integer', description: p.description, placeholder };
   });
 }
 
@@ -264,7 +270,7 @@ export function argsOf(fields: readonly ArgField[], values: Readonly<Record<stri
   for (const f of fields) {
     const raw = values[f.name] ?? '';
     if (raw.trim() === '') {
-      if (f.required) errors[f.name] = SLASH_COPY.needed;
+      if (f.required) errors[f.name] = SLASH_COPY.neededErr;
       continue;
     }
     switch (f.kind) {
@@ -281,7 +287,7 @@ export function argsOf(fields: readonly ArgField[], values: Readonly<Record<stri
       case 'bool':
       case 'enum': {
         const o = f.options[Number(raw)];
-        if (!o) errors[f.name] = SLASH_COPY.needed;
+        if (!o) errors[f.name] = SLASH_COPY.neededErr;
         else args[f.name] = o.value;
         break;
       }
@@ -301,7 +307,7 @@ export function argsOf(fields: readonly ArgField[], values: Readonly<Record<stri
 export const SKILL_COPY = Object.freeze({
   badArgs: 'arguments must be one line, under 4 KB, with no !`',
   notListed: 'this skill isn’t in this session any more',
-  overBudget: (tokens: number | null, limit: number | null): string => `this skill is ${tokens ?? '?'} tokens; this model takes at most ${limit ?? '?'} from one skill`,
+  overBudget: (tokens: number | null, limit: number | null): string => `this skill is ${tokens === null ? '?' : tokens.toLocaleString('en-US')} tokens; this model takes at most ${limit === null ? '?' : limit.toLocaleString('en-US')} from one skill`,
   ran: (name: string, args: string): string => `you ran skill /${name}${args ? ` ${args}` : ''}`,
 });
 

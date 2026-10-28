@@ -133,6 +133,8 @@ export class SlashFlow {
   readonly #skillsAsked = new Set<string>();
   /** where focus goes after a repaint (taken once) */
   #focus: 'textarea' | 'panel' | 'run' | null = null;
+  /** the human moved the active row (↑/↓): from then on a refresh keeps it while it is shown */
+  #moved = false;
 
   constructor(d: SlashFlowDeps) {
     this.#d = d;
@@ -208,6 +210,7 @@ export class SlashFlow {
       return true;
     }
     this.#gen++;
+    this.#moved = false;
     this.#s = { hsid, query, active: null, args: null, values: {}, errors: {}, result: null, busy: false, phase: a.tools || a.skills ? 'reading' : 'loaded', caps: null, skills: null, starting: false, startError: null };
     this.#pickActive();
     this.#d.live('');
@@ -265,6 +268,7 @@ export class SlashFlow {
     const at = items.findIndex((i) => i.key === s.active);
     const to = at < 0 ? (delta > 0 ? 0 : items.length - 1) : (at + delta + items.length) % items.length;
     s.active = items[to]!.key;
+    this.#moved = true;
     this.#d.repaint();
   }
 
@@ -507,7 +511,9 @@ export class SlashFlow {
     const s = this.#s;
     if (!s) return;
     const items = this.items();
-    if (!items.some((i) => i.key === s.active)) s.active = items[0]?.key ?? null;
+    // Mika C6'b2-1 #3: until the human moves (↑/↓), the active row is the first enabled row on every refresh (skills
+    // arrive after the commands: "/" + Enter acts on the top row, never a row the first paint happened to pick)
+    if (!this.#moved || !items.some((i) => i.key === s.active)) s.active = (items.find((i) => !i.disabled) ?? items[0])?.key ?? null;
   }
 
   #say(): void {
@@ -694,7 +700,7 @@ export function mountSlashMenu(doc: Document, d: SlashMenuDeps): SlashMenu {
     const eid = `slash-e-${n}`;
     const row = doc.createElement('div');
     row.className = 'slash-field';
-    const lab = h(mini, 'label', { class: 'sf-label' }, f.name, f.required ? h(mini, 'small', { class: 'slash-req' }, ` · ${SLASH_COPY.needed}`) : null) as unknown as HTMLElement;
+    const lab = h(mini, 'label', { class: 'sf-label' }, f.label, f.required ? h(mini, 'small', { class: 'slash-req' }, ` · ${SLASH_COPY.needed}`) : null) as unknown as HTMLElement;
     if (f.kind === 'bool' || f.kind === 'enum') lab.id = `${fid}-l`;
     else lab.setAttribute('for', fid);
     row.appendChild(lab);
@@ -759,13 +765,16 @@ export function mountSlashMenu(doc: Document, d: SlashMenuDeps): SlashMenu {
     const s = flow.state();
     const f = flow.takeFocus();
     if (!s) {
+      // Mika C6'b2-1 #2: focus inside the menu (a field, Run, close) returns to the textarea on any close, read BEFORE
+      // the panel's fields are removed (removing them drops focus to the body)
+      const inside = wrap.contains(doc.activeElement);
       wrap.hidden = true;
       panel.hidden = true;
       panel.replaceChildren();
       list.replaceChildren();
       ta.removeAttribute('aria-activedescendant');
       ta.removeAttribute('aria-expanded');
-      if (f === 'textarea' && wrap.contains(doc.activeElement)) ta.focus();
+      if (inside || (f === 'textarea' && doc.activeElement === doc.body)) ta.focus();
       return;
     }
     wrap.hidden = false;

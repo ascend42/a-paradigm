@@ -101,7 +101,7 @@ describe('#gui-slash-menu: the flow', () => {
     r.flow.press(null, true);
     expect(r.flow.state()!.args).toBe('tool:fs/write@0123abcd');
     await r.flow.runArgs(true);
-    expect(r.flow.state()!.errors).toEqual({ path: 'needed' });
+    expect(r.flow.state()!.errors).toEqual({ path: 'needed: fill this in' });
     expect(r.kinds()).not.toContain('request.session.tools.run');
     r.flow.setValue('path', 'a.txt');
     await r.flow.runArgs(false);
@@ -183,7 +183,7 @@ describe('#gui-slash-menu: the flow', () => {
     expect(r.kinds()).not.toContain('request.session.skill.run');
     r.flow.setValue('args', 'main');
     await r.flow.runArgs(true);
-    expect(r.flow.state()!.result).toBe('this skill is 9000 tokens; this model takes at most 4000 from one skill');
+    expect(r.flow.state()!.result).toBe('this skill is 9,000 tokens; this model takes at most 4,000 from one skill');
     await r.flow.runArgs(true);
     expect(r.skillsRan).toEqual([[H, 'review', 'main', 't-1']]);
     expect(r.flow.isOpen()).toBe(false);
@@ -234,5 +234,36 @@ describe('#gui-slash-menu: wiring', () => {
     expect(UI).toContain('e.stopPropagation(); // Esc closes only the menu');
     expect(UI).toContain("import { trapTab } from './tier-picker.js';");
     expect(UI).toContain("say.setAttribute('aria-live', 'polite')");
+  });
+});
+
+describe("#gui-slash-menu: Mika's C6'b2-1 review (#2, #3)", () => {
+  it('#3: until ↑/↓, the active row is the first enabled row on every refresh (skills arrive after commands)', async () => {
+    let release!: (v: unknown) => void;
+    const late = new Promise((r) => (release = r));
+    const r = rig({ 'request.session.skills.list': [() => late] });
+    r.flow.open(H, '', true);
+    // before the read lands: the commands are first
+    expect(r.flow.state()!.active).toBe('cmd:tools.open');
+    release({ hsid: H, skills: [{ name: 'review', loaded: true }] });
+    await tick();
+    await tick();
+    expect(r.flow.state()!.active).toBe('skill:review');
+    // a disabled first row is skipped
+    const d = rig({ 'request.session.skills.list': [{ hsid: H, skills: [{ name: 'aaa', loaded: false, why: 'x' }, { name: 'bbb', loaded: true }] }] });
+    d.flow.open(H, '', true);
+    await tick();
+    expect(d.flow.state()!.active).toBe('skill:bbb');
+    // once the human moved, a refresh keeps their row while it is shown
+    d.flow.move(1);
+    const chosen = d.flow.state()!.active;
+    await d.flow.read();
+    expect(d.flow.state()!.active).toBe(chosen);
+  });
+  it('#2: on any close, focus inside the menu (a field, Run, close) returns to the textarea, read before the panel empties', () => {
+    const at = UI.indexOf('const inside = wrap.contains(doc.activeElement);');
+    expect(at).toBeGreaterThan(0);
+    expect(at).toBeLessThan(UI.indexOf('panel.replaceChildren();', at));
+    expect(UI).toContain("if (inside || (f === 'textarea' && doc.activeElement === doc.body)) ta.focus();");
   });
 });

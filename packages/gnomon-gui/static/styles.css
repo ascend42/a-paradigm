@@ -1061,9 +1061,9 @@ html, body {
 /* ONE container (founder report 2026-10-20, "box inside a box"): the composer carries the only border and the focus
    ring; the textarea draws no border, outline or shadow of its own. The ring shows while the text field has keyboard
    focus (a11y: a visible focus state), on the same token as every other focus ring. */
-.composer textarea.field { border: 0; padding: 0; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
-.composer textarea.field:focus, .composer textarea.field:focus-visible { outline: none; box-shadow: none; }
-.composer:has(textarea.field:focus-visible) { outline: 2px solid var(--key-edge); outline-offset: -1px; }
+.composer #composer-text { border: 0; padding: 0; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+.composer #composer-text:focus, .composer #composer-text:focus-visible { outline: none; box-shadow: none; }
+.composer:has(#composer-text:focus-visible) { outline: 2px solid var(--key-edge); outline-offset: -1px; }
 
 /* palette rows: title left, kbd hint right */
 .pal-row { padding: 6px 10px; border-radius: var(--radius); align-items: baseline; }
