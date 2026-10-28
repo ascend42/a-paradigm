@@ -15,9 +15,10 @@ import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
 import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
 import {
-  readClassroomCertifications,
   computeRepeatFailureRate,
 } from '@a-company/premise-core';
+// Scoped learning: the union of every home, not premise-core's repo-only reader.
+import { readClassroomCertifications } from '../../../../paradigm-mcp/src/utils/field-failures.js';
 // Relative-path import into bundled paradigm-mcp source (same pattern as core/task-bridge.ts).
 import { listLearningStores } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
 
@@ -1161,7 +1162,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   const classroom = (() => {
     try {
       const certs = readClassroomCertifications(cwd);
-      const rollup = computeRepeatFailureRate(certs);
+      const rollup = computeRepeatFailureRate(certs.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
       const resolvedTotal = Object.values(rollup.perAgent).reduce(
         (n, a) => n + a.resolved,
         0,

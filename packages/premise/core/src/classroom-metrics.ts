@@ -104,9 +104,14 @@ function readJsonl<T>(filePath: string): T[] {
 }
 
 /**
- * Read all classroom-certification rows from
+ * Read all classroom-certification rows from the REPO ledger only,
  * `.paradigm/events/classroom-certifications.jsonl`. Tolerant — a missing or
  * corrupt ledger yields `[]`.
+ *
+ * @deprecated Scoped learning (TD-2026-10-28-820): certifications also live in
+ * the user home. premise-core cannot depend on paradigm-mcp's resolver, so
+ * Paradigm callers use paradigm-mcp `field-failures.readClassroomCertifications`
+ * (the union of every home) and pass the rows to computeRepeatFailureRate.
  */
 export function readClassroomCertifications(rootDir: string): ClassroomCertRow[] {
   return readJsonl<ClassroomCertRow>(

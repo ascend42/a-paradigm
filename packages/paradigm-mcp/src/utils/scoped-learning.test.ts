@@ -188,6 +188,18 @@ describe('promotion carries the journal home', () => {
   });
 });
 
+describe('classroom metrics see every home (F1)', () => {
+  it('counts a transferable:true promotion cert from the user home in the tool rollup', async () => {
+    const j = journal('kit', { transferable: true, tags: ['portable-cert'] });
+    gatedPromoteJournalEntry(root, 'kit', j.id, { certifiedBy: 'peer' });
+    expect(fs.existsSync(events('classroom-certifications.jsonl'))).toBe(false);
+    const { handleClassroomTool } = await import('../tools/classroom.js');
+    const out = await handleClassroomTool('paradigm_classroom_status', {}, { rootDir: root } as never);
+    const parsed = JSON.parse(out.text) as { perAgent: Record<string, { certifications: { total: number } }> };
+    expect(parsed.perAgent.kit.certifications.total).toBe(1);
+  });
+});
+
 describe('verdicts', () => {
   it('go to the user home with an author, and never consume a teammate repo verdict', () => {
     process.env.PARADIGM_AUTHOR = 'me';
