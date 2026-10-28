@@ -6,6 +6,8 @@ import * as fs from 'node:fs';
 
 const pidfile = process.argv[2];
 if (pidfile) fs.writeFileSync(pidfile, String(process.pid));
+// the spawn cwd, and whether repo-relative code (a `python -m pkg` / `go run .` style lookup) is visible from it
+if (pidfile) fs.writeFileSync(`${pidfile}.cwd`, JSON.stringify({ cwd: process.cwd(), seesRepoCode: fs.existsSync('pkg/__init__.py') || fs.existsSync('go.mod') }));
 if (pidfile) fs.writeFileSync(`${pidfile}.env`, JSON.stringify(Object.keys(process.env).filter((k) => /^GNOMON_/i.test(k))));
 let changed = false;
 let calls = 0;

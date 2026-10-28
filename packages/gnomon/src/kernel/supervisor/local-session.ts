@@ -110,7 +110,7 @@ import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
 import { LOCAL_RESERVED_TOOL_NAMES, offerWithin, type CapabilityEntry } from '../local/capability-index.js';
-import { launchDenies, LocalMcpPool, McpListCache, serverEnv, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
+import { launchCheck, serverLabel, LocalMcpPool, McpListCache, serverEnv, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
@@ -281,7 +281,7 @@ interface LocalSession {
   /** slice C2': the session's MCP servers (#local-mcp-client; attended sessions only), reaped at exit */
   mcp?: { pool: LocalMcpPool; kernel: BrokeredTool[]; entries: Map<string, CapabilityEntry[]>; manual: boolean; bound: Map<string, string>; offeredHash: string };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
-  mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit }> };
+  mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }> };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
   memory?: WorkingMemory;
   /** slice B2: the hash of the last memory_set sent (a change that renders the same block sends nothing) */
@@ -297,6 +297,14 @@ interface LocalSession {
   /** slice B2: the context target in effect, the signed config's, the endpoint's n_ctx and the reply budget */
   context: { target: number; config: number; nCtx: number | null; maxTokens: number };
 }
+
+/** Slice C2' (Aegis functional note): why a server failed, in words a human can act on. */
+function readableFailure(error: string, srv: LocalMcpServer | undefined, userHome: string | null): string {
+  const underHome = userHome && srv && [srv.command ?? '', ...(srv.args ?? [])].some((a) => path.isAbsolute(a) && (a === userHome || a.startsWith(userHome + path.sep)));
+  return underHome ? `${error} — it is installed under your home folder (nvm, ~/.npm, the uv cache…), which local sessions cannot read yet` : `${error} — it could not start or list its tools under the local session's sandbox`;
+}
+const userHomeOf = (h: string | undefined): string | null => (h ? path.resolve(h) : (process.env.HOME ?? null));
+const serverLabelOf = (s: LocalMcpServer): string => serverLabel(s.name);
 
 /** Slice C2' (Aegis M4): the hash of an offered set (names, classes, schemas, descriptions, targets). */
 const offeredHash = (tools: readonly BrokeredTool[]): string => createHash('sha256').update(JSON.stringify(tools.map((t) => [t.name, t.class, t.description, t.parameters, t.target?.server ?? null]))).digest('hex');
@@ -857,7 +865,10 @@ export class LocalLane {
           mcpServers = [];
         }
       }
-      const closure = launchDenies(mcpServers, wtReal ?? cwdReal, [cwdReal, ...(wtReal ? [wtReal] : [])]);
+      // Aegis H1 (re-check): servers run in a NEUTRAL cwd (empty, kernel-made, write-denied, under the Gnomon home and
+      // outside every root) and are refused launch-writable when anything that decides what they run is in a root
+      const neutralCwd = path.join(this.#o.home, 'sessions', `${hsidShort(hsid)}-mcp`); // a sibling of the session dir, never inside it
+      const closure = launchCheck(mcpServers, { roots: [cwdReal, ...(wtReal ? [wtReal] : [])], cwd: neutralCwd, sessionPath: env.PATH });
       const policyInput: Parameters<typeof buildSessionPolicy>[0] = {
         home: this.#o.home,
         cwd: cwdReal,
@@ -869,7 +880,7 @@ export class LocalLane {
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
         // slice C2': a session that can run MCP servers cannot swap what the next session's servers run
-        extraDenyWrite: [...this.#o.pathDenies, ...(closure.servers.length && this.#o.mcpDenyWrite ? this.#o.mcpDenyWrite({ cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }) : []), ...closure.denies],
+        extraDenyWrite: [...this.#o.pathDenies, ...(closure.servers.length && this.#o.mcpDenyWrite ? this.#o.mcpDenyWrite({ cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }) : [])],
         localRunner: { node: pin.node, dir: pin.dir },
         // T-2026-10-18-010: the home is read-denied; only this session's dir (local.yaml) and the staged runner copy are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: runner.copy, match: 'subpath' }],
@@ -879,7 +890,13 @@ export class LocalLane {
       const policy: SessionPolicy = buildSessionPolicy(policyInput);
       // Aegis H2: an MCP server's OWN profile: the session's, minus the session dir and the runner copy (no session
       // key, local.yaml or memory.jsonl is readable to third-party code)
-      const mcpPolicy: SessionPolicy | null = closure.servers.length ? buildSessionPolicy({ ...policyInput, homeReadable: [] }) : null;
+      // Aegis H1: the neutral cwd is its only readable home path (empty: made 0700, then 0500 once it exists)
+      let mcpPolicy: SessionPolicy | null = null;
+      if (closure.servers.length) {
+        fs.mkdirSync(neutralCwd, { recursive: true, mode: 0o700 });
+        if (this.#platform !== 'win32') fs.chmodSync(neutralCwd, 0o500);
+        mcpPolicy = buildSessionPolicy({ ...policyInput, homeReadable: [{ path: realRoot(neutralCwd) ?? neutralCwd, match: 'subpath' }], extraDenyWrite: [...(policyInput.extraDenyWrite ?? []), { path: realRoot(neutralCwd) ?? neutralCwd, match: 'subpath', class: 'binary' }] });
+      }
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const configPath = path.join(dir, 'local.yaml');
       const sessionCfg = {
@@ -903,7 +920,9 @@ export class LocalLane {
         ...(loop ? {} : { memory: true }),
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal };
+      // Aegis (C2' re-check, low): the runner speaks stdio only (gnomon-local never reads GNOMON_SOCK) and MCP servers
+      // never need the kernel: both profiles deny connecting to the kernel socket (the agentSockets path-literal deny)
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: (this.#platform === 'win32' ? env.TEMP : env.TMPDIR) ?? DARWIN_SCREEN_TMP_FALLBACK, home: userHome, roots: rootsReal, ...(path.isAbsolute(this.#o.sock) ? { agentSockets: [this.#o.sock] } : {}) };
       const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...drv.argv({ configPath, hsid })], extras, hsid };
       // step 10: an act step runs under `loop-act` (the session profile narrowed to its scratch and its endpoint port)
       const actLaunch: LoopActLaunchInput | null = loop?.act ? { ...launch, act: { home: this.#o.home, userHome, scratch: loop.act.scratch.tree, tmp: loop.act.scratch.tmp, repo: loop.act.scratch.repo, nodeModules: loop.act.scratch.nodeModules, endpointPort: loop.act.endpointPort, gitDeny: [loop.act.scratch.commonDir, ...loop.act.scratch.siblingWorktrees] } } : null;
@@ -927,7 +946,8 @@ export class LocalLane {
       tracked = true;
       const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       // Aegis H2: the servers get their own policy and an env without any kernel credential or handle
-      if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: wtReal ?? cwdReal, servers: closure.servers, refused: closure.refused };
+      if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, servers: closure.servers, refused: closure.refused, failed: [] };
+      else if (closure.refused.length) s.mcpLaunch = undefined;
       this.#sessions.set(hsid, s);
       live = s;
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
@@ -1013,6 +1033,8 @@ export class LocalLane {
           track: (child, label) => void this.#o.children.track({ kind: 'mcp-server', child, hsid: s.hsid, name: `mcp:${label}` }).catch(() => undefined) });
         s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual, bound: new Map(), offeredHash: '' };
         const ix = await pool.index();
+        // functional note (Aegis): a server that cannot start under the local profile says why, readably
+        s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
         for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
         tools = this.#mcpOffer(s);
         s.mcp.offeredHash = offeredHash(tools);
@@ -1046,6 +1068,13 @@ export class LocalLane {
     })];
   }
 
+  /** Slice C2': why this session's MCP servers were refused or failed (readable; no GUI surface yet). */
+  mcpReport(hsid: string): { refused: Array<{ id: string; name: string; fit: string; why?: string }>; failed: Array<{ label: string; error: string }> } | null {
+    const s = this.#sessions.get(hsid);
+    if (!s?.mcpLaunch) return null;
+    return { refused: [...s.mcpLaunch.refused, ...(s.mcp?.pool.refused ?? [])], failed: [...s.mcpLaunch.failed] };
+  }
+
   /** Slice C2': a server's notifications/tools/list_changed — re-narrowed, re-offered, one new tools_set. */
   #mcpChanged(s: LocalSession, label: string, entries: CapabilityEntry[]): void {
     if (!s.mcp || !s.tools || s.state !== 'running') return;
@@ -1066,6 +1095,7 @@ export class LocalLane {
     const input: SessionLaunchInput = { ...m.launch, binaryReal: srv.command, argv: [...(srv.args ?? [])] };
     const plan = this.#o.launchPlan ? this.#o.launchPlan(input) : sessionLaunchPlan(input, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
     const env = serverEnv(m.env, srv.env, LOOP_SESSION_ENV_DROPPED);
+    // Aegis H1: the neutral cwd, never the repo (the repo reaches the server only through its expanded args/env)
     return spawn(plan.command, plan.args, { cwd: m.cwd, env, detached: this.#platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
   }
 
@@ -1341,8 +1371,16 @@ export class LocalLane {
     // slice C1: calls in flight are cancelled (their cards expire, no target runs) and the session's verb cards expire
     s.tools?.cancelAll();
     if (s.tools?.offered.length) await this.#o.gitVerbs?.closeSession?.(s.hsid).catch(() => undefined);
-    // slice C2': every MCP server this session spawned is reaped
+    // slice C2': every MCP server this session spawned is reaped, and its neutral cwd removed
     await s.mcp?.pool.closeAll().catch(() => undefined);
+    if (s.mcpLaunch) {
+      try {
+        fs.chmodSync(s.mcpLaunch.cwd, 0o700);
+        fs.rmSync(s.mcpLaunch.cwd, { recursive: true, force: true });
+      } catch {
+        /* already gone */
+      }
+    }
     if (this.#platform === 'win32') {
       // W5: this session's win32 labels and grants (platform/win32/session-sandbox.ts releaseSession)
       try {

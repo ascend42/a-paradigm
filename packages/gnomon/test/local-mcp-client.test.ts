@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { remoteProxyOf } from '../src/kernel/desk/mcp-server-cards.js';
-import { launchClosure, launchDenies, LocalMcpPool, McpListCache, McpStdioClient, serverEnv, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
+import { launchCheck, LocalMcpPool, McpListCache, McpStdioClient, serverEnv, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
 
 const FAKE = path.join(__dirname, 'fixtures', 'fake-mcp-server.mjs');
 const dirs: string[] = [];
@@ -190,23 +190,26 @@ describe('LocalMcpPool', () => {
   }, 30_000);
 });
 
-describe('Aegis H1/H2: launch closure and server env', () => {
-  it('a model-writable launch file inside the roots is write-denied; a closure that is a root refuses the server', () => {
+describe('Aegis H1/H2: launch check and server env', () => {
+  it('refused launch-writable when the command, an arg, an env path segment or a PATH entry is in a root; case-folded on darwin', () => {
     const d = tmp();
     const repo = path.join(d, 'repo');
-    fs.mkdirSync(path.join(repo, 'tools'), { recursive: true });
-    const s = server({ command: process.execPath, args: ['./tools/mcp.js', '--flag'] });
-    const r = launchDenies([s], repo, [repo]);
-    const denied = r.denies.map((x) => x.path);
-    expect(denied).toEqual(expect.arrayContaining([path.join(repo, 'tools', 'mcp.js'), path.join(repo, 'package.json'), path.join(repo, 'node_modules')]));
-    expect(r.denies.find((x) => x.path === path.join(repo, 'node_modules'))!.match).toBe('subpath');
-    expect(r.servers).toHaveLength(1);
-    // the command itself outside the roots is in the closure but never a session deny
-    expect(launchClosure(s, repo).map((c) => c.path)).toContain(fs.realpathSync.native(process.execPath));
-    expect(denied).not.toContain(fs.realpathSync.native(process.execPath));
-    const bad = launchDenies([server({ args: [repo] })], repo, [repo]);
-    expect(bad.refused).toEqual([{ id: 'user::fake', name: 'fake', fit: 'launch-writable' }]);
-    expect(bad.servers).toEqual([]);
+    const neutral = path.join(d, 'gnomon-home', 'mcp-cwd', 'x');
+    fs.mkdirSync(path.join(repo, 'bin'), { recursive: true });
+    fs.mkdirSync(neutral, { recursive: true });
+    const chk = (s: LocalMcpServer, o: { sessionPath?: string; platform?: string; cwd?: string } = {}) => launchCheck([s], { roots: [repo], cwd: o.cwd ?? neutral, sessionPath: o.sessionPath ?? '/usr/bin', ...(o.platform ? { platform: o.platform } : {}) });
+    expect(chk(server()).servers).toHaveLength(1);
+    expect(chk(server({ command: path.join(repo, 'bin', 'srv') })).refused[0]).toMatchObject({ fit: 'launch-writable', why: expect.stringMatching(/command/) });
+    expect(chk(server({ args: [path.join(repo, 'tools', 'mcp.js')] })).refused[0]!.why).toMatch(/argument/);
+    expect(chk(server({ env: { PYTHONPATH: `/opt/x${path.delimiter}${path.join(repo, 'src')}` } })).refused[0]!.why).toMatch(/env PYTHONPATH/);
+    expect(chk(server(), { sessionPath: `/usr/bin${path.delimiter}${path.join(repo, 'bin')}` }).refused[0]!.why).toMatch(/PATH entry/);
+    expect(chk(server({ env: { PATH: path.join(repo, 'bin') } })).refused[0]!.why).toMatch(/PATH entry/);
+    // a case-variant of the root (APFS folds case): still inside
+    expect(chk(server({ args: [path.join(repo.toUpperCase(), '.NPMRC')] }), { platform: 'darwin' }).refused).toHaveLength(1);
+    // `python -m pkg` / `go run .`: no path-like arg, and the neutral cwd keeps repo code out of reach
+    expect(chk(server({ command: '/usr/bin/python3', args: ['-m', 'pkg'] })).servers).toHaveLength(1);
+    // a neutral dir inside a root refuses every server
+    expect(chk(server(), { cwd: path.join(repo, 'n') }).refused[0]!.why).toMatch(/neutral/);
   });
 
   it('the server env never carries GNOMON_* or the loop-dropped names', () => {
@@ -255,4 +258,33 @@ describe('Aegis L3 / Q7', () => {
     expect(remoteProxyOf(['supergateway'])).toBe('supergateway');
     expect(remoteProxyOf(['my-server'])).toBeNull();
   });
+});
+
+describe('Aegis M3 (re-check): pid-reuse-safe reaping', () => {
+  it('a group is killed once, when its leader closes; a closed group is never signalled again', async () => {
+    const kills: number[] = [];
+    const c = new McpStdioClient(spawnFake(), { killGroup: (pid) => void kills.push(pid) });
+    await c.initialize();
+    const pid = c.pid!;
+    await expect(c.callTool('crash', {}, { deadline: Date.now() + 10_000 })).rejects.toMatchObject({ code: 'exited' });
+    await c.exited;
+    await waitFor(() => kills.length === 1);
+    expect(kills).toEqual([pid]);
+    expect(c.closed).toBe(true);
+    expect(c.pid).toBeUndefined();
+    c.kill();
+    c.kill();
+    expect(kills).toEqual([pid]);
+  }, 20_000);
+
+  it('closeAll signals only live leaders; a restarted server never re-kills the old group', async () => {
+    let spawned = 0;
+    const pool = new LocalMcpPool({ servers: [server()], repo: '/r', spawn: () => (spawned++, spawnFake()) });
+    const t = pool.target('fake')!;
+    await t.call('crash', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 });
+    expect((await t.call('echo', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 })).isError).toBe(false);
+    expect(spawned).toBe(2);
+    await pool.closeAll();
+    expect(pool.live).toBe(0);
+  }, 20_000);
 });

@@ -254,15 +254,22 @@ components:
       plugin servers only, no first-party Paradigm and no project/local
       scope until Paradigm is staged; trust from the store entry, default
       enabled); http/sse refused remote-refused, reserved labels
-      label-reserved. Aegis H1: servers are fixed before the session profile,
-      which write-denies every launch-closure path inside the roots
-      (launchDenies; a closure that is a root refuses launch-writable).
-      Aegis H2: each server spawns lazily under its OWN policy (no session
-      dir or runner copy) with every GNOMON_* name stripped (serverEnv).
+      label-reserved. Aegis H1 (re-check): servers run in a neutral cwd
+      (sessions/<short>-mcp under the Gnomon home: empty, write-denied,
+      outside every root, removed at exit) and are refused launch-writable
+      when the command, a path-like arg, a path-like env segment or a PATH
+      entry lies in a root (launchCheck; lexical + realpath, case-folded on
+      darwin/win32). Aegis H2: each server spawns lazily under its OWN
+      policy (no session dir or runner copy; the neutral cwd readable) with
+      every GNOMON_* name stripped (serverEnv); runner and servers are
+      denied the kernel socket. Failures are recorded readably
+      (LocalLane.mcpReport; a server under ~ says so). Aegis M3 (re-check):
+      a group is killed once when its leader closes; closeAll signals only
+      live leaders.
       Kernel-lifetime tools/list cache per launch + repo (a hit spawns
       nothing until the first call), failures cached 60 s, one 15 s deadline
-      per server at open. Aegis M3/M4: every pid's group SIGKILLed on
-      restart and close, servers tracked as children kind mcp-server; one
+      per server at open. Aegis M3/M4: servers tracked as children kind
+      mcp-server; one
       relist in flight + one pending, 2 s apart, 6 a minute then stale;
       tools_set only on a changed offered-set hash; a name never rebinds to
       another server.

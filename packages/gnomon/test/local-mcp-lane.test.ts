@@ -51,6 +51,9 @@ describe('slice C2\': a local session calls a narrow MCP tool end to end', () =>
     const home = path.join(root, 'gnomon-home');
     fs.mkdirSync(cwd, { recursive: true });
     fs.mkdirSync(home);
+    fs.mkdirSync(path.join(cwd, 'pkg'));
+    fs.writeFileSync(path.join(cwd, 'pkg', '__init__.py'), 'raise SystemExit("repo code ran")\n');
+    fs.writeFileSync(path.join(cwd, 'go.mod'), 'module x\n');
     const pidfile = path.join(root, 'fake-mcp.pid');
     srv = await fakeOpenAI({
       tools: true,
@@ -102,15 +105,25 @@ describe('slice C2\': a local session calls a narrow MCP tool end to end', () =>
     const mcpPlan = plans.find((p) => p.argv[0] === FAKE)!;
     const sessionDir = path.join(home, 'sessions');
     expect(runnerPlan.policy.allowRead.some((r) => r.path.startsWith(sessionDir))).toBe(true);
-    expect(mcpPlan.policy.allowRead.some((r) => r.path.startsWith(sessionDir))).toBe(false);
-    // Aegis H1: the session profile write-denies the node server's project launch files inside the root
-    const real = fs.realpathSync.native(cwd);
-    expect(runnerPlan.policy.denyWrite.map((d) => d.path)).toEqual(expect.arrayContaining([path.join(real, 'package.json'), path.join(real, 'node_modules')]));
+    const sDir = runnerPlan.policy.allowRead.find((r) => r.path.startsWith(sessionDir) && !r.path.endsWith('-mcp'))!.path;
+    expect(mcpPlan.policy.allowRead.some((r) => r.path === sDir || r.path.startsWith(sDir + path.sep))).toBe(false);
+    // Aegis H1 (re-check): the server runs in the neutral cwd under the Gnomon home, never the repo, and cannot see
+    // repo code a `python -m pkg` / `go run .` lookup would take from its cwd; the neutral dir is write-denied
+    const where = JSON.parse(fs.readFileSync(`${pidfile}.cwd`, 'utf8')) as { cwd: string; seesRepoCode: boolean };
+    expect(where.cwd.startsWith(fs.realpathSync.native(path.join(home, 'sessions')))).toBe(true);
+    expect(where.cwd.endsWith('-mcp')).toBe(true);
+    expect(where.seesRepoCode).toBe(false);
+    // the runner and the servers are both denied the kernel socket (agentSockets path-literal deny)
+    expect((mcpPlan as unknown as { extras: { agentSockets?: string[] } }).extras.agentSockets).toContain(path.join(root, 'k.sock'));
+    expect((runnerPlan as unknown as { extras: { agentSockets?: string[] } }).extras.agentSockets).toContain(path.join(root, 'k.sock'));
+    expect(mcpPlan.policy.denyWrite.some((d) => d.path === where.cwd)).toBe(true);
     expect(JSON.parse(fs.readFileSync(`${pidfile}.env`, 'utf8'))).toEqual([]);
     const pid = Number(fs.readFileSync(pidfile, 'utf8'));
     expect(alive(pid)).toBe(true);
     await lane.stop(HUMAN, { hsid: s.hsid });
     expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
     expect(await waitFor(() => !alive(pid), 5_000)).toBe(true);
+    // the neutral cwd goes with the session
+    expect(await waitFor(() => !fs.existsSync(where.cwd), 5_000)).toBe(true);
   }, 40_000);
 });

@@ -31,7 +31,6 @@ import type { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { PolicyPath } from '../manifest/policy.js';
 import { narrow, OP_ANNOTATIONS_MAX_BYTES, OP_ANNOTATIONS_SCHEMA, type CapabilityEntry, type ServerTrust } from './capability-index.js';
 import type { BrokerTarget, TargetCall } from './tool-broker.js';
 
@@ -62,19 +61,13 @@ export interface LocalMcpServer {
 /**
  * remote-refused   an http/sse server (never reached from a local session)
  * label-reserved   (Aegis L3) its label is gnomon, kernel, another server's, or paradigm for a non-first-party server
- * launch-writable  (Aegis H1) a launch-closure path IS a session root or holds one, so it cannot be write-denied
- *                  without taking the root away: the server is refused
+ * launch-writable  (Aegis H1) its command, a path-like arg, a path-like env segment or a PATH entry lies inside a
+ *                  writable root (launchCheck): the server is refused
  */
 export type ServerFit = 'ok' | 'remote-refused' | 'launch-writable' | 'label-reserved';
 /** Aegis L3: labels no third-party server may take. */
 export const RESERVED_LABELS: readonly string[] = Object.freeze(['gnomon', 'kernel'])
 
-/** Commands whose launch reads project files beside the cwd (package manifests, installed packages, lockfiles, venvs). */
-const PROJECT_RUNNERS = new Set(['node', 'npx', 'npm', 'pnpm', 'pnpx', 'yarn', 'bun', 'bunx', 'tsx', 'ts-node', 'deno', 'uv', 'uvx', 'python', 'python3', 'pipx', 'poetry']);
-/** What a project runner reads from the cwd (each a launch-closure path when the command is one of them). */
-export const PROJECT_LAUNCH_FILES: readonly string[] = Object.freeze(['package.json', 'node_modules', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock', '.yarnrc.yml', '.pnp.cjs', 'bun.lockb', 'bun.lock', '.npmrc', 'deno.json', 'deno.lock', 'pyproject.toml', 'uv.lock', 'requirements.txt', 'setup.py', 'setup.cfg', 'poetry.lock', '.python-version', '.venv', 'venv']);
-
-const pathLike = (a: string): boolean => path.isAbsolute(a) || a.startsWith('./') || a.startsWith('../') || a.startsWith('.\\') || /[\\/]/.test(a) || /\.(?:[cm]?[jt]s|py|sh|rb|exe|cmd|bat)$/i.test(a);
 const realOr = (p: string): string => {
   try {
     return fs.realpathSync.native(p);
@@ -82,66 +75,62 @@ const realOr = (p: string): string => {
     return path.resolve(p);
   }
 };
-const within = (p: string, root: string): boolean => {
-  const r = path.relative(root, p);
+/** `p` inside (or equal to) `root`; case-insensitive on darwin and win32 (APFS and NTFS fold case by default). */
+export function within(p: string, root: string, platform: string = process.platform): boolean {
+  const fold = platform === 'darwin' || platform === 'win32';
+  const r = path.relative(fold ? root.toLowerCase() : root, fold ? p.toLowerCase() : p);
   return r === '' || (!r.startsWith('..') && !path.isAbsolute(r));
-};
+}
+const pathLike = (a: string): boolean => path.isAbsolute(a) || a.startsWith('./') || a.startsWith('../') || a.startsWith('.\\') || /[\\/]/.test(a) || /\.(?:[cm]?[jt]s|py|sh|rb|exe|cmd|bat)$/i.test(a);
 
-/**
- * Aegis H1: a server's LAUNCH CLOSURE — every file whose content decides what the server runs: its resolved command,
- * each path-like arg (absolute, or resolved against the spawn cwd), and for a project runner (node, npx, uv, python…)
- * the project files it reads beside the cwd (PROJECT_LAUNCH_FILES). Paths that do not exist yet are included (a model
- * could create them).
- */
-export function launchClosure(s: Pick<LocalMcpServer, 'command' | 'args'>, cwd: string): Array<{ path: string; match: 'literal' | 'subpath' }> {
-  const out = new Map<string, 'literal' | 'subpath'>();
-  const add = (p: string): void => {
-    const r = realOr(p);
-    let match: 'literal' | 'subpath' = 'literal';
-    try {
-      if (fs.statSync(r).isDirectory()) match = 'subpath';
-    } catch {
-      /* absent: denied as written */
-    }
-    if (out.get(r) !== 'subpath') out.set(r, match);
-  };
-  if (s.command) add(s.command);
-  for (const a of s.args ?? []) if (a && !a.startsWith('-') && pathLike(a)) add(path.resolve(cwd, a));
-  const base = s.command ? path.basename(s.command).replace(/\.(exe|cmd|bat)$/i, '').toLowerCase() : '';
-  if (PROJECT_RUNNERS.has(base) || /^python3(\.\d+)?$/.test(base)) {
-    for (const f of PROJECT_LAUNCH_FILES) {
-      const p = path.join(cwd, f);
-      out.set(realOr(p), f === 'node_modules' || f === '.venv' || f === 'venv' ? 'subpath' : 'literal');
-    }
-  }
-  return [...out].map(([p, match]) => ({ path: p, match }));
+export interface LaunchCheckInput {
+  /** the session's writable roots (cwd, worktree) */
+  roots: readonly string[];
+  /** the neutral spawn cwd (relative paths resolve against it) */
+  cwd: string;
+  /** the session env PATH (a server's own env PATH replaces it) */
+  sessionPath: string | undefined;
+  platform?: string;
 }
 
 /**
- * Aegis H1: the write-denies a LOCAL session needs so no model-written file decides what its servers run: every
- * launch-closure path inside the session's writable roots (no overlap skip: inside the roots is exactly the danger).
- * A closure path that IS a root or holds one cannot be denied without taking the root away: that server is refused
- * `launch-writable`.
+ * Aegis H1 (re-check): what decides what a server runs must never be model-writable. The server is spawned in a
+ * NEUTRAL cwd (an empty, kernel-made, write-denied dir under the Gnomon home, outside every root), so nothing a runner
+ * reads beside its cwd (package.json, node_modules, .npmrc, pyproject, `python -m` packages, `go run .`, bunfig, .env,
+ * tsconfig…) comes from the repo. It is REFUSED `launch-writable` when any of these lies inside a writable root
+ * (lexically or by realpath, case-folded on darwin/win32): the command, any path-like arg, any path-like segment of
+ * any env value (split on the path delimiter), any PATH entry. A neutral cwd inside a root refuses every server.
  */
-export function launchDenies(servers: readonly LocalMcpServer[], cwd: string, roots: readonly string[]): { denies: PolicyPath[]; refused: Array<{ id: string; name: string; fit: ServerFit }>; servers: LocalMcpServer[] } {
-  const rs = roots.map(realOr);
-  const denies: PolicyPath[] = [];
-  const refused: Array<{ id: string; name: string; fit: ServerFit }> = [];
+export function launchCheck(servers: readonly LocalMcpServer[], i: LaunchCheckInput): { refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; servers: LocalMcpServer[] } {
+  const platform = i.platform ?? process.platform;
+  const roots = [...new Set([...i.roots, ...i.roots.map(realOr)])];
+  const inRoot = (p: string): boolean => {
+    const abs = path.resolve(i.cwd, p);
+    return roots.some((r) => within(abs, r, platform) || within(realOr(abs), r, platform));
+  };
+  const refused: Array<{ id: string; name: string; fit: ServerFit; why: string }> = [];
   const kept: LocalMcpServer[] = [];
   for (const s of servers) {
     if (s.transport !== 'stdio') {
       kept.push(s); // the pool refuses it remote-refused
       continue;
     }
-    const closure = launchClosure(s, cwd);
-    if (closure.some((c) => rs.some((r) => within(r, c.path)))) {
-      refused.push({ id: s.id, name: s.name, fit: 'launch-writable' });
-      continue;
-    }
-    for (const c of closure) if (rs.some((r) => within(c.path, r)) && !denies.some((d) => d.path === c.path)) denies.push({ path: c.path, match: c.match, class: 'binary' });
-    kept.push(s);
+    const why = ((): string | null => {
+      if (inRoot(i.cwd)) return 'the neutral spawn directory lies inside a session root';
+      if (s.command && inRoot(s.command)) return 'its command lies inside a session root';
+      for (const a of s.args ?? []) if (a && !a.startsWith('-') && pathLike(a) && inRoot(a)) return 'an argument names a path inside a session root';
+      for (const [k, v] of Object.entries(s.env ?? {})) {
+        if (k.toUpperCase() === 'PATH') continue;
+        for (const seg of v.split(path.delimiter)) if (seg && pathLike(seg) && inRoot(seg)) return `env ${k} names a path inside a session root`;
+      }
+      const envPath = Object.entries(s.env ?? {}).find(([k]) => k.toUpperCase() === 'PATH')?.[1] ?? i.sessionPath ?? '';
+      for (const seg of envPath.split(path.delimiter)) if (seg && inRoot(seg)) return 'a PATH entry lies inside a session root';
+      return null;
+    })();
+    if (why) refused.push({ id: s.id, name: s.name, fit: 'launch-writable', why });
+    else kept.push(s);
   }
-  return { denies, refused, servers: kept };
+  return { refused, servers: kept };
 }
 
 /**
@@ -174,6 +163,8 @@ export interface McpClientOptions {
   listTimeoutMs?: number;
   onListChanged?: () => void;
   onExit?: (why: string) => void;
+  /** TEST SEAM: how a process group is killed (default killGroup) */
+  killGroup?: (pid: number) => void;
 }
 
 interface Pending {
@@ -190,6 +181,7 @@ export class McpStdioClient {
   #buf = '';
   #bufBytes = 0;
   #dead: string | null = null;
+  #leaderClosed = false;
   #caps: Record<string, unknown> = {};
   readonly exited: Promise<void>;
 
@@ -197,6 +189,14 @@ export class McpStdioClient {
     this.#child = child;
     this.#o = o;
     this.exited = new Promise((r) => child.once('close', () => r()));
+    // Aegis M3 (re-check): the group is killed ONCE, when its leader closes (its children may outlive it), and the pid
+    // is forgotten: a closed client is never signalled again (a reused pgid could be an unrelated group)
+    child.once('close', () => {
+      if (this.#leaderClosed) return;
+      this.#leaderClosed = true;
+      const pid = child.pid;
+      if (pid !== undefined) (o.killGroup ?? killGroup)(pid);
+    });
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (chunk: string) => this.#data(chunk));
     child.stdin?.on('error', () => undefined);
@@ -375,17 +375,24 @@ export class McpStdioClient {
 
   /** Reap: the server's process group (posix: spawned detached) or the process. */
   get pid(): number | undefined {
-    return this.#child.pid;
+    return this.#leaderClosed ? undefined : this.#child.pid;
+  }
+
+  /** the leader process has closed (its group was killed then; never signalled again) */
+  get closed(): boolean {
+    return this.#leaderClosed;
   }
 
   /**
-   * Aegis M3: reap the server's whole process group, ALWAYS (even after the leader exited, its children may live on):
-   * `process.kill(-pid, 'SIGKILL')` on POSIX (servers are spawned detached, so pid = pgid), ESRCH ignored; on Windows
-   * the process itself (it stays in the daemon's kill-on-close job).
+   * Aegis M3: reap the server's whole process group while its leader is live: `process.kill(-pid, 'SIGKILL')` on POSIX
+   * (servers are spawned detached, so pid = pgid), ESRCH ignored; on Windows the process itself (it stays in the
+   * daemon's kill-on-close job). After the leader closes nothing is signalled (pid reuse).
    */
   kill(): void {
+    // Aegis M3 (re-check): only a group whose leader has NOT closed is signalled (the close handler did the rest)
+    if (this.#leaderClosed) return;
     const pid = this.#child.pid;
-    if (pid !== undefined) killGroup(pid);
+    if (pid !== undefined) (this.#o.killGroup ?? killGroup)(pid);
     try {
       this.#child.kill('SIGKILL');
     } catch {
@@ -513,20 +520,14 @@ export class LocalMcpPool {
     return this.#servers.filter((p) => p.client && !p.client.dead).length;
   }
 
-  /** Aegis M3: every pid this session ever spawned (each group is killed at close, live or not). */
-  readonly #pids = new Set<number>();
-
   #start(p: PoolServer, signal?: AbortSignal): Promise<McpStdioClient> {
     if (this.#closed) return Promise.reject(new McpError('the session is closed', 'exited'));
     if (p.client && !p.client.dead) return Promise.resolve(p.client);
     if (p.starting) return p.starting;
-    // Aegis M3: a dead server's group is reaped before it is started again
-    if (p.client?.pid !== undefined) killGroup(p.client.pid);
     if (p.starts >= MAX_STARTS) return Promise.reject(new McpError(`not restarted after ${MAX_STARTS} starts in this session (${p.error ?? 'failed'})`, 'exited'));
     p.starts++;
     p.starting = (async () => {
       const child = this.#o.spawn(p.s);
-      if (child.pid !== undefined) this.#pids.add(child.pid);
       this.#o.track?.(child, p.label);
       const c = new McpStdioClient(child, {
         ...(this.#o.maxMessageBytes ? { maxMessageBytes: this.#o.maxMessageBytes } : {}),
@@ -671,8 +672,6 @@ export class LocalMcpPool {
       p.client.kill();
       waits.push(Promise.race([p.client.exited, new Promise<void>((r) => setTimeout(r, 2000).unref?.())]));
     }
-    // Aegis M3: every group this session ever spawned (restarted servers' old groups too)
-    for (const pid of this.#pids) killGroup(pid);
     await Promise.all(waits);
   }
 }
