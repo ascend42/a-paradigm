@@ -3,7 +3,7 @@
  * user text (orchestration tasks, --pr) never reach a shell. Each test plants
  * a `touch <marker>` payload and asserts the marker was not created.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -14,6 +14,8 @@ import { recordLore } from './lore/storage.js';
 import type { LoreEntry } from './lore/types.js';
 import { notificationOsascriptArgs } from './background-orchestrator.js';
 import { isPrRef } from '../commands/review/index.js';
+import { tutorialCheckpointCommand, tutorialNextCommand, checkpointArgv } from '../commands/tutorial/index.js';
+import { resolveInsideRoot } from '../commands/drift.js';
 import { gitDiffSinceCommit } from '../../../paradigm-mcp/src/utils/safe-git.js';
 
 let base: string;
@@ -105,6 +107,67 @@ describe('#background-orchestrator desktop notification', () => {
     const args = notificationOsascriptArgs(msg).map((a) => a.replace(/^display notification \(item 1 of argv\) with title \(item 2 of argv\)$/, 'return item 1 of argv'));
     expect(execFileSync('osascript', args, { encoding: 'utf8' }).trim()).toBe(msg);
     expect(marked()).toBe(false);
+  });
+});
+
+describe('tutorial command-success checkpoints', () => {
+  const setup = (command: string): void => {
+    fs.mkdirSync(path.join(root, '.paradigm', 'tutorial'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', 'tutorial', 'curriculum.yaml'), [
+      'title: t', 'description: d', 'bugs: []', 'steps:',
+      '  - id: s1', '    title: s1', '    description: d', '    file: s1.md',
+      '    checkpoints:', '      - type: command-success', `        command: ${JSON.stringify(command)}`,
+    ].join('\n'));
+    fs.writeFileSync(path.join(root, '.paradigm', 'tutorial', 'state.json'), JSON.stringify({ currentStep: 's1', completedSteps: [], fixedBugs: [] }));
+  };
+
+  it('never runs a command from curriculum.yaml', async () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      for (const cmd of [`touch ${path.join(base, MARK)}`, `paradigm status; touch ${path.join(base, MARK)}`, 'paradigm status $(touch PWNED_MARK)']) {
+        setup(cmd);
+        await tutorialCheckpointCommand(root);
+        await tutorialNextCommand(root);
+      }
+      expect(marked()).toBe(false);
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(logs.mock.calls.flat().join('\n')).toContain('Unsupported checkpoint command');
+    } finally {
+      exit.mockRestore();
+      logs.mockRestore();
+    }
+  });
+
+  it('maps only the built-in commands to argv', () => {
+    expect(checkpointArgv('paradigm status')).toEqual(['status']);
+    expect(checkpointArgv('  paradigm   dream aggregate ')).toEqual(['dream', 'aggregate']);
+    for (const bad of ['paradigm doctor --fix', 'paradigm status; id', 'touch x', 'constructor', 'toString', undefined, 42]) {
+      expect(checkpointArgv(bad), String(bad)).toBeNull();
+    }
+  });
+});
+
+describe('#flow-validator signal patterns are escaped', () => {
+  it('a regex metacharacter in a signal matches only literally', () => {
+    fs.writeFileSync(path.join(root, 'src', 'c.ts'), 'emit("aXb");\n');
+    const flow = { id: '$f', steps: [{ type: 'signal', symbol: '!a.b' }, { type: 'signal', symbol: '!order-placed' }] } as FlowDefinition;
+    const r = validateFlow(flow, { rootDir: root, checkImplementation: true });
+    expect(r.coverage.signalsMissing).toEqual(['!a.b']);
+  });
+});
+
+describe('paradigm drift path containment', () => {
+  it('resolveInsideRoot refuses paths outside the project, including through symlinks', () => {
+    expect(resolveInsideRoot(root, '.purpose')).toBe(fs.realpathSync(path.join(root, '.purpose')));
+    expect(resolveInsideRoot(root, 'src/a.ts')).toBe(fs.realpathSync(path.join(root, 'src', 'a.ts')));
+    fs.writeFileSync(path.join(base, 'outside.txt'), 'x');
+    expect(resolveInsideRoot(root, '../outside.txt')).toBeNull();
+    expect(resolveInsideRoot(root, path.join(base, 'outside.txt'))).toBeNull();
+    fs.symlinkSync(path.join(base, 'outside.txt'), path.join(root, 'link.purpose'));
+    expect(resolveInsideRoot(root, 'link.purpose')).toBeNull();
+    expect(resolveInsideRoot(root, 'missing.ts')).toBeNull();
+    expect(resolveInsideRoot(root, '.')).toBeNull();
   });
 });
 

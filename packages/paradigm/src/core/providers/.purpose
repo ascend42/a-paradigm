@@ -29,7 +29,7 @@ components:
     aspects: ["~provider-cascade"]
 
   claude-cli-provider:
-    description: Spawn claude CLI processes directly
+    description: "Spawn claude CLI processes directly (argv, no shell). The prompt follows `-p --` so a prompt starting with `-` is never read as a flag."
     type: service
     path: claude-cli.ts
     aspects: ["~provider-cascade"]

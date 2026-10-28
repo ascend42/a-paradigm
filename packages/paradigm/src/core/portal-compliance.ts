@@ -225,7 +225,7 @@ function runGrep(rootDir: string, pattern: string): string {
   try {
     // Docs (README usage examples of the decorator) are not code that depends on a gate
     const globArgs = [...SKIP_DIRECTORIES.flatMap(d => ['--glob', `!**/${d}/**`]), '--glob', '!*.md', '--glob', '!*.mdx'];
-    const rgArgs = ['-n', '--no-ignore-vcs', ...globArgs, '--engine', 'auto', pattern, rootDir];
+    const rgArgs = ['-n', '--no-ignore-vcs', ...globArgs, '--engine', 'auto', '-e', pattern, '--', rootDir];
     return execFileSync('rg', rgArgs, options);
   } catch (err) {
     // rg exits 1 on no matches: that is an answer, not a failure — re-scanning with grep cost ~2s per pattern
@@ -234,7 +234,7 @@ function runGrep(rootDir: string, pattern: string): string {
   }
 
   const skipDirArgs = SKIP_DIRECTORIES.map(d => `--exclude-dir=${d}`);
-  const grepArgs = ['-rn', ...skipDirArgs, '--exclude=*.md', '--exclude=*.mdx', '-E', pattern, '--', rootDir];
+  const grepArgs = ['-rn', ...skipDirArgs, '--exclude=*.md', '--exclude=*.mdx', '-E', '-e', pattern, '--', rootDir];
 
   try {
     return execFileSync('grep', grepArgs, options);

@@ -449,7 +449,7 @@ components:
     file: packages/paradigm-mcp/src/utils/aspect-graph.ts
     tags: [aspect-graph, drift, anchors]
   safe-git:
-    description: 'git calls that never go through a shell. runGit(rootDir, args) is execFileSync(''git'', argv, shell false). gitDiffSinceCommit(rootDir, fromCommit, filePath) runs git diff --no-ext-diff --no-textconv <sha>..HEAD --unified=0 -- <path> and returns null when fromCommit fails COMMIT_SHA_RE (^[0-9a-f]{7,64}$; warns via the Paradigm logger) or git fails. gitRenameLog(rootDir, filePath) runs git log --follow --diff-filter=R --name-status -- <path>. Used by #aspect-graph, #aspect-fingerprint and the CLI `paradigm drift` command, whose paths and commit ids are repo content.'
+    description: 'git calls that never go through a shell. runGit(rootDir, args) is execFileSync(''git'', [''--literal-pathspecs'', ...argv], shell false), so a path like :(glob)** or *.ts names only that literal file. gitDiffSinceCommit(rootDir, fromCommit, filePath) runs git diff --no-ext-diff --no-textconv <sha>..HEAD --unified=0 -- <path> and returns null when fromCommit fails COMMIT_SHA_RE (^[0-9a-f]{7,64}$; warns via the Paradigm logger) or git fails. gitRenameLog(rootDir, filePath) runs git log --follow --diff-filter=R --name-status -- <path>. Used by #aspect-graph, #aspect-fingerprint and the CLI `paradigm drift` command, whose paths and commit ids are repo content.'
     type: utility
     file: packages/paradigm-mcp/src/utils/safe-git.ts
     tags: [security, git, drift]

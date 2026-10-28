@@ -131,14 +131,20 @@ export function getAllFlows(rootDir: string): FlowDefinition[] {
 // Symbol Detection
 // ============================================================================
 
+/** Escape a string for use as a literal inside a grep ERE. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * List .purpose files under rootDir (outside node_modules and .git), one per
  * line. No shell: rootDir is passed as an argument.
  */
 function findPurposeFiles(rootDir: string): string {
   try {
-    return execFileSync('find', [rootDir, '-name', '.purpose', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'], {
-      encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+    // Absolute path: a rootDir starting with `-`, `!` or `(` can't read as a find expression.
+    return execFileSync('find', [path.resolve(rootDir), '-name', '.purpose', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'], {
+      encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024, timeout: 10_000,
     });
   } catch (err) {
     // find exits non-zero on unreadable dirs but still prints what it found
@@ -154,7 +160,7 @@ function findPurposeFiles(rootDir: string): string {
 export function grepAnyFile(flags: readonly string[], pattern: string, rootDir: string): boolean {
   try {
     const out = execFileSync('grep', ['-r', '-l', ...flags, '-e', pattern, '--', rootDir], {
-      encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+      encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024, timeout: 10_000,
     });
     return out.trim().length > 0;
   } catch (err) {
@@ -169,7 +175,7 @@ export function grepAnyFile(flags: readonly string[], pattern: string, rootDir: 
  */
 function symbolExistsInCode(symbol: string, rootDir: string): boolean {
   // 1. Check .purpose files for declared symbols (e.g. "#my-component:" at line start)
-  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escaped = escapeRegex(symbol);
   if (grepAnyFile(['-E', '--include=.purpose'], `^${escaped}:`, rootDir)) return true;
 
   // 2. Check source code files (fixed-string match)
@@ -184,16 +190,14 @@ function symbolExistsInCode(symbol: string, rootDir: string): boolean {
  * Check if a signal is emitted somewhere
  */
 function signalIsEmitted(signal: string, rootDir: string): boolean {
-  // Search for common signal emission patterns
-  const patterns = [
-    signal,
-    `emit.*${signal.replace(/^!/, '')}`,
-    `dispatch.*${signal.replace(/^!/, '')}`,
-    `send.*${signal.replace(/^!/, '')}`,
-  ];
+  // Search for common signal emission patterns. The signal is repo content,
+  // so it is regex-escaped and matched as an ERE (-E).
+  const escaped = escapeRegex(signal);
+  const name = escapeRegex(signal.replace(/^!/, ''));
+  const patterns = [escaped, `emit.*${name}`, `dispatch.*${name}`, `send.*${name}`];
 
   for (const pattern of patterns) {
-    if (grepAnyFile(['--include=*.ts', '--include=*.js'], pattern, rootDir)) return true;
+    if (grepAnyFile(['-E', '--include=*.ts', '--include=*.js'], pattern, rootDir)) return true;
   }
 
   return false;

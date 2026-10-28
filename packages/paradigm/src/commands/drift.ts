@@ -118,6 +118,24 @@ function computeShift(
 }
 
 /**
+ * Resolve `p` (absolute, or relative to rootDir) to an existing real path
+ * inside rootDir, following symlinks. Returns null for anything outside the
+ * project or missing. Paths here come from the aspect graph DB, which is repo
+ * content.
+ */
+export function resolveInsideRoot(rootDir: string, p: string): string | null {
+  try {
+    const root = fs.realpathSync(rootDir);
+    const real = fs.realpathSync(path.resolve(root, p));
+    const rel = path.relative(root, real);
+    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    return real;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Update anchor line numbers in a .purpose file.
  */
 function healPurposeFile(
@@ -129,8 +147,10 @@ function healPurposeFile(
   newStart: number,
   newEnd: number,
 ): boolean {
-  const absPath = path.isAbsolute(purposePath) ? purposePath : path.join(rootDir, purposePath);
-  if (!fs.existsSync(absPath)) return false;
+  // defined_in comes from the graph DB (repo content): only a real .purpose file
+  // inside the project, symlinks resolved, is ever written.
+  const absPath = resolveInsideRoot(rootDir, purposePath);
+  if (!absPath || path.basename(absPath) !== '.purpose') return false;
 
   try {
     const content = fs.readFileSync(absPath, 'utf8');
@@ -187,11 +207,10 @@ export async function driftCheckCommand(options: {
       stmt.free();
 
       for (const anchor of anchors) {
-        const absFile = path.isAbsolute(anchor.file_path)
-          ? anchor.file_path
-          : path.join(rootDir, anchor.file_path);
+        // Refuse anchor paths outside the project (reported as missing).
+        const absFile = resolveInsideRoot(rootDir, anchor.file_path);
 
-        if (!fs.existsSync(absFile)) {
+        if (!absFile) {
           results.push({
             aspectId: anchor.aspect_id,
             path: anchor.file_path,

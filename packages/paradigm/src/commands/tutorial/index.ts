@@ -6,7 +6,29 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+
+/**
+ * The only commands a `command-success` checkpoint may run, mapped to argv
+ * for this CLI. curriculum.yaml lives in the repo, so its `command` text is a
+ * lookup key, never something to execute.
+ */
+export const CHECKPOINT_COMMANDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  'paradigm status': ['status'],
+  'paradigm dream aggregate': ['dream', 'aggregate'],
+});
+
+/** argv for a checkpoint command, or null when it is not a built-in one. */
+export function checkpointArgv(command: unknown): string[] | null {
+  if (typeof command !== 'string') return null;
+  const key = command.trim().replace(/\s+/g, ' ');
+  return Object.prototype.hasOwnProperty.call(CHECKPOINT_COMMANDS, key) ? [...CHECKPOINT_COMMANDS[key]] : null;
+}
+
+/** Run this same paradigm CLI (node + its entry script) with argv, no shell. */
+function runParadigm(args: string[], cwd: string): void {
+  execFileSync(process.execPath, [process.argv[1], ...args], { cwd, stdio: 'pipe', timeout: 120_000 });
+}
 
 /**
  * Tutorial state file location
@@ -530,8 +552,15 @@ async function validateCheckpoint(rootDir: string, stepId: string, curriculum: C
         break;
       }
       case 'command-success': {
+        // curriculum.yaml is repo content: its command is never run as given.
+        // Only a built-in checkpoint command maps to argv for this same CLI.
+        const args = checkpointArgv(checkpoint.command);
+        if (!args) {
+          console.log(chalk.red(`❌ Unsupported checkpoint command: ${JSON.stringify(String(checkpoint.command ?? '').slice(0, 80))} (allowed: ${Object.keys(CHECKPOINT_COMMANDS).join(', ')})`));
+          return false;
+        }
         try {
-          execSync(checkpoint.command!, { cwd: rootDir, stdio: 'pipe' });
+          runParadigm(args, rootDir);
         } catch {
           console.log(chalk.red(`❌ Command failed: ${checkpoint.command}`));
           return false;
