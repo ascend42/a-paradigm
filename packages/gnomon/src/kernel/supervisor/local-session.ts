@@ -1903,7 +1903,8 @@ export class LocalLane {
    * error, why and server string is cleaned (cleanServerText) and capped (CAPABILITY_TEXT_MAX); a tool's fullSchema is
    * returned only for a fullOfferable or human-only entry, every key and string of it cleaned. Slice C6'a2-3 (K1): each
    * tool names its "/" result policy (`send` | `ask`, read from the ResultPolicyBook for this repo and the entry's
-   * binding NOW; null: not chosen yet, the first use, or the binding changed).
+   * binding NOW; null: not chosen yet, the first use, or the binding changed). K2: a top-level `tainted` says whether
+   * THIS session is tainted (#taintedNow).
    */
   #capabilities(s: LocalSession): Record<string, unknown> {
     const tier = s.tier?.tier ?? null;
@@ -1984,6 +1985,9 @@ export class LocalLane {
       servers,
       pins,
       tools,
+      // slice C6'a2-3 (K2): THIS session took in a sent tool result or skill text (the injection pause); the GUI re-reads
+      // it on this session's tool.result.sent and skill.run rows. Per session: never another session's taint.
+      tainted: this.#taintedNow(s),
     };
   }
 
