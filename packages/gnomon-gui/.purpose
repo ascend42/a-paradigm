@@ -188,6 +188,48 @@ components:
       palette (tools.open). Tests: test/tools-drawer.test.ts,
       test/tools-drawer-flow.test.ts, test/tools-drawer-memory.test.ts.
     tags: [gui, local, tools, memory]
+  gui-slash-menu:
+    description: >-
+      8.0:local-lane slice C6'b2-1 (Mika's design; TD-2026-10-28-956, -969;
+      spec G-GUI-19; the kernel half is C6'a2, G-LCL-25..29): the composer's
+      "/" menu. core/slash-menu.ts (PURE): slashItemsOf (Skills · Gnomon
+      commands · Tools by server; a row that cannot run stays aria-disabled
+      with its reason in words via whyWords; tier 0's one "Start servers
+      for /" row; "servers are off in this session"), filterSlash (the
+      typeahead), slashOptionId (ids stable across repaints), runKeyLabel
+      (the Run key names its cost), argFieldsOf / argsOf (text, number, a seg
+      for an enum or boolean, mono JSON), skillsOf, skillArgsProblem,
+      skillRefusalWords, startFailWords (the drawer's fitWords) and the
+      request builders (request.session.tools.start / .run / .result,
+      .skills.list, .skill.run). ui/slash-menu.ts: SlashFlow (no DOM; every
+      request on a trusted event, once per press) and mountSlashMenu (a
+      listbox above the composer driven by aria-activedescendant so the
+      textarea keeps focus; Esc closes only the menu; the args panel with
+      the shared trapTab; one persistent live line). core/host-hints.ts
+      hostHintsOf(text, loadedSkills): a loaded skill's slash command reads
+      "Run it from /" with an Open / menu key (palette slash.open). Tests:
+      test/slash-menu.test.ts, test/slash-menu-flow.test.ts,
+      test/host-hints.test.ts.
+    tags: [gui, local, tools, skills]
+  gui-slash-runs:
+    description: >-
+      8.0:local-lane slice C6'b2-1 (spec G-GUI-20): a "/" run's transcript
+      row. core/slash-runs.ts (PURE): the RunView reducer (running → ran |
+      refused | carded → reading → ran | gone; denied), runWords (refusals in
+      plain words with next:, the "10 runs a minute from /; try again in Ns"
+      limit said here only), dataFoldOf (the dashed "data" fold past 12
+      lines, text nodes only), policyWord (send: goes with your next
+      message; ask or not chosen: kept here; not sent), runRowOf (the
+      kernel's tool.brokered{author:'human'} row as history, no result) and
+      skillReplayName (a skill run's replay reads "you ran skill /x").
+      SlashFlow reads request.session.tools.result exactly once, when a
+      carded run's card settled allowed; results live in page memory only.
+      core/store.ts chatItems draws the page's slash-run and skill-ran rows
+      and claims the kernel row; ui/slash-menu.ts renderRunRow paints it.
+      The first-use policy question and Send this one are slice b2-2.
+      Tests: test/slash-runs.test.ts, test/slash-menu-flow.test.ts,
+      test/host-hints.test.ts.
+    tags: [gui, local, tools]
   gui:
     loop-cards: >-
       8.0:loops (gnomon-loops.md §3.1, §3.3; build step 2): the generic card
