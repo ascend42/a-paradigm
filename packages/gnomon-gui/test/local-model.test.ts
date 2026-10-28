@@ -513,3 +513,56 @@ describe('Aegis L4: the shared decision-batch vectors against the GUI row table'
     });
   }
 });
+
+describe('#gui-tool-tier: the Settings Tool tier row (C4\'b)', () => {
+  const probe = (tier: Record<string, unknown> | undefined) => local({ lastProbe: { endpoint: 'ollama', at: '2026-10-22T23:24:00.000Z', ok: true, why: 'capable', tools: true, contextSize: 32768, ...(tier ? { tier: { skill: 2, passed: 3, measuring: false, window: 3, human: null, ...tier } } : {}) } });
+  const tierRow = (st: unknown, ui: LocalUi = emptyLocalUi()) => row(sec(st, ui).rows, 'local-tier');
+  const acts = (r: SettingRow | undefined): string[] => (r && r.kind === 'readonly' ? (r.keys ?? []).map((k) => k.act) : []);
+  it('each case, after Check, with its how line', () => {
+    const rows = sec(probe({})).rows;
+    expect(rows.findIndex((r) => r.id === 'local-tier')).toBe(rows.findIndex((r) => r.id === 'local-check') + 1);
+    expect(valueOf(tierRow(probe({})))).toBe('2 · measured');
+    expect(valueOf(tierRow(probe({ human: 3 })))).toBe('3 · yours (measured 2)');
+    expect(valueOf(tierRow(probe({ skill: null, measuring: true, window: 3 })))).toBe('1 · provisional · measuring…');
+    expect(valueOf(tierRow(probe({ skill: 3, window: 1 })))).toBe('1 · measured 3, capped by context');
+    expect(valueOf(tierRow(probe(undefined)))).toBe('not measured yet');
+    expect(tierRow(probe({}))).toMatchObject({ how: 'Change it for one session from its header; tick ‘in new sessions too’ to keep it.' });
+    expect(tierRow(NONE)).toBeUndefined();
+  });
+  it('Re-measure always (disabled while measuring); Reset to measured only while a tier is remembered, with its note', () => {
+    expect(acts(tierRow(probe({})))).toEqual(['tier-remeasure']);
+    const r = tierRow(probe({ human: 3 }));
+    expect(acts(r)).toEqual(['tier-remeasure', 'tier-reset']);
+    expect(r).toMatchObject({ keys: [{ label: 'Re-measure', quiet: true }, { label: 'Reset to measured', quiet: true }], how: expect.stringMatching(/^New sessions use the measured tier; open sessions keep theirs\. /) });
+    expect(tierRow(probe({ measuring: true }))).toMatchObject({ keys: [{ act: 'tier-remeasure', disabled: true }] });
+    expect(tierRow(probe({}), { ...emptyLocalUi(), measuring: 1 })).toMatchObject({ value: '2 · measured · measuring…', keys: [{ disabled: true }] });
+  });
+  it('Re-measure sends request.local.tier.remeasure on a trusted press only, and says measuring… until lastProbe settles', async () => {
+    let st: unknown = probe({});
+    const { c, calls } = rig(() => st, { 'request.local.tier.remeasure': [{ endpoint: 'ollama', measuring: true, joined: false }] });
+    c.press('tier-remeasure', null, false);
+    expect(calls).toEqual([]);
+    const pressed = new Promise<void>((res) => {
+      c.press('tier-remeasure', null, true);
+      setTimeout(res, 0);
+    });
+    expect(valueOf(tierRow(st, c.ui()))).toBe('2 · measured · measuring…');
+    c.press('tier-remeasure', null, true); // disabled while measuring: nothing more is sent
+    st = probe({ skill: 3, passed: 4 });
+    await pressed;
+    expect(calls).toEqual([{ kind: 'request.local.tier.remeasure', payload: { endpoint: 'ollama' } }]);
+    expect(valueOf(tierRow(st, c.ui()))).toBe('3 · measured');
+  });
+  it('Reset to measured sends request.local.tier.clear on a trusted press only; a store it cannot write says so', async () => {
+    const { c, calls } = rig(probe({ human: 3 }), { 'request.local.tier.clear': [{ endpoint: 'ollama', cleared: true, previous: 3 }, { endpoint: 'ollama', cleared: false, why: 'store-unwritable' }] });
+    c.press('tier-reset', null, false);
+    expect(calls).toEqual([]);
+    c.press('tier-reset', null, true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toEqual([{ kind: 'request.local.tier.clear', payload: { endpoint: 'ollama' } }]);
+    expect(c.ui().result).toBeNull();
+    c.press('tier-reset', null, true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(c.ui().result).toEqual({ text: 'Not changed: Gnomon couldn’t write its tier file', fail: true });
+  });
+});

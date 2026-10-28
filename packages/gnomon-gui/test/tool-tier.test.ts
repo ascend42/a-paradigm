@@ -5,6 +5,8 @@
  * commit per press, untrusted presses) are the controller's, below.
  */
 import { describe, expect, it } from 'vitest';
+import { RpcError } from '../src/core/client.js';
+import { TierFlow } from '../src/ui/tier-picker.js';
 import { commitOutcome, previewOf, previewView, probeTierOf, refusalPhase, sessionTierOf, sheetView, tierChipOf, tierLabel, tierMenu, tierRequest, tierSettingsValue, TIER_COPY, WINDOW_TIER_MIN, type TierPreview } from '../src/core/tool-tier.js';
 
 const H = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
@@ -152,5 +154,134 @@ describe('#gui-tool-tier: outcome, Settings value, requests', () => {
   it('the requests: preview, commit (never a retry), re-measure and clear', () => {
     expect(tierRequest(H, 'preview', 3)).toEqual({ kind: 'request.session.tier', payload: { hsid: H, op: 'preview', tier: 3 } });
     expect(tierRequest(H, 'commit', TOKEN, false, 3)).toEqual({ kind: 'request.session.tier', payload: { hsid: H, op: 'commit', token: TOKEN, remember: false, tier: 3 } });
+  });
+});
+
+/* ── the press paths (ui/tier-picker.ts TierFlow: no DOM) ───────────────────────────────────────────────────────── */
+
+/** A flow over a fake kernel: answers per request op, a manual timer; a commit waits for commitDone(). */
+function flowRig(answers: Partial<Record<'preview' | 'commit', Array<unknown | (() => never)>>> = {}) {
+  const calls: Array<Record<string, unknown>> = [];
+  const toasts: Array<[string, string]> = [];
+  const timers: Array<{ fn: () => void; ms: number; cancelled: boolean }> = [];
+  let release: (() => void) | null = null;
+  const flow = new TierFlow({
+    call: async (req) => {
+      calls.push(req.payload);
+      const op = req.payload.op as 'preview' | 'commit';
+      if (op === 'commit') await new Promise<void>((r) => (release = r));
+      const q = answers[op]?.shift();
+      if (typeof q === 'function') return (q as () => never)();
+      return q ?? (op === 'preview' ? answer() : { tier: 3, previous: 2, remembered: false, tierSource: 'human' });
+    },
+    toast: (t, k) => void toasts.push([t, k]),
+    repaint: () => undefined,
+    timer: (fn, ms) => {
+      const t = { fn, ms, cancelled: false };
+      timers.push(t);
+      return () => void (t.cancelled = true);
+    },
+  });
+  const settle = () => new Promise<void>((r) => setTimeout(r, 0));
+  const commitDone = async () => {
+    await settle();
+    release?.();
+    await settle();
+  };
+  const open = async (requested: 0 | 1 | 2 | 3 = 3) => {
+    flow.open({ hsid: H, from: 2, requested, model: 'qwen' }, true);
+    expect(flow.state()?.phase).toBe('loading');
+    await settle();
+  };
+  return { flow, calls, toasts, timers, open, settle, commitDone };
+}
+const stale = () => {
+  throw new RpcError({ code: 'BAD_REQUEST', reason: 'stale', message: 'request.session.tier: the preview is stale, expired or already used: preview again', next: [], data: null });
+};
+
+describe('#gui-tool-tier: the press paths', () => {
+  it('an untrusted press sends nothing (menu pick, Apply, Preview again, the checkbox)', async () => {
+    const r = flowRig();
+    r.flow.open({ hsid: H, from: 2, requested: 3, model: 'qwen' }, false);
+    expect(r.flow.state()).toBeNull();
+    await r.open();
+    r.flow.setRemember(true, false);
+    expect(r.flow.state()?.remember).toBe(false);
+    await r.flow.apply(false);
+    r.flow.again(false);
+    expect(r.calls.map((c) => c.op)).toEqual(['preview']);
+  });
+  it('the checkbox starts unticked; a double press of Apply sends ONE commit with the token and the tick', async () => {
+    const r = flowRig();
+    await r.open();
+    expect(r.flow.state()).toMatchObject({ phase: 'ready', remember: false });
+    r.flow.setRemember(true, true);
+    const a = r.flow.apply(true);
+    const b = r.flow.apply(true);
+    expect(r.flow.state()?.phase).toBe('applying');
+    await r.commitDone();
+    await Promise.all([a, b]);
+    expect(r.calls.filter((c) => c.op === 'commit')).toEqual([{ hsid: H, op: 'commit', token: TOKEN, remember: true, tier: 3 }]);
+    expect(r.flow.state()).toBeNull();
+    // remembered:false after a commit that asked to remember (a race fallback): the info toast, then a warn
+    expect(r.toasts).toEqual([['tier 2 → 3 · applies from the next step · prompt cache starts over', 'info'], ['tier 3 applies to this session only: can’t remember: Gnomon couldn’t write its tier file', 'warn']]);
+  });
+  it('expiry: at expiresInMs Apply becomes Preview again, the token is dropped, and Apply sends nothing', async () => {
+    const r = flowRig();
+    await r.open();
+    expect(r.timers.map((t) => t.ms)).toEqual([60_000]);
+    r.timers[0]!.fn();
+    expect(r.flow.state()?.phase).toBe('expired');
+    expect(r.flow.view()?.keys.map((k) => k.act)).toEqual(['again', 'cancel']);
+    await r.flow.apply(true);
+    expect(r.calls.map((c) => c.op)).toEqual(['preview']);
+    r.flow.again(true);
+    await r.settle();
+    expect(r.calls.map((c) => c.op)).toEqual(['preview', 'preview']);
+    expect(r.flow.state()?.phase).toBe('ready');
+  });
+  it('stale: Not changed + Preview again; the commit is never retried', async () => {
+    const r = flowRig({ commit: [stale] });
+    await r.open();
+    const a = r.flow.apply(true);
+    await r.commitDone();
+    await a;
+    expect(r.flow.state()?.phase).toBe('stale');
+    expect(r.flow.view()?.status).toBe('Not changed: this session’s tools changed since the preview.');
+    await r.flow.apply(true);
+    await r.settle();
+    expect(r.calls.map((c) => c.op)).toEqual(['preview', 'commit']);
+    expect(r.toasts).toEqual([]);
+  });
+  it('not-found: the session is not running; focus goes to close', async () => {
+    const r = flowRig({ preview: [() => { throw new RpcError({ code: 'NOT_FOUND', reason: 'not-found', message: 'no such running local session for this principal', next: [], data: null }); }] });
+    await r.open();
+    expect(r.flow.view()).toMatchObject({ status: 'Not changed: this session isn’t running any more.', fail: true, focus: 'close' });
+  });
+  it('a malformed preview is an error, never a held token; closing drops the token and the timer', async () => {
+    const r = flowRig({ preview: [{ hsid: H, to: 3 }] });
+    await r.open();
+    expect(r.flow.state()?.phase).toBe('error');
+    await r.flow.apply(true);
+    const ok = flowRig();
+    await ok.open();
+    ok.flow.close();
+    expect(ok.timers[0]!.cancelled).toBe(true);
+    expect(ok.flow.state()).toBeNull();
+    await ok.flow.apply(true);
+    expect([...r.calls, ...ok.calls].every((c) => c.op === 'preview')).toBe(true);
+  });
+  it('to === from: no Apply; a preview closed before it lands is dropped', async () => {
+    const r = flowRig({ preview: [answer({ from: 2, to: 2, requested: 3, window: 2 })] });
+    await r.open();
+    expect(r.flow.view()?.keys.map((k) => k.act)).toEqual(['close']);
+    await r.flow.apply(true);
+    expect(r.timers).toEqual([]);
+    const late = flowRig();
+    late.flow.open({ hsid: H, from: 2, requested: 3, model: 'qwen' }, true);
+    late.flow.close();
+    await late.settle();
+    expect(late.flow.state()).toBeNull();
+    expect(late.timers).toEqual([]);
   });
 });

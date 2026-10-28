@@ -36,6 +36,7 @@ import { idleNoteOf, speakerName, startRungName, VOICE_ACTIVITY_KINDS, VOICE_ROW
 import { isClientRow, type EnrolState } from './voice-client.js';
 import { refusalPhrase } from './capture.js';
 import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
+import { tierOfCapabilities, type Tier, type TierSource } from './tool-tier.js';
 
 export interface Row {
   seq: number;
@@ -88,6 +89,12 @@ export interface SessionRow {
   firstUser?: string | null;
   /** 8.0:session-rename: the name the human gave it (the kernel's last session.renamed); null = the derived title. */
   name?: string | null;
+  /** #gui-tool-tier (C4'b): who opened it (session.open{by}), whether it is a loop session, and its local endpoint */
+  owner?: string | null;
+  loop?: boolean;
+  endpoint?: string | null;
+  /** #gui-tool-tier: the session's tool tier, from its last model.capabilities{hsid, tier, tierSource} */
+  tier?: { tier: Tier; source: TierSource; measured: Tier | null; previous?: Tier };
 }
 
 /** Session states that mean the session is gone (it can only come back through a session.open of a resume). */
@@ -286,12 +293,22 @@ export class GuiStore {
         if (typeof p.backend === 'string') s.backend = p.backend;
         if (typeof p.cwd === 'string') s.cwd = p.cwd;
         if (!s.openedAt && typeof r.at === 'string') s.openedAt = r.at;
+        // #gui-tool-tier: the opener (the kernel stamps the row; `by` names the principal who asked), loop or not
+        s.owner = typeof p.by === 'string' ? p.by : null;
+        s.loop = p.attended === false || p.origin === 'loop';
+        s.endpoint = typeof p.endpoint === 'string' ? p.endpoint : null;
+        delete s.tier;
       } else if (r.kind === 'session.refused') s.state = 'refused';
       else if (r.kind === 'session.orphaned') s.state = 'orphaned'; // the new kernel's boot sweep (§2.4 rule 4)
       else if (r.kind === 'session.exited' && failedExit(p)) s.state = 'failed';
       else if (r.kind === 'session.exited' || r.kind === 'session.stop' || r.kind === 'session.exit' || r.kind === 'session.end') s.state = 'ended';
       else if (isLiveState(s.state) && r.kind === 'turn.partial') s.state = 'streaming';
       else if (isLiveState(s.state) && r.kind === 'turn.result') s.state = 'idle';
+      // #gui-tool-tier: the kernel's record of the session's tier (at open, and after a human change)
+      if (r.kind === 'model.capabilities') {
+        const t = tierOfCapabilities(p, hsid);
+        if (t) s.tier = t;
+      }
       // 8.0:session-rename: the kernel's session.renamed (normalised display text; '' = back to the derived title)
       if (r.kind === 'session.renamed' && r.view === 'full' && validateKindPayload('session.renamed', p).length === 0 && p.hsid === hsid) s.name = (p.name as string) || null;
       if (!s.firstUser) {

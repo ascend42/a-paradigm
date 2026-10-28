@@ -1156,6 +1156,11 @@ html, body {
    under the key (ui/model-picker.ts sets its left); nothing in the row clips it */
 .pane-head.chead { position: relative; }
 .model-switch-lines p { margin: 0 0 4px; }
+/* #gui-tool-tier (C4'b): the tier key and menu reuse the model key's; a ◆ warning is warn ink (the glyph and the
+   words carry it, never the colour alone); the remember checkbox sits on one line with its label */
+.tier-wrap { vertical-align: baseline; }
+.model-switch-lines p.warn { color: var(--warn-ink); }
+.tier-remember { display: flex; align-items: center; gap: 6px; }
 
 /* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
 .seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }

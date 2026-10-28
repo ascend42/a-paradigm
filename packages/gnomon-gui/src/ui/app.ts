@@ -62,6 +62,7 @@ import { DELAY_KEY, DICTATION_POLL_MS, delayLabel, placeWords, plainAppend, type
 import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mount.js';
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
+import { mountTierPicker, type TierPicker } from './tier-picker.js';
 import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, RepinReturn, type KeptChoice } from '../core/folder-field.js';
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
@@ -117,6 +118,7 @@ const shortKeyId = (spki: string): string => {
 let noticeCard: { cardId: string; seen: boolean } | null = null;
 /** #gui-model-picker (ui/model-picker.ts), mounted below; null until then */
 let modelPicker: ModelPicker | null = null;
+let tierPicker: TierPicker | null = null;
 /** #gui-toast: the one toast region (ui/toasts.ts), mounted on first use (the chat column's right edge). */
 let toastRegion: Toasts | null = null;
 const toasts = (): Toasts =>
@@ -309,8 +311,12 @@ function paintChatHead(): void {
   const meta = $('chead-meta');
   // #gui-model-picker: a streaming session repaints this header on every row; the model key stays put (its open
   // menu, its focus) and the parts around it are rebuilt before and after it
-  for (const n of Array.from(meta.childNodes)) if (!(n instanceof HTMLElement && n.hasAttribute('data-model-chip'))) meta.removeChild(n);
-  if (!s) modelPicker?.headChip(meta, null);
+  // #gui-tool-tier: the tier key (a local session's) stays put the same way
+  for (const n of Array.from(meta.childNodes)) if (!(n instanceof HTMLElement && (n.hasAttribute('data-model-chip') || n.hasAttribute('data-tier-chip')))) meta.removeChild(n);
+  if (!s) {
+    modelPicker?.headChip(meta, null);
+    tierPicker?.headChip(meta, null);
+  }
   if (s) {
     const g = store.groups().find((x) => x.sessions.some((y) => y.hsid === s.hsid));
     const hue = groupHue(s.repo ?? UNSCOPED, g?.sessions ?? [s]);
@@ -320,6 +326,7 @@ function paintChatHead(): void {
     // Mika (2026-10-23 delta): the project name ellipsizes last and keeps its whole name in the title
     meta.prepend(h(doc, 'span', { class: `pink h${hue}`, title: proj }, '■ ', h(doc, 'span', { class: 'chead-proj' }, proj)) as unknown as Node, h(doc, 'span', { class: 'chead-backend' }, ` · ${backendWord(s.backend)}`) as unknown as Node);
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
+    tierPicker?.headChip(meta, s.hsid); // #gui-tool-tier: a local session's tool tier, ▾ to change it (its owner)
     // Mika (2026-10-23): "started · 9m" is the one part that ellipsizes, so the model key is never the one clipped
     meta.appendChild(h(doc, 'span', { class: 'chead-when' }, `${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`) as unknown as Node);
   }
@@ -1569,6 +1576,9 @@ store.onChange(() => standingFeed.repaint());
 // #gui-model-picker: the New-session model select, the header chip + switch, the Settings slot; its own module
 modelPicker = mountModelPicker(document, { client: () => client, rows: (hsid) => store.transcript(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), focused: () => focused, notice, folder: () => nsField.value() });
 store.onChange(() => modelPicker?.repaint());
+// #gui-tool-tier (C4'b): a local session's tool tier in the header (the owner's key ▾, a plain chip otherwise)
+tierPicker = mountTierPicker(document, { client: () => client, session: (hsid) => store.sessions.get(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), me: () => session?.principal ?? myPrincipal(), model: (hsid) => sessionModelOf(store.transcript(hsid))?.model ?? 'this model', notice });
+store.onChange(() => tierPicker?.repaint());
 // #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
 // #gui-local-model: the Local model section's press paths (ui/local-model.ts); the sheet hands it presses
 const localModel = new LocalModelController({
