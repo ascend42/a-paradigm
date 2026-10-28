@@ -4,7 +4,7 @@
  * and is skipped in manual mode. Pure tests (no POSIX fixtures).
  */
 import { describe, expect, it } from 'vitest';
-import { ALLOW_NPM_TEST_PREFIX, BUILD_TOOL_PREFIX_ALLOW, BUILD_TOOLS, GIT_SUBCOMMAND_ALLOW, gitPrefixOptBad, prefixMatchRefusal, prefixRefusal, shownPrefixWords } from '../src/kernel/supervisor/prefix-policy.js';
+import { ALLOW_NPM_TEST_PREFIX, BUILD_TOOL_PREFIX_ALLOW, BUILD_TOOLS, GIT_SUBCOMMAND_ALLOW, gitPrefixOptBad, normalArgv0, prefixMatchRefusal, prefixRefusal, shownPrefixWords } from '../src/kernel/supervisor/prefix-policy.js';
 import { gateClassPathRule } from '../src/kernel/manifest/layers.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 import { RuleBook, type RuleRow } from '../src/kernel/supervisor/rules.js';
@@ -179,6 +179,9 @@ describe('#prefix-policy M1: display', () => {
     expect(shownPrefixWords(['git', 'log', 'x'])).toBe("'git' 'log' 'x'");
     // G-BRK-09 (Aegis C6'a2-2 M1): a destructive argv0, in any case, with .exe, mkfs.* — refused at prefix and match
     // R1: the case- and .exe-normalised argv0 drives every check (interpreter, python, git, build tool)
+    for (const v of ['rm', 'RM', 'rm.exe', 'rm.cmd', 'RM.BAT', 'rm.COM', 'rm.', 'rm ', 'rm. .', 'rm.exe.', 'rm.bat .']) expect(normalArgv0(v), JSON.stringify(v)).toBe('rm');
+    expect(normalArgv0('mkfs.ext4')).toBe('mkfs.ext4');
+    for (const a0 of ['rm.cmd', 'RM.BAT', 'rm.', 'bash.cmd', 'Env.com']) expect(prefixRefusal([a0, 'x']), a0).not.toBeNull();
     expect(prefixRefusal(['Env', 'rm'])).toMatch(/arbitrary code/);
     expect(prefixRefusal(['SUDO', 'rm'])).toMatch(/arbitrary code/);
     expect(prefixRefusal(['Bash', 'x'])).toMatch(/arbitrary code/);

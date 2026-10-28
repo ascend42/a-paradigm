@@ -85,14 +85,20 @@ export const DESTRUCTIVE_ARGV0: ReadonlySet<string> = new Set([
   'cp', 'tee', 'tar', 'unzip', 'ditto', 'patch', 'split', 'scp', 'curl', 'wget', 'copy', 'xcopy', 'robocopy',
 ]);
 
-/** Aegis C6'a2-2 M1: argv0 names a destructive program (case-insensitive, `.exe` dropped, mkfs.* / newfs_* too). */
 /**
- * Aegis C6'a2-2 R1: argv0 as the filesystem resolves it. APFS and NTFS are case-insensitive and Windows adds `.exe`,
- * so `Env`, `GIT` and `bash.exe` are env, git and bash: EVERY argv0 check (interpreter, python, git, build tool,
- * destructive) uses this one form, at offer, accept, fold and match.
+ * Aegis C6'a2-2 R1: argv0 as the filesystem resolves it. APFS and NTFS are case-insensitive, Windows runs `rm.exe`,
+ * `rm.com`, `rm.cmd` or `rm.bat` for `rm`, and NTFS ignores trailing dots and spaces, so `Env`, `GIT`, `bash.exe`,
+ * `RM.BAT`, `rm.` and `rm ` are env, git, bash and rm: EVERY argv0 check (interpreter, python, git, build tool,
+ * destructive) uses this one form, at offer, accept, fold and match. destructiveArgv0 (M1) is DESTRUCTIVE_ARGV0 on
+ * this form, plus mkfs.* / newfs_*.
  */
 export function normalArgv0(a0: string): string {
-  return a0.toLowerCase().replace(/\.exe$/, '');
+  let n = a0.toLowerCase();
+  for (let prev = ''; prev !== n; ) {
+    prev = n;
+    n = n.replace(/[. ]+$/, '').replace(/\.(?:exe|com|cmd|bat)$/, '');
+  }
+  return n;
 }
 
 export function destructiveArgv0(a0: string): boolean {
