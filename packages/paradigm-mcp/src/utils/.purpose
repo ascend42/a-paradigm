@@ -401,7 +401,22 @@ components:
     tags:
       - learning
       - v7.12
+      - scoped-learning
     file: packages/paradigm-mcp/src/utils/learning-stores.ts
+  learning-home-resolver:
+    description: 'Scoped learning S0+S1 (TD-2026-10-28-820), in learning-stores.ts. Every learning record has a home, repo (committed, <root>/.paradigm), user (~/.paradigm, per repo under projects/<repoId>; journals, global notebooks and global wisdom stay at ~/.paradigm/<rel>) or machine (<learning home>/machine/<repoId>). homeOf(artifact, entry?, config?) resolves entry home > config learning.default_home.<artifact> > the ARTIFACTS registry default. pathFor(artifact, home, root) computes the path and runs assertHomePlacement, which throws LearningHomeError when user or machine data would land under the repo root or repo data outside it. $PARADIGM_LEARNING_HOME overrides the per-repo user and machine root (tests). appendLearningRows stamps home on each row; readLearningRows takes the union of every home, tags legacy rows with the default home, dedupes by id with the repo row winning; rewriteLearningRows edits whichever home holds a row. promotionHomeOf(journal) gives the home a promotion carries (transferable:false → repo); groupByHome keeps calibration populations apart; currentAuthor stamps verdict authorship.'
+    type: utility
+    tags:
+      - learning
+      - scoped-learning
+    file: packages/paradigm-mcp/src/utils/learning-stores.ts
+  repo-id:
+    description: 'repoIdOf(root): the id per-repo user and machine learning stores are keyed by. A parity copy of gnomon''s repoIdOf (.gnomon/project.yaml repoId, else path: + 16 hex of sha256(realpath)); scoped-learning.test.ts fails if gnomon''s algorithm drifts. repoIdSegment makes it one filesystem-safe path segment (Windows-safe).'
+    type: utility
+    tags:
+      - learning
+      - scoped-learning
+    file: packages/paradigm-mcp/src/utils/repo-id.ts
   protocol-loader:
     description: 'Loads/validates .paradigm/protocols/*.protocol and rebuilds the protocol index. 7.12.0 (D4): lintProtocol emits PROTOCOL_IS_SKILL (warn only, never changes status; surfaced in validateProtocol issues) when no step names a repo path — the reverse of skill-loader''s SKILL_IS_PROTOCOL, reusing its exported repoPathTokens detector.'
     type: loader
@@ -420,7 +435,7 @@ components:
     file: packages/paradigm-mcp/src/utils/arch-loader.ts
     type: loader
   calibration-aggregate:
-    description: 'Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package.'
+    description: 'Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals as the union of their homes (scoped learning S1), learns bands from one population (the home new actuals land in), reports other homes in otherHomes without pooling them, and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package.'
     file: packages/paradigm-mcp/src/utils/calibration-aggregate.ts
     type: utility
     tags: [feature, calibration, learning-loop]
