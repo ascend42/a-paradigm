@@ -230,8 +230,9 @@ export class LocalUsageMeter {
 }
 
 const line = (o: Record<string, unknown>): string => `${JSON.stringify(o)}\n`;
-export const promptLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'prompt', message });
-export const followUpLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'follow_up', message });
+/** slice C6'a2-1 (Aegis M1): `data` are kernel-framed "/" results the child pushes as their own data messages. */
+export const promptLine = (message: string, id?: string, data?: readonly string[]): string => line({ ...(id ? { id } : {}), type: 'prompt', message, ...(data?.length ? { data: [...data] } : {}) });
+export const followUpLine = (message: string, id?: string, data?: readonly string[]): string => line({ ...(id ? { id } : {}), type: 'follow_up', message, ...(data?.length ? { data: [...data] } : {}) });
 export const steerLine = (message: string, id?: string): string => line({ ...(id ? { id } : {}), type: 'steer', message });
 export const abortLine = (): string => line({ type: 'abort' });
 /** Slice S1: the kernel's answer to one tool_request (content capped at TOOL_RESPONSE_MAX_CHARS). */
@@ -260,7 +261,7 @@ export const localAdapter: LocalAdapter = Object.freeze({
   argv: (i: LocalArgvInput): string[] => buildLocalArgv(i),
   parse: (line: string): LocalEvent => parseLocalLine(line),
   newMeter: (): LocalUsageMeter => new LocalUsageMeter(),
-  turnLine: (t: { text: string; inFlight: boolean }): string => (t.inFlight ? followUpLine(t.text) : promptLine(t.text)),
+  turnLine: (t: { text: string; inFlight: boolean; data?: readonly string[] }): string => (t.inFlight ? followUpLine(t.text, undefined, t.data) : promptLine(t.text, undefined, t.data)),
   interruptLine: (): string => abortLine(),
   steerLine: (text: string): string => steerLine(text),
   toolsSetLine: (tools: ReadonlyArray<OfferedTool>, id?: string, surface?: 'compact' | 'full'): string => toolsSetLine(tools, id, surface),

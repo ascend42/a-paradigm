@@ -17,6 +17,7 @@ import { narrow, type CapabilityEntry } from '../src/kernel/local/capability-ind
 import { UNTRUSTED_IRREVERSIBLE_LINE, DESTRUCTIVE_RULED_PER_RULE_DAY, DESTRUCTIVE_RULED_PER_SESSION_MINUTE, DestructiveRuleBudget, destructiveAlwaysLine, HUMAN_RUNS_PER_MINUTE, LocalToolBroker, schemaRefusal, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
 import { frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
+import { followUpLine, promptLine } from '../src/adapters/local/runner.js';
 import { FakeHelper } from './helper-fake.js';
 
 const HUMAN = 'p:abcdefgh/matt';
@@ -331,6 +332,12 @@ describe('G-LCL-26 the result policy and framing', () => {
     expect(big.frame).toContain('cut to the first 50');
     expect(resultCapBytes(1_000_000)).toBe(RESULT_SEND_MAX_BYTES);
     expect(resultCapBytes(8192)).toBe(5120);
+  });
+
+  it('Aegis M1: frames ride as the line\'s own data field, never glued onto the prompt text', () => {
+    const p = JSON.parse(promptLine('fix it', undefined, ['FRAME']));
+    expect(p).toEqual({ type: 'prompt', message: 'fix it', data: ['FRAME'] });
+    expect(JSON.parse(followUpLine('next'))).toEqual({ type: 'follow_up', message: 'next' });
   });
 
   it('schemaRefusal names an unchecked keyword anywhere in the schema', () => {

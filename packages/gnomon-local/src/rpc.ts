@@ -199,12 +199,15 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
     const ok = (data?: unknown): void => emit({ type: 'response', ...id, command, success: true, ...(data !== undefined ? { data } : {}) });
     const no = (error: string): void => emit({ type: 'response', ...id, command, success: false, error });
     const msg = typeof cmd.message === 'string' && cmd.message.length > 0 ? cmd.message : null;
+    // slice C6'a2-1 (Aegis M1): prompt / follow_up may carry kernel-framed data parts (at most 8 strings, 64 KiB each)
+    const data = cmd.data === undefined ? undefined : Array.isArray(cmd.data) && cmd.data.length <= 8 && cmd.data.every((d: unknown) => typeof d === 'string' && d.length > 0 && d.length <= 65_536) ? (cmd.data as string[]) : null;
     switch (command) {
       case 'prompt':
         if (!msg) return no('message is required');
+        if (data === null) return no('data must be 1..8 non-empty strings');
         if (agent.running) return no('agent is busy (use steer or follow_up)');
         ok();
-        void agent.prompt(msg);
+        void agent.prompt(msg, data);
         return;
       case 'steer':
         if (!msg) return no('message is required');
@@ -214,7 +217,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         return ok();
       case 'follow_up':
         if (!msg) return no('message is required');
-        agent.followUp(msg);
+        if (data === null) return no('data must be 1..8 non-empty strings');
+        agent.followUp(msg, data);
         return ok();
       case 'abort':
         agent.abort();

@@ -2826,15 +2826,16 @@ export class LocalLane {
     // slice C6'a2-1 (#local-result-policy): "/" results the policy sends go in as DATA parts of THIS human turn (never
     // the system role), before the human's text; the SESSION is marked tainted for the rest of its life (INJECTION PAUSE:
     // destructive rules pass no model call in it again). One hash-only tool.result.sent row each.
-    let message = p.text;
+    let data: string[] | undefined;
     const sendNow = s.pendingSend ?? [];
     if (sendNow.length && !s.loop) {
       s.pendingSend = [];
       s.tainted = true;
       for (const x of sendNow) await this.#o.log('tool.result.sent', x.row, { session: s.hsid }).catch(() => undefined);
-      message = `${sendNow.map((x) => x.frame).join('\n\n')}\n\n${p.text}`;
+      data = sendNow.map((x) => x.frame);
     }
-    s.child.stdin?.write(drv.turnLine({ text: message, inFlight }));
+    // Aegis M1: the frames ride as the line's own `data` (the child pushes each as a data message; the goal stays the text)
+    s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight, ...(data ? { data } : {}) }));
     return { turn: turnId(s.hsid, n) };
   }
 
