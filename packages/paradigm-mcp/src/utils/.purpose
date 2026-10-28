@@ -11,11 +11,22 @@ components:
       at an empty per-session kernel-owned dir); git hardening comes from the kernel's GIT_CONFIG_* env. Paradigm loads
       no .paradigm/ file as code in any mode (audited: habits, protocols, config, loops are data; loop checks run only
       in the Gnomon kernel after a human trusts the exact content hash).
+      Aegis review fixes: H2 breadcrumbBase puts breadcrumbs, the session work
+      log, postflight liveness and verdicts under HOME; no background static
+      index rebuild per call (index-loader) and no university pack cache
+      (university-core) in the staged mode. M1 staged-guard.ts wraps Node's fs
+      write/read API once at start: writes only to <root>/.paradigm/**, .purpose
+      files, the root portal.yaml and HOME (never .git, never via a symlink),
+      reads only in the root, HOME and the bundle dir. M2 STAGED_REFUSED_FAMILIES
+      (persona, symphony, platform, conductor, brain, sentinel) are unlisted,
+      unannotated and refused. aspect suggest_scan refuses (unbundlable import).
     path: src/utils/gnomon-staged.ts
     type: module
     tags: [mcp, gnomon, td-2026-10-27-833]
     tests:
       - src/tools/family-op-annotations.test.ts
+      - src/tools/staged-ops.test.ts
+      - src/utils/staged-guard.test.ts
   plugin-update-checker:
     description: >-
       #plugin-update-checker: detects stale Claude Code plugins (marketplace clones vs remote, cached

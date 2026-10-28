@@ -324,8 +324,20 @@ components:
       kernel after a human trust card on the content hash), so .paradigm/ stays
       read-write and the staged mode turns off the server's own side effects.
       RESIDUAL RISK: .paradigm/ habits, protocols, prompts and wisdom a local
-      model writes can steer later Claude sessions. Windows: staging works; no
-      helper grants the session SID a read ACE on the staged dir yet (gap).
+      model writes can steer later Claude sessions. Windows: composeLocal
+      refuses the staged server on win32 (no helper grants the session SID a
+      read ACE on the staged dir yet). Aegis review fixes: H3 edit-ledger.ts
+      (<home>/local-edits.jsonl: open{roots}, close, edit{realpath}) — a linked
+      checkout with a local edit under the source since its build, or a live
+      local session whose roots overlap it, refuses request.mcp.paradigm.stage
+      (local-writes) unless {force:true}; the reply shows git status with
+      --ignored --untracked-files=all, the build time vs HEAD's commit time and
+      those writes. M3 the server env reuses ANCHOR_GIT_CONFIG plus
+      GIT_NO_LAZY_FETCH, GIT_ATTR_NOSYSTEM, GIT_TERMINAL_PROMPT=0 and
+      GIT_CONFIG_GLOBAL at the null device. M4 every source file is read
+      through an O_NOFOLLOW fd whose fstat matches the selected ino/dev
+      (regular, nlink 1). Low: homeReadable under mcp/ is only
+      mcp/first-party/paradigm/<version>-<sha12>.
     path: src/kernel/local/paradigm-stage.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
