@@ -20,6 +20,7 @@ import * as path from 'path';
 import {
   appendLearningRows,
   currentAuthor,
+  isOwnAuthor,
   homeOf,
   readLearningHomeConfig,
   readLearningRows,
@@ -336,7 +337,7 @@ export function readPostflightLiveness(rootDir: string): PostflightLivenessRecor
  */
 export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): void {
   try {
-    appendLearningRows('verdicts', rootDir, [{ ...entry, author: entry.author ?? currentAuthor() }]);
+    appendLearningRows('verdicts', rootDir, [{ ...entry, author: entry.author ?? currentAuthor(rootDir) }]);
   } catch (err) {
     log.component('#session-work-log').warn('failed to record verdict', {
       error: err instanceof Error ? err.message : String(err),
@@ -349,8 +350,8 @@ export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): vo
  * author belongs to a teammate's pending queue, never this user's postflight.
  * Rows without an author are read as before (the S2 migration retires them).
  */
-function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, me: string): boolean {
-  return at === 'repo' && typeof row.author === 'string' && row.author !== me;
+function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, rootDir: string): boolean {
+  return at === 'repo' && typeof row.author === 'string' && !isOwnAuthor(row.author, rootDir);
 }
 
 /**
@@ -358,9 +359,8 @@ function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, me: stri
  * repo rows, minus a teammate's repo rows.
  */
 export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
-  const me = currentAuthor();
   return readLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', rootDir, {
-    filter: (row, at) => !row.consumed && !isTeammateRepoVerdict(row, at, me),
+    filter: (row, at) => !row.consumed && !isTeammateRepoVerdict(row, at, rootDir),
   });
 }
 
@@ -371,10 +371,9 @@ export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
  */
 export function markVerdictsConsumed(rootDir: string, nominationIds: string[]): void {
   const consumed = new Set(nominationIds);
-  const me = currentAuthor();
-  rewriteLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', rootDir, (row, at) => {
+  rewriteLearningRows<SessionWorkEntry & { consumed?: boolean; migrated?: boolean }>('verdicts', rootDir, (row, at) => {
     if (!row.nominationId || !consumed.has(row.nominationId)) return undefined;
-    if (row.consumed || isTeammateRepoVerdict(row, at, me)) return undefined;
+    if (row.consumed || row.migrated || isTeammateRepoVerdict(row, at, rootDir)) return undefined;
     return { ...row, consumed: true };
   });
 }
