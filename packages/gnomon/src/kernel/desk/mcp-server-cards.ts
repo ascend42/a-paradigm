@@ -41,7 +41,8 @@
  *              token, the newest listing and the current declaration, then writes tool.trust{op:'set'}; clear takes no
  *              token (it only narrows). Refused: a `fetches` server, a remote proxy, a remote, a project or local server,
  *              the first-party server (already first-party) and Windows. Turning a server off drops its trust (why
- *              disabled).
+ *              disabled). Slice C5'a2 (Aegis hardening): ONE open trust card per server id; a repeat commit (a fresh
+ *              valid token) returns the open card's cardId, the way enable de-dupes with #pending.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -351,6 +352,8 @@ export class McpServers {
   #lastVerify: { at: string; ok: boolean; why: string | null } | null = null;
   /** slice C5'a1: single-use trust preview tokens → what they are bound to */
   readonly #trustTokens = new Map<string, { principal: string; id: string; launchHash: string; toolsHash: string; expires: number }>();
+  /** slice C5'a2 (Aegis hardening): server id → its open trust card (raised: false while the raise is in flight) */
+  readonly #trustCards = new Map<string, { cardId: string; raised: boolean }>();
 
   constructor(o: McpServersOptions) {
     this.#o = o;
@@ -778,6 +781,13 @@ export class McpServers {
     // a FRESH presence, hand-only, never standing: 'grant' is in NEVER_STANDING_KINDS, never voice). Its detail (inside
     // the contentHash) binds {id, launchHash, toolsHash, reads}; the token stays the preview's TOCTOU binding. Trust is
     // set only when the card is allowed, after the listing is checked again.
+    // Aegis hardening (C5'a2): one open trust card per server id; a repeat commit returns it (like enable's #pending)
+    const open = this.#trustCards.get(id);
+    if (open) {
+      const c = open.raised ? this.#o.broker.card?.(open.cardId) : null;
+      if (!open.raised || (c && c.state === 'pending')) return { id, pending: true, cardId: open.cardId };
+      this.#trustCards.delete(id);
+    }
     const d = this.#find(id)!;
     const reads = narrow(l.tools, l.label, { trust: 'trusted' }).filter((e) => e.class === 'read' && !e.humanOnly).map((e) => e.name);
     const via = asker.credential === 'gui' ? ('settings' as const) : ('terminal' as const);
@@ -794,29 +804,39 @@ export class McpServers {
       if (again.launchHash !== l.launchHash || again.toolsHash !== l.toolsHash || again.pluginVersion !== l.pluginVersion) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${MCP_TRUST_REQUEST}: the server changed while the card was open: ask again`, { why: 'changed', id });
       return again;
     };
-    const card = await this.#o.broker.raise({
-      kind: 'grant',
-      cardId: mintId('card'),
-      requestedBy: asker.principal!,
-      attended: true,
-      detail: { action: 'mcp.trust', id, name: d.name, server: l.label, launchHash: l.launchHash, toolsHash: l.toolsHash, reads, rootRows: [] },
-      lines,
-      block: shown.block,
-      decisions: ['allow', 'deny'],
-      handOnly: true,
-      timeoutMs: MCP_TRUST_CARD_TTL_MS,
-      // TOCTOU inside the one touch, BEFORE the presence prompt
-      prepare: (decision: string) => {
-        if (decision === 'allow') sameListing();
-        return null;
-      },
-      effect: async (decision) => {
-        if (decision !== 'allow') return;
-        const again = sameListing();
-        await trust.set({ id, label: again.label, binding: bindingOf({ id, launchHash: again.launchHash, pluginVersion: again.pluginVersion, toolsHash: again.toolsHash }), launchHash: again.launchHash, toolsHash: again.toolsHash });
-        this.#o.emit?.({ event: 'mcp.trust.set', id, label: again.label });
-      },
-    });
+    const trustCardId = mintId('card');
+    const slot = { cardId: trustCardId, raised: false };
+    this.#trustCards.set(id, slot);
+    let card: Awaited<ReturnType<McpServersOptions['broker']['raise']>>;
+    try {
+      card = await this.#o.broker.raise({
+        kind: 'grant',
+        cardId: trustCardId,
+        requestedBy: asker.principal!,
+        attended: true,
+        detail: { action: 'mcp.trust', id, name: d.name, server: l.label, launchHash: l.launchHash, toolsHash: l.toolsHash, reads, rootRows: [] },
+        lines,
+        block: shown.block,
+        decisions: ['allow', 'deny'],
+        handOnly: true,
+        timeoutMs: MCP_TRUST_CARD_TTL_MS,
+        // TOCTOU inside the one touch, BEFORE the presence prompt
+        prepare: (decision: string) => {
+          if (decision === 'allow') sameListing();
+          return null;
+        },
+        effect: async (decision) => {
+          if (decision !== 'allow') return;
+          const again = sameListing();
+          await trust.set({ id, label: again.label, binding: bindingOf({ id, launchHash: again.launchHash, pluginVersion: again.pluginVersion, toolsHash: again.toolsHash }), launchHash: again.launchHash, toolsHash: again.toolsHash });
+          this.#o.emit?.({ event: 'mcp.trust.set', id, label: again.label });
+        },
+      });
+    } catch (err) {
+      if (this.#trustCards.get(id) === slot) this.#trustCards.delete(id);
+      throw err;
+    }
+    slot.raised = true;
     return { id, pending: true, cardId: card.cardId };
   }
 
