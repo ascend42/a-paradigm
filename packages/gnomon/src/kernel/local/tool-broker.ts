@@ -364,6 +364,40 @@ function check(schema: unknown, v: unknown, at: string, depth: number): string |
 }
 
 /**
+ * Slice C6'a2-1: why a tool's FULL schema would refuse EVERY call before any argument is read (a keyword the validator
+ * does not check, an unknown type, an unsafe or broken pattern anywhere under properties or items), or null. The "/"
+ * menu shows such a tool as not runnable, with this reason (request.session.capabilities tools[].run).
+ */
+export function schemaRefusal(schema: unknown, at = 'arguments', depth = 0): string | null {
+  if (depth > ARG_LIMITS.depth) return null;
+  const sc = isObj(schema) ? schema : {};
+  const unknownKw = Object.keys(sc).find((k) => !SCHEMA_KEYWORDS.includes(k));
+  if (unknownKw !== undefined) return `the schema of ${at} uses ${JSON.stringify(unknownKw.slice(0, 32))}, which the kernel does not check`;
+  const types = typeof sc.type === 'string' ? [sc.type] : Array.isArray(sc.type) ? sc.type.filter((t): t is string => typeof t === 'string') : null;
+  if (types && types.some((t) => !TYPE_OK[t])) return `the schema of ${at} names an unknown type`;
+  if (typeof sc.pattern === 'string') {
+    const unsafe = unsafePattern(sc.pattern);
+    if (unsafe) return `the schema of ${at} has an unsafe pattern (${unsafe})`;
+    try {
+      new RegExp(sc.pattern, 'u');
+    } catch {
+      return `the schema of ${at} has a pattern that does not compile`;
+    }
+  }
+  if (sc.items !== undefined) {
+    const e = schemaRefusal(sc.items, `${at}[]`, depth + 1);
+    if (e) return e;
+  }
+  if (isObj(sc.properties)) {
+    for (const [k, v] of Object.entries(sc.properties)) {
+      const e = schemaRefusal(v, `${at}.${k.slice(0, 64)}`, depth + 1);
+      if (e) return e;
+    }
+  }
+  return null;
+}
+
+/**
  * Aegis N6: a schema pattern the kernel will run (it bounds the input at ARG_LIMITS.string already): at most
  * PATTERN_MAX_CHARS, no backreference or lookaround, no quantified group that itself holds a quantifier (the classic
  * catastrophic shapes `(a+)+`, `(a|a*)*`, `(.*){2,}`). Returns why it is unsafe, or null.

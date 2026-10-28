@@ -98,7 +98,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { releaseSession, sessionSidFor } from '../../platform/win32/session-sandbox.js';
-import { HSID_PATTERN, HSID_V1_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type ToolSelectionTrigger, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, HSID_V1_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, TOOL_BROKER_TOOL_PATTERN, COMPACTION_REASONS, type CompactionReason, type ToolSelectionTrigger, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -113,7 +113,7 @@ import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js'
 import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
-import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
+import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, schemaRefusal, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
 import { cleanServerText, fullOfferable, fullParameters, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry, type ServerTrust } from '../local/capability-index.js';
 import { candidatesOf, FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpError, McpListCache, serverEnv, type LaunchCheckInput, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
@@ -341,6 +341,33 @@ interface LocalSession {
   toolsSetSeq: number;
   /** slice C4'a (#local-tool-tier): the session's tool tier (attended sessions only; a loop session has none) */
   tier?: SessionTier;
+  /** slice C6'a2-1: the "/" runs whose result is held (carded runs, read once by the same principal; RUN_RESULT_TTL_MS) */
+  runs?: Map<string, HeldRun>;
+  /** slice C6'a2-1: the latest "/" result of each capability entry (a first-use `send` sends it), bounded */
+  lastRuns?: Map<string, SlashResult>;
+  /** slice C6'a2-1: framed "/" results waiting for the human's next turn (the result policy said send) */
+  pendingSend?: Array<{ frame: string; row: Record<string, unknown> }>;
+  /** slice C6'a2-1 (INJECTION PAUSE): the turns that took in sent tool results or skill text */
+  tainted?: Set<number>;
+}
+
+/** Slice C6'a2-1: one "/" result as the kernel holds it (never logged: the row is hash-only). */
+interface SlashResult {
+  entry: CapabilityEntry;
+  argsHash: string;
+  text: string;
+  isError: boolean;
+  /** the server's trust when it ran (the frame names it) */
+  trust: ServerTrust;
+  at: number;
+}
+
+/** Slice C6'a2-1: a "/" run's held result (pending until the carded run settles). */
+interface HeldRun {
+  principal: string;
+  cardId?: string;
+  expires: number;
+  out?: { status: 'ran' | 'refused'; why?: string; content: string; isError: boolean };
 }
 
 /** Slice C4'a (#local-tool-tier): one attended session's tier state. */
@@ -434,7 +461,22 @@ export const LOCAL_SESSION_CAPABILITIES_REQUEST = 'request.session.capabilities'
  * its launch re-checked first (refused when its launch, trust or pin binding no longer holds). One per server at a time.
  */
 export const LOCAL_SESSION_MCP_RESTART_REQUEST = 'request.session.mcp.restart' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST]);
+/**
+ * Slice C6'a2-1 ("/" runs, TD-2026-10-28-956 / -969): the human starts a TIER 0 session's MCP servers without offering
+ * the model anything ({hsid}); runs one capability entry from "/" ({hsid, id, args, form}); reads a carded run's result
+ * once ({hsid, runId}); and sets the first-use result policy of a tool ({hsid, id, policy: send | ask}). Dispatcher-only:
+ * never rows of their own (each run logs its tool.brokered{author:'human'} row; a policy change its tool.result.policy).
+ */
+export const LOCAL_SESSION_TOOLS_START_REQUEST = 'request.session.tools.start' as const;
+export const LOCAL_SESSION_TOOLS_RUN_REQUEST = 'request.session.tools.run' as const;
+export const LOCAL_SESSION_TOOLS_RESULT_REQUEST = 'request.session.tools.result' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST, LOCAL_SESSION_TOOLS_START_REQUEST, LOCAL_SESSION_TOOLS_RUN_REQUEST, LOCAL_SESSION_TOOLS_RESULT_REQUEST]);
+/** Slice C6'a2-1: a carded "/" run's result is held this long for request.session.tools.result (read once). */
+export const RUN_RESULT_TTL_MS = 10 * 60_000;
+/** Slice C6'a2-1: at most this many "/" run results a session holds (the oldest goes first). */
+export const RUN_RESULTS_MAX = 16;
+/** Slice C6'a2-1: a "/" run's reply status. */
+export type SlashRunStatus = 'ran' | 'refused' | 'carded';
 /** Slice C6'a1: every server-written string request.session.capabilities returns is cleaned and at most this long. */
 export const CAPABILITY_TEXT_MAX = 240;
 /** Slice C6'a1: a fullSchema in the capabilities reply is at most this many bytes (else it is left out). */
@@ -1724,6 +1766,9 @@ export class LocalLane {
    */
   #reselect(s: LocalSession, trigger: ToolSelectionTrigger, need?: string, o: { force?: boolean; surface?: TierSurface | 'none' } = {}): CapabilityEntry[] {
     if (!s.mcp || !s.sel || !s.tools || s.state !== 'running') return [];
+    // slice C6'a2-1: a TIER 0 session whose servers the human started for "/" offers the model nothing — no list_changed,
+    // trust change, goal or step ever sends a tools_set; only a tier commit (trigger 'tier') changes the offer
+    if (trigger !== 'tier' && s.tier && !tierPlan(s.tier.tier, s.context.target).brokered) return [];
     const { tools, found, ids, hash, unfit } = this.#mcpOffer(s, need);
     s.sel.selectedAt = s.sel.step;
     if (need !== undefined) s.sel.found = { names: found.map((e) => e.name), step: s.sel.step };
@@ -1877,7 +1922,10 @@ export class LocalLane {
           const c = cleanSchema(fullParameters(e));
           if (Buffer.byteLength(JSON.stringify(c), 'utf8') <= CAPABILITY_SCHEMA_MAX_BYTES) fullSchema = c;
         }
-        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}) });
+        // slice C6'a2-1: can the human run it from "/" (request.session.tools.run), and if not, why (shown in the menu)
+        const unchecked = schemaRefusal(e.schema);
+        const run = m.pool.trustBindingOf(e.server) === null ? { runnable: false, why: 'untrusted' } : unchecked ? { runnable: false, why: 'unchecked-schema', detail: capText(unchecked) } : { runnable: true };
+        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}), run });
       }
     }
     return {
@@ -1955,6 +2003,117 @@ export class LocalLane {
     }
     const rep = m.pool.report().find((x) => x.label === label);
     return { hsid: s.hsid, server: label, state: rep?.state ?? (r.error ? 'failed' : 'running'), starts: rep?.starts ?? 0, tools: r.entries?.length ?? 0, ...(r.error !== null ? { error: capText(r.error) } : {}) };
+  }
+
+  /**
+   * Slice C6'a2-1: request.session.tools.start{hsid} — a TIER 0 session's MCP servers start (the same #startMcp a tier
+   * raise uses, so the index exists for "/" and the capabilities drawer) while the model is offered NOTHING: no setTools,
+   * no tools_set, and #reselect sends none while the tier stays 0. Any other tier is refused (its servers started with
+   * the session). Joins a start already running.
+   */
+  async #toolsStart(s: LocalSession): Promise<Record<string, unknown>> {
+    const kind = LOCAL_SESSION_TOOLS_START_REQUEST;
+    if (!s.tier || s.tier.tier !== 0) throw refused('BAD_REQUEST', `${kind}: only a tier 0 session starts its servers this way (at tier 1 and up they start with the session)`, { reason: 'bad-params', why: 'not-tier-0' });
+    if (!s.mcpLaunch?.servers.length) throw refused('NOT_FOUND', `${kind}: this session has no MCP servers`, { reason: 'not-found' });
+    const already = s.mcp !== undefined && !this.#mcpStarting.has(s);
+    await this.#startMcp(s, s.tier.kernel, this.#mode(s) === 'manual');
+    if (s.state !== 'running') throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
+    const m = s.mcp;
+    return { hsid: s.hsid, started: m !== undefined, already, servers: m ? m.pool.labels.length : 0, tools: m ? [...m.entries.values()].reduce((n, es) => n + es.length, 0) : 0, offered: s.tools?.offered.length ?? 0 };
+  }
+
+  /**
+   * Slice C6'a2-1: request.session.tools.run{hsid, id, args, form} — the human runs ONE capability entry of the session's
+   * index from "/" (`id` is its capabilities key; never a grace entry or a kernel verb: unknown-tool). Servers that are not started are `servers-off`
+   * (never auto-started); `narrow` only for an entry that is not humanOnly; the server must have a live trust binding
+   * (else `untrusted`). Then LocalToolBroker.runHuman: reassembled, validated against the FULL schema, class-gated (read
+   * runs; mutate: a card whose allow may be cached; destructive: an irreversible card, fresh presence) and logged with
+   * author 'human'. Answers {status: ran | refused | carded, runId, cardId?, content?, isError, why?}; a carded run's
+   * result is held for request.session.tools.result (same principal, RUN_RESULT_TTL_MS, read once).
+   */
+  async #toolsRun(principal: string, s: LocalSession, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const kind = LOCAL_SESSION_TOOLS_RUN_REQUEST;
+    if (typeof p.id !== 'string' || p.id.length === 0 || p.id.length > 256) throw refused('BAD_REQUEST', `${kind}: id must be a capability id`, { reason: 'bad-params', field: 'id' });
+    if (p.form !== 'narrow' && p.form !== 'full') throw refused('BAD_REQUEST', `${kind}: form must be narrow or full`, { reason: 'bad-params', field: 'form' });
+    if (p.args === null || typeof p.args !== 'object' || Array.isArray(p.args)) throw refused('BAD_REQUEST', `${kind}: args must be a JSON object`, { reason: 'bad-params', field: 'args' });
+    const args = p.args as Record<string, unknown>;
+    const form = p.form;
+    const runId = `run-${randomBytes(12).toString('hex')}`;
+    const m = s.mcp;
+    // the id is the capabilities reply's key (capabilityKey: the entry id when clean, else its hashed form)
+    const entry = m ? entryByCapabilityKey([...m.entries.values()].flat(), p.id) : undefined;
+    const refuse = async (why: 'unknown-tool' | 'servers-off' | 'untrusted' | 'bad-args', content: string): Promise<Record<string, unknown>> => {
+      await this.#o.log('tool.brokered', { hsid: s.hsid, server: entry?.server ?? KERNEL_MCP_SERVER, ...(entry && TOOL_BROKER_TOOL_PATTERN.test(entry.name) ? { tool: entry.name, class: entry.class } : {}), argsHash: inputHash(args), decision: why === 'unknown-tool' || why === 'bad-args' ? why : 'refused', bytes: 0, isError: true, author: 'human' }, { session: s.hsid }).catch(() => undefined);
+      return { hsid: s.hsid, status: 'refused' satisfies SlashRunStatus, runId, why, content, isError: true };
+    };
+    // never auto-started: a tier 0 session's servers start only on request.session.tools.start
+    if (!m || this.#mcpStarting.has(s)) return refuse('servers-off', 'The MCP servers of this session are not started.');
+    if (!entry) return refuse('unknown-tool', `No tool ${p.id.slice(0, 64)} in this session's index.`);
+    if (form === 'narrow' && entry.humanOnly) return refuse('bad-args', `${entry.name} is human-only: run it in its full form.`);
+    const target = m.pool.target(entry.server);
+    if (!target) return refuse('unknown-tool', `No tool ${p.id.slice(0, 64)} in this session's index.`);
+    if (m.pool.trustBindingOf(entry.server) === null) return refuse('untrusted', `${entry.server} is not trusted: trust it in Settings before running its tools from /.`);
+    if (!s.tools) return refuse('servers-off', 'The session is not ready for brokered tools.');
+    const trust = m.pool.trustLive(entry.server);
+    let onCarded!: (cardId: string) => void;
+    const carded = new Promise<string>((resolve) => (onCarded = resolve));
+    const run = s.tools.runHuman({ runId, entry, target, form, args, onCarded });
+    const first = await Promise.race([run.then((r) => ({ r })), carded.then((cardId) => ({ cardId }))]);
+    if ('cardId' in first) {
+      // the card waits on the human: the run settles later and its result is held for tools.result
+      const held = this.#holdRun(s, runId, { principal, cardId: first.cardId, expires: this.#now() + RUN_RESULT_TTL_MS });
+      void run.then((r) => {
+        held.out = this.#runOut(s, entry, args, trust, r);
+      }).catch(() => {
+        held.out = { status: 'refused', why: 'refused', content: 'the run failed', isError: true };
+      });
+      return { hsid: s.hsid, status: 'carded' satisfies SlashRunStatus, runId, cardId: first.cardId, isError: false };
+    }
+    const out = this.#runOut(s, entry, args, trust, first.r);
+    return { hsid: s.hsid, ...out, runId, ...(first.r.cardId ? { cardId: first.r.cardId } : {}) };
+  }
+
+  /** Slice C6'a2-1: a settled "/" run's reply, and its result kept for the result policy (ran only). */
+  #runOut(s: LocalSession, entry: CapabilityEntry, args: Record<string, unknown>, trust: ServerTrust, r: { content: string; isError: boolean; decision?: string }): { status: 'ran' | 'refused'; why?: string; content: string; isError: boolean } {
+    const ran = r.decision === 'ran' || r.decision === 'approved';
+    if (!ran) return { status: 'refused', why: r.decision ?? 'refused', content: r.content, isError: true };
+    this.#ranResult(s, { entry, argsHash: inputHash(args), text: r.content, isError: r.isError, trust, at: this.#now() });
+    return { status: 'ran', content: r.content, isError: r.isError };
+  }
+
+  /** Slice C6'a2-1: the latest "/" result of each entry (the result policy reads it). */
+  #ranResult(s: LocalSession, r: SlashResult): void {
+    const last = (s.lastRuns ??= new Map());
+    last.delete(r.entry.id);
+    last.set(r.entry.id, r);
+    while (last.size > RUN_RESULTS_MAX) last.delete(last.keys().next().value!);
+  }
+
+  /** Slice C6'a2-1: hold a "/" run's result (bounded, expired ones dropped first). */
+  #holdRun(s: LocalSession, runId: string, h: HeldRun): HeldRun {
+    const runs = (s.runs ??= new Map());
+    const now = this.#now();
+    for (const [id, x] of runs) if (x.expires <= now) runs.delete(id);
+    runs.set(runId, h);
+    while (runs.size > RUN_RESULTS_MAX) runs.delete(runs.keys().next().value!);
+    return h;
+  }
+
+  /**
+   * Slice C6'a2-1: request.session.tools.result{hsid, runId} — a carded run's result, read ONCE by the principal that ran
+   * it, within RUN_RESULT_TTL_MS. While the card is still open: {status:'carded', pending:true} (not consumed).
+   */
+  #toolsResult(principal: string, s: LocalSession, p: Record<string, unknown>): Record<string, unknown> {
+    const kind = LOCAL_SESSION_TOOLS_RESULT_REQUEST;
+    if (typeof p.runId !== 'string' || !/^run-[0-9a-f]{24}$/.test(p.runId)) throw refused('BAD_REQUEST', `${kind}: runId must be a run id`, { reason: 'bad-params', field: 'runId' });
+    const h = s.runs?.get(p.runId);
+    if (!h || h.principal !== principal || h.expires <= this.#now()) {
+      if (h && h.expires <= this.#now()) s.runs!.delete(p.runId);
+      throw refused('NOT_FOUND', `${kind}: no held result for this run (it was read, expired or is not yours)`, { reason: 'not-found' });
+    }
+    if (!h.out) return { hsid: s.hsid, runId: p.runId, status: 'carded' satisfies SlashRunStatus, pending: true, ...(h.cardId ? { cardId: h.cardId } : {}), isError: false };
+    s.runs!.delete(p.runId);
+    return { hsid: s.hsid, runId: p.runId, ...h.out, ...(h.cardId ? { cardId: h.cardId } : {}) };
   }
 
   /**
@@ -2191,7 +2350,7 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_TOOLS_RUN_REQUEST ? ['hsid', 'id', 'args', 'form'] : kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST ? ['hsid', 'runId'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
@@ -2231,6 +2390,10 @@ export class LocalLane {
     // slice C6'a1: read only
     if (kind === LOCAL_SESSION_CAPABILITIES_REQUEST) return this.#capabilities(s);
     if (kind === LOCAL_SESSION_MCP_RESTART_REQUEST) return this.#restartMcp(s, p);
+    // slice C6'a2-1: "/" runs (the human's own; a loop session is refused above)
+    if (kind === LOCAL_SESSION_TOOLS_START_REQUEST) return this.#toolsStart(s);
+    if (kind === LOCAL_SESSION_TOOLS_RUN_REQUEST) return this.#toolsRun(asker.principal, s, p);
+    if (kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST) return this.#toolsResult(asker.principal, s, p);
     // slice C4'a: the human's two-phase tool-tier change
     if (kind === LOCAL_SESSION_TIER_REQUEST) return this.#tierRequest(asker.principal, s, p);
     if (kind === LOCAL_SESSION_COMPACT_REQUEST) {
