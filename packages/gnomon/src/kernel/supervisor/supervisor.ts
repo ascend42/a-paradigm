@@ -127,7 +127,8 @@ import { EDIT_RULE_TOOLS as EDIT_SCOPE_TOOLS } from './rules.js';
 import { answerFor, askNoteCap, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCOPE_KINDS, inputHash, withEditScopes, MAX_ATTACHED_PLAN_CHARS, MAX_PENDING_PERMISSIONS, parseAskAnswer, PLAN_FILE, type AskQuestion, type CardKindP } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
-import { LocalLane, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle, type LocalSessionAsker } from './local-session.js';
+import { LocalLane, SESSION_SKILL_RUN_REQUEST, SESSION_SKILLS_LIST_REQUEST, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle, type LocalSessionAsker, type SkillRunStatus } from './local-session.js';
+import { listSkills, nativeSkillText, readStagedSkill, skillArgsRefusal, skillBody, skillTemplate, SlashSkillsProbe, type SlashProbeRun, type StagedSkills } from './skill-run.js';
 import type { LocalProbeSink } from '../local/config-request.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
@@ -242,6 +243,12 @@ export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids
 
 export interface SupervisorOptions {
   log: SupervisorLog;
+  /**
+   * slice C6'a2-2 (brief item 6): runs the slash-skill canary under a Claude binary (SlashSkillsProbe stages it in a
+   * kernel scratch dir and caches the answer by the binary's sha256). Absent: no probe, so a Claude session's "/" skill
+   * runs as the kernel's template.
+   */
+  slashProbe?: SlashProbeRun;
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'> & Partial<Pick<BudgetFuse, 'reattribute'>>;
   /** P8-D96: decisionOf/expire/noteOf/suspect answer the permission channel; absent (or raise-only) ⇒ every request is denied */
@@ -418,6 +425,10 @@ interface Session {
   /** item 3: ExitPlanMode tool_use input.plan by tool_use id (bounded TOOL_ID_CAP) and the last plan-file Write content (display only) */
   planUses: Map<string, string>;
   lastPlanFile: string | null;
+  /** slice C6'a2-2: the repo skills staged for this session (its kernel-staged plugin; absent: no repo context) */
+  skills?: StagedSkills;
+  /** slice C6'a2-2: the private claude copy this session execs and its sha256 hex (the slash probe's cache key) */
+  binary?: { exec: string; sha256: string };
   policy: SessionPolicy;
   /** §2.4 rule 11: set when the drain wrote this session's session.drained row */
   drained?: DrainOutcome;
@@ -729,6 +740,8 @@ export class SessionSupervisor {
   /** Aegis M: the in-home node dir on the session PATH is write-denied in every session profile */
   readonly #pathDenies: PolicyPath[];
   readonly #local: LocalLane;
+  /** slice C6'a2-2: whether a Claude binary runs a plugin skill typed into a turn (cached by its sha256) */
+  readonly #slash: SlashSkillsProbe;
   /** §2.4 rule 11: set once a drain begins; session.open and session.send are refused ENGINE{draining} from then on */
   #drain: Promise<DrainReport> | null = null;
   /** §2.4 rule 11 (B2): hsids this kernel resumed after an upgrade */
@@ -776,6 +789,7 @@ export class SessionSupervisor {
     // Aegis ruling 3: one row at daemon start when the OS identity is incomplete (names only, no error text)
     const missing = missingIdentity(this.#identity);
     if (missing.length) void Promise.resolve().then(() => o.log('session.sandbox', { phase: 'identity', missing })).catch(() => undefined);
+    this.#slash = new SlashSkillsProbe({ home: o.home, ...(o.slashProbe ? { run: o.slashProbe } : {}) });
     this.#local = new LocalLane({
       log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), ...(this.#gitVerbs ? { gitVerbs: this.#gitVerbs } : {}), ...(o.runMode ? { runMode: o.runMode } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}), identity: this.#identity, sessionPath: this.#sessionPath, pathDenies: this.#pathDenies,
       kernelPrincipal: o.kernelPrincipal, sock: o.sock, ...(o.env ? { env: o.env } : {}), ...(o.endpointPort ? { endpointPort: o.endpointPort } : {}),
@@ -1162,6 +1176,7 @@ export class SessionSupervisor {
         hsid, uuid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [], turnIds: [], consumedTurns: 0, replayLive: false,
         watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), stderrBytes: 0, watch: null, pending: new Map(), toolNames: new Map(), requested: new Set(), planUses: new Map(), lastPlanFile: null, policy, trace, lastMode: null, planApproved: false, model: req.model && req.model !== 'any' && req.model !== 'default' ? req.model : 'claude',
         contextTokens: r ? null : 0, seenModel: null, switching: null, controlWaiters: new Map(), modelUncertain: null,
+        ...(repoCtx ? { skills: { dir: repoCtx.pluginDir, ctx: { skills: repoCtx.skills, refused: repoCtx.refused } } } : {}), binary: { exec: priv.exec, sha256: priv.sha256 },
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -2158,7 +2173,49 @@ export class SessionSupervisor {
    * .memory.delete), dispatcher-only; LocalLane.humanRequest re-checks the asker and the owner.
    */
   localSessionRequest(asker: LocalSessionAsker, kind: string, payload: unknown): Promise<Record<string, unknown>> {
+    // slice C6'a2-2: "/" skills of a CLAUDE session are served here; a local session's by the lane
+    const hsid = payload !== null && typeof payload === 'object' ? (payload as { hsid?: unknown }).hsid : undefined;
+    if ((kind === SESSION_SKILLS_LIST_REQUEST || kind === SESSION_SKILL_RUN_REQUEST) && typeof hsid === 'string' && this.#sessions.has(hsid)) return this.#claudeSkillRequest(asker, kind, payload as Record<string, unknown>);
     return this.#local.humanRequest(asker, kind, payload);
+  }
+
+  /**
+   * Slice C6'a2-2: request.session.skills.list{hsid} / request.session.skill.run{hsid, name, args} for a Claude session
+   * (the human owner on a gui or device connection; dispatcher-only, no request row). The skills are the session's
+   * kernel-staged plugin (P8-D97 sanitized copy). A run goes natively (`/project:<name> <args>`, Claude expands the
+   * STAGED copy) when the slash probe says this binary does so, else as the kernel's template (staged body, $ARGUMENTS
+   * once, the kernel's first line). Either way it is the human's next turn and every tool call in it is the model's
+   * (P8-D96 cards as normal). One hash-only skill.run row per listed skill run or refused.
+   */
+  async #claudeSkillRequest(asker: LocalSessionAsker, kind: string, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
+      throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
+    }
+    const keys = kind === SESSION_SKILL_RUN_REQUEST ? ['hsid', 'name', 'args'] : ['hsid'];
+    if (Object.keys(p).some((k) => !keys.includes(k))) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
+    const s = this.#sessions.get(p.hsid as string);
+    if (!s || s.owner !== asker.principal || s.state !== 'running') throw refused('NOT_FOUND', 'no such running session for this principal', { reason: 'not-found' });
+    const listed = s.skills ? listSkills(s.skills) : [];
+    if (kind === SESSION_SKILLS_LIST_REQUEST) return { hsid: s.hsid, skills: listed };
+    if (typeof p.name !== 'string' || p.name.length === 0 || p.name.length > 64) throw refused('BAD_REQUEST', `${kind}: name must be a listed skill name`, { reason: 'bad-params', field: 'name' });
+    const name = p.name;
+    const args = p.args === undefined ? '' : p.args;
+    const staged = listed.some((x) => x.loaded && x.name === name) ? readStagedSkill(s.skills?.dir ?? null, name) : null;
+    if (!staged) return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'not-listed', content: `No runnable skill ${name.slice(0, 64)} in this session.` };
+    const skillHash = `sha256:${staged.sha}`;
+    const argsHash = `sha256:${createHash('sha256').update(typeof args === 'string' ? args : (JSON.stringify(args) ?? '')).digest('hex')}`;
+    const row = (via: 'native' | 'template', decision: 'ran' | 'refused', tokens?: number) => this.#o.log('skill.run', { hsid: s.hsid, name, skillHash, argsHash, via, decision, ...(tokens !== undefined ? { tokens } : {}) }, { session: s.hsid }).catch(() => undefined);
+    const bad = skillArgsRefusal(args);
+    if (bad !== null) {
+      await row('template', 'refused');
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', content: `${bad}.` };
+    }
+    const native = s.binary ? await this.#slash.native(s.binary) : false;
+    const text = native ? nativeSkillText(name, args as string) : skillTemplate({ name, file: staged.file, sha: staged.sha, body: skillBody(staged.text), args: args as string });
+    const via = native ? 'native' : 'template';
+    const sent = await this.send(asker.principal, { hsid: s.hsid, text, origin: 'kernel' });
+    await row(via, 'ran');
+    return { hsid: s.hsid, status: 'ran' satisfies SkillRunStatus, via, turn: sent.turn, skillHash };
   }
 
   /** The local lane config new opens use (undefined = none). */
