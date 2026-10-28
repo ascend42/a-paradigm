@@ -22,6 +22,11 @@
  *   - A server from the repo's own .mcp.json offers "On in <folder>" only: never "for all repos".
  *   - A server with a problem shows ✕ and the kernel's reason, and has no key.
  *   - Windows: rows show, keys don't; the how line says why (the root key lives in the Mac helper in 8.0).
+ *   - C5'b (8.0:local-lane, Mika): per-server trust on the server's own row. A chip says untrusted, trusted or
+ *     first-party by its word (never a hue); Trust… (untrusted and allowed) opens the preview INLINE under the row (a
+ *     settings-form confirm block: checking, ready, expired, refused, committing), then the request row while the root
+ *     card waits, then the outcome under the row. Clear trust (quiet) takes no card. A refusal that lasts shows no key;
+ *     one that passes keeps Trust… aria-disabled, and the row's how line says why (trustRefusalWords), never the code.
  *
  * Keys name their press as `mcp:<verb>` (data-lm-act) with the server id (or the card id) as the value; the sheet routes
  * `mcp:` presses here, never through SETTINGS_RUNS.
@@ -32,6 +37,8 @@ import type { FormKey, ResultView, SettingRow, SettingsSection } from './setting
 export const MCP_SECTION = 'mcp-servers' as const;
 export const MCP_ENABLE_REQUEST = 'request.mcp.enable' as const;
 export const MCP_DISABLE_REQUEST = 'request.mcp.disable' as const;
+/** C5'b: request.mcp.trust{id, op: 'preview' | 'commit' | 'clear', token?} (kernel #mcp-servers, slice C5'a1). */
+export const MCP_TRUST_REQUEST = 'request.mcp.trust' as const;
 export const MCP_FIRST_PARTY = 'first-party:paradigm';
 /** #batch-card: the kernel's cap of servers on one enable card (kernel MCP_ENABLE_MAX; status.mcp.max wins). */
 export const MCP_ENABLE_MAX = 16;
@@ -114,12 +121,19 @@ export interface McpRowView {
   problems: Array<{ code: string; text: string }>;
   on: { all: boolean; repos: string[] };
   changed: boolean;
+  /** C5'b: status.mcp row trust{level, why} (null: a kernel that does not report trust; no chip, no key) */
+  trust: McpTrustView | null;
+}
+/** C5'b: a server's trust as the kernel reports it; why: the kernel's closed reason it cannot be trusted now, or null. */
+export interface McpTrustView {
+  level: 'untrusted' | 'trusted' | 'first-party';
+  why: string | null;
 }
 export interface McpStatusView {
   state: 'not-connected' | 'not-offered' | 'ok';
   windows: boolean;
   envFile: string;
-  firstParty: { on: boolean; available: boolean; version: string | null; why: string | null; dir: string | null; linked: boolean; autoAllowed: string[] } | null;
+  firstParty: { on: boolean; available: boolean; version: string | null; why: string | null; dir: string | null; linked: boolean; autoAllowed: string[]; trust?: McpTrustView | null } | null;
   servers: McpRowView[];
   repos: Array<{ repo: string; folder: string; hsids: string[]; servers: McpRowView[] }>;
   pending: Array<{ cardId: string; id: string; scope: string; repo: string | null }>;
@@ -165,7 +179,13 @@ function rowOf(v: unknown): McpRowView | null {
     problems: (Array.isArray(v.problems) ? v.problems : []).filter(isObj).map((p) => ({ code: String(p.code), text: shown(p.text, 240) })),
     on: { all: on.all === true, repos: strs(on.repos) },
     changed: v.changed === true,
+    trust: trustOf(v.trust),
   };
+}
+
+function trustOf(v: unknown): McpTrustView | null {
+  if (!isObj(v) || (v.level !== 'untrusted' && v.level !== 'trusted' && v.level !== 'first-party')) return null;
+  return { level: v.level, why: typeof v.why === 'string' ? v.why : null };
 }
 
 /** One allowed card's skips (status.mcp.skips[i]): who decided it (connId) and which servers did turn on (on). */
@@ -197,7 +217,7 @@ export function mcpStatusOf(status: unknown): McpStatusView {
     state: 'ok',
     windows: m.unsupported === 'platform' || m.platform === 'win32',
     envFile: str(m.envFile) ?? '~/.gnomon/loop-env',
-    firstParty: fp ? { on: fp.on === true, available: fp.available === true, version: str(fp.version), why: fp.why ? shown(fp.why, 200) : null, dir: fp.dir ? shown(fp.dir, 200) : null, linked: fp.linked === true, autoAllowed: strs(fp.autoAllowed) } : null,
+    firstParty: fp ? { on: fp.on === true, available: fp.available === true, version: str(fp.version), why: fp.why ? shown(fp.why, 200) : null, dir: fp.dir ? shown(fp.dir, 200) : null, linked: fp.linked === true, autoAllowed: strs(fp.autoAllowed), trust: trustOf(fp.trust) } : null,
     servers: m.servers.map(rowOf).filter((r): r is McpRowView => r !== null),
     repos: (Array.isArray(m.repos) ? m.repos : []).filter(isObj).map((r) => ({ repo: String(r.repo), folder: shown(r.folder, 80), hsids: strs(r.hsids), servers: (Array.isArray(r.servers) ? r.servers : []).map(rowOf).filter((x): x is McpRowView => x !== null) })),
     pending: (Array.isArray(m.pending) ? m.pending : []).filter(isObj).map((p) => ({ cardId: String(p.cardId), id: String(p.id), scope: String(p.scope), repo: str(p.repo) })),
@@ -232,8 +252,174 @@ export interface McpUi {
   /** a press in flight (its key shows busy) */
   busy: string | null;
   result: ResultView | null;
+  /** C5'b: the trust preview open under one server's row (ui/mcp-servers.ts TrustFlow holds its token), or null */
+  trust?: McpTrustUi | null;
 }
-export const emptyMcpUi = (): McpUi => ({ at: null, staged: [], marking: false, request: null, busy: null, result: null });
+export const emptyMcpUi = (): McpUi => ({ at: null, staged: [], marking: false, request: null, busy: null, result: null, trust: null });
+
+/* ── C5'b per-server trust ──────────────────────────────────────── */
+
+/** The trust panel's phases (the C4'b tier sheet's, inline): checking → ready → committing → pending; expired, refused. */
+export type TrustPhase = 'checking' | 'ready' | 'expired' | 'refused' | 'committing' | 'pending';
+export interface McpTrustUi {
+  id: string;
+  /** display text (a server's name is untrusted text) */
+  name: string;
+  phase: TrustPhase;
+  /** the kernel's notice, verbatim (display text) */
+  notice: string | null;
+  /** the tools that would run with no card (display text) */
+  reads: string[];
+  expiresAt: string | null;
+  /** refused: the plain words ("Not changed: …"); expired: why Preview again */
+  result: ResultView | null;
+  /** pending: the trust card */
+  cardId: string | null;
+}
+
+export const TRUST_COPY = Object.freeze({
+  chip: Object.freeze({ untrusted: 'untrusted', trusted: 'trusted', 'first-party': 'first-party' }) as Readonly<Record<McpTrustView['level'], string>>,
+  trust: 'Trust…',
+  clear: 'Clear trust',
+  commit: 'Trust · root card',
+  cancel: 'Cancel',
+  again: 'Preview again',
+  checking: 'Checking what Gnomon would trust…',
+  committing: 'Raising the card…',
+  noReads: 'none: every tool still asks; trust lets you make Always rules',
+  readsLead: 'These run with no card:',
+  expired: 'Not changed: this preview expired.',
+  stale: 'Not changed: the server changed since the preview.',
+  pendingChip: 'card waiting',
+  requestHow: 'Allow takes the root key and your presence. Deny keeps it untrusted.',
+  /** the reads list shows at most this many, then "+N more" */
+  readsMax: 12,
+});
+
+/** "the plugin x" or the config file a server comes from (problemNext's where). */
+const whereOf = (r: { source: string; plugin: { id: string } | null }): string => (r.plugin ? `the plugin ${r.plugin.id}` : (SOURCE_WORDS[r.source] ?? r.source));
+
+/**
+ * C5'b (Mika's table): why a server can't be trusted now, in plain words with next:, and whether Trust… shows at all.
+ * key 'none': a refusal that lasts (no key); 'disabled': one that passes (Trust… stays, aria-disabled). The kernel's code
+ * is never shown: an unknown one reads as a generic line.
+ */
+export function trustRefusalWords(why: string, r: { source: string; plugin: { id: string } | null } = { source: 'user', plugin: null }): { key: 'none' | 'disabled'; how: string } {
+  switch (why) {
+    case 'platform':
+    case 'problem':
+    case 'not-found':
+    case 'first-party':
+      // the Windows line, the ✕ line or the first-party row already says it
+      return { key: 'none', how: '' };
+    case 'not-local':
+    case 'remote':
+      return { key: 'none', how: 'trust: not needed · it never runs in a local session' };
+    case 'fetches':
+      return { key: 'none', how: 'can’t be trusted: it downloads what it runs at each launch · next: install it and point its command at the installed copy' };
+    case 'remote-proxy':
+      return { key: 'none', how: 'can’t be trusted: it forwards to a remote server · its tools keep asking' };
+    case 'bad-id':
+      return { key: 'none', how: `can’t be trusted: its name can’t be recorded · next: rename it in ${whereOf(r)}` };
+    case 'not-enabled':
+      return { key: 'disabled', how: 'turn it on first, then Trust…' };
+    case 'not-listed':
+      return { key: 'disabled', how: 'Trust… opens once a local session lists its tools · next: open a local session in a folder where it’s on' };
+    case 'changed':
+      return { key: 'disabled', how: 'it changed since a session listed its tools · next: open a new local session' };
+    case 'unavailable':
+      return { key: 'none', how: 'can’t be trusted: this Gnomon does not offer per-server trust · next: update Gnomon' };
+    default:
+      return { key: 'none', how: 'can’t be trusted now · next: close Settings and open it again' };
+  }
+}
+
+/** The words of a refused preview or commit: "Not changed: " + the table's words (with next:); never the code. */
+export function trustRefusedResult(why: string | null, r?: { source: string; plugin: { id: string } | null }): ResultView {
+  const w = why ? trustRefusalWords(why, r).how : '';
+  return { lead: 'Not changed:', text: ` ${w || 'Gnomon did not trust it · next: close Settings and open it again'}`, fail: true };
+}
+
+/** C5'b: the row's trust chip, told by its word (trusted and first-party in ink, untrusted plain), never by a hue. */
+export function trustChipOf(t: McpTrustView | null | undefined): { text: string; ink?: boolean } | null {
+  if (!t) return null;
+  return t.level === 'untrusted' ? { text: TRUST_COPY.chip.untrusted } : { text: TRUST_COPY.chip[t.level], ink: true };
+}
+
+/** C5'b: a row's trust keys: Trust… (untrusted and allowed; aria-disabled while a refusal passes) or Clear trust. */
+export function trustKeys(r: McpRowView, ui: McpUi, windows: boolean): FormKey[] {
+  const t = r.trust;
+  if (!t || windows || t.level === 'first-party' || r.problems.length) return [];
+  const title = (label: string): string => `${label} · ${r.name}`;
+  if (t.level === 'trusted') return [{ act: 'mcp:untrust', value: r.id, label: TRUST_COPY.clear, quiet: true, title: title(TRUST_COPY.clear), ...(ui.busy === `mcp:untrust|${r.id}` ? { busy: true, ariaDisabled: true } : ui.busy ? { disabled: true } : {}) }];
+  const words = t.why ? trustRefusalWords(t.why, r) : null;
+  if (words?.key === 'none') return [];
+  const open = ui.trust?.id === r.id;
+  // one trust panel at a time: another server's Trust… waits (aria-disabled, it keeps its place in the Tab order)
+  return [{ act: 'mcp:trust', value: r.id, label: TRUST_COPY.trust, title: title('Trust'), expanded: open, ...(words || (ui.trust && !open) ? { ariaDisabled: true } : ui.busy ? { disabled: true } : {}) }];
+}
+
+/** The reads as the panel lists them: at most readsMax, then "+N more". */
+export function readsShown(reads: readonly string[]): string[] {
+  const max = TRUST_COPY.readsMax;
+  return reads.length > max ? [...reads.slice(0, max), `+${reads.length - max} more`] : [...reads];
+}
+
+/** The rows the trust panel adds under its server's row: the confirm block, or the request row while its card waits. */
+export function trustPanelRows(t: McpTrustUi): SettingRow[] {
+  if (t.phase === 'pending' && t.cardId) return [{ kind: 'request', id: 'mcp-trust-request', label: 'Asked', chip: TRUST_COPY.pendingChip, line: `trust ${t.name}’s tool labels`, keys: [{ act: 'mcp:decide', value: t.cardId, label: MCP_COPY.decide }], how: TRUST_COPY.requestHow }];
+  const cancel: FormKey = { act: 'mcp:trust-cancel', value: t.id, label: TRUST_COPY.cancel, quiet: true, ...(t.phase === 'committing' ? { ariaDisabled: true } : {}) };
+  const commit = (o: Partial<FormKey>): FormKey => ({ act: 'mcp:trust-commit', value: t.id, label: TRUST_COPY.commit, pri: true, ...o });
+  const label = `Trust ${t.name}’s tool labels`;
+  const form = (confirm: NonNullable<Extract<SettingRow, { kind: 'form' }>['confirm']>, result?: ResultView | null): SettingRow => ({ kind: 'form', id: 'mcp-trust', label: '', keys: [], confirm, ...(result ? { result } : {}) });
+  switch (t.phase) {
+    case 'checking':
+      return [form({ label, text: TRUST_COPY.checking, keys: [commit({ busy: true, ariaDisabled: true }), cancel] })];
+    case 'committing':
+      return [form({ label, text: TRUST_COPY.committing, keys: [commit({ busy: true, ariaDisabled: true }), cancel] })];
+    case 'refused':
+      return [form({ label, text: '', keys: [cancel] }, t.result)];
+    default: {
+      const list = t.reads.length ? readsShown(t.reads) : null;
+      const keys: FormKey[] = t.phase === 'expired' ? [{ act: 'mcp:trust-again', value: t.id, label: TRUST_COPY.again, pri: true }, cancel] : [commit({}), cancel];
+      return [form({ label, text: t.notice ?? '', lines: [list ? TRUST_COPY.readsLead : `${TRUST_COPY.readsLead} ${TRUST_COPY.noReads}`], ...(list ? { list } : {}), keys }, t.phase === 'expired' ? t.result : null)];
+    }
+  }
+}
+
+/** The section's one polite line (empty when idle): what the trust panel is doing now. */
+export function trustLiveText(t: McpTrustUi | null | undefined): string {
+  if (!t) return '';
+  switch (t.phase) {
+    case 'checking':
+      return TRUST_COPY.checking;
+    case 'ready':
+      return `Ready: ${TRUST_COPY.commit} raises the card for ${t.name}.`;
+    case 'expired':
+      return `${t.result?.lead ?? 'Not changed:'}${t.result?.text ?? ''}`;
+    case 'refused':
+      return `${t.result?.lead ?? 'Not changed:'}${t.result?.text ?? ''}`;
+    case 'committing':
+      return TRUST_COPY.committing;
+    case 'pending':
+      return `Card waiting: trust ${t.name}’s tool labels. ${MCP_COPY.decide}.`;
+  }
+}
+
+export const trustedResult = (name: string, at: string, n: number): ResultView => ({ lead: 'Trusted', text: ` ${name}’s tool labels at ${at}. ${n} tool${n === 1 ? ' runs' : 's run'} with no card.` });
+export const trustNotChangedResult = (name: string, at: string, why: 'denied' | 'expired'): ResultView => ({ lead: 'Not changed:', text: ` ${name} stays untrusted; the card was ${why} at ${at}.` });
+export const trustClearedResult = (name: string, at: string): ResultView => ({ lead: 'Cleared trust', text: ` in ${name}’s tool labels at ${at}. Its tools ask again; its Always rules are paused.` });
+
+/** request.mcp.trust: preview and clear take no token; a commit carries the preview's. */
+export function trustRequest(id: string, op: 'preview' | 'commit' | 'clear', token?: string): { kind: string; payload: Record<string, unknown> } {
+  return { kind: MCP_TRUST_REQUEST, payload: op === 'commit' ? { id, op, token } : { id, op } };
+}
+
+/** A preview answer as the panel reads it, or null (not one the page reads). The notice and reads become display text. */
+export function trustPreviewOf(v: unknown): { notice: string; reads: string[]; token: string; expiresAt: string | null } | null {
+  if (!isObj(v) || typeof v.token !== 'string' || !v.token || typeof v.notice !== 'string') return null;
+  return { notice: shown(v.notice, 2000), reads: strs(v.reads).map((x) => shown(x, 120)), token: v.token, expiresAt: typeof v.expiresAt === 'string' ? v.expiresAt : null };
+}
 
 /**
  * TD-2026-10-23-361 (H1, founder: honour their rules, show them): the human's own Claude Code allow rules that let a
@@ -321,14 +507,14 @@ export function waitingCards(v: McpStatusView): Array<{ cardId: string; ids: str
 
 export function mcpSection(i: McpSectionInput): SettingsSection {
   const v = mcpStatusOf(i.status);
-  const sec = (rows: SettingRow[]): SettingsSection => ({ id: MCP_SECTION, title: MCP_COPY.title, owner: MCP_COPY.owner, intro: MCP_COPY.intro, rows });
+  const sec = (rows: SettingRow[]): SettingsSection => ({ id: MCP_SECTION, title: MCP_COPY.title, owner: MCP_COPY.owner, intro: MCP_COPY.intro, rows, live: trustLiveText(i.ui.trust) });
   if (v.state === 'not-connected') return sec([{ kind: 'readonly', id: 'mcp', label: 'MCP servers', value: MCP_COPY.notConnected.value, how: MCP_COPY.notConnected.how }]);
   if (v.state === 'not-offered') return sec([{ kind: 'readonly', id: 'mcp', label: 'MCP servers', value: MCP_COPY.notOffered.value, how: MCP_COPY.notOffered.how }]);
   const rows: SettingRow[] = [];
   const fp = v.firstParty;
   if (fp) {
     const k: FormKey[] = fp.available ? [{ act: fp.on ? 'mcp:fp-off' : 'mcp:fp-on', value: MCP_FIRST_PARTY, label: fp.on ? 'Turn off' : 'Turn on', quiet: fp.on, ...(i.ui.busy ? { disabled: true } : {}) }] : [];
-    rows.push({ kind: 'readonly', id: 'mcp-paradigm', label: 'Paradigm MCP · first-party', value: !fp.available ? 'not installed' : fp.on ? `on in every session${fp.version ? ` · paradigm ${fp.version}` : ''}` : 'off', how: fp.available ? [fp.dir || fp.autoAllowed.length ? MCP_COPY.fpHow.replace(/\.$/, '') : MCP_COPY.fpHow, ...(fp.dir ? [`runs from ${fp.dir}${fp.linked ? ' (linked: it runs live as that folder changes, and sessions working in that folder can edit it)' : ''}`] : []), ...(fp.autoAllowed.length ? [autoAllowWords(fp.autoAllowed)] : [])].join(' · ') : MCP_COPY.fpMissing, ...(fp.available ? (fp.on ? { mark: '✓' } : {}) : { mark: '✕' }), ...(k.length ? { keys: k } : {}) });
+    rows.push({ kind: 'readonly', id: 'mcp-paradigm', label: 'Paradigm MCP · first-party', value: !fp.available ? 'not installed' : fp.on ? `on in every session${fp.version ? ` · paradigm ${fp.version}` : ''}` : 'off', how: fp.available ? [fp.dir || fp.autoAllowed.length ? MCP_COPY.fpHow.replace(/\.$/, '') : MCP_COPY.fpHow, ...(fp.dir ? [`runs from ${fp.dir}${fp.linked ? ' (linked: it runs live as that folder changes, and sessions working in that folder can edit it)' : ''}`] : []), ...(fp.autoAllowed.length ? [autoAllowWords(fp.autoAllowed)] : [])].join(' · ') : MCP_COPY.fpMissing, ...(fp.available ? (fp.on ? { mark: '✓' } : {}) : { mark: '✕' }), ...(k.length ? { keys: k } : {}), ...(fp.trust ? { chip: trustChipOf(fp.trust)! } : {}) });
   }
   const repo = i.hsid ? (v.repos.find((r) => r.hsids.includes(i.hsid!)) ?? null) : null;
   const pendingIds = new Set(v.pending.map((p) => p.id));
@@ -358,11 +544,17 @@ export function mcpSection(i: McpSectionInput): SettingsSection {
     const marked = i.ui.staged.find((m) => m.id === r.id) ?? null;
     const waiting = pendingIds.has(r.id);
     const st = stateOf(r, repo?.repo ?? null, marked, waiting);
-    const keys = keysOf(r, repo, i.ui, v.windows, waiting, full, batching);
+    const keys = [...keysOf(r, repo, i.ui, v.windows, waiting, full, batching), ...trustKeys(r, i.ui, v.windows)];
     if (keys.some((k) => /^mcp:(on|mark)-/.test(k.act))) offerable += 1;
     const p0 = r.problems[0];
-    const how = p0 && p0.code !== 'first-party' ? `${howWords(r, v.envFile)} · ${problemNext(p0.code, r)}` : howWords(r, v.envFile);
-    rows.push({ kind: 'readonly', id: `mcp-${r.source}-${n}`, label, value: st.value, how, ...(st.mark ? { mark: st.mark } : {}), ...(grp ? { grp: true } : {}), ...(keys.length ? { keys } : {}), title: `${r.sessionName} · tools mcp__${r.sessionName}__*` });
+    // C5'b: why it can't be trusted now sits in the row's how line (never the kernel's code)
+    const tw = r.trust && r.trust.level === 'untrusted' && r.trust.why && !r.problems.length && !v.windows ? trustRefusalWords(r.trust.why, r).how : '';
+    const how0 = p0 && p0.code !== 'first-party' ? `${howWords(r, v.envFile)} · ${problemNext(p0.code, r)}` : howWords(r, v.envFile);
+    const how = tw ? `${how0} · ${tw}` : how0;
+    const chip = p0?.code === 'first-party' ? null : trustChipOf(r.trust);
+    rows.push({ kind: 'readonly', id: `mcp-${r.source}-${n}`, label, value: st.value, how, ...(st.mark ? { mark: st.mark } : {}), ...(grp ? { grp: true } : {}), ...(keys.length ? { keys } : {}), ...(chip ? { chip } : {}), title: `${r.sessionName} · tools mcp__${r.sessionName}__*` });
+    // C5'b: the trust preview opens INLINE under its row (never a modal over the sheet); then its outcome
+    if (i.ui.trust?.id === r.id) rows.push(...trustPanelRows(i.ui.trust));
     if (r.id === at) outcome();
     if (r.id === under && mine) rows.push(requestRow({ cardId: mine.cardId, ids: mine.ids ?? [], line: mine.line }, 'mcp-request', true));
   };
