@@ -419,7 +419,7 @@ export class Agent {
     const system = this.#messages[0]?.role === 'system' ? estimateTokens([this.#messages[0]]) : 0;
     const fixed = this.#o.maxTokens + system + estimateTokens([{ role: 'user', content: summary }]) + (this.#goal !== undefined && !goalPinned ? Math.ceil(this.#goal.length / 4) : 0) + 64;
     const room = Math.max(0, budget - fixed);
-    const { messages, kept, excerpts } = compactedHistory(this.#messages, summary, Math.floor(room / 3), { ...(this.#goal !== undefined ? { goal: this.#goal } : {}), excerptTokens: Math.floor(room / 4), ...(goalPinned ? { goalPinned } : {}) });
+    const { messages, kept, excerpts } = compactedHistory(this.#messages, summary, Math.floor(room / 3), { ...(this.#goal !== undefined ? { goal: this.#goal } : {}), excerptTokens: Math.floor(room / 4), ...(goalPinned ? { goalPinned } : {}), isData: (m) => this.#data.has(m) });
     this.#messages.splice(0, this.#messages.length, ...messages);
     this.#compactions++;
     this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, excerpts, goalPinned, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
