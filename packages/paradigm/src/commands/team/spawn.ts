@@ -17,6 +17,7 @@ import {
 import { AgentSpawner } from '../../core/agent-spawner.js';
 import { getBestProvider } from '../../core/provider-registry.js';
 import { loadAgentsManifest } from './loader.js';
+import { holdWhilePrompting, stripTerminalEscapes } from '../../core/providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -31,6 +32,8 @@ export interface SpawnCommandOptions {
   budget?: string;
   timeout?: string;
   checkpoint?: boolean;
+  /** --allow-commands / --no-allow-commands; undefined = use the saved choice. */
+  allowCommands?: boolean;
 }
 
 // ============================================================================
@@ -155,12 +158,18 @@ export async function teamSpawnCommand(
       return;
     }
 
+    // While the consent question is on screen, agent output (this agent's or
+    // a parallel one's) is held, so it can't draw over or fake the question.
+    holdWhilePrompting(() => renderMessage(message));
+  };
+
+  const renderMessage = (message: AgentMessage): void => {
     // Stream text output
     if (message.type === 'text') {
       if (spinner.isSpinning) {
         spinner.stop();
       }
-      process.stdout.write(message.content);
+      process.stdout.write(stripTerminalEscapes(message.content));
       outputText += message.content;
     } else if (message.type === 'tool_use') {
       if (!spinner.isSpinning) {
@@ -200,12 +209,19 @@ export async function teamSpawnCommand(
     checkpoints: options.checkpoint ? { beforeActions: ['write', 'delete', 'execute'] } : undefined,
     onMessage,
     onCheckpoint,
+    commandPolicy: {
+      allowCommands: options.allowCommands,
+      onBeforePrompt: () => { if (spinner.isSpinning) spinner.stop(); },
+    },
   });
 
   // Ensure newline after streamed output
   if (outputText && !outputText.endsWith('\n')) {
     console.log();
   }
+
+  // Allowed-but-sensitive writes (#write-guard) the user should look at.
+  const reviewWrites = [...new Set(messages.flatMap((m) => m.reviewWrites ?? []))];
 
   // Output result
   if (options.json) {
@@ -217,6 +233,7 @@ export async function teamSpawnCommand(
       model: options.model || 'default',
       task: options.task,
       relay: result.relay,
+      reviewWrites,
       error: result.error,
     }, null, 2));
     return;
@@ -251,6 +268,11 @@ export async function teamSpawnCommand(
         console.log(chalk.gray(`    ${icon} ${artifact.path}`));
       }
     }
+  }
+
+  if (reviewWrites.length > 0) {
+    console.log(chalk.yellow('\n  Review these writes:'));
+    for (const file of reviewWrites) console.log(chalk.yellow(`    ${file}`));
   }
 
   console.log(chalk.gray(`  Session: ${result.sessionId}`));

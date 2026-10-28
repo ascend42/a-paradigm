@@ -6,6 +6,7 @@
  */
 
 import { AgentDefinition } from '../commands/team/types.js';
+import type { CommandPolicy } from './providers/command-consent.js';
 
 // ============================================================================
 // Core Types
@@ -26,6 +27,8 @@ export interface AgentMessage {
   toolInput?: Record<string, unknown>;
   toolResult?: unknown;
   usage?: TokenUsage;
+  /** On 'done': allowed-but-sensitive files the agent wrote (package.json, portal.yaml, ...), for the user to review. */
+  reviewWrites?: string[];
   timestamp: string;
 }
 
@@ -67,6 +70,11 @@ export interface SpawnOptions {
   checkpoints?: CheckpointConfig;
   /** Timeout in milliseconds */
   timeout?: number;
+  /**
+   * ^command-execution-consent for providers that run shell commands
+   * themselves (the Anthropic API provider). See providers/command-consent.ts.
+   */
+  commandPolicy?: CommandPolicy;
 }
 
 export interface AgentContext {

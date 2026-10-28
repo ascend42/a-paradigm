@@ -188,6 +188,57 @@ The intent is twofold: (1) the agent reads its own scope each session and self-r
 
 `paradigm agent review`, `approve`, and `deny` manage scope-change proposals — when an agent wants to expand its claimed scope, it routes through this approval queue rather than silently edits its own `.agent` file.
 
+### Shell commands from agents run through the Anthropic API (enforced)
+
+Unlike adoption contracts, this one is enforced in code. When `ANTHROPIC_API_KEY` is set, `paradigm team spawn`, `paradigm team orchestrate` and background orchestrations run agents through the Anthropic API provider, which gives the model four tools: `read_file`, `write_file`, `search_files` and `run_command`.
+
+**Files stay in the project.** Every path the model gives, and the folder it asks `run_command` to use, must resolve inside the run's working directory, with symlinks followed. An absolute path such as `~/.ssh/id_ed25519`, a `../` path, a UNC or device path, or a symlink in the repo that points outside is refused, and the model is told why. An agent can't run with `/`, your home folder or a folder above it as its working directory.
+
+**Some files are never written.** Some files run commands the next time git, your editor, a hook or your shell touches the repo, so `write_file` refuses them even while commands are off:
+
+- `.git`, `.hg` and `.svn`, at any depth, as folders or files
+- at any depth: the folders `.claude/`, `.cursor/`, `.vscode/`, `.idea/`, `.devcontainer/`, `.husky/`, `.githooks/`, `.lefthook/` and `.paradigm/` (agents change Paradigm state through Paradigm tools), and the files `.mcp.json`, `.envrc`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.mise.toml`, `mise.toml`, `lefthook.yml`, `lefthook.yaml`, `.pre-commit-config.yaml`, `.pnpmfile.cjs` and `bunfig.toml`
+- at the project root: `.github/`, `.gitlab-ci.yml`, `.circleci/`, `.buildkite/`, `azure-pipelines.yml` and `Jenkinsfile`
+- `~/.paradigm/`, `~/.claude/` and the consent setting's file (wherever its symlink points)
+- any write that would leave a folder looking like a bare git repository (a `HEAD` file with `objects/` and `refs/`, or with a `commondir` or `gitdir` file)
+- adding or changing an install-time script (`preinstall`, `install`, `postinstall`, `preprepare`, `prepare`, `postprepare`, `prepublish`, `prepublishOnly`, `prepack`, `postpack`, `dependencies`, `pnpm:devPreinstall`) in any `package.json`, `package.yaml` or `package.json5` (which must be plain JSON)
+
+Names are compared the way macOS and Windows compare them: case-insensitively with full Unicode case folding, ignoring trailing dots and spaces. Names containing `:`, invisible characters, or new short names like `GIT~1` are refused, and so are symlinked or hard-linked targets. Other `package.json` edits, `portal.yaml`, `CLAUDE.md`, `.gitmodules` and `.gitattributes` are written, and listed under "Review these writes" at the end of the run. This list protects you while commands are off and before you've answered. Once commands are on it limits nothing, because a command can write any of these files itself.
+
+**`run_command` asks once.** It is on by default, but the first time an agent tries a command, Paradigm shows the command and asks:
+
+```
+A Paradigm agent wants to run a shell command:
+  command: "npm test"
+  in:      "/path/to/your/project"
+
+Paradigm agents can run shell commands on your machine with your permissions. Keep this on? [y/N]
+```
+
+Your answer is saved in `~/.paradigm/config.yaml` and used from then on:
+
+```yaml
+agent-provider:
+  allow-commands: true   # false turns run_command off; delete the line to be asked again
+```
+
+| Situation | `run_command` |
+|---|---|
+| `--allow-commands` on this run | Offered and runs without asking. Not saved. |
+| `--no-allow-commands` on this run | Not offered. Not saved. |
+| Saved `true` | Offered and runs. |
+| Saved `false` | Not offered. |
+| Not decided, you're at a terminal | Offered. The first call asks the question above. |
+| Not decided, no terminal (`--background`, orchestrated from MCP, piped, CI) | Not offered until you decide. |
+
+The command and folder in the question are escaped and cut to 500 characters, the answer is read from `/dev/tty`, and agent output waits until you've answered, so nothing the model writes can draw a fake question. Only `y` or `yes` turns commands on; Enter means no.
+
+The setting is per user, found through your account's home folder (not `$HOME`). It is never read from a project's `.paradigm/config.yaml`, so a repo you clone can't turn commands on for itself, and the agent's file tools can't reach it. A saved value is ignored if the file resolves inside the project, belongs to another user, or is writable by your group or others. It is saved with mode 0600. `CI` being set counts as no terminal. Tools that drive a pseudo-terminal (expect, node-pty) count as a person at the terminal, so pass `--allow-commands` or `--no-allow-commands` from them. Whether `run_command` is offered is fixed when the run starts. Note that once commands are on, a command can do anything you can; keeping its folder inside the project does not limit what the command itself touches. Turn it on only for repos and tasks you trust.
+
+**Commands run without your secrets.** Before a command runs, variables are removed when the name contains `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `API_KEY`, `ACCESS_KEY`, `PRIVATE_KEY`, `AUTHTOKEN` or `SESSION_KEY`, ends in `_KEY`, `_AUTH` or `_PAT`, or starts with `AWS_`, `AZURE_`, `GCP_`, `GCLOUD_`, `CLOUDSDK_`, `GOOGLE_APPLICATION_`, `ANTHROPIC_` or `OPENAI_`. Names ending in `_PASS`, `_PW`, `_PWD` or `_DSN`, containing `CREDS`, `COOKIE` or `JWT`, or starting with `TF_VAR_`, `GIT_CONFIG_KEY_` or `GIT_CONFIG_VALUE_` go too, as do `SSH_AUTH_SOCK`, `KUBECONFIG`, `DOCKER_AUTH_CONFIG`, `DOCKER_CONFIG`, `VAULT_ADDR`, `GIT_CONFIG_COUNT`, `GIT_ASKPASS`, `SSH_ASKPASS`, `NETRC`, and any variable whose value holds a URL with a password (`scheme://user:password@host`). `PWD` and `OLDPWD` are kept. This is a safety net, not a sandbox: a command you allowed can still read credential files on disk. Commands get no stdin. Each runs in its own process group (on Windows, its process tree is killed with `taskkill /T /F`), which is killed when it times out and when Paradigm exits or is interrupted. A command that calls `setsid` leaves the group and survives. Agent text streamed to your terminal has escape sequences removed.
+
+**Every command is logged.** Each `run_command`, whether it ran or was refused, is appended to `~/.paradigm/logs/<project-hash>/agent-commands.jsonl` (mode 0600, outside the repo so neither the repo nor the agent can edit it). Each line has the project, command (cut to 4 KB, with its full length), folder, exit code, agent and time. Environment values are never written. Set `DEBUG=1` to also see each command in the Paradigm log output on stderr.
+
 ## 7. How agents learn
 
 Three storage tiers feed the learning loop:

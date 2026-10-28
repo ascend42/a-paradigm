@@ -5,10 +5,30 @@ description: |
 
 components:
   claude-provider:
-    description: Anthropic API direct — requires ANTHROPIC_API_KEY environment variable
+    description: "Anthropic API direct — requires ANTHROPIC_API_KEY environment variable. Offers the model read_file, write_file, search_files and run_command (claude-tools.ts). Every model-supplied path and the run_command cwd must resolve by realpath inside the run's workingDirectory (resolveContained, symlinks that lead out refused). run_command is offered and run only as ^command-execution-consent allows, and every call (command, cwd, exit code, timestamp, refusals too; never env values) is appended to ~/.paradigm/logs/<project-hash>/agent-commands.jsonl (0600, O_NOFOLLOW, command cut to 4 KB with its full length). Refuses to start when the working directory is /, the home folder or above it (unsafeRunRoot). Whether run_command is offered is snapshotted at run start; a later flip of the setting cannot enable it."
     type: service
     path: claude.ts
-    aspects: ["~provider-cascade"]
+    files: [claude.ts, claude-tools.ts, command-runner.ts, write-guard.ts]
+    aspects: ["~provider-cascade", "~agent-tools-confined"]
+    gates: ["^command-execution-consent"]
+
+  write-guard:
+    description: "write_file deny-list for the Anthropic API provider. Protects the OFF state and the time before consent; bounds nothing once run_command is ON. Checks the requested and the resolved path (lexical containment, then realpath of the longest existing prefix); segments NFC + lowercase + trailing dots/spaces stripped; refuses ':' segments, new 8.3-style '~N' segments, empty segments, existing symlink or nlink>1 targets. Names folded like case-insensitive filesystems (NFKC, toUpperCase().toLowerCase(), NFC, trailing dots/spaces stripped); segments with default-ignorable characters refused. Denies .git/.hg/.svn at any depth (files too) and the gitdir a root .git file points to; at any depth the folders .claude .cursor .vscode .idea .devcontainer .paradigm .husky .githooks .lefthook and the files .mcp.json .envrc .npmrc .yarnrc .yarnrc.yml .mise.toml mise.toml lefthook.yml/.yaml .pre-commit-config.yaml .pnpmfile.cjs bunfig.toml; at the root only the CI names .github .gitlab-ci.yml .circleci .buildkite azure-pipelines.yml Jenkinsfile; plus absolute ~/.paradigm, ~/.claude, the consent config's real path and the command log. Refuses a write that would leave any affected folder (the one the first new entry lands in, each folder mkdir -p creates, the parent) holding HEAD plus objects/ and refs/, or HEAD plus commondir or gitdir. package.json, package.yaml and package.json5 (plain JSON only): install-time scripts (incl. preprepare, postprepare, dependencies, pnpm:devPreinstall) may not be added or changed; other edits allowed and listed. portal.yaml, CLAUDE.md, .gitmodules, .gitattributes allowed and listed in the run summary (AgentMessage.reviewWrites on done). writeChecked opens with O_NOFOLLOW and checks nlink before truncating."
+    type: service
+    path: write-guard.ts
+    gates: ["^command-execution-consent"]
+
+  command-runner:
+    description: "Runs an allowed run_command: shell, no stdin, cleaned env (cleanCommandEnv drops names containing TOKEN/SECRET/PASSWORD/PASSWD/CREDENTIAL/API_KEY/ACCESS_KEY/PRIVATE_KEY/AUTHTOKEN/SESSION_KEY, ending _KEY/_AUTH/_PAT, starting AWS_/AZURE_/GCP_/GCLOUD_/CLOUDSDK_/GOOGLE_APPLICATION_/ANTHROPIC_/OPENAI_/NPM_CONFIG__AUTH, plus GH_TOKEN, GITHUB_TOKEN, NPM_TOKEN, NODE_AUTH_TOKEN, SSH_AUTH_SOCK, KUBECONFIG, DOCKER_AUTH_CONFIG, VAULT_ADDR), detached into its own process group on POSIX; on timeout the group gets SIGTERM then SIGKILL; every live group is SIGKILLed on process exit and on SIGINT/SIGTERM/SIGHUP (hooks installed only while commands run). Output capped at 1 MB per stream. Also drops *_PASS/*_PW/*_PWD/*_DSN, *CREDS*/*COOKIE*/*JWT*, TF_VAR_*, GIT_CONFIG_COUNT/KEY_*/VALUE_*, GIT_ASKPASS, SSH_ASKPASS, NETRC, DOCKER_CONFIG, and any variable whose value holds scheme://user:password@. Env cleaning is defense in depth, not containment. On Windows the process tree is killed with taskkill /T /F; on POSIX a command can escape its group with setsid."
+    type: service
+    path: command-runner.ts
+    gates: ["^command-execution-consent"]
+
+  command-consent:
+    description: "Decides whether run_command is offered and allowed for an API-run agent. Order: --allow-commands / --no-allow-commands for one run (never saved); then agent-provider.allow-commands in ~/.paradigm/config.yaml (home from os.userInfo, not $HOME; per user only, never the project config; ignored if it resolves inside the run root, is owned by another uid, or is group/world-writable; saved atomically, 0600); then, when undecided, an interactive terminal is asked once on the first call ('Paradigm agents can run shell commands on your machine with your permissions. Keep this on? [y/N]', on stderr) and the answer is saved, while background, orchestrated, MCP, piped and CI runs do not get the tool (pty automation counts as interactive). Parallel first calls share one question. The question shows the command and folder escaped (escapeForTerminal: JSON-quoted, C0/DEL/C1/bidi/zero-width/separators as \\uXXXX, cut to 500 chars), reads the answer from /dev/tty when it can be opened (else stdin), and while it is open all agent output the CLI prints is held (holdWhilePrompting / isConsentPromptOpen) and written after the answer."
+    type: service
+    path: command-consent.ts
+    gates: ["^command-execution-consent"]
 
   claude-code-provider:
     description: Claude Code Task tool — requires Max subscription
@@ -50,6 +70,18 @@ signals:
     tags: [team, warning]
 
 aspects:
+  ~agent-tools-confined:
+    description: The Anthropic API provider's file tools and run_command cwd stay inside the run's working directory (realpath of the longest existing prefix, so symlinks are followed), and run_command needs ^command-execution-consent. The consent setting lives outside the working directory, so the agent cannot grant it to itself.
+    category: invariant
+    severity: high
+    tags: [providers, security]
+    anchors:
+      - claude-tools.ts:1-1
+      - command-consent.ts:1-1
+    applies-to:
+      - "#claude-provider"
+      - "#command-consent"
+
   ~provider-api-key-requirements:
     description: Each provider has specific environment detection — claude requires ANTHROPIC_API_KEY, claude-code requires CLAUDE_CODE=1 or TERM_PROGRAM=claude, cursor-cli requires Cursor IDE environment, claude-cli checks claude command in PATH
     category: constraint
