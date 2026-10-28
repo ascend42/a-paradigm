@@ -411,7 +411,14 @@ migrateCmd
   .option('--dry-run', 'Print the per-step plan without writing anything')
   .option('--apply', 'Also move habits that reference removed University paths into the backup')
   .option('--json', 'Emit the result as JSON')
+  .option('--scopes', 'Scoped learning: copy your own legacy repo rows to your user home (dry run unless --apply)')
+  .option('--yes', 'With --scopes: answer the confirm prompts with yes')
   .action(async (options) => {
+    if (options.scopes) {
+      const { migrateLearningScopesCommand } = await import('./commands/migrate-learning-scopes.js');
+      await migrateLearningScopesCommand({ apply: options.apply, yes: options.yes, json: options.json });
+      return;
+    }
     const { migrateLearningStoresCommand } = await import('./commands/migrate-learning-stores.js');
     await migrateLearningStoresCommand(options);
   });

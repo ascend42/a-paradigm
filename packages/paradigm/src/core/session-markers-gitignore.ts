@@ -68,11 +68,13 @@ export const GENERATED_STATE: readonly string[] = Object.freeze([
   // Machine-churn event logs only: per-machine hook, liveness and gate
   // telemetry. team-funnel.jsonl is machine-only too (founder ruling, Loid:
   // "an instrument lives with what it measures"); Loid calibrates each
-  // machine's invocation rate from its own funnel. Learning records stay
-  // committed (verdicts, overrides, debates, nominations, promotion-decisions,
-  // classroom-certifications, notebook-refs, session-log, stream.jsonl + its
-  // .last-processed cursor) and so does history/ (the repo's shared symbol
-  // history; a scoped-learning slice will handle it).
+  // machine's invocation rate from its own funnel (scoped learning S2: new
+  // rows go to the machine home; these legacy copies stay ignored). Legacy
+  // repo LEARNING logs (verdicts, debates, nominations, promotion-decisions,
+  // provisional-mined, estimate-actuals) are frozen, still tracked and still
+  // read; new rows go to the user home. They are NOT ignored here. Repo-home
+  // records (overrides, classroom-certifications, notebook-refs), session-log,
+  // stream.jsonl + its .last-processed cursor and history/ stay committed.
   'events/team-funnel.jsonl',
   'events/compliance-history.jsonl',
   'events/postflight-liveness.jsonl',
@@ -93,7 +95,9 @@ export function sessionMarkersBlock(): string {
   return [
     BEGIN,
     ...SESSION_MARKERS.map((m) => `/${m}`),
-    '# generated state: rebuilt by `paradigm index` / the MCP server, never committed',
+    '# generated state: rebuilt by `paradigm index` / the MCP server, never committed.',
+    '# machine telemetry below now goes to the machine home; legacy repo learning logs',
+    '# (verdicts, nominations, ...) are frozen, still read, and not listed: new rows go to the user home',
     ...GENERATED_STATE.map((m) => `/${m}`),
     END,
   ].join('\n');
