@@ -2,6 +2,20 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  gnomon-staged:
+    description: >-
+      #gnomon-staged (TD-2026-10-27-833): utils/gnomon-staged.ts, the mode the Gnomon kernel sets
+      (PARADIGM_GNOMON_STAGED=1) when it runs the staged single-file bundle for a LOCAL model session. In that mode
+      the server skips Conductor auto-registration (ps/osascript, a global-dir write) and refuses
+      paradigm_plugin_check (it shells out and reaches the network). The global dir follows HOME (the kernel points it
+      at an empty per-session kernel-owned dir); git hardening comes from the kernel's GIT_CONFIG_* env. Paradigm loads
+      no .paradigm/ file as code in any mode (audited: habits, protocols, config, loops are data; loop checks run only
+      in the Gnomon kernel after a human trusts the exact content hash).
+    path: src/utils/gnomon-staged.ts
+    type: module
+    tags: [mcp, gnomon, td-2026-10-27-833]
+    tests:
+      - src/tools/family-op-annotations.test.ts
   plugin-update-checker:
     description: >-
       #plugin-update-checker: detects stale Claude Code plugins (marketplace clones vs remote, cached

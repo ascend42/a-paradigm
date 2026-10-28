@@ -29,6 +29,7 @@ import { rebuildStaticFiles } from './tools/reindex.js';
 import { getSessionTracker } from './utils/session-tracker.js';
 import { resolveProjectRoot } from './utils/global-store.js';
 import { autoRegisterWithConductor } from './utils/conductor-loader.js';
+import { gnomonStaged } from './utils/gnomon-staged.js';
 import { log } from './utils/mcp-logger.js';
 import { setUniversityCoreLogger } from '@a-company/university-core';
 
@@ -95,8 +96,9 @@ async function main() {
     process.exit(1);
   }
 
-  // Auto-register with Conductor (fire-and-forget, never blocks startup)
-  autoRegisterWithConductor(projectDir);
+  // Auto-register with Conductor (fire-and-forget, never blocks startup). Never in the staged Gnomon mode
+  // (TD-2026-10-27-833): it runs ps/osascript and writes the global dir.
+  if (!gnomonStaged()) autoRegisterWithConductor(projectDir);
 
   // Create MCP server
   const server = new Server(

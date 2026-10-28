@@ -5,7 +5,7 @@
  */
 
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export interface FallbackReference {
   filePath: string;
@@ -27,27 +27,26 @@ export function grepForReferences(
   const { maxResults = 20 } = options;
   const results: FallbackReference[] = [];
 
-  // Escape special regex chars but preserve the symbol prefix
-  const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-  // Try using ripgrep first (faster), fall back to grep
-  const grepCommands = [
-    // ripgrep - exclude common directories
-    `rg -n --no-heading "${escapedSymbol}" "${rootDir}" --glob "!node_modules" --glob "!.git" --glob "!dist" --glob "!build" --glob "!coverage" --max-count 50 2>/dev/null`,
-    // fallback to grep
-    `grep -rn "${escapedSymbol}" "${rootDir}" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=build --exclude-dir=coverage 2>/dev/null | head -50`,
+  // Try ripgrep first (faster), fall back to grep. execFileSync with an argv, never a shell string
+  // (TD-2026-10-27-833: a local model reaches this through paradigm_ripple): a quote, backtick or `$(...)` in the
+  // symbol or the root is an argument, never run. Fixed-string matching, as the old regex escaping intended.
+  const excludes = ['node_modules', '.git', 'dist', 'build', 'coverage'];
+  const grepCommands: Array<[string, string[]]> = [
+    ['rg', ['-n', '--no-heading', '--fixed-strings', '--max-count', '50', ...excludes.flatMap((d) => ['--glob', `!${d}`]), '--', symbol, rootDir]],
+    ['grep', ['-rnF', ...excludes.map((d) => `--exclude-dir=${d}`), '--', symbol, rootDir]],
   ];
 
   let output = '';
-  for (const cmd of grepCommands) {
+  for (const [cmd, args] of grepCommands) {
     try {
-      output = execSync(cmd, { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+      output = execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
       if (output.trim()) break;
     } catch {
-      // grep returns non-zero if no matches, that's fine
+      // grep/rg exit non-zero on no match (or a missing binary): try the next
       continue;
     }
   }
+  output = output.split('\n').slice(0, 50).join('\n');
 
   if (!output.trim()) {
     return results;

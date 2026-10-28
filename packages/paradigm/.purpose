@@ -4,6 +4,16 @@ description: |
   Entry point for all Paradigm commands including shift, init, scan, sync, team, mcp, and more.
   Requires Node 24 or newer (engines >=24.0.0, 8.0).
 features:
+  mcp-bundle:
+    description: >-
+      TD-2026-10-27-833 (#paradigm-mcp): scripts/build-mcp-bundle.mjs (npm run build:mcp-bundle, part of build)
+      writes dist/mcp-bundle/{paradigm-mcp.mjs, sql-wasm.wasm, manifest.json}: the Paradigm MCP as ONE ESM file
+      (every dependency bundled, node: prefixes kept, a require/__dirname shim), the wasm sql.js loads beside it, and
+      a manifest {schema paradigm-mcp-bundle:v1, entry, files [{relativePath, mode, sha256, size}]}. The Gnomon kernel
+      stages exactly these files (it hashes its own copy and never trusts the manifest's hashes); an install without
+      the bundle is staged as the dereferenced package tree.
+    type: build
+    tags: [mcp, gnomon, build]
   shift-command:
     description: Full project setup in one command (init → team init → scan → sync → doctor)
     type: command

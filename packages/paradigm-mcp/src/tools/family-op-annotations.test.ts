@@ -13,7 +13,7 @@ import * as path from 'path';
 import { ListToolsRequestSchema, CallToolRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { buildRegistry, buildToolSurface, registerTools } from './index.js';
 import { registerResources } from '../resources/index.js';
-import { FAMILY_META } from './families.js';
+import { FAMILY_META, LOCAL_ONLY_OPS } from './families.js';
 import { familyOpsFromMap, OP_ANNOTATIONS_RESOURCE_URI, OP_ANNOTATIONS_SCHEMA } from '../utils/tool-family.js';
 import { invalidateFeatureCache } from '../utils/tool-registry.js';
 import type { ProjectContext } from '../utils/index-loader.js';
@@ -114,8 +114,8 @@ describe(`resource ${OP_ANNOTATIONS_RESOURCE_URI}`, () => {
     expect(content.mimeType).toBe('application/json');
     const doc = JSON.parse(content.text) as Doc;
     expect(doc.schema).toBe(OP_ANNOTATIONS_SCHEMA);
-    const listedFamilies = (await w.listTools()).map(t => t.name as string).filter(n => surface.families.has(n));
-    expect(Object.keys(doc.tools).sort()).toEqual([...listedFamilies].sort());
+    // TD-2026-10-27-833: a constant over code — every family, whatever is listed
+    expect(Object.keys(doc.tools).sort()).toEqual([...surface.families.keys()].sort());
     for (const [name, map] of Object.entries(doc.tools)) expect(map, name).toEqual(expectedFor(name));
     expect(doc.tools.paradigm_task.list.readOnlyHint).toBe(true);
     expect(doc.tools.paradigm_task.create.readOnlyHint).toBe(false);
@@ -123,12 +123,33 @@ describe(`resource ${OP_ANNOTATIONS_RESOURCE_URI}`, () => {
     console.info(`[tool-annotations] ${Object.keys(doc.tools).length} families, ${Buffer.byteLength(content.text)} bytes`);
   });
 
-  it('follows tools/list: an on-demand family appears only once activated', async () => {
+  it('is a constant over code: activation and the project never change it (TD-2026-10-27-833)', async () => {
     const w = wire();
-    expect(Object.keys((JSON.parse((await w.read()).text) as Doc).tools)).not.toContain('paradigm_sentinel');
+    const before = (await w.read()).text;
+    expect((JSON.parse(before) as Doc).tools.paradigm_sentinel).toEqual(expectedFor('paradigm_sentinel'));
     await w.call('paradigm_tool_activate', { feature: 'sentinel' });
-    const doc = JSON.parse((await w.read()).text) as Doc;
-    expect(doc.tools.paradigm_sentinel).toEqual(expectedFor('paradigm_sentinel'));
+    expect((await w.read()).text).toBe(before);
+    // a hostile project: config naming tools and a planted annotation file change nothing
+    fs.mkdirSync(path.join(root, '.paradigm'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', 'config.yaml'), 'mcp:\n  tools:\n    enable: [sentinel, symphony]\n    legacy_listing: true\n');
+    fs.writeFileSync(path.join(root, '.paradigm', 'tool-annotations.json'), JSON.stringify({ schema: OP_ANNOTATIONS_SCHEMA, tools: { paradigm_task: { create: { readOnlyHint: true, openWorldHint: false } } } }));
+    let after: string;
+    try {
+      after = (await wire().read()).text;
+    } finally {
+      fs.rmSync(path.join(root, '.paradigm'), { recursive: true, force: true });
+    }
+    expect(after).toBe(before);
+    expect((JSON.parse(after) as Doc).tools.paradigm_task.create.readOnlyHint).toBe(false);
+  });
+
+  it('LOCAL_ONLY_OPS: each is read-only and declares openWorldHint false; network families declare none (TD-2026-10-27-833)', async () => {
+    const doc = JSON.parse((await wire().read()).text) as Doc;
+    for (const [fam, ops] of Object.entries(LOCAL_ONLY_OPS)) {
+      for (const op of ops) expect(doc.tools[fam]?.[op], `${fam}.${op}`).toMatchObject({ readOnlyHint: true, openWorldHint: false });
+    }
+    // families that reach the network or another process get no stamp (their own declarations stand)
+    for (const fam of ['paradigm_symphony', 'paradigm_personas', 'paradigm_platform', 'paradigm_conductor', 'paradigm_loop', 'paradigm_brain', 'paradigm_university', 'paradigm_sentinel']) expect(LOCAL_ONLY_OPS[fam], fam).toBeUndefined();
   });
 
   it('tools/list carries no op-annotations _meta', async () => {

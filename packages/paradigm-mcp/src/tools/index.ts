@@ -34,7 +34,8 @@ import { refreshContextSafely, type ProjectContext, type ReloadContextFn } from 
 import { ToolRegistry, type ToolModule, type ToolDefinition, toListedTool, readMcpToolsConfig, FEATURE_DETECTORS } from '../utils/tool-registry.js';
 import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, OP_ANNOTATIONS_SCHEMA, type ToolFamily, type OpAnnotationsDocument } from '../utils/tool-family.js';
 import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
-import { ANCHOR_TOOLS, DEFAULT_FAMILIES, FAMILY_META, ON_DEMAND, findOnDemand } from './families.js';
+import { gnomonStaged, GNOMON_STAGED_REFUSAL } from '../utils/gnomon-staged.js';
+import { ANCHOR_TOOLS, DEFAULT_FAMILIES, FAMILY_META, LOCAL_ONLY_OPS, ON_DEMAND, findOnDemand } from './families.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
@@ -585,6 +586,17 @@ export function buildToolSurface(registry: ToolRegistry): ToolSurface {
     if (!legacyDefs.has(d.name)) legacyDefs.set(d.name, d);
   }
   const opsByFamily = familyOpsFromMap();
+  // TD-2026-10-27-833: the reviewed local-only read ops declare openWorldHint: false (LOCAL_ONLY_OPS). Code only:
+  // nothing here is read from the project.
+  for (const [family, ops] of Object.entries(LOCAL_ONLY_OPS)) {
+    for (const op of ops) {
+      const legacy = opsByFamily.get(family)?.[op];
+      const def = legacy ? legacyDefs.get(legacy) : undefined;
+      if (!legacy || !def) throw new Error(`LOCAL_ONLY_OPS names ${family}.${op}, which is not a registered op`);
+      if ((def.annotations as Record<string, unknown> | undefined)?.readOnlyHint !== true) throw new Error(`LOCAL_ONLY_OPS names ${family}.${op}, which is not read-only`);
+      legacyDefs.set(legacy, { ...def, annotations: { ...(def.annotations ?? {}), openWorldHint: false } });
+    }
+  }
   const families = new Map<string, ToolFamily>();
   for (const meta of FAMILY_META) {
     if (meta.plain) continue;
@@ -651,9 +663,9 @@ export function listSurfaceTools(
 
 /**
  * Per-op annotations document (paradigm://tool-annotations) for the family
- * tools present in `listed` — pass the current tools/list so the document
- * covers exactly the families a client can see (on-demand ones only once
- * enabled or activated).
+ * tools present in `listed`. registerTools passes EVERY family, once, so the
+ * served document is a constant over code (TD-2026-10-27-833): neither the
+ * project's `.paradigm/config.yaml` nor a session's activations change it.
  */
 export function buildOpAnnotationsDocument(surface: ToolSurface, listed: ReadonlyArray<{ name: string }>): OpAnnotationsDocument {
   const tools: OpAnnotationsDocument['tools'] = {};
@@ -1358,6 +1370,12 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_plugin_check': {
+          // TD-2026-10-27-833: the staged Gnomon mode never shells out or reaches the network for this
+          if (gnomonStaged()) {
+            const text = JSON.stringify({ error: GNOMON_STAGED_REFUSAL }, null, 2);
+            trackToolCall(text.length, name);
+            return { content: [{ type: 'text', text }], isError: true };
+          }
           const { runPluginUpdateCheck, buildPluginCheckReport, detectPluginHost } = await import('../utils/plugin-update-checker.js');
           const results = await runPluginUpdateCheck();
           const pluginText = JSON.stringify(buildPluginCheckReport(results, detectPluginHost()), null, 2);
@@ -1503,12 +1521,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
     }
   );
 
-  return {
-    opAnnotations: () => buildOpAnnotationsDocument(
-      surface,
-      listSurfaceTools(surface, registry, getContext().rootDir, activatedOnDemand),
-    ),
-  };
+  // TD-2026-10-27-833: the class map is a CONSTANT over code — every family's per-op hints, built once from the
+  // compiled definitions. It never follows the project's config or listing (a client reads only the entries of the
+  // tools it was listed), so nothing in `.paradigm/` can change how an op is classed.
+  const opAnnotationsDoc = buildOpAnnotationsDocument(surface, [...surface.families.keys()].map((name) => ({ name })));
+  return { opAnnotations: () => opAnnotationsDoc };
 }
 
 // ────────────────────────────────────────────────────────
