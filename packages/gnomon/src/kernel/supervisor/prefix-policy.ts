@@ -18,6 +18,8 @@
  *   - every word is printable ASCII (0x21–0x7e): no homoglyph or invisible character can make two
  *     prefixes look alike; argv0 has no `/` or `\` (no path to a program the session can write).
  *   - argv0 is not an interpreter, shell or runner (INTERPRETER_DENYLIST, plus python*).
+ *   - argv0 is not a destructive program (DESTRUCTIVE_ARGV0: rm, mv, dd, truncate, shred, chmod, chown, rsync …;
+ *     Aegis C6'a2-2 M1): its later arguments decide what it destroys, so no match-time check can bound it.
  *   - package managers / build tools (BUILD_TOOLS): NONE is ever a prefix rule. BUILD_TOOL_PREFIX_ALLOW is EMPTY
  *     (Aegis second BLOCK, H2–H4/M1/M2): even a "read-only" subcommand runs or routes code the repo controls —
  *     `.yarnrc.yml` yarnPath swaps the yarn binary, `.cargo/config.toml` rustc-wrapper / build.rustc runs a program
@@ -64,6 +66,26 @@ export const INTERPRETER_DENYLIST: ReadonlySet<string> = new Set([
   // Aegis LP1 review (gnomon-loops §3.1): Windows script hosts and exec wrappers that run another program
   'cmd', 'powershell', 'pwsh', 'wscript', 'cscript', 'mshta', 'arch', 'script', 'stdbuf', 'setsid', 'chroot', 'sandbox-exec', 'busybox',
 ]);
+
+/**
+ * Aegis C6'a2-2 M1 (G-BRK-09): programs that delete, overwrite, move, re-own or re-permission data (or kill
+ * processes). Their damage is in their ARGUMENTS (`rm build/x -rf src` under an `rm build/x` rule), which no
+ * path check can bound, so none is EVER a prefix rule: refused at offer, accept, fold and match (prefixRefusal).
+ * Compared case-insensitively with any `.exe` dropped (APFS and NTFS resolve `RM` and `rm.exe` to rm). find
+ * (-delete, -exec) and xargs are already INTERPRETER_DENYLIST; git clean / reset / checkout / restore / rm /
+ * stash are outside GIT_SUBCOMMAND_ALLOW; rsync (--delete) is here.
+ */
+export const DESTRUCTIVE_ARGV0: ReadonlySet<string> = new Set([
+  'rm', 'rmdir', 'unlink', 'srm', 'shred', 'wipe', 'trash', 'mv', 'dd', 'truncate', 'ln', 'install', 'rsync',
+  'chmod', 'chown', 'chgrp', 'chflags', 'chattr', 'setfacl', 'xattr', 'mkfs', 'newfs', 'fdisk', 'diskutil', 'wipefs', 'mkswap',
+  'kill', 'pkill', 'killall', 'del', 'erase', 'rd', 'move', 'ren', 'rename', 'remove-item',
+]);
+
+/** Aegis C6'a2-2 M1: argv0 names a destructive program (case-insensitive, `.exe` dropped, mkfs.* / newfs_* too). */
+export function destructiveArgv0(a0: string): boolean {
+  const n = a0.toLowerCase().replace(/\.exe$/, '');
+  return DESTRUCTIVE_ARGV0.has(n) || /^(mkfs|newfs)[._]/.test(n);
+}
 
 /**
  * Package managers and build tools: NEVER a prefix rule (BUILD_TOOL_PREFIX_ALLOW is empty; see the header). Listed
@@ -125,6 +147,7 @@ export function prefixRefusal(prefix: readonly string[]): string | null {
   const [a0, a1] = prefix as [string, string];
   if (a0.includes('/') || a0.includes('\\')) return 'the program is named by a path';
   if (INTERPRETER_DENYLIST.has(a0) || /^python/.test(a0)) return `${a0} runs arbitrary code: never a prefix rule`;
+  if (destructiveArgv0(a0)) return `${a0} can delete or overwrite whatever its later arguments name: never a prefix rule`;
   if (prefix.some((w) => pathWordBad(w))) return 'a prefix word names a path';
   if (a0 === 'git') {
     if (prefix.length !== 2) return 'a git prefix is exactly two words: git <subcommand>';

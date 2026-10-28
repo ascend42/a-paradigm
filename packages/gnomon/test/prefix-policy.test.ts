@@ -175,6 +175,11 @@ describe('#prefix-policy M1: display', () => {
   it("each word quoted, non-ASCII escaped: 'git log' x is not git log x, and a homoglyph is visible", () => {
     expect(shownPrefixWords(['git log', 'x'])).toBe("'git log' 'x'");
     expect(shownPrefixWords(['git', 'log', 'x'])).toBe("'git' 'log' 'x'");
+    // G-BRK-09 (Aegis C6'a2-2 M1): a destructive argv0, in any case, with .exe, mkfs.* — refused at prefix and match
+    for (const a0 of ['rm', 'RM', 'Rm.EXE', 'rmdir', 'unlink', 'mv', 'dd', 'truncate', 'shred', 'chmod', 'chown', 'chgrp', 'rsync', 'ln', 'kill', 'mkfs.ext4', 'newfs_apfs']) {
+      expect(prefixRefusal([a0, 'build/x']), a0).toMatch(/delete or overwrite/);
+      expect(prefixMatchRefusal([a0, 'build/x', '-rf', 'src'], [a0, 'build/x'], ['/work/repo']), a0).not.toBeNull();
+    }
     expect(shownPrefixWords(['gіt', 'log'])).toBe("'g\\u0456t' 'log'");
     expect(shownPrefixWords(['a‮b', 'c'])).toBe("'a\\u202eb' 'c'");
   });

@@ -558,7 +558,10 @@ components:
       .pnpmfile and npm view --registry make every subcommand code or
       exfiltration; an entry needs a malicious-config falsifier;
       ALLOW_NPM_TEST_PREFIX default off); git exactly two words with a
-      read-ish subcommand. prefixMatchRefusal re-checks at match time:
+      read-ish subcommand; never a destructive argv0 (DESTRUCTIVE_ARGV0,
+      Aegis C6'a2-2 M1, G-BRK-09: rm, mv, dd, truncate, shred, chmod, chown,
+      rsync … any case, .exe dropped, mkfs.*), refused at offer, accept, fold
+      and match. prefixMatchRefusal re-checks at match time:
       gitPrefixOptBad models git's option parsing (a --name that prefixes any
       GIT_REFUSED_LONG option, so abbreviations like --outp/--ext-d/--open;
       any short bundle containing O c C p u; plus shell-readonly gitOptBad),

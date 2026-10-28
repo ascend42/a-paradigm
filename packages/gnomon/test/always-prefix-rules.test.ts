@@ -189,3 +189,24 @@ describe('scoped edit rules fold and match (TD-2026-10-23-939 follow-up)', () =>
     expect(book(editRows(card(26), { kind: 'file', path: '/x' }, { match: 'file', path: '/work/repo/a.ts' })).list()).toEqual([]); // malformed scope
   });
 });
+
+describe('G-BRK-09 (Aegis C6\'a2-2 M1): a destructive program is never a prefix rule (offer, fold, match)', () => {
+  const offers = (command: string): unknown => {
+    const p = composePermission({ toolName: 'Bash', input: { command }, toolUseId: null } as never, { repo: '/work/repo', denyWrite: [] });
+    return p.kind === 'card' ? (p.detail.prefixOptions ?? []) : null;
+  };
+  it('no rm, mv, dd, truncate, shred, chmod, chown or rsync prefix is offered; nor git clean/reset, find or xargs', () => {
+    for (const c of ['rm build/x -rf src', 'mv a b', 'dd if=a of=b', 'truncate -s 0 f', 'shred f', 'chmod 777 f', 'chown me f', 'rsync -a --delete a b', 'RM build/x', 'rm.exe build/x', 'mkfs.ext4 x y', 'git clean -fdx', 'git reset --hard', 'find . -delete', 'xargs rm -rf']) expect(offers(c), c).toEqual([]);
+  });
+  it('a kernel-signed rm prefix rule never folds, so `rm build/x -rf src` never passes without a card', () => {
+    for (const prefix of [['rm', 'build/x'], ['mv', 'a'], ['chmod', '777'], ['rsync', 'a']]) {
+      const b = book(prefixRows(card(40), { command: `${prefix.join(' ')} y`, scope: { kind: 'prefix', prefix }, prefix }));
+      expect(b.list(), prefix.join(' ')).toEqual([]);
+    }
+    expect(m(book(prefixRows(card(41), { command: 'rm build/x', scope: { kind: 'prefix', prefix: ['rm', 'build/x'] }, prefix: ['rm', 'build/x'] })), 'rm build/x -rf src')).toBeNull();
+  });
+  it('a forged rm prefix rule never folds', () => {
+    const rows = prefixRows(card(42), { command: 'rm build/x', scope: { kind: 'prefix', prefix: ['rm', 'build/x'] }, prefix: ['rm', 'build/x'], principal: 'p:abcdefgh/founder' });
+    expect(book(rows).list()).toEqual([]);
+  });
+});
