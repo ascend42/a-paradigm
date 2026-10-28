@@ -252,3 +252,17 @@ describe('TD-2026-10-27-833: the mcpStateDir carve-back is strict', () => {
     }
   });
 });
+
+describe('Aegis M3: the staged Paradigm env hardens git', () => {
+  it('carries the anchor git config plus no lazy fetch, no system/global config or attributes, no prompt', async () => {
+    const { stagedParadigmEnv } = await import('../src/kernel/supervisor/local-session.js');
+    const { ANCHOR_GIT_CONFIG } = await import('../src/kernel/supervisor/shell-readonly.js');
+    for (const [platform, nul] of [['darwin', '/dev/null'], ['win32', 'NUL']] as const) {
+      const env = stagedParadigmEnv('/h/s-pg', platform);
+      expect(env).toMatchObject({ HOME: '/h/s-pg', PARADIGM_GNOMON_STAGED: '1', GIT_NO_LAZY_FETCH: '1', GIT_ATTR_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: nul, GIT_CONFIG_COUNT: String(ANCHOR_GIT_CONFIG.length) });
+      const pairs = Array.from({ length: ANCHOR_GIT_CONFIG.length }, (_, i) => [env[`GIT_CONFIG_KEY_${i}`], env[`GIT_CONFIG_VALUE_${i}`]]);
+      expect(pairs).toEqual(ANCHOR_GIT_CONFIG.map(([k, v]) => [k, k === 'core.hooksPath' ? nul : v]));
+      if (platform === 'win32') expect(env.USERPROFILE).toBe('/h/s-pg');
+    }
+  });
+});

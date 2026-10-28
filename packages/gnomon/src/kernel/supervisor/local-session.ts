@@ -118,6 +118,7 @@ import { repoKeyOf } from './repo-hooks.js';
 import { inputHash } from './permission.js';
 import { prepareRunner, verifyNode, type LocalRunnerPin } from '../local/runner-pin.js';
 import { readParadigmPin, recheckStaged } from '../local/paradigm-stage.js';
+import { ANCHOR_GIT_CONFIG } from './shell-readonly.js';
 import { appendLedger } from '../local/edit-ledger.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
@@ -314,16 +315,23 @@ const serverLabelOf = (s: LocalMcpServer): string => serverLabel(s.name);
  * the repo's .git/config): no fsmonitor, no hooks path, no system config.
  */
 export function stagedParadigmEnv(stateDir: string, platform: string): Record<string, string> {
+  const nul = platform === 'win32' ? 'NUL' : '/dev/null';
+  // Aegis M3: the anchor's git config (#shell-readonly ANCHOR_GIT_CONFIG: no fsmonitor, pager, hooks, ssh, signing
+  // programs or credential helper), hooks at the platform's null device, plus no lazy fetch, no system or global
+  // config or attributes, and no prompt
+  const cfg = ANCHOR_GIT_CONFIG.map(([k, v]) => [k, k === 'core.hooksPath' ? nul : v] as const);
   return {
     HOME: stateDir,
     ...(platform === 'win32' ? { USERPROFILE: stateDir } : {}),
     PARADIGM_GNOMON_STAGED: '1',
     GIT_CONFIG_NOSYSTEM: '1',
-    GIT_CONFIG_COUNT: '2',
-    GIT_CONFIG_KEY_0: 'core.fsmonitor',
-    GIT_CONFIG_VALUE_0: 'false',
-    GIT_CONFIG_KEY_1: 'core.hooksPath',
-    GIT_CONFIG_VALUE_1: platform === 'win32' ? 'NUL' : '/dev/null',
+    GIT_CONFIG_GLOBAL: nul,
+    GIT_ATTR_NOSYSTEM: '1',
+    GIT_NO_LAZY_FETCH: '1',
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_PAGER: 'cat',
+    GIT_CONFIG_COUNT: String(cfg.length),
+    ...Object.fromEntries(cfg.flatMap(([k, v], i) => [[`GIT_CONFIG_KEY_${i}`, k], [`GIT_CONFIG_VALUE_${i}`, v]])),
   };
 }
 
