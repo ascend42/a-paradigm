@@ -66,13 +66,27 @@
  * card like a mutate tool (logged with that class), and a trusted read the
  * target finds untrusted by the time it runs is refused (why trust-dropped).
  * Every brokered MCP card names the server's trust level.
- * GAPS left for C5'a2/C5'b (documented in .purpose): no selection beyond the
- * C2' slot rule; no Always/standing grants for brokered tools; no grant UI
- * for per-server trust; the suspension notice is the tool.brokered row
- * (no GUI notice yet); control characters are refused outright (no newline in
- * brokered args).
+ * Slice C5'a2 (^local-tool-grant): a `mutate` narrow tool of a server trusted
+ * NOW (trusted or first-party) is RULEABLE: its bindHash (toolBindHash: the
+ * entry id, the sha256 of its FULL schema, its class and the server's live
+ * trust binding; the entry, never its form) is matched against the repo's
+ * #always-rules tool rules AFTER the manual check and BEFORE the carded rate
+ * limit. A match runs with no card: it writes approval.auto{tool, inputHash,
+ * modeRef:'rule:<id>'} first (no row, no run), counts as carded for
+ * MAX_CARDED_IN_FLIGHT, takes RULED_PER_MINUTE (not CARDED_PER_MINUTE) and the
+ * tool timeout, tells the target it runs on trust (a trust drop before it
+ * runs refuses it) and logs `approved` with no cardId. No match: the card
+ * offers allow | deny | always with a ruleScope, detail.toolScopes ['tool']
+ * and detail.brokered.bindHash (inside the contentHash); `always` counts as
+ * allow. Destructive tools, read tools, untrusted servers, kernel verbs,
+ * manual mode and loop sessions never match a rule and never offer Always.
+ * GAPS left for C5'b (documented in .purpose): no selection beyond the
+ * C2' slot rule; no grant UI for per-server trust or the tool scope; the
+ * Rules view does not mark a dormant tool rule stale yet; the suspension
+ * notice is the tool.brokered row (no GUI notice yet); control characters are
+ * refused outright (no newline in brokered args).
  */
-import type { ToolBrokerClass, ToolBrokeredDecision } from '@a-company/gnomon-contracts';
+import { canonicalJson, sha256Tagged, type ToolBrokerClass, type ToolBrokeredDecision } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker } from '../broker/broker.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
@@ -96,6 +110,8 @@ export const SUSPEND_AFTER_DENIES = 3;
 export const SUSPEND_WINDOW_MS = 10 * 60_000;
 /** Aegis N1: at most this many mutate/destructive requests per session per minute (past it, busy). */
 export const CARDED_PER_MINUTE = 6;
+/** Slice C5'a2: at most this many calls an Always rule passes per session per minute (past it, busy). */
+export const RULED_PER_MINUTE = 20;
 /** Aegis N6: the longest schema pattern run. */
 export const PATTERN_MAX_CHARS = 256;
 /** The full-schema bounds (step 2). */
@@ -130,7 +146,8 @@ export interface TargetCall {
   onRunning?: () => void;
   /**
    * slice C5'a1: this call runs with NO card only because the server's labels are believed (a read tool of a trusted
-   * server): the target refuses it (why 'trust-dropped') if that trust has ended by the time it would run
+   * server; slice C5'a2: or a call an Always rule passed, which needs that trust too): the target refuses it (why
+   * 'trust-dropped') if that trust has ended by the time it would run
    */
   trustedRead?: boolean;
 }
@@ -362,7 +379,22 @@ export interface ToolResponseOut {
   decision?: ToolBrokeredDecision;
 }
 
-type Broker = Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire'>>;
+type Broker = Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'auto'>>;
+
+/** Slice C5'a2: the repo's #always-rules tool-rule match (RuleBook.match through the supervisor's alwaysRule seam). */
+export interface BrokeredRuleSource {
+  /** the live tool rule for (repoKey, `mcp:<server>/<tool>`, bindHash), or null (none, off, dormant, manual mode) */
+  match(repoKey: string, tool: string, bindHash: string): { ruleId: string } | null;
+}
+
+/**
+ * Slice C5'a2 (^local-tool-grant): what a tool rule binds — the capability ENTRY (its id names the server, the tool and
+ * the op), the sha256 of its FULL schema (not the 8-hex id), its class and the server's live trust binding. Never the
+ * form it was offered in (a tier change keeps rules live).
+ */
+export function toolBindHash(entry: Pick<CapabilityEntry, 'id' | 'schema'>, cls: ToolBrokerClass, trustBinding: string): string {
+  return sha256Tagged(canonicalJson({ entryId: entry.id, schemaSha256: sha256Tagged(canonicalJson(entry.schema)), class: cls, trust: trustBinding }));
+}
 
 export interface LocalToolBrokerOptions {
   hsid: string;
@@ -393,6 +425,15 @@ export interface LocalToolBrokerOptions {
    * a card like a mutate tool. Absent: no narrow tool is believed (fail closed).
    */
   trustLive?: (server: string) => ServerTrust;
+  /** slice C5'a2: the repo's tool rules (absent: no rule matches and no card offers Always) */
+  rules?: BrokeredRuleSource;
+  /** slice C5'a2: the session's repo key (the rule scope; absent: no rule matches and no card offers Always) */
+  repoKey?: string;
+  /**
+   * slice C5'a2: the server's live trust binding (#local-mcp-client trustBindingOf: the TrustBook binding of a trusted
+   * server, a first-party marker for the staged pin, null otherwise). Absent or null: not ruleable.
+   */
+  trustBinding?: (server: string) => string | null;
 }
 
 /** Why a call's controller was aborted. */
@@ -413,6 +454,9 @@ export const TRUST_CARD_LINE: Readonly<Record<ServerTrust, string>> = Object.fre
   'first-party': "server: first-party · Gnomon's staged Paradigm server; this call still asks",
 });
 
+/** Slice C5'a2: the card line of a ruleable call (the scope an `always` on it takes). */
+export const alwaysLine = (name: string): string => `Always: any call of ${name} in this repo, any arguments · paused if the tool or its server changes`;
+
 /** Slice C4'a: `a` is the same capability entry as `b`, offered in another form. */
 const formShadow = (a: BrokeredTool, b: BrokeredTool): boolean => a.entry !== undefined && b.entry !== undefined && a.entry.id === b.entry.id && (a.form ?? 'narrow') !== (b.form ?? 'narrow');
 
@@ -425,7 +469,9 @@ export class LocalToolBroker {
   /** slice C3' (Aegis M3): the previous offered set, callable until the child acknowledges tools_set #graceAck */
   #grace: readonly BrokeredTool[] = [];
   #graceAck: string | null = null;
-  readonly #inflight = new Map<string, { ctl: AbortController; carded: boolean }>();
+  readonly #inflight = new Map<string, { ctl: AbortController; carded: boolean; ruled?: boolean }>();
+  /** Slice C5'a2: when the session's recent rule-passed calls arrived */
+  readonly #ruled: number[] = [];
   /** Aegis M4: `${tool}\0${argsHash}` → until (epoch ms) */
   readonly #cooldown = new Map<string, number>();
   readonly #denies: number[] = [];
@@ -521,8 +567,9 @@ export class LocalToolBroker {
     const c = this.#inflight.get(id);
     if (c && !c.ctl.signal.aborted) {
       c.ctl.abort('cancel' satisfies StopWhy);
-      // Aegis N1: a carded call the child walks away from counts toward the suspension (a request/cancel loop)
-      if (c.carded) this.#strike();
+      // Aegis N1: a carded call the child walks away from counts toward the suspension (a request/cancel loop); a call an
+      // Always rule passed raised no card
+      if (c.carded && !c.ruled) this.#strike();
     }
     return c !== undefined;
   }
@@ -583,7 +630,25 @@ export class LocalToolBroker {
     const trustedRead = !carded && level !== null;
     // Aegis L2: manual mode is read at call time too (the human may have switched since open)
     if (carded && !target.ownsGate && o.manual?.()) return done('refused', `${tool.name}: this session is in manual mode, so calls that need the human are off.`, true);
-    if (carded) {
+    // slice C5'a2 (^local-tool-grant): only a mutate narrow tool of a server trusted NOW is ruleable (never destructive,
+    // read, a kernel verb, an untrusted server; manual mode is refused above and the RuleBook never matches in it)
+    const ruleName = tool.entry ? brokeredToolName(target, tool.entry.tool) : null;
+    const trustBinding = carded && cls === 'mutate' && tool.entry && !target.ownsGate && (level === 'trusted' || level === 'first-party') && o.rules && typeof o.repoKey === 'string' ? (o.trustBinding?.(target.server) ?? null) : null;
+    const always = trustBinding !== null && tool.entry ? { bindHash: toolBindHash(tool.entry, 'mutate', trustBinding), repoKey: o.repoKey! } : null;
+    let ruleId: string | null = null;
+    if (always && ruleName && typeof o.broker?.auto === 'function') {
+      try {
+        ruleId = o.rules!.match(always.repoKey, ruleName, always.bindHash)?.ruleId ?? null;
+      } catch {
+        ruleId = null; // an unreadable rule source never allows
+      }
+    }
+    if (ruleId !== null) {
+      const now = this.#now();
+      while (this.#ruled.length && this.#ruled[0]! <= now - 60_000) this.#ruled.shift();
+      if (this.#ruled.length >= RULED_PER_MINUTE) return done('busy', `At most ${RULED_PER_MINUTE} calls an Always rule passes per minute: wait a moment.`, true);
+      this.#ruled.push(now);
+    } else if (carded) {
       const now = this.#now();
       while (this.#carded.length && this.#carded[0]! <= now - 60_000) this.#carded.shift();
       if (this.#carded.length >= CARDED_PER_MINUTE) return done('busy', `At most ${CARDED_PER_MINUTE} calls that need the human per minute: wait a moment.`, true);
@@ -591,24 +656,34 @@ export class LocalToolBroker {
     }
     if (this.#inflight.size >= MAX_BROKERED_IN_FLIGHT || (carded && [...this.#inflight.values()].filter((x) => x.carded).length >= MAX_CARDED_IN_FLIGHT)) return done('busy', carded ? 'Another call that needs the human is already waiting: wait for it.' : `This session already has ${this.#inflight.size} brokered calls in flight: wait for them.`, true);
     const ctl = new AbortController();
-    const ms = carded ? (o.cardTimeoutMs ?? CARD_TIMEOUT_MS) : (o.toolTimeoutMs ?? TOOL_TIMEOUT_MS);
+    // slice C5'a2: a call an Always rule passes waits for no human: the tool timeout
+    const ms = carded && ruleId === null ? (o.cardTimeoutMs ?? CARD_TIMEOUT_MS) : (o.toolTimeoutMs ?? TOOL_TIMEOUT_MS);
     // Aegis M1: counted from the line's receipt, ending before the child's own timer
     const deadline = (req.receivedAt ?? this.#now()) + ms - Math.min(DEADLINE_MARGIN_MS, Math.floor(ms / 2));
     const timer = setTimeout(() => ctl.abort('deadline' satisfies StopWhy), Math.max(0, deadline - this.#now()));
     timer.unref?.();
-    this.#inflight.set(req.id, { ctl, carded });
+    this.#inflight.set(req.id, { ctl, carded, ...(ruleId !== null ? { ruled: true } : {}) });
     const stopped = (cardAllowed: boolean, cardId?: string): Promise<ToolResponseOut> =>
       done(cardAllowed ? 'allowed-cancelled' : ctl.signal.reason === 'deadline' ? 'expired' : 'cancelled', ctl.signal.reason === 'deadline' ? 'expired: the call passed its deadline before it ran' : 'cancelled: the call was aborted before it ran', true, cardId);
     try {
       let cardId: string | undefined;
       let allowed = false;
-      if (carded && !target.ownsGate) {
-        const d = await this.#card(tool, target, req, callArgs, deadline, ctl.signal, cls ?? tool.class, level);
+      if (ruleId !== null) {
+        // slice C5'a2: log-before-effect: no approval.auto row, no run (the call is refused, never left unanswered)
+        try {
+          await o.broker!.auto!({ hsid: o.hsid, tool: ruleName!, inputHash: inputHash(callArgs), modeRef: `rule:${ruleId}` });
+        } catch {
+          return done('refused', `${tool.name}: not run: the kernel could not record the Always rule that would pass it.`, true);
+        }
+        allowed = true;
+      } else if (carded && !target.ownsGate) {
+        const d = await this.#card(tool, target, req, callArgs, deadline, ctl.signal, cls ?? tool.class, level, always);
         cardId = d.cardId ?? undefined;
         if (d.decision === 'none') return done('no-approval-surface', 'No approval surface could take the card: not run.', true, cardId);
         if (d.decision === 'stopped') return stopped(false, cardId);
         if (d.decision === 'too-large') return done('bad-args', `${tool.name}: the request is too large to show in full on a card`, true);
-        if (d.decision !== 'allow') {
+        // Arky 1 (C5'a2): `always` allows this call too (and learned the rule); anything else is a deny
+        if (d.decision !== 'allow' && d.decision !== 'always') {
           this.#denied(key);
           return done('denied', 'The human did not approve this call.', true, cardId);
         }
@@ -626,7 +701,7 @@ export class LocalToolBroker {
       if (!target.ownsGate) onRunning();
       let r: { text: string; isError: boolean; why?: string; cardId?: string };
       try {
-        r = await target.call(tool.entry ? tool.entry.tool : tool.name, callArgs, { signal: ctl.signal, deadline, onRunning, ...(trustedRead ? { trustedRead: true } : {}) });
+        r = await target.call(tool.entry ? tool.entry.tool : tool.name, callArgs, { signal: ctl.signal, deadline, onRunning, ...(trustedRead || ruleId !== null ? { trustedRead: true } : {}) });
       } catch (err) {
         r = { text: `the ${tool.name} call failed: ${(err as Error).message.slice(0, 200)}`, isError: true };
       }
@@ -648,8 +723,12 @@ export class LocalToolBroker {
     }
   }
 
-  /** Step 3 (a target with no gate of its own): the card, every argument shown, allow | deny, expired on stop. */
-  async #card(tool: BrokeredTool, target: BrokerTarget, req: ToolRequestIn, callArgs: Record<string, unknown>, deadline: number, signal: AbortSignal, cls: ToolBrokerClass, level: ServerTrust | null): Promise<{ decision: string; cardId: string | null }> {
+  /**
+   * Step 3 (a target with no gate of its own): the card, every argument shown, allow | deny, expired on stop. Slice
+   * C5'a2: a ruleable call's card also offers always (scope {kind:'tool'}): a ruleScope, detail.toolScopes and
+   * detail.brokered.bindHash, inside the contentHash.
+   */
+  async #card(tool: BrokeredTool, target: BrokerTarget, req: ToolRequestIn, callArgs: Record<string, unknown>, deadline: number, signal: AbortSignal, cls: ToolBrokerClass, level: ServerTrust | null, always: { bindHash: string; repoKey: string } | null): Promise<{ decision: string; cardId: string | null }> {
     const o = this.#o;
     const b = o.broker;
     if (!b || typeof b.decisionOf !== 'function') return { decision: 'none', cardId: null };
@@ -658,12 +737,12 @@ export class LocalToolBroker {
     const name = brokeredToolName(target, tool.entry ? tool.entry.tool : tool.name);
     const plan = composePermission({ requestId: req.id, toolName: name, toolUseId: req.toolCallId, input: callArgs }, { repo: o.repo, denyWrite: [] });
     if (plan.kind !== 'card') return { decision: 'too-large', cardId: null };
-    const lines = [...plan.lines, `class: ${cls} · a brokered call from this local session to ${target.server}`, ...(level ? [TRUST_CARD_LINE[level]] : []), ...droppedLine(tool.entry?.dropped ?? [])];
-    const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: cls, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}), ...(level ? { trust: level === 'enabled' ? 'untrusted' : level } : {}) } };
+    const lines = [...plan.lines, `class: ${cls} · a brokered call from this local session to ${target.server}`, ...(level ? [TRUST_CARD_LINE[level]] : []), ...droppedLine(tool.entry?.dropped ?? []), ...(always ? [alwaysLine(name)] : [])];
+    const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: cls, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}), ...(level ? { trust: level === 'enabled' ? 'untrusted' : level } : {}), ...(always ? { bindHash: always.bindHash } : {}) }, ...(always ? { toolScopes: ['tool'] } : {}) };
     let cardId: string;
     try {
       // the broker's own timeout falls after the deadline, so the kernel's deadline (expired) always wins the race
-      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, toolInput: callArgs, tool: name, decisions: ['allow', 'deny'], timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
+      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, toolInput: callArgs, tool: name, decisions: always ? ['allow', 'deny', 'always'] : ['allow', 'deny'], ...(always ? { ruleScope: { repoKey: always.repoKey } } : {}), timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
       cardId = c.cardId;
     } catch {
       return { decision: 'none', cardId: null };

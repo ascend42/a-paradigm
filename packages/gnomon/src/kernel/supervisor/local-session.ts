@@ -155,7 +155,7 @@ export interface LocalLaneOptions {
   log: LocalLog;
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'permit'>;
-  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire'>>;
+  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'auto'>>;
   /** slice C1: the kernel's own SDK server's verbs, brokered to attended local sessions (absent: no brokered tools) */
   gitVerbs?: Pick<GitVerbs, 'tools' | 'call'> & Partial<Pick<GitVerbs, 'closeSession' | 'openSession'>>;
   /** slice C1 (Aegis M3): the run-mode book (SupervisorOptions.runMode): a manual session's verbs refuse, its tools are read-only */
@@ -197,6 +197,11 @@ export interface LocalLaneOptions {
   mcpCache?: McpListCache;
   /** slice C5'a1: the kernel's TrustBook (absent: no third-party server is trusted); a fold re-narrows every session */
   mcpTrust?: PoolTrust & { subscribe?: (fn: (id: string) => void) => () => void };
+  /**
+   * slice C5'a2 (^local-tool-grant): the #always-rules match (SupervisorOptions.alwaysRule). A brokered call asks it for
+   * a tool rule with the call's bindHash, never in manual mode. Absent: no rule matches and no card offers Always.
+   */
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; bindHash?: string | null }) => { ruleId: string } | null;
 }
 
 /** The last endpoint probe as status.local.lastProbe shows it. */
@@ -1349,7 +1354,11 @@ export class LocalLane {
     // slice C2': the session's MCP servers, narrowed (#capability-index); a loop session gets none
     let tools: BrokeredTool[] = brokered ? kernelTools : [];
     if (!s.loop && brokered) tools = (await this.#startMcp(s, kernelTools, manual)) ?? tools;
-    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual', trustLive: (server) => s.mcp?.pool.trustLive(server) ?? 'enabled' });
+    // slice C5'a2 (^local-tool-grant): tool rules of the session's repo, matched with the mode read at call time
+    const roots = [s.roots.cwd, ...(s.roots.worktree ? [s.roots.worktree] : [])];
+    const alwaysRule = this.#o.alwaysRule;
+    const rules = alwaysRule && s.loop === undefined ? { rules: { match: (repoKey: string, tool: string, bindHash: string) => alwaysRule(repoKey, tool, bindHash, undefined, { prefixRules: this.#mode(s) !== 'manual', roots, bindHash }) }, repoKey: repoKeyOf(roots), trustBinding: (server: string) => s.mcp?.pool.trustBindingOf(server) ?? null } : {};
+    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual', trustLive: (server) => s.mcp?.pool.trustLive(server) ?? 'enabled', ...rules });
   }
 
   /**
