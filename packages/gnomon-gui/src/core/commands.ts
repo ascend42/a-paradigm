@@ -46,6 +46,8 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'mcp.open', title: 'MCP servers…', keys: 'Settings · MCP servers' },
   // #gui-capability-browser (C6'b1): the focused local session's Tools and memory drawer (also ⋯ and the tier key's menu)
   { id: 'tools.open', title: 'Tools and memory… (this local session’s tools, servers, pins and memory)', keys: '⋯ · Tools and memory' },
+  // #gui-slash-menu (C6'b2-1): the focused session's "/" menu (skills, Gnomon commands, this local session's tools)
+  { id: 'slash.open', title: '/ menu… (skills, Gnomon commands and this session’s tools)', keys: 'type / in the composer' },
   { id: 'mods.open', title: 'Mods… (installed, available, add from folder)' },
   // #gui-loops (gnomon-loops.md §6; Atelier 2026-10-22-gnomon-loops-ui): the Loops leaf and the kill switch
   { id: 'loops.open', title: 'Loops… (the Loops view: list, graph, keys)' },

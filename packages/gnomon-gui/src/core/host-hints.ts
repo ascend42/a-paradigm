@@ -23,7 +23,7 @@
 import { displayText } from './render.js';
 
 /** The palette command ids a host slip may open (screens only: none sends, decides or changes anything). */
-export const HOST_OPEN_IDS = Object.freeze(['mcp.open', 'rules.open', 'local.setup', 'settings.open', 'voice.settings.open', 'session.new'] as const);
+export const HOST_OPEN_IDS = Object.freeze(['mcp.open', 'rules.open', 'local.setup', 'settings.open', 'voice.settings.open', 'session.new', 'slash.open'] as const);
 export type HostOpenId = (typeof HOST_OPEN_IDS)[number];
 
 /**
@@ -177,14 +177,26 @@ function slashHits(text: string): SlashHit[] {
   return out;
 }
 
+/**
+ * #gui-slash-menu (C6'b2-1, the host-slip amendment): a slash command that names one of the session's listed, LOADED
+ * repo skills (`/name`, or Claude Code's `/project:name`) runs in Gnomon, from "/": its slip never says "Slash commands
+ * don't run" and its one key opens the / menu. The table's own commands (/mcp, /plugin, …) keep their Gnomon way.
+ */
+export const SKILL_HINT_LINE = 'Run it from /';
+const skillOf = (name: string, skills: ReadonlySet<string>): string | null => {
+  const n = name.startsWith('project:') ? name.slice('project:'.length) : name;
+  return skills.has(n) ? n : null;
+};
+
 /** The hint for one slash hit, or null (an unknown name outside a verb or a namespace). */
-function slashHint(hit: SlashHit): HostHint | null {
+function slashHint(hit: SlashHit, skills: ReadonlySet<string>): HostHint | null {
   const base = hit.name.split(':')[0]!;
   const rule = !hit.name.includes(':') && Object.hasOwn(HOST_SLASH_TABLE, base) ? HOST_SLASH_TABLE[base]! : null;
   if (rule) {
     const r = rule(hit.rest);
     return { said: capSaid(r.said ?? `/${hit.name}`), line: r.line, action: r.action, ...(r.warn ? { warn: r.warn } : {}) };
   }
+  if (skillOf(hit.name, skills)) return { said: capSaid(`/${hit.name}`), line: SKILL_HINT_LINE, action: open('slash.open', 'Open / menu') };
   if (BUILTINS.has(hit.name) || hit.how === 'verb' || hit.name.includes(':')) return { said: capSaid(`/${hit.name}`), line: NO_SLASH, action: null };
   return null;
 }
@@ -231,13 +243,15 @@ function claudeHint(argsRaw: string): HostHint | null {
 
 /**
  * The host hints for one reply's text, in reading order, at most HOST_HINTS_MAX, one per instruction. Reads the text
- * only: the caller shows the text exactly as it came and draws each hint beside it.
+ * only: the caller shows the text exactly as it came and draws each hint beside it. `loadedSkills` (C6'b2-1): the
+ * names of the session's listed, loaded skills (skills.list), whose slash commands run from "/".
  */
-export function hostHintsOf(text: string): HostHint[] {
+export function hostHintsOf(text: string, loadedSkills: readonly string[] = []): HostHint[] {
   if (!text || (!text.includes('/') && !/restart|claude/i.test(text))) return [];
+  const skills = new Set(loadedSkills);
   const found: Array<{ at: number; hint: HostHint }> = [];
   for (const hit of slashHits(text)) {
-    const hint = slashHint(hit);
+    const hint = slashHint(hit, skills);
     if (hint) found.push({ at: hit.at, hint });
   }
   const r = RESTART.exec(text);

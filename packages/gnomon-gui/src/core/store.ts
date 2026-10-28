@@ -37,6 +37,8 @@ import { isClientRow, type EnrolState } from './voice-client.js';
 import { refusalPhrase } from './capture.js';
 import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
 import { tierOfCapabilities, type Tier, type TierSource } from './tool-tier.js';
+import { runRowOf, skillReplayName, type RunWords } from './slash-runs.js';
+import { SKILL_COPY } from './slash-menu.js';
 
 export interface Row {
   seq: number;
@@ -687,7 +689,7 @@ export function rowDetail(r: Row): string | null {
  * or not addressed to the session); `voice-refused` a voice turn the kernel refused (its reason, subtle); `spoken`
  * the 🔊 marker under a reply the voice app spoke aloud.
  */
-export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'raw-detail' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working' | 'hook' | 'claude-note';
+export type ChatRole = 'user' | 'assistant' | 'activity' | 'tool' | 'card' | 'auto' | 'result' | 'system' | 'error' | 'raw' | 'raw-detail' | 'voice-heard' | 'voice-refused' | 'spoken' | 'working' | 'hook' | 'claude-note' | 'run';
 
 /**
  * T-2026-10-21-007: the clock of a turn still running. `since` is when the turn (or, on an activity line, its first
@@ -731,6 +733,10 @@ export interface ChatItem {
   open?: boolean;
   /** Mika Delta 11: an approval.decide line's card (the page may say what it answered there) */
   cardId?: string;
+  /** #gui-slash-runs: a "/" run this page started (its key: the page draws it from its own run) */
+  runKey?: string;
+  /** #gui-slash-runs: a "/" run from the kernel's tool.brokered{author:'human'} row (history: no result kept) */
+  runRow?: RunWords;
 }
 
 const CHAT_TEXT_MAX = 20_000;
@@ -1314,6 +1320,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   // Aegis L3: the kernel's speakable reply per source row (turnSeq): the said-aloud line is the kernel's words
   const kernelReply = new Map<number, { text: string; from: string }>();
   let turnGuidance: string | null = null; // Aegis M1: the guidanceHash of the latest turn.sent
+  // #gui-slash-runs: this page's "/" runs whose kernel tool.brokered{author:'human'} row has not come yet (in order)
+  const unclaimedRuns: Array<{ server: string; tool: string }> = [];
   for (const r of rows) {
     const p = objOf(r.payload);
     if (r.kind === 'voice.turn.agent' && p?.source === 'kernel-speakable' && typeof r.principal === 'string' && /^p:[0-9a-z]{8}\/kernel$/.test(r.principal) && typeof p.turnSeq === 'number' && Array.isArray(p.items)) {
@@ -1344,6 +1352,24 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
         placedTurn = undefined;
         echoTurn.push(lastWaiting());
         if (r.mark === 'voice-edited' && editedReplays > 0) editedReplays--;
+      } else if (r.kind === 'slash-run') {
+        // #gui-slash-runs: this page's "/" run, in the transcript from the press; the kernel's tool.brokered row for
+        // it (same server and tool, after it) is claimed below and not drawn twice
+        const p = objOf(r.payload) ?? {};
+        const key = typeof p.key === 'string' ? p.key : '';
+        const it = push(r, 0, { role: 'run', text: `you ran ${String(p.tool ?? '')} on ${String(p.server ?? '')}` }, 'tail');
+        it.runKey = key;
+        unclaimedRuns.push({ server: String(p.server ?? ''), tool: String(p.tool ?? '') });
+      } else if (r.kind === 'skill-ran') {
+        // #gui-slash-menu: a "/" skill run posts as the human's turn, "you ran skill /x args" (its replay is folded
+        // into it, below, and never shows the skill's text)
+        const p = objOf(r.payload) ?? {};
+        const name = String(p.name ?? '');
+        echoes.push(SKILL_COPY.ran(name, ''));
+        placedTurn = typeof r.turn === 'string' ? r.turn : undefined;
+        push(r, 0, { role: 'user', text: SKILL_COPY.ran(name, String(p.args ?? '')) }, 'message');
+        placedTurn = undefined;
+        echoTurn.push(lastWaiting());
       } else {
         // a refused send stays with the message it refused
         const last = waiting[waiting.length - 1];
@@ -1426,7 +1452,12 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
       if (typeof p.line === 'string' || facts !== undefined) steps.push(r.seq, r.at, typeof p.line === 'string' ? p.line : null, facts, typeof p.type === 'string' ? p.type : undefined);
     }
     if (r.kind === 'turn.event' && r.view === 'full' && p && typeof p.line === 'string') {
-      const its = lineItems(p.line, turnGuidance).map((it) => (it.role === 'assistant' ? withKernelSaid(it, kernelReply.get(r.seq)) : it)).filter((it) => {
+      const its = lineItems(p.line, turnGuidance).map((it) => {
+        if (it.role === 'assistant') return withKernelSaid(it, kernelReply.get(r.seq));
+        // #gui-slash-menu: a replayed "/" skill run reads "you ran skill /x" (and pairs with this page's own row)
+        const sk = it.role === 'user' ? skillReplayName(it.text) : null;
+        return sk ? { ...it, text: SKILL_COPY.ran(sk, '') } : it;
+      }).filter((it) => {
         if (it.role !== 'user') return true;
         const i = echoes.indexOf(oneLine(it.text));
         if (i < 0) return true;
@@ -1509,6 +1540,19 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
         } else push(r, v.part ?? 0, v, 'tail');
       }
       continue;
+    }
+    if (r.kind === 'tool.brokered') {
+      // #gui-slash-runs: a "/" run's kernel row. One this page drew from the press is claimed (oldest first, same
+      // server and tool; an unknown tool's row names no tool); any other (an earlier page, a reload) is history
+      const hist = runRowOf(r);
+      if (hist) {
+        const at = unclaimedRuns.findIndex((u) => (hist.tool === null || u.tool === hist.tool) && (u.server === hist.server || hist.tool === null));
+        if (at >= 0) {
+          unclaimedRuns.splice(at, 1);
+          hidden++;
+        } else push(r, 0, { role: 'run', text: hist.words.head }, 'tail').runRow = hist.words;
+        continue;
+      }
     }
     const it = kernelItem(r);
     if (it) push(r, 0, it);

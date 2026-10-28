@@ -173,6 +173,8 @@ export function runReducer(r: RunView, e: RunEvent): RunView {
     case 'result-failed':
       if (r.phase !== 'reading') return r;
       if (!e.network && e.reason === 'not-found') return { ...r, phase: 'gone' };
+      // still pending after the bounded asks: nothing was consumed, and the page does not ask again
+      if (!e.network && e.reason === 'pending') return { ...r, phase: 'refused', refusal: { text: 'the result wasn’t ready to read', next: 'run it again' } };
       return { ...r, phase: 'refused', refusal: e.network ? { text: 'the result could not be read: the connection dropped', next: 'run it again' } : { text: 'the kernel refused to give the result', next: 'run it again' } };
   }
 }
@@ -278,4 +280,16 @@ export function runRowOf(row: { kind: string; payload?: unknown }): { tool: stri
   // a busy row carries no text: the history cannot tell the minute limit from a waiting card, so it says neither
   const w = d === 'busy' ? { text: 'too many at once', next: null } : runRefusalWords(d, { server });
   return { tool, server, words: { ...base, state: `not run: ${w.text}`, next: w.next, tone: 'fail' } };
+}
+
+/* ── a skill run's replay ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The skill a replayed human message is, when it is a "/" skill run's text (the kernel's template, which starts "The
+ * human ran repo skill <name> (from .claude/skills/…", or a Claude session's native "/project:<name> …"), else null.
+ * The transcript shows it as "you ran skill /<name>" (Mika: a run posts as your turn), never the skill's body.
+ */
+export function skillReplayName(text: string): string | null {
+  const m = /^The human ran repo skill ([a-z0-9][a-z0-9-]{0,63}) \(from \.claude\/skills\//.exec(text) ?? /^\/project:([a-z0-9][a-z0-9-]{0,63})(?:\s|$)/.exec(text);
+  return m ? m[1]! : null;
 }
