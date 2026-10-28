@@ -12,6 +12,8 @@ import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { RefusedError, scopeDigest, TOOL_NAME, validateKindPayload } from '@a-company/gnomon-contracts';
 import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider, type StandingSeam } from '../src/kernel/broker/index.js';
+import { contentHashOf } from '../src/kernel/broker/card.js';
+import { composePermission } from '../src/kernel/supervisor/permission.js';
 import { decisionMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { narrow, type CapabilityEntry, type ServerTrust } from '../src/kernel/local/capability-index.js';
@@ -401,5 +403,58 @@ describe('G-LCL-22 a standing grant may create a tool rule (founder answer 3)', 
     expect(r.book().get(card.cardId)).toMatchObject({ match: 'tool', presence: `standing:${GRANT}` });
     expect(await r.call('write')).toMatchObject({ decision: 'approved' });
     expect(r.autos()).toHaveLength(1);
+  });
+});
+
+describe("C5'a3 K1: a brokered card carries a tool-scope node the contentHash covers", () => {
+  type Node = { type?: unknown; detail?: Record<string, unknown> };
+  const scopeNodes = (block: unknown): Node[] => ((block as { children?: Node[] }).children ?? []).filter((k) => k && k.type === 'tool-scope');
+  const hashOf = (c: { kind: string; requestedBy: string; hsid?: string; flags?: readonly string[] }, detail: unknown): string => contentHashOf({ kind: c.kind, requestedBy: c.requestedBy, ...(c.hsid ? { hsid: c.hsid } : {}), detail, flags: c.flags ?? [] });
+
+  it('a ruleable card: ONE node, its detail hashes to the contentHash and names what the kernel offered', async () => {
+    const r = rig();
+    const out = r.call('write');
+    await waitFor(() => r.pending().length === 1);
+    const c = r.pending()[0]!;
+    const nodes = scopeNodes(c.block);
+    expect(nodes).toHaveLength(1);
+    const d = nodes[0]!.detail!;
+    expect(hashOf(c as never, d)).toBe(c.contentHash);
+    const e = entriesOf().find((x) => x.name === 'write')!;
+    expect(d.tool).toBe('mcp:srv/write');
+    expect(d.toolScopes).toEqual(['tool']);
+    expect(d.brokered).toMatchObject({ server: 'srv', tool: 'write', class: 'mutate', trust: 'trusted', bindHash: toolBindHash(e, 'mutate', BINDING) });
+    // a tampered node no longer hashes to the card (the GUI refuses it)
+    expect(hashOf(c as never, { ...d, toolScopes: ['tool', 'server'] })).not.toBe(c.contentHash);
+    // the text lines are unchanged: the node is the block's last child, after every Text line
+    expect(((c.block as { children: Node[] }).children.at(-1) as Node).type).toBe('tool-scope');
+    r.broker.expire(c.cardId, 'cancelled');
+    await out;
+  });
+
+  it('a non-ruleable brokered card (destructive) carries the node with no toolScopes and no bindHash', async () => {
+    const r = rig();
+    const out = r.call('drop');
+    await waitFor(() => r.pending().length === 1);
+    const c = r.pending()[0]!;
+    const nodes = scopeNodes(c.block);
+    expect(nodes).toHaveLength(1);
+    expect(hashOf(c as never, nodes[0]!.detail)).toBe(c.contentHash);
+    expect(nodes[0]!.detail).not.toHaveProperty('toolScopes');
+    expect(nodes[0]!.detail!.brokered).not.toHaveProperty('bindHash');
+    r.broker.expire(c.cardId, 'cancelled');
+    await out;
+  });
+
+  it('a non-brokered permission card carries no tool-scope node', () => {
+    let n = 0;
+    for (const [toolName, input] of [['Bash', { command: 'ls -la' }], ['Edit', { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' }], ['Write', { file_path: '/r/b.ts', content: 'x' }]] as const) {
+      const plan = composePermission({ requestId: 'q1', toolName, toolUseId: 't1', input }, { repo: '/r', denyWrite: [] });
+      if (plan.kind !== 'card') continue;
+      n++;
+      expect(scopeNodes(plan.block)).toEqual([]);
+      expect(JSON.stringify(plan.block)).not.toContain('tool-scope');
+    }
+    expect(n).toBeGreaterThan(0);
   });
 });

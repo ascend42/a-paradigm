@@ -80,6 +80,10 @@
  * and detail.brokered.bindHash (inside the contentHash); `always` counts as
  * allow. Destructive tools, read tools, untrusted servers, kernel verbs,
  * manual mode and loop sessions never match a rule and never offer Always.
+ * Slice C5'a3: every brokered card's block carries a {type:'tool-scope',
+ * detail} node holding the card's full detail (the one the contentHash covers:
+ * toolScopes, the tool, its server, the trust level and bindHash), so the GUI
+ * can verify what the kernel offered.
  * GAPS left for C5'b (documented in .purpose): no selection beyond the
  * C2' slot rule; no grant UI for per-server trust or the tool scope; the
  * Rules view does not mark a dormant tool rule stale yet; the suspension
@@ -88,6 +92,7 @@
  */
 import { canonicalJson, sha256Tagged, type ToolBrokerClass, type ToolBrokeredDecision } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker } from '../broker/broker.js';
+import { blockOf } from '../broker/card.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { kernelMcpAnswer } from '../supervisor/kernel-mcp.js';
@@ -739,10 +744,15 @@ export class LocalToolBroker {
     if (plan.kind !== 'card') return { decision: 'too-large', cardId: null };
     const lines = [...plan.lines, `class: ${cls} · a brokered call from this local session to ${target.server}`, ...(level ? [TRUST_CARD_LINE[level]] : []), ...droppedLine(tool.entry?.dropped ?? []), ...(always ? [alwaysLine(name)] : [])];
     const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: cls, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}), ...(level ? { trust: level === 'enabled' ? 'untrusted' : level } : {}), ...(always ? { bindHash: always.bindHash } : {}) }, ...(always ? { toolScopes: ['tool'] } : {}) };
+    // slice C5'a3: a {type:'tool-scope', detail} node (like permission.ts edit-scope) carries the card's FULL detail, the
+    // one the contentHash covers: what the kernel offered (toolScopes, the tool, its server, the trust level, bindHash),
+    // so the GUI can verify it. Display only: the block is not hashed, and the text lines are the same as before
+    const shown = blockOf(lines).block;
+    const block = { ...shown, children: [...((shown.children as unknown[]) ?? []), { type: 'tool-scope', detail: structuredClone(detail) }] };
     let cardId: string;
     try {
       // the broker's own timeout falls after the deadline, so the kernel's deadline (expired) always wins the race
-      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, toolInput: callArgs, tool: name, decisions: always ? ['allow', 'deny', 'always'] : ['allow', 'deny'], ...(always ? { ruleScope: { repoKey: always.repoKey } } : {}), timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
+      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, block, toolInput: callArgs, tool: name, decisions: always ? ['allow', 'deny', 'always'] : ['allow', 'deny'], ...(always ? { ruleScope: { repoKey: always.repoKey } } : {}), timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
       cardId = c.cardId;
     } catch {
       return { decision: 'none', cardId: null };

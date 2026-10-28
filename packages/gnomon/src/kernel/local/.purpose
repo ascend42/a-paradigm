@@ -212,6 +212,9 @@ components:
       approved with no cardId. No match: the card offers allow | deny | always with a
       ruleScope, detail.toolScopes ['tool'] and detail.brokered.bindHash; always counts as
       allow. Destructive, read, untrusted, kernel verbs, manual and loop never.
+      Slice C5'a3: every brokered card's block carries one {type:'tool-scope', detail} node
+      (like edit-scope) holding the card's full detail, inside the contentHash (toolScopes,
+      tool, server, trust, bindHash), so the GUI can verify what the kernel offered.
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
