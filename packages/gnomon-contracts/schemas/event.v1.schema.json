@@ -235,6 +235,7 @@
     "session.sandbox",
     "session.spawned",
     "session.tainted",
+    "skill.run",
     "socket.auth.fail",
     "socket.auth.ok",
     "socket.auth.reconnect.requested",
@@ -257,6 +258,8 @@
     "tend.proposal.fate",
     "tend.teacher.drafted",
     "tool.brokered",
+    "tool.result.policy",
+    "tool.result.sent",
     "tool.selection",
     "tool.trust",
     "turn.ask-user",
@@ -403,7 +406,10 @@
     "session.memory": "8.0:local-lane",
     "session.model": "8.0:model-switch",
     "session.renamed": "8.0:session-rename",
+    "skill.run": "8.0:local-lane",
     "tool.brokered": "8.0:local-lane",
+    "tool.result.policy": "8.0:local-lane",
+    "tool.result.sent": "8.0:local-lane",
     "tool.selection": "8.0:local-lane",
     "tool.trust": "8.0:local-lane",
     "verdict.incident": "M1.1:P8-D86-D88"
@@ -951,7 +957,32 @@
       "decision",
       "bytes",
       "isError",
-      "cardId"
+      "cardId",
+      "author"
+    ],
+    "tool.result.policy": [
+      "hsid",
+      "repoKey",
+      "tool",
+      "bindHash",
+      "policy"
+    ],
+    "tool.result.sent": [
+      "hsid",
+      "tool",
+      "argsHash",
+      "bytes",
+      "cut",
+      "policy"
+    ],
+    "skill.run": [
+      "hsid",
+      "name",
+      "skillHash",
+      "argsHash",
+      "via",
+      "decision",
+      "tokens"
     ],
     "session.memory": [
       "hsid",

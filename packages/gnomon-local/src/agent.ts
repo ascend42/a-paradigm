@@ -172,7 +172,9 @@ export class Agent {
   #nextSurface: 'compact' | 'full' | null = null;
   readonly #messages: ChatMessage[] = [];
   readonly #steer: string[] = [];
-  readonly #follow: string[] = [];
+  readonly #follow: Array<{ text: string; data?: readonly string[] }> = [];
+  /** slice C6'a2-1 (Aegis M1): the messages that are DATA parts the kernel attached ("/" results), never the request */
+  readonly #data = new WeakSet<ChatMessage>();
   #abort: AbortController | null = null;
   /** Aegis M2: one per prompt run, passed to the tools as ctx.signal; abort() fires it */
   #runAbort = new AbortController();
@@ -399,7 +401,7 @@ export class Agent {
     const budget = Math.max(this.#budget, 256);
     // slice B2: working memory pins THIS goal verbatim => the summary and the lead message do not restate it
     const goalPinned = this.#goal !== undefined && this.#memory?.goalHash !== undefined && this.#memory.goalHash === sha256(this.#goal);
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget, this.#goal, goalPinned), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget, this.#goal, goalPinned, (m) => this.#data.has(m)), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
     let c: Completion;
     try {
       c = await complete(this.#o.base, body, { signal: this.#abort.signal, ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
@@ -417,7 +419,7 @@ export class Agent {
     const system = this.#messages[0]?.role === 'system' ? estimateTokens([this.#messages[0]]) : 0;
     const fixed = this.#o.maxTokens + system + estimateTokens([{ role: 'user', content: summary }]) + (this.#goal !== undefined && !goalPinned ? Math.ceil(this.#goal.length / 4) : 0) + 64;
     const room = Math.max(0, budget - fixed);
-    const { messages, kept, excerpts } = compactedHistory(this.#messages, summary, Math.floor(room / 3), { ...(this.#goal !== undefined ? { goal: this.#goal } : {}), excerptTokens: Math.floor(room / 4), ...(goalPinned ? { goalPinned } : {}) });
+    const { messages, kept, excerpts } = compactedHistory(this.#messages, summary, Math.floor(room / 3), { ...(this.#goal !== undefined ? { goal: this.#goal } : {}), excerptTokens: Math.floor(room / 4), ...(goalPinned ? { goalPinned } : {}), isData: (m) => this.#data.has(m) });
     this.#messages.splice(0, this.#messages.length, ...messages);
     this.#compactions++;
     this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, excerpts, goalPinned, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
@@ -472,9 +474,9 @@ export class Agent {
     this.#steer.push(text);
   }
 
-  followUp(text: string): void {
-    if (this.#running) this.#follow.push(text);
-    else void this.prompt(text);
+  followUp(text: string, data?: readonly string[]): void {
+    if (this.#running) this.#follow.push({ text, ...(data?.length ? { data } : {}) });
+    else void this.prompt(text, data);
   }
 
   abort(): void {
@@ -485,11 +487,20 @@ export class Agent {
     this.#o.broker?.cancelAll();
   }
 
-  async prompt(text: string): Promise<void> {
+  /**
+   * slice C6'a2-1 (Aegis M1): `data` are kernel-framed "/" results: each is its OWN message (before the human's text),
+   * marked as data for compaction; the goal is the human's text only, so a pinned goalHash still matches it.
+   */
+  async prompt(text: string, data?: readonly string[]): Promise<void> {
     if (this.#running) throw new Error('agent is busy (use steer or follow_up)');
     this.#running = true;
     this.#aborted = false;
     this.#runAbort = new AbortController();
+    for (const d of data ?? []) {
+      const m: ChatMessage = { role: 'user', content: d };
+      this.#data.add(m);
+      this.#messages.push(m);
+    }
     this.#messages.push({ role: 'user', content: text });
     this.#goal = text;
     const total = { input: 0, output: 0 };
@@ -603,6 +614,6 @@ export class Agent {
     this.#aborted = false;
     this.#o.emit({ type: 'agent_end', stopReason, usage: total, ...(error ? { error } : {}) });
     const next = this.#follow.shift();
-    if (next !== undefined) await this.prompt(next);
+    if (next !== undefined) await this.prompt(next.text, next.data);
   }
 }

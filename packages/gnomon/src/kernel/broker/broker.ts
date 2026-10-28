@@ -518,6 +518,21 @@ export class ApprovalBroker {
     return this.#helperBatch;
   }
 
+  /**
+   * 8.0:local-lane C6'a2-1 (TD-2026-10-28-969): could a root-class decision of this (kind, detail) be raised NOW without
+   * the raise-time helper check refusing the whole card? True only when the row table it needs is known to the running
+   * helper: a click-class key, no helper version seam, or an unknown or older version answer false (fail closed). A kind
+   * with no minimum answers true. #local-tool-broker asks this BEFORE it offers a destructive Always, so an older helper
+   * gets allow | deny only.
+   */
+  async rootTableReady(kind: string, detail: Record<string, unknown>): Promise<boolean> {
+    const need = ROW_TABLE_MIN_HELPER[rootKindOf(kind, detail)];
+    if (need === undefined) return true;
+    if (this.#approvals.clickClass === true || typeof this.#approvals.helperVersion !== 'function') return false;
+    const have = await this.#approvals.helperVersion().catch(() => null);
+    return have !== null && versionAtLeast(have, need);
+  }
+
   async refreshHelperBatch(): Promise<HelperBatchState> {
     if (typeof this.#approvals.decisionBatchAvailable !== 'function') return (this.#helperBatch = null);
     const ok = await this.#approvals.decisionBatchAvailable().catch(() => false);
@@ -862,7 +877,8 @@ export class ApprovalBroker {
       } else if (sc.kind === 'tool') {
         // 8.0:local-lane C5'a2 (^local-tool-grant): only on a brokered MCP permission card the KERNEL offered the scope on
         // (detail.toolScopes and detail.brokered.bindHash, inside contentHash: #local-tool-broker sets them only for a
-        // mutate tool of a server trusted NOW, never destructive, manual or a loop session) that carries a ruleScope
+        // mutate or (C6'a2-1, root class, helper 1.10.0) destructive tool of a server trusted NOW, never manual or a loop
+        // session) that carries a ruleScope
         const offered = Array.isArray(r.detail.toolScopes) ? (r.detail.toolScopes as unknown[]) : [];
         if (String(card.kind) !== 'permission' || !r.tool || !BROKERED_MCP_TOOL.test(r.tool) || !offered.includes('tool') || brokeredBindHashOf(r.detail) === null || !r.ruleScope) {
           throw fail('BAD_REQUEST', 'bad-params', 'a tool scope needs a brokered card the kernel offered that scope on', { cardId });
@@ -1183,6 +1199,8 @@ export class ApprovalBroker {
         ? `fresh presence: always allow edits to ${JSON.stringify(scope.path)} (any content) in this repo`
         : decision === 'always' && scope?.kind === 'repo-edits'
         ? 'fresh presence: always allow edits in this repo (same as auto-edits for this repo)'
+        : decision === 'always' && scope?.kind === 'tool' && ((r.card.flags ?? []) as string[]).includes('irreversible')
+        ? `fresh presence and the root key: always allow ${String(r.tool)} calls (any arguments) in this repo, by you and by the model without asking; it can delete or overwrite; paused if the tool or its server changes`
         : decision === 'always' && scope?.kind === 'tool'
         ? `fresh presence: always allow ${String(r.tool)} calls (any arguments) in this repo, paused if the tool or its server changes`
         : decision === 'always'

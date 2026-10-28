@@ -444,11 +444,11 @@
         "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
       ],
       "root": [
-        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"permission\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"budget\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
       ],
       "intent": "[]",
       "error": "batch-refused",
-      "why": "no row table for card kind permission"
+      "why": "no row table for card kind budget"
     },
     {
       "name": "F3: a voice enrolment row without a cardId is refused",

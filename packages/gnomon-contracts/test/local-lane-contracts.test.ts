@@ -3,7 +3,7 @@
  * tool.brokered kind is registered, closed and HASH-ONLY.
  */
 import { describe, expect, it } from 'vitest';
-import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SESSION_MCP_ERROR_MAX, SESSION_MCP_FITS, SESSION_MCP_STATES, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, validateKindPayload } from '../src/index.js';
+import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SKILL_RUN_DECISIONS, SKILL_RUN_VIAS, TOOL_RESULT_POLICIES, SESSION_MCP_ERROR_MAX, SESSION_MCP_FITS, SESSION_MCP_STATES, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, validateKindPayload } from '../src/index.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
 const row = { hsid: HSID, server: 'gnomon', tool: 'gnomon_git_push', class: 'destructive', argsHash: `sha256:${'a'.repeat(64)}`, decision: 'approved', bytes: 12, isError: false, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' };
@@ -11,7 +11,7 @@ const row = { hsid: HSID, server: 'gnomon', tool: 'gnomon_git_push', class: 'des
 describe('tool.brokered (8.0:local-lane)', () => {
   it('is a kernel kind, sensitive, reserved under 8.0:local-lane, with a closed payload', () => {
     expect(EVENT_KINDS['tool.brokered']).toMatchObject({ kind: 'tool.brokered', owner: 'kernel', sensitivity: 'sensitive', reserved: '8.0:local-lane' });
-    expect(KIND_PAYLOADS['tool.brokered']).toEqual(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId']);
+    expect(KIND_PAYLOADS['tool.brokered']).toEqual(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId', 'author']);
     expect((CLIENT_API_DESCRIPTOR as unknown as { toolBrokered: { decisions: string[] } }).toolBrokered.decisions).toEqual([...TOOL_BROKERED_DECISIONS]);
   });
   it('a valid row passes; an unresolved tool omits tool and class', () => {
@@ -91,5 +91,44 @@ describe("session.mcp (8.0:local-lane C6'a1)", () => {
     expect(validateKindPayload('session.mcp', { ...started, state: 'failed', error: 'a\u0007b' }).length).toBeGreaterThan(0);
     expect(validateKindPayload('session.mcp', { ...started, state: 'failed', error: 'e'.repeat(SESSION_MCP_ERROR_MAX + 1) }).length).toBeGreaterThan(0);
     expect(validateKindPayload('session.mcp', { ...started, command: 'node x' }).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * 8.0:local-lane (TD-2026-10-28-956 / -969 slice C6'a2-1): tool.brokered{author}, tool.result.policy, tool.result.sent and
+ * skill.run are registered, closed and hash-only.
+ */
+describe('"/" runs, the result policy and skill runs (8.0:local-lane, slice C6\'a2-1)', () => {
+  const SHA = `sha256:${'c'.repeat(64)}`;
+  it('tool.brokered takes author human only (absent: the model)', () => {
+    expect(validateKindPayload('tool.brokered', { ...row, author: 'human' })).toEqual([]);
+    expect(validateKindPayload('tool.brokered', { ...row, author: 'model' }).length).toBeGreaterThan(0);
+    expect((CLIENT_API_DESCRIPTOR as unknown as { toolBrokered: { authors: string[] } }).toolBrokered.authors).toEqual(['human']);
+  });
+  it('tool.result.policy is a kernel kind with a closed payload over a brokered MCP tool name', () => {
+    expect(EVENT_KINDS['tool.result.policy']).toMatchObject({ kind: 'tool.result.policy', owner: 'kernel', reserved: '8.0:local-lane' });
+    expect(KIND_PAYLOADS['tool.result.policy']).toEqual(['hsid', 'repoKey', 'tool', 'bindHash', 'policy']);
+    const p = { hsid: HSID, repoKey: SHA, tool: 'mcp:files/delete_file', bindHash: SHA, policy: 'send' };
+    expect(validateKindPayload('tool.result.policy', p)).toEqual([]);
+    expect(validateKindPayload('tool.result.policy', { ...p, policy: 'always' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('tool.result.policy', { ...p, tool: 'Bash' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('tool.result.policy', { ...p, extra: 1 }).length).toBeGreaterThan(0);
+    expect((CLIENT_API_DESCRIPTOR as unknown as { toolResult: { policies: string[] } }).toolResult.policies).toEqual([...TOOL_RESULT_POLICIES]);
+  });
+  it('tool.result.sent is sensitive and hash-only', () => {
+    expect(EVENT_KINDS['tool.result.sent']).toMatchObject({ owner: 'kernel', sensitivity: 'sensitive', reserved: '8.0:local-lane' });
+    const r = { hsid: HSID, tool: 'mcp:files/read_file', argsHash: SHA, bytes: 120, cut: false, policy: 'send' };
+    expect(validateKindPayload('tool.result.sent', r)).toEqual([]);
+    expect(validateKindPayload('tool.result.sent', { ...r, text: 'the result' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('tool.result.sent', { ...r, cut: 'yes' }).length).toBeGreaterThan(0);
+  });
+  it('skill.run is sensitive with closed via and decision; tokens is optional', () => {
+    expect(EVENT_KINDS['skill.run']).toMatchObject({ kind: 'skill.run', owner: 'kernel', sensitivity: 'sensitive', reserved: '8.0:local-lane' });
+    const r = { hsid: HSID, name: 'review-pr', skillHash: SHA, argsHash: SHA, via: 'template', decision: 'ran' };
+    expect(validateKindPayload('skill.run', r)).toEqual([]);
+    expect(validateKindPayload('skill.run', { ...r, decision: 'over-budget', tokens: 9000 })).toEqual([]);
+    expect(validateKindPayload('skill.run', { ...r, via: 'shell' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('skill.run', { ...r, name: 'Review PR' }).length).toBeGreaterThan(0);
+    expect((CLIENT_API_DESCRIPTOR as unknown as { skillRun: { vias: string[]; decisions: string[] } }).skillRun).toMatchObject({ vias: [...SKILL_RUN_VIAS], decisions: [...SKILL_RUN_DECISIONS] });
   });
 });

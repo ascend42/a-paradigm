@@ -182,14 +182,20 @@ describe('G-LCL-22 a ruleable call: the card offers Always, the rule passes the 
 });
 
 describe('G-LCL-22 falsifiers', () => {
-  it('a destructive tool never offers Always and never passes, even when a rule source answers a rule', async () => {
-    const r = rig({ rules: { match: () => ({ ruleId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }) } });
+  // C6'a2-1 (amended G-LCL-22): a destructive tool's Always needs helper 1.10.0 (the `permission` row table) and a fresh
+  // root touch; this rig's broker has no helper at all, so it is never offered, and a MUTATE rule never passes it
+  it('a destructive tool offers no Always on a broker without the permission row table, and a mutate rule never passes it', async () => {
+    const r = rig();
+    await r.learnBy('write');
     const out = r.call('drop');
     await waitFor(() => r.pending().length === 1);
     const c = r.pending()[0]!;
+    expect(c.flags).toContain('irreversible');
     expect(c.actions!.map((a) => a.decision).sort()).toEqual(['allow', 'deny']);
     expect(r.raisedRow()).not.toHaveProperty('bindHash');
     expect(r.autos()).toEqual([]);
+    expect(r.calls).toHaveLength(1); // the mutate call that learned the rule only
+    r.calls.length = 0;
     // always is not one of its actions, and a tool scope is refused on it
     expect(await refusal(r.broker.approve(H, { cardId: c.cardId, decision: 'always', scope: { kind: 'tool' }, decisionSig: r.toolSig(c.cardId, c.contentHash) }))).toMatchObject({ code: 'BAD_REQUEST' });
     await r.broker.approve(H, { cardId: c.cardId, decision: 'deny', decisionSig: r.v1(c.cardId, 'deny', c.contentHash) });

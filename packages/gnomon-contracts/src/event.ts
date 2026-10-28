@@ -289,7 +289,16 @@ const TABLE: Row[] = [
   // 8.0:local-lane (TD-2026-10-27-833 slice C5'a1, #mcp-servers trust): tool.trust{id, label, op, binding, why?,
   // launchHash?, toolsHash?} — the human trusted or cleared an MCP server's own tool labels, or the kernel dropped that
   // trust (its launch or its tool list changed, or it was turned off). KERNEL-signed only; TrustBook folds no other row.
-  ['tool', 'kernel', 'brokered selection trust', LOCAL_LANE],
+  // 8.0:local-lane (TD-2026-10-28-956 / -969 slice C6'a2-1, #local-tool-broker "/" runs): tool.brokered gains author
+  // ('human': a "/" run the human started; absent: the model's call). tool.result.policy{hsid, repoKey, tool, bindHash,
+  // policy} — the human's choice whether a tool's "/" results go to the model (send) or not (ask), keyed by the repo,
+  // the brokered tool name and its bindHash: KERNEL-signed only (ResultPolicyBook folds no other row; a binding change
+  // reads ask). tool.result.sent{hsid, tool, argsHash, bytes, cut, policy} — one "/" result the kernel attached to the
+  // human's next turn as framed data (hash-only: never the result).
+  ['tool', 'kernel', 'brokered selection trust result.policy result.sent', LOCAL_LANE],
+  // 8.0:local-lane (slice C6'a2): skill.run{hsid, name, skillHash, argsHash, via, decision, tokens?} — the human ran a
+  // repo skill from "/" (native: the model's own slash skill; template: the kernel's sanitized template). Hash-only.
+  ['skill', 'kernel', 'run', LOCAL_LANE],
   // 8.0:local-lane (TD-2026-10-27-833 slice B2, #local-working-memory): session.memory{hsid, op, id?, source?, kind?,
   // textHash?, bytes, why?} — one change to a local session's kernel-owned working memory: HASH-ONLY (never the text).
   // session.context{hsid, target, previous, requested, configTarget, nCtx, aboveConfig} — the human changed a local
@@ -317,6 +326,9 @@ const SENSITIVE_KINDS: Record<string, Sensitivity> = {
   'tool.brokered': 'sensitive',
   // 8.0:local-lane (B2): the text digest is of human or model text
   'session.memory': 'sensitive',
+  // 8.0:local-lane (C6'a2): the args digest is of human-typed "/" arguments
+  'tool.result.sent': 'sensitive',
+  'skill.run': 'sensitive',
 };
 
 /** Field-level labels stricter than the event's (§9.1 / §9.3 redaction matrix). */
@@ -552,7 +564,13 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   // 8.0:git-verbs: closed, ids and closed values only (host is a validated DNS name, never a URL)
   'git.verb': Object.freeze(['hsid', 'verb', 'phase', 'inputHash', 'why', 'cardId', 'host', 'exitCode']),
   // 8.0:local-lane: closed and hash-only (tool and class absent when the name resolved to no offered tool)
-  'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId']),
+  'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId', 'author']),
+  // 8.0:local-lane (C6'a2): closed; the repo key, the brokered tool name, its bindHash and the closed policy only
+  'tool.result.policy': Object.freeze(['hsid', 'repoKey', 'tool', 'bindHash', 'policy']),
+  // 8.0:local-lane (C6'a2): closed and hash-only (never the result)
+  'tool.result.sent': Object.freeze(['hsid', 'tool', 'argsHash', 'bytes', 'cut', 'policy']),
+  // 8.0:local-lane (C6'a2): closed and hash-only (never the skill text or the arguments)
+  'skill.run': Object.freeze(['hsid', 'name', 'skillHash', 'argsHash', 'via', 'decision', 'tokens']),
   // 8.0:local-lane (B2): closed and hash-only; delete carries no entry fields, refused carries why
   'session.memory': Object.freeze(['hsid', 'op', 'id', 'source', 'kind', 'textHash', 'bytes', 'why']),
   // 8.0:local-lane (C3'): closed; ids are capability ids, the hash the selection's; no query or need text
@@ -570,7 +588,8 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'request.session.restart': Object.freeze(['checkpointRef']),
   'offer.suppressed': Object.freeze(['name', 'offerKind']),
   'git.verb': Object.freeze(['why', 'cardId', 'host', 'exitCode']),
-  'tool.brokered': Object.freeze(['tool', 'class', 'cardId']),
+  'tool.brokered': Object.freeze(['tool', 'class', 'cardId', 'author']),
+  'skill.run': Object.freeze(['tokens']),
   'session.memory': Object.freeze(['id', 'source', 'kind', 'textHash', 'why']),
   // 8.0:local-lane (C5'a1): a set row carries launchHash and toolsHash (a drop names which one changed)
   'tool.trust': Object.freeze(['why', 'launchHash', 'toolsHash']),
@@ -682,6 +701,26 @@ export type ToolSelectionTrigger = (typeof TOOL_SELECTION_TRIGGERS)[number];
 /** tool.selection{added, removed, found}: capability ids `<server>/<tool>[.<op>]@<sha256(schema)[:8]>`, at most this many each. */
 export const TOOL_SELECTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}@[0-9a-f]{8}$/;
 export const TOOL_SELECTION_MAX_IDS = 64;
+/**
+ * tool.brokered{author} (CLOSED, 8.0:local-lane C6'a2): `human` marks a "/" run the human started
+ * (request.session.tools.run); absent, the call is the model's.
+ */
+export const TOOL_BROKERED_AUTHORS = ['human'] as const;
+export type ToolBrokeredAuthor = (typeof TOOL_BROKERED_AUTHORS)[number];
+/**
+ * tool.result.policy{policy} / tool.result.sent{policy} (CLOSED, C6'a2): send (a "/" result of this tool goes to the
+ * model with the human's next turn, as framed data) or ask (it does not). No row, or a binding change: ask.
+ */
+export const TOOL_RESULT_POLICIES = ['send', 'ask'] as const;
+export type ToolResultPolicy = (typeof TOOL_RESULT_POLICIES)[number];
+/** skill.run{name}: a repo skill name (lowercase letters, digits and hyphens, at most 64). */
+export const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** skill.run{via} (CLOSED, C6'a2): native (the model's own slash skill) or template (the kernel's sanitized template). */
+export const SKILL_RUN_VIAS = ['native', 'template'] as const;
+export type SkillRunVia = (typeof SKILL_RUN_VIAS)[number];
+/** skill.run{decision} (CLOSED, C6'a2): ran, refused (not listed, bad arguments, a loop session…) or over-budget. */
+export const SKILL_RUN_DECISIONS = ['ran', 'refused', 'over-budget'] as const;
+export type SkillRunDecision = (typeof SKILL_RUN_DECISIONS)[number];
 /** tool.brokered{server}: the MCP server name the call went to (`gnomon` = the kernel's own SDK server). */
 export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** tool.brokered{tool}: an offered tool name (kernel-chosen, never model text). */
@@ -1096,6 +1135,32 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('isError' in v && typeof v.isError !== 'boolean') c.fail('isError', 'must be a boolean');
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
       if (('tool' in v) !== ('class' in v)) c.fail('class', 'is present exactly when the tool resolved');
+      if ('author' in v) c.closedEnum('author', v.author, TOOL_BROKERED_AUTHORS);
+      break;
+    case 'tool.result.policy':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('repoKey' in v) c.str('repoKey', v.repoKey, SHA256_TAGGED, 'sha256:<hex> (the repo key)');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a brokered tool name (mcp:<server>/<tool>)');
+      if ('tool' in v && typeof v.tool === 'string' && !v.tool.startsWith('mcp:')) c.fail('tool', 'is a brokered MCP tool name (mcp:<server>/<tool>)');
+      if ('bindHash' in v) c.str('bindHash', v.bindHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('policy' in v) c.closedEnum('policy', v.policy, TOOL_RESULT_POLICIES);
+      break;
+    case 'tool.result.sent':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('tool' in v) c.str('tool', v.tool, TOOL_NAME, 'a brokered tool name (mcp:<server>/<tool>)');
+      if ('argsHash' in v) c.str('argsHash', v.argsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('bytes' in v && (typeof v.bytes !== 'number' || !Number.isSafeInteger(v.bytes) || v.bytes < 0)) c.fail('bytes', 'must be a non-negative integer');
+      if ('cut' in v && typeof v.cut !== 'boolean') c.fail('cut', 'must be a boolean');
+      if ('policy' in v) c.closedEnum('policy', v.policy, TOOL_RESULT_POLICIES);
+      break;
+    case 'skill.run':
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('name' in v) c.str('name', v.name, SKILL_NAME_PATTERN, 'a skill name');
+      if ('skillHash' in v) c.str('skillHash', v.skillHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('argsHash' in v) c.str('argsHash', v.argsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if ('via' in v) c.closedEnum('via', v.via, SKILL_RUN_VIAS);
+      if ('decision' in v) c.closedEnum('decision', v.decision, SKILL_RUN_DECISIONS);
+      if ('tokens' in v && (typeof v.tokens !== 'number' || !Number.isSafeInteger(v.tokens) || v.tokens < 0)) c.fail('tokens', 'must be a non-negative integer');
       break;
     case 'tool.trust': {
       if ('id' in v) c.str('id', v.id, TOOL_TRUST_ID_PATTERN, 'a user or plugin MCP server id');

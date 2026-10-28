@@ -157,7 +157,7 @@ describe('8.0:loops descriptor and the one clientApiId move', () => {
   });
   it('clientApiId moved once to the pinned value, and the pin file agrees', () => {
     expect(computeClientApiId()).toBe(CLIENT_API_ID);
-    expect(CLIENT_API_ID).toBe('sha256:820f6b316df9ca829037ddefcbdaaf2c94c26ffce248431b1638a7c4f3f661d4');
+    expect(CLIENT_API_ID).toBe('sha256:ef710386692316235e192831734ddd1b98c77b900456c20d59d674696976e6c3');
     const pin = JSON.parse(readFileSync(fileURLToPath(new URL('../schemas/client-api.ids.json', import.meta.url)), 'utf8')) as { clientApiId: string };
     expect(pin.clientApiId).toBe(CLIENT_API_ID);
   });

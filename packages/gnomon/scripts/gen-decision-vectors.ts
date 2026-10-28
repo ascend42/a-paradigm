@@ -70,7 +70,9 @@ add('C3: an install capability row never names a device', A, batch('install', 'i
 add('C3: the publisher row names another publisher', A, batch('install', 'install', [pub({ publisher: 'other' }), inst()]));
 add('C3: an uninstall never signs a grant.install', [presence], batch('uninstall', 'allow', [inst()]));
 add('C3: a mod.mcp.config decision signs no grant row', [approve(C, 'allow'), presence], batch('mod.mcp.config', 'allow', [trust()]));
-add('C3: an unknown card kind', [approve(C, 'allow'), presence], batch('permission', 'allow', []));
+add('C3: an unknown card kind', [approve(C, 'allow'), presence], batch('budget', 'allow', []));
+// 8.0:local-lane C6'a2-1 (Aegis L2): the `permission` ok vector is held for slice a2-h (helper 1.10.0); the Swift
+// helper 1.9.0 has no permission table, so a shared ok vector would fail its testSharedBindingVectors
 add('F3: a voice enrolment row without a cardId is refused', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: undefined })]));
 add('C3: a voice enrolment for another card', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: C2 })]));
 add('C2: egress hosts that do not fit the line are refused, never truncated', A, batch('install', 'install', [trust(), egress({ hosts: Array.from({ length: 30 }, (_, i) => `h${i}-${'y'.repeat(40)}.example.com`) }), inst()]));

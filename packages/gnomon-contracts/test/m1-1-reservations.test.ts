@@ -265,7 +265,7 @@ const COVERAGE: Record<string, Entry> = {
 // Moved again by 8.0:local-lane (TD-2026-10-27-833 slice C5'a1: tool.trust, the tool scope and match, TOOL_NAME mcp names, descriptor toolTrust): was sha256:7a4754b7…144d.
 // Moved again by 8.0:local-lane (TD-2026-10-27-833 slice C6'a1: session.mcp, descriptor sessionMcp): was sha256:f2b45e1b…156a.
 // Moved again by 8.0:local-lane (Aegis C6'a1 L1: session.mcp fit disabled): was sha256:58e12025…e405.
-const PINNED_CLIENT_API_ID = 'sha256:820f6b316df9ca829037ddefcbdaaf2c94c26ffce248431b1638a7c4f3f661d4';
+const PINNED_CLIENT_API_ID = 'sha256:ef710386692316235e192831734ddd1b98c77b900456c20d59d674696976e6c3';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
