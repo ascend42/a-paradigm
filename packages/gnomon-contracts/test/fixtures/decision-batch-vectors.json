@@ -444,11 +444,24 @@
         "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
       ],
       "root": [
-        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"permission\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"budget\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"allow\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
       ],
       "intent": "[]",
       "error": "batch-refused",
-      "why": "no row table for card kind permission"
+      "why": "no row table for card kind budget"
+    },
+    {
+      "name": "C3: a permission decision signs only its decision row",
+      "approvals": [
+        "gnomon:approve:v1\ncard:01HZZZZZZZZZZZZZZZZZZZZZZZ\nalways\nsha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\np:abcdefgh/matt",
+        "gnomon:presence:v1\nmod.install\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge"
+      ],
+      "root": [
+        "gnomon:row-sig:v1\n{\"approver\":\"p:abcdefgh/matt\",\"cardId\":\"card:01HZZZZZZZZZZZZZZZZZZZZZZZ\",\"cardKind\":\"permission\",\"contentHash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decision\":\"always\",\"rowsDigest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schemaVersion\":\"gnomon-root-decision:v2\"}"
+      ],
+      "intent": "[]",
+      "error": null,
+      "shown": "Gnomon Helper: ONE presence signs always on permission card:01HZZZZZZZZZZZZZZZZZZZZZZZ sha256:aaaaaaaaaaaa; digests eacbebf57f79 1a09afa1106a 3e4bc926e80b"
     },
     {
       "name": "F3: a voice enrolment row without a cardId is refused",
