@@ -20,6 +20,8 @@
  *     for room, it waits hidden until a slot frees.
  */
 
+import { displayText } from './render.js';
+
 export type ToastKind = 'info' | 'warn' | 'fail';
 
 /** At most this many toasts are shown at once (zone toasts, overflow). */
@@ -93,3 +95,25 @@ export function splitToastText(text: string): { main: string; next: string | nul
 
 /** Whether the main text may not fit 4 lines at 44ch (then the full text goes in title= too). A cheap upper bound. */
 export const toastMayClip = (main: string): boolean => main.length > TOAST_LINES * TOAST_MEASURE_CH || main.split('\n').length > TOAST_LINES;
+
+/**
+ * C5'b (8.0:local-lane): the kernel dropped a server's trust because it changed (a kernel-signed tool.trust{op:'dropped'}
+ * with why launch-changed or tools-changed): a warn toast (10 s, not sticky) with the key Trust again…. A drop because it
+ * was turned off (disabled), and a clear from Settings, raise no toast: the server's row says it. The name is the
+ * server's as status.mcp lists it, as display text (a server's own words are untrusted).
+ */
+export function trustDropToastOf(row: { kind?: unknown; payload?: unknown }, status: unknown): { id: string; text: string } | null {
+  if (row.kind !== 'tool.trust' || !row.payload || typeof row.payload !== 'object') return null;
+  const p = row.payload as Record<string, unknown>;
+  if (p.op !== 'dropped' || (p.why !== 'launch-changed' && p.why !== 'tools-changed') || typeof p.id !== 'string') return null;
+  const m = status && typeof status === 'object' ? (status as { mcp?: { servers?: unknown; repos?: unknown } }).mcp : null;
+  const repos = Array.isArray(m?.repos) ? (m.repos as Array<{ servers?: unknown }>) : [];
+  const all = [...(Array.isArray(m?.servers) ? m.servers : []), ...repos.flatMap((r) => (r && Array.isArray(r.servers) ? r.servers : []))] as Array<{ id?: unknown; name?: unknown } | null>;
+  const found = all.find((s) => s && s.id === p.id);
+  const name = displayText(typeof found?.name === 'string' ? found.name : typeof p.label === 'string' ? p.label : 'an MCP server').slice(0, 64);
+  const what = p.why === 'launch-changed' ? 'its command changed' : 'its tool list changed';
+  return { id: p.id, text: `${name} changed (${what}): Gnomon stopped trusting its tool labels. Its tools ask again; its Always rules are paused.` };
+}
+
+/** C5'b: the drop toast's kind and key (founder: warn, 10 s, not sticky). */
+export const TRUST_DROP_TOAST = Object.freeze({ kind: 'warn' as ToastKind, key: 'Trust again…' });

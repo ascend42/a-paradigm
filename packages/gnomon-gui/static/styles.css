@@ -1564,6 +1564,10 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .sf-result strong, .sf-note strong { font-weight: 600; }
 .settings-intro { margin: 0 0 4px; font-size: var(--fs-label); color: var(--sec); max-width: 80ch; }
 .settings-value .mk { font-weight: 600; }
+/* C5'b: a settings-form readonly row's trust chip (untrusted plain; trusted and first-party .ink): told by its word, never a hue */
+.settings-row .settings-value .chip { margin-left: 2px; }
+/* C5'b: the trust preview's reads list (inside the inline confirm block) */
+.sf-list { margin: 0; padding-left: 16px; font-size: var(--fs-label); color: var(--ink2); overflow-wrap: anywhere; }
 .settings-row.settings-form { align-items: start; }
 .settings-row.settings-form > .settings-label { padding-top: 6px; }
 .settings-row[data-grp="start"] { margin-top: 8px; }
@@ -1686,6 +1690,8 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .rule-what.struck { text-decoration: line-through; color: var(--sec); }
 .rule-meta { grid-column: 1; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
 .rule-row.is-off .rule-state { font-weight: 600; color: var(--ink2); }
+/* C5'b: a paused rule (status.rules paused) says why in its state: weight 600 --ink2, never a hue */
+.rule-row.is-paused .rule-state { font-weight: 600; color: var(--ink2); }
 .rule-staged { grid-column: 1; font-size: var(--fs-label); font-weight: 600; color: var(--ink); }
 .rule-keys { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 6px; align-items: center; justify-self: end; }
 /* Turn off ▾ opens inline under the row, like the card's Always ▾ (.always-choices) */

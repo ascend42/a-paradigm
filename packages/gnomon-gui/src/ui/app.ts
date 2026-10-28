@@ -45,7 +45,7 @@ import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '.
 import { mountStandingFeed } from './standing-feed.js';
 import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringSheet } from './card-focus.js';
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
-import type { ToastKind } from '../core/toasts.js';
+import { trustDropToastOf, TRUST_DROP_TOAST, type ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
@@ -1869,6 +1869,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         loopRow(r); // #gui-loops: loop done toasts and a status re-read
         localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
         rulesRow(r); // #gui-rules-view: a rule row re-reads status.rules; a timed off that ended is a 6 s toast
+        trustDropRow(r); // C5'b: a server whose trust the kernel dropped (it changed) is a warn toast
         mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
@@ -2760,6 +2761,29 @@ function rulesRow(r: { kind: string; payload?: unknown; principal?: string }): v
     if (text) toasts().show(text, { kind: 'info', key: { label: 'see Rules', onPress: (e: MouseEvent) => e.isTrusted && settings.open('rules') } });
   }
   void refreshStatus();
+}
+
+/** C5'b: a kernel-signed tool.trust{op:'dropped'} (launch or tools changed) is a warn toast; Trust again… opens its row. */
+function trustDropRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (r.kind !== 'tool.trust' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
+  const t = trustDropToastOf(r, status);
+  if (!t) return;
+  toasts().show(t.text, {
+    kind: TRUST_DROP_TOAST.kind,
+    key: {
+      label: TRUST_DROP_TOAST.key,
+      onPress: (e: MouseEvent) => {
+        if (!e.isTrusted) return;
+        settings.open(MCP_SECTION);
+        // the server's own row: its Trust… key (or its first key while trust waits on a new listing)
+        const v = t.id.replace(/["\\]/g, '\\$&');
+        const sec = document.querySelector(`#settings-body [data-section="${MCP_SECTION}"]`);
+        const k = (sec?.querySelector(`[data-lm-act="mcp:trust"][data-lm-value="${v}"]`) ?? sec?.querySelector(`[data-lm-value="${v}"]`)) as HTMLElement | null;
+        k?.scrollIntoView({ block: 'center' });
+        k?.focus({ preventScroll: true });
+      },
+    },
+  });
 }
 
 /* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */
