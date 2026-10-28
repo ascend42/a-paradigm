@@ -17,7 +17,7 @@ import {
 import { AgentSpawner } from '../../core/agent-spawner.js';
 import { getBestProvider } from '../../core/provider-registry.js';
 import { loadAgentsManifest } from './loader.js';
-import { holdWhilePrompting } from '../../core/providers/command-consent.js';
+import { holdWhilePrompting, stripTerminalEscapes } from '../../core/providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -169,7 +169,7 @@ export async function teamSpawnCommand(
       if (spinner.isSpinning) {
         spinner.stop();
       }
-      process.stdout.write(message.content);
+      process.stdout.write(stripTerminalEscapes(message.content));
       outputText += message.content;
     } else if (message.type === 'tool_use') {
       if (!spinner.isSpinning) {

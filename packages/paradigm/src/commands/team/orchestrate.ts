@@ -27,7 +27,7 @@ import {
   BackgroundOrchestration,
 } from '../../core/background-orchestrator.js';
 import { loadAgentsManifest } from './loader.js';
-import { holdWhilePrompting } from '../../core/providers/command-consent.js';
+import { holdWhilePrompting, stripTerminalEscapes } from '../../core/providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -230,7 +230,7 @@ export async function teamOrchestrateCommand(
 
       if (options.live && message.type === 'text') {
         // Live streaming mode. Held while the consent question is on screen.
-        holdWhilePrompting(() => process.stdout.write(chalk.gray(`[${source}] `) + message.content));
+        holdWhilePrompting(() => process.stdout.write(chalk.gray(`[${source}] `) + stripTerminalEscapes(message.content)));
       }
     },
     onAgentStart: (agent, subtask, model) => {

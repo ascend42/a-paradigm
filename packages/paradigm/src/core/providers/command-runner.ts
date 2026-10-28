@@ -8,28 +8,43 @@
  *   Every live group is killed when the CLI exits or gets SIGINT, SIGTERM or
  *   SIGHUP (a detached group no longer receives the terminal's Ctrl+C itself).
  * - No stdin: a command can't read the terminal, or the consent answer.
+ *
+ * Limits: env cleaning is defense in depth, not containment; a command that is
+ * allowed to run can still read files such as ~/.netrc or a cloud CLI's
+ * credentials. On POSIX a command can leave its process group with `setsid`
+ * (or a double fork plus setsid), and such a process survives the group kill.
+ * On Windows the command's process tree is killed with `taskkill /T /F`.
  */
 
-import { spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 
 /**
- * Environment variables removed before a command runs. A name is removed when
- * it matches any of these (case-insensitive):
- *  - contains TOKEN, SECRET, PASSWORD, PASSWD, CREDENTIAL, API_KEY,
- *    ACCESS_KEY, PRIVATE_KEY, AUTHTOKEN or SESSION_KEY
- *  - ends with _KEY, _AUTH or _PAT
+ * Environment variables removed before a command runs (defense in depth, not
+ * containment). A name is removed when it matches any of these
+ * (case-insensitive):
+ *  - contains TOKEN, SECRET, PASSWORD, PASSWD, CREDENTIAL, CREDS, COOKIE,
+ *    JWT, API_KEY, ACCESS_KEY, PRIVATE_KEY, AUTHTOKEN or SESSION_KEY
+ *  - ends with _KEY, _AUTH, _PAT, _PASS, _PW, _PWD or _DSN (PWD and OLDPWD
+ *    have no underscore before PWD and are kept)
  *  - starts with AWS_, AZURE_, GCP_, GCLOUD_, CLOUDSDK_, GOOGLE_APPLICATION_,
- *    ANTHROPIC_, OPENAI_, NPM_CONFIG__AUTH or NPM_CONFIG_//
+ *    ANTHROPIC_, OPENAI_, TF_VAR_, GIT_CONFIG_KEY_, GIT_CONFIG_VALUE_,
+ *    NPM_CONFIG__AUTH or NPM_CONFIG_//
  *  - is exactly GH_TOKEN, GITHUB_TOKEN, NPM_TOKEN, NODE_AUTH_TOKEN,
- *    SSH_AUTH_SOCK, KUBECONFIG, DOCKER_AUTH_CONFIG or VAULT_ADDR
- * PATH, HOME, LANG, TERM, PWD and the rest are kept.
+ *    SSH_AUTH_SOCK, KUBECONFIG, DOCKER_AUTH_CONFIG, DOCKER_CONFIG, VAULT_ADDR,
+ *    GIT_CONFIG_COUNT, GIT_ASKPASS, SSH_ASKPASS or NETRC
+ * A variable is also removed when its VALUE holds a URL with a password
+ * (scheme://user:password@host). PATH, HOME, LANG, TERM, PWD and the rest are
+ * kept.
  */
 export const SECRET_ENV_PATTERNS: RegExp[] = [
-  /TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|API_KEY|ACCESS_KEY|PRIVATE_KEY|AUTHTOKEN|SESSION_KEY/i,
-  /(_KEY|_AUTH|_PAT)$/i,
-  /^(AWS_|AZURE_|GCP_|GCLOUD_|CLOUDSDK_|GOOGLE_APPLICATION_|ANTHROPIC_|OPENAI_|NPM_CONFIG__AUTH|NPM_CONFIG_\/\/)/i,
-  /^(GH_TOKEN|GITHUB_TOKEN|NPM_TOKEN|NODE_AUTH_TOKEN|SSH_AUTH_SOCK|KUBECONFIG|DOCKER_AUTH_CONFIG|VAULT_ADDR)$/i,
+  /TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|CREDS|COOKIE|JWT|API_KEY|ACCESS_KEY|PRIVATE_KEY|AUTHTOKEN|SESSION_KEY/i,
+  /(_KEY|_AUTH|_PAT|_PASS|_PW|_PWD|_DSN)$/i,
+  /^(AWS_|AZURE_|GCP_|GCLOUD_|CLOUDSDK_|GOOGLE_APPLICATION_|ANTHROPIC_|OPENAI_|TF_VAR_|GIT_CONFIG_KEY_|GIT_CONFIG_VALUE_|NPM_CONFIG__AUTH|NPM_CONFIG_\/\/)/i,
+  /^(GH_TOKEN|GITHUB_TOKEN|NPM_TOKEN|NODE_AUTH_TOKEN|SSH_AUTH_SOCK|KUBECONFIG|DOCKER_AUTH_CONFIG|DOCKER_CONFIG|VAULT_ADDR|GIT_CONFIG_COUNT|GIT_ASKPASS|SSH_ASKPASS|NETRC)$/i,
 ];
+
+/** A value carrying credentials in a URL: scheme://user:password@host. */
+export const CREDENTIAL_URL = /:\/\/[^/\s:@]+:[^/\s@]+@/;
 
 export function isSecretEnvName(name: string): boolean {
   return SECRET_ENV_PATTERNS.some((re) => re.test(name));
@@ -38,7 +53,9 @@ export function isSecretEnvName(name: string): boolean {
 export function cleanCommandEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(env)) {
-    if (!isSecretEnvName(k)) out[k] = v;
+    if (isSecretEnvName(k)) continue;
+    if (typeof v === 'string' && CREDENTIAL_URL.test(v)) continue;
+    out[k] = v;
   }
   return out;
 }
@@ -114,7 +131,11 @@ export function runShellCommand(
     const killGroup = (signal: NodeJS.Signals): void => {
       try {
         if (POSIX && pid) process.kill(-pid, signal);
-        else child.kill(signal);
+        else if (pid) {
+          // Windows has no process groups: kill the whole tree. Synchronous so
+          // it also works from the process 'exit' hook.
+          execFileSync('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
+        } else child.kill(signal);
       } catch {
         // Already gone.
       }

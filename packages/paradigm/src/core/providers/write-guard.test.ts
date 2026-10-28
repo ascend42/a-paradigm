@@ -63,9 +63,10 @@ describe('write deny-list', () => {
     ]) {
       expect(refused(p), p).toBe(true);
     }
-    // Root-only rules don't reach into ordinary subfolders.
+    // CI rules are root-only; editor, hook and env files count at any depth.
     expect(refused('docs/Jenkinsfile')).toBe(false);
-    expect(refused('src/.envrc')).toBe(false);
+    expect(refused('docs/.github/workflows/x.yml')).toBe(false);
+    expect(refused('src/.envrc')).toBe(true);
   });
 
   it('refuses a target that is a symlink, a hard link, or reached through a symlinked folder', () => {

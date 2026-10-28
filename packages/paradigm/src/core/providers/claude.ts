@@ -23,7 +23,7 @@ import {
 } from '../agent-provider.js';
 import { AgentDefinition } from '../../commands/team/types.js';
 import * as path from 'path';
-import { CommandGate, CommandGateDeps, userHomeDir } from './command-consent.js';
+import { CommandGate, CommandGateDeps, userConfigPath, userHomeDir } from './command-consent.js';
 import { ToolContext, commandLogPathFor, executeTool, toolDefinitions } from './claude-tools.js';
 import * as fs from 'fs';
 
@@ -117,6 +117,20 @@ export function unsafeRunRoot(workingDirectory: string, home: string): string | 
   return null;
 }
 
+/**
+ * Absolute paths write_file never touches: ~/.paradigm, ~/.claude, the command
+ * log, and the consent config's real location (it may be a symlink elsewhere).
+ */
+export function deniedWritesFor(home: string, commandLogPath: string, configPath?: string): string[] {
+  const denied = [path.join(home, '.paradigm'), path.join(home, '.claude'), commandLogPath];
+  try {
+    denied.push(fs.realpathSync.native(configPath ?? userConfigPath(home)));
+  } catch {
+    // No config yet.
+  }
+  return denied;
+}
+
 // ============================================================================
 // Claude Provider
 // ============================================================================
@@ -195,7 +209,7 @@ export class ClaudeAgentProvider implements AgentProvider {
       agent: agent.name,
       timeout: options.timeout,
       mcpServerPath: options.mcpServerPath,
-      deniedWrites: [path.join(home, '.paradigm'), path.join(home, '.claude'), commandLogPath],
+      deniedWrites: deniedWritesFor(home, commandLogPath, this.consentDeps.configPath),
       reviewWrites: new Set<string>(),
     };
 

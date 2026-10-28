@@ -110,12 +110,17 @@ export function isTrustedConfig(configPath: string, workingDirectory?: string): 
     const root = realOrNull(workingDirectory);
     if (root && within(root, real)) return false;
   }
-  try {
-    const st = fs.statSync(real);
-    if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return false;
-    if (process.platform !== 'win32' && (st.mode & 0o022) !== 0) return false;
-  } catch {
-    return false;
+  // The file, and the folder holding it (~/.paradigm, and the target's folder
+  // if the file is a symlink): someone else able to write either could
+  // replace the file.
+  for (const p of new Set([real, path.dirname(configPath), path.dirname(real)])) {
+    try {
+      const st = fs.statSync(p);
+      if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return false;
+      if (process.platform !== 'win32' && (st.mode & 0o022) !== 0) return false;
+    } catch {
+      return false;
+    }
   }
   return true;
 }
@@ -145,8 +150,21 @@ export function writeAllowCommandsSetting(
   configPath: string = userConfigPath(),
   workingDirectory?: string,
 ): void {
-  const dir = path.dirname(configPath);
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  // A symlinked config is updated at its target, not replaced by a file.
+  let target = configPath;
+  let isLink = false;
+  try {
+    isLink = fs.lstatSync(configPath).isSymbolicLink();
+  } catch {
+    // Not there yet.
+  }
+  if (isLink) {
+    const resolved = realOrNull(configPath);
+    if (!resolved) throw new Error(`consent config ${configPath} is a dangling symlink`);
+    target = resolved;
+  }
+  const dir = path.dirname(target);
   if (workingDirectory) {
     const root = realOrNull(workingDirectory);
     const realDir = realOrNull(dir);
@@ -154,7 +172,7 @@ export function writeAllowCommandsSetting(
       throw new Error(`refusing to save consent inside the working directory (${realDir})`);
     }
   }
-  const config = fs.existsSync(configPath) ? readYaml(configPath) : {};
+  const config = fs.existsSync(target) ? readYaml(target) : {};
   const existing = config['agent-provider'];
   const section = existing && typeof existing === 'object' ? (existing as Record<string, unknown>) : {};
   section['allow-commands'] = value;
@@ -162,7 +180,7 @@ export function writeAllowCommandsSetting(
   const tmp = path.join(dir, `.config.yaml.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
   try {
     fs.writeFileSync(tmp, yaml.dump(config, { lineWidth: -1, noRefs: true }), { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
-    fs.renameSync(tmp, configPath);
+    fs.renameSync(tmp, target);
   } catch (error) {
     fs.rmSync(tmp, { force: true });
     throw error;
@@ -198,6 +216,26 @@ export function escapeForTerminal(text: string, max = MAX_PROMPT_TEXT): string {
     (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
   );
   return cut ? `${shown} ... (${chars.length - max} more characters not shown)` : shown;
+}
+
+/**
+ * Agent text made safe to stream to the terminal: CSI sequences (cursor
+ * moves, screen clears, colours), OSC sequences (window titles, hyperlinks,
+ * clipboard writes), other escape sequences, lone ESC, C1 controls, other C0
+ * controls and DEL are removed. Newlines, tabs and carriage returns are kept.
+ */
+export function stripTerminalEscapes(text: string): string {
+  return String(text)
+    .replace(/\u001b\][\s\S]*?(?:\u0007|\u001b\\|$)/g, '')
+    .replace(/\u009d[\s\S]*?(?:\u0007|\u009c|$)/g, '')
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]?/g, '')
+    .replace(/\u009b[0-?]*[ -/]*[@-~]?/g, '')
+    .replace(/\u001b[PX^_][\s\S]*?(?:\u001b\\|$)/g, '')
+    .replace(/\u001b[ -/]*[0-~]?/g, '')
+    .replace(/[\u0080-\u009f]/g, '')
+    // Other C0 controls (bell, backspace, ...) and DEL; a sequence split across
+    // two streamed chunks leaves at most harmless text behind.
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
 }
 
 // While a consent question is open, agent output to the terminal is held here
