@@ -5,7 +5,9 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [8.0.5] — 2026-10-28
+
+**Agents run through the Anthropic API ask before running commands, and stay in the project.** With `ANTHROPIC_API_KEY` set, the agents `paradigm team spawn`, `paradigm team orchestrate` and background orchestrations start could run any shell command without asking, and read or write files anywhere on your disk. Now `run_command` asks you once and remembers your answer for your user account only, and file tools are confined to the run's working directory. Files that would run commands later are refused. If you use Paradigm agents with an API key, upgrade. Gnomon is unchanged at 8.0.2.
 
 ### Security
 - **Agents run through the Anthropic API ask before running shell commands, and their file tools stay in the project** (`#claude-provider`, `#command-consent`, `^command-execution-consent`; found by Aegis; affects 8.0.4 and earlier). When `ANTHROPIC_API_KEY` is set, `paradigm team spawn`, `paradigm team orchestrate` and background orchestrations use the API provider, which gave the model a `run_command` tool that ran any shell command with no approval, in any folder it named. Its `read_file` and `write_file` accepted absolute paths, so it could read `~/.ssh` or edit your shell startup files. What the model asks for can be steered by the task text, by repo files it reads and by the repo's agent definitions.
