@@ -325,7 +325,8 @@ export function validateBrokeredArgs(schema: Record<string, unknown>, args: unkn
   return check(schema, args, 'arguments', 0);
 }
 
-const badText = (t: string): string | null => (FORBIDDEN_CHARS.test(t) ? 'holds a control, format, private-use, unassigned or ignorable character' : t.normalize('NFC') !== t ? 'is not in Unicode NFC' : null);
+/** A string the kernel refuses in model- or human-written arguments (also the "/" skill args check, C6'a2-2), or null. */
+export const badText = (t: string): string | null => (FORBIDDEN_CHARS.test(t) ? 'holds a control, format, private-use, unassigned or ignorable character' : t.normalize('NFC') !== t ? 'is not in Unicode NFC' : null);
 
 function check(schema: unknown, v: unknown, at: string, depth: number): string | null {
   if (depth > ARG_LIMITS.depth) return `${at} is nested too deeply`;

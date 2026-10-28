@@ -4,7 +4,7 @@
  * and is skipped in manual mode. Pure tests (no POSIX fixtures).
  */
 import { describe, expect, it } from 'vitest';
-import { ALLOW_NPM_TEST_PREFIX, BUILD_TOOL_PREFIX_ALLOW, BUILD_TOOLS, GIT_SUBCOMMAND_ALLOW, gitPrefixOptBad, prefixMatchRefusal, prefixRefusal, shownPrefixWords } from '../src/kernel/supervisor/prefix-policy.js';
+import { ALLOW_NPM_TEST_PREFIX, BUILD_TOOL_PREFIX_ALLOW, BUILD_TOOLS, GIT_SUBCOMMAND_ALLOW, gitPrefixOptBad, normalArgv0, prefixMatchRefusal, prefixRefusal, shownPrefixWords } from '../src/kernel/supervisor/prefix-policy.js';
 import { gateClassPathRule } from '../src/kernel/manifest/layers.js';
 import { inputHash } from '../src/kernel/supervisor/permission.js';
 import { RuleBook, type RuleRow } from '../src/kernel/supervisor/rules.js';
@@ -135,9 +135,11 @@ describe('#prefix-policy match time: git options, location (M3), manual mode (M2
   it('a prefix-ruled argument never names a gate-class path (.git/** needs a card)', () => {
     expect(gateClassPathRule('.git/config')).not.toBeNull();
     expect(gateClassPathRule('.git/hooks/pre-commit')).not.toBeNull();
-    const cp = book(rows(card(34), ['cp', 'a.txt'], 'cp a.txt b.txt'));
-    expect(m(cp, 'cp a.txt b.txt')).not.toBeNull();
-    for (const c of ['cp a.txt .git/config', `cp a.txt ${ROOT}/.git/hooks/pre-commit`, 'cp a.txt package.json', 'cp a.txt .claude/settings.json', 'cp a.txt sub/.git/config', 'cp a.txt --target=.git']) expect(m(cp, c), c).toBeNull();
+    // Aegis C6'a2-2 R2: cp is destructive now (never a prefix rule); the gate-class check is shown with diff
+    expect(book(rows(card(35), ['cp', 'a.txt'], 'cp a.txt b.txt')).list()).toEqual([]);
+    const df = book(rows(card(34), ['diff', 'a.txt'], 'diff a.txt b.txt'));
+    expect(m(df, 'diff a.txt b.txt')).not.toBeNull();
+    for (const c of ['diff a.txt .git/config', `diff a.txt ${ROOT}/.git/hooks/pre-commit`, 'diff a.txt package.json', 'diff a.txt .claude/settings.json', 'diff a.txt sub/.git/config', 'diff a.txt --target=.git']) expect(m(df, c), c).toBeNull();
     expect(m(b, 'git log -- .git/config')).toBeNull();
   });
 
@@ -175,6 +177,24 @@ describe('#prefix-policy M1: display', () => {
   it("each word quoted, non-ASCII escaped: 'git log' x is not git log x, and a homoglyph is visible", () => {
     expect(shownPrefixWords(['git log', 'x'])).toBe("'git log' 'x'");
     expect(shownPrefixWords(['git', 'log', 'x'])).toBe("'git' 'log' 'x'");
+    // G-BRK-09 (Aegis C6'a2-2 M1): a destructive argv0, in any case, with .exe, mkfs.* — refused at prefix and match
+    // R1: the case- and .exe-normalised argv0 drives every check (interpreter, python, git, build tool)
+    for (const v of ['rm', 'RM', 'rm.exe', 'rm.cmd', 'RM.BAT', 'rm.COM', 'rm.', 'rm ', 'rm. .', 'rm.exe.', 'rm.bat .']) expect(normalArgv0(v), JSON.stringify(v)).toBe('rm');
+    expect(normalArgv0('mkfs.ext4')).toBe('mkfs.ext4');
+    for (const a0 of ['rm.cmd', 'RM.BAT', 'rm.', 'bash.cmd', 'Env.com']) expect(prefixRefusal([a0, 'x']), a0).not.toBeNull();
+    expect(prefixRefusal(['Env', 'rm'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['SUDO', 'rm'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['Bash', 'x'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['Python3.EXE', 'x'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['Git', 'clean'])).toMatch(/never a prefix rule/);
+    expect(prefixRefusal(['GIT', 'log', 'x'])).toMatch(/exactly two words/);
+    expect(prefixRefusal(['NPM', 'test'])).toBe(prefixRefusal(['npm', 'test']));
+    expect(prefixRefusal(['NPM', 'ls'])).toMatch(/project config/);
+    expect(prefixMatchRefusal(['Git', 'log', '--output=x'], ['Git', 'log'], ['/work/repo'])).not.toBeNull();
+    for (const a0 of ['rm', 'RM', 'Rm.EXE', 'rmdir', 'unlink', 'mv', 'dd', 'truncate', 'shred', 'chmod', 'chown', 'chgrp', 'rsync', 'ln', 'kill', 'mkfs.ext4', 'newfs_apfs', 'cp', 'tee', 'tar', 'unzip', 'ditto', 'patch', 'split', 'scp', 'curl', 'Wget']) {
+      expect(prefixRefusal([a0, 'build/x']), a0).toMatch(/delete or overwrite/);
+      expect(prefixMatchRefusal([a0, 'build/x', '-rf', 'src'], [a0, 'build/x'], ['/work/repo']), a0).not.toBeNull();
+    }
     expect(shownPrefixWords(['gіt', 'log'])).toBe("'g\\u0456t' 'log'");
     expect(shownPrefixWords(['a‮b', 'c'])).toBe("'a\\u202eb' 'c'");
   });

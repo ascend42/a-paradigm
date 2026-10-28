@@ -433,14 +433,17 @@ function realDir(p: string): boolean {
 /**
  * Build the session's repo context: the memory dirs and the generated plugin under `outDir` (wiped first).
  * Reads only `<cwd>/.claude/{skills,agents,commands}` and the memory files' presence; writes only under outDir.
+ * `skillsOnly` (slice C6'a2-2, a local session's "/" skills): no memory walk and no agents or commands, only the
+ * sanitized skills copy the kernel later builds a skill's template from (never the live file).
  */
-export function buildRepoContext(i: { cwd: string; userHome: string; outDir: string; maxSubtreeDirs?: number }): RepoContext {
+export function buildRepoContext(i: { cwd: string; userHome: string; outDir: string; maxSubtreeDirs?: number; skillsOnly?: boolean }): RepoContext {
   const cwd = realpathLoose(i.cwd);
   const { chain, top } = memoryChainOf(cwd, i.userHome);
   const ctx: RepoContext = { pluginDir: null, memoryDirs: [], importTargets: [], memoryRefused: [], skills: [], agents: [], commands: [], refused: [], dropped: [], frontmatterHooks: [] };
   // the outermost memory dir is walked once; a nested dir reuses that walk when it succeeded (else walks its own)
   let outer: { dir: string; walk: ReturnType<typeof memoryFilesUnder> } | null = null;
-  for (const d of chain.filter(hasMemory).reverse()) {
+  // slice C6'a2-2: a local session stages its skills only (no memory walk, no agents or commands: it loads neither)
+  for (const d of i.skillsOnly ? [] : chain.filter(hasMemory).reverse()) {
     if (outer === null) outer = { dir: d, walk: memoryFilesUnder(d, i.maxSubtreeDirs, top) };
     const reuse = outer.walk.ok && isUnder(outer.dir, d) ? outer.walk : undefined;
     const a = d === outer.dir && !outer.walk.ok ? outer.walk : auditMemoryDir(d, top, i.userHome, i.maxSubtreeDirs, reuse);
@@ -543,7 +546,7 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
   }
   // agents: top-level *.md
   const agentsDir = path.join(claudeDir, 'agents');
-  if (realDir(agentsDir)) {
+  if (!i.skillsOnly && realDir(agentsDir)) {
     const rd = readDir(agentsDir);
     if (!rd.ok) ctx.refused.push({ path: rel('agents'), why: rd.why });
     for (const e of rd.ok ? rd.ents : []) {
@@ -566,7 +569,7 @@ export function buildRepoContext(i: { cwd: string; userHome: string; outDir: str
   }
   // commands: *.md, nested dirs kept (Claude namespaces them)
   const commandsDir = path.join(claudeDir, 'commands');
-  if (realDir(commandsDir)) {
+  if (!i.skillsOnly && realDir(commandsDir)) {
     const tree = listTree(commandsDir);
     if (!tree.ok) ctx.refused.push({ path: rel('commands'), why: tree.why });
     else {

@@ -139,6 +139,8 @@ import { LOOP_ORIGIN, LOOP_SESSION_ENV_DROPPED, loopActTools } from './loop-clam
 import { liveScratch, type Scratch } from '../git/scratch.js';
 import { answerMemoryTool, MEMORY_FILE, MEMORY_TOOL_NAMES, memoryOwnerOf, memoryRowsOf, MAX_TOOL_PINS, memorySlotTokens, TOOL_PIN_NAME_RE, WorkingMemory, type MemoryChange } from '../local/working-memory.js';
 import { loopActLaunchPlan, type LoopActLaunchInput } from '../sandbox/loop-act.js';
+import { buildRepoContext } from './repo-context.js';
+import { listSkills, skillArgsRefusal, SKILL_CONTEXT_SHARE, skillRunTemplate, stagedSkillForRun, type SkillListing, type StagedSkills } from './skill-run.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 const EVENT_LINE_CAP = 64 * 1024;
@@ -364,6 +366,8 @@ interface LocalSession {
    * session — through compaction — and ends only with the session (a new session starts clean).
    */
   tainted?: boolean;
+  /** slice C6'a2-2: the repo skills the kernel staged (sanitized) for this attended session at open (a loop session: none) */
+  skills?: StagedSkills;
 }
 
 /** Slice C6'a2-1: one "/" result as the kernel holds it (never logged: the row is hash-only). */
@@ -486,7 +490,16 @@ export const LOCAL_SESSION_TOOLS_START_REQUEST = 'request.session.tools.start' a
 export const LOCAL_SESSION_TOOLS_RUN_REQUEST = 'request.session.tools.run' as const;
 export const LOCAL_SESSION_TOOLS_RESULT_REQUEST = 'request.session.tools.result' as const;
 export const LOCAL_SESSION_TOOLS_POLICY_REQUEST = 'request.session.tools.policy' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST, LOCAL_SESSION_TOOLS_START_REQUEST, LOCAL_SESSION_TOOLS_RUN_REQUEST, LOCAL_SESSION_TOOLS_RESULT_REQUEST, LOCAL_SESSION_TOOLS_POLICY_REQUEST]);
+/**
+ * Slice C6'a2-2 ("/" skills, TD-2026-10-28-956 / -969; kernel/supervisor/skill-run.ts): the human lists the repo skills
+ * staged for a running session ({hsid}) and runs one ({hsid, name, args}). Dispatcher-only: never rows of their own
+ * (each run logs one skill.run row). The supervisor serves a Claude session's; the lane serves a local session's.
+ */
+export const SESSION_SKILLS_LIST_REQUEST = 'request.session.skills.list' as const;
+export const SESSION_SKILL_RUN_REQUEST = 'request.session.skill.run' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST, LOCAL_SESSION_TOOLS_START_REQUEST, LOCAL_SESSION_TOOLS_RUN_REQUEST, LOCAL_SESSION_TOOLS_RESULT_REQUEST, LOCAL_SESSION_TOOLS_POLICY_REQUEST, SESSION_SKILLS_LIST_REQUEST, SESSION_SKILL_RUN_REQUEST]);
+/** Slice C6'a2-2: a skill run's reply status. */
+export type SkillRunStatus = 'ran' | 'refused';
 /** Slice C6'a2-1: at most this many framed "/" results wait for the human's next turn (the oldest goes first). */
 export const PENDING_SEND_MAX = 4;
 /** Slice C6'a2-1: a carded "/" run's result is held this long for request.session.tools.result (read once). */
@@ -1337,6 +1350,9 @@ export class LocalLane {
         }
       }
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      // slice C6'a2-2: an attended session's repo skills, staged (sanitized, skills only) in its own kernel-owned dir;
+      // "/" skills are listed and templated from THIS copy, never the live file
+      const skills = loop ? undefined : this.#stageSkills(wtReal ?? cwdReal, path.join(dir, 'context'));
       const configPath = path.join(dir, 'local.yaml');
       // slice C4'a (#local-tool-tier): an attended session's tier is fixed HERE (min(human ?? skill, window); pending =
       // provisional min(1, window)); its surface is the tier's, which the endpoint's configured surface can only lower
@@ -1391,7 +1407,7 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, toolsSetSeq: 0, ...(tierState ? { tier: tierState } : {}), ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, toolsSetSeq: 0, ...(tierState ? { tier: tierState } : {}), ...(skills ? { skills } : {}), ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       // Aegis H2: the servers get their own policy and an env without any kernel credential or handle
       if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, check: checkInput, servers: closure.servers, refused: closure.refused, failed: [], ...(paradigmPolicy && stateMade ? { firstParty: { launch: { ...launch, policy: paradigmPolicy }, stateDir: stateMade, nodePin: { node: pin.node, nodeSha256: pin.nodeSha256 } } } : {}) };
       else if (closure.refused.length) s.mcpLaunch = undefined;
@@ -2194,6 +2210,67 @@ export class LocalLane {
     return s.tainted === true;
   }
 
+  /**
+   * Slice C6'a2-2: stage an attended session's repo skills (buildRepoContext, skills only) under its own session dir.
+   * A scan that throws stages nothing (no skill is listed or runnable): never a failed open.
+   */
+  #stageSkills(cwd: string, outDir: string): StagedSkills {
+    try {
+      const ctx = buildRepoContext({ cwd, userHome: this.#userHome(), outDir, skillsOnly: true });
+      return { dir: ctx.pluginDir, ctx: { skills: ctx.skills, refused: ctx.refused } };
+    } catch {
+      return { dir: null, ctx: { skills: [], refused: [] } };
+    }
+  }
+
+  /** Slice C6'a2-2: request.session.skills.list — the session's staged skills (refused and not user-invocable: loaded false). */
+  #skillList(s: LocalSession): SkillListing[] {
+    return s.skills ? listSkills(s.skills) : [];
+  }
+
+  /**
+   * Slice C6'a2-2: request.session.skill.run{hsid, name, args} — the human runs one listed repo skill. `name` must be a
+   * loaded name of skills.list; the args pass skillArgsRefusal. The template is built from the STAGED SKILL.md (body only,
+   * `$ARGUMENTS` replaced once, the kernel's first line); a template over SKILL_CONTEXT_SHARE of the context target is
+   * refused over-budget (its tokens and the limit). A run TAINTS the session (founder), then goes as the human's next
+   * turn (a follow_up while one is in flight) whose tool calls are all the model's (cards and rules as normal). One
+   * hash-only skill.run row per listed skill run or refused; a name not listed writes none.
+   */
+  async #skillRun(principal: string, s: LocalSession, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const kind = SESSION_SKILL_RUN_REQUEST;
+    if (typeof p.name !== 'string' || p.name.length === 0 || p.name.length > 64) throw refused('BAD_REQUEST', `${kind}: name must be a listed skill name`, { reason: 'bad-params', field: 'name' });
+    const args = p.args === undefined ? '' : p.args;
+    const name = p.name;
+    // Aegis L2: ONE read of the staged copy, the listing checks re-made on that text
+    const staged = stagedSkillForRun(s.skills, name);
+    if (!staged) return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'not-listed', via: 'template', content: `No runnable skill ${name.slice(0, 64)} in this session.` };
+    const skillHash = `sha256:${staged.sha}`;
+    const argsHash = sha(typeof args === 'string' ? args : JSON.stringify(args) ?? '');
+    const row = (decision: 'ran' | 'refused' | 'over-budget', tokens?: number) => this.#o.log('skill.run', { hsid: s.hsid, name, skillHash, argsHash, via: 'template', decision, ...(tokens !== undefined ? { tokens } : {}) }, { session: s.hsid }).catch(() => undefined);
+    const bad = skillArgsRefusal(args);
+    if (bad !== null) {
+      await row('refused');
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', via: 'template', content: `${bad}.` };
+    }
+    // Aegis L1: the substituted template is re-checked for shell preprocessing
+    const { template, refusal } = skillRunTemplate({ name, staged, args: args as string });
+    if (refusal !== null) {
+      await row('refused');
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', via: 'template', content: `${refusal}.` };
+    }
+    const tokens = sendTokens(template);
+    const limit = Math.floor(s.context.target * SKILL_CONTEXT_SHARE);
+    if (tokens > limit) {
+      await row('over-budget', tokens);
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'over-budget', via: 'template', tokens, limit, content: `${name} is about ${tokens} tokens, over this session's skill limit of ${limit}.` };
+    }
+    // Aegis N1: tainted FIRST, before any await on the send path
+    s.tainted = true;
+    const sent = await this.#sendTurn(principal, { hsid: s.hsid, text: template, origin: 'kernel' }, { skill: true });
+    await row('ran', tokens);
+    return { hsid: s.hsid, status: 'ran' satisfies SkillRunStatus, via: 'template', turn: sent.turn, tokens, limit, skillHash };
+  }
+
   /** Slice C6'a2-1: hold a "/" run's result (bounded, expired ones dropped first). */
   #holdRun(s: LocalSession, runId: string, h: HeldRun): HeldRun {
     const runs = (s.runs ??= new Map());
@@ -2455,7 +2532,7 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_TOOLS_RUN_REQUEST ? ['hsid', 'id', 'args', 'form'] : kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST ? ['hsid', 'runId'] : kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST ? ['hsid', 'id', 'policy'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_TOOLS_RUN_REQUEST ? ['hsid', 'id', 'args', 'form'] : kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST ? ['hsid', 'runId'] : kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST ? ['hsid', 'id', 'policy'] : kind === SESSION_SKILL_RUN_REQUEST ? ['hsid', 'name', 'args'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
@@ -2500,6 +2577,9 @@ export class LocalLane {
     if (kind === LOCAL_SESSION_TOOLS_RUN_REQUEST) return this.#toolsRun(asker.principal, s, p);
     if (kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST) return this.#toolsResult(asker.principal, s, p);
     if (kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST) return this.#toolsPolicy(asker, s, p);
+    // slice C6'a2-2: "/" skills (the human's own; a loop session is refused above)
+    if (kind === SESSION_SKILLS_LIST_REQUEST) return { hsid: s.hsid, skills: this.#skillList(s) };
+    if (kind === SESSION_SKILL_RUN_REQUEST) return this.#skillRun(asker.principal, s, p);
     // slice C4'a: the human's two-phase tool-tier change
     if (kind === LOCAL_SESSION_TIER_REQUEST) return this.#tierRequest(asker.principal, s, p);
     if (kind === LOCAL_SESSION_COMPACT_REQUEST) {
@@ -2789,13 +2869,24 @@ export class LocalLane {
   }
 
   async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution; origin?: 'kernel'; voiceOrigin?: { sentBy: VoiceSentBy } }): Promise<{ turn: string; steered?: boolean }> {
+    return this.#sendTurn(principal, p);
+  }
+
+  /**
+   * The one send path. `o.skill` (slice C6'a2-2, kernel-only: never reachable from a client's send): the text is the
+   * kernel's template of a repo skill the human ran from "/" — logged origin kernel, its goal is DATA (tool:skill), and
+   * the SESSION is tainted before the line is written (founder: skill text taints the session).
+   */
+  async #sendTurn(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution; origin?: 'kernel'; voiceOrigin?: { sentBy: VoiceSentBy } }, o: { skill?: boolean } = {}): Promise<{ turn: string; steered?: boolean }> {
     const s = this.#get(principal, p.hsid);
+    // slice C6'a2-2 (founder; Aegis N1): a skill template taints the session before ANY await of the send path
+    if (o.skill) s.tainted = true;
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
     // session.send{steer} (slice 2, §11.5): mid-turn text the child reads at its next step. It joins the IN-FLIGHT
     // turn, whose permit already pays for it (law 1: no new turn.sent, so no new permit); a permitId with steer is
     // refused. With no turn in flight there is nothing to steer: it is an ordinary send (a new permitted turn).
-    if (p.steer === true && s.turnPermits.length > 0) {
+    if (p.steer === true && s.turnPermits.length > 0 && !o.skill) {
       if (p.permitId !== undefined) throw refused('BAD_REQUEST', 'a steer joins the in-flight turn and takes no permit', { reason: 'bad-params' });
       // round 2 (M2): the in-flight turn's permit must still be live — an expired one pays for nothing
       const head = this.#o.fuse.permit(s.turnPermits[0]!);
@@ -2834,7 +2925,7 @@ export class LocalLane {
     // slice B2: the prompt is the goal (memory_set goes out BEFORE the prompt line); a follow_up's when its run starts
     // Aegis L8: a hand-typed turn or a verified voice send is the trusted goal; unverified voice is data
     // Aegis R1: a kernel-composed turn (a mod offer's title) is DATA (tool:offer), never the trusted goal
-    const untrusted: `tool:${string}` | undefined = p.origin === 'kernel' ? 'tool:offer' : p.voiceOrigin?.sentBy === 'unverified' || (p.source === 'voice' && p.voiceOrigin === undefined) ? 'tool:voice' : undefined;
+    const untrusted: `tool:${string}` | undefined = o.skill ? 'tool:skill' : p.origin === 'kernel' ? 'tool:offer' : p.voiceOrigin?.sentBy === 'unverified' || (p.source === 'voice' && p.voiceOrigin === undefined) ? 'tool:voice' : undefined;
     const goal = { text: p.text, ...(untrusted ? { untrusted } : {}) };
     if (!inFlight) {
       await this.#setGoal(s, goal);

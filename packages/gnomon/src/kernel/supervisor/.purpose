@@ -279,6 +279,19 @@ components:
       request.session.mcp.restart{hsid, server} (pin, trust and launchCheck
       re-checked, then the starts counter reset; one per server). Each MCP
       server start, failure and refusal is one session.mcp row.
+      SLICE C6'a2-2 ("/" skills, TD-2026-10-28-956 / -969; G-LCL-29;
+      skill-run.ts): supervisor.localSessionRequest serves
+      request.session.skills.list / request.session.skill.run for a CLAUDE
+      session itself (the lane serves a local session's): the human owner on
+      gui/device only, the skills of the session's P8-D97 staged plugin, the
+      same name and args checks; a run goes natively (/project:<name> <args>,
+      Claude expands the STAGED copy) only when SlashSkillsProbe says the
+      session's claude binary does so (a canary skill in a kernel scratch dir
+      under <home>/probes, never the user's repo; cached by the binary's
+      sha256 in probes/slash-skills.json; SupervisorOptions.slashProbe is the
+      runner, absent in the daemon today, so the template runs), else as the
+      kernel's template. One hash-only skill.run{via} row per listed run.
+      buildRepoContext gains skillsOnly (no memory walk, no agents/commands).
     path: src/kernel/supervisor/
     type: module
     tags: [gnomon, kernel, session, paradigm-8, m1.7]
@@ -288,6 +301,8 @@ components:
       - test/permission-session.test.ts
       - test/repo-context.test.ts
       - test/local-capabilities-lane.test.ts
+      - test/session-skills.test.ts
+      - test/skill-run.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
   voice-origin:
     description: >-
@@ -543,7 +558,10 @@ components:
       .pnpmfile and npm view --registry make every subcommand code or
       exfiltration; an entry needs a malicious-config falsifier;
       ALLOW_NPM_TEST_PREFIX default off); git exactly two words with a
-      read-ish subcommand. prefixMatchRefusal re-checks at match time:
+      read-ish subcommand; never a destructive argv0 (DESTRUCTIVE_ARGV0,
+      Aegis C6'a2-2 M1, G-BRK-09: rm, mv, dd, truncate, shred, chmod, chown,
+      rsync … any case, .exe dropped, mkfs.*), refused at offer, accept, fold
+      and match. prefixMatchRefusal re-checks at match time:
       gitPrefixOptBad models git's option parsing (a --name that prefixes any
       GIT_REFUSED_LONG option, so abbreviations like --outp/--ext-d/--open;
       any short bundle containing O c C p u; plus shell-readonly gitOptBad),

@@ -79,6 +79,20 @@ components:
       e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
       local CLI verb, the claude estimate on the card, attended/unattended
       local automations (law 5). #backend-adapter: the DRIVER half is src/adapters/local/ (runner.ts: localAdapter, LocalAdapter = core + SteerChannel + ToolBrokerChannel, LocalArgvInput, LocalUsageMeter.charge(ev); fixtures/<gnomon-local version>-turn.jsonl), called as `drv` by src/kernel/supervisor/local-session.ts; the kernel half is src/kernel/local/.
+      SLICE C6'a2-2 ("/" skills, TD-2026-10-28-956 / -969; G-LCL-29): an
+      attended session stages its repo skills at open (buildRepoContext
+      skillsOnly into <session dir>/context: sanitized, never the live file);
+      LocalLane.humanRequest serves request.session.skills.list{hsid} (refused,
+      user-invocable:false and unsupported names loaded:false with a why) and
+      request.session.skill.run{hsid, name, args} (src/kernel/supervisor/
+      skill-run.ts: a loaded listed name, args <= 4 KiB NFC badText-clean one
+      line without !` or ```!, the staged body under the kernel's first line
+      with $ARGUMENTS replaced once by split/join, over half the context target
+      refused over-budget with its tokens and the limit). A run TAINTS the
+      session before the template is written (founder: skill text taints the
+      session; G-LCL-27), goes as the human's turn (session.inject origin
+      kernel, its goal data tool:skill) and every tool call in it is the
+      model's. One hash-only skill.run row per listed run or refusal.
     driver-path: src/adapters/local/
     path: src/kernel/local/
     type: module
@@ -90,7 +104,9 @@ components:
       - test/local-config.test.ts
       - test/local-lane-spawn.test.ts
       - test/local-tool-broker.test.ts
-    oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
+      - test/local-skill-lane.test.ts
+      - test/skill-run.test.ts
+    oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c, G-LCL-29]
   local-tool-broker:
     description: >-
       #local-tool-broker (TD-2026-10-27-833 slices S1 + C1; T-2026-10-26-003):
