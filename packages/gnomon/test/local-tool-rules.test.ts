@@ -14,7 +14,7 @@ import { RefusedError, scopeDigest, TOOL_NAME, validateKindPayload } from '@a-co
 import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider, type StandingSeam } from '../src/kernel/broker/index.js';
 import { contentHashOf } from '../src/kernel/broker/card.js';
 import { composePermission } from '../src/kernel/supervisor/permission.js';
-import { McpListCache } from '../src/kernel/local/mcp-client.js';
+import { LISTINGS_KEPT, McpListCache } from '../src/kernel/local/mcp-client.js';
 import { bindingOf, toolsHashOf } from '../src/kernel/local/trust-book.js';
 import { rulesStatus } from '../src/kernel/socket/rules-apply.js';
 import { decisionMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
@@ -462,7 +462,7 @@ describe("C5'a3 K1: a brokered card carries a tool-scope node the contentHash co
   });
 });
 
-describe("C5'a3 K2: status.rules[].paused from the newest listing (display only)", () => {
+describe("C5'a3 K2: status.rules[].paused from every listing under the label (display only)", () => {
   const ID = 'user:matt:srv';
   const LAUNCH = 'sha256:' + 'c'.repeat(64);
   /** a cache holding one listing of `srv` (id ID) with these tools */
@@ -478,7 +478,7 @@ describe("C5'a3 K2: status.rules[].paused from the newest listing (display only)
     return { match: 'tool', tool: `mcp:srv/${tool}`, bindHash: toolBindHash(e, 'mutate', bindOf(tools)) };
   };
   const src = (cache: McpListCache, o: { trust?: string | null; on?: boolean | null } = {}): ToolRulePauseSource => ({
-    listed: (label) => cache.newestByLabel(label),
+    listed: (label) => cache.listingsByLabel(label),
     trust: () => (o.trust === null ? null : { binding: o.trust ?? bindOf(TOOLS) }),
     on: () => (o.on === undefined ? true : o.on),
   });
@@ -511,8 +511,8 @@ describe("C5'a3 K2: status.rules[].paused from the newest listing (display only)
 
   it('omitted when it cannot be known: never listed, tools no longer cached, not a tool rule, a non-mcp name', () => {
     expect(toolRulePaused(ruleFor(TOOLS), src(new McpListCache()))).toBeNull();
-    const l = cacheWith(TOOLS).newestByLabel('srv')!;
-    const evicted: ToolRulePauseSource = { listed: () => ({ ...l, tools: null }), trust: () => ({ binding: bindOf(TOOLS) }), on: () => true };
+    const l = cacheWith(TOOLS).listingsByLabel('srv')![0]!;
+    const evicted: ToolRulePauseSource = { listed: () => [{ ...l, tools: null }], trust: () => ({ binding: bindOf(TOOLS) }), on: () => true };
     expect(toolRulePaused({ ...ruleFor(TOOLS), bindHash: 'sha256:' + 'e'.repeat(64) }, evicted)).toBeNull();
     // unknown on-state: no server-off guess
     expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(TOOLS), { on: null }))).toBeNull();
@@ -520,11 +520,62 @@ describe("C5'a3 K2: status.rules[].paused from the newest listing (display only)
     expect(toolRulePaused({ match: 'tool', tool: 'Write', bindHash: ruleFor(TOOLS).bindHash }, src(cacheWith(TOOLS), { on: false }))).toBeNull();
   });
 
-  it('newestByLabel answers the newest listing under a label', () => {
+  it('listingsByLabel answers every listing under a label (ids and per-repo keys); a forgotten one makes it unknowable', () => {
     const c = cacheWith(TOOLS);
     c.set('k-newer', { tools: [TOOLS[1]!], annotations: null }, { id: 'project:/r:srv', label: 'srv', launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf([TOOLS[1]!]) }, T0 + 5);
-    expect(c.newestByLabel('srv')).toMatchObject({ id: 'project:/r:srv', tools: [TOOLS[1]] });
-    expect(c.newestByLabel('nope')).toBeNull();
+    c.set('k-repo2', { tools: TOOLS, annotations: null }, { id: ID, label: 'srv', launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf(TOOLS) }, T0 + 6);
+    expect(c.listingsByLabel('srv')!.map((l) => [l.id, l.key])).toEqual([[ID, `k-${ID}-${T0}`], ['project:/r:srv', 'k-newer'], [ID, 'k-repo2']]);
+    expect(c.listingsByLabel('nope')).toEqual([]);
+    for (let i = 0; i <= LISTINGS_KEPT; i++) c.set(`k-fill-${i}`, { tools: [], annotations: null }, { id: `user:matt:f${i}`, label: 'fill', launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf([]) }, T0 + 10 + i);
+    expect(c.listingsByLabel('srv')).toBeNull();
+    expect(toolRulePaused(ruleFor(TOOLS), { listed: (l) => c.listingsByLabel(l), trust: () => null, on: () => true })).toBeNull();
+  });
+
+  describe('Aegis L1: every listing under the label is judged', () => {
+    const ID2 = 'project:/other:srv';
+    const SCHEMA = [{ ...TOOLS[0]!, inputSchema: { type: 'object', properties: { t: { type: 'string' }, u: { type: 'number' } } } }, TOOLS[1]!];
+    const bindFor = (id: string, tools: Array<Record<string, unknown>>): string => bindingOf({ id, launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf(tools) });
+    const many = (ls: Array<{ id: string; key: string; tools: Array<Record<string, unknown>> }>): McpListCache => {
+      const c = new McpListCache();
+      ls.forEach((l, i) => c.set(l.key, { tools: l.tools, annotations: null }, { id: l.id, label: 'srv', launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf(l.tools) }, T0 + i));
+      return c;
+    };
+    const srcOf = (c: McpListCache, trust: Record<string, string | null>, on: Record<string, boolean> = {}): ToolRulePauseSource => ({
+      listed: (label) => c.listingsByLabel(label),
+      trust: (id) => (trust[id] ? { binding: trust[id]! } : null),
+      on: (id) => on[id] ?? true,
+    });
+
+    it('two ids share a label, one listing matches and one does not: no paused', () => {
+      const c = many([{ id: ID, key: 'a', tools: TOOLS }, { id: ID2, key: 'b', tools: SCHEMA }]);
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, { [ID]: bindOf(TOOLS), [ID2]: bindFor(ID2, SCHEMA) }))).toBeNull();
+      // the matching one listed FIRST (older) still counts
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, { [ID]: bindOf(TOOLS), [ID2]: null }))).toBeNull();
+    });
+
+    it('neither matches: paused with the reason every listing agrees on; mixed reasons or an unknown one: omitted', () => {
+      const c = many([{ id: ID, key: 'a', tools: SCHEMA }, { id: ID2, key: 'b', tools: SCHEMA }]);
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, { [ID]: bindFor(ID, SCHEMA), [ID2]: bindFor(ID2, SCHEMA) }))).toBe('changed');
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, {}))).toBe('untrusted');
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, {}, { [ID]: false, [ID2]: false }))).toBe('server-off');
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, { [ID]: bindFor(ID, SCHEMA) }))).toBeNull(); // changed + untrusted
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, {}, { [ID]: false }))).toBeNull(); // server-off + untrusted
+      const unknown: ToolRulePauseSource = { ...srcOf(c, {}), on: (id) => (id === ID ? null : true) };
+      expect(toolRulePaused(ruleFor(TOOLS), unknown)).toBeNull(); // untrusted + unknown
+    });
+
+    it('per-repo listings of one server: any repo whose listing matches leaves it unpaused', () => {
+      const c = many([{ id: ID, key: 'repo-a', tools: TOOLS }, { id: ID, key: 'repo-b', tools: SCHEMA }]);
+      // trusted at repo A's listing: A matches (B's binding is not the live one), so no paused
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, { [ID]: bindOf(TOOLS) }))).toBeNull();
+      // re-trusted at repo B's listing: A untrusted, B changed: mixed, omitted
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, { [ID]: bindOf(SCHEMA) }))).toBeNull();
+      // no trust: both untrusted
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(c, {}))).toBe('untrusted');
+      // both repos list the changed tools, re-trusted: both changed
+      const both = many([{ id: ID, key: 'repo-a', tools: SCHEMA }, { id: ID, key: 'repo-b', tools: SCHEMA }]);
+      expect(toolRulePaused(ruleFor(TOOLS), srcOf(both, { [ID]: bindOf(SCHEMA) }))).toBe('changed');
+    });
   });
 
   it('status.rules carries paused on tool rules only, omits it when null, and matching is unchanged', async () => {

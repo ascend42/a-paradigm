@@ -1545,7 +1545,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
           // 8.0:local-lane C5'a3: a tool rule's paused reason from the newest listing, the TrustBook and the enabled set
           // (read once per status; display only, matching never reads it)
           let on: Set<string> | null = null;
-          const src: ToolRulePauseSource = { listed: (label) => mcpListCache.newestByLabel(label), trust: (id) => mcpTrust.of(id), on: (id) => (on ??= mcpServers.enabledIds()).has(id) };
+          const src: ToolRulePauseSource = { listed: (label) => mcpListCache.listingsByLabel(label), trust: (id) => mcpTrust.of(id), on: (id) => (on ??= mcpServers.enabledIds()).has(id) };
           return rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName, skipped: rulesApply.lastSkipped(), paused: (r) => toolRulePaused(r, src) });
         },
       },

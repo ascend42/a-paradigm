@@ -408,8 +408,8 @@ export type ToolRulePause = 'untrusted' | 'changed' | 'server-off';
 
 /** What toolRulePaused reads: the daemon's McpListCache, TrustBook and #mcp-servers enabled set. */
 export interface ToolRulePauseSource {
-  /** the newest listing in this daemon run of the server with this label (McpListCache.newestByLabel) */
-  listed(label: string): (ListedIndex & { tools: Array<Record<string, unknown>> | null }) | null;
+  /** every listing in this daemon run under this label (McpListCache.listingsByLabel); null: not knowable */
+  listed(label: string): ReadonlyArray<ListedIndex & { tools: Array<Record<string, unknown>> | null }> | null;
   /** the server's live trust (McpTrust.of): its binding, or null when it is not trusted */
   trust(id: string): { binding: string } | null;
   /** the server is on now (#mcp-servers enabled); null: not known */
@@ -417,25 +417,35 @@ export interface ToolRulePauseSource {
 }
 
 /**
- * Slice C5'a3 (status.rules[].paused, display only: matching never reads it): why a tool rule would not match now,
- * from the bindHash of the newest listing of its server. server-off: the server is not on; untrusted: the server's
- * trust is not live for that listing (no TrustBook entry, or its binding is not the listing's); changed: no mutate
- * entry of the rule's tool in that listing has the rule's bindHash under the live binding. null: not paused, OR not
- * knowable (not a tool rule, the server never listed in this daemon run, its tools no longer cached): never a guess.
+ * Slice C5'a3 (status.rules[].paused, display only: matching never reads it): why a tool rule would not match now.
+ * Aegis L1: EVERY listing under the rule's label is judged (several ids sharing a label, the per-repo listings of one
+ * server), each as: server-off (the server is not on), untrusted (no TrustBook entry, or its binding is not the
+ * listing's), changed (no mutate entry of the rule's tool in that listing has the rule's bindHash under the live
+ * binding), match, or unknown (its on-state or its tools not known). A reason is reported only when EVERY listing
+ * gives that same reason; any match, any unknown, mixed reasons, no listing, or a label whose listings are not all
+ * known answer null (the field is omitted): never a guess.
  */
 export function toolRulePaused(r: { match?: string; tool: string; bindHash?: string }, src: ToolRulePauseSource): ToolRulePause | null {
   if (r.match !== 'tool' || typeof r.bindHash !== 'string') return null;
   const m = /^mcp:([^/]+)\/(.+)$/.exec(r.tool);
   if (!m) return null;
   const [, label, toolName] = m as unknown as [string, string, string];
-  const l = src.listed(label);
-  if (!l) return null;
-  if (src.on(l.id) === false) return 'server-off';
-  const t = src.trust(l.id);
-  if (!t || t.binding !== bindingOf({ id: l.id, launchHash: l.launchHash, pluginVersion: l.pluginVersion, toolsHash: l.toolsHash })) return 'untrusted';
-  if (!l.tools) return null;
-  const now = narrow(l.tools, label, { trust: 'trusted' }).filter((e) => e.tool === toolName && e.class === 'mutate').map((e) => toolBindHash(e, 'mutate', t.binding));
-  return now.includes(r.bindHash) ? null : 'changed';
+  const ls = src.listed(label);
+  if (!ls || ls.length === 0) return null;
+  const verdict = (l: ListedIndex & { tools: Array<Record<string, unknown>> | null }): ToolRulePause | 'match' | 'unknown' => {
+    const on = src.on(l.id);
+    if (on === null) return 'unknown';
+    if (on === false) return 'server-off';
+    const t = src.trust(l.id);
+    if (!t || t.binding !== bindingOf({ id: l.id, launchHash: l.launchHash, pluginVersion: l.pluginVersion, toolsHash: l.toolsHash })) return 'untrusted';
+    if (!l.tools) return 'unknown';
+    const now = narrow(l.tools, label, { trust: 'trusted' }).filter((e) => e.tool === toolName && e.class === 'mutate').map((e) => toolBindHash(e, 'mutate', t.binding));
+    return now.includes(r.bindHash!) ? 'match' : 'changed';
+  };
+  const all = new Set(ls.map(verdict));
+  if (all.size !== 1) return null;
+  const only = [...all][0]!;
+  return only === 'match' || only === 'unknown' ? null : only;
 }
 
 export interface LocalToolBrokerOptions {
