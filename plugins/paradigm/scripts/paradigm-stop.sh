@@ -34,23 +34,80 @@ else
   fi
 fi
 [ "$STOP_ACTIVE" = "true" ] || STOP_ACTIVE=false
-STOP_FP_FILE=".paradigm/.stop-block-fingerprint"
 
 if [ -z "$CWD" ]; then
   CWD="$(pwd)"
 fi
 
-# Not a paradigm project — pass
-if [ ! -d "$CWD/.paradigm" ]; then
-  exit 0
+# Project root (paradigm-resolve.sh): $CLAUDE_PROJECT_DIR, else the main
+# checkout (parent of the git common dir), else $CWD. A linked worktree the
+# session did not start in is judged at the project root.
+SCRIPT_DIR=$(dirname "$0")
+[ -f "$SCRIPT_DIR/paradigm-resolve.sh" ] && . "$SCRIPT_DIR/paradigm-resolve.sh"
+if command -v _pm_project_root >/dev/null 2>&1; then
+  _pm_project_root "$CWD" || exit 0  # Not a paradigm project — pass
+  CWD=$PM_ROOT
+  _pm_session_id "$INPUT"
+else
+  [ -d "$CWD/.paradigm" ] || exit 0
+  PM_SID=""
 fi
 
 cd "$CWD" || exit 0
 
+# The last blocked violation set: per session when the input has a session id.
+if [ -n "$PM_SID" ]; then
+  STOP_FP_FILE=".paradigm/.sessions/$PM_SID.stop-fp"
+else
+  STOP_FP_FILE=".paradigm/.stop-block-fingerprint"
+fi
+
 # Get modified files (uncommitted changes)
 _pm_mark git-diff
-MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
+MODIFIED_ALL=$(git diff --name-only HEAD 2>/dev/null)
+
+# --- Session attribution (touched-files ledger) ---
+# The PostToolUse Write|Edit hook records every file this session edited in
+# .paradigm/.sessions/<session_id>.touched. Only those files are judged; the
+# rest of the tree's changes (Bash edits, other sessions, generated state) are
+# listed as advisory. Without a session id (older hosts, tests) the whole tree
+# is judged, as before.
+UNATTRIBUTED=""
+if [ -n "$PM_SID" ]; then
+  LEDGER=".paradigm/.sessions/$PM_SID.touched"
+  MODIFIED=""
+  _NL='
+'
+  for _f in $MODIFIED_ALL; do
+    if [ -f "$LEDGER" ] && grep -qxF -- "$_f" "$LEDGER" 2>/dev/null; then
+      MODIFIED="$MODIFIED$_f$_NL"
+    else
+      case "$_f" in
+        .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;  # generated state
+        *) UNATTRIBUTED="$UNATTRIBUTED$_f$_NL" ;;
+      esac
+    fi
+  done
+  MODIFIED=${MODIFIED%"$_NL"}
+  UNATTRIBUTED=${UNATTRIBUTED%"$_NL"}
+else
+  MODIFIED=$MODIFIED_ALL
+fi
+
+# _print_unattributed — advisory list of changes this session did not make
+# through Write/Edit (capped at 10 paths).
+_print_unattributed() {
+  [ -n "$UNATTRIBUTED" ] || return 0
+  _n=$(printf '%s\n' "$UNATTRIBUTED" | wc -l | tr -d ' ')
+  echo "" >&2
+  echo "[paradigm] Advisory: $_n changed file(s) not edited through Write/Edit in this session (Bash, another session or worktree); not judged:" >&2
+  printf '%s\n' "$UNATTRIBUTED" | head -n 10 | sed 's/^/  - /' >&2
+  [ "$_n" -gt 10 ] && echo "  ... and $((_n - 10)) more" >&2
+  return 0
+}
+
 if [ -z "$MODIFIED" ]; then
+  _print_unattributed
   # Clean up session markers on pass (no modifications)
   rm -f ".paradigm/.pending-review"
   rm -f ".paradigm/.session-started"
@@ -59,7 +116,6 @@ if [ -z "$MODIFIED" ]; then
 fi
 
 # Source shared compliance checks
-SCRIPT_DIR=$(dirname "$0")
 . "$SCRIPT_DIR/paradigm-common.sh"
 
 _pm_mark verdict
@@ -72,14 +128,15 @@ fi
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
-  # --- Loop guard: a fix attempt that changed nothing ends the turn ---
-  # Without this a violation the agent cannot resolve inside the turn blocks
-  # every stop forever. When this Stop follows a Stop-hook continuation
-  # (stop_hook_active) and the violation set is unchanged — or this is the 4th
-  # consecutive block — print the violations, log stop-block-unresolved and
-  # allow the stop. The marker stays, and the next turn (not active) blocks
-  # again. PARADIGM_OVERRIDE is unaffected: overridden remediations never
-  # reach VIOLATIONS.
+  # --- Loop cap: one block per violation set ---
+  # A violation set blocks once. After that the identical set (digits
+  # ignored) is advisory: on the Stop that follows a Stop-hook continuation
+  # (stop_hook_active — the agent already had its fix attempt) and on every
+  # later turn of the session. A changed set blocks again, up to 3 consecutive
+  # continuations. The last blocked set is kept per session
+  # (.paradigm/.sessions/<id>.stop-fp) and cleared by a passing run.
+  # PARADIGM_OVERRIDE is unaffected: overridden remediations never reach
+  # VIOLATIONS.
   STOP_FP=$(_pm_violation_fp)
   PREV_FP=""
   PREV_COUNT=0
@@ -90,9 +147,17 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   fi
   if [ "$STOP_ACTIVE" = "true" ] && { [ "$STOP_FP" = "$PREV_FP" ] || [ "$PREV_COUNT" -ge 3 ]; }; then
     echo "" >&2
-    echo "Paradigm: unresolved after a fix attempt — ending the turn; these will block again next turn ($VIOLATION_COUNT violation(s)):" >&2
+    echo "Paradigm: unresolved after a fix attempt — ending the turn; advisory from now on ($VIOLATION_COUNT violation(s)):" >&2
     echo "$VIOLATIONS" >&2
+    _print_unattributed
     _pm_record_unresolved "$STOP_FP" "$PREV_COUNT"
+    exit 0
+  fi
+  if [ "$STOP_FP" = "$PREV_FP" ]; then
+    echo "" >&2
+    echo "[paradigm] Advisory: already reported this session, not blocking again ($VIOLATION_COUNT violation(s)):" >&2
+    echo "$VIOLATIONS" >&2
+    _print_unattributed
     exit 0
   fi
   if [ "$STOP_ACTIVE" = "true" ]; then
@@ -100,6 +165,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   else
     STOP_COUNT=1
   fi
+  mkdir -p "${STOP_FP_FILE%/*}" 2>/dev/null
   printf '%s\n%s\n' "$STOP_FP" "$STOP_COUNT" > "$STOP_FP_FILE" 2>/dev/null
 
   # Emit compliance-violation event (fire-and-forget, backgrounded)
@@ -119,6 +185,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
     echo "Advisory:" >&2
     echo "$ADVISORY" >&2
   fi
+  _print_unattributed
   echo "" >&2
   echo "Run these MCP tools to fix:" >&2
   echo "  1. paradigm_purpose (op: add_component) — register new code units" >&2
@@ -139,6 +206,7 @@ if [ -n "$ADVISORY" ]; then
   echo "[paradigm] Advisory:" >&2
   echo "$ADVISORY" >&2
 fi
+_print_unattributed
 
 # Auto-demote graduated habits with 3+ failures
 # NOTE: Could be absorbed into compliance-check command in a future iteration.
@@ -163,10 +231,14 @@ rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
 rm -f "$STOP_FP_FILE"
-# NOTE: .orchestrated / .solo-declared / .team-prompted / .team-reminded /
-# .team-bypass-recorded are deliberately NOT cleared here — Stop fires per assistant turn, and clearing
-# would erase solo declarations mid-session and re-nag every turn. They expire
-# by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
+# NOTE: gate markers (.orchestrated / .solo-declared / .team-prompted /
+# .team-reminded / .team-bypass-recorded, and the per-session files in
+# .paradigm/.sessions/) are deliberately NOT cleared here — Stop fires per
+# assistant turn, and clearing would erase delegation credit and solo
+# declarations mid-session and re-nag every turn. Session files last for the
+# session (pruned after 7 days); the shared markers expire by age
+# (PARADIGM_GATE_TTL_HOURS, default 4h).
+find ".paradigm/.sessions" -type f -mtime +7 -exec rm -f {} + 2>/dev/null
 
 # Postflight learning already ran above: paradigm-common.sh calls
 # `compliance-check --learn`, which runs the same runPostflightLearning pass in

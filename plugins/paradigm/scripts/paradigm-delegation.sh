@@ -1,13 +1,17 @@
 #!/bin/sh
 # Paradigm Claude Code PostToolUse — Agent delegation credit (!delegation-recorded)
 # Fires after the host `Agent` (formerly `Task`) tool runs. When the delegated
-# subagent is a roster agent — a `paradigm:*` plugin agent, or a project agent
-# defined at $CWD/.claude/agents/<type>.md — and it returned a non-empty
-# response, writes .paradigm/.orchestrated (same JSON payload shape as
-# recordOrchestrationCompletion in packages/paradigm-mcp/src/utils/
-# orchestration-marker.ts, source "delegation"). The Stop hook (Check 13), the
-# team gate and the prompt gate honour that marker by age
-# (PARADIGM_GATE_TTL_HOURS, default 4h). Every delegation, credited or not, is
+# subagent is a team agent — a `paradigm:*` plugin agent, a project agent in
+# <root>/.claude/agents, or a user-global agent in ~/.claude/agents (by file
+# name <type>.md or `name:` frontmatter) — and it returned a non-empty
+# response, the orchestration gate is satisfied (TD-2026-10-28-956):
+#   - <root>/.paradigm/.sessions/<session_id>.orchestrated lasts for the session;
+#   - <root>/.paradigm/.orchestrated (same JSON payload shape as
+#     recordOrchestrationCompletion in packages/paradigm-mcp/src/utils/
+#     orchestration-marker.ts, source "delegation") is honoured by age
+#     (PARADIGM_GATE_TTL_HOURS, default 4h) when a reader has no session id.
+# The Stop hook (Check 13), the team gate and the prompt gate read both, at the
+# project root (paradigm-resolve.sh). Every delegation, credited or not, is
 # appended to .paradigm/events/team-funnel.jsonl for Loid's invocation-rate
 # calibration.
 # Installed by: paradigm hooks install --claude-code
@@ -48,19 +52,37 @@ fi
 
 [ -n "$CWD" ] || CWD="$(pwd)"
 
-# Not a paradigm project — pass
-[ -d "$CWD/.paradigm" ] || exit 0
+# Project root (paradigm-resolve.sh): markers are written there, never in a
+# linked worktree. Not a paradigm project — pass.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh" 2>/dev/null
+command -v _pm_project_root >/dev/null 2>&1 || exit 0
+_pm_project_root "$CWD" 2>/dev/null || exit 0
+CWD=$PM_ROOT
+_pm_session_id "$INPUT" 2>/dev/null
 
 # The ledger rows are hand-built JSON: keep the subagent string to a safe set.
 SUBAGENT=$(printf '%s' "$SUBAGENT" | tr -cd 'a-zA-Z0-9:._-' | head -c 80)
 [ -n "$SUBAGENT" ] || exit 0
 
-# Roster agent? paradigm:* plugin agents, or a project-defined agent file.
+# _agent_defined <dir> — <dir>/<type>.md exists, or an agent file there
+# declares `name: <type>` in its frontmatter.
+_agent_defined() {
+  [ -d "$1" ] || return 1
+  [ -f "$1/$SUBAGENT.md" ] && return 0
+  grep -qE "^name:[[:space:]]*[\"']?$SUBAGENT[\"']?[[:space:]]*\$" "$1"/*.md 2>/dev/null
+}
+
+# Team agent? paradigm:* plugin agents, a project agent (<root>/.claude/agents)
+# or a user-global agent (~/.claude/agents, e.g. atelier-mika).
 IS_ROSTER=false
 case "$SUBAGENT" in
   paradigm:?*) IS_ROSTER=true ;;
-  .*) ;;
-  *) [ -f "$CWD/.claude/agents/$SUBAGENT.md" ] && IS_ROSTER=true ;;
+  .*|*:*) ;;
+  *)
+    if _agent_defined "$CWD/.claude/agents" || { [ -n "$HOME" ] && _agent_defined "$HOME/.claude/agents"; }; then
+      IS_ROSTER=true
+    fi
+    ;;
 esac
 
 CREDITED=false
@@ -70,6 +92,10 @@ TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 if [ "$CREDITED" = "true" ]; then
   printf '{"timestamp":"%s","type":"orchestrated","verdicts":1,"source":"delegation","subagent":"%s"}\n' "$TS" "$SUBAGENT" > "$CWD/.paradigm/.orchestrated" 2>/dev/null || true
+  if [ -n "$PM_SID" ]; then
+    mkdir -p "$CWD/.paradigm/.sessions" 2>/dev/null
+    printf '{"timestamp":"%s","type":"orchestrated","source":"delegation","subagent":"%s","session":"%s"}\n' "$TS" "$SUBAGENT" "$PM_SID" > "$CWD/.paradigm/.sessions/$PM_SID.orchestrated" 2>/dev/null || true
+  fi
 fi
 
 mkdir -p "$CWD/.paradigm/events" 2>/dev/null

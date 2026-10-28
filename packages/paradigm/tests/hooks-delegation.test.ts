@@ -131,5 +131,59 @@ for (const noJq of [false, true]) {
       expect(r.stdout).toBe('');
       expect(fs.existsSync(path.join(root, '.paradigm'))).toBe(false);
     });
+
+    it('a user-global agent in ~/.claude/agents is credited, with a session marker', () => {
+      const root = project();
+      const home = project(false);
+      fs.mkdirSync(path.join(home, '.claude', 'agents'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.claude', 'agents', 'atelier-mika.md'), '---\nname: atelier-mika\n---\n');
+      const input = JSON.stringify({ ...JSON.parse(payload(root, 'atelier-mika', 'reviewed')), session_id: 'g1' });
+      const r = spawnSync('/bin/sh', [SCRIPT], {
+        input,
+        cwd: home,
+        env: { PATH: noJq ? noJqBin() : '/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin', HOME: home },
+        encoding: 'utf8',
+      });
+      expect(r.status).toBe(0);
+      expect(r.stdout + r.stderr).toBe('');
+      expect(fs.existsSync(marker(root))).toBe(true);
+      expect(JSON.parse(fs.readFileSync(path.join(root, '.paradigm', '.sessions', 'g1.orchestrated'), 'utf8')))
+        .toMatchObject({ source: 'delegation', subagent: 'atelier-mika', session: 'g1' });
+      expect(funnel(root)[0]).toMatchObject({ subagent: 'atelier-mika', credited: true });
+    });
+
+    it('an unknown agent name is not credited even with a ~/.claude/agents dir', () => {
+      const root = project();
+      const home = project(false);
+      fs.mkdirSync(path.join(home, '.claude', 'agents'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.claude', 'agents', 'other.md'), '---\nname: other\n---\n');
+      spawnSync('/bin/sh', [SCRIPT], {
+        input: payload(root, 'nobody', 'x'),
+        cwd: home,
+        env: { PATH: noJq ? noJqBin() : '/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin', HOME: home },
+        encoding: 'utf8',
+      });
+      expect(fs.existsSync(marker(root))).toBe(false);
+    });
   });
 }
+
+describe('claude-code-delegation.sh from a linked worktree', () => {
+  it('writes the markers at the project root, not in the worktree', () => {
+    const root = project();
+    const git = (cwd: string, ...args: string[]) =>
+      spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' });
+    fs.writeFileSync(path.join(root, '.paradigm', 'config.yaml'), 'version: "1.0"\n');
+    git(root, 'init', '-q');
+    git(root, 'add', '-A');
+    git(root, 'commit', '-qm', 'init');
+    const wt = path.join(root, '.claude', 'worktrees', 'agent-1');
+    git(root, 'worktree', 'add', '-q', '-b', 'agent-1', wt);
+    const input = JSON.stringify({ ...JSON.parse(payload(wt, 'paradigm:builder', 'done')), session_id: 'w1' });
+    const r = spawnSync('/bin/sh', [SCRIPT], { input, cwd: wt, env: { PATH: '/usr/bin:/bin', HOME: os.tmpdir() }, encoding: 'utf8' });
+    expect(r.status).toBe(0);
+    expect(fs.existsSync(path.join(root, '.paradigm', '.sessions', 'w1.orchestrated'))).toBe(true);
+    expect(fs.existsSync(marker(root))).toBe(true);
+    expect(fs.existsSync(marker(wt))).toBe(false);
+  });
+});

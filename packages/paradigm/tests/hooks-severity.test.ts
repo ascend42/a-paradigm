@@ -126,7 +126,7 @@ describe('Check 13 honours .orchestrated by TTL', () => {
   it('no marker → orchestration advisory (control)', () => {
     const out = check13Advisory(orchProject('none'));
     expect(out).toContain('(orchestration) Magnitude');
-    expect(out).toContain('delegate to a roster agent, run a debrief');
+    expect(out).toContain('delegate to a team agent (Agent tool)');
     expect(out).not.toContain('orchestrate_inline');
   });
   it('fresh marker → no advisory', () => {
@@ -234,5 +234,175 @@ describe('team-gate and prompt-gate honour .orchestrated by TTL', () => {
     const r = prompt(orchProject('stale'));
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('orchestration-eligible');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-2026-10-27-005 / T-2026-10-28-002: the Stop hook judges the session's own
+// Write/Edit files at the project root; markers live at the root; one block per
+// violation set; pre-commit never stages; SessionStart rebuilds a fresh clone.
+// Violations come from a Check 14 guard remediation (stub CLI), so the only
+// variable is whether a modified file is judged at all.
+// ---------------------------------------------------------------------------
+
+describe('session attribution and the project root', () => {
+  const sh = (cwd: string, ...args: string[]) =>
+    spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' });
+
+  function repo(): { root: string; bin: string; worktree: string } {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-attr-'));
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-attr-bin-'));
+    dirs.push(root, bin);
+    fs.writeFileSync(
+      path.join(bin, 'paradigm'),
+      `#!/bin/sh
+case "$1" in
+  compliance-check) echo '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}' ;;
+  internal) echo '[{"id":"rmd-0","severity":"guard","claimant":"compliance","reason":"guard violation"}]' ;;
+  index) pwd > "$PM_INDEX_MARK" ;;
+esac
+exit 0
+`,
+    );
+    fs.chmodSync(path.join(bin, 'paradigm'), 0o755);
+    fs.mkdirSync(path.join(root, '.paradigm', 'events'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', 'config.yaml'), 'version: "1.0"\n');
+    fs.writeFileSync(path.join(root, 'README.md'), 'a\n');
+    fs.writeFileSync(path.join(root, 'NOTES.md'), 'a\n');
+    sh(root, 'init', '-q');
+    sh(root, 'add', '-A');
+    sh(root, 'commit', '-qm', 'init');
+    const worktree = path.join(root, '.claude', 'worktrees', 'agent-1');
+    sh(root, 'worktree', 'add', '-q', '-b', 'agent-1', worktree);
+    return { root, bin, worktree };
+  }
+  const ledger = (root: string, sid: string, files: string[]) => {
+    fs.mkdirSync(path.join(root, '.paradigm', '.sessions'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', '.sessions', `${sid}.touched`), files.map((f) => `${f}\n`).join(''));
+  };
+  function stop(bin: string, cwd: string, input: object) {
+    return spawnSync('sh', [path.join(SCRIPTS, 'claude-code-stop.sh')], {
+      input: JSON.stringify({ cwd, hook_event_name: 'Stop', ...input }),
+      cwd,
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: cwd },
+      encoding: 'utf8',
+    });
+  }
+
+  it('a worktree cwd is judged at the project root', () => {
+    const { root, bin, worktree } = repo();
+    expect(fs.existsSync(path.join(worktree, '.paradigm', 'config.yaml'))).toBe(true);
+    fs.writeFileSync(path.join(root, 'README.md'), 'b\n');
+    ledger(root, 's1', ['README.md']);
+    const r = stop(bin, worktree, { session_id: 's1', stop_hook_active: false });
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr).toContain('guard violation');
+    // the block fingerprint is kept at the root, not in the worktree
+    expect(fs.existsSync(path.join(root, '.paradigm', '.sessions', 's1.stop-fp'))).toBe(true);
+    expect(fs.existsSync(path.join(worktree, '.paradigm', '.sessions'))).toBe(false);
+  });
+
+  it('only ledger files count; the rest is advisory', () => {
+    const { root, bin } = repo();
+    fs.writeFileSync(path.join(root, 'README.md'), 'b\n'); // edited by Bash / another session
+    ledger(root, 's2', ['NOTES.md']); // this session touched NOTES.md, which is unchanged
+    const pass = stop(bin, root, { session_id: 's2', stop_hook_active: false });
+    expect(pass.status, pass.stderr).toBe(0);
+    expect(pass.stderr).toContain('not edited through Write/Edit in this session');
+    expect(pass.stderr).toContain('  - README.md');
+    ledger(root, 's2', ['NOTES.md', 'README.md']);
+    expect(stop(bin, root, { session_id: 's2', stop_hook_active: false }).status).toBe(2);
+  });
+
+  it('postwrite records the edited file in the session ledger, relative to the root', () => {
+    const { root } = repo();
+    const r = spawnSync('sh', [path.join(SCRIPTS, 'claude-code-postwrite.sh')], {
+      input: JSON.stringify({ session_id: 's3', cwd: root, tool_name: 'Edit', tool_input: { file_path: path.join(root, 'README.md') } }),
+      cwd: root,
+      env: { PATH: '/usr/bin:/bin', HOME: root },
+      encoding: 'utf8',
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout + r.stderr).toBe('');
+    expect(fs.readFileSync(path.join(root, '.paradigm', '.sessions', 's3.touched'), 'utf8')).toBe('README.md\n');
+  });
+
+  it('a second block under stop_hook_active becomes advisory, and stays advisory next turn', () => {
+    const { root, bin } = repo();
+    fs.writeFileSync(path.join(root, 'README.md'), 'b\n');
+    ledger(root, 's4', ['README.md']);
+    expect(stop(bin, root, { session_id: 's4', stop_hook_active: false }).status).toBe(2);
+    const retry = stop(bin, root, { session_id: 's4', stop_hook_active: true });
+    expect(retry.status, retry.stderr).toBe(0);
+    expect(retry.stderr).toContain('unresolved after a fix attempt');
+    const nextTurn = stop(bin, root, { session_id: 's4', stop_hook_active: false });
+    expect(nextTurn.status, nextTurn.stderr).toBe(0);
+    expect(nextTurn.stderr).toContain('already reported this session');
+    // a new session blocks once again
+    ledger(root, 's5', ['README.md']);
+    expect(stop(bin, root, { session_id: 's5', stop_hook_active: false }).status).toBe(2);
+  });
+
+  it('a marker written at the root is honoured from a worktree (team gate + prompt gate)', () => {
+    const { root, worktree } = repo();
+    const gate = (script: string, input: object) =>
+      spawnSync('sh', [path.join(SCRIPTS, script)], {
+        input: JSON.stringify({ session_id: 's6', cwd: worktree, ...input }),
+        cwd: worktree,
+        env: { PATH: '/usr/bin:/bin', HOME: worktree },
+        encoding: 'utf8',
+      });
+    const team = () => gate('claude-code-team-gate.sh', { tool_name: 'Write', tool_input: { file_path: path.join(worktree, 'src', 'a.ts') } });
+    const prompt = () => gate('claude-code-prompt-gate.sh', { prompt: 'please implement the export feature for reports' });
+    fs.mkdirSync(path.join(root, '.paradigm', '.sessions'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', '.sessions', 's6.orchestrated'), '{}');
+    expect(team().stderr).not.toContain('without team orchestration');
+    expect(prompt().stdout).toBe('');
+    // control: without the root marker the gates speak, once per session, recommending a team agent
+    fs.rmSync(path.join(root, '.paradigm', '.sessions', 's6.orchestrated'));
+    const t = team();
+    expect(t.stderr).toContain('delegate to a team agent');
+    expect(t.stderr).not.toContain('orchestrate_inline');
+    expect(team().stderr).toBe('');
+    const p = prompt();
+    expect(p.stdout).toContain('Delegate to a team agent');
+    expect(p.stdout).not.toContain('orchestrate_inline');
+    expect(fs.existsSync(path.join(root, '.paradigm', '.sessions', 's6.team-reminded'))).toBe(true);
+  });
+
+  it('no .paradigm file is staged after a commit', () => {
+    const { root } = repo();
+    fs.writeFileSync(path.join(root, '.paradigm', 'scan-index.json'), '{"generatedAt":"x"}\n');
+    fs.writeFileSync(path.join(root, '.paradigm', 'navigator.yaml'), 'generatedAt: x\n');
+    const r = spawnSync('sh', [path.join(SCRIPTS, 'claude-code-precommit.sh')], {
+      input: JSON.stringify({ cwd: root, tool_input: { command: 'git commit -m x' } }),
+      cwd: root,
+      env: { PATH: '/usr/bin:/bin', HOME: root, CLAUDE_PROJECT_DIR: root },
+      encoding: 'utf8',
+    });
+    expect(r.status).toBe(0);
+    expect(sh(root, 'diff', '--cached', '--name-only').stdout.trim()).toBe('');
+  });
+
+  it('a fresh clone rebuilds the index at SessionStart; an indexed one does not', async () => {
+    const { root, bin } = repo();
+    const mark = path.join(bin, 'index-ran');
+    const start = () =>
+      spawnSync('sh', [path.join(SCRIPTS, 'claude-code-session-start.sh')], {
+        input: JSON.stringify({ session_id: 's7' }),
+        cwd: root,
+        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: root, CLAUDE_PROJECT_DIR: root, PM_INDEX_MARK: mark },
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+    expect(start().status).toBe(0);
+    for (let i = 0; i < 50 && !fs.existsSync(mark); i++) await new Promise((r) => setTimeout(r, 100));
+    expect(fs.realpathSync(fs.readFileSync(mark, 'utf8').trim())).toBe(fs.realpathSync(root));
+    fs.rmSync(mark);
+    fs.writeFileSync(path.join(root, '.paradigm', 'scan-index.json'), '{}');
+    fs.writeFileSync(path.join(root, '.paradigm', 'navigator.yaml'), 'a: 1\n');
+    expect(start().status).toBe(0);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(fs.existsSync(mark)).toBe(false);
   });
 });

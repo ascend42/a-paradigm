@@ -1118,18 +1118,22 @@ if [ "$_SEV" != "off" ]; then
 
   # Compare magnitude against threshold (default 3)
   if [ "$MAGNITUDE" -ge "$ORCH_THRESHOLD" ]; then
-    # Gate markers expire by age (Stop fires per assistant turn, so clearing
-    # them here would erase declarations mid-session). TTL default 4h.
+    # Gate markers are never cleared here (Stop fires per assistant turn, so
+    # clearing would erase declarations mid-session). A team-agent delegation
+    # in this session (.paradigm/.sessions/<id>.orchestrated, written by the
+    # PostToolUse Agent|Task hook) lasts for the session; the shared markers
+    # (settlement, debrief, `paradigm solo <reason>`) expire by age, TTL
+    # default 4h. Either satisfies the gate — bypass becomes a legible recorded
+    # choice instead of silent drift. The project root is $CWD (cd'd into).
     _GATE_TTL_MIN=$(( ${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
     _marker_fresh() {
       [ -f "$1" ] || return 1
       [ -n "$(find "$1" -mmin "-$_GATE_TTL_MIN" 2>/dev/null)" ]
     }
-    # A fresh orchestration marker (settlement, debrief, or a roster-agent
-    # delegation via the PostToolUse Agent|Task hook) or a structured solo
-    # declaration (paradigm solo <reason>) satisfies the gate — bypass becomes a
-    # legible recorded choice instead of silent drift.
-    if ! _marker_fresh ".paradigm/.orchestrated" && ! _marker_fresh ".paradigm/.solo-declared"; then
+    _GATE_SESSION_MARKER=""
+    [ -n "${PM_SID:-}" ] && _GATE_SESSION_MARKER=".paradigm/.sessions/$PM_SID.orchestrated"
+    if { [ -z "$_GATE_SESSION_MARKER" ] || [ ! -f "$_GATE_SESSION_MARKER" ]; } \
+      && ! _marker_fresh ".paradigm/.orchestrated" && ! _marker_fresh ".paradigm/.solo-declared"; then
       # Record the bypass to the team-funnel telemetry regardless of severity —
       # the invocation-rate metric needs the event even when only warning.
       # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
@@ -1145,14 +1149,14 @@ if [ "$_SEV" != "off" ]; then
       if [ "$_SEV" = "block" ]; then
         VIOLATIONS="$VIOLATIONS
   - Task magnitude $MAGNITUDE >= $ORCH_THRESHOLD without orchestration ($MAGNITUDE_REASONS).
-    Delegate to a roster agent, run a debrief, or declare solo explicitly:
+    Delegate to a team agent (Agent tool: a paradigm:* agent, or one in .claude/agents or ~/.claude/agents), or declare solo explicitly:
     paradigm solo <trivial|hotfix|user-directed|exploratory>
     Override: paradigm enforcement override orchestration-required warn"
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
   - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration.
-    Bypass recorded to team-funnel telemetry. Next time: delegate to a roster agent, run a debrief, or declare \`paradigm solo <reason>\`."
+    Bypass recorded to team-funnel telemetry. Next time: delegate to a team agent (Agent tool), or declare \`paradigm solo <reason>\`."
       fi
     fi
   fi

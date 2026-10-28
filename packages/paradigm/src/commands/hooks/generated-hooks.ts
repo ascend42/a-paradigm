@@ -1124,18 +1124,22 @@ if [ "$_SEV" != "off" ]; then
 
   # Compare magnitude against threshold (default 3)
   if [ "$MAGNITUDE" -ge "$ORCH_THRESHOLD" ]; then
-    # Gate markers expire by age (Stop fires per assistant turn, so clearing
-    # them here would erase declarations mid-session). TTL default 4h.
+    # Gate markers are never cleared here (Stop fires per assistant turn, so
+    # clearing would erase declarations mid-session). A team-agent delegation
+    # in this session (.paradigm/.sessions/<id>.orchestrated, written by the
+    # PostToolUse Agent|Task hook) lasts for the session; the shared markers
+    # (settlement, debrief, \`paradigm solo <reason>\`) expire by age, TTL
+    # default 4h. Either satisfies the gate — bypass becomes a legible recorded
+    # choice instead of silent drift. The project root is $CWD (cd'd into).
     _GATE_TTL_MIN=$(( \${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
     _marker_fresh() {
       [ -f "$1" ] || return 1
       [ -n "$(find "$1" -mmin "-$_GATE_TTL_MIN" 2>/dev/null)" ]
     }
-    # A fresh orchestration marker (settlement, debrief, or a roster-agent
-    # delegation via the PostToolUse Agent|Task hook) or a structured solo
-    # declaration (paradigm solo <reason>) satisfies the gate — bypass becomes a
-    # legible recorded choice instead of silent drift.
-    if ! _marker_fresh ".paradigm/.orchestrated" && ! _marker_fresh ".paradigm/.solo-declared"; then
+    _GATE_SESSION_MARKER=""
+    [ -n "\${PM_SID:-}" ] && _GATE_SESSION_MARKER=".paradigm/.sessions/$PM_SID.orchestrated"
+    if { [ -z "$_GATE_SESSION_MARKER" ] || [ ! -f "$_GATE_SESSION_MARKER" ]; } \\
+      && ! _marker_fresh ".paradigm/.orchestrated" && ! _marker_fresh ".paradigm/.solo-declared"; then
       # Record the bypass to the team-funnel telemetry regardless of severity —
       # the invocation-rate metric needs the event even when only warning.
       # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
@@ -1151,14 +1155,14 @@ if [ "$_SEV" != "off" ]; then
       if [ "$_SEV" = "block" ]; then
         VIOLATIONS="$VIOLATIONS
   - Task magnitude $MAGNITUDE >= $ORCH_THRESHOLD without orchestration ($MAGNITUDE_REASONS).
-    Delegate to a roster agent, run a debrief, or declare solo explicitly:
+    Delegate to a team agent (Agent tool: a paradigm:* agent, or one in .claude/agents or ~/.claude/agents), or declare solo explicitly:
     paradigm solo <trivial|hotfix|user-directed|exploratory>
     Override: paradigm enforcement override orchestration-required warn"
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
   - (orchestration) Magnitude $MAGNITUDE ($MAGNITUDE_REASONS) without team orchestration.
-    Bypass recorded to team-funnel telemetry. Next time: delegate to a roster agent, run a debrief, or declare \\\`paradigm solo <reason>\\\`."
+    Bypass recorded to team-funnel telemetry. Next time: delegate to a team agent (Agent tool), or declare \\\`paradigm solo <reason>\\\`."
       fi
     fi
   fi
@@ -1336,7 +1340,10 @@ _pm_record_unresolved() {
 `;
 
 export const RESOLVE_HOOK = `#!/bin/sh
-# paradigm-resolve.sh — finds the paradigm CLI for the hooks (sourced, POSIX sh).
+# paradigm-resolve.sh — finds the paradigm CLI, the project root and the
+# session's state files for the hooks (sourced, POSIX sh). The root and session
+# helpers (_pm_project_root, _pm_session_id, _pm_gate_resolved, _pm_once) are
+# documented at the end of the file.
 # Sourced by paradigm-common.sh (Stop hooks), claude-code-precommit.sh and
 # cursor-precommit.sh, and embedded in the git post-commit / pre-push hooks
 # \`paradigm hooks install\` writes, so every hook resolves the CLI the same way.
@@ -1409,6 +1416,104 @@ _pm_resolve_paradigm() {
   fi
   [ -n "$PARADIGM_BIN" ]
 }
+
+# --- Project root and session state (shared by the Claude Code hooks) ---
+#
+# _pm_project_root [<cwd>]   # 0 = found, 1 = not a Paradigm project
+#   Sets PM_ROOT to the Paradigm project the session belongs to:
+#   1. $CLAUDE_PROJECT_DIR when it holds a .paradigm/ (the directory the
+#      session started in, so a session started inside a worktree judges it);
+#   2. the main checkout, the parent of \`git rev-parse --git-common-dir\`. A
+#      linked worktree (e.g. .claude/worktrees/<agent>) carries the tracked part
+#      of .paradigm/, but a session that did not start there is judged, and
+#      keeps its gate markers, at the project root;
+#   3. <cwd> itself when it holds a .paradigm/ (no git, or a nested project).
+#   Paths stay logical (no pwd -P) so they compare with the paths Claude Code
+#   sends in tool_input.file_path.
+_pm_project_root() {
+  PM_ROOT=""
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR/.paradigm" ]; then
+    PM_ROOT=\${CLAUDE_PROJECT_DIR%/}
+    return 0
+  fi
+  _pm_c=\${1:-$PWD}
+  _pm_gcd=$(CDPATH= cd -- "$_pm_c" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || _pm_gcd=""
+  if [ -n "$_pm_gcd" ]; then
+    case "$_pm_gcd" in /*|[A-Za-z]:*) ;; *) _pm_gcd="$_pm_c/$_pm_gcd" ;; esac
+    _pm_gcd=\${_pm_gcd%/}
+    case "$_pm_gcd" in
+      */.git)
+        _pm_r=$(CDPATH= cd -- "\${_pm_gcd%/.git}" 2>/dev/null && pwd) || _pm_r=""
+        if [ -n "$_pm_r" ] && [ -d "$_pm_r/.paradigm" ]; then
+          PM_ROOT=$_pm_r
+          return 0
+        fi
+        ;;
+    esac
+  fi
+  if [ -d "$_pm_c/.paradigm" ]; then
+    PM_ROOT=$(CDPATH= cd -- "$_pm_c" 2>/dev/null && pwd) || PM_ROOT=$_pm_c
+    return 0
+  fi
+  return 1
+}
+
+# _pm_json_field <json> <field> — prints a top-level string field (jq, else grep).
+_pm_json_field() {
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$1" | jq -r --arg f "$2" '.[$f] // empty' 2>/dev/null
+  else
+    printf '%s' "$1" | grep -o "\\"$2\\"[[:space:]]*:[[:space:]]*\\"[^\\"]*\\"" 2>/dev/null | head -n 1 | sed "s/.*\\"$2\\"[[:space:]]*:[[:space:]]*\\"//; s/\\"\\$//" 2>/dev/null
+  fi
+}
+
+# _pm_session_id <json> — sets PM_SID to the input's session_id, reduced to
+# [A-Za-z0-9_-] (it names files). Empty when the input carries none.
+_pm_session_id() {
+  PM_SID=$(_pm_json_field "$1" session_id | tr -cd 'A-Za-z0-9_-' | head -c 80)
+}
+
+# Session state lives in <root>/.paradigm/.sessions/<session_id>.<kind>
+# (gitignored): .touched (the Write/Edit ledger), .orchestrated (a team agent
+# was delegated to this session), .stop-fp (the last blocked violation set),
+# .team-prompted / .team-reminded (once-per-session reminders). A session file
+# lasts for the session. The shared .paradigm/.orchestrated and .solo-declared
+# (written by the MCP server and \`paradigm solo\`, which have no session id)
+# still expire by age: PARADIGM_GATE_TTL_HOURS, default 4h.
+_pm_session_file() { # <kind> -> path; status 1 without a session id
+  [ -n "$PM_SID" ] && [ -n "$PM_ROOT" ] || return 1
+  printf '%s' "$PM_ROOT/.paradigm/.sessions/$PM_SID.$1"
+}
+
+_pm_marker_fresh() { # <path> — exists and is younger than the gate TTL
+  [ -f "$1" ] || return 1
+  _pm_ttl=$(( \${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
+  [ -n "$(find "$1" -mmin "-$_pm_ttl" 2>/dev/null)" ]
+}
+
+# _pm_gate_resolved — the orchestration gate is satisfied: a team agent was
+# delegated to in this session, or a fresh shared marker exists (MCP
+# settlement/debrief, delegation from a session without an id, \`paradigm solo\`).
+_pm_gate_resolved() {
+  if _pm_sf=$(_pm_session_file orchestrated) && [ -f "$_pm_sf" ]; then return 0; fi
+  _pm_marker_fresh "$PM_ROOT/.paradigm/.orchestrated" && return 0
+  _pm_marker_fresh "$PM_ROOT/.paradigm/.solo-declared" && return 0
+  return 1
+}
+
+# _pm_once <kind> — status 0 the first time per session (per TTL window when
+# the input has no session id) and records it; 1 afterwards.
+_pm_once() {
+  if _pm_sf=$(_pm_session_file "$1"); then
+    [ -f "$_pm_sf" ] && return 1
+    mkdir -p "\${_pm_sf%/*}" 2>/dev/null
+    : > "$_pm_sf" 2>/dev/null
+    return 0
+  fi
+  _pm_marker_fresh "$PM_ROOT/.paradigm/.$1" && return 1
+  touch "$PM_ROOT/.paradigm/.$1" 2>/dev/null
+  return 0
+}
 `;
 
 export const CLAUDE_CODE_STOP_HOOK = `#!/bin/sh
@@ -1447,23 +1552,80 @@ else
   fi
 fi
 [ "$STOP_ACTIVE" = "true" ] || STOP_ACTIVE=false
-STOP_FP_FILE=".paradigm/.stop-block-fingerprint"
 
 if [ -z "$CWD" ]; then
   CWD="$(pwd)"
 fi
 
-# Not a paradigm project — pass
-if [ ! -d "$CWD/.paradigm" ]; then
-  exit 0
+# Project root (paradigm-resolve.sh): $CLAUDE_PROJECT_DIR, else the main
+# checkout (parent of the git common dir), else $CWD. A linked worktree the
+# session did not start in is judged at the project root.
+SCRIPT_DIR=$(dirname "$0")
+[ -f "$SCRIPT_DIR/paradigm-resolve.sh" ] && . "$SCRIPT_DIR/paradigm-resolve.sh"
+if command -v _pm_project_root >/dev/null 2>&1; then
+  _pm_project_root "$CWD" || exit 0  # Not a paradigm project — pass
+  CWD=$PM_ROOT
+  _pm_session_id "$INPUT"
+else
+  [ -d "$CWD/.paradigm" ] || exit 0
+  PM_SID=""
 fi
 
 cd "$CWD" || exit 0
 
+# The last blocked violation set: per session when the input has a session id.
+if [ -n "$PM_SID" ]; then
+  STOP_FP_FILE=".paradigm/.sessions/$PM_SID.stop-fp"
+else
+  STOP_FP_FILE=".paradigm/.stop-block-fingerprint"
+fi
+
 # Get modified files (uncommitted changes)
 _pm_mark git-diff
-MODIFIED=$(git diff --name-only HEAD 2>/dev/null)
+MODIFIED_ALL=$(git diff --name-only HEAD 2>/dev/null)
+
+# --- Session attribution (touched-files ledger) ---
+# The PostToolUse Write|Edit hook records every file this session edited in
+# .paradigm/.sessions/<session_id>.touched. Only those files are judged; the
+# rest of the tree's changes (Bash edits, other sessions, generated state) are
+# listed as advisory. Without a session id (older hosts, tests) the whole tree
+# is judged, as before.
+UNATTRIBUTED=""
+if [ -n "$PM_SID" ]; then
+  LEDGER=".paradigm/.sessions/$PM_SID.touched"
+  MODIFIED=""
+  _NL='
+'
+  for _f in $MODIFIED_ALL; do
+    if [ -f "$LEDGER" ] && grep -qxF -- "$_f" "$LEDGER" 2>/dev/null; then
+      MODIFIED="$MODIFIED$_f$_NL"
+    else
+      case "$_f" in
+        .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;  # generated state
+        *) UNATTRIBUTED="$UNATTRIBUTED$_f$_NL" ;;
+      esac
+    fi
+  done
+  MODIFIED=\${MODIFIED%"$_NL"}
+  UNATTRIBUTED=\${UNATTRIBUTED%"$_NL"}
+else
+  MODIFIED=$MODIFIED_ALL
+fi
+
+# _print_unattributed — advisory list of changes this session did not make
+# through Write/Edit (capped at 10 paths).
+_print_unattributed() {
+  [ -n "$UNATTRIBUTED" ] || return 0
+  _n=$(printf '%s\\n' "$UNATTRIBUTED" | wc -l | tr -d ' ')
+  echo "" >&2
+  echo "[paradigm] Advisory: $_n changed file(s) not edited through Write/Edit in this session (Bash, another session or worktree); not judged:" >&2
+  printf '%s\\n' "$UNATTRIBUTED" | head -n 10 | sed 's/^/  - /' >&2
+  [ "$_n" -gt 10 ] && echo "  ... and $((_n - 10)) more" >&2
+  return 0
+}
+
 if [ -z "$MODIFIED" ]; then
+  _print_unattributed
   # Clean up session markers on pass (no modifications)
   rm -f ".paradigm/.pending-review"
   rm -f ".paradigm/.session-started"
@@ -1472,7 +1634,6 @@ if [ -z "$MODIFIED" ]; then
 fi
 
 # Source shared compliance checks
-SCRIPT_DIR=$(dirname "$0")
 . "$SCRIPT_DIR/paradigm-common.sh"
 
 _pm_mark verdict
@@ -1485,14 +1646,15 @@ fi
 
 # --- Final verdict ---
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
-  # --- Loop guard: a fix attempt that changed nothing ends the turn ---
-  # Without this a violation the agent cannot resolve inside the turn blocks
-  # every stop forever. When this Stop follows a Stop-hook continuation
-  # (stop_hook_active) and the violation set is unchanged — or this is the 4th
-  # consecutive block — print the violations, log stop-block-unresolved and
-  # allow the stop. The marker stays, and the next turn (not active) blocks
-  # again. PARADIGM_OVERRIDE is unaffected: overridden remediations never
-  # reach VIOLATIONS.
+  # --- Loop cap: one block per violation set ---
+  # A violation set blocks once. After that the identical set (digits
+  # ignored) is advisory: on the Stop that follows a Stop-hook continuation
+  # (stop_hook_active — the agent already had its fix attempt) and on every
+  # later turn of the session. A changed set blocks again, up to 3 consecutive
+  # continuations. The last blocked set is kept per session
+  # (.paradigm/.sessions/<id>.stop-fp) and cleared by a passing run.
+  # PARADIGM_OVERRIDE is unaffected: overridden remediations never reach
+  # VIOLATIONS.
   STOP_FP=$(_pm_violation_fp)
   PREV_FP=""
   PREV_COUNT=0
@@ -1503,9 +1665,17 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   fi
   if [ "$STOP_ACTIVE" = "true" ] && { [ "$STOP_FP" = "$PREV_FP" ] || [ "$PREV_COUNT" -ge 3 ]; }; then
     echo "" >&2
-    echo "Paradigm: unresolved after a fix attempt — ending the turn; these will block again next turn ($VIOLATION_COUNT violation(s)):" >&2
+    echo "Paradigm: unresolved after a fix attempt — ending the turn; advisory from now on ($VIOLATION_COUNT violation(s)):" >&2
     echo "$VIOLATIONS" >&2
+    _print_unattributed
     _pm_record_unresolved "$STOP_FP" "$PREV_COUNT"
+    exit 0
+  fi
+  if [ "$STOP_FP" = "$PREV_FP" ]; then
+    echo "" >&2
+    echo "[paradigm] Advisory: already reported this session, not blocking again ($VIOLATION_COUNT violation(s)):" >&2
+    echo "$VIOLATIONS" >&2
+    _print_unattributed
     exit 0
   fi
   if [ "$STOP_ACTIVE" = "true" ]; then
@@ -1513,6 +1683,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   else
     STOP_COUNT=1
   fi
+  mkdir -p "\${STOP_FP_FILE%/*}" 2>/dev/null
   printf '%s\\n%s\\n' "$STOP_FP" "$STOP_COUNT" > "$STOP_FP_FILE" 2>/dev/null
 
   # Emit compliance-violation event (fire-and-forget, backgrounded)
@@ -1532,6 +1703,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
     echo "Advisory:" >&2
     echo "$ADVISORY" >&2
   fi
+  _print_unattributed
   echo "" >&2
   echo "Run these MCP tools to fix:" >&2
   echo "  1. paradigm_purpose (op: add_component) — register new code units" >&2
@@ -1552,6 +1724,7 @@ if [ -n "$ADVISORY" ]; then
   echo "[paradigm] Advisory:" >&2
   echo "$ADVISORY" >&2
 fi
+_print_unattributed
 
 # Auto-demote graduated habits with 3+ failures
 # NOTE: Could be absorbed into compliance-check command in a future iteration.
@@ -1576,10 +1749,14 @@ rm -f ".paradigm/.habits-blocking"
 rm -f ".paradigm/.session-started"
 rm -f ".paradigm/.purpose-paths"
 rm -f "$STOP_FP_FILE"
-# NOTE: .orchestrated / .solo-declared / .team-prompted / .team-reminded /
-# .team-bypass-recorded are deliberately NOT cleared here — Stop fires per assistant turn, and clearing
-# would erase solo declarations mid-session and re-nag every turn. They expire
-# by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
+# NOTE: gate markers (.orchestrated / .solo-declared / .team-prompted /
+# .team-reminded / .team-bypass-recorded, and the per-session files in
+# .paradigm/.sessions/) are deliberately NOT cleared here — Stop fires per
+# assistant turn, and clearing would erase delegation credit and solo
+# declarations mid-session and re-nag every turn. Session files last for the
+# session (pruned after 7 days); the shared markers expire by age
+# (PARADIGM_GATE_TTL_HOURS, default 4h).
+find ".paradigm/.sessions" -type f -mtime +7 -exec rm -f {} + 2>/dev/null
 
 # Postflight learning already ran above: paradigm-common.sh calls
 # \`compliance-check --learn\`, which runs the same runPostflightLearning pass in
@@ -1591,70 +1768,80 @@ exit 0
 `;
 
 export const CLAUDE_CODE_POSTWRITE_HOOK = `#!/bin/sh
-# Legacy afterFileEdit hook — replaced by paradigm-posttooluse.sh (postToolUse)
-# Kept as a no-op because Claude Code expects the file to exist.
+# Paradigm Claude Code PostToolUse (Write|Edit) — the session's touched-files ledger.
+# Appends the edited file, relative to the project root, to
+# <root>/.paradigm/.sessions/<session_id>.touched. The Stop hook judges only the
+# files in this ledger; the rest of the tree's changes (Bash edits, other
+# sessions, other worktrees) are reported as advisory, never blocked on.
+# Installed by: paradigm hooks install --claude-code
+#
+# Hook type: PostToolUse (matcher: Write|Edit)
+# Contract: NEVER fails loudly — always exit 0, no stdout/stderr output.
+
 # Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
 case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
 [ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PostToolUse-Write 10000 2000
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+command -v _pm_project_root >/dev/null 2>&1 || exit 0
+
+INPUT=$(cat 2>/dev/null)
+[ -n "$INPUT" ] || exit 0
+
+CWD=$(_pm_json_field "$INPUT" cwd)
+[ -n "$CWD" ] || CWD=$(pwd)
+_pm_project_root "$CWD" || exit 0
+_pm_session_id "$INPUT"
+[ -n "$PM_SID" ] || exit 0
+
+if command -v jq >/dev/null 2>&1; then
+  FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' 2>/dev/null)
+else
+  FILE=$(printf '%s' "$INPUT" | grep -o '"\\(file_path\\|notebook_path\\)"[[:space:]]*:[[:space:]]*"[^"]*"' 2>/dev/null | head -n 1 | sed 's/^"[a-z_]*"[[:space:]]*:[[:space:]]*"//; s/"$//' 2>/dev/null)
+fi
+[ -n "$FILE" ] || exit 0
+case "$FILE" in /*|[A-Za-z]:*) ;; *) FILE="$CWD/$FILE" ;; esac
+
+# Repo-relative path, as \`git diff --name-only\` prints it. Try the logical
+# root and the physical one (macOS /var -> /private/var, symlinked checkouts).
+REL=""
+_PHYS_ROOT=$(CDPATH= cd -- "$PM_ROOT" 2>/dev/null && pwd -P)
+_FILE_DIR=$(CDPATH= cd -- "\${FILE%/*}" 2>/dev/null && pwd -P)
+_PHYS_FILE=\${_FILE_DIR:+$_FILE_DIR/\${FILE##*/}}
+for _cand in "$FILE|$PM_ROOT" "$FILE|$_PHYS_ROOT" "$_PHYS_FILE|$_PHYS_ROOT"; do
+  _f=\${_cand%%|*}
+  _r=\${_cand#*|}
+  [ -n "$_f" ] && [ -n "$_r" ] || continue
+  case "$_f" in "$_r"/*) REL=\${_f#"$_r"/}; break ;; esac
+done
+[ -n "$REL" ] || exit 0  # outside the project
+
+LEDGER="$PM_ROOT/.paradigm/.sessions/$PM_SID.touched"
+mkdir -p "\${LEDGER%/*}" 2>/dev/null
+if ! grep -qxF -- "$REL" "$LEDGER" 2>/dev/null; then
+  printf '%s\\n' "$REL" >> "$LEDGER" 2>/dev/null
+fi
 
 exit 0
 `;
 
 export const CLAUDE_CODE_PRECOMMIT_HOOK = `#!/bin/sh
-# Paradigm Claude Code Pre-Commit Hook
-# Intercepts git commit Bash calls and auto-rebuilds the index.
+# Paradigm Claude Code Pre-Commit Hook — retired (kept as a no-op).
+# It used to rebuild the index on \`git commit\` and \`git add\` scan-index.json,
+# navigator.yaml and flow-index.json. Those files carry a generatedAt stamp, so
+# every commit picked up an index diff. They are now gitignored generated state
+# (#session-markers-gitignore): the MCP server serves a live index, and
+# SessionStart rebuilds the files when a fresh clone lacks them.
+# The file stays because existing settings.json / hooks.json entries call it.
 # Installed by: paradigm hooks install --claude-code
 #
 # Hook type: PreToolUse (matcher: Bash)
-# Exit 0 = allow (never blocks), just ensures index is fresh
+# Exit 0 = allow (never blocks), never stages anything.
 
-# Read JSON from stdin (hook input)
 # Hook self-monitoring (#hook-monitor, fail open): wall time + outcome -> .paradigm/events/hook-timings.jsonl
 case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
 [ -f "$_PM_DIR/paradigm-hook-monitor.sh" ] && . "$_PM_DIR/paradigm-hook-monitor.sh" && _pm_begin PreToolUse-Bash 15000 5000
 
-INPUT=$(cat)
-
-# Extract the command from tool_input
-if command -v jq >/dev/null 2>&1; then
-  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
-else
-  COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"command"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
-fi
-
-# If command doesn't contain "git commit", pass through
-case "$COMMAND" in
-  *"git commit"*) ;;
-  *) exit 0 ;;
-esac
-
-# The project root, not the directory the command runs in: Claude Code sets
-# CLAUDE_PROJECT_DIR; otherwise the git toplevel, then the current directory.
-ROOT="\${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
-
-# If no .paradigm directory, not a paradigm project
-if [ ! -d "$ROOT/.paradigm" ]; then
-  exit 0
-fi
-# Source before the cd: $_PM_DIR may be relative to where the hook started.
-[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
-cd "$ROOT" || exit 0
-
-# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
-# Stop hooks): the project root's own @a-company/paradigm (never one committed to
-# git), then \`paradigm\` on PATH. No npx: never a fetch inside a hook.
-if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
-  $PARADIGM_BIN index --quiet 2>/dev/null || true
-fi
-
-# Stage the rebuilt files if they exist
-for f in .paradigm/scan-index.json .paradigm/navigator.yaml .paradigm/flow-index.json; do
-  if [ -f "$f" ]; then
-    git add "$f" 2>/dev/null || true
-  fi
-done
-
-# Never block — exit 0
+cat >/dev/null 2>&1
 exit 0
 `;
 
@@ -1786,22 +1973,20 @@ if [ -z "$CWD" ]; then
   CWD="$(pwd)"
 fi
 
-# Not a paradigm project — pass
-if [ ! -d "$CWD/.paradigm" ]; then
-  exit 0
-fi
+# Project root + session (paradigm-resolve.sh): markers live at the root, so a
+# delegation credited from a worktree counts here too. Not a paradigm project — pass.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+command -v _pm_project_root >/dev/null 2>&1 || exit 0
+_pm_project_root "$CWD" || exit 0
+CWD=$PM_ROOT
+_pm_session_id "$INPUT"
 
-# Markers expire by age, NOT by Stop-hook clearing — the Stop hook fires per
-# assistant turn, so clearing there would erase solo declarations mid-session
-# and turn the once-per-session cap into once-per-turn nagging. TTL default 4h.
-TTL_MIN=$(( \${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
-marker_fresh() {
-  [ -f "$1" ] || return 1
-  [ -n "$(find "$1" -mmin "-$TTL_MIN" 2>/dev/null)" ]
-}
-
+# Markers are not cleared by the Stop hook (it fires per assistant turn, so
+# clearing there would erase solo declarations mid-session and turn the
+# once-per-session cap into once-per-turn nagging). A team-agent delegation
+# lasts for the session; shared markers expire by age (TTL default 4h).
 # Session already resolved the gate (team ran, or solo was declared) — pass
-if marker_fresh "$CWD/.paradigm/.orchestrated" || marker_fresh "$CWD/.paradigm/.solo-declared"; then
+if _pm_gate_resolved; then
   exit 0
 fi
 
@@ -1834,17 +2019,14 @@ MATCHED_CLEAN=$(printf '%s' "$MATCHED" | tr -cd 'a-zA-Z ' | head -c 40)
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 echo "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"eligible\\",\\"source\\":\\"prompt-gate\\",\\"matched\\":\\"$MATCHED_CLEAN\\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
 
-# Inject the directive at most once per TTL window (age-based, see above)
-MARKER="$CWD/.paradigm/.team-prompted"
-if marker_fresh "$MARKER"; then
-  exit 0
-fi
-touch "$MARKER" 2>/dev/null
+# Inject the directive at most once per session (per TTL window without a
+# session id)
+_pm_once team-prompted || exit 0
 
 # stdout on UserPromptSubmit = injected into the model's context
 echo "[paradigm] This task looks orchestration-eligible (matched: \\"$MATCHED_CLEAN\\")."
 echo "Standing opt-in for team orchestration exists in this project. Before editing source:"
-echo "  - Run paradigm_orchestrate_inline (mode=\\"plan\\") to engage the agent team, OR"
+echo "  - Delegate to a team agent with the Agent tool (a paradigm:* agent, or one in .claude/agents or ~/.claude/agents), OR"
 echo "  - Declare solo explicitly: \\\`paradigm solo <trivial|hotfix|user-directed|exploratory> [note]\\\`"
 echo "Solo work on eligible tasks without a declaration is recorded as a bypass at session end."
 
@@ -1863,7 +2045,7 @@ export const CLAUDE_CODE_TEAM_GATE_HOOK = `#!/bin/sh
 # Graduation to a blocking guard happens only after baseline telemetry
 # justifies it (Loid: "advisory-everywhere first, four weeks minimum").
 #
-# Uses a session marker (.paradigm/.team-reminded) to fire at most once.
+# Fires at most once per session (.paradigm/.sessions/<id>.team-reminded).
 # Escape hatch: PARADIGM_TEAM_GATE=off
 
 # Read JSON from stdin (hook input)
@@ -1889,26 +2071,17 @@ if [ -z "$CWD" ]; then
   CWD="$(pwd)"
 fi
 
-# Not a paradigm project — pass
-if [ ! -d "$CWD/.paradigm" ]; then
-  exit 0
-fi
+# Project root + session (paradigm-resolve.sh): markers live at the root, so a
+# delegation credited from a worktree counts here too. Not a paradigm project — pass.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+command -v _pm_project_root >/dev/null 2>&1 || exit 0
+_pm_project_root "$CWD" || exit 0
+CWD=$PM_ROOT
+_pm_session_id "$INPUT"
 
-# Markers expire by age, NOT by Stop-hook clearing (Stop fires per turn).
-TTL_MIN=$(( \${PARADIGM_GATE_TTL_HOURS:-4} * 60 ))
-marker_fresh() {
-  [ -f "$1" ] || return 1
-  [ -n "$(find "$1" -mmin "-$TTL_MIN" 2>/dev/null)" ]
-}
-
-# Session already resolved the gate — pass
-if marker_fresh "$CWD/.paradigm/.orchestrated" || marker_fresh "$CWD/.paradigm/.solo-declared"; then
-  exit 0
-fi
-
-# Only remind once per TTL window
-MARKER="$CWD/.paradigm/.team-reminded"
-if marker_fresh "$MARKER"; then
+# Session already resolved the gate (team agent delegated this session, or a
+# fresh shared marker / solo declaration) — pass
+if _pm_gate_resolved; then
   exit 0
 fi
 
@@ -1929,8 +2102,8 @@ case "$FILE_PATH" in
   */docs/*|*/.paradigm/*) exit 0 ;;
 esac
 
-# Mark as reminded so this only fires once per session
-touch "$MARKER" 2>/dev/null
+# Remind once per session (per TTL window without a session id)
+_pm_once team-reminded || exit 0
 
 # Record the edit-advisory event (telemetry)
 EVENTS_DIR="$CWD/.paradigm/events"
@@ -1942,8 +2115,9 @@ echo "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"edit-advisory\\",\\"source\\":\\"
 # Emit advisory (non-blocking)
 echo "" >&2
 echo "[paradigm] Source edit without team orchestration this session." >&2
-echo "  Standing opt-in exists: run paradigm_orchestrate_inline (mode=\\"plan\\") to engage the team," >&2
-echo "  or declare solo explicitly: paradigm solo <trivial|hotfix|user-directed|exploratory> [note]" >&2
+echo "  Standing opt-in exists: delegate to a team agent with the Agent tool (a paradigm:* agent, or one in" >&2
+echo "  .claude/agents or ~/.claude/agents), or declare solo explicitly:" >&2
+echo "  paradigm solo <trivial|hotfix|user-directed|exploratory> [note]" >&2
 echo "  Undeclared solo work on eligible tasks is recorded as a bypass at session end." >&2
 
 exit 0
@@ -1983,13 +2157,17 @@ exit 0
 export const CLAUDE_CODE_DELEGATION_HOOK = `#!/bin/sh
 # Paradigm Claude Code PostToolUse — Agent delegation credit (!delegation-recorded)
 # Fires after the host \`Agent\` (formerly \`Task\`) tool runs. When the delegated
-# subagent is a roster agent — a \`paradigm:*\` plugin agent, or a project agent
-# defined at $CWD/.claude/agents/<type>.md — and it returned a non-empty
-# response, writes .paradigm/.orchestrated (same JSON payload shape as
-# recordOrchestrationCompletion in packages/paradigm-mcp/src/utils/
-# orchestration-marker.ts, source "delegation"). The Stop hook (Check 13), the
-# team gate and the prompt gate honour that marker by age
-# (PARADIGM_GATE_TTL_HOURS, default 4h). Every delegation, credited or not, is
+# subagent is a team agent — a \`paradigm:*\` plugin agent, a project agent in
+# <root>/.claude/agents, or a user-global agent in ~/.claude/agents (by file
+# name <type>.md or \`name:\` frontmatter) — and it returned a non-empty
+# response, the orchestration gate is satisfied (TD-2026-10-28-956):
+#   - <root>/.paradigm/.sessions/<session_id>.orchestrated lasts for the session;
+#   - <root>/.paradigm/.orchestrated (same JSON payload shape as
+#     recordOrchestrationCompletion in packages/paradigm-mcp/src/utils/
+#     orchestration-marker.ts, source "delegation") is honoured by age
+#     (PARADIGM_GATE_TTL_HOURS, default 4h) when a reader has no session id.
+# The Stop hook (Check 13), the team gate and the prompt gate read both, at the
+# project root (paradigm-resolve.sh). Every delegation, credited or not, is
 # appended to .paradigm/events/team-funnel.jsonl for Loid's invocation-rate
 # calibration.
 # Installed by: paradigm hooks install --claude-code
@@ -2030,19 +2208,37 @@ fi
 
 [ -n "$CWD" ] || CWD="$(pwd)"
 
-# Not a paradigm project — pass
-[ -d "$CWD/.paradigm" ] || exit 0
+# Project root (paradigm-resolve.sh): markers are written there, never in a
+# linked worktree. Not a paradigm project — pass.
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh" 2>/dev/null
+command -v _pm_project_root >/dev/null 2>&1 || exit 0
+_pm_project_root "$CWD" 2>/dev/null || exit 0
+CWD=$PM_ROOT
+_pm_session_id "$INPUT" 2>/dev/null
 
 # The ledger rows are hand-built JSON: keep the subagent string to a safe set.
 SUBAGENT=$(printf '%s' "$SUBAGENT" | tr -cd 'a-zA-Z0-9:._-' | head -c 80)
 [ -n "$SUBAGENT" ] || exit 0
 
-# Roster agent? paradigm:* plugin agents, or a project-defined agent file.
+# _agent_defined <dir> — <dir>/<type>.md exists, or an agent file there
+# declares \`name: <type>\` in its frontmatter.
+_agent_defined() {
+  [ -d "$1" ] || return 1
+  [ -f "$1/$SUBAGENT.md" ] && return 0
+  grep -qE "^name:[[:space:]]*[\\"']?$SUBAGENT[\\"']?[[:space:]]*\\$" "$1"/*.md 2>/dev/null
+}
+
+# Team agent? paradigm:* plugin agents, a project agent (<root>/.claude/agents)
+# or a user-global agent (~/.claude/agents, e.g. atelier-mika).
 IS_ROSTER=false
 case "$SUBAGENT" in
   paradigm:?*) IS_ROSTER=true ;;
-  .*) ;;
-  *) [ -f "$CWD/.claude/agents/$SUBAGENT.md" ] && IS_ROSTER=true ;;
+  .*|*:*) ;;
+  *)
+    if _agent_defined "$CWD/.claude/agents" || { [ -n "$HOME" ] && _agent_defined "$HOME/.claude/agents"; }; then
+      IS_ROSTER=true
+    fi
+    ;;
 esac
 
 CREDITED=false
@@ -2052,6 +2248,10 @@ TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 if [ "$CREDITED" = "true" ]; then
   printf '{"timestamp":"%s","type":"orchestrated","verdicts":1,"source":"delegation","subagent":"%s"}\\n' "$TS" "$SUBAGENT" > "$CWD/.paradigm/.orchestrated" 2>/dev/null || true
+  if [ -n "$PM_SID" ]; then
+    mkdir -p "$CWD/.paradigm/.sessions" 2>/dev/null
+    printf '{"timestamp":"%s","type":"orchestrated","source":"delegation","subagent":"%s","session":"%s"}\\n' "$TS" "$SUBAGENT" "$PM_SID" > "$CWD/.paradigm/.sessions/$PM_SID.orchestrated" 2>/dev/null || true
+  fi
 fi
 
 mkdir -p "$CWD/.paradigm/events" 2>/dev/null
@@ -2067,7 +2267,9 @@ export const CLAUDE_CODE_SESSION_START_HOOK = `#!/bin/sh
 # end older than its timeout, or a recorded SIGTERM) or ran over its budget
 # since the last warning, prints ONE line per hook to stdout — SessionStart
 # stdout is added to the agent's context. Rate-limited to once per session
-# (.paradigm/.hook-health-warned). Also trims the ring to its cap.
+# (.paradigm/.hook-health-warned). Also trims the ring to its cap, and on a
+# fresh clone (no generated scan-index.json / navigator.yaml) starts a detached
+# \`paradigm index\` rebuild.
 #
 # Hook type: SessionStart. Contract: always exit 0; fail open.
 
@@ -2078,6 +2280,20 @@ INPUT=$(cat)
 
 ROOT="\${CLAUDE_PROJECT_DIR:-$PWD}"
 [ -d "$ROOT/.paradigm" ] || exit 0
+
+# Fresh clone: the generated indexes are gitignored (#session-markers-gitignore),
+# so readers that load them from disk (loop-files, workspace-loader, protocol
+# health, the lore timeline) find nothing until something rebuilds them. When
+# scan-index.json or navigator.yaml is missing, run \`paradigm index\` (the
+# project's own CLI, then PATH; paradigm-resolve.sh) FULLY detached: a
+# background child holding this hook's pipes would stall the session start.
+if [ ! -f "$ROOT/.paradigm/scan-index.json" ] || [ ! -f "$ROOT/.paradigm/navigator.yaml" ]; then
+  [ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+  if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+    ( cd "$ROOT" && $PARADIGM_BIN index --quiet ) </dev/null >/dev/null 2>&1 &
+  fi
+fi
+
 RING="$ROOT/.paradigm/events/hook-timings.jsonl"
 [ -f "$RING" ] || exit 0
 MARK="$ROOT/.paradigm/.hook-health-warned"
@@ -2300,6 +2516,17 @@ fi
 if [ ! -d "$CWD/.paradigm" ]; then
   echo '{"continue":true}'
   exit 0
+fi
+
+# Fresh clone: the generated indexes are gitignored (#session-markers-gitignore).
+# When scan-index.json or navigator.yaml is missing, run \`paradigm index\`
+# FULLY detached (never hold this hook's pipes open).
+if [ ! -f "$CWD/.paradigm/scan-index.json" ] || [ ! -f "$CWD/.paradigm/navigator.yaml" ]; then
+  case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
+  [ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+  if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$CWD"; then
+    ( cd "$CWD" && $PARADIGM_BIN index --quiet ) </dev/null >/dev/null 2>&1 &
+  fi
 fi
 
 # Build the additional_context payload
@@ -2548,64 +2775,19 @@ exit 0
 `;
 
 export const CURSOR_PRECOMMIT_HOOK = `#!/bin/sh
-# Paradigm Cursor Pre-Commit Hook
-# Intercepts git commit shell executions and auto-rebuilds the index.
+# Paradigm Cursor Pre-Commit Hook — retired (kept as a no-op).
+# It used to rebuild the index on \`git commit\` and \`git add\` scan-index.json,
+# navigator.yaml and flow-index.json. Those files carry a generatedAt stamp, so
+# every commit picked up an index diff. They are now gitignored generated state
+# (#session-markers-gitignore): the MCP server serves a live index and
+# rebuilds the files.
+# The file stays because existing .cursor/hooks.json entries call it.
 # Installed by: paradigm hooks install --cursor
 #
 # Hook type: beforeShellExecution (matcher: "git commit")
-# Exit 0 = allow (never blocks), just ensures index is fresh
+# Exit 0 = allow (never blocks), never stages anything.
 
-# Sibling scripts (paradigm-resolve.sh) sit beside this one.
-case "$0" in */*) _PM_DIR=\${0%/*} ;; *) _PM_DIR=. ;; esac
-
-# Read JSON from stdin (hook input)
-INPUT=$(cat)
-
-# Extract the command from Cursor's beforeShellExecution input
-if command -v jq >/dev/null 2>&1; then
-  COMMAND=$(echo "$INPUT" | jq -r '.command // .shellCommand // empty' 2>/dev/null)
-else
-  COMMAND=$(echo "$INPUT" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"command"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
-fi
-
-# If command doesn't contain "git commit", pass through
-case "$COMMAND" in
-  *"git commit"*) ;;
-  *) exit 0 ;;
-esac
-
-# The project root, not a subdirectory: the input's cwd, otherwise the git
-# toplevel, then the current directory.
-if command -v jq >/dev/null 2>&1; then
-  ROOT=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
-else
-  ROOT=$(echo "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
-fi
-[ -n "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-
-# If no .paradigm directory, not a paradigm project
-if [ ! -d "$ROOT/.paradigm" ]; then
-  exit 0
-fi
-# Source before the cd: $_PM_DIR may be relative to where the hook started.
-[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
-cd "$ROOT" || exit 0
-
-# Rebuild the index with the CLI paradigm-resolve.sh finds (shared with the
-# Stop hooks): the project root's own @a-company/paradigm (never one committed to
-# git), then \`paradigm\` on PATH. No npx: never a fetch inside a hook.
-if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
-  $PARADIGM_BIN index --quiet 2>/dev/null || true
-fi
-
-# Stage the rebuilt files if they exist
-for f in .paradigm/scan-index.json .paradigm/navigator.yaml .paradigm/flow-index.json; do
-  if [ -f "$f" ]; then
-    git add "$f" 2>/dev/null || true
-  fi
-done
-
-# Never block — exit 0
+cat >/dev/null 2>&1
 exit 0
 `;
 

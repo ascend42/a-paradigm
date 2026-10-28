@@ -5,7 +5,9 @@
 # end older than its timeout, or a recorded SIGTERM) or ran over its budget
 # since the last warning, prints ONE line per hook to stdout — SessionStart
 # stdout is added to the agent's context. Rate-limited to once per session
-# (.paradigm/.hook-health-warned). Also trims the ring to its cap.
+# (.paradigm/.hook-health-warned). Also trims the ring to its cap, and on a
+# fresh clone (no generated scan-index.json / navigator.yaml) starts a detached
+# `paradigm index` rebuild.
 #
 # Hook type: SessionStart. Contract: always exit 0; fail open.
 
@@ -16,6 +18,20 @@ INPUT=$(cat)
 
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 [ -d "$ROOT/.paradigm" ] || exit 0
+
+# Fresh clone: the generated indexes are gitignored (#session-markers-gitignore),
+# so readers that load them from disk (loop-files, workspace-loader, protocol
+# health, the lore timeline) find nothing until something rebuilds them. When
+# scan-index.json or navigator.yaml is missing, run `paradigm index` (the
+# project's own CLI, then PATH; paradigm-resolve.sh) FULLY detached: a
+# background child holding this hook's pipes would stall the session start.
+if [ ! -f "$ROOT/.paradigm/scan-index.json" ] || [ ! -f "$ROOT/.paradigm/navigator.yaml" ]; then
+  [ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+  if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
+    ( cd "$ROOT" && $PARADIGM_BIN index --quiet ) </dev/null >/dev/null 2>&1 &
+  fi
+fi
+
 RING="$ROOT/.paradigm/events/hook-timings.jsonl"
 [ -f "$RING" ] || exit 0
 MARK="$ROOT/.paradigm/.hook-health-warned"

@@ -44,6 +44,9 @@ function runHook(script: string, input: object, extra: Record<string, string> = 
 
 function killStopHook(signal: NodeJS.Signals): Promise<void> {
   return new Promise((resolve) => {
+    // session 'k' edited a.ts through Write/Edit (the touched-files ledger the Stop hook judges)
+    fs.mkdirSync(path.join(root, '.paradigm', '.sessions'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', '.sessions', 'k.touched'), 'a.ts\n');
     const ch = spawn('/bin/sh', [path.join(SCRIPTS, 'paradigm-stop.sh')], { cwd: root, env: env(), stdio: ['pipe', 'ignore', 'ignore'] });
     ch.stdin.end(JSON.stringify({ session_id: 'k', cwd: root, hook_event_name: 'Stop' }));
     setTimeout(() => ch.kill(signal), 700);

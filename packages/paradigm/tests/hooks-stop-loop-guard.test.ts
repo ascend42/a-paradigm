@@ -4,8 +4,8 @@
  * `loop_count`. A violation the agent cannot fix inside the turn used to block
  * every stop forever. Now an unchanged violation set (digits ignored) on such
  * a Stop — or a 4th consecutive block — ends the turn, logs
- * `stop-block-unresolved` to team-funnel.jsonl and keeps the marker so the
- * next turn blocks again.
+ * `stop-block-unresolved` to team-funnel.jsonl and keeps the marker. A set
+ * blocks once: on later turns the identical set is advisory.
  *
  * Violations come from Check 14 (a guard remediation served by a stub
  * `paradigm internal active-remediations`), so each test controls the exact
@@ -147,14 +147,15 @@ describe('Claude Code Stop hook loop guard', () => {
     expect(unresolvedRows(fx.root)[0]).toMatchObject({ consecutive: 3 });
   });
 
-  it('(6) a fresh turn after an unresolved release blocks again; PARADIGM_OVERRIDE unchanged', () => {
+  it('(6) a fresh turn after an unresolved release is advisory (one block per set); PARADIGM_OVERRIDE unchanged', () => {
     const fx = fixture();
     fx.setReasons(['purpose missing for src/a']);
     expect(claude(fx, false).status).toBe(2);
     expect(claude(fx, true).status).toBe(0);
     const fresh = claude(fx, false);
-    expect(fresh.status, fresh.stderr).toBe(2);
-    expect(fresh.stderr).toContain('Paradigm compliance check failed');
+    expect(fresh.status, fresh.stderr).toBe(0);
+    expect(fresh.stderr).toContain('already reported this session, not blocking again');
+    expect(fresh.stderr).toContain('purpose missing for src/a');
     expect(marker(fx.root)![1]).toBe('1');
     // overriding the remediation removes the violation → pass, marker cleared
     const over = claude(fx, false, { PARADIGM_OVERRIDE: 'rmd-0' });

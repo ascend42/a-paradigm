@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { ensureSessionMarkersGitignore, SESSION_MARKERS } from './session-markers-gitignore.js';
+import { ensureSessionMarkersGitignore, SESSION_MARKERS, untrackGeneratedState } from './session-markers-gitignore.js';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -45,5 +45,45 @@ describe('ensureSessionMarkersGitignore', () => {
     expect(untracked).not.toContain('.orchestrated');
     expect(untracked).toContain('.paradigm/.purpose');
     expect(untracked).toContain('.paradigm/config.yaml');
+  });
+
+  it('untrackGeneratedState: git rm --cached on generated state only, safe to run again', () => {
+    const root = tmp();
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd: root, encoding: 'utf8' });
+    git('init', '-q');
+    const p = path.join(root, '.paradigm');
+    const files: Record<string, string> = {
+      'scan-index.json': '{}', 'navigator.yaml': 'a: 1', 'flow-index.json': '{}',
+      'events/team-funnel.jsonl': '{}', 'events/.last-processed': '1', 'history/log.jsonl': '{}',
+      'lore/timeline.yaml': 'v: 1', 'protocols/index.yaml': 'v: 1',
+      // authored: stays tracked
+      'config.yaml': 'v: 1', 'lore/entries/2026-10-28/L-1.lore': 'x', 'docs/.index.yaml': 'x',
+      'decisions/D-1.yaml': 'x', 'protocols/P-x.protocol': 'x', 'events/sub/nested.jsonl': '{}',
+    };
+    for (const [f, c] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(p, f)), { recursive: true });
+      fs.writeFileSync(path.join(p, f), c);
+    }
+    git('add', '-A');
+    git('commit', '-qm', 'init');
+    ensureSessionMarkersGitignore(p);
+    const first = untrackGeneratedState(root).sort();
+    expect(first).toEqual([
+      '.paradigm/events/.last-processed', '.paradigm/events/team-funnel.jsonl', '.paradigm/flow-index.json',
+      '.paradigm/history/log.jsonl', '.paradigm/lore/timeline.yaml', '.paradigm/navigator.yaml',
+      '.paradigm/protocols/index.yaml', '.paradigm/scan-index.json',
+    ]);
+    for (const f of first) expect(fs.existsSync(path.join(root, f))).toBe(true); // kept on disk
+    const tracked = git('ls-files', '.paradigm');
+    for (const f of ['config.yaml', 'lore/entries/2026-10-28/L-1.lore', 'docs/.index.yaml', 'decisions/D-1.yaml', 'protocols/P-x.protocol', 'events/sub/nested.jsonl']) {
+      expect(tracked).toContain(`.paradigm/${f}`);
+    }
+    // second run: nothing left, nothing re-added, ignored files stay untracked
+    expect(untrackGeneratedState(root)).toEqual([]);
+    git('add', '-A');
+    expect(git('ls-files', '.paradigm/scan-index.json')).toBe('');
+    // outside a git repository: a no-op
+    expect(untrackGeneratedState(tmp())).toEqual([]);
   });
 });

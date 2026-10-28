@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**The Paradigm hooks stop interrupting long sessions.** The Stop hook now judges only the files your session edited, at the project root. A problem it already reported is not blocked a second time. Commits no longer pick up `.paradigm` index changes.
+
+### Fixed
+- **The Stop hook judges the session's own edits** (`#touched-files-ledger`, `#paradigm-hooks`). The PostToolUse Write|Edit hook records each edited file in `.paradigm/.sessions/<session_id>.touched`. The Stop hook blocks only on those files. Other changed files (Bash edits, other sessions, other worktrees) are listed as an advisory. Without a session id the whole tree is judged, as before. `paradigm hooks install --claude-code` now registers the postwrite hook with the `Write|Edit` matcher. The old `Edit,Write` matcher never fired and is upgraded in place.
+- **Worktrees are judged at the project root** (`#paradigm-resolve`). The root is `$CLAUDE_PROJECT_DIR`, then the main checkout (the parent of the git common dir), then the cwd. A linked worktree the session did not start in no longer passes as its own project.
+- **Gate markers live at the project root** (`#delegation-hook`, `#team-invocation-gates`). A team-agent delegation credited from a worktree counts everywhere. It lasts for the session (`.paradigm/.sessions/<id>.orchestrated`). Shared markers from the MCP server and `paradigm solo` keep the 4h TTL. The team and prompt reminders fire once per session.
+- **One block per violation set** (`#stop-loop-guard`). After one block, the identical set is advisory, both on the `stop_hook_active` retry and on later turns. A changed set blocks again.
+- **The gates recommend delegating to a team agent** with the Agent tool, not `paradigm_orchestrate_inline`, which does not satisfy the gate.
+- **User-global agents count as team agents.** Delegating to an agent in `~/.claude/agents` (for example `atelier-mika`) satisfies the orchestration gate.
+- **Commits no longer stage `.paradigm` index files** (`#precommit-hooks`, `#session-markers-gitignore`). The pre-commit hooks no longer rebuild or `git add` scan-index.json, navigator.yaml and flow-index.json. They are no-ops now. Generated state is gitignored: the indexes, manifest.consistency.json, session-breadcrumbs.prev.json, `events/*.jsonl`, `events/.last-processed`, `history/`, `lore/timeline.yaml`, and the generated protocols, personas, curriculum, scenarios and university `index.yaml`. `paradigm sync` untracks any of these already committed (`git rm --cached`; the files stay on disk). Run `paradigm sync` once and commit the removal.
+- **A fresh clone rebuilds its indexes** (`#IndexCommand`, `#hook-health-warning`). SessionStart runs `paradigm index` in the background when scan-index.json or navigator.yaml is missing. `paradigm index` also rebuilds the generated YAML indexes.
+
 ## [8.0.5] — 2026-10-28
 
 **Agents run through the Anthropic API ask before running commands, and stay in the project.** With `ANTHROPIC_API_KEY` set, the agents `paradigm team spawn`, `paradigm team orchestrate` and background orchestrations start could run any shell command without asking, and read or write files anywhere on your disk. Now `run_command` asks you once and remembers your answer for your user account only, and file tools are confined to the run's working directory. Files that would run commands later are refused. If you use Paradigm agents with an API key, upgrade. Gnomon is unchanged at 8.0.2.
