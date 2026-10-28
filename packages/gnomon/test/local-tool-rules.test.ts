@@ -14,11 +14,14 @@ import { RefusedError, scopeDigest, TOOL_NAME, validateKindPayload } from '@a-co
 import { ApprovalBroker, approvalsKeyFrom, type PresenceProvider, type StandingSeam } from '../src/kernel/broker/index.js';
 import { contentHashOf } from '../src/kernel/broker/card.js';
 import { composePermission } from '../src/kernel/supervisor/permission.js';
+import { McpListCache } from '../src/kernel/local/mcp-client.js';
+import { bindingOf, toolsHashOf } from '../src/kernel/local/trust-book.js';
+import { rulesStatus } from '../src/kernel/socket/rules-apply.js';
 import { decisionMessage, KeyRing, signaturePreimage, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { mintTestPresence } from '../src/kernel/testing.js';
 import { narrow, type CapabilityEntry, type ServerTrust } from '../src/kernel/local/capability-index.js';
-import { alwaysLine, LocalToolBroker, RULED_PER_MINUTE, toolBindHash, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
-import { RuleBook, ruleWords, type RuleRow } from '../src/kernel/supervisor/rules.js';
+import { alwaysLine, LocalToolBroker, RULED_PER_MINUTE, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool, type ToolRulePauseSource } from '../src/kernel/local/tool-broker.js';
+import { RuleBook, ruleWords, toolRuleWords, type RuleRow } from '../src/kernel/supervisor/rules.js';
 
 const HUMAN = 'p:abcdefgh/matt';
 const AGENT = 'p:abcdefgh/s-01hzzzzz';
@@ -155,7 +158,7 @@ describe('G-LCL-22 a ruleable call: the card offers Always, the rule passes the 
     expect(r.prompts[0]).toContain('always allow mcp:srv/write calls (any arguments) in this repo');
     const rule = r.book().get(card.cardId)!;
     expect(rule).toMatchObject({ match: 'tool', tool: 'mcp:srv/write', bindHash: learned.bindHash });
-    expect(ruleWords(rule)).toBe('any call of mcp:srv/write (any arguments), while the tool and its server stay the same');
+    expect(ruleWords(rule)).toBe('any call of write on the srv MCP server (any arguments)');
     // the next call: approval.auto first, then the run (on trust), tool.brokered approved with NO cardId
     const next = await r.call('write', { t: 'other args' });
     expect(next).toMatchObject({ isError: false, decision: 'approved' });
@@ -456,5 +459,106 @@ describe("C5'a3 K1: a brokered card carries a tool-scope node the contentHash co
       expect(JSON.stringify(plan.block)).not.toContain('tool-scope');
     }
     expect(n).toBeGreaterThan(0);
+  });
+});
+
+describe("C5'a3 K2: status.rules[].paused from the newest listing (display only)", () => {
+  const ID = 'user:matt:srv';
+  const LAUNCH = 'sha256:' + 'c'.repeat(64);
+  /** a cache holding one listing of `srv` (id ID) with these tools */
+  const cacheWith = (tools: Array<Record<string, unknown>>, label = 'srv', id = ID, at = T0): McpListCache => {
+    const c = new McpListCache();
+    c.set(`k-${id}-${at}`, { tools, annotations: null }, { id, label, launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf(tools) }, at);
+    return c;
+  };
+  const bindOf = (tools: Array<Record<string, unknown>>): string => bindingOf({ id: ID, launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf(tools) });
+  /** the rule an always on `write` learned while the server was trusted with `tools` */
+  const ruleFor = (tools: Array<Record<string, unknown>>, tool = 'write') => {
+    const e = narrow(tools, 'srv', { trust: 'trusted' }).find((x) => x.tool === tool)!;
+    return { match: 'tool', tool: `mcp:srv/${tool}`, bindHash: toolBindHash(e, 'mutate', bindOf(tools)) };
+  };
+  const src = (cache: McpListCache, o: { trust?: string | null; on?: boolean | null } = {}): ToolRulePauseSource => ({
+    listed: (label) => cache.newestByLabel(label),
+    trust: () => (o.trust === null ? null : { binding: o.trust ?? bindOf(TOOLS) }),
+    on: () => (o.on === undefined ? true : o.on),
+  });
+
+  it('a live rule is not paused (null)', () => {
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(TOOLS)))).toBeNull();
+  });
+
+  it('server-off: the server is not on now (checked first)', () => {
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(TOOLS), { on: false, trust: null }))).toBe('server-off');
+  });
+
+  it('untrusted: no live trust, or a trust binding that is not the newest listing\'s', () => {
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(TOOLS), { trust: null }))).toBe('untrusted');
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(TOOLS), { trust: 'sha256:' + 'd'.repeat(64) }))).toBe('untrusted');
+  });
+
+  it("changed: the tool's schema or class moved (re-trusted at the new listing), or the tool is gone", () => {
+    const schema = [{ ...TOOLS[0]!, inputSchema: { type: 'object', properties: { t: { type: 'string' }, u: { type: 'number' } } } }, TOOLS[1]!];
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(schema), { trust: bindOf(schema) }))).toBe('changed');
+    const reads = [{ ...TOOLS[0]!, annotations: { readOnlyHint: true, openWorldHint: false } }, TOOLS[1]!];
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(reads), { trust: bindOf(reads) }))).toBe('changed');
+    const gone = [TOOLS[1]!];
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(gone), { trust: bindOf(gone) }))).toBe('changed');
+    // another server's change never touches it
+    const other = cacheWith(TOOLS);
+    other.set('k-other', { tools: schema, annotations: null }, { id: 'user:matt:other', label: 'other', launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf(schema) }, T0 + 1);
+    expect(toolRulePaused(ruleFor(TOOLS), src(other))).toBeNull();
+  });
+
+  it('omitted when it cannot be known: never listed, tools no longer cached, not a tool rule, a non-mcp name', () => {
+    expect(toolRulePaused(ruleFor(TOOLS), src(new McpListCache()))).toBeNull();
+    const l = cacheWith(TOOLS).newestByLabel('srv')!;
+    const evicted: ToolRulePauseSource = { listed: () => ({ ...l, tools: null }), trust: () => ({ binding: bindOf(TOOLS) }), on: () => true };
+    expect(toolRulePaused({ ...ruleFor(TOOLS), bindHash: 'sha256:' + 'e'.repeat(64) }, evicted)).toBeNull();
+    // unknown on-state: no server-off guess
+    expect(toolRulePaused(ruleFor(TOOLS), src(cacheWith(TOOLS), { on: null }))).toBeNull();
+    expect(toolRulePaused({ match: 'exact', tool: 'mcp:srv/write' }, src(cacheWith(TOOLS), { on: false }))).toBeNull();
+    expect(toolRulePaused({ match: 'tool', tool: 'Write', bindHash: ruleFor(TOOLS).bindHash }, src(cacheWith(TOOLS), { on: false }))).toBeNull();
+  });
+
+  it('newestByLabel answers the newest listing under a label', () => {
+    const c = cacheWith(TOOLS);
+    c.set('k-newer', { tools: [TOOLS[1]!], annotations: null }, { id: 'project:/r:srv', label: 'srv', launchHash: LAUNCH, pluginVersion: null, toolsHash: toolsHashOf([TOOLS[1]!]) }, T0 + 5);
+    expect(c.newestByLabel('srv')).toMatchObject({ id: 'project:/r:srv', tools: [TOOLS[1]] });
+    expect(c.newestByLabel('nope')).toBeNull();
+  });
+
+  it('status.rules carries paused on tool rules only, omits it when null, and matching is unchanged', async () => {
+    const r = rig();
+    const { card } = await r.learnBy();
+    const book = r.book();
+    const bindHash = book.get(card.cardId)!.bindHash!;
+    const ctx = { prefixRules: true, roots: ['/r'], bindHash };
+    const before = book.match(REPO, 'mcp:srv/write', bindHash, undefined, ctx);
+    const asked: string[] = [];
+    const row = (p: 'untrusted' | 'changed' | 'server-off' | null | 'boom') => {
+      const st = rulesStatus(book, { paused: (x) => { asked.push(x.match); if (p === 'boom') throw new Error('x'); return p; } });
+      return (st.rules as Array<Record<string, unknown>>).find((x) => x.ruleId === card.cardId)!;
+    };
+    for (const p of ['untrusted', 'changed', 'server-off'] as const) expect(row(p).paused).toBe(p);
+    expect(row(null)).not.toHaveProperty('paused');
+    expect(row('boom')).not.toHaveProperty('paused');
+    expect(rulesStatus(book).rules as unknown[]).toEqual([expect.not.objectContaining({ paused: expect.anything() })]);
+    expect(new Set(asked)).toEqual(new Set(['tool']));
+    // display only: the RuleBook answers the same match after every status read
+    expect(book.match(REPO, 'mcp:srv/write', bindHash, undefined, ctx)).toEqual(before);
+    expect(before).toMatchObject({ ruleId: card.cardId });
+    expect(await r.call('write', { t: 'still runs' })).toMatchObject({ decision: 'approved' });
+  });
+});
+
+describe("C5'a3 K3: tool rule words", () => {
+  it('any call of <tool> on the <server> MCP server (any arguments)', () => {
+    expect(toolRuleWords('mcp:srv/write')).toBe('any call of write on the srv MCP server (any arguments)');
+    expect(toolRuleWords('mcp:notes-db/fam.put')).toBe('any call of fam.put on the notes-db MCP server (any arguments)');
+    expect(ruleWords({ ruleId: 'card:x', match: 'tool', tool: 'mcp:srv/write', bindHash: 'sha256:' + 'a'.repeat(64), repoKey: REPO } as never)).toBe('any call of write on the srv MCP server (any arguments)');
+  });
+  it('a name of another shape is cleaned and shown whole', () => {
+    expect(toolRuleWords('Write')).toBe('any call of Write (any arguments)');
+    expect(toolRuleWords('mcp:srv/a‮b')).not.toContain('‮');
   });
 });

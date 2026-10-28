@@ -85,6 +85,7 @@
  * false). An `mcp:` tool never matches an exact, prefix or edit rule.
  */
 import path from 'node:path';
+import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import type { KernelLog } from '../log/index.js';
 import { inputHash } from './permission.js';
 import { pushRuleWords } from '../git/verbs.js';
@@ -213,12 +214,23 @@ function commandTextOf(tool: unknown, input: unknown): { command?: string; comma
  * 8.0:rules-view (Aegis L1): what a rule allows, in plain words the KERNEL composes from its own RuleBook (never page
  * text). The Rules view lists them and the batch card's lines name each re-enabled rule with them.
  */
+/**
+ * 8.0:local-lane C5'a3 (Mika): a brokered tool rule's words, `any call of <tool> on the <server> MCP server (any
+ * arguments)`. The names come from the rule's own mcp:<server>/<tool> name (BROKERED_RULE_TOOL), each cleaned by the
+ * display sanitizer every card line passes through (sanitizeDisplayText); a name of another shape is shown whole.
+ */
+export function toolRuleWords(tool: string): string {
+  const clean = (s: string): string => sanitizeDisplayText(s).text;
+  const m = BROKERED_RULE_TOOL.test(tool) ? /^mcp:([^/]+)\/(.+)$/.exec(tool) : null;
+  return m ? `any call of ${clean(m[2]!)} on the ${clean(m[1]!)} MCP server (any arguments)` : `any call of ${clean(tool)} (any arguments)`;
+}
+
 export function ruleWords(r: AlwaysRule): string {
   if (r.words) return r.words;
   if (r.match === 'prefix') return `Bash commands starting ${(r.prefix ?? []).join(' ')} …`;
   if (r.match === 'file') return `edits to ${r.path ?? '?'}`;
   if (r.match === 'repo-edits') return 'edits in this repo (same as auto-edits)';
-  if (r.match === 'tool') return `any call of ${r.tool} (any arguments), while the tool and its server stay the same`;
+  if (r.match === 'tool') return toolRuleWords(r.tool);
   if (r.tool === 'Bash') {
     if (r.command === undefined) return 'this exact Bash command';
     const n = r.commandChars ?? r.command.length;

@@ -590,6 +590,15 @@ export class McpListCache {
     if (!n) return null;
     return { ...n, tools: this.#m.get(n.key)?.tools ?? null };
   }
+  /**
+   * Slice C5'a3 (status.rules paused): the newest listing in this daemon run of the server a tool rule names by its
+   * label (mcp:<label>/<tool>); several ids under one label: the newest. null: never listed in this run.
+   */
+  newestByLabel(label: string): (ListedIndex & { tools: Array<Record<string, unknown>> | null }) | null {
+    let best: ListedIndex | null = null;
+    for (const n of this.#newest.values()) if (n.label === label && (!best || n.at >= best.at)) best = n;
+    return best ? this.newest(best.id) : null;
+  }
   get size(): number {
     return this.#m.size;
   }

@@ -850,6 +850,11 @@ export class McpServers {
    * Aegis L3: a server trusted on the chain but no longer on anywhere (its `disabled` drop row failed to write, or the
    * store was edited while the daemon was down) is dropped again (why disabled). Run at daemon start; returns the ids.
    */
+  /** Slice C5'a3 (status.rules paused server-off): the ids on now (the store's enabled rows; reconcileTrust's set). */
+  enabledIds(): Set<string> {
+    return new Set(readMcpServersStore(this.#o.home).enabled.map((e) => e.id));
+  }
+
   reconcileTrust(): string[] {
     const t = this.#o.trust;
     if (!t?.all) return [];

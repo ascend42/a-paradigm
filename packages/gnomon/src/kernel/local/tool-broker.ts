@@ -97,7 +97,9 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { kernelMcpAnswer } from '../supervisor/kernel-mcp.js';
 import { composePermission, inputHash } from '../supervisor/permission.js';
-import { reassemble, reassembleFull, type CapabilityEntry, type ServerTrust, type ToolForm } from './capability-index.js';
+import { narrow, reassemble, reassembleFull, type CapabilityEntry, type ServerTrust, type ToolForm } from './capability-index.js';
+import type { ListedIndex } from './mcp-client.js';
+import { bindingOf } from './trust-book.js';
 
 /** The same deadlines the child waits (gnomon-local broker.ts TOOL_TIMEOUT_MS / CARD_TIMEOUT_MS). */
 export const TOOL_TIMEOUT_MS = 30_000;
@@ -399,6 +401,41 @@ export interface BrokeredRuleSource {
  */
 export function toolBindHash(entry: Pick<CapabilityEntry, 'id' | 'schema'>, cls: ToolBrokerClass, trustBinding: string): string {
   return sha256Tagged(canonicalJson({ entryId: entry.id, schemaSha256: sha256Tagged(canonicalJson(entry.schema)), class: cls, trust: trustBinding }));
+}
+
+/** Slice C5'a3: why a tool rule would not match now (status.rules[].paused; display only). */
+export type ToolRulePause = 'untrusted' | 'changed' | 'server-off';
+
+/** What toolRulePaused reads: the daemon's McpListCache, TrustBook and #mcp-servers enabled set. */
+export interface ToolRulePauseSource {
+  /** the newest listing in this daemon run of the server with this label (McpListCache.newestByLabel) */
+  listed(label: string): (ListedIndex & { tools: Array<Record<string, unknown>> | null }) | null;
+  /** the server's live trust (McpTrust.of): its binding, or null when it is not trusted */
+  trust(id: string): { binding: string } | null;
+  /** the server is on now (#mcp-servers enabled); null: not known */
+  on(id: string): boolean | null;
+}
+
+/**
+ * Slice C5'a3 (status.rules[].paused, display only: matching never reads it): why a tool rule would not match now,
+ * from the bindHash of the newest listing of its server. server-off: the server is not on; untrusted: the server's
+ * trust is not live for that listing (no TrustBook entry, or its binding is not the listing's); changed: no mutate
+ * entry of the rule's tool in that listing has the rule's bindHash under the live binding. null: not paused, OR not
+ * knowable (not a tool rule, the server never listed in this daemon run, its tools no longer cached): never a guess.
+ */
+export function toolRulePaused(r: { match?: string; tool: string; bindHash?: string }, src: ToolRulePauseSource): ToolRulePause | null {
+  if (r.match !== 'tool' || typeof r.bindHash !== 'string') return null;
+  const m = /^mcp:([^/]+)\/(.+)$/.exec(r.tool);
+  if (!m) return null;
+  const [, label, toolName] = m as unknown as [string, string, string];
+  const l = src.listed(label);
+  if (!l) return null;
+  if (src.on(l.id) === false) return 'server-off';
+  const t = src.trust(l.id);
+  if (!t || t.binding !== bindingOf({ id: l.id, launchHash: l.launchHash, pluginVersion: l.pluginVersion, toolsHash: l.toolsHash })) return 'untrusted';
+  if (!l.tools) return null;
+  const now = narrow(l.tools, label, { trust: 'trusted' }).filter((e) => e.tool === toolName && e.class === 'mutate').map((e) => toolBindHash(e, 'mutate', t.binding));
+  return now.includes(r.bindHash) ? null : 'changed';
 }
 
 export interface LocalToolBrokerOptions {
