@@ -23,8 +23,8 @@ import {
 // Certifications are read as the union of every home with readLearningRows,
 // the same read field-failures.readClassroomCertifications does (that module
 // loads the MCP logger for its writers), never premise-core's repo-only reader.
-import { listLearningStores, readLearningRows } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
-import { certificationsByHome, type ClassroomCertRow } from '../../../../paradigm-mcp/src/utils/field-failures.js';
+import { certificationsByHome, listLearningStores, readLearningRows } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+import type { ClassroomCertRow } from '../../../../paradigm-mcp/src/utils/field-failures.js';
 
 interface CheckResult {
   name: string;

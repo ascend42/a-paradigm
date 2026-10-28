@@ -227,24 +227,9 @@ export function appendClassroomCertification(rootDir: string, row: ClassroomCert
   }
 }
 
-/** A certification population: one home, or the pre-scoping legacy repo rows. */
-export type CertPopulation = LearningHome | 'legacy';
-
-/**
- * Split certifications into populations for the repeat-failure rate (scoped
- * learning S2): one per home, plus legacy repo rows (no home, no author) on
- * their own. Calibration never pools homes; empty populations are omitted.
- */
-export function certificationsByHome<T extends { home?: unknown; legacy?: unknown }>(certs: T[]): Partial<Record<CertPopulation, T[]>> {
-  const out: Partial<Record<CertPopulation, T[]>> = {};
-  for (const c of certs) {
-    const key: CertPopulation = c.legacy === true
-      ? 'legacy'
-      : c.home === 'user' || c.home === 'machine' ? c.home : 'repo';
-    (out[key] ??= []).push(c);
-  }
-  return out;
-}
+// certificationsByHome lives in learning-stores.ts (logger-free, so doctor can
+// load it without @a-company/paradigm-logger); re-exported here.
+export { certificationsByHome, type CertPopulation } from './learning-stores.js';
 
 /** Read all classroom-certification rows (union of homes, each tagged with its home). */
 export function readClassroomCertifications(rootDir: string): ClassroomCertRow[] {

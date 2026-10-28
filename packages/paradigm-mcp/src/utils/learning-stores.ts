@@ -745,6 +745,25 @@ export function promotionHomeOf(journal: { home?: unknown; transferable?: boolea
   return journal.transferable === false ? 'repo' : 'user';
 }
 
+/** A certification population: one home, or the pre-scoping legacy repo rows. */
+export type CertPopulation = LearningHome | 'legacy';
+
+/**
+ * Split certifications into populations for the repeat-failure rate (scoped
+ * learning S2): one per home, plus legacy repo rows (no home, no author) on
+ * their own. Calibration never pools homes; empty populations are omitted.
+ */
+export function certificationsByHome<T extends { home?: unknown; legacy?: unknown }>(certs: T[]): Partial<Record<CertPopulation, T[]>> {
+  const out: Partial<Record<CertPopulation, T[]>> = {};
+  for (const c of certs) {
+    const key: CertPopulation = c.legacy === true
+      ? 'legacy'
+      : c.home === 'user' || c.home === 'machine' ? c.home : 'repo';
+    (out[key] ??= []).push(c);
+  }
+  return out;
+}
+
 /** Group samples by home: calibration never pools populations silently. */
 export function groupByHome<T extends { home?: LearningHome }>(rows: T[], fallback: LearningHome): Record<LearningHome, T[]> {
   const out: Record<LearningHome, T[]> = { repo: [], user: [], machine: [] };
