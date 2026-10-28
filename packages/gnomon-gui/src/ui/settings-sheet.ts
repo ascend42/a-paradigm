@@ -65,6 +65,10 @@ export interface SettingsDeps {
   rules?: RulesPress;
   /** #gui-mcp-servers: a press on an `mcp:` key (ui/mcp-servers.ts) */
   mcp?: { press(act: string, value: string | null, trusted: boolean): void; escape?(): boolean; sheetClosed?(): void };
+  /** #gui-capability-browser (C6'b1): a press on a `kept:` key (Local model › Kept memory; ui/tools-drawer.ts KeptFlow) */
+  kept?: { press(act: string, value: string | null, trusted: boolean): void; escape(): boolean };
+  /** called each time the sheet opens (Kept memory reads request.session.memory.list then) */
+  onOpen?: () => void;
 }
 
 /** Where focus goes after a Local model press: a field, a key, or the section's heading. */
@@ -298,6 +302,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     if (overlay.hidden) back = document.activeElement as HTMLElement | null;
     overlay.hidden = false;
     focused = section ?? null;
+    d.onOpen?.();
     repaint();
     const heading = section ? (body.querySelector(`#settings-h-${CSS.escape(section)}`) as HTMLElement | null) : null;
     if (heading) {
@@ -346,6 +351,10 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
       // the submit key presses through the form's submit (Enter in a field presses it too)
       if (lm.disabled || lm.type === 'submit') return;
       if (lm.dataset.lmAct!.startsWith('mcp:')) return d.mcp?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
+      if (lm.dataset.lmAct!.startsWith('kept:')) {
+        if (lm.getAttribute('aria-disabled') === 'true') return; // it keeps its focus; its press does nothing
+        return d.kept?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
+      }
       return d.local?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
     }
     const b = t.closest('[data-settings-run]') as HTMLButtonElement | null;
@@ -405,6 +414,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     escape: () => {
       if (d.rules?.escape()) return; // #gui-rules-view: an open Turn off ▾ folds first, focus back on its key
       if (d.mcp?.escape?.()) return; // C5'b: an open trust preview closes first, focus back on its Trust… key
+      if (d.kept?.escape()) return; // C6'b1: an open Kept memory confirm closes first, focus back on its Delete
       if (!d.local?.escape()) close();
     },
     focusLocal,

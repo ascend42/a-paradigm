@@ -452,6 +452,8 @@ export interface ToolsDrawer {
   row(r: RowLike): void;
   /** the toast's "see Tools": open on the Tools segment, focus on the server's Restart key once read */
   openServer(hsid: string, label: string, trusted: boolean): boolean;
+  /** Settings › Kept memory › Open: an ended session's memory (it may be from an earlier run: no row of it is read) */
+  openMemory(hsid: string, title: string, trusted: boolean, opener: HTMLElement | null): boolean;
   readonly flow: ToolsFlow;
 }
 
@@ -714,6 +716,10 @@ export function mountToolsDrawer(doc: Document, d: ToolsDrawerDeps): ToolsDrawer
     isOpen: () => !overlay.hidden,
     hsid: () => flow.state()?.hsid ?? null,
     row: (r) => flow.row(r),
+    openMemory(hsid, title, trusted, opener) {
+      if (overlay.hidden) back = opener ?? (doc.activeElement as HTMLElement | null);
+      return flow.open({ hsid, title, access: 'ended' }, 'memory', trusted);
+    },
     openServer(hsid, label, trusted) {
       const s = d.session(hsid);
       if (!s) return false;

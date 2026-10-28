@@ -28,6 +28,7 @@ import { rungOf, RUNG_NAME } from './voice-ladder.js';
 import { emptyLocalUi, localSection, type LocalUi } from './local-model.js';
 import type { RulesBlockView } from './rules.js';
 import { emptyMcpUi, mcpSection, type McpUi } from './mcp-servers.js';
+import { keptRows, type KeptUi } from './tools-drawer.js';
 
 export const THEME_KEY = 'gnomon.gui.theme';
 export const MOTION_KEY = 'gnomon.gui.motion';
@@ -221,6 +222,16 @@ export interface SettingsInput {
   rules?: RulesBlockView;
   /** #gui-mcp-servers: the MCP servers section's transient state (ui/mcp-servers.ts) and the focused session */
   mcp?: { ui: McpUi; hsid: string | null };
+  /** #gui-capability-browser (C6'b1): the ended sessions that keep working memory (Local model › Kept memory) */
+  kept?: KeptUi;
+}
+
+/** C6'b1: Local model gets "Kept memory · N sessions" (each with Open and Delete) before its terminal line. */
+function withKept(sec: SettingsSection, kept: KeptUi | undefined): SettingsSection {
+  const rows = kept ? keptRows(kept) : [];
+  if (!rows.length) return sec;
+  const at = sec.rows.findIndex((r) => r.id === 'local-term');
+  return { ...sec, rows: at < 0 ? [...sec.rows, ...rows] : [...sec.rows.slice(0, at), ...rows, ...sec.rows.slice(at)] };
 }
 
 const short = (s: string, n = 12): string => (s.length > n + 4 ? `${s.slice(0, n)}…${s.slice(-4)}` : s);
@@ -356,7 +367,7 @@ export function settingsModel(i: SettingsInput): SettingsSection[] {
     { id: 'layout', title: 'Layout', rows: layout },
     { id: 'voice', title: 'Voice', rows: voice },
     // #gui-local-model (session 2026-10-22-gnomon-local-model): between Voice and Permissions, kernel-owned
-    localSection({ status: s, ui: i.local?.ui ?? emptyLocalUi(), loopsUsing: i.local?.loopsUsing ?? [], time: fmt }),
+    withKept(localSection({ status: s, ui: i.local?.ui ?? emptyLocalUi(), loopsUsing: i.local?.loopsUsing ?? [], time: fmt }), i.kept),
     // #gui-mcp-servers (T-2026-10-23-003): the human's own MCP servers and the first-party Paradigm MCP, kernel-owned
     mcpSection({ status: s, ui: i.mcp?.ui ?? emptyMcpUi(), hsid: i.mcp?.hsid ?? null }),
     { id: 'permissions', title: 'Permissions', rows: permissions },

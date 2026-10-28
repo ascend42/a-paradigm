@@ -63,7 +63,7 @@ import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mo
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { mountTierPicker, type TierPicker } from './tier-picker.js';
-import { mountToolsDrawer, type ToolsDrawer } from './tools-drawer.js';
+import { KeptFlow, mountToolsDrawer, type ToolsDrawer } from './tools-drawer.js';
 import { drawerAccess, mcpFailToastOf, MCP_FAIL_TOAST, serversOffOf, serversOffText } from '../core/tools-drawer.js';
 import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, RepinReturn, type KeptChoice } from '../core/folder-field.js';
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
@@ -1649,9 +1649,28 @@ const mcpServers = new McpServersController({
     return a && a.closest(`#settings-body [data-section="${MCP_SECTION}"]`) ? (a.dataset.lmAct ?? null) : null;
   },
 });
+// #gui-capability-browser (C6'b1): Settings › Local model › Kept memory (the ended sessions' working memory)
+const keptTitle = (hsid: string): string => {
+  const s = store.sessions.get(hsid);
+  return s ? sessionTitle(s) : `session …${hsid.slice(-8)}`;
+};
+const kept = new KeptFlow({
+  call: (req) => (client ? client.call('log.append', req) : Promise.reject(new Error('not connected'))),
+  repaint: () => settings.repaint(),
+  title: keptTitle,
+  // Open: the drawer over the sheet; Esc closes it and focus returns to this Open key
+  open: (hsid) => void toolsDrawer?.openMemory(hsid, keptTitle(hsid), true, document.activeElement as HTMLElement | null),
+  focus: (f) => {
+    const sec = document.querySelector(`#settings-body [data-section="${LOCAL_SECTION}"]`);
+    const el = 'heading' in f ? sec?.querySelector('h3') : sec?.querySelector(`[data-lm-act="${CSS.escape(f.act)}"]${f.value !== undefined ? `[data-lm-value="${CSS.escape(f.value)}"]` : ''}`);
+    (el as HTMLElement | null | undefined)?.focus();
+  },
+});
 const settings = mountSettings(document, {
   local: localModel,
   mcp: mcpServers,
+  kept,
+  onOpen: () => void kept.read(),
   model: () =>
     settingsModel({
       theme,
@@ -1669,6 +1688,7 @@ const settings = mountSettings(document, {
       local: { ui: localModel.ui(), loopsUsing: loopsUsingLocal() },
       rules: rulesBlock(rulesStatusOf(status), rulesUi, (hsid) => sessionName(hsid) || null),
       mcp: { ui: mcpServers.ui(), hsid: focused },
+      kept: kept.ui(),
     }),
   run: (id) => run(id, true), // the sheet acts on trusted presses only (settings-sheet.ts)
   revoke: (grantId) => void revokeGrant(grantId),
@@ -1899,6 +1919,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         trustDropRow(r); // C5'b: a server whose trust the kernel dropped (it changed) is a warn toast
         mcpFailRow(r); // C6'b1: a server of my running local session stopped: a fail toast with "see Tools"
         toolsDrawer?.row(r); // C6'b1: the open drawer re-reads on its session's tool.selection and session.mcp rows
+        if (r.kind === 'session.memory' && settings.isOpen() && (r.payload as { op?: unknown } | undefined)?.op === 'delete') void kept.read(); // C6'b1: Kept memory
         mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)

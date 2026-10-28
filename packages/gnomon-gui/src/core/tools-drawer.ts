@@ -648,7 +648,8 @@ export function keptOf(v: unknown): string[] | null {
 
 /** The rows Settings › Local model gets: "Kept memory · N sessions", then each with Open and Delete (confirmed inline). */
 export function keptRows(k: KeptUi): SettingRow[] {
-  if (k.sessions === null) return [];
+  // only once read, and only when a session keeps memory (or a delete just said what happened)
+  if (k.sessions === null || (!k.sessions.length && !k.result)) return [];
   const n = k.sessions.length;
   const rows: SettingRow[] = [{ kind: 'readonly', id: 'kept-memory', label: TOOLS_COPY.kept.label, value: n ? `${n} session${n === 1 ? '' : 's'}` : TOOLS_COPY.kept.none, how: TOOLS_COPY.kept.how, grp: true, live: true }];
   k.sessions.forEach((s, i) => {

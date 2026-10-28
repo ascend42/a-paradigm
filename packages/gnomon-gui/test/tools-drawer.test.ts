@@ -345,7 +345,9 @@ describe('#gui-capability-browser: Settings › Local model › Kept memory', ()
     const c = keptRows({ ...k, confirm: 'h1' });
     expect(c[1]).toMatchObject({ kind: 'form', confirm: { text: 'Delete this ended session’s working memory? The conversation stays.', keys: [{ act: 'kept:delete-yes', label: 'Delete memory', pri: true }, { act: 'kept:keep', label: 'Keep' }] } });
     expect(keptRows({ ...k, confirm: 'h1', busy: 'h1' })[1]).toMatchObject({ confirm: { keys: [{ busy: true, ariaDisabled: true, label: 'Deleting…' }, { ariaDisabled: true }] } });
-    expect(keptRows({ ...k, sessions: [] })[0]).toMatchObject({ value: 'none' });
+    // none kept: no row at all; after the last one was deleted, the count says none and the result shows
+    expect(keptRows({ ...k, sessions: [] })).toEqual([]);
+    expect(keptRows({ ...k, sessions: [], result: { text: 'x' } })[0]).toMatchObject({ value: 'none' });
     expect(keptRows({ ...k, result: { text: 'Memory deleted.' } }).at(-1)).toMatchObject({ kind: 'form', result: { text: 'Memory deleted.' } });
   });
 });
