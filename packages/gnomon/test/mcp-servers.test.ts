@@ -293,7 +293,7 @@ describe('G-MCP-05 #mcp-servers the enable card and requests', () => {
     expect(Object.keys(comp.servers)).toEqual(['paradigm', 'neurons']);
   });
 
-  it('slice C2\' + TD-2026-10-27-833: composeLocal gives user/plugin servers, and the first-party Paradigm only from a verified staged pin (none here: refused pin-mismatch); trust from the store', async () => {
+  it('slice C2\' + TD-2026-10-27-833: composeLocal gives user/plugin servers, and the first-party Paradigm only from a verified staged pin (none here: refused pin-mismatch); never trust from the store (C5\'a1)', async () => {
     const { m, raised, w, home } = setup();
     const id = idOf(m, 'neurons');
     await m.request(human, MCP_ENABLE_REQUEST, { id, scope: 'all' });
@@ -306,12 +306,19 @@ describe('G-MCP-05 #mcp-servers the enable card and requests', () => {
     // the install at /p does not exist, so nothing is staged: Paradigm is listed refused, never launched
     expect(local.map((x) => [x.name, x.trust, x.refused?.fit ?? null])).toEqual([['paradigm', 'first-party', 'pin-mismatch'], ['neurons', 'enabled', null]]);
     expect(local[0]!.command).toBeUndefined();
-    // a stored `trusted` is read; any other value falls back to enabled
+    // slice C5'a1 (G-LCL-23): an edited store `trust` field widens nothing: composeLocal never reads it, and the
+    // next write drops it; the server carries its launch hash for the TrustBook binding
     const st = readMcpServersStore(home);
-    writeMcpServersStore(home, { ...st, enabled: st.enabled.map((e) => ({ ...e, trust: 'trusted' as const })) });
-    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).filter((x) => !x.refused).map((x) => x.trust)).toEqual(['trusted']);
-    writeMcpServersStore(home, { ...st, enabled: st.enabled.map((e) => ({ ...e, trust: 'first-party' as never })) });
-    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).filter((x) => !x.refused).map((x) => x.trust)).toEqual(['enabled']);
+    const p = mcpServersPath(home);
+    const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as { enabled: Array<Record<string, unknown>> };
+    for (const e of raw.enabled) e.trust = 'trusted';
+    fs.writeFileSync(p, JSON.stringify(raw));
+    const again = m.composeLocal({ hsid: 'h1', cwd: repo }).filter((x) => !x.refused);
+    expect(again.map((x) => x.trust)).toEqual(['enabled']);
+    expect(again[0]!.launchHash).toBe(st.enabled[0]!.launchHash);
+    expect(readMcpServersStore(home).enabled[0]).not.toHaveProperty('trust');
+    writeMcpServersStore(home, readMcpServersStore(home));
+    expect(fs.readFileSync(p, 'utf8')).not.toContain('"trust"');
     void w;
   });
 

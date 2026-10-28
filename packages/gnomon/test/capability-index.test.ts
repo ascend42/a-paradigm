@@ -102,15 +102,17 @@ describe('classes and trust', () => {
     expect(['fam.get', 'fam.set', 'fam.drop'].map((n) => byName(tr, n).class)).toEqual(['mutate', 'mutate', 'mutate']);
   });
 
-  it('per-op annotations from the op-annotations RESOURCE (trusted only; a bad shape is ignored whole)', () => {
+  it('per-op annotations from the op-annotations RESOURCE (first-party only since C5\'a1; a bad shape is ignored whole)', () => {
     const res = { schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { get: { readOnlyHint: true, openWorldHint: false }, drop: { destructiveHint: true } } } };
-    const tr = narrow(tools, 's', { trust: 'trusted', opAnnotations: res });
+    const tr = narrow(tools, 's', { trust: 'first-party', opAnnotations: res });
     expect(['fam.get', 'fam.set', 'fam.drop'].map((n) => byName(tr, n).class)).toEqual(['read', 'mutate', 'destructive']);
+    // slice C5'a1 (trap: trust flapping): a merely trusted server's resource is never read
+    expect(narrow(tools, 's', { trust: 'trusted', opAnnotations: res }).filter((e) => e.op).map((e) => e.class)).toEqual(['mutate', 'mutate', 'mutate']);
     expect(narrow(tools, 's', { trust: 'enabled', opAnnotations: res }).filter((e) => e.op).map((e) => e.class)).toEqual(['mutate', 'mutate', 'mutate']);
     expect(parseOpAnnotations({ ...res, schema: 'other' })).toBeNull();
     expect(parseOpAnnotations({ schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { get: { readOnlyHint: 'yes' } } } })).toBeNull();
     expect(parseOpAnnotations({ schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { get: { evilHint: true } } } })).toBeNull();
-    const bad = narrow(tools, 's', { trust: 'trusted', opAnnotations: { schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { get: { readOnlyHint: 1 } } } } });
+    const bad = narrow(tools, 's', { trust: 'first-party', opAnnotations: { schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { get: { readOnlyHint: 1 } } } } });
     expect(byName(bad, 'fam.get').class).toBe('mutate');
   });
 
@@ -118,8 +120,10 @@ describe('classes and trust', () => {
     const withMeta = [{ ...tools[2], _meta: { 'io.gnomon/op-annotations': { get: { readOnlyHint: true, openWorldHint: false }, set: { readOnlyHint: true, openWorldHint: false } } } }];
     const tr = narrow(withMeta, 's', { trust: 'trusted' });
     expect(['fam.get', 'fam.set', 'fam.drop'].map((n) => byName(tr, n).class)).toEqual(['read', 'read', 'mutate']);
-    const both = narrow(withMeta, 's', { trust: 'trusted', opAnnotations: { schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { set: { destructiveHint: true } } } } });
+    const both = narrow(withMeta, 's', { trust: 'first-party', opAnnotations: { schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { set: { destructiveHint: true } } } } });
     expect(byName(both, 'fam.set').class).toBe('destructive');
+    // a trusted server: the resource is ignored, its _meta map stands
+    expect(byName(narrow(withMeta, 's', { trust: 'trusted', opAnnotations: { schema: OP_ANNOTATIONS_SCHEMA, tools: { fam: { set: { destructiveHint: true } } } } }), 'fam.set').class).toBe('read');
     expect(narrow(withMeta, 's', { trust: 'enabled' }).map((e) => e.class)).toEqual(['mutate', 'mutate', 'mutate']);
   });
 

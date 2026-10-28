@@ -191,7 +191,7 @@ describe('the broker routes by the OFFERED form across a tier change', () => {
     const target: BrokerTarget = { server: 'srv', provenance: 'mcp:srv', ownsGate: false, list: async () => [], call: async (_n, args) => (calls.push(args), { text: 'ok', isError: false }) };
     const narrowT: BrokeredTool = { name: fam!.name, description: fam!.description, parameters: fam!.parameters, class: 'read', entry: fam!, target, form: 'narrow' };
     const fullT: BrokeredTool = { ...narrowT, parameters: fullParameters(fam!), form: 'full' };
-    const b = new LocalToolBroker({ hsid: 'h', principalId: 'p', repo: '/r', loop: false, log: async () => undefined, target, tools: [narrowT], running: () => true });
+    const b = new LocalToolBroker({ hsid: 'h', principalId: 'p', repo: '/r', loop: false, log: async () => undefined, target, tools: [narrowT], running: () => true, trustLive: () => 'first-party' });
     b.setTools([fullT], { ackId: 'ts-1' });
     const req = (id: string, args: Record<string, unknown>) => b.handle({ id, toolCallId: 'c', name: 'fam.get', args, error: null });
     expect((await req('tr-1', { 'n.a': 'v' })).isError).toBe(false);

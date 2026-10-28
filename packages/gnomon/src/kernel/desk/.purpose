@@ -289,6 +289,25 @@ components:
       source, version, sourceKind, git dirty, treeSha256. status.mcp.firstParty
       gains staged (the pin and its dir) and pinMismatch (the last
       verification's why, or 'no pin'); a GUI card is C6'.
+      Per-server trust (TD-2026-10-27-833 slice C5'a1, G-LCL-23): how much a
+      LOCAL session believes a user or plugin server's own tool labels lives
+      in KERNEL-signed tool.trust{id, label, op set|cleared|dropped, binding,
+      why, launchHash?, toolsHash?} rows folded by TrustBook
+      (src/kernel/local/trust-book.ts), never in mcp-servers.json:
+      composeLocal no longer reads the store's old trust field and the next
+      write drops it. request.mcp.trust{id, op preview|commit|clear, token?}
+      (human, gui/device, dispatch kind list): preview reads the newest
+      listing of the server in this daemon run (listedOf over the daemon's
+      McpListCache; none: not-listed) and answers the trust notice, the tools
+      that would run with no card and a single-use 60 s token bound to
+      (principal, id, launchHash, toolsHash); commit re-checks token, listing
+      and declaration, then writes the set row; clear needs no token.
+      Refused (MCP_TRUST_REFUSALS): platform (win32), first-party,
+      not-local, remote, fetches, remote-proxy, problem, bad-id,
+      not-enabled, not-listed, changed. Turning a server off everywhere drops
+      its trust (why disabled). status.mcp server rows gain trust{level
+      untrusted|trusted, why, since?}; firstParty.trust is first-party. GUI is
+      C5'b; Always rules for brokered tools are C5'a2.
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
@@ -297,4 +316,6 @@ components:
     tests:
       - test/mcp-servers.test.ts
       - test/mcp-servers-sandbox.test.ts
-    oracles: [G-MCP-01, G-MCP-02, G-MCP-03, G-MCP-04, G-MCP-05, G-MCP-06, G-MCP-07]
+      - test/mcp-trust-request.test.ts
+      - test/local-trust.test.ts
+    oracles: [G-MCP-01, G-MCP-02, G-MCP-03, G-MCP-04, G-MCP-05, G-MCP-06, G-MCP-07, G-LCL-23]

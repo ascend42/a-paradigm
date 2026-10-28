@@ -7,6 +7,8 @@
  * call; a split op is fixed by the kernel; the server is reaped when the session exits; a loop session gets none.
  */
 // @gnomon-platform: darwin, linux
+import { McpListCache } from '../src/kernel/local/mcp-client.js';
+import { bindingOf } from '../src/kernel/local/trust-book.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -70,12 +72,17 @@ describe('slice C2\': a local session calls a narrow MCP tool end to end', () =>
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
     const cards: Array<Record<string, unknown>> = [];
     const plans: Array<{ binaryReal: string; argv: readonly string[]; policy: { allowRead: Array<{ path: string }>; denyWrite: Array<{ path: string }> } }> = [];
+    const mcpCache = new McpListCache();
     const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       broker: { raise: async (i) => (cards.push(i as never), { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' } as never), decisionOf: async () => 'allow', expire: async () => true },
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp', surface: 'full' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
       launchPlan: (i) => (plans.push(i), { command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
-      localMcp: () => [{ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE, pidfile], trust: 'trusted' }, { id: 'user::far', name: 'far', transport: 'http', trust: 'trusted' }],
+      localMcp: () => [{ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE, pidfile], trust: 'enabled', launchHash: `hmac-sha256:${'1'.repeat(64)}` }, { id: 'user::far', name: 'far', transport: 'http', trust: 'enabled' }],
+      // slice C5'a1: the human trusted this server's labels (a stand-in TrustBook that holds whatever was last listed;
+      // the commit, the binding and the drops are test/local-trust.test.ts)
+      mcpCache,
+      mcpTrust: { of: (id) => { const n = mcpCache.newest(id); return n ? { binding: bindingOf({ id, launchHash: n.launchHash, pluginVersion: n.pluginVersion, toolsHash: n.toolsHash }), launchHash: n.launchHash, toolsHash: n.toolsHash, label: n.label } : null; }, drop: () => undefined },
     });
     // slice C4'a: measure the endpoint's tool skill first, as the daemon's start probe does (the fake passes T1-T4;
     // the 8k window caps it at tier 2); an unmeasured endpoint opens provisional at tier 1
