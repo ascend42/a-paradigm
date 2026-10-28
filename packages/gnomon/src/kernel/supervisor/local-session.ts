@@ -113,7 +113,7 @@ import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js'
 import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
-import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
+import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
 import { cleanServerText, fullOfferable, fullParameters, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry, type ServerTrust } from '../local/capability-index.js';
 import { candidatesOf, FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpError, McpListCache, serverEnv, type LaunchCheckInput, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
@@ -211,7 +211,7 @@ export interface LocalLaneOptions {
    * a restart of one that is not is refused disabled. Absent (test rigs): not checked.
    */
   mcpEnabled?: (id: string, launchHash: string) => boolean;
-  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; bindHash?: string | null }) => { ruleId: string } | null;
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; bindHash?: string | null; toolClass?: 'mutate' | 'destructive' }) => { ruleId: string } | null;
 }
 
 /** The last endpoint probe as status.local.lastProbe shows it. */
@@ -600,6 +600,8 @@ export class LocalLane {
   readonly #remeasuring = new Map<string, Promise<void>>();
   /** Aegis C4'b L1: when each endpoint's last re-measure started (the lane's clock) */
   readonly #remeasureAt = new Map<string, number>();
+  /** Slice C6'a2-1 (founder): the destructive-rule pass limits, one for the daemon (the per-rule day count spans sessions) */
+  readonly #destructiveBudget = new DestructiveRuleBudget();
   /** Aegis C4'a L2: a session's MCP start in flight (a concurrent tier commit waits on it) */
   readonly #mcpStarting = new WeakMap<LocalSession, Promise<BrokeredTool[] | null>>();
   #lastFallback: { at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string } | null = null;
@@ -1439,8 +1441,8 @@ export class LocalLane {
     // slice C5'a2 (^local-tool-grant): tool rules of the session's repo, matched with the mode read at call time
     const roots = [s.roots.cwd, ...(s.roots.worktree ? [s.roots.worktree] : [])];
     const alwaysRule = this.#o.alwaysRule;
-    const rules = alwaysRule && s.loop === undefined ? { rules: { match: (repoKey: string, tool: string, bindHash: string) => alwaysRule(repoKey, tool, bindHash, undefined, { prefixRules: this.#mode(s) !== 'manual', roots, bindHash }) }, repoKey: repoKeyOf(roots), trustBinding: (server: string) => s.mcp?.pool.trustBindingOf(server) ?? null } : {};
-    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual', trustLive: (server) => s.mcp?.pool.trustLive(server) ?? 'enabled', ...rules });
+    const rules = alwaysRule && s.loop === undefined ? { rules: { match: (repoKey: string, tool: string, bindHash: string, toolClass: 'mutate' | 'destructive') => alwaysRule(repoKey, tool, bindHash, undefined, { prefixRules: this.#mode(s) !== 'manual', roots, bindHash, toolClass }) }, repoKey: repoKeyOf(roots), trustBinding: (server: string) => s.mcp?.pool.trustBindingOf(server) ?? null } : {};
+    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual', trustLive: (server) => s.mcp?.pool.trustLive(server) ?? 'enabled', destructiveBudget: this.#destructiveBudget, ...rules });
   }
 
   /**

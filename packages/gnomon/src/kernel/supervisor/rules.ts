@@ -83,6 +83,14 @@
  * its class and the server's live trust binding) is the rule's: a schema, class or trust change leaves it dormant (it
  * stands, listed, and matches again only if that exact binding comes back). Never in manual mode (`ctx.prefixRules`
  * false). An `mcp:` tool never matches an exact, prefix or edit rule.
+ *
+ * DESTRUCTIVE TOOL RULES (8.0:local-lane C6'a2-1, TD-2026-10-28-969): a tool rule is DESTRUCTIVE when its kernel-signed
+ * approval.request carries flags including `irreversible` (#local-tool-broker flags every destructive brokered card). It
+ * is formed ONLY when the decide row's presence is exactly 'fresh' AND it carries a rootSig (the card's `always` is root
+ * class), and the learned row's presence is 'fresh' too: never from a standing grant, a CLI touch, a cached unlock or
+ * voice. It has no expiry (it stands until revoked or its binding changes). It matches only a call whose class is
+ * destructive (PrefixMatchContext.toolClass), and a mutate rule never matches a destructive call (nor the reverse;
+ * the bindHash covers the class too).
  */
 import path from 'node:path';
 import { sanitizeDisplayText } from '@a-company/gnomon-contracts';
@@ -139,6 +147,11 @@ export interface PrefixMatchContext {
    * (a different one leaves the rule dormant). Absent or null ⇒ no tool rule matches.
    */
   bindHash?: string | null;
+  /**
+   * 8.0:local-lane C6'a2-1: the brokered call's class. A destructive call matches only a destructive tool rule; any other
+   * value (absent included) matches only a mutate tool rule.
+   */
+  toolClass?: 'mutate' | 'destructive';
 }
 
 /** The tools a scoped edit rule covers (the auto-edits tools). */
@@ -183,6 +196,8 @@ export interface AlwaysRule {
   match: 'exact' | 'prefix' | 'file' | 'repo-edits' | 'tool';
   /** tool rules only (8.0:local-lane C5'a2): the binding the card showed; a call with another bindHash never matches */
   bindHash?: string;
+  /** tool rules only (8.0:local-lane C6'a2-1): a destructive tool rule (its card was irreversible; root class, fresh) */
+  destructive?: boolean;
   /** prefix rules only: the literal argv words */
   prefix?: string[];
   /** file rules only: the absolute path the auto-edits pass resolved on the card */
@@ -260,7 +275,9 @@ function bump<V>(m: Map<string, V>, k: string, v: V, cap: number): void {
 
 export class RuleBook {
   readonly #trust: KernelTrust;
-  readonly #requests = new Map<string, { tool: string; inputHash: string; commandHash: string | null; argv: string[] | null; hsid?: string; command?: string; commandChars?: number; words?: string; bindHash?: string }>();
+  readonly #requests = new Map<string, { tool: string; inputHash: string; commandHash: string | null; argv: string[] | null; hsid?: string; command?: string; commandChars?: number; words?: string; bindHash?: string; irreversible?: boolean }>();
+  /** 8.0:local-lane C6'a2-1: cardId → the always decide row was presence 'fresh' exactly AND carried a rootSig */
+  readonly #freshRoot = new Map<string, boolean>();
   /** cardId → the decide row's scope key ('exact' or the canonical prefix JSON) */
   readonly #always = new Map<string, string>();
   readonly #rules = new Map<string, AlwaysRule>();
@@ -290,7 +307,9 @@ export class RuleBook {
       if (!card || card.kind !== 'permission' || typeof card.cardId !== 'string' || typeof p.tool !== 'string' || !('tool_input' in p)) return;
       // 8.0:local-lane C5'a2: a brokered card's request row carries the bindHash of its detail (inside the contentHash)
       const bindHash = BROKERED_RULE_TOOL.test(p.tool) && typeof p.bindHash === 'string' && BIND_HASH.test(p.bindHash) ? p.bindHash : null;
-      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null, ...(typeof r.session === 'string' ? { hsid: r.session } : {}), ...commandTextOf(p.tool, p.tool_input), ...((): { words?: string } => { const w = p.tool === 'gnomon_git_push' ? pushRuleWords(p.tool_input) : null; return w ? { words: w } : {}; })(), ...(bindHash ? { bindHash } : {}) }, MAX_TRACKED_REQUESTS);
+      // 8.0:local-lane C6'a2-1: a destructive brokered card is flagged irreversible (the flags inside its contentHash)
+      const irreversible = Array.isArray(p.flags) && p.flags.includes('irreversible');
+      bump(this.#requests, card.cardId, { tool: p.tool, inputHash: inputHash(p.tool_input), commandHash: p.tool === 'Bash' ? bashCommandHash(p.tool_input) : null, argv: p.tool === 'Bash' && obj(p.tool_input) && typeof obj(p.tool_input)!.command === 'string' ? simpleArgv(String(obj(p.tool_input)!.command)) : null, ...(typeof r.session === 'string' ? { hsid: r.session } : {}), ...commandTextOf(p.tool, p.tool_input), ...((): { words?: string } => { const w = p.tool === 'gnomon_git_push' ? pushRuleWords(p.tool_input) : null; return w ? { words: w } : {}; })(), ...(bindHash ? { bindHash } : {}), ...(irreversible ? { irreversible: true } : {}) }, MAX_TRACKED_REQUESTS);
     } else if (r.kind === 'grant.standing') {
       // TD-2026-10-23-815: the grant as minted (kernel-signed; a malformed row covers nothing)
       const exp = typeof p.expiresAt === 'string' ? Date.parse(p.expiresAt) : NaN;
@@ -326,6 +345,9 @@ export class RuleBook {
         }
       }
       bump(this.#always, p.cardId, key, MAX_TRACKED_REQUESTS);
+      // 8.0:local-lane C6'a2-1: a destructive tool rule needs THIS: fresh presence exactly and the root signature
+      const rs = obj(p.rootSig);
+      bump(this.#freshRoot, p.cardId, p.presence === 'fresh' && !!rs && typeof rs.signer === 'string' && rs.signer.length > 0 && typeof rs.sig === 'string' && rs.sig.length > 0, MAX_TRACKED_REQUESTS);
     } else if (r.kind === 'approval.rule.learned') {
       const cardId = p.cardId;
       const isPrefix = p.match === 'prefix';
@@ -349,6 +371,13 @@ export class RuleBook {
         // the decide row's scope is the tool scope, and the learned bindHash is the one the kernel-signed request row
         // carried from the card's detail (the same check as the tool name above)
         if (decided !== '@tool' || !req.bindHash || p.bindHash !== req.bindHash) return;
+        // 8.0:local-lane C6'a2-1 (TD-2026-10-28-969): a destructive (irreversible) card learns only from a FRESH touch
+        // with the root key — never standing, CLI, cached or voice
+        if (req.irreversible) {
+          if (p.presence !== 'fresh' || this.#freshRoot.get(cardId) !== true) return;
+          bump(this.#rules, cardId, { ...base, match: 'tool', bindHash: req.bindHash, destructive: true }, MAX_RULES);
+          return;
+        }
         bump(this.#rules, cardId, { ...base, match: 'tool', bindHash: req.bindHash }, MAX_RULES);
         return;
       }
@@ -389,6 +418,7 @@ export class RuleBook {
       if (typeof p.ruleId !== 'string') return;
       this.#rules.delete(p.ruleId);
       this.#always.delete(p.ruleId);
+      this.#freshRoot.delete(p.ruleId);
       this.#off.delete(p.ruleId);
     } else if (r.kind === 'approval.rule.disabled') {
       // 8.0:rules-view: off, on a rule that STANDS (an off row for an unknown or revoked rule marks nothing)
@@ -456,7 +486,9 @@ export class RuleBook {
     // never in manual mode; a rule whose binding differs is dormant (it stands, it does not match)
     if (tool.startsWith('mcp:')) {
       if (!ctx || !ctx.prefixRules || typeof ctx.bindHash !== 'string' || !BIND_HASH.test(ctx.bindHash)) return null;
-      for (const r of live) if (r.match === 'tool' && r.repoKey === repoKey && r.tool === tool && r.bindHash === ctx.bindHash) return r;
+      // 8.0:local-lane C6'a2-1: a destructive call matches only a destructive rule, any other call only a mutate rule
+      const destructive = ctx.toolClass === 'destructive';
+      for (const r of live) if (r.match === 'tool' && r.repoKey === repoKey && r.tool === tool && r.bindHash === ctx.bindHash && (r.destructive === true) === destructive) return r;
       return null;
     }
     for (const r of live) if (r.match === 'exact' && r.repoKey === repoKey && r.tool === tool && r.inputHash === hash) return r;
