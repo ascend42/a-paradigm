@@ -22,7 +22,8 @@ import {
   MODEL_PRICING,
 } from '../agent-provider.js';
 import { AgentDefinition } from '../../commands/team/types.js';
-import { CommandGate, CommandGateDeps } from './command-consent.js';
+import * as path from 'path';
+import { CommandGate, CommandGateDeps, userHomeDir } from './command-consent.js';
 import { ToolContext, executeTool, toolDefinitions } from './claude-tools.js';
 
 // ============================================================================
@@ -149,6 +150,11 @@ export class ClaudeAgentProvider implements AgentProvider {
       agent: agent.name,
       timeout: options.timeout,
       mcpServerPath: options.mcpServerPath,
+      deniedWrites: [
+        path.join(this.consentDeps.homeDir ?? userHomeDir(), '.paradigm'),
+        path.join(this.consentDeps.homeDir ?? userHomeDir(), '.claude'),
+      ],
+      reviewWrites: new Set<string>(),
     };
 
     // Track conversation
@@ -279,10 +285,15 @@ export class ClaudeAgentProvider implements AgentProvider {
       }
     }
 
-    // Final message
+    // Final message. Allowed-but-sensitive writes (#write-guard) are listed
+    // for the user to review.
+    const reviewWrites = [...(toolCtx.reviewWrites ?? [])];
     yield {
       type: 'done',
-      content: 'Agent completed',
+      content: reviewWrites.length > 0
+        ? `Agent completed. Review these writes: ${reviewWrites.join(', ')}`
+        : 'Agent completed',
+      ...(reviewWrites.length > 0 ? { reviewWrites } : {}),
       usage: totalUsage,
       timestamp: new Date().toISOString(),
     };

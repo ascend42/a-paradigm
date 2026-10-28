@@ -12,6 +12,12 @@ components:
     aspects: ["~provider-cascade", "~agent-tools-confined"]
     gates: ["^command-execution-consent"]
 
+  write-guard:
+    description: "write_file deny-list for the Anthropic API provider. Protects the OFF state and the time before consent; bounds nothing once run_command is ON. Checks the requested and the resolved path (lexical containment, then realpath of the longest existing prefix); segments NFC + lowercase + trailing dots/spaces stripped; refuses ':' segments, new 8.3-style '~N' segments, empty segments, existing symlink or nlink>1 targets. Denies .git/.hg/.svn at any depth (files too), the gitdir a root .git file points to, root .claude .mcp.json .cursor .vscode .idea .devcontainer .husky .githooks .pre-commit-config.yaml lefthook .github .gitlab-ci.yml .circleci .buildkite azure-pipelines.yml Jenkinsfile .envrc mise .npmrc .yarnrc and all of .paradigm, plus absolute ~/.paradigm, ~/.claude and the command log. package.json: install-time scripts may not be added or changed; other edits allowed and listed. portal.yaml, CLAUDE.md, .gitmodules, .gitattributes allowed and listed in the run summary (AgentMessage.reviewWrites on done). writeChecked opens with O_NOFOLLOW and checks nlink before truncating."
+    type: service
+    path: write-guard.ts
+    gates: ["^command-execution-consent"]
+
   command-consent:
     description: "Decides whether run_command is offered and allowed for an API-run agent. Order: --allow-commands / --no-allow-commands for one run (never saved); then agent-provider.allow-commands in ~/.paradigm/config.yaml (per user only, never the project config); then, when undecided, an interactive terminal is asked once on the first call ('Paradigm agents can run shell commands on your machine with your permissions. Keep this on? [y/N]', on stderr) and the answer is saved, while background, orchestrated, MCP and piped runs do not get the tool. Parallel first calls share one question."
     type: service

@@ -213,6 +213,9 @@ export async function teamSpawnCommand(
     console.log();
   }
 
+  // Allowed-but-sensitive writes (#write-guard) the user should look at.
+  const reviewWrites = [...new Set(messages.flatMap((m) => m.reviewWrites ?? []))];
+
   // Output result
   if (options.json) {
     console.log(JSON.stringify({
@@ -223,6 +226,7 @@ export async function teamSpawnCommand(
       model: options.model || 'default',
       task: options.task,
       relay: result.relay,
+      reviewWrites,
       error: result.error,
     }, null, 2));
     return;
@@ -257,6 +261,11 @@ export async function teamSpawnCommand(
         console.log(chalk.gray(`    ${icon} ${artifact.path}`));
       }
     }
+  }
+
+  if (reviewWrites.length > 0) {
+    console.log(chalk.yellow('\n  Review these writes:'));
+    for (const file of reviewWrites) console.log(chalk.yellow(`    ${file}`));
   }
 
   console.log(chalk.gray(`  Session: ${result.sessionId}`));

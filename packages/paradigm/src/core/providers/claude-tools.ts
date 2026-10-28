@@ -16,6 +16,7 @@ import { glob } from 'glob';
 import { log } from '../../utils/logger.js';
 import { resolveContained } from '../../utils/path-containment.js';
 import type { CommandGate } from './command-consent.js';
+import { checkWrite, writeChecked } from './write-guard.js';
 
 export const COMMAND_LOG_FILE = path.join('.paradigm', 'events', 'agent-commands.jsonl');
 
@@ -38,6 +39,10 @@ export interface ToolContext {
   /** run_command timeout in ms. */
   timeout?: number;
   mcpServerPath?: string;
+  /** Absolute trees write_file never touches (#write-guard), e.g. ~/.paradigm, ~/.claude. */
+  deniedWrites?: string[];
+  /** Filled with allowed-but-sensitive writes (package.json, portal.yaml, ...) for the run summary. */
+  reviewWrites?: Set<string>;
 }
 
 export interface CommandLogRecord {
@@ -144,11 +149,19 @@ export async function executeTool(
     }
 
     case 'write_file': {
-      const filePath = resolveContained(root, input.path as string, { allowMissing: true });
-      if (!filePath) return outside('path', input.path);
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, String(input.content ?? ''));
-      return `Written to ${path.relative(fs.realpathSync(root), filePath)}`;
+      const content = String(input.content ?? '');
+      // #write-guard runs before any directory is created.
+      const verdict = checkWrite(root, input.path, content, { deniedAbsolute: ctx.deniedWrites });
+      if (!verdict.ok) {
+        log.component('claude-provider').debug('write_file refused', { path: String(input.path), reason: verdict.reason });
+        return `Error: ${verdict.reason}`;
+      }
+      writeChecked(verdict.real, content);
+      if (verdict.review) {
+        ctx.reviewWrites?.add(verdict.review);
+        log.component('claude-provider').debug('write_file wrote a file to review', { file: verdict.review });
+      }
+      return `Written to ${path.relative(fs.realpathSync.native(root), verdict.real)}`;
     }
 
     case 'search_files': {

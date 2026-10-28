@@ -203,6 +203,9 @@ export async function teamOrchestrateCommand(
     spinner.text = `Orchestrating (${modeLabel} mode)...`;
   }
 
+  // Allowed-but-sensitive writes (#write-guard) the user should look at.
+  const reviewWrites = new Set<string>();
+
   // Callbacks for live output
   const result = await orchestrator.orchestrate(task, {
     mode,
@@ -221,6 +224,7 @@ export async function teamOrchestrateCommand(
       blockOnViolations: true,
     } : undefined,
     onMessage: (source, message) => {
+      for (const file of message.reviewWrites ?? []) reviewWrites.add(`${file} (${source})`);
       if (options.json || options.quiet) return;
 
       if (options.live && message.type === 'text') {
@@ -268,11 +272,16 @@ export async function teamOrchestrateCommand(
 
   // Output results
   if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({ ...result, reviewWrites: [...reviewWrites] }, null, 2));
     return;
   }
 
   displayResult(result);
+  if (reviewWrites.size > 0) {
+    console.log(chalk.yellow('  Review these writes:'));
+    for (const file of reviewWrites) console.log(chalk.yellow(`    ${file}`));
+    console.log();
+  }
 }
 
 // ============================================================================

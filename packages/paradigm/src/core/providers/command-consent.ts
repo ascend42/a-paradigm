@@ -57,8 +57,21 @@ export const CONSENT_QUESTION =
 
 export const SETTING_KEY = 'agent-provider.allow-commands';
 
-export function userConfigPath(): string {
-  return path.join(os.homedir(), '.paradigm', 'config.yaml');
+/**
+ * The user's home from the account database (os.userInfo), not $HOME, so a
+ * run started with HOME=. (or HOME pointing into a repo) can't move the
+ * consent file somewhere the repo controls.
+ */
+export function userHomeDir(): string {
+  try {
+    return os.userInfo().homedir || os.homedir();
+  } catch {
+    return os.homedir();
+  }
+}
+
+export function userConfigPath(home: string = userHomeDir()): string {
+  return path.join(home, '.paradigm', 'config.yaml');
 }
 
 function readYaml(configPath: string): Record<string, unknown> {
@@ -120,6 +133,8 @@ export const terminalConsentPrompt: ConsentPrompt = (command, cwd) =>
 const pendingPrompts = new Map<string, Promise<boolean>>();
 
 export interface CommandGateDeps {
+  /** Test seam for the user's home (defaults to userHomeDir()). */
+  homeDir?: string;
   configPath?: string;
   prompt?: ConsentPrompt;
   isInteractive?: () => boolean;
@@ -134,7 +149,7 @@ export class CommandGate {
   private readonly notify: (line: string) => void;
 
   constructor(private readonly policy: CommandPolicy = {}, deps: CommandGateDeps = {}) {
-    this.configPath = deps.configPath ?? userConfigPath();
+    this.configPath = deps.configPath ?? userConfigPath(deps.homeDir);
     this.prompt = deps.prompt ?? terminalConsentPrompt;
     this.interactive = policy.interactive ?? (deps.isInteractive ?? isInteractiveTerminal)();
     this.notify = deps.notify ?? ((line) => process.stderr.write(`${line}\n`));

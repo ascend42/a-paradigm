@@ -27,6 +27,8 @@ export interface AgentMessage {
   toolInput?: Record<string, unknown>;
   toolResult?: unknown;
   usage?: TokenUsage;
+  /** On 'done': allowed-but-sensitive files the agent wrote (package.json, portal.yaml, ...), for the user to review. */
+  reviewWrites?: string[];
   timestamp: string;
 }
 
