@@ -17,7 +17,7 @@ import { Agent } from '../../gnomon-local/src/agent.js';
 import { KernelToolBroker } from '../../gnomon-local/src/broker.js';
 import { COMPAT_ALLOWLIST } from '../../gnomon-local/src/compat.js';
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
-import { readTiers, toolTiersPath } from '../src/kernel/local/tool-tier.js';
+import { readTiers, setHuman, toolTiersPath } from '../src/kernel/local/tool-tier.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
@@ -131,5 +131,79 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
     const none = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'none', cwd: root, roots: [root], maxSteps: 1, maxTokens: 256, broker, emit });
     expect(none.setBrokered([big], 'ts-1', 'full')).toMatch(/surface none/);
     expect(none.surface).toBe('none');
+  });
+
+  it('Aegis L1 (b): a set with no surface keeps a pending surface change (the child ends on full)', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-tierl1-')));
+    srv = await fakeOpenAI({ tools: true, script: [{ content: 'a', delayMs: 200 }, { content: 'b' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    const emit = (e: Record<string, unknown>): void => void evs.push(e);
+    const t = { name: 'mk', description: 'make', class: 'read' as const, parameters: { type: 'object', properties: { a: { type: 'string' } } } };
+    const a = new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'compact', cwd: root, roots: [root], maxSteps: 2, maxTokens: 256, broker: new KernelToolBroker({ emit }), emit });
+    const run = a.prompt('one');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(a.running).toBe(true);
+    // the tier commit's set (full), then a selection's set with no surface, both before the next step
+    expect(a.setBrokered([t], 'ts-1', 'full')).toBeNull();
+    expect(a.setBrokered([t, { ...t, name: 'mk2' }], 'ts-2')).toBeNull();
+    await run;
+    await a.prompt('two');
+    expect(a.surface).toBe('full');
+    expect(a.brokered).toEqual(['mk', 'mk2']);
+  });
+
+  it('Aegis L2: two interleaved commits during an MCP start — the loser is stale and nothing stale is sent', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-tierl2-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    srv = await fakeOpenAI({ tools: true, nCtx: 16384, script: [{ content: 'Done.' }] });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
+      log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      broker: { raise: async () => ({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }) as never, decisionOf: async () => 'allow', expire: async () => true },
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js'), contextTarget: 16384 },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+      localMcp: () => [{ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE, path.join(root!, 'pid')], trust: 'trusted' }],
+    });
+    // measured (fingerprint known), then the human's remembered tier 0: the session opens with no MCP server started
+    await lane.probeAll();
+    await lane.tierSettled();
+    const rec = Object.values(readTiers(home).records)[0]!;
+    setHuman(home, { base: rec.base, model: rec.model, fingerprint: rec.fingerprint }, 0);
+    const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+    const caps = () => rows.filter((r) => r.kind === 'model.capabilities' && r.payload.hsid === s.hsid && r.payload.tier !== undefined).map((r) => r.payload);
+    expect(caps()[0]).toMatchObject({ tier: 0, tierSource: 'human' });
+    const tier = (p: Record<string, unknown>) => lane.humanRequest(human as never, 'request.session.tier', { hsid: s.hsid, ...p }) as Promise<Record<string, unknown>>;
+    const pa = (await tier({ op: 'preview', tier: 3 })).token;
+    const a = tier({ op: 'commit', token: pa });
+    // A is waiting on the MCP start; B previews and commits on top of it
+    const pb = (await tier({ op: 'preview', tier: 2 })).token;
+    await expect(tier({ op: 'commit', token: pb })).rejects.toThrow(/stale/);
+    expect(await a).toMatchObject({ tier: 3, previous: 0, surface: 'full' });
+    const human_ = caps().filter((c) => c.previous !== undefined);
+    expect(human_).toEqual([expect.objectContaining({ tier: 3, previous: 0, surface: 'full' })]);
+    expect(rows.filter((r) => r.kind === 'tool.selection' && r.payload.hsid === s.hsid && r.payload.trigger === 'tier')).toHaveLength(1);
+    // Aegis L1 (a): a later selection keeps the child on full (the model sees the full echo schema)
+    await lane.humanRequest(human as never, 'request.session.tools.pin', { hsid: s.hsid, name: 'echo', pinned: true });
+    await lane.send(HUMAN, { hsid: s.hsid, text: 'go' });
+    expect(await waitFor(() => rows.some((r) => r.kind === 'turn.result'), 20_000)).toBe(true);
+    const req = srv.requests.filter((r) => JSON.stringify(r.tools ?? []).includes('read_file')).at(-1)!;
+    const echo = (req.tools as Array<{ function: { name: string; parameters: unknown } }>).find((t) => t.function.name === 'echo')!;
+    expect(echo.function.parameters).toEqual({ type: 'object', properties: { text: { type: 'string' } } });
+    await lane.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+  }, 40_000);
+
+  it('Aegis L3: an existing local/ dir that is too open is narrowed to 0700', () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-tierl3-')));
+    fs.mkdirSync(path.join(root, 'local'), { mode: 0o755 });
+    fs.chmodSync(path.join(root, 'local'), 0o755);
+    setHuman(root, { base: 'http://127.0.0.1:1', model: 'm', fingerprint: 'f' }, 2);
+    expect(fs.statSync(path.join(root, 'local')).mode & 0o777).toBe(0o700);
   });
 });

@@ -207,6 +207,12 @@ export const measuredCurrent = (r: TierRecord | null): r is TierRecord & { skill
 function writeTiers(home: string, doc: TierDoc): void {
   const dir = path.join(home, TOOL_TIERS_DIR);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // Aegis C4'a L3: an existing dir that is too open is narrowed (ours only, never through a symlink; not on win32)
+  if (process.platform !== 'win32') {
+    const st = fs.lstatSync(dir);
+    if (!st.isDirectory()) throw new Error(`#local-tool-tier: ${TOOL_TIERS_DIR} is not a directory (a symlink is never followed)`);
+    if (st.uid === process.getuid?.() && (st.mode & 0o777) !== 0o700) fs.chmodSync(dir, 0o700);
+  }
   const file = path.join(dir, TOOL_TIERS_FILE);
   const refuseTarget = (): void => {
     let st: fs.Stats;

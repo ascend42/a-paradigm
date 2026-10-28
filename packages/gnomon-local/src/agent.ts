@@ -333,7 +333,8 @@ export class Agent {
     // slice C4'a: a session opened with no tool surface (a loop judge) never gains one
     if (surface !== undefined && this.#o.surface === 'none') return 'a session with tool surface none takes no surface change';
     this.#nextBrokered = tools.map((t) => ({ ...t }));
-    this.#nextSurface = surface ?? null;
+    // Aegis C4'a L1 (b): a set that carries no surface keeps a surface change still pending
+    this.#nextSurface = surface ?? this.#nextSurface;
     this.#nextBrokeredId = typeof id === 'string' && TOOLS_SET_ID_RE.test(id) ? id : null;
     if (!this.#running) this.#takePending();
     return null;

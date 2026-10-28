@@ -496,6 +496,8 @@ export class LocalLane {
   readonly #memSkill = new Map<string, { skill: ToolTier; passed: number }>();
   /** slice C4'a: the tool-skill measurements in flight, by endpoint id (one at a time per endpoint) */
   readonly #measuring = new Map<string, Promise<void>>();
+  /** Aegis C4'a L2: a session's MCP start in flight (a concurrent tier commit waits on it) */
+  readonly #mcpStarting = new WeakMap<LocalSession, Promise<BrokeredTool[] | null>>();
   #lastFallback: { at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string } | null = null;
 
   constructor(o: LocalLaneOptions) {
@@ -1306,7 +1308,16 @@ export class LocalLane {
    * over exactly the servers fixed at open, its first index and the selection state; returns the first offered set, or
    * null when the session has no server.
    */
-  async #startMcp(s: LocalSession, kernelTools: BrokeredTool[], manual: boolean): Promise<BrokeredTool[] | null> {
+  #startMcp(s: LocalSession, kernelTools: BrokeredTool[], manual: boolean): Promise<BrokeredTool[] | null> {
+    // Aegis C4'a L2: one start per session; a concurrent caller waits on the same one
+    const inFlight = this.#mcpStarting.get(s);
+    if (inFlight) return inFlight;
+    const p = this.#startMcpOnce(s, kernelTools, manual).finally(() => this.#mcpStarting.delete(s));
+    this.#mcpStarting.set(s, p);
+    return p;
+  }
+
+  async #startMcpOnce(s: LocalSession, kernelTools: BrokeredTool[], manual: boolean): Promise<BrokeredTool[] | null> {
     if (s.loop || !s.mcpLaunch || s.mcp) return null;
     // exactly the servers whose launch closure the session profile write-denies (fixed at open)
     const servers = s.mcpLaunch.servers;
@@ -1466,17 +1477,19 @@ export class LocalLane {
     const same = (a: string, b: string): boolean => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
     const valid = pend !== null && same(pend.token, token) && pend.principal === principal && pend.gen === t.gen && this.#now() <= pend.expires && (tier === undefined || tier === pend.tier) && this.#tierAllowed(s, pend.tier).to === pend.tier;
     if (!valid) throw refused('BAD_REQUEST', `${kind}: the preview is stale, expired or already used: preview again`, { reason: 'stale' });
-    const previous = t.tier;
     const plan = tierPlan(pend.tier, s.context.target);
     const surface = lowerSurface(plan.surface, t.surfaceCap) as TierSurface | 'none';
+    // Aegis C4'a L2: running first; a raise from tier 0 starts the MCP servers (awaited, shared by a concurrent commit);
+    // then running AND the selection generation again — only then does the tier state change (a commit that lost the
+    // race is stale and sends nothing)
+    if (s.state !== 'running' || !s.tools) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
+    if (plan.brokered && (!s.mcp || this.#mcpStarting.has(s))) await this.#startMcp(s, t.kernel, this.#mode(s) === 'manual');
+    if (s.state !== 'running' || !s.tools) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
+    if (t.gen !== pend.gen) throw refused('BAD_REQUEST', `${kind}: the preview is stale (the selection changed while the tier was applied): preview again`, { reason: 'stale' });
+    const previous = t.tier;
     t.tier = pend.tier;
     t.source = 'human';
     t.surface = surface;
-    // a raise from tier 0 starts the session's MCP servers now (none were started at tier 0)
-    if (plan.brokered && !s.mcp && s.tools) {
-      await this.#startMcp(s, t.kernel, this.#mode(s) === 'manual');
-    }
-    if (s.state !== 'running' || !s.tools) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (s.mcp && s.sel) {
       this.#reselect(s, 'tier', undefined, { force: true, surface });
     } else {
@@ -1549,7 +1562,10 @@ export class LocalLane {
       s.tools.setTools(tools, { ackId: id });
       // slice C4'a: the selection generation moved (a pending tier preview is stale now)
       if (s.tier) s.tier.gen++;
-      this.#write(s, drv.toolsSetLine(s.tools.offered, id, o.surface === 'none' ? undefined : o.surface));
+      // Aegis C4'a L1 (a): every tools_set of a tiered session carries its current surface, so a later set can never
+      // leave the child on a stale one
+      const surface = o.surface ?? s.tier?.surface;
+      this.#write(s, drv.toolsSetLine(s.tools.offered, id, surface === 'none' ? undefined : surface));
       // Aegis M2: one audit row per change of the offered set — capability ids only, never the query or the need
       const before = new Set(s.sel.ids);
       const row = { hsid: s.hsid, trigger, hash: `sha256:${hash}`, added: ids.filter((x) => !before.has(x)), removed: s.sel.ids.filter((x) => !ids.includes(x)), found: found.map((e) => e.id), unfitPins: Math.min(unfit, 64) };
