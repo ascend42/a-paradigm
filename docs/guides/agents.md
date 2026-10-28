@@ -256,6 +256,8 @@ Promotion flow: lore entry → journal (postflight, when something was learned) 
 - Writes journal entries; promotes high-confidence repeat patterns to notebooks
 - Updates expertise scores using a `0.7 * existing + 0.3 * new` rolling average
 
+Each record has a home: `repo` (committed, shared), `user` (just you) or `machine` (this computer). See [Where learning lives](./learning-scopes.md) for teach's "This repo or just you?" question, the migration, visibility and the commit guard.
+
 See §9 of the [University guide](./university.md) for the related project-pack content surface — University holds first-party teaching content, separate from agent-learned notebooks.
 
 ## 8. MCP tools
