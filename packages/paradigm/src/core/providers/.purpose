@@ -8,7 +8,7 @@ components:
     description: "Anthropic API direct — requires ANTHROPIC_API_KEY environment variable. Offers the model read_file, write_file, search_files and run_command (claude-tools.ts). Every model-supplied path and the run_command cwd must resolve by realpath inside the run's workingDirectory (resolveContained, symlinks that lead out refused). run_command is offered and run only as ^command-execution-consent allows, and every call (command, cwd, exit code, timestamp, refusals too; never env values) is appended to ~/.paradigm/logs/<project-hash>/agent-commands.jsonl (0600, O_NOFOLLOW, command cut to 4 KB with its full length). Refuses to start when the working directory is /, the home folder or above it (unsafeRunRoot). Whether run_command is offered is snapshotted at run start; a later flip of the setting cannot enable it."
     type: service
     path: claude.ts
-    files: [claude.ts, claude-tools.ts]
+    files: [claude.ts, claude-tools.ts, command-runner.ts, write-guard.ts]
     aspects: ["~provider-cascade", "~agent-tools-confined"]
     gates: ["^command-execution-consent"]
 
@@ -16,6 +16,12 @@ components:
     description: "write_file deny-list for the Anthropic API provider. Protects the OFF state and the time before consent; bounds nothing once run_command is ON. Checks the requested and the resolved path (lexical containment, then realpath of the longest existing prefix); segments NFC + lowercase + trailing dots/spaces stripped; refuses ':' segments, new 8.3-style '~N' segments, empty segments, existing symlink or nlink>1 targets. Denies .git/.hg/.svn at any depth (files too), the gitdir a root .git file points to, root .claude .mcp.json .cursor .vscode .idea .devcontainer .husky .githooks .pre-commit-config.yaml lefthook .github .gitlab-ci.yml .circleci .buildkite azure-pipelines.yml Jenkinsfile .envrc mise .npmrc .yarnrc and all of .paradigm, plus absolute ~/.paradigm, ~/.claude and the command log. package.json: install-time scripts may not be added or changed; other edits allowed and listed. portal.yaml, CLAUDE.md, .gitmodules, .gitattributes allowed and listed in the run summary (AgentMessage.reviewWrites on done). writeChecked opens with O_NOFOLLOW and checks nlink before truncating."
     type: service
     path: write-guard.ts
+    gates: ["^command-execution-consent"]
+
+  command-runner:
+    description: "Runs an allowed run_command: shell, no stdin, cleaned env (cleanCommandEnv drops names containing TOKEN/SECRET/PASSWORD/PASSWD/CREDENTIAL/API_KEY/ACCESS_KEY/PRIVATE_KEY/AUTHTOKEN/SESSION_KEY, ending _KEY/_AUTH/_PAT, starting AWS_/AZURE_/GCP_/GCLOUD_/CLOUDSDK_/GOOGLE_APPLICATION_/ANTHROPIC_/OPENAI_/NPM_CONFIG__AUTH, plus GH_TOKEN, GITHUB_TOKEN, NPM_TOKEN, NODE_AUTH_TOKEN, SSH_AUTH_SOCK, KUBECONFIG, DOCKER_AUTH_CONFIG, VAULT_ADDR), detached into its own process group on POSIX; on timeout the group gets SIGTERM then SIGKILL; every live group is SIGKILLed on process exit and on SIGINT/SIGTERM/SIGHUP (hooks installed only while commands run). Output capped at 1 MB per stream."
+    type: service
+    path: command-runner.ts
     gates: ["^command-execution-consent"]
 
   command-consent:

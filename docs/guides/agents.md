@@ -192,14 +192,23 @@ The intent is twofold: (1) the agent reads its own scope each session and self-r
 
 Unlike adoption contracts, this one is enforced in code. When `ANTHROPIC_API_KEY` is set, `paradigm team spawn`, `paradigm team orchestrate` and background orchestrations run agents through the Anthropic API provider, which gives the model four tools: `read_file`, `write_file`, `search_files` and `run_command`.
 
-**Files stay in the project.** Every path the model gives, and the folder it asks `run_command` to use, must resolve inside the run's working directory, with symlinks followed. An absolute path such as `~/.ssh/id_ed25519`, a `../` path, or a symlink in the repo that points outside is refused, and the model is told why.
+**Files stay in the project.** Every path the model gives, and the folder it asks `run_command` to use, must resolve inside the run's working directory, with symlinks followed. An absolute path such as `~/.ssh/id_ed25519`, a `../` path, a UNC or device path, or a symlink in the repo that points outside is refused, and the model is told why. An agent can't run with `/`, your home folder or a folder above it as its working directory.
+
+**Some files are never written.** Some files run commands the next time git, your editor, a hook or your shell touches the repo, so `write_file` refuses them even while commands are off:
+
+- `.git`, `.hg` and `.svn`, at any depth, as folders or files
+- at the project root: `.claude/`, `.mcp.json`, `.cursor/`, `.vscode/`, `.idea/`, `.devcontainer/`, `.husky/`, `.githooks/`, `.pre-commit-config.yaml`, `lefthook.yml`, `.lefthook/`, `.github/`, `.gitlab-ci.yml`, `.circleci/`, `.buildkite/`, `azure-pipelines.yml`, `Jenkinsfile`, `.envrc`, `.mise.toml`, `mise.toml`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, and all of `.paradigm/` (agents change Paradigm state through Paradigm tools)
+- `~/.paradigm/` and `~/.claude/`
+- adding or changing an install-time script (`preinstall`, `install`, `postinstall`, `prepare`, `prepublish`, `prepublishOnly`, `prepack`, `postpack`) in any `package.json`
+
+Names are compared case-insensitively, ignoring trailing dots and spaces. Names containing `:` and new short names like `GIT~1` are refused, and so are symlinked or hard-linked targets. Other `package.json` edits, `portal.yaml`, `CLAUDE.md`, `.gitmodules` and `.gitattributes` are written, and listed under "Review these writes" at the end of the run. This list protects you while commands are off and before you've answered. Once commands are on it limits nothing, because a command can write any of these files itself.
 
 **`run_command` asks once.** It is on by default, but the first time an agent tries a command, Paradigm shows the command and asks:
 
 ```
 A Paradigm agent wants to run a shell command:
-  npm test
-  in /path/to/your/project
+  command: "npm test"
+  in:      "/path/to/your/project"
 
 Paradigm agents can run shell commands on your machine with your permissions. Keep this on? [y/N]
 ```
@@ -220,9 +229,13 @@ agent-provider:
 | Not decided, you're at a terminal | Offered. The first call asks the question above. |
 | Not decided, no terminal (`--background`, orchestrated from MCP, piped, CI) | Not offered until you decide. |
 
-The setting is per user. It is never read from a project's `.paradigm/config.yaml`, so a repo you clone can't turn commands on for itself, and the agent's file tools can't reach it. Note that once commands are on, a command can do anything you can; keeping its folder inside the project does not limit what the command itself touches. Turn it on only for repos and tasks you trust.
+The command and folder in the question are escaped and cut to 500 characters, the answer is read from `/dev/tty`, and agent output waits until you've answered, so nothing the model writes can draw a fake question. Only `y` or `yes` turns commands on; Enter means no.
 
-**Every command is logged.** Each `run_command`, whether it ran or was refused, is appended to `.paradigm/events/agent-commands.jsonl` in the project, with the command, folder, exit code, agent and time. Environment values are never written. Set `DEBUG=1` to also see each command in the Paradigm log output.
+The setting is per user, found through your account's home folder (not `$HOME`). It is never read from a project's `.paradigm/config.yaml`, so a repo you clone can't turn commands on for itself, and the agent's file tools can't reach it. A saved value is ignored if the file resolves inside the project, belongs to another user, or is writable by your group or others. It is saved with mode 0600. `CI` being set counts as no terminal. Tools that drive a pseudo-terminal (expect, node-pty) count as a person at the terminal, so pass `--allow-commands` or `--no-allow-commands` from them. Whether `run_command` is offered is fixed when the run starts. Note that once commands are on, a command can do anything you can; keeping its folder inside the project does not limit what the command itself touches. Turn it on only for repos and tasks you trust.
+
+**Commands run without your secrets.** Before a command runs, variables are removed when the name contains `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `API_KEY`, `ACCESS_KEY`, `PRIVATE_KEY`, `AUTHTOKEN` or `SESSION_KEY`, ends in `_KEY`, `_AUTH` or `_PAT`, or starts with `AWS_`, `AZURE_`, `GCP_`, `GCLOUD_`, `CLOUDSDK_`, `GOOGLE_APPLICATION_`, `ANTHROPIC_` or `OPENAI_`. `SSH_AUTH_SOCK`, `KUBECONFIG`, `DOCKER_AUTH_CONFIG` and `VAULT_ADDR` are removed too. Commands get no stdin. Each runs in its own process group, which is killed when it times out and when Paradigm exits or is interrupted.
+
+**Every command is logged.** Each `run_command`, whether it ran or was refused, is appended to `~/.paradigm/logs/<project-hash>/agent-commands.jsonl` (mode 0600, outside the repo so neither the repo nor the agent can edit it). Each line has the project, command (cut to 4 KB, with its full length), folder, exit code, agent and time. Environment values are never written. Set `DEBUG=1` to also see each command in the Paradigm log output on stderr.
 
 ## 7. How agents learn
 

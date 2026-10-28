@@ -10,7 +10,6 @@
  * to ~/.paradigm/logs/<project-hash>/agent-commands.jsonl (0600, outside the repo).
  */
 
-import { execSync } from 'child_process';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -19,6 +18,10 @@ import { log } from '../../utils/logger.js';
 import { resolveContained } from '../../utils/path-containment.js';
 import type { CommandGate } from './command-consent.js';
 import { checkWrite, writeChecked } from './write-guard.js';
+import { runShellCommand } from './command-runner.js';
+
+/** How deep search_files descends. */
+export const SEARCH_MAX_DEPTH = 20;
 
 /** Longest command text kept in a log record; the full length is recorded too. */
 export const MAX_LOGGED_COMMAND = 4096;
@@ -84,6 +87,7 @@ export interface CommandLogRecord {
   /** Exit code; null when refused, timed out or killed by a signal. */
   exitCode: number | null;
   signal?: string;
+  timedOut?: boolean;
   /** Present when the command was not run. */
   refused?: string;
   durationMs?: number;
@@ -204,10 +208,10 @@ export async function executeTool(
       if (!searchPath) return outside('path', input.path);
       const pattern = input.pattern;
       if (typeof pattern !== 'string' || pattern === '' || path.isAbsolute(pattern) ||
-          pattern.split(/[\\/]/).includes('..')) {
-        return `Error: pattern ${JSON.stringify(pattern)} must be a relative glob without "..".`;
+          /^[\\/]/.test(pattern) || /[{}]/.test(pattern) || pattern.split(/[\\/]/).includes('..')) {
+        return `Error: pattern ${JSON.stringify(pattern)} must be a relative glob without "..", braces or a leading slash.`;
       }
-      const files = await glob(pattern, { cwd: searchPath, follow: false });
+      const files = await glob(pattern, { cwd: searchPath, follow: false, nobrace: true, maxDepth: SEARCH_MAX_DEPTH });
       return files
         .filter((f) => resolveContained(fs.realpathSync.native(root), path.join(searchPath, f)) !== null)
         .join('\n');
@@ -259,28 +263,20 @@ async function runCommand(input: Record<string, unknown>, ctx: ToolContext): Pro
   }
 
   const started = Date.now();
-  try {
-    const output = execSync(command, {
-      cwd: cmdCwd,
-      encoding: 'utf-8',
-      timeout: ctx.timeout || 30000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    recordCommand(ctx, { ...base, exitCode: 0, durationMs: Date.now() - started });
-    return output;
-  } catch (error) {
-    const e = error as { status?: number | null; signal?: string | null; stdout?: string; stderr?: string; message?: string };
-    const exitCode = typeof e.status === 'number' ? e.status : null;
-    recordCommand(ctx, {
-      ...base,
-      exitCode,
-      ...(e.signal ? { signal: e.signal } : {}),
-      durationMs: Date.now() - started,
-    });
-    const detail = [e.stdout, e.stderr].filter(Boolean).join('\n').trim();
-    const status = exitCode !== null ? `exit code ${exitCode}` : `stopped${e.signal ? ` by ${e.signal}` : ''}`;
-    return `Error: command failed (${status})${detail ? `\n${detail}` : e.message ? `\n${e.message}` : ''}`;
-  }
+  const r = await runShellCommand(command, { cwd: cmdCwd, timeoutMs: ctx.timeout || 30000 });
+  recordCommand(ctx, {
+    ...base,
+    exitCode: r.exitCode,
+    ...(r.signal ? { signal: r.signal } : {}),
+    ...(r.timedOut ? { timedOut: true } : {}),
+    durationMs: Date.now() - started,
+  });
+  if (r.exitCode === 0 && !r.timedOut) return r.stdout;
+  const detail = [r.stdout, r.stderr].filter(Boolean).join('\n').trim();
+  const status = r.timedOut
+    ? `timed out after ${ctx.timeout || 30000} ms; its process group was killed`
+    : r.exitCode !== null ? `exit code ${r.exitCode}` : `stopped${r.signal ? ` by ${r.signal}` : ''}`;
+  return `Error: command failed (${status})${detail ? `\n${detail}` : ''}`;
 }
 
 /**
