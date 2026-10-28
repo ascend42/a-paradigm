@@ -190,6 +190,40 @@ describe('#gui-slash-menu: the flow', () => {
   });
 });
 
+describe("#gui-slash-runs: Send this one (C6'b2-2)", () => {
+  const askCaps = () => caps({ tools: [tool('grep', { policy: 'ask' })] });
+  it('sends tools.send{hsid, runId} once per trusted press; the live line confirms it', async () => {
+    const r = rig({ 'request.session.capabilities': [askCaps()], 'request.session.tools.run': [{ status: 'ran', runId: RUN, content: 'x', isError: false }], 'request.session.tools.send': [{ hsid: H, runId: RUN, policy: 'once', queued: true, tainted: true }] });
+    r.flow.open(H, 'grep', true);
+    await tick();
+    r.flow.press(null, true);
+    await tick();
+    const key = r.added[0]!.key;
+    expect(r.flow.run(key)).toMatchObject({ phase: 'ran', policy: 'ask' });
+    await r.flow.sendOne(key, false);
+    expect(r.kinds()).not.toContain('request.session.tools.send');
+    const p = r.flow.sendOne(key, true);
+    void r.flow.sendOne(key, true); // in flight: nothing more is sent
+    await p;
+    expect(r.calls.filter((c) => c.kind === 'request.session.tools.send')).toEqual([{ kind: 'request.session.tools.send', payload: { hsid: H, runId: RUN } }]);
+    expect(r.flow.run(key)!.send).toBe('sent');
+    expect(r.lives.at(-1)).toBe('grep: this result goes with your next message');
+    await r.flow.sendOne(key, true);
+    expect(r.kinds().filter((k) => k === 'request.session.tools.send')).toHaveLength(1);
+  });
+
+  it('a refusal reads in words on the row and in the live line', async () => {
+    const r = rig({ 'request.session.capabilities': [askCaps()], 'request.session.tools.run': [{ status: 'ran', runId: RUN, content: 'x', isError: false }], 'request.session.tools.send': [() => { throw refusal('changed'); }] });
+    r.flow.open(H, 'grep', true);
+    await tick();
+    r.flow.press(null, true);
+    await tick();
+    const key = r.added[0]!.key;
+    await r.flow.sendOne(key, true);
+    expect(r.lives.at(-1)).toBe('grep: not sent: the tool or its server’s trust changed since it ran, so it isn’t sent · next: run it again');
+  });
+});
+
 describe('#gui-slash-runs: transcript rows (chatItems)', () => {
   const at = '2026-10-28T12:00:00.000Z';
   it('this page’s run row shows once: the kernel row for it is claimed; another is history', () => {

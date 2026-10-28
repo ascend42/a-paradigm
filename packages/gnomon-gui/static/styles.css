@@ -1769,6 +1769,10 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .trow.role-run .run-clock { color: var(--sec); }
 .trow.role-run .run-next, .trow.role-run .run-policy { font-size: var(--fs-label); color: var(--sec); }
 .trow.role-run .run-keys { margin-top: 4px; }
+.trow.role-run .run-policy { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-top: 2px; }
+.trow.role-run .run-policy:focus { outline: none; }
+.trow.role-run .run-policy:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.trow.role-run .run-send-note { font-size: var(--fs-label); color: var(--fail); }
 .trow.role-run .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
 .trow.role-run .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
 .trow.role-run .run-data-text { margin: 2px 0 4px; font-family: var(--mono); font-size: var(--fs-control); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto; }

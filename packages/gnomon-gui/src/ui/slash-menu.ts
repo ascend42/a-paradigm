@@ -40,6 +40,7 @@ import {
   startFailWords,
   toolsResultRequest,
   toolsRunRequest,
+  toolsSendRequest,
   toolsStartRequest,
   type ArgField,
   type SkillListing,
@@ -47,7 +48,7 @@ import {
   type SlashItem,
   type SlashRequest,
 } from '../core/slash-menu.js';
-import { rateWaitSecs, RUN_COPY, runReducer, runWords, settledDecisionOf, startRun, type RunEvent, type RunView, type RunWords } from '../core/slash-runs.js';
+import { canSend, rateWaitSecs, RUN_COPY, runReducer, runWords, SEND_COPY, settledDecisionOf, startRun, type RunEvent, type RunView, type RunWords } from '../core/slash-runs.js';
 import { capabilitiesOf, type Capabilities } from '../core/tools-drawer.js';
 import { trapTab } from './tier-picker.js';
 
@@ -406,6 +407,27 @@ export class SlashFlow {
     if (this.#runs.has(key)) this.#apply(key, { type: 'fold', open });
   }
 
+  /**
+   * C6'b2-2: Send this one — request.session.tools.send{hsid, runId}, ONE trusted press while the row offers it (a
+   * press while it is in flight, or on a row that does not offer it, sends nothing). The tool's policy stays ask.
+   */
+  async sendOne(key: string, trusted: boolean): Promise<void> {
+    const v = this.#runs.get(key);
+    if (!trusted || !v || !canSend(v) || !this.#d.access(v.hsid)?.tools) return; // G-GUI-04
+    const runId = v.runId!;
+    this.#apply(key, { type: 'sending' });
+    let out: unknown;
+    try {
+      out = await this.#d.call(toolsSendRequest(v.hsid, runId));
+    } catch (err) {
+      const r = this.#apply(key, { type: 'send-failed', reason: reasonOf(err)?.reason ?? null, network: !(err instanceof RpcError) });
+      if (r) this.#d.live(`${r.tool}: ${runWords(r).sendNote ?? ''}`);
+      return;
+    }
+    const r = this.#apply(key, { type: 'sent', v: out });
+    if (r) this.#d.live(r.send === 'sent' ? SEND_COPY.live(r.tool) : `${r.tool}: ${runWords(r).sendNote ?? ''}`);
+  }
+
   /* ── runs ── */
 
   #apply(key: string, e: RunEvent): RunView | null {
@@ -562,7 +584,17 @@ export function renderRunRow(doc: MiniDoc, w: RunWords, o: { key: string | null;
     w.next ? h(doc, 'div', { class: 'run-next' }, `next: ${w.next}`) : null,
     w.key === 'decide' && k ? h(doc, 'div', { class: 'run-keys' }, h(doc, 'button', { class: 'key quiet', type: 'button', 'data-run-act': 'decide', 'data-run-key': k }, RUN_COPY.decide)) : null,
     data,
-    w.policy ? h(doc, 'div', { class: 'run-policy' }, w.policy) : null,
+    // C6'b2-2: the policy line (tabindex -1: where focus lands when its key goes) and, under ask, Send this one
+    w.policy
+      ? h(
+          doc,
+          'div',
+          { class: 'run-policy', tabindex: '-1' },
+          h(doc, 'span', { class: 'run-policy-word' }, w.policy),
+          w.sendKey && k ? h(doc, 'button', { class: 'key quiet run-send', type: 'button', 'data-run-act': 'send', 'data-run-key': k, ...(w.sendKey === 'busy' ? { 'aria-busy': 'true', 'aria-disabled': 'true' } : {}) }, w.sendKey === 'busy' ? SEND_COPY.sending : SEND_COPY.key) : null,
+        )
+      : null,
+    w.sendNote ? h(doc, 'div', { class: 'run-send-note' }, w.sendNote) : null,
   );
 }
 

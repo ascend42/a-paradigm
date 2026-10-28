@@ -23,6 +23,9 @@ import { CLASS_WORD, fitWords, shown, type Capabilities, type CapParam, type Cap
 export const TOOLS_START_REQUEST = 'request.session.tools.start' as const;
 export const TOOLS_RUN_REQUEST = 'request.session.tools.run' as const;
 export const TOOLS_RESULT_REQUEST = 'request.session.tools.result' as const;
+/** C6'b2-2: send ONE held "/" result to the model (the tool stays ask), and a tool's "/" result policy. */
+export const TOOLS_SEND_REQUEST = 'request.session.tools.send' as const;
+export const TOOLS_POLICY_REQUEST = 'request.session.tools.policy' as const;
 export const SKILLS_LIST_REQUEST = 'request.session.skills.list' as const;
 export const SKILL_RUN_REQUEST = 'request.session.skill.run' as const;
 /** The kernel's SKILL_ARGS_MAX_BYTES (skill-run.ts). */
@@ -346,5 +349,9 @@ export const toolsStartRequest = (hsid: string): SlashRequest => ({ kind: TOOLS_
 /** A run: `full` for a human-only tool (its full schema), `narrow` otherwise. */
 export const toolsRunRequest = (hsid: string, t: Pick<CapTool, 'id' | 'humanOnly'>, args: Record<string, unknown>): SlashRequest => ({ kind: TOOLS_RUN_REQUEST, payload: { hsid, id: t.id, args, form: t.humanOnly ? 'full' : 'narrow' } });
 export const toolsResultRequest = (hsid: string, runId: string): SlashRequest => ({ kind: TOOLS_RESULT_REQUEST, payload: { hsid, runId } });
+/** C6'b2-2: Send this one. */
+export const toolsSendRequest = (hsid: string, runId: string): SlashRequest => ({ kind: TOOLS_SEND_REQUEST, payload: { hsid, runId } });
+/** C6'b2-2: the first-use question, and the drawer's Stop sending (ask). `id` is the capability id. */
+export const toolsPolicyRequest = (hsid: string, id: string, policy: 'send' | 'ask'): SlashRequest => ({ kind: TOOLS_POLICY_REQUEST, payload: { hsid, id, policy } });
 export const skillsListRequest = (hsid: string): SlashRequest => ({ kind: SKILLS_LIST_REQUEST, payload: { hsid } });
 export const skillRunRequest = (hsid: string, name: string, args: string): SlashRequest => ({ kind: SKILL_RUN_REQUEST, payload: { hsid, name, args } });

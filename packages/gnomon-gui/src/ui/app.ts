@@ -605,6 +605,16 @@ function onRunKey(k: HTMLElement, e: Event): void {
     slashMenu!.flow.fold(key, act === 'unfold');
     ($('viewport').querySelector(`[data-run="${CSS.escape(key)}"] .run-fold`) as HTMLElement | null)?.focus({ preventScroll: true });
   }
+  if (k.getAttribute('aria-disabled') === 'true') return; // aria-busy: it sends nothing
+  // C6'b2-2: Send this one; the row is remounted: focus goes back to the same key, else to the row's policy line
+  if (act === 'send') void slashMenu!.flow.sendOne(key, true).then(() => focusRunKey(key, act));
+}
+/** C6'b2-2: after a run row's key settles, focus its same key if it is still there, else the row's policy line. */
+function focusRunKey(key: string, act: string): void {
+  const row = $('viewport').querySelector(`[data-run="${CSS.escape(key)}"]`);
+  const a = document.activeElement;
+  if (a && a !== document.body && !row?.contains(a)) return; // the human moved on: focus stays where they put it
+  ((row?.querySelector(`[data-run-act="${CSS.escape(act)}"]`) ?? row?.querySelector('.run-policy')) as HTMLElement | null)?.focus({ preventScroll: true });
 }
 
 /* ── #gui-host-hints (founder 2026-10-23): host slips under a reply that names what does not run in Gnomon ── */
