@@ -40,8 +40,8 @@ if command -v jq >/dev/null 2>&1; then
 else
   # (stderr muted: a missing or odd grep/sed must not leak output — fail open)
   exec 3>&2 2>/dev/null
-  CWD=$(printf '%s' "$INPUT" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
-  SUBAGENT=$(printf '%s' "$INPUT" | grep -o '"subagent_type"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | sed 's/.*"subagent_type"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//')
+  CWD=$(printf '%s' "$INPUT" | grep -oE '"cwd"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' | head -n 1 | sed -E 's/^"cwd"[[:space:]]*:[[:space:]]*"//; s/"$//')
+  SUBAGENT=$(printf '%s' "$INPUT" | grep -oE '"subagent_type"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' | head -n 1 | sed -E 's/^"subagent_type"[[:space:]]*:[[:space:]]*"//; s/"$//')
   HAS_RESPONSE=false
   if printf '%s' "$INPUT" | grep -q '"tool_response"[[:space:]]*:'; then
     if ! printf '%s' "$INPUT" | grep -q '"tool_response"[[:space:]]*:[[:space:]]*\(null\|""\|{[[:space:]]*}\|\[[[:space:]]*\]\)'; then

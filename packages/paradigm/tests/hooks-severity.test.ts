@@ -12,7 +12,25 @@ import { SH, SYS_PATH, WIN, baseEnv, pathValue, shellPath, tempDir } from '../sr
 
 const COMMON_SH = path.resolve(__dirname, '..', 'src', 'commands', 'hooks', 'scripts', 'paradigm-common.sh');
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+/**
+ * Windows-safe cleanup: drop registered git worktrees first (git keeps
+ * handles and read-only files under them), then remove with retries so a
+ * child process that is still exiting cannot fail the test with EPERM.
+ */
+function cleanup(d: string): void {
+  if (fs.existsSync(path.join(d, '.git')) && fs.statSync(path.join(d, '.git')).isDirectory()) {
+    const list = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: d, encoding: 'utf8' }).stdout || '';
+    for (const line of list.split('\n')) {
+      const wt = line.startsWith('worktree ') ? line.slice('worktree '.length).trim() : '';
+      if (wt && path.resolve(wt) !== path.resolve(d)) {
+        spawnSync('git', ['worktree', 'remove', '--force', '--force', wt], { cwd: d, encoding: 'utf8' });
+      }
+    }
+    spawnSync('git', ['worktree', 'prune'], { cwd: d, encoding: 'utf8' });
+  }
+  fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}
+afterEach(() => { for (const d of dirs.splice(0)) cleanup(d); });
 
 function severities(enforcementJson: string): Record<string, string> {
   const root = tempDir('paradigm-sev-');
@@ -33,7 +51,7 @@ exit 0
   );
   fs.chmodSync(path.join(bin, 'paradigm'), 0o755);
   const ids = ['purpose-exists', 'aspect-advisory', 'orchestration-required', 'purpose-coverage', 'not-configured'];
-  const script = `cd "${shellPath(root)}"; MODIFIED=""; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
+  const script = `SCRIPT_DIR="${shellPath(path.dirname(COMMON_SH))}"; cd "${shellPath(root)}"; MODIFIED=""; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
 for id in ${ids.join(' ')}; do echo "$id=$(_check_severity "$id" dflt)"; done
 echo "threshold=$ORCH_THRESHOLD"`;
   const r = spawnSync(SH, ['-c', script], { env: { ...baseEnv(), PATH: pathValue([bin, ...SYS_PATH]), HOME: root }, encoding: 'utf8' });
@@ -117,7 +135,7 @@ function check13Advisory(root: string): string {
   fs.mkdirSync(path.join(root, 'src'), { recursive: true });
   for (const f of files) fs.writeFileSync(path.join(root, f), 'export const x = 1;\n');
   fs.writeFileSync(path.join(root, 'src', '.purpose'), 'version: 2.0.0\ncomponents:\n  x:\n    description: x\n');
-  const script = `cd "${shellPath(root)}"; MODIFIED="${[...files, 'src/.purpose'].join('\n')}"; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
+  const script = `SCRIPT_DIR="${shellPath(path.dirname(COMMON_SH))}"; cd "${shellPath(root)}"; MODIFIED="${[...files, 'src/.purpose'].join('\n')}"; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
 echo "$ADVISORY"`;
   const r = spawnSync(SH, ['-c', script], { env: { ...baseEnv(), PATH: pathValue([bin, ...SYS_PATH]), HOME: root }, encoding: 'utf8' });
   return r.stdout;
@@ -153,7 +171,7 @@ describe('path lists split on newlines only', () => {
       try { fs.writeFileSync(path.join(root, f), 'export const x = 1;\n'); } catch { /* `*` is not a legal Windows file name */ }
     }
     fs.writeFileSync(path.join(root, 'src', 'a.ts'), 'x\n'); // a glob would expand src/*.ts to this
-    const script = `cd "${shellPath(root)}"; MODIFIED="${files.join('\n')}"; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
+    const script = `SCRIPT_DIR="${shellPath(path.dirname(COMMON_SH))}"; cd "${shellPath(root)}"; MODIFIED="${files.join('\n')}"; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
 echo "source=$SOURCE_COUNT"; case "$-" in *f*) echo glob=off ;; *) echo glob=on ;; esac; printf 'ifs=%s\\n' "$(printf '%s' "$IFS" | od -An -c | tr -d ' ')"`;
     const out = spawnSync(SH, ['-c', script], { env: { ...baseEnv(), PATH: pathValue([stubBin(), ...SYS_PATH]), HOME: root }, encoding: 'utf8' }).stdout;
     expect(out).toContain('source=2'); // two paths, not three words
@@ -178,7 +196,7 @@ describe('nested generated state is not source', () => {
       fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
       fs.writeFileSync(path.join(root, f), '{}\n');
     }
-    const script = `cd "${shellPath(root)}"; MODIFIED="${files.join('\n')}"; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
+    const script = `SCRIPT_DIR="${shellPath(path.dirname(COMMON_SH))}"; cd "${shellPath(root)}"; MODIFIED="${files.join('\n')}"; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
 echo "generated=$PARADIGM_GENERATED_ONLY source=$SOURCE_COUNT"; echo "$ADVISORY"`;
     return spawnSync(SH, ['-c', script], { env: { ...baseEnv(), PATH: pathValue([stubBin(), ...SYS_PATH]), HOME: root }, encoding: 'utf8' }).stdout;
   }
@@ -298,7 +316,7 @@ describe('session attribution and the project root', () => {
 case "$1" in
   compliance-check) echo '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}' ;;
   internal) echo '[{"id":"rmd-0","severity":"guard","claimant":"compliance","reason":"guard violation"}]' ;;
-  index) pwd > "$PM_INDEX_MARK" ;;
+  index) { pwd -W 2>/dev/null || pwd; } > "$PM_INDEX_MARK" ;;
 esac
 exit 0
 `,

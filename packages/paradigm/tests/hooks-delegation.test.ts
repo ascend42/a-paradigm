@@ -17,7 +17,25 @@ import { SH, SYS_PATH, WIN, baseEnv, pathValue, shellPath, tempDir } from '../sr
 
 const SCRIPT = path.resolve(__dirname, '..', 'src', 'commands', 'hooks', 'scripts', 'claude-code-delegation.sh');
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+/**
+ * Windows-safe cleanup: drop registered git worktrees first (git keeps
+ * handles and read-only files under them), then remove with retries so a
+ * child process that is still exiting cannot fail the test with EPERM.
+ */
+function cleanup(d: string): void {
+  if (fs.existsSync(path.join(d, '.git')) && fs.statSync(path.join(d, '.git')).isDirectory()) {
+    const list = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: d, encoding: 'utf8' }).stdout || '';
+    for (const line of list.split('\n')) {
+      const wt = line.startsWith('worktree ') ? line.slice('worktree '.length).trim() : '';
+      if (wt && path.resolve(wt) !== path.resolve(d)) {
+        spawnSync('git', ['worktree', 'remove', '--force', '--force', wt], { cwd: d, encoding: 'utf8' });
+      }
+    }
+    spawnSync('git', ['worktree', 'prune'], { cwd: d, encoding: 'utf8' });
+  }
+  fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}
+afterEach(() => { for (const d of dirs.splice(0)) cleanup(d); });
 
 function project(paradigm = true): string {
   const root = tempDir('paradigm-deleg-');
@@ -119,8 +137,9 @@ for (const noJq of [false, true]) {
       run(payload(root, 'paradigm:bu"il$(x)d/er', 'ok'), { noJq });
       const rows = funnel(root); // parses → the row is valid JSON
       expect(rows[0].subagent).toMatch(/^[a-zA-Z0-9:._-]+$/);
-      // jq decodes the escaped quote then strips it; the grep fallback stops at it.
-      expect(rows[0].subagent).toBe(noJq ? 'paradigm:bu' : 'paradigm:builxder');
+      // jq decodes the escaped quote and the sanitiser strips it; the grep
+      // fallback reads escaped JSON strings whole, so both agree.
+      expect(rows[0].subagent).toBe('paradigm:builxder');
     });
 
     it('malformed stdin → exit 0, no output, nothing written', () => {
