@@ -242,9 +242,10 @@ components:
       #always-rules learns it only from an irreversible request whose decide
       row is presence 'fresh' with a rootSig; no expiry; class-matched;
       DestructiveRuleBudget 3/session/minute and 30/rule/day (past either, a
-      card); in a tainted session a model call is carded. GAPS: the Swift
-      permission row table is slice a2-h (until it ships no destructive
-      Always is offered); skills are slice a2-2; the Revoke toast and "/"
+      card); in a tainted session a model call is carded. The Swift
+      permission row table is in the helper 1.10.0 source (a2-h, G-HLP-02);
+      until a signed 1.10.0 ships in Gnomon.app no destructive Always is
+      offered. GAPS: skills are slice a2-2; the Revoke toast and "/"
       menu are C6'b2; a one-off send under policy ask is not built.
     path: src/kernel/local/tool-broker.ts
     type: module

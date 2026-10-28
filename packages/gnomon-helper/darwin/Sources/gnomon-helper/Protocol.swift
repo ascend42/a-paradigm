@@ -36,7 +36,11 @@ import Foundation
 /// `requestedBy`, the agent that asked, is in its field set) and `local.config` (one gnomon-root-local:v1 row: a real
 /// home's local-model config, loopback endpoints only, at most 4, the runner pinned by sha256). The kernel refuses a
 /// card of either kind when it is RAISED on an older helper ("update the Gnomon app"). Same protocol, additive.
-let gnomonHelperVersion = "1.9.0"
+/// 1.10.0 (TD-2026-10-28-969, C6'a2-h, G-HLP-02): the `permission` row table — a destructive brokered Always signs
+/// its gnomon-root-decision:v2 row ONLY (rootRows:[]), and any further row is refused. The kernel offers a
+/// destructive Always only from this version (ROW_TABLE_MIN_HELPER.permission); an older helper keeps allow and deny.
+/// Same protocol, additive.
+let gnomonHelperVersion = "1.10.0"
 let helperProtocol = "gnomon-helper:v2"
 
 /// Bounds (attacker-growable inputs are capped before use).
@@ -362,7 +366,8 @@ func rowTableRefusal(cardKind: String, rows: [Json]) -> String? {
         // TD-2026-10-22-769 (1.9.0): a real home's local-model config signs exactly one gnomon-root-local:v1 row
         guard kinds == [localRootSchema] else { return "a local.config signs exactly one gnomon-root-local:v1 row" }
         return localRowRefusal(rows[0])
-    case "mod.mcp.config", "api-token", "peer-pair", "grant":
+    case "permission", "mod.mcp.config", "api-token", "peer-pair", "grant":
+        // 1.10.0 (G-HLP-02): a destructive brokered Always (`permission`) signs its decision row only, like these
         return kinds.isEmpty ? nil : "a \(cardKind) decision signs only its decision row"
     default:
         return "no row table for card kind \(String(cardKind.prefix(40)))"

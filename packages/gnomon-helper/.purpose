@@ -76,6 +76,14 @@ components:
       override is in the closed row and an override is marked on the line;
       loop.trusted by ('root' or a principal) and requestedBy are principal
       ids of at most 128 chars;
+      Helper 1.10.0 (TD-2026-10-28-969, C6'a2-h, G-HLP-02): the `permission`
+      row table — a destructive brokered Always (rootDecisions ['always'],
+      rootRows []) signs its gnomon-root-decision:v2 row only; any further
+      row is refused batch-refused before a prompt or a key, and the table
+      stays closed to every other kind. The kernel offers a destructive
+      Always only from this version (ROW_TABLE_MIN_HELPER.permission);
+      testPermission* and testAnUnknownKindIsStillRefused in
+      DecisionSignTests.swift, plus the shared permission vectors;
       decisionLine names what every row grants and every digest, FIRST in
       the dialog, refused rather than truncated. The TS mirror and shared
       vectors: gnomon src/kernel/identity/decision-batch.ts,

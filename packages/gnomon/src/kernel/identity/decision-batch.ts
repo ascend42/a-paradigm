@@ -27,7 +27,7 @@ export const LOCAL_ROOT_SCHEMA = 'gnomon-root-local:v1';
  * loop-trust shipped in the 1.8.0 SOURCE after the signed 1.8.0 was cut, so it needs 1.9.0 too.
  * 8.0:local-lane C6'a2-1 (TD-2026-10-28-969, #local-tool-broker destructive Always): `permission` — a destructive
  * brokered card's `always` is root class (RaiseInput.rootDecisions ['always'], rootRows []); its table signs the decision
- * row only and first ships in helper 1.10.0 (the Swift table is slice a2-h). #local-tool-broker asks
+ * row only and first ships in helper 1.10.0 (Protocol.swift rowTableRefusal, slice a2-h, G-HLP-02). #local-tool-broker asks
  * ApprovalBroker.rootTableReady first, so an older helper is offered allow | deny only (never a raise-time refusal).
  */
 export const ROW_TABLE_MIN_HELPER: Readonly<Record<string, string>> = Object.freeze({ 'loop-trust': '1.9.0', 'local.config': '1.9.0', permission: '1.10.0' });
