@@ -38,6 +38,8 @@ export interface ToastOptions {
   onClose?: () => void;
   /** #gui-loops (toast loop-done): the family tag in place of the kind's ("↻ loop · evening-tidy") */
   tag?: string;
+  /** C6'b2-2: a variant class (toast `rule-ran`) */
+  variant?: string;
 }
 
 export interface ToastHandle {
@@ -47,6 +49,11 @@ export interface ToastHandle {
   dismiss(): void;
   /** the key element, if any (so the owner can focus it) */
   readonly keyEl: HTMLButtonElement | null;
+  /**
+   * C6'b2-2 (variant rule-ran): the same toast says something new (its text, announced politely; its time starts
+   * again). `dropKey`: its key goes (focus on it moves to the toast text). Nothing moves, no new toast is made.
+   */
+  update(text: string, o?: { dropKey?: boolean }): void;
 }
 
 export interface Toasts {
@@ -140,7 +147,7 @@ export function mountToasts(doc: Document, region: HTMLElement, opts: ToastMount
     const kind = o.kind ?? 'info';
     const persistent = o.persistent === true;
     const el = doc.createElement('div');
-    el.className = `${toastClass(kind)}${persistent ? ' held' : ''}`;
+    el.className = `${toastClass(kind)}${persistent ? ' held' : ''}${o.variant ? ` ${o.variant.replace(/[^a-z0-9-]/g, '')}` : ''}`;
     const { main, next } = splitToastText(text);
     const tag = o.tag ?? toastTag(kind, persistent);
     if (tag) {
@@ -214,7 +221,26 @@ export function mountToasts(doc: Document, region: HTMLElement, opts: ToastMount
         return live.includes(t);
       },
       dismiss: () => remove(t, false),
-      keyEl,
+      get keyEl() {
+        return keyEl;
+      },
+      update: (text2: string, u: { dropKey?: boolean } = {}) => {
+        if (!live.includes(t)) return;
+        body.textContent = splitToastText(text2).main;
+        if (u.dropKey && keyEl) {
+          const had = keyEl === doc.activeElement;
+          keyEl.remove();
+          keyEl = null;
+          if (had) {
+            body.tabIndex = -1;
+            body.focus();
+          }
+        }
+        stopTimer(t);
+        t.remaining = toastTtl(kind, persistent);
+        startTimer(t);
+        announce(kind, tag ? `${tag}: ${text2}` : text2);
+      },
     };
     live.push(t);
     // newest on top: a new toast goes in at the top and nothing else moves (focus stays where it is)

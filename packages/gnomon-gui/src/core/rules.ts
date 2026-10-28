@@ -60,6 +60,8 @@ export interface RuleItem {
   until: string | null;
   /** C5'a3 K2 / C5'b: why a tool rule would not match now (status.rules[].paused; null: it would, or not known) */
   paused?: RulePause | null;
+  /** C6'b2-2 (K3): a tool rule's class as it was learned (status.rules[].class); null: not a tool rule, or not known */
+  class?: 'destructive' | 'mutate' | null;
 }
 
 /** C5'b: status.rules[].paused (closed): the server is not trusted now, the tool changed, the server is off. */
@@ -88,7 +90,7 @@ export function rulesStatusOf(status: unknown): RulesStatus {
         if (!x || typeof x !== 'object') return [];
         const r = x as Record<string, unknown>;
         if (typeof r.ruleId !== 'string' || typeof r.words !== 'string' || typeof r.repoKey !== 'string' || (r.state !== 'on' && r.state !== 'off')) return [];
-        return [{ ruleId: r.ruleId, match: str(r.match) ?? 'exact', tool: str(r.tool) ?? '?', repoKey: r.repoKey, repoName: str(r.repoName), words: r.words, learnedAt: str(r.learnedAt), hsid: str(r.hsid), state: r.state, until: r.state === 'off' ? str(r.until) : null, paused: PAUSES.includes(r.paused as string) ? (r.paused as RulePause) : null }];
+        return [{ ruleId: r.ruleId, match: str(r.match) ?? 'exact', tool: str(r.tool) ?? '?', repoKey: r.repoKey, repoName: str(r.repoName), words: r.words, learnedAt: str(r.learnedAt), hsid: str(r.hsid), state: r.state, until: r.state === 'off' ? str(r.until) : null, paused: PAUSES.includes(r.paused as string) ? (r.paused as RulePause) : null, class: r.class === 'destructive' || r.class === 'mutate' ? r.class : null }];
       })
     : [];
   return { built: o.built === true, now: str(o.now), presets: { hour: str(p.hour), tomorrow: str(p.tomorrow) }, pendingCardId: str(o.pendingCardId), rules };

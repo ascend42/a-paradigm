@@ -45,7 +45,7 @@ import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '.
 import { mountStandingFeed } from './standing-feed.js';
 import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringSheet } from './card-focus.js';
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
-import { trustDropToastOf, TRUST_DROP_TOAST, type ToastKind } from '../core/toasts.js';
+import { RULE_RAN_TOAST, ruleRanAuthor, ruleRanOf, ruleRanText, ruleRevokeFailWords, ruleRevokeRequest, trustDropToastOf, TRUST_DROP_TOAST, type RuleRanAuthor, type ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
@@ -2005,6 +2005,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
         rulesRow(r); // #gui-rules-view: a rule row re-reads status.rules; a timed off that ended is a 6 s toast
         trustDropRow(r); // C5'b: a server whose trust the kernel dropped (it changed) is a warn toast
+        ruleRanRow(r); // C6'b2-2: an Always rule passed an MCP call with no card: "ran by rule", one toast per rule
         mcpFailRow(r); // C6'b1: a server of my running local session stopped: a fail toast with "see Tools"
         toolsDrawer?.row(r); // C6'b1: the open drawer re-reads on its session's tool.selection and session.mcp rows
         slashMenu?.flow.row(r); // C6'b2-1: a carded "/" run settled (read its result once); the open menu re-reads
@@ -2911,6 +2912,57 @@ function mcpFailRow(r: { kind: string; payload?: unknown; principal?: string }):
   const t = mcpFailToastOf(r);
   if (!t || toolsSessionOf(t.hsid)?.access !== 'owner') return;
   toasts().show(t.text, { kind: MCP_FAIL_TOAST.kind, key: { label: MCP_FAIL_TOAST.key, onPress: (e: MouseEvent) => e.isTrusted && toolsDrawer?.openServer(t.hsid, t.server, true) } });
+}
+
+/**
+ * C6'b2-2 (Mika, toast variant rule-ran): a kernel-signed approval.auto{modeRef:'rule:…'} for an MCP tool of a local
+ * session this human opened is a toast "ran by rule · {tool} on {server} · by the model" (or "· by you from /"): warn
+ * for a tool that can't be undone, else info. Its one key, Revoke, removes the rule (request.rules.apply{remove}: it
+ * only tightens, no presence). Repeated passes of one rule update ONE toast ("ran 4 times by rule"), never a flood.
+ */
+const ruleToasts = new Map<string, { n: number; author: RuleRanAuthor; handle: ToastHandle }>();
+function ruleRanRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (r.kind !== 'approval.auto' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
+  const t = ruleRanOf(r);
+  if (!t || toolsSessionOf(t.hsid)?.access !== 'owner') return;
+  const by = slashMenu?.flow.humanRunning(t.hsid, t.server, t.tool) ? 'human' : 'model';
+  const had = ruleToasts.get(t.ruleId);
+  if (had?.handle.present) {
+    had.n++;
+    had.author = ruleRanAuthor(had.author, by);
+    if (had.handle.keyEl) had.handle.update(ruleRanText(t, had.n, had.author)); // a Revoke in flight or done keeps its words
+    return;
+  }
+  const cls = rulesStatusOf(status).rules.find((x) => x.ruleId === t.ruleId)?.class ?? null;
+  const entry = { n: 1, author: by as RuleRanAuthor, handle: null as unknown as ToastHandle };
+  entry.handle = toasts().show(ruleRanText(t, 1, by), {
+    kind: RULE_RAN_TOAST.kind(cls),
+    variant: 'rule-ran',
+    key: {
+      label: RULE_RAN_TOAST.key,
+      onPress: (e: MouseEvent) => {
+        const k = entry.handle.keyEl;
+        if (!e.isTrusted || !k || k.getAttribute('aria-disabled') === 'true') return; // G-GUI-04; once per press
+        if (!client) return void notice('Not removed: nothing was sent, Gnomon is not connected · next: try again once it is', 'fail', { source: 'rule-revoke' });
+        k.setAttribute('aria-disabled', 'true');
+        k.setAttribute('aria-busy', 'true');
+        k.textContent = RULE_RAN_TOAST.removing;
+        client
+          .call('log.append', ruleRevokeRequest(t.ruleId))
+          .then(() => {
+            entry.handle.update(RULE_RAN_TOAST.removed, { dropKey: true });
+            void refreshStatus();
+          })
+          .catch((err: unknown) => {
+            k.removeAttribute('aria-disabled');
+            k.removeAttribute('aria-busy');
+            k.textContent = RULE_RAN_TOAST.key;
+            notice(ruleRevokeFailWords(err instanceof RpcError ? err.refusal.reason : null, !(err instanceof RpcError)), 'fail', { source: 'rule-revoke' });
+          });
+      },
+    },
+  });
+  ruleToasts.set(t.ruleId, entry);
 }
 
 /** C5'b: a kernel-signed tool.trust{op:'dropped'} (launch or tools changed) is a warn toast; Trust again… opens its row. */

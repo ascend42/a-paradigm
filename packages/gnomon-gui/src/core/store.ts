@@ -37,7 +37,7 @@ import { isClientRow, type EnrolState } from './voice-client.js';
 import { refusalPhrase } from './capture.js';
 import { foldOffers, OFFER_ROW_KINDS, stripOfferBlocks, type OfferBook } from './offers.js';
 import { tierOfCapabilities, type Tier, type TierSource } from './tool-tier.js';
-import { runRowOf, skillReplayName, type RunWords } from './slash-runs.js';
+import { runRowOf, skillReplayName, TAINT_LINE, taintsSession, type RunWords } from './slash-runs.js';
 import { SKILL_COPY } from './slash-menu.js';
 
 export interface Row {
@@ -1322,6 +1322,8 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
   let turnGuidance: string | null = null; // Aegis M1: the guidanceHash of the latest turn.sent
   // #gui-slash-runs: this page's "/" runs whose kernel tool.brokered{author:'human'} row has not come yet (in order)
   const unclaimedRuns: Array<{ server: string; tool: string }> = [];
+  // C6'b2-2: the injection pause is said ONCE, where the session first took in a sent result or skill text
+  let taintNoted = false;
   for (const r of rows) {
     const p = objOf(r.payload);
     if (r.kind === 'voice.turn.agent' && p?.source === 'kernel-speakable' && typeof r.principal === 'string' && /^p:[0-9a-z]{8}\/kernel$/.test(r.principal) && typeof p.turnSeq === 'number' && Array.isArray(p.items)) {
@@ -1539,6 +1541,11 @@ export function chatItems(rows: readonly Row[], opts: { raw?: boolean; live?: bo
           echoTurn.push(w);
         } else push(r, v.part ?? 0, v, 'tail');
       }
+      continue;
+    }
+    if (!taintNoted && taintsSession(r)) {
+      taintNoted = true;
+      push(r, 0, { role: 'system', text: TAINT_LINE });
       continue;
     }
     if (r.kind === 'tool.brokered') {

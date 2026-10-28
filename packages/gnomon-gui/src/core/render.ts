@@ -410,6 +410,10 @@ export interface CardView {
 export interface ToolScopeView {
   tool: string;
   server: string;
+  /** C6'b2-2: the tool can't be undone (the hashed detail.brokered.class): its Always is root class, Touch ID */
+  destructive?: boolean;
+  /** C6'b2-2: the kernel's own "Always: any call of … by you from / AND by the model …" line, verbatim (the key's note) */
+  alwaysLine?: string | null;
 }
 
 /**
@@ -430,11 +434,18 @@ export function toolScopesOf(card: Record<string, unknown>): ToolScopeView | nul
   if (!Array.isArray(d.toolScopes) || d.toolScopes.length !== 1 || d.toolScopes[0] !== 'tool') return null;
   const b = d.brokered && typeof d.brokered === 'object' && !Array.isArray(d.brokered) ? (d.brokered as Record<string, unknown>) : null;
   if (!b || typeof b.server !== 'string' || !b.server || typeof b.tool !== 'string' || !b.tool || typeof b.bindHash !== 'string') return null;
-  return { tool: displayText(b.tool).slice(0, 120), server: displayText(b.server).slice(0, 80) };
+  const out = { tool: displayText(b.tool).slice(0, 120), server: displayText(b.server).slice(0, 80) };
+  if (b.class !== 'destructive') return out;
+  // C6'b2-2: a destructive tool's Always says, in the kernel's own words, that it runs for you AND the model
+  const line = kernelTextLines(block).find((l) => l.startsWith('Always: any call of ')) ?? null;
+  return { ...out, destructive: true, alwaysLine: line ? displayText(line).slice(0, 400) : null };
 }
 
 /** C5'b: the brokered card's one Always choice, in plain words (Mika: shown beside the key, never only on hover). */
 export const TOOL_SCOPE_KEY = Object.freeze({
+  /** C6'b2-2 (Mika): a destructive tool's one Always key, and its Allow, name the Touch ID they take */
+  destructive: (t: ToolScopeView): string => `Always: ${t.tool} on ${t.server} · Touch ID`,
+  touchId: 'allow · Touch ID',
   short: 'this tool, any arguments',
   note: (t: ToolScopeView): string => `every call of ${t.tool} on ${t.server} in this repo · paused if the tool or server changes`,
   label: (t: ToolScopeView): string => `Always: ${t.tool} on ${t.server}, any arguments, in this repo`,
@@ -1262,7 +1273,11 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const noAlwaysLine = brokered && !(scoped === 'tool' && keys.includes('always'));
   const shownBody0 = mcpFace ? withoutLines(body, (l) => l === kLine || l.startsWith('Allow takes the root key') || (!!hashLine && l === hashLine)) : body;
   const shownBody1 = brokered && kLine ? withoutLines(shownBody0, (l) => l === kLine) : shownBody0;
-  const shownBody = noAlwaysLine ? withoutLines(shownBody1, (l) => l.startsWith('Always: any call of ')) : shownBody1;
+  // C6'b2-2: a destructive tool's key shows the kernel's Always line as its visible note: not twice
+  const alwaysOnFace = scoped === 'tool' && keys.includes('always') && !!toolScope?.destructive && !!toolScope.alwaysLine;
+  const shownBody = noAlwaysLine || alwaysOnFace ? withoutLines(shownBody1, (l) => l.startsWith('Always: any call of ')) : shownBody1;
+  // C6'b2-2 (Mika): a brokered card that can't be undone asks fresh presence on Allow: its key says so
+  const allowWord = brokered && v.flags.includes('irreversible') ? TOOL_SCOPE_KEY.touchId : 'allow';
   // a kind whose lines the kernel does not compose: its words are labelled as the requester's (never the kernel's)
   // design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
   // large that's fine"): a body taller than its cap scrolls INSIDE the card (styles.css .card-body), so the title, the
@@ -1317,7 +1332,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
         // width); the key itself decides nothing, each choice below is the decision key
         d === 'always' && scoped
           ? h(doc, 'button', { class: `key key-always-fold${d === pri ? ' pri' : ''}`, type: 'button', 'data-always-fold': v.cardId, 'aria-expanded': String(!!v.alwaysOpen) }, `Always ${v.alwaysOpen ? '▴' : '▾'}`)
-          : h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}), ...(ask && d === 'answer' && !askComplete(ask, v.askPicks ?? new Map()) ? { 'aria-disabled': 'true', title: 'answer every question first' } : {}) }, ask && d === 'answer' ? askSubmitLabel(ask) : d),
+          : h(doc, 'button', { class: d === pri ? 'key pri' : 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId, ...(loud && d === 'deny' ? { 'data-default': 'true' } : {}), ...(ask && d === 'answer' && !askComplete(ask, v.askPicks ?? new Map()) ? { 'aria-disabled': 'true', title: 'answer every question first' } : {}) }, ask && d === 'answer' ? askSubmitLabel(ask) : d === 'allow' ? allowWord : d),
       ),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),
@@ -1342,7 +1357,9 @@ function alwaysChoices(doc: MiniDoc, v: CardView, scoped: 'command' | 'edit' | '
   if (scoped === 'tool') {
     // C5'b: one choice, as the git remote's: this tool on this server, any arguments, in this repo
     const t = v.toolScope ?? { tool: 'this tool', server: 'its server' };
-    return h(doc, 'div', { class: `always-choices${v.alwaysOpen ? ' open' : ''}`, role: 'group', 'aria-label': 'Always allow, no card next time', 'data-always-for': v.cardId }, h(doc, 'span', { class: 'always-h' }, 'always allow, no card next time:'), row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.label(t), TOOL_SCOPE_KEY.short, TOOL_SCOPE_KEY.note(t)));
+    // C6'b2-2 (Mika): a destructive tool's one key names its Touch ID; its note is the kernel's line, verbatim
+    const choice = t.destructive ? row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.destructive(t), TOOL_SCOPE_KEY.destructive(t), t.alwaysLine ?? TOOL_SCOPE_KEY.note(t)) : row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.label(t), TOOL_SCOPE_KEY.short, TOOL_SCOPE_KEY.note(t));
+    return h(doc, 'div', { class: `always-choices${v.alwaysOpen ? ' open' : ''}${t.destructive ? ' destructive' : ''}`, role: 'group', 'aria-label': 'Always allow, no card next time', 'data-always-for': v.cardId }, h(doc, 'span', { class: 'always-h' }, 'always allow, no card next time:'), choice);
   }
   if (scoped === 'remote') {
     // #git-verbs: one choice, the exact remote the kernel resolved (its rule is keyed to that URL and host)

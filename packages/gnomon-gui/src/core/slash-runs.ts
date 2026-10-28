@@ -395,6 +395,23 @@ export function runWords(r: RunView): RunWords {
   }
 }
 
+/* ── taint (C6'b2-2, founder: the drawer and one transcript note, not the header) ─────────────────────────────────── */
+
+/**
+ * The injection pause in words (Mika): the session took in a sent tool result or skill text, so a destructive Always rule
+ * no longer passes a MODEL call (it takes the card); the human's "/" runs are not affected. One transcript system row
+ * where it first happened (the session's first kernel tool.result.sent or skill.run{decision:'ran'} row), and the
+ * Tools drawer's line (capabilities.tainted).
+ */
+export const TAINT_LINE = 'Always rules for tools that can’t be undone are paused for the model in this session: it has read tool results or skill text. Your / runs are not affected.';
+
+/** Is this kernel row the kind that taints its session (a sent tool result, a skill's text)? */
+export function taintsSession(row: { kind: string; payload?: unknown; principal?: string }): boolean {
+  if (typeof row.principal !== 'string' || !/^p:[0-9a-z]{8}\/kernel$/.test(row.principal)) return false;
+  if (row.kind === 'tool.result.sent') return true;
+  return row.kind === 'skill.run' && isObj(row.payload) && row.payload.decision === 'ran';
+}
+
 /* ── history: the kernel's row of a run this page did not start (or before a reload) ─────────────────────────────── */
 
 /** A tool.brokered{author:'human'} row as a run row's words (no result: it is never kept), or null for any other row. */

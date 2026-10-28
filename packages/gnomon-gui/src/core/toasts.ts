@@ -117,3 +117,55 @@ export function trustDropToastOf(row: { kind?: unknown; payload?: unknown }, sta
 
 /** C5'b: the drop toast's kind and key (founder: warn, 10 s, not sticky). */
 export const TRUST_DROP_TOAST = Object.freeze({ kind: 'warn' as ToastKind, key: 'Trust again…' });
+
+/* ── C6'b2-2 (Mika): the "ran by rule" toast (variant rule-ran) ──────────────────────────────────────────────────── */
+
+/** Who a rule passed a call for: the model, the human from "/", or both (one toast counts every pass of its rule). */
+export type RuleRanAuthor = 'model' | 'human' | 'both';
+
+export interface RuleRan {
+  ruleId: string;
+  hsid: string;
+  tool: string;
+  server: string;
+}
+
+/**
+ * A kernel approval.auto{modeRef:'rule:<ruleId>'} for an MCP tool (`mcp:<server>/<tool>`): an Always rule passed it with
+ * no card. Anything else (an edit a mode allowed, a kernel tool, a malformed row) is null. The names are display text.
+ */
+export function ruleRanOf(row: { kind?: unknown; payload?: unknown }): RuleRan | null {
+  if (row.kind !== 'approval.auto' || !row.payload || typeof row.payload !== 'object') return null;
+  const p = row.payload as Record<string, unknown>;
+  const ref = typeof p.modeRef === 'string' ? /^rule:(.{1,200})$/.exec(p.modeRef) : null;
+  const m = typeof p.tool === 'string' ? /^mcp:([^/]{1,64})\/(.{1,64})$/.exec(p.tool) : null;
+  if (!ref || !m || typeof p.hsid !== 'string') return null;
+  return { ruleId: ref[1]!, hsid: p.hsid, server: displayText(m[1]!).slice(0, 64), tool: displayText(m[2]!).slice(0, 64) };
+}
+
+export const RULE_RAN_TOAST = Object.freeze({
+  key: 'Revoke',
+  removing: 'Revoking…',
+  removed: 'rule removed; its next call takes a card',
+  /** a rule for a tool that can't be undone (or one the page cannot place) is a warn: amber, 10 s, paused on hover or focus */
+  kind: (cls: 'destructive' | 'mutate' | null): ToastKind => (cls === 'mutate' ? 'info' : 'warn'),
+  by: Object.freeze({ model: 'by the model', human: 'by you from /', both: 'by you and the model' }) as Readonly<Record<RuleRanAuthor, string>>,
+});
+
+/** "ran by rule · write on fs · by the model"; repeated passes of one rule: "ran 4 times by rule · …". */
+export function ruleRanText(t: Pick<RuleRan, 'tool' | 'server'>, n: number, author: RuleRanAuthor): string {
+  return `${n > 1 ? `ran ${n} times by rule` : 'ran by rule'} · ${t.tool} on ${t.server} · ${RULE_RAN_TOAST.by[author]}`;
+}
+
+/** The author after one more pass: the same, or both. */
+export const ruleRanAuthor = (was: RuleRanAuthor | null, now: 'model' | 'human'): RuleRanAuthor => (was === null || was === now ? now : 'both');
+
+/** The Revoke key's request: remove the rule (it only tightens: no presence). */
+export const ruleRevokeRequest = (ruleId: string): { kind: string; payload: { changes: Array<{ ruleId: string; op: 'remove' }> } } => ({ kind: 'request.rules.apply', payload: { changes: [{ ruleId, op: 'remove' }] } });
+
+/** A refused or dropped Revoke, in words with next: (never the code). */
+export function ruleRevokeFailWords(reason: string | null, network: boolean): string {
+  if (network) return 'Not known whether the rule was removed: the connection dropped · next: look in Settings › Rules';
+  if (reason === 'not-found') return 'Not removed: the rule is already gone · next: look in Settings › Rules';
+  return 'Not removed: Gnomon refused it · next: look in Settings › Rules';
+}
