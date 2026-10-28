@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A write that would put user or machine data under the repository root throws, and so does repo data outside it.
   - Readers combine the repo and user copies. On the same id the repo copy wins. An older row with no `home` and no author counts under the home it was read from, as a separate legacy population.
   - A folder that is your home directory, or is not in a git repository, has no repo home. Its records all go to the user home.
+  - **Behaviour change in a project without git:** records that default to the repo home (project notebooks, overrides, classroom certifications, notebook refs) now land in the user home. Rows already in `.paradigm/` are still read.
   - The platform's nomination list and the classroom metrics read every home.
   - Promotion follows the journal. A lesson taught with `transferable: false` becomes a repo notebook, and its certification and promotion-decision row are written to the repo too. Before this change every promotion went to the global notebook.
   - Verdicts are written to the user home with an author. Postflight skips a teammate's verdict in the repository when the row names a different author.

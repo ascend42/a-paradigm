@@ -404,7 +404,7 @@ components:
       - scoped-learning
     file: packages/paradigm-mcp/src/utils/learning-stores.ts
   learning-home-resolver:
-    description: 'Scoped learning S0+S1 (TD-2026-10-28-820), in learning-stores.ts. Every learning record has a home, repo (committed, <root>/.paradigm), user (~/.paradigm, per repo under projects/<repoId>; journals, global notebooks and global wisdom stay at ~/.paradigm/<rel>) or machine (<learning home>/machine/<repoId>). homeOf(artifact, entry?, config?) resolves entry home > config learning.default_home.<artifact> > the ARTIFACTS registry default. pathFor(artifact, home, root) computes the path and runs assertHomePlacement, which throws LearningHomeError when user or machine data would land under the repo root or repo data outside it. $PARADIGM_LEARNING_HOME overrides the per-repo user and machine root (tests). appendLearningRows stamps home on each row; readLearningRows takes the union of every home, tags a legacy row (no home, no author) with the home it was read from plus legacy:true (a separate calibration population, used only as a labelled cold-start prior), dedupes by id with the repo row winning; hasRepoHome(root) is false when the root is the home dir (or an ancestor of it) or not inside a git repo, and then repo maps to user with the guard skipped ($PARADIGM_LEARNING_ASSUME_REPO=1 skips the git check, for tests); rewriteLearningRows edits whichever home holds a row. promotionHomeOf(journal) gives the home a promotion carries (transferable:false → repo); groupByHome keeps calibration populations apart; currentAuthor stamps verdict authorship.'
+    description: 'Scoped learning S0+S1 (TD-2026-10-28-820), in learning-stores.ts. Every learning record has a home, repo (committed, <root>/.paradigm), user (~/.paradigm, per repo under projects/<repoId>; journals, global notebooks and global wisdom stay at ~/.paradigm/<rel>) or machine (<learning home>/machine/<repoId>). homeOf(artifact, entry?, config?) resolves entry home > config learning.default_home.<artifact> > the ARTIFACTS registry default. pathFor(artifact, home, root) computes the path and runs assertHomePlacement, which throws LearningHomeError when user or machine data would land under the repo root or repo data outside it. $PARADIGM_LEARNING_HOME overrides the per-repo user and machine root (tests). appendLearningRows stamps home on each row; readLearningRows takes the union of every home, tags a legacy row (no home, no author) with the home it was read from plus legacy:true (a separate calibration population, used only as a labelled cold-start prior), dedupes by id with the repo row winning; hasRepoHome(root) is false when the root is the home dir (or an ancestor of it) or not inside a git repo, and then repo maps to user with the guard skipped ($PARADIGM_LEARNING_ASSUME_REPO=1 skips the git check; a test/CI setting only, set by the vitest setups because temp roots are not git repos; documented here only, never in user guides); rewriteLearningRows edits whichever home holds a row. promotionHomeOf(journal) gives the home a promotion carries (transferable:false → repo); groupByHome keeps calibration populations apart; currentAuthor stamps verdict authorship.'
     type: utility
     tags:
       - learning
@@ -417,6 +417,12 @@ components:
       - learning
       - scoped-learning
     file: packages/paradigm-mcp/src/utils/repo-id.ts
+  no-repo-only-cert-reader-guard:
+    description: 'Test guard (no-repo-only-cert-reader.test.ts): fails if any paradigm or paradigm-mcp source imports or re-exports premise-core''s deprecated repo-only readClassroomCertifications. Certifications are read through field-failures.readClassroomCertifications (the union of every home).'
+    type: test
+    tags:
+      - scoped-learning
+    file: packages/paradigm-mcp/src/utils/no-repo-only-cert-reader.test.ts
   protocol-loader:
     description: 'Loads/validates .paradigm/protocols/*.protocol and rebuilds the protocol index. 7.12.0 (D4): lintProtocol emits PROTOCOL_IS_SKILL (warn only, never changes status; surfaced in validateProtocol issues) when no step names a repo path — the reverse of skill-loader''s SKILL_IS_PROTOCOL, reusing its exported repoPathTokens detector.'
     type: loader
