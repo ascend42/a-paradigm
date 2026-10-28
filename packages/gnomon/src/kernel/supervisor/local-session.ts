@@ -393,6 +393,8 @@ interface SlashResult {
 interface SendableRun {
   /** the principal that ran it (only they send it) */
   principal: string;
+  /** the capability entry it ran (kept after the send: an already-sending check reads its policy) */
+  entryId: string;
   /** the result; dropped once it is sent */
   result?: SlashResult;
   /** the bindHash (#local-result-policy key) the entry had when it ran: a send re-checks it */
@@ -2160,7 +2162,7 @@ export class LocalLane {
   #ranResult(s: LocalSession, r: SlashResult, hold: { principal: string; expires: number }): void {
     const key = this.#policyOf(s, r.entry);
     // slice C6'a2-3: held for a one-off send under the binding it ran with (a run with no live binding is never sendable)
-    if (key && r.runId) this.#keepSendable(s, r.runId, { principal: hold.principal, result: r, bindHash: key.bindHash, expires: hold.expires, sent: false });
+    if (key && r.runId) this.#keepSendable(s, r.runId, { principal: hold.principal, entryId: r.entry.id, result: r, bindHash: key.bindHash, expires: hold.expires, sent: false });
     // #local-result-policy: `send` (for this repo, tool and binding NOW) queues it for the human's next turn
     if (key?.policy === 'send') {
       this.#queueSend(s, r);
@@ -2251,7 +2253,7 @@ export class LocalLane {
     const h = m?.get(runId);
     if (!h || h.principal !== asker.principal) throw refused('NOT_FOUND', `${kind}: no held result for this run (it expired, is from another session or is not yours)`, { reason: 'not-found' });
     const ran = h.result;
-    const e = ran && s.mcp ? [...s.mcp.entries.values()].flat().find((y) => y.id === ran.entry.id) : undefined;
+    const e = s.mcp ? [...s.mcp.entries.values()].flat().find((y) => y.id === h.entryId) : undefined;
     const key = e ? this.#policyOf(s, e) : null;
     if (key?.policy === 'send') throw refused('BAD_REQUEST', `${kind}: ${key.tool} already sends its results to the model`, { reason: 'already-sending' });
     if (h.sent || !ran) throw refused('BAD_REQUEST', `${kind}: this result was already sent`, { reason: 'already-sent' });

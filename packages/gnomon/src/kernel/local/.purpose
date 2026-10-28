@@ -249,7 +249,10 @@ components:
       {status ran|refused|carded, runId, cardId?, content?, isError}) and
       request.session.tools.result{hsid, runId} (a carded run, same
       principal, 10 min, read once). capabilities tools[].run says whether
-      "/" can run it (untrusted, unchecked-schema via schemaRefusal).
+      "/" can run it (untrusted, unchecked-schema via schemaRefusal). Slice
+      C6'a2-3: request.session.tools.send{hsid, runId} sends one held ran
+      result once (see #local-result-policy); capabilities also gives
+      tools[].policy and tainted.
       #local-tool-broker: every destructive card, and (Aegis L3) every card of
       a server with no live trust, is irreversible (fresh presence each time); a
       destructive tool's Always is root class (rootDecisions ['always'],
@@ -620,6 +623,22 @@ components:
       hash-only tool.result.sent row each and marks the whole SESSION tainted
       until it ends (the INJECTION PAUSE: #local-tool-broker's destructive rules pass no model
       call in it). The daemon wires one ResultPolicy (daemon.ts).
+      SLICE C6'a2-3 (founder: "ask" means ask each time): the one-off send,
+      request.session.tools.send{hsid, runId} (LocalLane, dispatcher-only):
+      ONE held "/" result goes to the model framed as data WITHOUT changing
+      the policy. GUI press by the owner only (device: matrix), never a loop
+      session; refused already-sending while the policy is send; the run
+      must be this session's, within RUN_RESULT_TTL_MS (10 min) and unsent
+      (already-sent: idempotent per runId); its bindHash and trust binding
+      are re-checked as at attach (changed). Same #queueSend, frameResult and
+      whole-turn cap; a SendItem marked once (needs only the same binding at
+      attach, survives a move to ask: dropTool keeps it); the session is
+      tainted at once; its tool.result.sent row says policy 'once'. LocalLane
+      keeps ran results for it in a per-session `sendable` map separate from
+      the read-once tools.result hold, so reading never consumes the send.
+      Kernel facts for the GUI: request.session.capabilities tools[].policy
+      (send | ask | null: not chosen yet or the binding changed) and a
+      top-level tainted (this session only).
     path: src/kernel/local/result-policy.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, mcp, c6]
@@ -628,6 +647,7 @@ components:
     tests:
       - test/local-destructive-rules.test.ts
       - test/local-slash-lane.test.ts
+      - test/local-one-off-send-lane.test.ts
       - ../gnomon-contracts/test/local-lane-contracts.test.ts
     oracles: [G-LCL-26, G-LCL-27]
   paradigm-stage:
