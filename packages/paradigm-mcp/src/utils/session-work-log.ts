@@ -8,14 +8,28 @@
  *
  * Storage: .paradigm/events/session-log.jsonl
  * Bounded: 200 entries per session (cleared on session start)
+ *
+ * Scoped learning (S1, TD-2026-10-28-820): durable verdicts default to the
+ * USER home (a pending queue a teammate never consumes) and notebook-refs to
+ * the home of the notebook entry they measure. Both go through the
+ * learning-stores resolver; readers take the union.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  appendLearningRows,
+  currentAuthor,
+  homeOf,
+  readLearningHomeConfig,
+  readLearningRows,
+  rewriteLearningRows,
+  type LearningHome,
+} from './learning-stores.js';
+import { log } from './mcp-logger.js';
 
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
-const VERDICTS_LOG_FILE = '.paradigm/events/verdicts.jsonl';
 const ITERATION_REVISIONS_FILE = '.paradigm/events/iteration-revisions.jsonl';
 const POSTFLIGHT_LIVENESS_FILE = '.paradigm/events/postflight-liveness.jsonl';
 const MAX_ENTRIES = 200;
@@ -54,6 +68,11 @@ export interface SessionWorkEntry {
   // Decisions
   decisionTitle?: string;
   decisionRationale?: string;
+
+  /** Scoped learning: who recorded a durable verdict (S1 reader skips a teammate's repo rows). */
+  author?: string;
+  /** Scoped learning: where a durable verdict lives. Readers tag legacy rows with the default. */
+  home?: LearningHome;
 }
 
 /**
@@ -90,9 +109,9 @@ export interface NotebookReferenceEntry {
   agentId: string;
   notebookEntryIds: string[];
   orchestrationId?: string;
+  /** Scoped learning: the home of the notebook entries this receipt measures. */
+  home?: LearningHome;
 }
-
-const NOTEBOOK_REFS_FILE = '.paradigm/events/notebook-refs.jsonl';
 
 /**
  * Activity metric snapshot — proxy metrics for understanding session scope.
@@ -317,61 +336,47 @@ export function readPostflightLiveness(rootDir: string): PostflightLivenessRecor
  */
 export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): void {
   try {
-    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf8');
-  } catch {
-    // Non-fatal
+    appendLearningRows('verdicts', rootDir, [{ ...entry, author: entry.author ?? currentAuthor() }]);
+  } catch (err) {
+    log.component('#session-work-log').warn('failed to record verdict', {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
 /**
- * Read all unconsumed verdicts from the durable verdicts log.
+ * S1 teammate rule: a verdict read from the REPO path that names a different
+ * author belongs to a teammate's pending queue, never this user's postflight.
+ * Rows without an author are read as before (the S2 migration retires them).
+ */
+function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, me: string): boolean {
+  return at === 'repo' && typeof row.author === 'string' && row.author !== me;
+}
+
+/**
+ * Read all unconsumed verdicts: the union of the user-home queue and legacy
+ * repo rows, minus a teammate's repo rows.
  */
 export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
-  try {
-    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
-    if (!fs.existsSync(filePath)) return [];
-    return fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as SessionWorkEntry & { consumed?: boolean }; }
-        catch { return null; }
-      })
-      .filter((e): e is SessionWorkEntry => e !== null && !e.consumed);
-  } catch {
-    return [];
-  }
+  const me = currentAuthor();
+  return readLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', rootDir, {
+    filter: (row, at) => !row.consumed && !isTeammateRepoVerdict(row, at, me),
+  });
 }
 
 /**
- * Mark verdicts as consumed after postflight processes them.
- * Rewrites the file with a `consumed: true` flag on each processed entry.
+ * Mark verdicts as consumed after postflight processes them. Rewrites every
+ * physical verdicts file with `consumed: true` on each processed entry, never
+ * touching a teammate's repo rows.
  */
 export function markVerdictsConsumed(rootDir: string, nominationIds: string[]): void {
-  try {
-    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
-    if (!fs.existsSync(filePath)) return;
-    const consumed = new Set(nominationIds);
-    const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(l => l.trim());
-    const updated = lines.map(line => {
-      try {
-        const entry = JSON.parse(line) as Record<string, unknown>;
-        if (entry.nominationId && consumed.has(entry.nominationId as string)) {
-          return JSON.stringify({ ...entry, consumed: true });
-        }
-        return line;
-      } catch { return line; }
-    });
-    fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
-  } catch {
-    // Non-fatal
-  }
+  const consumed = new Set(nominationIds);
+  const me = currentAuthor();
+  rewriteLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', rootDir, (row, at) => {
+    if (!row.nominationId || !consumed.has(row.nominationId)) return undefined;
+    if (row.consumed || isTeammateRepoVerdict(row, at, me)) return undefined;
+    return { ...row, consumed: true };
+  });
 }
 
 // ── Durable Iteration Revisions ───────────────────────────────────────
@@ -594,54 +599,44 @@ export function clearActivityMetrics(rootDir: string): void {
 export function recordNotebookReference(
   rootDir: string,
   agentId: string,
-  entryIds: string[],
+  entryIds: Array<string | { id: string; home?: LearningHome }>,
   orchestrationId?: string
 ): void {
   try {
     if (entryIds.length === 0) return;
-
-    const filePath = path.join(rootDir, NOTEBOOK_REFS_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    // An instrument lives in the same home as what it measures: one receipt
+    // row per home of the injected entries (bare ids take the config default).
+    const config = readLearningHomeConfig(rootDir);
+    const byHome = new Map<LearningHome, string[]>();
+    for (const e of entryIds) {
+      const id = typeof e === 'string' ? e : e.id;
+      const home = homeOf('notebook-refs', typeof e === 'string' ? null : e, config);
+      byHome.set(home, [...(byHome.get(home) ?? []), id]);
     }
-
-    const entry: NotebookReferenceEntry = {
-      timestamp: new Date().toISOString(),
-      type: 'notebook-reference',
-      agentId,
-      notebookEntryIds: entryIds,
-      ...(orchestrationId ? { orchestrationId } : {}),
-    };
-
-    const line = JSON.stringify(entry) + '\n';
-    fs.appendFileSync(filePath, line, 'utf8');
+    const timestamp = new Date().toISOString();
+    for (const [home, ids] of byHome) {
+      const entry: NotebookReferenceEntry = {
+        timestamp,
+        type: 'notebook-reference',
+        agentId,
+        notebookEntryIds: ids,
+        ...(orchestrationId ? { orchestrationId } : {}),
+      };
+      appendLearningRows('notebook-refs', rootDir, [entry], { home, config });
+    }
   } catch {
     // Non-fatal — reference tracking is advisory
   }
 }
 
 /**
- * Read all notebook reference entries from the current session.
+ * Read all notebook reference entries (union of every home).
  * Used for analysis and surfacing in paradigm_status.
  */
 export function getNotebookReferences(rootDir: string): NotebookReferenceEntry[] {
-  try {
-    const filePath = path.join(rootDir, NOTEBOOK_REFS_FILE);
-    if (!fs.existsSync(filePath)) return [];
-
-    return fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as NotebookReferenceEntry; }
-        catch { return null; }
-      })
-      .filter((e): e is NotebookReferenceEntry => e !== null && e.type === 'notebook-reference');
-  } catch {
-    return [];
-  }
+  return readLearningRows<NotebookReferenceEntry>('notebook-refs', rootDir, {
+    filter: e => e.type === 'notebook-reference',
+  });
 }
 
 /**

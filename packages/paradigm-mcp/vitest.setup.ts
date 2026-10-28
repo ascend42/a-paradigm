@@ -12,6 +12,13 @@ import { afterAll } from 'vitest';
 const isolated = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-brain-home-'));
 process.env.PARADIGM_BRAIN_HOME = isolated;
 
+// Scoped learning: per-repo user and machine stores (verdicts, nominations,
+// promotion-decisions, ...) resolve under PARADIGM_LEARNING_HOME, so no test
+// writes into the real ~/.paradigm/projects.
+const learningHome = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-learning-home-'));
+process.env.PARADIGM_LEARNING_HOME = learningHome;
+
 afterAll(() => {
   fs.rmSync(isolated, { recursive: true, force: true });
+  fs.rmSync(learningHome, { recursive: true, force: true });
 });

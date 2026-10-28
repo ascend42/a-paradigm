@@ -28,6 +28,7 @@ import {
 import { invalidateWisdomCache } from '../utils/wisdom-loader.js';
 import { recordDecision as recordTeamDecision, writeCompanionLoreEntry } from '../utils/decision-loader.js';
 import { log } from '../utils/mcp-logger.js';
+import { homeOf, readLearningHomeConfig } from '../utils/learning-stores.js';
 
 // Session-scoped flag so the v6.0 deprecation warning fires at most once per
 // MCP session (D3 locked — soft deprecation on wisdom, asymmetric to lore).
@@ -330,7 +331,7 @@ export async function handleWisdomTool(
         status,
         rationale,
         consequences,
-        scope: recordScope = 'project',
+        scope: requestedScope,
       } = args as {
         type: 'antipattern' | 'decision';
         id: string;
@@ -344,6 +345,14 @@ export async function handleWisdomTool(
         consequences?: { positive: string[]; negative: string[]; mitigations?: string[] };
         scope?: 'project' | 'global';
       };
+      // Scoped learning (S1): an explicit scope is the entry's home (project → repo,
+      // global → user); else config learning.default_home.wisdom; else 'repo'.
+      const wisdomHome = homeOf(
+        'wisdom',
+        requestedScope ? { home: requestedScope === 'global' ? 'user' : 'repo' } : null,
+        readLearningHomeConfig(ctx.rootDir),
+      );
+      const recordScope: 'project' | 'global' = wisdomHome === 'user' ? 'global' : 'project';
 
       if (type === 'antipattern') {
         if (!description || !reason || !alternative) {

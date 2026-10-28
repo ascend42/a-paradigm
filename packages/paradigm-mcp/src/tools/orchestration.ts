@@ -1554,7 +1554,8 @@ async function handleAgentPrompt(
           try {
             const { recordNotebookReference } = await import('../utils/session-work-log.js');
             // The Classroom: carry the join key (previously omitted here).
-            recordNotebookReference(ctx.rootDir, agentName, sorted.map(e => e.id), orchestrationId);
+            // Scoped learning: each receipt lands in the home of the entry it measures.
+            recordNotebookReference(ctx.rootDir, agentName, sorted.map(e => ({ id: e.id, home: e.home })), orchestrationId);
           } catch { /* non-fatal */ }
         }
       } catch { /* notebook loading is non-fatal */ }
