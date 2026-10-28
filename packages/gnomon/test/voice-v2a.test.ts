@@ -224,14 +224,15 @@ describe('#gnomon-voice V2a privacy', () => {
     r.clock.t += 2000;
     // a push-to-talk claim: the speaker gate holds (the Dictate draft exception, an AMBIENT turn under a key send
     // ceiling, keeps the text for the draft: voice-dictate-unverified.test.ts)
-    const out = (await r.userTurn({ speakerId: 'spk:unknown-1', speakerEnrolled: false, text: 'my bank pin is 1234', note: 'smuggled', mode: 'ptt' })) as Record<string, unknown>;
+    const out = (await r.userTurn({ speakerId: 'spk:unknown-1', speakerEnrolled: false, text: 'my bank pin is zebra-quokka', note: 'smuggled', mode: 'ptt' })) as Record<string, unknown>;
     expect(out).toMatchObject({ forwardable: false, refused: 'voice-speaker' });
     const p = r.rows.at(-1)!.payload;
-    expect(JSON.stringify(p)).not.toContain('1234');
+    // a secret with non-hex letters: the row's random-keyed hmac hex can never contain it by chance (it did: '…91234669')
+    expect(JSON.stringify(p)).not.toContain('zebra-quokka');
     expect(p).not.toHaveProperty('text');
     expect(p).not.toHaveProperty('note');
     expect(p).toMatchObject({ textHash: expect.stringMatching(/^hmac-sha256:[0-9a-f]{64}$/), durationMs: 1000, refusedReason: 'voice-speaker', forwarded: false });
-    expect(await refusal(r.send('my bank pin is 1234'))).toMatchObject({ reason: 'voice-speaker' });
+    expect(await refusal(r.send('my bank pin is zebra-quokka'))).toMatchObject({ reason: 'voice-speaker' });
   });
   it('a turn refused at receipt stores a hash plus the reason; it stays unforwardable after the cause clears', async () => {
     const r = rig();

@@ -105,5 +105,5 @@ jobs:
       # node_modules/.bin; expects an MCP initialize reply and no marker.
       - name: End-to-end (real npx, MCP initialize)
         env:
-          E2E_VERSION: '8.0.3'
+          E2E_VERSION: '8.0.4'
         run: node packages/paradigm/tests/e2e/plugin-mcp-launch-e2e.mjs
