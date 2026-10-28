@@ -95,7 +95,7 @@ describe('McpStdioClient', () => {
   it('finds the op-annotations resource by its /tool-annotations URI', async () => {
     const c = new McpStdioClient(spawnFake());
     await c.initialize();
-    expect(await c.readOpAnnotations()).toEqual({ schema: 'io.gnomon/op-annotations:v1', tools: { fam: { get: { readOnlyHint: true } } } });
+    expect(await c.readOpAnnotations()).toEqual({ schema: 'io.gnomon/op-annotations:v1', tools: { fam: { get: { readOnlyHint: true, openWorldHint: false } } } });
     c.kill();
   }, 20_000);
 });

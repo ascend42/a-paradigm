@@ -38,6 +38,8 @@
  */
 import { createHash } from 'node:crypto';
 import { canonicalJson, type ToolBrokerClass } from '@a-company/gnomon-contracts';
+import { SCHEMA_KEYWORDS } from './tool-broker.js';
+import { neutraliseKernelText } from './working-memory.js';
 
 /** How much the kernel believes a server's own annotations (C5' adds the grant UI; config sets it today). */
 export type ServerTrust = 'enabled' | 'trusted' | 'first-party';
@@ -143,10 +145,25 @@ export function firstSentence(d: string): string {
   return (m ? m[1]! : line).trim();
 }
 
+/** Aegis M1: characters never let into a tool definition (the broker's FORBIDDEN_CHARS set). */
+const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Default_Ignorable_Code_Point}]/gu;
+
+/**
+ * Aegis M1: server text that reaches the model's TOOL LIST (descriptions) is data from a third party: controls,
+ * format and ignorable characters become spaces, chat-template special tokens and the kernel's delimiters are
+ * neutralised (neutraliseKernelText, as tool results are), runs of space fold to one.
+ */
+export function cleanServerText(t: string): string {
+  return neutraliseKernelText(t.normalize('NFC').replace(UNSAFE_CHARS, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+/** Aegis M1: an enum value safe to show the model as-is (else the enum stays in the full schema only). */
+const SAFE_ENUM_VALUE = /^[A-Za-z0-9 _.:/@+-]{0,64}$/;
+
 function describe(d: string, op: string | null): string {
   const label = op ? ` (${op})` : '';
   const room = DESCRIPTION_MAX - label.length;
-  let s = firstSentence(d) || 'MCP tool.';
+  let s = cleanServerText(firstSentence(d)) || 'MCP tool.';
   if (s.length > room) s = `${s.slice(0, room - 1).trimEnd()}…`;
   return `${s}${label}`;
 }
@@ -161,6 +178,8 @@ export function splitParam(schema: Record<string, unknown>): string | null {
     const e = p.enum;
     return e.length > 0 && e.length <= MAX_OPS && e.every((v) => typeof v === 'string' && OP_VALUE_RE.test(v)) && new Set(e).size === e.length;
   });
+  // Aegis L6: the op param's own name must be one the kernel can set as an own property
+  cands.splice(0, cands.length, ...cands.filter((c) => PROP_NAME_RE.test(c) && !FORBIDDEN_KEYS.has(c)));
   const named = cands.find((c) => OP_PARAM_NAMES.includes(c.toLowerCase()));
   if (named) return named;
   const described = cands.find((c) => {
@@ -202,6 +221,13 @@ function walk(schema: Record<string, unknown>, skip: string | null): Walked {
         bad('a union or reference');
         continue;
       }
+      // a keyword the kernel validator does not check (minimum, format, minItems…) would refuse every call that sets
+      // this param: never offered (required → human-only)
+      const unknownKw = unchecked(raw);
+      if (unknownKw) {
+        bad(`uses ${unknownKw}, which the kernel validator does not check`);
+        continue;
+      }
       const t = typeOf(raw);
       if (t && PRIMITIVES.has(t)) {
         out.params.push({ name, path, kind: 'scalar', required, schema: narrowScalar(raw, t) });
@@ -219,18 +245,33 @@ function walk(schema: Record<string, unknown>, skip: string | null): Walked {
   return out;
 }
 
+/** The first schema keyword (this level, or a primitive array's items) the kernel validator does not check, or null. */
+function unchecked(s: Record<string, unknown>): string | null {
+  const own = Object.keys(s).find((k) => !SCHEMA_KEYWORDS.includes(k));
+  if (own !== undefined) return own;
+  if (isObj(s.items)) return Object.keys(s.items).find((k) => !SCHEMA_KEYWORDS.includes(k)) ?? null;
+  return null;
+}
+
 function narrowScalar(s: Record<string, unknown>, t: string): Record<string, unknown> {
   const out: Record<string, unknown> = { type: t };
-  if (typeof s.description === 'string' && s.description) out.description = s.description.split('\n')[0]!.slice(0, PARAM_DESCRIPTION_MAX);
-  if (Array.isArray(s.enum) && s.enum.length <= 64 && s.enum.every((e) => typeof e === 'string' || typeof e === 'number' || typeof e === 'boolean')) out.enum = [...s.enum];
+  const desc = typeof s.description === 'string' ? cleanServerText(s.description.split('\n')[0]!).slice(0, PARAM_DESCRIPTION_MAX) : '';
+  if (desc) out.description = desc;
+  // Aegis M1: an enum with any value the model should not read verbatim is left out of the narrow schema (the full
+  // schema still enforces it at validation)
+  if (Array.isArray(s.enum) && s.enum.length <= 64 && s.enum.every((e) => (typeof e === 'string' && SAFE_ENUM_VALUE.test(e)) || (typeof e === 'number' && Number.isFinite(e)) || typeof e === 'boolean')) out.enum = [...s.enum];
   return out;
 }
 
+/**
+ * Aegis M2: read ONLY when readOnlyHint is true AND openWorldHint is false (a read of the outside world is not a local
+ * read); a read-only tool that may reach the open world is mutate; otherwise a missing destructiveHint counts as
+ * destructive (MCP's own default), destructiveHint false is mutate. Trust `enabled` (or no annotations) is mutate.
+ */
 function classOf(a: unknown, trust: ServerTrust): ToolBrokerClass {
   if (trust === 'enabled' || !isObj(a)) return 'mutate';
-  if (a.destructiveHint === true) return 'destructive';
-  if (a.readOnlyHint === true) return 'read';
-  return 'mutate';
+  if (a.readOnlyHint === true) return a.openWorldHint === false ? 'read' : 'mutate';
+  return a.destructiveHint === false ? 'mutate' : 'destructive';
 }
 
 export interface NarrowOptions {
@@ -290,7 +331,9 @@ function opClass(tool: string, op: string, parent: ToolBrokerClass, trust: Serve
   const fromResource = resource?.get(tool)?.get(op);
   const fromMeta = !fromResource && meta && Object.hasOwn(meta, op) ? annotationsOf(meta[op]) : null;
   const ann = fromResource ?? fromMeta;
-  if (ann) return classOf(ann, trust);
+  // Aegis L4: per-op annotations may make an op of a destructive parent weaker (mutate, even read) ONLY for a
+  // first-party server; a merely trusted server's op of a destructive tool stays destructive
+  if (ann) return parent === 'destructive' && trust !== 'first-party' ? 'destructive' : classOf(ann, trust);
   return parent === 'destructive' ? 'destructive' : 'mutate';
 }
 
@@ -316,6 +359,8 @@ export function narrow(list: { tools?: unknown } | readonly unknown[], server: s
     const op = splitParam(schema);
     const ops: Array<string | null> = op ? ((schema.properties as Record<string, Record<string, unknown>>)[op]!.enum as string[]) : [null];
     const w = walk(schema, op);
+    const rootKw = Object.keys(schema).find((k) => !SCHEMA_KEYWORDS.includes(k));
+    if (rootKw !== undefined) w.humanOnly ??= `the schema uses ${rootKw}, which the kernel validator does not check`;
     const metaAnn = isObj(t._meta) && isObj(t._meta[OP_ANNOTATIONS_META]) ? t._meta[OP_ANNOTATIONS_META] : null;
     for (const v of ops) {
       const name = v ? `${t.name}.${v}` : t.name;

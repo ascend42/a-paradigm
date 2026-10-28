@@ -394,7 +394,7 @@ describe('Aegis C1 re-check (N1-N6)', () => {
 });
 
 describe('slice C2\': narrow MCP tools through the broker (G-LCL-16)', () => {
-  const entries = narrow([{ name: 'fam', description: 'Fam. Ops: put(key*, meta, tags), get(key*).', inputSchema: { type: 'object', properties: { op: { type: 'string', enum: ['put', 'get'] }, key: { type: 'string', pattern: '^[a-z]+$' }, meta: { type: 'object', properties: { owner: { type: 'string' } } }, tags: { type: 'array', items: { type: 'string' } } }, required: ['op', 'key'] }, annotations: { readOnlyHint: true } }], 'srv', { trust: 'trusted', opAnnotations: { schema: 'io.gnomon/op-annotations:v1', tools: { fam: { get: { readOnlyHint: true } } } } });
+  const entries = narrow([{ name: 'fam', description: 'Fam. Ops: put(key*, meta, tags), get(key*).', inputSchema: { type: 'object', properties: { op: { type: 'string', enum: ['put', 'get'] }, key: { type: 'string', pattern: '^[a-z]+$' }, meta: { type: 'object', properties: { owner: { type: 'string' } } }, tags: { type: 'array', items: { type: 'string' } } }, required: ['op', 'key'] }, annotations: { readOnlyHint: true, openWorldHint: false } }], 'srv', { trust: 'trusted', opAnnotations: { schema: 'io.gnomon/op-annotations:v1', tools: { fam: { get: { readOnlyHint: true, openWorldHint: false } } } } });
   const mcpRig = () => {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const target: BrokerTarget = { server: 'srv', provenance: 'mcp:srv', ownsGate: false, list: async () => [], call: async (name, args) => (calls.push({ name, args }), { text: 'ok', isError: false }) };
