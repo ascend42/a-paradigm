@@ -353,10 +353,15 @@ features:
     components:
       - '#dream-snapshotter'
   tutorial-command:
-    description: "Interactive tutorial with curriculum state tracking. A command-success checkpoint never runs curriculum.yaml text (repo content): the command must be a key in CHECKPOINT_COMMANDS (paradigm status, paradigm dream aggregate), which maps to argv for this same CLI (execFileSync node + entry script, no shell); anything else fails the checkpoint."
+    description: "Interactive tutorial with curriculum state tracking. A command-success checkpoint never runs curriculum.yaml text (repo content): the command must be a key in CHECKPOINT_COMMANDS (paradigm status, paradigm dream aggregate), which maps to argv for this same CLI (execFileSync node + entry script, no shell); anything else fails the checkpoint. Step files (curriculum `file`) resolve only inside <root>/.paradigm/tutorial and file-exists checkpoint paths only inside the project, via #path-containment; repo text (step file content, titles, descriptions, ids) is printed through printable(), which strips C0/C1 control characters."
     type: command
     components:
       - '#tutorial-handler'
+  path-containment:
+    description: "resolveInsideRoot(baseDir, p) — the real path (symlinks followed) of an existing file strictly inside baseDir, or null for anything outside, baseDir itself or missing. Used for paths read from repo content by #drift-command and #tutorial-command."
+    type: utility
+    file: src/utils/path-containment.ts
+    tags: [security, paths]
   sweep-command:
     description: Entropy detection and cleanup — 9 checks for orphaned symbols, stale purpose, phantom gates, dead signals, broken flows, lore rot, tag orphans, aspect drift, coverage decay. Auto-fix by default.
     type: command

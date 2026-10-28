@@ -14,7 +14,7 @@ import { recordLore } from './lore/storage.js';
 import type { LoreEntry } from './lore/types.js';
 import { notificationOsascriptArgs } from './background-orchestrator.js';
 import { isPrRef } from '../commands/review/index.js';
-import { tutorialCheckpointCommand, tutorialNextCommand, checkpointArgv } from '../commands/tutorial/index.js';
+import { tutorialCheckpointCommand, tutorialNextCommand, tutorialStepCommand, checkpointArgv, tutorialStepPath, printable } from '../commands/tutorial/index.js';
 import { resolveInsideRoot } from '../commands/drift.js';
 import { gitDiffSinceCommit } from '../../../paradigm-mcp/src/utils/safe-git.js';
 
@@ -136,6 +136,61 @@ describe('tutorial command-success checkpoints', () => {
     } finally {
       exit.mockRestore();
       logs.mockRestore();
+    }
+  });
+
+  it('keeps step files inside .paradigm/tutorial and strips control characters from them', async () => {
+    const tdir = path.join(root, '.paradigm', 'tutorial');
+    fs.mkdirSync(tdir, { recursive: true });
+    fs.writeFileSync(path.join(tdir, 's1.md'), 'hello\x1b]0;evil\x07 \x1b[31mred\x1b[0m\r\nline2\tok\n');
+    fs.writeFileSync(path.join(base, 'secret.md'), 'TOP SECRET');
+    fs.symlinkSync(path.join(base, 'secret.md'), path.join(tdir, 'link.md'));
+    expect(tutorialStepPath(root, 's1.md')).toBe(fs.realpathSync(path.join(tdir, 's1.md')));
+    for (const bad of ['../../../secret.md', path.join(base, 'secret.md'), 'link.md', '../../src/a.ts', '', 42]) {
+      expect(tutorialStepPath(root, bad), String(bad)).toBeNull();
+    }
+    expect(printable('a\x1b[31mb\x07c\x9bd\r\ne\tf')).toBe('a[31mbcd\ne\tf');
+
+    const write = (file: string): void => fs.writeFileSync(path.join(tdir, 'curriculum.yaml'), [
+      'title: t', 'description: d', 'bugs: []', 'steps:',
+      '  - id: s1', '    title: s1', '    description: d', `    file: ${JSON.stringify(file)}`, '    checkpoints: []',
+    ].join('\n'));
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const out: string[] = [];
+    const logs = vi.spyOn(console, 'log').mockImplementation((...a) => { out.push(a.join(' ')); });
+    const errs = vi.spyOn(console, 'error').mockImplementation((...a) => { out.push(a.join(' ')); });
+    try {
+      write('s1.md');
+      await tutorialStepCommand(root, '1');
+      write('../../../secret.md');
+      await tutorialStepCommand(root, '1');
+    } finally {
+      exit.mockRestore(); logs.mockRestore(); errs.mockRestore();
+    }
+    const all = out.join('\n');
+    expect(all).toContain('line2\tok');
+    expect(all).not.toMatch(/\x1b\]0;|\x07|\r/);
+    expect(all).not.toContain('TOP SECRET');
+    expect(all).toContain('Step file not found');
+  });
+
+  it('a file-exists checkpoint only counts paths inside the project', async () => {
+    fs.writeFileSync(path.join(base, 'outside.txt'), 'x');
+    fs.mkdirSync(path.join(root, '.paradigm', 'tutorial'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', 'tutorial', 'curriculum.yaml'), [
+      'title: t', 'description: d', 'bugs: []', 'steps:',
+      '  - id: s1', '    title: s1', '    description: d', '    file: s1.md',
+      '    checkpoints:', '      - type: file-exists', '        path: ../outside.txt',
+    ].join('\n'));
+    fs.writeFileSync(path.join(root, '.paradigm', 'tutorial', 'state.json'), JSON.stringify({ currentStep: 's1', completedSteps: [], fixedBugs: [] }));
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await tutorialCheckpointCommand(root);
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(logs.mock.calls.flat().join('\n')).toContain('Missing: ../outside.txt');
+    } finally {
+      exit.mockRestore(); logs.mockRestore();
     }
   });
 

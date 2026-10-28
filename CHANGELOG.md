@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A missing `osascript` or `notify-send` no longer crashes a background orchestration's notification.
   - `paradigm hooks install` writes its syntax-check script into a fresh private temp folder.
   - `paradigm drift` heals only a real `.purpose` file inside the project, and reports an anchor whose path leaves the project as missing. Both paths come from the aspect graph database.
+  - `paradigm tutorial` reads step files only from `.paradigm/tutorial`, and a `file-exists` checkpoint counts only paths inside the project (symlinks followed), so `curriculum.yaml` can't make the tutorial print a file from elsewhere on your disk. Tutorial text from the repo (step files, titles, descriptions) is printed with terminal control characters removed, so it can't send escape sequences to your terminal.
+  - The Cursor CLI provider passes `-p -- <prompt>` (Cursor's `-p` is a boolean flag), so a prompt starting with `-` is not read as an option.
+  - Conductor's AppleScript escaping is now also tested against curly quotes, line and paragraph separators and `«data …»` inside a value; all stay data. The terminal launcher is Conductor's only AppleScript code.
 
 ### Fixed
 - **The plugin's MCP server and hooks work in repos that require pnpm** (`#paradigm-mcp-launch`). npm 11 applies the nearest `package.json`'s `devEngines` to `npx`, so in a repo with `devEngines.packageManager` set to pnpm and `onFail: "error"`, the plugin's `npx --package=@a-company/paradigm paradigm-mcp` exited with `EBADDEVENGINES` (the server showed as `CONNECTION_CLOSED`), and the hooks' `npx --no-install paradigm` failed silently (Stop reported the CLI as missing, pre-commit skipped the index rebuild).

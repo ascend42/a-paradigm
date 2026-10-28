@@ -139,9 +139,7 @@ export class CursorCliProvider implements AgentProvider {
     // Spawn Cursor agent CLI process
     // Note: Cursor CLI doesn't have stream-json like Claude CLI
     // We'll capture stdout and parse it as text
-    const args = [
-      '-p', prompt.slice(0, 8000),  // Non-interactive mode with prompt
-    ];
+    const args: string[] = [];
 
     // Add model if specified (map opus/sonnet/haiku to Cursor model names)
     if (options.model) {
@@ -150,6 +148,10 @@ export class CursorCliProvider implements AgentProvider {
         args.push('--model', cursorModel);
       }
     }
+
+    // `-p` (--print) is a boolean flag and the prompt is positional, so it goes
+    // last after `--`: a prompt starting with `-` is never read as an option.
+    args.push('-p', '--', prompt.slice(0, 8000));
 
     // Stream messages from the CLI
     const messageEmitter = new EventEmitter();

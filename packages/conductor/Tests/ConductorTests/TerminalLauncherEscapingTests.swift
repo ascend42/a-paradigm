@@ -35,6 +35,13 @@ final class TerminalLauncherEscapingTests: XCTestCase {
             "/tmp/back\\slash\\\" & (do shell script \"touch \(marker)\") & \"",
             "line\nbreak\rcarriage",
             "plain/path with spaces",
+            // AppleScript also treats curly quotes as string delimiters.
+            "/tmp/q\u{201D} & (do shell script \"touch \(marker)\") & \u{201C}",
+            "/tmp/c\u{201C}open\u{201D} close",
+            "/tmp/ls\u{2028}sep & (do shell script \"touch \(marker)\")",
+            "/tmp/ps\u{2029}para",
+            "/tmp/«data utxt0041» & (do shell script \"touch \(marker)\")",
+            "«data utxt0041»",
         ]
         for value in values {
             XCTAssertEqual(try roundTrip(value), value)

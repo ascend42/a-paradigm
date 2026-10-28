@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { execFileSync } from 'child_process';
+import { resolveInsideRoot } from '../../utils/path-containment.js';
 
 /**
  * The only commands a `command-success` checkpoint may run, mapped to argv
@@ -25,6 +26,23 @@ export function checkpointArgv(command: unknown): string[] | null {
   return Object.prototype.hasOwnProperty.call(CHECKPOINT_COMMANDS, key) ? [...CHECKPOINT_COMMANDS[key]] : null;
 }
 
+/**
+ * The step file for `file` (a curriculum.yaml value, repo content), only if it
+ * is a real file inside <root>/.paradigm/tutorial. Null otherwise.
+ */
+export function tutorialStepPath(rootDir: string, file: unknown): string | null {
+  return typeof file === 'string' ? resolveInsideRoot(path.join(rootDir, TUTORIAL_DIR), file) : null;
+}
+
+/**
+ * Text from the repo, safe to print: C0/C1 control characters (ANSI escapes,
+ * OSC sequences, carriage returns) are removed; newline and tab are kept.
+ */
+export function printable(text: unknown): string {
+  // eslint-disable-next-line no-control-regex
+  return String(text ?? '').replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, '');
+}
+
 /** Run this same paradigm CLI (node + its entry script) with argv, no shell. */
 function runParadigm(args: string[], cwd: string): void {
   execFileSync(process.execPath, [process.argv[1], ...args], { cwd, stdio: 'pipe', timeout: 120_000 });
@@ -39,6 +57,9 @@ const TUTORIAL_STATE_FILE = '.paradigm/tutorial/state.json';
  * Tutorial curriculum file
  */
 const CURRICULUM_FILE = '.paradigm/tutorial/curriculum.yaml';
+
+/** Folder that holds the step files; curriculum `file` values stay inside it. */
+const TUTORIAL_DIR = '.paradigm/tutorial';
 
 /**
  * Tutorial state interface
@@ -534,9 +555,10 @@ async function validateCheckpoint(rootDir: string, stepId: string, curriculum: C
   for (const checkpoint of step.checkpoints || []) {
     switch (checkpoint.type) {
       case 'file-exists': {
-        const filePath = path.join(rootDir, checkpoint.path!);
-        if (!fs.existsSync(filePath)) {
-          console.log(chalk.red(`❌ Missing: ${checkpoint.path}`));
+        // checkpoint.path is repo content: only a path inside the project counts.
+        // (The default curriculum checks project-root files such as portal.yaml.)
+        if (!resolveInsideRoot(rootDir, String(checkpoint.path ?? ''))) {
+          console.log(chalk.red(`❌ Missing: ${printable(checkpoint.path)}`));
           return false;
         }
         break;
@@ -562,7 +584,7 @@ async function validateCheckpoint(rootDir: string, stepId: string, curriculum: C
         try {
           runParadigm(args, rootDir);
         } catch {
-          console.log(chalk.red(`❌ Command failed: ${checkpoint.command}`));
+          console.log(chalk.red(`❌ Command failed: ${printable(checkpoint.command)}`));
           return false;
         }
         break;
@@ -570,7 +592,7 @@ async function validateCheckpoint(rootDir: string, stepId: string, curriculum: C
       case 'bug-fixed': {
         const state = loadState(rootDir);
         if (!state.fixedBugs.includes(checkpoint.bug!)) {
-          console.log(chalk.red(`❌ Bug not fixed: ${checkpoint.bug}`));
+          console.log(chalk.red(`❌ Bug not fixed: ${printable(checkpoint.bug)}`));
           return false;
         }
         break;
@@ -606,17 +628,17 @@ export async function tutorialStartCommand(targetPath: string | undefined): Prom
     }
 
     console.log(chalk.blue('\n🎓 Paradigm Tutorial\n'));
-    console.log(`Current Step: ${state.currentStep || 'Not started'}`);
+    console.log(`Current Step: ${printable(state.currentStep) || 'Not started'}`);
     console.log(`Completed Steps: ${state.completedSteps.length}/${curriculum.steps.length}\n`);
 
     if (state.currentStep) {
       const step = curriculum.steps.find((s) => s.id === state.currentStep);
       if (step) {
-        const stepFile = path.join(rootDir, '.paradigm/tutorial', step.file);
-        if (fs.existsSync(stepFile)) {
-          console.log(chalk.cyan(`📖 ${step.title}`));
-          console.log(chalk.gray(step.description));
-          console.log(chalk.gray(`\nView full instructions: ${stepFile}\n`));
+        const stepFile = tutorialStepPath(rootDir, step.file);
+        if (stepFile) {
+          console.log(chalk.cyan(`📖 ${printable(step.title)}`));
+          console.log(chalk.gray(printable(step.description)));
+          console.log(chalk.gray(`\nView full instructions: ${printable(stepFile)}\n`));
         }
       }
     }
@@ -652,14 +674,15 @@ export async function tutorialStepCommand(
     }
 
     const step = curriculum.steps[stepIndex];
-    const stepFile = path.join(rootDir, '.paradigm/tutorial', step.file);
+    // step.file is repo content: it must name a file inside .paradigm/tutorial.
+    const stepFile = tutorialStepPath(rootDir, step.file);
 
-    if (fs.existsSync(stepFile)) {
-      console.log(chalk.blue(`\n📖 Step ${stepIndex + 1}: ${step.title}\n`));
+    if (stepFile) {
+      console.log(chalk.blue(`\n📖 Step ${stepIndex + 1}: ${printable(step.title)}\n`));
       const content = fs.readFileSync(stepFile, 'utf8');
-      console.log(content);
+      console.log(printable(content));
     } else {
-      console.error(chalk.red(`❌ Step file not found: ${stepFile}`));
+      console.error(chalk.red(`❌ Step file not found in ${TUTORIAL_DIR}: ${printable(step.file)}`));
       process.exit(1);
     }
   } catch (error) {
@@ -683,7 +706,7 @@ export async function tutorialCheckpointCommand(targetPath: string | undefined):
       return;
     }
 
-    console.log(chalk.blue(`\n🔍 Validating checkpoint for step: ${state.currentStep}\n`));
+    console.log(chalk.blue(`\n🔍 Validating checkpoint for step: ${printable(state.currentStep)}\n`));
 
     const passed = await validateCheckpoint(rootDir, state.currentStep, curriculum);
     
@@ -694,11 +717,11 @@ export async function tutorialCheckpointCommand(targetPath: string | undefined):
       const currentIndex = curriculum.steps.findIndex((s) => s.id === state.currentStep);
       if (currentIndex < curriculum.steps.length - 1) {
         const nextStep = curriculum.steps[currentIndex + 1];
-        const nextStepFile = path.join(rootDir, '.paradigm/tutorial', nextStep.file);
-        
-        if (fs.existsSync(nextStepFile)) {
-          console.log(chalk.cyan(`\n📖 Next Step: ${nextStep.title}\n`));
-          console.log(chalk.gray(nextStep.description));
+        const nextStepFile = tutorialStepPath(rootDir, nextStep.file);
+
+        if (nextStepFile) {
+          console.log(chalk.cyan(`\n📖 Next Step: ${printable(nextStep.title)}\n`));
+          console.log(chalk.gray(printable(nextStep.description)));
           console.log(chalk.gray(`\nRun 'paradigm tutorial step ${currentIndex + 2}' to view full instructions.\n`));
         }
       } else {
@@ -771,15 +794,15 @@ export async function tutorialStatusCommand(targetPath: string | undefined): Pro
     const state = loadState(rootDir);
 
     console.log(chalk.blue('\n📊 Tutorial Progress\n'));
-    console.log(`Current Step: ${state.currentStep || 'Not started'}`);
-    console.log(`Completed: ${state.completedSteps.length}/${curriculum.steps.length}`);
+    console.log(`Current Step: ${printable(state.currentStep) || 'Not started'}`);
+    console.log(`Completed:${state.completedSteps.length}/${curriculum.steps.length}`);
     console.log(`Bugs Fixed: ${state.fixedBugs.length}\n`);
 
     if (state.currentStep) {
       const step = curriculum.steps.find((s) => s.id === state.currentStep);
       if (step) {
-        console.log(chalk.cyan(`Current: ${step.title}`));
-        console.log(chalk.gray(step.description));
+        console.log(chalk.cyan(`Current: ${printable(step.title)}`));
+        console.log(chalk.gray(printable(step.description)));
       }
     }
     console.log('');

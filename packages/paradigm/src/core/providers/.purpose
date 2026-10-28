@@ -23,7 +23,7 @@ components:
     aspects: ["~provider-cascade"]
 
   cursor-cli-provider:
-    description: Cursor agent CLI — auto-detected when running in Cursor IDE
+    description: "Cursor agent CLI — auto-detected when running in Cursor IDE. `-p` (--print) is a boolean flag and the prompt is positional, so args end with `-p -- <prompt>` (after --model): a prompt starting with `-` is never read as an option."
     type: service
     path: cursor-cli.ts
     aspects: ["~provider-cascade"]
