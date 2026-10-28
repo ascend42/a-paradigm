@@ -63,7 +63,8 @@ function setup(platform = 'darwin', cardState: () => string = () => 'gone') {
   const cache = new McpListCache();
   let now = 1_800_000_000_000;
   const raised: Array<{ kind: string; handOnly: boolean; detail: Record<string, unknown>; lines: string[]; prepare: (d: string) => unknown; effect: (d: string) => Promise<void> }> = [];
-  const broker = { raise: async (i: never) => (raised.push(i), { cardId: (i as { cardId: string }).cardId }) as never, card: () => ({ state: cardState() }) as never };
+  const expired: string[] = [];
+  const broker = { raise: async (i: never) => (raised.push(i), { cardId: (i as { cardId: string }).cardId }) as never, card: () => ({ state: cardState() }) as never, expire: async (cardId: string) => (expired.push(cardId), true) };
   const m = new McpServers({ home, broker: broker as never, userHome, pathDirs: () => [bin], launchKey: KEY, firstParty: () => ({ available: false, why: 'not installed' }) as never, liveRepos: () => [{ cwd: repo, hsid: 'h1' }], platform, clock: () => now, listedOf: (id) => cache.newest(id), trust });
   const decl = (name: string) => discoverMcpServers({ userHome, repos: [repo], pathDirs: [bin], platform: 'darwin' }).find((d) => d.name === name)!;
   const enable = async (name: string): Promise<string> => {
@@ -87,7 +88,7 @@ function setup(platform = 'darwin', cardState: () => string = () => 'gone') {
     expect(c.prepare('allow')).toBeNull();
     await c.effect('allow');
   };
-  return { m, trust, cache, rows, push, trustRows, enable, list, decl, home, raised, commit, tick: (ms: number) => (now += ms) };
+  return { m, trust, cache, rows, push, trustRows, enable, list, decl, home, raised, expired, commit, tick: (ms: number) => (now += ms) };
 }
 const statusTrust = (m: McpServers, name: string) => (m.status() as { servers: Array<{ name: string; trust: { level: string; why: string | null } }> }).servers.find((s) => s.name === name)!.trust;
 const refusal = async (p: Promise<unknown>): Promise<Record<string, unknown>> => {
@@ -261,6 +262,32 @@ describe('Aegis hardening (C5\'a2): one open trust card per server id', () => {
     expect(third.cardId).not.toBe(first.cardId);
     expect(t.raised).toHaveLength(2);
     expect(t.trustRows()).toEqual([]);
+  });
+
+  it('Aegis L1: an open card for an older listing is withdrawn and a new card raised for the new one; the old allow is refused', async () => {
+    const t = setup('darwin', () => 'pending');
+    const id = await t.enable('neurons');
+    t.list('neurons');
+    const preview = async (): Promise<string> => ((await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string }).token;
+    t.raised.length = 0;
+    const a = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token: await preview() })) as { cardId: string };
+    const cardA = t.raised[0]!;
+    // the server re-lists with another tool list (L2)
+    const l2 = [...TOOLS, { name: 'more', description: 'More.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true, openWorldHint: false } }];
+    t.tick(1000);
+    t.list('neurons', l2);
+    const b = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token: await preview() })) as { cardId: string };
+    expect(b.cardId).not.toBe(a.cardId);
+    expect(t.expired).toEqual([a.cardId]);
+    expect(t.raised).toHaveLength(2);
+    expect(t.raised[1]!.detail).toMatchObject({ toolsHash: toolsHashOf(l2) });
+    // card A's allow is refused (its listing is gone) before the prompt and at the effect; nothing is set
+    expect(() => cardA.prepare('allow')).toThrow(/changed/);
+    await expect(cardA.effect('allow')).rejects.toThrow(/changed/);
+    expect(t.trustRows()).toEqual([]);
+    // the same listing again returns card B
+    expect(await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token: await preview() })).toMatchObject({ cardId: b.cardId });
+    expect(t.raised).toHaveLength(2);
   });
 });
 

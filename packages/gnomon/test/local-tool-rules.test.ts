@@ -321,6 +321,18 @@ describe('G-LCL-22 the tool scope in the approval broker', () => {
     expect(await refusal(r.broker.approve(H, { cardId: odd.cardId, decision: 'always', scope: { kind: 'tool' }, decisionSig: r.toolSig(odd.cardId, odd.contentHash) }))).toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('Aegis I1: the request row carries a bindHash only when detail.toolScopes includes tool', async () => {
+    const r = rig();
+    const reqRow = () => r.rows.filter((x) => x.kind === 'approval.request').at(-1)!.payload;
+    const raise = (toolScopes: unknown) => r.broker.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { toolScopes, brokered: { bindHash: BINDING } }, lines: ['x'], tool: 'mcp:srv/write', toolInput: { t: 'x' }, ruleScope: { repoKey: REPO } });
+    for (const scopes of [[], ['file'], ['repo-edits', 'prefix']]) {
+      await raise(scopes);
+      expect(reqRow(), JSON.stringify(scopes)).not.toHaveProperty('bindHash');
+    }
+    await raise(['tool']);
+    expect(reqRow()).toMatchObject({ bindHash: BINDING });
+  });
+
   it('the scope digest of the tool scope is its own (never another scope\'s) and the presence binding carries it', () => {
     const d = scopeDigest({ kind: 'tool' });
     expect(d).toMatch(/^sha256:[0-9a-f]{64}$/);

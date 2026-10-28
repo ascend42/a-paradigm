@@ -316,7 +316,7 @@ export interface McpAsker {
 
 export interface McpServersOptions {
   home: string;
-  broker: Pick<ApprovalBroker, 'raise' | 'card'>;
+  broker: Pick<ApprovalBroker, 'raise' | 'card'> & Partial<Pick<ApprovalBroker, 'expire'>>;
   userHome: string;
   /** the session PATH dirs (a bare command resolves on them, never on the daemon's PATH) */
   pathDirs: () => readonly string[];
@@ -353,7 +353,7 @@ export class McpServers {
   /** slice C5'a1: single-use trust preview tokens → what they are bound to */
   readonly #trustTokens = new Map<string, { principal: string; id: string; launchHash: string; toolsHash: string; expires: number }>();
   /** slice C5'a2 (Aegis hardening): server id → its open trust card (raised: false while the raise is in flight) */
-  readonly #trustCards = new Map<string, { cardId: string; raised: boolean }>();
+  readonly #trustCards = new Map<string, { cardId: string; raised: boolean; launchHash: string; toolsHash: string }>();
 
   constructor(o: McpServersOptions) {
     this.#o = o;
@@ -782,10 +782,16 @@ export class McpServers {
     // the contentHash) binds {id, launchHash, toolsHash, reads}; the token stays the preview's TOCTOU binding. Trust is
     // set only when the card is allowed, after the listing is checked again.
     // Aegis hardening (C5'a2): one open trust card per server id; a repeat commit returns it (like enable's #pending)
+    // Aegis L1 (C5'a2 sign-off): an open card for ANOTHER listing (the server re-listed since) is withdrawn and a new
+    // card raised for this one, so an old card never blocks a commit until it times out (its allow is refused)
     const open = this.#trustCards.get(id);
     if (open) {
       const c = open.raised ? this.#o.broker.card?.(open.cardId) : null;
-      if (!open.raised || (c && c.state === 'pending')) return { id, pending: true, cardId: open.cardId };
+      const live = !open.raised || (c !== null && c !== undefined && c.state === 'pending');
+      const same = open.launchHash === l.launchHash && open.toolsHash === l.toolsHash;
+      if (live && same) return { id, pending: true, cardId: open.cardId };
+      if (live && !open.raised) return { id, pending: true, cardId: open.cardId }; // its raise is still in flight
+      if (live) await this.#o.broker.expire?.(open.cardId, 'cancelled').catch(() => false);
       this.#trustCards.delete(id);
     }
     const d = this.#find(id)!;
@@ -805,7 +811,7 @@ export class McpServers {
       return again;
     };
     const trustCardId = mintId('card');
-    const slot = { cardId: trustCardId, raised: false };
+    const slot = { cardId: trustCardId, raised: false, launchHash: l.launchHash, toolsHash: l.toolsHash };
     this.#trustCards.set(id, slot);
     let card: Awaited<ReturnType<McpServersOptions['broker']['raise']>>;
     try {
