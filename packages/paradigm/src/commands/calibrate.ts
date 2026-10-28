@@ -55,13 +55,16 @@ export async function calibrateCommand(options: {
     dim('Run some orchestrations first — actuals are captured per agent-step.');
     return;
   }
-  const { groups, samplesRead } = result;
+  const { groups, samplesRead, home, otherHomes } = result;
 
   const learned = groups.filter(g => g.learned);
   const pending = groups.filter(g => !g.learned);
 
   header('Calibration — learned token-estimate table');
   kv('Samples read', String(samplesRead));
+  kv('Population', `${home} home`);
+  const others = Object.entries(otherHomes).map(([h, n]) => `${h}: ${n}`);
+  if (others.length > 0) dim(`  Not pooled (other homes): ${others.join(', ')}`);
   kv('Groups', String(groups.length));
   kv('Written to', LEARNED_FILE);
 

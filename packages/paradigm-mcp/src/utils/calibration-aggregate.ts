@@ -9,15 +9,20 @@
  * Pure aggregation: read the captured per-agent actuals → group by
  * (archetype, taskType) → compute p10/p90 bands for groups at/above the sample
  * floor (MIN_SAMPLES) → write `.paradigm/learned/token-estimates.json`.
+ *
+ * Scoped learning (S1): actuals are read as the union of their homes, each
+ * sample tagged with its home. The table is learned from ONE population (the
+ * home new actuals land in); samples from other homes are reported, never
+ * pooled silently.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { homeOf, readLearningHomeConfig, readLearningRows, type LearningHome } from './learning-stores.js';
 
 /** Minimum samples per (archetype, taskType) group before a band is learned. */
 export const MIN_SAMPLES = 8;
 
-const ACTUALS_FILE = '.paradigm/events/estimate-actuals.jsonl';
 const LEARNED_FILE = '.paradigm/learned/token-estimates.json';
 
 /** A learned band for one (archetype, taskType) cell. */
@@ -121,19 +126,32 @@ export function aggregateActuals(lines: string[]): { table: LearnedTokenTable; g
  * outcome, or `null` when there are no actuals yet (nothing written). Never
  * throws (a settlement must not break on a calibration hiccup).
  */
-export function rebuildLearnedTable(rootDir: string): { table: LearnedTokenTable; groups: GroupReport[]; samplesRead: number } | null {
+export function rebuildLearnedTable(rootDir: string): {
+  table: LearnedTokenTable;
+  groups: GroupReport[];
+  samplesRead: number;
+  /** The population the table was learned from. */
+  home: LearningHome;
+  /** Samples in other homes, counted but not pooled into the bands. */
+  otherHomes: Partial<Record<LearningHome, number>>;
+} | null {
   try {
-    const actualsPath = path.join(rootDir, ACTUALS_FILE);
-    if (!fs.existsSync(actualsPath)) return null;
-
-    const lines = fs.readFileSync(actualsPath, 'utf8').split('\n');
+    const rows = readLearningRows<ActualRecord>('estimate-actuals', rootDir);
+    if (rows.length === 0) return null;
+    const home = homeOf('estimate-actuals', null, readLearningHomeConfig(rootDir));
+    const otherHomes: Partial<Record<LearningHome, number>> = {};
+    const lines: string[] = [];
+    for (const r of rows) {
+      if (r.home === home) lines.push(JSON.stringify(r));
+      else otherHomes[r.home] = (otherHomes[r.home] ?? 0) + 1;
+    }
     const { table, groups } = aggregateActuals(lines);
 
     const learnedDir = path.join(rootDir, path.dirname(LEARNED_FILE));
     if (!fs.existsSync(learnedDir)) fs.mkdirSync(learnedDir, { recursive: true });
     fs.writeFileSync(path.join(rootDir, LEARNED_FILE), JSON.stringify(table, null, 2) + '\n', 'utf8');
 
-    return { table, groups, samplesRead: groups.reduce((s, g) => s + g.n, 0) };
+    return { table, groups, samplesRead: groups.reduce((s, g) => s + g.n, 0), home, otherHomes };
   } catch {
     return null;
   }
