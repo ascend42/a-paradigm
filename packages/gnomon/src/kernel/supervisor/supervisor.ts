@@ -128,7 +128,8 @@ import { answerFor, askNoteCap, ASK_USER_TIMEOUT_MS, composePermission, EDIT_SCO
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, SESSION_SKILL_RUN_REQUEST, SESSION_SKILLS_LIST_REQUEST, type LocalLaneOptions, type LoopOpenRequest, type LoopSessionHandle, type LocalSessionAsker, type SkillRunStatus } from './local-session.js';
-import { listSkills, nativeSkillText, readStagedSkill, skillArgsRefusal, skillBody, skillTemplate, SlashSkillsProbe, type SlashProbeRun, type StagedSkills } from './skill-run.js';
+import { CLAUDE_SKILL_TOKEN_LIMIT, listSkills, nativeSkillText, skillArgsRefusal, skillRunTemplate, SlashSkillsProbe, stagedSkillForRun, type SlashProbeRun, type StagedSkills } from './skill-run.js';
+import { sendTokens } from '../local/result-policy.js';
 import type { LocalProbeSink } from '../local/config-request.js';
 import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, repoKeyOf, type RepoHook } from './repo-hooks.js';
 import { buildRepoContext, memoryChainOf, REPO_CONTEXT_ENV, REPO_CONTEXT_SETTINGS, repoContextLines, repoContextRow, repoSettingsInfo, repoSettingsLines, type RepoContext } from './repo-context.js';
@@ -427,6 +428,11 @@ interface Session {
   lastPlanFile: string | null;
   /** slice C6'a2-2: the repo skills staged for this session (its kernel-staged plugin; absent: no repo context) */
   skills?: StagedSkills;
+  /**
+   * slice C6'a2-2 (Aegis, audit parity): set once a repo skill's text was sent to this session. AUDIT ONLY: nothing
+   * gates on it (the local lane's taint gates destructive rules; a Claude session has no such gate).
+   */
+  skillTainted?: boolean;
   /** slice C6'a2-2: the private claude copy this session execs and its sha256 hex (the slash probe's cache key) */
   binary?: { exec: string; sha256: string };
   policy: SessionPolicy;
@@ -2200,7 +2206,8 @@ export class SessionSupervisor {
     if (typeof p.name !== 'string' || p.name.length === 0 || p.name.length > 64) throw refused('BAD_REQUEST', `${kind}: name must be a listed skill name`, { reason: 'bad-params', field: 'name' });
     const name = p.name;
     const args = p.args === undefined ? '' : p.args;
-    const staged = listed.some((x) => x.loaded && x.name === name) ? readStagedSkill(s.skills?.dir ?? null, name) : null;
+    // Aegis L2: ONE read of the staged copy, the listing checks re-made on that text
+    const staged = stagedSkillForRun(s.skills, name);
     if (!staged) return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'not-listed', content: `No runnable skill ${name.slice(0, 64)} in this session.` };
     const skillHash = `sha256:${staged.sha}`;
     const argsHash = `sha256:${createHash('sha256').update(typeof args === 'string' ? args : (JSON.stringify(args) ?? '')).digest('hex')}`;
@@ -2210,12 +2217,27 @@ export class SessionSupervisor {
       await row('template', 'refused');
       return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', content: `${bad}.` };
     }
+    // Aegis L1: the substituted template is re-checked for shell preprocessing, before either path
+    const { template, refusal } = skillRunTemplate({ name, staged, args: args as string });
+    if (refusal !== null) {
+      await row('template', 'refused');
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', content: `${refusal}.` };
+    }
+    // Aegis L3: capped like the local lane (the native expansion is the same body)
+    const tokens = sendTokens(template);
+    const limit = CLAUDE_SKILL_TOKEN_LIMIT;
+    if (tokens > limit) {
+      await this.#o.log('skill.run', { hsid: s.hsid, name, skillHash, argsHash, via: 'template', decision: 'over-budget', tokens }, { session: s.hsid }).catch(() => undefined);
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'over-budget', tokens, limit, content: `${name} is about ${tokens} tokens, over the skill limit of ${limit}.` };
+    }
     const native = s.binary ? await this.#slash.native(s.binary) : false;
-    const text = native ? nativeSkillText(name, args as string) : skillTemplate({ name, file: staged.file, sha: staged.sha, body: skillBody(staged.text), args: args as string });
+    const text = native ? nativeSkillText(name, args as string) : template;
     const via = native ? 'native' : 'template';
+    // audit parity with the local lane: marked before the send, gating nothing (Claude sessions have no taint gate)
+    s.skillTainted = true;
     const sent = await this.send(asker.principal, { hsid: s.hsid, text, origin: 'kernel' });
-    await row(via, 'ran');
-    return { hsid: s.hsid, status: 'ran' satisfies SkillRunStatus, via, turn: sent.turn, skillHash };
+    await row(via, 'ran', native ? undefined : tokens);
+    return { hsid: s.hsid, status: 'ran' satisfies SkillRunStatus, via, turn: sent.turn, skillHash, tokens, limit };
   }
 
   /** The local lane config new opens use (undefined = none). */

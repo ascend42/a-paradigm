@@ -29,7 +29,7 @@ import * as path from 'node:path';
 import { SKILL_NAME_PATTERN } from '@a-company/gnomon-contracts';
 import { badText } from '../local/tool-broker.js';
 import { cleanServerText } from '../local/capability-index.js';
-import { MAX_CONTEXT_FILE_BYTES, REPO_CONTEXT_PLUGIN, type RepoContext } from './repo-context.js';
+import { hasShellPreprocessing, MAX_CONTEXT_FILE_BYTES, REPO_CONTEXT_PLUGIN, type RepoContext } from './repo-context.js';
 
 /** The human's skill arguments: at most this many UTF-8 bytes. */
 export const SKILL_ARGS_MAX_BYTES = 4096;
@@ -136,6 +136,7 @@ export function frontmatterOf(text: string): Record<string, string> {
       continue;
     }
     if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) v = v.slice(1, -1);
+    else v = v.replace(/(?:^|[ \t]+)#.*$/, '').trim(); // Aegis L4: a ` #` comment ends a plain YAML scalar
     out[key] = v;
   }
   flush();
@@ -212,6 +213,33 @@ export function skillTemplate(i: { name: string; file?: string; sha: string; bod
 
 /** A Claude session's native run of a staged skill: the plugin's namespaced slash command. */
 export const nativeSkillText = (name: string, args: string): string => `/${REPO_CONTEXT_PLUGIN}:${name}${args ? ` ${args}` : ''}`;
+
+/** Aegis L3: a Claude session's skill template is capped too (half of a 200k-token window; the local lane: half its target). */
+export const CLAUDE_SKILL_TOKEN_LIMIT = 100_000;
+
+/**
+ * Aegis L2: the ONE read of a skill a run uses — a staged, listed name (SKILL_NAME_PATTERN), its staged SKILL.md read
+ * once, and the listing checks re-made on THAT text (not user-invocable: false; no shell preprocessing). Null: the
+ * run is `not-listed`.
+ */
+export function stagedSkillForRun(st: StagedSkills | undefined, name: string): { text: string; sha: string; file: string } | null {
+  if (!st || !SKILL_NAME_PATTERN.test(name) || !st.ctx.skills.includes(name)) return null;
+  const got = readStagedSkill(st.dir, name);
+  if (!got) return null;
+  if ((frontmatterOf(got.text)['user-invocable'] ?? '').toLowerCase() === 'false') return null;
+  if (hasShellPreprocessing(got.text)) return null;
+  return got;
+}
+
+/**
+ * The template of a run and why it is refused (null: it may run). Aegis L1: the SUBSTITUTED template is re-checked with
+ * hasShellPreprocessing (the args check sees only the literal spellings; joined with the body they could form a fence),
+ * for the template and the native path alike.
+ */
+export function skillRunTemplate(i: { name: string; staged: { text: string; sha: string; file: string }; args: string }): { template: string; refusal: string | null } {
+  const template = skillTemplate({ name: i.name, file: i.staged.file, sha: i.staged.sha, body: skillBody(i.staged.text), args: i.args });
+  return { template, refusal: hasShellPreprocessing(template) ? 'with these args the skill holds shell preprocessing (!` or a ```! block)' : null };
+}
 
 /** What one slash-skill probe gets: the Claude binary, the canary plugin in a kernel scratch dir and the nonce. */
 export interface SlashProbeInput {

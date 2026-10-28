@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildRepoContext } from '../src/kernel/supervisor/repo-context.js';
-import { frontmatterOf, listSkills, nativeSkillText, readStagedSkill, skillArgsRefusal, skillBody, skillTemplate, SKILL_ARGS_MAX_BYTES, SlashSkillsProbe, SLASH_CANARY_SKILL, type SlashProbeInput } from '../src/kernel/supervisor/skill-run.js';
+import { frontmatterOf, listSkills, nativeSkillText, readStagedSkill, skillArgsRefusal, skillBody, skillRunTemplate, skillTemplate, SKILL_ARGS_MAX_BYTES, SlashSkillsProbe, SLASH_CANARY_SKILL, stagedSkillForRun, type SlashProbeInput } from '../src/kernel/supervisor/skill-run.js';
 
 let root: string | null = null;
 afterEach(() => {
@@ -108,6 +108,33 @@ describe('G-LCL-29 the template', () => {
   it('the native text is the namespaced plugin command', () => {
     expect(nativeSkillText('deploy', 'prod')).toBe('/project:deploy prod');
     expect(nativeSkillText('deploy', '')).toBe('/project:deploy');
+  });
+});
+
+describe('Aegis C6\'a2-2 lows: one read, re-checks on the substituted text, comments', () => {
+  it('L1: args that complete a fence or a !` with the body are refused on the substituted template', () => {
+    const staged = (body: string) => ({ text: `---\nname: x\n---\n${body}\n`, sha: 'f'.repeat(64), file: 'SKILL.md' });
+    expect(skillRunTemplate({ name: 'x', staged: staged('```$ARGUMENTS\nid\n```'), args: '!sh' }).refusal).toMatch(/shell preprocessing/);
+    expect(skillRunTemplate({ name: 'x', staged: staged('$ARGUMENTS`id`'), args: 'a!' }).refusal).toMatch(/shell preprocessing/);
+    expect(skillRunTemplate({ name: 'x', staged: staged('Tidy $ARGUMENTS.'), args: 'a!' })).toMatchObject({ refusal: null });
+  });
+  it('L2 + L4: stagedSkillForRun reads once and re-makes the listing checks; a ` #` comment ends a plain value', () => {
+    const w = repo({
+      'ok/SKILL.md': '---\nname: ok\n---\nBody.\n',
+      'commented/SKILL.md': '---\nname: commented\nuser-invocable: false # internal\n---\nNo.\n',
+      'quoted/SKILL.md': '---\nname: quoted\ndescription: "a # b"\n---\nYes.\n',
+    });
+    const ctx = buildRepoContext({ cwd: w.cwd, userHome: w.home, outDir: w.out, skillsOnly: true });
+    const st = { dir: ctx.pluginDir, ctx };
+    expect(listSkills(st).find((x) => x.name === 'commented')).toMatchObject({ loaded: false });
+    expect(listSkills(st).find((x) => x.name === 'quoted')).toMatchObject({ loaded: true, description: 'a # b' });
+    expect(stagedSkillForRun(st, 'commented')).toBeNull();
+    expect(stagedSkillForRun(st, 'ok')).toMatchObject({ file: 'SKILL.md' });
+    expect(stagedSkillForRun(st, 'nope')).toBeNull();
+    expect(stagedSkillForRun(undefined, 'ok')).toBeNull();
+    // a staged copy changed after the scan to hold shell preprocessing is refused on the read the run uses
+    fs.writeFileSync(path.join(ctx.pluginDir!, 'skills', 'ok', 'SKILL.md'), '---\nname: ok\n---\nRun !`id`\n');
+    expect(stagedSkillForRun(st, 'ok')).toBeNull();
   });
 });
 

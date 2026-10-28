@@ -140,7 +140,7 @@ import { liveScratch, type Scratch } from '../git/scratch.js';
 import { answerMemoryTool, MEMORY_FILE, MEMORY_TOOL_NAMES, memoryOwnerOf, memoryRowsOf, MAX_TOOL_PINS, memorySlotTokens, TOOL_PIN_NAME_RE, WorkingMemory, type MemoryChange } from '../local/working-memory.js';
 import { loopActLaunchPlan, type LoopActLaunchInput } from '../sandbox/loop-act.js';
 import { buildRepoContext } from './repo-context.js';
-import { listSkills, readStagedSkill, skillArgsRefusal, skillBody, SKILL_CONTEXT_SHARE, skillTemplate, type SkillListing, type StagedSkills } from './skill-run.js';
+import { listSkills, skillArgsRefusal, SKILL_CONTEXT_SHARE, skillRunTemplate, stagedSkillForRun, type SkillListing, type StagedSkills } from './skill-run.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 const EVENT_LINE_CAP = 64 * 1024;
@@ -2241,9 +2241,9 @@ export class LocalLane {
     if (typeof p.name !== 'string' || p.name.length === 0 || p.name.length > 64) throw refused('BAD_REQUEST', `${kind}: name must be a listed skill name`, { reason: 'bad-params', field: 'name' });
     const args = p.args === undefined ? '' : p.args;
     const name = p.name;
-    if (!this.#skillList(s).some((x) => x.loaded && x.name === name)) return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'not-listed', via: 'template', content: `No runnable skill ${name.slice(0, 64)} in this session.` };
-    const staged = readStagedSkill(s.skills?.dir ?? null, name);
-    if (!staged) return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'not-listed', via: 'template', content: `The staged copy of ${name} could not be read.` };
+    // Aegis L2: ONE read of the staged copy, the listing checks re-made on that text
+    const staged = stagedSkillForRun(s.skills, name);
+    if (!staged) return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'not-listed', via: 'template', content: `No runnable skill ${name.slice(0, 64)} in this session.` };
     const skillHash = `sha256:${staged.sha}`;
     const argsHash = sha(typeof args === 'string' ? args : JSON.stringify(args) ?? '');
     const row = (decision: 'ran' | 'refused' | 'over-budget', tokens?: number) => this.#o.log('skill.run', { hsid: s.hsid, name, skillHash, argsHash, via: 'template', decision, ...(tokens !== undefined ? { tokens } : {}) }, { session: s.hsid }).catch(() => undefined);
@@ -2252,13 +2252,20 @@ export class LocalLane {
       await row('refused');
       return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', via: 'template', content: `${bad}.` };
     }
-    const template = skillTemplate({ name, file: staged.file, sha: staged.sha, body: skillBody(staged.text), args: args as string });
+    // Aegis L1: the substituted template is re-checked for shell preprocessing
+    const { template, refusal } = skillRunTemplate({ name, staged, args: args as string });
+    if (refusal !== null) {
+      await row('refused');
+      return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'bad-args', via: 'template', content: `${refusal}.` };
+    }
     const tokens = sendTokens(template);
     const limit = Math.floor(s.context.target * SKILL_CONTEXT_SHARE);
     if (tokens > limit) {
       await row('over-budget', tokens);
       return { hsid: s.hsid, status: 'refused' satisfies SkillRunStatus, why: 'over-budget', via: 'template', tokens, limit, content: `${name} is about ${tokens} tokens, over this session's skill limit of ${limit}.` };
     }
+    // Aegis N1: tainted FIRST, before any await on the send path
+    s.tainted = true;
     const sent = await this.#sendTurn(principal, { hsid: s.hsid, text: template, origin: 'kernel' }, { skill: true });
     await row('ran', tokens);
     return { hsid: s.hsid, status: 'ran' satisfies SkillRunStatus, via: 'template', turn: sent.turn, tokens, limit, skillHash };
@@ -2872,6 +2879,8 @@ export class LocalLane {
    */
   async #sendTurn(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean; source?: 'voice'; voice?: VoiceTurnLink; voiceAttribution?: VoiceAttribution; origin?: 'kernel'; voiceOrigin?: { sentBy: VoiceSentBy } }, o: { skill?: boolean } = {}): Promise<{ turn: string; steered?: boolean }> {
     const s = this.#get(principal, p.hsid);
+    // slice C6'a2-2 (founder; Aegis N1): a skill template taints the session before ANY await of the send path
+    if (o.skill) s.tainted = true;
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
     // session.send{steer} (slice 2, §11.5): mid-turn text the child reads at its next step. It joins the IN-FLIGHT
@@ -2947,8 +2956,6 @@ export class LocalLane {
       for (const x of sendNow) await this.#o.log('tool.result.sent', x.row, { session: s.hsid }).catch(() => undefined);
       data = [...(note ? [note] : []), ...sendNow.map((x) => x.frame)];
     }
-    // slice C6'a2-2 (founder): a skill template taints the session BEFORE it reaches the model
-    if (o.skill) s.tainted = true;
     // Aegis M1: the frames ride as the line's own `data` (the child pushes each as a data message; the goal stays the text)
     s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight, ...(data ? { data } : {}) }));
     return { turn: turnId(s.hsid, n) };

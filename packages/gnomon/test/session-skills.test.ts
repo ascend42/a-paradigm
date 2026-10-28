@@ -44,6 +44,8 @@ function rig(slashProbe?: (i: SlashProbeInput) => Promise<boolean>) {
   fs.writeFileSync(path.join(skillDir, 'tidy', 'SKILL.md'), '---\nname: tidy\ndescription: Tidy up\n---\nTidy $ARGUMENTS.\n');
   fs.mkdirSync(path.join(skillDir, 'hidden'), { recursive: true });
   fs.writeFileSync(path.join(skillDir, 'hidden', 'SKILL.md'), '---\nname: hidden\nuser-invocable: false\n---\nNo.\n');
+  fs.mkdirSync(path.join(skillDir, 'huge'), { recursive: true });
+  fs.writeFileSync(path.join(skillDir, 'huge', 'SKILL.md'), `---\nname: huge\n---\n${'word '.repeat(60_000)}\n`);
   const ask = (kind: string, p: Record<string, unknown>, asker: object = human) => sup.localSessionRequest(asker as never, kind, p);
   const sentTexts = () => trace(w).filter((t) => t.t === 'stdin' && (t.m as { type?: string }).type === 'user').map((t) => JSON.stringify((t.m as { message?: unknown }).message));
   return { rows, sup, ask, sentTexts, skillRows: () => rows.filter((r) => r.kind === 'skill.run').map((r) => r.payload) };
@@ -55,16 +57,19 @@ describe.skipIf(!SANDBOX_OK)('G-LCL-29 "/" skills of a Claude session', () => {
     const s = await r.sup.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd });
     try {
       const list = (await r.ask('request.session.skills.list', { hsid: s.hsid })) as { skills: Array<{ name: string; loaded: boolean }> };
-      expect(list.skills.map((x) => [x.name, x.loaded])).toEqual([['hidden', false], ['tidy', true]]);
+      expect(list.skills.map((x) => [x.name, x.loaded])).toEqual([['hidden', false], ['huge', true], ['tidy', true]]);
       expect(await r.ask('request.session.skill.run', { hsid: s.hsid, name: 'hidden', args: '' })).toMatchObject({ status: 'refused', why: 'not-listed' });
       expect(await r.ask('request.session.skill.run', { hsid: s.hsid, name: 'tidy', args: 'x\ny' })).toMatchObject({ status: 'refused', why: 'bad-args' });
+      // Aegis L3: a Claude session's skill is capped too
+      const over = await r.ask('request.session.skill.run', { hsid: s.hsid, name: 'huge', args: '' });
+      expect(over).toMatchObject({ status: 'refused', why: 'over-budget', limit: 100_000 });
       await expect(r.ask('request.session.skill.run', { hsid: s.hsid, name: 'tidy', args: '' }, { ...human, principal: 'p:abcdefgh/other' })).rejects.toThrow(/no such running session/);
       await expect(r.ask('request.session.skill.run', { hsid: s.hsid, name: 'tidy', args: '' }, { ...human, principalClass: 'agent' })).rejects.toThrow(/gui or device/);
       expect(await r.ask('request.session.skill.run', { hsid: s.hsid, name: 'tidy', args: 'the $& desk' })).toMatchObject({ status: 'ran', via: 'template' });
       expect(await waitFor(() => r.sentTexts().length === 1)).toBe(true);
       expect(r.sentTexts()[0]).toContain('The human ran repo skill tidy (from .claude/skills/tidy/SKILL.md, sha ');
       expect(r.sentTexts()[0]).toContain('Tidy the $& desk.');
-      expect(r.skillRows().map((x) => [x.via, x.decision])).toEqual([['template', 'refused'], ['template', 'ran']]);
+      expect(r.skillRows().map((x) => [x.via, x.decision])).toEqual([['template', 'refused'], ['template', 'over-budget'], ['template', 'ran']]);
       for (const x of r.skillRows()) expect(validateKindPayload('skill.run', x)).toEqual([]);
     } finally {
       await r.sup.stop(HUMAN, { hsid: s.hsid });
