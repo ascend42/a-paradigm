@@ -5,7 +5,10 @@
  *
  *   GET  /health /props /slots /v1/models
  *   POST /v1/chat/completions — the capability probe's `get_time` request is
- *        answered from `tools` (a tool call iff tools); every other request
+ *        answered from `tools` (a tool call iff tools); slice C4'a: the
+ *        tool-skill probe's T2-T4 requests (lookup_city, archive_note,
+ *        create_event) are answered right while `toolSkill` (how many of
+ *        T1..T4 pass; default 4) reaches them, never from the script; every other request
  *        consumes the next scripted reply (streamed as SSE when asked:
  *        content in 3 deltas, tool-call arguments split across 2 chunks,
  *        then a usage chunk and [DONE]); a reply with `httpStatus` answers
@@ -33,7 +36,7 @@ export interface FakeServer {
   close(): Promise<void>;
 }
 
-export async function fakeOpenAI(o: { tools?: boolean; nCtx?: number; model?: string; script?: FakeReply[]; slots?: boolean } = {}): Promise<FakeServer> {
+export async function fakeOpenAI(o: { tools?: boolean; nCtx?: number; model?: string; script?: FakeReply[]; slots?: boolean; toolSkill?: number; modelPath?: string } = {}): Promise<FakeServer> {
   const script = [...(o.script ?? [])];
   const requests: Array<Record<string, unknown>> = [];
   const model = o.model ?? 'fake-qwen-7b-q4';
@@ -46,14 +49,23 @@ export async function fakeOpenAI(o: { tools?: boolean; nCtx?: number; model?: st
     req.on('data', (d) => (raw += d));
     req.on('end', () => {
       if (req.method === 'GET' && req.url === '/health') return json(res, 200, { status: 'ok' });
-      if (req.method === 'GET' && req.url === '/props') return json(res, 200, { default_generation_settings: { n_ctx: o.nCtx ?? 8192 }, total_slots: 1, chat_template: o.tools ? '{% if tools %}…{% endif %}' : '' });
+      if (req.method === 'GET' && req.url === '/props') return json(res, 200, { default_generation_settings: { n_ctx: o.nCtx ?? 8192 }, total_slots: 1, chat_template: o.tools ? '{% if tools %}…{% endif %}' : '', model_path: o.modelPath ?? '/models/fake-qwen-7b-q4.gguf' });
       if (req.method === 'GET' && req.url === '/slots') return o.slots === false ? json(res, 501, { error: 'slots disabled' }) : json(res, 200, [{ id: 0, n_ctx: o.nCtx ?? 8192 }]);
       if (req.method === 'GET' && req.url === '/v1/models') return json(res, 200, { data: [{ id: model }] });
       if (req.method !== 'POST' || req.url !== '/v1/chat/completions') return json(res, 404, { error: 'not found' });
       const body = JSON.parse(raw) as Record<string, unknown>;
       requests.push(body);
-      const isProbe = Array.isArray(body.tools) && (body.tools as Array<{ function?: { name?: string } }>).some((t) => t.function?.name === 'get_time');
-      const reply: FakeReply = isProbe ? (o.tools ? { toolCalls: [{ name: 'get_time', arguments: '{"tz":"UTC"}' }] } : { content: 'It is noon.' }) : (script.shift() ?? { content: 'done' });
+      const names = Array.isArray(body.tools) ? (body.tools as Array<{ function?: { name?: string } }>).map((t) => t.function?.name) : [];
+      const skill = o.toolSkill ?? 4;
+      const wrong: FakeReply = { content: 'I cannot use tools.' };
+      // slice C4'a: the tool-skill probe (T2-T4) never consumes the script
+      const tier: FakeReply | null = names.includes('lookup_city')
+        ? (skill < 2 ? wrong : (body.messages as Array<{ role?: string }>).some((m) => m.role === 'tool') ? { toolCalls: [{ name: 'get_time', arguments: '{"tz":"Europe/Lisbon"}' }] } : { toolCalls: [{ name: 'lookup_city', arguments: '{"code":"K7"}' }] })
+        : names.includes('archive_note') ? (skill < 3 ? wrong : { toolCalls: [{ name: 'archive_note', arguments: '{"id":"n-42"}' }] })
+        : names.includes('create_event') ? (skill < 4 ? wrong : { toolCalls: [{ name: 'create_event', arguments: JSON.stringify({ title: 'Design review', when: { date: '2026-03-14', time: '15:00' }, attendees: [{ name: 'Ana', role: 'organizer' }, { name: 'Ben', role: 'guest' }], priority: 'high' }) }] })
+        : null;
+      const isProbe = names.includes('get_time');
+      const reply: FakeReply = tier ?? (isProbe ? (o.tools ? { toolCalls: [{ name: 'get_time', arguments: '{"tz":"UTC"}' }] } : { content: 'It is noon.' }) : (script.shift() ?? { content: 'done' }));
       if (reply.delayMs) return void setTimeout(() => respond(res, body, reply), reply.delayMs);
       respond(res, body, reply);
     });

@@ -655,8 +655,11 @@ export type ToolBrokerClass = (typeof TOOL_BROKER_CLASSES)[number];
  */
 export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'expired', 'allowed-cancelled', 'cooldown', 'suspended', 'refused', 'busy', 'not-running'] as const;
 export type ToolBrokeredDecision = (typeof TOOL_BROKERED_DECISIONS)[number];
-/** tool.selection{trigger} (CLOSED, 8.0:local-lane C3'): why the kernel re-selected a local session's narrow tools. */
-export const TOOL_SELECTION_TRIGGERS = ['goal', 'steer', 'find', 'periodic', 'list_changed', 'pin', 'mode'] as const;
+/**
+ * tool.selection{trigger} (CLOSED, 8.0:local-lane C3'): why the kernel re-selected a local session's narrow tools.
+ * `tier` (C4'a, #local-tool-tier): the human committed a tool-tier change (request.session.tier).
+ */
+export const TOOL_SELECTION_TRIGGERS = ['goal', 'steer', 'find', 'periodic', 'list_changed', 'pin', 'mode', 'tier'] as const;
 export type ToolSelectionTrigger = (typeof TOOL_SELECTION_TRIGGERS)[number];
 /** tool.selection{added, removed, found}: capability ids `<server>/<tool>[.<op>]@<sha256(schema)[:8]>`, at most this many each. */
 export const TOOL_SELECTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}@[0-9a-f]{8}$/;

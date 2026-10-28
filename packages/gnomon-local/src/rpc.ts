@@ -16,7 +16,8 @@
  * Slice S1 (two-way protocol, TD-2026-10-27-833; broker.ts):
  * stdin           {type:'tool_response', id, content, isError, provenance}
  *                 {id?, type:'tools_set', tools:[{name, description,
- *                   parameters, class}]} (from the next step on)
+ *                   parameters, class}], surface?} (from the next step on;
+ *                   slice C4'a: surface compact|full with the set)
  * Slice B2 (#local-working-memory; broker.ts parseContextCommand):
  *                 {id?, type:'memory_set', render, hash, bytes, goalHash?}
  *                   → {memory:{bytes}} (refused without `memory: true` or
@@ -238,7 +239,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         // slice B2: the memory tools' names are reserved like the natives'; slice C3': so is find_tool
         const r = parseToolsSet(cmd, [...TOOLS.map((t) => t.name), ...MEMORY_TOOL_NAMES, FIND_TOOL_NAME]);
         if ('error' in r) return no(r.error);
-        const why = agent.setBrokered(r.tools, cmd.id);
+        // slice C4'a: a tier change carries the surface; it applies with the set
+        const why = agent.setBrokered(r.tools, cmd.id, r.surface);
         return why ? no(why) : ok({ tools: r.tools.length });
       }
       case 'memory_set':

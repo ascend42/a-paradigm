@@ -9,8 +9,11 @@
  *   child → kernel  tool_request{id, toolCallId, name, args}
  *                   (context_report is slice B1's, unchanged)
  *   kernel → child  tool_response{id, content, isError, provenance}
- *                   tools_set{tools:[{name, description, parameters, class}]}
- *                     replaces the offered brokered set from the NEXT step on
+ *                   tools_set{tools:[{name, description, parameters, class}],
+ *                     surface?} replaces the offered brokered set from the
+ *                     NEXT step on; slice C4'a (#local-tool-tier): the
+ *                     optional surface (compact | full: a tier change) is
+ *                     applied WITH the set at that step start
  *                   memory_set{render, hash, bytes, goalHash?} / compact{} /
  *                     set_context{contextTarget}: slice B2's context
  *                     commands (parseContextCommand; agent.ts applies them)
@@ -89,10 +92,17 @@ function closed(cmd: Record<string, unknown>, keys: readonly string[]): string |
   return extra === undefined ? null : `unknown field ${extra.slice(0, 32)}`;
 }
 
-/** tools_set → the new offered set, or why it is refused. Names must be unique and outside `reserved` (the native tools). */
-export function parseToolsSet(cmd: Record<string, unknown>, reserved: readonly string[]): { tools: BrokeredToolSpec[] } | { error: string } {
-  const c = closed(cmd, ['id', 'type', 'tools']);
+/** Slice C4'a: the surfaces a tools_set may carry (never `none`: a session with no tools is fixed at open). */
+export const TOOLS_SET_SURFACES: readonly ('compact' | 'full')[] = Object.freeze(['compact', 'full']);
+
+/**
+ * tools_set → the new offered set (and slice C4'a's optional surface), or why it is refused. Names must be unique and
+ * outside `reserved` (the native tools).
+ */
+export function parseToolsSet(cmd: Record<string, unknown>, reserved: readonly string[]): { tools: BrokeredToolSpec[]; surface?: 'compact' | 'full' } | { error: string } {
+  const c = closed(cmd, ['id', 'type', 'tools', 'surface']);
   if (c) return { error: c };
+  if (cmd.surface !== undefined && !(TOOLS_SET_SURFACES as readonly unknown[]).includes(cmd.surface)) return { error: 'surface must be compact or full' };
   if (!Array.isArray(cmd.tools) || cmd.tools.length > BROKER_LIMITS.tools) return { error: `tools must be a list of at most ${BROKER_LIMITS.tools}` };
   const out: BrokeredToolSpec[] = [];
   for (const [i, t] of cmd.tools.entries()) {
@@ -108,7 +118,7 @@ export function parseToolsSet(cmd: Record<string, unknown>, reserved: readonly s
     if (typeof t.class !== 'string' || !(TOOL_CLASSES as readonly string[]).includes(t.class)) return { error: `tools[${i}].class must be read, mutate or destructive` };
     out.push({ name: t.name, description: t.description, parameters: structuredClone(t.parameters), class: t.class as ToolClass });
   }
-  return { tools: out };
+  return { tools: out, ...(cmd.surface !== undefined ? { surface: cmd.surface as 'compact' | 'full' } : {}) };
 }
 
 export interface ToolResponse {

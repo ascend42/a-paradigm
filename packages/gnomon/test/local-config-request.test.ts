@@ -442,8 +442,12 @@ describe('request.local.probe: the read-only check before a card', () => {
     expect(seenProbing).toMatchObject({ endpoint: 'llama', since: expect.any(String) });
     expect(lane.probing()).toBeNull();
     expect(lane.lastProbe()).toMatchObject({ endpoint: 'llama', ok: false, why: 'ctx-below-floor', contextSize: 4096 });
-    // the cache took it: probeAll within the TTL asks the server nothing
+    // slice C4'a: Check again also measured the tool skill in the background (through the lane's own fetch); settled
+    await lane.tierSettled();
+    laneFetches = 0;
+    // the cache took it: probeAll within the TTL asks the server nothing (the fingerprint and the measurement too)
     expect(await lane.probeAll()).toEqual([{ endpoint: 'llama', ok: true }]);
+    await lane.tierSettled();
     expect(laneFetches).toBe(0);
     // model-missing is said as such on the health row
     await new Promise((res) => setTimeout(res, 60));

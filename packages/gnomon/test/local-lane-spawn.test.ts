@@ -112,7 +112,9 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     expect((grant.scope as { repo: string }).repo).toMatch(/^path:/);
     expect(rows.find((r) => r.kind === 'session.spawned' && r.payload.phase === 'running')!.payload.kind).toBe('local-runner');
     expect(kinds.indexOf('session.spawned')).toBeLessThan(kinds.indexOf('turn.event'));
-    expect(rows.find((r) => r.kind === 'model.capabilities' && r.payload.hsid === hsid)!.payload).toMatchObject({ backend: 'local', tools: true, ctx: 8192 });
+    // slice C4'a: the open's own model.capabilities row names the tier; the child's names its tools and context
+    expect(rows.find((r) => r.kind === 'model.capabilities' && r.payload.hsid === hsid && r.payload.tier !== undefined)!.payload).toMatchObject({ backend: 'local', tier: 1, tierSource: 'provisional' });
+    expect(rows.find((r) => r.kind === 'model.capabilities' && r.payload.hsid === hsid && r.payload.ctx !== undefined)!.payload).toMatchObject({ backend: 'local', tools: true, ctx: 8192 });
     const usage = rows.filter((r) => r.kind === 'budget.usage' && !r.payload.malformed);
     expect(usage.every((u) => u.payload.backend === 'local' && u.payload.permitId === grant.permitId)).toBe(true);
     expect(usage.reduce((a, u) => a + (u.payload.tokens as number), 0)).toBe(240);

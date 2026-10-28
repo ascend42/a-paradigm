@@ -87,7 +87,7 @@
  * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
  * children), `gnomon probe local` as a CLI verb.
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -109,7 +109,7 @@ import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
-import { cleanServerText, LOCAL_RESERVED_TOOL_NAMES, type CapabilityEntry } from '../local/capability-index.js';
+import { cleanServerText, fullOfferable, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry } from '../local/capability-index.js';
 import { FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpListCache, serverEnv, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
@@ -123,7 +123,8 @@ import { ANCHOR_GIT_CONFIG } from './shell-readonly.js';
 import { appendLedger } from '../local/edit-ledger.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
-import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
+import { fingerprintOf, probeLocalEndpoint, probeToolSkill, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
+import { effectiveTier, isTier, lookupTier, lowerSurface, measuredCurrent, setHuman, skillTier, tierPlan, windowTier, writeMeasured, WINDOW_TIER_MIN, type TierModel, type TierSource, type TierSurface, type ToolTier } from '../local/tool-tier.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import { loopRunRefInfo, type LoopRunRef, type LoopRunRefInfo } from '../loops/registry.js';
@@ -177,6 +178,8 @@ export interface LocalLaneOptions {
   config?: LocalLaneConfig;
   /** TEST RIG ONLY: the probe's fetch */
   probeFetch?: ProbeFetch;
+  /** TEST SEAM (slice C4'a): the clock of request.session.tier tokens (default Date.now) */
+  now?: () => number;
   probeTtlMs?: number;
   /** TEST RIG ONLY: the launch plan (default: the platform's `session` sandbox profile). The daemon never sets it. */
   launchPlan?: (i: SessionLaunchInput) => SessionLaunchPlan;
@@ -198,6 +201,12 @@ export interface LocalProbeState {
   error?: string;
   tools: boolean;
   contextSize: number | null;
+  /**
+   * slice C4'a (#local-tool-tier): the endpoint's tool tier — the measured skill (null: not measured yet), how many of
+   * T1..T4 passed, whether a measurement is running, the window tier of the effective context target, and the human's
+   * remembered value for this model (null: none)
+   */
+  tier?: { skill: ToolTier | null; passed: number | null; measuring: boolean; window: ToolTier; human: ToolTier | null };
 }
 
 /** openLoop's request (the runner's model step). */
@@ -306,6 +315,32 @@ interface LocalSession {
   memorySetSeq: number;
   /** slice B2: the context target in effect, the signed config's, the endpoint's n_ctx and the reply budget */
   context: { target: number; config: number; nCtx: number | null; maxTokens: number };
+  /** slice C4'a: tools_set ids (ts-N), one counter for every tools_set with an id (selection and tier changes) */
+  toolsSetSeq: number;
+  /** slice C4'a (#local-tool-tier): the session's tool tier (attended sessions only; a loop session has none) */
+  tier?: SessionTier;
+}
+
+/** Slice C4'a (#local-tool-tier): one attended session's tier state. */
+interface SessionTier {
+  tier: ToolTier;
+  source: TierSource;
+  /** the measured skill at open (null: not measured yet) */
+  measured: ToolTier | null;
+  /** the model the store keys (null: no fingerprint known yet) */
+  model: TierModel | null;
+  /** the endpoint's configured surface: it can only LOWER the tier's */
+  surfaceCap: 'none' | 'compact' | 'full' | undefined;
+  /** the surface in effect (none: the endpoint's configured surface offers no tools) */
+  surface: TierSurface | 'none';
+  /** the kernel verbs this session may be offered (tier >= 1) */
+  kernel: BrokeredTool[];
+  /** the selection generation: bumped by every change of the offered set (a preview token names it) */
+  gen: number;
+  /** the preview awaiting its commit (single use, TIER_TOKEN_TTL_MS) */
+  pending: { token: string; principal: string; tier: ToolTier; gen: number; expires: number } | null;
+  /** the endpoint (for remember: its fingerprint may be learnt after open) */
+  endpoint: { id: string; base: string; model: string };
 }
 
 /** Slice C2' (Aegis functional note): why a server failed, in words a human can act on. */
@@ -354,7 +389,14 @@ export const LOCAL_SESSION_MEMORY_READ_REQUEST = 'request.session.memory.read' a
 export const LOCAL_SESSION_MEMORY_LIST_REQUEST = 'request.session.memory.list' as const;
 /** Slice C3' (#tool-selector): the human pins or unpins a narrow tool of a running session ({hsid, name, pinned}). */
 export const LOCAL_SESSION_TOOLS_PIN_REQUEST = 'request.session.tools.pin' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST]);
+/**
+ * Slice C4'a (#local-tool-tier): the human changes a running session's tool tier, in two phases —
+ * {hsid, tier, op:'preview'} → what will change and a single-use token; {hsid, op:'commit', token, remember?} applies it.
+ */
+export const LOCAL_SESSION_TIER_REQUEST = 'request.session.tier' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST]);
+/** Slice C4'a: a preview token lives this long. */
+export const TIER_TOKEN_TTL_MS = 60_000;
 /** Slice B2: the asker of a human request (stamped by the dispatcher). */
 export interface LocalSessionAsker {
   connId: string;
@@ -448,6 +490,12 @@ export class LocalLane {
   readonly #probing = new Map<symbol, { endpoint: string; since: string }>();
   /** bumped by setConfig: a probe that started under an older config records nothing */
   #gen = 0;
+  /** slice C4'a (#local-tool-tier): each configured endpoint's model fingerprint as last learnt (id → base, model, fingerprint) */
+  readonly #fingerprints = new Map<string, { base: string; model: string; fingerprint: string | null; at: number }>();
+  /** slice C4'a: a model with no fingerprint is measured into memory only (never persisted), by `base|model` */
+  readonly #memSkill = new Map<string, { skill: ToolTier; passed: number }>();
+  /** slice C4'a: the tool-skill measurements in flight, by endpoint id (one at a time per endpoint) */
+  readonly #measuring = new Map<string, Promise<void>>();
   #lastFallback: { at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string } | null = null;
 
   constructor(o: LocalLaneOptions) {
@@ -477,6 +525,12 @@ export class LocalLane {
     this.#gen++;
     this.#probes.clear();
     this.#lastProbe = null;
+    // slice C4'a: a fingerprint stays known only for an endpoint whose id, base and model are unchanged
+    for (const [id, f] of [...this.#fingerprints]) {
+      const e = config?.endpoints.find((x) => x.id === id);
+      const v = e ? classifyEndpoint(e.base, this.#forbiddenPorts()) : null;
+      if (!e || !v?.ok || v.base !== f.base) this.#fingerprints.delete(id);
+    }
   }
 
   /** status.local.probing: the oldest probe of a configured endpoint in flight (its endpoint and start), or null. */
@@ -512,6 +566,10 @@ export class LocalLane {
     if (!this.#config?.endpoints.some((e) => e.id === id)) return;
     this.#probes.set(id, { at: Date.now(), caps });
     this.#setLastProbe(id, caps, o.why);
+    // slice C4'a: Check again measures the tool skill too, in the background, on a cache miss
+    const e = this.#config.endpoints.find((x) => x.id === id)!;
+    const v = classifyEndpoint(e.base, this.#forbiddenPorts());
+    if (v.ok && o.why === undefined) this.#measure(id, v.base, caps);
   }
 
   /** The config generation (recordProbe's `gen`: read it before the probe starts). */
@@ -522,6 +580,102 @@ export class LocalLane {
   #setLastProbe(id: string, caps: LocalCapabilities, why?: string): void {
     const k = capability(caps, this.#config?.ctxFloor ?? DEFAULT_CTX_FLOOR, false);
     this.#lastProbe = { endpoint: id, at: new Date().toISOString(), ok: k.capable && why === undefined, why: why ?? k.reason, ...(caps.error ? { error: caps.error.slice(0, 200) } : {}), tools: caps.tools, contextSize: caps.nCtx };
+    this.#refreshProbeTier(id);
+  }
+
+  /** Slice C4'a: status.local.lastProbe.tier for endpoint `id` (when it is the last probe's). */
+  #refreshProbeTier(id: string): void {
+    const lp = this.#lastProbe;
+    if (!lp || lp.endpoint !== id) return;
+    const caps = this.#probes.get(id)?.caps;
+    const e = this.#config?.endpoints.find((x) => x.id === id);
+    const v = e ? classifyEndpoint(e.base, this.#forbiddenPorts()) : null;
+    if (!caps || !caps.ok || !e || !v?.ok) return;
+    const k = this.#tierOf(id, v.base, caps.model ?? e.model, caps);
+    const target = Math.min(this.#config?.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET);
+    lp.tier = { skill: k.skill, passed: k.passed, measuring: this.#measuring.has(id), window: windowTier(target, caps.nCtx !== null), human: k.human };
+  }
+
+  /** Slice C4'a: the store's record, or null (an unreadable store is no record). */
+  #readTier(m: TierModel): ReturnType<typeof lookupTier> {
+    try {
+      return lookupTier(this.#o.home, m);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Slice C4'a: what the lane knows of a model's tier — the measured skill (T1 failed: 0; a current measurement for its
+   * fingerprint; else null, pending), how many tests passed, the human's remembered value and the store key's model.
+   */
+  #tierOf(id: string, base: string, model: string, caps: Pick<LocalCapabilities, 'tools'>): { skill: ToolTier | null; passed: number | null; human: ToolTier | null; model: TierModel | null } {
+    const f = this.#fingerprints.get(id);
+    const known = f && f.base === base && f.model === model ? f : null;
+    const tm: TierModel | null = known?.fingerprint ? { base, model, fingerprint: known.fingerprint } : null;
+    const rec = tm ? this.#readTier(tm) : null;
+    const mem = known && !known.fingerprint ? this.#memSkill.get(`${base}|${model}`) : undefined;
+    const human = rec?.human ?? null;
+    if (!caps.tools) return { skill: 0, passed: 0, human, model: tm };
+    if (measuredCurrent(rec)) return { skill: rec.skill, passed: rec.passed, human, model: tm };
+    if (mem) return { skill: mem.skill, passed: mem.passed, human, model: tm };
+    return { skill: null, passed: null, human, model: tm };
+  }
+
+  /** Slice C4'a: settle every tool-skill measurement in flight (tests; the daemon never waits on one). */
+  async tierSettled(): Promise<void> {
+    while (this.#measuring.size) await Promise.all([...this.#measuring.values()]);
+  }
+
+  /**
+   * Slice C4'a (#local-tool-tier): measure endpoint `id`'s tool skill in the BACKGROUND after a probe (T1 is caps.tools):
+   * its fingerprint first, then — only on a cache miss (no current measurement for that fingerprint) or `force` (an
+   * explicit re-measure) — T2-T4 (probeToolSkill), written to the store (a model with no fingerprint: memory only). One
+   * measurement per endpoint at a time; one begun under an older config records nothing. Never throws.
+   */
+  #measure(id: string, base: string, caps: LocalCapabilities, o: { force?: boolean } = {}): void {
+    if (!caps.ok || this.#measuring.has(id)) return;
+    const model = caps.model ?? this.#config?.endpoints.find((x) => x.id === id)?.model;
+    if (!model) return;
+    const gen = this.#gen;
+    const io = { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) };
+    const run = (async (): Promise<void> => {
+      // a fingerprint learnt within the probe TTL is reused (probeAll within the TTL asks the server nothing)
+      const known = this.#fingerprints.get(id);
+      const fresh = known && known.base === base && known.model === model && Date.now() - known.at < (this.#o.probeTtlMs ?? 60_000) && !o.force;
+      const fp = fresh ? known.fingerprint : await fingerprintOf({ base, model }, io);
+      if (gen !== this.#gen) return;
+      if (!fresh) this.#fingerprints.set(id, { base, model, fingerprint: fp, at: Date.now() });
+      const tm: TierModel | null = fp ? { base, model, fingerprint: fp } : null;
+      const memKey = `${base}|${model}`;
+      if (!o.force && (tm ? measuredCurrent(this.#readTier(tm)) : this.#memSkill.has(memKey))) return;
+      this.#refreshProbeTier(id);
+      const r = caps.tools ? await probeToolSkill({ base, model }, { t1: true, ...io }) : { skill: skillTier(0), passed: 0, failed: 't1' as const };
+      if (gen !== this.#gen) return;
+      if (tm) writeMeasured(this.#o.home, tm, { skill: r.skill, passed: r.passed });
+      else this.#memSkill.set(memKey, { skill: r.skill, passed: r.passed });
+      await this.#o.log('model.capabilities', { backend: 'local', endpoint: id, model, tier: r.skill, tierSource: 'measured', passed: r.passed, ...(r.failed ? { failed: r.failed } : {}), ...('why' in r && r.why ? { why: r.why } : {}), fingerprinted: tm !== null });
+    })()
+      .catch(() => undefined)
+      .finally(() => {
+        this.#measuring.delete(id);
+        this.#refreshProbeTier(id);
+      });
+    this.#measuring.set(id, run);
+  }
+
+  /**
+   * Slice C4'a: an explicit re-measure of configured endpoint `id` (a fresh probe, then T2-T4 whatever the store holds).
+   * Resolves when the measurement settles. No dispatcher request reaches it yet (the GUI is C4'b).
+   */
+  async remeasure(id: string): Promise<void> {
+    const e = this.#config?.endpoints.find((x) => x.id === id);
+    const v = e ? classifyEndpoint(e.base, this.#forbiddenPorts()) : null;
+    if (!e || !v?.ok) return;
+    this.#probes.delete(id);
+    const caps = await this.#probe({ id, base: v.base, model: e.model }).catch(() => null);
+    if (caps?.ok) this.#measure(id, v.base, caps, { force: true });
+    await this.#measuring.get(id);
   }
 
   /** The last probe of any endpoint (state for Settings: ok, why, tools, context), or null since the config applied. */
@@ -577,6 +731,8 @@ export class LocalLane {
       if (!v.ok || !LOCAL_COMPAT_NAMES.includes(ep.compat) || loopbackPort(v.base) === null) continue; // Aegis L3: loopback only in 8.0
       const caps = await this.#probe({ id: ep.id, base: v.base, model: ep.model }).catch(() => null);
       out.push({ endpoint: ep.id, ok: caps?.ok === true });
+      // slice C4'a: T2-T4 in the background after the probe, only on a cache miss
+      if (caps?.ok) this.#measure(ep.id, v.base, caps);
     }
     return out;
   }
@@ -978,6 +1134,9 @@ export class LocalLane {
       }
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const configPath = path.join(dir, 'local.yaml');
+      // slice C4'a (#local-tool-tier): an attended session's tier is fixed HERE (min(human ?? skill, window); pending =
+      // provisional min(1, window)); its surface is the tier's, which the endpoint's configured surface can only lower
+      const tierState = loop ? undefined : this.#openTier(ep, base, model, caps, Math.min(cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET));
       const sessionCfg = {
         schemaVersion: 'gnomon-local-session:v1',
         session: hsid,
@@ -987,7 +1146,7 @@ export class LocalLane {
         capabilities: { tools: tools === 'native', nCtx: caps.nCtx },
         // a loop judge/summarize step: no tools at all and one model step per turn (§3.4); an act step: only the
         // tools its trust card admits, its protected globs, the node's turn cap
-        surface: loop && !loop.act ? 'none' : (ep.surface ?? 'compact'),
+        surface: loop && !loop.act ? 'none' : tierState ? tierState.surface : (ep.surface ?? 'compact'),
         maxSteps: loop ? (loop.act ? loop.act.maxSteps : 1) : (cfg.maxSteps ?? 16),
         ...(loop?.act ? { tools: loop.act.tools, protect: loop.act.protect } : {}),
         maxTokens: loop ? Math.max(16, Math.min(loop.maxTokens, cfg.maxTokens ?? 1024)) : (cfg.maxTokens ?? 1024),
@@ -1028,7 +1187,7 @@ export class LocalLane {
       if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
-      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, toolsSetSeq: 0, ...(tierState ? { tier: tierState } : {}), ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       // Aegis H2: the servers get their own policy and an env without any kernel credential or handle
       if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, servers: closure.servers, refused: closure.refused, failed: [], ...(paradigmPolicy && stateMade ? { firstParty: { launch: { ...launch, policy: paradigmPolicy }, stateDir: stateMade, nodePin: { node: pin.node, nodeSha256: pin.nodeSha256 } } } : {}) };
       else if (closure.refused.length) s.mcpLaunch = undefined;
@@ -1039,6 +1198,8 @@ export class LocalLane {
       this.#wire(s);
       const offered = s.tools.offered.map((t) => t.name);
       await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, ...(plan.partial?.length ? { partial: [...plan.partial] } : {}), profile: actLaunch ? 'loop-act' : 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId, ...(loop ? { origin: LOOP_ORIGIN } : { brokeredTools: offered }) }, { session: hsid });
+      // slice C4'a: the session's tier (an open payload: tier, tierSource measured | human | provisional)
+      if (s.tier) await this.#o.log('model.capabilities', { hsid, backend: 'local', model, tier: s.tier.tier, tierSource: s.tier.source, measured: s.tier.measured, surface: s.tier.surface }, { session: hsid });
       if (offered.length) this.#write(s, drv.toolsSetLine(s.tools.offered));
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
@@ -1108,7 +1269,22 @@ export class LocalLane {
     void s.exited.then(() => queue(() => this.#onExit(s)));
   }
 
-  /** Slice C1: the session's brokered tools — the kernel SDK server's (C1 narrowing), none for a loop session. */
+  /**
+   * Slice C4'a (#local-tool-tier): an attended session's tier at open — min(human ?? skill, window(target)), a pending
+   * measurement provisional min(1, window); the surface is the tier's, lowered by the endpoint's configured surface.
+   */
+  #openTier(ep: { id: string; model: string; surface?: 'none' | 'compact' | 'full' }, base: string, model: string, caps: LocalCapabilities, target: number): SessionTier {
+    const k = this.#tierOf(ep.id, base, model, caps);
+    const window = windowTier(target, caps.nCtx !== null);
+    const { tier, source } = effectiveTier({ skill: k.skill, human: k.human, window });
+    const surface = lowerSurface(tierPlan(tier, target).surface, ep.surface) as TierSurface | 'none';
+    return { tier, source, measured: k.skill, model: k.model, surfaceCap: ep.surface, surface, kernel: [], gen: 0, pending: null, endpoint: { id: ep.id, base, model } };
+  }
+
+  /**
+   * Slice C1: the session's brokered tools — the kernel SDK server's (C1 narrowing), none for a loop session. Slice C4'a:
+   * none at all at tier 0 (no kernel verb, no MCP server started, so the child never offers find_tool).
+   */
   async #toolBroker(s: LocalSession): Promise<LocalToolBroker> {
     const verbs = s.loop ? undefined : this.#o.gitVerbs;
     const target = verbs ? kernelSdkTarget(verbs, () => (s.state === 'running' ? this.#verbSession(s) : null)) : NO_TARGET;
@@ -1117,28 +1293,37 @@ export class LocalLane {
     const kernelTools = verbs ? await offeredKernelTools(target, { manual }).catch(() => []) : [];
     // Aegis N5: an hsid opened here is never a closed one (a same-process resume)
     if (verbs) this.#o.gitVerbs?.openSession?.(s.hsid);
+    if (s.tier) s.tier.kernel = kernelTools;
+    const brokered = !s.tier || tierPlan(s.tier.tier, s.context.target).brokered;
     // slice C2': the session's MCP servers, narrowed (#capability-index); a loop session gets none
-    let tools: BrokeredTool[] = kernelTools;
-    if (!s.loop && s.mcpLaunch) {
-      // exactly the servers whose launch closure the session profile write-denies (fixed at open)
-      const servers = s.mcpLaunch.servers;
-      if (servers.length) {
-        const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries),
-          // Aegis M3: stopped with the daemon too (kind mcp-server: no session rows)
-          track: (child, label) => void this.#o.children.track({ kind: 'mcp-server', child, hsid: s.hsid, name: `mcp:${label}` }).catch(() => undefined) });
-        s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual, bound: new Map(), offeredHash: '' };
-        const ix = await pool.index();
-        // functional note (Aegis): a server that cannot start under the local profile says why, readably
-        s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
-        for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
-        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', textTrusted: true, finds: 0, mode: this.#mode(s), setSeq: 0, ids: [] };
-        const first = this.#mcpOffer(s);
-        tools = first.tools;
-        s.sel.ids = first.ids;
-        s.mcp.offeredHash = offeredHash(tools);
-      }
-    }
+    let tools: BrokeredTool[] = brokered ? kernelTools : [];
+    if (!s.loop && brokered) tools = (await this.#startMcp(s, kernelTools, manual)) ?? tools;
     return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual' });
+  }
+
+  /**
+   * Slice C2' (moved out of #toolBroker for C4'a, which also starts it on a raise from tier 0): the session's MCP pool
+   * over exactly the servers fixed at open, its first index and the selection state; returns the first offered set, or
+   * null when the session has no server.
+   */
+  async #startMcp(s: LocalSession, kernelTools: BrokeredTool[], manual: boolean): Promise<BrokeredTool[] | null> {
+    if (s.loop || !s.mcpLaunch || s.mcp) return null;
+    // exactly the servers whose launch closure the session profile write-denies (fixed at open)
+    const servers = s.mcpLaunch.servers;
+    if (!servers.length) return null;
+    const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries),
+      // Aegis M3: stopped with the daemon too (kind mcp-server: no session rows)
+      track: (child, label) => void this.#o.children.track({ kind: 'mcp-server', child, hsid: s.hsid, name: `mcp:${label}` }).catch(() => undefined) });
+    s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual, bound: new Map(), offeredHash: '' };
+    const ix = await pool.index();
+    // functional note (Aegis): a server that cannot start under the local profile says why, readably
+    s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
+    for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
+    s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', textTrusted: true, finds: 0, mode: this.#mode(s), setSeq: 0, ids: [] };
+    const first = this.#mcpOffer(s);
+    s.sel.ids = first.ids;
+    s.mcp.offeredHash = offeredHash(first.tools);
+    return first.tools;
   }
 
   /**
@@ -1149,14 +1334,24 @@ export class LocalLane {
    * from one server is never rebound to another in this session (Aegis M4); names are de-duplicated first in index
    * order (Aegis L3).
    */
-  #mcpOffer(s: LocalSession, need?: string): { tools: BrokeredTool[]; found: CapabilityEntry[]; ids: string[]; hash: string; unfit: number } {
+  #mcpOffer(s: LocalSession, need?: string, dry?: { tier: ToolTier; surface: TierSurface | 'none' }): { tools: BrokeredTool[]; found: CapabilityEntry[]; ids: string[]; hash: string; unfit: number; unfitPins: Array<{ name: string; why: string }> } {
     const m = s.mcp!;
     const sel = s.sel!;
     const manual = m.manual || this.#mode(s) === 'manual';
     const found = sel.found && sel.step - sel.found.step < RESELECT_EVERY_STEPS ? sel.found.names : [];
+    // slice C4'a (#local-tool-tier): K, the slot and the surface are the tier's (a preview asks for another tier, dry:
+    // nothing is bound); tier 0 offers nothing at all; tier 3 with a full surface offers full forms
+    const tier = dry?.tier ?? s.tier?.tier ?? 2;
+    const surface = dry?.surface ?? s.tier?.surface ?? 'compact';
+    const plan = tierPlan(tier, s.context.target);
+    const full = surface === 'full' && plan.complexHumanOnly;
     const r = selectTools({
       entries: [...m.entries.values()].flat(),
-      fixed: [...m.kernel, FIND_TOOL_SPEC],
+      fixed: plan.brokered ? [...m.kernel, FIND_TOOL_SPEC] : [],
+      k: plan.k,
+      slot: plan.slotTokens,
+      surface: surface === 'full' ? 'full' : 'compact',
+      allowFull: full,
       query: this.#selectionQuery(s),
       ...(need !== undefined ? { need } : {}),
       sticky: [...sel.current, ...sel.recent.flat()],
@@ -1169,13 +1364,15 @@ export class LocalLane {
       untrustedQuery: this.#untrustedQuery(s),
       classOf: (e: CapabilityEntry) => e.class,
     });
-    for (const e of r.selected) if (!m.bound.has(e.name)) m.bound.set(e.name, e.server);
-    const tools = [...m.kernel, ...r.selected.flatMap((e) => {
+    if (!dry) for (const e of r.selected) if (!m.bound.has(e.name)) m.bound.set(e.name, e.server);
+    const tools: BrokeredTool[] = plan.brokered ? [...m.kernel, ...r.selected.flatMap((e, n) => {
       const target = m.pool.target(e.server);
-      return target ? [{ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }] : [];
-    })];
+      const form = r.forms[n]!;
+      // slice C4'a: offered in its form (a full one carries the full schema and is called through reassembleFull)
+      return target ? [{ name: e.name, description: e.description, parameters: parametersIn(e, form), class: e.class, entry: e, target, form }] : [];
+    })] : [];
     const offered = r.selected.filter((e) => tools.some((t) => t.entry === e));
-    return { tools, found: r.found.filter((e) => offered.includes(e)), ids: offered.map((e) => e.id), hash: r.hash, unfit: r.unfit.length };
+    return { tools, found: r.found.filter((e) => offered.includes(e)), ids: offered.map((e) => e.id), hash: r.hash, unfit: r.unfit.length, unfitPins: r.unfitPins };
   }
 
   /**
@@ -1191,13 +1388,128 @@ export class LocalLane {
     if (typeof p.pinned !== 'boolean') throw refused('BAD_REQUEST', `${kind}: pinned must be a boolean`, { reason: 'bad-params', field: 'pinned' });
     if (!s.memory || !s.mcp || !s.sel) throw refused('NOT_FOUND', 'this session has no narrow tools to pin', { reason: 'not-found' });
     const name = p.name;
-    if (p.pinned && ![...s.mcp.entries.values()].some((es) => es.some((e) => e.name === name && !e.humanOnly))) throw refused('NOT_FOUND', `${kind}: no narrow tool ${name} in this session`, { reason: 'not-found', field: 'name' });
+    // slice C4'a: at tier 3 (full surface) a complex human-only tool is pinnable when fullOfferable
+    const fullTier = s.tier !== undefined && s.tier.surface === 'full' && tierPlan(s.tier.tier, s.context.target).complexHumanOnly;
+    if (p.pinned && ![...s.mcp.entries.values()].some((es) => es.some((e) => e.name === name && (!e.humanOnly || (fullTier && fullOfferable(e)))))) throw refused('NOT_FOUND', `${kind}: no narrow tool ${name} in this session`, { reason: 'not-found', field: 'name' });
     const changes = p.pinned ? s.memory.pinTool(name) : s.memory.unpinTool(name);
     const refusedChange = changes.find((c) => c.op === 'refused');
     await this.#memoryChanged(s, changes);
     if (refusedChange) throw refused('BAD_REQUEST', `${kind}: at most ${MAX_TOOL_PINS} tool pins`, { reason: 'full' });
     this.#reselect(s, 'pin');
     return { hsid: s.hsid, name, pinned: p.pinned, pins: s.memory.toolPins(), offered: s.tools?.offered.some((t) => t.name === name) ?? false };
+  }
+
+  #now(): number {
+    return this.#o.now?.() ?? Date.now();
+  }
+
+  /**
+   * Slice C4'a (#local-tool-tier): request.session.tier — the human's two-phase tier change. Human-only (humanRequest
+   * already refused an agent principal or a non-gui/device credential), the owner of a running attended session.
+   * preview{hsid, tier} says what will change and mints ONE token; commit{hsid, token, remember?} applies it.
+   */
+  async #tierRequest(principal: string, s: LocalSession, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const kind = LOCAL_SESSION_TIER_REQUEST;
+    if (!s.tier) throw refused('NOT_FOUND', 'this session has no tool tier', { reason: 'not-found' });
+    if (p.op === 'preview') {
+      if (p.token !== undefined || p.remember !== undefined) throw refused('BAD_REQUEST', `${kind} preview takes {hsid, tier, op}`, { reason: 'bad-params' });
+      if (!isTier(p.tier)) throw refused('BAD_REQUEST', `${kind}: tier must be 0, 1, 2 or 3`, { reason: 'bad-params', field: 'tier' });
+      return this.#previewTier(principal, s, p.tier);
+    }
+    if (p.op === 'commit') {
+      if (typeof p.token !== 'string' || !/^[0-9a-f]{32}$/.test(p.token)) throw refused('BAD_REQUEST', `${kind}: commit takes the preview's token`, { reason: 'bad-params', field: 'token' });
+      if (p.remember !== undefined && typeof p.remember !== 'boolean') throw refused('BAD_REQUEST', `${kind}: remember must be a boolean`, { reason: 'bad-params', field: 'remember' });
+      if (p.tier !== undefined && !isTier(p.tier)) throw refused('BAD_REQUEST', `${kind}: tier must be 0, 1, 2 or 3`, { reason: 'bad-params', field: 'tier' });
+      return this.#commitTier(principal, s, p.token, p.remember === true, p.tier as ToolTier | undefined);
+    }
+    throw refused('BAD_REQUEST', `${kind}: op must be preview or commit`, { reason: 'bad-params', field: 'op' });
+  }
+
+  /** Slice C4'a: what a tier would offer this session now (dry: nothing is bound, nothing is sent). */
+  #tierOffer(s: LocalSession, tier: ToolTier, surface: TierSurface | 'none'): { names: string[]; unfitPins: Array<{ name: string; why: string }> } {
+    if (s.mcp && s.sel) {
+      const r = this.#mcpOffer(s, undefined, { tier, surface });
+      return { names: r.tools.map((t) => t.name), unfitPins: r.unfitPins };
+    }
+    const brokered = tierPlan(tier, s.context.target).brokered;
+    return { names: brokered ? s.tier!.kernel.map((t) => t.name) : [], unfitPins: (s.memory?.toolPins() ?? []).map((name) => ({ name, why: brokered ? 'not-offerable' : 'tier-0' })) };
+  }
+
+  /** Slice C4'a: the tier the window allows for a requested one (the context target in effect NOW). */
+  #tierAllowed(s: LocalSession, requested: ToolTier): { to: ToolTier; window: ToolTier } {
+    const window = windowTier(s.context.target, s.context.nCtx !== null);
+    return { to: Math.min(requested, window) as ToolTier, window };
+  }
+
+  async #previewTier(principal: string, s: LocalSession, requested: ToolTier): Promise<Record<string, unknown>> {
+    const t = s.tier!;
+    const { to, window } = this.#tierAllowed(s, requested);
+    const plan = tierPlan(to, s.context.target);
+    const surface = lowerSurface(plan.surface, t.surfaceCap) as TierSurface | 'none';
+    const next = this.#tierOffer(s, to, surface);
+    const current = s.tools?.offered.map((x) => x.name) ?? [];
+    const leaving = current.filter((n) => !next.names.includes(n));
+    const notices = [`Tier ${t.tier} → ${to}: at most ${plan.k} narrow tools in ${plan.slotTokens} tokens, ${surface} tool schemas${plan.brokered ? '' : ', no brokered tools'}. The model's prompt cache starts over.`];
+    if (requested > window) notices.push(`Tier ${requested} needs a ${WINDOW_TIER_MIN[requested as 1 | 2 | 3] / 1024}k context target.`);
+    if (t.measured === null ? to > 1 : to > t.measured) notices.push(`Tier ${to} is above what this model measured (${t.measured ?? 'not measured yet'}). It may call tools badly; calls are still checked and carded.`);
+    const token = randomBytes(16).toString('hex');
+    t.pending = { token, principal, tier: to, gen: t.gen, expires: this.#now() + TIER_TOKEN_TTL_MS };
+    return { hsid: s.hsid, from: t.tier, to, requested, measured: t.measured, window, k: plan.k, slotTokens: plan.slotTokens, slotShare: plan.slotShare, surface: `${t.surface}→${surface}`, cacheLost: true, leaving, unfitPins: next.unfitPins, notice: notices.join(' '), token, expiresInMs: TIER_TOKEN_TTL_MS };
+  }
+
+  async #commitTier(principal: string, s: LocalSession, token: string, remember: boolean, tier: ToolTier | undefined): Promise<Record<string, unknown>> {
+    const kind = LOCAL_SESSION_TIER_REQUEST;
+    const t = s.tier!;
+    // single use: every commit attempt consumes the pending preview
+    const pend = t.pending;
+    t.pending = null;
+    const same = (a: string, b: string): boolean => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+    const valid = pend !== null && same(pend.token, token) && pend.principal === principal && pend.gen === t.gen && this.#now() <= pend.expires && (tier === undefined || tier === pend.tier) && this.#tierAllowed(s, pend.tier).to === pend.tier;
+    if (!valid) throw refused('BAD_REQUEST', `${kind}: the preview is stale, expired or already used: preview again`, { reason: 'stale' });
+    const previous = t.tier;
+    const plan = tierPlan(pend.tier, s.context.target);
+    const surface = lowerSurface(plan.surface, t.surfaceCap) as TierSurface | 'none';
+    t.tier = pend.tier;
+    t.source = 'human';
+    t.surface = surface;
+    // a raise from tier 0 starts the session's MCP servers now (none were started at tier 0)
+    if (plan.brokered && !s.mcp && s.tools) {
+      await this.#startMcp(s, t.kernel, this.#mode(s) === 'manual');
+    }
+    if (s.state !== 'running' || !s.tools) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
+    if (s.mcp && s.sel) {
+      this.#reselect(s, 'tier', undefined, { force: true, surface });
+    } else {
+      const id = `ts-${++s.toolsSetSeq}`;
+      s.tools.setTools(plan.brokered ? t.kernel : [], { ackId: id });
+      t.gen++;
+      this.#write(s, drv.toolsSetLine(s.tools.offered, id, surface === 'none' ? undefined : surface));
+    }
+    await this.#o.log('model.capabilities', { hsid: s.hsid, backend: 'local', model: s.model, tier: t.tier, previous, measured: t.measured, tierSource: 'human', surface }, { session: s.hsid });
+    let remembered = false;
+    let rememberWhy: string | undefined;
+    if (remember) {
+      const tm = t.model ?? (await this.#tierModel(t.endpoint));
+      if (tm) {
+        try {
+          setHuman(this.#o.home, tm, t.tier);
+          t.model = tm;
+          remembered = true;
+        } catch {
+          rememberWhy = 'store-unwritable';
+        }
+      } else rememberWhy = 'no-fingerprint';
+    }
+    const now = this.#tierOffer(s, t.tier, surface);
+    return { hsid: s.hsid, tier: t.tier, previous, measured: t.measured, tierSource: 'human', surface, offered: s.tools.offered.map((x) => x.name), unfitPins: now.unfitPins, remembered, ...(rememberWhy ? { rememberWhy } : {}), applies: 'next-step' };
+  }
+
+  /** Slice C4'a: the store model of an endpoint (its fingerprint, learnt now when unknown), or null without one. */
+  async #tierModel(ep: { id: string; base: string; model: string }): Promise<TierModel | null> {
+    const f = this.#fingerprints.get(ep.id);
+    let fp = f && f.base === ep.base && f.model === ep.model ? f.fingerprint : undefined;
+    if (fp === undefined) fp = await fingerprintOf({ base: ep.base, model: ep.model }, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+    return fp ? { base: ep.base, model: ep.model, fingerprint: fp } : null;
   }
 
   /**
@@ -1219,18 +1531,22 @@ export class LocalLane {
    * cache). Synchronous: the tools_set line is written before whatever the caller writes next (a find_tool answer, a
    * steer, a prompt), so the child holds it for its next step. Returns find_tool's offered matches.
    */
-  #reselect(s: LocalSession, trigger: ToolSelectionTrigger, need?: string): CapabilityEntry[] {
+  #reselect(s: LocalSession, trigger: ToolSelectionTrigger, need?: string, o: { force?: boolean; surface?: TierSurface | 'none' } = {}): CapabilityEntry[] {
     if (!s.mcp || !s.sel || !s.tools || s.state !== 'running') return [];
     const { tools, found, ids, hash, unfit } = this.#mcpOffer(s, need);
     s.sel.selectedAt = s.sel.step;
     if (need !== undefined) s.sel.found = { names: found.map((e) => e.name), step: s.sel.step };
     const h = offeredHash(tools);
-    if (h !== s.mcp.offeredHash) {
+    // slice C4'a: a tier commit always sends its tools_set (with the surface, which the set's hash does not cover)
+    if (h !== s.mcp.offeredHash || o.force) {
       s.mcp.offeredHash = h;
       // Aegis M3: the previous set stays callable until the child acknowledges THIS tools_set id
-      const id = `ts-${++s.sel.setSeq}`;
+      const id = `ts-${++s.toolsSetSeq}`;
+      s.sel.setSeq = s.toolsSetSeq;
       s.tools.setTools(tools, { ackId: id });
-      this.#write(s, drv.toolsSetLine(s.tools.offered, id));
+      // slice C4'a: the selection generation moved (a pending tier preview is stale now)
+      if (s.tier) s.tier.gen++;
+      this.#write(s, drv.toolsSetLine(s.tools.offered, id, o.surface === 'none' ? undefined : o.surface));
       // Aegis M2: one audit row per change of the offered set — capability ids only, never the query or the need
       const before = new Set(s.sel.ids);
       const row = { hsid: s.hsid, trigger, hash: `sha256:${hash}`, added: ids.filter((x) => !before.has(x)), removed: s.sel.ids.filter((x) => !ids.includes(x)), found: found.map((e) => e.id), unfitPins: Math.min(unfit, 64) };
@@ -1501,7 +1817,7 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
@@ -1518,6 +1834,8 @@ export class LocalLane {
     if (!s || s.owner !== asker.principal || s.state !== 'running') throw refused('NOT_FOUND', 'no such running local session for this principal', { reason: 'not-found' });
     if (s.loop) throw refused('FORBIDDEN', 'a loop session takes no context requests', { reason: 'loop-session' });
     if (kind === LOCAL_SESSION_TOOLS_PIN_REQUEST) return this.#pinTool(s, p);
+    // slice C4'a: the human's two-phase tool-tier change
+    if (kind === LOCAL_SESSION_TIER_REQUEST) return this.#tierRequest(asker.principal, s, p);
     if (kind === LOCAL_SESSION_COMPACT_REQUEST) {
       this.#write(s, drv.compactLine());
       return { hsid, when: s.turnPermits.length > 0 ? 'next-step' : 'next-run' };
@@ -1624,7 +1942,8 @@ export class LocalLane {
     appendLedger(this.#o.home, { kind: 'close', hsid: s.hsid, at: Date.now() });
     // slice C1: calls in flight are cancelled (their cards expire, no target runs) and the session's verb cards expire
     s.tools?.cancelAll();
-    if (s.tools?.offered.length) await this.#o.gitVerbs?.closeSession?.(s.hsid).catch(() => undefined);
+    // slice C4'a: a session whose verbs were ever offerable (a tier change may have emptied the set) closes them too
+    if (s.tools?.offered.length || s.tier?.kernel.length) await this.#o.gitVerbs?.closeSession?.(s.hsid).catch(() => undefined);
     // slice C2': every MCP server this session spawned is reaped, and its neutral cwd removed
     await s.mcp?.pool.closeAll().catch(() => undefined);
     if (s.mcpLaunch) {

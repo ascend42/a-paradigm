@@ -82,7 +82,8 @@ export interface SteerChannel {
 
 /** local (slice S1 / C1): the kernel's half of the brokered-tool protocol. */
 export interface ToolBrokerChannel {
-  toolsSetLine(tools: ReadonlyArray<OfferedTool>, id?: string): string;
+  /** slice C4'a: `surface` (optional) is the tool surface the child applies WITH this set at its next step start */
+  toolsSetLine(tools: ReadonlyArray<OfferedTool>, id?: string, surface?: 'compact' | 'full'): string;
   toolResponseLine(r: ToolResponse): string;
   toolProgressLine(id: string): string;
 }

@@ -54,6 +54,11 @@
  * labelled by its provenance. A name in neither the native nor the current
  * brokered set is "unknown tool" (the allowTools rule). A session with an
  * allowTools list (a loop act session) never takes brokered tools.
+ * Slice C4'a (#local-tool-tier): a tools_set may carry a surface (compact |
+ * full, a tier change); it applies with the set at the next step start and
+ * the ledger is recomputed, so the step's usual budget check compacts first
+ * when the history no longer fits; tools_applied{id} follows. A session
+ * opened with surface none never takes a surface.
  *
  * Slice B2 (#local-working-memory, TD-2026-10-27-833): the KERNEL owns the
  * session's working memory and pushes its rendered block with memory_set; the
@@ -159,6 +164,12 @@ export class Agent {
   #nextBrokered: BrokeredToolSpec[] | null = null;
   /** slice C3' (Aegis M3): the kernel's id of the pending tools_set; acknowledged with tools_applied{id} when it takes effect */
   #nextBrokeredId: string | null = null;
+  /**
+   * slice C4'a (#local-tool-tier): the tool surface in effect (the config's at start) and the one a tools_set carried
+   * for the next step (a tier change); applied with the set, then the ledger is recomputed
+   */
+  #surface: ToolSurface;
+  #nextSurface: 'compact' | 'full' | null = null;
   readonly #messages: ChatMessage[] = [];
   readonly #steer: string[] = [];
   readonly #follow: string[] = [];
@@ -195,6 +206,7 @@ export class Agent {
   constructor(o: AgentOptions) {
     this.#o = o;
     this.#target = o.contextTarget ?? DEFAULT_CONTEXT_TARGET;
+    this.#surface = o.surface;
     this.#native = orderTools(o.allowTools ? TOOLS.filter((t) => o.allowTools!.includes(t.name)) : TOOLS);
     this.#messages.push({ role: 'system', content: '' });
     this.#applyTools();
@@ -206,18 +218,18 @@ export class Agent {
     // brokered tools follow the natives (orderTools keeps names outside TOOL_ORDER last, in the kernel's order);
     // slice B2: the memory tools (note, forget) come before the kernel's brokered ones
     this.#tools = orderTools([...this.#native, ...[...this.#memoryTools, ...this.#findTool, ...this.#brokered].map((b) => ({ name: b.name, description: b.description, parameters: b.parameters }))]);
-    const textTools = !o.nativeTools && o.surface !== 'none' ? textToolPrompt(this.#tools) : '';
+    const textTools = !o.nativeTools && this.#surface !== 'none' ? textToolPrompt(this.#tools) : '';
     this.#sysBase = o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.';
     this.#sysTools = textTools;
     const sys = [this.#sysBase, textTools].filter(Boolean).join('\n\n');
     if (this.#messages[0]?.role === 'system') this.#messages[0] = { role: 'system', content: sys };
-    const schema = o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(this.#tools, o.surface)).length / 4) : 0;
+    const schema = o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(this.#tools, this.#surface)).length / 4) : 0;
     this.#ledger = contextLedger({ target: this.#target, systemMessageTokens: estimateTokens([this.#messages[0]!]), toolsTokens: o.nativeTools ? schema : Math.ceil(textTools.length / 4), toolsInSystem: !o.nativeTools, replyTokens: o.maxTokens, memoryTokens: memoryTokensOf(this.#memory) });
   }
 
   /** Slice B2: the memory tools this session offers (none without memory, a broker, or with a tools allowlist). */
   get #memoryTools(): readonly BrokeredToolSpec[] {
-    return this.#o.memory && this.#o.broker && !this.#o.allowTools && this.#o.surface !== 'none' ? MEMORY_TOOLS : [];
+    return this.#o.memory && this.#o.broker && !this.#o.allowTools && this.#surface !== 'none' ? MEMORY_TOOLS : [];
   }
 
   /**
@@ -225,7 +237,7 @@ export class Agent {
    * broker, with a tools allowlist or with surface none). The kernel resolves it and sends the next step's tools_set.
    */
   get #findTool(): readonly BrokeredToolSpec[] {
-    return this.#o.broker && !this.#o.allowTools && this.#o.surface !== 'none' && this.#brokered.length > 0 ? [FIND_TOOL] : [];
+    return this.#o.broker && !this.#o.allowTools && this.#surface !== 'none' && this.#brokered.length > 0 ? [FIND_TOOL] : [];
   }
 
   /** The system message as the request carries it: the system prompt, the memory block, then the text-tool prompt. */
@@ -292,6 +304,9 @@ export class Agent {
       if (this.#nextBrokeredId !== null) this.#o.emit({ type: 'tools_applied', id: this.#nextBrokeredId });
       this.#nextBrokeredId = null;
       this.#nextBrokered = null;
+      // slice C4'a: a tier change's surface takes effect with its set (the ledger below is recomputed for both)
+      if (this.#nextSurface !== null) this.#surface = this.#nextSurface;
+      this.#nextSurface = null;
       changed = true;
     }
     if (this.#nextMemory !== null) {
@@ -312,13 +327,21 @@ export class Agent {
    * Slice C1: the kernel's tools_set. Takes effect at the next step start. Refused (an error string) when this agent
    * has no broker port or is a loop act session (allowTools).
    */
-  setBrokered(tools: readonly BrokeredToolSpec[], id?: unknown): string | null {
+  setBrokered(tools: readonly BrokeredToolSpec[], id?: unknown, surface?: 'compact' | 'full'): string | null {
     if (!this.#o.broker) return 'this session has no kernel broker';
     if (this.#o.allowTools) return 'a session with a tools allowlist takes no brokered tools';
+    // slice C4'a: a session opened with no tool surface (a loop judge) never gains one
+    if (surface !== undefined && this.#o.surface === 'none') return 'a session with tool surface none takes no surface change';
     this.#nextBrokered = tools.map((t) => ({ ...t }));
+    this.#nextSurface = surface ?? null;
     this.#nextBrokeredId = typeof id === 'string' && TOOLS_SET_ID_RE.test(id) ? id : null;
     if (!this.#running) this.#takePending();
     return null;
+  }
+
+  /** Slice C4'a: the tool surface in effect (tests, get_state). */
+  get surface(): ToolSurface {
+    return this.#surface;
   }
 
   /** The brokered names in effect (tests, get_state). */
@@ -362,7 +385,7 @@ export class Agent {
 
   #requestOnce(noTools = false): Promise<Completion> {
     this.#abort = new AbortController();
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#requestMessages(), tools: noTools ? [] : this.#tools, nativeTools: noTools ? false : this.#o.nativeTools, surface: noTools ? 'none' : this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#requestMessages(), tools: noTools ? [] : this.#tools, nativeTools: noTools ? false : this.#o.nativeTools, surface: noTools ? 'none' : this.#surface, maxTokens: this.#o.maxTokens, stream: true });
     return complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
   }
 
@@ -524,9 +547,9 @@ export class Agent {
           c = await this.#request();
         }
         this.#abort = null;
-        const textCalls = !this.#o.nativeTools && this.#o.surface !== 'none' ? parseTextToolCalls(c.content) : { calls: [], rest: c.content };
+        const textCalls = !this.#o.nativeTools && this.#surface !== 'none' ? parseTextToolCalls(c.content) : { calls: [], rest: c.content };
         // surface 'none' ⇒ never execute a tool call, whatever the model emits (Aegis L4)
-        const calls = this.#o.surface === 'none' ? [] : this.#o.nativeTools ? c.toolCalls.map((t) => ({ id: t.id, name: t.name, arguments: t.arguments as unknown })) : textCalls.calls;
+        const calls = this.#surface === 'none' ? [] : this.#o.nativeTools ? c.toolCalls.map((t) => ({ id: t.id, name: t.name, arguments: t.arguments as unknown })) : textCalls.calls;
         if (c.usage) {
           total.input += c.usage.input;
           total.output += c.usage.output;
