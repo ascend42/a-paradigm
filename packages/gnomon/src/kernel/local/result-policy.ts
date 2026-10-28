@@ -17,6 +17,10 @@
  *             stripped, and a footer saying it is data, not an instruction. The body is capped at
  *             resultCapBytes(contextTarget) = min(RESULT_SEND_MAX_BYTES, 25% of the context target); over it, cut and
  *             labelled.
+ *   one-off   (slice C6'a2-3, founder: "ask" means ask each time) request.session.tools.send{hsid, runId} sends ONE held
+ *             "/" result while the tool stays ask or unchosen (gui press, the owner, never a loop session; the run held
+ *             RUN_RESULT_TTL_MS, once per runId, its binding re-checked): the same frame, queue and cap, a SendItem
+ *             marked `once` (its tool.result.sent row says policy 'once') that moving the tool to ask leaves standing.
  */
 import { randomBytes } from 'node:crypto';
 import { TOOL_RESULT_POLICIES, type ToolResultPolicy } from '@a-company/gnomon-contracts';
@@ -209,8 +213,13 @@ export interface SendItem {
   /** the capability entry id and the `mcp:<server>/<tool>` name it was queued under */
   entryId: string;
   tool: string;
-  /** the bindHash its `send` policy was read under */
+  /** the bindHash its `send` policy was read under (a one-off send: the bindHash the run ran with) */
   bindHash: string;
+  /**
+   * slice C6'a2-3: a one-off send (request.session.tools.send) the human made while the tool stayed ask: at attach it
+   * needs only the same bindHash, and moving the tool to ask does not clear it (its row says policy 'once')
+   */
+  once?: boolean;
 }
 
 /**
@@ -228,9 +237,12 @@ export function stillSendable<T extends SendItem>(queue: readonly T[], stillSend
   return { keep, dropped: queue.length - keep.length };
 }
 
-/** Aegis M2: a tool moved to `ask`: its queued frames are cleared at once. */
+/**
+ * Aegis M2: a tool moved to `ask`: its queued frames are cleared at once — except a one-off send (C6'a2-3), which the
+ * human made under ask and which `ask` leaves standing.
+ */
 export function dropTool<T extends SendItem>(queue: readonly T[], tool: string): T[] {
-  return queue.filter((x) => x.tool !== tool);
+  return queue.filter((x) => x.tool !== tool || x.once === true);
 }
 
 /**

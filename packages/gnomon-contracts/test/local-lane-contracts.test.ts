@@ -3,7 +3,7 @@
  * tool.brokered kind is registered, closed and HASH-ONLY.
  */
 import { describe, expect, it } from 'vitest';
-import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SKILL_RUN_DECISIONS, SKILL_RUN_VIAS, TOOL_RESULT_POLICIES, SESSION_MCP_ERROR_MAX, SESSION_MCP_FITS, SESSION_MCP_STATES, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, validateKindPayload } from '../src/index.js';
+import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SKILL_RUN_DECISIONS, SKILL_RUN_VIAS, TOOL_RESULT_POLICIES, TOOL_RESULT_SENT_POLICIES, SESSION_MCP_ERROR_MAX, SESSION_MCP_FITS, SESSION_MCP_STATES, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, validateKindPayload } from '../src/index.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
 const row = { hsid: HSID, server: 'gnomon', tool: 'gnomon_git_push', class: 'destructive', argsHash: `sha256:${'a'.repeat(64)}`, decision: 'approved', bytes: 12, isError: false, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' };
@@ -121,6 +121,14 @@ describe('"/" runs, the result policy and skill runs (8.0:local-lane, slice C6\'
     expect(validateKindPayload('tool.result.sent', r)).toEqual([]);
     expect(validateKindPayload('tool.result.sent', { ...r, text: 'the result' }).length).toBeGreaterThan(0);
     expect(validateKindPayload('tool.result.sent', { ...r, cut: 'yes' }).length).toBeGreaterThan(0);
+  });
+  it("C6'a2-3: tool.result.sent's policy takes once (a one-off send); tool.result.policy never does", () => {
+    const r = { hsid: HSID, tool: 'mcp:files/read_file', argsHash: SHA, bytes: 120, cut: false, policy: 'once' };
+    expect(TOOL_RESULT_SENT_POLICIES).toEqual(['send', 'ask', 'once']);
+    expect(validateKindPayload('tool.result.sent', r)).toEqual([]);
+    expect(validateKindPayload('tool.result.sent', { ...r, policy: 'twice' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('tool.result.policy', { hsid: HSID, repoKey: SHA, tool: 'mcp:files/read_file', bindHash: SHA, policy: 'once' }).length).toBeGreaterThan(0);
+    expect((CLIENT_API_DESCRIPTOR as unknown as { toolResult: { sentPolicies: string[] } }).toolResult.sentPolicies).toEqual([...TOOL_RESULT_SENT_POLICIES]);
   });
   it('skill.run is sensitive with closed via and decision; tokens is optional', () => {
     expect(EVENT_KINDS['skill.run']).toMatchObject({ kind: 'skill.run', owner: 'kernel', sensitivity: 'sensitive', reserved: '8.0:local-lane' });

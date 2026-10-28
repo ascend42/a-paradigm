@@ -8,7 +8,7 @@ Everything a community client needs is published by `@a-company/gnomon-contracts
 ## Identity
 
 - clientApi: `gnomon-rpc:v1`
-- clientApiId: `sha256:ef710386692316235e192831734ddd1b98c77b900456c20d59d674696976e6c3` (pinned in `schemas/client-api.ids.json`)
+- clientApiId: `sha256:fed7e22ca4e35405f65592e3a3d829b33beeaada98b7321483496f4dd185c4a3` (pinned in `schemas/client-api.ids.json`)
 - kitId: `sha256:3d3f917de8f745846f4e7216583bdb6bdef4a966aff62a152c26d730dccecf9a` (`kit:v1`)
 - clientApiId = sha256(canonicalJson(descriptor) + "\n" + kitId); modAbiId is not an input.
 
