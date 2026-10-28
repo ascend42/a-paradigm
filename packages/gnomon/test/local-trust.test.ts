@@ -123,10 +123,15 @@ describe('G-LCL-23 the pool: trust follows the binding; a change drops it with a
     const pool = new LocalMcpPool({ servers: [server()], repo: '/r', cache, trust: c.trust, spawn: () => spawnFake() });
     expect(new Set((await pool.index()).entries.map((e) => e.class))).toEqual(new Set(['mutate']));
     expect(pool.trustLive('fake')).toBe('enabled');
+    // slice C5'a2: an untrusted server has no trust binding, so none of its tools is ruleable
+    expect(pool.trustBindingOf('fake')).toBeNull();
     expect(cache.newest('user::fake')).toMatchObject({ id: 'user::fake', label: 'fake', launchHash: L1, pluginVersion: null, toolsHash: expect.stringMatching(/^sha256:/) });
     await trustNewest(c, cache);
     expect(classes(pool.renarrow('fake')!)).toMatchObject({ echo: 'read', poke: 'mutate', 'fam.get': 'mutate' });
     expect(pool.trustLive('fake')).toBe('trusted');
+    // slice C5'a2: the rule's trust half is the TrustBook binding this session narrowed under
+    expect(pool.trustBindingOf('fake')).toBe(c.trust.of('user::fake')!.binding);
+    expect(pool.trustBindingOf('nope')).toBeNull();
     await pool.closeAll();
   }, 20_000);
 
@@ -165,6 +170,8 @@ describe('G-LCL-23 the pool: trust follows the binding; a change drops it with a
     await waitFor(() => c.trustRows().some((p) => p.op === 'dropped'));
     expect(c.trustRows().filter((p) => p.op === 'dropped').map((p) => p.why)).toEqual(['tools-changed']);
     expect(pool.trustLive('fake')).toBe('enabled');
+    // slice C5'a2: a drop ends the trust binding too, so every tool rule of the server is dormant at once
+    expect(pool.trustBindingOf('fake')).toBeNull();
     await pool.closeAll();
   }, 20_000);
 

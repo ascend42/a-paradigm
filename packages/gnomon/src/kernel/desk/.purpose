@@ -313,7 +313,11 @@ components:
       not-enabled, not-listed, changed. Turning a server off everywhere drops
       its trust (why disabled). status.mcp server rows gain trust{level
       untrusted|trusted, why, since?}; firstParty.trust is first-party. GUI is
-      C5'b; Always rules for brokered tools are C5'a2.
+      C5'b. Slice C5'a2 (Aegis hardening, G-LCL-22): ONE open trust card per
+      server id (#trustCards); a repeat commit with a live token returns the
+      open card's cardId and raises nothing, like enable's #pending. Always
+      rules for brokered tools (^local-tool-grant) are #local-tool-broker and
+      #always-rules.
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
@@ -324,4 +328,4 @@ components:
       - test/mcp-servers-sandbox.test.ts
       - test/mcp-trust-request.test.ts
       - test/local-trust.test.ts
-    oracles: [G-MCP-01, G-MCP-02, G-MCP-03, G-MCP-04, G-MCP-05, G-MCP-06, G-MCP-07, G-LCL-23]
+    oracles: [G-MCP-01, G-MCP-02, G-MCP-03, G-MCP-04, G-MCP-05, G-MCP-06, G-MCP-07, G-LCL-22, G-LCL-23]
