@@ -25,6 +25,7 @@ import {
   reapStaleInProgress,
   isTerminal,
 } from './task-settlement.js';
+import { pathFor } from './learning-stores.js';
 
 // ────────────────────────────────────────────────────────
 // Harness
@@ -34,7 +35,8 @@ let root: string;
 let homeDir: string;
 let priorHome: string | undefined;
 
-const LIVENESS = (r: string) => path.join(r, '.paradigm/events/settlement-liveness.jsonl');
+// Scoped learning S2: liveness rows go to the machine home.
+const LIVENESS = (r: string) => pathFor('settlement-liveness', 'machine', r);
 
 function readLiveness(r: string): Array<Record<string, unknown>> {
   const p = LIVENESS(r);
