@@ -17,6 +17,7 @@
  */
 import { CUSTOM, MODEL_CHOICES, modelChipText, modelLabel, openModelOf, sessionModelText, pickerProblem, rememberChoice, rememberedChoice, sessionModelOf, switchChoices, switchConfirmText, switchRequest, type StorageLike } from '../core/model-picker.js';
 import type { ToastKind } from '../core/toasts.js';
+import { trapTab } from './tier-picker.js';
 
 interface Caller {
   call<T = unknown>(method: string, params?: unknown): Promise<T>;
@@ -104,7 +105,7 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     chip?.menu.remove();
     chip = null;
   };
-  const sheet = el(doc, 'div', { id: 'model-switch-dialog', class: 'overlay', role: 'dialog', 'aria-label': 'switch model' });
+  const sheet = el(doc, 'div', { id: 'model-switch-dialog', class: 'overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'switch model' });
   sheet.hidden = true;
   const card = el(doc, 'form', { class: 'sheet-card', autocomplete: 'off' });
   const lines = el(doc, 'div', { class: 'model-switch-lines' });
@@ -177,6 +178,8 @@ export function mountModelPicker(doc: Document, d: ModelPickerDeps): ModelPicker
     if (chip && !chip.menu.hidden && !(e.target as HTMLElement).closest('.model-wrap, .model-menu')) closeMenu();
   });
   doc.addEventListener('keydown', (e) => {
+    // Mika C4'b F11: Tab stays inside the open switch sheet (as the tier sheet)
+    if (e.key === 'Tab' && !sheet.hidden) return trapTab(sheet, e);
     if (e.key === 'Escape' && chip && !chip.menu.hidden) {
       closeMenu();
       chip.btn.focus();

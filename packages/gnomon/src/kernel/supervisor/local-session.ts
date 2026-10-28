@@ -124,7 +124,7 @@ import { appendLedger } from '../local/edit-ledger.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
 import { fingerprintOf, probeLocalEndpoint, probeToolSkill, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
-import { effectiveTier, isTier, lookupTier, lowerSurface, measuredCurrent, setHuman, skillTier, tierPlan, windowTier, writeMeasured, WINDOW_TIER_MIN, type TierModel, type TierSource, type TierSurface, type ToolTier } from '../local/tool-tier.js';
+import { effectiveTier, isTier, lookupTier, lowerSurface, measuredCurrent, setHuman, skillTier, tierPlan, tiersWritable, windowTier, writeMeasured, WINDOW_TIER_MIN, type TierModel, type TierSource, type TierSurface, type ToolTier } from '../local/tool-tier.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/voice-control.js';
 import { loopRunRefInfo, type LoopRunRef, type LoopRunRefInfo } from '../loops/registry.js';
@@ -178,8 +178,10 @@ export interface LocalLaneOptions {
   config?: LocalLaneConfig;
   /** TEST RIG ONLY: the probe's fetch */
   probeFetch?: ProbeFetch;
-  /** TEST SEAM (slice C4'a): the clock of request.session.tier tokens (default Date.now) */
+  /** TEST SEAM (slice C4'a): the clock of request.session.tier tokens and the re-measure gap (default Date.now) */
   now?: () => number;
+  /** Aegis C4'b L1: the least gap between two re-measures of one endpoint (default REMEASURE_GAP_MS, as Check again) */
+  remeasureGapMs?: number;
   probeTtlMs?: number;
   /** TEST RIG ONLY: the launch plan (default: the platform's `session` sandbox profile). The daemon never sets it. */
   launchPlan?: (i: SessionLaunchInput) => SessionLaunchPlan;
@@ -394,9 +396,19 @@ export const LOCAL_SESSION_TOOLS_PIN_REQUEST = 'request.session.tools.pin' as co
  * {hsid, tier, op:'preview'} → what will change and a single-use token; {hsid, op:'commit', token, remember?} applies it.
  */
 export const LOCAL_SESSION_TIER_REQUEST = 'request.session.tier' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST]);
+/**
+ * Slice C4'b (#local-tool-tier): the human re-measures a configured endpoint's tool skill ({endpoint}; answers at once
+ * {measuring:true}, the result lands in status.local.lastProbe.tier; a measurement already running is joined), and
+ * clears the tier they remembered for its model ({endpoint}; open sessions keep theirs). Endpoint-scoped, not
+ * session-scoped, but served by the same human-only dispatcher path (never rows of their own; no contract id moves).
+ */
+export const LOCAL_TIER_REMEASURE_REQUEST = 'request.local.tier.remeasure' as const;
+export const LOCAL_TIER_CLEAR_REQUEST = 'request.local.tier.clear' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST]);
 /** Slice C4'a: a preview token lives this long. */
 export const TIER_TOKEN_TTL_MS = 60_000;
+/** Aegis C4'b L1: one re-measure per endpoint per this gap (the same gap as Check again, config-request probeGapMs). */
+export const REMEASURE_GAP_MS = 2000;
 /** Slice B2: the asker of a human request (stamped by the dispatcher). */
 export interface LocalSessionAsker {
   connId: string;
@@ -496,6 +508,10 @@ export class LocalLane {
   readonly #memSkill = new Map<string, { skill: ToolTier; passed: number }>();
   /** slice C4'a: the tool-skill measurements in flight, by endpoint id (one at a time per endpoint) */
   readonly #measuring = new Map<string, Promise<void>>();
+  /** Slice C4'b: an explicit re-measure in flight per endpoint (its probe, then its measurement): a second one joins it */
+  readonly #remeasuring = new Map<string, Promise<void>>();
+  /** Aegis C4'b L1: when each endpoint's last re-measure started (the lane's clock) */
+  readonly #remeasureAt = new Map<string, number>();
   /** Aegis C4'a L2: a session's MCP start in flight (a concurrent tier commit waits on it) */
   readonly #mcpStarting = new WeakMap<LocalSession, Promise<BrokeredTool[] | null>>();
   #lastFallback: { at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string } | null = null;
@@ -595,7 +611,7 @@ export class LocalLane {
     if (!caps || !caps.ok || !e || !v?.ok) return;
     const k = this.#tierOf(id, v.base, caps.model ?? e.model, caps);
     const target = Math.min(this.#config?.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET);
-    lp.tier = { skill: k.skill, passed: k.passed, measuring: this.#measuring.has(id), window: windowTier(target, caps.nCtx !== null), human: k.human };
+    lp.tier = { skill: k.skill, passed: k.passed, measuring: this.#measuring.has(id) || this.#remeasuring.has(id), window: windowTier(target, caps.nCtx !== null), human: k.human };
   }
 
   /** Slice C4'a: the store's record, or null (an unreadable store is no record). */
@@ -626,7 +642,7 @@ export class LocalLane {
 
   /** Slice C4'a: settle every tool-skill measurement in flight (tests; the daemon never waits on one). */
   async tierSettled(): Promise<void> {
-    while (this.#measuring.size) await Promise.all([...this.#measuring.values()]);
+    while (this.#measuring.size || this.#remeasuring.size) await Promise.all([...this.#measuring.values(), ...this.#remeasuring.values()]);
   }
 
   /**
@@ -668,16 +684,41 @@ export class LocalLane {
 
   /**
    * Slice C4'a: an explicit re-measure of configured endpoint `id` (a fresh probe, then T2-T4 whatever the store holds).
-   * Resolves when the measurement settles. No dispatcher request reaches it yet (the GUI is C4'b).
+   * Resolves when the measurement settles. Slice C4'b: request.local.tier.remeasure reaches it; a re-measure already
+   * running for `id` is JOINED (its promise), never started twice. A background (unforced) measurement running for
+   * `id` would do nothing on a cache hit, so the forced run is QUEUED after it (Aegis C4'b info). status.local
+   * .lastProbe.tier says measuring from the moment it starts. A probe begun under an older config is never measured
+   * (Aegis C4'b L2).
    */
-  async remeasure(id: string): Promise<void> {
+  remeasure(id: string): Promise<void> {
+    const running = this.#remeasuring.get(id);
+    if (running) return running;
+    const background = this.#measuring.get(id);
+    // Aegis C4'b L2: the config generation the re-measure was asked under (probeGen); a change meanwhile skips #measure
+    const gen = this.#gen;
     const e = this.#config?.endpoints.find((x) => x.id === id);
     const v = e ? classifyEndpoint(e.base, this.#forbiddenPorts()) : null;
-    if (!e || !v?.ok) return;
-    this.#probes.delete(id);
-    const caps = await this.#probe({ id, base: v.base, model: e.model }).catch(() => null);
-    if (caps?.ok) this.#measure(id, v.base, caps, { force: true });
-    await this.#measuring.get(id);
+    if (!e || !v?.ok) return Promise.resolve();
+    // the run waits for `go`: it is in #remeasuring, and the last probe's tier says measuring, before the cache drops
+    let go!: () => void;
+    const started = new Promise<void>((r) => (go = r));
+    const run = (async (): Promise<void> => {
+      await started;
+      if (background) await background.catch(() => undefined);
+      this.#probes.delete(id);
+      const caps = await this.#probe({ id, base: v.base, model: e.model }).catch(() => null);
+      if (caps?.ok && gen === this.#gen) this.#measure(id, v.base, caps, { force: true });
+      await this.#measuring.get(id);
+    })()
+      .catch(() => undefined)
+      .finally(() => {
+        this.#remeasuring.delete(id);
+        this.#refreshProbeTier(id);
+      });
+    this.#remeasuring.set(id, run);
+    this.#refreshProbeTier(id);
+    go();
+    return run;
   }
 
   /** The last probe of any endpoint (state for Settings: ok, why, tools, context), or null since the config applied. */
@@ -1463,9 +1504,12 @@ export class LocalLane {
     const notices = [`Tier ${t.tier} → ${to}: at most ${plan.k} narrow tools in ${plan.slotTokens} tokens, ${surface} tool schemas${plan.brokered ? '' : ', no brokered tools'}. The model's prompt cache starts over.`];
     if (requested > window) notices.push(`Tier ${requested} needs a ${WINDOW_TIER_MIN[requested as 1 | 2 | 3] / 1024}k context target.`);
     if (t.measured === null ? to > 1 : to > t.measured) notices.push(`Tier ${to} is above what this model measured (${t.measured ?? 'not measured yet'}). It may call tools badly; calls are still checked and carded.`);
+    // slice C4'b: can remember:true be kept? (the GUI disables its checkbox with the reason before Apply)
+    const tm = t.model ?? (await this.#tierModel(t.endpoint).catch(() => null));
+    const rememberWhy = !tm ? 'no-fingerprint' : !tiersWritable(this.#o.home) ? 'store-unwritable' : undefined;
     const token = randomBytes(16).toString('hex');
     t.pending = { token, principal, tier: to, gen: t.gen, expires: this.#now() + TIER_TOKEN_TTL_MS };
-    return { hsid: s.hsid, from: t.tier, to, requested, measured: t.measured, window, k: plan.k, slotTokens: plan.slotTokens, slotShare: plan.slotShare, surface: `${t.surface}→${surface}`, cacheLost: true, leaving, unfitPins: next.unfitPins, notice: notices.join(' '), token, expiresInMs: TIER_TOKEN_TTL_MS };
+    return { hsid: s.hsid, from: t.tier, to, requested, measured: t.measured, window, k: plan.k, slotTokens: plan.slotTokens, slotShare: plan.slotShare, surface: `${t.surface}→${surface}`, cacheLost: true, leaving, unfitPins: next.unfitPins, notice: notices.join(' '), token, expiresInMs: TIER_TOKEN_TTL_MS, rememberable: rememberWhy === undefined, ...(rememberWhy ? { rememberWhy } : {}) };
   }
 
   async #commitTier(principal: string, s: LocalSession, token: string, remember: boolean, tier: ToolTier | undefined): Promise<Record<string, unknown>> {
@@ -1515,6 +1559,32 @@ export class LocalLane {
     }
     const now = this.#tierOffer(s, t.tier, surface);
     return { hsid: s.hsid, tier: t.tier, previous, measured: t.measured, tierSource: 'human', surface, offered: s.tools.offered.map((x) => x.name), unfitPins: now.unfitPins, remembered, ...(rememberWhy ? { rememberWhy } : {}), applies: 'next-step' };
+  }
+
+  /**
+   * Slice C4'b: request.local.tier.clear{endpoint} — forget the human's remembered tier for the endpoint's model and
+   * fingerprint (setHuman null): new sessions open at the measured tier; an open session keeps its tier (nothing is
+   * sent to a child). One model.capabilities{endpoint, tierSource:'measured', action:'human-cleared'} row when a
+   * remembered value was cleared.
+   */
+  async #clearTier(id: string): Promise<Record<string, unknown>> {
+    const e = this.#config!.endpoints.find((x) => x.id === id)!;
+    const v = classifyEndpoint(e.base, this.#forbiddenPorts());
+    if (!v.ok) throw refused('NOT_FOUND', `${LOCAL_TIER_CLEAR_REQUEST}: the endpoint's address is not a loopback one`, { reason: 'not-found', field: 'endpoint' });
+    const model = this.#probes.get(id)?.caps.model ?? e.model;
+    const tm = await this.#tierModel({ id, base: v.base, model });
+    if (!tm) return { endpoint: id, cleared: false, why: 'no-fingerprint' };
+    const prev = this.#readTier(tm);
+    if (!prev || prev.human === null) return { endpoint: id, cleared: false, why: 'none' };
+    try {
+      setHuman(this.#o.home, tm, null);
+    } catch {
+      return { endpoint: id, cleared: false, why: 'store-unwritable' };
+    }
+    const measured = measuredCurrent(prev) ? prev.skill : null;
+    await this.#o.log('model.capabilities', { backend: 'local', endpoint: id, model, tier: measured, tierSource: 'measured', action: 'human-cleared', previous: prev.human });
+    this.#refreshProbeTier(id);
+    return { endpoint: id, cleared: true, previous: prev.human, measured };
   }
 
   /** Slice C4'a: the store model of an endpoint (its fingerprint, learnt now when unknown), or null without one. */
@@ -1836,12 +1906,32 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
     if (extra.length) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     if (kind === LOCAL_SESSION_MEMORY_LIST_REQUEST) return this.#listMemory(asker.principal);
+    // slice C4'b: the endpoint-scoped tier requests (a configured endpoint id)
+    if (kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST) {
+      if (typeof p.endpoint !== 'string' || p.endpoint.length === 0 || p.endpoint.length > 64) throw refused('BAD_REQUEST', `${kind} takes {endpoint}`, { reason: 'bad-params', field: 'endpoint' });
+      const id = p.endpoint;
+      if (!this.#config?.endpoints.some((e) => e.id === id)) throw refused('NOT_FOUND', `${kind}: no configured endpoint ${id.slice(0, 64)}`, { reason: 'not-found', field: 'endpoint' });
+      if (kind === LOCAL_TIER_CLEAR_REQUEST) return this.#clearTier(id);
+      // a re-measure already running is joined (no new work); otherwise at most one per endpoint per gap (Aegis L1)
+      const joined = this.#remeasuring.has(id);
+      if (!joined) {
+        const now = this.#now();
+        const gap = this.#o.remeasureGapMs ?? REMEASURE_GAP_MS;
+        const last = this.#remeasureAt.get(id);
+        if (last !== undefined && now - last < gap) throw refused('BAD_REQUEST', `${kind}: a re-measure just ran: try again in a moment`, { reason: 'rate-limited', why: 'rate-limited', retryAfterMs: Math.max(0, Math.ceil(gap - (now - last))) });
+        this.#remeasureAt.set(id, now);
+      }
+      // a background measurement running: the forced one is queued after it (it would otherwise find its cache hit)
+      const queued = !joined && this.#measuring.has(id);
+      void this.remeasure(id);
+      return { endpoint: id, measuring: true, joined: joined || queued, queued };
+    }
     if (typeof p.hsid !== 'string' || !HSID_PATTERN.test(p.hsid)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const hsid = p.hsid;
     if (kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST) {
