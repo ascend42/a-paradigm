@@ -16,11 +16,16 @@ import * as path from 'path';
 
 /** The project a repository's learning is recorded under. Never throws. */
 export function repoIdOf(root: string): string {
+  return resolveRepoId(root).id;
+}
+
+/** repoIdOf plus where the id came from (gnomon project.yaml, or the path hash). */
+function resolveRepoId(root: string): { id: string; source: 'gnomon' | 'hash' } {
   try {
     const m = /^repoId:\s*['"]?([A-Za-z0-9._:/-]{1,128})['"]?\s*$/m.exec(
       fs.readFileSync(path.join(root, '.gnomon', 'project.yaml'), 'utf8'),
     );
-    if (m) return m[1]!;
+    if (m) return { id: m[1]!, source: 'gnomon' };
   } catch {
     /* no project.yaml */
   }
@@ -30,13 +35,20 @@ export function repoIdOf(root: string): string {
   } catch {
     /* keep root */
   }
-  return `path:${createHash('sha256').update(real).digest('hex').slice(0, 16)}`;
+  return { id: `path:${createHash('sha256').update(real).digest('hex').slice(0, 16)}`, source: 'hash' };
 }
 
 /**
- * The repo id as one filesystem-safe path segment (Windows forbids `:`, and a
- * project.yaml id may hold `/`). Every character outside [A-Za-z0-9._-] → `-`.
+ * The repo id as one filesystem-safe path segment, prefixed by its source so
+ * two sources can never collide (review F7):
+ *   `h-<16 hex>`  — the path-hash fallback
+ *   `g-<id>`      — a gnomon project.yaml repoId; when sanitising changed it
+ *                   (Windows forbids `:`, ids may hold `/`), `-<8 hex>` of the
+ *                   raw id is appended so `a/b` and `a-b` stay distinct.
  */
 export function repoIdSegment(root: string): string {
-  return repoIdOf(root).replace(/[^A-Za-z0-9._-]/g, '-');
+  const { id, source } = resolveRepoId(root);
+  if (source === 'hash') return `h-${id.slice('path:'.length)}`;
+  const safe = id.replace(/[^A-Za-z0-9._-]/g, '-');
+  return safe === id ? `g-${id}` : `g-${safe}-${createHash('sha256').update(id).digest('hex').slice(0, 8)}`;
 }

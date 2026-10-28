@@ -348,7 +348,24 @@ describe('repoIdOf parity with gnomon', () => {
     fs.mkdirSync(path.join(root, '.gnomon'), { recursive: true });
     fs.writeFileSync(path.join(root, '.gnomon', 'project.yaml'), 'name: x\nrepoId: "gh:acme/widgets"\n', 'utf8');
     expect(repoIdOf(root)).toBe('gh:acme/widgets');
-    expect(repoIdSegment(root)).toBe('gh-acme-widgets');
+    const h8 = createHash('sha256').update('gh:acme/widgets').digest('hex').slice(0, 8);
+    expect(repoIdSegment(root)).toBe(`g-gh-acme-widgets-${h8}`);
+  });
+
+  it('prefixes the segment by source so ids never collide (F7)', () => {
+    const hash = repoIdOf(root).slice(5);
+    expect(repoIdSegment(root)).toBe(`h-${hash}`);
+    const seg = (id: string) => {
+      fs.mkdirSync(path.join(root, '.gnomon'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.gnomon', 'project.yaml'), `repoId: ${id}\n`, 'utf8');
+      return repoIdSegment(root);
+    };
+    expect(seg('acme-widgets')).toBe('g-acme-widgets');
+    expect(seg('acme/widgets')).not.toBe(seg('acme-widgets'));
+    expect(seg('acme:widgets')).not.toBe(seg('acme/widgets'));
+    // a gnomon id that looks like a hash never lands on the hash segment
+    expect(seg(hash)).toBe(`g-${hash}`);
+    expect(seg(`path:${hash}`).startsWith('g-')).toBe(true);
   });
 
   it('falls back to path: + sha256(realpath) prefix', () => {
