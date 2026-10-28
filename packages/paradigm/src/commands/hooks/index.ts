@@ -224,9 +224,10 @@ function cleanupProjectClaudeCodeHooks(rootDir: string): { cleaned: boolean; rem
  */
 function validateBashSyntax(scriptContent: string, scriptName: string): string | null {
   try {
-    // Write to a temp file and check syntax
-    const tmpPath = path.join(os.tmpdir(), `paradigm-hook-validate-${Date.now()}.sh`);
-    fs.writeFileSync(tmpPath, scriptContent, 'utf8');
+    // Write to a private temp dir (mkdtemp: fresh, 0700) so no other user can pre-create or swap the file.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-hook-validate-'));
+    const tmpPath = path.join(tmpDir, 'hook.sh');
+    fs.writeFileSync(tmpPath, scriptContent, { encoding: 'utf8', flag: 'wx' });
     try {
       // No shell. A failed execFileSync puts bash's stderr in err.message, which the catch below reads.
       execFileSync('bash', ['-n', tmpPath], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -239,7 +240,7 @@ function validateBashSyntax(scriptContent: string, scriptName: string): string |
       if (!/syntax error|unexpected (EOF|end of file|token)/i.test(text)) return null;
       return `${scriptName}: bash syntax error — ${e.message?.split('\n')[0] || 'unknown error'}`;
     } finally {
-      try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
     }
   } catch {
     return null; // Can't validate, assume OK

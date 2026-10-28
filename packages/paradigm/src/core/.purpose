@@ -115,11 +115,11 @@ components:
     type: service
     path: context-builder.ts
   flow-validator:
-    description: 'Validate flow definitions against the actual codebase implementation and generate Mermaid flowchart diagrams. Implementation checks run grep and find through execFileSync argv (grepAnyFile, findPurposeFiles; pattern after -e, path after --), because flow symbols and the project path are repo content; source matches are fixed-string (-F), .purpose declarations an escaped ERE.'
+    description: 'Validate flow definitions against the actual codebase implementation and generate Mermaid flowchart diagrams. Implementation checks run grep and find through execFileSync argv (grepAnyFile, findPurposeFiles; pattern after -e, path after --), because flow symbols and the project path are repo content; source matches are fixed-string (-F), .purpose declarations and signal patterns an escaped ERE; find gets path.resolve(rootDir); grep and find time out after 10 s.'
     type: service
     path: flow-validator.ts
   portal-compliance:
-    description: Validate portal.yaml gates are used in routes and routes reference declared gates. v5.37.12 fail-closed (discriminated PortalLoadResult). v5.38.0 imports classifyYamlError from @a-company/portal-core and attaches near-match suggestions to undeclared / unused gates via the #near-match helper.
+    description: Validate portal.yaml gates are used in routes and routes reference declared gates. v5.37.12 fail-closed (discriminated PortalLoadResult). v5.38.0 imports classifyYamlError from @a-company/portal-core and attaches near-match suggestions to undeclared / unused gates via the #near-match helper. rg and grep get the pattern after -e and the root after --, so a gate pattern starting with - is never an option.
     type: service
     path: portal-compliance.ts
   near-match:
@@ -288,7 +288,7 @@ aspects:
       - flows
       - visualization
     anchors:
-      - flow-validator.ts:613-678
+      - flow-validator.ts:617-682
     applies-to:
       - '#flow-validator'
   ~portal-language-agnostic-grep:

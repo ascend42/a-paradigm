@@ -353,7 +353,7 @@ features:
     components:
       - '#dream-snapshotter'
   tutorial-command:
-    description: Interactive tutorial with curriculum state tracking
+    description: "Interactive tutorial with curriculum state tracking. A command-success checkpoint never runs curriculum.yaml text (repo content): the command must be a key in CHECKPOINT_COMMANDS (paradigm status, paradigm dream aggregate), which maps to argv for this same CLI (execFileSync node + entry script, no shell); anything else fails the checkpoint."
     type: command
     components:
       - '#tutorial-handler'

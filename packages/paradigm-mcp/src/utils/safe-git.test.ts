@@ -114,6 +114,33 @@ describe('commit ids are validated before use', () => {
     expect(fs.existsSync(marker)).toBe(false);
   });
 
+  it('a leading-dash anchor path is a path, not an option (no --output file)', () => {
+    const from = head();
+    const out = path.join(root, 'PWNED_OUTPUT');
+    expect(gitDiffSinceCommit(root, from, `--output=${out}`)).toBe('');
+    expect(gitDiffSinceCommit(root, from, '--output=/tmp/paradigm-safe-git-PWNED')).toBe('');
+    expect(fs.existsSync(out)).toBe(false);
+    expect(fs.existsSync('/tmp/paradigm-safe-git-PWNED')).toBe(false);
+  });
+
+  it('pathspec magic in an anchor path stays literal', () => {
+    const from = head();
+    fs.writeFileSync(path.join(root, 'other.ts'), 'x\n');
+    git('add', '-A');
+    git('commit', '--quiet', '-m', 'other');
+    // As a glob pathspec, these would match other.ts and EVIL; literally, no such file exists.
+    expect(gitDiffSinceCommit(root, from, ':(glob)**')).toBe('');
+    expect(gitDiffSinceCommit(root, from, '*.ts')).toBe('');
+    // A real file whose name looks like magic diffs as itself.
+    const magic = ':(glob)*.ts';
+    fs.writeFileSync(path.join(root, magic), 'm\n');
+    git('--literal-pathspecs', 'add', '--', magic);
+    git('commit', '--quiet', '-m', 'magic');
+    const d = gitDiffSinceCommit(root, from, magic) ?? '';
+    expect(d).toContain('+m');
+    expect(d).not.toContain('other.ts');
+  });
+
   it('a valid sha still diffs', () => {
     const from = head();
     fs.writeFileSync(path.join(root, EVIL), BODY + '// tail\n');

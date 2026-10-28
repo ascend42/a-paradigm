@@ -54,9 +54,16 @@ function refFromUrl(url: string): string | undefined {
  * format") — so extract the number from `owner/repo#N` (or a URL); fall back to
  * the raw ref (a full URL is also accepted).
  */
-function issueSelector(ref: string): string {
-  const m = ref.match(/#(\d+)$/) || ref.match(/\/issues\/(\d+)/);
-  return m ? m[1] : ref;
+export function issueSelector(ref: string): string {
+  // The ref is stored in task files (repo content) and becomes a gh argument:
+  // only a number, owner/repo#N or a github.com issue URL is accepted, so it
+  // can never be read as a gh option such as --repo.
+  const s = String(ref ?? '').trim();
+  const m = s.match(/^(\d+)$/)
+    || s.match(/^[\w.-]+\/[\w.-]+#(\d+)$/)
+    || s.match(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/(\d+)\/?$/);
+  if (!m) throw new Error(`github: not a GitHub issue ref (number, owner/repo#N or issue URL): ${JSON.stringify(s.slice(0, 80))}`);
+  return m[1];
 }
 
 export class GithubProvider implements SyncProvider {

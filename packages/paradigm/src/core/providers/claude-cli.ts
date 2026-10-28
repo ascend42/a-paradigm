@@ -153,7 +153,8 @@ export class ClaudeCliProvider implements AgentProvider {
     }
 
     // Add the prompt last (after all flags)
-    args.push('-p', prompt.slice(0, 8000));  // Truncate for CLI arg limit
+    // `--` ends option parsing, so a prompt starting with `-` is never read as a flag.
+    args.push('-p', '--', prompt.slice(0, 8000));  // Truncate for CLI arg limit
 
     // Stream messages from the CLI
     const messageEmitter = new EventEmitter();

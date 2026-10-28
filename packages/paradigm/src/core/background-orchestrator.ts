@@ -316,12 +316,14 @@ export class BackgroundOrchestrator {
           // Desktop notification (macOS/Linux)
           try {
             if (process.platform === 'darwin') {
-              spawn('osascript', notificationOsascriptArgs(`Orchestration ${orch.status}: ${orch.task.slice(0, 50)}`));
+              // A missing binary arrives as an async 'error' event; without a listener it crashes the process.
+              spawn('osascript', notificationOsascriptArgs(`Orchestration ${orch.status}: ${orch.task.slice(0, 50)}`))
+                .on('error', () => {});
             } else {
               spawn('notify-send', [
                 'Paradigm',
                 `Orchestration ${orch.status}: ${orch.task.slice(0, 50)}`,
-              ]);
+              ]).on('error', () => {});
             }
           } catch {
             // Notification failed, ignore

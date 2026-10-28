@@ -66,6 +66,11 @@ components:
       - feature
       - personas
       - testing
+  drift-command:
+    description: 'paradigm drift — CLI aspect-anchor drift check over .paradigm/aspect-graph.db with git line-shift auto-heal. The line mapping diffs through #safe-git (no shell, hex commit ids only). Anchor file_path and the aspect defined_in come from the DB (repo content), so resolveInsideRoot (realpath, symlinks followed) refuses anything outside the project: such an anchor reports missing, and only a real .purpose file inside the project is ever healed.'
+    type: command
+    file: packages/paradigm/src/commands/drift.ts
+    tags: [aspects, drift, security]
   conductor-install:
     description: 'Global binary install for Conductor. --install copies native binary to ~/.paradigm/conductor/bin/. Three-tier resolution: installed → monorepo dev → error.'
     type: command

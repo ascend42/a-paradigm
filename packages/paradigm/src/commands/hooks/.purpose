@@ -79,7 +79,8 @@ components:
       a real syntax report (syntax error / unexpected EOF or token) blocks. No usable bash (Windows without Git
       Bash on PATH, or the WSL stub bash.exe with no distro) counts as "can't validate", so install still works
       there. Shipped .sh hooks, plugin .cjs scripts and generated-hooks.ts are pinned to LF in .gitattributes
-      (a CRLF checkout breaks bash and generate-hooks --check); the Windows workflow asserts it.
+      (a CRLF checkout breaks bash and generate-hooks --check); the Windows workflow asserts it. The script is
+      written into a fresh fs.mkdtempSync directory and checked with execFileSync('bash', ['-n', path]), no shell.
     type: utility
     file: index.ts
     tags:

@@ -18,9 +18,13 @@ export function isCommitSha(ref: unknown): ref is string {
   return typeof ref === 'string' && COMMIT_SHA_RE.test(ref);
 }
 
-/** Run git with an argv array and no shell. Throws on a non-zero exit. */
+/**
+ * Run git with an argv array and no shell. Throws on a non-zero exit.
+ * `--literal-pathspecs` comes first so a path such as `:(glob)**` or `*.ts`
+ * from a .purpose file names only that literal file.
+ */
 export function runGit(rootDir: string, args: readonly string[], timeout = 5000): string {
-  return execFileSync('git', [...args], {
+  return execFileSync('git', ['--literal-pathspecs', ...args], {
     cwd: rootDir,
     encoding: 'utf8',
     timeout,
