@@ -195,8 +195,8 @@ html, body {
 .key:active { transform: translate(2px, 2px); box-shadow: none; }
 .key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .key[disabled], .key[aria-disabled="true"] { color: var(--sec); cursor: not-allowed; } /* aria-disabled: a busy key that keeps its focus (folder-field Choosing…) */
-/* C5'b (Mika): an aria-disabled key draws the quiet look (no key edge, no offset): its edge must not say it presses */
-.key[aria-disabled="true"] { border-color: var(--rule); box-shadow: none; }
+/* C5'b (Mika): a disabled or aria-disabled key draws the quiet look (no key edge, no offset): its edge must not say it presses */
+.key[disabled], .key[aria-disabled="true"] { border-color: var(--rule); box-shadow: none; }
 /* design-system migration keys (session 2026-10-22-gnomon-local-model F10): a disabled pri key (Run now, a busy Allow,
    Checking…) draws as a default key with --sec text, as .seg-key[disabled]; --sec on the ink fill was about 2.6:1 */
 .key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }

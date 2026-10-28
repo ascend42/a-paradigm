@@ -312,6 +312,20 @@ describe("C5'b chip only where trust is a question (Mika)", () => {
     expect(all(block).find((e) => e.tag === 'button')!.kids).toEqual(['Close']);
   });
 
+  it('a disabled or aria-disabled plain key draws the quiet look (no key edge, no offset), and the system records it', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(new URL('../static/styles.css', import.meta.url), 'utf8');
+    const plain = '.key[disabled], .key[aria-disabled="true"] { border-color: var(--rule); box-shadow: none; }';
+    expect(css).toContain(plain);
+    // the primary key's own disabled rule still wins: more specific (.key.pri[disabled]), later in the file, and it
+    // keeps its own fill and text (--sheet, --sec)
+    const pri = '.key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }';
+    expect(css).toContain(pri);
+    expect(css.indexOf(pri)).toBeGreaterThan(css.indexOf(plain));
+    const ds = readFileSync(new URL('../../../.atelier/systems/gnomon/design-system.yaml', import.meta.url), 'utf8');
+    expect(ds).toContain('any disabled or aria-disabled key draws the quiet look, border --rule and no offset shadow (.key[disabled], .key[aria-disabled=true])');
+  });
+
   it('the Settings dialog keeps Tab inside it with the shared trapTab (never a copy)', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('../src/ui/settings-sheet.ts', import.meta.url), 'utf8');
