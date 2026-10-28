@@ -89,8 +89,13 @@ export function tokenize(text: string): string[] {
 function docTerms(e: SelectableEntry): string[] {
   const props = e.parameters && typeof e.parameters.properties === 'object' && e.parameters.properties !== null ? Object.keys(e.parameters.properties) : [];
   const name = tokenize(e.name);
-  return [...name, ...name, ...tokenize(e.description), ...tokenize(props.join(' '))];
+  // Aegis M1: a server cannot inflate a tool's score with repeated description words or a long param list
+  return [...name, ...name, ...new Set(tokenize(e.description)), ...tokenize(props.slice(0, DOC_PARAM_NAMES).join(' '))];
 }
+
+/** Aegis M1: param names a document counts (the first ones), and one server's share of the ranked and found tiers. */
+export const DOC_PARAM_NAMES = 8;
+export const serverCap = (k: number): number => Math.max(6, Math.ceil(k / 3));
 
 /** BM25 scores of `docs` for `query` (distinct query terms, at most QUERY_MAX_TERMS, in first-seen order). */
 export function bm25(docs: readonly string[][], query: readonly string[]): number[] {
@@ -127,8 +132,13 @@ export interface SelectInput<T extends SelectableEntry> {
   entries: readonly T[];
   /** the tools offered before any narrow tool (kernel verbs, find_tool): they take the slot first */
   fixed: readonly Surface[];
-  /** the query text (goal + latest user/steer text + last tool error), already bounded by the caller */
+  /**
+   * the TRUSTED query text (human text: a hand-typed or verified goal, a steer), already bounded by the caller. Aegis
+   * L1: only this (or a pin, a sticky call, a find_tool need) can bring a destructive-class tool into the set
+   */
   query: string;
+  /** untrusted query text (the failing tool's NAME, an offer or unverified-voice goal): scores read/mutate tools only */
+  untrustedQuery?: string;
   /** a find_tool need (bounded, cleaned) */
   need?: string;
   /** names to keep (called in the last STICKY_STEPS steps) */
@@ -144,6 +154,8 @@ export interface SelectInput<T extends SelectableEntry> {
   bound?: ReadonlyMap<string, string>;
   /** a candidate filter (a manual session: read-class only) */
   allow?: (e: T) => boolean;
+  /** Aegis L1: the class of an entry (destructive entries enter only via trusted text, pins, sticky or a need) */
+  classOf?: (e: T) => string;
   /** at most this many narrow tools (default SELECT_K) */
   k?: number;
 }
@@ -163,12 +175,13 @@ export interface Selection<T extends SelectableEntry> {
 
 /** The candidates in index order: offerable, unreserved, unbound elsewhere, allowed, first name wins. */
 export function candidatesOf<T extends SelectableEntry>(i: Pick<SelectInput<T>, 'entries' | 'fixed' | 'reserved' | 'bound' | 'allow'>): T[] {
-  const taken = new Set([...(i.reserved ?? []), ...i.fixed.map((f) => f.name)]);
+  // Aegis L6: reserved and fixed names compare case-insensitively
+  const taken = new Set([...(i.reserved ?? []), ...i.fixed.map((f) => f.name)].map((n) => n.toLowerCase()));
   const seen = new Set<string>();
   const out: T[] = [];
   for (const e of i.entries) {
     // Aegis L3 (C2'): a server tool never takes a kernel verb's name or the gnomon_ prefix
-    if (e.humanOnly || taken.has(e.name) || /^gnomon_/i.test(e.name) || seen.has(e.name)) continue;
+    if (e.humanOnly || taken.has(e.name.toLowerCase()) || /^gnomon_/i.test(e.name) || seen.has(e.name)) continue;
     const b = i.bound?.get(e.name);
     if (b !== undefined && b !== e.server) continue;
     if (i.allow && !i.allow(e)) continue;
@@ -178,7 +191,6 @@ export function candidatesOf<T extends SelectableEntry>(i: Pick<SelectInput<T>, 
   return out;
 }
 
-const byScore = (a: { score: number; id: string }, b: { score: number; id: string }): number => b.score - a.score || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /** The selection for one state (the module comment). Pure: the same input gives the same output. */
 export function selectTools<T extends SelectableEntry>(i: SelectInput<T>): Selection<T> {
@@ -186,13 +198,31 @@ export function selectTools<T extends SelectableEntry>(i: SelectInput<T>): Selec
   const index = new Map(cands.map((e, n) => [e, n]));
   const byName = new Map(cands.map((e) => [e.name, e]));
   const docs = cands.map(docTerms);
-  const scores = bm25(docs, tokenize(i.query));
-  const ranked = cands.map((e, n) => ({ e, id: e.id, score: scores[n]! })).filter((x) => x.score > 0).sort(byScore);
-  const needRanked = i.need ? bm25(docs, tokenize(i.need)).map((score, n) => ({ e: cands[n]!, id: cands[n]!.id, score })).filter((x) => x.score > 0).sort(byScore).slice(0, FIND_TOOL_MAX_RESULTS) : [];
+  // Aegis M1: equal scores keep index order
+  const byScore = (a: { score: number; n: number }, b: { score: number; n: number }): number => b.score - a.score || a.n - b.n;
+  const trusted = bm25(docs, tokenize(i.query));
+  const mixed = i.untrustedQuery ? bm25(docs, tokenize(`${i.query}\n${i.untrustedQuery}`)) : trusted;
+  const destructive = (e: T): boolean => i.classOf?.(e) === 'destructive';
+  // Aegis L1: a destructive tool is scored by trusted text only, and never fills the index-order tail
+  const ranked = cands.map((e, n) => ({ e, n, id: e.id, score: destructive(e) ? trusted[n]! : mixed[n]! })).filter((x) => x.score > 0).sort(byScore);
+  const needRanked = i.need ? bm25(docs, tokenize(i.need)).map((score, n) => ({ e: cands[n]!, n, id: cands[n]!.id, score })).filter((x) => x.score > 0).sort(byScore).slice(0, FIND_TOOL_MAX_RESULTS) : [];
   const inIndex = (names: readonly string[] | undefined): T[] => [...new Set(names ?? [])].map((n) => byName.get(n)).filter((e): e is T => e !== undefined).sort((a, b) => index.get(a)! - index.get(b)!);
   const pins = inIndex(i.pins);
-  const order: T[] = [...pins, ...inIndex(i.sticky), ...needRanked.map((x) => x.e), ...inIndex(i.found), ...ranked.map((x) => x.e), ...cands];
   const k = Math.max(0, Math.min(i.k ?? SELECT_K, MAX_OFFERED - i.fixed.length));
+  // Aegis M1: one server holds at most serverCap(k) of the found and ranked tiers (pins and sticky exempt); the rest
+  // fall to the index-order tail
+  const cap = serverCap(k);
+  const perServer = new Map<string, number>();
+  const exempt = new Set([...pins, ...inIndex(i.sticky)]);
+  const capped = (es: readonly T[]): T[] => es.filter((e) => {
+    if (exempt.has(e)) return false; // already ahead of the tiers; never counted against the cap
+    const c = perServer.get(e.server) ?? 0;
+    if (c >= cap) return false;
+    perServer.set(e.server, c + 1);
+    return true;
+  });
+  const tiers = capped([...needRanked.map((x) => x.e), ...inIndex(i.found), ...ranked.map((x) => x.e)].filter((e, n, a) => a.indexOf(e) === n));
+  const order: T[] = [...pins, ...inIndex(i.sticky), ...tiers, ...cands.filter((e) => !destructive(e))];
   const slot = toolsSlotTokens(i.contextTarget);
   let used = compactSurfaceTokens(i.fixed);
   const chosen = new Set<T>();
@@ -215,8 +245,9 @@ export function selectTools<T extends SelectableEntry>(i: SelectInput<T>): Selec
 }
 
 /** The find_tool answer: one line per found tool (name, class, description), or a hint when nothing matched. */
-export function findToolAnswer(found: ReadonlyArray<Pick<CapabilityEntry, 'name' | 'description' | 'class'>>): string {
+export function findToolAnswer(found: ReadonlyArray<Pick<CapabilityEntry, 'name' | 'description' | 'class' | 'server'>>): string {
   if (!found.length) return 'No tool matched that need. Try other words, or do it with the tools you have.';
-  const lines = found.slice(0, FIND_TOOL_MAX_RESULTS).map((e) => `- ${e.name}: ${e.description.split('\n')[0]!.slice(0, 120)}${e.class === 'read' ? '' : ` (${e.class}: asks the human first)`}`);
+  // Aegis L5: each line names the server the tool comes from
+  const lines = found.slice(0, FIND_TOOL_MAX_RESULTS).map((e) => `- ${e.name} [${e.server}]: ${e.description.split('\n')[0]!.slice(0, 120)}${e.class === 'read' ? '' : ` (${e.class}: asks the human first)`}`);
   return ['Callable from your next step:', ...lines].join('\n');
 }

@@ -78,7 +78,7 @@ describe('$local-brokered-call: resolve, validate, class, target, row, reply', (
   it('a read-class tool runs and replies with provenance kernel; one tool.brokered row, hash-only and valid', async () => {
     const r = rig();
     const out = await r.b.handle(req('kernel_status', { verbose: true, note: 'secret-ish text' }));
-    expect(out).toEqual({ id: 'tr-1', content: 'ran kernel_status', isError: false, provenance: 'kernel' });
+    expect(out).toEqual({ id: 'tr-1', content: 'ran kernel_status', isError: false, provenance: 'kernel', decision: 'ran' });
     expect(r.calls).toEqual([{ name: 'kernel_status', args: { verbose: true, note: 'secret-ish text' } }]);
     expect(r.rows).toHaveLength(1);
     const row = r.rows[0]!;

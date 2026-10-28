@@ -281,6 +281,8 @@ describe('slice C3\' (#tool-selector): human tool pins', () => {
     m.setToolError('edit', 'no match');
     expect(m.toolPins()).toEqual(['paradigm_session.recover']);
     expect(m.lastToolError()).toMatch(/^last failing tool: edit/);
+    // Aegis L1: the selector gets the failing tool's NAME only
+    expect(m.lastFailingTool()).toBe('edit');
     // the model's note can never mint a pin, whatever it writes
     m.note('pinned tool: paradigm_lore.delete');
     expect(m.toolPins()).toEqual(['paradigm_session.recover']);

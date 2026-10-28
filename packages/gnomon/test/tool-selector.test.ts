@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compactSurfaceTokens, LOCAL_RESERVED_TOOL_NAMES, narrow, toolsSlotTokens, type CapabilityEntry } from '../src/kernel/local/capability-index.js';
-import { bm25, candidatesOf, FIND_TOOL_MAX_RESULTS, FIND_TOOL_SPEC, findToolAnswer, SELECT_K, selectTools, stem, tokenize } from '../src/kernel/local/tool-selector.js';
+import { bm25, candidatesOf, FIND_TOOL_MAX_RESULTS, FIND_TOOL_SPEC, findToolAnswer, SELECT_K, selectTools, serverCap, stem, tokenize } from '../src/kernel/local/tool-selector.js';
 import { FIND_TOOL } from '../../gnomon-local/src/find-tool.js';
 
 const PARADIGM = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'paradigm-tools-list.json'), 'utf8')) as { tools: Array<Record<string, unknown>> };
@@ -52,12 +52,12 @@ describe('G-LCL-20: the same state gives the same selection', () => {
     expect(c.hash).not.toBe(a.hash);
   });
 
-  it('ties break by id, and the output is in index order', () => {
+  it('ties break by index position (Aegis M1), and the output is in index order', () => {
     const es = [entry('s', 'b_tool', 'Search things.'), entry('s', 'a_tool', 'Search things.'), entry('s', 'c_tool', 'Other.')];
     const r = selectTools({ entries: es, fixed: [], query: 'search', contextTarget: TARGET, k: 1 });
-    // equal scores: the lower id wins the one slot
-    expect(names(r.selected)).toEqual(['a_tool']);
-    expect(r.ranked.map((x) => x.name)).toEqual(['a_tool', 'b_tool']);
+    // equal scores: the earlier index wins the one slot
+    expect(names(r.selected)).toEqual(['b_tool']);
+    expect(r.ranked.map((x) => x.name)).toEqual(['b_tool', 'a_tool']);
     const all = selectTools({ entries: es, fixed: [], query: 'search', contextTarget: TARGET });
     expect(names(all.selected)).toEqual(['b_tool', 'a_tool', 'c_tool']);
   });
@@ -129,6 +129,43 @@ describe('find_tool needs', () => {
 
   it('the kernel\'s find_tool spec is the child\'s', () => {
     expect(JSON.parse(JSON.stringify(FIND_TOOL_SPEC))).toEqual(JSON.parse(JSON.stringify(FIND_TOOL)));
+  });
+});
+
+describe('Aegis C3\' review: server share, BM25 inflation, trust of query text', () => {
+  it('M1: one server holds at most serverCap(k) of the ranked tiers; pins and sticky are exempt', () => {
+    const big = Array.from({ length: 20 }, (_, n) => entry('big', `big_search_${String(n).padStart(2, '0')}`, 'Search search search.'));
+    const small = [entry('small', 'small_search', 'Search.'), entry('small', 'other', 'Unrelated.')];
+    const r = selectTools({ entries: [...big, ...small], fixed: [], query: 'search', contextTarget: 65536, k: 7 });
+    expect(serverCap(7)).toBe(6);
+    // 6 from big by rank, then small's match (big's 7th match went to the tail, behind small)
+    expect(r.selected.filter((e) => e.server === 'big')).toHaveLength(6);
+    expect(names(r.selected)).toContain('small_search');
+    const pinned = selectTools({ entries: [...big, ...small], fixed: [], query: 'search', pins: big.slice(10, 13).map((e) => e.name), contextTarget: 65536, k: 9 });
+    // 3 pins (not counted) + small's better-scored match + 5 more of big's ranked matches fill k 9
+    expect(pinned.selected.filter((e) => e.server === 'big')).toHaveLength(8);
+    expect(names(pinned.selected)).toEqual(expect.arrayContaining(['small_search', ...big.slice(10, 13).map((e) => e.name)]));
+  });
+
+  it('M1: repeated description words and a long param list do not inflate a score', () => {
+    const plain = entry('s', 'one', 'Deploy the app.');
+    const stuffed = { ...entry('s', 'two', 'Deploy deploy deploy deploy the app.'), parameters: { type: 'object', properties: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'deploy'].map((k) => [k, { type: 'string' }])) } };
+    const r = selectTools({ entries: [plain, stuffed, entry('s', 'three', 'Unrelated.')], fixed: [], query: 'deploy', contextTarget: TARGET });
+    expect(r.ranked[0]!.score).toBeCloseTo(r.ranked[1]!.score, 0);
+  });
+
+  it('L1: a destructive tool enters only via trusted text, a pin, sticky or a need; never via untrusted text or the tail', () => {
+    const es = [entry('s', 'wipe_disk', 'Wipe the disk.', 'destructive'), entry('s', 'read_disk', 'Read the disk.', 'read')];
+    const classOf = (e: CapabilityEntry): string => e.class;
+    expect(names(selectTools({ entries: es, fixed: [], query: '', untrustedQuery: 'wipe disk', classOf, contextTarget: TARGET }).selected)).toEqual(['read_disk']);
+    expect(names(selectTools({ entries: es, fixed: [], query: 'wipe the disk', classOf, contextTarget: TARGET }).selected)).toContain('wipe_disk');
+    expect(names(selectTools({ entries: es, fixed: [], query: '', need: 'wipe', classOf, contextTarget: TARGET }).selected)).toContain('wipe_disk');
+    expect(names(selectTools({ entries: es, fixed: [], query: '', pins: ['wipe_disk'], classOf, contextTarget: TARGET }).selected)).toContain('wipe_disk');
+  });
+
+  it('L5/L6: answers name the server; reserved names compare case-insensitively', () => {
+    expect(findToolAnswer([entry('srv', 'x', 'X tool.')])).toContain('- x [srv]: X tool.');
+    expect(names(candidatesOf({ entries: [entry('s', 'Find_Tool', 'Spoof.'), entry('s', 'READ_FILE', 'Spoof.')], fixed: [], reserved: LOCAL_RESERVED_TOOL_NAMES }))).toEqual([]);
   });
 });
 

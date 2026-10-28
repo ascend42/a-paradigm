@@ -289,7 +289,7 @@ interface LocalSession {
    * names called this step and in the last STICKY_STEPS steps, find_tool's matches in force, the latest user or steer
    * text (bounded), and find_tool calls this turn
    */
-  sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; finds: number };
+  sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; textTrusted: boolean; finds: number; mode: RunMode };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
   mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }>; firstParty?: { launch: SessionLaunchInput; stateDir: string; nodePin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'> } };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
@@ -1131,7 +1131,7 @@ export class LocalLane {
         // functional note (Aegis): a server that cannot start under the local profile says why, readably
         s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
         for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
-        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', finds: 0 };
+        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', textTrusted: true, finds: 0, mode: this.#mode(s) };
         tools = this.#mcpOffer(s).tools;
         s.mcp.offeredHash = offeredHash(tools);
       }
@@ -1164,6 +1164,8 @@ export class LocalLane {
       reserved: LOCAL_RESERVED_TOOL_NAMES,
       bound: m.bound,
       ...(manual ? { allow: (e: CapabilityEntry) => e.class === 'read' } : {}),
+      untrustedQuery: this.#untrustedQuery(s),
+      classOf: (e: CapabilityEntry) => e.class,
     });
     for (const e of r.selected) if (!m.bound.has(e.name)) m.bound.set(e.name, e.server);
     const tools = [...m.kernel, ...r.selected.flatMap((e) => {
@@ -1195,9 +1197,17 @@ export class LocalLane {
     return { hsid: s.hsid, name, pinned: p.pinned, pins: s.memory.toolPins(), offered: s.tools?.offered.some((t) => t.name === name) ?? false };
   }
 
-  /** Slice C3': the selector's query — the Goal, the latest user/steer text, the last tool error, each bounded. */
+  /**
+   * Slice C3': the selector's TRUSTED query — the human's goal and the latest human user/steer text, each bounded.
+   * Aegis L1: an offer or unverified-voice goal, and the failing tool's name, are the untrusted query.
+   */
   #selectionQuery(s: LocalSession): string {
-    return [s.memory?.goal() ?? '', s.sel?.text ?? '', s.memory?.lastToolError() ?? ''].map((t) => t.slice(0, QUERY_PART_MAX)).join('\n');
+    return [s.memory?.goalTrusted() ? (s.memory.goal() ?? '') : '', s.sel?.textTrusted ? s.sel.text : ''].map((t) => t.slice(0, QUERY_PART_MAX)).join('\n');
+  }
+
+  /** Aegis L1: the untrusted query — an untrusted goal or user text, and the last failing tool's NAME (never its error). */
+  #untrustedQuery(s: LocalSession): string {
+    return [s.memory && !s.memory.goalTrusted() ? (s.memory.goal() ?? '') : '', s.sel && !s.sel.textTrusted ? s.sel.text : '', s.memory?.lastFailingTool() ?? ''].map((t) => t.slice(0, QUERY_PART_MAX)).join('\n');
   }
 
   /**
@@ -1228,13 +1238,19 @@ export class LocalLane {
     sel.recent.push([...sel.current]);
     while (sel.recent.length > STICKY_STEPS) sel.recent.shift();
     sel.current = new Set();
-    if (sel.step - sel.selectedAt >= RESELECT_EVERY_STEPS) this.#reselect(s);
+    // Aegis L4: a run-mode change (e.g. to manual) re-selects at once
+    const mode = this.#mode(s);
+    if (mode !== sel.mode) {
+      sel.mode = mode;
+      this.#reselect(s);
+    } else if (sel.step - sel.selectedAt >= RESELECT_EVERY_STEPS) this.#reselect(s);
   }
 
   /** Slice C3': a new goal (a prompt, or a queued follow_up's when its run starts): find_tool's matches lapse. */
-  #goalChanged(s: LocalSession, text: string): void {
+  #goalChanged(s: LocalSession, text: string, trusted: boolean): void {
     if (!s.sel) return;
     s.sel.text = text.slice(0, QUERY_PART_MAX);
+    s.sel.textTrusted = trusted;
     s.sel.found = null;
     this.#reselect(s);
   }
@@ -1401,9 +1417,10 @@ export class LocalLane {
       }
     } else if (ev.isError === true) {
       // the error text is TOOL output: its entry is labelled tool:<server> and renders in the data section
-      const brokered = s.tools?.offered.some((t) => t.name === ev.tool) ?? false;
+      const bt = s.tools?.offered.find((t) => t.name === ev.tool);
       const head = (ev.errorHead ?? '').replace(/^<tool-data [^>]*>\n?/, '').slice(0, 200);
-      await this.#memoryChanged(s, s.memory.setToolError(ev.tool, head, brokered ? `tool:${KERNEL_MCP_SERVER}` : 'tool:local'));
+      // Aegis info (C3'): a brokered error is labelled with ITS server (setToolError falls back to tool:local if unfit)
+      await this.#memoryChanged(s, s.memory.setToolError(ev.tool, head, bt ? `tool:${(bt.target?.server ?? KERNEL_MCP_SERVER).toLowerCase()}` : 'tool:local'));
     }
   }
 
@@ -1575,8 +1592,6 @@ export class LocalLane {
     if (s.memory && ev.name !== null && MEMORY_TOOL_NAMES.includes(ev.name)) return this.#memoryRequest(s, ev);
     // slice C3': find_tool is the kernel's own (#tool-selector); a loop session has no selector and the broker refuses it
     if (ev.name === FIND_TOOL_NAME && !s.loop) return this.#findTool(s, ev);
-    // slice C3': an offered tool called this step stays selected for the next STICKY_STEPS steps
-    if (s.sel && ev.name !== null && s.tools?.offered.some((t) => t.name === ev.name)) s.sel.current.add(ev.name);
     if (!s.tools) {
       // Aegis L7: never unanswered, never unlogged (the broker is built before stdout is read; this is the backstop)
       await this.#o.log('tool.brokered', { hsid: s.hsid, server: KERNEL_MCP_SERVER, argsHash: inputHash(ev.args ?? null), decision: 'not-running', bytes: 0, isError: true }, { session: s.hsid }).catch(() => undefined);
@@ -1584,6 +1599,8 @@ export class LocalLane {
       return;
     }
     const r = await s.tools.handle({ id: ev.id, toolCallId: ev.toolCallId, name: ev.name, args: ev.args, error: ev.error, receivedAt });
+    // slice C3' (Aegis L2): a tool that RAN stays selected for the next STICKY_STEPS steps
+    if (s.sel && ev.name !== null && r.decision === 'ran') s.sel.current.add(ev.name);
     this.#write(s, drv.toolResponseLine(r));
   }
 
@@ -1697,7 +1714,7 @@ export class LocalLane {
         if (nextGoal !== undefined) {
           await this.#setGoal(s, nextGoal);
           // slice C3': the follow_up's goal re-selects the tools before its run's first step
-          this.#goalChanged(s, nextGoal.text);
+          this.#goalChanged(s, nextGoal.text, nextGoal.untrusted === undefined);
         }
         if (s.loop?.pending) s.loop.pending({ text: s.loop.reply, tokens: s.loop.tokens, stopReason: ev.stopReason, error: ev.error ?? (ev.stopReason === 'error' ? 'the model call failed' : null), ...(s.loop.act ? { protectedHits: [...s.loop.act.hits] } : {}) });
         return;
@@ -1786,6 +1803,8 @@ export class LocalLane {
       // slice C3': a steer re-selects the tools; any tools_set goes out ahead of the steer line
       if (s.sel) {
         s.sel.text = p.text.slice(0, QUERY_PART_MAX);
+        // Aegis L1: an unverified-voice steer is untrusted text
+        s.sel.textTrusted = !(p.voiceOrigin?.sentBy === 'unverified' || (p.source === 'voice' && p.voiceOrigin === undefined));
         this.#reselect(s);
       }
       s.child.stdin?.write(drv.steerLine(p.text));
@@ -1816,7 +1835,7 @@ export class LocalLane {
     if (!inFlight) {
       await this.#setGoal(s, goal);
       // slice C3': a new goal re-selects the tools; any tools_set goes out ahead of the prompt line
-      this.#goalChanged(s, p.text);
+      this.#goalChanged(s, p.text, untrusted === undefined);
     } else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(goal);
     s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight }));
     return { turn: turnId(s.hsid, n) };

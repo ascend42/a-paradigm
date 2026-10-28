@@ -337,6 +337,8 @@ export interface ToolResponseOut {
   content: string;
   isError: boolean;
   provenance: string;
+  /** slice C3' (Aegis L2): the row's decision (sticky credit only for `ran`); never sent to the child */
+  decision?: ToolBrokeredDecision;
 }
 
 type Broker = Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire'>>;
@@ -465,7 +467,7 @@ export class LocalToolBroker {
     const target = tool?.target ?? o.target;
     const done = async (decision: ToolBrokeredDecision, content: string, isError: boolean, cardId?: string): Promise<ToolResponseOut> => {
       await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool ? { tool: tool.name, class: tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}) }, { session: o.hsid }).catch(() => undefined);
-      return { id: req.id, content, isError, provenance: target.provenance };
+      return { id: req.id, content, isError, provenance: target.provenance, decision };
     };
     if (o.loop) return done('loop-session', 'Loop sessions never run brokered tools.', true);
     if (this.#inflight.has(req.id)) return done('bad-args', `request ${req.id} is already in flight`, true);

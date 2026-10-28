@@ -479,13 +479,26 @@ export class WorkingMemory {
     return this.#entries.find((e) => e.kind === 'goal')?.text ?? null;
   }
 
+  /** Aegis L1: is the current goal the human's own (hand-typed or verified voice), not an offer or unverified voice? */
+  goalTrusted(): boolean {
+    return this.#entries.find((e) => e.kind === 'goal')?.source === 'human';
+  }
+
+  /** Aegis L1: the last failing tool's NAME only (never the server's error detail), or null. */
+  lastFailingTool(): string | null {
+    const t = this.lastToolError();
+    const m = t === null ? null : /^last failing tool: ([A-Za-z0-9_.:-]{1,64})/.exec(t);
+    return m ? m[1]! : null;
+  }
+
   /**
    * Slice C3' (#tool-selector, founder decision: pins are HUMAN-only): the names of the human's tool pins. Only
    * pinTool (reached from the human-only request.session.tools.pin) writes one: kind tool-pin, source human, text
    * `pinned tool: <name>`; the model's note{} is always source model, kind note, so it can never mint a pin.
    */
   toolPins(): string[] {
-    return this.#entries.filter((e) => e.kind === 'tool-pin' && e.source === 'human' && e.text.startsWith(PIN_PREFIX)).map((e) => e.text.slice(PIN_PREFIX.length));
+    // Aegis L3: only well-formed names, at most MAX_TOOL_PINS (a hand-edited file cannot widen the pins)
+    return this.#entries.filter((e) => e.kind === 'tool-pin' && e.source === 'human' && e.text.startsWith(PIN_PREFIX)).map((e) => e.text.slice(PIN_PREFIX.length)).filter((n) => TOOL_PIN_NAME_RE.test(n)).slice(0, MAX_TOOL_PINS);
   }
 
   /** Slice C3': the human pins `name` (a tool name the caller checked); at most MAX_TOOL_PINS. */
