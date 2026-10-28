@@ -72,8 +72,11 @@ add('C3: an uninstall never signs a grant.install', [presence], batch('uninstall
 add('C3: a mod.mcp.config decision signs no grant row', [approve(C, 'allow'), presence], batch('mod.mcp.config', 'allow', [trust()]));
 add('C3: an unknown card kind', [approve(C, 'allow'), presence], batch('budget', 'allow', []));
 // 8.0:local-lane C6'a2-h (helper 1.10.0, G-HLP-02): a destructive brokered Always signs its decision row only
-add('C3: a permission decision signs only its decision row', [approve(C, 'always'), presence], batch('permission', 'always', []));
-add('C3: a permission decision never signs a grant row', [approve(C, 'always'), presence], batch('permission', 'always', [trust()]));
+// Aegis a2-h nit: the tool broker raises the permission card with no presence override, so its purpose is the
+// broker's default `approval.decide` (broker.ts r.presence?.purpose ?? 'approval.decide'), never mod.install
+const presenceDecide = 'gnomon:presence:v1\napproval.decide\nsha256:00\nconn:01HZZZZZZZZZZZZZZZZZZZZZZA\nchallenge';
+add('C3: a permission decision signs only its decision row', [approve(C, 'always'), presenceDecide], batch('permission', 'always', []));
+add('C3: a permission decision never signs a grant row', [approve(C, 'always'), presenceDecide], batch('permission', 'always', [trust()]));
 add('F3: a voice enrolment row without a cardId is refused', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: undefined })]));
 add('C3: a voice enrolment for another card', [approve(C, 'allow'), presence], batch('voice.enrol', 'allow', [enrol({ cardId: C2 })]));
 add('C2: egress hosts that do not fit the line are refused, never truncated', A, batch('install', 'install', [trust(), egress({ hosts: Array.from({ length: 30 }, (_, i) => `h${i}-${'y'.repeat(40)}.example.com`) }), inst()]));
