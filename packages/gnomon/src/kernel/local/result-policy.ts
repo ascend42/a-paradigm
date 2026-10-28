@@ -165,3 +165,35 @@ export function frameResult(r: { tool: string; trust: string; text: string; isEr
   const header = `[data from ${r.tool} · run by the human from / · ${TRUST_WORDS[r.trust] ?? 'untrusted server'} · ${size}${r.isError ? ' · the tool reported an error' : ''}]`;
   return { frame: `${header}\n<${tag}>\n${body}\n</${tag}>\n${RESULT_FOOTER}`, bytes, cut };
 }
+
+/** Slice C6'a2-1: one framed "/" result waiting for the human's next turn. */
+export interface SendItem {
+  frame: string;
+  /** the tool.result.sent row it writes when attached */
+  row: Record<string, unknown>;
+  /** the capability entry id and the `mcp:<server>/<tool>` name it was queued under */
+  entryId: string;
+  tool: string;
+  /** the bindHash its `send` policy was read under */
+  bindHash: string;
+}
+
+/**
+ * Aegis M2: what still goes when the human's turn is sent — every queued frame whose policy is STILL `send` under the
+ * SAME bindHash (`stillSend` re-reads the book and the live trust binding); the rest are dropped and counted.
+ */
+export function stillSendable<T extends SendItem>(queue: readonly T[], stillSend: (x: T) => boolean): { keep: T[]; dropped: number } {
+  const keep = queue.filter((x) => {
+    try {
+      return stillSend(x);
+    } catch {
+      return false; // an unreadable book never sends
+    }
+  });
+  return { keep, dropped: queue.length - keep.length };
+}
+
+/** Aegis M2: a tool moved to `ask`: its queued frames are cleared at once. */
+export function dropTool<T extends SendItem>(queue: readonly T[], tool: string): T[] {
+  return queue.filter((x) => x.tool !== tool);
+}

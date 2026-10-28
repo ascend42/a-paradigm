@@ -15,7 +15,7 @@ import { ROW_TABLE_MIN_HELPER, rowTableRefusal } from '../src/kernel/identity/de
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { narrow, type CapabilityEntry } from '../src/kernel/local/capability-index.js';
 import { UNTRUSTED_IRREVERSIBLE_LINE, DESTRUCTIVE_RULED_PER_RULE_DAY, DESTRUCTIVE_RULED_PER_SESSION_MINUTE, DestructiveRuleBudget, destructiveAlwaysLine, HUMAN_RUNS_PER_MINUTE, LocalToolBroker, schemaRefusal, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
-import { frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
+import { dropTool, stillSendable, type SendItem, frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { followUpLine, promptLine } from '../src/adapters/local/runner.js';
 import { FakeHelper } from './helper-fake.js';
@@ -332,6 +332,25 @@ describe('G-LCL-26 the result policy and framing', () => {
     expect(big.frame).toContain('cut to the first 50');
     expect(resultCapBytes(1_000_000)).toBe(RESULT_SEND_MAX_BYTES);
     expect(resultCapBytes(8192)).toBe(5120);
+  });
+
+  it('Aegis M2: at attach each frame is re-checked (policy still send, same binding); moving a tool to ask clears its frames', () => {
+    const book = new ResultPolicyBook({ principal: KERNEL, isKernelKey: () => true });
+    const B2 = 'sha256:' + '2'.repeat(64);
+    let seq = 0;
+    const set = (tool: string, bindHash: string, policy: string) => book.fold({ seq: ++seq, kind: 'tool.result.policy', principal: KERNEL, keyId: 'k', payload: { hsid: HSID, repoKey: REPO, tool, bindHash, policy } });
+    set('mcp:srv/a', SHA, 'send');
+    set('mcp:srv/b', SHA, 'send');
+    set('mcp:srv/c', SHA, 'send');
+    const item = (tool: string): SendItem => ({ frame: tool, row: {}, entryId: tool, tool, bindHash: SHA });
+    const q = [item('mcp:srv/a'), item('mcp:srv/b'), item('mcp:srv/c')];
+    set('mcp:srv/b', SHA, 'ask'); // b moved to ask after it was queued
+    const live: Record<string, string> = { 'mcp:srv/a': SHA, 'mcp:srv/b': SHA, 'mcp:srv/c': B2 }; // c's trust binding changed
+    const r = stillSendable(q, (x) => book.of(REPO, x.tool, live[x.tool]!) === 'send' && live[x.tool] === x.bindHash);
+    expect(r.keep.map((x) => x.tool)).toEqual(['mcp:srv/a']);
+    expect(r.dropped).toBe(2);
+    expect(stillSendable(q, () => { throw new Error('unreadable'); }).keep).toEqual([]);
+    expect(dropTool(q, 'mcp:srv/a').map((x) => x.tool)).toEqual(['mcp:srv/b', 'mcp:srv/c']);
   });
 
   it('Aegis M1: frames ride as the line\'s own data field, never glued onto the prompt text', () => {

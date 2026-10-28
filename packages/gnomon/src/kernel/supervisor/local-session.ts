@@ -114,7 +114,7 @@ import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, schemaRefusal, toolBindHash, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
-import { frameResult, resultCapBytes, type ResultPolicyPort } from '../local/result-policy.js';
+import { dropTool, frameResult, resultCapBytes, stillSendable, type ResultPolicyPort, type SendItem } from '../local/result-policy.js';
 import { cleanServerText, fullOfferable, fullParameters, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry, type ServerTrust } from '../local/capability-index.js';
 import { candidatesOf, FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpError, McpListCache, serverEnv, type LaunchCheckInput, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
@@ -352,7 +352,7 @@ interface LocalSession {
   /** slice C6'a2-1: the latest "/" result of each capability entry (a first-use `send` sends it), bounded */
   lastRuns?: Map<string, SlashResult>;
   /** slice C6'a2-1: framed "/" results waiting for the human's next turn (the result policy said send) */
-  pendingSend?: Array<{ frame: string; row: Record<string, unknown> }>;
+  pendingSend?: SendItem[];
   /**
    * slice C6'a2-1 (INJECTION PAUSE, founder: whole session): set once the session took in ANY sent tool result or skill
    * text. The text stays in the child's history (and can be copied into a note), so it lasts for the rest of the
@@ -2126,10 +2126,12 @@ export class LocalLane {
 
   /** Slice C6'a2-1: frame one "/" result for the human's next turn (capped, at most PENDING_SEND_MAX waiting). */
   #queueSend(s: LocalSession, r: SlashResult): void {
-    const tool = `mcp:${r.entry.server}/${r.entry.tool}`;
+    const key = this.#policyOf(s, r.entry);
+    if (!key) return;
+    const tool = key.tool;
     const f = frameResult({ tool, trust: r.trust, text: r.text, isError: r.isError }, resultCapBytes(s.context.target));
     const q = (s.pendingSend ??= []);
-    q.push({ frame: f.frame, row: { hsid: s.hsid, tool, argsHash: r.argsHash, bytes: f.bytes, cut: f.cut, policy: 'send' } });
+    q.push({ frame: f.frame, row: { hsid: s.hsid, tool, argsHash: r.argsHash, bytes: f.bytes, cut: f.cut, policy: 'send' }, entryId: r.entry.id, tool, bindHash: key.bindHash });
     while (q.length > PENDING_SEND_MAX) q.shift();
     s.lastRuns?.delete(r.entry.id);
   }
@@ -2161,6 +2163,8 @@ export class LocalLane {
       throw refused('ENGINE', `${kind}: the choice could not be recorded`, { reason: 'unavailable' });
     }
     let queued = false;
+    // Aegis M2: moving to ask clears this tool's frames that were waiting for the next turn
+    if (policy === 'ask' && s.pendingSend?.length) s.pendingSend = dropTool(s.pendingSend, key.tool);
     if (policy === 'send') {
       const last = s.lastRuns?.get(entry.id);
       if (last && this.#now() - last.at <= RUN_RESULT_TTL_MS) {
@@ -2827,9 +2831,15 @@ export class LocalLane {
     // the system role), before the human's text; the SESSION is marked tainted for the rest of its life (INJECTION PAUSE:
     // destructive rules pass no model call in it again). One hash-only tool.result.sent row each.
     let data: string[] | undefined;
-    const sendNow = s.pendingSend ?? [];
+    // Aegis M2: each frame goes only if its tool is STILL `send` under the same trust binding (a policy, trust or schema
+    // change since it was queued drops it)
+    const sendNow = stillSendable(s.pendingSend ?? [], (x) => {
+      const e = s.mcp ? [...s.mcp.entries.values()].flat().find((y) => y.id === x.entryId) : undefined;
+      const k = e ? this.#policyOf(s, e) : null;
+      return k !== null && k.policy === 'send' && k.bindHash === x.bindHash;
+    }).keep;
+    s.pendingSend = [];
     if (sendNow.length && !s.loop) {
-      s.pendingSend = [];
       s.tainted = true;
       for (const x of sendNow) await this.#o.log('tool.result.sent', x.row, { session: s.hsid }).catch(() => undefined);
       data = sendNow.map((x) => x.frame);
