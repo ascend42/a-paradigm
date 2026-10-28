@@ -269,6 +269,16 @@ components:
       group (the exit path releases the permits); a stray child before track
       is SIGKILLed as a group; preflight spawns are async; used turn-permit
       ids are pruned on expiry; status shows the claude pin.
+      SLICE C6'a1 (#gui-capability-browser kernel side, TD-2026-10-28-956):
+      LocalLane.humanRequest (reached by supervisor.localSessionRequest,
+      dispatcher-only via LOCAL_SESSION_REQUESTS, gui/device human only, the
+      session's owner, anyone else NOT_FOUND) serves two more requests:
+      request.session.capabilities{hsid} (read only: tiers, verbs, servers
+      with their runtime state, pins with a why code, tools with their
+      availability; every server string cleaned and capped) and
+      request.session.mcp.restart{hsid, server} (pin, trust and launchCheck
+      re-checked, then the starts counter reset; one per server). Each MCP
+      server start, failure and refusal is one session.mcp row.
     path: src/kernel/supervisor/
     type: module
     tags: [gnomon, kernel, session, paradigm-8, m1.7]
@@ -277,6 +287,7 @@ components:
       - test/repo-hooks.test.ts
       - test/permission-session.test.ts
       - test/repo-context.test.ts
+      - test/local-capabilities-lane.test.ts
     oracles: [G-RUN-03, G-SUB-05, G-SUB-07, G-SUB-08]
   voice-origin:
     description: >-

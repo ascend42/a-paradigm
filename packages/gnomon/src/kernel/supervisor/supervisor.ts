@@ -288,6 +288,8 @@ export interface SupervisorOptions {
   /** slice C5'a1: the daemon's tools/list cache and TrustBook, shared with request.mcp.trust (#mcp-servers) */
   localMcpCache?: McpListCache;
   localMcpTrust?: PoolTrust & { subscribe?: (fn: (id: string) => void) => () => void };
+  /** slice C6'a1 (Aegis L1): McpServers.enabledAt — a third-party server is still on at its open-time launch hash */
+  localMcpEnabled?: (id: string, launchHash: string) => boolean;
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
@@ -775,7 +777,7 @@ export class SessionSupervisor {
       ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
       ...(o.localMcp ? { localMcp: o.localMcp } : {}), ...(o.mcpDenyWrite ? { mcpDenyWrite: o.mcpDenyWrite } : {}),
-      ...(o.localMcpCache ? { mcpCache: o.localMcpCache } : {}), ...(o.localMcpTrust ? { mcpTrust: o.localMcpTrust } : {}),
+      ...(o.localMcpCache ? { mcpCache: o.localMcpCache } : {}), ...(o.localMcpTrust ? { mcpTrust: o.localMcpTrust } : {}), ...(o.localMcpEnabled ? { mcpEnabled: o.localMcpEnabled } : {}),
       // slice C5'a2 (^local-tool-grant): brokered tool rules from the same RuleBook
       ...(o.alwaysRule ? { alwaysRule: o.alwaysRule } : {}),
     });

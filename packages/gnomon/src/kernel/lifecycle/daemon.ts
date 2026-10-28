@@ -1017,6 +1017,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     localMcp: (ctx) => mcpServers.composeLocal(ctx),
     localMcpCache: mcpListCache,
     localMcpTrust: mcpTrust,
+    localMcpEnabled: (id, launchHash) => mcpServers.enabledAt(id, launchHash),
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
     deskMcp: (distroServers, ctx) => {

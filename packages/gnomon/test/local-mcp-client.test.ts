@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { remoteProxyOf } from '../src/kernel/desk/mcp-server-cards.js';
-import { launchCheck, LocalMcpPool, McpListCache, McpStdioClient, serverEnv, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
+import { launchCheck, launchKey, LocalMcpPool, McpListCache, McpStdioClient, serverEnv, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
 import { bindingOf, type PoolTrust } from '../src/kernel/local/trust-book.js';
 
 /** slice C5'a1: a TrustBook stand-in; `trustNewest` trusts the newest listing of an id (what a human commit does). */
@@ -67,6 +67,89 @@ afterEach(() => {
 });
 
 const server = (over: Partial<LocalMcpServer> = {}): LocalMcpServer => ({ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE], trust: 'enabled', launchHash: LAUNCH, ...over });
+/** slice C6'a1: a server process that exits before it answers initialize. */
+const spawnDead = (): ChildProcess => {
+  const c = spawn(process.execPath, ['-e', 'process.exit(4)'], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+  kids.push(c);
+  return c;
+};
+
+describe("slice C6'a1: the pool's state report and its onState (session.mcp)", () => {
+  it('a start, a runtime crash (once), a respawn; the pool\'s own kills say nothing; report() follows', async () => {
+    const states: string[] = [];
+    const pool = new LocalMcpPool({ servers: [server()], repo: '/r', spawn: () => spawnFake(), onState: (l, st, err) => states.push(`${l}:${st}${err ? `:${err}` : ''}`) });
+    expect(pool.report()).toEqual([{ label: 'fake', id: 'user::fake', state: 'not-started', error: null, starts: 0, trust: 'enabled' }]);
+    await pool.index();
+    expect(states).toEqual(['fake:started']);
+    expect(pool.report()[0]).toMatchObject({ state: 'running', starts: 1, error: null });
+    const t = pool.target('fake')!;
+    await t.call('crash', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 });
+    await waitFor(() => states.length === 2);
+    expect(states[1]).toMatch(/^fake:failed:/);
+    expect(pool.report()[0]).toMatchObject({ state: 'failed', starts: 1, error: expect.any(String) });
+    expect((await t.call('echo', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 })).isError).toBe(false);
+    expect(states.slice(2)).toEqual(['fake:started']);
+    expect(pool.report()[0]).toMatchObject({ state: 'running', starts: 2 });
+    await pool.closeAll();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(states).toHaveLength(3);
+  }, 30_000);
+
+  it('restart: resets the starts counter after MAX_STARTS failures, starts and lists again; one at a time', async () => {
+    const states: string[] = [];
+    let good = false;
+    const changed: string[][] = [];
+    const cache = new McpListCache();
+    const pool = new LocalMcpPool({ servers: [server()], repo: '/r', cache, spawn: () => (good ? spawnFake() : spawnDead()), onState: (l, st) => states.push(`${l}:${st}`), onChanged: (_l, es) => changed.push(es.map((e) => e.name)) });
+    await pool.index();
+    const t = pool.target('fake')!;
+    for (let i = 0; i < 2; i++) await t.call('echo', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 });
+    expect(pool.report()[0]).toMatchObject({ state: 'failed', starts: 3 });
+    // past MAX_STARTS nothing starts (and nothing new is said)
+    expect((await t.call('echo', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 })).text).toMatch(/not restarted after 3 starts/);
+    expect(states).toEqual(['fake:failed', 'fake:failed', 'fake:failed']);
+    expect(cache.failure(launchKey(server(), '/r'))).toBeDefined();
+    good = true;
+    const [a, b] = await Promise.allSettled([pool.restart('fake'), pool.restart('fake')]);
+    expect(a).toMatchObject({ status: 'fulfilled', value: { error: null } });
+    expect(b).toMatchObject({ status: 'rejected', reason: { code: 'busy' } });
+    expect(pool.report()[0]).toMatchObject({ state: 'running', starts: 1, error: null });
+    expect(states.at(-1)).toBe('fake:started');
+    expect(changed.at(-1)).toContain('echo');
+    expect(cache.failure(launchKey(server(), '/r'))).toBeUndefined();
+    expect(pool.busy('fake')).toBe(false);
+    await expect(pool.restart('nope')).rejects.toThrow(/no server/);
+    await pool.closeAll();
+  }, 30_000);
+
+  it('trustHolds: true until a server narrowed trusted loses that trust or the book holds another binding', async () => {
+    const cache = new McpListCache();
+    const trust = stubTrust();
+    const pool = new LocalMcpPool({ servers: [server()], repo: '/r', cache, trust, spawn: () => spawnFake() });
+    await pool.index();
+    expect(pool.trustHolds('fake')).toBe(true); // enabled, never trusted
+    trust.trustNewest(cache, 'user::fake');
+    pool.renarrow('fake');
+    expect(pool.trustLive('fake')).toBe('trusted');
+    expect(pool.trustHolds('fake')).toBe(true);
+    trust.m.get('user::fake')!.binding = `sha256:${'9'.repeat(64)}`;
+    expect(pool.trustHolds('fake')).toBe(false);
+    trust.m.delete('user::fake');
+    expect(pool.trustHolds('fake')).toBe(false); // it was trusted in this session and is not now
+    await pool.closeAll();
+  }, 30_000);
+
+  it('a start that fails says failed once; a remote server is the pool\'s refusal', async () => {
+    const states: string[] = [];
+    const pool = new LocalMcpPool({ servers: [server(), server({ id: 'user::far', name: 'far', transport: 'http', command: undefined })], repo: '/r', spawn: () => spawnDead(), onState: (l, st) => states.push(`${l}:${st}`) });
+    expect(pool.refused).toEqual([{ id: 'user::far', name: 'far', fit: 'remote-refused' }]);
+    const ix = await pool.index();
+    expect(ix.failed).toHaveLength(1);
+    expect(states).toEqual(['fake:failed']);
+    expect(pool.report()[0]).toMatchObject({ state: 'failed', starts: 1 });
+    await pool.closeAll();
+  }, 30_000);
+});
 
 describe('McpStdioClient', () => {
   it('initialize, tools/list, tools/call; a server request is answered not-supported', async () => {

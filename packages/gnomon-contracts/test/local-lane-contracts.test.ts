@@ -3,7 +3,7 @@
  * tool.brokered kind is registered, closed and HASH-ONLY.
  */
 import { describe, expect, it } from 'vitest';
-import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, validateKindPayload } from '../src/index.js';
+import { CLIENT_API_DESCRIPTOR, EVENT_KINDS, KIND_PAYLOADS, SESSION_MCP_ERROR_MAX, SESSION_MCP_FITS, SESSION_MCP_STATES, SESSION_MEMORY_OPS, TOOL_BROKERED_DECISIONS, validateKindPayload } from '../src/index.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
 const row = { hsid: HSID, server: 'gnomon', tool: 'gnomon_git_push', class: 'destructive', argsHash: `sha256:${'a'.repeat(64)}`, decision: 'approved', bytes: 12, isError: false, cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' };
@@ -64,5 +64,32 @@ describe('session.memory and session.context (8.0:local-lane, slice B2)', () => 
     expect(validateKindPayload('session.context', { ...ctx, aboveConfig: false }).length).toBeGreaterThan(0);
     expect(validateKindPayload('session.context', { ...ctx, target: 4096, aboveConfig: false })).toEqual([]);
     expect(validateKindPayload('session.context', { ...ctx, why: 'x' }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("session.mcp (8.0:local-lane C6'a1)", () => {
+  const started = { hsid: HSID, server: 'fake', state: 'started' };
+  it('is a kernel kind under 8.0:local-lane whose error is a sensitive field, with closed state and fit', () => {
+    expect(EVENT_KINDS['session.mcp']).toMatchObject({ kind: 'session.mcp', owner: 'kernel', sensitivity: 'normal', reserved: '8.0:local-lane', fieldLabels: { error: 'sensitive' } });
+    expect(KIND_PAYLOADS['session.mcp']).toEqual(['hsid', 'server', 'state', 'fit', 'error']);
+    expect((CLIENT_API_DESCRIPTOR as unknown as { sessionMcp: unknown }).sessionMcp).toEqual({ states: [...SESSION_MCP_STATES], fits: [...SESSION_MCP_FITS], errorMax: SESSION_MCP_ERROR_MAX });
+  });
+  it('started carries neither; refused carries fit; failed carries error', () => {
+    expect(validateKindPayload('session.mcp', started)).toEqual([]);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'refused', fit: 'trust-changed' })).toEqual([]);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'refused', fit: 'disabled' })).toEqual([]);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'failed', error: 'exited with code 3' })).toEqual([]);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'refused' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'failed' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, fit: 'launch-writable' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, error: 'x' }).length).toBeGreaterThan(0);
+  });
+  it('refuses open values, an unlabelled server, control characters and an error past its cap', () => {
+    expect(validateKindPayload('session.mcp', { ...started, state: 'crashed' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'refused', fit: 'because' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, server: 'Fake Server' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'failed', error: 'a\u0007b' }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'failed', error: 'e'.repeat(SESSION_MCP_ERROR_MAX + 1) }).length).toBeGreaterThan(0);
+    expect(validateKindPayload('session.mcp', { ...started, command: 'node x' }).length).toBeGreaterThan(0);
   });
 });

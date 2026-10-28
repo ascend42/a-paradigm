@@ -2,6 +2,7 @@
  * @symbol #local-runner
  * @symbol #supervisor
  * @symbol ^subscription-only
+ * @symbol #gui-capability-browser
  *
  * #supervisor's LOCAL path (spec §3.3, §6.1, §13; M1.8 slice 1): attended,
  * human-started sessions whose declared model is `local` or `any`. The
@@ -82,6 +83,10 @@
  *   aboveConfig on the session.context row and the reply; a lower target re-renders memory first) and
  *   request.session.memory.delete{hsid} (live or ended; the owner recorded in memory.jsonl; the file is unlinked;
  *   one session.memory{op:'delete'} row). The session dir is never pruned while it holds memory.
+ * SLICE C6'a1 (#gui-capability-browser kernel side, TD-2026-10-28-956): humanRequest also serves the read-only
+ *   request.session.capabilities{hsid} (#capabilities: tools, servers, pins; every server string cleaned and capped) and
+ *   request.session.mcp.restart{hsid, server} (#restartMcp: pin, trust and launchCheck re-checked, then the starts
+ *   counter reset). Every MCP server start, failure and refusal is one session.mcp row (#mcpRow).
  * DEFERRED (reported): unattended local automations other than loops (law 5;
  * the scheduler still refuses them), the claude estimate on the card (null: no per-task
  * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
@@ -109,9 +114,9 @@ import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
-import { cleanServerText, fullOfferable, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry } from '../local/capability-index.js';
-import { FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
-import { launchCheck, serverLabel, LocalMcpPool, McpListCache, serverEnv, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
+import { cleanServerText, fullOfferable, fullParameters, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry, type ServerTrust } from '../local/capability-index.js';
+import { candidatesOf, FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
+import { launchCheck, serverLabel, LocalMcpPool, McpError, McpListCache, serverEnv, type LaunchCheckInput, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
 import type { PoolTrust } from '../local/trust-book.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
@@ -201,6 +206,11 @@ export interface LocalLaneOptions {
    * slice C5'a2 (^local-tool-grant): the #always-rules match (SupervisorOptions.alwaysRule). A brokered call asks it for
    * a tool rule with the call's bindHash, never in manual mode. Absent: no rule matches and no card offers Always.
    */
+  /**
+   * slice C6'a1 (Aegis L1): whether a third-party server is still on at its open-time launch hash (McpServers.enabledAt);
+   * a restart of one that is not is refused disabled. Absent (test rigs): not checked.
+   */
+  mcpEnabled?: (id: string, launchHash: string) => boolean;
   alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; bindHash?: string | null }) => { ruleId: string } | null;
 }
 
@@ -312,7 +322,7 @@ interface LocalSession {
    */
   sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; textTrusted: boolean; finds: number; mode: RunMode; setSeq: number; ids: string[] };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
-  mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }>; firstParty?: { launch: SessionLaunchInput; stateDir: string; nodePin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'> } };
+  mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; check: LaunchCheckInput; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }>; firstParty?: { launch: SessionLaunchInput; stateDir: string; nodePin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'> } };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
   memory?: WorkingMemory;
   /** slice B2: the hash of the last memory_set sent (a change that renders the same block sends nothing) */
@@ -414,7 +424,75 @@ export const LOCAL_SESSION_TIER_REQUEST = 'request.session.tier' as const;
  */
 export const LOCAL_TIER_REMEASURE_REQUEST = 'request.local.tier.remeasure' as const;
 export const LOCAL_TIER_CLEAR_REQUEST = 'request.local.tier.clear' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST]);
+/**
+ * Slice C6'a1 (#gui-capability-browser, kernel side): the human reads what a running session's tools and MCP servers are
+ * ({hsid}; read only: nothing is selected, bound, started or sent).
+ */
+export const LOCAL_SESSION_CAPABILITIES_REQUEST = 'request.session.capabilities' as const;
+/**
+ * Slice C6'a1: the human restarts one MCP server of a running session ({hsid, server}): its starts counter is reset and
+ * its launch re-checked first (refused when its launch, trust or pin binding no longer holds). One per server at a time.
+ */
+export const LOCAL_SESSION_MCP_RESTART_REQUEST = 'request.session.mcp.restart' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST]);
+/** Slice C6'a1: every server-written string request.session.capabilities returns is cleaned and at most this long. */
+export const CAPABILITY_TEXT_MAX = 240;
+/** Slice C6'a1: a fullSchema in the capabilities reply is at most this many bytes (else it is left out). */
+export const CAPABILITY_SCHEMA_MAX_BYTES = 16 * 1024;
+/** Slice C6'a1: why a pin is not offered (the GUI words it). */
+export type PinWhy = 'over-k' | 'no-room' | 'no-full-form' | 'tier-0';
+const PIN_WHY: Readonly<Record<string, PinWhy>> = Object.freeze({ 'over-k': 'over-k', 'over-slot': 'no-room', 'not-offerable': 'no-full-form', 'tier-0': 'tier-0' });
+/** Slice C6'a1: what a pool refusal (which carries no words) means. */
+const FIT_WHY: Readonly<Record<string, string>> = Object.freeze({ 'remote-refused': 'a remote (http or sse) server is never reached from a local session', 'label-reserved': 'its name is taken by the kernel or another server', 'pin-mismatch': 'the first-party Paradigm MCP has no verified staged copy', 'launch-writable': 'what it runs lies inside a folder the session can write' });
+/** Slice C6'a1: server text cleaned (cleanServerText) and capped. */
+function capText(t: string, max: number = CAPABILITY_TEXT_MAX): string {
+  const c = [...cleanServerText(t)];
+  return c.length > max ? `${c.slice(0, max - 1).join('')}…` : c.join('');
+}
+const SCHEMA_FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+/** Slice C6'a1: a copy of a schema with every key and string cleaned and capped (depth- and size-bounded). */
+function cleanSchema(v: unknown, depth = 0): unknown {
+  if (depth > 8) return null;
+  if (typeof v === 'string') return capText(v, 512);
+  if (v === null || typeof v === 'boolean') return v;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (Array.isArray(v)) return v.slice(0, 64).map((x) => cleanSchema(x, depth + 1));
+  if (typeof v !== 'object') return null;
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>).slice(0, 128)) {
+    if (SCHEMA_FORBIDDEN_KEYS.has(k) || capText(k, 64) !== k) continue;
+    out[k] = cleanSchema(x, depth + 1);
+  }
+  return out;
+}
+/**
+ * Slice C6'a1 (Aegis L2): a capability id as the capabilities reply keys it — the entry id when it is a clean
+ * `<server>/<name>@<hash8>` (the tool.selection id shape), else `<server>/~<sha256(id)[:16]>` (a raw server tool name never
+ * reaches the GUI). Stable per entry: entryByCapabilityKey maps it back.
+ */
+const CAPABILITY_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}@[0-9a-f]{8}$/;
+export function capabilityKey(id: string): string {
+  if (CAPABILITY_KEY_RE.test(id)) return id;
+  const server = serverLabel(id.split('/')[0] ?? '');
+  return `${server}/~${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
+}
+/** Slice C6'a1: the entry a capabilities key names (the input side of capabilityKey), or undefined. */
+export function entryByCapabilityKey<E extends { id: string }>(entries: Iterable<E>, key: string): E | undefined {
+  for (const e of entries) if (capabilityKey(e.id) === key) return e;
+  return undefined;
+}
+/** Slice C6'a1: one param of a tool as the capabilities reply lists it. */
+function paramsOf(schema: Record<string, unknown>): Array<{ name: string; required: boolean; type: string; enum?: unknown[]; description?: string }> {
+  const props = schema.properties !== null && typeof schema.properties === 'object' && !Array.isArray(schema.properties) ? (schema.properties as Record<string, unknown>) : {};
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  return Object.entries(props).slice(0, 64).flatMap(([name, raw]) => {
+    if (SCHEMA_FORBIDDEN_KEYS.has(name)) return [];
+    const p = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+    const types = typeof p.type === 'string' ? [p.type] : Array.isArray(p.type) ? p.type.filter((x): x is string => typeof x === 'string') : [];
+    const en = Array.isArray(p.enum) ? p.enum.slice(0, 64).flatMap((x) => (typeof x === 'string' ? [capText(x, 64)] : typeof x === 'boolean' || x === null || (typeof x === 'number' && Number.isFinite(x)) ? [x] : [])) : null;
+    return [{ name: capText(name, 64), required: required.includes(name), type: types.length ? capText(types.join('|'), 32) : 'any', ...(en ? { enum: en } : {}), ...(typeof p.description === 'string' ? { description: capText(p.description) } : {}) }];
+  });
+}
 /** Slice C4'a: a preview token lives this long. */
 export const TIER_TOKEN_TTL_MS = 60_000;
 /** Aegis C4'b L1: one re-measure per endpoint per this gap (the same gap as Check again, config-request probeGapMs). */
@@ -1129,7 +1207,9 @@ export class LocalLane {
       // dir (never the user's ~/.paradigm), the staged mode on and git's fsmonitor and hooks off
       const stateDir = path.join(this.#o.home, 'sessions', `${hsidShort(hsid)}-pg`);
       mcpServers = mcpServers.map((m) => (m.staged ? { ...m, command: runner.command, env: { ...(m.env ?? {}), ...stagedParadigmEnv(stateDir, this.#platform) } } : m));
-      const closure = launchCheck(mcpServers, { roots: [cwdReal, ...(wtReal ? [wtReal] : [])], cwd: neutralCwd, sessionPath: env.PATH, home: userHome });
+      // slice C6'a1: kept, so a human restart re-runs the same check
+      const checkInput: LaunchCheckInput = { roots: [cwdReal, ...(wtReal ? [wtReal] : [])], cwd: neutralCwd, sessionPath: env.PATH, home: userHome };
+      const closure = launchCheck(mcpServers, checkInput);
       const policyInput: Parameters<typeof buildSessionPolicy>[0] = {
         home: this.#o.home,
         cwd: cwdReal,
@@ -1245,10 +1325,12 @@ export class LocalLane {
       tracked = true;
       const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, toolsSetSeq: 0, ...(tierState ? { tier: tierState } : {}), ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       // Aegis H2: the servers get their own policy and an env without any kernel credential or handle
-      if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, servers: closure.servers, refused: closure.refused, failed: [], ...(paradigmPolicy && stateMade ? { firstParty: { launch: { ...launch, policy: paradigmPolicy }, stateDir: stateMade, nodePin: { node: pin.node, nodeSha256: pin.nodeSha256 } } } : {}) };
+      if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, check: checkInput, servers: closure.servers, refused: closure.refused, failed: [], ...(paradigmPolicy && stateMade ? { firstParty: { launch: { ...launch, policy: paradigmPolicy }, stateDir: stateMade, nodePin: { node: pin.node, nodeSha256: pin.nodeSha256 } } } : {}) };
       else if (closure.refused.length) s.mcpLaunch = undefined;
       this.#sessions.set(hsid, s);
       live = s;
+      // slice C6'a1: one session.mcp row per server the launch check refused
+      for (const r of s.mcpLaunch?.refused ?? []) await this.#mcpRow(s, serverLabel(r.name), 'refused', { fit: r.fit });
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
       s.tools = await this.#toolBroker(s);
       this.#wire(s);
@@ -1381,9 +1463,13 @@ export class LocalLane {
     const servers = s.mcpLaunch.servers;
     if (!servers.length) return null;
     const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, ...(this.#o.mcpTrust ? { trust: this.#o.mcpTrust } : {}), spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries),
+      // slice C6'a1: one session.mcp row per start and failure (a runtime crash included)
+      onState: (label, state, error) => void this.#mcpRow(s, label, state, error !== undefined ? { error } : {}),
       // Aegis M3: stopped with the daemon too (kind mcp-server: no session rows)
       track: (child, label) => void this.#o.children.track({ kind: 'mcp-server', child, hsid: s.hsid, name: `mcp:${label}` }).catch(() => undefined) });
     s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual, bound: new Map(), offeredHash: '' };
+    // slice C6'a1: the servers the pool refuses (remote, a reserved label)
+    for (const r of pool.refused) await this.#mcpRow(s, serverLabel(r.name), 'refused', { fit: r.fit });
     const ix = await pool.index();
     // functional note (Aegis): a server that cannot start under the local profile says why, readably
     s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
@@ -1722,6 +1808,163 @@ export class LocalLane {
     return { refused: [...s.mcpLaunch.refused, ...(s.mcp?.pool.refused ?? [])], failed: [...s.mcpLaunch.failed], firstParty: { staged: !!pin, version: pin?.version ?? null, treeSha256: pin?.treeSha256 ?? null, source: pin?.source ?? null, sourceKind: pin?.sourceKind ?? null, dirty: pin?.dirty ?? null } };
   }
 
+  /**
+   * Slice C6'a1 (#gui-capability-browser, kernel side): request.session.capabilities{hsid} — what the session's tools and
+   * MCP servers are NOW, for the owner's tools drawer. READ ONLY: a dry selection at the session's own tier explains the
+   * pins (nothing is bound, started or sent). It folds mcpReport (the launch-check and pool refusals, the index
+   * failures) with the pool's runtime state (a server that crashed after it started is `failed`). Every description,
+   * error, why and server string is cleaned (cleanServerText) and capped (CAPABILITY_TEXT_MAX); a tool's fullSchema is
+   * returned only for a fullOfferable or human-only entry, every key and string of it cleaned.
+   */
+  #capabilities(s: LocalSession): Record<string, unknown> {
+    const tier = s.tier?.tier ?? null;
+    const surface = s.tier?.surface ?? 'compact';
+    const plan = tierPlan(tier ?? 2, s.context.target);
+    const mode = this.#mode(s);
+    const manual = mode === 'manual' || (s.mcp?.manual ?? false);
+    const kernel = s.tier?.kernel ?? s.mcp?.kernel ?? [];
+    const zero = { read: 0, mutate: 0, destructive: 0 };
+    const servers: Array<Record<string, unknown>> = [];
+    const launch = s.mcpLaunch;
+    const refusedTrust = (id: string): ServerTrust => (id.startsWith('first-party:') ? 'first-party' : 'enabled');
+    for (const r of [...(launch?.refused ?? []), ...(s.mcp?.pool.refused ?? [])]) {
+      const why = 'why' in r && typeof r.why === 'string' ? r.why : (FIT_WHY[r.fit] ?? r.fit);
+      servers.push({ label: capText(serverLabel(r.name), 64), trust: refusedTrust(r.id), state: 'refused', fit: r.fit, why: capText(why), starts: 0, counts: { ...zero } });
+    }
+    if (s.mcp) {
+      for (const p of s.mcp.pool.report()) {
+        const counts = { ...zero };
+        for (const e of s.mcp.entries.get(p.label) ?? []) counts[e.class]++;
+        const readable = launch?.failed.find((f) => f.label === p.label)?.error;
+        servers.push({ label: capText(p.label, 64), trust: p.trust, state: p.state, ...(p.state === 'failed' ? { error: capText(readable ?? p.error ?? 'failed') } : {}), starts: p.starts, counts });
+      }
+    } else {
+      // tier 0 (or not started yet): the servers fixed at open, as the pool would take them
+      for (const srv of launch?.servers ?? []) {
+        const remote = srv.transport !== 'stdio' || !srv.command;
+        servers.push({ label: capText(serverLabelOf(srv), 64), trust: srv.trust === 'first-party' ? 'first-party' : 'enabled', state: remote ? 'refused' : 'not-started', ...(remote ? { fit: 'remote-refused', why: capText(FIT_WHY['remote-refused']!) } : {}), starts: 0, counts: { ...zero } });
+      }
+    }
+    // the pins: offered now, or why not (a dry selection at the session's own tier and surface)
+    const offeredNames = new Set(s.tools?.offered.map((t) => t.name) ?? []);
+    const unfit = tier === null ? [] : this.#tierOffer(s, tier, surface).unfitPins;
+    const pins = (s.memory?.toolPins() ?? []).map((name) => {
+      const u = unfit.find((x) => x.name === name);
+      const offered = offeredNames.has(name);
+      return { name: capText(name, 64), offered, ...(!offered && u && PIN_WHY[u.why] ? { why: PIN_WHY[u.why] } : {}) };
+    });
+    // the narrow tools of the index, each with how the model can reach it
+    const tools: Array<Record<string, unknown>> = [];
+    if (s.mcp) {
+      const m = s.mcp;
+      const entries = [...m.entries.values()].flat();
+      const full = surface === 'full' && plan.complexHumanOnly;
+      const offeredIds = new Set(s.tools?.offered.flatMap((t) => (t.entry ? [t.entry.id] : [])) ?? []);
+      const cands = new Set(candidatesOf({ entries, fixed: plan.brokered ? [...m.kernel, FIND_TOOL_SPEC] : [], reserved: LOCAL_RESERVED_TOOL_NAMES, bound: m.bound, allowFull: full }));
+      for (const e of entries) {
+        const fo = fullOfferable(e);
+        const availability = offeredIds.has(e.id) ? 'offered'
+          : tier === 0 || !plan.brokered ? 'not-at-tier'
+          : e.humanOnly && !fo ? 'slash-only'
+          : e.humanOnly && !full ? 'not-at-tier'
+          : manual && e.class !== 'read' ? 'manual-reads-only'
+          : cands.has(e) && plan.findTool ? 'findable'
+          : 'slash-only';
+        let fullSchema: unknown;
+        if (fo || e.humanOnly) {
+          const c = cleanSchema(fullParameters(e));
+          if (Buffer.byteLength(JSON.stringify(c), 'utf8') <= CAPABILITY_SCHEMA_MAX_BYTES) fullSchema = c;
+        }
+        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}) });
+      }
+    }
+    return {
+      hsid: s.hsid,
+      generation: s.tier?.gen ?? s.toolsSetSeq,
+      tier,
+      k: tier === null ? null : plan.k,
+      surface,
+      mode,
+      verbs: kernel.map((t) => ({ name: t.name, class: t.class })),
+      servers,
+      pins,
+      tools,
+    };
+  }
+
+  /**
+   * Slice C6'a1: request.session.mcp.restart{hsid, server} — the owner restarts one MCP server of a running session that
+   * the pool holds (never one refused at open: the session profile write-denies only the launch closure fixed then).
+   * Re-checked first, synchronously: the staged first-party pin (recheckStaged and the pinned node), the trust it was
+   * narrowed under (LocalMcpPool.trustHolds) and launchCheck with the open's own inputs; a check that fails refuses it
+   * (one session.mcp{state:'refused', fit} row, FORBIDDEN reason refused). Then LocalMcpPool.restart resets its starts
+   * counter and starts and lists it again (its session.mcp started or failed row; a new listing re-selects). One restart
+   * per server at a time (BAD_REQUEST reason busy).
+   */
+  async #restartMcp(s: LocalSession, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const kind = LOCAL_SESSION_MCP_RESTART_REQUEST;
+    if (typeof p.server !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(p.server)) throw refused('BAD_REQUEST', `${kind}: server must be a server label`, { reason: 'bad-params', field: 'server' });
+    const label = p.server;
+    const m = s.mcp;
+    const launch = s.mcpLaunch;
+    const srv = launch?.servers.find((x) => serverLabelOf(x) === label);
+    if (!m || !launch || !srv || !m.pool.labels.includes(label)) throw refused('NOT_FOUND', `${kind}: no MCP server ${label} started in this session`, { reason: 'not-found', field: 'server' });
+    if (m.pool.busy(label)) throw refused('BAD_REQUEST', `${kind}: ${label} is already starting`, { reason: 'busy' });
+    let refusal: { fit: ServerFit | 'trust-changed' | 'disabled'; why: string } | null = null;
+    const fp = launch.firstParty;
+    if (srv.staged) {
+      let changed: string | null = recheckStaged(srv.staged.snapshot);
+      if (!changed) {
+        try {
+          if (!fp || verifyNode(fp.nodePin) !== srv.command) changed = 'the pinned node changed';
+        } catch {
+          changed = 'the pinned node changed';
+        }
+      }
+      if (changed) refusal = { fit: 'pin-mismatch', why: changed };
+    }
+    // Aegis L1: a third-party server the human turned off (or relaunched under another hash) since open stays off
+    if (!refusal && !srv.staged && srv.trust !== 'first-party' && this.#o.mcpEnabled) {
+      let on = false;
+      try {
+        on = typeof srv.launchHash === 'string' && this.#o.mcpEnabled(srv.id, srv.launchHash);
+      } catch {
+        on = false;
+      }
+      if (!on) refusal = { fit: 'disabled', why: 'it is no longer turned on for sessions at the launch this session opened with' };
+    }
+    if (!refusal && !m.pool.trustHolds(label)) refusal = { fit: 'trust-changed', why: 'it changed since it was trusted, so its trust no longer holds' };
+    if (!refusal) {
+      const r = launchCheck([srv], launch.check).refused[0];
+      if (r) refusal = { fit: r.fit, why: r.why };
+    }
+    if (refusal) {
+      await this.#mcpRow(s, label, 'refused', { fit: refusal.fit });
+      throw refused('FORBIDDEN', `${kind}: ${label} is not restarted: ${capText(refusal.why)}`, { reason: 'refused', fit: refusal.fit, why: capText(refusal.why) });
+    }
+    // its index-time failure is history now
+    launch.failed = launch.failed.filter((f) => f.label !== label);
+    let r: { entries: CapabilityEntry[] | null; error: string | null };
+    try {
+      r = await m.pool.restart(label);
+    } catch (e) {
+      if (e instanceof McpError && e.code === 'busy') throw refused('BAD_REQUEST', `${kind}: ${label} is already starting`, { reason: 'busy' });
+      throw refused('NOT_FOUND', `${kind}: ${label} cannot be restarted: ${capText((e as Error).message)}`, { reason: 'not-found' });
+    }
+    const rep = m.pool.report().find((x) => x.label === label);
+    return { hsid: s.hsid, server: label, state: rep?.state ?? (r.error ? 'failed' : 'running'), starts: rep?.starts ?? 0, tools: r.entries?.length ?? 0, ...(r.error !== null ? { error: capText(r.error) } : {}) };
+  }
+
+  /**
+   * Slice C6'a1: one session.mcp{hsid, server, state, fit?|error?} row — a server of this session started, failed or was
+   * refused (the GUI toasts it). The error is cleaned server text, capped (SESSION_MCP_ERROR_MAX); never fatal.
+   */
+  async #mcpRow(s: LocalSession, label: string, state: 'started' | 'failed' | 'refused', extra: { fit?: string; error?: string }): Promise<void> {
+    if (s.state === 'exited') return;
+    const error = extra.error !== undefined ? capText(extra.error, CAPABILITY_TEXT_MAX) || 'failed' : undefined;
+    await this.#o.log('session.mcp', { hsid: s.hsid, server: label, state, ...(state === 'refused' && extra.fit ? { fit: extra.fit } : {}), ...(state === 'failed' ? { error: error ?? 'failed' } : {}) }, { session: s.hsid }).catch(() => undefined);
+  }
+
   /** Slice C2': a server's notifications/tools/list_changed — re-narrowed, re-offered, one new tools_set. */
   #mcpChanged(s: LocalSession, label: string, entries: CapabilityEntry[]): void {
     if (!s.mcp || !s.tools || s.state !== 'running') return;
@@ -1946,7 +2189,7 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
@@ -1983,6 +2226,9 @@ export class LocalLane {
     if (!s || s.owner !== asker.principal || s.state !== 'running') throw refused('NOT_FOUND', 'no such running local session for this principal', { reason: 'not-found' });
     if (s.loop) throw refused('FORBIDDEN', 'a loop session takes no context requests', { reason: 'loop-session' });
     if (kind === LOCAL_SESSION_TOOLS_PIN_REQUEST) return this.#pinTool(s, p);
+    // slice C6'a1: read only
+    if (kind === LOCAL_SESSION_CAPABILITIES_REQUEST) return this.#capabilities(s);
+    if (kind === LOCAL_SESSION_MCP_RESTART_REQUEST) return this.#restartMcp(s, p);
     // slice C4'a: the human's two-phase tool-tier change
     if (kind === LOCAL_SESSION_TIER_REQUEST) return this.#tierRequest(asker.principal, s, p);
     if (kind === LOCAL_SESSION_COMPACT_REQUEST) {

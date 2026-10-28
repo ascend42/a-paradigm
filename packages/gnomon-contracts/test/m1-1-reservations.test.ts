@@ -263,7 +263,9 @@ const COVERAGE: Record<string, Entry> = {
 // Moved again by 8.0:local-lane (TD-2026-10-27-833 slice B2: session.memory + session.context, descriptor sessionMemory): was sha256:c47ec016…8c55.
 // Moved again by 8.0:local-lane (Aegis B2 review L1: session.memory why child-refused): was sha256:04cbb358…41ff.
 // Moved again by 8.0:local-lane (TD-2026-10-27-833 slice C5'a1: tool.trust, the tool scope and match, TOOL_NAME mcp names, descriptor toolTrust): was sha256:7a4754b7…144d.
-const PINNED_CLIENT_API_ID = 'sha256:f2b45e1b85178684d62a61dca8db278343229bd4a820b788b94255b3be1e156a';
+// Moved again by 8.0:local-lane (TD-2026-10-27-833 slice C6'a1: session.mcp, descriptor sessionMcp): was sha256:f2b45e1b…156a.
+// Moved again by 8.0:local-lane (Aegis C6'a1 L1: session.mcp fit disabled): was sha256:58e12025…e405.
+const PINNED_CLIENT_API_ID = 'sha256:820f6b316df9ca829037ddefcbdaaf2c94c26ffce248431b1638a7c4f3f661d4';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -622,6 +624,8 @@ describe('event labels and payload docs (round 2)', () => {
       'loop.landed': { paths: 'sensitive' },
       'loop.proposed': { paths: 'sensitive' },
       'loop.request': { repo: 'sensitive' },
+      // 8.0:local-lane (C6'a1): an MCP server's error can name a path under the human's home
+      'session.mcp': { error: 'sensitive' },
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {

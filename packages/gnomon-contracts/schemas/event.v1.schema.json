@@ -223,6 +223,7 @@
     "session.idle",
     "session.inject",
     "session.layers.changed",
+    "session.mcp",
     "session.memory",
     "session.model",
     "session.open",
@@ -398,6 +399,7 @@
     "session.context": "8.0:local-lane",
     "session.context.threshold": "8.0:TD-2026-10-20-812",
     "session.drained": "8.0:P8-D98",
+    "session.mcp": "8.0:local-lane",
     "session.memory": "8.0:local-lane",
     "session.model": "8.0:model-switch",
     "session.renamed": "8.0:session-rename",
@@ -978,6 +980,13 @@
       "why",
       "launchHash",
       "toolsHash"
+    ],
+    "session.mcp": [
+      "hsid",
+      "server",
+      "state",
+      "fit",
+      "error"
     ],
     "session.context": [
       "hsid",

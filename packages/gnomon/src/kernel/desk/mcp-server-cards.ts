@@ -851,6 +851,14 @@ export class McpServers {
    * store was edited while the daemon was down) is dropped again (why disabled). Run at daemon start; returns the ids.
    */
   /** Slice C5'a3 (status.rules paused server-off): the ids on now (the store's enabled rows; reconcileTrust's set). */
+  /**
+   * Slice C6'a1 (Aegis L1): whether server `id` is still on at exactly `launchHash` (a human restart of a local session's
+   * server is refused disabled when it is not: turned off, or relaunched under another hash since the session opened).
+   */
+  enabledAt(id: string, launchHash: string): boolean {
+    return readMcpServersStore(this.#o.home).enabled.some((e) => e.id === id && e.launchHash === launchHash);
+  }
+
   enabledIds(): Set<string> {
     return new Set(readMcpServersStore(this.#o.home).enabled.map((e) => e.id));
   }
