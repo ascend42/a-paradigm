@@ -216,6 +216,24 @@ describe('INJECTION PAUSE and the pass limits', () => {
     expect(r.rows.filter((x) => x.kind === 'approval.auto')).toHaveLength(2);
   });
 
+  it('H1 (founder: whole session): a hostile result in turn 5 keeps destructive rules paused in turn 6; a fresh session is unaffected', async () => {
+    // the session-wide flag as LocalLane keeps it: set when turn 5 attached a sent result, never cleared by a turn's end
+    const session = { turn: 4, tainted: false };
+    const r = rig({ rules: destructiveOnly, tainted: () => session.tainted });
+    session.turn = 5;
+    session.tainted = true; // turn 5 took in a sent result
+    session.turn = 6; // turn 5 ended: the taint stays
+    const model = r.call('drop', { t: 'turn 6' });
+    await waitFor(() => r.pending().length === 1);
+    r.broker.expire(r.pending()[0]!.cardId, 'cancelled');
+    await model;
+    expect(r.rows.filter((x) => x.kind === 'approval.auto')).toHaveLength(0);
+    // a "/" run in the same session still passes by the rule
+    expect(await r.run('drop', { t: 'human' })).toMatchObject({ decision: 'approved' });
+    const fresh = rig({ rules: destructiveOnly, tainted: () => false });
+    expect(await fresh.call('drop', { t: 'turn 6' })).toMatchObject({ decision: 'approved' });
+  });
+
   it(`a destructive rule passes at most ${DESTRUCTIVE_RULED_PER_SESSION_MINUTE} calls per session per minute, then cards`, async () => {
     const r = rig({ rules: destructiveOnly });
     for (let i = 0; i < DESTRUCTIVE_RULED_PER_SESSION_MINUTE; i++) expect(await r.call('drop', { t: `${i}` })).toMatchObject({ decision: 'approved' });

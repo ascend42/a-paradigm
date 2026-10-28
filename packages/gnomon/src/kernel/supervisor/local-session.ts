@@ -353,8 +353,12 @@ interface LocalSession {
   lastRuns?: Map<string, SlashResult>;
   /** slice C6'a2-1: framed "/" results waiting for the human's next turn (the result policy said send) */
   pendingSend?: Array<{ frame: string; row: Record<string, unknown> }>;
-  /** slice C6'a2-1 (INJECTION PAUSE): the turns that took in sent tool results or skill text */
-  tainted?: Set<number>;
+  /**
+   * slice C6'a2-1 (INJECTION PAUSE, founder: whole session): set once the session took in ANY sent tool result or skill
+   * text. The text stays in the child's history (and can be copied into a note), so it lasts for the rest of the
+   * session — through compaction — and ends only with the session (a new session starts clean).
+   */
+  tainted?: boolean;
 }
 
 /** Slice C6'a2-1: one "/" result as the kernel holds it (never logged: the row is hash-only). */
@@ -2167,10 +2171,9 @@ export class LocalLane {
     return { hsid: s.hsid, id: p.id, tool: key.tool, policy, previous, queued };
   }
 
-  /** Slice C6'a2-1 (INJECTION PAUSE): the turn running now took in sent tool results or skill text. */
+  /** Slice C6'a2-1 (INJECTION PAUSE, founder: whole session): this session ever took in sent tool results or skill text. */
   #taintedNow(s: LocalSession): boolean {
-    if (!s.tainted?.size || s.turnPermits.length === 0) return false;
-    return s.tainted.has(s.turns - s.turnPermits.length + 1);
+    return s.tainted === true;
   }
 
   /** Slice C6'a2-1: hold a "/" run's result (bounded, expired ones dropped first). */
@@ -2685,8 +2688,6 @@ export class LocalLane {
         s.replyBytes = null;
         await usage('turn.result', s.meter.charge(ev), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', runUsage, replyBytes, maxSteps: s.maxSteps, ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
         const head = s.turnPermits.shift();
-        // slice C6'a2-1: a closed turn's taint is history
-        if (closing > 0) s.tainted?.delete(closing);
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         // slice B2: the follow_up queued behind this run starts now: its text is the goal
@@ -2823,13 +2824,13 @@ export class LocalLane {
       this.#goalChanged(s, p.text, untrusted === undefined);
     } else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(goal);
     // slice C6'a2-1 (#local-result-policy): "/" results the policy sends go in as DATA parts of THIS human turn (never
-    // the system role), before the human's text; the turn is marked tainted (INJECTION PAUSE: destructive rules pass no
-    // model call in it). One hash-only tool.result.sent row each.
+    // the system role), before the human's text; the SESSION is marked tainted for the rest of its life (INJECTION PAUSE:
+    // destructive rules pass no model call in it again). One hash-only tool.result.sent row each.
     let message = p.text;
     const sendNow = s.pendingSend ?? [];
     if (sendNow.length && !s.loop) {
       s.pendingSend = [];
-      (s.tainted ??= new Set()).add(n);
+      s.tainted = true;
       for (const x of sendNow) await this.#o.log('tool.result.sent', x.row, { session: s.hsid }).catch(() => undefined);
       message = `${sendNow.map((x) => x.frame).join('\n\n')}\n\n${p.text}`;
     }

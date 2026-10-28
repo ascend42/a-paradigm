@@ -574,7 +574,7 @@ export interface LocalToolBrokerOptions {
    */
   trustBinding?: (server: string) => string | null;
   /**
-   * slice C6'a2-1 (INJECTION PAUSE, founder): the session's current turn took in sent tool results or skill text. While
+   * slice C6'a2-1 (INJECTION PAUSE, founder: whole session): the session took in sent tool results or skill text. While
    * true, a destructive rule never passes a MODEL call (it takes the card); "/" runs are unaffected. Absent: never.
    */
   tainted?: () => boolean;
