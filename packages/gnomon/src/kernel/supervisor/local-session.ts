@@ -109,7 +109,8 @@ import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
-import { LOCAL_RESERVED_TOOL_NAMES, offerWithin, type CapabilityEntry } from '../local/capability-index.js';
+import { cleanServerText, LOCAL_RESERVED_TOOL_NAMES, type CapabilityEntry } from '../local/capability-index.js';
+import { FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpListCache, serverEnv, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
@@ -128,7 +129,7 @@ import { voiceTag, type VoiceAttribution, type VoiceTurnLink } from '../voice/vo
 import { loopRunRefInfo, type LoopRunRef, type LoopRunRefInfo } from '../loops/registry.js';
 import { LOOP_ORIGIN, LOOP_SESSION_ENV_DROPPED, loopActTools } from './loop-clamp.js';
 import { liveScratch, type Scratch } from '../git/scratch.js';
-import { answerMemoryTool, MEMORY_FILE, MEMORY_TOOL_NAMES, memoryOwnerOf, memoryRowsOf, memorySlotTokens, WorkingMemory, type MemoryChange } from '../local/working-memory.js';
+import { answerMemoryTool, MEMORY_FILE, MEMORY_TOOL_NAMES, memoryOwnerOf, memoryRowsOf, MAX_TOOL_PINS, memorySlotTokens, TOOL_PIN_NAME_RE, WorkingMemory, type MemoryChange } from '../local/working-memory.js';
 import { loopActLaunchPlan, type LoopActLaunchInput } from '../sandbox/loop-act.js';
 
 const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -283,6 +284,12 @@ interface LocalSession {
   tools?: LocalToolBroker;
   /** slice C2': the session's MCP servers (#local-mcp-client; attended sessions only), reaped at exit */
   mcp?: { pool: LocalMcpPool; kernel: BrokeredTool[]; entries: Map<string, CapabilityEntry[]>; manual: boolean; bound: Map<string, string>; offeredHash: string };
+  /**
+   * slice C3' (#tool-selector): the selection state — completed steps, the step of the last selection, the brokered
+   * names called this step and in the last STICKY_STEPS steps, find_tool's matches in force, the latest user or steer
+   * text (bounded), and find_tool calls this turn
+   */
+  sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; finds: number };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
   mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }>; firstParty?: { launch: SessionLaunchInput; stateDir: string; nodePin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'> } };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
@@ -345,7 +352,9 @@ export const LOCAL_SESSION_MEMORY_DELETE_REQUEST = 'request.session.memory.delet
 /** Aegis M2: the human reads a session's memory, and lists the sessions that hold memory. */
 export const LOCAL_SESSION_MEMORY_READ_REQUEST = 'request.session.memory.read' as const;
 export const LOCAL_SESSION_MEMORY_LIST_REQUEST = 'request.session.memory.list' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST]);
+/** Slice C3' (#tool-selector): the human pins or unpins a narrow tool of a running session ({hsid, name, pinned}). */
+export const LOCAL_SESSION_TOOLS_PIN_REQUEST = 'request.session.tools.pin' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST]);
 /** Slice B2: the asker of a human request (stamped by the dispatcher). */
 export interface LocalSessionAsker {
   connId: string;
@@ -1122,7 +1131,8 @@ export class LocalLane {
         // functional note (Aegis): a server that cannot start under the local profile says why, readably
         s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
         for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
-        tools = this.#mcpOffer(s);
+        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', finds: 0 };
+        tools = this.#mcpOffer(s).tools;
         s.mcp.offeredHash = offeredHash(tools);
       }
     }
@@ -1130,28 +1140,129 @@ export class LocalLane {
   }
 
   /**
-   * Slice C2': the offered set — the kernel verbs, then narrow tools in index order (servers in compose order, Paradigm
-   * first) while they fit the ledger's tools slot (offerWithin: toolsSlotTokens of the session's context target);
-   * a manual session gets read-class narrow tools only (Aegis M3). C3' replaces this rule with selection.
+   * Slice C3' (#tool-selector; replaces the C2' fixed offer): the offered set — the kernel verbs, then the narrow tools
+   * selectTools picks for the session's state (pins, sticky, a find_tool need and its matches, BM25 over the goal, the
+   * latest user/steer text and the last tool error) within the ledger's tools slot after the kernel verbs and
+   * find_tool. A manual session (at open or now) gets read-class narrow tools only (Aegis M3). A name once offered
+   * from one server is never rebound to another in this session (Aegis M4); names are de-duplicated first in index
+   * order (Aegis L3).
    */
-  #mcpOffer(s: LocalSession): BrokeredTool[] {
+  #mcpOffer(s: LocalSession, need?: string): { tools: BrokeredTool[]; found: CapabilityEntry[] } {
     const m = s.mcp!;
-    // Aegis M4: a name once offered from one server is never rebound to another in this session; Aegis L3: names are
-    // de-duplicated (first in index order wins) BEFORE the budget
-    const seen = new Set<string>();
-    const all = [...m.entries.values()].flat().filter((e) => {
-      if ((m.manual && e.class !== 'read') || seen.has(e.name)) return false;
-      const b = m.bound.get(e.name);
-      if (b !== undefined && b !== e.server) return false;
-      seen.add(e.name);
-      return true;
+    const sel = s.sel!;
+    const manual = m.manual || this.#mode(s) === 'manual';
+    const found = sel.found && sel.step - sel.found.step < RESELECT_EVERY_STEPS ? sel.found.names : [];
+    const r = selectTools({
+      entries: [...m.entries.values()].flat(),
+      fixed: [...m.kernel, FIND_TOOL_SPEC],
+      query: this.#selectionQuery(s),
+      ...(need !== undefined ? { need } : {}),
+      sticky: [...sel.current, ...sel.recent.flat()],
+      found,
+      pins: s.memory?.toolPins() ?? [],
+      contextTarget: s.context.target,
+      reserved: LOCAL_RESERVED_TOOL_NAMES,
+      bound: m.bound,
+      ...(manual ? { allow: (e: CapabilityEntry) => e.class === 'read' } : {}),
     });
-    const chosen = offerWithin(m.kernel, all, { contextTarget: s.context.target, reserved: LOCAL_RESERVED_TOOL_NAMES });
-    for (const e of chosen) if (!m.bound.has(e.name)) m.bound.set(e.name, e.server);
-    return [...m.kernel, ...chosen.flatMap((e) => {
+    for (const e of r.selected) if (!m.bound.has(e.name)) m.bound.set(e.name, e.server);
+    const tools = [...m.kernel, ...r.selected.flatMap((e) => {
       const target = m.pool.target(e.server);
       return target ? [{ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }] : [];
     })];
+    return { tools, found: r.found.filter((e) => tools.some((t) => t.entry === e)) };
+  }
+
+  /**
+   * Slice C3': request.session.tools.pin{hsid, name, pinned} — the HUMAN pins (or unpins) a narrow tool the session's
+   * index holds (founder decision: pins are human-only; the model has no path to one). A pin is a working-memory
+   * tool-pin entry (source human); it is always selected while it fits the tools slot, never past the manual-mode
+   * class filter, and a mutate pin still raises its card at call time. One session.memory row; tools_set when the
+   * offered set changed.
+   */
+  async #pinTool(s: LocalSession, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const kind = LOCAL_SESSION_TOOLS_PIN_REQUEST;
+    if (typeof p.name !== 'string' || !TOOL_PIN_NAME_RE.test(p.name)) throw refused('BAD_REQUEST', `${kind}: name must be a tool name`, { reason: 'bad-params', field: 'name' });
+    if (typeof p.pinned !== 'boolean') throw refused('BAD_REQUEST', `${kind}: pinned must be a boolean`, { reason: 'bad-params', field: 'pinned' });
+    if (!s.memory || !s.mcp || !s.sel) throw refused('NOT_FOUND', 'this session has no narrow tools to pin', { reason: 'not-found' });
+    const name = p.name;
+    if (p.pinned && ![...s.mcp.entries.values()].some((es) => es.some((e) => e.name === name && !e.humanOnly))) throw refused('NOT_FOUND', `${kind}: no narrow tool ${name} in this session`, { reason: 'not-found', field: 'name' });
+    const changes = p.pinned ? s.memory.pinTool(name) : s.memory.unpinTool(name);
+    const refusedChange = changes.find((c) => c.op === 'refused');
+    await this.#memoryChanged(s, changes);
+    if (refusedChange) throw refused('BAD_REQUEST', `${kind}: at most ${MAX_TOOL_PINS} tool pins`, { reason: 'full' });
+    this.#reselect(s);
+    return { hsid: s.hsid, name, pinned: p.pinned, pins: s.memory.toolPins(), offered: s.tools?.offered.some((t) => t.name === name) ?? false };
+  }
+
+  /** Slice C3': the selector's query — the Goal, the latest user/steer text, the last tool error, each bounded. */
+  #selectionQuery(s: LocalSession): string {
+    return [s.memory?.goal() ?? '', s.sel?.text ?? '', s.memory?.lastToolError() ?? ''].map((t) => t.slice(0, QUERY_PART_MAX)).join('\n');
+  }
+
+  /**
+   * Slice C3': re-select (a goal change, a steer, a find_tool, every RESELECT_EVERY_STEPS steps, a list_changed) and
+   * send tools_set ONLY when the offered set's hash changed (a stable native tools array keeps llama.cpp's prompt
+   * cache). Synchronous: the tools_set line is written before whatever the caller writes next (a find_tool answer, a
+   * steer, a prompt), so the child holds it for its next step. Returns find_tool's offered matches.
+   */
+  #reselect(s: LocalSession, need?: string): CapabilityEntry[] {
+    if (!s.mcp || !s.sel || !s.tools || s.state !== 'running') return [];
+    const { tools, found } = this.#mcpOffer(s, need);
+    s.sel.selectedAt = s.sel.step;
+    if (need !== undefined) s.sel.found = { names: found.map((e) => e.name), step: s.sel.step };
+    const h = offeredHash(tools);
+    if (h !== s.mcp.offeredHash) {
+      s.mcp.offeredHash = h;
+      s.tools.setTools(tools);
+      this.#write(s, drv.toolsSetLine(s.tools.offered));
+    }
+    return found;
+  }
+
+  /** Slice C3': a step ended — the sticky window moves; every RESELECT_EVERY_STEPS steps the set is re-selected. */
+  #stepEnded(s: LocalSession): void {
+    const sel = s.sel;
+    if (!sel) return;
+    sel.step++;
+    sel.recent.push([...sel.current]);
+    while (sel.recent.length > STICKY_STEPS) sel.recent.shift();
+    sel.current = new Set();
+    if (sel.step - sel.selectedAt >= RESELECT_EVERY_STEPS) this.#reselect(s);
+  }
+
+  /** Slice C3': a new goal (a prompt, or a queued follow_up's when its run starts): find_tool's matches lapse. */
+  #goalChanged(s: LocalSession, text: string): void {
+    if (!s.sel) return;
+    s.sel.text = text.slice(0, QUERY_PART_MAX);
+    s.sel.found = null;
+    this.#reselect(s);
+  }
+
+  /**
+   * Slice C3': find_tool{need}, answered by the kernel (class read, no card). The need is bounded (FIND_TOOL_NEED_MAX)
+   * and cleaned like server text (controls, special tokens, delimiters); at most FIND_TOOL_PER_TURN calls a turn. The
+   * selector runs with the need, its top matches replace the bottom of the set, tools_set goes out first, then the
+   * answer (at most 5 names, a line each). One hash-only tool.brokered row.
+   */
+  async #findTool(s: LocalSession, ev: Extract<LocalEvent, { kind: 'tool-request' }>): Promise<void> {
+    const argsHash = inputHash(ev.args ?? null);
+    const answer = async (decision: 'ran' | 'bad-args' | 'refused' | 'not-running', content: string, isError: boolean): Promise<void> => {
+      await this.#o.log('tool.brokered', { hsid: s.hsid, server: KERNEL_MCP_SERVER, tool: FIND_TOOL_NAME, class: 'read', argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError }, { session: s.hsid }).catch(() => undefined);
+      this.#write(s, drv.toolResponseLine({ id: ev.id!, content, isError, provenance: 'kernel' }));
+    };
+    const a = ev.args;
+    if (ev.error !== null || a === null) return answer('bad-args', `find_tool: ${ev.error ?? 'arguments must be a JSON object'}`, true);
+    if (Object.keys(a).some((k) => k !== 'need') || typeof a.need !== 'string') return answer('bad-args', 'find_tool takes {need}', true);
+    if (a.need.length > FIND_TOOL_NEED_MAX) return answer('bad-args', `find_tool: need is at most ${FIND_TOOL_NEED_MAX} characters`, true);
+    const need = cleanServerText(a.need);
+    if (!need) return answer('bad-args', 'find_tool: need is empty', true);
+    if (s.state !== 'running') return answer('not-running', 'The session is not running.', true);
+    if (!s.mcp || !s.sel) return answer('ran', 'No other tools are available in this session.', false);
+    if (s.sel.finds >= FIND_TOOL_PER_TURN) return answer('refused', `find_tool is limited to ${FIND_TOOL_PER_TURN} calls per turn; use the tools you have`, true);
+    s.sel.finds++;
+    const found = this.#reselect(s, need);
+    return answer('ran', findToolAnswer(found), false);
   }
 
   /** Slice C2': why this session's MCP servers were refused or failed (readable; no GUI surface yet). */
@@ -1167,13 +1278,8 @@ export class LocalLane {
   #mcpChanged(s: LocalSession, label: string, entries: CapabilityEntry[]): void {
     if (!s.mcp || !s.tools || s.state !== 'running') return;
     s.mcp.entries.set(label, entries);
-    const tools = this.#mcpOffer(s);
-    // Aegis M4: a tools_set only when the offered set actually changed
-    const h = offeredHash(tools);
-    if (h === s.mcp.offeredHash) return;
-    s.mcp.offeredHash = h;
-    s.tools.setTools(tools);
-    this.#write(s, drv.toolsSetLine(s.tools.offered));
+    // Aegis M4: a tools_set only when the offered set actually changed (#reselect compares the hash)
+    this.#reselect(s);
   }
 
   /** Slice C2': one MCP server of a local session, spawned under the SESSION's own launch plan (its files, its network). */
@@ -1276,7 +1382,7 @@ export class LocalLane {
    * the wrong file. Aegis H1: the recorded path is the KERNEL's form (fileRefOf), never the model's raw string.
    */
   async #memoryTool(s: LocalSession, ev: Extract<LocalEvent, { kind: 'tool' }>): Promise<void> {
-    if (!s.memory || ev.tool === null || MEMORY_TOOL_NAMES.includes(ev.tool)) return;
+    if (!s.memory || ev.tool === null || MEMORY_TOOL_NAMES.includes(ev.tool) || ev.tool === FIND_TOOL_NAME) return;
     if (ev.phase === 'start') {
       if (ev.toolCallId === null || !EDIT_TOOLS.includes(ev.tool)) return;
       if (s.toolPaths.has(ev.toolCallId)) s.toolPaths.set(ev.toolCallId, null);
@@ -1364,7 +1470,7 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
@@ -1380,6 +1486,7 @@ export class LocalLane {
     const s = this.#sessions.get(hsid);
     if (!s || s.owner !== asker.principal || s.state !== 'running') throw refused('NOT_FOUND', 'no such running local session for this principal', { reason: 'not-found' });
     if (s.loop) throw refused('FORBIDDEN', 'a loop session takes no context requests', { reason: 'loop-session' });
+    if (kind === LOCAL_SESSION_TOOLS_PIN_REQUEST) return this.#pinTool(s, p);
     if (kind === LOCAL_SESSION_COMPACT_REQUEST) {
       this.#write(s, drv.compactLine());
       return { hsid, when: s.turnPermits.length > 0 ? 'next-step' : 'next-run' };
@@ -1466,6 +1573,10 @@ export class LocalLane {
     // slice B2: the memory tools of an attended session are the kernel's own store (a loop session has none: they
     // fall through to the broker, which refuses them)
     if (s.memory && ev.name !== null && MEMORY_TOOL_NAMES.includes(ev.name)) return this.#memoryRequest(s, ev);
+    // slice C3': find_tool is the kernel's own (#tool-selector); a loop session has no selector and the broker refuses it
+    if (ev.name === FIND_TOOL_NAME && !s.loop) return this.#findTool(s, ev);
+    // slice C3': an offered tool called this step stays selected for the next STICKY_STEPS steps
+    if (s.sel && ev.name !== null && s.tools?.offered.some((t) => t.name === ev.name)) s.sel.current.add(ev.name);
     if (!s.tools) {
       // Aegis L7: never unanswered, never unlogged (the broker is built before stdout is read; this is the backstop)
       await this.#o.log('tool.brokered', { hsid: s.hsid, server: KERNEL_MCP_SERVER, argsHash: inputHash(ev.args ?? null), decision: 'not-running', bytes: 0, isError: true }, { session: s.hsid }).catch(() => undefined);
@@ -1528,7 +1639,7 @@ export class LocalLane {
     // slice C1: a tool_request line carries model-written args: hashed for every session (tool.brokered is hash-only too)
     // Aegis L3: so are the tool_execution_* lines of a brokered tool (they echo its args and the kernel's result)
     // slice B2: so are the memory tools' (note carries model-written text; session.memory rows are hash-only)
-    const brokeredTool = ev.kind === 'tool' && ev.tool !== null && ((s.tools?.offered.some((t) => t.name === ev.tool) ?? false) || (s.memory !== undefined && MEMORY_TOOL_NAMES.includes(ev.tool)));
+    const brokeredTool = ev.kind === 'tool' && ev.tool !== null && ((s.tools?.offered.some((t) => t.name === ev.tool) ?? false) || (s.memory !== undefined && MEMORY_TOOL_NAMES.includes(ev.tool)) || ev.tool === FIND_TOOL_NAME);
     const hashOnly = bytes > EVENT_LINE_CAP || ev.kind === 'tool-request' || brokeredTool || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
     await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(hashOnly ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     if (s.loop && ev.kind === 'message') s.loop.reply = loopReplyOf(line) ?? s.loop.reply;
@@ -1583,13 +1694,25 @@ export class LocalLane {
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         // slice B2: the follow_up queued behind this run starts now: its text is the goal
         const nextGoal = s.pendingGoals.shift();
-        if (nextGoal !== undefined) await this.#setGoal(s, nextGoal);
+        if (nextGoal !== undefined) {
+          await this.#setGoal(s, nextGoal);
+          // slice C3': the follow_up's goal re-selects the tools before its run's first step
+          this.#goalChanged(s, nextGoal.text);
+        }
         if (s.loop?.pending) s.loop.pending({ text: s.loop.reply, tokens: s.loop.tokens, stopReason: ev.stopReason, error: ev.error ?? (ev.stopReason === 'error' ? 'the model call failed' : null), ...(s.loop.act ? { protectedHits: [...s.loop.act.hits] } : {}) });
         return;
       }
       case 'tool':
         // slice B2: edited files and the last failing tool (attended sessions)
         await this.#memoryTool(s, ev);
+        return;
+      case 'turn':
+        // slice C3': a model step ended (turn_end): stickiness moves, a periodic re-select may send tools_set
+        if (ev.phase === 'end') this.#stepEnded(s);
+        return;
+      case 'start':
+        // slice C3': a run started (agent_start): find_tool's per-turn allowance resets
+        if (s.sel) s.sel.finds = 0;
         return;
       case 'tool-request':
         // slice C1: answered OUTSIDE this queue — a mutate call's card may wait minutes on a human
@@ -1660,6 +1783,11 @@ export class LocalLane {
       const turn = turnId(s.hsid, s.turns - s.turnPermits.length + 1);
       await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8'), ...voiceTag(p) }, { session: s.hsid });
       await this.#o.log('turn.steer', { hsid: s.hsid, turn, contentHash, permitId: s.turnPermits[0], backend: 'local' }, { session: s.hsid });
+      // slice C3': a steer re-selects the tools; any tools_set goes out ahead of the steer line
+      if (s.sel) {
+        s.sel.text = p.text.slice(0, QUERY_PART_MAX);
+        this.#reselect(s);
+      }
       s.child.stdin?.write(drv.steerLine(p.text));
       return { turn, steered: true };
     }
@@ -1685,8 +1813,11 @@ export class LocalLane {
     // Aegis R1: a kernel-composed turn (a mod offer's title) is DATA (tool:offer), never the trusted goal
     const untrusted: `tool:${string}` | undefined = p.origin === 'kernel' ? 'tool:offer' : p.voiceOrigin?.sentBy === 'unverified' || (p.source === 'voice' && p.voiceOrigin === undefined) ? 'tool:voice' : undefined;
     const goal = { text: p.text, ...(untrusted ? { untrusted } : {}) };
-    if (!inFlight) await this.#setGoal(s, goal);
-    else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(goal);
+    if (!inFlight) {
+      await this.#setGoal(s, goal);
+      // slice C3': a new goal re-selects the tools; any tools_set goes out ahead of the prompt line
+      this.#goalChanged(s, p.text);
+    } else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(goal);
     s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight }));
     return { turn: turnId(s.hsid, n) };
   }

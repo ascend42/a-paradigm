@@ -475,7 +475,7 @@ export function compactSurfaceTokens(tools: ReadonlyArray<Pick<CapabilityEntry, 
 }
 
 /**
- * C2' offer rule (until C3' adds selection): the brokered tools' share of the context target. The kernel verbs come
+ * C2' offer rule (slice C3' replaced it in LocalLane with #tool-selector, which keeps this slot): the brokered tools' share of the context target. The kernel verbs come
  * first; narrow tools follow in INDEX ORDER (servers in compose order, Paradigm first; tools in list order) while their
  * compact-surface tokens fit TOOLS_SLOT_SHARE of the target (at most TOOLS_SLOT_MAX_TOKENS), and the whole set stays
  * under MAX_OFFERED. Human-only entries and names already taken are skipped.
@@ -508,7 +508,7 @@ export function offerWithin<T extends Pick<CapabilityEntry, 'name' | 'descriptio
 }
 
 /**
- * The names a local session already holds (gnomon-local compat.ts TOOL_ORDER natives + the memory tools): a narrow
+ * The names a local session already holds (gnomon-local compat.ts TOOL_ORDER natives + the memory tools + find_tool): a narrow
  * tool by one of these names is never offered (the child refuses a tools_set naming one). Kept in step by a test.
  */
-export const LOCAL_RESERVED_TOOL_NAMES: readonly string[] = Object.freeze(['list_dir', 'read_file', 'read_section', 'grep', 'outline', 'edit', 'write_file', 'note', 'forget']);
+export const LOCAL_RESERVED_TOOL_NAMES: readonly string[] = Object.freeze(['list_dir', 'read_file', 'read_section', 'grep', 'outline', 'edit', 'write_file', 'note', 'forget', 'find_tool']);

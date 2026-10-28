@@ -17,9 +17,11 @@ import { parseSessionConfig, rpcSession } from '../../gnomon-local/src/index.js'
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { parseLocalLine, toolResponseLine, toolsSetLine } from '../src/adapters/local/runner.js';
 import { GIT_VERB_TOOL_SPECS, type VerbSession } from '../src/kernel/git/kernel-verbs.js';
-import { LOCAL_RESERVED_TOOL_NAMES, narrow, offerWithin } from '../src/kernel/local/capability-index.js';
+import { LOCAL_RESERVED_TOOL_NAMES, narrow, offerWithin, type CapabilityEntry } from '../src/kernel/local/capability-index.js';
+import { selectTools } from '../src/kernel/local/tool-selector.js';
 import { TOOL_ORDER } from '../../gnomon-local/src/compat.js';
 import { MEMORY_TOOLS } from '../../gnomon-local/src/memory-tools.js';
+import { FIND_TOOL } from '../../gnomon-local/src/find-tool.js';
 import { droppedLine, kernelSdkTarget, LocalToolBroker, offeredKernelTools, validateBrokeredArgs, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
@@ -432,8 +434,26 @@ describe('slice C2\': narrow MCP tools through the broker (G-LCL-16)', () => {
     expect(r.rows[0]!.payload).toMatchObject({ tool: 'fam.put', class: 'mutate', decision: 'approved' });
   });
 
-  it('the reserved names are the child\'s natives and memory tools', () => {
-    expect([...LOCAL_RESERVED_TOOL_NAMES].sort()).toEqual([...TOOL_ORDER, ...MEMORY_TOOLS.map((t) => t.name)].sort());
+  it('G-LCL-20: a narrow tool the selection leaves out is refused unknown-tool with no target call until a selection offers it', async () => {
+    const r = mcpRig();
+    const toBrokered = (es: readonly CapabilityEntry[]): BrokeredTool[] => es.map((e) => ({ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target: r.b.offered[0]!.target! }));
+    // a selection of one (k 1) for a query about putting: fam.get is not offered
+    const first = selectTools({ entries, fixed: [], query: 'put', contextTarget: 8192, k: 1 });
+    expect(first.selected.map((e) => e.name)).toEqual(['fam.put']);
+    r.b.setTools(toBrokered(first.selected));
+    expect(await r.b.handle(req('fam.get', { key: 'abc' }))).toMatchObject({ isError: true, content: 'unknown tool fam.get' });
+    expect(r.calls).toEqual([]);
+    // a find_tool need puts it at the top: the next set offers it and the call runs
+    const next = selectTools({ entries, fixed: [], query: 'put', need: 'get', contextTarget: 8192, k: 1 });
+    expect(next.found.map((e) => e.name)).toEqual(['fam.get']);
+    r.b.setTools(toBrokered(next.selected));
+    expect(await r.b.handle(req('fam.get', { key: 'abc' }))).toMatchObject({ isError: false });
+    expect(r.calls).toEqual([{ name: 'fam', args: { key: 'abc', op: 'get' } }]);
+    expect(r.rows.map((x) => x.payload.decision)).toEqual(['unknown-tool', 'ran']);
+  });
+
+  it('the reserved names are the child\'s natives, memory tools and find_tool (slice C3\')', () => {
+    expect([...LOCAL_RESERVED_TOOL_NAMES].sort()).toEqual([...TOOL_ORDER, ...MEMORY_TOOLS.map((t) => t.name), FIND_TOOL.name].sort());
   });
 });
 

@@ -26,6 +26,10 @@
  *     passes it relative to the session root after realpath and a roots check;
  *     the store quotes it; at most MAX_FILE_REFS, the oldest rolls off) and
  *     the last failing tool (the text is tool output: source `tool:<server>`);
+ *   - human-written (slice C3', #tool-selector): tool pins, kind tool-pin,
+ *     source human, text `pinned tool: <name>` (pinTool/unpinTool, reached
+ *     only from the human's request.session.tools.pin; at most MAX_TOOL_PINS);
+ *     the last-failing-tool entry is the tool-pin whose source is NOT human;
  *   - model-written: `note{text}` (≤ NOTE_MAX_CHARS) and `forget{id}` (model
  *     notes only). At most MAX_MODEL_NOTES model notes: the oldest is evicted.
  * Caps: at most MAX_ENTRIES entries of at most ENTRY_MAX_CHARS each. The goal
@@ -81,6 +85,10 @@ export const MEMORY_SLOT_SHARE = 0.12;
 /** Aegis M1: bytes per token for the memory block's conservative estimate (gnomon-local budget.ts MEMORY_BYTES_PER_TOKEN). */
 export const MEMORY_BYTES_PER_TOKEN = 2.5;
 export const MEMORY_ID_RE = /^wm-[1-9]\d{0,8}$/;
+/** Slice C3': human tool pins per session, their entry text prefix, and the names a pin may hold (a model tool name). */
+export const MAX_TOOL_PINS = 8;
+export const PIN_PREFIX = 'pinned tool: ';
+export const TOOL_PIN_NAME_RE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 const CUT_MARK = ' […cut]';
 const KINDS: readonly MemoryKind[] = ['goal', 'fact', 'note', 'file-ref', 'tool-pin'];
 const SOURCE_RE = /^(?:human|kernel|model|tool:[a-z0-9][a-z0-9_-]{0,63})$/;
@@ -457,7 +465,58 @@ export class WorkingMemory {
    */
   setToolError(tool: string, detail: string, source: `tool:${string}` = 'tool:local'): MemoryChange[] {
     const src: MemorySource = source.startsWith('tool:') && SOURCE_RE.test(source) ? source : 'tool:local';
-    return this.#replaceOne((e) => e.kind === 'tool-pin', 'tool-pin', src, cut(oneLine(`last failing tool: ${tool}${detail ? ` — ${detail}` : ''}`), ENTRY_MAX_CHARS).text);
+    // slice C3': a human tool pin (kind tool-pin, source human) is never the last-failing-tool entry
+    return this.#replaceOne((e) => e.kind === 'tool-pin' && e.source !== 'human', 'tool-pin', src, cut(oneLine(`last failing tool: ${tool}${detail ? ` — ${detail}` : ''}`), ENTRY_MAX_CHARS).text);
+  }
+
+  /** Slice C3': the last failing tool's entry text (tool output: query text for #tool-selector only), or null. */
+  lastToolError(): string | null {
+    return this.#entries.find((e) => e.kind === 'tool-pin' && e.source !== 'human')?.text ?? null;
+  }
+
+  /** Slice C3': the current goal's text, or null. */
+  goal(): string | null {
+    return this.#entries.find((e) => e.kind === 'goal')?.text ?? null;
+  }
+
+  /**
+   * Slice C3' (#tool-selector, founder decision: pins are HUMAN-only): the names of the human's tool pins. Only
+   * pinTool (reached from the human-only request.session.tools.pin) writes one: kind tool-pin, source human, text
+   * `pinned tool: <name>`; the model's note{} is always source model, kind note, so it can never mint a pin.
+   */
+  toolPins(): string[] {
+    return this.#entries.filter((e) => e.kind === 'tool-pin' && e.source === 'human' && e.text.startsWith(PIN_PREFIX)).map((e) => e.text.slice(PIN_PREFIX.length));
+  }
+
+  /** Slice C3': the human pins `name` (a tool name the caller checked); at most MAX_TOOL_PINS. */
+  pinTool(name: string): MemoryChange[] {
+    if (!TOOL_PIN_NAME_RE.test(name)) return [{ op: 'refused', source: 'human', kind: 'tool-pin', bytes: Buffer.byteLength(name, 'utf8'), why: 'empty' }];
+    if (this.toolPins().includes(name)) return [];
+    const text = `${PIN_PREFIX}${name}`;
+    if (this.toolPins().length >= MAX_TOOL_PINS) {
+      const out: MemoryChange[] = [{ op: 'refused', source: 'human', kind: 'tool-pin', bytes: Buffer.byteLength(text, 'utf8'), why: 'full' }];
+      return out;
+    }
+    const out: MemoryChange[] = [];
+    if (!this.#room('human', 'tool-pin', text, out)) {
+      this.#persist(out, []);
+      return out;
+    }
+    const entry = this.#mint('tool-pin', 'human', text, true);
+    this.#entries.push(entry);
+    out.push({ op: 'add', entry });
+    this.#persist(out, [entry]);
+    return out;
+  }
+
+  /** Slice C3': the human removes a pin (nothing when `name` is not pinned). */
+  unpinTool(name: string): MemoryChange[] {
+    const e = this.#entries.find((x) => x.kind === 'tool-pin' && x.source === 'human' && x.text === `${PIN_PREFIX}${name}`);
+    if (!e) return [];
+    this.#entries.splice(this.#entries.indexOf(e), 1);
+    const out: MemoryChange[] = [{ op: 'forget', entry: e }];
+    this.#persist(out, []);
+    return out;
   }
 
   /** The model's note{text}: ≤ NOTE_MAX_CHARS; NFKC and hygiene (cleanText); the oldest model note leaves past MAX_MODEL_NOTES. */

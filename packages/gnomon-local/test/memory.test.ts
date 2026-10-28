@@ -202,6 +202,24 @@ describe('note / forget: brokered to the kernel; never for a loop session', () =
     expect(s.evs.find((e) => e.type === 'tool_execution_end')).toMatchObject({ isError: true, result: expect.stringContaining('longer than 300') });
   });
 
+  it('slice C3\': find_tool is offered only with brokered tools, goes out as tool_request, and its name is reserved', async () => {
+    const s = await session([{ content: 'a' }, { toolCalls: [{ name: 'find_tool', arguments: '{"need":"lore timeline"}' }] }, { content: 'done' }], {
+      kernel: (req, reply) => reply({ type: 'tool_response', id: req.id, content: 'Callable from your next step:\n- lore.timeline: Timeline.', isError: false, provenance: 'kernel' }),
+    });
+    s.send({ type: 'prompt', message: 'no brokered tools yet' });
+    await s.idle();
+    const first = (agentRequests()[0]!.tools as Array<{ function: { name: string } }>).map((t) => t.function.name);
+    expect(first).not.toContain('find_tool');
+    s.send({ type: 'tools_set', tools: [{ name: 'find_tool', description: 'd', parameters: { type: 'object' }, class: 'read' }] });
+    expect(s.last()).toMatchObject({ success: false, error: 'tools[0].name find_tool is taken' });
+    s.send({ type: 'tools_set', tools: [{ name: 'lore.get', description: 'Get lore.', parameters: { type: 'object', properties: {} }, class: 'read' }] });
+    s.send({ type: 'prompt', message: 'find one' });
+    await s.idle();
+    const second = (agentRequests()[1]!.tools as Array<{ function: { name: string } }>).map((t) => t.function.name);
+    expect(second).toEqual([...TOOLS.map((t) => t.name), ...MEMORY_TOOL_NAMES, 'find_tool', 'lore.get']);
+    expect(s.evs.find((e) => e.type === 'tool_request')).toMatchObject({ name: 'find_tool', args: { need: 'lore timeline' } });
+  });
+
   it('a loop session gets no note tools: no memory flag (none offered), and memory with a tools allowlist is refused', async () => {
     const s = await session([{ content: 'ok' }], { extra: { memory: undefined } });
     s.send({ type: 'prompt', message: 'go' });

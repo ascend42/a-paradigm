@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateKindPayload } from '@a-company/gnomon-contracts';
 import { DELIMITER_NAMES, escapeData as childEscape, memoryBlockTokens as childBlock, memorySlotTokens as childSlot, neutraliseDelimiters as childDelims, neutraliseSpecialTokens as childSpecial } from '../../gnomon-local/src/index.js';
-import { answerMemoryTool, ENTRY_MAX_CHARS, escapeModelText, KERNEL_OPEN, MAX_ENTRIES, MAX_FILE_REFS, MAX_MODEL_NOTES, MEMORY_CLOSE, MEMORY_DELIMITER_NAMES, MEMORY_FILE, memoryBlockTokens, memoryOwnerOf, memoryRowsOf, memorySlotTokens, MODEL_OPEN, neutraliseDelimiters, neutraliseSpecialTokens, sha256, WorkingMemory } from '../src/kernel/local/working-memory.js';
+import { answerMemoryTool, ENTRY_MAX_CHARS, MAX_TOOL_PINS,escapeModelText, KERNEL_OPEN, MAX_ENTRIES, MAX_FILE_REFS, MAX_MODEL_NOTES, MEMORY_CLOSE, MEMORY_DELIMITER_NAMES, MEMORY_FILE, memoryBlockTokens, memoryOwnerOf, memoryRowsOf, memorySlotTokens, MODEL_OPEN, neutraliseDelimiters, neutraliseSpecialTokens, sha256, WorkingMemory } from '../src/kernel/local/working-memory.js';
 import { tempHome } from './daemon-helpers.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
@@ -266,5 +266,43 @@ describe('session.memory rows are hash-only and valid', () => {
     }
     expect(rows[1]).toMatchObject({ textHash: sha256(text), bytes: Buffer.byteLength(text) });
     expect(validateKindPayload('session.memory', { hsid: HSID, op: 'refused', bytes: 0, why: 'child-refused' })).toEqual([]);
+  });
+});
+
+describe('slice C3\' (#tool-selector): human tool pins', () => {
+  it('pinTool/unpinTool are the only way to a pin; the last failing tool never overwrites one; reload keeps them', () => {
+    const { m, reopen } = store();
+    const add = m.pinTool('paradigm_session.recover');
+    expect(add).toHaveLength(1);
+    expect(add[0]).toMatchObject({ op: 'add', entry: { kind: 'tool-pin', source: 'human', text: 'pinned tool: paradigm_session.recover' } });
+    expect(m.pinTool('paradigm_session.recover')).toEqual([]);
+    // the last failing tool is its own tool-pin entry (source tool:*), replaced in place, never the human's pin
+    m.setToolError('grep', 'bad pattern');
+    m.setToolError('edit', 'no match');
+    expect(m.toolPins()).toEqual(['paradigm_session.recover']);
+    expect(m.lastToolError()).toMatch(/^last failing tool: edit/);
+    // the model's note can never mint a pin, whatever it writes
+    m.note('pinned tool: paradigm_lore.delete');
+    expect(m.toolPins()).toEqual(['paradigm_session.recover']);
+    expect(reopen().toolPins()).toEqual(['paradigm_session.recover']);
+    expect(m.unpinTool('paradigm_session.recover')[0]).toMatchObject({ op: 'forget' });
+    expect(m.toolPins()).toEqual([]);
+    expect(reopen().toolPins()).toEqual([]);
+    for (const row of memoryRowsOf(HSID, add)) expect(validateKindPayload('session.memory', row)).toEqual([]);
+  });
+
+  it('at most MAX_TOOL_PINS pins; a name that is not a tool name is refused', () => {
+    const { m } = store();
+    for (let i = 0; i < MAX_TOOL_PINS; i++) expect(m.pinTool(`tool_${i}`)[0]!.op).toBe('add');
+    expect(m.pinTool('one_more')[0]).toMatchObject({ op: 'refused', why: 'full' });
+    expect(m.pinTool('bad name\n')[0]).toMatchObject({ op: 'refused' });
+    expect(m.toolPins()).toHaveLength(MAX_TOOL_PINS);
+  });
+
+  it('goal() is the current goal text', () => {
+    const { m } = store();
+    expect(m.goal()).toBeNull();
+    m.setGoal('recover the paradigm checkpoint');
+    expect(m.goal()).toBe('recover the paradigm checkpoint');
   });
 });

@@ -183,10 +183,13 @@ components:
       called with the signal and deadline, answered source mcp:<server>, and
       logged tool.brokered{server, tool: the narrow name}; setTools()
       replaces the set on a server's list_changed (LocalLane re-sends
-      tools_set). LocalLane offers kernel verbs plus narrow tools by the C2'
-      slot rule (offerWithin); a manual session gets read-class narrow tools
-      only; loop sessions get no MCP tools; a session with MCP servers also
-      takes #mcp-servers' write-denies (mcpDenyWrite).
+      tools_set). LocalLane offers kernel verbs plus the narrow tools
+      #tool-selector picks (slice C3'; it replaced the C2' offerWithin rule)
+      and re-sends tools_set when the selection's hash changes; find_tool is
+      the kernel's own (answered in local-session.ts, never by this broker);
+      a manual session gets read-class narrow tools only; loop sessions get no
+      MCP tools; a session with MCP servers also takes #mcp-servers'
+      write-denies (mcpDenyWrite).
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
@@ -229,8 +232,9 @@ components:
       runs (G-LCL-16). The C2' offer rule (offerWithin): kernel verbs first,
       then narrow tools in index order while their compact-surface tokens fit
       toolsSlotTokens(contextTarget) = min(1500, 15 % of the target), at most
-      48 brokered tools; human-only and taken names skipped. C3' replaces it
-      with selection.
+      48 brokered tools; human-only and taken names skipped. C3' replaced it
+      in LocalLane with #tool-selector (the slot rule and MAX_OFFERED stay;
+      LOCAL_RESERVED_TOOL_NAMES now holds find_tool too).
     path: src/kernel/local/capability-index.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
@@ -238,6 +242,70 @@ components:
     tests:
       - test/capability-index.test.ts
     oracles: [G-LCL-16]
+  tool-selector:
+    description: >-
+      #tool-selector (TD-2026-10-27-833 slice C3', design G2/G3; spec §13.1
+      "Tool selection"): src/kernel/local/tool-selector.ts, which narrow tools
+      a local session is offered at a step. selectTools is PURE and
+      deterministic (no clock, no randomness, no embeddings): BM25 (k1 1.2,
+      b 0.75; a term every candidate holds is not scored; scores rounded to
+      1e-9) over each candidate's name (twice), description and narrow param
+      names, tokenised with camelCase splits, stop words and a small suffix
+      stemmer. Query = the working-memory Goal + the latest user or steer text
+      + the last tool error (each <= QUERY_PART_MAX 600 chars, <= 64 distinct
+      terms) + a find_tool need. Priority: human pins, then STICKY tools
+      (called in the last STICKY_STEPS 2 steps), then the need's top matches
+      (<= FIND_TOOL_MAX_RESULTS 5; they replace the bottom of the set), then
+      earlier find_tool matches still in force, then positive scores (desc,
+      ties by id), then index order; taken while the set stays under SELECT_K
+      24 (until C4' derives K from the tier) and MAX_OFFERED, and the compact
+      surface fits toolsSlotTokens(target) after the fixed tools (kernel
+      verbs and find_tool). Output in INDEX order with a hash of the ids.
+      Candidates exclude human-only entries, reserved names
+      (LOCAL_RESERVED_TOOL_NAMES incl. find_tool), the gnomon_ prefix, fixed
+      names, later duplicates, a name bound to another server this session
+      (no rebinding) and whatever `allow` refuses (manual: read-class only,
+      over pins, stickiness and needs). LocalLane (local-session.ts) keeps
+      per-session state (steps from turn_end lines, the sticky window, found
+      matches for RESELECT_EVERY_STEPS steps, the latest user/steer text,
+      find_tool calls per run) and re-selects on a goal change (a prompt, a
+      follow_up's run start), a steer, a find_tool, every
+      RESELECT_EVERY_STEPS 4 steps and a server's list_changed — never every
+      step — and writes tools_set only when the offered hash changed, always
+      ahead of the line that follows (prompt, steer, find_tool answer).
+      find_tool{need} is the ONE meta-tool: the child offers it as a core tool
+      whenever brokered tools exist (gnomon-local find-tool.ts; spec parity
+      with FIND_TOOL_SPEC), it rides tool_request, and the kernel answers it
+      (class read, no card): need <= 200 chars, cleaned with cleanServerText,
+      closed {need}, at most FIND_TOOL_PER_TURN 3 per run (else refused); the
+      selector runs with the need, tools_set goes out, then the answer (<= 5
+      `- name: description` lines, a carded class flagged "asks the human
+      first"); one hash-only tool.brokered{server gnomon, tool find_tool,
+      class read} row; its tool_execution lines are hash-only. A found tool is
+      callable from the NEXT step; until then the child refuses it (unknown
+      tool) and the broker refuses any name outside its current offered set
+      (G-LCL-20). Human pins (founder decision: human-only):
+      request.session.tools.pin{hsid, name, pinned} (gui/device, the owner;
+      the name must be a non-human-only narrow tool of the session) writes a
+      working-memory tool-pin entry, source human (WorkingMemory.pinTool, at
+      most MAX_TOOL_PINS 8); the model's note{} can never mint one. Selection
+      only decides what is offered: a mutate or destructive tool it offers
+      still raises its card at call time. Loop sessions have no selector and
+      no brokered tools; a find_tool from one falls to the broker, which
+      refuses loop-session. Gaps: K and the slot are not yet per tier (C4');
+      no session row records each selection (the tools_set line itself is not
+      logged); a found mutate tool is offered (carded), not refused.
+    path: src/kernel/local/tool-selector.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
+    related: ["#capability-index", "#local-tool-broker", "#local-working-memory", "#gnomon-local"]
+    signals: []
+    tests:
+      - test/tool-selector.test.ts
+      - test/local-tool-broker.test.ts
+      - test/local-working-memory.test.ts
+      - test/paradigm-staged-lane.test.ts
+    oracles: [G-LCL-20]
   local-mcp-client:
     description: >-
       #local-mcp-client (TD-2026-10-27-833 slice C2'): the kernel's minimal
@@ -363,6 +431,10 @@ components:
       kind goal|fact|note|file-ref|tool-pin, source human|kernel|model|tool:<server>, text, at, pinned}. Kernel-
       written: the goal (each prompt; a follow_up's when its run starts), edited files (write_file/edit tool ends,
       de-duplicated), the last failing tool (source tool:<server>: its text is tool output, rendered as data).
+      Slice C3' (#tool-selector): human tool pins are kind tool-pin, source human, text `pinned tool: <name>`
+      (pinTool/unpinTool, only from request.session.tools.pin, at most MAX_TOOL_PINS 8); the last failing tool is
+      the tool-pin whose source is not human (setToolError never overwrites a pin); goal() and lastToolError()
+      feed the selector's query.
       Aegis B2 review: file-refs are the kernel's realpath-checked form relative to the root, quoted, at most 8, and
       render as DATA; all text NFKC with look-alike <, controls, bidi, zero-width, tag characters and every line
       separator neutralised; fullwidth DeepSeek tokens, tool_call and think neutralised (parity with shape.ts); the

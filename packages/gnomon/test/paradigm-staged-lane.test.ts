@@ -13,6 +13,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { validateKindPayload } from '@a-company/gnomon-contracts';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { McpServers, MCP_PARADIGM_STAGE_REQUEST } from '../src/kernel/desk/mcp-server-cards.js';
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
@@ -286,6 +287,70 @@ describe('TD-2026-10-27-833: a local session runs the REAL staged Paradigm bundl
     await lane.stop(HUMAN, { hsid: s.hsid });
     expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
     expect(await waitFor(() => !fs.existsSync(stateDir), 5_000)).toBe(true);
+  }, 60_000);
+});
+
+describe('slice C3\' (#tool-selector): per-step selection and find_tool with the REAL staged Paradigm bundle', () => {
+  it('the recover goal selects paradigm_session.recover (runs, no card); an unoffered tool is refused until find_tool offers it next step', async () => {
+    expect(fs.existsSync(CLI), 'run `npm run build:gnomon` (builds gnomon-local)').toBe(true);
+    expect(fs.existsSync(path.join(BUNDLE, 'manifest.json')), 'run `npm run build:mcp-bundle` in packages/paradigm').toBe(true);
+    const w = world({ real: true });
+    const m = servers(w, false, []);
+    srv = await fakeOpenAI({
+      tools: true,
+      script: [
+        { toolCalls: [{ name: 'paradigm_session.recover', arguments: '{}' }] },
+        // not in this step's set: the child refuses it, nothing reaches the kernel or the server
+        { toolCalls: [{ name: 'paradigm_lore.timeline', arguments: '{}' }] },
+        { toolCalls: [{ name: 'find_tool', arguments: '{"need":"show the lore timeline"}' }] },
+        { toolCalls: [{ name: 'paradigm_lore.timeline', arguments: '{}' }] },
+        { content: 'Done.' },
+      ],
+    });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const cards: Array<Record<string, unknown>> = [];
+    const lane = new LocalLane({
+      sessionPath: null, pathDenies: [], log, children, fuse, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.root, 'k.sock'),
+      broker: { raise: async (i) => (cards.push(i as never), { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' } as never), decisionOf: async () => 'allow', expire: async () => true },
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp', surface: 'full' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+      localMcp: (ctx) => m.composeLocal(ctx),
+    });
+    const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.repo, model: 'local' }, async () => null))!;
+    // a human pin (human-only request) is offered from the next selection; the model has no path to one
+    const pin = await lane.humanRequest(human as never, 'request.session.tools.pin', { hsid: s.hsid, name: 'paradigm_task.list', pinned: true });
+    expect(pin).toMatchObject({ pinned: true, pins: ['paradigm_task.list'], offered: true });
+    await expect(lane.humanRequest(human as never, 'request.session.tools.pin', { hsid: s.hsid, name: 'no_such_tool', pinned: true })).rejects.toThrow(/no narrow tool/);
+    await expect(lane.humanRequest({ ...human, principalClass: 'agent' } as never, 'request.session.tools.pin', { hsid: s.hsid, name: 'paradigm_task.list', pinned: true })).rejects.toThrow(/human/);
+    await lane.send(HUMAN, { hsid: s.hsid, text: 'recover the paradigm checkpoint' });
+    expect(await waitFor(() => rows.some((r) => r.kind === 'turn.result'), 30_000)).toBe(true);
+    const toolsOf = (r: Record<string, unknown>): string[] => ((r.tools ?? []) as Array<{ function: { name: string } }>).map((t) => t.function.name);
+    const agentReqs = srv.requests.filter((r) => toolsOf(r).includes('read_file'));
+    expect(agentReqs.length).toBe(5);
+    // step 1 (after the goal's selection): recover, the pin and find_tool offered; lore.timeline not
+    expect(toolsOf(agentReqs[0]!)).toEqual(expect.arrayContaining(['paradigm_session.recover', 'paradigm_task.list', 'find_tool']));
+    expect(toolsOf(agentReqs[0]!)).not.toContain('paradigm_lore.timeline');
+    // step 3 still without it; the step after find_tool carries its narrow schema
+    expect(toolsOf(agentReqs[2]!)).not.toContain('paradigm_lore.timeline');
+    expect(toolsOf(agentReqs[3]!)).toContain('paradigm_lore.timeline');
+    const brokered = rows.filter((r) => r.kind === 'tool.brokered').map((r) => [r.payload.server, r.payload.tool, r.payload.class, r.payload.decision]);
+    expect(brokered).toEqual([
+      ['paradigm', 'paradigm_session.recover', 'read', 'ran'],
+      ['gnomon', 'find_tool', 'read', 'ran'],
+      ['paradigm', 'paradigm_lore.timeline', 'read', 'ran'],
+    ]);
+    for (const r of rows.filter((x) => x.kind === 'tool.brokered')) expect(validateKindPayload('tool.brokered', r.payload)).toEqual([]);
+    expect(cards).toHaveLength(0);
+    const toolMsgs = (agentReqs[4]!.messages as Array<{ role: string; content: string }>).filter((x) => x.role === 'tool');
+    expect(toolMsgs[1]!.content).toMatch(/unknown tool/i);
+    expect(toolMsgs[2]!.content).toContain('paradigm_lore.timeline');
+    // the find_tool line is hash-only in the log (the need is model text)
+    expect(rows.some((r) => r.kind === 'turn.event' && typeof r.payload.line === 'string' && r.payload.line.includes('lore timeline'))).toBe(false);
+    await lane.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
   }, 60_000);
 });
 

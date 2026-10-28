@@ -79,6 +79,7 @@ import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 import { contextLedger, contextReport, memoryBlockTokens, memorySlotTokens, resultCapChars, TARGET_HEADROOM, type ContextLedger } from './budget.js';
 import { MEMORY_TOOLS } from './memory-tools.js';
+import { FIND_TOOL } from './find-tool.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
 import { neutraliseResult, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
 import { runTool, TOOLS } from './tools.js';
@@ -199,7 +200,7 @@ export class Agent {
     const o = this.#o;
     // brokered tools follow the natives (orderTools keeps names outside TOOL_ORDER last, in the kernel's order);
     // slice B2: the memory tools (note, forget) come before the kernel's brokered ones
-    this.#tools = orderTools([...this.#native, ...[...this.#memoryTools, ...this.#brokered].map((b) => ({ name: b.name, description: b.description, parameters: b.parameters }))]);
+    this.#tools = orderTools([...this.#native, ...[...this.#memoryTools, ...this.#findTool, ...this.#brokered].map((b) => ({ name: b.name, description: b.description, parameters: b.parameters }))]);
     const textTools = !o.nativeTools && o.surface !== 'none' ? textToolPrompt(this.#tools) : '';
     this.#sysBase = o.systemPrompt ?? 'You are a careful coding agent working in the user\'s project.';
     this.#sysTools = textTools;
@@ -212,6 +213,14 @@ export class Agent {
   /** Slice B2: the memory tools this session offers (none without memory, a broker, or with a tools allowlist). */
   get #memoryTools(): readonly BrokeredToolSpec[] {
     return this.#o.memory && this.#o.broker && !this.#o.allowTools && this.#o.surface !== 'none' ? MEMORY_TOOLS : [];
+  }
+
+  /**
+   * Slice C3': find_tool, the one meta-tool, offered with the kernel's brokered tools (none without them, without a
+   * broker, with a tools allowlist or with surface none). The kernel resolves it and sends the next step's tools_set.
+   */
+  get #findTool(): readonly BrokeredToolSpec[] {
+    return this.#o.broker && !this.#o.allowTools && this.#o.surface !== 'none' && this.#brokered.length > 0 ? [FIND_TOOL] : [];
   }
 
   /** The system message as the request carries it: the system prompt, the memory block, then the text-tool prompt. */
@@ -475,7 +484,7 @@ export class Agent {
         // slice C1: a tools_set received during the last step applies from this step on (slice B2: and the memory
         // block and the context target the kernel set)
         this.#takePending();
-        const brokered = [...this.#memoryTools, ...this.#brokered];
+        const brokered = [...this.#memoryTools, ...this.#findTool, ...this.#brokered];
         const turn = ++this.#turn;
         this.#o.emit({ type: 'turn_start', turn });
         this.#report(turn);

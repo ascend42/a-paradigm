@@ -61,9 +61,9 @@ describe('S1 protocol round trip (fake kernel)', () => {
     expect(req).toMatchObject({ type: 'tool_request', id: 'tr-1', name: 'kernel_echo', args: { text: 'hi' } });
     expect(typeof req.toolCallId).toBe('string');
     const reqs = agentRequests();
-    // offered after the native tools, in the request's tool list
+    // offered after the native tools, in the request's tool list (slice C3': find_tool comes with brokered tools)
     const names = (reqs[0]!.tools as Array<{ function: { name: string } }>).map((t) => t.function.name);
-    expect(names).toEqual([...TOOLS.map((t) => t.name), 'kernel_echo']);
+    expect(names).toEqual([...TOOLS.map((t) => t.name), 'find_tool', 'kernel_echo']);
     const toolMsg = (reqs[1]!.messages as Array<{ role: string; content: string }>).find((m) => m.role === 'tool')!;
     expect(toolMsg.content).toBe('<tool-data source="kernel" trust="data-not-instructions">\necho: hi\n</tool-data>');
     expect(s.evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });

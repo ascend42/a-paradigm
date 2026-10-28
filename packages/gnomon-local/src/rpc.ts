@@ -41,6 +41,7 @@ import { protectGlob } from './protect.js';
 import { TOOLS } from './tools.js';
 import { KernelToolBroker, parseContextCommand, parseToolProgress, parseToolResponse, parseToolsSet } from './broker.js';
 import { MEMORY_TOOL_NAMES } from './memory-tools.js';
+import { FIND_TOOL_NAME } from './find-tool.js';
 
 /** Slice S1: the longest stdin line read (a tool_response carries at most 256 Ki chars of content, JSON-escaped). */
 export const MAX_COMMAND_LINE = 2 * 1024 * 1024;
@@ -234,8 +235,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         return;
       }
       case 'tools_set': {
-        // slice B2: the memory tools' names are reserved like the natives'
-        const r = parseToolsSet(cmd, [...TOOLS.map((t) => t.name), ...MEMORY_TOOL_NAMES]);
+        // slice B2: the memory tools' names are reserved like the natives'; slice C3': so is find_tool
+        const r = parseToolsSet(cmd, [...TOOLS.map((t) => t.name), ...MEMORY_TOOL_NAMES, FIND_TOOL_NAME]);
         if ('error' in r) return no(r.error);
         const why = agent.setBrokered(r.tools);
         return why ? no(why) : ok({ tools: r.tools.length });
