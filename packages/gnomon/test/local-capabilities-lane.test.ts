@@ -15,6 +15,8 @@ import { validateKindPayload } from '@a-company/gnomon-contracts';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { CAPABILITY_TEXT_MAX, LocalLane } from '../src/kernel/supervisor/local-session.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
+import { McpListCache } from '../src/kernel/local/mcp-client.js';
+import { bindingOf } from '../src/kernel/local/trust-book.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
@@ -165,5 +167,86 @@ describe('G-LCL-24 request.session.capabilities (kernel side)', () => {
     await lane.stop(HUMAN, { hsid: s.hsid });
     expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
     await expect(caps()).rejects.toThrow(/no such running/);
+  }, 40_000);
+
+  it('request.session.mcp.restart: owner-only; resets the counter; refused on a trust or launch binding change; one at a time', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-restart-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    // the second server runs through a symlinked dir OUTSIDE the repo; repointed INTO the repo, its launch is refused
+    const outside = path.join(root, 'tools');
+    fs.mkdirSync(outside);
+    fs.copyFileSync(FAKE, path.join(outside, 'srv.mjs'));
+    fs.mkdirSync(path.join(cwd, 'tools'));
+    fs.copyFileSync(FAKE, path.join(cwd, 'tools', 'srv.mjs'));
+    const link = path.join(root, 'link');
+    fs.symlinkSync(outside, link, 'dir');
+    srv = await fakeOpenAI({ tools: true, nCtx: 16384, script: [{ content: 'Done.' }] });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    // a TrustBook stand-in: trust is set for the newest listing and folded into every session (subscribe)
+    const cache = new McpListCache();
+    const book = new Map<string, { binding: string; launchHash: string; toolsHash: string; label: string }>();
+    const listeners: Array<(id: string) => void> = [];
+    const mcpTrust = { of: (id: string) => book.get(id) ?? null, drop: (id: string) => void book.delete(id), subscribe: (fn: (id: string) => void) => (listeners.push(fn), () => undefined) };
+    const trustNewest = (id: string): void => {
+      const n = cache.newest(id)!;
+      book.set(id, { binding: bindingOf({ id, launchHash: n.launchHash, pluginVersion: n.pluginVersion, toolsHash: n.toolsHash }), launchHash: n.launchHash, toolsHash: n.toolsHash, label: n.label });
+      for (const fn of listeners) fn(id);
+    };
+    const LAUNCH = `hmac-sha256:${'1'.repeat(64)}`;
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [], mcpCache: cache, mcpTrust,
+      log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      broker: { raise: async () => ({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }) as never, decisionOf: async () => 'allow', expire: async () => true },
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js'), contextTarget: 16384 },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+      localMcp: () => [
+        { id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE], trust: 'enabled', launchHash: LAUNCH, pluginVersion: null },
+        { id: 'user::linked', name: 'linked', transport: 'stdio', command: process.execPath, args: [path.join(link, 'srv.mjs')], trust: 'enabled', launchHash: LAUNCH, pluginVersion: null },
+      ],
+    });
+    const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+    const restart = (server: string, asker: object = human) => lane.humanRequest(asker as never, 'request.session.mcp.restart', { hsid: s.hsid, server }) as Promise<Record<string, unknown>>;
+    const caps = async () => (await lane.humanRequest(human as never, 'request.session.capabilities', { hsid: s.hsid })) as unknown as Caps;
+    const mcpRows = () => rows.filter((r) => r.kind === 'session.mcp').map((r) => r.payload);
+
+    // refusals before anything runs: an agent, another principal, bad params, a server the session does not hold
+    await expect(restart('fake', { ...human, principalClass: 'agent' })).rejects.toThrow(/human/);
+    await expect(restart('fake', { ...human, principal: 'p:abcdefgh/other' })).rejects.toThrow(/no such running/);
+    await expect(restart('Not A Label')).rejects.toThrow(/server label/);
+    await expect(restart('nope')).rejects.toThrow(/no MCP server nope/);
+    expect((await caps()).servers.find((x) => x.label === 'fake')).toMatchObject({ state: 'running', starts: 1 });
+
+    // a restart kills the process, resets the counter and starts it again (one started row); one at a time
+    const n0 = mcpRows().length;
+    const [a, b] = await Promise.allSettled([restart('fake'), restart('fake')]);
+    expect(a).toMatchObject({ status: 'fulfilled', value: { hsid: s.hsid, server: 'fake', state: 'running', starts: 1 } });
+    expect(b.status).toBe('rejected');
+    expect(String((b as PromiseRejectedResult).reason)).toMatch(/already starting/);
+    expect(mcpRows().slice(n0)).toEqual([{ hsid: s.hsid, server: 'fake', state: 'started' }]);
+
+    // trusted, then the book holds another binding: the trust no longer holds and the restart is refused (one row)
+    trustNewest('user::fake');
+    expect((await caps()).servers.find((x) => x.label === 'fake')).toMatchObject({ trust: 'trusted' });
+    expect(await restart('fake')).toMatchObject({ state: 'running', starts: 1 });
+    book.get('user::fake')!.binding = `sha256:${'9'.repeat(64)}`;
+    await expect(restart('fake')).rejects.toThrow(/not restarted/);
+    expect(mcpRows().at(-1)).toEqual({ hsid: s.hsid, server: 'fake', state: 'refused', fit: 'trust-changed' });
+
+    // the launch moved inside the repo since open: the re-run launch check refuses it
+    expect(await restart('linked')).toMatchObject({ state: 'running' });
+    fs.unlinkSync(link);
+    fs.symlinkSync(path.join(cwd, 'tools'), link, 'dir');
+    await expect(restart('linked')).rejects.toThrow(/not restarted/);
+    expect(mcpRows().at(-1)).toEqual({ hsid: s.hsid, server: 'linked', state: 'refused', fit: 'launch-writable' });
+    for (const r of mcpRows()) expect(validateKindPayload('session.mcp', r)).toEqual([]);
+
+    await lane.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+    await expect(restart('fake')).rejects.toThrow(/no such running/);
   }, 40_000);
 });
