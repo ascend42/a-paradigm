@@ -118,6 +118,7 @@ import { repoKeyOf } from './repo-hooks.js';
 import { inputHash } from './permission.js';
 import { prepareRunner, verifyNode, type LocalRunnerPin } from '../local/runner-pin.js';
 import { readParadigmPin, recheckStaged } from '../local/paradigm-stage.js';
+import { appendLedger } from '../local/edit-ledger.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
@@ -1008,6 +1009,8 @@ export class LocalLane {
       if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, servers: closure.servers, refused: closure.refused, failed: [], ...(paradigmPolicy && stateMade ? { firstParty: { launch: { ...launch, policy: paradigmPolicy }, stateDir: stateMade, nodePin: { node: pin.node, nodeSha256: pin.nodeSha256 } } } : {}) };
       else if (closure.refused.length) s.mcpLaunch = undefined;
       this.#sessions.set(hsid, s);
+      // Aegis H3: the edit ledger knows which roots a local session could write (staging a linked checkout reads it)
+      appendLedger(this.#o.home, { kind: 'open', hsid, at: Date.now(), roots: rootsReal });
       live = s;
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
       s.tools = await this.#toolBroker(s);
@@ -1270,7 +1273,12 @@ export class LocalLane {
     if (ev.toolCallId !== null) s.toolPaths.delete(ev.toolCallId);
     if (ev.isError === false && typeof p === 'string') {
       const rel = this.#fileRefOf(s, p);
-      if (rel !== null) await this.#memoryChanged(s, s.memory.addFileRef(rel));
+      if (rel !== null) {
+        // Aegis H3: every successful local edit, by realpath, in the kernel's edit ledger
+        const root = [s.roots.worktree, s.roots.cwd].find((r): r is string => r !== undefined && fs.existsSync(path.join(r, rel)));
+        if (root) appendLedger(this.#o.home, { kind: 'edit', hsid: s.hsid, at: Date.now(), path: path.join(root, rel) });
+        await this.#memoryChanged(s, s.memory.addFileRef(rel));
+      }
     } else if (ev.isError === true) {
       // the error text is TOOL output: its entry is labelled tool:<server> and renders in the data section
       const brokered = s.tools?.offered.some((t) => t.name === ev.tool) ?? false;
@@ -1457,6 +1465,7 @@ export class LocalLane {
   async #onExit(s: LocalSession): Promise<void> {
     if (s.state === 'exited') return;
     s.state = 'exited';
+    appendLedger(this.#o.home, { kind: 'close', hsid: s.hsid, at: Date.now() });
     // slice C1: calls in flight are cancelled (their cards expire, no target runs) and the session's verb cards expire
     s.tools?.cancelAll();
     if (s.tools?.offered.length) await this.#o.gitVerbs?.closeSession?.(s.hsid).catch(() => undefined);

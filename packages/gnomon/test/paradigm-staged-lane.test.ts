@@ -8,6 +8,7 @@
  *     HOME at the per-session dir and the neutral cwd.
  */
 // @gnomon-platform: darwin, linux
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -17,6 +18,7 @@ import { McpServers, MCP_PARADIGM_STAGE_REQUEST } from '../src/kernel/desk/mcp-s
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
 import { stageRoot } from '../src/kernel/local/paradigm-stage.js';
+import { appendLedger } from '../src/kernel/local/edit-ledger.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
@@ -130,6 +132,40 @@ describe('TD-2026-10-27-833: #mcp-servers stages and verifies the first-party Pa
     expect(r).toMatchObject({ source: w.pkg, version: '9.9.9', sourceKind: 'linked-checkout', staged: true, verified: true, dirty: null, treeSha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
     expect(m.composeLocal({ hsid: 'h2', cwd: w.repo })[0]).toMatchObject({ trust: 'first-party', staged: expect.any(Object) });
     await expect(m.request(human, MCP_PARADIGM_STAGE_REQUEST, { bogus: 1 })).rejects.toThrow(/unknown field/);
+  });
+});
+
+describe('Aegis H3: staging a linked checkout a local session could have written', () => {
+  it('reports ignored/untracked files and the build vs HEAD time; a local edit under the source since the build refuses unless forced', async () => {
+    const w = world();
+    const git = (...a: string[]) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { cwd: w.pkg });
+    git('init', '-q');
+    fs.writeFileSync(path.join(w.pkg, '.gitignore'), 'dist/mcp-bundle/\n');
+    git('add', 'package.json', '.gitignore', 'dist/mcp.js');
+    git('commit', '-qm', 'init');
+    const events: Array<Record<string, unknown>> = [];
+    const m = servers(w, true, events);
+    const preview = (await m.request(human, MCP_PARADIGM_STAGE_REQUEST, { preview: true })) as { dirty: boolean; git: { entries: string[] }; builtAt: string; headCommitAt: string; builtAfterHead: boolean | null };
+    // the gitignored bundle shows as ignored (`!!`): a plain dirty check would call this clean
+    expect(preview.dirty).toBe(true);
+    expect(preview.git.entries.some((e) => e.startsWith('!! ') && e.includes('mcp-bundle'))).toBe(true);
+    expect(typeof preview.builtAt).toBe('string');
+    expect(typeof preview.headCommitAt).toBe('string');
+    // a local session edited a file under the source after the build
+    appendLedger(w.home, { kind: 'edit', hsid: 'hsid:v1:x', at: Date.now() + 1000, path: path.join(w.pkg, 'dist', 'mcp-bundle', 'paradigm-mcp.mjs') });
+    await expect(m.request(human, MCP_PARADIGM_STAGE_REQUEST, {})).rejects.toMatchObject({ message: expect.stringMatching(/force: true/) });
+    expect(fs.existsSync(stageRoot(w.home))).toBe(false);
+    const r = (await m.request(human, MCP_PARADIGM_STAGE_REQUEST, { force: true })) as Record<string, unknown>;
+    expect(r).toMatchObject({ staged: true, forced: true, localWrites: { edits: [expect.objectContaining({ hsid: 'hsid:v1:x' })] } });
+  });
+
+  it('a live local session whose root contains the source counts, even with no edit row', async () => {
+    const w = world();
+    const m = servers(w, true, []);
+    appendLedger(w.home, { kind: 'open', hsid: 'hsid:v1:y', at: 1, roots: [path.dirname(w.pkg)] });
+    await expect(m.request(human, MCP_PARADIGM_STAGE_REQUEST, {})).rejects.toThrow(/force/);
+    appendLedger(w.home, { kind: 'close', hsid: 'hsid:v1:y', at: 2 });
+    expect(await m.request(human, MCP_PARADIGM_STAGE_REQUEST, {})).toMatchObject({ staged: true, forced: false });
   });
 });
 

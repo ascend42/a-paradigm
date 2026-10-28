@@ -345,11 +345,51 @@ export function recheckStaged(s: StagedSnapshot): string | null {
   return null;
 }
 
-/** A checkout's git dirty state (tracked files only), or null. git's fsmonitor and hooks are off. */
+const NULL_DEV = process.platform === 'win32' ? 'NUL' : '/dev/null';
+/** git, hardened: no fsmonitor, no hooks, no system or global config, no lazy fetch, no prompt. */
+function git(dir: string, args: readonly string[]): { ok: boolean; out: string } {
+  const r = spawnSync('git', ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${NULL_DEV}`, '-C', dir, ...args], {
+    encoding: 'utf8',
+    timeout: 5000,
+    maxBuffer: 4 * 1024 * 1024,
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: NULL_DEV, GIT_OPTIONAL_LOCKS: '0', GIT_NO_LAZY_FETCH: '1', GIT_TERMINAL_PROMPT: '0', GIT_ATTR_NOSYSTEM: '1' },
+  });
+  return { ok: r.status === 0 && typeof r.stdout === 'string', out: typeof r.stdout === 'string' ? r.stdout : '' };
+}
+
+/**
+ * Aegis H3: a checkout's full status under the package — tracked changes, untracked AND ignored files (dist/mcp-bundle
+ * is gitignored, so a hidden rebuild shows only here). null when it is not a git checkout.
+ */
+export function gitStatusOf(dir: string): { dirty: boolean; count: number; entries: string[] } | null {
+  const r = git(dir, ['status', '--porcelain', '--ignored', '--untracked-files=all', '--', '.']);
+  if (!r.ok) return null;
+  const lines = r.out.split('\n').filter((l) => l.length > 0);
+  return { dirty: lines.length > 0, count: lines.length, entries: lines.slice(0, 50).map((l) => l.slice(0, 300)) };
+}
+
+/** A checkout's dirty state (tracked, untracked and ignored files under the package), or null. */
 export function gitDirtyOf(dir: string): boolean | null {
-  const r = spawnSync('git', ['-c', 'core.fsmonitor=false', '-c', `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`, '-C', dir, 'status', '--porcelain', '--untracked-files=no', '--', '.'], { encoding: 'utf8', timeout: 5000, env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_OPTIONAL_LOCKS: '0' } });
-  if (r.status !== 0 || typeof r.stdout !== 'string') return null;
-  return r.stdout.trim().length > 0;
+  return gitStatusOf(dir)?.dirty ?? null;
+}
+
+/** HEAD's commit time (ms), or null. */
+export function headCommitTimeOf(dir: string): number | null {
+  const r = git(dir, ['log', '-1', '--no-ext-diff', '--no-textconv', '--format=%ct']);
+  const t = Number(r.out.trim());
+  return r.ok && Number.isFinite(t) && t > 0 ? t * 1000 : null;
+}
+
+/** When the code that would be staged was built: the bundle manifest's mtime, else the entry's (ms), or null. */
+export function builtAtOf(src: ParadigmSource): number | null {
+  for (const p of [path.join(src.dir, ...PARADIGM_BUNDLE_MANIFEST), src.entry]) {
+    try {
+      return fs.statSync(p).mtimeMs;
+    } catch {
+      /* next */
+    }
+  }
+  return null;
 }
 
 export const sourceKindOf = (src: Pick<ParadigmSource, 'linked'>): ParadigmSourceKind => (src.linked ? 'linked-checkout' : 'npm-global');

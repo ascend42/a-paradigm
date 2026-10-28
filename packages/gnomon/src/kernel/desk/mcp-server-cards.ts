@@ -41,7 +41,8 @@ import type { PolicyPath } from '../manifest/policy.js';
 import { RpcRefusal } from '../socket/rpc.js';
 import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
 import type { LocalMcpServer } from '../local/mcp-client.js';
-import { autoStage, gitDirtyOf, readParadigmPin, sourceKindOf, stageParadigm, StageRefused, verifyStaged, type ParadigmPin, type VerifyResult } from '../local/paradigm-stage.js';
+import { autoStage, builtAtOf, gitStatusOf, headCommitTimeOf, readParadigmPin, sourceKindOf, stageParadigm, StageRefused, verifyStaged, type ParadigmPin, type VerifyResult } from '../local/paradigm-stage.js';
+import { localWritesUnder } from '../local/edit-ledger.js';
 import { allowRuleWords, autoAllowRules, composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
 
 export const MCP_SERVERS_SCHEMA = 'gnomon-mcp-servers:v1' as const;
@@ -442,21 +443,39 @@ export class McpServers {
   }
 
   /**
-   * request.mcp.paradigm.stage{preview?} (human, gui/device): stage the installed Paradigm MCP now (an npm-global
-   * install or a LINKED CHECKOUT — the only way one is ever staged). The reply names the source path, version,
-   * source kind and the checkout's git dirty state; {preview: true} answers the same without staging.
+   * request.mcp.paradigm.stage{preview?, force?} (human, gui/device): stage the installed Paradigm MCP now (an
+   * npm-global install or a LINKED CHECKOUT — the only way one is ever staged). The reply names the source path,
+   * version, source kind, the checkout's full git status under the package (tracked, untracked AND ignored:
+   * dist/mcp-bundle is gitignored), the build's time against HEAD's commit time, and the local sessions that could
+   * have written the source since that build (#paradigm-stage edit ledger). Aegis H3: for a linked checkout, any such
+   * local edit or live session REFUSES the stage (`local-writes`) unless the human re-sends {force: true}; {preview:
+   * true} answers the same without staging.
    */
   #stageRequest(payload: unknown): unknown {
     if (payload !== undefined && payload !== null && !isObj(payload)) throw bad('payload', `${MCP_PARADIGM_STAGE_REQUEST} takes {preview?: boolean}`);
     const p = (payload ?? {}) as Record<string, unknown>;
-    for (const k of Object.keys(p)) if (k !== 'preview') throw bad(k.slice(0, 32), `unknown field ${k.slice(0, 32)}`);
+    for (const k of Object.keys(p)) if (k !== 'preview' && k !== 'force') throw bad(k.slice(0, 32), `unknown field ${k.slice(0, 32)}`);
     if (p.preview !== undefined && typeof p.preview !== 'boolean') throw bad('preview', 'preview is a boolean');
+    if (p.force !== undefined && typeof p.force !== 'boolean') throw bad('force', 'force is a boolean');
     const fp = this.#o.firstParty();
     if (!fp.available) throw new RpcRefusal('NOT_FOUND', 'bad-params', `#mcp-servers: ${fp.why}`, { why: 'not-installed', next: PARADIGM_INSTALL_HINT });
     const sourceKind = sourceKindOf(fp);
-    const dirty = gitDirtyOf(fp.dir);
-    const facts = { id: FIRST_PARTY_PARADIGM, source: fp.dir, version: fp.version, sourceKind, dirty };
-    if (p.preview === true) return { ...facts, staged: false, preview: true, current: readParadigmPin(this.#o.home) };
+    const status = gitStatusOf(fp.dir);
+    const dirty = status?.dirty ?? null;
+    const builtAt = builtAtOf({ dir: fp.dir, entry: fp.entry, version: fp.version, linked: fp.linked });
+    const headAt = headCommitTimeOf(fp.dir);
+    const writes = localWritesUnder(this.#o.home, realOr(fp.dir), builtAt ?? 0);
+    const localWrites = writes.edits.length + writes.sessions.length > 0;
+    const facts = {
+      id: FIRST_PARTY_PARADIGM, source: fp.dir, version: fp.version, sourceKind, dirty,
+      git: status, builtAt: builtAt === null ? null : new Date(builtAt).toISOString(), headCommitAt: headAt === null ? null : new Date(headAt).toISOString(),
+      builtAfterHead: builtAt !== null && headAt !== null ? builtAt > headAt : null,
+      localWrites: { edits: writes.edits.map((e) => ({ hsid: e.hsid, path: e.path, at: new Date(e.at).toISOString() })), sessions: writes.sessions },
+    };
+    if (p.preview === true) return { ...facts, staged: false, preview: true, current: readParadigmPin(this.#o.home), ...(sourceKind === 'linked-checkout' && localWrites ? { needsForce: true } : {}) };
+    if (sourceKind === 'linked-checkout' && localWrites && p.force !== true) {
+      throw new RpcRefusal('UNSUPPORTED', 'bad-params', '#mcp-servers: a local session could have written this checkout since its Paradigm build: re-send with {force: true} to stage it anyway', { why: 'local-writes', edits: facts.localWrites.edits.slice(0, 10), sessions: writes.sessions.slice(0, 10), hint: 'rebuild Paradigm yourself, or stage with force' });
+    }
     let pin: ParadigmPin;
     try {
       pin = stageParadigm(this.#o.home, { dir: fp.dir, entry: fp.entry, version: fp.version, linked: fp.linked }, { sourceKind, dirty, ...(this.#o.clock ? { now: this.#o.clock } : {}) });
@@ -467,7 +486,7 @@ export class McpServers {
     const v = verifyStaged(this.#o.home);
     this.#lastVerify = { at: new Date((this.#o.clock ?? Date.now)()).toISOString(), ok: v.ok, why: v.ok ? null : v.why };
     this.#o.emit?.({ event: 'mcp.first-party.staged', id: FIRST_PARTY_PARADIGM, version: pin.version, treeSha256: pin.treeSha256, sourceKind, dirty, by: 'human' });
-    return { ...facts, staged: true, treeSha256: pin.treeSha256, layout: pin.layout, stagedAt: pin.stagedAt, verified: v.ok };
+    return { ...facts, staged: true, forced: p.force === true && localWrites, treeSha256: pin.treeSha256, layout: pin.layout, stagedAt: pin.stagedAt, verified: v.ok };
   }
 
   status(): Record<string, unknown> {
