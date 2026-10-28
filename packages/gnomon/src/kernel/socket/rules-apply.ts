@@ -300,7 +300,10 @@ function safePaused(f: (r: AlwaysRule) => unknown, r: AlwaysRule): string | null
   }
 }
 
-/** status.rules (the human class only): every standing rule in the kernel's words, its state on the kernel clock, the presets. */
+/**
+ * status.rules (the human class only): every standing rule in the kernel's words, its state on the kernel clock, the
+ * presets. A tool rule also names its `class` (destructive | mutate, C6'a2-3); other rules have none.
+ */
 export function rulesStatus(
   book: RuleBook,
   o: {
@@ -342,6 +345,9 @@ export function rulesStatus(
         cardId: r.ruleId,
         state: st.state,
         ...((p) => (p ? { paused: p } : {}))(r.match === 'tool' && o.paused ? safePaused(o.paused, r) : null),
+        // 8.0:local-lane C6'a2-3 (K3): a tool rule's class, as it was learned (an irreversible card learns a destructive
+        // rule, which matches destructive calls only; any other a mutate one), so the Rules view can tag it. Tool rules only.
+        ...(r.match === 'tool' ? { class: r.destructive === true ? 'destructive' : 'mutate' } : {}),
         ...(st.state === 'off' ? { until: st.until, offSince: st.since } : {}),
       };
     }),
