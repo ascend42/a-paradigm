@@ -139,7 +139,7 @@ describe('resolver: write-side guard', () => {
 });
 
 describe('union read', () => {
-  it('repo wins on the same id, and legacy rows without home count with the type default', () => {
+  it('repo wins on the same id, and a legacy row (no home, no author) takes the home it was read from', () => {
     writeJsonl(events('nominations.jsonl'), [
       { id: 'n1', agent: 'a', brief: 'repo copy' }, // legacy: no home
       { id: 'n3', agent: 'a', brief: 'repo only' },
@@ -151,8 +151,13 @@ describe('union read', () => {
     const rows = readLearningRows<{ id: string; brief: string }>('nominations', root, { idOf: r => r.id });
     expect(rows.map(r => r.id).sort()).toEqual(['n1', 'n2', 'n3']);
     expect(rows.find(r => r.id === 'n1')!.brief).toBe('repo copy');
-    // the legacy repo row has no home field; it takes the nominations default
-    expect(rows.find(r => r.id === 'n3')!.home).toBe('user');
+    // F2: the legacy repo row is tagged by its file, not the type default, and flagged
+    expect(rows.find(r => r.id === 'n3')).toMatchObject({ home: 'repo', legacy: true });
+    expect(rows.find(r => r.id === 'n2')!.legacy).toBeUndefined();
+    // a row with an author but no home still takes the type default
+    writeJsonl(events('verdicts.jsonl'), [{ nominationId: 'v', author: 'someone' }]);
+    expect(readLearningRows('verdicts', root)[0]).toMatchObject({ home: 'user' });
+    expect((readLearningRows('verdicts', root)[0] as { legacy?: true }).legacy).toBeUndefined();
   });
 });
 
@@ -238,12 +243,40 @@ describe('calibration is per scope', () => {
   it('learns token bands from one population and reports the others', () => {
     const row = (total: number) => ({ archetype: 'builder', taskType: 'feature', actualTokens: { input: 0, output: 0, total } });
     appendLearningRows('estimate-actuals', root, Array.from({ length: 8 }, (_, i) => row(1000 + i)));
-    writeJsonl(events('estimate-actuals.jsonl'), [{ ...row(99999), home: 'repo' }, row(1008)]);
+    writeJsonl(events('estimate-actuals.jsonl'), [{ ...row(99999), home: 'repo' }, row(50000)]);
     const res = rebuildLearnedTable(root)!;
     expect(res.home).toBe('user');
+    expect(res.population).toBe('user');
+    expect(res.coldStartPrior).toBe(false);
     expect(res.otherHomes).toEqual({ repo: 1 });
-    expect(res.table.builder.feature.n).toBe(9); // 8 user + 1 legacy row (default home)
+    expect(res.legacySamples).toBe(1); // the legacy row is its own population, not pooled
+    expect(res.table.builder.feature.n).toBe(8);
     expect(res.table.builder.feature.max).toBeLessThan(2000);
+  });
+
+  it('uses legacy rows only as a labelled cold-start prior when the scope has no samples', () => {
+    const row = (total: number) => ({ archetype: 'builder', taskType: 'feature', actualTokens: { input: 0, output: 0, total } });
+    writeJsonl(events('estimate-actuals.jsonl'), Array.from({ length: 8 }, (_, i) => row(500 + i)));
+    const res = rebuildLearnedTable(root)!;
+    expect(res.population).toBe('legacy-repo');
+    expect(res.coldStartPrior).toBe(true);
+    expect(res.table.builder.feature.n).toBe(8);
+  });
+
+  it('reports legacy nominations apart and labels a cold-start threshold prior', async () => {
+    const base = { agent: 'kit', relevance: 1, urgency: 'low', type: 'observation', brief: 'b', surfaced: true, timestamp: new Date().toISOString() };
+    writeJsonl(events('nominations.jsonl'), Array.from({ length: 5 }, (_, i) => ({ ...base, id: `l${i}`, engaged: true, response: 'dismissed' })));
+    const stats = getNominationStats(root, 'kit');
+    expect(stats.total).toBe(0); // the user scope has no samples
+    expect(stats.legacy?.total).toBe(5);
+    expect(stats.byHome.repo).toBeUndefined();
+    const agents = path.join(root, '.paradigm', 'agents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(agents, 'kit.agent'), 'id: kit\nrole: test\nattention:\n  threshold: 0.6\n', 'utf8');
+    const { adjustAttentionFromFeedback } = await import('./nomination-engine.js');
+    const adj = adjustAttentionFromFeedback(root, 'kit');
+    expect(adj.population).toBe('legacy-repo');
+    expect(adj.reason).toContain('cold-start prior: legacy repo population');
   });
 });
 

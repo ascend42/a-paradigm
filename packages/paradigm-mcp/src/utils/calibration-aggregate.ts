@@ -134,24 +134,50 @@ export function rebuildLearnedTable(rootDir: string): {
   home: LearningHome;
   /** Samples in other homes, counted but not pooled into the bands. */
   otherHomes: Partial<Record<LearningHome, number>>;
+  /** Pre-scoping repo rows (no home, no author): a separate population. */
+  legacySamples: number;
+  /** The population the bands were learned from. */
+  population: LearningHome | 'legacy-repo';
+  /** True when the bands come from the legacy population as a cold-start prior. */
+  coldStartPrior: boolean;
 } | null {
   try {
     const rows = readLearningRows<ActualRecord>('estimate-actuals', rootDir);
     if (rows.length === 0) return null;
     const home = homeOf('estimate-actuals', null, readLearningHomeConfig(rootDir));
     const otherHomes: Partial<Record<LearningHome, number>> = {};
-    const lines: string[] = [];
+    let lines: string[] = [];
+    const legacyLines: string[] = [];
     for (const r of rows) {
-      if (r.home === home) lines.push(JSON.stringify(r));
+      if (r.legacy) legacyLines.push(JSON.stringify(r));
+      else if (r.home === home) lines.push(JSON.stringify(r));
       else otherHomes[r.home] = (otherHomes[r.home] ?? 0) + 1;
     }
+    // Legacy rows (no home, no author) are a separate repo population (review
+    // F2). They seed the table only when the scope has no samples, and the
+    // result is then labelled a cold-start prior.
+    let population: LearningHome | 'legacy-repo' = home;
+    if (lines.length === 0 && legacyLines.length > 0) {
+      lines = legacyLines;
+      population = 'legacy-repo';
+    }
+    const legacySamples = legacyLines.length;
     const { table, groups } = aggregateActuals(lines);
 
     const learnedDir = path.join(rootDir, path.dirname(LEARNED_FILE));
     if (!fs.existsSync(learnedDir)) fs.mkdirSync(learnedDir, { recursive: true });
     fs.writeFileSync(path.join(rootDir, LEARNED_FILE), JSON.stringify(table, null, 2) + '\n', 'utf8');
 
-    return { table, groups, samplesRead: groups.reduce((s, g) => s + g.n, 0), home, otherHomes };
+    return {
+      table,
+      groups,
+      samplesRead: groups.reduce((s, g) => s + g.n, 0),
+      home,
+      otherHomes,
+      legacySamples,
+      population,
+      coldStartPrior: population === 'legacy-repo',
+    };
   } catch {
     return null;
   }

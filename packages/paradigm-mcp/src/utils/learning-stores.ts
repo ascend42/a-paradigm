@@ -510,6 +510,12 @@ export function appendLearningRows<T extends object>(
   return file;
 }
 
+/** Tags readLearningRows adds. `legacy` marks a pre-scoping row whose home was inferred from its file. */
+export interface LearningRowTags {
+  home: LearningHome;
+  legacy?: true;
+}
+
 export interface ReadLearningOptions<T> extends PathForOptions {
   /** Dedupe key; rows without one are all kept. Repo wins on the same id. */
   idOf?: (row: T) => string | undefined;
@@ -520,26 +526,32 @@ export interface ReadLearningOptions<T> extends PathForOptions {
 
 /**
  * Union read of `artifact` across repo, user and machine. Each row is tagged
- * with `home` (its own field, else homeOf's default — so legacy repo rows
- * without `home` still count). Deduped by `idOf`, repo wins on the same id.
+ * with `home`: its own field; else, for a legacy row with no home and no
+ * author, the home it was READ FROM, flagged `legacy: true` (a separate
+ * population; review F2); else homeOf's default. Writes still use the type
+ * default. Deduped by `idOf`, repo wins on the same id.
  * Order: user, machine, then repo rows, each in file order. Never throws.
  */
 export function readLearningRows<T extends object>(
   artifact: LearningArtifact,
   root: string,
   opts: ReadLearningOptions<T> = {},
-): Array<T & { home: LearningHome }> {
+): Array<T & LearningRowTags> {
   const config = opts.config !== undefined ? opts.config : readLearningHomeConfig(root);
   const fallback = homeOf(artifact, null, config);
   const locs = existingLocations(artifact, root, opts);
   const ordered = [...locs.filter(l => l.home !== 'repo'), ...locs.filter(l => l.home === 'repo')];
   const byId = new Map<string, number>();
-  const out: Array<T & { home: LearningHome }> = [];
+  const out: Array<T & LearningRowTags> = [];
   for (const loc of ordered) {
     for (const row of parseJsonl<T>(loc.file)) {
       if (opts.filter && !opts.filter(row, loc.home)) continue;
-      const own = (row as { home?: unknown }).home;
-      const tagged = { ...row, home: isLearningHome(own) ? own : fallback } as T & { home: LearningHome };
+      const { home: own, author } = row as { home?: unknown; author?: unknown };
+      const tagged = (isLearningHome(own)
+        ? { ...row, home: own }
+        : author === undefined
+          ? { ...row, home: loc.home, legacy: true }
+          : { ...row, home: fallback }) as T & LearningRowTags;
       const id = opts.idOf?.(row);
       if (id !== undefined && byId.has(id)) {
         out[byId.get(id)!] = tagged;

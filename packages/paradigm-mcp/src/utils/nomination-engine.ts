@@ -702,7 +702,7 @@ export function emitAndProcess(
 export function adjustAttentionFromFeedback(
   rootDir: string,
   agentId: string
-): { adjusted: boolean; oldThreshold: number; newThreshold: number; reason: string } {
+): { adjusted: boolean; oldThreshold: number; newThreshold: number; reason: string; population?: NominationPopulation } {
   const profile = loadAgentProfile(rootDir, agentId);
   if (!profile?.attention) {
     return { adjusted: false, oldThreshold: 0.6, newThreshold: 0.6, reason: 'No attention config' };
@@ -716,15 +716,21 @@ export function adjustAttentionFromFeedback(
   // Scoped learning: rates are computed per home and never pooled silently. The
   // threshold is driven by the home new nominations land in; other homes are
   // reported alongside (byHome) but never mixed into the rate.
+  // Legacy rows (no home, no author) are their own population: used only as a
+  // LABELLED cold-start prior when the scope has too little data (review F2).
   const nominationHome = nominationScope(rootDir);
-  const allNominations = loadNominations(rootDir, { agent: agentId }).filter(n => n.home === nominationHome);
-  const active = allNominations.filter(n =>
-    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < staleThresholdMs)
-  );
-  const engaged = active.filter(n => n.engaged);
-
+  const isFresh = (n: Nomination) =>
+    n.engaged || (Date.now() - new Date(n.timestamp).getTime() < staleThresholdMs);
+  const forAgent = loadNominations(rootDir, { agent: agentId });
+  let population: NominationPopulation = nominationHome;
+  let engaged = forAgent.filter(n => n.home === nominationHome && !n.legacy && isFresh(n) && n.engaged);
   if (engaged.length < 5) {
-    return { adjusted: false, oldThreshold, newThreshold: oldThreshold, reason: `Insufficient data (${engaged.length}/5 engaged nominations)` };
+    const legacyEngaged = forAgent.filter(n => n.legacy && isFresh(n) && n.engaged);
+    if (legacyEngaged.length < 5) {
+      return { adjusted: false, oldThreshold, newThreshold: oldThreshold, reason: `Insufficient data (${engaged.length}/5 engaged nominations)`, population };
+    }
+    engaged = legacyEngaged;
+    population = 'legacy-repo';
   }
 
   const accepted = engaged.filter(n => n.response === 'accepted').length;
@@ -745,8 +751,10 @@ export function adjustAttentionFromFeedback(
     reason = `High accept rate (${(acceptRate * 100).toFixed(0)}%) — lowering threshold to contribute more`;
   }
 
+  if (population === 'legacy-repo') reason = `[cold-start prior: legacy repo population] ${reason}`;
+
   if (newThreshold === oldThreshold) {
-    return { adjusted: false, oldThreshold, newThreshold, reason };
+    return { adjusted: false, oldThreshold, newThreshold, reason, population };
   }
 
   // Apply the adjustment
@@ -763,10 +771,10 @@ export function adjustAttentionFromFeedback(
     source: 'agent-action',
     agent: agentId,
     context: `Attention threshold adjusted: ${oldThreshold.toFixed(2)} → ${newThreshold.toFixed(2)} (${reason})`,
-    data: { old_threshold: oldThreshold, new_threshold: newThreshold, accept_rate: acceptRate, dismiss_rate: dismissRate, home: nominationHome },
+    data: { old_threshold: oldThreshold, new_threshold: newThreshold, accept_rate: acceptRate, dismiss_rate: dismissRate, home: nominationHome, population },
   });
 
-  return { adjusted: true, oldThreshold, newThreshold, reason };
+  return { adjusted: true, oldThreshold, newThreshold, reason, population };
 }
 
 /**
@@ -775,7 +783,12 @@ export function adjustAttentionFromFeedback(
 export function getNominationStats(
   rootDir: string,
   agentId: string
-): NominationRateStats & { home: LearningHome; byHome: Partial<Record<LearningHome, NominationRateStats>> } {
+): NominationRateStats & {
+  home: LearningHome;
+  byHome: Partial<Record<LearningHome, NominationRateStats>>;
+  /** Pre-scoping rows (no home, no author): reported apart, never pooled. */
+  legacy?: NominationRateStats;
+} {
   const { nominationTtlDays } = loadAmbientConfig(rootDir);
   const staleThresholdMs = nominationTtlDays * 24 * 60 * 60 * 1000;
   // Filter out stale pending nominations (older than TTL, not engaged) to prevent diluting stats
@@ -785,13 +798,17 @@ export function getNominationStats(
   // Scoped learning: one rate per home; the headline numbers are the scope new
   // nominations land in, never a silent pool of every home.
   const scope = nominationScope(rootDir);
-  const groups = groupByHome(nominations, scope);
+  const legacy = nominations.filter(n => n.legacy);
+  const groups = groupByHome(nominations.filter(n => !n.legacy), scope);
   const byHome: Partial<Record<LearningHome, NominationRateStats>> = {};
   for (const h of Object.keys(groups) as LearningHome[]) {
     if (groups[h].length > 0) byHome[h] = rateStats(groups[h]);
   }
-  return { ...rateStats(groups[scope]), home: scope, byHome };
+  return { ...rateStats(groups[scope]), home: scope, byHome, ...(legacy.length > 0 ? { legacy: rateStats(legacy) } : {}) };
 }
+
+/** A calibration population: one home, or the legacy repo rows used as a labelled cold-start prior. */
+export type NominationPopulation = LearningHome | 'legacy-repo';
 
 export interface NominationRateStats {
   total: number;
