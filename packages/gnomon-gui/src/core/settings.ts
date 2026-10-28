@@ -89,6 +89,10 @@ export interface FormKey {
   submit?: boolean;
   /** C5'b: aria-disabled (it keeps its focus and its place in the Tab order; its press path ignores it) */
   ariaDisabled?: boolean;
+  /** C6'b1: a toggle key's aria-pressed (Pin / Unpin) */
+  pressed?: boolean;
+  /** C6'b1: the id of the visible line that says why the key is aria-disabled (aria-describedby; never a tooltip only) */
+  describedBy?: string;
 }
 /** A result line (role=status, or alert when it fails): the outcome word in 600, then the rest. */
 export interface ResultView {

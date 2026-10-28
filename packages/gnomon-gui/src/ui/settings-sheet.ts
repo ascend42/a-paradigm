@@ -90,13 +90,14 @@ function rich(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, t
   return h(doc, tag, attrs, ...parts.map((p, i) => (i % 2 ? h(doc, 'code', null, p) : p)));
 }
 
-function keyEl(doc: MiniDoc, k: FormKey): MiniEl {
-  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.ariaDisabled ? { 'aria-disabled': 'true' } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
+/** A settings-form key (exported for #gui-capability-browser's drawer, which reuses the readonly rows with keys). */
+export function keyEl(doc: MiniDoc, k: FormKey): MiniEl {
+  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.ariaDisabled ? { 'aria-disabled': 'true' } : {}), ...(k.pressed !== undefined ? { 'aria-pressed': String(k.pressed) } : {}), ...(k.describedBy ? { 'aria-describedby': k.describedBy } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
   if (k.disabled) (b as unknown as { disabled: boolean }).disabled = true;
   return b;
 }
 
-function resultEl(doc: MiniDoc, r: ResultView): MiniEl {
+export function resultEl(doc: MiniDoc, r: ResultView): MiniEl {
   return h(doc, 'p', { class: `sf-result${r.fail ? ' fail' : ''}`, role: r.fail ? 'alert' : 'status' }, r.lead ? h(doc, 'strong', null, r.lead) : null, r.text);
 }
 
@@ -136,7 +137,8 @@ function formEl(doc: MiniDoc, f: FormView): MiniEl {
   return form;
 }
 
-function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
+/** One row of a section (exported for #gui-capability-browser's drawer). */
+export function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
   if (r.kind === 'rules') return rulesBlockEl(doc, r.view);
   if (r.kind === 'term') return h(doc, 'div', { class: 'settings-row sf-term', 'data-row': r.id }, h(doc, 'span', { class: 'settings-label' }), h(doc, 'p', { class: 'meta settings-how' }, r.text, h(doc, 'code', null, r.code)));
   const head = h(doc, 'span', { class: 'settings-label' }, r.label);
