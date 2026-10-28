@@ -250,10 +250,11 @@ components:
       is killed), per-request timeouts (the broker's deadline for calls),
       256 tools, 32 requests in flight, 3 starts per server per session.
       LocalMcpPool (one per local session): servers from
-      McpServers.composeLocal (#mcp-servers; INTERIM per Aegis H1: user and
-      plugin servers only, no first-party Paradigm and no project/local
-      scope until Paradigm is staged; trust from the store entry, default
-      enabled); http/sse refused remote-refused, reserved labels
+      McpServers.composeLocal (#mcp-servers: user and plugin servers, and
+      since TD-2026-10-27-833 the first-party Paradigm MCP ONLY from a
+      verified staged pin (#paradigm-stage; else listed refused fit
+      pin-mismatch, and the pool refuses first-party trust without one); no
+      project/local scope; trust from the store entry, default enabled); http/sse refused remote-refused, reserved labels
       label-reserved. Aegis H1 (re-check): servers run in a neutral cwd
       (sessions/<short>-mcp under the Gnomon home: empty, write-denied,
       outside every root, removed at exit) and are refused launch-writable
@@ -277,6 +278,11 @@ components:
       relist in flight + one pending, 2 s apart, 6 a minute then stale;
       tools_set only on a changed offered-set hash; a name never rebinds to
       another server.
+      TD-2026-10-27-833 (staged Paradigm): launchCheck lets exactly the last
+      positional of a staged first-party server (`node <staged entry> <repo
+      root>`) name a session root, and nothing else (an entry outside the
+      staged dir, a subdir, an extra arg or any other trust is refused); a
+      server composed refused (pin-mismatch) is listed and never launched.
     path: src/kernel/local/mcp-client.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
@@ -284,7 +290,50 @@ components:
     tests:
       - test/local-mcp-client.test.ts
       - test/local-mcp-lane.test.ts
-    oracles: [G-LCL-17]
+      - test/paradigm-staged-lane.test.ts
+    oracles: [G-LCL-17, G-LCL-18, G-LCL-19]
+  paradigm-stage:
+    description: >-
+      #paradigm-stage (TD-2026-10-27-833, follow-up to slice C2'):
+      src/kernel/local/paradigm-stage.ts stages the first-party Paradigm MCP
+      for LOCAL sessions. What: the install's dist/mcp-bundle files (manifest
+      paradigm-mcp-bundle:v1) or, without one, the package tree (node_modules
+      .bin link dirs skipped); a symlink, hardlink (nlink > 1), special file or
+      entry resolving outside the source refuses the whole stage. Where:
+      <home>/mcp/first-party/paradigm/<version>-<treeSha12>/ (dirs 0700, files
+      0400; temp dir then rename), <dir>.manifest.json, pin.json {schema
+      gnomon-paradigm-pin:v1, version, source, sourceKind npm-global |
+      linked-checkout, treeSha256, stagedAt, entry, layout, dirty}; the newest
+      previous stage is kept, older ones pruned. Hash: sha256 over sorted
+      `<rel>\0<mode>\0<sha256>` lines of the COPY. When: autoStage stages an
+      npm-global install when its version or source differs from the pin; a
+      linked checkout never (only request.mcp.paradigm.stage, #mcp-servers);
+      never on a file change. Verify: verifyStaged at session open (file set,
+      modes, regular, nlink 1, sha256, tree hash); recheckStaged right before
+      spawn (size/mtime/inode). LocalLane runs it with the runner's pinned node
+      (verifyNode again before spawn) under its OWN profile (staged dir
+      readable, <home>/sessions/<short>-pg read+write via the policy's
+      mcpStateDir carve-back, ~/.paradigm and ~/.conductor read-denied), in the
+      neutral cwd, stripped env plus HOME at the -pg dir,
+      PARADIGM_GNOMON_STAGED=1 and GIT_CONFIG_* (no fsmonitor, no hooks path);
+      a pre-spawn mismatch is a session.sandbox{phase mcp-pin-mismatch} row and
+      the server fails. Paradigm's write ops are mutate/destructive (cards);
+      its local-only reads are class read (openWorldHint false from code).
+      .paradigm/ decision: Paradigm loads no .paradigm/ file as code (habits,
+      protocols, config, loop files are data; loop checks run only in the
+      kernel after a human trust card on the content hash), so .paradigm/ stays
+      read-write and the staged mode turns off the server's own side effects.
+      RESIDUAL RISK: .paradigm/ habits, protocols, prompts and wisdom a local
+      model writes can steer later Claude sessions. Windows: staging works; no
+      helper grants the session SID a read ACE on the staged dir yet (gap).
+    path: src/kernel/local/paradigm-stage.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
+    signals: []
+    tests:
+      - test/paradigm-stage.test.ts
+      - test/paradigm-staged-lane.test.ts
+    oracles: [G-LCL-18, G-LCL-19]
   local-working-memory:
     description: >-
       #local-working-memory (TD-2026-10-27-833 slice B2; T-2026-10-26-003; spec §13.1 "Working memory and context

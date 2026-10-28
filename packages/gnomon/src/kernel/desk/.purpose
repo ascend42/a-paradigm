@@ -279,6 +279,16 @@ components:
       L2 permission.ts fieldLines splits on every line break (\r\n, \n, \r,
       \v, \f, U+0085, U+2028, U+2029) so no line escapes a fence; L3 every
       enable card, one server too, carries the wrapped block (never cut).
+      TD-2026-10-27-833 (staged Paradigm): LOCAL_MCP_SOURCES is first-party,
+      user, plugin; composeLocal gives the first-party Paradigm MCP only from a
+      verified staged pin (#paradigm-stage: autoStage for an npm-global
+      install, then verifyStaged), else a refused pin-mismatch entry and the
+      daemon.desk event mcp.first-party.pin-mismatch. request.mcp.paradigm.stage
+      {preview?} (human, gui/device; dispatcher-only, no row) stages the
+      install now (the only way a linked checkout is staged) and replies with
+      source, version, sourceKind, git dirty, treeSha256. status.mcp.firstParty
+      gains staged (the pin and its dir) and pinMismatch (the last
+      verification's why, or 'no pin'); a GUI card is C6'.
     path: src/kernel/desk/
     type: module
     tags: [gnomon, kernel, desk, mcp, security, paradigm-8]
