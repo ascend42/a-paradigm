@@ -118,6 +118,39 @@ components:
       sessionModelLine writes one transcript line per outcome. Preview
       fixture `model-switch` (preview/fixtures.ts).
     tags: [gui, model]
+  gui-tool-tier:
+    description: >-
+      TD-2026-10-27-833 slice C4'b (Mika's design; spec G-GUI-17): a local
+      session's tool tier in the GUI. core/tool-tier.ts (PURE): sessionTierOf
+      / tierOfCapabilities (the last model.capabilities{hsid, tier,
+      tierSource} of the session; session.open starts afresh), tierLabel (the
+      source as a word: tier 2 | tier 3 · yours | tier 1 · provisional),
+      tierChipOf (the owner of a live attended local session gets the key;
+      another principal or an ended session a plain chip titled "Only the
+      person who opened this session can change its tier."; a loop session
+      none), tierMenu (current marked, the measured note ends " · measured"),
+      previewOf (shape-checked; null on anything malformed), previewView and
+      sheetView (meta lines, ◆ warnings built from the fields never from
+      notice, the unticked "in new sessions too" checkbox disabled with the
+      kernel's rememberWhy, no Apply when to === from, every phase),
+      commitOutcome (the info toast; a warn when remember was asked and not
+      kept), tierSettingsValue (status.local.lastProbe.tier), tierRequest,
+      remeasureRequest, clearRequest; WINDOW_TIER_MIN mirrors the kernel.
+      ui/tier-picker.ts: mountTierPicker (the header key `key quiet model-btn
+      kernel-owned` with a .mode-menu, nodes carry data-tier-chip so
+      paintChatHead keeps them; the confirm sheet #tier-dialog .sheet-card)
+      and TierFlow (no DOM): one preview at a time, its token dropped on
+      close, Apply commits once (a double press sends one commit) and never
+      retries, at expiresInMs or on a stale refusal Apply becomes Preview
+      again (a new preview on a trusted press); every request only on a
+      trusted event (G-GUI-04); Esc closes the menu, then the sheet, and focus
+      returns to the tier key. store.ts SessionRow gains owner
+      (session.open{by}), loop, endpoint and tier. The Settings Tool tier row
+      (core/local-model.ts tierRowOf, after Check) with Re-measure
+      (request.local.tier.remeasure; measuring… until lastProbe settles) and
+      Reset to measured (request.local.tier.clear; shown only while a tier is
+      remembered). Tests: test/tool-tier.test.ts, test/local-model.test.ts.
+    tags: [gui, local, tier]
   gui:
     loop-cards: >-
       8.0:loops (gnomon-loops.md §3.1, §3.3; build step 2): the generic card
