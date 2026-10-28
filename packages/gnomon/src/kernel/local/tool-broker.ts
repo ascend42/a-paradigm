@@ -80,6 +80,10 @@
  * and detail.brokered.bindHash (inside the contentHash); `always` counts as
  * allow. Destructive tools, read tools, untrusted servers, kernel verbs,
  * manual mode and loop sessions never match a rule and never offer Always.
+ * Slice C5'a3: every brokered card's block carries a {type:'tool-scope',
+ * detail} node holding the card's full detail (the one the contentHash covers:
+ * toolScopes, the tool, its server, the trust level and bindHash), so the GUI
+ * can verify what the kernel offered.
  * GAPS left for C5'b (documented in .purpose): no selection beyond the
  * C2' slot rule; no grant UI for per-server trust or the tool scope; the
  * Rules view does not mark a dormant tool rule stale yet; the suspension
@@ -88,11 +92,14 @@
  */
 import { canonicalJson, sha256Tagged, type ToolBrokerClass, type ToolBrokeredDecision } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker } from '../broker/broker.js';
+import { blockOf } from '../broker/card.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { kernelMcpAnswer } from '../supervisor/kernel-mcp.js';
 import { composePermission, inputHash } from '../supervisor/permission.js';
-import { reassemble, reassembleFull, type CapabilityEntry, type ServerTrust, type ToolForm } from './capability-index.js';
+import { narrow, reassemble, reassembleFull, type CapabilityEntry, type ServerTrust, type ToolForm } from './capability-index.js';
+import type { ListedIndex } from './mcp-client.js';
+import { bindingOf } from './trust-book.js';
 
 /** The same deadlines the child waits (gnomon-local broker.ts TOOL_TIMEOUT_MS / CARD_TIMEOUT_MS). */
 export const TOOL_TIMEOUT_MS = 30_000;
@@ -394,6 +401,51 @@ export interface BrokeredRuleSource {
  */
 export function toolBindHash(entry: Pick<CapabilityEntry, 'id' | 'schema'>, cls: ToolBrokerClass, trustBinding: string): string {
   return sha256Tagged(canonicalJson({ entryId: entry.id, schemaSha256: sha256Tagged(canonicalJson(entry.schema)), class: cls, trust: trustBinding }));
+}
+
+/** Slice C5'a3: why a tool rule would not match now (status.rules[].paused; display only). */
+export type ToolRulePause = 'untrusted' | 'changed' | 'server-off';
+
+/** What toolRulePaused reads: the daemon's McpListCache, TrustBook and #mcp-servers enabled set. */
+export interface ToolRulePauseSource {
+  /** every listing in this daemon run under this label (McpListCache.listingsByLabel); null: not knowable */
+  listed(label: string): ReadonlyArray<ListedIndex & { tools: Array<Record<string, unknown>> | null }> | null;
+  /** the server's live trust (McpTrust.of): its binding, or null when it is not trusted */
+  trust(id: string): { binding: string } | null;
+  /** the server is on now (#mcp-servers enabled); null: not known */
+  on(id: string): boolean | null;
+}
+
+/**
+ * Slice C5'a3 (status.rules[].paused, display only: matching never reads it): why a tool rule would not match now.
+ * Aegis L1: EVERY listing under the rule's label is judged (several ids sharing a label, the per-repo listings of one
+ * server), each as: server-off (the server is not on), untrusted (no TrustBook entry, or its binding is not the
+ * listing's), changed (no mutate entry of the rule's tool in that listing has the rule's bindHash under the live
+ * binding), match, or unknown (its on-state or its tools not known). A reason is reported only when EVERY listing
+ * gives that same reason; any match, any unknown, mixed reasons, no listing, or a label whose listings are not all
+ * known answer null (the field is omitted): never a guess.
+ */
+export function toolRulePaused(r: { match?: string; tool: string; bindHash?: string }, src: ToolRulePauseSource): ToolRulePause | null {
+  if (r.match !== 'tool' || typeof r.bindHash !== 'string') return null;
+  const m = /^mcp:([^/]+)\/(.+)$/.exec(r.tool);
+  if (!m) return null;
+  const [, label, toolName] = m as unknown as [string, string, string];
+  const ls = src.listed(label);
+  if (!ls || ls.length === 0) return null;
+  const verdict = (l: ListedIndex & { tools: Array<Record<string, unknown>> | null }): ToolRulePause | 'match' | 'unknown' => {
+    const on = src.on(l.id);
+    if (on === null) return 'unknown';
+    if (on === false) return 'server-off';
+    const t = src.trust(l.id);
+    if (!t || t.binding !== bindingOf({ id: l.id, launchHash: l.launchHash, pluginVersion: l.pluginVersion, toolsHash: l.toolsHash })) return 'untrusted';
+    if (!l.tools) return 'unknown';
+    const now = narrow(l.tools, label, { trust: 'trusted' }).filter((e) => e.tool === toolName && e.class === 'mutate').map((e) => toolBindHash(e, 'mutate', t.binding));
+    return now.includes(r.bindHash!) ? 'match' : 'changed';
+  };
+  const all = new Set(ls.map(verdict));
+  if (all.size !== 1) return null;
+  const only = [...all][0]!;
+  return only === 'match' || only === 'unknown' ? null : only;
 }
 
 export interface LocalToolBrokerOptions {
@@ -739,10 +791,15 @@ export class LocalToolBroker {
     if (plan.kind !== 'card') return { decision: 'too-large', cardId: null };
     const lines = [...plan.lines, `class: ${cls} · a brokered call from this local session to ${target.server}`, ...(level ? [TRUST_CARD_LINE[level]] : []), ...droppedLine(tool.entry?.dropped ?? []), ...(always ? [alwaysLine(name)] : [])];
     const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: cls, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}), ...(level ? { trust: level === 'enabled' ? 'untrusted' : level } : {}), ...(always ? { bindHash: always.bindHash } : {}) }, ...(always ? { toolScopes: ['tool'] } : {}) };
+    // slice C5'a3: a {type:'tool-scope', detail} node (like permission.ts edit-scope) carries the card's FULL detail, the
+    // one the contentHash covers: what the kernel offered (toolScopes, the tool, its server, the trust level, bindHash),
+    // so the GUI can verify it. Display only: the block is not hashed, and the text lines are the same as before
+    const shown = blockOf(lines).block;
+    const block = { ...shown, children: [...((shown.children as unknown[]) ?? []), { type: 'tool-scope', detail: structuredClone(detail) }] };
     let cardId: string;
     try {
       // the broker's own timeout falls after the deadline, so the kernel's deadline (expired) always wins the race
-      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, toolInput: callArgs, tool: name, decisions: always ? ['allow', 'deny', 'always'] : ['allow', 'deny'], ...(always ? { ruleScope: { repoKey: always.repoKey } } : {}), timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
+      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, block, toolInput: callArgs, tool: name, decisions: always ? ['allow', 'deny', 'always'] : ['allow', 'deny'], ...(always ? { ruleScope: { repoKey: always.repoKey } } : {}), timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
       cardId = c.cardId;
     } catch {
       return { decision: 'none', cardId: null };

@@ -502,6 +502,11 @@ components:
       class or trust changed) leaves it dormant. A standing grant's
       permission:always forms one like any other rule. LocalLane reaches it
       through SupervisorOptions.alwaysRule (LocalLaneOptions.alwaysRule).
+      Slice C5'a3: a tool rule reads "any call of <tool> on the <server> MCP
+      server (any arguments)" (toolRuleWords, names cleaned by
+      sanitizeDisplayText); status.rules[].paused (untrusted | changed |
+      server-off, #local-tool-broker toolRulePaused) is display only, omitted
+      when unknown, and match() never reads it.
     path: src/kernel/supervisor/rules.ts
     type: module
     tags: [gnomon, kernel, approvals, paradigm-8, move-1]

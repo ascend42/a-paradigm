@@ -46,6 +46,8 @@ export const MAX_TOOLS = 256;
 export const MAX_PENDING = 32;
 export const OP_ANNOTATION_READS = 4;
 export const LIST_CACHE_MAX = 64;
+/** Slice C5'a3 (Aegis L1): listing metadata (hashes and label only) kept per cache key; past it the label is unknowable. */
+export const LISTINGS_KEPT = 1024;
 /** A server that crashed this many times in one session is not started again in it. */
 export const MAX_STARTS = 3;
 
@@ -559,6 +561,10 @@ export class McpListCache {
   readonly #m = new Map<string, ListedServer>();
   /** slice C5'a1 (Arky 5): newest listing per server id */
   readonly #newest = new Map<string, ListedIndex>();
+  /** slice C5'a3 (Aegis L1): every listing per cache key (per id and repo), kept longer than the tools themselves */
+  readonly #byKey = new Map<string, ListedIndex>();
+  /** labels a listing was forgotten under (status.rules paused is then not knowable for them) */
+  readonly #forgot = new Set<string>();
   readonly #failed = new Map<string, { at: number; why: string }>();
   /** Aegis M5: a recent failure of this launch (within FAILURE_TTL_MS), or undefined */
   failure(k: string, now = Date.now()): string | undefined {
@@ -578,10 +584,18 @@ export class McpListCache {
     this.#m.delete(k);
     this.#m.set(k, v);
     if (this.#m.size > LIST_CACHE_MAX) this.#m.delete(this.#m.keys().next().value as string);
+    this.#byKey.delete(k);
     if (meta) {
       this.#newest.delete(meta.id);
       this.#newest.set(meta.id, { ...meta, key: k, at: now });
       if (this.#newest.size > LIST_CACHE_MAX) this.#newest.delete(this.#newest.keys().next().value as string);
+      this.#byKey.set(k, { ...meta, key: k, at: now });
+      if (this.#byKey.size > LISTINGS_KEPT) {
+        const old = this.#byKey.keys().next().value as string;
+        // Aegis L1 (C5'a3): a forgotten listing may still be live in a session, so its label is no longer knowable
+        this.#forgot.add(this.#byKey.get(old)!.label);
+        this.#byKey.delete(old);
+      }
     }
   }
   /** Slice C5'a1: the newest listing of a server id in this daemon run, with its tools while the cache still holds them. */
@@ -589,6 +603,16 @@ export class McpListCache {
     const n = this.#newest.get(id);
     if (!n) return null;
     return { ...n, tools: this.#m.get(n.key)?.tools ?? null };
+  }
+  /**
+   * Slice C5'a3 (status.rules paused; Aegis L1): EVERY listing in this daemon run under the label a tool rule names
+   * (mcp:<label>/<tool>): several ids under one label and the per-repo listings of one server, each with its tools while
+   * the cache still holds them (null: evicted). null: not knowable (a listing under this label was forgotten). [] when
+   * never listed.
+   */
+  listingsByLabel(label: string): Array<ListedIndex & { tools: Array<Record<string, unknown>> | null }> | null {
+    if (this.#forgot.has(label)) return null;
+    return [...this.#byKey.values()].filter((n) => n.label === label).map((n) => ({ ...n, tools: this.#m.get(n.key)?.tools ?? null }));
   }
   get size(): number {
     return this.#m.size;

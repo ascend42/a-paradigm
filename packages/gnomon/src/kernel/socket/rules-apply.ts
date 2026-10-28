@@ -289,8 +289,31 @@ export function createRulesApply(d: RulesApplyDeps): {
   return { apply, expireDue, lastSkipped: () => lastSkipped, pendingCardId: () => (pending && d.broker.card(pending)?.state === 'pending' ? pending : null) };
 }
 
+const PAUSES: readonly string[] = ['untrusted', 'changed', 'server-off'];
+/** A paused reader that throws or answers something else leaves the field out (never a guess, never a broken status). */
+function safePaused(f: (r: AlwaysRule) => unknown, r: AlwaysRule): string | null {
+  try {
+    const p = f(r);
+    return typeof p === 'string' && PAUSES.includes(p) ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 /** status.rules (the human class only): every standing rule in the kernel's words, its state on the kernel clock, the presets. */
-export function rulesStatus(book: RuleBook, o: { pendingCardId?: string | null; repoName?: (repoKey: string) => string | null; skipped?: { cardId: string; ruleIds: string[] } | null } = {}): Record<string, unknown> {
+export function rulesStatus(
+  book: RuleBook,
+  o: {
+    pendingCardId?: string | null;
+    repoName?: (repoKey: string) => string | null;
+    skipped?: { cardId: string; ruleIds: string[] } | null;
+    /**
+     * 8.0:local-lane C5'a3: why a tool rule would not match now (#local-tool-broker toolRulePaused), display only; null
+     * or absent: not paused or not knowable, and the row has no `paused` field (never a guess)
+     */
+    paused?: (r: AlwaysRule) => 'untrusted' | 'changed' | 'server-off' | null;
+  } = {},
+): Record<string, unknown> {
   const now = book.now();
   const t = new Date(now);
   const tomorrow = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1, 6, 0, 0, 0).getTime();
@@ -318,6 +341,7 @@ export function rulesStatus(book: RuleBook, o: { pendingCardId?: string | null; 
         ...(r.hsid ? { hsid: r.hsid } : {}),
         cardId: r.ruleId,
         state: st.state,
+        ...((p) => (p ? { paused: p } : {}))(r.match === 'tool' && o.paused ? safePaused(o.paused, r) : null),
         ...(st.state === 'off' ? { until: st.until, offSince: st.since } : {}),
       };
     }),

@@ -162,6 +162,7 @@ import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
 import { McpServers } from '../desk/mcp-server-cards.js';
 import { McpListCache } from '../local/mcp-client.js';
+import { toolRulePaused, type ToolRulePauseSource } from '../local/tool-broker.js';
 import { McpTrust, trustSourceOf } from '../local/trust-book.js';
 import { resolveFirstPartyParadigm, type FirstPartyResolution } from '../desk/mcp-servers.js';
 import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
@@ -1540,7 +1541,13 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         revoke: (ctx: Parameters<typeof rulesRevoke>[0], payload: unknown) => rulesRevoke(ctx, payload),
         // 8.0:rules-view (#rules-apply): the Rules view's one save, and status.rules (human class only)
         apply: (asker: Parameters<typeof rulesApply.apply>[0], payload: unknown) => rulesApply.apply(asker, payload),
-        status: () => rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName, skipped: rulesApply.lastSkipped() }),
+        status: () => {
+          // 8.0:local-lane C5'a3: a tool rule's paused reason from the newest listing, the TrustBook and the enabled set
+          // (read once per status; display only, matching never reads it)
+          let on: Set<string> | null = null;
+          const src: ToolRulePauseSource = { listed: (label) => mcpListCache.listingsByLabel(label), trust: (id) => mcpTrust.of(id), on: (id) => (on ??= mcpServers.enabledIds()).has(id) };
+          return rulesStatus(syncRuleBook(), { pendingCardId: rulesApply.pendingCardId(), repoName, skipped: rulesApply.lastSkipped(), paused: (r) => toolRulePaused(r, src) });
+        },
       },
       sessionNames: { rename: (asker: Parameters<SessionNames['rename']>[0], payload: unknown) => sessionNames.rename(asker, payload), namesFor: (principal: string) => sessionNames.namesFor(principal) },
       loops: loops.port,

@@ -212,6 +212,15 @@ components:
       approved with no cardId. No match: the card offers allow | deny | always with a
       ruleScope, detail.toolScopes ['tool'] and detail.brokered.bindHash; always counts as
       allow. Destructive, read, untrusted, kernel verbs, manual and loop never.
+      Slice C5'a3: every brokered card's block carries one {type:'tool-scope', detail} node
+      (like edit-scope) holding the card's full detail, inside the contentHash (toolScopes,
+      tool, server, trust, bindHash), so the GUI can verify what the kernel offered.
+      toolRulePaused (status.rules[].paused, display only) judges EVERY listing under the
+      rule's label (McpListCache.listingsByLabel: ids sharing a label, per-repo listings),
+      the TrustBook and the #mcp-servers enabled set: server-off, untrusted (no live trust
+      for that listing's binding), changed (no mutate entry of the tool has the rule's
+      bindHash), match or unknown. A reason only when every listing gives it (Aegis L1);
+      any match, unknown or mixed reasons: null (omitted).
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
