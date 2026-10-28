@@ -65,6 +65,9 @@ import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { mountTierPicker, type TierPicker } from './tier-picker.js';
 import { KeptFlow, mountToolsDrawer, type ToolsDrawer } from './tools-drawer.js';
 import { drawerAccess, mcpFailToastOf, MCP_FAIL_TOAST, serversOffOf, serversOffText } from '../core/tools-drawer.js';
+import { mountSlashMenu, renderRunRow, type SlashMenu } from './slash-menu.js';
+import { SLASH_COMMANDS } from '../core/slash-menu.js';
+import { runWords } from '../core/slash-runs.js';
 import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, RepinReturn, type KeptChoice } from '../core/folder-field.js';
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
@@ -123,6 +126,7 @@ let modelPicker: ModelPicker | null = null;
 let tierPicker: TierPicker | null = null;
 /** #gui-capability-browser (C6'b1): the Tools and memory drawer of a local session (ui/tools-drawer.ts), mounted below */
 let toolsDrawer: ToolsDrawer | null = null;
+let slashMenu: SlashMenu | null = null;
 /** #gui-toast: the one toast region (ui/toasts.ts), mounted on first use (the chat column's right edge). */
 let toastRegion: Toasts | null = null;
 const toasts = (): Toasts =>
@@ -289,6 +293,8 @@ function unmountAll(): void {
 
 /** A new transcript (focus, raw toggle): rebuild from scratch, stuck to the bottom. */
 function resetTranscript(): void {
+  if (slashMenu?.flow.state()?.hsid !== focused) slashMenu?.close(); // #gui-slash-menu: the menu is the focused session's
+  if (focused) void slashMenu?.flow.ensureSkills(focused); // the host slips of its replies read its loaded skills
   unmountAll();
   memo = null;
   items = [];
@@ -549,6 +555,12 @@ function itemEl(it: FoldedItem): HTMLElement {
     return h(doc, 'div', { class: `trow role-activity${open ? ' open' : ''}${it.live ? ' live' : ''}`, role: 'button', tabindex: '0', 'aria-expanded': String(open), 'data-act': it.key, title: open ? 'Hide the steps' : 'Show the steps' }, `${open ? '▾' : '▸'} ${it.text}`, clock) as unknown as HTMLElement;
   }
   if (it.role === 'working') return workingEl(it);
+  // #gui-slash-runs: a "/" run row, from this page's run (its result held in memory only) or the kernel's row (history)
+  if (it.role === 'run') {
+    const v = it.runKey ? slashMenu?.flow.run(it.runKey) : null;
+    if (v) return renderRunRow(doc, runWords(v), { key: v.key, at: v.at, now: Date.now() }) as unknown as HTMLElement;
+    if (it.runRow) return renderRunRow(doc, it.runRow, { key: null, at: it.at ?? '', now: Date.now() }) as unknown as HTMLElement;
+  }
   // Luna #10: a voice-sent turn reads in words, "you · spoken · sent by <how>", never a glyph
   const spoken = it.role === 'user' && (it.voice === 'voice-edited' || it.speaker !== undefined) ? voiceWho({ speaker: it.speaker ?? 'you', edited: it.voice === 'voice-edited', sent: it.sentLabel ?? null }) : null;
   const label = spoken ? spoken.who : it.role === 'assistant' ? agentLabel() : ROLE_LABEL[it.role];
@@ -578,16 +590,36 @@ function itemEl(it: FoldedItem): HTMLElement {
   return h(doc, 'div', { class: `trow role-${it.role}${it.speaker !== undefined ? ' voice' : ''}${it.tone === 'warn' ? ' warn' : it.tone === 'fail' ? ' fail' : ''}` }, ...body, ...renderHostSlips(doc, it.key, host, hostCopied), ...slips.map((v) => slipEl(v))) as unknown as HTMLElement;
 }
 
+/**
+ * #gui-slash-runs: a run row's keys. Decide in the stack focuses the card GROUP, never its Allow (a second Enter cannot
+ * allow it); the data fold opens and folds in place, the focus staying on its key.
+ */
+function onRunKey(k: HTMLElement, e: Event): void {
+  if (!e.isTrusted) return; // G-GUI-04
+  const key = k.dataset.runKey ?? '';
+  const v = slashMenu?.flow.run(key);
+  if (!v) return;
+  const act = k.dataset.runAct;
+  if (act === 'decide' && v.cardId) return focusCardGroup(v.cardId, 'card');
+  if (act === 'fold' || act === 'unfold') {
+    slashMenu!.flow.fold(key, act === 'unfold');
+    ($('viewport').querySelector(`[data-run="${CSS.escape(key)}"] .run-fold`) as HTMLElement | null)?.focus({ preventScroll: true });
+  }
+}
+
 /* ── #gui-host-hints (founder 2026-10-23): host slips under a reply that names what does not run in Gnomon ── */
 /** the hints each mounted reply drew (the Copy key copies from here: the same string its <code> shows) */
-const hostAt = new Map<string, { text: string; hints: HostHint[] }>();
+const hostAt = new Map<string, { text: string; hints: HostHint[]; skills: string }>();
 let hostCopied: string | null = null;
 let hostCopiedTimer: ReturnType<typeof setTimeout> | null = null;
 function hostHintsFor(key: string, text: string): HostHint[] {
+  // #gui-slash-menu: a slash command naming one of this session's loaded skills runs from / (its slip says so)
+  const skills = focused ? (slashMenu?.flow.loadedSkills(focused) ?? []) : [];
+  const sig = skills.join(' ');
   const had = hostAt.get(key);
-  if (had && had.text === text) return had.hints;
-  const hints = hostHintsOf(text);
-  if (hints.length) hostAt.set(key, { text, hints });
+  if (had && had.text === text && had.skills === sig) return had.hints;
+  const hints = hostHintsOf(text, skills);
+  if (hints.length) hostAt.set(key, { text, hints, skills: sig });
   else hostAt.delete(key);
   if (hostAt.size > 400) hostAt.delete(hostAt.keys().next().value!);
   return hints;
@@ -1608,6 +1640,49 @@ function openTools(trusted: boolean, opener: HTMLElement | null = null): void {
   if (!focused || !toolsSessionOf(focused)) return notice('Tools and memory is for a local model session: focus one first', 'info', { source: 'tools' });
   toolsDrawer?.open(focused, null, trusted, opener);
 }
+// #gui-slash-menu (C6'b2-1): the "/" menu above the composer; #gui-slash-runs: its run rows in the transcript
+slashMenu = mountSlashMenu(document, {
+  client: () => client,
+  textarea: $<HTMLTextAreaElement>('composer-text'),
+  host: $('composer'),
+  now: () => Date.now(),
+  access: (hsid) => slashAccessOf(hsid),
+  commands: SLASH_COMMANDS,
+  runAdded: (v) => {
+    // the row is in the transcript at the press (memory only, like the composer echo)
+    local.push({ seq: store.head + 0.5, kind: 'slash-run', connId: 'local', session: v.hsid, payload: { key: v.key, server: v.server, tool: v.tool }, at: v.at });
+    paintTranscript();
+  },
+  runChanged: (v) => {
+    for (const it of items) if (it.runKey === v.key) remountItem(it.key);
+    paintTranscript();
+  },
+  command: (id, trusted) => run(id, trusted),
+  openTools: (hsid, trusted) => void toolsDrawer?.open(hsid, 'tools', trusted, $('composer-text')),
+  skillRan: (hsid, name, args, turn) => {
+    // a skill run posts as the human's turn: "you ran skill /name args", stamped with its turn id (pairs with turn.sent)
+    local.push({ seq: store.head + 0.5, kind: 'skill-ran', connId: 'local', session: hsid, payload: { name, args }, at: new Date().toISOString(), ...(turn ? { turn } : {}) });
+    follow.jump();
+    paintTranscript();
+  },
+  skillsChanged: (hsid) => {
+    if (hsid !== focused) return;
+    for (const it of items) if (it.role === 'assistant') remountItem(it.key);
+    paintTranscript();
+  },
+});
+/** The palette's and a host slip's "Open / menu": the focused session's menu, or why not. */
+function openSlash(trusted: boolean): void {
+  if (!focused || !slashAccessOf(focused)) return notice('The / menu is for a running session you opened: focus one first', 'info', { source: 'slash' });
+  slashMenu?.openFor(focused, trusted);
+}
+/** What "/" offers in a session: its owner's skills while it runs; a local attended session's tools too (null: nothing). */
+function slashAccessOf(hsid: string): { tools: boolean; skills: boolean } | null {
+  const s = store.sessions.get(hsid);
+  const me = session?.principal ?? myPrincipal();
+  if (!s || s.loop === true || !isLiveState(s.state) || s.owner == null || me === null || s.owner !== me) return null;
+  return { tools: drawerAccess({ backend: s.backend, loop: false, live: true, owner: s.owner, me }) === 'owner', skills: true };
+}
 // #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
 // #gui-local-model: the Local model section's press paths (ui/local-model.ts); the sheet hands it presses
 const localModel = new LocalModelController({
@@ -1919,6 +1994,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         trustDropRow(r); // C5'b: a server whose trust the kernel dropped (it changed) is a warn toast
         mcpFailRow(r); // C6'b1: a server of my running local session stopped: a fail toast with "see Tools"
         toolsDrawer?.row(r); // C6'b1: the open drawer re-reads on its session's tool.selection and session.mcp rows
+        slashMenu?.flow.row(r); // C6'b2-1: a carded "/" run settled (read its result once); the open menu re-reads
         if (r.kind === 'session.memory' && settings.isOpen() && (r.payload as { op?: unknown } | undefined)?.op === 'delete') void kept.read(); // C6'b1: Kept memory
         mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
@@ -2196,11 +2272,11 @@ function focusCard(cardId: string, what: CardLabel = 'card'): void {
  * #gui-local-model (rule form-says-where-the-card-is): Decide in the stack focuses the card GROUP, never its Allow,
  * so a second Enter cannot allow it.
  */
-function focusCardGroup(cardId: string): void {
+function focusCardGroup(cardId: string, what: CardLabel = 'grant card'): void {
   uncoverStack(stackCovers);
   const el = cardInPile(cardId) as HTMLElement | null;
   if (!el) {
-    notice(notArrivedText('grant card'), 'warn');
+    notice(notArrivedText(what), 'warn');
     if (noticeShown) cardWait = { cardId, toast: noticeShown };
     return;
   }
@@ -3701,6 +3777,7 @@ function run(id: string, trusted: boolean): void {
   else if (id === 'local.setup') settings.open(LOCAL_SECTION); // #gui-local-model: section-focused
   else if (id === 'mcp.open') settings.open(MCP_SECTION); // #gui-mcp-servers: section-focused
   else if (id === 'tools.open') openTools(trusted); // #gui-capability-browser: the focused local session's drawer
+  else if (id === 'slash.open') openSlash(trusted); // #gui-slash-menu: the focused session's "/" menu
   else if (id === 'mods.open') modsPanel.open();
   else if (id === 'loops.open') loopsView.open();
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
@@ -3901,6 +3978,8 @@ function wire(): void {
     if (c) return onChoice(e, c);
     const send = (e.target as HTMLElement).closest('.choices.live [data-choice-send]') as HTMLElement | null;
     if (send) return onChoiceSend(e, send); // #gui-ask-card multi-select
+    const rk = (e.target as HTMLElement).closest('[data-run-act]') as HTMLElement | null;
+    if (rk) return onRunKey(rk, e);
     toggleAct(e.target);
   });
   // #gui-table-talk: inside the live choices a letter / number picks (only with an empty composer); arrows move
@@ -4055,6 +4134,8 @@ function wire(): void {
   // dictation: typing in the composer, or clicking into a draft, holds it (never auto-send mid-edit)
   $('composer-tall').addEventListener('click', () => toggleComposerTall());
   window.addEventListener('resize', () => fitComposer());
+  // #gui-slash-menu: "/" and one word opens the menu on the focused session (the human's own typing only)
+  $('composer-text').addEventListener('input', (e) => slashMenu?.input($<HTMLTextAreaElement>('composer-text').value, focused, e.isTrusted));
   $('composer-text').addEventListener('input', () => {
     fitComposer();
     if (dictationOn() && dict.focusedHere) dispatchDictation({ type: 'userEdit', text: $<HTMLTextAreaElement>('composer-text').value, now: Date.now() });
@@ -4080,6 +4161,7 @@ function wire(): void {
   });
   $('dictation-hold').addEventListener('click', () => dispatchDictation({ type: 'hold', hold: !dict.hold, now: Date.now() }));
   $('composer-text').addEventListener('keydown', (e) => {
+    if (slashMenu?.key(e)) return; // #gui-slash-menu: ↑/↓, Enter and Esc belong to the open "/" menu
     if (e.key === 'Tab' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault(); // ⇧Tab cycles the run mode, as in Claude Code (§11.5)
       cycleMode(e.isTrusted);

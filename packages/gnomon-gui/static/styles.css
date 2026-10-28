@@ -1061,9 +1061,9 @@ html, body {
 /* ONE container (founder report 2026-10-20, "box inside a box"): the composer carries the only border and the focus
    ring; the textarea draws no border, outline or shadow of its own. The ring shows while the text field has keyboard
    focus (a11y: a visible focus state), on the same token as every other focus ring. */
-.composer textarea.field { border: 0; padding: 0; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
-.composer textarea.field:focus, .composer textarea.field:focus-visible { outline: none; box-shadow: none; }
-.composer:has(textarea.field:focus-visible) { outline: 2px solid var(--key-edge); outline-offset: -1px; }
+.composer #composer-text { border: 0; padding: 0; background: transparent; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+.composer #composer-text:focus, .composer #composer-text:focus-visible { outline: none; box-shadow: none; }
+.composer:has(#composer-text:focus-visible) { outline: 2px solid var(--key-edge); outline-offset: -1px; }
 
 /* palette rows: title left, kbd hint right */
 .pal-row { padding: 6px 10px; border-radius: var(--radius); align-items: baseline; }
@@ -1723,3 +1723,52 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .tools-sheet .agent-claimed .settings-row > .settings-label { align-self: start; }
 .tools-sheet .rule-row .why-off { grid-column: 1; }
 .tools-sheet .td-foot { border-bottom: 0; }
+
+/* #gui-slash-menu (C6'b2-1; design-system slash-menu): the "/" menu, a menu variant hung ABOVE the composer. The
+   textarea keeps focus (aria-activedescendant): the active row is the menu's hover fill plus the focus ring, never a
+   hue. A row that cannot run is quiet ink (aria-disabled, its reason the note). No new token. */
+.composer { position: relative; }
+.slash-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); z-index: 20; max-width: 560px; padding: 4px; background: var(--sheet); border: 1px solid var(--key-edge); border-radius: var(--radius); box-shadow: var(--sheet-shadow); }
+.slash-menu[hidden] { display: none; }
+.slash-list { max-height: min(360px, 50vh); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.slash-list[hidden], .slash-foot[hidden], .slash-args[hidden] { display: none; }
+.slash-h { padding-top: 8px; }
+.slash-group:first-child .slash-h { padding-top: 4px; }
+.slash-opt { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); column-gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: var(--radius); color: var(--ink); cursor: pointer; }
+.slash-opt.active { background: var(--fold); box-shadow: inset 0 0 0 2px var(--key-edge); }
+.slash-opt.off { color: var(--sec); cursor: default; }
+.slash-name { font-size: var(--fs-control); font-weight: 500; overflow-wrap: anywhere; }
+.slash-note { font-size: var(--fs-label); color: var(--sec); text-align: right; overflow-wrap: anywhere; }
+.slash-opt.off .slash-note { color: var(--ink2); text-align: left; grid-column: 1 / -1; }
+.slash-why { grid-column: 1 / -1; font-size: var(--fs-label); color: var(--sec); overflow-wrap: anywhere; }
+.slash-empty { margin: 0; padding: 6px 8px; font-size: var(--fs-control); color: var(--sec); }
+.slash-empty.fail { color: var(--fail); }
+.slash-foot { margin: 4px 0 0; padding: 4px 8px 2px; border-top: 1px solid var(--rule); font-size: var(--fs-label); color: var(--sec); }
+.slash-args { display: flex; flex-direction: column; gap: 8px; padding: 6px 8px; }
+.slash-args-h { margin: 0; font-size: var(--fs-control); font-weight: 600; overflow-wrap: anywhere; }
+.slash-args > .slash-why { margin: 0; }
+.slash-field { display: flex; flex-direction: column; gap: 4px; }
+.slash-field .field { width: 100%; box-sizing: border-box; }
+.slash-req { font-weight: 400; color: var(--sec); }
+.slash-json { font-family: var(--mono); font-size: var(--fs-control); resize: vertical; }
+.slash-seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.slash-err { font-size: var(--fs-label); font-weight: 600; color: var(--fail); }
+.slash-args .sf-keys { display: flex; gap: 8px; }
+
+/* #gui-slash-runs (C6'b2-1; design-system transcript-row variant run): "you ran {tool} on {server}" and its state; the
+   result behind model-text-control's dashed edge with the label "data" (.agent-claimed), mono, text nodes only. */
+.trow.role-run { padding-left: 28px; font-size: var(--fs-control); color: var(--ink2); }
+.trow.role-run .who { display: flex; gap: 8px; align-items: baseline; }
+.trow.role-run .run-head { color: var(--ink); font-weight: 500; overflow-wrap: anywhere; }
+.trow.role-run .run-state { display: flex; gap: 6px; align-items: center; }
+.trow.role-run.fail .run-state { color: var(--fail); }
+.trow.role-run.quiet .run-state { color: var(--sec); }
+.trow.role-run .spin { width: 9px; height: 9px; flex: none; border: 1.5px solid var(--rule); border-top-color: var(--key-edge); border-radius: 50%; animation: turn-spin 0.9s linear infinite; }
+[data-motion="reduced"] .trow.role-run .spin { animation: none; }
+@media (prefers-reduced-motion: reduce) { .trow.role-run .spin { animation: none; } }
+.trow.role-run .run-clock { color: var(--sec); }
+.trow.role-run .run-next, .trow.role-run .run-policy { font-size: var(--fs-label); color: var(--sec); }
+.trow.role-run .run-keys { margin-top: 4px; }
+.trow.role-run .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
+.trow.role-run .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
+.trow.role-run .run-data-text { margin: 2px 0 4px; font-family: var(--mono); font-size: var(--fs-control); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto; }

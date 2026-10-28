@@ -396,14 +396,18 @@ describe('composer: one container, not a box inside a box (founder report 2026-1
   const rules = (sel: RegExp): string[] => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => sel.test(m[1]!.trim())).map((m) => m[2]!);
   it('the composer carries the border; the textarea draws no border, outline or shadow of its own', () => {
     expect(rules(/^\.composer$/).some((b) => /border:\s*1px solid var\(--sec\)/.test(b))).toBe(true); // the field edge (board gnomon-field-border)
-    const ta = rules(/^\.composer textarea\.field$/).join(';');
+    const ta = rules(/^\.composer #composer-text$/).join(';');
     expect(ta).toMatch(/border:\s*0/);
     expect(ta).toMatch(/outline:\s*none/);
     expect(ta).toMatch(/box-shadow:\s*none/);
-    expect(rules(/\.composer textarea\.field:focus-visible/).join(';')).toMatch(/outline:\s*none/);
+    expect(rules(/\.composer #composer-text:focus-visible/).join(';')).toMatch(/outline:\s*none/);
   });
   it('keyboard focus stays visible: the ring moves to the one container, on the shared focus token', () => {
-    expect(rules(/^\.composer:has\(textarea\.field:focus-visible\)$/).join(';')).toMatch(/outline:\s*2px solid var\(--key-edge\)/);
+    expect(rules(/^\.composer:has\(#composer-text:focus-visible\)$/).join(';')).toMatch(/outline:\s*2px solid var\(--key-edge\)/);
+  });
+  it("Mika C6'b2-1 #1: the reset is the composer's own textarea only; the / menu's JSON field keeps its edge and focus ring", () => {
+    expect(css).not.toMatch(/\.composer textarea\.field/);
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) if (/border:\s*0|outline:\s*none/.test(m[2]!) && /\.composer\b/.test(m[1]!)) expect(m[1]!, m[1]).not.toMatch(/slash|textarea\.field/);
   });
   it('no theme or state rule gives the composer textarea a border back', () => {
     for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
