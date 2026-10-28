@@ -362,10 +362,20 @@ export interface LocalToolBrokerOptions {
   now?: () => number;
   /** Aegis N4: tell the child the call's effect started (LocalLane writes tool_progress{id, state:'running'}) */
   progress?: (id: string) => void;
+  /** Aegis L2 (slice C2'): the session's run mode NOW is manual (a carded call to a target with no gate is refused) */
+  manual?: () => boolean;
 }
 
 /** Why a call's controller was aborted. */
 type StopWhy = 'cancel' | 'deadline';
+
+/** Aegis L1: the card's "not offered" line: plain names only (each ≤ 64 chars, at most 12), plus a count of the rest. */
+export function droppedLine(dropped: readonly string[]): string[] {
+  if (!dropped.length) return [];
+  const plain = dropped.filter((d) => /^[A-Za-z_$][A-Za-z0-9_$.-]{0,63}$/.test(d)).slice(0, 12);
+  const rest = dropped.length - plain.length;
+  return [`not offered to the model: ${plain.join(', ')}${rest ? `${plain.length ? ' ' : ''}(+${rest} more)` : ''}`];
+}
 
 /** The namespaced name a brokered card shows (Aegis L6): never a Claude tool name composePermission special-cases. */
 export const brokeredToolName = (target: Pick<BrokerTarget, 'provenance' | 'server'>, tool: string): string => (target.provenance === 'kernel' ? `kernel:${tool}` : `mcp:${target.server}/${tool}`);
@@ -477,6 +487,8 @@ export class LocalToolBroker {
     const key = `${tool.name}\u0000${argsHash}`;
     if ((this.#cooldown.get(key) ?? 0) > this.#now()) return done('cooldown', `${tool.name} with these arguments was just denied: ask the human differently or wait.`, true);
     const carded = tool.class !== 'read';
+    // Aegis L2: manual mode is read at call time too (the human may have switched since open)
+    if (carded && !target.ownsGate && o.manual?.()) return done('refused', `${tool.name}: this session is in manual mode, so calls that need the human are off.`, true);
     if (carded) {
       const now = this.#now();
       while (this.#carded.length && this.#carded[0]! <= now - 60_000) this.#carded.shift();
@@ -552,7 +564,7 @@ export class LocalToolBroker {
     const name = brokeredToolName(target, tool.entry ? tool.entry.tool : tool.name);
     const plan = composePermission({ requestId: req.id, toolName: name, toolUseId: req.toolCallId, input: callArgs }, { repo: o.repo, denyWrite: [] });
     if (plan.kind !== 'card') return { decision: 'too-large', cardId: null };
-    const lines = [...plan.lines, `class: ${tool.class} · a brokered call from this local session to ${target.server}`, ...(tool.entry?.dropped.length ? [`not offered to the model: ${tool.entry.dropped.slice(0, 12).join(', ')}`] : [])];
+    const lines = [...plan.lines, `class: ${tool.class} · a brokered call from this local session to ${target.server}`, ...droppedLine(tool.entry?.dropped ?? [])];
     const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: tool.class, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}) } };
     let cardId: string;
     try {

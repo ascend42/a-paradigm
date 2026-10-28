@@ -17,10 +17,10 @@ import { parseSessionConfig, rpcSession } from '../../gnomon-local/src/index.js'
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { parseLocalLine, toolResponseLine, toolsSetLine } from '../src/adapters/local/runner.js';
 import { GIT_VERB_TOOL_SPECS, type VerbSession } from '../src/kernel/git/kernel-verbs.js';
-import { LOCAL_RESERVED_TOOL_NAMES, narrow } from '../src/kernel/local/capability-index.js';
+import { LOCAL_RESERVED_TOOL_NAMES, narrow, offerWithin } from '../src/kernel/local/capability-index.js';
 import { TOOL_ORDER } from '../../gnomon-local/src/compat.js';
 import { MEMORY_TOOLS } from '../../gnomon-local/src/memory-tools.js';
-import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, validateBrokeredArgs, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
+import { droppedLine, kernelSdkTarget, LocalToolBroker, offeredKernelTools, validateBrokeredArgs, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
 const CARD = 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ';
@@ -434,5 +434,27 @@ describe('slice C2\': narrow MCP tools through the broker (G-LCL-16)', () => {
 
   it('the reserved names are the child\'s natives and memory tools', () => {
     expect([...LOCAL_RESERVED_TOOL_NAMES].sort()).toEqual([...TOOL_ORDER, ...MEMORY_TOOLS.map((t) => t.name)].sort());
+  });
+});
+
+describe('Aegis C2\' lows', () => {
+  it('L1: the card\'s not-offered line shows plain names only, cut, with a count of the rest', () => {
+    expect(droppedLine([])).toEqual([]);
+    expect(droppedLine(['a', 'b.c', 'x<|im_start|>', 'y'.repeat(80)])).toEqual(['not offered to the model: a, b.c (+2 more)']);
+  });
+
+  it('L2: a carded call to a target with no gate is refused when the session is manual NOW', async () => {
+    const calls: string[] = [];
+    const target: BrokerTarget = { server: 'srv', provenance: 'mcp:srv', ownsGate: false, list: async () => [], call: async (n) => (calls.push(n), { text: 'ok', isError: false }) };
+    let manual = false;
+    const b = new LocalToolBroker({ hsid: HSID, principalId: 'p:abcdefgh/s-x', repo: '/repo', loop: false, log: async () => undefined, broker: { raise: async () => ({ cardId: CARD }) as never, decisionOf: async () => 'allow' } as never, target, tools: [{ name: 'poke', description: 'P.', parameters: { type: 'object', properties: {} }, class: 'mutate' }], running: () => true, manual: () => manual });
+    manual = true;
+    expect((await b.handle(req('poke', {}))).content).toMatch(/manual mode/);
+    expect(calls).toEqual([]);
+  });
+
+  it('L3: a server tool never takes the gnomon_ prefix', () => {
+    const es = narrow([{ name: 'gnomon_git_push', inputSchema: { type: 'object', properties: {} } }, { name: 'ok', inputSchema: { type: 'object', properties: {} } }], 's');
+    expect(offerWithin([], es, { contextTarget: 8192 }).map((e) => e.name)).toEqual(['ok']);
   });
 });

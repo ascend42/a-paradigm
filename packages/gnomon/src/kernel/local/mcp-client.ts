@@ -61,10 +61,13 @@ export interface LocalMcpServer {
 
 /**
  * remote-refused   an http/sse server (never reached from a local session)
+ * label-reserved   (Aegis L3) its label is gnomon, kernel, another server's, or paradigm for a non-first-party server
  * launch-writable  (Aegis H1) a launch-closure path IS a session root or holds one, so it cannot be write-denied
  *                  without taking the root away: the server is refused
  */
-export type ServerFit = 'ok' | 'remote-refused' | 'launch-writable';
+export type ServerFit = 'ok' | 'remote-refused' | 'launch-writable' | 'label-reserved';
+/** Aegis L3: labels no third-party server may take. */
+export const RESERVED_LABELS: readonly string[] = Object.freeze(['gnomon', 'kernel'])
 
 /** Commands whose launch reads project files beside the cwd (package manifests, installed packages, lockfiles, venvs). */
 const PROJECT_RUNNERS = new Set(['node', 'npx', 'npm', 'pnpm', 'pnpx', 'yarn', 'bun', 'bunx', 'tsx', 'ts-node', 'deno', 'uv', 'uvx', 'python', 'python3', 'pipx', 'poetry']);
@@ -343,11 +346,12 @@ export class McpStdioClient {
     let cursor: string | undefined;
     for (let page = 0; page < 4; page++) {
       const r = await this.request('resources/list', cursor ? { cursor } : undefined, o).catch(() => ({}) as Record<string, unknown>);
-      if (Array.isArray(r.resources)) for (const x of r.resources) if (isObj(x) && typeof x.uri === 'string' && x.uri.length <= 512) listed.push({ uri: x.uri, json: x.mimeType === 'application/json' });
+      // Aegis L5: only a `…/tool-annotations` URI, or a resource that carries the explicit io.gnomon/op-annotations marker
+      if (Array.isArray(r.resources)) for (const x of r.resources) if (isObj(x) && typeof x.uri === 'string' && x.uri.length <= 512) listed.push({ uri: x.uri, json: isObj(x._meta) && x._meta['io.gnomon/op-annotations'] === true });
       cursor = typeof r.nextCursor === 'string' && r.nextCursor ? r.nextCursor : undefined;
       if (!cursor || listed.length >= 256) break;
     }
-    const ranked = [...listed.filter((x) => /\/tool-annotations$/.test(x.uri)), ...listed.filter((x) => x.json && !/\/tool-annotations$/.test(x.uri))];
+    const ranked = [...listed.filter((x) => /\/tool-annotations$/.test(x.uri)), ...listed.filter((x) => x.json && !/\/tool-annotations$/.test(x.uri))]; // json = marked
     for (const x of ranked.slice(0, OP_ANNOTATION_READS)) {
       const r = await this.request('resources/read', { uri: x.uri }, o).catch(() => null);
       const c = r && Array.isArray(r.contents) ? r.contents.find((y) => isObj(y) && typeof y.text === 'string') : undefined;
@@ -490,7 +494,11 @@ export class LocalMcpPool {
         continue;
       }
       const label = serverLabel(s.name);
-      if (labels.has(label) || label === 'gnomon') continue; // a name that would collide with another (or the kernel's own)
+      // Aegis L3: a label taken by another server, a kernel label, or `paradigm` for anything but the first-party server
+      if (labels.has(label) || RESERVED_LABELS.includes(label) || (label === 'paradigm' && s.trust !== 'first-party')) {
+        this.refused.push({ id: s.id, name: s.name, fit: 'label-reserved' });
+        continue;
+      }
       labels.add(label);
       this.#servers.push({ s, label, key: launchKey(s, o.repo), client: null, starting: null, error: null, starts: 0, relist: { inflight: false, pending: false, last: 0, recent: [], stale: false } });
     }

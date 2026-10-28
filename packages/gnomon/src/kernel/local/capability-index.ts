@@ -496,7 +496,8 @@ export function offerWithin<T extends Pick<CapabilityEntry, 'name' | 'descriptio
   const chosen: T[] = [];
   let used = compactSurfaceTokens(fixed);
   for (const e of entries) {
-    if (e.humanOnly || taken.has(e.name) || fixed.length + chosen.length >= MAX_OFFERED) continue;
+    // Aegis L3: a server tool never takes a kernel verb's name or the gnomon_ prefix
+    if (e.humanOnly || taken.has(e.name) || /^gnomon_/i.test(e.name) || fixed.length + chosen.length >= MAX_OFFERED) continue;
     const cost = compactSurfaceTokens([e]);
     if (used + cost > slot) continue;
     used += cost;

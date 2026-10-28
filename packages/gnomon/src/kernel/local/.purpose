@@ -250,15 +250,22 @@ components:
       is killed), per-request timeouts (the broker's deadline for calls),
       256 tools, 32 requests in flight, 3 starts per server per session.
       LocalMcpPool (one per local session): servers from
-      McpServers.composeLocal (#mcp-servers: first-party Paradigm as trust
-      first-party, then the servers enabled for this repo at their current
-      launch hash, project/local servers only in their own repo, trust from
-      the store entry, default enabled); http/sse servers refused with fit
-      remote-refused; each stdio server spawned lazily through the session's
-      own launch plan (sessionLaunchPlan with the session policy: the
-      session's files and network), with a kernel-lifetime tools/list cache
-      per launch + repo so a cache hit spawns nothing until the first call;
-      closeAll() reaps every server at session exit (process group on posix).
+      McpServers.composeLocal (#mcp-servers; INTERIM per Aegis H1: user and
+      plugin servers only, no first-party Paradigm and no project/local
+      scope until Paradigm is staged; trust from the store entry, default
+      enabled); http/sse refused remote-refused, reserved labels
+      label-reserved. Aegis H1: servers are fixed before the session profile,
+      which write-denies every launch-closure path inside the roots
+      (launchDenies; a closure that is a root refuses launch-writable).
+      Aegis H2: each server spawns lazily under its OWN policy (no session
+      dir or runner copy) with every GNOMON_* name stripped (serverEnv).
+      Kernel-lifetime tools/list cache per launch + repo (a hit spawns
+      nothing until the first call), failures cached 60 s, one 15 s deadline
+      per server at open. Aegis M3/M4: every pid's group SIGKILLed on
+      restart and close, servers tracked as children kind mcp-server; one
+      relist in flight + one pending, 2 s apart, 6 a minute then stale;
+      tools_set only on a changed offered-set hash; a name never rebinds to
+      another server.
     path: src/kernel/local/mcp-client.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]

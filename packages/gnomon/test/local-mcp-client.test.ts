@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { remoteProxyOf } from '../src/kernel/desk/mcp-server-cards.js';
 import { launchClosure, launchDenies, LocalMcpPool, McpListCache, McpStdioClient, serverEnv, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
 
 const FAKE = path.join(__dirname, 'fixtures', 'fake-mcp-server.mjs');
@@ -239,4 +240,19 @@ describe('Aegis M4/M5: list_changed storms and open-time failures', () => {
     expect(b.failed[0]!.error).toMatch(/failed recently/);
     expect(spawned).toBe(1);
   }, 20_000);
+});
+
+describe('Aegis L3 / Q7', () => {
+  it('L3: gnomon, kernel and (unless first-party) paradigm labels are refused label-reserved', () => {
+    const pool = new LocalMcpPool({ servers: [server({ id: 'a', name: 'Gnomon' }), server({ id: 'b', name: 'kernel' }), server({ id: 'c', name: 'paradigm', trust: 'trusted' }), server({ id: 'd', name: 'paradigm', trust: 'first-party' })], spawn: () => spawnFake(), repo: '/r' });
+    expect(pool.refused.map((r) => [r.id, r.fit])).toEqual([['a', 'label-reserved'], ['b', 'label-reserved'], ['c', 'label-reserved']]);
+    expect(pool.labels).toEqual(['paradigm']);
+  });
+
+  it('Q7: known proxy packages read as a remote server on the enable card', () => {
+    expect(remoteProxyOf(['-y', 'mcp-remote@0.1.2', 'https://x'])).toBe('mcp-remote');
+    expect(remoteProxyOf(['@acme/mcp-proxy'])).toBe('mcp-proxy');
+    expect(remoteProxyOf(['supergateway'])).toBe('supergateway');
+    expect(remoteProxyOf(['my-server'])).toBeNull();
+  });
 });

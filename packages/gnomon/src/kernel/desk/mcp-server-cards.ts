@@ -175,6 +175,17 @@ const whereWords = (scope: McpScope): string => (scope === 'all' ? 'for all your
 const askedLine = (via: 'settings' | 'terminal', at: number): string => `asked from ${via === 'settings' ? 'Settings' : 'the terminal'} · ${hhmm(at)} · applies to new sessions`;
 
 /** What turns on with one server: where it comes from, what it runs or where it connects, env names, auto-allow rules. Names only, never a value. */
+/** Aegis Q7: known stdio-to-remote proxy packages (a stdio server that is really a remote one). */
+export const REMOTE_PROXY_PACKAGES: readonly string[] = Object.freeze(['mcp-remote', 'supergateway', 'mcp-proxy']);
+/** The proxy package an arg names (`mcp-remote`, `mcp-remote@1.2`, `@scope/mcp-proxy`…), or null. */
+export function remoteProxyOf(args: readonly string[]): string | null {
+  for (const a of args) {
+    const base = a.replace(/^@[^/]+\//, '').replace(/@[^@]*$/, '').toLowerCase();
+    if (REMOTE_PROXY_PACKAGES.includes(base)) return base;
+  }
+  return null;
+}
+
 export function mcpServerFactLines(r: McpServerRow, f: McpCardFacts): string[] {
   const anyValue = r.envNames.length + r.headerNames.length + r.needs.length > 0;
   return [
@@ -185,6 +196,7 @@ export function mcpServerFactLines(r: McpServerRow, f: McpCardFacts): string[] {
       : [`connects to ${r.host ?? '?'} (${r.url ?? r.transport}) from the session: tool calls send data there`]),
     ...(r.shell ? [`runs a shell (${r.shell}): Gnomon cannot see what that command line starts`] : []),
     ...(r.fetches ? [`downloads what it runs at every launch (${r.fetches}): what runs can change without a new card`] : []),
+    ...(r.transport === 'stdio' && remoteProxyOf(r.args) ? [`connects to a remote server (${remoteProxyOf(r.args)} is a proxy): tool calls can send data off this machine`] : []),
     ...(r.inline ? [`runs inline code (${r.inline}): the program is the args above`] : []),
     ...(r.envNames.length ? [`env names ${r.envNames.join(', ')} (values not shown)`] : []),
     ...(r.headerNames.length ? [`header names ${r.headerNames.join(', ')} (values not shown)`] : []),
