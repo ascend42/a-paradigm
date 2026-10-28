@@ -72,7 +72,7 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { kernelMcpAnswer } from '../supervisor/kernel-mcp.js';
 import { composePermission, inputHash } from '../supervisor/permission.js';
-import { reassemble, reassembleFull, type CapabilityEntry, type ToolForm } from './capability-index.js';
+import { reassemble, reassembleFull, type CapabilityEntry, type ServerTrust, type ToolForm } from './capability-index.js';
 
 /** The same deadlines the child waits (gnomon-local broker.ts TOOL_TIMEOUT_MS / CARD_TIMEOUT_MS). */
 export const TOOL_TIMEOUT_MS = 30_000;
@@ -122,6 +122,11 @@ export interface TargetCall {
   deadline: number;
   /** Aegis N4: the target calls this once, right before its effect starts */
   onRunning?: () => void;
+  /**
+   * slice C5'a1: this call runs with NO card only because the server's labels are believed (a read tool of a trusted
+   * server): the target refuses it (why 'trust-dropped') if that trust has ended by the time it would run
+   */
+  trustedRead?: boolean;
 }
 
 /** A target the broker calls: one MCP server (C1: the kernel's own). */
@@ -376,6 +381,12 @@ export interface LocalToolBrokerOptions {
   progress?: (id: string) => void;
   /** Aegis L2 (slice C2'): the session's run mode NOW is manual (a carded call to a target with no gate is refused) */
   manual?: () => boolean;
+  /**
+   * slice C5'a1: how much the kernel believes an MCP server's labels NOW (#local-mcp-client trustLive). A `read` narrow
+   * tool (grace entries included) runs with no card ONLY while this answers trusted or first-party; otherwise it takes
+   * a card like a mutate tool. Absent: no narrow tool is believed (fail closed).
+   */
+  trustLive?: (server: string) => ServerTrust;
 }
 
 /** Why a call's controller was aborted. */

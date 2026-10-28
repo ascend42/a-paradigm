@@ -22,7 +22,7 @@
  *   DESCRIBE  the description's first sentence plus the op label, at most DESCRIPTION_MAX chars.
  *   CLASS     read | mutate | destructive. MCP annotations count ONLY when the server's trust is `trusted` or
  *             `first-party` (readOnlyHint → read, destructiveHint → destructive, else mutate). A split op's class
- *             comes from per-op annotations, again only for a trusted server: first a resource the server advertises
+ *             comes from per-op annotations, again only for a trusted server: first (FIRST-PARTY only, slice C5'a1) a resource the server advertises
  *             whose JSON has schema `io.gnomon/op-annotations:v1` ({tools: {<tool>: {<op>: annotations}}}, found
  *             generically by #local-mcp-client, size-bounded, shape-validated or ignored whole), else the tool's
  *             `_meta["io.gnomon/op-annotations"]` map; an op neither names is mutate (a destructive parent stays
@@ -377,7 +377,9 @@ function opClass(tool: string, op: string, parent: ToolBrokerClass, trust: Serve
  */
 export function narrow(list: { tools?: unknown } | readonly unknown[], server: string, o: NarrowOptions = {}): CapabilityEntry[] {
   const trust = o.trust ?? 'enabled';
-  const resourceAnn = trust === 'enabled' ? null : parseOpAnnotations(o.opAnnotations);
+  // slice C5'a1 (trap: trust flapping): an op-annotations RESOURCE counts for the first-party server only; a trusted
+  // server's per-op classes come from its tools/list _meta map alone
+  const resourceAnn = trust === 'first-party' ? parseOpAnnotations(o.opAnnotations) : null;
   const tools = Array.isArray(list) ? list : isObj(list) && Array.isArray(list.tools) ? list.tools : [];
   const out: CapabilityEntry[] = [];
   for (const t of tools) {

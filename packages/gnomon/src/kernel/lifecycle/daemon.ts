@@ -161,6 +161,8 @@ import { KernelSpeakable } from '../voice/speakable.js';
 import { composeGuidance } from '../desk/desk-guidance.js';
 import { deskRepoScope, OFFER_SEED_KINDS, OfferRouter, type CommittedRow } from '../desk/offer-router.js';
 import { McpServers } from '../desk/mcp-server-cards.js';
+import { McpListCache } from '../local/mcp-client.js';
+import { McpTrust, trustSourceOf } from '../local/trust-book.js';
 import { resolveFirstPartyParadigm, type FirstPartyResolution } from '../desk/mcp-servers.js';
 import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
@@ -889,6 +891,12 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     catchUp(ruleBook, ruleSourceOf(log));
     return ruleBook;
   };
+  // slice C5'a1 (#mcp-servers trust, Arky 8): the TrustBook folds KERNEL-signed tool.trust rows; it catches up HERE,
+  // before any local session can index or start a pool, and every later read catches up again (a fold re-narrows)
+  const mcpTrust = new McpTrust({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: trustSourceOf(log), append: (kind, payload) => appendRow(kind, payload), onError: (op, id) => emit({ kind: 'daemon.desk', event: 'mcp.trust.write-failed', op, id } as DaemonEvent) });
+  mcpTrust.sync();
+  // slice C5'a1: the one tools/list cache (LocalLane's sessions list into it; request.mcp.trust reads its newest per id)
+  const mcpListCache = new McpListCache();
   // P8-D86/D87 run modes: folded from KERNEL-signed approval.mode.set / session.open{runMode} rows (a repo's mode
   // persists across sessions and restarts); strictness levels are not built (no level source ⇒ the ceiling permits
   // every mode). The control is the request.mode.set handler (dispatcher `requests`) and the session port's runMode.
@@ -1001,6 +1009,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
     // TD-2026-10-27-833 slice C2': local sessions reach the same servers (first-party Paradigm + the enabled ones)
     localMcp: (ctx) => mcpServers.composeLocal(ctx),
+    localMcpCache: mcpListCache,
+    localMcpTrust: mcpTrust,
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
     deskMcp: (distroServers, ctx) => {
