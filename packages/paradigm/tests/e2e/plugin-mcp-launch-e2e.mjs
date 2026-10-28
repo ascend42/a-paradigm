@@ -10,7 +10,7 @@
  *   - W/node_modules/.bin/ plants (POSIX: node, sh; Windows: node.cmd, sh.cmd, cmd.cmd) that drop a marker file
  *     and print a forged PARADIGM_MCP_ENTRY if anything ever runs them
  *   - the OS temp dir pointed at W/t, so the launcher's npx folder sits under W (W is its ancestor)
- *   - a temp copy of the plugin whose plugin.json version is E2E_VERSION (default 8.0.3, the published one): the
+ *   - a temp copy of the plugin whose plugin.json version is E2E_VERSION (default 8.0.4, the published one): the
  *     shipped launcher pins the plugin version, so the harness pins through the copy, not a launcher override
  *   - a project W/"proj x" whose package.json requires pnpm, with no node_modules (so the npx path is taken)
  * PATH holds only this node's folder (real node, npm, npx) and the system folders: no global paradigm-mcp.
@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 
 const WIN = process.platform === 'win32';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
-const VERSION = process.env.E2E_VERSION || '8.0.3';
+const VERSION = process.env.E2E_VERSION || '8.0.4';
 const TIMEOUT_MS = Number(process.env.E2E_TIMEOUT_MS || 300_000);
 
 const log = (m) => process.stdout.write(`[e2e] ${m}\n`);
