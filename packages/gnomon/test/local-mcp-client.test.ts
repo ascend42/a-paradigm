@@ -11,6 +11,26 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { remoteProxyOf } from '../src/kernel/desk/mcp-server-cards.js';
 import { launchCheck, LocalMcpPool, McpListCache, McpStdioClient, serverEnv, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
+import { bindingOf, type PoolTrust } from '../src/kernel/local/trust-book.js';
+
+/** slice C5'a1: a TrustBook stand-in; `trustNewest` trusts the newest listing of an id (what a human commit does). */
+const LAUNCH = `hmac-sha256:${'1'.repeat(64)}`;
+const stubTrust = (): PoolTrust & { m: Map<string, { binding: string; launchHash: string; toolsHash: string; label: string }>; drops: string[]; trustNewest: (cache: McpListCache, id: string) => void } => {
+  const m = new Map<string, { binding: string; launchHash: string; toolsHash: string; label: string }>();
+  const drops: string[] = [];
+  return {
+    m,
+    drops,
+    of: (id) => m.get(id) ?? null,
+    drop: (id, why) => {
+      if (m.delete(id)) drops.push(`${id}:${why}`);
+    },
+    trustNewest: (cache, id) => {
+      const n = cache.newest(id)!;
+      m.set(id, { binding: bindingOf({ id, launchHash: n.launchHash, pluginVersion: n.pluginVersion, toolsHash: n.toolsHash }), launchHash: n.launchHash, toolsHash: n.toolsHash, label: n.label });
+    },
+  };
+};
 
 const FAKE = path.join(__dirname, 'fixtures', 'fake-mcp-server.mjs');
 const dirs: string[] = [];
@@ -46,7 +66,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
 });
 
-const server = (over: Partial<LocalMcpServer> = {}): LocalMcpServer => ({ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE], trust: 'trusted', ...over });
+const server = (over: Partial<LocalMcpServer> = {}): LocalMcpServer => ({ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE], trust: 'enabled', launchHash: LAUNCH, ...over });
 
 describe('McpStdioClient', () => {
   it('initialize, tools/list, tools/call; a server request is answered not-supported', async () => {
@@ -109,9 +129,10 @@ describe('LocalMcpPool', () => {
     expect(serverLabel('Remote.X')).toBe('remote-x');
   });
 
-  it('index narrows with trust and the resource annotations; a cache hit spawns nothing until first call; reap on close', async () => {
+  it('index narrows with the TrustBook trust (no resource for a trusted server); a cache hit spawns nothing until first call; reap on close', async () => {
     const d = tmp();
     const cache = new McpListCache();
+    const trust = stubTrust();
     let spawned = 0;
     const pids: string[] = [];
     const mk = (): LocalMcpPool =>
@@ -119,6 +140,7 @@ describe('LocalMcpPool', () => {
         servers: [server()],
         repo: d,
         cache,
+        trust,
         spawn: () => {
           spawned++;
           const pf = path.join(d, `pid${spawned}`);
@@ -127,10 +149,17 @@ describe('LocalMcpPool', () => {
         },
       });
     const a = mk();
-    const ix = await a.index();
+    const ix0 = await a.index();
     expect(spawned).toBe(1);
+    // slice C5'a1: not trusted yet: every tool mutate
+    expect(new Set(ix0.entries.map((e) => e.class))).toEqual(new Set(['mutate']));
+    expect(a.trustLive('fake')).toBe('enabled');
+    trust.trustNewest(cache, 'user::fake');
+    const ix = { entries: a.renarrow('fake')! };
     const cls = Object.fromEntries(ix.entries.map((e) => [e.name, e.class]));
-    expect(cls).toMatchObject({ echo: 'read', poke: 'mutate', 'fam.get': 'read', 'fam.set': 'mutate' });
+    // a trusted server's tools/list labels count; its op-annotations RESOURCE is never read (fam.get stays mutate)
+    expect(cls).toMatchObject({ echo: 'read', poke: 'mutate', 'fam.get': 'mutate', 'fam.set': 'mutate' });
+    expect(a.trustLive('fake')).toBe('trusted');
     expect(ix.entries[0]!.id).toMatch(/^fake\/echo@[0-9a-f]{8}$/);
     await a.closeAll();
     const pid1 = Number(fs.readFileSync(pids[0]!, 'utf8'));
@@ -138,13 +167,16 @@ describe('LocalMcpPool', () => {
 
     // a second session in the same repo: the cached list, no spawn until a call
     const b = mk();
-    await b.index();
+    expect(Object.fromEntries((await b.index()).entries.map((e) => [e.name, e.class]))).toMatchObject({ echo: 'read' });
     expect(spawned).toBe(1);
     const t = b.target('fake')!;
     let running = 0;
     const r = await t.call('echo', { text: 'x' }, { signal: new AbortController().signal, deadline: Date.now() + 10_000, onRunning: () => running++ });
     expect(r).toEqual({ text: 'echo:{"text":"x"}:1', isError: false });
     expect(spawned).toBe(2);
+    // the first spawn re-listed once (same tools): still trusted, nothing dropped
+    expect(b.trustLive('fake')).toBe('trusted');
+    expect(trust.drops).toEqual([]);
     expect(running).toBe(1);
     expect(b.live).toBe(1);
     await b.closeAll();

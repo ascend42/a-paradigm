@@ -31,6 +31,17 @@
  *              back on (back to the default) with no card.
  *   Windows    discovery and rows work; turning a server on is refused (a root-class decision needs the root key,
  *              which lives in the Mac helper in 8.0); the first-party Paradigm MCP still runs.
+ *   trust      (TD-2026-10-27-833 slice C5'a1, #local-mcp-client) request.mcp.trust{id, op:'preview'|'commit'|'clear',
+ *              token?}, the human on a gui or device connection only (like enable). How much a LOCAL session believes
+ *              a user or plugin server's own tool labels lives in KERNEL-signed tool.trust rows (#trust-book TrustBook),
+ *              never in this store: composeLocal no longer reads the store's old `trust` field and the next write drops
+ *              it. preview works from the newest listing of the server in this daemon run (McpListCache, injected as
+ *              listedOf; none: why 'not-listed') and answers the notice, the tools that would run with no card and a
+ *              single-use TRUST_TOKEN_TTL_MS token bound to (principal, id, launchHash, toolsHash); commit re-checks the
+ *              token, the newest listing and the current declaration, then writes tool.trust{op:'set'}; clear takes no
+ *              token (it only narrows). Refused: a `fetches` server, a remote proxy, a remote, a project or local server,
+ *              the first-party server (already first-party) and Windows. Turning a server off drops its trust (why
+ *              disabled).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -39,6 +50,11 @@ import { batchCardBlock } from '../broker/batch-card.js';
 import type { ApprovalBroker } from '../broker/broker.js';
 import type { PolicyPath } from '../manifest/policy.js';
 import { RpcRefusal } from '../socket/rpc.js';
+import { randomBytes } from 'node:crypto';
+import { TOOL_BROKER_SERVER_PATTERN, TOOL_TRUST_ID_PATTERN } from '@a-company/gnomon-contracts';
+import { narrow } from '../local/capability-index.js';
+import { serverLabel, type ListedIndex } from '../local/mcp-client.js';
+import { bindingOf, type TrustEntry } from '../local/trust-book.js';
 import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
 import type { LocalMcpServer } from '../local/mcp-client.js';
 import { autoStage, builtAtOf, gitStatusOf, headCommitTimeOf, readParadigmPin, sourceKindOf, stageParadigm, StageRefused, verifyStaged, type ParadigmPin, type VerifyResult } from '../local/paradigm-stage.js';
@@ -55,7 +71,58 @@ export const MCP_ENABLE_REQUEST = 'request.mcp.enable' as const;
 export const MCP_DISABLE_REQUEST = 'request.mcp.disable' as const;
 /** TD-2026-10-27-833: the human stages the first-party Paradigm MCP (the only way a linked checkout is ever staged). */
 export const MCP_PARADIGM_STAGE_REQUEST = 'request.mcp.paradigm.stage' as const;
-export const MCP_REQUESTS: readonly string[] = Object.freeze([MCP_ENABLE_REQUEST, MCP_DISABLE_REQUEST, MCP_PARADIGM_STAGE_REQUEST]);
+/** Slice C5'a1: the human trusts (or stops trusting) a server's own tool labels for local sessions. */
+export const MCP_TRUST_REQUEST = 'request.mcp.trust' as const;
+export const MCP_REQUESTS: readonly string[] = Object.freeze([MCP_ENABLE_REQUEST, MCP_DISABLE_REQUEST, MCP_PARADIGM_STAGE_REQUEST, MCP_TRUST_REQUEST]);
+/** Slice C5'a1: a trust preview's token is single-use and lives this long. */
+export const TRUST_TOKEN_TTL_MS = 60_000;
+/** Aegis H1: the trust card waits this long for the human's fresh press. */
+export const MCP_TRUST_CARD_TTL_MS = 10 * 60_000;
+/** Slice C5'a1: at most this many preview tokens wait at once (oldest dropped). */
+const TRUST_TOKENS_MAX = 64;
+/**
+ * Slice C5'a1: why a server cannot be trusted (closed): platform (Windows), not-found, first-party (it already is),
+ * not-local (a project or local server: never in a local session), remote (http/sse), fetches (downloads what it runs
+ * at each launch), remote-proxy (a stdio proxy to a remote server), problem (its declaration has a problem), bad-id
+ * (an id or label the tool.trust row cannot carry), not-enabled (not on at its current launch hash), not-listed (no
+ * local session listed it in this daemon run), changed (the newest listing is not its current launch).
+ */
+export const MCP_TRUST_REFUSALS = Object.freeze(['platform', 'not-found', 'first-party', 'not-local', 'remote', 'fetches', 'remote-proxy', 'problem', 'bad-id', 'not-enabled', 'not-listed', 'changed'] as const);
+export type McpTrustRefusal = (typeof MCP_TRUST_REFUSALS)[number];
+const TRUST_REFUSAL_TEXT: Readonly<Record<McpTrustRefusal, string>> = Object.freeze({
+  platform: 'per-server trust is not offered on Windows yet',
+  'not-found': 'no such server in your Claude Code config now (status.mcp lists them)',
+  'first-party': 'the Paradigm MCP is first-party already',
+  'not-local': "a project or local server never reaches a local session, so it has nothing to trust",
+  remote: 'a remote server never reaches a local session',
+  fetches: 'it downloads what it runs at every launch, so what Gnomon would trust can change without a sign',
+  'remote-proxy': 'it is a proxy to a remote server, so what Gnomon would trust is not on this machine',
+  problem: 'its declaration has a problem',
+  'bad-id': 'its id or name cannot be recorded',
+  'not-enabled': 'it is not turned on at its current launch',
+  'not-listed': 'no local session listed its tools since Gnomon started: open a local session that uses it, then ask again',
+  changed: 'it changed since a local session listed its tools: open a local session that uses it, then ask again',
+});
+
+/** Slice C5'a1: the trust card's words (the GUI shows them as they are). */
+export function trustNotice(name: string, reads: readonly string[]): string {
+  return `Trust ${name}'s tool labels? Gnomon will believe what ${name} says about its tools. These run with no card: ${reads.length ? reads.join(', ') : 'none'}. You can make Always rules for its other tools. Tools that change or delete things still ask each time. Trust ends by itself if its command, arguments, environment or tool list changes.`;
+}
+
+const DROP_WHY_TEXT: Readonly<Record<'launch-changed' | 'tools-changed' | 'disabled', string>> = Object.freeze({ 'launch-changed': 'its launch changed', 'tools-changed': 'its tool list changed', disabled: 'it was turned off' });
+/** Slice C5'a1: what the human reads when the kernel dropped a server's trust. */
+export function trustDropNotice(name: string, why: 'launch-changed' | 'tools-changed' | 'disabled'): string {
+  return `${name} changed (${DROP_WHY_TEXT[why]}), so Gnomon stopped trusting its tool labels. Its tools ask again and its Always rules are paused. Trust it again in Settings › MCP servers.`;
+}
+
+/** The kernel's TrustBook as McpServers uses it (#trust-book McpTrust). */
+export interface McpTrustStore {
+  of(id: string): TrustEntry | null;
+  set(e: { id: string; label: string; binding: string; launchHash: string; toolsHash: string }): Promise<void>;
+  clear(id: string): Promise<boolean>;
+  drop(id: string, why: 'launch-changed' | 'tools-changed' | 'disabled'): void;
+  all?(): TrustEntry[];
+}
 export const MCP_ENABLE_CARD_TTL_MS = 24 * 3600 * 1000;
 export const MCP_CHANGED_WHILE_OPEN = 'the server changed while the card was open: ask again';
 export const MCP_ALL_CHANGED_WHILE_OPEN = 'every server on the card changed while it was open: ask again';
@@ -84,12 +151,8 @@ export interface McpEnabledEntry {
   launchHash: string;
   at: string;
   cardId: string;
-  /**
-   * TD-2026-10-27-833 slice C2': how much a LOCAL session believes this server's own annotations (#capability-index).
-   * Absent = `enabled` (annotations ignored, every tool mutate). `trusted` is set by the human only (C5' adds its UI);
-   * `first-party` is never stored (it is the Paradigm MCP's alone).
-   */
-  trust?: 'enabled' | 'trusted';
+  // slice C5'a1: no `trust` field. Trust lives in kernel-signed tool.trust rows; a store's old field is never read and the
+  // next write drops it (both only narrow)
 }
 export interface McpServersStore {
   enabled: McpEnabledEntry[];
@@ -125,9 +188,9 @@ export function readMcpServersStore(home: string): McpServersStore {
       (e): e is McpEnabledEntry => isObj(e) && typeof e.id === 'string' && typeof e.launchHash === 'string' && typeof e.cardId === 'string' && typeof e.at === 'string' && (e.scope === 'all' || (isObj(e.scope) && typeof e.scope.repo === 'string' && path.isAbsolute(e.scope.repo))),
     );
     const fp = isObj(v.firstParty) && v.firstParty.paradigm === 'off' ? 'off' : 'on';
-    // slice C2': a trust value other than the two a store may hold is dropped (the entry stays, as `enabled`)
-    for (const e of enabled) if (e.trust !== undefined && e.trust !== 'enabled' && e.trust !== 'trusted') delete e.trust;
-    return { enabled: enabled.slice(0, MAX_ENTRIES), firstParty: { paradigm: fp } };
+    // slice C5'a1: only the entry's own fields are kept (an old or edited `trust` field is never read, and the next
+    // write drops it)
+    return { enabled: enabled.slice(0, MAX_ENTRIES).map((e) => ({ id: e.id, scope: e.scope, launchHash: e.launchHash, at: e.at, cardId: e.cardId })), firstParty: { paradigm: fp } };
   } catch {
     return empty;
   }
@@ -142,7 +205,8 @@ export function writeMcpServersStore(home: string, s: McpServersStore): void {
     /* absent */
   }
   const tmp = `${p}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify({ schema: MCP_SERVERS_SCHEMA, enabled: s.enabled.slice(0, MAX_ENTRIES), firstParty: s.firstParty }, null, 2)}\n`, { mode: 0o600 });
+  const enabled = s.enabled.slice(0, MAX_ENTRIES).map((e) => ({ id: e.id, scope: e.scope, launchHash: e.launchHash, at: e.at, cardId: e.cardId }));
+  fs.writeFileSync(tmp, `${JSON.stringify({ schema: MCP_SERVERS_SCHEMA, enabled, firstParty: s.firstParty }, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(tmp, p);
 }
 
@@ -265,6 +329,13 @@ export interface McpServersOptions {
   emit?: (e: Record<string, unknown>) => void;
   /** the card size cap (tests lower it); default MAX_CARD_CHARS */
   maxCardChars?: number;
+  /**
+   * slice C5'a1 (Arky 6): the newest listing of a server id in this daemon run (the daemon's McpListCache, which only
+   * LocalLane's sessions fill); absent: request.mcp.trust answers not-listed
+   */
+  listedOf?: (id: string) => (ListedIndex & { tools: Array<Record<string, unknown>> | null }) | null;
+  /** slice C5'a1: the kernel's TrustBook (absent: request.mcp.trust refuses, status says untrusted) */
+  trust?: McpTrustStore;
 }
 
 const bad = (field: string, msg: string, data: Record<string, unknown> = {}): RpcRefusal => new RpcRefusal('BAD_REQUEST', 'bad-params', `#mcp-servers: ${msg}`, { field, ...data });
@@ -278,6 +349,8 @@ export class McpServers {
   readonly #skips = new Map<string, McpSkip>();
   /** TD-2026-10-27-833: the last full verification of the staged Paradigm pin (status reads it; never re-hashes) */
   #lastVerify: { at: string; ok: boolean; why: string | null } | null = null;
+  /** slice C5'a1: single-use trust preview tokens → what they are bound to */
+  readonly #trustTokens = new Map<string, { principal: string; id: string; launchHash: string; toolsHash: string; expires: number }>();
 
   constructor(o: McpServersOptions) {
     this.#o = o;
@@ -361,6 +434,10 @@ export class McpServers {
 
   /** The session's own servers (first-party + enabled) for a session opened in `cwd`. */
   compose(ctx: { hsid: string; cwd: string; worktree?: string }): ComposeResult {
+    return this.#compose(ctx).r;
+  }
+
+  #compose(ctx: { hsid: string; cwd: string; worktree?: string }): { r: ComposeResult; decls: McpServerDecl[] } {
     const store = readMcpServersStore(this.#o.home);
     const repo = realOr(ctx.cwd);
     const fp = store.firstParty.paradigm === 'on' ? this.#o.firstParty() : null;
@@ -371,19 +448,18 @@ export class McpServers {
     const r = composeSessionMcp({ decls, enabled: (d, hash) => enabledState(store, d, hash, repo), launchKey: this.#o.launchKey, cwd: ctx.cwd, firstParty: fp && fp.available ? fp : null, envValue: (n) => env.values.get(n) });
     if (fp && !fp.available) this.#o.emit?.({ event: 'mcp.first-party.unavailable', hsid: ctx.hsid, why: fp.why });
     for (const s of r.skipped) this.#o.emit?.({ event: 'mcp.user.skipped', hsid: ctx.hsid, id: s.id, server: s.server, why: s.why, ...(s.names ? { names: s.names } : {}) });
-    return r;
+    return { r, decls };
   }
 
   /**
    * TD-2026-10-27-833 slice C2': the servers a LOCAL session in `ctx.cwd` may reach (#local-mcp-client): exactly the
    * servers compose() gives a Claude session there (the first-party Paradigm MCP as trust `first-party`, then every
-   * enabled server at its current launch hash, a project or local server only in its own repo), each with its store
-   * entry's trust (default `enabled`; the narrowest of the applicable entries). Remote servers are listed as composed;
-   * the pool refuses them (remote-refused).
+   * enabled server at its current launch hash, a project or local server only in its own repo). Remote servers are
+   * listed as composed; the pool refuses them (remote-refused). Slice C5'a1: every non-first-party server is `enabled`
+   * here and carries its launch hash and plugin version; the pool asks the TrustBook (the store's trust is never read).
    */
   composeLocal(ctx: { hsid: string; cwd: string; worktree?: string }): LocalMcpServer[] {
-    const r = this.compose(ctx);
-    const store = readMcpServersStore(this.#o.home);
+    const { r, decls } = this.#compose(ctx);
     const out: LocalMcpServer[] = [];
     for (const a of r.added) {
       // INTERIM (Aegis H1, until the first-party Paradigm MCP is staged as a pinned, hashed copy in the Gnomon home):
@@ -397,15 +473,16 @@ export class McpServers {
       const e = r.servers[a.server] as Record<string, unknown> | undefined;
       if (!e) continue;
       const transport = e.type === 'http' || e.type === 'sse' ? e.type : 'stdio';
-      const entries = store.enabled.filter((x) => x.id === a.id && x.launchHash === a.launchHash);
-      const trust = entries.length && entries.every((x) => x.trust === 'trusted') ? 'trusted' : 'enabled';
+      const d = decls.find((x) => x.id === a.id);
       out.push({
         id: a.id,
         name: a.server,
         transport,
         ...(transport === 'stdio' && typeof e.command === 'string' ? { command: e.command, args: Array.isArray(e.args) ? e.args.map(String) : [] } : {}),
         ...(transport === 'stdio' && e.env && typeof e.env === 'object' ? { env: { ...(e.env as Record<string, string>) } } : {}),
-        trust,
+        trust: 'enabled',
+        launchHash: a.launchHash,
+        pluginVersion: d?.plugin?.version ?? null,
       });
     }
     return out;
@@ -501,7 +578,7 @@ export class McpServers {
     const state = (d: McpServerDecl) => {
       const hash = declHash(d, key);
       const mine = store.enabled.filter((e) => e.id === d.id);
-      return { ...mcpServerRow(d), autoAllowed: autoAllowRules(this.#o.userHome, d.sessionName), on: { all: mine.some((e) => e.scope === 'all' && e.launchHash === hash), repos: mine.filter((e) => e.scope !== 'all' && e.launchHash === hash).map((e) => (e.scope as { repo: string }).repo) }, changed: mine.some((e) => e.launchHash !== hash) };
+      return { ...mcpServerRow(d), autoAllowed: autoAllowRules(this.#o.userHome, d.sessionName), on: { all: mine.some((e) => e.scope === 'all' && e.launchHash === hash), repos: mine.filter((e) => e.scope !== 'all' && e.launchHash === hash).map((e) => (e.scope as { repo: string }).repo) }, changed: mine.some((e) => e.launchHash !== hash), trust: this.#trustRow(d, hash, mine.some((e) => e.launchHash === hash)) };
     };
     const live = new Map<string, string[]>();
     for (const l of this.#o.liveRepos?.() ?? []) {
@@ -515,7 +592,7 @@ export class McpServers {
       unsupported: this.#platform() === 'win32' ? 'platform' : null,
       envFile: LOOP_ENV_SHOWN,
       // TD-2026-10-27-833: staged (the pin a local session runs) and pinMismatch (why it is not offered), for the C6' card
-      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }), ...this.#stagedStatus() },
+      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, trust: { level: 'first-party', why: 'first-party' }, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }), ...this.#stagedStatus() },
       servers: all.filter((d) => d.source === 'user' || d.source === 'plugin').map(state),
       repos: [...live].map(([repo, hsids]) => ({ repo, folder: path.basename(repo), hsids, servers: all.filter((d) => d.repo === repo).map(state) })),
       // one entry per server; the servers of one batch card share its cardId
@@ -525,6 +602,22 @@ export class McpServers {
       skips: [...this.#skips.values()],
       ...(this.#skips.size ? { skipped: [...this.#skips.values()].at(-1) } : {}),
     };
+  }
+
+  /**
+   * Slice C5'a1 (for the C5'b GUI): a server row's trust — level untrusted | trusted (the TrustBook holds it; the pool
+   * still checks the binding at every listing), and why it cannot be trusted now (MCP_TRUST_REFUSALS) or null when a
+   * preview would be answered. Hashes and names only.
+   */
+  #trustRow(d: McpServerDecl, hash: string, on: boolean): { level: 'untrusted' | 'trusted'; why: McpTrustRefusal | null; since?: number } {
+    const t = this.#o.trust?.of(d.id) ?? null;
+    let why: McpTrustRefusal | null = this.#trustRefusal(d);
+    if (!why && !on) why = 'not-enabled';
+    if (!why) {
+      const l = this.#o.listedOf?.(d.id) ?? null;
+      why = !l || !l.tools ? 'not-listed' : l.launchHash !== hash || l.pluginVersion !== (d.plugin?.version ?? null) ? 'changed' : null;
+    }
+    return { level: t ? 'trusted' : 'untrusted', why, ...(t ? { since: t.seq } : {}) };
   }
 
   #human(asker: McpAsker, kind: string): void {
@@ -575,6 +668,7 @@ export class McpServers {
   async request(asker: McpAsker, kind: string, payload: unknown): Promise<unknown> {
     this.#human(asker, kind);
     if (kind === MCP_PARADIGM_STAGE_REQUEST) return this.#stageRequest(payload);
+    if (kind === MCP_TRUST_REQUEST) return this.#trustRequest(asker, payload);
     // #batch-card: several servers, each with its scope, on ONE card (one presence decides them all)
     if (kind === MCP_ENABLE_REQUEST && isObj(payload) && 'servers' in payload) {
       const items = this.#parseBatch(payload);
@@ -605,8 +699,142 @@ export class McpServers {
     const before = s.enabled.length;
     s.enabled = s.enabled.filter((e) => !(e.id === id && (scope === null || sameScope(e.scope, scope))));
     if (s.enabled.length !== before) writeMcpServersStore(this.#o.home, s);
+    // slice C5'a1: a server turned off everywhere is trusted no more (one dropped row, why disabled)
+    if (!s.enabled.some((e) => e.id === id) && this.#o.trust?.of(id)) this.#o.trust.drop(id, 'disabled');
     this.#o.emit?.({ event: 'mcp.user.disabled', id, removed: before - s.enabled.length });
     return { id, disabled: true, removed: before - s.enabled.length };
+  }
+
+  /** Slice C5'a1: why this declaration can never be trusted (before listing), or null. */
+  #trustRefusal(d: McpServerDecl | null): McpTrustRefusal | null {
+    if (this.#platform() === 'win32') return 'platform';
+    if (!d) return 'not-found';
+    if (d.id === FIRST_PARTY_PARADIGM) return 'first-party';
+    if (d.source !== 'user' && d.source !== 'plugin') return 'not-local';
+    if (d.transport !== 'stdio') return 'remote';
+    if (d.fetches) return 'fetches';
+    if (remoteProxyOf(d.args)) return 'remote-proxy';
+    if (d.problems.length) return 'problem';
+    if (!TOOL_TRUST_ID_PATTERN.test(d.id) || !TOOL_BROKER_SERVER_PATTERN.test(serverLabel(d.sessionName))) return 'bad-id';
+    return null;
+  }
+
+  #trustRefused(why: McpTrustRefusal, id: string): RpcRefusal {
+    return new RpcRefusal(why === 'not-found' ? 'NOT_FOUND' : 'UNSUPPORTED', 'bad-params', `#mcp-servers: cannot trust this server: ${TRUST_REFUSAL_TEXT[why]}`, { why, id });
+  }
+
+  /**
+   * Slice C5'a1: the server as it is now and its newest listing, checked for trust: refusable, on at its current launch
+   * hash, listed in this daemon run at that launch hash and plugin version.
+   */
+  #trustable(id: string): { d: McpServerDecl; hash: string; l: ListedIndex & { tools: Array<Record<string, unknown>> } } {
+    const d = id === FIRST_PARTY_PARADIGM ? null : this.#find(id);
+    const why = id === FIRST_PARTY_PARADIGM ? 'first-party' : this.#trustRefusal(d);
+    if (why) throw this.#trustRefused(why, id);
+    const hash = declHash(d!, this.#o.launchKey);
+    if (!readMcpServersStore(this.#o.home).enabled.some((e) => e.id === id && e.launchHash === hash)) throw this.#trustRefused('not-enabled', id);
+    const l = this.#o.listedOf?.(id) ?? null;
+    if (!l || !l.tools) throw this.#trustRefused('not-listed', id);
+    if (l.launchHash !== hash || l.pluginVersion !== (d!.plugin?.version ?? null)) throw this.#trustRefused('changed', id);
+    return { d: d!, hash, l: { ...l, tools: l.tools } };
+  }
+
+  /**
+   * request.mcp.trust{id, op, token?} (slice C5'a1; human, gui or device). preview: the notice, the tools that would run
+   * with no card, and a single-use token; commit: the token again, re-checked, then one tool.trust{op:'set'} row; clear:
+   * one tool.trust{op:'cleared'} row (no token: it only narrows).
+   */
+  async #trustRequest(asker: McpAsker, payload: unknown): Promise<unknown> {
+    if (!isObj(payload)) throw bad('id', `${MCP_TRUST_REQUEST} takes {id, op: 'preview' | 'commit' | 'clear', token?}`);
+    for (const k of Object.keys(payload)) if (!['id', 'op', 'token'].includes(k)) throw bad(k.slice(0, 32), `unknown field ${k.slice(0, 32)}`);
+    const { id, op, token } = payload;
+    if (typeof id !== 'string' || id.length === 0 || id.length > 2048) throw bad('id', 'id names one server (status.mcp)');
+    if (op !== 'preview' && op !== 'commit' && op !== 'clear') throw bad('op', "op is 'preview', 'commit' or 'clear'");
+    if (op === 'commit' ? typeof token !== 'string' || token.length === 0 || token.length > 128 : token !== undefined) throw bad('token', op === 'commit' ? 'a commit carries the preview token' : 'only a commit carries a token');
+    const trust = this.#o.trust;
+    if (op === 'clear') {
+      const cleared = trust ? await trust.clear(id) : false;
+      if (cleared) this.#o.emit?.({ event: 'mcp.trust.cleared', id });
+      return { id, trusted: false, cleared };
+    }
+    if (!trust) throw new RpcRefusal('UNSUPPORTED', 'bad-params', '#mcp-servers: per-server trust is not available in this kernel', { why: 'unavailable', id });
+    const now = (this.#o.clock ?? Date.now)();
+    for (const [t, v] of [...this.#trustTokens]) if (v.expires < now) this.#trustTokens.delete(t);
+    if (op === 'preview') {
+      const { d, l } = this.#trustable(id);
+      const reads = narrow(l.tools, l.label, { trust: 'trusted' }).filter((e) => e.class === 'read' && !e.humanOnly).map((e) => e.name);
+      const t = randomBytes(24).toString('base64url');
+      this.#trustTokens.set(t, { principal: asker.principal!, id, launchHash: l.launchHash, toolsHash: l.toolsHash, expires: now + TRUST_TOKEN_TTL_MS });
+      while (this.#trustTokens.size > TRUST_TOKENS_MAX) this.#trustTokens.delete(this.#trustTokens.keys().next().value!);
+      return { id, name: d.name, label: l.label, preview: true, trusted: trust.of(id) !== null, token: t, expiresAt: new Date(now + TRUST_TOKEN_TTL_MS).toISOString(), notice: trustNotice(d.name, reads), reads, launchHash: l.launchHash, toolsHash: l.toolsHash, listedAt: new Date(l.at).toISOString() };
+    }
+    // commit: the token is used up whatever happens next (single use)
+    const pend = this.#trustTokens.get(token as string);
+    this.#trustTokens.delete(token as string);
+    if (!pend || pend.principal !== asker.principal || pend.id !== id || now > pend.expires) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${MCP_TRUST_REQUEST}: the preview is stale, expired or already used: preview again`, { why: 'stale', id });
+    const { l } = this.#trustable(id);
+    if (l.launchHash !== pend.launchHash || l.toolsHash !== pend.toolsHash) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${MCP_TRUST_REQUEST}: the server changed since the preview: preview again`, { why: 'stale', id });
+    // Aegis H1 (founder: "Trusting a server always needs a fresh press"): the commit raises ONE grant card (root key and
+    // a FRESH presence, hand-only, never standing: 'grant' is in NEVER_STANDING_KINDS, never voice). Its detail (inside
+    // the contentHash) binds {id, launchHash, toolsHash, reads}; the token stays the preview's TOCTOU binding. Trust is
+    // set only when the card is allowed, after the listing is checked again.
+    const d = this.#find(id)!;
+    const reads = narrow(l.tools, l.label, { trust: 'trusted' }).filter((e) => e.class === 'read' && !e.humanOnly).map((e) => e.name);
+    const via = asker.credential === 'gui' ? ('settings' as const) : ('terminal' as const);
+    const lines = [
+      `Trust ${d.name}'s tool labels for local sessions`,
+      askedLine(via, now),
+      trustNotice(d.name, reads),
+      `launch ${l.launchHash} · tools ${l.toolsHash}`,
+      'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice; deny changes nothing',
+    ];
+    const shown = batchCardBlock(lines);
+    const sameListing = (): ListedIndex & { tools: Array<Record<string, unknown>> } => {
+      const again = this.#trustable(id).l;
+      if (again.launchHash !== l.launchHash || again.toolsHash !== l.toolsHash || again.pluginVersion !== l.pluginVersion) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${MCP_TRUST_REQUEST}: the server changed while the card was open: ask again`, { why: 'changed', id });
+      return again;
+    };
+    const card = await this.#o.broker.raise({
+      kind: 'grant',
+      cardId: mintId('card'),
+      requestedBy: asker.principal!,
+      attended: true,
+      detail: { action: 'mcp.trust', id, name: d.name, server: l.label, launchHash: l.launchHash, toolsHash: l.toolsHash, reads, rootRows: [] },
+      lines,
+      block: shown.block,
+      decisions: ['allow', 'deny'],
+      handOnly: true,
+      timeoutMs: MCP_TRUST_CARD_TTL_MS,
+      // TOCTOU inside the one touch, BEFORE the presence prompt
+      prepare: (decision: string) => {
+        if (decision === 'allow') sameListing();
+        return null;
+      },
+      effect: async (decision) => {
+        if (decision !== 'allow') return;
+        const again = sameListing();
+        await trust.set({ id, label: again.label, binding: bindingOf({ id, launchHash: again.launchHash, pluginVersion: again.pluginVersion, toolsHash: again.toolsHash }), launchHash: again.launchHash, toolsHash: again.toolsHash });
+        this.#o.emit?.({ event: 'mcp.trust.set', id, label: again.label });
+      },
+    });
+    return { id, pending: true, cardId: card.cardId };
+  }
+
+  /**
+   * Aegis L3: a server trusted on the chain but no longer on anywhere (its `disabled` drop row failed to write, or the
+   * store was edited while the daemon was down) is dropped again (why disabled). Run at daemon start; returns the ids.
+   */
+  reconcileTrust(): string[] {
+    const t = this.#o.trust;
+    if (!t?.all) return [];
+    const on = new Set(readMcpServersStore(this.#o.home).enabled.map((e) => e.id));
+    const out: string[] = [];
+    for (const e of t.all()) {
+      if (on.has(e.id)) continue;
+      t.drop(e.id, 'disabled');
+      out.push(e.id);
+    }
+    return out;
   }
 
   /** Find a server by id, re-read now (local/project ids carry their repo). */

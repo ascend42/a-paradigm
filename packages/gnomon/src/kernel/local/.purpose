@@ -196,6 +196,12 @@ components:
       'full') is the form a narrow tool was OFFERED in; a full one is read by reassembleFull, a
       narrow one by reassemble; a tier change re-offering the same entry in another form keeps the
       previous form callable and winning its name until the child's tools_applied (formShadow).
+      Slice C5'a1 (G-LCL-23): trustLive(server) is checked on the RESOLVED tool (grace entries
+      included): a read narrow tool runs with no card only while its server is trusted or
+      first-party NOW, else it takes a card as mutate (logged so); absent trustLive believes
+      nothing. A trusted read the pool finds untrusted at its first spawn is refused
+      (trust-dropped -> refused). Every brokered MCP card names the server's trust level
+      (TRUST_CARD_LINE).
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
@@ -206,7 +212,8 @@ components:
       - test/local-mcp-lane.test.ts
       - test/loop-model-e2e.test.ts
       - test/git-verbs.test.ts
-    oracles: [G-LCL-15, G-LCL-16]
+      - test/local-trust.test.ts
+    oracles: [G-LCL-15, G-LCL-16, G-LCL-23]
   capability-index:
     description: >-
       #capability-index (TD-2026-10-27-833 slice C2'): narrow(list, server,
@@ -415,7 +422,20 @@ components:
       since TD-2026-10-27-833 the first-party Paradigm MCP ONLY from a
       verified staged pin (#paradigm-stage; else listed refused fit
       pin-mismatch, and the pool refuses first-party trust without one); no
-      project/local scope; trust from the store entry, default enabled); http/sse refused remote-refused, reserved labels
+      project/local scope; slice C5'a1: never trust from the store: every
+      third-party server comes in enabled with its launch hash and plugin
+      version, and the pool asks the TrustBook (trust-book.ts) for the
+      EFFECTIVE trust, trusted only while the book holds exactly this
+      listing's binding sha256({id, launchHash, pluginVersion, toolsHash});
+      the binding is re-checked at index, on a cache hit, at the first spawn
+      (a trusted server narrowed from the cache re-lists once before its
+      first call) and on list_changed, and a mismatch drops trust everywhere
+      with one tool.trust{op:'dropped', why launch-changed|tools-changed}
+      row; op-annotation resources are read for first-party only; the cache
+      keeps a newest-per-id index {launchHash, toolsHash, at} for
+      request.mcp.trust; trustLive(label) answers the broker; LocalLane
+      re-narrows every session on a trust fold (pruneGrace by class, forced
+      tools_set)); http/sse refused remote-refused, reserved labels
       label-reserved. Aegis H1 (re-check): servers run in a neutral cwd
       (sessions/<short>-mcp under the Gnomon home: empty, write-denied,
       outside every root, removed at exit) and are refused launch-writable
@@ -452,7 +472,8 @@ components:
       - test/local-mcp-client.test.ts
       - test/local-mcp-lane.test.ts
       - test/paradigm-staged-lane.test.ts
-    oracles: [G-LCL-17, G-LCL-18, G-LCL-19]
+      - test/local-trust.test.ts
+    oracles: [G-LCL-17, G-LCL-18, G-LCL-19, G-LCL-23]
   paradigm-stage:
     description: >-
       #paradigm-stage (TD-2026-10-27-833, follow-up to slice C2'):

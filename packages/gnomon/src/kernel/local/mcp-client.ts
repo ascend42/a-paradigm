@@ -36,6 +36,7 @@ import { realPrefix as realLoose } from '../runner/env.js';
 import { narrow, OP_ANNOTATIONS_MAX_BYTES, OP_ANNOTATIONS_SCHEMA, type CapabilityEntry, type ServerTrust } from './capability-index.js';
 import type { BrokerTarget, TargetCall } from './tool-broker.js';
 import type { StagedSnapshot } from './paradigm-stage.js';
+import { bindingOf, toolsHashOf, type PoolTrust } from './trust-book.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 export const MCP_MESSAGE_MAX_BYTES = 4 * 1024 * 1024;
@@ -58,7 +59,15 @@ export interface LocalMcpServer {
   command?: string;
   args?: readonly string[];
   env?: Readonly<Record<string, string>>;
+  /**
+   * `first-party` (the verified staged Paradigm pin) or `enabled`. Slice C5'a1: `trusted` is never taken from here any
+   * more; the pool asks the kernel's TrustBook (PoolTrust) and checks the binding. A `trusted` value is read as enabled.
+   */
   trust: ServerTrust;
+  /** slice C5'a1: the #mcp-servers launch hash (declHash, keyed; excludes trust and repo): the trust binding's launch half */
+  launchHash?: string | null;
+  /** slice C5'a1: a plugin server's plugin version (part of the trust binding) */
+  pluginVersion?: string | null;
   /**
    * TD-2026-10-27-833: the first-party Paradigm MCP from its VERIFIED staged copy (#paradigm-stage): its dir, the
    * snapshot recheckStaged compares right before spawn, and the repo root it is launched for (args[1]).
@@ -529,9 +538,27 @@ export interface ListedServer {
   annotations: unknown;
 }
 
-/** The kernel-lifetime tools/list cache (LocalLane owns one; bounded, oldest dropped). */
+/**
+ * Slice C5'a1: the newest listing of one server id in this daemon run (any repo): what request.mcp.trust previews and
+ * commits against (`listedOf`). Hashes and the label only; the tools come from the cache entry while it is still held.
+ */
+export interface ListedIndex {
+  id: string;
+  label: string;
+  launchHash: string;
+  pluginVersion: string | null;
+  toolsHash: string;
+  /** epoch ms of the listing */
+  at: number;
+  /** the cache key it was listed under */
+  key: string;
+}
+
+/** The kernel-lifetime tools/list cache (the daemon owns one, shared by every LocalLane session; bounded, oldest dropped). */
 export class McpListCache {
   readonly #m = new Map<string, ListedServer>();
+  /** slice C5'a1 (Arky 5): newest listing per server id */
+  readonly #newest = new Map<string, ListedIndex>();
   readonly #failed = new Map<string, { at: number; why: string }>();
   /** Aegis M5: a recent failure of this launch (within FAILURE_TTL_MS), or undefined */
   failure(k: string, now = Date.now()): string | undefined {
@@ -547,10 +574,21 @@ export class McpListCache {
   get(k: string): ListedServer | undefined {
     return this.#m.get(k);
   }
-  set(k: string, v: ListedServer): void {
+  set(k: string, v: ListedServer, meta?: Omit<ListedIndex, 'key' | 'at'>, now = Date.now()): void {
     this.#m.delete(k);
     this.#m.set(k, v);
     if (this.#m.size > LIST_CACHE_MAX) this.#m.delete(this.#m.keys().next().value as string);
+    if (meta) {
+      this.#newest.delete(meta.id);
+      this.#newest.set(meta.id, { ...meta, key: k, at: now });
+      if (this.#newest.size > LIST_CACHE_MAX) this.#newest.delete(this.#newest.keys().next().value as string);
+    }
+  }
+  /** Slice C5'a1: the newest listing of a server id in this daemon run, with its tools while the cache still holds them. */
+  newest(id: string): (ListedIndex & { tools: Array<Record<string, unknown>> | null }) | null {
+    const n = this.#newest.get(id);
+    if (!n) return null;
+    return { ...n, tools: this.#m.get(n.key)?.tools ?? null };
   }
   get size(): number {
     return this.#m.size;
@@ -575,6 +613,8 @@ export interface LocalMcpPoolOptions {
   onChanged?: (label: string, entries: CapabilityEntry[]) => void;
   /** Aegis M3: register each spawned server with the daemon's children (stopped with the daemon) */
   track?: (child: ChildProcess, label: string) => void;
+  /** slice C5'a1: the kernel's TrustBook (absent: no server is trusted; first-party stays first-party) */
+  trust?: PoolTrust;
 }
 
 interface PoolServer {
@@ -588,6 +628,13 @@ interface PoolServer {
   starts: number;
   /** Aegis M4: relist throttle */
   relist: { inflight: boolean; pending: boolean; last: number; recent: number[]; stale: boolean };
+  /** slice C5'a1: the last listing narrowed, the trust it was narrowed under, and its binding */
+  listed: ListedServer | null;
+  eff: ServerTrust;
+  binding: string | null;
+  toolsHash: string | null;
+  /** slice C5'a1: a trusted server narrowed from a cache hit lists once more at its first spawn */
+  relistOnSpawn: boolean;
 }
 
 /** One local session's MCP servers (never shared across sessions). */
@@ -617,7 +664,7 @@ export class LocalMcpPool {
         continue;
       }
       labels.add(label);
-      this.#servers.push({ s, label, key: launchKey(s, o.repo), client: null, starting: null, error: null, starts: 0, relist: { inflight: false, pending: false, last: 0, recent: [], stale: false } });
+      this.#servers.push({ s, label, key: launchKey(s, o.repo), client: null, starting: null, error: null, starts: 0, relist: { inflight: false, pending: false, last: 0, recent: [], stale: false }, listed: null, eff: s.trust === 'first-party' ? 'first-party' : 'enabled', binding: null, toolsHash: null, relistOnSpawn: false });
     }
   }
 
@@ -657,6 +704,21 @@ export class LocalMcpPool {
         throw e;
       }
       if (this.#closed) c.kill();
+      // slice C5'a1: a trusted server narrowed from the cache lists once more at its first spawn, BEFORE its first call;
+      // a changed list re-narrows (the binding check drops trust) and a failed one stops believing its labels
+      if (p.relistOnSpawn && !this.#closed) {
+        p.relistOnSpawn = false;
+        const before = p.toolsHash;
+        try {
+          const v = await this.#listed(c, p, signal ?? AbortSignal.timeout(this.#o.listTimeoutMs ?? LIST_TIMEOUT_MS));
+          if (toolsHashOf(v.tools) !== before) {
+            const entries = this.#narrow(p, v);
+            if (!this.#closed) this.#o.onChanged?.(p.label, entries);
+          }
+        } catch {
+          if (p.eff === 'trusted') p.eff = 'enabled';
+        }
+      }
       return c;
     })().finally(() => {
       p.starting = null;
@@ -667,14 +729,63 @@ export class LocalMcpPool {
   async #listed(c: McpStdioClient, p: PoolServer, signal?: AbortSignal): Promise<ListedServer> {
     const o = signal ? { signal } : {};
     const tools = await c.listTools(o);
-    const annotations = p.s.trust === 'enabled' ? null : await c.readOpAnnotations(o).catch(() => null);
+    // slice C5'a1 (trap: trust flapping): op-annotation resources are read for the FIRST-PARTY server only, so trust
+    // given while a server was listed as untrusted never changes what was listed
+    const annotations = p.s.trust === 'first-party' ? await c.readOpAnnotations(o).catch(() => null) : null;
     const v = { tools, annotations };
-    this.#o.cache?.set(p.key, v);
+    const meta = p.s.trust !== 'first-party' && p.s.launchHash ? { id: p.s.id, label: p.label, launchHash: p.s.launchHash, pluginVersion: p.s.pluginVersion ?? null, toolsHash: toolsHashOf(tools) } : undefined;
+    this.#o.cache?.set(p.key, v, meta);
     return v;
   }
 
+  /**
+   * Slice C5'a1: narrow under the server's EFFECTIVE trust: first-party for the staged pin; trusted only while the
+   * TrustBook holds this id with exactly this listing's binding; else enabled. A held trust whose binding differs is
+   * dropped (one row, everywhere) and this listing narrows as enabled.
+   */
   #narrow(p: PoolServer, v: ListedServer): CapabilityEntry[] {
-    return narrow(v.tools, p.label, { trust: p.s.trust, opAnnotations: v.annotations });
+    const toolsHash = toolsHashOf(v.tools);
+    p.listed = v;
+    p.toolsHash = toolsHash;
+    p.binding = p.s.trust !== 'first-party' && p.s.launchHash ? bindingOf({ id: p.s.id, launchHash: p.s.launchHash, pluginVersion: p.s.pluginVersion ?? null, toolsHash }) : null;
+    p.eff = this.#effective(p, toolsHash);
+    // Aegis L2: trusted with no live client (a cache hit, or trust set after one): its first spawn re-lists once
+    if (p.eff === 'trusted' && (!p.client || p.client.dead)) p.relistOnSpawn = true;
+    return narrow(v.tools, p.label, { trust: p.eff, opAnnotations: p.eff === 'first-party' ? v.annotations : null });
+  }
+
+  #effective(p: PoolServer, toolsHash: string): ServerTrust {
+    if (p.s.trust === 'first-party') return 'first-party';
+    const t = this.#o.trust?.of(p.s.id);
+    if (!t) return 'enabled';
+    if (p.binding !== null && t.binding === p.binding) return 'trusted';
+    // the launch (declHash or plugin version) or the tool list moved: trust ends everywhere, with a row
+    this.#o.trust!.drop(p.s.id, t.launchHash !== p.s.launchHash ? 'launch-changed' : t.toolsHash !== toolsHash ? 'tools-changed' : 'launch-changed');
+    return 'enabled';
+  }
+
+  /**
+   * Slice C5'a1 (the broker's call-time check): how much the kernel believes this server's labels NOW: first-party;
+   * trusted only while the TrustBook still holds the binding this session narrowed under; else enabled (a read tool
+   * then takes a card, grace entries included).
+   */
+  trustLive(label: string): ServerTrust {
+    const p = this.#servers.find((x) => x.label === label);
+    if (!p) return 'enabled';
+    if (p.eff === 'first-party') return 'first-party';
+    if (p.eff !== 'trusted' || p.binding === null) return 'enabled';
+    return this.#o.trust?.of(p.s.id)?.binding === p.binding ? 'trusted' : 'enabled';
+  }
+
+  /** Slice C5'a1: the labels of the servers with this id in this session. */
+  labelsOf(id: string): string[] {
+    return this.#servers.filter((p) => p.s.id === id).map((p) => p.label);
+  }
+
+  /** Slice C5'a1: re-narrow one server's last listing under its trust now (a trust row folded), or null when never listed. */
+  renarrow(label: string): CapabilityEntry[] | null {
+    const p = this.#servers.find((x) => x.label === label);
+    return p?.listed ? this.#narrow(p, p.listed) : null;
   }
 
   /**
@@ -729,7 +840,12 @@ export class LocalMcpPool {
       this.#servers.map(async (p) => {
         try {
           const hit = this.#o.cache?.get(p.key);
-          if (hit) return this.#narrow(p, hit);
+          if (hit) {
+            const entries = this.#narrow(p, hit);
+            // slice C5'a1: re-checked at its first spawn (the cached list may be older than the binary)
+            if (p.eff === 'trusted') p.relistOnSpawn = true;
+            return entries;
+          }
           // Aegis M5: a launch that just failed is not retried at every open (briefly cached)
           const failed = this.#o.cache?.failure(p.key);
           if (failed) throw new Error(`failed recently: ${failed}`);
@@ -763,6 +879,9 @@ export class LocalMcpPool {
         try {
           const c = await this.#start(p);
           if (o.signal.aborted) return { text: 'cancelled', isError: true, why: 'cancelled' };
+          // slice C5'a1: a call that runs with no card only because the server's labels were believed is refused when
+          // that trust ended while it started (the first-spawn re-list found a change)
+          if (o.trustedRead && this.trustLive(p.label) === 'enabled') return { text: `${p.label} changed, so Gnomon stopped trusting its tool labels: call ${name} again (it will ask)`, isError: true, why: 'trust-dropped' };
           o.onRunning?.();
           return await c.callTool(name, args, { signal: o.signal, deadline: o.deadline });
         } catch (e) {

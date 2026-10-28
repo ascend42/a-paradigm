@@ -112,6 +112,7 @@ import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget
 import { cleanServerText, fullOfferable, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry } from '../local/capability-index.js';
 import { FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpListCache, serverEnv, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
+import type { PoolTrust } from '../local/trust-book.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
@@ -192,6 +193,10 @@ export interface LocalLaneOptions {
   localMcp?: (ctx: { hsid: string; cwd: string; worktree?: string }) => readonly LocalMcpServer[];
   /** slice C2': with localMcp, the same write-denies Claude sessions get (#mcp-servers: what the next session's server runs) */
   mcpDenyWrite?: (ctx: { cwd: string; worktree?: string }) => readonly PolicyPath[];
+  /** slice C5'a1: the daemon's tools/list cache (request.mcp.trust reads its newest-per-id index); default one per lane */
+  mcpCache?: McpListCache;
+  /** slice C5'a1: the kernel's TrustBook (absent: no third-party server is trusted); a fold re-narrows every session */
+  mcpTrust?: PoolTrust & { subscribe?: (fn: (id: string) => void) => () => void };
 }
 
 /** The last endpoint probe as status.local.lastProbe shows it. */
@@ -487,7 +492,7 @@ export class LocalLane {
   readonly #o: LocalLaneOptions;
   readonly #sessions = new Map<string, LocalSession>();
   /** slice C2': each MCP server's last tools/list per launch + repo (a hit spawns nothing until the first call) */
-  readonly #mcpCache = new McpListCache();
+  readonly #mcpCache: McpListCache;
   readonly #history: Array<Record<string, unknown>> = [];
   readonly #usedTurnPermits = new Set<string>();
   readonly #probes = new Map<string, { at: number; caps: LocalCapabilities }>();
@@ -522,6 +527,9 @@ export class LocalLane {
     this.#platform = o.platform ?? process.platform;
     this.#identity = o.identity !== undefined ? o.identity : sessionIdentity();
     this.#sessionPath = o.sessionPath;
+    this.#mcpCache = o.mcpCache ?? new McpListCache();
+    // slice C5'a1 (Arky 8): any later trust fold re-narrows the sessions that hold the server
+    o.mcpTrust?.subscribe?.((id) => this.#trustChanged(id));
   }
 
   /** Aegis L2: the OS home (passwd), never $HOME; the userHome seam still wins */
@@ -1341,7 +1349,7 @@ export class LocalLane {
     // slice C2': the session's MCP servers, narrowed (#capability-index); a loop session gets none
     let tools: BrokeredTool[] = brokered ? kernelTools : [];
     if (!s.loop && brokered) tools = (await this.#startMcp(s, kernelTools, manual)) ?? tools;
-    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual' });
+    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual', trustLive: (server) => s.mcp?.pool.trustLive(server) ?? 'enabled' });
   }
 
   /**
@@ -1363,7 +1371,7 @@ export class LocalLane {
     // exactly the servers whose launch closure the session profile write-denies (fixed at open)
     const servers = s.mcpLaunch.servers;
     if (!servers.length) return null;
-    const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries),
+    const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, ...(this.#o.mcpTrust ? { trust: this.#o.mcpTrust } : {}), spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries),
       // Aegis M3: stopped with the daemon too (kind mcp-server: no session rows)
       track: (child, label) => void this.#o.children.track({ kind: 'mcp-server', child, hsid: s.hsid, name: `mcp:${label}` }).catch(() => undefined) });
     s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual, bound: new Map(), offeredHash: '' };
@@ -1712,9 +1720,32 @@ export class LocalLane {
     // Aegis M3: a previous-set tool a list_changed removed or changed (its entry id is gone), or whose server is gone,
     // is never callable through the grace
     const m = s.mcp;
-    s.tools.pruneGrace((t) => !t.entry || (m.pool.target(t.entry.server) !== undefined && m.pool.target(t.entry.server) !== null && (m.entries.get(t.entry.server) ?? []).some((e) => e.id === t.entry!.id)));
+    // slice C5'a1: an entry whose CLASS changed (a trust drop re-narrowed it) is gone too
+    s.tools.pruneGrace((t) => !t.entry || (m.pool.target(t.entry.server) !== undefined && m.pool.target(t.entry.server) !== null && (m.entries.get(t.entry.server) ?? []).some((e) => e.id === t.entry!.id && e.class === t.entry!.class)));
     // Aegis M4: a tools_set only when the offered set actually changed (#reselect compares the hash)
     this.#reselect(s, 'list_changed');
+  }
+
+  /**
+   * Slice C5'a1 (Arky 4, 8): a tool.trust row folded (set, cleared or dropped) for server `id`: every running session
+   * that holds it re-narrows its last listing under the trust now, drops the grace entries whose class changed
+   * (pruneGrace) and sends a new tools_set with an ackId (forced: the class is not in the offered hash). Cards come
+   * back at once on a drop; the broker's trustLive covers the calls already on their way.
+   */
+  #trustChanged(id: string): void {
+    for (const s of this.#sessions.values()) {
+      const m = s.mcp;
+      if (!m || !s.tools || s.state !== 'running') continue;
+      let changed = false;
+      for (const label of m.pool.labelsOf(id)) {
+        const entries = m.pool.renarrow(label);
+        if (!entries) continue;
+        m.entries.set(label, entries);
+        s.tools.pruneGrace((t) => !t.entry || t.entry.server !== label || entries.some((e) => e.id === t.entry!.id && e.class === t.entry!.class));
+        changed = true;
+      }
+      if (changed) this.#reselect(s, 'list_changed', undefined, { force: true });
+    }
   }
 
   /** Slice C2': one MCP server of a local session, spawned under the SESSION's own launch plan (its files, its network). */

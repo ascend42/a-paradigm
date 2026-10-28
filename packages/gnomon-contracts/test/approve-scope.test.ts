@@ -16,7 +16,7 @@ describe('approve scope (TD-2026-10-20-294)', () => {
   it('approve publishes the scope param and the closed kinds', () => {
     const approve = CLIENT_API_DESCRIPTOR.verbs.find((v) => v.verb === 'approve')!;
     expect(approve.params).toContain('scope?');
-    expect([...APPROVE_SCOPE_KINDS]).toEqual(['exact', 'prefix', 'file', 'repo-edits']);
+    expect([...APPROVE_SCOPE_KINDS]).toEqual(['exact', 'prefix', 'file', 'repo-edits', 'tool']);
   });
 
   it('scoped edits (TD-2026-10-23-939 follow-up): file and repo-edits carry no other key; their digest is over the kind alone', () => {

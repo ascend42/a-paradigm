@@ -38,7 +38,7 @@ afterEach(async () => {
 
 type Row = { kind: string; payload: Record<string, unknown> };
 
-function rig(o: { tools?: BrokeredTool[]; loop?: boolean; decision?: Promise<string> | string; broker?: boolean; target?: BrokerTarget; toolTimeoutMs?: number; cardTimeoutMs?: number; decisions?: string[] } = {}) {
+function rig(o: { tools?: BrokeredTool[]; loop?: boolean; decision?: Promise<string> | string; broker?: boolean; target?: BrokerTarget; toolTimeoutMs?: number; cardTimeoutMs?: number; decisions?: string[]; trustLive?: (server: string) => 'enabled' | 'trusted' | 'first-party' } = {}) {
   const rows: Row[] = [];
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const raised: Array<Record<string, unknown>> = [];
@@ -68,7 +68,7 @@ function rig(o: { tools?: BrokeredTool[]; loop?: boolean; decision?: Promise<str
       return true;
     },
   };
-  const b = new LocalToolBroker({ hsid: HSID, principalId: 'p:abcdefgh/s-x', repo: '/repo', loop: o.loop ?? false, log: async (kind, payload) => void rows.push({ kind, payload }), ...(broker ? { broker: broker as never } : {}), target, tools, running: () => true, ...(o.toolTimeoutMs ? { toolTimeoutMs: o.toolTimeoutMs } : {}), ...(o.cardTimeoutMs ? { cardTimeoutMs: o.cardTimeoutMs } : {}) });
+  const b = new LocalToolBroker({ hsid: HSID, principalId: 'p:abcdefgh/s-x', repo: '/repo', loop: o.loop ?? false, log: async (kind, payload) => void rows.push({ kind, payload }), ...(broker ? { broker: broker as never } : {}), target, tools, running: () => true, ...(o.toolTimeoutMs ? { toolTimeoutMs: o.toolTimeoutMs } : {}), ...(o.cardTimeoutMs ? { cardTimeoutMs: o.cardTimeoutMs } : {}), ...(o.trustLive ? { trustLive: o.trustLive } : {}) });
   return { b, rows, calls, raised, expired };
 }
 
@@ -396,12 +396,13 @@ describe('Aegis C1 re-check (N1-N6)', () => {
 });
 
 describe('slice C2\': narrow MCP tools through the broker (G-LCL-16)', () => {
-  const entries = narrow([{ name: 'fam', description: 'Fam. Ops: put(key*, meta, tags), get(key*).', inputSchema: { type: 'object', properties: { op: { type: 'string', enum: ['put', 'get'] }, key: { type: 'string', pattern: '^[a-z]+$' }, meta: { type: 'object', properties: { owner: { type: 'string' } } }, tags: { type: 'array', items: { type: 'string' } } }, required: ['op', 'key'] }, annotations: { readOnlyHint: true, openWorldHint: false } }], 'srv', { trust: 'trusted', opAnnotations: { schema: 'io.gnomon/op-annotations:v1', tools: { fam: { get: { readOnlyHint: true, openWorldHint: false } } } } });
+  const entries = narrow([{ name: 'fam', description: 'Fam. Ops: put(key*, meta, tags), get(key*).', inputSchema: { type: 'object', properties: { op: { type: 'string', enum: ['put', 'get'] }, key: { type: 'string', pattern: '^[a-z]+$' }, meta: { type: 'object', properties: { owner: { type: 'string' } } }, tags: { type: 'array', items: { type: 'string' } } }, required: ['op', 'key'] }, annotations: { readOnlyHint: true, openWorldHint: false } }], 'srv', { trust: 'first-party', opAnnotations: { schema: 'io.gnomon/op-annotations:v1', tools: { fam: { get: { readOnlyHint: true, openWorldHint: false } } } } });
+  // slice C5'a1: the read op runs with no card only while the server is believed NOW (first-party here)
   const mcpRig = () => {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const target: BrokerTarget = { server: 'srv', provenance: 'mcp:srv', ownsGate: false, list: async () => [], call: async (name, args) => (calls.push({ name, args }), { text: 'ok', isError: false }) };
     const tools: BrokeredTool[] = entries.map((e) => ({ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }));
-    return { ...rig({ tools }), calls };
+    return { ...rig({ tools, trustLive: () => 'first-party' }), calls };
   };
 
   it('a reassembled call reaches the server tool with the kernel-fixed op; the row names the narrow tool', async () => {
