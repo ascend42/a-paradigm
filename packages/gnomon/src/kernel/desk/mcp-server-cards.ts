@@ -467,16 +467,19 @@ export class McpServers {
     const builtAt = builtAtOf({ dir: fp.dir, entry: fp.entry, version: fp.version, linked: fp.linked });
     const headAt = headCommitTimeOf(fp.dir);
     const writes = localWritesUnder(this.#o.home, realOr(fp.dir), builtAt ?? 0);
-    const localWrites = writes.edits.length + writes.sessions.length > 0;
+    // Aegis should-fix: a ledger read only in part (incomplete inside the window) counts as local writes
+    const localWrites = writes.edits.length + writes.sessions.length > 0 || writes.incomplete !== null;
     const facts = {
       id: FIRST_PARTY_PARADIGM, source: fp.dir, version: fp.version, sourceKind, dirty,
       git: status, builtAt: builtAt === null ? null : new Date(builtAt).toISOString(), headCommitAt: headAt === null ? null : new Date(headAt).toISOString(),
       builtAfterHead: builtAt !== null && headAt !== null ? builtAt > headAt : null,
-      localWrites: { edits: writes.edits.map((e) => ({ hsid: e.hsid, path: e.path, at: new Date(e.at).toISOString() })), sessions: writes.sessions },
+      localWrites: { edits: writes.edits.map((e) => ({ hsid: e.hsid, path: e.path, at: new Date(e.at).toISOString() })), sessions: writes.sessions, incompleteSince: writes.incomplete === null ? null : new Date(writes.incomplete).toISOString() },
+      // informational: edits under the source in the last 7 days, whatever the build time
+      recentLocalEdits: writes.recent.map((e) => ({ hsid: e.hsid, path: e.path, at: new Date(e.at).toISOString() })),
     };
     if (p.preview === true) return { ...facts, staged: false, preview: true, current: readParadigmPin(this.#o.home), ...(sourceKind === 'linked-checkout' && localWrites ? { needsForce: true } : {}) };
     if (sourceKind === 'linked-checkout' && localWrites && p.force !== true) {
-      throw new RpcRefusal('UNSUPPORTED', 'bad-params', '#mcp-servers: a local session could have written this checkout since its Paradigm build: re-send with {force: true} to stage it anyway', { why: 'local-writes', edits: facts.localWrites.edits.slice(0, 10), sessions: writes.sessions.slice(0, 10), hint: 'rebuild Paradigm yourself, or stage with force' });
+      throw new RpcRefusal('UNSUPPORTED', 'bad-params', '#mcp-servers: a local session could have written this checkout since its Paradigm build: re-send with {force: true} to stage it anyway', { why: 'local-writes', edits: facts.localWrites.edits.slice(0, 10), sessions: writes.sessions.slice(0, 10), incompleteSince: facts.localWrites.incompleteSince, hint: 'rebuild Paradigm yourself, or stage with force' });
     }
     let pin: ParadigmPin;
     try {

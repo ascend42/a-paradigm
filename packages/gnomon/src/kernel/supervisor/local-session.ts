@@ -881,6 +881,8 @@ export class LocalLane {
     let neutralMade: string | null = null;
     /** TD-2026-10-27-833: the staged Paradigm server's global dir this open made (removed if the open fails) */
     let stateMade: string | null = null;
+    /** Aegis H3: an `open` ledger row was written (a failed open closes it) */
+    let ledgerOpened = false;
     try {
       // a loop step's permit: scope.loop is the PAYING loop (the root caller), scope.user the human who trusted it
       permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: !loop, kind: 'session.spawn', backend: 'local', model, scope: { user: loop?.info.trustedBy ?? req.principal, session: hsid, repo, ...(loop ? { loop: loop.info.rootKey } : {}) }, ...(loop ? { limits: { tokens: loop.maxTokens } } : {}) });
@@ -995,6 +997,11 @@ export class LocalLane {
       // step 10: an act step runs under `loop-act` (the session profile narrowed to its scratch and its endpoint port)
       const actLaunch: LoopActLaunchInput | null = loop?.act ? { ...launch, act: { home: this.#o.home, userHome, scratch: loop.act.scratch.tree, tmp: loop.act.scratch.tmp, repo: loop.act.scratch.repo, nodeModules: loop.act.scratch.nodeModules, endpointPort: loop.act.endpointPort, gitDeny: [loop.act.scratch.commonDir, ...loop.act.scratch.siblingWorktrees] } } : null;
       const plan = this.#o.launchPlan ? this.#o.launchPlan(actLaunch ?? launch) : actLaunch ? loopActLaunchPlan(actLaunch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+      // Aegis H3 + should-fix: the edit ledger knows which roots a local session could write (staging a linked
+      // checkout reads it). Written BEFORE the spawn; a session whose `open` row cannot be written is refused, so the
+      // ledger never misses a session that could write
+      if (!appendLedger(this.#o.home, { kind: 'open', hsid, at: Date.now(), roots: rootsReal })) throw refused('UNSUPPORTED', 'the local edit ledger could not be written', { session: 'spawn_failed' });
+      ledgerOpened = true;
       const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });
       // re-check (M3): a root swapped since the check refuses; nothing between here and spawn awaits
       if (realRoot(req.cwd) !== cwdReal || (req.worktree !== undefined && realRoot(req.worktree) !== wtReal)) {
@@ -1017,8 +1024,6 @@ export class LocalLane {
       if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, servers: closure.servers, refused: closure.refused, failed: [], ...(paradigmPolicy && stateMade ? { firstParty: { launch: { ...launch, policy: paradigmPolicy }, stateDir: stateMade, nodePin: { node: pin.node, nodeSha256: pin.nodeSha256 } } } : {}) };
       else if (closure.refused.length) s.mcpLaunch = undefined;
       this.#sessions.set(hsid, s);
-      // Aegis H3: the edit ledger knows which roots a local session could write (staging a linked checkout reads it)
-      appendLedger(this.#o.home, { kind: 'open', hsid, at: Date.now(), roots: rootsReal });
       live = s;
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
       s.tools = await this.#toolBroker(s);
@@ -1038,6 +1043,7 @@ export class LocalLane {
         }
       }
       if (stateMade && !live) fs.rmSync(stateMade, { recursive: true, force: true });
+      if (ledgerOpened && !live) appendLedger(this.#o.home, { kind: 'close', hsid, at: Date.now() });
       if (this.#platform === 'win32' && !live) {
         // W5: an open that failed before a live session undoes its win32 labels and grants
         try {

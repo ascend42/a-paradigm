@@ -18,7 +18,7 @@ import { McpServers, MCP_PARADIGM_STAGE_REQUEST } from '../src/kernel/desk/mcp-s
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
 import { stageRoot } from '../src/kernel/local/paradigm-stage.js';
-import { appendLedger } from '../src/kernel/local/edit-ledger.js';
+import { appendLedger, EDIT_LEDGER_FILE, LEDGER_MAX_BYTES, localWritesUnder } from '../src/kernel/local/edit-ledger.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
@@ -167,6 +167,60 @@ describe('Aegis H3: staging a linked checkout a local session could have written
     appendLedger(w.home, { kind: 'close', hsid: 'hsid:v1:y', at: 2 });
     expect(await m.request(human, MCP_PARADIGM_STAGE_REQUEST, {})).toMatchObject({ staged: true, forced: false });
   });
+
+  it('a ledger read only from its tail is incomplete inside the window and counts as local writes', async () => {
+    const w = world();
+    const now = Date.now();
+    // unrelated rows newer than the build, enough to push the window's start out of the readable tail
+    for (let i = 0; i < 40; i++) appendLedger(w.home, { kind: 'edit', hsid: `hsid:v1:f${i}`, at: now + 1000 + i, path: path.join(w.root, 'elsewhere', `${i}.ts`) });
+    const small = localWritesUnder(w.home, w.pkg, now - 1000, { maxBytes: 512 });
+    expect(small.incomplete).not.toBeNull();
+    expect(small.edits).toEqual([]);
+    // a horizon older than the window is complete
+    expect(localWritesUnder(w.home, w.pkg, now + 10_000, { maxBytes: 512 }).incomplete).toBeNull();
+    expect(localWritesUnder(w.home, w.pkg, now - 1000).incomplete).toBeNull();
+    // over LEDGER_MAX_BYTES, the stage request refuses (force overrides)
+    const filler = `${JSON.stringify({ kind: 'edit', hsid: 'hsid:v1:pad', at: now + 5000, path: path.join(w.root, 'elsewhere', 'x'.repeat(200)) })}\n`;
+    fs.appendFileSync(path.join(w.home, EDIT_LEDGER_FILE), filler.repeat(Math.ceil((LEDGER_MAX_BYTES + 4096) / filler.length)));
+    const m = servers(w, true, []);
+    await expect(m.request(human, MCP_PARADIGM_STAGE_REQUEST, {})).rejects.toMatchObject({ message: expect.stringMatching(/force/) });
+    expect(await m.request(human, MCP_PARADIGM_STAGE_REQUEST, { force: true })).toMatchObject({ staged: true, forced: true, localWrites: { incompleteSince: expect.any(String) } });
+  });
+
+  it('informational: local edits under the source in the last 7 days are listed whatever the build time', async () => {
+    const w = world();
+    const day = 86_400_000;
+    appendLedger(w.home, { kind: 'edit', hsid: 'hsid:v1:old', at: Date.now() - 3 * day, path: path.join(w.pkg, 'dist', 'mcp.js') });
+    appendLedger(w.home, { kind: 'edit', hsid: 'hsid:v1:ancient', at: Date.now() - 9 * day, path: path.join(w.pkg, 'dist', 'mcp.js') });
+    const m = servers(w, true, []);
+    // both edits predate the build, so they do not block; the 3-day-old one is still shown
+    const r = (await m.request(human, MCP_PARADIGM_STAGE_REQUEST, {})) as { staged: boolean; recentLocalEdits: Array<{ hsid: string }> };
+    expect(r.staged).toBe(true);
+    expect(r.recentLocalEdits.map((e) => e.hsid)).toEqual(['hsid:v1:old']);
+  });
+});
+
+describe('Aegis should-fix: a local session whose ledger open row cannot be written is refused', () => {
+  it('refuses the open before any spawn', async () => {
+    expect(fs.existsSync(CLI), 'run `npm run build:gnomon` (builds gnomon-local)').toBe(true);
+    const w = world();
+    fs.mkdirSync(path.join(w.home, EDIT_LEDGER_FILE)); // a directory where the ledger file goes: every append fails
+    srv = await fakeOpenAI({ tools: true, script: [{ content: 'x' }] });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    let spawned = 0;
+    const lane = new LocalLane({
+      sessionPath: null, pathDenies: [], log, children, fuse, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.root, 'k.sock'),
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp', surface: 'full' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
+      launchPlan: (i) => (spawned++, { command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+    });
+    await expect(lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.repo, model: 'local' }, async () => null)).rejects.toThrow(/edit ledger/);
+    expect(rows.some((r) => r.kind === 'session.refused')).toBe(true);
+    expect(rows.some((r) => r.kind === 'session.sandbox')).toBe(false);
+    void spawned;
+  }, 30_000);
 });
 
 describe('TD-2026-10-27-833: a local session runs the REAL staged Paradigm bundle', () => {

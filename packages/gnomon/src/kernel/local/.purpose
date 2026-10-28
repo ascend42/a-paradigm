@@ -337,7 +337,13 @@ components:
       GIT_CONFIG_GLOBAL at the null device. M4 every source file is read
       through an O_NOFOLLOW fd whose fstat matches the selected ino/dev
       (regular, nlink 1). Low: homeReadable under mcp/ is only
-      mcp/first-party/paradigm/<version>-<sha12>.
+      mcp/first-party/paradigm/<version>-<sha12>. Should-fix: a ledger over
+      LEDGER_MAX_BYTES is read from its tail and reports incomplete since its
+      oldest row read; inside the window that counts as local-writes (force
+      only). Chosen over compaction: no rewrite of a kernel ledger, fails
+      closed. A local session whose open row cannot be appended is refused
+      before spawn (a failed open appends close). The stage reply also lists
+      edits under the source in the last 7 days (recentLocalEdits).
     path: src/kernel/local/paradigm-stage.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
