@@ -20,6 +20,7 @@
  *   order     the daemon catches the book up BEFORE the first index or pool (next to the RuleBook catch-up); any later
  *             fold tells the subscribers (LocalLane re-narrows).
  */
+import { randomBytes } from 'node:crypto';
 import { canonicalJson, sha256Tagged, TOOL_BROKER_SERVER_PATTERN, TOOL_TRUST_ID_PATTERN, TOOL_TRUST_LAUNCH_PATTERN, type ToolTrustWhy } from '@a-company/gnomon-contracts';
 import type { KernelLog } from '../log/index.js';
 import { catchUp, type RuleRow, type RuleSource } from '../supervisor/rules.js';
@@ -55,7 +56,7 @@ export function toolsHashOf(tools: ReadonlyArray<Record<string, unknown>>): stri
     return sha256Tagged(canonicalJson(rows));
   } catch {
     // a value canonicalJson refuses (never plain JSON from a server): a hash that matches nothing
-    return sha256Tagged(`unhashable:${Date.now()}:${Math.random()}`);
+    return sha256Tagged(`unhashable:${randomBytes(16).toString('hex')}`);
   }
 }
 
