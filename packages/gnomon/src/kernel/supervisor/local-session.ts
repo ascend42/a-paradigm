@@ -114,7 +114,7 @@ import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, schemaRefusal, toolBindHash, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
-import { droppedLabel, dropTool, fitQueue, frameResult, resultCap, sendTokens, stillSendable, type ResultPolicyPort, type SendItem } from '../local/result-policy.js';
+import { droppedLabel, dropTool, fitQueue, frameResult, noteReserve, resultCap, sendTokens, stillSendable, type ResultPolicyPort, type SendItem } from '../local/result-policy.js';
 import { cleanServerText, fullOfferable, fullParameters, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry, type ServerTrust } from '../local/capability-index.js';
 import { candidatesOf, FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpError, McpListCache, serverEnv, type LaunchCheckInput, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
@@ -2140,7 +2140,10 @@ export class LocalLane {
     const key = this.#policyOf(s, r.entry);
     if (!key) return;
     const tool = key.tool;
-    const f = frameResult({ tool, trust: r.trust, text: r.text, isError: r.isError }, resultCap(s.context.target));
+    // Aegis Low 1: the WHOLE frame fits the turn's cap less the note reserve, so an oversize result is sent cut
+    const cap = resultCap(s.context.target);
+    const reserve = noteReserve();
+    const f = frameResult({ tool, trust: r.trust, text: r.text, isError: r.isError }, { bytes: Math.max(0, cap.bytes - reserve.bytes), tokens: Math.max(0, cap.tokens - reserve.tokens) });
     const q = (s.pendingSend ??= []);
     q.push({ frame: f.frame, row: { hsid: s.hsid, tool, argsHash: r.argsHash, bytes: f.bytes, cut: f.cut, policy: 'send' }, entryId: r.entry.id, tool, bindHash: key.bindHash });
     while (q.length > PENDING_SEND_MAX) q.shift();

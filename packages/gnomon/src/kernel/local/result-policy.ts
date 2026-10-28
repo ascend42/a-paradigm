@@ -165,7 +165,13 @@ export function frameResult(r: { tool: string; trust: string; text: string; isEr
   const clean = r.text.replace(/[\p{Cf}\u0000]/gu, '');
   const bytes = Buffer.byteLength(clean, 'utf8');
   let body = clean;
-  const cap: ResultCap = typeof capIn === 'number' ? { bytes: capIn, tokens: Infinity } : capIn;
+  // a number caps the BODY; a ResultCap (Aegis Low 1) caps the WHOLE frame: the body gets what the header (sized for
+  // the worst case, a cut), the delimiters and the footer leave, so a cut frame always fits
+  let cap: ResultCap = typeof capIn === 'number' ? { bytes: capIn, tokens: Infinity } : capIn;
+  if (typeof capIn !== 'number') {
+    const worst = `[data from ${r.tool} · run by the human from / · ${TRUST_WORDS[r.trust] ?? 'untrusted server'} · ${bytes} bytes, cut to the first ${bytes}${r.isError ? ' · the tool reported an error' : ''}]\n<gnomon-data-${'0'.repeat(18)}>\n\n</gnomon-data-${'0'.repeat(18)}>\n${RESULT_FOOTER}`;
+    cap = { bytes: Math.max(0, capIn.bytes - Buffer.byteLength(worst, 'utf8')), tokens: Math.max(0, capIn.tokens - sendTokens(worst)) };
+  }
   const cut = bytes > cap.bytes || sendTokens(clean) > cap.tokens;
   if (cut) {
     let used = 0;
@@ -245,6 +251,15 @@ export function fitQueue<T extends { frame: string }>(queue: readonly T[], cap: 
     keep.unshift(queue[i]!);
   }
   return { keep, dropped: queue.length - keep.length };
+}
+
+/**
+ * Aegis Low 1: a frame is queued under the turn's cap less this reserve (the longest dropped-note), so a single cut frame
+ * plus any note always fits the turn.
+ */
+export function noteReserve(): ResultCap {
+  const worst = droppedLabel({ overCap: 999, changed: 999 })!;
+  return { bytes: Buffer.byteLength(worst, 'utf8'), tokens: sendTokens(worst) };
 }
 
 /** Aegis M2/M3: the kernel's own data part naming what was not sent (never the dropped content). */

@@ -15,7 +15,7 @@ import { ROW_TABLE_MIN_HELPER, rowTableRefusal } from '../src/kernel/identity/de
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { narrow, type CapabilityEntry } from '../src/kernel/local/capability-index.js';
 import { UNTRUSTED_IRREVERSIBLE_LINE, DESTRUCTIVE_RULED_PER_RULE_DAY, DESTRUCTIVE_RULED_PER_SESSION_MINUTE, DestructiveRuleBudget, destructiveAlwaysLine, HUMAN_RUNS_PER_MINUTE, LocalToolBroker, schemaRefusal, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
-import { rulePassesOf, droppedLabel, fitQueue, resultCap, sendTokens, dropTool, stillSendable, type SendItem, frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
+import { noteReserve, rulePassesOf, droppedLabel, fitQueue, resultCap, sendTokens, dropTool, stillSendable, type SendItem, frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { followUpLine, promptLine } from '../src/adapters/local/runner.js';
 import { FakeHelper } from './helper-fake.js';
@@ -382,8 +382,25 @@ describe('G-LCL-26 the result policy and framing', () => {
     // CJK text is cut by tokens long before bytes: 2048 tokens is 1024 code points
     const cjk = frameResult({ tool: 'mcp:srv/a', trust: 'trusted', text: '漢'.repeat(1500), isError: false }, cap);
     expect(cjk.cut).toBe(true);
-    expect(cjk.frame).toContain('漢'.repeat(1024));
-    expect(cjk.frame).not.toContain('漢'.repeat(1025));
+    // a ResultCap caps the WHOLE frame (Aegis Low 1): it fits in tokens and bytes
+    expect(sendTokens(cjk.frame)).toBeLessThanOrEqual(cap.tokens);
+    expect(Buffer.byteLength(cjk.frame, 'utf8')).toBeLessThanOrEqual(cap.bytes);
+    expect(cjk.frame).toContain('漢'.repeat(900));
+  });
+
+  it('Aegis Low 1: an oversize result is sent cut (never dropped whole): the frame fits the turn with the note reserve', () => {
+    for (const target of [4096, 8192, 65536]) {
+      const cap = resultCap(target);
+      const reserve = noteReserve();
+      const qcap = { bytes: cap.bytes - reserve.bytes, tokens: cap.tokens - reserve.tokens };
+      const f = frameResult({ tool: 'mcp:srv/a', trust: 'trusted', text: 'x'.repeat(100_000), isError: true }, qcap);
+      expect(f).toMatchObject({ bytes: 100_000, cut: true });
+      expect(f.frame).toContain('100000 bytes, cut to the first');
+      const note = droppedLabel({ overCap: 1, changed: 3 })!;
+      const fit = fitQueue([{ frame: f.frame }], { bytes: cap.bytes - Buffer.byteLength(note, 'utf8'), tokens: cap.tokens - sendTokens(note) });
+      expect(fit).toMatchObject({ dropped: 0 });
+      expect(fit.keep).toHaveLength(1);
+    }
   });
 
   it('Aegis M1: frames ride as the line\'s own data field, never glued onto the prompt text', () => {
