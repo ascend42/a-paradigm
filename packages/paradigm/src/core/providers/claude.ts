@@ -24,7 +24,8 @@ import {
 import { AgentDefinition } from '../../commands/team/types.js';
 import * as path from 'path';
 import { CommandGate, CommandGateDeps, userHomeDir } from './command-consent.js';
-import { ToolContext, executeTool, toolDefinitions } from './claude-tools.js';
+import { ToolContext, commandLogPathFor, executeTool, toolDefinitions } from './claude-tools.js';
+import * as fs from 'fs';
 
 // ============================================================================
 // Types
@@ -83,6 +84,38 @@ const MODEL_IDS: Record<AgentModel, string> = {
   sonnet: 'claude-sonnet-4-20250514',
   haiku: 'claude-haiku-4-20250514',
 };
+
+// ============================================================================
+// Run root check
+// ============================================================================
+
+/**
+ * A run's working directory may not be the filesystem root, the user's home,
+ * or any folder above home: the tools' confinement would then cover ~/.ssh,
+ * shell rc files and ~/.paradigm. Returns a reason, or null when fine.
+ */
+export function unsafeRunRoot(workingDirectory: string, home: string): string | null {
+  let root: string;
+  let realHome: string;
+  try {
+    root = fs.realpathSync.native(workingDirectory);
+  } catch {
+    return `Working directory ${workingDirectory} does not exist.`;
+  }
+  try {
+    realHome = fs.realpathSync.native(home);
+  } catch {
+    realHome = path.resolve(home);
+  }
+  if (path.parse(root).root === root) {
+    return `Refusing to run an agent with the filesystem root (${root}) as its working directory.`;
+  }
+  const rel = path.relative(root, realHome);
+  if (rel === '' || !(rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel))) {
+    return `Refusing to run an agent with your home folder, or a folder above it (${root}), as its working directory. Run it from a project folder.`;
+  }
+  return null;
+}
 
 // ============================================================================
 // Claude Provider
@@ -144,16 +177,25 @@ export class ClaudeAgentProvider implements AgentProvider {
     // Tools: paths confined to the working directory; run_command behind
     // ^command-execution-consent. One gate per run so the answer to the
     // consent question applies to the rest of the run.
+    const workingDirectory = options.workingDirectory || process.cwd();
+    const home = this.consentDeps.homeDir ?? userHomeDir();
+    const rootProblem = unsafeRunRoot(workingDirectory, home);
+    if (rootProblem) {
+      yield { type: 'error', content: rootProblem, timestamp: new Date().toISOString() };
+      return;
+    }
+    const gate = new CommandGate(options.commandPolicy, { ...this.consentDeps, workingDirectory });
+    const commandLogPath = commandLogPathFor(workingDirectory, home);
     const toolCtx: ToolContext = {
-      workingDirectory: options.workingDirectory || process.cwd(),
-      gate: new CommandGate(options.commandPolicy, this.consentDeps),
+      workingDirectory,
+      gate,
+      // Snapshot: a setting flipped to true mid-run must not enable it.
+      commandsOffered: gate.isOffered(),
+      commandLogPath,
       agent: agent.name,
       timeout: options.timeout,
       mcpServerPath: options.mcpServerPath,
-      deniedWrites: [
-        path.join(this.consentDeps.homeDir ?? userHomeDir(), '.paradigm'),
-        path.join(this.consentDeps.homeDir ?? userHomeDir(), '.claude'),
-      ],
+      deniedWrites: [path.join(home, '.paradigm'), path.join(home, '.claude'), commandLogPath],
       reviewWrites: new Set<string>(),
     };
 

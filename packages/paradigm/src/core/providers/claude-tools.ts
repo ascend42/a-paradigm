@@ -5,11 +5,13 @@
  * run_command cwd) must resolve, by realpath, inside the run's working
  * directory; anything else, including a symlink that points out, is refused.
  * run_command is offered and run only as ^command-execution-consent allows
- * (see command-consent.ts), and every call, run or refused, is appended to
- * .paradigm/events/agent-commands.jsonl in the working directory.
+ * (see command-consent.ts) and only if it was offered at run start. write_file
+ * also passes #write-guard. Every run_command call, run or refused, is appended
+ * to ~/.paradigm/logs/<project-hash>/agent-commands.jsonl (0600, outside the repo).
  */
 
 import { execSync } from 'child_process';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
@@ -18,7 +20,24 @@ import { resolveContained } from '../../utils/path-containment.js';
 import type { CommandGate } from './command-consent.js';
 import { checkWrite, writeChecked } from './write-guard.js';
 
-export const COMMAND_LOG_FILE = path.join('.paradigm', 'events', 'agent-commands.jsonl');
+/** Longest command text kept in a log record; the full length is recorded too. */
+export const MAX_LOGGED_COMMAND = 4096;
+
+/**
+ * Where a project's command log lives: outside the repo, under the user's
+ * home, so neither the repo nor the agent's write_file can plant or edit it.
+ * ~/.paradigm/logs/<first 16 hex of sha256(realpath of root)>/agent-commands.jsonl
+ */
+export function commandLogPathFor(workingDirectory: string, home: string): string {
+  let root = path.resolve(workingDirectory);
+  try {
+    root = fs.realpathSync.native(workingDirectory);
+  } catch {
+    // Not there (yet): hash the resolved path.
+  }
+  const hash = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  return path.join(home, '.paradigm', 'logs', hash, 'agent-commands.jsonl');
+}
 
 export interface ToolDefinition {
   name: string;
@@ -34,6 +53,13 @@ export interface ToolContext {
   /** The run's working directory. Every model-supplied path stays inside it. */
   workingDirectory: string;
   gate: CommandGate;
+  /**
+   * Whether run_command was offered when the run started. If it wasn't, it is
+   * refused for the whole run, even if the saved setting changes meanwhile.
+   */
+  commandsOffered: boolean;
+  /** Absolute path of the append-only command log (see commandLogPathFor). */
+  commandLogPath: string;
   /** Agent name, recorded in the command log. */
   agent?: string;
   /** run_command timeout in ms. */
@@ -47,8 +73,13 @@ export interface ToolContext {
 
 export interface CommandLogRecord {
   timestamp: string;
+  /** Real path of the working directory, so a hashed log folder can be traced back. */
+  project?: string;
   agent?: string;
+  /** Command text, cut to MAX_LOGGED_COMMAND characters. */
   command: string;
+  /** Full length of the command text. */
+  commandLength?: number;
   cwd: string;
   /** Exit code; null when refused, timed out or killed by a signal. */
   exitCode: number | null;
@@ -58,7 +89,7 @@ export interface CommandLogRecord {
   durationMs?: number;
 }
 
-export function toolDefinitions(ctx: Pick<ToolContext, 'gate' | 'mcpServerPath'>): ToolDefinition[] {
+export function toolDefinitions(ctx: Pick<ToolContext, 'gate' | 'mcpServerPath' | 'commandsOffered'>): ToolDefinition[] {
   const tools: ToolDefinition[] = [
     {
       name: 'read_file',
@@ -97,7 +128,9 @@ export function toolDefinitions(ctx: Pick<ToolContext, 'gate' | 'mcpServerPath'>
     },
   ];
 
-  if (ctx.gate.isOffered()) {
+  // Offered only if it was offered at run start AND still is (a "no" to the
+  // consent question removes it; nothing adds it mid-run).
+  if (ctx.commandsOffered && ctx.gate.isOffered()) {
     tools.push({
       name: 'run_command',
       description: 'Run a shell command in the working directory (or a folder inside it)',
@@ -176,7 +209,7 @@ export async function executeTool(
       }
       const files = await glob(pattern, { cwd: searchPath, follow: false });
       return files
-        .filter((f) => resolveContained(root, path.join(searchPath, f)) !== null)
+        .filter((f) => resolveContained(fs.realpathSync.native(root), path.join(searchPath, f)) !== null)
         .join('\n');
     }
 
@@ -202,21 +235,26 @@ async function runCommand(input: Record<string, unknown>, ctx: ToolContext): Pro
     cwd: String(requestedCwd),
   };
 
+  if (!ctx.commandsOffered) {
+    recordCommand(ctx, { ...base, exitCode: null, refused: 'not offered at run start' });
+    return 'Error: run_command was not offered for this run, so it cannot be used.';
+  }
+
   if (!command) {
-    recordCommand(ctx.workingDirectory, { ...base, exitCode: null, refused: 'empty command' });
+    recordCommand(ctx, { ...base, exitCode: null, refused: 'empty command' });
     return 'Error: command is required.';
   }
 
   const cmdCwd = resolveContained(ctx.workingDirectory, requestedCwd as string, { allowRoot: true });
   if (!cmdCwd) {
-    recordCommand(ctx.workingDirectory, { ...base, exitCode: null, refused: 'cwd outside working directory' });
+    recordCommand(ctx, { ...base, exitCode: null, refused: 'cwd outside working directory' });
     return outside('cwd', requestedCwd);
   }
   base.cwd = cmdCwd;
 
   const decision = await ctx.gate.authorize(command, cmdCwd);
   if (!decision.allowed) {
-    recordCommand(ctx.workingDirectory, { ...base, exitCode: null, refused: decision.reason });
+    recordCommand(ctx, { ...base, exitCode: null, refused: decision.reason });
     return `Error: ${decision.reason}`;
   }
 
@@ -228,12 +266,12 @@ async function runCommand(input: Record<string, unknown>, ctx: ToolContext): Pro
       timeout: ctx.timeout || 30000,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    recordCommand(ctx.workingDirectory, { ...base, exitCode: 0, durationMs: Date.now() - started });
+    recordCommand(ctx, { ...base, exitCode: 0, durationMs: Date.now() - started });
     return output;
   } catch (error) {
     const e = error as { status?: number | null; signal?: string | null; stdout?: string; stderr?: string; message?: string };
     const exitCode = typeof e.status === 'number' ? e.status : null;
-    recordCommand(ctx.workingDirectory, {
+    recordCommand(ctx, {
       ...base,
       exitCode,
       ...(e.signal ? { signal: e.signal } : {}),
@@ -249,24 +287,40 @@ async function runCommand(input: Record<string, unknown>, ctx: ToolContext): Pro
  * Append one record to the command log and send it to the Paradigm logger.
  * Never records environment values. Logging failures never fail the tool.
  */
-export function recordCommand(workingDirectory: string, record: CommandLogRecord): void {
-  // debug, not info: the logger writes to stdout, which carries --json output
-  // and the MCP protocol when the orchestrator runs inside an MCP server. The
-  // file below is the durable log.
-  log.component('claude-provider').debug(record.refused ? 'run_command refused' : 'run_command ran', {
-    command: record.command,
-    cwd: record.cwd,
-    exitCode: record.exitCode,
-    timestamp: record.timestamp,
-    ...(record.refused ? { refused: record.refused } : {}),
+export function recordCommand(
+  ctx: Pick<ToolContext, 'workingDirectory' | 'commandLogPath'>,
+  record: CommandLogRecord,
+): void {
+  const full = record.command;
+  let project: string | undefined;
+  try {
+    project = fs.realpathSync.native(ctx.workingDirectory);
+  } catch {
+    project = ctx.workingDirectory;
+  }
+  const entry: CommandLogRecord = {
+    ...record,
+    project,
+    command: full.length > MAX_LOGGED_COMMAND ? full.slice(0, MAX_LOGGED_COMMAND) : full,
+    commandLength: full.length,
+  };
+  log.component('claude-provider').debug(entry.refused ? 'run_command refused' : 'run_command ran', {
+    command: entry.command,
+    cwd: entry.cwd,
+    exitCode: entry.exitCode,
+    timestamp: entry.timestamp,
+    ...(entry.refused ? { refused: entry.refused } : {}),
   });
   try {
-    // A repo could ship the log path as a symlink to, say, ~/.zshrc; the
-    // record holds model-written text, so only ever append inside the project.
-    const file = resolveContained(workingDirectory, COMMAND_LOG_FILE, { allowMissing: true });
-    if (!file) return;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.appendFileSync(file, `${JSON.stringify(record)}\n`, 'utf-8');
+    fs.mkdirSync(path.dirname(ctx.commandLogPath), { recursive: true, mode: 0o700 });
+    const { O_WRONLY, O_APPEND, O_CREAT } = fs.constants;
+    const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+    const fd = fs.openSync(ctx.commandLogPath, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW, 0o600);
+    try {
+      fs.writeSync(fd, `${JSON.stringify(entry)}\n`);
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     // The log must not break the agent run.
   }

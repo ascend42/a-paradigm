@@ -83,26 +83,98 @@ function readYaml(configPath: string): Record<string, unknown> {
   }
 }
 
-/** The saved choice, or undefined when not decided (or not a boolean). */
-export function readAllowCommandsSetting(configPath: string = userConfigPath()): boolean | undefined {
+function within(parent: string, p: string): boolean {
+  const rel = path.relative(parent, p);
+  return rel === '' || !(rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel));
+}
+
+function realOrNull(p: string): string | null {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a saved setting at configPath can be believed. It can't when the
+ * file (followed through symlinks) sits inside the run's working directory,
+ * is owned by someone else, or is group- or world-writable: in each case
+ * someone other than this user (or the repo) could have written "true".
+ */
+export function isTrustedConfig(configPath: string, workingDirectory?: string): boolean {
+  const real = realOrNull(configPath);
+  if (!real) return false;
+  if (workingDirectory) {
+    const root = realOrNull(workingDirectory);
+    if (root && within(root, real)) return false;
+  }
+  try {
+    const st = fs.statSync(real);
+    if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return false;
+    if (process.platform !== 'win32' && (st.mode & 0o022) !== 0) return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * The saved choice, or undefined when not decided, not a boolean, or not
+ * trustworthy (see isTrustedConfig).
+ */
+export function readAllowCommandsSetting(
+  configPath: string = userConfigPath(),
+  workingDirectory?: string,
+): boolean | undefined {
+  if (!isTrustedConfig(configPath, workingDirectory)) return undefined;
   const section = readYaml(configPath)['agent-provider'];
   if (!section || typeof section !== 'object') return undefined;
   const value = (section as Record<string, unknown>)['allow-commands'];
   return typeof value === 'boolean' ? value : undefined;
 }
 
-/** Save the choice, keeping every other key in the file. */
-export function writeAllowCommandsSetting(value: boolean, configPath: string = userConfigPath()): void {
+/**
+ * Save the choice atomically (temp file + rename, mode 0600), keeping every
+ * other key in the file. Refuses (throws) when the config folder resolves
+ * inside the working directory.
+ */
+export function writeAllowCommandsSetting(
+  value: boolean,
+  configPath: string = userConfigPath(),
+  workingDirectory?: string,
+): void {
+  const dir = path.dirname(configPath);
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (workingDirectory) {
+    const root = realOrNull(workingDirectory);
+    const realDir = realOrNull(dir);
+    if (root && realDir && within(root, realDir)) {
+      throw new Error(`refusing to save consent inside the working directory (${realDir})`);
+    }
+  }
   const config = fs.existsSync(configPath) ? readYaml(configPath) : {};
   const existing = config['agent-provider'];
   const section = existing && typeof existing === 'object' ? (existing as Record<string, unknown>) : {};
   section['allow-commands'] = value;
   config['agent-provider'] = section;
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, yaml.dump(config, { lineWidth: -1, noRefs: true }), 'utf-8');
+  const tmp = path.join(dir, `.config.yaml.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
+  try {
+    fs.writeFileSync(tmp, yaml.dump(config, { lineWidth: -1, noRefs: true }), { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
+    fs.renameSync(tmp, configPath);
+  } catch (error) {
+    fs.rmSync(tmp, { force: true });
+    throw error;
+  }
 }
 
+/**
+ * A person is at the terminal: stdin, stdout and stderr are TTYs and CI is
+ * not set. Automation driving a pseudo-terminal (expect, node-pty) counts as
+ * interactive; such tools should pass --allow-commands or --no-allow-commands.
+ */
 export function isInteractiveTerminal(): boolean {
+  if (process.env.CI) return false;
   return Boolean(process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY);
 }
 
@@ -135,6 +207,8 @@ const pendingPrompts = new Map<string, Promise<boolean>>();
 export interface CommandGateDeps {
   /** Test seam for the user's home (defaults to userHomeDir()). */
   homeDir?: string;
+  /** The run's working directory; a saved setting inside it is ignored. */
+  workingDirectory?: string;
   configPath?: string;
   prompt?: ConsentPrompt;
   isInteractive?: () => boolean;
@@ -147,9 +221,11 @@ export class CommandGate {
   private readonly prompt: ConsentPrompt;
   private readonly interactive: boolean;
   private readonly notify: (line: string) => void;
+  private readonly workingDirectory?: string;
 
   constructor(private readonly policy: CommandPolicy = {}, deps: CommandGateDeps = {}) {
     this.configPath = deps.configPath ?? userConfigPath(deps.homeDir);
+    this.workingDirectory = deps.workingDirectory;
     this.prompt = deps.prompt ?? terminalConsentPrompt;
     this.interactive = policy.interactive ?? (deps.isInteractive ?? isInteractiveTerminal)();
     this.notify = deps.notify ?? ((line) => process.stderr.write(`${line}\n`));
@@ -159,7 +235,7 @@ export class CommandGate {
     if (typeof this.policy.allowCommands === 'boolean') {
       return { state: this.policy.allowCommands ? 'allowed' : 'denied', source: 'flag' };
     }
-    const saved = readAllowCommandsSetting(this.configPath);
+    const saved = readAllowCommandsSetting(this.configPath, this.workingDirectory);
     if (typeof saved === 'boolean') {
       return { state: saved ? 'allowed' : 'denied', source: 'config' };
     }
@@ -193,7 +269,7 @@ export class CommandGate {
     let saved = false;
     try {
       yes = await this.prompt(command, cwd);
-      writeAllowCommandsSetting(yes, this.configPath);
+      writeAllowCommandsSetting(yes, this.configPath, this.workingDirectory);
       saved = true;
     } catch {
       yes = false;

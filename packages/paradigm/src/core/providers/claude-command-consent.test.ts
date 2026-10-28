@@ -12,7 +12,7 @@ import {
   readAllowCommandsSetting,
   writeAllowCommandsSetting,
 } from './command-consent.js';
-import { COMMAND_LOG_FILE, executeTool, toolDefinitions, type ToolContext } from './claude-tools.js';
+import { executeTool, toolDefinitions, type ToolContext } from './claude-tools.js';
 import { ClaudeAgentProvider } from './claude.js';
 import type { AgentDefinition } from '../../commands/team/types.js';
 
@@ -20,6 +20,7 @@ let tmp: string;
 let work: string;
 let outsideDir: string;
 let configPath: string;
+let logPath: string;
 
 beforeEach(() => {
   tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cmd-consent-')));
@@ -29,22 +30,24 @@ beforeEach(() => {
   fs.mkdirSync(outsideDir);
   fs.writeFileSync(path.join(outsideDir, 'secret.txt'), 'SECRET');
   configPath = path.join(tmp, 'home', '.paradigm', 'config.yaml');
+  logPath = path.join(tmp, 'home', '.paradigm', 'logs', 'p', 'agent-commands.jsonl');
 });
 
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-function ctx(gate: CommandGate): ToolContext {
-  return { workingDirectory: work, gate, agent: 'builder' };
+/** commandsOffered defaults to the gate's state now, like the provider's run-start snapshot. */
+function ctx(gate: CommandGate, commandsOffered = gate.isOffered()): ToolContext {
+  return { workingDirectory: work, gate, agent: 'builder', commandsOffered, commandLogPath: logPath };
 }
 
 function offered(gate: CommandGate): boolean {
-  return toolDefinitions({ gate }).some((t) => t.name === 'run_command');
+  return toolDefinitions({ gate, commandsOffered: true }).some((t) => t.name === 'run_command');
 }
 
 function readLog(): Array<Record<string, unknown>> {
-  const file = path.join(work, COMMAND_LOG_FILE);
+  const file = logPath;
   if (!fs.existsSync(file)) return [];
   return fs.readFileSync(file, 'utf-8').trim().split('\n').map((l) => JSON.parse(l));
 }
@@ -58,7 +61,9 @@ describe('command consent', () => {
     expect(offered(gate)).toBe(false);
 
     const out = await executeTool('run_command', { command: 'echo hi > ran.txt' }, ctx(gate));
-    expect(out).toMatch(/no one is at a terminal/);
+    expect(out).toMatch(/not offered/);
+    // Even if a call reached the gate, it refuses without asking.
+    expect((await gate.authorize('echo hi', work)).reason).toMatch(/no one is at a terminal/);
     expect(prompt).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(work, 'ran.txt'))).toBe(false);
     expect(readAllowCommandsSetting(configPath)).toBeUndefined();
@@ -143,10 +148,12 @@ describe('command consent', () => {
     writeAllowCommandsSetting(false, configPath);
     const gate = new CommandGate({}, { configPath, isInteractive: () => true, ...quiet });
     expect(offered(gate)).toBe(false);
-    const out = await executeTool('run_command', { command: 'echo hi' }, ctx(gate));
+    expect(await executeTool('run_command', { command: 'echo hi' }, ctx(gate))).toMatch(/not offered/);
+    const out = await executeTool('run_command', { command: 'echo hi' }, ctx(gate, true));
     expect(out).toMatch(/turned off by the user/);
-    expect(readLog()[0]).toMatchObject({ command: 'echo hi', exitCode: null });
-    expect(readLog()[0].refused).toBeTruthy();
+    expect(readLog()[1]).toMatchObject({ command: 'echo hi', exitCode: null });
+    expect(readLog()[0].refused).toBe('not offered at run start');
+    expect(readLog()[1].refused).toMatch(/turned off by the user/);
   });
 
   it('the flag overrides the saved choice both ways, and is never saved', async () => {
@@ -159,7 +166,7 @@ describe('command consent', () => {
     writeAllowCommandsSetting(true, configPath);
     const off = new CommandGate({ allowCommands: false }, { configPath, isInteractive: () => true, ...quiet });
     expect(offered(off)).toBe(false);
-    expect(await executeTool('run_command', { command: 'echo off' }, ctx(off))).toMatch(/--no-allow-commands/);
+    expect(await executeTool('run_command', { command: 'echo off' }, ctx(off, true))).toMatch(/--no-allow-commands/);
     expect(readAllowCommandsSetting(configPath)).toBe(true);
   });
 
@@ -233,11 +240,11 @@ describe('confinement to the working directory', () => {
     expect(await executeTool('search_files', { pattern: `${outsideDir}/*` }, c)).toMatch(/without/);
   });
 
-  it('the command log is never written through a symlink that leads out', async () => {
-    fs.mkdirSync(path.join(work, '.paradigm', 'events'), { recursive: true });
+  it('the command log is never written through a symlink', async () => {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
     const target = path.join(outsideDir, 'rc');
     fs.writeFileSync(target, '');
-    fs.symlinkSync(target, path.join(work, COMMAND_LOG_FILE));
+    fs.symlinkSync(target, logPath);
     await executeTool('run_command', { command: 'echo hi' }, ctx(allowed()));
     expect(fs.readFileSync(target, 'utf-8')).toBe('');
   });
@@ -262,7 +269,7 @@ describe('ClaudeAgentProvider request', () => {
       body = JSON.parse(String(init?.body));
       return new Response(sse, { status: 200 });
     }) as unknown as typeof fetch;
-    const provider = new ClaudeAgentProvider({ configPath, isInteractive: () => false, ...quiet });
+    const provider = new ClaudeAgentProvider({ configPath, homeDir: path.join(tmp, 'home'), isInteractive: () => false, ...quiet });
     for await (const _ of provider.spawn(agent, {
       task: 't',
       context: { systemPrompt: '', files: [], symbols: [] },
