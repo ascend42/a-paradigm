@@ -378,7 +378,10 @@ components:
       template-token shape in every carried string; L1 every selection tools_set of a tiered session carries its
       surface and the child keeps a pending surface when a set carries none; L2 a commit checks running, awaits the
       (shared) MCP start, re-checks running and the generation, and only then changes the tier (a racing commit is
-      stale); L3 an existing <home>/local that is too open is chmodded 0700 (ours, not win32).
+      stale); L3 an existing <home>/local that is too open is chmodded 0700 (ours, not win32). Sign-off low: tokenShape (NFKC; `<|` `|>` closing tags `<tool` `<function` `<think` `<<` `>>`, and
+      case-sensitive [NAME]/[/NAME] brackets incl. Mistral tekken) refuses full-form text and makes describe() fall
+      back to 'MCP tool.' at every tier; kept separate from SPECIAL_TOKEN/shape.ts (those neutralise model-read output
+      and must stay narrow).
     path: src/kernel/local/tool-tier.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]

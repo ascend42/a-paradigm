@@ -170,10 +170,34 @@ export function cleanServerText(t: string): string {
 /** Aegis M1: an enum value safe to show the model as-is (else the enum stays in the full schema only). */
 const SAFE_ENUM_VALUE = /^[A-Za-z0-9 _.:/@+-]{0,64}$/;
 
+/**
+ * Aegis C4'a M1 (+ the sign-off low): chat-template and kernel-delimiter SHAPES server text may never carry to the model
+ * (the child does not clean tool `parameters`, and descriptions reach the tool list at every tier). Tested on the NFKC
+ * form, so fullwidth ＜| |＞ ＜｜ are caught. Case-insensitive: `<|` `|>` `<｜` `｜>`, any closing tag `</`, `<tool…`,
+ * `<function…`, `<think`, `<s>`, `…_of_turn>`, `<working-memory`, `<<` and `>>`. Case-SENSITIVE: a bracketed upper-case
+ * token `[NAME]` / `[/NAME]` (Mistral [INST], [TOOL_CALLS], tekken [TOOL_CONTENT], [ARGS], [CALL_ID], [THINK], [IMG]…),
+ * so ordinary bracketed words like `[optional]` stay.
+ *
+ * Not shared with working-memory's SPECIAL_TOKEN / gnomon-local shape.ts: those NEUTRALISE text the model must still
+ * read (tool results, memory; parity-tested across the two packages) by inserting a word joiner after the opening
+ * character, and stay narrow so code in tool output (`</div>`, `a << 2`, `[TODO]`) is untouched. This is a REFUSAL
+ * predicate for third-party schema and description text, deliberately broader.
+ */
+const TOKEN_SHAPE_CI = /<\||\|>|<｜|｜>|<\/|<tool|<function|<think|<\/?s>|_of_turn>|<working-memory|<<|>>/i;
+const TOKEN_SHAPE_UPPER = /\[\/?[A-Z][A-Z_]{1,31}\]/;
+export function tokenShape(t: string): boolean {
+  const n = t.normalize('NFKC');
+  return TOKEN_SHAPE_CI.test(n) || TOKEN_SHAPE_UPPER.test(n);
+}
+
 function describe(d: string, op: string | null): string {
   const label = op ? ` (${op})` : '';
   const room = DESCRIPTION_MAX - label.length;
-  let s = cleanServerText(firstSentence(d)) || 'MCP tool.';
+  // Aegis C4'a sign-off: a description holding a template-token shape is replaced whole (every tier)
+  // (tested on the raw sentence too: cleanServerText's neutraliser would hide `<|` and `[INST]` behind a word joiner)
+  const raw = firstSentence(d);
+  const first = cleanServerText(raw);
+  let s = first && !tokenShape(raw) && !tokenShape(first) ? first : 'MCP tool.';
   if (s.length > room) s = `${s.slice(0, room - 1).trimEnd()}…`;
   return `${s}${label}`;
 }
@@ -549,14 +573,8 @@ export function fullParameters(e: Pick<CapabilityEntry, 'schema' | 'opParam'>): 
 }
 
 const SCHEMA_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'array', 'object', 'null']);
-/**
- * Aegis C4'a M1: chat-template and kernel-delimiter shapes a full schema may never carry to the model (the child does
- * not clean `parameters`): `<|` / `|>` (ChatML, DeepSeek fullwidth too), any closing tag `</…`, `<tool…`, `<think`,
- * `<s>`, `…_of_turn>`, `[INST]`-style brackets.
- */
-const TOKEN_SHAPE = /<\||\|>|<｜|｜>|<\/|<tool|<think|<\/?s>|_of_turn>|<working-memory|\[\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\]/i;
 /** Text a full schema may carry: bounded, unchanged by cleanServerText, and no template-token shape. */
-const clean = (t: unknown): boolean => typeof t === 'string' && t.length <= 2048 && cleanServerText(t) === t && !TOKEN_SHAPE.test(t);
+const clean = (t: unknown): boolean => typeof t === 'string' && t.length <= 2048 && cleanServerText(t) === t && !tokenShape(t);
 const cleanValue = (v: unknown): boolean => v === null || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 256 && clean(v));
 
 /** Why a schema node cannot be offered in full, or null (every keyword the validator checks, clean text, bounded depth). */
