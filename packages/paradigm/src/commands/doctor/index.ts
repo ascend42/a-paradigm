@@ -23,7 +23,17 @@ import {
 // Certifications are read as the union of every home with readLearningRows,
 // the same read field-failures.readClassroomCertifications does (that module
 // loads the MCP logger for its writers), never premise-core's repo-only reader.
-import { certificationsByHome, listLearningStores, readLearningRows } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+import {
+  certificationsByHome,
+  formatCensusRow,
+  learningCensus,
+  listLearningStores,
+  populationOf,
+  readLearningRows,
+  type CertPopulation,
+} from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+// notebook-loader is logger-free too (it imports only learning-stores).
+import { findLearningConflicts } from '../../../../paradigm-mcp/src/utils/notebook-loader.js';
 import type { ClassroomCertRow } from '../../../../paradigm-mcp/src/utils/field-failures.js';
 
 interface CheckResult {
@@ -1142,6 +1152,33 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     } catch {
       // Census is advisory.
     }
+
+    // Scoped learning S4: the census per home (repo / user / machine), the
+    // legacy rows, the last write and the learn-path skips, one line per store.
+    try {
+      for (const row of learningCensus(cwd)) {
+        results.push({ name: 'Learning census', status: 'info', message: formatCensusRow(row) });
+      }
+    } catch {
+      // Census is advisory.
+    }
+
+    // Scoped learning S4: repo and user lessons that conflict on one concept,
+    // reported for Loid. Never resolved here.
+    try {
+      const conflicts = findLearningConflicts(cwd);
+      if (conflicts.length > 0) {
+        const shown = conflicts.slice(0, 5).map(c => `${c.agent}/${c.concept} (repo ${c.repo.id} vs user ${c.user.id})`);
+        results.push({
+          name: 'Learning conflicts',
+          status: 'info',
+          message: `${conflicts.length} repo/user conflict(s) for Loid: ${shown.join('; ')}${conflicts.length > 5 ? '; ...' : ''}`,
+          fix: 'Nothing is resolved automatically. Review with Loid; keep, refine or retire one side.',
+        });
+      }
+    } catch {
+      // Conflict report is advisory.
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -1191,7 +1228,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     results.push({
       name: 'Repeat-failure-rate',
       status: 'warn',
-      message: `High in the ${p.home} home: ${p.rollup.overall} of resolved certs were overturned (${p.overturnedTotal}/${p.resolvedTotal})`,
+      message: `High in the ${populationOf(p.home as CertPopulation)} population: ${p.rollup.overall} of resolved certs were overturned (${p.overturnedTotal}/${p.resolvedTotal})`,
       fix: 'Learnings are breaking repeatedly — review refinements via /paradigm:class review',
     });
   }
@@ -1278,7 +1315,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       for (const p of classroom.populations) {
         const { overall } = p.rollup;
         const rateLabel = overall === null ? 'n/a (no certs resolved yet)' : String(overall);
-        kv(`repeat-failure-rate (${p.home} home)`, rateLabel);
+        kv(`repeat-failure-rate [population: ${populationOf(p.home as CertPopulation)}]`, rateLabel);
         kv('  resolved / overturned', `${p.resolvedTotal} / ${p.overturnedTotal}`);
         // Per-agent split — only agents with at least one resolved cert.
         for (const agent of Object.keys(p.rollup.perAgent).sort()) {
@@ -1287,12 +1324,12 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           out(`    ${chalk.dim(agent + ':')} rate ${rate} (${a.overturned}/${a.resolved} overturned)`);
         }
         if (overall !== null && p.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR && overall > REPEAT_FAILURE_WARN_THRESHOLD) {
-          warn(`  Repeat-failure-rate is high in the ${p.home} home (${overall} > 0.5) — learnings are breaking repeatedly. Review refinements via /paradigm:class review.`);
+          warn(`  Repeat-failure-rate is high in the ${populationOf(p.home as CertPopulation)} population (${overall} > 0.5) — learnings are breaking repeatedly. Review refinements via /paradigm:class review.`);
         } else if (overall !== null) {
-          success(`  ${p.home} home: repeat-failure-rate within healthy range.`);
+          success(`  ${populationOf(p.home as CertPopulation)} population: repeat-failure-rate within healthy range.`);
         }
       }
-      if (classroom.populations.length > 1) dim('  Homes are reported separately, never pooled.');
+      if (classroom.populations.length > 1) dim('  Populations are reported separately, never pooled.');
       // Healthy advisory: an overturned cert means the field caught a learning
       // and the loop is correcting — NOT a red flag on its own.
       if (classroom.overturnedTotal > 0) {

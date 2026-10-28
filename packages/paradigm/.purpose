@@ -656,7 +656,7 @@ components:
     file: src/core/calibration.ts
     type: utility
   calibrate-command:
-    description: v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing.
+    description: 'v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing. Scoped learning S4: every band and count is tagged [population: repo|user|machine|legacy-prior]; the planner''s estimatedTokens carries population and a note naming it.'
     file: src/commands/calibrate.ts
     type: command
   routing-backfill:
@@ -664,7 +664,7 @@ components:
     file: src/core/routing-backfill.ts
     type: utility
   learn-routing-command:
-    description: `paradigm learn routing --backfill` — runs #routing-backfill and reports areas via cli-output helpers.
+    description: '`paradigm learn routing --backfill` — runs #routing-backfill and reports areas via cli-output helpers.'
     file: src/commands/learn-routing.ts
     type: command
 signals:

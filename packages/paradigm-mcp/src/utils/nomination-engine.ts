@@ -41,6 +41,7 @@ import {
   readLearningHomeConfig,
   readLearningRows,
   rewriteLearningRows,
+  type CalibrationPopulation,
   type LearningHome,
 } from './learning-stores.js';
 
@@ -802,15 +803,18 @@ export function getNominationStats(
   const groups = groupByHome(nominations.filter(n => !n.legacy), scope);
   const byHome: Partial<Record<LearningHome, NominationRateStats>> = {};
   for (const h of Object.keys(groups) as LearningHome[]) {
-    if (groups[h].length > 0) byHome[h] = rateStats(groups[h]);
+    if (groups[h].length > 0) byHome[h] = rateStats(groups[h], h);
   }
-  return { ...rateStats(groups[scope]), home: scope, byHome, ...(legacy.length > 0 ? { legacy: rateStats(legacy) } : {}) };
+  // S4: every rate names its population (repo, user, machine or legacy-prior).
+  return { ...rateStats(groups[scope], scope), home: scope, byHome, ...(legacy.length > 0 ? { legacy: rateStats(legacy, 'legacy-prior') } : {}) };
 }
 
 /** A calibration population: one home, or the legacy repo rows used as a labelled cold-start prior. */
 export type NominationPopulation = LearningHome | 'legacy-repo';
 
 export interface NominationRateStats {
+  /** S4: the population this rate is computed over; populations are never pooled. */
+  population: CalibrationPopulation;
   total: number;
   accepted: number;
   dismissed: number;
@@ -819,13 +823,14 @@ export interface NominationRateStats {
   acceptRate: number;
 }
 
-function rateStats(nominations: Nomination[]): NominationRateStats {
+function rateStats(nominations: Nomination[], population: CalibrationPopulation): NominationRateStats {
   const accepted = nominations.filter(n => n.response === 'accepted').length;
   const dismissed = nominations.filter(n => n.response === 'dismissed').length;
   const deferred = nominations.filter(n => n.response === 'deferred').length;
   const pending = nominations.filter(n => !n.engaged).length;
   const engaged = accepted + dismissed + deferred;
   return {
+    population,
     total: nominations.length,
     accepted,
     dismissed,

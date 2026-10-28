@@ -77,7 +77,7 @@ function slugify(s: string): string {
  * normalized concept that is neither a structured tag (contains ':') nor a known
  * grouping word. Falls back to the first concept, then '' (caller uses context).
  */
-function pickSlugConcept(concepts: string[]): string {
+export function pickSlugConcept(concepts: string[]): string {
   const normalized = (concepts || []).map(normalizeConcept).filter(Boolean);
   const topical = normalized.find(c => !c.includes(':') && !NON_TOPICAL_CONCEPTS.has(c));
   return topical || normalized[0] || '';
@@ -282,6 +282,65 @@ export function classifyNotebookScope(entry: {
   }
 
   return 'generalizable';
+}
+
+// ────────────────────────────────────────────────────────
+// Conflict report (scoped learning S4)
+// ────────────────────────────────────────────────────────
+
+export interface LearningConflict {
+  agent: string;
+  /** The concept key both entries are filed under (pickSlugConcept, the key notebook ids derive from). */
+  concept: string;
+  repo: { id: string; snippet: string; home_source?: string };
+  user: { id: string; snippet: string; home_source?: string };
+}
+
+/**
+ * Repo and user notebook entries that conflict, for Loid (S4): the same agent
+ * and the same concept key (the topical concept a notebook id is derived from),
+ * different ids, and different guidance (snippets differ). The same id in both
+ * homes is not a conflict: the repo row wins on read. Report only; never
+ * resolves, rewrites or deletes. Never throws.
+ */
+export function findLearningConflicts(rootDir: string): LearningConflict[] {
+  const repoBase = path.join(rootDir, PROJECT_NOTEBOOKS_DIR);
+  if (!hasRepoHome(rootDir) || path.resolve(repoBase) === path.resolve(GLOBAL_NOTEBOOKS_DIR)) return [];
+  const agentsIn = (dir: string): string[] => {
+    try {
+      return fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
+    } catch {
+      return [];
+    }
+  };
+  const keyOf = (e: NotebookEntry): string =>
+    pickSlugConcept(e.concepts || []) || normalizeConcept((e.context || '').split(' ').slice(0, 4).join(' '));
+  const out: LearningConflict[] = [];
+  const userAgents = new Set(agentsIn(GLOBAL_NOTEBOOKS_DIR));
+  for (const agent of agentsIn(repoBase).filter(a => userAgents.has(a)).sort()) {
+    const repo = new Map<string, NotebookEntry>();
+    const user = new Map<string, NotebookEntry>();
+    loadEntriesFromDir(path.join(repoBase, agent), repo, 'repo');
+    loadEntriesFromDir(path.join(GLOBAL_NOTEBOOKS_DIR, agent), user, 'user');
+    const userByKey = new Map<string, NotebookEntry[]>();
+    for (const u of user.values()) {
+      const k = keyOf(u);
+      if (k) (userByKey.get(k) ?? userByKey.set(k, []).get(k)!).push(u);
+    }
+    for (const r of repo.values()) {
+      const k = keyOf(r);
+      for (const u of userByKey.get(k) ?? []) {
+        if (u.id === r.id || (u.snippet || '').trim() === (r.snippet || '').trim()) continue;
+        out.push({
+          agent,
+          concept: k,
+          repo: { id: r.id, snippet: r.snippet, ...(r.home_source ? { home_source: r.home_source } : {}) },
+          user: { id: u.id, snippet: u.snippet, ...(u.home_source ? { home_source: u.home_source } : {}) },
+        });
+      }
+    }
+  }
+  return out;
 }
 
 // ────────────────────────────────────────────────────────

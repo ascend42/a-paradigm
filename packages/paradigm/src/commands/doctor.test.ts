@@ -196,6 +196,10 @@ describe('doctorCommand', () => {
     expect(allOutput).toContain('Classroom / learning health');
     expect(allOutput).toContain('repeat-failure-rate');
     expect(allOutput).toMatch(/0\.5/);
+    // S4: the rate names its population (these rows have no home or author: legacy).
+    expect(allOutput).toContain('repeat-failure-rate [population: legacy-prior]');
+    // S4: the census line per home, with the legacy count.
+    expect(allOutput).toMatch(/Learning census\s+classroom-certifications: repo 2 \(legacy 2\) · user 0 · machine 0 · last write/);
     // The healthy "loop is correcting" advisory fires on the overturned cert.
     expect(allOutput).toMatch(/loop is correcting/i);
   });
