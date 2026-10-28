@@ -20,6 +20,7 @@ import { RpcError } from '../core/client.js';
 import { refusalLine } from '../core/local-model.js';
 import { commitOutcome, previewOf, refusalPhase, sheetView, tierChipOf, tierMenu, tierRequest, TIER_COPY, type SessionTier, type SheetPhase, type SheetView, type Tier, type TierPreview, type TierRequest } from '../core/tool-tier.js';
 import type { ToastKind } from '../core/toasts.js';
+import { TOOLS_COPY } from '../core/tools-drawer.js';
 
 /* ── the flow (no DOM) ───────────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -231,11 +232,15 @@ export interface TierPickerDeps {
   model: (hsid: string) => string;
   notice: (msg: string | null, kind?: ToastKind) => void;
   timer?: TierFlowDeps['timer'];
+  /** #gui-capability-browser (C6'b1): the menu's last item opens the Tools and memory drawer (a trusted press) */
+  openTools?: (hsid: string, trusted: boolean, opener: HTMLElement) => void;
 }
 export interface TierPicker {
   /** the header label for a session, appended to `into` (nothing for a non-local or loop session; null removes it) */
   headChip(into: HTMLElement, hsid: string | null): void;
   repaint(): void;
+  /** C6'b1: the drawer's "Change tier…": open the tier menu of the session's key (false when there is no key) */
+  openMenu(hsid: string): boolean;
   /** the flow (tests) */
   readonly flow: TierFlow;
 }
@@ -426,6 +431,15 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
           });
           return b;
         }));
+        // C6'b1 (Mika): the menu's last item is "Tools and memory…" (the drawer of this session)
+        if (d.openTools) {
+          const tools = el(doc, 'button', { class: 'mode-item scope', type: 'button', role: 'menuitem', 'data-open-tools': '' }, TOOLS_COPY.open);
+          tools.addEventListener('click', (e) => {
+            closeMenu();
+            d.openTools!(hsid, e.isTrusted, btn);
+          });
+          menu.appendChild(tools);
+        }
         // as the model key: the menu hangs from the header row (the left part clips), right after that part
         const host = (btn.closest('.pane-head') as HTMLElement | null) ?? into;
         const part = btn.closest('.chead-l') as HTMLElement | null;
@@ -446,6 +460,12 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
     },
     repaint(): void {
       paintChip();
+    },
+    openMenu(hsid: string): boolean {
+      if (chip?.hsid !== hsid || chip.kind !== 'key' || !chip.menu) return false;
+      if (chip.menu.hidden) chip.btn.click();
+      (chip.menu.querySelector('[aria-current="true"]') as HTMLElement | null ?? chip.menu.querySelector('button') as HTMLElement | null ?? chip.btn).focus();
+      return true;
     },
   };
 }

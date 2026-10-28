@@ -14,6 +14,8 @@
  *   - "in new sessions too" starts unticked (founder); it is disabled with the kernel's reason when the tier cannot be
  *     remembered (rememberable false).
  */
+import { pinWhyWords } from './tools-drawer.js';
+
 export const TIER_REQUEST = 'request.session.tier' as const;
 export const TIER_REMEASURE_REQUEST = 'request.local.tier.remeasure' as const;
 export const TIER_CLEAR_REQUEST = 'request.local.tier.clear' as const;
@@ -43,7 +45,6 @@ export const TIER_COPY = Object.freeze({
   measuredMark: ' · measured',
   cache: 'prompt cache: starts over, so the next reply is slower',
   noneLeave: 'none leave',
-  pinWaits: 'waits until you raise the tier',
   foot: 'Applies from the model’s next step; a call already running finishes as it started.',
   footMcp: 'MCP servers start first.',
   apply: 'Apply now · cache resets',
@@ -184,7 +185,7 @@ function shortList(lead: string, xs: readonly string[]): [string, string | null]
   if (xs.length <= LIST_SHOWN) return [`${lead}${xs.join(', ')}`, null];
   return [`${lead}${xs.slice(0, LIST_SHOWN).join(', ')} and ${xs.length - LIST_SHOWN} more`, `${lead}${xs.join(', ')}`];
 }
-const pinWhy = (why: string): string => (why === 'tier-0' ? TIER_COPY.pinWaits : why.replace(/-/g, ' '));
+
 
 export interface PreviewView {
   lines: string[];
@@ -200,7 +201,8 @@ export interface PreviewView {
 /** What the sheet says about a preview (Mika's meta lines, the ◆ warnings, the checkbox and the foot). */
 export function previewView(p: TierPreview, model: string): PreviewView {
   const now = formsOf(p.from, p.surface.from);
-  const pins = p.unfitPins.map((u) => `${u.name} (${pinWhy(u.why)})`);
+  // C6'b1: the same words as the Tools drawer (pinWhyWords); never the selector's raw code ("over k")
+  const pins = p.unfitPins.map((u) => `${u.name} (${pinWhyWords(u.why, { tier: p.to, k: p.k })})`);
   const rows: Array<[string, string | null]> = [
     [p.to === 0 ? `tools: its own file tools only (now ${now} forms)` : `tools: up to ${p.k}, ${formsOf(p.to, p.surface.to)} forms (now ${now})`, null],
     [`tool space: ${grouped(p.slotTokens)} tokens, ${Math.round(p.slotShare * 100)}% of its context`, null],
