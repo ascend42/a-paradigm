@@ -1004,6 +1004,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     },
     liveRepos: () => supervisor.liveScopes().map((x) => ({ cwd: x.cwd, hsid: x.hsid })),
     emit: (e) => emit({ kind: 'daemon.desk', ...e } as DaemonEvent),
+    // slice C5'a1 (Arky 6): request.mcp.trust previews and commits against the lane's newest listing; trust rows
+    listedOf: (id) => mcpListCache.newest(id),
+    trust: mcpTrust,
   });
   const supervisor: SessionSupervisor = new SessionSupervisor({
     mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
