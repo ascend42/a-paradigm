@@ -93,7 +93,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { releaseSession, sessionSidFor } from '../../platform/win32/session-sandbox.js';
-import { HSID_PATTERN, HSID_V1_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, HSID_V1_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, COMPACTION_REASONS, type CompactionReason, type ToolSelectionTrigger, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -289,7 +289,7 @@ interface LocalSession {
    * names called this step and in the last STICKY_STEPS steps, find_tool's matches in force, the latest user or steer
    * text (bounded), and find_tool calls this turn
    */
-  sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; textTrusted: boolean; finds: number; mode: RunMode; setSeq: number };
+  sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; textTrusted: boolean; finds: number; mode: RunMode; setSeq: number; ids: string[] };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
   mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }>; firstParty?: { launch: SessionLaunchInput; stateDir: string; nodePin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'> } };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
@@ -1131,8 +1131,10 @@ export class LocalLane {
         // functional note (Aegis): a server that cannot start under the local profile says why, readably
         s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
         for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
-        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', textTrusted: true, finds: 0, mode: this.#mode(s), setSeq: 0 };
-        tools = this.#mcpOffer(s).tools;
+        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', textTrusted: true, finds: 0, mode: this.#mode(s), setSeq: 0, ids: [] };
+        const first = this.#mcpOffer(s);
+        tools = first.tools;
+        s.sel.ids = first.ids;
         s.mcp.offeredHash = offeredHash(tools);
       }
     }
@@ -1147,7 +1149,7 @@ export class LocalLane {
    * from one server is never rebound to another in this session (Aegis M4); names are de-duplicated first in index
    * order (Aegis L3).
    */
-  #mcpOffer(s: LocalSession, need?: string): { tools: BrokeredTool[]; found: CapabilityEntry[] } {
+  #mcpOffer(s: LocalSession, need?: string): { tools: BrokeredTool[]; found: CapabilityEntry[]; ids: string[]; hash: string; unfit: number } {
     const m = s.mcp!;
     const sel = s.sel!;
     const manual = m.manual || this.#mode(s) === 'manual';
@@ -1172,7 +1174,8 @@ export class LocalLane {
       const target = m.pool.target(e.server);
       return target ? [{ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }] : [];
     })];
-    return { tools, found: r.found.filter((e) => tools.some((t) => t.entry === e)) };
+    const offered = r.selected.filter((e) => tools.some((t) => t.entry === e));
+    return { tools, found: r.found.filter((e) => offered.includes(e)), ids: offered.map((e) => e.id), hash: r.hash, unfit: r.unfit.length };
   }
 
   /**
@@ -1193,7 +1196,7 @@ export class LocalLane {
     const refusedChange = changes.find((c) => c.op === 'refused');
     await this.#memoryChanged(s, changes);
     if (refusedChange) throw refused('BAD_REQUEST', `${kind}: at most ${MAX_TOOL_PINS} tool pins`, { reason: 'full' });
-    this.#reselect(s);
+    this.#reselect(s, 'pin');
     return { hsid: s.hsid, name, pinned: p.pinned, pins: s.memory.toolPins(), offered: s.tools?.offered.some((t) => t.name === name) ?? false };
   }
 
@@ -1216,9 +1219,9 @@ export class LocalLane {
    * cache). Synchronous: the tools_set line is written before whatever the caller writes next (a find_tool answer, a
    * steer, a prompt), so the child holds it for its next step. Returns find_tool's offered matches.
    */
-  #reselect(s: LocalSession, need?: string): CapabilityEntry[] {
+  #reselect(s: LocalSession, trigger: ToolSelectionTrigger, need?: string): CapabilityEntry[] {
     if (!s.mcp || !s.sel || !s.tools || s.state !== 'running') return [];
-    const { tools, found } = this.#mcpOffer(s, need);
+    const { tools, found, ids, hash, unfit } = this.#mcpOffer(s, need);
     s.sel.selectedAt = s.sel.step;
     if (need !== undefined) s.sel.found = { names: found.map((e) => e.name), step: s.sel.step };
     const h = offeredHash(tools);
@@ -1228,6 +1231,11 @@ export class LocalLane {
       const id = `ts-${++s.sel.setSeq}`;
       s.tools.setTools(tools, { ackId: id });
       this.#write(s, drv.toolsSetLine(s.tools.offered, id));
+      // Aegis M2: one audit row per change of the offered set — capability ids only, never the query or the need
+      const before = new Set(s.sel.ids);
+      const row = { hsid: s.hsid, trigger, hash: `sha256:${hash}`, added: ids.filter((x) => !before.has(x)), removed: s.sel.ids.filter((x) => !ids.includes(x)), found: found.map((e) => e.id), unfitPins: Math.min(unfit, 64) };
+      s.sel.ids = ids;
+      void this.#o.log('tool.selection', row, { session: s.hsid }).catch(() => undefined);
     }
     return found;
   }
@@ -1244,8 +1252,8 @@ export class LocalLane {
     const mode = this.#mode(s);
     if (mode !== sel.mode) {
       sel.mode = mode;
-      this.#reselect(s);
-    } else if (sel.step - sel.selectedAt >= RESELECT_EVERY_STEPS) this.#reselect(s);
+      this.#reselect(s, 'mode');
+    } else if (sel.step - sel.selectedAt >= RESELECT_EVERY_STEPS) this.#reselect(s, 'periodic');
   }
 
   /** Slice C3': a new goal (a prompt, or a queued follow_up's when its run starts): find_tool's matches lapse. */
@@ -1254,7 +1262,7 @@ export class LocalLane {
     s.sel.text = text.slice(0, QUERY_PART_MAX);
     s.sel.textTrusted = trusted;
     s.sel.found = null;
-    this.#reselect(s);
+    this.#reselect(s, 'goal');
   }
 
   /**
@@ -1279,7 +1287,7 @@ export class LocalLane {
     if (!s.mcp || !s.sel) return answer('ran', 'No other tools are available in this session.', false);
     if (s.sel.finds >= FIND_TOOL_PER_TURN) return answer('refused', `find_tool is limited to ${FIND_TOOL_PER_TURN} calls per turn; use the tools you have`, true);
     s.sel.finds++;
-    const found = this.#reselect(s, need);
+    const found = this.#reselect(s, 'find', need);
     return answer('ran', findToolAnswer(found), false);
   }
 
@@ -1301,7 +1309,7 @@ export class LocalLane {
     const m = s.mcp;
     s.tools.pruneGrace((t) => !t.entry || (m.pool.target(t.entry.server) !== undefined && m.pool.target(t.entry.server) !== null && (m.entries.get(t.entry.server) ?? []).some((e) => e.id === t.entry!.id)));
     // Aegis M4: a tools_set only when the offered set actually changed (#reselect compares the hash)
-    this.#reselect(s);
+    this.#reselect(s, 'list_changed');
   }
 
   /** Slice C2': one MCP server of a local session, spawned under the SESSION's own launch plan (its files, its network). */
@@ -1816,7 +1824,7 @@ export class LocalLane {
         s.sel.text = p.text.slice(0, QUERY_PART_MAX);
         // Aegis L1: an unverified-voice steer is untrusted text
         s.sel.textTrusted = !(p.voiceOrigin?.sentBy === 'unverified' || (p.source === 'voice' && p.voiceOrigin === undefined));
-        this.#reselect(s);
+        this.#reselect(s, 'steer');
       }
       s.child.stdin?.write(drv.steerLine(p.text));
       return { turn, steered: true };

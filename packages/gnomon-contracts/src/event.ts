@@ -283,7 +283,10 @@ const TABLE: Row[] = [
   // 8.0:local-lane (TD-2026-10-27-833 slice C1, #local-tool-broker): tool.brokered{hsid, server, tool?, class?, argsHash,
   // decision, bytes, isError, cardId?} — one brokered tool call of a local session (the child's tool_request, answered
   // by the kernel): HASH-ONLY (the args are a digest, the result a byte count; never args, output, paths or model text).
-  ['tool', 'kernel', 'brokered', LOCAL_LANE],
+  // 8.0:local-lane (TD-2026-10-27-833 slice C3', Aegis M2, #tool-selector): tool.selection{hsid, trigger, hash, added,
+  // removed, found, unfitPins} — a local session's offered narrow-tool set changed: capability ids only (never the
+  // query, a find_tool need or any model text).
+  ['tool', 'kernel', 'brokered selection', LOCAL_LANE],
   // 8.0:local-lane (TD-2026-10-27-833 slice B2, #local-working-memory): session.memory{hsid, op, id?, source?, kind?,
   // textHash?, bytes, why?} — one change to a local session's kernel-owned working memory: HASH-ONLY (never the text).
   // session.context{hsid, target, previous, requested, configTarget, nCtx, aboveConfig} — the human changed a local
@@ -541,6 +544,8 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'tool.brokered': Object.freeze(['hsid', 'server', 'tool', 'class', 'argsHash', 'decision', 'bytes', 'isError', 'cardId']),
   // 8.0:local-lane (B2): closed and hash-only; delete carries no entry fields, refused carries why
   'session.memory': Object.freeze(['hsid', 'op', 'id', 'source', 'kind', 'textHash', 'bytes', 'why']),
+  // 8.0:local-lane (C3'): closed; ids are capability ids, the hash the selection's; no query or need text
+  'tool.selection': Object.freeze(['hsid', 'trigger', 'hash', 'added', 'removed', 'found', 'unfitPins']),
   'session.context': Object.freeze(['hsid', 'target', 'previous', 'requested', 'configTarget', 'nCtx', 'aboveConfig']),
 });
 
@@ -650,6 +655,12 @@ export type ToolBrokerClass = (typeof TOOL_BROKER_CLASSES)[number];
  */
 export const TOOL_BROKERED_DECISIONS = ['ran', 'approved', 'denied', 'unknown-tool', 'bad-args', 'loop-session', 'no-approval-surface', 'cancelled', 'expired', 'allowed-cancelled', 'cooldown', 'suspended', 'refused', 'busy', 'not-running'] as const;
 export type ToolBrokeredDecision = (typeof TOOL_BROKERED_DECISIONS)[number];
+/** tool.selection{trigger} (CLOSED, 8.0:local-lane C3'): why the kernel re-selected a local session's narrow tools. */
+export const TOOL_SELECTION_TRIGGERS = ['goal', 'steer', 'find', 'periodic', 'list_changed', 'pin', 'mode'] as const;
+export type ToolSelectionTrigger = (typeof TOOL_SELECTION_TRIGGERS)[number];
+/** tool.selection{added, removed, found}: capability ids `<server>/<tool>[.<op>]@<sha256(schema)[:8]>`, at most this many each. */
+export const TOOL_SELECTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}@[0-9a-f]{8}$/;
+export const TOOL_SELECTION_MAX_IDS = 64;
 /** tool.brokered{server}: the MCP server name the call went to (`gnomon` = the kernel's own SDK server). */
 export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** tool.brokered{tool}: an offered tool name (kernel-chosen, never model text). */
@@ -1027,6 +1038,18 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
       if (('tool' in v) !== ('class' in v)) c.fail('class', 'is present exactly when the tool resolved');
       break;
+    case 'tool.selection': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('trigger' in v) c.closedEnum('trigger', v.trigger, TOOL_SELECTION_TRIGGERS);
+      if ('hash' in v) c.str('hash', v.hash, SHA256_TAGGED, 'sha256:<hex>');
+      for (const k of ['added', 'removed', 'found'] as const) {
+        if (!(k in v)) continue;
+        const a = v[k];
+        if (!Array.isArray(a) || a.length > TOOL_SELECTION_MAX_IDS || !a.every((x) => typeof x === 'string' && TOOL_SELECTION_ID_PATTERN.test(x))) c.fail(k, `must be at most ${TOOL_SELECTION_MAX_IDS} capability ids`);
+      }
+      if ('unfitPins' in v && (typeof v.unfitPins !== 'number' || !Number.isSafeInteger(v.unfitPins) || v.unfitPins < 0 || v.unfitPins > 64)) c.fail('unfitPins', 'must be an integer 0..64');
+      break;
+    }
     case 'session.memory': {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('op' in v) c.closedEnum('op', v.op, SESSION_MEMORY_OPS);

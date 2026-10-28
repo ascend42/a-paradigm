@@ -347,6 +347,14 @@ describe('slice C3\' (#tool-selector): per-step selection and find_tool with the
     const toolMsgs = (agentReqs[4]!.messages as Array<{ role: string; content: string }>).filter((x) => x.role === 'tool');
     expect(toolMsgs[1]!.content).toMatch(/unknown tool/i);
     expect(toolMsgs[2]!.content).toContain('paradigm_lore.timeline');
+    // Aegis M2: every change of the offered set is one valid tool.selection row (ids only, never the need)
+    const sel = rows.filter((r) => r.kind === 'tool.selection').map((r) => r.payload);
+    for (const p of sel) expect(validateKindPayload('tool.selection', p)).toEqual([]);
+    expect(sel.map((p) => p.trigger)).toEqual(expect.arrayContaining(['pin', 'goal', 'find']));
+    const find = sel.find((p) => p.trigger === 'find')!;
+    expect((find.found as string[]).some((id) => id.startsWith('paradigm/paradigm_lore.timeline@'))).toBe(true);
+    expect((find.added as string[]).some((id) => id.startsWith('paradigm/paradigm_lore.timeline@'))).toBe(true);
+    expect(JSON.stringify(sel)).not.toContain('lore timeline');
     // the find_tool line is hash-only in the log (the need is model text)
     expect(rows.some((r) => r.kind === 'turn.event' && typeof r.payload.line === 'string' && r.payload.line.includes('lore timeline'))).toBe(false);
     await lane.stop(HUMAN, { hsid: s.hsid });

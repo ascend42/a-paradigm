@@ -256,6 +256,7 @@
     "tend.proposal.fate",
     "tend.teacher.drafted",
     "tool.brokered",
+    "tool.selection",
     "turn.ask-user",
     "turn.event",
     "turn.partial",
@@ -400,6 +401,7 @@
     "session.model": "8.0:model-switch",
     "session.renamed": "8.0:session-rename",
     "tool.brokered": "8.0:local-lane",
+    "tool.selection": "8.0:local-lane",
     "verdict.incident": "M1.1:P8-D86-D88"
   },
   "x-gnomon-reserved-payload-fields": {
@@ -955,6 +957,15 @@
       "textHash",
       "bytes",
       "why"
+    ],
+    "tool.selection": [
+      "hsid",
+      "trigger",
+      "hash",
+      "added",
+      "removed",
+      "found",
+      "unfitPins"
     ],
     "session.context": [
       "hsid",

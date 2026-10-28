@@ -292,9 +292,27 @@ components:
       only decides what is offered: a mutate or destructive tool it offers
       still raises its card at call time. Loop sessions have no selector and
       no brokered tools; a find_tool from one falls to the broker, which
-      refuses loop-session. Gaps: K and the slot are not yet per tier (C4');
-      no session row records each selection (the tools_set line itself is not
-      logged); a found mutate tool is offered (carded), not refused.
+      refuses loop-session. Aegis C3' review (fixed): M1 one server holds
+      at most serverCap(K) = max(6, ceil(K/3)) of the found and ranked tiers
+      (pins and sticky exempt; the rest fall to the tail), ties break by
+      index, BM25 docs count the first DOC_PARAM_NAMES 8 param names and each
+      description term once; M2 every change of the offered set is one
+      tool.selection{hsid, trigger goal|steer|find|periodic|list_changed|pin|
+      mode, hash, added, removed, found, unfitPins} row (contracts
+      8.0:local-lane, capability ids only; the query and need never logged);
+      M3 tools_set carries id ts-N, the child answers tools_applied{id} when
+      the set takes effect, and the broker keeps the previous set callable
+      (union; the new entry wins a name) until the ack for the latest id,
+      cleared on agent_start and pruned on list_changed (entry id gone or no
+      server target); L1 the query is split trusted (the human goal, a human
+      steer) / untrusted (offer or unverified-voice text, the failing tool's
+      NAME only) and destructive tools enter only via trusted text, pins,
+      sticky or a need, never the tail; L2 sticky credit only on decision ran;
+      L3 toolPins() keeps well-formed names, at most 8; L4 a run-mode change
+      re-selects at the next step end; L5 find_tool lines name the server;
+      L6 reserved names compare lower-cased (selector and child). Gaps: K and
+      the slot are not yet per tier (C4'); a found mutate tool is offered
+      (carded), not refused; the mode change is noticed at a step end.
     path: src/kernel/local/tool-selector.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
