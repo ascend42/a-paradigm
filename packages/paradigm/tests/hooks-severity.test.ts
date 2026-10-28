@@ -144,6 +144,24 @@ describe('Check 13 honours .orchestrated by TTL', () => {
 // count toward SOURCE_COUNT, the cross-package signal or Check 13's magnitude.
 // ---------------------------------------------------------------------------
 
+describe('path lists split on newlines only', () => {
+  it('a modified file with a space in its name is one source path', () => {
+    const root = orchProject('none');
+    const files = ['src/x.ts y.ts', 'src/*.ts'];
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    for (const f of files) {
+      try { fs.writeFileSync(path.join(root, f), 'export const x = 1;\n'); } catch { /* `*` is not a legal Windows file name */ }
+    }
+    fs.writeFileSync(path.join(root, 'src', 'a.ts'), 'x\n'); // a glob would expand src/*.ts to this
+    const script = `cd "${shellPath(root)}"; MODIFIED="${files.join('\n')}"; . "${shellPath(COMMON_SH)}" >/dev/null 2>&1
+echo "source=$SOURCE_COUNT"; case "$-" in *f*) echo glob=off ;; *) echo glob=on ;; esac; printf 'ifs=%s\\n' "$(printf '%s' "$IFS" | od -An -c | tr -d ' ')"`;
+    const out = spawnSync(SH, ['-c', script], { env: { ...baseEnv(), PATH: pathValue([stubBin(), ...SYS_PATH]), HOME: root }, encoding: 'utf8' }).stdout;
+    expect(out).toContain('source=2'); // two paths, not three words
+    expect(out).toContain('glob=on'); // restored after the loops
+    expect(out).toContain('ifs=\\t\\n'); // default IFS restored
+  });
+});
+
 describe('nested generated state is not source', () => {
   const NESTED = [
     '.paradigm/events/stream.jsonl',
@@ -480,6 +498,34 @@ exit 0
     expect(r.status, r.stderr).toBe(2);
     expect(fs.existsSync(path.join(worktree, '.paradigm', '.sessions', 'c1.stop-fp'))).toBe(true);
     expect(fs.existsSync(path.join(root, '.paradigm', '.sessions', 'c1.stop-fp'))).toBe(false);
+  });
+
+  it('git older than 2.31 (echoes --path-format=absolute back) still resolves the root', () => {
+    const { root } = repo();
+    const realGit = spawnSync(SH, ['-c', 'command -v git'], { env: { ...baseEnv(), PATH: pathValue(SYS_PATH) }, encoding: 'utf8' }).stdout.trim();
+    const stub = tempDir('paradigm-oldgit-');
+    dirs.push(stub);
+    // Old rev-parse prints an unknown --path-format=absolute back and exits 0.
+    fs.writeFileSync(path.join(stub, 'git'), `#!/bin/sh
+case " $* " in
+  *" --path-format=absolute "*)
+    echo "--path-format=absolute"
+    shift_args=""
+    for a in "$@"; do [ "$a" = "--path-format=absolute" ] || shift_args="$shift_args $a"; done
+    exec "${realGit}" $shift_args ;;
+esac
+exec "${realGit}" "$@"
+`, { mode: 0o755 });
+    const sub = path.join(root, 'src');
+    fs.mkdirSync(sub, { recursive: true });
+    const r = spawnSync(SH, [shellPath(path.join(SCRIPTS, 'claude-code-postwrite.sh'))], {
+      input: JSON.stringify({ cwd: sub, session_id: 'og', tool_name: 'Write', tool_input: { file_path: path.join(sub, 'a.ts') } }),
+      cwd: sub,
+      env: { ...baseEnv(), PATH: pathValue([stub, ...SYS_PATH]), HOME: root },
+      encoding: 'utf8',
+    });
+    expect(r.status).toBe(0);
+    expect(fs.readFileSync(path.join(root, '.paradigm', '.sessions', 'og.touched'), 'utf8')).toBe('src/a.ts\n');
   });
 
   it('no git: the cwd holding .paradigm is the root, and the postwrite ledger still works', () => {

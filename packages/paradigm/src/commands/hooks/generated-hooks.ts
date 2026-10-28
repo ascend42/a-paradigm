@@ -55,6 +55,28 @@ export const COMMON_HOOK = `#!/bin/sh
 command -v _pm_mark >/dev/null 2>&1 || _pm_mark() { :; }
 command -v _pm_count >/dev/null 2>&1 || _pm_count() { :; }
 
+# Path lists ($MODIFIED, $PURPOSE_PATHS, $UNCOVERED_SOURCE_DIRS) are one path
+# per line. A loop over one splits on newlines only, with globbing off, so a
+# file name with a space (or a *) is one path:
+#   _pm_lines_on "$LIST"
+#   for f in $LIST; do _pm_lines_off
+# _pm_lines_on switches only for a list with at least one path (so the loop
+# body runs and restores IFS and globbing at its first line); _pm_lines_off
+# restores them. The list is expanded once, before the body runs.
+_PM_NL='
+'
+_pm_lines_on() {
+  case "$1" in
+    *[!"$_PM_NL"]*) _PM_SAVED_IFS=$IFS; IFS=$_PM_NL; set -f ;;
+  esac
+}
+_pm_lines_off() {
+  [ -n "\${_PM_SAVED_IFS+x}" ] || return 0
+  IFS=$_PM_SAVED_IFS
+  unset _PM_SAVED_IFS
+  set +f
+}
+
 VIOLATIONS=""
 VIOLATION_COUNT=0
 AUTO_FIXED=""
@@ -69,7 +91,8 @@ PARADIGM_AUTO_FIX="\${PARADIGM_AUTO_FIX:-0}"
 # state checks (remediations, purpose-required patterns, memory) still run.
 PARADIGM_GENERATED_ONLY=true
 _MODIFIED_COUNT=0
-for file in $MODIFIED; do
+_pm_lines_on "$MODIFIED"
+for file in $MODIFIED; do _pm_lines_off
   _MODIFIED_COUNT=$((_MODIFIED_COUNT + 1))
   case "$file" in
     .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;
@@ -270,7 +293,8 @@ _pm_mark purpose-coverage-resolve
 # a missing CLI is already a blocking violation above.
 _TAB=$(printf '\\t')
 _COV_DIRS=""
-for file in $MODIFIED; do
+_pm_lines_on "$MODIFIED"
+for file in $MODIFIED; do _pm_lines_off
   case "$file" in
     .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
@@ -337,7 +361,9 @@ SOURCE_COUNT=0
 PARADIGM_COUNT=0
 UNCOVERED_SOURCE_DIRS=""
 
-for file in $MODIFIED; do
+_pm_lines_on "$MODIFIED"
+
+for file in $MODIFIED; do _pm_lines_off
   case "$file" in
     .paradigm/*|*.purpose|portal.yaml)
       PARADIGM_COUNT=$((PARADIGM_COUNT + 1))
@@ -351,7 +377,8 @@ for file in $MODIFIED; do
       # If there IS a covering .purpose, check if it was modified too
       if [ -n "$covering" ]; then
         purpose_was_modified=false
-        for mod_file in $MODIFIED; do
+        _pm_lines_on "$MODIFIED"
+        for mod_file in $MODIFIED; do _pm_lines_off
           if [ "$mod_file" = "$covering" ]; then
             purpose_was_modified=true
             break
@@ -378,7 +405,8 @@ _SEV=$(_check_severity "purpose-coverage" "block")
 if [ "$_SEV" != "off" ] && [ -n "$UNCOVERED_SOURCE_DIRS" ] && [ "$PARADIGM_COUNT" -eq 0 ]; then
   # Count uncovered dirs
   UNCOVERED_DIR_COUNT=0
-  for _d in $UNCOVERED_SOURCE_DIRS; do
+  _pm_lines_on "$UNCOVERED_SOURCE_DIRS"
+  for _d in $UNCOVERED_SOURCE_DIRS; do _pm_lines_off
     UNCOVERED_DIR_COUNT=$((UNCOVERED_DIR_COUNT + 1))
   done
   if [ "$_SEV" = "block" ]; then
@@ -398,7 +426,9 @@ _pm_mark check2-purpose-exists
 # --- Check 2: Modified source directories no .purpose documents (shared rule) ---
 DIRS_WITHOUT_PURPOSE=""
 
-for file in $MODIFIED; do
+_pm_lines_on "$MODIFIED"
+
+for file in $MODIFIED; do _pm_lines_off
   case "$file" in
     .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
@@ -453,7 +483,8 @@ if [ "$_SEV" != "off" ]; then
     # Check if any modified files contain route-like patterns
     # Skip: test/spec/fixture files, markdown, and comment-only matches
     ROUTE_FILES=""
-    for file in $MODIFIED; do
+    _pm_lines_on "$MODIFIED"
+    for file in $MODIFIED; do _pm_lines_off
       # Skip test, spec, and fixture files entirely
       case "$file" in
         *test*|*spec*|*fixture*|*__tests__*|*__mocks__*|*.test.*|*.spec.*) continue ;;
@@ -594,7 +625,8 @@ fi
 # Strategy B: Git-based fallback — for each modified source file, check whether
 # its covering .purpose was modified more recently (by filesystem mtime).
 # This catches cases where .pending-review is missing or out of sync.
-for file in $MODIFIED; do
+_pm_lines_on "$MODIFIED"
+for file in $MODIFIED; do _pm_lines_off
   case "$file" in
     .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
   esac
@@ -653,7 +685,8 @@ ADVISORY=""
 _SEV=$(_check_severity "aspect-advisory" "warn")
 if [ "$_SEV" != "off" ]; then
   HAS_ASPECTS=false
-  for purpose_file in $PURPOSE_PATHS; do
+  _pm_lines_on "$PURPOSE_PATHS"
+  for purpose_file in $PURPOSE_PATHS; do _pm_lines_off
     if grep -qE '^\\s*~' "$purpose_file" 2>/dev/null; then
       HAS_ASPECTS=true
       break
@@ -662,7 +695,8 @@ if [ "$_SEV" != "off" ]; then
 
   if [ "$HAS_ASPECTS" = true ] && [ "$SOURCE_COUNT" -gt 0 ]; then
     ASPECT_UPDATED=false
-    for file in $MODIFIED; do
+    _pm_lines_on "$MODIFIED"
+    for file in $MODIFIED; do _pm_lines_off
       case "$file" in
         *.purpose)
           if grep -qE '^\\s*~|anchors:|applies-to:' "$file" 2>/dev/null; then
@@ -690,7 +724,8 @@ if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ];
   LORE_RECORDED=false
 
   # Check git diff first (covers staged/committed lore)
-  for file in $MODIFIED; do
+  _pm_lines_on "$MODIFIED"
+  for file in $MODIFIED; do _pm_lines_off
     case "$file" in
       .paradigm/lore/entries/*.yaml|.paradigm/lore/entries/*/*.yaml|.paradigm/lore/entries/*.lore|.paradigm/lore/entries/*/*.lore)
         LORE_RECORDED=true
@@ -722,7 +757,8 @@ if [ "$_SEV" != "off" ] && [ "$SOURCE_COUNT" -ge 3 ] && [ -d ".paradigm/lore" ];
 
       # Extract symbols from modified file paths (directory basenames as component names)
       LORE_SYMBOLS=""
-      for file in $MODIFIED; do
+      _pm_lines_on "$MODIFIED"
+      for file in $MODIFIED; do _pm_lines_off
         case "$file" in
           .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*|*.md|*.lock|*.log|.gitignore|.env*|*.json|*.purpose|portal.yaml) continue ;;
         esac
@@ -1076,7 +1112,8 @@ if [ "$_SEV" != "off" ]; then
   # Signal 2: Cross-package changes (2 points — different packages/ dirs)
   CROSS_PKG_COUNT=0
   SEEN_PKGS=""
-  for file in $MODIFIED; do
+  _pm_lines_on "$MODIFIED"
+  for file in $MODIFIED; do _pm_lines_off
     case "$file" in
       */.paradigm/*|*/.warpline/*) ;;
       packages/*)
@@ -1098,7 +1135,8 @@ if [ "$_SEV" != "off" ]; then
 
   # Signal 3: Security-adjacent files (2 points each)
   SEC_ADJACENT=0
-  for file in $MODIFIED; do
+  _pm_lines_on "$MODIFIED"
+  for file in $MODIFIED; do _pm_lines_off
     case "$file" in
       .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;
       portal.yaml|*/portal.yaml) SEC_ADJACENT=$((SEC_ADJACENT + 1)) ;;
@@ -1112,7 +1150,8 @@ if [ "$_SEV" != "off" ]; then
 
   # Signal 4: Symbol-bearing files (1 point if .purpose files were changed alongside source)
   SYMBOL_FILES=0
-  for file in $MODIFIED; do
+  _pm_lines_on "$MODIFIED"
+  for file in $MODIFIED; do _pm_lines_off
     case "$file" in
       *.purpose) SYMBOL_FILES=$((SYMBOL_FILES + 1)) ;;
     esac
@@ -1455,6 +1494,9 @@ _pm_project_root() {
     git rev-parse --path-format=absolute --git-common-dir --show-prefix 2>/dev/null \\
       || git rev-parse --git-common-dir --show-prefix 2>/dev/null
   }) || _pm_git=""
+  # git older than 2.31 echoes the unknown --path-format=absolute back as its
+  # first line (exit 0): drop it; the common dir is then the relative form.
+  case "$_pm_git" in --*) _pm_git=$(printf '%s\\n' "$_pm_git" | sed 1d) ;; esac
   if [ -n "$_pm_git" ]; then
     _pm_gcd=$(printf '%s\\n' "$_pm_git" | sed -n 1p)
     _pm_pfx=$(printf '%s\\n' "$_pm_git" | sed -n 2p)

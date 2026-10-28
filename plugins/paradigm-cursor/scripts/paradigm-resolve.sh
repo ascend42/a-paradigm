@@ -114,6 +114,9 @@ _pm_project_root() {
     git rev-parse --path-format=absolute --git-common-dir --show-prefix 2>/dev/null \
       || git rev-parse --git-common-dir --show-prefix 2>/dev/null
   }) || _pm_git=""
+  # git older than 2.31 echoes the unknown --path-format=absolute back as its
+  # first line (exit 0): drop it; the common dir is then the relative form.
+  case "$_pm_git" in --*) _pm_git=$(printf '%s\n' "$_pm_git" | sed 1d) ;; esac
   if [ -n "$_pm_git" ]; then
     _pm_gcd=$(printf '%s\n' "$_pm_git" | sed -n 1p)
     _pm_pfx=$(printf '%s\n' "$_pm_git" | sed -n 2p)
