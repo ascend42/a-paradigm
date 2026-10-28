@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { gitDiffSinceCommit } from '../../../paradigm-mcp/src/utils/safe-git.js';
+import { resolveInsideRoot } from '../utils/path-containment.js';
 import chalk from 'chalk';
 
 interface AnchorRow {
@@ -117,23 +118,8 @@ function computeShift(
   return { newStart: startLine + offset, newEnd: endLine + offset };
 }
 
-/**
- * Resolve `p` (absolute, or relative to rootDir) to an existing real path
- * inside rootDir, following symlinks. Returns null for anything outside the
- * project or missing. Paths here come from the aspect graph DB, which is repo
- * content.
- */
-export function resolveInsideRoot(rootDir: string, p: string): string | null {
-  try {
-    const root = fs.realpathSync(rootDir);
-    const real = fs.realpathSync(path.resolve(root, p));
-    const rel = path.relative(root, real);
-    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null;
-    return real;
-  } catch {
-    return null;
-  }
-}
+// Paths here come from the aspect graph DB (repo content): see #path-containment.
+export { resolveInsideRoot };
 
 /**
  * Update anchor line numbers in a .purpose file.
