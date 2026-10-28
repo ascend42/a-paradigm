@@ -25,6 +25,7 @@ vi.mock('os', async importOriginal => {
 
 import {
   appendLearningRows,
+  hasRepoHome,
   homeOf,
   LearningHomeError,
   listLearningStores,
@@ -302,6 +303,41 @@ describe('learned token table lives in the user home (F3)', () => {
     fs.mkdirSync(path.dirname(legacy), { recursive: true });
     fs.writeFileSync(legacy, JSON.stringify({ tester: { bugfix: { min: 1, max: 2, n: 9 } } }), 'utf8');
     expect(loadLearnedTokenTable(root).tester.bugfix.n).toBe(9);
+  });
+});
+
+describe('no repo home (F4)', () => {
+  it('the home dir as root: promotion works, everything is user, no guard throw', () => {
+    // the mocked os.homedir() IS the root here
+    const j = journal('kit', { transferable: false, tags: ['home-root-thing'] });
+    expect(hasRepoHome(mockHome)).toBe(false);
+    const res = gatedPromoteJournalEntry(mockHome, 'kit', j.id, { certifiedBy: 'peer' });
+    expect(res.promoted).toBe(true);
+    const nb = loadNotebookEntries('kit', mockHome).find(e => e.id === res.notebookId);
+    expect(nb?.home).toBe('user');
+    expect(readClassroomCertifications(mockHome).find(c => c.entryId === res.notebookId)?.home).toBe('user');
+    expect(pathFor('classroom-certifications', 'repo', mockHome)).toBe(pathFor('classroom-certifications', 'user', mockHome));
+    fs.rmSync(path.join(mockHome, '.paradigm'), { recursive: true, force: true });
+  });
+
+  it('a root outside any git repository has no repo home; a git root does', () => {
+    const prev = process.env.PARADIGM_LEARNING_ASSUME_REPO;
+    delete process.env.PARADIGM_LEARNING_ASSUME_REPO;
+    try {
+      expect(hasRepoHome(root)).toBe(false);
+      const file = appendLearningRows('notebook-refs', root, [{ type: 'notebook-reference', agentId: 'kit', notebookEntryIds: ['x'] }]);
+      expect(file.startsWith(root)).toBe(false);
+      expect(readLearningRows('notebook-refs', root)[0].home).toBe('user');
+      fs.mkdirSync(path.join(root, '.git'));
+      expect(hasRepoHome(root)).toBe(true);
+      expect(appendLearningRows('notebook-refs', root, [{ type: 'notebook-reference' }])).toBe(events('notebook-refs.jsonl'));
+      // a subfolder project inside a repo still has a repo home
+      const sub = path.join(root, 'packages', 'app');
+      fs.mkdirSync(sub, { recursive: true });
+      expect(hasRepoHome(sub)).toBe(true);
+    } finally {
+      if (prev !== undefined) process.env.PARADIGM_LEARNING_ASSUME_REPO = prev;
+    }
   });
 });
 

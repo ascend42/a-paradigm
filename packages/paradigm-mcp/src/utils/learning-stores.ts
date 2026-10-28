@@ -421,13 +421,50 @@ function learningBase(opts: PathForOptions): string {
     ?? path.join(opts.homeDir ?? os.homedir(), '.paradigm');
 }
 
+/** The raw location of `artifact` in `home` (no guard, no mapping). */
+function locate(artifact: LearningArtifact, home: LearningHome, r: string, opts: PathForOptions): string {
+  const spec = ARTIFACTS[artifact];
+  if (home === 'repo') return path.join(r, '.paradigm', ...spec.rel);
+  if (home === 'user' && spec.userShared) return path.join(opts.homeDir ?? os.homedir(), '.paradigm', ...spec.rel);
+  return path.join(learningBase(opts), home === 'user' ? 'projects' : 'machine', repoIdSegment(r), ...spec.rel);
+}
+
+function hasGitAncestor(dir: string): boolean {
+  for (let d = dir; ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, '.git'))) return true;
+    if (path.dirname(d) === d) return false;
+  }
+}
+
+/**
+ * Whether `root` has a repo home at all (review F4). There is none when the
+ * root IS the home directory (or an ancestor of it: user stores would sit
+ * inside it), or when the root is not inside a git repository (nothing is
+ * committed or shared). Then every record is user-home and the guard is
+ * skipped. $PARADIGM_LEARNING_ASSUME_REPO=1 skips the git check only; the test
+ * setups set it because their temp roots are not git repositories.
+ */
+export function hasRepoHome(root: string, opts: PathForOptions = {}): boolean {
+  const r = realOrResolved(root);
+  const home = realOrResolved(opts.homeDir ?? os.homedir());
+  if (isInside(home, r)) return false;
+  if (process.env.PARADIGM_LEARNING_ASSUME_REPO === '1') return true;
+  return hasGitAncestor(r);
+}
+
+/** The home a write actually uses: repo becomes user when the root has no repo home. */
+export function effectiveHome(home: LearningHome, root: string, opts: PathForOptions = {}): LearningHome {
+  return home === 'repo' && !hasRepoHome(root, opts) ? 'user' : home;
+}
+
 /**
  * Absolute path of `artifact` in `home` for the repo at `root`:
  *   repo    → <root>/.paradigm/<rel>
  *   user    → <learningHome>/projects/<repoId>/<rel>  (userShared: ~/.paradigm/<rel>)
  *   machine → <learningHome>/machine/<repoId>/<rel>
- * Runs the guard, so it throws LearningHomeError rather than return a path in
- * the wrong home. Computes only; creates nothing.
+ * When the root has no repo home (hasRepoHome), 'repo' maps to 'user' and the
+ * guard is skipped. Otherwise runs the guard, so it throws LearningHomeError
+ * rather than return a path in the wrong home. Computes only; creates nothing.
  */
 export function pathFor(
   artifact: LearningArtifact,
@@ -435,23 +472,31 @@ export function pathFor(
   root: string,
   opts: PathForOptions = {},
 ): string {
-  const spec = ARTIFACTS[artifact];
   const r = path.resolve(root);
-  let p: string;
-  if (home === 'repo') p = path.join(r, '.paradigm', ...spec.rel);
-  else if (home === 'user' && spec.userShared) p = path.join(opts.homeDir ?? os.homedir(), '.paradigm', ...spec.rel);
-  else p = path.join(learningBase(opts), home === 'user' ? 'projects' : 'machine', repoIdSegment(r), ...spec.rel);
+  if (!hasRepoHome(r, opts)) return locate(artifact, home === 'repo' ? 'user' : home, r, opts);
+  const p = locate(artifact, home, r, opts);
   assertHomePlacement(home, p, r);
   return p;
 }
 
-/** Every existing physical location of `artifact` for this repo, repo first. Never throws. */
+/**
+ * Every existing physical location of `artifact` for this repo, repo first.
+ * Reads the raw locations (a legacy repo file is still read when the root has
+ * no repo home). Never throws.
+ */
 function existingLocations(artifact: LearningArtifact, root: string, opts: PathForOptions): Array<{ home: LearningHome; file: string }> {
+  const r = path.resolve(root);
+  const guarded = hasRepoHome(r, opts);
   const out: Array<{ home: LearningHome; file: string }> = [];
+  const seen = new Set<string>();
   for (const h of LEARNING_HOMES) {
     try {
-      const file = pathFor(artifact, h, root, opts);
-      if (fs.existsSync(file)) out.push({ home: h, file });
+      const file = locate(artifact, h, r, opts);
+      if (guarded) assertHomePlacement(h, file, r);
+      if (!seen.has(file) && fs.existsSync(file)) {
+        seen.add(file);
+        out.push({ home: h, file });
+      }
     } catch {
       /* a misplaced home is skipped on read; writers still throw */
     }
@@ -503,7 +548,7 @@ export function appendLearningRows<T extends object>(
 ): string {
   const config = opts.config !== undefined ? opts.config : readLearningHomeConfig(root);
   const first = rows[0] as { home?: unknown } | undefined;
-  const home = homeOf(artifact, { home: opts.home ?? first?.home }, config);
+  const home = effectiveHome(homeOf(artifact, { home: opts.home ?? first?.home }, config), root, opts);
   const file = pathFor(artifact, home, root, opts);
   if (rows.length === 0) return file;
   fs.mkdirSync(path.dirname(file), { recursive: true });

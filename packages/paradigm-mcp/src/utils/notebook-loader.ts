@@ -19,7 +19,7 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import type { NotebookEntry, NotebookProvenance, NotebookScope } from '../types/notebooks.js';
-import { assertHomePlacement, isLearningHome, pathFor, type LearningHome } from './learning-stores.js';
+import { assertHomePlacement, effectiveHome, hasRepoHome, isLearningHome, pathFor, type LearningHome } from './learning-stores.js';
 
 // ────────────────────────────────────────────────────────
 // Constants
@@ -130,7 +130,11 @@ export function loadNotebookEntries(
 
   // Load project entries (override global with same id)
   const projectDir = path.join(rootDir, PROJECT_NOTEBOOKS_DIR, agentId);
-  loadEntriesFromDir(projectDir, entries, 'repo');
+  // With no repo home (root is the home dir, or not a git repo) a project dir
+  // is user data, and may BE the global dir (review F4).
+  if (path.resolve(projectDir) !== path.resolve(globalDir)) {
+    loadEntriesFromDir(projectDir, entries, hasRepoHome(rootDir) ? 'repo' : 'user');
+  }
 
   let result = Array.from(entries.values());
 
@@ -305,12 +309,16 @@ export function addNotebookEntry(
   const baseId = `nb-${agentSlug}-${conceptSlug}`;
 
   // Precedence: the entry's own home > the scope argument (global → user, project → repo).
-  const home: LearningHome = isLearningHome(entry.home) ? entry.home : scope === 'global' ? 'user' : 'repo';
+  // A root with no repo home (the home dir itself, or not a git repo) writes to user (review F4).
   const root = rootDir || process.cwd();
+  const home: LearningHome = effectiveHome(
+    isLearningHome(entry.home) ? entry.home : scope === 'global' ? 'user' : 'repo',
+    root,
+  );
   let dir: string;
   if (home === 'user') {
     dir = path.join(GLOBAL_NOTEBOOKS_DIR, agentId);
-    if (rootDir) assertHomePlacement('user', dir, rootDir);
+    if (rootDir && hasRepoHome(rootDir)) assertHomePlacement('user', dir, rootDir);
   } else {
     dir = path.join(pathFor('notebooks', home, root), agentId);
   }
