@@ -244,6 +244,37 @@ function writeTiers(home: string, doc: TierDoc): void {
   }
 }
 
+/**
+ * Slice C4'b: could writeTiers write the store now? (the preview's `rememberable`): <home>/local is a directory we may
+ * write (a symlink or a file there is never followed) and the store, when present, is a regular file; with no
+ * <home>/local yet, <home> must be writable. A best guess before Apply: the commit still reports what happened.
+ */
+export function tiersWritable(home: string): boolean {
+  const dir = path.join(home, TOOL_TIERS_DIR);
+  try {
+    let st: fs.Stats | null = null;
+    try {
+      st = fs.lstatSync(dir);
+    } catch {
+      st = null;
+    }
+    if (!st) {
+      fs.accessSync(home, fs.constants.W_OK);
+      return true;
+    }
+    if (!st.isDirectory()) return false;
+    fs.accessSync(dir, fs.constants.W_OK);
+    try {
+      if (!fs.lstatSync(path.join(dir, TOOL_TIERS_FILE)).isFile()) return false;
+    } catch {
+      // no store yet: the first write makes it
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Drop every record of the same base and model whose fingerprint differs (a new digest clears them, human values too). */
 function dropOtherDigests(doc: TierDoc, m: TierModel): void {
   for (const [k, r] of Object.entries(doc.records)) if (r.base === m.base && r.model === m.model && r.fingerprint !== m.fingerprint) delete doc.records[k];

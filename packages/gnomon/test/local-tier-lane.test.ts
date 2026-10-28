@@ -206,4 +206,91 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
     setHuman(root, { base: 'http://127.0.0.1:1', model: 'm', fingerprint: 'f' }, 2);
     expect(fs.statSync(path.join(root, 'local')).mode & 0o777).toBe(0o700);
   });
+
+  /** a lane on a fresh home against `srv` (the C4'b cases) */
+  const laneFor = () => {
+    const cwd = path.join(root!, 'repo');
+    const home = path.join(root!, 'gnomon-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home, { recursive: true });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
+      log, children, fuse, home, userHome: root!, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root!, 'k.sock'),
+      broker: { raise: async () => ({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }) as never, decisionOf: async () => 'allow', expire: async () => true },
+      config: { endpoints: [{ id: 'fake', base: srv!.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js'), contextTarget: 16384 },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+    });
+    const open = async () => (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+    const stop = async (hsid: string) => {
+      await lane.stop(HUMAN, { hsid });
+      expect(await waitFor(() => lane.stateOf(hsid) === 'exited', 5_000)).toBe(true);
+    };
+    return { lane, rows, home, open, stop };
+  };
+
+  it('C4\'b: re-measure and clear are human-only; a second re-measure joins; clear makes the next open measured; rememberable says why not', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-tierb-')));
+    srv = await fakeOpenAI({ tools: true, nCtx: 16384, script: [{ content: 'Done.' }] });
+    const { lane, rows, home, open, stop } = laneFor();
+    const ask = (asker: object, kind: string, p: Record<string, unknown>) => lane.humanRequest(asker as never, kind, p);
+    // principal refusals: an agent, or a human on a non-gui/device connection, never reaches either request
+    for (const kind of ['request.local.tier.remeasure', 'request.local.tier.clear']) {
+      await expect(ask({ ...human, principalClass: 'agent' }, kind, { endpoint: 'fake' })).rejects.toThrow(/human/);
+      await expect(ask({ ...human, credential: 'cli' }, kind, { endpoint: 'fake' })).rejects.toThrow(/human/);
+      await expect(ask(human, kind, { endpoint: 'nope' })).rejects.toThrow(/no configured endpoint/);
+      await expect(ask(human, kind, { endpoint: 'fake', hsid: 'x' })).rejects.toThrow(/takes \{endpoint\}/);
+    }
+    await lane.probeAll();
+    await lane.tierSettled();
+    const measuredRows = () => rows.filter((r) => r.kind === 'model.capabilities' && r.payload.tierSource === 'measured' && r.payload.action === undefined && r.payload.hsid === undefined);
+    const before = measuredRows().length;
+    expect(before).toBe(1);
+    // two re-measures at once: the second joins the first (one measurement); measuring shows at once
+    const r1 = await ask(human, 'request.local.tier.remeasure', { endpoint: 'fake' });
+    expect(r1).toEqual({ endpoint: 'fake', measuring: true, joined: false });
+    expect(lane.lastProbe()?.tier?.measuring).toBe(true);
+    const r2 = await ask({ ...human, credential: 'device' }, 'request.local.tier.remeasure', { endpoint: 'fake' });
+    expect(r2).toEqual({ endpoint: 'fake', measuring: true, joined: true });
+    await lane.tierSettled();
+    expect(measuredRows()).toHaveLength(before + 1);
+    expect(lane.lastProbe()?.tier).toMatchObject({ measuring: false, human: null });
+    // a remembered tier, then clear: the store forgets it, one row says so, and the next open is measured
+    const rec = Object.values(readTiers(home).records)[0]!;
+    setHuman(home, { base: rec.base, model: rec.model, fingerprint: rec.fingerprint }, 3);
+    const s1 = await open();
+    const caps = (hsid: string) => rows.filter((r) => r.kind === 'model.capabilities' && r.payload.hsid === hsid && r.payload.tier !== undefined).map((r) => r.payload);
+    expect(caps(s1.hsid)[0]).toMatchObject({ tier: 3, tierSource: 'human' });
+    expect(await ask(human, 'request.local.tier.clear', { endpoint: 'fake' })).toMatchObject({ endpoint: 'fake', cleared: true, previous: 3, measured: rec.skill });
+    expect(rows.filter((r) => r.payload.action === 'human-cleared')).toEqual([{ kind: 'model.capabilities', payload: expect.objectContaining({ endpoint: 'fake', tierSource: 'measured', tier: rec.skill, previous: 3 }) }]);
+    expect(Object.values(readTiers(home).records)[0]).toMatchObject({ human: null, skill: rec.skill });
+    // nothing remembered: a second clear changes nothing and writes no row
+    expect(await ask(human, 'request.local.tier.clear', { endpoint: 'fake' })).toMatchObject({ cleared: false, why: 'none' });
+    expect(rows.filter((r) => r.payload.action === 'human-cleared')).toHaveLength(1);
+    // the open session keeps its tier (no row, nothing sent); a new one opens measured
+    expect(caps(s1.hsid)).toHaveLength(1);
+    const s2 = await open();
+    expect(caps(s2.hsid)[0]).toMatchObject({ tier: rec.skill, tierSource: 'measured' });
+    const preview = (hsid: string) => ask(human, 'request.session.tier', { hsid, op: 'preview', tier: 2 });
+    expect(await preview(s2.hsid)).toMatchObject({ rememberable: true });
+    expect((await preview(s2.hsid)).rememberWhy).toBeUndefined();
+    // the store cannot be written (its directory is a file): rememberable false, store-unwritable
+    fs.rmSync(path.join(home, 'local'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(home, 'local'), 'not a dir\n');
+    expect(await preview(s2.hsid)).toMatchObject({ rememberable: false, rememberWhy: 'store-unwritable' });
+    await stop(s1.hsid);
+    await stop(s2.hsid);
+  }, 40_000);
+
+  it('C4\'b: a server that names no model file (no fingerprint) previews rememberable false, no-fingerprint', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-tierbf-')));
+    srv = await fakeOpenAI({ tools: true, nCtx: 16384, modelPath: '', script: [{ content: 'Done.' }] });
+    const { lane, open, stop } = laneFor();
+    const s = await open();
+    expect(await lane.humanRequest(human as never, 'request.session.tier', { hsid: s.hsid, op: 'preview', tier: 2 })).toMatchObject({ rememberable: false, rememberWhy: 'no-fingerprint' });
+    expect(await lane.humanRequest(human as never, 'request.local.tier.clear', { endpoint: 'fake' })).toMatchObject({ cleared: false, why: 'no-fingerprint' });
+    await stop(s.hsid);
+  }, 40_000);
 });

@@ -358,12 +358,13 @@ components:
       readTiers, lookupTier, writeMeasured, setHuman; a new fingerprint drops the old digest's records (human value
       too); no TTL. LocalLane: probeAll and Check again (recordProbe) run #measure in the background (fingerprintOf,
       then probeToolSkill on a cache miss; a model with no fingerprint is measured into memory only); remeasure(id)
-      forces one (no dispatcher request yet: C4'b); tierSettled() for tests; status.local.lastProbe.tier{skill,
+      forces one (C4'b: request.local.tier.remeasure; a running one is joined); tierSettled() for tests; status.local.lastProbe.tier{skill,
       passed, measuring, window, human}. At open: local.yaml surface from the tier, model.capabilities{hsid, tier,
       tierSource measured|human|provisional, measured, surface}. request.session.tier (dispatcher-only, human-only
       via humanRequest: an agent principal is refused on both phases; the owner of a running attended session):
       {op:'preview', tier} → {from, to (window-capped), requested, measured, window, k, slotTokens, slotShare,
-      surface 'a→b', cacheLost, leaving, unfitPins, notice, token, expiresInMs}; the token is 128-bit random, single
+      surface 'a→b', cacheLost, leaving, unfitPins, notice, token, expiresInMs, rememberable, rememberWhy?
+      no-fingerprint|store-unwritable (C4'b; tiersWritable)}; the token is 128-bit random, single
       use (every commit attempt consumes it), TIER_TOKEN_TTL_MS 60 s, bound to the principal, the session, the tier
       and the selection generation (bumped on every change of the offered set), else refused reason 'stale';
       {op:'commit', token, remember?} re-selects (a raise from 0 starts the MCP pool), sends tools_set{id, tools,
@@ -371,7 +372,10 @@ components:
       'tier'} (the one contracts change); remember:true writes the per-model human value (rememberWhy no-fingerprint
       when none is known). Until tools_applied the previous set and its forms stay callable (#local-tool-broker form
       shadow). A tier never touches allow, classOf, cards, trust, the manual filter or the destructive-entry rules
-      (C5' owns grants). Gaps: no GUI (C4'b); remeasure has no request; a context-target change does not re-tier a
+      (C5' owns grants). C4'b: request.local.tier.remeasure{endpoint} (answers {measuring:true, joined} at once) and
+      request.local.tier.clear{endpoint} (setHuman null; one model.capabilities{endpoint, tierSource:'measured',
+      action:'human-cleared', previous} row; open sessions keep their tier), both human-only via humanRequest, in
+      LOCAL_SESSION_REQUESTS. Gaps: a context-target change does not re-tier a
       live session (the slot follows the target); after a config hot apply an endpoint whose base or model changed
       is provisional until Check again or a restart. Aegis C4'a review (fixed): M1 fullRefusal also requires
       required names to be carriable property names of the same node and patterns to be clean, and refuses any

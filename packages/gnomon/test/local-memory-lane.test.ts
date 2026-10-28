@@ -143,7 +143,7 @@ describe('kernel-owned working memory in a live local session', () => {
     const del = r.rows.filter((x) => x.kind === 'session.memory' && x.payload.op === 'delete');
     expect(del.map((x) => x.payload)).toEqual([{ hsid, op: 'delete', bytes: 0 }]);
     await expect(r.lane.humanRequest(GUI, LOCAL_SESSION_MEMORY_DELETE_REQUEST, { hsid })).rejects.toThrow(/no such/);
-    expect(LOCAL_SESSION_REQUESTS).toEqual(['request.session.compact', 'request.session.context', 'request.session.memory.delete', 'request.session.memory.read', 'request.session.memory.list', 'request.session.tools.pin', 'request.session.tier']);
+    expect(LOCAL_SESSION_REQUESTS).toEqual(['request.session.compact', 'request.session.context', 'request.session.memory.delete', 'request.session.memory.read', 'request.session.memory.list', 'request.session.tools.pin', 'request.session.tier', 'request.local.tier.remeasure', 'request.local.tier.clear']);
   });
 
   it('Aegis R1/R5/L1d: a kernel-composed (offer) turn is data, logged origin kernel; `..env.bak` is a file-ref; delete{stop:true} stops the session', async () => {
