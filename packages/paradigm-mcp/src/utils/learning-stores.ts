@@ -25,6 +25,11 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
+import type { LearningHome } from '../types/knowledge-streams.js';
+import { repoIdSegment } from './repo-id.js';
+
+export type { LearningHome } from '../types/knowledge-streams.js';
 
 export type StoreClass = 'ledger' | 'knowledge' | 'pipeline' | 'policy' | 'native';
 
@@ -36,6 +41,8 @@ export interface LearningStore {
   scope: 'project' | 'global';
   /** Owning component symbol. */
   owner: string;
+  /** Registry default home (scoped learning). Absent on native and unscoped stores. */
+  home?: LearningHome;
   /** Number of records (jsonl rows / files / yaml list items). 0 when absent. Never throws. */
   count(): number;
 }
@@ -196,6 +203,21 @@ export function listLearningStores(rootDir: string, opts: LearningStoreOptions =
     { id: 'postflight-liveness', class: 'pipeline', path: ev('postflight-liveness.jsonl'), scope: 'project', owner: '#ambient-tools',
       count: () => countJsonl(ev('postflight-liveness.jsonl')) },
 
+    // Registered for scoped learning S0 (TD-2026-10-28-820). Paths are the
+    // legacy repo locations; homeOf/pathFor give the scoped location.
+    { id: 'verdicts', class: 'pipeline', path: ev('verdicts.jsonl'), scope: 'project', owner: '#session-work-log',
+      count: () => countJsonl(ev('verdicts.jsonl')) },
+    { id: 'overrides', class: 'pipeline', path: ev('overrides.jsonl'), scope: 'project', owner: '#override-command',
+      count: () => countJsonl(ev('overrides.jsonl')) },
+    { id: 'provisional-mined', class: 'pipeline', path: ev('provisional-mined.jsonl'), scope: 'project', owner: '#provisional-intake',
+      count: () => countJsonl(ev('provisional-mined.jsonl')) },
+    { id: 'estimate-actuals', class: 'pipeline', path: ev('estimate-actuals.jsonl'), scope: 'project', owner: '#calibration',
+      count: () => countJsonl(ev('estimate-actuals.jsonl')) },
+    { id: 'team-funnel', class: 'pipeline', path: ev('team-funnel.jsonl'), scope: 'project', owner: '#team-funnel',
+      count: () => countJsonl(ev('team-funnel.jsonl')) },
+    { id: 'compliance-history', class: 'pipeline', path: ev('compliance-history.jsonl'), scope: 'project', owner: '#compliance-checker',
+      count: () => countJsonl(ev('compliance-history.jsonl')) },
+
     // ── policy (D3: habits are hook policy, not a learning store) ──
     { id: 'habits', class: 'policy', path: p('habits'), scope: 'project', owner: '#habits',
       count: () => countFiles(p('habits'), f => f.endsWith('.habit')) },
@@ -206,6 +228,10 @@ export function listLearningStores(rootDir: string, opts: LearningStoreOptions =
       count: () => countFiles(path.join(home, '.claude', 'projects', nativeMemorySlug(root), 'memory'), f => f.endsWith('.md')) },
   ];
 
+  for (const st of stores) {
+    const a = REGISTRY_ARTIFACT[st.id];
+    if (a) st.home = st.scope === 'global' ? 'user' : ARTIFACTS[a].defaultHome;
+  }
   return stores;
 }
 
@@ -219,4 +245,371 @@ export function legacyStorePaths(rootDir: string, opts: LearningStoreOptions = {
     projectWisdomDecisions: path.join(path.resolve(rootDir), '.paradigm', 'wisdom', 'decisions'),
     globalWisdomDecisions: path.join(home, '.paradigm', 'wisdom', 'decisions'),
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Scoped learning (S0, TD-2026-10-28-820): homeOf / pathFor / the guard, and
+// the union JSONL helpers every S1 writer and reader goes through.
+//
+// Rule (Loid): an instrument lives in the same home as the thing it measures.
+// Precedence: entry home > config `learning.default_home.<artifact>` > registry.
+// Readers take the union of repo and user (and machine), dedupe by id, and the
+// repo row wins on the same id (notebook-loader's rule).
+// ════════════════════════════════════════════════════════════════════════
+
+export const LEARNING_HOMES: readonly LearningHome[] = ['repo', 'user', 'machine'];
+
+export type LearningArtifact =
+  // repo by default
+  | 'notebooks' | 'decisions' | 'wisdom' | 'habits' | 'agent-state' | 'overrides'
+  | 'classroom-certifications' | 'notebook-refs'
+  // user by default
+  | 'journals' | 'verdicts' | 'provisional-mined' | 'nominations' | 'debates'
+  | 'promotion-decisions' | 'estimate-actuals'
+  // machine by default
+  | 'hook-timings' | 'settlement-liveness' | 'postflight-liveness' | 'team-funnel' | 'compliance-history';
+
+interface ArtifactSpec {
+  defaultHome: LearningHome;
+  /** Path parts under the `.paradigm` folder of the home. */
+  rel: string[];
+  /**
+   * The user home is the person's cross-project store (~/.paradigm/<rel>), not
+   * the per-repo one (~/.paradigm/projects/<repoId>/<rel>). True for the stores
+   * that already followed the person before scoping: journals, global
+   * notebooks, global wisdom.
+   */
+  userShared?: boolean;
+}
+
+/** Founder defaults (TD-2026-10-28-820). */
+export const ARTIFACTS: Readonly<Record<LearningArtifact, ArtifactSpec>> = {
+  'notebooks': { defaultHome: 'repo', rel: ['notebooks'], userShared: true },
+  'decisions': { defaultHome: 'repo', rel: ['decisions'] },
+  'wisdom': { defaultHome: 'repo', rel: ['wisdom'], userShared: true },
+  'habits': { defaultHome: 'repo', rel: ['habits'] },
+  'agent-state': { defaultHome: 'repo', rel: ['agent-state'] },
+  'overrides': { defaultHome: 'repo', rel: ['events', 'overrides.jsonl'] },
+  'classroom-certifications': { defaultHome: 'repo', rel: ['events', 'classroom-certifications.jsonl'] },
+  'notebook-refs': { defaultHome: 'repo', rel: ['events', 'notebook-refs.jsonl'] },
+  'journals': { defaultHome: 'user', rel: ['agents'], userShared: true },
+  'verdicts': { defaultHome: 'user', rel: ['events', 'verdicts.jsonl'] },
+  'provisional-mined': { defaultHome: 'user', rel: ['events', 'provisional-mined.jsonl'] },
+  'nominations': { defaultHome: 'user', rel: ['events', 'nominations.jsonl'] },
+  'debates': { defaultHome: 'user', rel: ['events', 'debates.jsonl'] },
+  'promotion-decisions': { defaultHome: 'user', rel: ['events', 'promotion-decisions.jsonl'] },
+  'estimate-actuals': { defaultHome: 'user', rel: ['events', 'estimate-actuals.jsonl'] },
+  'hook-timings': { defaultHome: 'machine', rel: ['events', 'hook-timings.jsonl'] },
+  'settlement-liveness': { defaultHome: 'machine', rel: ['events', 'settlement-liveness.jsonl'] },
+  'postflight-liveness': { defaultHome: 'machine', rel: ['events', 'postflight-liveness.jsonl'] },
+  'team-funnel': { defaultHome: 'machine', rel: ['events', 'team-funnel.jsonl'] },
+  'compliance-history': { defaultHome: 'machine', rel: ['events', 'compliance-history.jsonl'] },
+};
+
+/** Registry row id → artifact, for the `home` column of listLearningStores. */
+const REGISTRY_ARTIFACT: Record<string, LearningArtifact> = {
+  'journals': 'journals', 'decisions': 'decisions', 'antipatterns': 'wisdom', 'preferences': 'wisdom',
+  'notebooks': 'notebooks', 'notebooks-global': 'notebooks', 'antipatterns-global': 'wisdom', 'nominations': 'nominations', 'debates': 'debates',
+  'promotion-decisions': 'promotion-decisions', 'classroom-certifications': 'classroom-certifications',
+  'notebook-refs': 'notebook-refs', 'settlement-liveness': 'settlement-liveness',
+  'postflight-liveness': 'postflight-liveness', 'habits': 'habits', 'verdicts': 'verdicts',
+  'overrides': 'overrides', 'provisional-mined': 'provisional-mined', 'estimate-actuals': 'estimate-actuals',
+  'team-funnel': 'team-funnel', 'compliance-history': 'compliance-history',
+};
+
+export function isLearningHome(v: unknown): v is LearningHome {
+  return v === 'repo' || v === 'user' || v === 'machine';
+}
+
+/** The slice of .paradigm/config.yaml the resolver reads. */
+export interface LearningHomeConfig {
+  learning?: { default_home?: Partial<Record<string, unknown>> };
+}
+
+let _configCache: { file: string; mtimeMs: number; config: LearningHomeConfig | null } | null = null;
+
+/** Read `learning.default_home` from <root>/.paradigm/config.yaml (mtime-cached). Never throws. */
+export function readLearningHomeConfig(root: string): LearningHomeConfig | null {
+  const file = path.join(path.resolve(root), '.paradigm', 'config.yaml');
+  try {
+    const st = fs.statSync(file);
+    if (_configCache && _configCache.file === file && _configCache.mtimeMs === st.mtimeMs) return _configCache.config;
+    const parsed = yaml.load(fs.readFileSync(file, 'utf8')) as LearningHomeConfig | null;
+    const config = parsed && typeof parsed === 'object' ? parsed : null;
+    _configCache = { file, mtimeMs: st.mtimeMs, config };
+    return config;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The home a record of `artifact` lives in. Precedence: the entry's own `home`
+ * > config `learning.default_home.<artifact>` > the registry default. Invalid
+ * values at any level fall through to the next.
+ */
+export function homeOf(
+  artifact: LearningArtifact,
+  entry?: { home?: unknown } | null,
+  config?: LearningHomeConfig | null,
+): LearningHome {
+  if (entry && isLearningHome(entry.home)) return entry.home;
+  const configured = config?.learning?.default_home?.[artifact];
+  if (isLearningHome(configured)) return configured;
+  return ARTIFACTS[artifact].defaultHome;
+}
+
+export interface PathForOptions {
+  /** Override the home directory (tests). Defaults to os.homedir(). */
+  homeDir?: string;
+  /**
+   * Root of the per-repo user and machine stores. Defaults to
+   * $PARADIGM_LEARNING_HOME, else <homeDir>/.paradigm.
+   */
+  learningHome?: string;
+}
+
+/** Thrown when a record would land in the wrong home (the write-side guard). */
+export class LearningHomeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LearningHomeError';
+  }
+}
+
+/** Resolve the longest existing prefix through realpath (macOS /tmp → /private/tmp). */
+function realOrResolved(p: string): string {
+  const abs = path.resolve(p);
+  let head = abs;
+  const tail: string[] = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(head), ...tail.reverse());
+    } catch {
+      const parent = path.dirname(head);
+      if (parent === head) return abs;
+      tail.push(path.basename(head));
+      head = parent;
+    }
+  }
+}
+
+function isInside(child: string, parent: string): boolean {
+  const rel = path.relative(realOrResolved(parent), realOrResolved(child));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * The write-side guard: user and machine data never go under the repo root,
+ * and repo data never goes outside it. Throws LearningHomeError on a mismatch.
+ */
+export function assertHomePlacement(home: LearningHome, filePath: string, root: string): void {
+  const inside = isInside(filePath, root);
+  if (home !== 'repo' && inside) {
+    throw new LearningHomeError(`refusing to write ${home}-home learning data under the repo root: ${filePath}`);
+  }
+  if (home === 'repo' && !inside) {
+    throw new LearningHomeError(`repo-home learning data must live under the repo root: ${filePath}`);
+  }
+}
+
+function learningBase(opts: PathForOptions): string {
+  return opts.learningHome
+    ?? process.env.PARADIGM_LEARNING_HOME
+    ?? path.join(opts.homeDir ?? os.homedir(), '.paradigm');
+}
+
+/**
+ * Absolute path of `artifact` in `home` for the repo at `root`:
+ *   repo    → <root>/.paradigm/<rel>
+ *   user    → <learningHome>/projects/<repoId>/<rel>  (userShared: ~/.paradigm/<rel>)
+ *   machine → <learningHome>/machine/<repoId>/<rel>
+ * Runs the guard, so it throws LearningHomeError rather than return a path in
+ * the wrong home. Computes only; creates nothing.
+ */
+export function pathFor(
+  artifact: LearningArtifact,
+  home: LearningHome,
+  root: string,
+  opts: PathForOptions = {},
+): string {
+  const spec = ARTIFACTS[artifact];
+  const r = path.resolve(root);
+  let p: string;
+  if (home === 'repo') p = path.join(r, '.paradigm', ...spec.rel);
+  else if (home === 'user' && spec.userShared) p = path.join(opts.homeDir ?? os.homedir(), '.paradigm', ...spec.rel);
+  else p = path.join(learningBase(opts), home === 'user' ? 'projects' : 'machine', repoIdSegment(r), ...spec.rel);
+  assertHomePlacement(home, p, r);
+  return p;
+}
+
+/** Every existing physical location of `artifact` for this repo, repo first. Never throws. */
+function existingLocations(artifact: LearningArtifact, root: string, opts: PathForOptions): Array<{ home: LearningHome; file: string }> {
+  const out: Array<{ home: LearningHome; file: string }> = [];
+  for (const h of LEARNING_HOMES) {
+    try {
+      const file = pathFor(artifact, h, root, opts);
+      if (fs.existsSync(file)) out.push({ home: h, file });
+    } catch {
+      /* a misplaced home is skipped on read; writers still throw */
+    }
+  }
+  return out;
+}
+
+function parseJsonl<T>(file: string): T[] {
+  try {
+    return fs.readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(l => l.trim())
+      .map(l => { try { return JSON.parse(l) as T; } catch { return null; } })
+      .filter((r): r is T => r !== null && typeof r === 'object');
+  } catch {
+    return [];
+  }
+}
+
+/** Trim a JSONL file to its last `maxLines` rows. Non-fatal. */
+export function pruneJsonl(file: string, maxLines: number): void {
+  try {
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(l => l.trim());
+    if (lines.length > maxLines) fs.writeFileSync(file, lines.slice(-maxLines).join('\n') + '\n', 'utf8');
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export interface AppendLearningOptions extends PathForOptions {
+  /** Explicit home for these rows (beats row.home and config). */
+  home?: LearningHome;
+  /** Trim the file to this many rows after the append. */
+  maxLines?: number;
+  config?: LearningHomeConfig | null;
+}
+
+/**
+ * Append rows to `artifact` in their resolved home (opts.home > the first
+ * row's home > config > registry). Each row is stamped with `home`. Throws
+ * LearningHomeError when the path is in the wrong home (best-effort callers
+ * catch it). Returns the file written.
+ */
+export function appendLearningRows<T extends object>(
+  artifact: LearningArtifact,
+  root: string,
+  rows: T[],
+  opts: AppendLearningOptions = {},
+): string {
+  const config = opts.config !== undefined ? opts.config : readLearningHomeConfig(root);
+  const first = rows[0] as { home?: unknown } | undefined;
+  const home = homeOf(artifact, { home: opts.home ?? first?.home }, config);
+  const file = pathFor(artifact, home, root, opts);
+  if (rows.length === 0) return file;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.appendFileSync(file, rows.map(r => JSON.stringify({ ...r, home })).join('\n') + '\n', 'utf8');
+  if (opts.maxLines) pruneJsonl(file, opts.maxLines);
+  return file;
+}
+
+export interface ReadLearningOptions<T> extends PathForOptions {
+  /** Dedupe key; rows without one are all kept. Repo wins on the same id. */
+  idOf?: (row: T) => string | undefined;
+  /** Per-file filter; `at` is the physical home the row was read from. */
+  filter?: (row: T, at: LearningHome) => boolean;
+  config?: LearningHomeConfig | null;
+}
+
+/**
+ * Union read of `artifact` across repo, user and machine. Each row is tagged
+ * with `home` (its own field, else homeOf's default — so legacy repo rows
+ * without `home` still count). Deduped by `idOf`, repo wins on the same id.
+ * Order: user, machine, then repo rows, each in file order. Never throws.
+ */
+export function readLearningRows<T extends object>(
+  artifact: LearningArtifact,
+  root: string,
+  opts: ReadLearningOptions<T> = {},
+): Array<T & { home: LearningHome }> {
+  const config = opts.config !== undefined ? opts.config : readLearningHomeConfig(root);
+  const fallback = homeOf(artifact, null, config);
+  const locs = existingLocations(artifact, root, opts);
+  const ordered = [...locs.filter(l => l.home !== 'repo'), ...locs.filter(l => l.home === 'repo')];
+  const byId = new Map<string, number>();
+  const out: Array<T & { home: LearningHome }> = [];
+  for (const loc of ordered) {
+    for (const row of parseJsonl<T>(loc.file)) {
+      if (opts.filter && !opts.filter(row, loc.home)) continue;
+      const own = (row as { home?: unknown }).home;
+      const tagged = { ...row, home: isLearningHome(own) ? own : fallback } as T & { home: LearningHome };
+      const id = opts.idOf?.(row);
+      if (id !== undefined && byId.has(id)) {
+        out[byId.get(id)!] = tagged;
+        continue;
+      }
+      if (id !== undefined) byId.set(id, out.length);
+      out.push(tagged);
+    }
+  }
+  return out;
+}
+
+/**
+ * Rewrite every existing physical file of `artifact` in place. `fn` returns the
+ * replacement row, or undefined to keep the line byte-identical. `at` is the
+ * physical home. Returns the number of rows changed. Non-fatal per file.
+ */
+export function rewriteLearningRows<T extends object>(
+  artifact: LearningArtifact,
+  root: string,
+  fn: (row: T, at: LearningHome) => T | undefined,
+  opts: PathForOptions = {},
+): number {
+  let changed = 0;
+  for (const loc of existingLocations(artifact, root, opts)) {
+    try {
+      let fileChanged = false;
+      const lines = fs.readFileSync(loc.file, 'utf8').split('\n').filter(l => l.trim());
+      const updated = lines.map(line => {
+        try {
+          const next = fn(JSON.parse(line) as T, loc.home);
+          if (next === undefined) return line;
+          fileChanged = true;
+          changed++;
+          return JSON.stringify(next);
+        } catch {
+          return line;
+        }
+      });
+      if (fileChanged) fs.writeFileSync(loc.file, updated.join('\n') + '\n', 'utf8');
+    } catch {
+      /* non-fatal */
+    }
+  }
+  return changed;
+}
+
+/**
+ * Where a journal entry's promotion lands, and so where its notebook entry,
+ * classroom certification and promotion-decision row live (Loid's rule).
+ * Explicit `home` wins; else transferable:false → repo, true/absent → user.
+ */
+export function promotionHomeOf(journal: { home?: unknown; transferable?: boolean }): LearningHome {
+  if (isLearningHome(journal.home)) return journal.home;
+  return journal.transferable === false ? 'repo' : 'user';
+}
+
+/** Group samples by home: calibration never pools populations silently. */
+export function groupByHome<T extends { home?: LearningHome }>(rows: T[], fallback: LearningHome): Record<LearningHome, T[]> {
+  const out: Record<LearningHome, T[]> = { repo: [], user: [], machine: [] };
+  for (const r of rows) out[isLearningHome(r.home) ? r.home : fallback].push(r);
+  return out;
+}
+
+/** Who wrote a row (verdict authorship): $PARADIGM_AUTHOR, else the OS user. */
+export function currentAuthor(): string {
+  if (process.env.PARADIGM_AUTHOR) return process.env.PARADIGM_AUTHOR;
+  try {
+    return os.userInfo().username;
+  } catch {
+    return 'unknown';
+  }
 }

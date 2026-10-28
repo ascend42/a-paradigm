@@ -13,6 +13,8 @@
  * Publishing scope — controls which audiences can receive this entry.
  * Matches the enum in @a-company/agent-format.
  */
+import type { LearningHome } from './knowledge-streams.js';
+
 export type NotebookScope = 'generalizable' | 'project-specific' | 'platform-specific';
 
 export interface NotebookEntry {
@@ -89,6 +91,12 @@ export interface NotebookEntry {
    * - 'refine': revised as "X except Y" after a field break (The Classroom)
    */
   lineageType?: 'fix' | 'derive' | 'capture' | 'promote' | 'refine';
+  /**
+   * Where this entry lives (scoped learning): 'repo' = .paradigm/notebooks
+   * (project), 'user' = ~/.paradigm/notebooks (global). Not the same axis as
+   * `scope` (content class). Loaders tag it from the directory when absent.
+   */
+  home?: LearningHome;
 }
 
 /**
