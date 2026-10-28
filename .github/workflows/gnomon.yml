@@ -128,6 +128,19 @@ jobs:
           path: ${{ runner.temp }}/probe-results/*.json
           if-no-files-found: warn
 
+  # Aegis L2 (C6'a2-1): the helper's unit tests, including testSharedBindingVectors over the shared decision.sign
+  # vectors (packages/gnomon-contracts/test/fixtures/decision-batch-vectors.json). Pure logic, unsigned (no Secure
+  # Enclave, no entitlements). macOS 15: the package's deployment floor (TD-2026-10-22-220), so the test bundle loads.
+  helper-swift:
+    name: gnomon-helper swift test (macos-15)
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: swift test (gnomon-helper, darwin, unsigned)
+        working-directory: packages/gnomon-helper/darwin
+        run: swift test
+
   native:
     name: native (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
