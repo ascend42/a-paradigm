@@ -180,6 +180,28 @@ export interface CapTool {
   humanOnly: boolean;
   availability: Availability;
   description: string;
+  /** C6'b2-1: whether the human can run it from "/" (request.session.tools.run), and if not, why (a code the menu words) */
+  run: CapRun;
+  /** C6'b2-1: its arguments as the kernel lists them (the "/" args panel's fields) */
+  params: CapParam[];
+  /** C6'b2-1: its full schema when the kernel sends one (cleaned, at most 16 KiB): present means a complex value is allowed */
+  fullSchema: unknown;
+  /** C6'b2-1: its "/" result policy now (null: not chosen yet) */
+  policy: 'send' | 'ask' | null;
+}
+/** C6'b2-1: a tool's "/" runnability (capabilities tools[].run). */
+export interface CapRun {
+  runnable: boolean;
+  why: string | null;
+  detail: string | null;
+}
+/** C6'b2-1: one argument of a tool (capabilities tools[].params). */
+export interface CapParam {
+  name: string;
+  required: boolean;
+  type: string;
+  enum: Array<string | number | boolean | null> | null;
+  description: string;
 }
 export interface CapServer {
   label: string;
@@ -205,6 +227,8 @@ export interface Capabilities {
   servers: CapServer[];
   pins: CapPin[];
   tools: CapTool[];
+  /** C6'b2-1: this session took in a sent tool result or skill text (the injection pause) */
+  tainted: boolean;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -245,9 +269,26 @@ export function capabilitiesOf(v: unknown, hsid: string): Capabilities | null {
     humanOnly: t.humanOnly === true,
     availability: t.availability as Availability,
     description: shown(t.description),
+    run: runOf(t.run),
+    params: Array.isArray(t.params) ? t.params.filter(isObj).filter((p) => typeof p.name === 'string').slice(0, 64).map(paramOf) : [],
+    fullSchema: isObj(t.fullSchema) ? t.fullSchema : null,
+    policy: t.policy === 'send' || t.policy === 'ask' ? t.policy : null,
   }));
   const verbs = v.verbs.filter(isObj).filter((x) => typeof x.name === 'string' && isClass(x.class)).map((x) => ({ name: shown(x.name, 64), class: x.class as ToolClass }));
-  return { hsid, generation: v.generation, tier: v.tier as number | null, k: nat(v.k) ? v.k : null, mode: typeof v.mode === 'string' ? shown(v.mode, 32) : null, verbs, servers, pins, tools };
+  return { hsid, generation: v.generation, tier: v.tier as number | null, k: nat(v.k) ? v.k : null, mode: typeof v.mode === 'string' ? shown(v.mode, 32) : null, verbs, servers, pins, tools, tainted: v.tainted === true };
+}
+
+/** C6'b2-1: capabilities tools[].run, cleaned (absent or unreadable: not runnable, no reason). */
+function runOf(v: unknown): CapRun {
+  if (!isObj(v)) return { runnable: false, why: null, detail: null };
+  if (v.runnable === true) return { runnable: true, why: null, detail: null };
+  return { runnable: false, why: typeof v.why === 'string' ? shown(v.why, 32) : null, detail: typeof v.detail === 'string' ? shown(v.detail) : null };
+}
+
+/** C6'b2-1: capabilities tools[].params[i], cleaned (an enum keeps its scalars only). */
+function paramOf(p: Record<string, unknown>): CapParam {
+  const en = Array.isArray(p.enum) ? p.enum.slice(0, 64).filter((x): x is string | number | boolean | null => x === null || typeof x === 'boolean' || (typeof x === 'number' && Number.isFinite(x)) || typeof x === 'string') : null; // the kernel's own cleaned values: sent back as they came (a run must name the server's value)
+  return { name: shown(p.name, 64), required: p.required === true, type: typeof p.type === 'string' ? shown(p.type, 32) : 'any', enum: en && en.length ? en : null, description: shown(p.description) };
 }
 
 /* ── memory ──────────────────────────────────────────────────────────────────────────────────────────────────────── */

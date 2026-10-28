@@ -371,3 +371,14 @@ describe('#gui-capability-browser: Settings › Local model › Kept memory', ()
     expect(keptRows({ ...k, result: { text: 'Memory deleted.' } }).at(-1)).toMatchObject({ kind: 'form', result: { text: 'Memory deleted.' } });
   });
 });
+
+describe("#gui-capability-browser: C6'b2-1 fields (run, params, fullSchema, policy, tainted)", () => {
+  it('every tool reads its "/" run, params, schema and policy; the session its taint; junk reads safe', () => {
+    const c = capabilitiesOf(answer({ tainted: true, tools: [{ ...tool({ name: 'grep' }), run: { runnable: true }, params: [{ name: 'p', required: true, type: 'string' }, 'junk'], fullSchema: { type: 'object' }, policy: 'ask' }, { ...tool({ name: 'rm' }), run: { runnable: false, why: 'untrusted' }, params: 'x', fullSchema: [1], policy: 'always' }] }), H)!;
+    expect(c.tainted).toBe(true);
+    expect(c.tools[0]).toMatchObject({ run: { runnable: true, why: null, detail: null }, params: [{ name: 'p', required: true, type: 'string', enum: null, description: '' }], fullSchema: { type: 'object' }, policy: 'ask' });
+    expect(c.tools[1]).toMatchObject({ run: { runnable: false, why: 'untrusted', detail: null }, params: [], fullSchema: null, policy: null });
+    expect(capabilitiesOf(answer(), H)!.tainted).toBe(false);
+    expect(capabilitiesOf(answer(), H)!.tools[0]!.run.runnable).toBe(false);
+  });
+});
