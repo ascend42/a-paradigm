@@ -55,7 +55,9 @@ describe('ensureSessionMarkersGitignore', () => {
     const p = path.join(root, '.paradigm');
     const files: Record<string, string> = {
       'scan-index.json': '{}', 'navigator.yaml': 'a: 1', 'flow-index.json': '{}',
-      'events/compliance-history.jsonl': '{}',
+      'events/compliance-history.jsonl': '{}', 'events/team-funnel.jsonl': '{}',
+      // tracked session markers (root and nested) and nested generated state
+      'events/hook-timings.jsonl': '{}', '.orchestrated': '{}', '.sessions/s.touched': 'a.ts',
       'events/postflight-liveness.jsonl': '{}', 'events/settlement-liveness.jsonl': '{}',
       'lore/timeline.yaml': 'v: 1', 'protocols/index.yaml': 'v: 1',
       // authored: stays tracked
@@ -64,28 +66,39 @@ describe('ensureSessionMarkersGitignore', () => {
       // learning records and shared history: stay tracked
       'events/verdicts.jsonl': '{}', 'events/overrides.jsonl': '{}', 'events/debates.jsonl': '{}',
       'events/nominations.jsonl': '{}', 'events/promotion-decisions.jsonl': '{}',
-      'events/provisional-mined.jsonl': '{}', 'events/stream.jsonl': '{}', 'events/team-funnel.jsonl': '{}', 'events/.last-processed': '1',
+      'events/provisional-mined.jsonl': '{}', 'events/stream.jsonl': '{}', 'events/.last-processed': '1',
       'history/log.jsonl': '{}', 'history/index.yaml': 'v: 1',
     };
     for (const [f, c] of Object.entries(files)) {
       fs.mkdirSync(path.dirname(path.join(p, f)), { recursive: true });
       fs.writeFileSync(path.join(p, f), c);
     }
+    const nested = path.join(root, 'packages', 'x', '.paradigm');
+    fs.mkdirSync(path.join(nested, 'events'), { recursive: true });
+    fs.writeFileSync(path.join(nested, 'events', 'hook-timings.jsonl'), '{}');
+    fs.writeFileSync(path.join(nested, 'scan-index.json'), '{}');
+    fs.writeFileSync(path.join(nested, 'config.yaml'), 'v: 1');
     git('add', '-A');
     git('commit', '-qm', 'init');
     ensureSessionMarkersGitignore(p);
     const first = untrackGeneratedState(root).sort();
     expect(first).toEqual([
-      '.paradigm/events/compliance-history.jsonl', '.paradigm/events/postflight-liveness.jsonl',
-      '.paradigm/events/settlement-liveness.jsonl', '.paradigm/flow-index.json',
+      '.paradigm/.orchestrated', '.paradigm/.sessions/s.touched',
+      '.paradigm/events/compliance-history.jsonl', '.paradigm/events/hook-timings.jsonl',
+      '.paradigm/events/postflight-liveness.jsonl', '.paradigm/events/settlement-liveness.jsonl',
+      '.paradigm/events/team-funnel.jsonl', '.paradigm/flow-index.json',
       '.paradigm/lore/timeline.yaml', '.paradigm/navigator.yaml',
       '.paradigm/protocols/index.yaml', '.paradigm/scan-index.json',
+      'packages/x/.paradigm/events/hook-timings.jsonl', 'packages/x/.paradigm/scan-index.json',
     ]);
+    // the nested folder gets the managed block; its authored files stay tracked
+    expect(fs.readFileSync(path.join(nested, '.gitignore'), 'utf8')).toContain('/events/hook-timings.jsonl');
+    expect(git('ls-files', 'packages/x/.paradigm/config.yaml').trim()).toBe('packages/x/.paradigm/config.yaml');
     for (const f of first) expect(fs.existsSync(path.join(root, f))).toBe(true); // kept on disk
     const tracked = git('ls-files', '.paradigm');
     for (const f of ['config.yaml', 'lore/entries/2026-10-28/L-1.lore', 'docs/.index.yaml', 'decisions/D-1.yaml', 'protocols/P-x.protocol', 'events/sub/nested.jsonl',
       'events/verdicts.jsonl', 'events/overrides.jsonl', 'events/debates.jsonl', 'events/nominations.jsonl', 'events/promotion-decisions.jsonl',
-      'events/provisional-mined.jsonl', 'events/stream.jsonl', 'events/team-funnel.jsonl', 'events/.last-processed', 'history/log.jsonl', 'history/index.yaml']) {
+      'events/provisional-mined.jsonl', 'events/stream.jsonl', 'events/.last-processed', 'history/log.jsonl', 'history/index.yaml']) {
       expect(tracked).toContain(`.paradigm/${f}`);
     }
     // second run: nothing left, nothing re-added, ignored files stay untracked
@@ -93,9 +106,11 @@ describe('ensureSessionMarkersGitignore', () => {
     git('add', '-A');
     expect(git('ls-files', '.paradigm/scan-index.json')).toBe('');
     expect(git('ls-files', '.paradigm/events/compliance-history.jsonl')).toBe('');
+    expect(git('ls-files', '.paradigm/events/team-funnel.jsonl')).toBe('');
+    expect(git('ls-files', 'packages/x/.paradigm/events/hook-timings.jsonl')).toBe('');
     // the hook-timings trim temp file is ignored too
     fs.writeFileSync(path.join(p, 'events', 'hook-timings.jsonl.tmp.123'), 'x');
-    expect(git('status', '--porcelain', '--', '.paradigm/events')).not.toContain('hook-timings');
+    expect(git('ls-files', '-o', '--exclude-standard', '--', '.paradigm/events')).not.toContain('hook-timings');
     // outside a git repository: a no-op
     expect(untrackGeneratedState(tmp())).toEqual([]);
   });

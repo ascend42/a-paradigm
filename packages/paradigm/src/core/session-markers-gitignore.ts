@@ -65,12 +65,15 @@ export const GENERATED_STATE: readonly string[] = Object.freeze([
   'navigator.yaml',
   'manifest.consistency.json',
   'session-breadcrumbs.prev.json',
-  // Machine-churn event logs only: per-machine hook and liveness telemetry.
-  // Learning records stay committed (verdicts, overrides, debates,
-  // nominations, promotion-decisions, classroom-certifications, notebook-refs,
-  // team-funnel (Loid calibrates the invocation rate from it),
-  // session-log, stream.jsonl + its .last-processed cursor) and so does
-  // history/ (the repo's shared symbol history).
+  // Machine-churn event logs only: per-machine hook, liveness and gate
+  // telemetry. team-funnel.jsonl is machine-only too (founder ruling, Loid:
+  // "an instrument lives with what it measures"); Loid calibrates each
+  // machine's invocation rate from its own funnel. Learning records stay
+  // committed (verdicts, overrides, debates, nominations, promotion-decisions,
+  // classroom-certifications, notebook-refs, session-log, stream.jsonl + its
+  // .last-processed cursor) and so does history/ (the repo's shared symbol
+  // history; a scoped-learning slice will handle it).
+  'events/team-funnel.jsonl',
   'events/compliance-history.jsonl',
   'events/postflight-liveness.jsonl',
   'events/settlement-liveness.jsonl',
@@ -118,9 +121,8 @@ export function ensureSessionMarkersGitignore(paradigmDir: string): boolean {
   return true;
 }
 
-/** True when `rel` (relative to `.paradigm/`, forward slashes) is generated state. */
-export function isGeneratedState(rel: string): boolean {
-  for (const pattern of GENERATED_STATE) {
+function matchesAny(patterns: readonly string[], rel: string): boolean {
+  for (const pattern of patterns) {
     if (pattern.endsWith('/')) {
       if (rel.startsWith(pattern)) return true;
     } else if (pattern.includes('*')) {
@@ -133,18 +135,30 @@ export function isGeneratedState(rel: string): boolean {
   return false;
 }
 
+/** True when `rel` (relative to `.paradigm/`, forward slashes) is generated state. */
+export function isGeneratedState(rel: string): boolean {
+  return matchesAny(GENERATED_STATE, rel);
+}
+
+/** True when `rel` (relative to `.paradigm/`) is in the managed block: a session marker or generated state. */
+export function isManagedIgnore(rel: string): boolean {
+  return matchesAny(SESSION_MARKERS, rel) || matchesAny(GENERATED_STATE, rel);
+}
+
 /**
- * Untrack generated state already committed under `<rootDir>/.paradigm/`:
- * `git rm --cached` on every tracked file `isGeneratedState` matches. The
- * files stay on disk. Safe to run any number of times: once untracked (and
- * ignored by the managed block) nothing matches. No shell is involved (git
- * runs through execFileSync). Returns the untracked paths, relative to
- * rootDir; [] outside a git repository.
+ * Untrack session markers and generated state already committed in
+ * `<rootDir>/.paradigm/` and in any nested `.paradigm/` folder below it
+ * (packages/x/.paradigm/events/hook-timings.jsonl): `git rm --cached` on
+ * every tracked file `isManagedIgnore` matches, after writing the managed
+ * block into each nested folder's .gitignore too. The files stay on disk.
+ * Safe to run any number of times: once untracked (and ignored) nothing
+ * matches. No shell is involved (git runs through execFileSync). Returns the
+ * untracked paths, relative to rootDir; [] outside a git repository.
  */
 export function untrackGeneratedState(rootDir: string): string[] {
   let tracked: string;
   try {
-    tracked = execFileSync('git', ['ls-files', '-z', '--', '.paradigm'], {
+    tracked = execFileSync('git', ['-c', 'core.quotePath=false', 'ls-files', '-z', '--', '.paradigm', ':(glob)**/.paradigm/**'], {
       cwd: rootDir,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -152,9 +166,23 @@ export function untrackGeneratedState(rootDir: string): string[] {
   } catch {
     return [];
   }
-  const files = tracked
-    .split('\0')
-    .filter((f) => f.startsWith('.paradigm/') && isGeneratedState(f.slice('.paradigm/'.length)));
+  const files: string[] = [];
+  const nested = new Set<string>();
+  for (const f of tracked.split('\0')) {
+    if (!f) continue;
+    let at: number;
+    if (f.startsWith('.paradigm/')) at = 0;
+    else {
+      const i = f.indexOf('/.paradigm/');
+      if (i < 0) continue;
+      at = i + 1;
+    }
+    const rel = f.slice(at + '.paradigm/'.length);
+    if (!isManagedIgnore(rel)) continue;
+    files.push(f);
+    if (at > 0) nested.add(f.slice(0, at - 1));
+  }
+  for (const dir of nested) ensureSessionMarkersGitignore(path.join(rootDir, dir, '.paradigm'));
   for (let i = 0; i < files.length; i += 200) {
     execFileSync('git', ['rm', '--cached', '--quiet', '--', ...files.slice(i, i + 200)], {
       cwd: rootDir,
