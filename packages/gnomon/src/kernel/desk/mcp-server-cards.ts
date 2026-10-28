@@ -76,6 +76,8 @@ export const MCP_TRUST_REQUEST = 'request.mcp.trust' as const;
 export const MCP_REQUESTS: readonly string[] = Object.freeze([MCP_ENABLE_REQUEST, MCP_DISABLE_REQUEST, MCP_PARADIGM_STAGE_REQUEST, MCP_TRUST_REQUEST]);
 /** Slice C5'a1: a trust preview's token is single-use and lives this long. */
 export const TRUST_TOKEN_TTL_MS = 60_000;
+/** Aegis H1: the trust card waits this long for the human's fresh press. */
+export const MCP_TRUST_CARD_TTL_MS = 10 * 60_000;
 /** Slice C5'a1: at most this many preview tokens wait at once (oldest dropped). */
 const TRUST_TOKENS_MAX = 64;
 /**
@@ -119,6 +121,7 @@ export interface McpTrustStore {
   set(e: { id: string; label: string; binding: string; launchHash: string; toolsHash: string }): Promise<void>;
   clear(id: string): Promise<boolean>;
   drop(id: string, why: 'launch-changed' | 'tools-changed' | 'disabled'): void;
+  all?(): TrustEntry[];
 }
 export const MCP_ENABLE_CARD_TTL_MS = 24 * 3600 * 1000;
 export const MCP_CHANGED_WHILE_OPEN = 'the server changed while the card was open: ask again';
@@ -771,10 +774,67 @@ export class McpServers {
     if (!pend || pend.principal !== asker.principal || pend.id !== id || now > pend.expires) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${MCP_TRUST_REQUEST}: the preview is stale, expired or already used: preview again`, { why: 'stale', id });
     const { l } = this.#trustable(id);
     if (l.launchHash !== pend.launchHash || l.toolsHash !== pend.toolsHash) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${MCP_TRUST_REQUEST}: the server changed since the preview: preview again`, { why: 'stale', id });
-    const binding = bindingOf({ id, launchHash: l.launchHash, pluginVersion: l.pluginVersion, toolsHash: l.toolsHash });
-    await trust.set({ id, label: l.label, binding, launchHash: l.launchHash, toolsHash: l.toolsHash });
-    this.#o.emit?.({ event: 'mcp.trust.set', id, label: l.label });
-    return { id, trusted: true, binding };
+    // Aegis H1 (founder: "Trusting a server always needs a fresh press"): the commit raises ONE grant card (root key and
+    // a FRESH presence, hand-only, never standing: 'grant' is in NEVER_STANDING_KINDS, never voice). Its detail (inside
+    // the contentHash) binds {id, launchHash, toolsHash, reads}; the token stays the preview's TOCTOU binding. Trust is
+    // set only when the card is allowed, after the listing is checked again.
+    const d = this.#find(id)!;
+    const reads = narrow(l.tools, l.label, { trust: 'trusted' }).filter((e) => e.class === 'read' && !e.humanOnly).map((e) => e.name);
+    const via = asker.credential === 'gui' ? ('settings' as const) : ('terminal' as const);
+    const lines = [
+      `Trust ${d.name}'s tool labels for local sessions`,
+      askedLine(via, now),
+      trustNotice(d.name, reads),
+      `launch ${l.launchHash} · tools ${l.toolsHash}`,
+      'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice; deny changes nothing',
+    ];
+    const shown = batchCardBlock(lines);
+    const sameListing = (): ListedIndex & { tools: Array<Record<string, unknown>> } => {
+      const again = this.#trustable(id).l;
+      if (again.launchHash !== l.launchHash || again.toolsHash !== l.toolsHash || again.pluginVersion !== l.pluginVersion) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${MCP_TRUST_REQUEST}: the server changed while the card was open: ask again`, { why: 'changed', id });
+      return again;
+    };
+    const card = await this.#o.broker.raise({
+      kind: 'grant',
+      cardId: mintId('card'),
+      requestedBy: asker.principal!,
+      attended: true,
+      detail: { action: 'mcp.trust', id, name: d.name, server: l.label, launchHash: l.launchHash, toolsHash: l.toolsHash, reads, rootRows: [] },
+      lines,
+      block: shown.block,
+      decisions: ['allow', 'deny'],
+      handOnly: true,
+      timeoutMs: MCP_TRUST_CARD_TTL_MS,
+      // TOCTOU inside the one touch, BEFORE the presence prompt
+      prepare: (decision: string) => {
+        if (decision === 'allow') sameListing();
+        return null;
+      },
+      effect: async (decision) => {
+        if (decision !== 'allow') return;
+        const again = sameListing();
+        await trust.set({ id, label: again.label, binding: bindingOf({ id, launchHash: again.launchHash, pluginVersion: again.pluginVersion, toolsHash: again.toolsHash }), launchHash: again.launchHash, toolsHash: again.toolsHash });
+        this.#o.emit?.({ event: 'mcp.trust.set', id, label: again.label });
+      },
+    });
+    return { id, pending: true, cardId: card.cardId };
+  }
+
+  /**
+   * Aegis L3: a server trusted on the chain but no longer on anywhere (its `disabled` drop row failed to write, or the
+   * store was edited while the daemon was down) is dropped again (why disabled). Run at daemon start; returns the ids.
+   */
+  reconcileTrust(): string[] {
+    const t = this.#o.trust;
+    if (!t?.all) return [];
+    const on = new Set(readMcpServersStore(this.#o.home).enabled.map((e) => e.id));
+    const out: string[] = [];
+    for (const e of t.all()) {
+      if (on.has(e.id)) continue;
+      t.drop(e.id, 'disabled');
+      out.push(e.id);
+    }
+    return out;
   }
 
   /** Find a server by id, re-read now (local/project ids carry their repo). */

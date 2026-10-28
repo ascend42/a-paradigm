@@ -17,6 +17,7 @@ import { MCP_DISABLE_REQUEST, MCP_ENABLE_REQUEST, MCP_TRUST_REQUEST, mcpServersP
 import { McpListCache } from '../src/kernel/local/mcp-client.js';
 import { bindingOf, McpTrust, toolsHashOf } from '../src/kernel/local/trust-book.js';
 import type { RuleRow } from '../src/kernel/supervisor/rules.js';
+import { NEVER_STANDING_KINDS, standingTupleOf } from '../src/kernel/broker/standing-grant.js';
 
 const KERNEL = 'p:abcdefgh/kernel';
 const KEY = Buffer.alloc(32, 7);
@@ -61,7 +62,7 @@ function setup(platform = 'darwin') {
   const trust = new McpTrust({ principal: KERNEL, isKernelKey: (k) => k === 'key:kernel', source: { head: () => rows.length, read: (f, t) => rows.filter((r) => r.seq! >= f && r.seq! <= t) }, append: async (k, p) => push(k, p) });
   const cache = new McpListCache();
   let now = 1_800_000_000_000;
-  const raised: Array<{ prepare: (d: string) => unknown; effect: (d: string) => Promise<void> }> = [];
+  const raised: Array<{ kind: string; handOnly: boolean; detail: Record<string, unknown>; lines: string[]; prepare: (d: string) => unknown; effect: (d: string) => Promise<void> }> = [];
   const broker = { raise: async (i: never) => (raised.push(i), { cardId: (i as { cardId: string }).cardId }) as never, card: () => ({ state: 'gone' }) as never };
   const m = new McpServers({ home, broker: broker as never, userHome, pathDirs: () => [bin], launchKey: KEY, firstParty: () => ({ available: false, why: 'not installed' }) as never, liveRepos: () => [{ cwd: repo, hsid: 'h1' }], platform, clock: () => now, listedOf: (id) => cache.newest(id), trust });
   const decl = (name: string) => discoverMcpServers({ userHome, repos: [repo], pathDirs: [bin], platform: 'darwin' }).find((d) => d.name === name)!;
@@ -79,7 +80,14 @@ function setup(platform = 'darwin') {
     cache.set(`k-${d.id}-${toolsHashOf(tools)}`, { tools, annotations: null }, { id: d.id, label: d.sessionName, launchHash: declHash(d, KEY), pluginVersion: null, toolsHash: toolsHashOf(tools) });
   };
   const trustRows = () => rows.filter((r) => r.kind === 'tool.trust').map((r) => r.payload as Record<string, unknown>);
-  return { m, trust, cache, rows, push, trustRows, enable, list, decl, home, tick: (ms: number) => (now += ms) };
+  /** Aegis H1: a commit raises the fresh-presence card; the human's allow (prepare, then effect) sets trust */
+  const commit = async (id: string, token: string): Promise<void> => {
+    expect(await m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token })).toMatchObject({ id, pending: true });
+    const c = raised.at(-1)!;
+    expect(c.prepare('allow')).toBeNull();
+    await c.effect('allow');
+  };
+  return { m, trust, cache, rows, push, trustRows, enable, list, decl, home, raised, commit, tick: (ms: number) => (now += ms) };
 }
 const statusTrust = (m: McpServers, name: string) => (m.status() as { servers: Array<{ name: string; trust: { level: string; why: string | null } }> }).servers.find((s) => s.name === name)!.trust;
 const refusal = async (p: Promise<unknown>): Promise<Record<string, unknown>> => {
@@ -121,7 +129,7 @@ describe('G-LCL-23 request.mcp.trust: only a human commit with a live token sets
     expect(p.reads).toEqual(['search']);
     expect(p.notice).toBe("Trust neurons's tool labels? Gnomon will believe what neurons says about its tools. These run with no card: search. You can make Always rules for its other tools. Tools that change or delete things still ask each time. Trust ends by itself if its command, arguments, environment or tool list changes.");
     expect(t.trustRows()).toEqual([]);
-    expect(await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token: p.token })).toMatchObject({ id, trusted: true });
+    await t.commit(id, p.token);
     const rows = t.trustRows();
     expect(rows).toEqual([{ id, label: 'neurons', op: 'set', binding: bindingOf({ id, launchHash: p.launchHash, pluginVersion: null, toolsHash: p.toolsHash }), why: 'human', launchHash: p.launchHash, toolsHash: p.toolsHash }]);
     expect(validateKindPayload('tool.trust', rows[0])).toEqual([]);
@@ -153,7 +161,7 @@ describe('G-LCL-23 request.mcp.trust: only a human commit with a live token sets
     expect(t.trustRows()).toEqual([]);
     // reused: the first commit sets trust, the same token again is refused
     const t4 = await preview();
-    await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token: t4 });
+    await t.commit(id, t4);
     expect(await refusal(t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token: t4 }))).toMatchObject({ why: 'stale' });
     expect(t.trustRows().map((r) => r.op)).toEqual(['set']);
   });
@@ -176,7 +184,7 @@ describe('G-LCL-23 request.mcp.trust: only a human commit with a live token sets
     t.list('neurons');
     expect(await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'clear' })).toEqual({ id, trusted: false, cleared: false });
     const { token } = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string };
-    await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token });
+    await t.commit(id, token);
     expect(await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'clear' })).toEqual({ id, trusted: false, cleared: true });
     expect(t.trustRows().map((r) => [r.op, r.why])).toEqual([['set', 'human'], ['cleared', 'human']]);
     expect(t.trust.of(id)).toBeNull();
@@ -224,11 +232,77 @@ describe('G-LCL-23 nothing but a kernel commit widens trust', () => {
     const id = await t.enable('neurons');
     t.list('neurons');
     const { token } = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string };
-    await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token });
+    await t.commit(id, token);
     await t.m.request(human, MCP_DISABLE_REQUEST, { id });
     expect(t.trust.of(id)).toBeNull();
     await new Promise((r) => setTimeout(r, 0));
     expect(t.trustRows().map((r) => [r.op, r.why])).toEqual([['set', 'human'], ['dropped', 'disabled']]);
     expect(trustDropNotice('neurons', 'disabled')).toBe('neurons changed (it was turned off), so Gnomon stopped trusting its tool labels. Its tools ask again and its Always rules are paused. Trust it again in Settings › MCP servers.');
+  });
+});
+
+describe('Aegis C5\'a1 review: H1 a fresh press, L1 re-trust, L3 restart', () => {
+  it('H1: commit raises ONE hand-only grant card (never standing) binding id, launch, tools and reads; without the press nothing is set', async () => {
+    const t = setup();
+    const id = await t.enable('neurons');
+    t.list('neurons');
+    const { token, launchHash, toolsHash } = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string; launchHash: string; toolsHash: string };
+    t.raised.length = 0;
+    expect(await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token })).toMatchObject({ id, pending: true });
+    expect(t.raised).toHaveLength(1);
+    const c = t.raised[0]!;
+    expect(c).toMatchObject({ kind: 'grant', handOnly: true, detail: { action: 'mcp.trust', id, launchHash, toolsHash, reads: ['search'], rootRows: [] } });
+    // a standing grant never satisfies it ('grant' is never standing)
+    expect(NEVER_STANDING_KINDS.has('grant')).toBe(true);
+    expect(standingTupleOf({ kind: 'grant' } as never, 'allow', c.detail, null)).toBeNull();
+    // no press (or a deny): trust stays unset
+    expect(t.trust.of(id)).toBeNull();
+    await c.effect('deny');
+    expect(t.trust.of(id)).toBeNull();
+    expect(t.trustRows()).toEqual([]);
+  });
+
+  it('H1: a listing that changed between the card and the approval is refused before the presence prompt and at the effect', async () => {
+    const t = setup();
+    const id = await t.enable('neurons');
+    t.list('neurons');
+    const { token } = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string };
+    await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'commit', token });
+    const c = t.raised.at(-1)!;
+    t.list('neurons', [TOOLS[0]!]);
+    expect(await refusal(Promise.resolve().then(() => c.prepare('allow')))).toMatchObject({ why: 'changed' });
+    expect(await refusal(c.effect('allow'))).toMatchObject({ why: 'changed' });
+    expect(t.trust.of(id)).toBeNull();
+    expect(t.trustRows()).toEqual([]);
+  });
+
+  it('L1: trust dropped (a launch change), the launch reverted, trusted again: the server is trusted', async () => {
+    const t = setup();
+    const id = await t.enable('neurons');
+    t.list('neurons');
+    const p1 = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string };
+    await t.commit(id, p1.token);
+    t.trust.drop(id, 'launch-changed');
+    expect(t.trust.of(id)).toBeNull();
+    await new Promise((r) => setTimeout(r, 0));
+    const p2 = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string };
+    await t.commit(id, p2.token);
+    expect(t.trust.of(id)).not.toBeNull();
+    expect(statusTrust(t.m, 'neurons').level).toBe('trusted');
+  });
+
+  it('L3: a trusted server that is on nowhere (its disabled drop row never landed) is dropped again at start', async () => {
+    const t = setup();
+    const id = await t.enable('neurons');
+    t.list('neurons');
+    const { token } = (await t.m.request(human, MCP_TRUST_REQUEST, { id, op: 'preview' })) as { token: string };
+    await t.commit(id, token);
+    // the store lost the entry while the trust row stayed (a failed drop write, then a restart)
+    fs.writeFileSync(mcpServersPath(t.home), JSON.stringify({ schema: 'gnomon-mcp-servers:v1', enabled: [], firstParty: { paradigm: 'on' } }));
+    expect(t.m.reconcileTrust()).toEqual([id]);
+    expect(t.trust.of(id)).toBeNull();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(t.trustRows().map((r) => [r.op, r.why])).toEqual([['set', 'human'], ['dropped', 'disabled']]);
+    expect(t.m.reconcileTrust()).toEqual([]);
   });
 });

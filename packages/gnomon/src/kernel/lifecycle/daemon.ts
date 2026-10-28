@@ -1008,6 +1008,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     listedOf: (id) => mcpListCache.newest(id),
     trust: mcpTrust,
   });
+  // Aegis L3: a trusted server that is on nowhere any more is dropped again (a disabled drop row that failed to write)
+  mcpServers.reconcileTrust();
   const supervisor: SessionSupervisor = new SessionSupervisor({
     mcpDenyWrite: (ctx) => mcpServers.sessionDenies(ctx),
     // TD-2026-10-27-833 slice C2': local sessions reach the same servers (first-party Paradigm + the enabled ones)

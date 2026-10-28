@@ -301,7 +301,13 @@ components:
       McpListCache; none: not-listed) and answers the trust notice, the tools
       that would run with no card and a single-use 60 s token bound to
       (principal, id, launchHash, toolsHash); commit re-checks token, listing
-      and declaration, then writes the set row; clear needs no token.
+      and declaration, then (Aegis H1, founder: trusting always needs a fresh
+      press) raises ONE grant card, detail.action 'mcp.trust' binding {id,
+      launchHash, toolsHash, reads}: root key and a fresh presence,
+      hand-only, never standing, never voice; prepare and effect check the
+      listing again, and only an allow writes the set row; clear needs no
+      token. Aegis L3: at daemon start reconcileTrust drops again (why
+      disabled) any trusted id that is on nowhere.
       Refused (MCP_TRUST_REFUSALS): platform (win32), first-party,
       not-local, remote, fetches, remote-proxy, problem, bad-id,
       not-enabled, not-listed, changed. Turning a server off everywhere drops
