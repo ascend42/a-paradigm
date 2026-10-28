@@ -25,6 +25,7 @@
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { folderFieldEl } from './folder-field.js';
 import { rulesBlockEl } from './rules-block.js';
+import { trapTab } from './tier-picker.js';
 import { SETTINGS_RUNS, type FieldView, type FormKey, type FormView, type ResultView, type SectionId, type SettingRow, type SettingsSection } from '../core/settings.js';
 
 /** The Local model section's press path (ui/local-model.ts LocalModelController). */
@@ -63,7 +64,7 @@ export interface SettingsDeps {
   local?: LocalPress;
   rules?: RulesPress;
   /** #gui-mcp-servers: a press on an `mcp:` key (ui/mcp-servers.ts) */
-  mcp?: { press(act: string, value: string | null, trusted: boolean): void };
+  mcp?: { press(act: string, value: string | null, trusted: boolean): void; escape?(): boolean; sheetClosed?(): void };
 }
 
 /** Where focus goes after a Local model press: a field, a key, or the section's heading. */
@@ -90,7 +91,7 @@ function rich(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, t
 }
 
 function keyEl(doc: MiniDoc, k: FormKey): MiniEl {
-  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
+  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.ariaDisabled ? { 'aria-disabled': 'true' } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
   if (k.disabled) (b as unknown as { disabled: boolean }).disabled = true;
   return b;
 }
@@ -142,7 +143,11 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
   if (r.kind === 'form') {
     const row = h(doc, 'div', { class: 'settings-row settings-form', 'data-row': r.id }, head);
     if (r.form) row.appendChild(formEl(doc, r.form));
-    else if (r.confirm) row.appendChild(h(doc, 'div', { class: 'set-form', role: 'group', 'aria-label': r.confirm.label }, h(doc, 'p', { class: 'sf-lead' }, r.confirm.text), h(doc, 'div', { class: 'sf-keys' }, ...r.confirm.keys.map((k) => keyEl(doc, k)))));
+    else if (r.confirm) {
+      const c = r.confirm;
+      // C5'b: the trust preview's notice, its lead line and the reads list sit above the keys
+      row.appendChild(h(doc, 'div', { class: 'set-form', role: 'group', 'aria-label': c.label }, c.text ? h(doc, 'p', { class: 'sf-lead' }, c.text) : null, ...(c.lines ?? []).map((l) => h(doc, 'p', { class: 'sf-note' }, l)), c.list?.length ? h(doc, 'ul', { class: 'sf-list' }, ...c.list.map((x) => h(doc, 'li', null, x))) : null, ...(c.after ?? []).map((l) => h(doc, 'p', { class: 'sf-note' }, l)), c.result ? resultEl(doc, c.result) : null, h(doc, 'div', { class: 'sf-keys' }, ...c.keys.map((k) => keyEl(doc, k)))));
+    }
     else if (r.keys.length === 1) row.appendChild(keyEl(doc, r.keys[0]!));
     else if (r.keys.length) row.appendChild(h(doc, 'div', { class: 'sf-keys' }, ...r.keys.map((k) => keyEl(doc, k))));
     if (r.result) row.appendChild(resultEl(doc, r.result));
@@ -180,7 +185,7 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     row.setAttribute('data-readonly', 'true');
     if (r.grp) row.setAttribute('data-grp', 'start');
     if (r.live) row.setAttribute('aria-live', 'polite');
-    row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value));
+    row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value, r.chip ? ' ' : null, r.chip ? h(doc, 'span', { class: `chip${r.chip.ink ? ' ink' : ''}` }, r.chip.text) : null));
     if (r.how) row.appendChild(rich(doc, 'p', { class: 'meta settings-how' }, r.how));
     // the keys are a group named by their row, so "Turn off" is heard with what it turns off (Mika 2026-10-23)
     if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys', role: 'group', 'aria-label': r.label }, ...r.keys.map((k) => keyEl(doc, k))));
@@ -199,6 +204,8 @@ export function sectionEl(doc: MiniDoc, s: SettingsSection, focused = false): Mi
   const hid = `settings-h-${s.id}`;
   const sec = h(doc, 'section', { class: `settings-sec${focused ? ' focused' : ''}`, 'data-section': s.id, 'aria-labelledby': hid, ...(s.owner ? { 'data-kernel-owned': 'true' } : {}) }, setId(h(doc, 'h3', { class: 'title settings-h', tabindex: '-1' }, s.title, s.owner ? ' ' : null, s.owner ? h(doc, 'span', { class: 'sec-owner' }, s.owner) : null), hid));
   if (s.intro) sec.appendChild(h(doc, 'p', { class: 'settings-intro' }, s.intro));
+  // C5'b: one persistent polite line per section that has one (empty when idle; mountSettings keeps its node)
+  if (s.live !== undefined) sec.appendChild(h(doc, 'p', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'data-live': s.id }, s.live));
   for (const r of s.rows) sec.appendChild(rowEl(doc, r));
   return sec;
 }
@@ -244,8 +251,16 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     // a repaint keeps the reader where they were: emptying the body clamps its scroll to the top (the Rules filter
     // re-paints on every key, and the field being typed in must not scroll away; Mika 2026-10-23)
     const top = body.scrollTop;
+    // C5'b: a live line must persist to be announced: keep the old nodes and carry the new text into them
+    const lives = new Map([...body.querySelectorAll<HTMLElement>('[data-live]')].map((n) => [n.dataset.live!, n] as const));
     painting = true;
     paintSettings(document as unknown as MiniDoc, body, d.model(), focused);
+    for (const n of body.querySelectorAll<HTMLElement>('[data-live]')) {
+      const old = lives.get(n.dataset.live!);
+      if (!old) continue;
+      if (old.textContent !== n.textContent) old.textContent = n.textContent;
+      n.replaceWith(old);
+    }
     painting = false;
     body.scrollTop = top;
     const el = keep ? (body.querySelector(keep) as HTMLElement | null) : null;
@@ -273,6 +288,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     overlay.hidden = true;
     focused = null;
     d.local?.sheetClosed();
+    d.mcp?.sheetClosed?.();
     back?.focus();
     back = null;
   };
@@ -371,6 +387,11 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     true,
   );
   document.getElementById('settings-close')?.addEventListener('click', close);
+  // Mika (C5'b review): the sheet is aria-modal, so Tab stays inside it (the shared trapTab, never a copy)
+  const dialog = (overlay.querySelector('[role="dialog"]') as HTMLElement | null) ?? overlay;
+  overlay.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Tab' && !overlay.hidden) trapTab(dialog, e as KeyboardEvent);
+  });
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close(); // a press on the scrim closes it
   });
@@ -381,6 +402,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     repaint,
     escape: () => {
       if (d.rules?.escape()) return; // #gui-rules-view: an open Turn off ▾ folds first, focus back on its key
+      if (d.mcp?.escape?.()) return; // C5'b: an open trust preview closes first, focus back on its Trust… key
       if (!d.local?.escape()) close();
     },
     focusLocal,

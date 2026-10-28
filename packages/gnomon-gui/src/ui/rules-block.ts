@@ -18,7 +18,7 @@ function keyEl(doc: MiniDoc, k: RuleKey, ruleId: string): MiniEl {
 }
 
 export function ruleRowEl(doc: MiniDoc, r: RuleRowView): MiniEl {
-  const cls = `rule-row${r.staged ? ' is-staged' : ''}${r.removed ? ' is-removed' : ''}${r.off ? ' is-off' : ''}`;
+  const cls = `rule-row${r.staged ? ' is-staged' : ''}${r.removed ? ' is-removed' : ''}${r.off ? ' is-off' : ''}${r.paused ? ' is-paused' : ''}`;
   const li = h(doc, 'li', { class: cls, 'data-rule-id': r.ruleId, title: `${r.where}${r.from ? ` · ${r.from}` : ''} (${r.ruleId})` });
   li.appendChild(h(doc, 'span', { class: `rule-what${r.removed ? ' struck' : ''}` }, r.what));
   // the group heading names the repo: the meta line doesn't repeat it (it stays in the title and the group's label)
@@ -58,7 +58,7 @@ export function rulesBlockEl(doc: MiniDoc, v: RulesBlockView): MiniEl {
   if (v.empty) box.appendChild(h(doc, 'p', { class: 'rules-empty' }, v.empty));
   if (v.noMatch) box.appendChild(h(doc, 'p', { class: 'rules-empty' }, v.noMatch));
   for (const g of v.groups) {
-    const count = h(doc, 'span', { class: 'rules-count' }, `${g.count} rule${g.count === 1 ? '' : 's'}${g.off ? ` · ${g.off} off` : ''}`);
+    const count = h(doc, 'span', { class: 'rules-count' }, `${g.count} rule${g.count === 1 ? '' : 's'}${g.off ? ` · ${g.off} off` : ''}${g.paused ? ` · ${g.paused} paused` : ''}`);
     // founder 2026-10-23 ("folded works"): at 50 rules or more the heading is the group's fold key (▸ folded, ▾ open);
     // the heading role stays on the <p>, the key inside it carries aria-expanded and the count
     const head = g.foldable

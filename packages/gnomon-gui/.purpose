@@ -61,6 +61,14 @@ components:
       toggleFold, ui.folds); the filter unfolds every group it matches; a
       group holding a staged change, an open Turn off ▾ or a waiting rule
       stays unfolded. Design system rule-row.folding.
+      C5'b (status.rules[].paused, kernel K2): RuleItem.paused; an on tool
+      rule that would not match now says why in its state (pausedText:
+      "paused: <server> isn't trusted now", "paused: the tool changed",
+      "paused: <server> is off"; the server from its mcp:<server>/<tool>
+      name as display text), weight 600 --ink2 (.rule-row.is-paused), never
+      a hue; the keys are unchanged; the summary and group counts name it
+      ("3 rules · 1 off · 1 paused"). The rule's words are the kernel's
+      (K3). Design system rule-row.paused. Test: test/trust-drop-paused.test.ts.
   gui-session-rename:
     description: >-
       8.0:session-rename (founder ask: rename a session). core/rename.ts
@@ -770,7 +778,17 @@ components:
       first body line (Mika Delta 8); a brokered MCP card (isBrokeredCard:
       an mcp: tool or a {type:'tool-scope'} node) never shows a plain
       `always` key, which would send no tool scope (8.0:local-lane C5'a3
-      interim guard; C5'b adds the scoped key);
+      interim guard); C5'b: its only Always is the scoped fold, and only
+      when its ONE tool-scope node hashes to the card's contentHash with
+      toolScopes ['tool'] (toolScopesOf): one row "this tool, any
+      arguments", noted "every call of <tool> on <server> in this repo ·
+      paused if the tool or server changes" (TOOL_SCOPE_KEY), data-scope
+      tool → approve scope {kind:'tool'} (approveParamsOf); a forged or
+      mismatched node offers none, and then the kernel's "Always: any call
+      of …" line is dropped from the body too. The mcp.trust grant card
+      joins the ⊙ gnomon family and the MCP face (gnomonFam, mcpFace); its
+      "launch … · tools …" line goes to details and the k-line's title=
+      (test/brokered-guard.test.ts);
       refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,
       papercraft day / phosphor night / auto themes and reduced motion.
@@ -1633,6 +1651,15 @@ components:
       that card) and ui/standing-feed.ts. A short CSS fade-in (styles.css
       .toast animation toast-in, set only under data-motion="full"), so
       reduced motion drops it.
+      C5'b: core/toasts.ts trustDropToastOf — a kernel-signed
+      tool.trust{op:'dropped'} with why launch-changed or tools-changed is a
+      warn toast (10 s, not sticky; TRUST_DROP_TOAST): "<name> changed (its
+      command changed | its tool list changed): Gnomon stopped trusting its
+      tool labels. Its tools ask again; its Always rules are paused." (the
+      name from status.mcp as display text) with the key Trust again…,
+      which opens Settings at that server's row (ui/app.ts trustDropRow).
+      disabled and a clear from Settings raise no toast. Test:
+      test/trust-drop-paused.test.ts.
     path: src/ui/toasts.ts
     type: module
     tags: [gnomon, gui, design-system, toast, notice]
@@ -1801,12 +1828,55 @@ components:
       what turned on; the skip line only when entry.connId is this page's
       connection, else only what turned on). Preview fixtures mcp-batch-card (the card,
       its body scrolling) and mcp-batch-waiting.
+      C5'b (8.0:local-lane, Mika; ^local-tool-grant): per-server trust on the
+      server's own row. status.mcp row trust{level, why} (McpRowView.trust)
+      gives the row's chip (trustChipOf: untrusted plain, trusted and
+      first-party ink, by word) and its keys (trustKeys): Trust… (act
+      mcp:trust) when untrusted and allowed, aria-disabled while a refusal
+      passes (not-enabled, not-listed, changed), none for a lasting one
+      (fetches, remote-proxy, bad-id, not-local, remote, platform,
+      problem); Clear trust (mcp:untrust, quiet, request.mcp.trust{op:
+      clear}, no card, applies at once). trustRefusalWords maps every code
+      to Mika's words with next: in the row's how line (never the code).
+      Trust… opens the preview INLINE under the row (trustPanelRows, a
+      settings-form confirm block): checking (Trust · root card aria-busy),
+      ready (the kernel's notice verbatim, the reads capped at 12 + "+N
+      more", or "none: every tool still asks …"), expired at expiresAt or
+      on a stale commit (Preview again, no countdown), refused ("Not
+      changed: " + words), committing ("Raising the card…", sent once,
+      never retried), pending (the request row, Decide in the stack). The
+      preview's token lives in ui/mcp-servers.ts TrustFlow (modelled on
+      ui/tier-picker.ts TierFlow), never in view state; acts
+      mcp:trust-commit, mcp:trust-again, mcp:trust-cancel. Our card's
+      approval.decide / approval.expire gives the outcome under the row
+      (trustedResult "Trusted <name>'s tool labels at 14:02. N tools run
+      with no card.", trustNotChangedResult); focus then goes to the
+      server's first key. Focus: Trust… moves it to the panel's primary key;
+      Esc (McpServersController.escape, routed by the sheet) closes the
+      panel back onto Trust…; one persistent polite line per section
+      (SettingsSection.live, the sheet keeps its node). A tool.trust row
+      re-reads status. Tests: test/mcp-trust.test.ts.
+      Mika's C5'b review (2026-10-28): no chip where trust is no question
+      (not-local, remote, problem, platform, a row with a problem); the panel
+      speaks its own words ("Gnomon will believe what <name> says about its
+      tools.", the reads, then what still asks and when trust ends; zero
+      reads: one line) and the kernel's notice stays on the card; a refused
+      panel holds its reason (role=alert) above Close; another server's
+      Trust… takes over a ready, expired or refused panel, while committing
+      or pending it waits and its title and how line say "one trust preview
+      at a time: finish or cancel <name>'s first"; the open Trust… is
+      aria-disabled then too; Esc is consumed while committing; "the card
+      expired at" / "was denied at"; Clear trust reads "Cleared: Gnomon no
+      longer trusts …". A brokered card's k-line is the kernel's "server: …"
+      trust line. The Settings dialog traps Tab with the shared trapTab
+      (ui/tier-picker.ts); any aria-disabled key draws the quiet look.
     path: src/core/mcp-servers.ts
     type: module
     tags: [gnomon, gui, settings, mcp, paradigm-8]
     tests:
       - test/mcp-servers.test.ts
       - test/mcp-servers-allow.test.ts
+      - test/mcp-trust.test.ts
     oracles: [G-MCP-08, G-MCP-09]
   gui-settings:
     description: >-

@@ -27,7 +27,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, isBrokeredCard, askDetailOf, askNote, displayText, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, isBrokeredCard, askDetailOf, askNote, displayText, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf, toolScopesOf } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, pickChoices, renderChoices, replyChoices, replyHash, toggleChoice } from '../core/choices.js';
@@ -45,7 +45,7 @@ import { stepFoldKey, stepParts, stepsFoldKey, stepText, withStepFolds } from '.
 import { mountStandingFeed } from './standing-feed.js';
 import { cardIn, notArrivedText, uncoverStack, type CardLabel, type CoveringSheet } from './card-focus.js';
 import { mountToasts, noticeChannel, type Notice, type NoticeOptions, type ToastHandle, type Toasts } from './toasts.js';
-import type { ToastKind } from '../core/toasts.js';
+import { trustDropToastOf, TRUST_DROP_TOAST, type ToastKind } from '../core/toasts.js';
 import { mountSettings } from './settings-sheet.js';
 import { afterSave, applyRequest, beforeClose as rulesBeforeClose, discard as rulesDiscard, emptyRulesUi, expiryToastOf, reconcile as rulesReconcile, refusedResult, RULE_ROW_KINDS, rulesBlock, rulesStatusOf, stageOff, stageOn, stageRemove, toggleFold, toggleOffMenu, unstage, type RulePreset } from '../core/rules.js';
 import { LocalModelController } from './local-model.js';
@@ -1088,6 +1088,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         voice: cardVoiceOf(c.card),
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
         brokered: isBrokeredCard(c.card.block, c.tool), // C5'a3: no plain always key on a brokered MCP card
+        toolScope: c.kind === 'permission' ? toolScopesOf(c.card) : null, // C5'b: the scoped Always, only from a verified tool-scope node
         localNs: localNsOf(session?.principal),
         // #gui-loops: the kernel's authorship basis (status.loops authoredBy agent-key-claim), never guessed from a name
         loopClaimedBy: c.kind.startsWith('loop-') ? loopClaimOf(c.card) : null,
@@ -1615,6 +1616,11 @@ const mcpServers = new McpServersController({
   },
   focus: (sel) => (document.querySelector(`#settings-body [data-section="${MCP_SECTION}"] ${sel}`) as HTMLElement | null)?.focus(),
   connId: () => session?.connId ?? null, // a card's skips are shown only to the connection that decided it
+  // C5'b: the trust panel moves focus only when it is already in the panel (or on its Trust… key)
+  focused: () => {
+    const a = document.activeElement as HTMLElement | null;
+    return a && a.closest(`#settings-body [data-section="${MCP_SECTION}"]`) ? (a.dataset.lmAct ?? null) : null;
+  },
 });
 const settings = mountSettings(document, {
   local: localModel,
@@ -1863,6 +1869,7 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         loopRow(r); // #gui-loops: loop done toasts and a status re-read
         localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
         rulesRow(r); // #gui-rules-view: a rule row re-reads status.rules; a timed off that ended is a 6 s toast
+        trustDropRow(r); // C5'b: a server whose trust the kernel dropped (it changed) is a warn toast
         mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
@@ -2754,6 +2761,29 @@ function rulesRow(r: { kind: string; payload?: unknown; principal?: string }): v
     if (text) toasts().show(text, { kind: 'info', key: { label: 'see Rules', onPress: (e: MouseEvent) => e.isTrusted && settings.open('rules') } });
   }
   void refreshStatus();
+}
+
+/** C5'b: a kernel-signed tool.trust{op:'dropped'} (launch or tools changed) is a warn toast; Trust again… opens its row. */
+function trustDropRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (r.kind !== 'tool.trust' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
+  const t = trustDropToastOf(r, status);
+  if (!t) return;
+  toasts().show(t.text, {
+    kind: TRUST_DROP_TOAST.kind,
+    key: {
+      label: TRUST_DROP_TOAST.key,
+      onPress: (e: MouseEvent) => {
+        if (!e.isTrusted) return;
+        settings.open(MCP_SECTION);
+        // the server's own row: its Trust… key (or its first key while trust waits on a new listing)
+        const v = t.id.replace(/["\\]/g, '\\$&');
+        const sec = document.querySelector(`#settings-body [data-section="${MCP_SECTION}"]`);
+        const k = (sec?.querySelector(`[data-lm-act="mcp:trust"][data-lm-value="${v}"]`) ?? sec?.querySelector(`[data-lm-value="${v}"]`)) as HTMLElement | null;
+        k?.scrollIntoView({ block: 'center' });
+        k?.focus({ preventScroll: true });
+      },
+    },
+  });
 }
 
 /* ── run mode (§11.4 control, §11.5 ⇧Tab; P8-D86/D87) ─────────────── */

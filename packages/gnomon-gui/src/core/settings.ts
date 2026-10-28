@@ -87,6 +87,8 @@ export interface FormKey {
   title?: string;
   /** the submit key of a form */
   submit?: boolean;
+  /** C5'b: aria-disabled (it keeps its focus and its place in the Tab order; its press path ignores it) */
+  ariaDisabled?: boolean;
 }
 /** A result line (role=status, or alert when it fails): the outcome word in 600, then the rest. */
 export interface ResultView {
@@ -121,9 +123,9 @@ export type SettingRow =
   | { kind: 'action'; id: string; label: string; run: string; note?: string }
   | { kind: 'revoke'; id: string; label: string; grantId: string; note?: string }
   // `how` may be '' (no how line); mark (✓ ✕ ?) leads the value in 600; grp starts a group by space; live = polite
-  | { kind: 'readonly'; id: string; label: string; value: string; how: string; slot?: string; mark?: string; grp?: boolean; live?: boolean; keys?: FormKey[]; title?: string }
+  | { kind: 'readonly'; id: string; label: string; value: string; how: string; slot?: string; mark?: string; grp?: boolean; live?: boolean; keys?: FormKey[]; title?: string; chip?: { text: string; ink?: boolean } }
   // component settings-form (session 2026-10-22-gnomon-local-model): closed = its keys; open = the form
-  | { kind: 'form'; id: string; label: string; keys: FormKey[]; form?: FormView; confirm?: { label: string; text: string; keys: FormKey[] }; result?: ResultView }
+  | { kind: 'form'; id: string; label: string; keys: FormKey[]; form?: FormView; confirm?: { label: string; text: string; keys: FormKey[]; lines?: string[]; list?: string[]; after?: string[]; result?: ResultView }; result?: ResultView }
   | { kind: 'request'; id: string; label: string; chip: string; line: string; keys: FormKey[]; how: string }
   | { kind: 'term'; id: string; text: string; code: string }
   // #gui-rules-view (8.0:rules-view): the Rules block (rule-row + rules-save-bar); its keys have their own press path
@@ -137,6 +139,8 @@ export interface SettingsSection {
   /** a section the kernel owns says so once in its heading ("· kernel-owned"); its rows drop the per-row suffix */
   owner?: string;
   intro?: string;
+  /** C5'b: the section's one persistent polite line (aria-live; empty when idle; the sheet keeps its node across repaints) */
+  live?: string;
 }
 
 /** The run ids a Settings control may name: existing GUI commands only (plus the standing Revoke, a kind of its own). */

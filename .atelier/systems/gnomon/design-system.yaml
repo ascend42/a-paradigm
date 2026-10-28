@@ -232,7 +232,7 @@ components:
     sizes: { all: { min-height: "var(--key-h) 28", min-width: "var(--key-h) 28 (glyph keys)", font: 11.5 } }
     build: "height comes from min-height: var(--key-h) with inline-flex centring (padding 0 10; quiet 0 8), not from padding + line-height, so glyph labels (✎ ⋯ ⤢ ▸) and words land on the same box. The day offset shadow stays outside the layout box. A key whose label wraps may grow past it (min-height, not height)."
     states: [default, hover, focus, pressed, selected, disabled, busy]
-    state-notes: { disabled-quiet: "a disabled or aria-disabled quiet key draws --sec text on a --rule edge (.key.quiet[disabled], .key.quiet[aria-disabled=true]); quiet's --ink2 must never out-rank the disabled look (Mika C4'b F5)", busy: "a busy key is aria-disabled, not disabled, so it keeps focus" }
+    state-notes: { disabled-quiet: "a disabled or aria-disabled quiet key draws --sec text on a --rule edge (.key.quiet[disabled], .key.quiet[aria-disabled=true]); quiet's --ink2 must never out-rank the disabled look (Mika C4'b F5)", busy: "a busy key is aria-disabled, not disabled, so it keeps focus", aria-disabled: "C5'b (Mika 2026-10-28): any disabled or aria-disabled key draws the quiet look, border --rule and no offset shadow (.key[disabled], .key[aria-disabled=true]), so its edge never says it presses (principle 2); its text is --sec" }
     tokens: { fill: --sheet, edge: --key-edge, text: --ink, hover: --fold, offset: --key-shadow, pri-fill: --ink, pri-text: --on-ink, focus: "2px solid --key-edge" }
     source: packages/gnomon-gui/static/styles.css:180-197,244
     examples:
@@ -513,6 +513,8 @@ components:
       - "denied or expired brings the form back with the entries and a 'Not changed' line"
       - "a change that loses something others depend on and costs presence to undo asks once inline, naming what stops (Turn off the local model when loops use it); otherwise it acts on the first press"
     states: [closed, open, invalid, checking, submitting, card-waiting, denied, expired, refused, applied]
+    chip: "C5'b (8.0:local-lane, Mika): a readonly row may carry ONE optional chip after its value (the shared chip: plain, or .ink), told by its word, never a hue. MCP servers: untrusted (plain), trusted (ink), first-party (ink). The trust preview opens INLINE under the server's row as a confirm block (checking, ready, expired → Preview again, refused, committing), then the request row while its root card waits, then the outcome under the row; never a modal over the sheet."
+    keys_disabled: "C5'b: a key whose refusal passes (turn it on first, not listed yet, changed) stays in place aria-disabled and the row's how line says why; a busy key is aria-disabled and keeps its focus"
     tokens:
       rule: "2px solid --ink at the left, padding-left 12 (as .vs-flow)"
       gap: "10 between fields; 2 between label, control and note"
@@ -1030,7 +1032,8 @@ components:
       status: clear
       from: { date: 2026-10-23, decided_by: creator, quote: "folded works" }
       source: "packages/gnomon-gui/src/core/rules.ts FOLD_AT, toggleFold, rulesBlock; packages/gnomon-gui/src/ui/rules-block.ts; packages/gnomon-gui/static/styles.css .rules-fold"
-    states: [on, off, off-until, off-open, staged-off, staged-on, staged-remove, filtered-out, empty, group-folded, group-unfolded]
+    states: [on, off, off-until, off-open, staged-off, staged-on, staged-remove, filtered-out, empty, group-folded, group-unfolded, paused]
+    paused: "C5'b (status.rules paused, K2): an on tool rule that would not match now says why in its state, weight 600 --ink2, never a hue: 'paused: <server> isn''t trusted now' · 'paused: the tool changed' · 'paused: <server> is off'. The keys are unchanged; the counts name it ('3 rules · 1 off · 1 paused')."
     never: ["a hue for on/off or staged (words and weight carry it)", "the amber ◆ for a staged change", "Remove that hides the row before Save (it stays, struck through, with keep)"]
     copy:
       empty: "No Always rules yet. When you choose Always on a card, the rule shows here. (no '0 rules' summary above it: said once)"

@@ -19,8 +19,12 @@
  *   - Folded (founder 2026-10-23: "folded works"): at FOLD_AT rules or more every repo group starts folded, showing its
  *     heading and count; the heading is the fold key (aria-expanded). A filter unfolds every group it matches; a group
  *     holding a staged change, an open Turn off ▾ or a rule waiting on a card stays unfolded (nothing staged hides).
+ *   - C5'b paused (status.rules[].paused): a tool rule that would not match now says why in its state ("paused: <server>
+ *     isn't trusted now", "paused: the tool changed", "paused: <server> is off"), by word and weight, never a hue; the
+ *     keys are unchanged and the counts name it ("3 rules · 1 off · 1 paused").
  */
 import type { ShownRefusal } from './client.js';
+import { displayText } from './render.js';
 
 export const RULES_EMPTY = 'No Always rules yet. When you choose Always on a card, the rule shows here.';
 /** Mika C1: the filter field shows above this many rules. */
@@ -54,7 +58,13 @@ export interface RuleItem {
   state: 'on' | 'off';
   /** off only: the kernel-clock end, or null (until turned back on) */
   until: string | null;
+  /** C5'a3 K2 / C5'b: why a tool rule would not match now (status.rules[].paused; null: it would, or not known) */
+  paused?: RulePause | null;
 }
+
+/** C5'b: status.rules[].paused (closed): the server is not trusted now, the tool changed, the server is off. */
+export type RulePause = 'untrusted' | 'changed' | 'server-off';
+const PAUSES: readonly string[] = ['untrusted', 'changed', 'server-off'];
 
 export interface RulesStatus {
   built: boolean;
@@ -78,7 +88,7 @@ export function rulesStatusOf(status: unknown): RulesStatus {
         if (!x || typeof x !== 'object') return [];
         const r = x as Record<string, unknown>;
         if (typeof r.ruleId !== 'string' || typeof r.words !== 'string' || typeof r.repoKey !== 'string' || (r.state !== 'on' && r.state !== 'off')) return [];
-        return [{ ruleId: r.ruleId, match: str(r.match) ?? 'exact', tool: str(r.tool) ?? '?', repoKey: r.repoKey, repoName: str(r.repoName), words: r.words, learnedAt: str(r.learnedAt), hsid: str(r.hsid), state: r.state, until: r.state === 'off' ? str(r.until) : null }];
+        return [{ ruleId: r.ruleId, match: str(r.match) ?? 'exact', tool: str(r.tool) ?? '?', repoKey: r.repoKey, repoName: str(r.repoName), words: r.words, learnedAt: str(r.learnedAt), hsid: str(r.hsid), state: r.state, until: r.state === 'off' ? str(r.until) : null, paused: PAUSES.includes(r.paused as string) ? (r.paused as RulePause) : null }];
       })
     : [];
   return { built: o.built === true, now: str(o.now), presets: { hour: str(p.hour), tomorrow: str(p.tomorrow) }, pendingCardId: str(o.pendingCardId), rules };
@@ -253,7 +263,23 @@ export function presetLabel(p: RulePreset, rs: RulesStatus): string {
   return `until tomorrow${at ? ` · ${hm(new Date(at))}` : ''}`;
 }
 
+/** C5'b: the server a tool rule names (`mcp:<server>/<tool>`), as display text (a server's name is untrusted). */
+export function ruleServerOf(tool: string): string {
+  const m = /^mcp:([^/]+)\//.exec(tool);
+  return m ? displayText(m[1]!).slice(0, 64) : 'its server';
+}
+
+/** C5'b: a paused rule's words (weight 600 --ink2, never a hue); the keys are unchanged. */
+export function pausedText(r: RuleItem): string | null {
+  if (r.state !== 'on' || !r.paused) return null;
+  if (r.paused === 'untrusted') return `paused: ${ruleServerOf(r.tool)} isn’t trusted now`;
+  if (r.paused === 'changed') return 'paused: the tool changed';
+  return `paused: ${ruleServerOf(r.tool)} is off`;
+}
+
 export function stateText(r: RuleItem, now: string | null): string {
+  const paused = pausedText(r);
+  if (paused) return paused;
   if (r.state === 'on') return 'on';
   return r.until ? `off until ${endText(r.until, now)}` : 'off';
 }
@@ -284,6 +310,8 @@ export interface RuleRowView {
   from: string | null;
   state: string;
   off: boolean;
+  /** C5'b: the rule is on but would not match now (its state says why) */
+  paused?: boolean;
   staged: string | null;
   removed: boolean;
   offOpen: boolean;
@@ -296,6 +324,8 @@ export interface RuleGroupView {
   label: string;
   count: number;
   off: number;
+  /** C5'b: rules on but paused */
+  paused?: number;
   /** FOLD_AT and up: the heading is a fold key */
   foldable: boolean;
   /** folded: the heading and its count only, no rows */
@@ -345,6 +375,7 @@ export function rowView(r: RuleItem, ui: RulesUi, rs: RulesStatus, sessionName?:
     from: name ? `from the card asked in ${name}` : r.hsid ? `from a card in session ${r.hsid.slice(-10)}` : null,
     state: stateText(r, rs.now),
     off: r.state === 'off',
+    paused: !!pausedText(r),
     staged: st ? stagedText(st) : waits ? WAITING_ROW : null,
     removed: st?.op === 'remove',
     offOpen,
@@ -363,6 +394,7 @@ const matches = (r: RuleItem, q: string): boolean => {
 export function rulesBlock(rs: RulesStatus, ui: RulesUi, sessionName?: (hsid: string) => string | null): RulesBlockView {
   const total = rs.rules.length;
   const off = rs.rules.filter((r) => r.state === 'off').length;
+  const paused = rs.rules.filter((r) => !!pausedText(r)).length;
   const shown = total > FILTER_AT;
   const q = shown ? ui.filter.trim() : '';
   const by = new Map<string, RuleItem[]>();
@@ -379,13 +411,13 @@ export function rulesBlock(rs: RulesStatus, ui: RulesUi, sessionName?: (hsid: st
     const all = rs.rules.filter((r) => r.repoKey === repoKey);
     const busy = list.some((r) => ui.staged.has(r.ruleId) || ui.offOpen === r.ruleId || !!ui.waiting?.ruleIds.includes(r.ruleId));
     const open = !foldable || !!q || busy || ui.folds.get(repoKey) === true;
-    return { repoKey, label: all.find((r) => r.repoName)?.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, foldable: foldable && !q && !busy, folded: !open, rows: open ? list.map((r) => rowView(r, ui, rs, sessionName)) : [] };
+    return { repoKey, label: all.find((r) => r.repoName)?.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, paused: all.filter((r) => !!pausedText(r)).length, foldable: foldable && !q && !busy, folded: !open, rows: open ? list.map((r) => rowView(r, ui, rs, sessionName)) : [] };
   });
   const n = ui.staged.size;
   return {
     built: rs.built,
     empty: rs.built && total === 0 ? RULES_EMPTY : null,
-    summary: !rs.built ? 'not offered by this kernel' : total === 0 ? '' : `${total} rule${total === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}${groups.length > 1 ? ` · ${groups.length} repos` : ''}`,
+    summary: !rs.built ? 'not offered by this kernel' : total === 0 ? '' : `${total} rule${total === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}${paused ? ` · ${paused} paused` : ''}${groups.length > 1 ? ` · ${groups.length} repos` : ''}`,
     filter: { value: ui.filter, shown },
     groups,
     noMatch: total > 0 && groups.length === 0 ? `No rule matches “${q}”.` : null,
