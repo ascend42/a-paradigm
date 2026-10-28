@@ -21,6 +21,8 @@ export function ruleRowEl(doc: MiniDoc, r: RuleRowView): MiniEl {
   const cls = `rule-row${r.staged ? ' is-staged' : ''}${r.removed ? ' is-removed' : ''}${r.off ? ' is-off' : ''}${r.paused ? ' is-paused' : ''}`;
   const li = h(doc, 'li', { class: cls, 'data-rule-id': r.ruleId, title: `${r.where}${r.from ? ` · ${r.from}` : ''} (${r.ruleId})` });
   li.appendChild(h(doc, 'span', { class: `rule-what${r.removed ? ' struck' : ''}` }, r.what));
+  // C6'b2-2: a rule for a tool that can't be undone says so in a word (a chip is never a key)
+  if (r.chip) li.appendChild(h(doc, 'span', { class: 'chip rule-chip' }, r.chip));
   // the group heading names the repo: the meta line doesn't repeat it (it stays in the title and the group's label)
   li.appendChild(h(doc, 'span', { class: 'rule-meta' }, `${r.since} · `, h(doc, 'span', { class: 'rule-state' }, r.state)));
   if (r.staged) li.appendChild(h(doc, 'span', { class: 'rule-staged' }, r.staged));
@@ -65,7 +67,9 @@ export function rulesBlockEl(doc: MiniDoc, v: RulesBlockView): MiniEl {
       ? h(doc, 'p', { class: 'rules-repo', role: 'heading', 'aria-level': '4' }, h(doc, 'button', { class: 'rules-fold', type: 'button', 'data-rule-act': 'fold', 'data-rule-id': g.repoKey, 'aria-expanded': String(!g.folded), title: `${g.folded ? 'Show' : 'Fold'} the rules for ${g.label}` }, h(doc, 'span', { class: 'rules-fold-mark', 'aria-hidden': 'true' }, g.folded ? '▸' : '▾'), ' ', g.label, ' ', count))
       : h(doc, 'p', { class: 'rules-repo', role: 'heading', 'aria-level': '4' }, g.label, ' ', count);
     const list = g.folded ? null : h(doc, 'ul', { class: 'rules-list', role: 'list' }, ...g.rows.map((r) => ruleRowEl(doc, r)));
-    box.appendChild(h(doc, 'section', { class: `rules-group${g.folded ? ' is-folded' : ''}`, 'aria-label': `${g.label}, ${g.count} rules` }, head, list));
+    // C6'b2-2: the destructive limit, once per group, under its heading (folded or not)
+    const limit = g.limit ? h(doc, 'p', { class: 'meta rules-limit' }, g.limit) : null;
+    box.appendChild(h(doc, 'section', { class: `rules-group${g.folded ? ' is-folded' : ''}`, 'aria-label': `${g.label}, ${g.count} rules` }, head, limit, list));
   }
   if (v.saveBar || v.result) {
     const bar = h(doc, 'div', { class: `rules-save-bar${v.saveBar ? ' has-changes' : ''}`, role: 'group', 'aria-label': 'Rule changes' });

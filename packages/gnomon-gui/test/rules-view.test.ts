@@ -17,6 +17,7 @@ import {
   presetLabel,
   reconcile,
   refusedResult,
+  DESTRUCTIVE_LIMIT,
   rulesBlock,
   RULES_EMPTY,
   rulesStatusOf,
@@ -225,5 +226,30 @@ describe('#gui-rules-view: the list at 0, 1, 5, 50 and 200 rules', () => {
   it('status.rules is read fail-safe', () => {
     expect(rulesStatusOf({}).built).toBe(false);
     expect(rulesStatusOf({ rules: { built: true, rules: [{ ruleId: 1 }] } }).rules).toEqual([]);
+  });
+});
+
+describe("#gui-rules-view: C6'b2-2 destructive tool rules (K3 class)", () => {
+  const tr = (n: number, cls: string | undefined, repo = REPO_A) => ({ ruleId: id(n), match: 'tool', tool: 'mcp:fs/rm', repoKey: repo, repoName: repo === REPO_A ? 'a-paradigm' : 'billing', words: `rm on fs, any arguments ${n}`, learnedAt: at('2026-10-23T12:00:00'), state: 'on', ...(cls ? { class: cls } : {}) });
+  const st = (rules: unknown[]) => rulesStatusOf({ rules: { built: true, now: at(NOW), presets: {}, rules } });
+
+  it('a destructive rule carries the chip "can’t be undone"; mutate and unknown carry none', () => {
+    const v = rulesBlock(st([tr(1, 'destructive'), tr(2, 'mutate'), tr(3, 'weird')]), emptyRulesUi());
+    const rows = v.groups[0]!.rows;
+    expect(rows.find((r) => r.ruleId === id(1))!.chip).toBe('can’t be undone');
+    expect(rows.find((r) => r.ruleId === id(2))!.chip).toBeNull();
+    expect(rows.find((r) => r.ruleId === id(3))!.chip).toBeNull();
+  });
+
+  it('the group states the limit once, only when it holds a destructive rule', () => {
+    const v = rulesBlock(st([tr(1, 'destructive'), tr(2, 'destructive'), tr(3, 'mutate', REPO_B)]), emptyRulesUi());
+    expect(DESTRUCTIVE_LIMIT).toBe('these run for you and the model · at most 3 a minute per session, 30 a day per rule');
+    expect(v.groups.find((g) => g.repoKey === REPO_A)!.limit).toBe(DESTRUCTIVE_LIMIT);
+    expect(v.groups.find((g) => g.repoKey === REPO_B)!.limit).toBeNull();
+    const els: Array<{ className: string; kids: unknown[] }> = [];
+    const doc = { createElement: (tag: string) => { const e = { tag, className: '', attrs: new Map<string, string>(), kids: [] as unknown[], appendChild(c: unknown) { this.kids.push(c); return c; }, setAttribute(n: string, val: string) { if (n === 'class') this.className = val; this.attrs.set(n, val); } }; els.push(e); return e; }, createTextNode: (t: string) => t };
+    rulesBlockEl(doc as never, v);
+    expect(els.filter((e) => e.className === 'meta rules-limit')).toHaveLength(1);
+    expect(els.filter((e) => e.className === 'chip rule-chip')).toHaveLength(2);
   });
 });

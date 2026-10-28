@@ -1695,6 +1695,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 /* C5'b: a paused rule (status.rules paused) says why in its state: weight 600 --ink2, never a hue */
 .rule-row.is-paused .rule-state { font-weight: 600; color: var(--ink2); }
 .rule-staged { grid-column: 1; font-size: var(--fs-label); font-weight: 600; color: var(--ink); }
+/* C6'b2-2: a rule for a tool that can't be undone: the chip in a word (ink, never a hue); the group's limit once */
+.rule-row .rule-chip { grid-column: 1; justify-self: start; }
+.rules-limit { margin: 0 0 2px; font-size: var(--fs-label); color: var(--sec); }
 .rule-keys { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 6px; align-items: center; justify-self: end; }
 /* Turn off ▾ opens inline under the row, like the card's Always ▾ (.always-choices) */
 .rule-offs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; padding-left: 8px; border-left: 1px solid var(--rule); }
