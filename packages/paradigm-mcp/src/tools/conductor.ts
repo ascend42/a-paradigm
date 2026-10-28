@@ -7,7 +7,7 @@
  * - paradigm_conductor_list: List all registered sessions
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
   registerConductorSession,
@@ -113,7 +113,7 @@ export async function handleConductorTool(
       // Try to get parent PID
       let parentPid: number | undefined;
       try {
-        const ppid = execSync(`ps -o ppid= -p ${pid}`, {
+        const ppid = execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)], {
           encoding: 'utf-8',
           timeout: 3000,
         }).trim();

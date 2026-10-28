@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-import { GithubProvider } from './github.js';
+import { GithubProvider, issueSelector } from './github.js';
 import type { Task } from '../../utils/task-loader.js';
 
 function baseTask(overrides: Partial<Task> = {}): Task {
@@ -174,5 +174,22 @@ describe('GithubProvider two-way (Phase 2b)', () => {
     expect(remote.closedReason).toBe('completed');
     expect(remote.assignees).toEqual(['octocat']);
     expect(remote.labels).toEqual(['blocked']);
+  });
+});
+
+describe('issueSelector (refs are repo content and become gh arguments)', () => {
+  it('accepts a number, owner/repo#N and a github.com issue URL', () => {
+    expect(issueSelector('7')).toBe('7');
+    expect(issueSelector('acme/widgets#7')).toBe('7');
+    expect(issueSelector('https://github.com/acme/widgets/issues/7')).toBe('7');
+  });
+
+  it('refuses anything else, and never runs gh with it', async () => {
+    for (const bad of ['--repo=evil/x', '-R', 'acme/widgets#7 --web', '7;rm', 'https://evil.com/a/b/issues/7', '']) {
+      expect(() => issueSelector(bad), bad).toThrow(/not a GitHub issue ref/);
+    }
+    const run = vi.fn(() => '');
+    await expect(new GithubProvider({ run }).close!({ provider: 'github', ref: '--repo=evil/x' })).rejects.toThrow();
+    expect(run).not.toHaveBeenCalled();
   });
 });

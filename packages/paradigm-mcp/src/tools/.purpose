@@ -3,6 +3,14 @@ description: |
   MCP tool handlers — dispatch layer for all paradigm_* tool calls.
   Each tool file exports getXToolsList() + handleXTool() functions.
 components:
+  fallback-grep:
+    description: 'grepForReferences(rootDir, symbol) — paradigm_ripple fallback when a symbol is not indexed. The symbol is model input: rg, then grep, run through execFileSync argv with -F (fixed string), the pattern after -e and the path after --; never a shell string. Output capped at 50 lines.'
+    type: utility
+    parent: '#ToolHandlers'
+    path: fallback-grep.ts
+    tags:
+      - ripple
+      - security
   legacy-tool-map:
     description: '7.13 single source of truth — every pre-7.13 paradigm_* tool name (184) mapped to its family op ({tool, op}) or anchor ({tool}, optional fixed args for folded tools like plugin_check → status check:plugins). No runtime imports; feeds hidden-alias dispatch, breadcrumb canonicalization, the reference codemod and the doctor legacy-name check. Aliases removed in 7.15.'
     type: config

@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { log } from './mcp-logger.js';
 import * as os from 'os';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
 const CONDUCTOR_DIR = path.join(os.homedir(), '.conductor');
 const SESSIONS_DIR = path.join(CONDUCTOR_DIR, 'sessions');
@@ -153,7 +153,8 @@ export function detectTerminalBundleId(): string | undefined {
         return bundle identifier of frontApp
       end tell
     `;
-    const result = execSync(`osascript -e '${script}'`, {
+    // No shell: the script goes to osascript as one argument.
+    const result = execFileSync('osascript', ['-e', script], {
       encoding: 'utf-8',
       timeout: 3000,
     }).trim();
@@ -199,7 +200,7 @@ export function autoRegisterWithConductor(projectDir: string): void {
     // Try to get parent PID
     let parentPid: number | undefined;
     try {
-      const ppid = execSync(`ps -o ppid= -p ${pid}`, {
+      const ppid = execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)], {
         encoding: 'utf-8',
         timeout: 3000,
       }).trim();

@@ -5,7 +5,7 @@
  */
 
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export interface FallbackReference {
   filePath: string;
@@ -27,27 +27,26 @@ export function grepForReferences(
   const { maxResults = 20 } = options;
   const results: FallbackReference[] = [];
 
-  // Escape special regex chars but preserve the symbol prefix
-  const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-  // Try using ripgrep first (faster), fall back to grep
-  const grepCommands = [
+  // The symbol comes from a tool call (model input), so it is matched as a
+  // fixed string (-F) and passed in an argv array with no shell.
+  const grepCommands: Array<[string, string[]]> = [
     // ripgrep - exclude common directories
-    `rg -n --no-heading "${escapedSymbol}" "${rootDir}" --glob "!node_modules" --glob "!.git" --glob "!dist" --glob "!build" --glob "!coverage" --max-count 50 2>/dev/null`,
+    ['rg', ['-n', '--no-heading', '-F', '--glob', '!node_modules', '--glob', '!.git', '--glob', '!dist', '--glob', '!build', '--glob', '!coverage', '--max-count', '50', '-e', symbol, '--', rootDir]],
     // fallback to grep
-    `grep -rn "${escapedSymbol}" "${rootDir}" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=build --exclude-dir=coverage 2>/dev/null | head -50`,
+    ['grep', ['-rn', '-F', '--exclude-dir=node_modules', '--exclude-dir=.git', '--exclude-dir=dist', '--exclude-dir=build', '--exclude-dir=coverage', '-e', symbol, '--', rootDir]],
   ];
 
   let output = '';
-  for (const cmd of grepCommands) {
+  for (const [bin, args] of grepCommands) {
     try {
-      output = execSync(cmd, { encoding: 'utf8', maxBuffer: 1024 * 1024 });
-      if (output.trim()) break;
-    } catch {
-      // grep returns non-zero if no matches, that's fine
-      continue;
+      output = execFileSync(bin, args, { encoding: 'utf8', maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (err) {
+      // non-zero on no match (1) or a partial error (2); keep any matches printed
+      output = String((err as { stdout?: string }).stdout ?? '');
     }
+    if (output.trim()) break;
   }
+  output = output.split('\n').slice(0, 50).join('\n');
 
   if (!output.trim()) {
     return results;

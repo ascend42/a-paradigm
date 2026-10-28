@@ -13,7 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import type { LoreEntry, LoreFilter, LoreTimeline, LoreAssessment } from './types.js';
 import { applyLoreFilter } from './filter.js';
 import { normalizeLoreEntry } from './normalize.js';
@@ -93,10 +93,19 @@ function validateLoreSymbols(rootDir: string, symbols: string[]): SymbolValidati
   const declaredSymbols = new Set<string>();
 
   try {
-    const findResult = require('child_process').execSync(
-      `find "${rootDir}" -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null || true`,
-      { encoding: 'utf-8' }
-    ) as string;
+    // No shell: rootDir is an argument, never part of a command string.
+    let findResult = '';
+    try {
+      findResult = execFileSync(
+        'find',
+        // Absolute path: a rootDir starting with `-`, `!` or `(` can't read as a find expression.
+        [path.resolve(rootDir), '-name', '.purpose', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'],
+        { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024, timeout: 10_000 }
+      );
+    } catch (err) {
+      // find exits non-zero on unreadable dirs but still prints what it found
+      findResult = String((err as { stdout?: string }).stdout ?? '');
+    }
 
     for (const purposePath of findResult.split('\n').filter(Boolean)) {
       try {

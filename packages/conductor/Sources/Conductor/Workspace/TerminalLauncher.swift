@@ -26,7 +26,7 @@ struct TerminalLauncher {
         projectDirectory: String,
         label: String? = nil
     ) async throws -> LaunchedTerminal {
-        let command = "cd \(shellEscape(projectDirectory)) && claude"
+        let command = launchCommand(projectDirectory: projectDirectory)
 
         switch terminal {
         case .terminal:
@@ -85,7 +85,7 @@ struct TerminalLauncher {
         let script = """
         tell application "Terminal"
             activate
-            do script "\(command)"
+            do script \(appleScriptString(command))
             set windowID to id of front window
             return windowID as text
         end tell
@@ -121,7 +121,7 @@ struct TerminalLauncher {
         let script = """
         tell application "Terminal"
             repeat with w in windows
-                if (id of w as text) is "\(windowID)" then
+                if (id of w as text) is \(appleScriptString(windowID)) then
                     close w
                     return
                 end if
@@ -148,7 +148,7 @@ struct TerminalLauncher {
             tell current window
                 set newTab to (create tab with default profile)
                 tell current session of newTab
-                    write text "\(command)"
+                    write text \(appleScriptString(command))
                     set sessionID to id
                 end tell
             end tell
@@ -188,7 +188,7 @@ struct TerminalLauncher {
             repeat with w in windows
                 repeat with t in tabs of w
                     repeat with s in sessions of t
-                        if id of s is "\(sessionID)" then
+                        if id of s is \(appleScriptString(sessionID)) then
                             close t
                             return
                         end if
@@ -229,8 +229,28 @@ struct TerminalLauncher {
 
     // MARK: - Helpers
 
-    private static func shellEscape(_ path: String) -> String {
+    /// Single-quote a value for the shell (POSIX `'…'`, with `'` as `'\''`).
+    static func shellEscape(_ path: String) -> String {
         "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    /// A complete AppleScript string literal (quotes included) for `value`.
+    /// Escapes `\` first, then `"`, so a project path or window/session id
+    /// can never close the literal and reach `do shell script`. AppleScript
+    /// string literals have no other escapes that matter here; line breaks
+    /// are written as `\n` / `\r` so the literal stays on one line.
+    static func appleScriptString(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "\"" + escaped + "\""
+    }
+
+    /// The shell command a new terminal runs for `projectDirectory`.
+    static func launchCommand(projectDirectory: String) -> String {
+        "cd \(shellEscape(projectDirectory)) && claude"
     }
 }
 

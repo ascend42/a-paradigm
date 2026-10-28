@@ -364,7 +364,7 @@ components:
       - Sources/Conductor/Workspace/WorkspaceManager.swift:1
 
   terminal-launcher:
-    description: "Launches and closes CC terminals. Returns LaunchedTerminal with windowIdentifier for targeted close. AppleScript for Terminal.app/iTerm2 (window ID / session ID), process-based for others."
+    description: "Launches and closes CC terminals. Returns LaunchedTerminal with windowIdentifier for targeted close. AppleScript for Terminal.app/iTerm2 (window ID / session ID), process-based for others. Every value spliced into AppleScript (the launch command with the shell-quoted project path, window and session ids) goes through appleScriptString, which escapes backslash then double quote, so it cannot close the literal and reach do shell script. Tested against curly quotes (U+201C/U+201D), U+2028/U+2029 and «data utxt…» inside the literal: all stay data. TerminalLauncher is the only NSAppleScript user in Conductor."
     type: service
     parent: "#workspace-manager"
     tags: [workspace, terminal, launch, close, applescript]

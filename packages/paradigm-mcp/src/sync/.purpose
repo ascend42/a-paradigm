@@ -29,7 +29,7 @@ components:
     file: provider.ts
     tags: [feature, task-management, sync]
   github-provider:
-    description: GitHub SyncProvider (two-way) — gh-CLI shell-out for issue create/comment/close/reopen/edit + pull via `gh issue view --json`; auth via `gh auth status`; self-registers on load
+    description: GitHub SyncProvider (two-way) — gh-CLI shell-out for issue create/comment/close/reopen/edit + pull via `gh issue view --json`; auth via `gh auth status`; self-registers on load. issueSelector accepts only a number, owner/repo#N or a github.com issue URL (task refs are repo content and become gh arguments) and throws otherwise.
     type: service
     file: providers/github.ts
     tags: [feature, task-management, sync, github]
