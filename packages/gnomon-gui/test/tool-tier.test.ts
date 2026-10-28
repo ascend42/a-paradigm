@@ -1,0 +1,156 @@
+/**
+ * #gui-tool-tier (slice C4'b): the session label per source, the chip for a non-owner or an ended session, the menu
+ * marks, the preview sheet's words in every state (window cap, above measured, nothing changes, tier-0 pins, cannot
+ * remember), a malformed preview, the commit outcome and the Settings value. The press paths (expiry, stale, one
+ * commit per press, untrusted presses) are the controller's, below.
+ */
+import { describe, expect, it } from 'vitest';
+import { commitOutcome, previewOf, previewView, probeTierOf, refusalPhase, sessionTierOf, sheetView, tierChipOf, tierLabel, tierMenu, tierRequest, tierSettingsValue, TIER_COPY, WINDOW_TIER_MIN, type TierPreview } from '../src/core/tool-tier.js';
+
+const H = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+const ME = 'p:abcdefgh/founder';
+const TOKEN = 'a'.repeat(32);
+/** a kernel preview answer (local-session.ts #previewTier) */
+const answer = (o: Record<string, unknown> = {}): Record<string, unknown> => ({ hsid: H, from: 2, to: 3, requested: 3, measured: 2, window: 3, k: 12, slotTokens: 4000, slotShare: 0.25, surface: 'compact→full', cacheLost: true, leaving: ['grep', 'glob'], unfitPins: [], notice: 'Tier 2 → 3: …', token: TOKEN, expiresInMs: 60_000, rememberable: true, ...o });
+const pv = (o: Record<string, unknown> = {}): TierPreview => previewOf(answer(o))!;
+
+describe('#gui-tool-tier: the session label', () => {
+  it('the source is a word: measured, yours, provisional', () => {
+    expect(tierLabel({ tier: 2, source: 'measured' })).toBe('tier 2');
+    expect(tierLabel({ tier: 3, source: 'human' })).toBe('tier 3 · yours');
+    expect(tierLabel({ tier: 1, source: 'provisional' })).toBe('tier 1 · provisional');
+  });
+  it('the last model.capabilities of THIS session; a session.open starts afresh; another session or a probe row is not it', () => {
+    const rows = [
+      { kind: 'session.open', payload: { hsid: H } },
+      { kind: 'model.capabilities', payload: { hsid: H, tier: 1, tierSource: 'provisional', measured: null } },
+      { kind: 'model.capabilities', payload: { backend: 'local', endpoint: 'fake', tier: 2, tierSource: 'measured' } },
+      { kind: 'model.capabilities', payload: { hsid: 'hsid:v1:other', tier: 0, tierSource: 'human' } },
+      { kind: 'model.capabilities', payload: { hsid: H, tier: 3, previous: 1, measured: 2, tierSource: 'human' } },
+    ];
+    expect(sessionTierOf(rows, H)).toEqual({ tier: 3, source: 'human', measured: 2, previous: 1 });
+    expect(sessionTierOf([...rows, { kind: 'session.open', payload: { hsid: H } }], H)).toBeNull();
+    expect(sessionTierOf([{ kind: 'model.capabilities', payload: { hsid: H, tier: 7, tierSource: 'human' } }], H)).toBeNull();
+  });
+  it('the owner of a live session gets the key (▾); another principal or an ended session gets a plain chip that says why', () => {
+    const tier = { tier: 1 as const, source: 'provisional' as const, measured: null };
+    const base = { backend: 'local', loop: false, live: true, owner: ME, me: ME, tier };
+    expect(tierChipOf(base)).toEqual({ kind: 'key', text: 'tier 1 · provisional ▾', title: TIER_COPY.provisional });
+    expect(tierChipOf({ ...base, me: 'p:abcdefgh/other' })).toMatchObject({ kind: 'chip', text: 'tier 1 · provisional', title: `${TIER_COPY.notOwner} ${TIER_COPY.provisional}` });
+    expect(tierChipOf({ ...base, live: false })).toMatchObject({ kind: 'chip', title: expect.stringContaining('Only the person who opened this session') });
+    expect(tierChipOf({ ...base, owner: null })?.kind).toBe('chip');
+    // loop sessions and Claude sessions: no label
+    expect(tierChipOf({ ...base, loop: true })).toBeNull();
+    expect(tierChipOf({ ...base, backend: 'claude-code' })).toBeNull();
+    expect(tierChipOf({ ...base, tier: null })).toBeNull();
+  });
+  it('the menu: every tier, the current marked, the measured note ends " · measured"', () => {
+    const m = tierMenu(3, 2);
+    expect(m.map((x) => x.name)).toEqual(['Tier 0', 'Tier 1', 'Tier 2', 'Tier 3']);
+    expect(m.filter((x) => x.current).map((x) => x.tier)).toEqual([3]);
+    expect(m[2]!.note).toBe('up to 12 tools, short forms · measured');
+    expect(m[0]!.note).toBe('its own file tools only: no Gnomon or MCP tools');
+    expect(m[3]!.note.endsWith(' · measured')).toBe(false);
+    expect(tierMenu(1, null).some((x) => x.note.endsWith(' · measured'))).toBe(false);
+  });
+});
+
+describe('#gui-tool-tier: the preview sheet', () => {
+  it('the meta lines and the foot', () => {
+    const v = previewView(pv(), 'qwen2.5-coder:14b');
+    expect(v.lines).toEqual(['tools: up to 12, full forms (now short)', 'tool space: 4 000 tokens, 25% of its context', 'leaving: grep, glob', 'prompt cache: starts over, so the next reply is slower']);
+    expect(v.foot).toBe(TIER_COPY.foot);
+    expect(v.apply).toBe(true);
+    expect(v.checkbox).toEqual({ label: 'Use tier 3 for qwen2.5-coder:14b in new sessions too', disabled: false });
+    expect(previewView(pv({ leaving: [] }), 'm').lines).toContain('none leave');
+  });
+  it('above what the model measured (or not measured yet, above 1) warns with ◆', () => {
+    expect(previewView(pv(), 'm').warnings).toEqual(['◆ Above what this model measured (2). It may call tools badly; every call is still checked and carded.']);
+    expect(previewView(pv({ measured: null, to: 2, requested: 2 }), 'm').warnings[0]).toBe('◆ Above what this model measured (not yet). It may call tools badly; every call is still checked and carded.');
+    expect(previewView(pv({ measured: null, from: 2, to: 1, requested: 1 }), 'm').warnings).toEqual([]);
+    expect(previewView(pv({ measured: 3 }), 'm').warnings).toEqual([]);
+  });
+  it('the window cap: the requested tier needs a bigger context target, so the lower one applies', () => {
+    const v = previewView(pv({ requested: 3, to: 2, window: 2, from: 1, measured: 3, surface: 'compact→compact', k: 12, slotTokens: 1228, slotShare: 0.15 }), 'm');
+    expect(v.warnings).toEqual([`◆ Tier 3 needs a context target of 16 384 tokens or more, so this applies tier 2.`]);
+    expect(WINDOW_TIER_MIN).toEqual({ 1: 4096, 2: 8192, 3: 16384 });
+  });
+  it('to === from: no Apply key and no checkbox, only close', () => {
+    const p = pv({ from: 2, to: 2, requested: 3, window: 2, measured: 3 });
+    const v = previewView(p, 'm');
+    expect(v.apply).toBe(false);
+    expect(v.checkbox).toBeNull();
+    const s = sheetView({ phase: 'ready', from: 2, requested: 3, preview: p, model: 'm' });
+    expect(s.keys).toEqual([{ act: 'close', label: 'close', quiet: true }]);
+    expect(s.focus).toBe('close');
+  });
+  it('tier 0: no forms, the pins wait for a raise; from tier 0 the foot says MCP servers start first', () => {
+    const down = previewView(pv({ to: 0, requested: 0, k: 0, slotTokens: 0, slotShare: 0, surface: 'full→compact', unfitPins: [{ name: 'echo', why: 'tier-0' }, { name: 'big', why: 'over-budget' }] }), 'm');
+    expect(down.lines[0]).toBe('tools: up to 0, no forms (now full)');
+    expect(down.lines).toContain('pins that won’t fit: echo (waits until you raise the tier), big (over budget)');
+    const up = previewView(pv({ from: 0, to: 2, requested: 2, measured: 2 }), 'm');
+    expect(up.lines[0]).toBe('tools: up to 12, full forms (now no)');
+    expect(up.foot).toBe(`${TIER_COPY.foot} MCP servers start first.`);
+  });
+  it('rememberable false disables the checkbox with the kernel’s reason inline', () => {
+    expect(previewView(pv({ rememberable: false, rememberWhy: 'no-fingerprint' }), 'm').checkbox).toEqual({ label: 'Use tier 3 for m in new sessions too', disabled: true, why: 'can’t remember: the server didn’t name this model’s file' });
+    expect(previewView(pv({ rememberable: false, rememberWhy: 'store-unwritable' }), 'm').checkbox).toMatchObject({ disabled: true, why: 'can’t remember: Gnomon couldn’t write its tier file' });
+  });
+  it.each([
+    ['not an object', null],
+    ['a tier out of range', answer({ to: 4 })],
+    ['a short token', answer({ token: 'abc' })],
+    ['a surface that is not a→b', answer({ surface: 'full' })],
+    ['an unknown surface', answer({ surface: 'compact→wide' })],
+    ['leaving not names', answer({ leaving: [1] })],
+    ['a pin with no why', answer({ unfitPins: [{ name: 'x' }] })],
+    ['no rememberable', answer({ rememberable: undefined })],
+    ['not rememberable with no reason', answer({ rememberable: false })],
+    ['an unknown reason', answer({ rememberable: false, rememberWhy: 'nope' })],
+    ['a share over 1', answer({ slotShare: 25 })],
+    ['no expiry', answer({ expiresInMs: 0 })],
+  ])('a malformed preview (%s) is null', (_why, v) => {
+    expect(previewOf(v)).toBeNull();
+  });
+  it('the phases: loading, applying, expired, stale, gone, error', () => {
+    const p = pv();
+    const loading = sheetView({ phase: 'loading', from: 2, requested: 3, preview: null, model: 'm' });
+    expect(loading).toMatchObject({ title: 'Change this session’s tool tier from 2 to 3?', status: 'Checking what tier 3 changes…', body: null });
+    expect(loading.keys[0]).toMatchObject({ act: 'apply', disabled: true, busy: true });
+    expect(sheetView({ phase: 'ready', from: 2, requested: 3, preview: p, model: 'm' }).keys).toEqual([{ act: 'apply', label: 'Apply now · cache resets', pri: true }, { act: 'cancel', label: 'cancel', quiet: true }]);
+    expect(sheetView({ phase: 'applying', from: 2, requested: 3, preview: p, model: 'm' }).keys[0]).toMatchObject({ label: 'Applying…', disabled: true });
+    const exp = sheetView({ phase: 'expired', from: 2, requested: 3, preview: p, model: 'm' });
+    expect(exp.status).toBe('Not changed: this preview expired (a preview holds for a minute).');
+    expect(exp.keys[0]).toEqual({ act: 'again', label: 'Preview again', pri: true });
+    expect(exp.keys.some((k) => k.act === 'apply')).toBe(false);
+    expect(sheetView({ phase: 'stale', from: 2, requested: 3, preview: p, model: 'm' }).status).toBe('Not changed: this session’s tools changed since the preview.');
+    const gone = sheetView({ phase: 'error', from: 2, requested: 3, preview: null, model: 'm' });
+    expect(gone).toMatchObject({ status: 'Not changed: this session isn’t running any more.', fail: true, focus: 'close' });
+    expect(sheetView({ phase: 'error', from: 2, requested: 3, preview: null, model: 'm', error: 'BAD_REQUEST  x' }).status).toBe('BAD_REQUEST  x');
+    expect([refusalPhase('stale'), refusalPhase('not-found'), refusalPhase('bad-params')]).toEqual(['stale', 'gone', 'error']);
+  });
+});
+
+describe('#gui-tool-tier: outcome, Settings value, requests', () => {
+  it('the info toast; remembered:false with remember asked is a warn with its reason', () => {
+    expect(commitOutcome({ tier: 3, previous: 2, remembered: false }, false)).toEqual({ info: 'tier 2 → 3 · applies from the next step · prompt cache starts over', warn: null });
+    expect(commitOutcome({ tier: 3, previous: 2, remembered: false, rememberWhy: 'no-fingerprint' }, true)?.warn).toBe('tier 3 applies to this session only: can’t remember: the server didn’t name this model’s file');
+    expect(commitOutcome({ tier: 3, previous: 2, remembered: true }, true)?.warn).toBeNull();
+    expect(commitOutcome({ tier: 9 }, false)).toBeNull();
+  });
+  it('the Settings value in each case', () => {
+    const t = (o: Record<string, unknown>) => probeTierOf({ skill: 2, passed: 3, measuring: false, window: 3, human: null, ...o });
+    expect(tierSettingsValue(t({}))).toBe('2 · measured');
+    expect(tierSettingsValue(t({ skill: 2, human: 3 }))).toBe('3 · yours (measured 2)');
+    expect(tierSettingsValue(t({ skill: null, measuring: true }))).toBe('1 · provisional · measuring…');
+    expect(tierSettingsValue(t({ skill: 3, window: 1 }))).toBe('1 · measured 3, capped by context');
+    expect(tierSettingsValue(t({ skill: null }))).toBe('not measured yet');
+    expect(tierSettingsValue(null)).toBe('not measured yet');
+    expect(tierSettingsValue(t({}), true)).toBe('2 · measured · measuring…');
+    expect(probeTierOf({ skill: 5 })).toBeNull();
+  });
+  it('the requests: preview, commit (never a retry), re-measure and clear', () => {
+    expect(tierRequest(H, 'preview', 3)).toEqual({ kind: 'request.session.tier', payload: { hsid: H, op: 'preview', tier: 3 } });
+    expect(tierRequest(H, 'commit', TOKEN, false, 3)).toEqual({ kind: 'request.session.tier', payload: { hsid: H, op: 'commit', token: TOKEN, remember: false, tier: 3 } });
+  });
+});
