@@ -34,7 +34,7 @@ import { refreshContextSafely, type ProjectContext, type ReloadContextFn } from 
 import { ToolRegistry, type ToolModule, type ToolDefinition, toListedTool, readMcpToolsConfig, FEATURE_DETECTORS } from '../utils/tool-registry.js';
 import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, OP_ANNOTATIONS_SCHEMA, type ToolFamily, type OpAnnotationsDocument } from '../utils/tool-family.js';
 import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
-import { gnomonStaged, GNOMON_STAGED_REFUSAL } from '../utils/gnomon-staged.js';
+import { gnomonStaged, GNOMON_STAGED_REFUSAL, STAGED_REFUSED_FAMILIES } from '../utils/gnomon-staged.js';
 import { ANCHOR_TOOLS, DEFAULT_FAMILIES, FAMILY_META, LOCAL_ONLY_OPS, ON_DEMAND, findOnDemand } from './families.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
@@ -764,7 +764,9 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
   server.setRequestHandler(
     ListToolsRequestSchema,
     async () => {
-      return { tools: listSurfaceTools(surface, registry, getContext().rootDir, activatedOnDemand) };
+      const tools = listSurfaceTools(surface, registry, getContext().rootDir, activatedOnDemand);
+      // Aegis M2: the staged Gnomon mode never lists a network/exec family
+      return { tools: gnomonStaged() ? tools.filter((t) => !STAGED_REFUSED_FAMILIES.includes(t.name)) : tools };
     }
   );
 
@@ -779,6 +781,10 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       const resolveError = 'error' in resolved ? resolved.error : null;
       const name = 'error' in resolved ? requestedName : resolved.canonical;
       const args = ('error' in resolved ? (rawArgs ?? {}) : resolved.args) as Record<string, any>;
+      // Aegis M2: a network/exec family refuses in the staged Gnomon mode, by its family name or a legacy per-op name
+      if (gnomonStaged() && (STAGED_REFUSED_FAMILIES.includes(requestedName) || STAGED_REFUSED_FAMILIES.includes(LEGACY_TOOL_MAP[name]?.tool ?? ''))) {
+        return { content: [{ type: 'text', text: JSON.stringify({ error: GNOMON_STAGED_REFUSAL, tool: requestedName }) }], isError: true };
+      }
       addToolBreadcrumb(name, args);
       if (!('error' in resolved) && resolved.deprecatedAlias) {
         getSessionTracker().addBreadcrumb(
@@ -1524,7 +1530,8 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
   // TD-2026-10-27-833: the class map is a CONSTANT over code — every family's per-op hints, built once from the
   // compiled definitions. It never follows the project's config or listing (a client reads only the entries of the
   // tools it was listed), so nothing in `.paradigm/` can change how an op is classed.
-  const opAnnotationsDoc = buildOpAnnotationsDocument(surface, [...surface.families.keys()].map((name) => ({ name })));
+  // Aegis M2: staged, the refused network/exec families carry no annotations either
+  const opAnnotationsDoc = buildOpAnnotationsDocument(surface, [...surface.families.keys()].filter((n) => !gnomonStaged() || !STAGED_REFUSED_FAMILIES.includes(n)).map((name) => ({ name })));
   return { opAnnotations: () => opAnnotationsDoc };
 }
 

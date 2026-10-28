@@ -10,7 +10,9 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
+import { STAGED_REFUSED_FAMILIES } from '../utils/gnomon-staged.js';
 import { buildRegistry, buildToolSurface, registerTools } from './index.js';
 import { LOCAL_ONLY_OPS } from './families.js';
 import { familyOpsFromMap } from '../utils/tool-family.js';
@@ -54,6 +56,8 @@ function argsFor(schema: Record<string, unknown> | undefined): Record<string, un
 }
 
 let call: (name: string, args: Record<string, unknown>) => Promise<unknown>;
+let list: () => Promise<Array<{ name: string }>>;
+let annotations: () => { tools: Record<string, unknown> };
 
 beforeAll(async () => {
   for (const d of ['lore', 'wisdom', 'history', 'tasks', 'protocols', 'agents', 'notebooks', 'docs']) fs.mkdirSync(path.join(repo, '.paradigm', d), { recursive: true });
@@ -75,7 +79,9 @@ beforeAll(async () => {
   getSessionTracker().setRootDir(repo);
   const handlers = new Map<unknown, (req: { params: Record<string, unknown> }) => Promise<unknown>>();
   const server = { setRequestHandler: (s: unknown, h: never) => void handlers.set(s, h), sendToolListChanged: async () => undefined };
-  registerTools(server as never, () => ctx, async () => ctx);
+  const reg = registerTools(server as never, () => ctx, async () => ctx);
+  annotations = reg.opAnnotations as never;
+  list = async () => ((await handlers.get(ListToolsRequestSchema)!({ params: {} })) as { tools: Array<{ name: string }> }).tools;
   call = (name, args) => handlers.get(CallToolRequestSchema)!({ params: { name, arguments: args } });
 });
 
@@ -110,6 +116,20 @@ describe('LOCAL_ONLY_OPS write nothing (staged mode)', () => {
       });
     }
   }
+
+  it('Aegis M2: network/exec families are not listed, carry no annotations and refuse (also by a legacy name)', async () => {
+    await call('paradigm_tool_activate', { feature: 'sentinel' });
+    const names = (await list()).map((t) => t.name);
+    for (const f of STAGED_REFUSED_FAMILIES) {
+      expect(names, f).not.toContain(f);
+      expect(annotations().tools[f], f).toBeUndefined();
+      const r = (await call(f, { op: 'list' })) as { isError?: boolean; content: Array<{ text: string }> };
+      expect(r.isError, f).toBe(true);
+      expect(r.content[0]!.text).toMatch(/staged/);
+    }
+    const legacy = Object.entries(LEGACY_TOOL_MAP).find(([, t]) => t.tool === 'paradigm_symphony')![0];
+    expect(((await call(legacy, {})) as { isError?: boolean }).isError).toBe(true);
+  });
 
   it('the session trail lands under HOME, never in the repo', () => {
     expect(fs.existsSync(path.join(repo, '.paradigm', 'session-breadcrumbs.json'))).toBe(false);

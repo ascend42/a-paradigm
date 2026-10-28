@@ -4,8 +4,11 @@
  * must be the live worst-case list's (every feature detector on), and the paradigm://tool-annotations document
  * (S-P) must be the live one. Regenerate with
  * `PARADIGM_TOOLS_FIXTURE=write npx vitest run src/tools/tools-list-fixture.test.ts`.
+ * TD-2026-10-27-833 (Aegis M2): Gnomon runs Paradigm in the STAGED mode, so the fixture is the staged list (no
+ * network/exec family listed or annotated). The env is set before the server module is imported.
  */
 import { describe, it, expect, vi } from 'vitest';
+process.env.PARADIGM_GNOMON_STAGED = '1';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

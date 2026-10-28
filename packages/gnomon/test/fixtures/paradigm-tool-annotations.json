@@ -457,110 +457,6 @@
         "destructiveHint": true
       }
     },
-    "paradigm_sentinel": {
-      "add_pattern": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "app_state": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "events": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "flow_activity": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "logs": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "metrics": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "patterns": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "record": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "resolve": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "schemas": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "scopes": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "services": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "show": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "stats": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "suggest_pattern": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "traces": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "triage": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "validate_symbol": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      }
-    },
-    "paradigm_symphony": {
-      "approve_file": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "peek": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "poll": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "request_file": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "send": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "status": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "thread": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      }
-    },
     "paradigm_classroom": {
       "promote": {
         "readOnlyHint": false,
@@ -621,52 +517,6 @@
         "destructiveHint": false
       }
     },
-    "paradigm_persona": {
-      "add_step": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "affected": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "coverage": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "create": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "delete": {
-        "readOnlyHint": false,
-        "destructiveHint": true
-      },
-      "get": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "list": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "remove_step": {
-        "readOnlyHint": false,
-        "destructiveHint": true
-      },
-      "run": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "update": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "validate": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      }
-    },
     "paradigm_university": {
       "pack_list": {
         "readOnlyHint": true,
@@ -703,48 +553,6 @@
         "destructiveHint": false
       }
     },
-    "paradigm_conductor": {
-      "list": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": false
-      },
-      "register": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": false
-      },
-      "unregister": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": false
-      }
-    },
-    "paradigm_platform": {
-      "annotate": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "clear": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "highlight": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "navigate": {
-        "readOnlyHint": false,
-        "destructiveHint": false
-      },
-      "observe": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      }
-    },
     "paradigm_pipeline": {
       "abort": {
         "readOnlyHint": false,
@@ -776,20 +584,6 @@
       }
     },
     "paradigm_graduation": {},
-    "paradigm_brain": {
-      "search": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "stale": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      },
-      "status": {
-        "readOnlyHint": true,
-        "destructiveHint": false
-      }
-    },
     "paradigm_loop": {
       "create": {
         "readOnlyHint": false,

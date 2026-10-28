@@ -22,6 +22,14 @@ export function gnomonStaged(env: NodeJS.ProcessEnv = process.env): boolean {
 export const GNOMON_STAGED_REFUSAL = 'not available when Paradigm runs staged for a Gnomon local session';
 
 /**
+ * Aegis M2: the families that reach the network or run other processes (personas run agents, symphony and platform
+ * talk to relays and the platform UI, conductor registers with a local app, brain reads the personal vault, sentinel
+ * runs its own server). In the staged mode they are not listed, carry no annotations and refuse every call, also by a
+ * legacy per-op name.
+ */
+export const STAGED_REFUSED_FAMILIES: readonly string[] = Object.freeze(['paradigm_persona', 'paradigm_symphony', 'paradigm_platform', 'paradigm_conductor', 'paradigm_brain', 'paradigm_sentinel']);
+
+/**
  * Aegis H2: where per-project session trails live (breadcrumbs, the session work log, postflight liveness, verdicts).
  * In the staged Gnomon mode they go under HOME (the kernel's per-session dir), never into the repo's `.paradigm/`: a
  * local model's tool trail must not replay into a later Claude session's recover.
