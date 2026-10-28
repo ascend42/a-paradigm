@@ -732,9 +732,11 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   }
   hooks.UserPromptSubmit = userPromptSubmitHooks;
 
-  // Add PostToolUse hook (advisory reminder after source edits)
+  // PostToolUse Write|Edit — the session's touched-files ledger the Stop hook
+  // judges (.paradigm/.sessions/<id>.touched). Matchers are regexes: the old
+  // 'Edit,Write' entry never matched a tool, so it is upgraded in place.
   const postWriteHookEntry = {
-    matcher: 'Edit,Write',
+    matcher: 'Write|Edit',
     hooks: [{
       type: 'command',
       command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-postwrite.sh"`,
@@ -743,11 +745,13 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   };
 
   const postToolUseHooks = (hooks.PostToolUse || []) as Array<Record<string, unknown>>;
-  const hasParadigmPostwrite = postToolUseHooks.some(
+  const paradigmPostwrite = postToolUseHooks.find(
     (h) => JSON.stringify(h).includes('paradigm-postwrite.sh'),
   );
-  if (!hasParadigmPostwrite) {
+  if (!paradigmPostwrite) {
     postToolUseHooks.push(postWriteHookEntry);
+  } else if (paradigmPostwrite.matcher === 'Edit,Write') {
+    paradigmPostwrite.matcher = 'Write|Edit';
   }
   // PostToolUse `Skill` — !skill-used ledger for Paradigm projections (silent, never blocks)
   if (!postToolUseHooks.some((h) => JSON.stringify(h).includes('paradigm-skill-used.sh'))) {

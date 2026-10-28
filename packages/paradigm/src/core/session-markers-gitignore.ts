@@ -30,6 +30,8 @@ export const SESSION_MARKERS: readonly string[] = Object.freeze([
   '.cid-session',
   '.graduation-failures/',
   '.memory-last-review',
+  // per-session hook state: Write/Edit ledger, delegation credit, last blocked set, reminders
+  '.sessions/',
   // hook self-monitoring (#hook-monitor): the timing ring + the once-per-session warning marker
   'events/hook-timings.jsonl',
   'events/stop-timing.jsonl',
