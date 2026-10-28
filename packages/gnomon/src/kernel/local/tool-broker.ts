@@ -50,10 +50,14 @@
  * (the child extends its wait, the kernel's deadline stops); a schema
  * `pattern` must pass a safe-regex check (length, no nested quantifier, no
  * backreference or lookaround).
- * GAPS left for C2'/C5' (documented in .purpose): no capability index or
- * narrowing beyond the worktree drop and manual mode; no Always/standing
- * grants for brokered tools; no per-server trust tiers (mcp:<server> is
- * plumbed, no MCP target yet); the suspension notice is the tool.brokered row
+ * Slice C2': a NARROW tool (#capability-index entry, its own target: one MCP
+ * server of the session's #local-mcp-client pool, ownsGate false) is
+ * reassembled (the op fixed by the kernel), validated against the FULL schema,
+ * class-gated as above, and its card shows `mcp:<server>/<tool>` with the
+ * reassembled call; setTools() replaces the set on a server's list_changed.
+ * GAPS left for C3'/C5' (documented in .purpose): no selection beyond the
+ * C2' slot rule; no Always/standing grants for brokered tools; no grant UI
+ * for per-server trust; the suspension notice is the tool.brokered row
  * (no GUI notice yet); control characters are refused outright (no newline in
  * brokered args).
  */
@@ -63,6 +67,7 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { kernelMcpAnswer } from '../supervisor/kernel-mcp.js';
 import { composePermission, inputHash } from '../supervisor/permission.js';
+import { reassemble, type CapabilityEntry } from './capability-index.js';
 
 /** The same deadlines the child waits (gnomon-local broker.ts TOOL_TIMEOUT_MS / CARD_TIMEOUT_MS). */
 export const TOOL_TIMEOUT_MS = 30_000;
@@ -92,6 +97,13 @@ export interface BrokeredTool {
   description: string;
   parameters: Record<string, unknown>;
   class: ToolBrokerClass;
+  /**
+   * slice C2': a NARROW tool (#capability-index): the narrow args are reassembled (fixed op, split commas, nested
+   * dotted params) and validated against `entry.schema` (the FULL schema) before the target sees them
+   */
+  entry?: CapabilityEntry;
+  /** slice C2': the target this tool goes to (an MCP server of the session's pool); default the broker's own */
+  target?: BrokerTarget;
 }
 
 export interface TargetCall {
@@ -360,7 +372,7 @@ export const brokeredToolName = (target: Pick<BrokerTarget, 'provenance' | 'serv
 
 export class LocalToolBroker {
   readonly #o: LocalToolBrokerOptions;
-  readonly #tools: readonly BrokeredTool[];
+  #tools: readonly BrokeredTool[];
   readonly #inflight = new Map<string, { ctl: AbortController; carded: boolean }>();
   /** Aegis M4: `${tool}\0${argsHash}` → until (epoch ms) */
   readonly #cooldown = new Map<string, number>();
@@ -375,6 +387,15 @@ export class LocalToolBroker {
     this.#o = o;
     // ^loop-origin-clamp: a loop session gets no brokered tools at all
     this.#tools = o.loop ? [] : o.tools.map((t) => ({ ...t, parameters: structuredClone(t.parameters) }));
+  }
+
+  /**
+   * slice C2': replace the offered set (a server's notifications/tools/list_changed). A loop session stays empty. A
+   * call already in flight keeps the tool it resolved.
+   */
+  setTools(tools: readonly BrokeredTool[]): void {
+    if (this.#o.loop) return;
+    this.#tools = tools.map((t) => ({ ...t, parameters: structuredClone(t.parameters) }));
   }
 
   /** What tools_set offers (empty for a loop session). */
@@ -431,9 +452,10 @@ export class LocalToolBroker {
     const o = this.#o;
     const argsHash = inputHash(req.args ?? null);
     const tool = req.name !== null ? this.#tools.find((t) => t.name === req.name) : undefined;
+    const target = tool?.target ?? o.target;
     const done = async (decision: ToolBrokeredDecision, content: string, isError: boolean, cardId?: string): Promise<ToolResponseOut> => {
-      await o.log('tool.brokered', { hsid: o.hsid, server: o.target.server, ...(tool ? { tool: tool.name, class: tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}) }, { session: o.hsid }).catch(() => undefined);
-      return { id: req.id, content, isError, provenance: o.target.provenance };
+      await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool ? { tool: tool.name, class: tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}) }, { session: o.hsid }).catch(() => undefined);
+      return { id: req.id, content, isError, provenance: target.provenance };
     };
     if (o.loop) return done('loop-session', 'Loop sessions never run brokered tools.', true);
     if (this.#inflight.has(req.id)) return done('bad-args', `request ${req.id} is already in flight`, true);
@@ -442,7 +464,15 @@ export class LocalToolBroker {
     if (!o.running()) return done('not-running', 'The session is not running.', true);
     if (req.receivedAt !== undefined && req.receivedAt <= this.#interruptedAt) return done('cancelled', 'cancelled: the session was interrupted after this call was sent', true);
     if (this.#suspended) return done('suspended', 'Brokered tools are suspended for this session after repeated denies.', true);
-    const bad = validateBrokeredArgs(tool.parameters, req.args);
+    // slice C2' (G-LCL-16): a narrow tool's args are reassembled (the op fixed by the kernel, never the model's) and the
+    // RESULT is validated against the FULL schema (its patterns through the safe-regex gate); a refusal never runs
+    let callArgs: Record<string, unknown> = req.args;
+    if (tool.entry) {
+      const r = reassemble(tool.entry, req.args);
+      if ('error' in r) return done('bad-args', `${tool.name}: ${r.error}`, true);
+      callArgs = r.args;
+    }
+    const bad = validateBrokeredArgs(tool.entry ? tool.entry.schema : tool.parameters, callArgs);
     if (bad) return done('bad-args', `${tool.name}: ${bad}`, true);
     const key = `${tool.name}\u0000${argsHash}`;
     if ((this.#cooldown.get(key) ?? 0) > this.#now()) return done('cooldown', `${tool.name} with these arguments was just denied: ask the human differently or wait.`, true);
@@ -466,8 +496,8 @@ export class LocalToolBroker {
     try {
       let cardId: string | undefined;
       let allowed = false;
-      if (carded && !o.target.ownsGate) {
-        const d = await this.#card(tool, req, deadline, ctl.signal);
+      if (carded && !target.ownsGate) {
+        const d = await this.#card(tool, target, req, callArgs, deadline, ctl.signal);
         cardId = d.cardId ?? undefined;
         if (d.decision === 'none') return done('no-approval-surface', 'No approval surface could take the card: not run.', true, cardId);
         if (d.decision === 'stopped') return stopped(false, cardId);
@@ -487,10 +517,10 @@ export class LocalToolBroker {
         clearTimeout(timer);
         o.progress?.(req.id);
       };
-      if (!o.target.ownsGate) onRunning();
+      if (!target.ownsGate) onRunning();
       let r: { text: string; isError: boolean; why?: string; cardId?: string };
       try {
-        r = await o.target.call(tool.name, req.args, { signal: ctl.signal, deadline, onRunning });
+        r = await target.call(tool.entry ? tool.entry.tool : tool.name, callArgs, { signal: ctl.signal, deadline, onRunning });
       } catch (err) {
         r = { text: `the ${tool.name} call failed: ${(err as Error).message.slice(0, 200)}`, isError: true };
       }
@@ -504,7 +534,7 @@ export class LocalToolBroker {
       }
       const mapped: Record<string, ToolBrokeredDecision> = { 'no-approval-surface': 'no-approval-surface', busy: 'busy', 'bad-input': 'bad-args', 'loop-session': 'loop-session' };
       if (r.why !== undefined && Object.hasOwn(mapped, r.why)) return done(mapped[r.why]!, text, true, cardId);
-      if (r.isError && (carded || o.target.ownsGate)) return done('refused', text, true, cardId);
+      if (r.isError && (carded || target.ownsGate)) return done('refused', text, true, cardId);
       return done(carded ? 'approved' : 'ran', text, r.isError, cardId);
     } finally {
       clearTimeout(timer);
@@ -513,19 +543,21 @@ export class LocalToolBroker {
   }
 
   /** Step 3 (a target with no gate of its own): the card, every argument shown, allow | deny, expired on stop. */
-  async #card(tool: BrokeredTool, req: ToolRequestIn, deadline: number, signal: AbortSignal): Promise<{ decision: string; cardId: string | null }> {
+  async #card(tool: BrokeredTool, target: BrokerTarget, req: ToolRequestIn, callArgs: Record<string, unknown>, deadline: number, signal: AbortSignal): Promise<{ decision: string; cardId: string | null }> {
     const o = this.#o;
     const b = o.broker;
     if (!b || typeof b.decisionOf !== 'function') return { decision: 'none', cardId: null };
-    const name = brokeredToolName(o.target, tool.name);
-    const plan = composePermission({ requestId: req.id, toolName: name, toolUseId: req.toolCallId, input: req.args! }, { repo: o.repo, denyWrite: [] });
+    // slice C2': a narrow tool's card names the server's own tool (mcp:<server>/<tool>) and shows the REASSEMBLED call
+    // (the op the kernel fixed included): exactly what will run
+    const name = brokeredToolName(target, tool.entry ? tool.entry.tool : tool.name);
+    const plan = composePermission({ requestId: req.id, toolName: name, toolUseId: req.toolCallId, input: callArgs }, { repo: o.repo, denyWrite: [] });
     if (plan.kind !== 'card') return { decision: 'too-large', cardId: null };
-    const lines = [...plan.lines, `class: ${tool.class} · a brokered call from this local session to ${o.target.server}`];
-    const detail = { ...plan.detail, brokered: { server: o.target.server, tool: tool.name, class: tool.class, argsHash: inputHash(req.args) } };
+    const lines = [...plan.lines, `class: ${tool.class} · a brokered call from this local session to ${target.server}`, ...(tool.entry?.dropped.length ? [`not offered to the model: ${tool.entry.dropped.slice(0, 12).join(', ')}`] : [])];
+    const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: tool.class, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}) } };
     let cardId: string;
     try {
       // the broker's own timeout falls after the deadline, so the kernel's deadline (expired) always wins the race
-      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, toolInput: req.args!, tool: name, decisions: ['allow', 'deny'], timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
+      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, toolInput: callArgs, tool: name, decisions: ['allow', 'deny'], timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
       cardId = c.cardId;
     } catch {
       return { decision: 'none', cardId: null };

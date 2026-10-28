@@ -108,7 +108,9 @@ import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js'
 import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
-import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget } from '../local/tool-broker.js';
+import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
+import { LOCAL_RESERVED_TOOL_NAMES, offerWithin, type CapabilityEntry } from '../local/capability-index.js';
+import { LocalMcpPool, McpListCache, type LocalMcpServer } from '../local/mcp-client.js';
 import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import type { RunMode } from '@a-company/gnomon-contracts';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
@@ -174,6 +176,13 @@ export interface LocalLaneOptions {
   probeTtlMs?: number;
   /** TEST RIG ONLY: the launch plan (default: the platform's `session` sandbox profile). The daemon never sets it. */
   launchPlan?: (i: SessionLaunchInput) => SessionLaunchPlan;
+  /**
+   * slice C2' (#local-mcp-client): the MCP servers an attended local session in `ctx.cwd` may reach — the same set a
+   * Claude session gets there (McpServers.composeLocal: first-party Paradigm + the enabled servers). Absent: none.
+   */
+  localMcp?: (ctx: { hsid: string; cwd: string; worktree?: string }) => readonly LocalMcpServer[];
+  /** slice C2': with localMcp, the same write-denies Claude sessions get (#mcp-servers: what the next session's server runs) */
+  mcpDenyWrite?: (ctx: { cwd: string; worktree?: string }) => readonly PolicyPath[];
 }
 
 /** The last endpoint probe as status.local.lastProbe shows it. */
@@ -269,6 +278,10 @@ interface LocalSession {
   roots: { cwd: string; worktree?: string };
   /** slice C1: this session's brokered tools (a loop session's offers none and refuses every call) */
   tools?: LocalToolBroker;
+  /** slice C2': the session's MCP servers (#local-mcp-client; attended sessions only), reaped at exit */
+  mcp?: { pool: LocalMcpPool; kernel: BrokeredTool[]; entries: Map<string, CapabilityEntry[]>; manual: boolean };
+  /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
+  mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
   memory?: WorkingMemory;
   /** slice B2: the hash of the last memory_set sent (a change that renders the same block sends nothing) */
@@ -370,6 +383,8 @@ function loopReplyOf(line: string): string | null {
 export class LocalLane {
   readonly #o: LocalLaneOptions;
   readonly #sessions = new Map<string, LocalSession>();
+  /** slice C2': each MCP server's last tools/list per launch + repo (a hit spawns nothing until the first call) */
+  readonly #mcpCache = new McpListCache();
   readonly #history: Array<Record<string, unknown>> = [];
   readonly #usedTurnPermits = new Set<string>();
   readonly #probes = new Map<string, { at: number; caps: LocalCapabilities }>();
@@ -839,7 +854,8 @@ export class LocalLane {
         managedSettingsPaths: row ? managedFiles(row) : [],
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
-        extraDenyWrite: [...this.#o.pathDenies],
+        // slice C2': a session that can run MCP servers cannot swap what the next session's servers run
+        extraDenyWrite: [...this.#o.pathDenies, ...(!loop && this.#o.localMcp && this.#o.mcpDenyWrite ? this.#o.mcpDenyWrite({ cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }) : [])],
         localRunner: { node: pin.node, dir: pin.dir },
         // T-2026-10-18-010: the home is read-denied; only this session's dir (local.yaml) and the staged runner copy are readable
         homeReadable: [{ path: dir, match: 'subpath' }, { path: runner.copy, match: 'subpath' }],
@@ -892,6 +908,7 @@ export class LocalLane {
       await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
       tracked = true;
       const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
+      if (!loop && this.#o.localMcp) s.mcpLaunch = { launch, env: { ...env }, cwd: wtReal ?? cwdReal };
       this.#sessions.set(hsid, s);
       live = s;
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
@@ -962,10 +979,61 @@ export class LocalLane {
     const verbs = s.loop ? undefined : this.#o.gitVerbs;
     const target = verbs ? kernelSdkTarget(verbs, () => (s.state === 'running' ? this.#verbSession(s) : null)) : NO_TARGET;
     // Aegis M3: a session in manual mode at open is offered no mutate/destructive tool at all
-    const tools = verbs ? await offeredKernelTools(target, { manual: this.#mode(s) === 'manual' }).catch(() => []) : [];
+    const manual = this.#mode(s) === 'manual';
+    const kernelTools = verbs ? await offeredKernelTools(target, { manual }).catch(() => []) : [];
     // Aegis N5: an hsid opened here is never a closed one (a same-process resume)
     if (verbs) this.#o.gitVerbs?.openSession?.(s.hsid);
+    // slice C2': the session's MCP servers, narrowed (#capability-index); a loop session gets none
+    let tools: BrokeredTool[] = kernelTools;
+    if (!s.loop && s.mcpLaunch && this.#o.localMcp) {
+      let servers: readonly LocalMcpServer[] = [];
+      try {
+        servers = this.#o.localMcp({ hsid: s.hsid, cwd: s.roots.cwd, ...(s.roots.worktree ? { worktree: s.roots.worktree } : {}) });
+      } catch {
+        servers = [];
+      }
+      if (servers.length) {
+        const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries) });
+        s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual };
+        const ix = await pool.index();
+        for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
+        tools = this.#mcpOffer(s);
+      }
+    }
     return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)) });
+  }
+
+  /**
+   * Slice C2': the offered set — the kernel verbs, then narrow tools in index order (servers in compose order, Paradigm
+   * first) while they fit the ledger's tools slot (offerWithin: toolsSlotTokens of the session's context target);
+   * a manual session gets read-class narrow tools only (Aegis M3). C3' replaces this rule with selection.
+   */
+  #mcpOffer(s: LocalSession): BrokeredTool[] {
+    const m = s.mcp!;
+    const all = [...m.entries.values()].flat().filter((e) => !m.manual || e.class === 'read');
+    const chosen = offerWithin(m.kernel, all, { contextTarget: s.context.target, reserved: LOCAL_RESERVED_TOOL_NAMES });
+    return [...m.kernel, ...chosen.flatMap((e) => {
+      const target = m.pool.target(e.server);
+      return target ? [{ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }] : [];
+    })];
+  }
+
+  /** Slice C2': a server's notifications/tools/list_changed — re-narrowed, re-offered, one new tools_set. */
+  #mcpChanged(s: LocalSession, label: string, entries: CapabilityEntry[]): void {
+    if (!s.mcp || !s.tools || s.state !== 'running') return;
+    s.mcp.entries.set(label, entries);
+    s.tools.setTools(this.#mcpOffer(s));
+    this.#write(s, drv.toolsSetLine(s.tools.offered));
+  }
+
+  /** Slice C2': one MCP server of a local session, spawned under the SESSION's own launch plan (its files, its network). */
+  #spawnMcp(s: LocalSession, srv: LocalMcpServer): ChildProcess {
+    const m = s.mcpLaunch;
+    if (!m || !srv.command || s.state !== 'running') throw new Error('the session is not running');
+    const input: SessionLaunchInput = { ...m.launch, binaryReal: srv.command, argv: [...(srv.args ?? [])] };
+    const plan = this.#o.launchPlan ? this.#o.launchPlan(input) : sessionLaunchPlan(input, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+    const env: Record<string, string | undefined> = { ...m.env, ...(srv.env ?? {}) };
+    return spawn(plan.command, plan.args, { cwd: m.cwd, env, detached: this.#platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
   }
 
   /** Aegis M3: the session's effective run mode from the run-mode book, as Claude sessions read it (unreadable ⇒ manual). */
@@ -1240,6 +1308,8 @@ export class LocalLane {
     // slice C1: calls in flight are cancelled (their cards expire, no target runs) and the session's verb cards expire
     s.tools?.cancelAll();
     if (s.tools?.offered.length) await this.#o.gitVerbs?.closeSession?.(s.hsid).catch(() => undefined);
+    // slice C2': every MCP server this session spawned is reaped
+    await s.mcp?.pool.closeAll().catch(() => undefined);
     if (this.#platform === 'win32') {
       // W5: this session's win32 labels and grants (platform/win32/session-sandbox.ts releaseSession)
       try {

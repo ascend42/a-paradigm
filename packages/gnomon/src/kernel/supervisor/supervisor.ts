@@ -113,6 +113,7 @@ import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
+import type { LocalMcpServer } from '../local/mcp-client.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv, win32SessionTempDir, DARWIN_SCREEN_TMP_FALLBACK, missingIdentity, planSessionPath, sessionIdentity, sessionNodeDir, sessionPathFor, type SessionIdentity } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
@@ -278,6 +279,11 @@ export interface SupervisorOptions {
    * package dir and the node that runs it, so no session can swap what the next session's server runs.
    */
   mcpDenyWrite?: (ctx: { cwd: string; worktree?: string }) => readonly PolicyPath[];
+  /**
+   * TD-2026-10-27-833 slice C2' (#local-mcp-client): the MCP servers an attended LOCAL session may reach (the daemon:
+   * McpServers.composeLocal, the same set a Claude session gets in that repo). Absent ⇒ local sessions get none.
+   */
+  localMcp?: (ctx: { hsid: string; cwd: string; worktree?: string }) => readonly LocalMcpServer[];
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
@@ -764,6 +770,7 @@ export class SessionSupervisor {
       kernelPrincipal: o.kernelPrincipal, sock: o.sock, ...(o.env ? { env: o.env } : {}), ...(o.endpointPort ? { endpointPort: o.endpointPort } : {}),
       ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
+      ...(o.localMcp ? { localMcp: o.localMcp } : {}), ...(o.mcpDenyWrite ? { mcpDenyWrite: o.mcpDenyWrite } : {}),
     });
   }
 

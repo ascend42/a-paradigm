@@ -17,6 +17,9 @@ import { parseSessionConfig, rpcSession } from '../../gnomon-local/src/index.js'
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { parseLocalLine, toolResponseLine, toolsSetLine } from '../src/adapters/local/runner.js';
 import { GIT_VERB_TOOL_SPECS, type VerbSession } from '../src/kernel/git/kernel-verbs.js';
+import { LOCAL_RESERVED_TOOL_NAMES, narrow } from '../src/kernel/local/capability-index.js';
+import { TOOL_ORDER } from '../../gnomon-local/src/compat.js';
+import { MEMORY_TOOLS } from '../../gnomon-local/src/memory-tools.js';
 import { kernelSdkTarget, LocalToolBroker, offeredKernelTools, validateBrokeredArgs, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
 
 const HSID = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
@@ -387,5 +390,49 @@ describe('Aegis C1 re-check (N1-N6)', () => {
       expect(validateBrokeredArgs({ type: 'object', properties: { s: { type: 'string', pattern } } }, { s: 'aaaa' }), pattern).toMatch(/unsafe pattern/);
     }
     expect(validateBrokeredArgs({ type: 'object', properties: { s: { type: 'string', pattern: '^[a-z0-9._-]+$' } } }, { s: 'ok' })).toBeNull();
+  });
+});
+
+describe('slice C2\': narrow MCP tools through the broker (G-LCL-16)', () => {
+  const entries = narrow([{ name: 'fam', description: 'Fam. Ops: put(key*, meta, tags), get(key*).', inputSchema: { type: 'object', properties: { op: { type: 'string', enum: ['put', 'get'] }, key: { type: 'string', pattern: '^[a-z]+$' }, meta: { type: 'object', properties: { owner: { type: 'string' } } }, tags: { type: 'array', items: { type: 'string' } } }, required: ['op', 'key'] }, annotations: { readOnlyHint: true } }], 'srv', { trust: 'trusted', opAnnotations: { schema: 'io.gnomon/op-annotations:v1', tools: { fam: { get: { readOnlyHint: true } } } } });
+  const mcpRig = () => {
+    const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    const target: BrokerTarget = { server: 'srv', provenance: 'mcp:srv', ownsGate: false, list: async () => [], call: async (name, args) => (calls.push({ name, args }), { text: 'ok', isError: false }) };
+    const tools: BrokeredTool[] = entries.map((e) => ({ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }));
+    return { ...rig({ tools }), calls };
+  };
+
+  it('a reassembled call reaches the server tool with the kernel-fixed op; the row names the narrow tool', async () => {
+    const r = mcpRig();
+    const out = await r.b.handle(req('fam.get', { key: 'abc' }));
+    expect(out).toMatchObject({ isError: false, provenance: 'mcp:srv' });
+    expect(r.calls).toEqual([{ name: 'fam', args: { key: 'abc', op: 'get' } }]);
+    expect(r.rows[0]!.payload).toMatchObject({ server: 'srv', tool: 'fam.get', class: 'read', decision: 'ran' });
+    expect(validateKindPayload('tool.brokered', r.rows[0]!.payload)).toEqual([]);
+  });
+
+  it('G-LCL-16: the model can never set the op; a reassembled call that fails the FULL schema never runs', async () => {
+    const r = mcpRig();
+    expect((await r.b.handle(req('fam.get', { key: 'abc', op: 'put' }))).content).toMatch(/unknown parameter "op"/);
+    expect((await r.b.handle(req('fam.get', { key: 'ABC' }))).content).toMatch(/pattern/);
+    expect((await r.b.handle(req('fam.put', { key: 'abc', 'meta.admin': true }))).content).toMatch(/unknown parameter/);
+    expect(r.calls).toEqual([]);
+    expect(r.raised).toEqual([]);
+    expect(r.rows.map((x) => x.payload.decision)).toEqual(['bad-args', 'bad-args', 'bad-args']);
+  });
+
+  it('a mutate op raises one card naming mcp:<server>/<tool> with the REASSEMBLED call, then runs', async () => {
+    const r = mcpRig();
+    const out = await r.b.handle(req('fam.put', { key: 'abc', 'meta.owner': 'me', tags: 'a,b' }));
+    expect(out.isError).toBe(false);
+    expect(r.raised).toHaveLength(1);
+    expect(r.raised[0]!.tool).toBe('mcp:srv/fam');
+    expect(r.raised[0]!.toolInput).toEqual({ key: 'abc', meta: { owner: 'me' }, tags: ['a', 'b'], op: 'put' });
+    expect(r.calls).toEqual([{ name: 'fam', args: { key: 'abc', meta: { owner: 'me' }, tags: ['a', 'b'], op: 'put' } }]);
+    expect(r.rows[0]!.payload).toMatchObject({ tool: 'fam.put', class: 'mutate', decision: 'approved' });
+  });
+
+  it('the reserved names are the child\'s natives and memory tools', () => {
+    expect([...LOCAL_RESERVED_TOOL_NAMES].sort()).toEqual([...TOOL_ORDER, ...MEMORY_TOOLS.map((t) => t.name)].sort());
   });
 });

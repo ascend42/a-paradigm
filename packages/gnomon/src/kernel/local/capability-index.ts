@@ -460,3 +460,9 @@ export function offerWithin<T extends Pick<CapabilityEntry, 'name' | 'descriptio
   }
   return chosen;
 }
+
+/**
+ * The names a local session already holds (gnomon-local compat.ts TOOL_ORDER natives + the memory tools): a narrow
+ * tool by one of these names is never offered (the child refuses a tools_set naming one). Kept in step by a test.
+ */
+export const LOCAL_RESERVED_TOOL_NAMES: readonly string[] = Object.freeze(['list_dir', 'read_file', 'read_section', 'grep', 'outline', 'edit', 'write_file', 'note', 'forget']);

@@ -20,7 +20,7 @@ const tmp = (): string => {
   return d;
 };
 const spawnFake = (pidfile?: string): ChildProcess => {
-  const c = spawn(process.execPath, [FAKE, ...(pidfile ? [pidfile] : [])], { stdio: ['pipe', 'pipe', 'ignore'], detached: process.platform !== 'win32', windowsHide: true });
+  const c = spawn(process.execPath, [FAKE, ...(pidfile ? [pidfile] : [])], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
   kids.push(c);
   return c;
 };

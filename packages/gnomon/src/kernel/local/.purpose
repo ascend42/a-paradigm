@@ -174,6 +174,19 @@ components:
       more, the kernel deadline stops); GitVerbs.openSession clears a closed
       hsid on open/resume; schema patterns pass unsafePattern first; the init
       verb's last cancel check precedes the remnant .git removal.
+      Slice C2': a NARROW tool (#capability-index entry plus its own target,
+      one server of the session's #local-mcp-client pool, ownsGate false) is
+      reassembled (op fixed by the kernel; any other key refused), validated
+      against the FULL schema (safe-regex gate included), class-gated as
+      above (read runs; mutate/destructive one card at a time naming
+      mcp:<server>/<tool> with the reassembled call and the dropped params),
+      called with the signal and deadline, answered source mcp:<server>, and
+      logged tool.brokered{server, tool: the narrow name}; setTools()
+      replaces the set on a server's list_changed (LocalLane re-sends
+      tools_set). LocalLane offers kernel verbs plus narrow tools by the C2'
+      slot rule (offerWithin); a manual session gets read-class narrow tools
+      only; loop sessions get no MCP tools; a session with MCP servers also
+      takes #mcp-servers' write-denies (mcpDenyWrite).
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
@@ -181,9 +194,10 @@ components:
     tests:
       - test/local-tool-broker.test.ts
       - test/local-lane-spawn.test.ts
+      - test/local-mcp-lane.test.ts
       - test/loop-model-e2e.test.ts
       - test/git-verbs.test.ts
-    oracles: [G-LCL-15]
+    oracles: [G-LCL-15, G-LCL-16]
   capability-index:
     description: >-
       #capability-index (TD-2026-10-27-833 slice C2'): narrow(list, server,
@@ -251,6 +265,7 @@ components:
     signals: []
     tests:
       - test/local-mcp-client.test.ts
+      - test/local-mcp-lane.test.ts
     oracles: [G-LCL-17]
   local-working-memory:
     description: >-
