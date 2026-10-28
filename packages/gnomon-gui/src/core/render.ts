@@ -338,6 +338,9 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
     case 'bash-prefix':
       // the kernel's structured prefix choices: the card's always keys render them (prefixOptionsOf)
       return h(doc, 'span', { class: 'blk blk-bash-prefix' });
+    case 'tool-scope':
+      // 8.0:local-lane C5'a3: a brokered MCP card's structured detail (toolScopes, tool, server, trust); C5'b renders it
+      return h(doc, 'span', { class: 'blk blk-tool-scope' });
     case 'ask-user':
       // the kernel's structured questions: the card's picker renders them (askDetailOf), the text lines above show them
       return h(doc, 'span', { class: 'blk blk-ask-user' });
@@ -397,6 +400,19 @@ export interface CardView {
   localNs?: string | null;
   /** #gui-loops: a loop-* card whose loop the kernel attributes to an agent key (authoredBy basis 'agent-key-claim'): the head says "claimed by <agent>" */
   loopClaimedBy?: string | null;
+  /** 8.0:local-lane C5'a3: a brokered MCP card (isBrokeredCard): it never shows a plain `always` key */
+  brokered?: boolean;
+}
+
+/**
+ * 8.0:local-lane C5'a3 (interim guard): a brokered MCP card — its tool is named `mcp:<server>/<tool>`, or its block
+ * carries the kernel's `{type:'tool-scope'}` node. Its `always` needs the tool scope, which a plain key never sends (the
+ * broker refuses it), so renderCard draws no plain `always` key on it; C5'b adds the scoped key. Restrictive only.
+ */
+export function isBrokeredCard(block: unknown, tool?: unknown): boolean {
+  if (typeof tool === 'string' && tool.startsWith('mcp:')) return true;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  return kids.some((k) => k !== null && typeof k === 'object' && (k as { type?: unknown }).type === 'tool-scope');
 }
 
 /** A permission card's composed title: the verb, the whole arg (lines kept), and whether the arg hit TITLE_ARG_MAX. */
@@ -1162,7 +1178,9 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const { doc } = ctx;
   // Aegis M1: root-capable = verified rows, ANY root-rows node (even a bad one), or a kind the table makes root
   const rootGated = v.rootRows !== undefined && (v.rootRows !== null || hasRootNode(block) || (ROOT_CLASS_BY_KIND[v.kind] ?? []).some((d) => v.decisions.includes(d)));
-  const keys = v.decidable && v.decisions.length ? (rootGated ? rootSafeDecisions(v.kind, v.decisions, v.rootRows ?? null) : v.decisions) : [];
+  const keys0 = v.decidable && v.decisions.length ? (rootGated ? rootSafeDecisions(v.kind, v.decisions, v.rootRows ?? null) : v.decisions) : [];
+  // 8.0:local-lane C5'a3 (interim guard): a brokered card never shows a plain `always` key (it sends no tool scope)
+  const keys = v.brokered || isBrokeredCard(block) ? keys0.filter((d) => d !== 'always') : keys0;
   const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
   // TD-2026-10-19-063: a claim-mismatch card (e.g. a claude re-pin NOT signed by the expected publisher) focuses Deny
   const loud = v.flags.includes('claim-mismatch');

@@ -27,7 +27,7 @@ import { clearRestarting, markRestarting, noteResume, peekResumeKey, restarting,
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, parseLayout, placeWorkshop, resolveMotion, resolveTheme, serializeLayout, togglePane, type Command, type Layout, type ThemeChoice, type WorkshopPlace } from '../core/commands.js';
 import { parseStaleMsg, STALE_CHANNEL, staleView, watchStale, type StaleState } from '../core/stale.js';
 import { applyCwdHint, clearCwdHint, cwdHintOf, decidePin, type CwdHint, type CwdHintTarget, hostSurface, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
-import { rootRowsOf, approveParamsOf, editScopesOf, askDetailOf, askNote, displayText, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
+import { rootRowsOf, approveParamsOf, editScopesOf, isBrokeredCard, askDetailOf, askNote, displayText, localNsOf, markCardBody, permissionTitleOf, prefixOptionsOf, cardFlags, cardVoiceOf, h, mdBlocks, mdInline, renderCard, stampWord, type MiniDoc, type MiniEl, type ScrollBodyEl, gitVerbOf } from '../core/render.js';
 import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { Follow, INTENT_MS, ScrollIntent, scrollEvent } from '../core/follow.js';
 import { choiceForKey, liveChoiceKey, pickChoice, pickChoices, renderChoices, replyChoices, replyHash, toggleChoice } from '../core/choices.js';
@@ -1087,6 +1087,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         now: Date.now(),
         voice: cardVoiceOf(c.card),
         composedTitle: permissionTitleOf(c.card, c.tool, c.toolInput),
+        brokered: isBrokeredCard(c.card.block, c.tool), // C5'a3: no plain always key on a brokered MCP card
         localNs: localNsOf(session?.principal),
         // #gui-loops: the kernel's authorship basis (status.loops authoredBy agent-key-claim), never guessed from a name
         loopClaimedBy: c.kind.startsWith('loop-') ? loopClaimOf(c.card) : null,

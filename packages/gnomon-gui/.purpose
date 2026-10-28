@@ -767,7 +767,10 @@ components:
       (gitVerbWarning, beside the irreversible chip, never only under
       details), and a lookalike host shows no k-line so its red warning is
       the first line under the title; a claim-mismatch card reds only its
-      first body line (Mika Delta 8);
+      first body line (Mika Delta 8); a brokered MCP card (isBrokeredCard:
+      an mcp: tool or a {type:'tool-scope'} node) never shows a plain
+      `always` key, which would send no tool scope (8.0:local-lane C5'a3
+      interim guard; C5'b adds the scoped key);
       refusals shown verbatim until M1.3
       presence), Shuttle view, the kernel-owned extension-risk badge,
       papercraft day / phosphor night / auto themes and reduced motion.
@@ -777,6 +780,7 @@ components:
     tests:
       - test/gui.test.ts
       - test/edit-scope.test.ts
+      - test/brokered-guard.test.ts
       - test/git-verb-card.test.ts
       - test/modes.test.ts
       - test/voice.test.ts
