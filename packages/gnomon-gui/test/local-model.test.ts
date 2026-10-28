@@ -553,6 +553,18 @@ describe('#gui-tool-tier: the Settings Tool tier row (C4\'b)', () => {
     expect(calls).toEqual([{ kind: 'request.local.tier.remeasure', payload: { endpoint: 'ollama' } }]);
     expect(valueOf(tierRow(st, c.ui()))).toBe('3 · measured');
   });
+  it('a rate-limited Re-measure says when to try again in a quiet line, and is not retried', async () => {
+    const limited = () => {
+      throw new RpcError({ code: 'BAD_REQUEST', reason: 'rate-limited', message: '#local-runner: request.local.tier.remeasure: a re-measure just ran: try again in a moment', next: [], data: { reason: 'rate-limited', why: 'rate-limited', retryAfterMs: 1400 } });
+    };
+    const { c, calls } = rig(probe({}), { 'request.local.tier.remeasure': [limited] });
+    c.press('tier-remeasure', null, true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toHaveLength(1);
+    expect(c.ui().result).toEqual({ text: 'Not re-measured: one ran moments ago. Try again in 2 s.' });
+    expect(c.ui().measuring).toBeNull();
+    expect(row(sec(probe({}), c.ui()).rows, 'local-form')).toMatchObject({ result: { text: 'Not re-measured: one ran moments ago. Try again in 2 s.' } });
+  });
   it('Reset to measured sends request.local.tier.clear on a trusted press only; a store it cannot write says so', async () => {
     const { c, calls } = rig(probe({ human: 3 }), { 'request.local.tier.clear': [{ endpoint: 'ollama', cleared: true, previous: 3 }, { endpoint: 'ollama', cleared: false, why: 'store-unwritable' }] });
     c.press('tier-reset', null, false);

@@ -217,7 +217,8 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
     const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
     const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
-    const lane = new LocalLane({ sessionPath: null, pathDenies: [],
+    const clock = { t: Date.now() };
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [], now: () => clock.t,
       log, children, fuse, home, userHome: root!, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root!, 'k.sock'),
       broker: { raise: async () => ({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }) as never, decisionOf: async () => 'allow', expire: async () => true },
       config: { endpoints: [{ id: 'fake', base: srv!.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js'), contextTarget: 16384 },
@@ -228,13 +229,13 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
       await lane.stop(HUMAN, { hsid });
       expect(await waitFor(() => lane.stateOf(hsid) === 'exited', 5_000)).toBe(true);
     };
-    return { lane, rows, home, open, stop };
+    return { lane, rows, home, open, stop, clock };
   };
 
   it('C4\'b: re-measure and clear are human-only; a second re-measure joins; clear makes the next open measured; rememberable says why not', async () => {
     root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-tierb-')));
     srv = await fakeOpenAI({ tools: true, nCtx: 16384, script: [{ content: 'Done.' }] });
-    const { lane, rows, home, open, stop } = laneFor();
+    const { lane, rows, home, open, stop, clock } = laneFor();
     const ask = (asker: object, kind: string, p: Record<string, unknown>) => lane.humanRequest(asker as never, kind, p);
     // principal refusals: an agent, or a human on a non-gui/device connection, never reaches either request
     for (const kind of ['request.local.tier.remeasure', 'request.local.tier.clear']) {
@@ -243,20 +244,32 @@ describe('slice C4\'a: a live session\'s tool tier', () => {
       await expect(ask(human, kind, { endpoint: 'nope' })).rejects.toThrow(/no configured endpoint/);
       await expect(ask(human, kind, { endpoint: 'fake', hsid: 'x' })).rejects.toThrow(/takes \{endpoint\}/);
     }
+    const measuredRows = () => rows.filter((r) => r.kind === 'model.capabilities' && r.payload.tierSource === 'measured' && r.payload.action === undefined && r.payload.hsid === undefined);
+    // Aegis info: a re-measure while the background (unforced) measurement runs is QUEUED after it, and says so
+    await lane.probeAll();
+    const r1 = await ask(human, 'request.local.tier.remeasure', { endpoint: 'fake' });
+    expect(r1).toEqual({ endpoint: 'fake', measuring: true, joined: true, queued: true });
+    expect(lane.lastProbe()?.tier?.measuring).toBe(true);
+    // a second one joins the running re-measure (no new work, so no rate limit)
+    const r2 = await ask({ ...human, credential: 'device' }, 'request.local.tier.remeasure', { endpoint: 'fake' });
+    expect(r2).toEqual({ endpoint: 'fake', measuring: true, joined: true, queued: false });
+    await lane.tierSettled();
+    // the background measurement, then the forced one after it
+    expect(measuredRows()).toHaveLength(2);
+    expect(lane.lastProbe()?.tier).toMatchObject({ measuring: false, human: null });
+    // Aegis L1: one re-measure per endpoint per gap (as Check again): rate-limited with retryAfterMs
+    const limited = await ask(human, 'request.local.tier.remeasure', { endpoint: 'fake' }).catch((e: unknown) => e);
+    expect(String(limited)).toMatch(/a re-measure just ran/);
+    expect((limited as { refusal?: { data?: Record<string, unknown> } }).refusal?.data).toMatchObject({ reason: 'rate-limited', retryAfterMs: 2000 });
+    clock.t += 2001;
+    // Aegis L2: a config change while the re-measure's probe runs: nothing is measured under the old config
+    const pending = ask(human, 'request.local.tier.remeasure', { endpoint: 'fake' });
+    lane.setConfig(lane.config());
+    expect(await pending).toMatchObject({ joined: false, queued: false });
+    await lane.tierSettled();
+    expect(measuredRows()).toHaveLength(2);
     await lane.probeAll();
     await lane.tierSettled();
-    const measuredRows = () => rows.filter((r) => r.kind === 'model.capabilities' && r.payload.tierSource === 'measured' && r.payload.action === undefined && r.payload.hsid === undefined);
-    const before = measuredRows().length;
-    expect(before).toBe(1);
-    // two re-measures at once: the second joins the first (one measurement); measuring shows at once
-    const r1 = await ask(human, 'request.local.tier.remeasure', { endpoint: 'fake' });
-    expect(r1).toEqual({ endpoint: 'fake', measuring: true, joined: false });
-    expect(lane.lastProbe()?.tier?.measuring).toBe(true);
-    const r2 = await ask({ ...human, credential: 'device' }, 'request.local.tier.remeasure', { endpoint: 'fake' });
-    expect(r2).toEqual({ endpoint: 'fake', measuring: true, joined: true });
-    await lane.tierSettled();
-    expect(measuredRows()).toHaveLength(before + 1);
-    expect(lane.lastProbe()?.tier).toMatchObject({ measuring: false, human: null });
     // a remembered tier, then clear: the store forgets it, one row says so, and the next open is measured
     const rec = Object.values(readTiers(home).records)[0]!;
     setHuman(home, { base: rec.base, model: rec.model, fingerprint: rec.fingerprint }, 3);

@@ -21,7 +21,7 @@
  *   - Esc closes the confirm or the form first (entries kept until the sheet closes), then the sheet.
  */
 import { RpcError, type ShownRefusal } from '../core/client.js';
-import { clearRequest, remeasureRequest, TIER_COPY } from '../core/tool-tier.js';
+import { clearRequest, remeasureLaterText, remeasureRequest, TIER_COPY } from '../core/tool-tier.js';
 import { changeForm, changesOf, deniedResult, editField, emptyLocalUi, expiredResult, firstInvalid, formErrors, localStatusOf, pickServer, probeAnswerOf, probeRequest, probeVerdict, REMOVE_REQUEST, refusalLine, requestLine, setRequest, setupForm, tierEndpointOf, turnedOffResult, appliedToast, turnedOffToast, type LocalField, type LocalForm, type LocalRequest, type LocalUi } from '../core/local-model.js';
 import type { LocalFocus, LocalPress } from './settings-sheet.js';
 import { FolderField, fieldView } from '../core/folder-field.js';
@@ -312,7 +312,9 @@ export class LocalModelController implements LocalPress {
     const r = await this.#call(remeasureRequest(ep));
     if (!r.ok) {
       ui.measuring = null;
-      ui.result = { text: r.text, fail: true };
+      // Aegis C4'b L1: the kernel allows one re-measure per endpoint every few seconds: say when, never auto-retry
+      const wait = r.refusal?.data?.why === 'rate-limited' ? Number(r.refusal.data.retryAfterMs) : NaN;
+      ui.result = Number.isFinite(wait) ? { text: remeasureLaterText(wait) } : { text: r.text, fail: true };
       return this.#paint({ act: 'tier-remeasure' });
     }
     // the result lands in lastProbe.tier (a model.capabilities row also refreshes status): re-read until it settles

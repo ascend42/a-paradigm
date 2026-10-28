@@ -372,7 +372,10 @@ components:
       'tier'} (the one contracts change); remember:true writes the per-model human value (rememberWhy no-fingerprint
       when none is known). Until tools_applied the previous set and its forms stay callable (#local-tool-broker form
       shadow). A tier never touches allow, classOf, cards, trust, the manual filter or the destructive-entry rules
-      (C5' owns grants). C4'b: request.local.tier.remeasure{endpoint} (answers {measuring:true, joined} at once) and
+      (C5' owns grants). C4'b: request.local.tier.remeasure{endpoint} (answers {measuring:true, joined, queued} at once; a running
+      re-measure is joined, a background unforced run gets the forced one queued after it; at most one per endpoint
+      per REMEASURE_GAP_MS, else rate-limited with retryAfterMs; a config change mid-probe skips the measure: Aegis
+      C4'b L1/L2) and
       request.local.tier.clear{endpoint} (setHuman null; one model.capabilities{endpoint, tierSource:'measured',
       action:'human-cleared', previous} row; open sessions keep their tier), both human-only via humanRequest, in
       LOCAL_SESSION_REQUESTS. Gaps: a context-target change does not re-tier a

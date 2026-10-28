@@ -302,5 +302,10 @@ export function tierRequest(hsid: string, op: 'preview' | 'commit', a: Tier | st
   if (op === 'preview') return { kind: TIER_REQUEST, payload: { hsid, op, tier: a } };
   return { kind: TIER_REQUEST, payload: { hsid, op, token: a, remember, ...(tier !== undefined ? { tier } : {}) } };
 }
+/** Aegis C4'b L1: the quiet line when the kernel refused a Re-measure as rate-limited (never retried by itself). */
+export function remeasureLaterText(retryAfterMs: number): string {
+  const s = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  return `Not re-measured: one ran moments ago. Try again in ${s} s.`;
+}
 export const remeasureRequest = (endpoint: string): TierRequest => ({ kind: TIER_REMEASURE_REQUEST, payload: { endpoint } });
 export const clearRequest = (endpoint: string): TierRequest => ({ kind: TIER_CLEAR_REQUEST, payload: { endpoint } });

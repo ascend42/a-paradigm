@@ -178,8 +178,10 @@ export interface LocalLaneOptions {
   config?: LocalLaneConfig;
   /** TEST RIG ONLY: the probe's fetch */
   probeFetch?: ProbeFetch;
-  /** TEST SEAM (slice C4'a): the clock of request.session.tier tokens (default Date.now) */
+  /** TEST SEAM (slice C4'a): the clock of request.session.tier tokens and the re-measure gap (default Date.now) */
   now?: () => number;
+  /** Aegis C4'b L1: the least gap between two re-measures of one endpoint (default REMEASURE_GAP_MS, as Check again) */
+  remeasureGapMs?: number;
   probeTtlMs?: number;
   /** TEST RIG ONLY: the launch plan (default: the platform's `session` sandbox profile). The daemon never sets it. */
   launchPlan?: (i: SessionLaunchInput) => SessionLaunchPlan;
@@ -405,6 +407,8 @@ export const LOCAL_TIER_CLEAR_REQUEST = 'request.local.tier.clear' as const;
 export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST]);
 /** Slice C4'a: a preview token lives this long. */
 export const TIER_TOKEN_TTL_MS = 60_000;
+/** Aegis C4'b L1: one re-measure per endpoint per this gap (the same gap as Check again, config-request probeGapMs). */
+export const REMEASURE_GAP_MS = 2000;
 /** Slice B2: the asker of a human request (stamped by the dispatcher). */
 export interface LocalSessionAsker {
   connId: string;
@@ -506,6 +510,8 @@ export class LocalLane {
   readonly #measuring = new Map<string, Promise<void>>();
   /** Slice C4'b: an explicit re-measure in flight per endpoint (its probe, then its measurement): a second one joins it */
   readonly #remeasuring = new Map<string, Promise<void>>();
+  /** Aegis C4'b L1: when each endpoint's last re-measure started (the lane's clock) */
+  readonly #remeasureAt = new Map<string, number>();
   /** Aegis C4'a L2: a session's MCP start in flight (a concurrent tier commit waits on it) */
   readonly #mcpStarting = new WeakMap<LocalSession, Promise<BrokeredTool[] | null>>();
   #lastFallback: { at: string; cardId: string | null; cwd: string; title: string | null; reason: string; outcome: string } | null = null;
@@ -678,13 +684,18 @@ export class LocalLane {
 
   /**
    * Slice C4'a: an explicit re-measure of configured endpoint `id` (a fresh probe, then T2-T4 whatever the store holds).
-   * Resolves when the measurement settles. Slice C4'b: request.local.tier.remeasure reaches it; a re-measure or a
-   * background measurement already running for `id` is JOINED (its promise), never started twice. status.local
-   * .lastProbe.tier says measuring from the moment it starts.
+   * Resolves when the measurement settles. Slice C4'b: request.local.tier.remeasure reaches it; a re-measure already
+   * running for `id` is JOINED (its promise), never started twice. A background (unforced) measurement running for
+   * `id` would do nothing on a cache hit, so the forced run is QUEUED after it (Aegis C4'b info). status.local
+   * .lastProbe.tier says measuring from the moment it starts. A probe begun under an older config is never measured
+   * (Aegis C4'b L2).
    */
   remeasure(id: string): Promise<void> {
-    const running = this.#remeasuring.get(id) ?? this.#measuring.get(id);
+    const running = this.#remeasuring.get(id);
     if (running) return running;
+    const background = this.#measuring.get(id);
+    // Aegis C4'b L2: the config generation the re-measure was asked under (probeGen); a change meanwhile skips #measure
+    const gen = this.#gen;
     const e = this.#config?.endpoints.find((x) => x.id === id);
     const v = e ? classifyEndpoint(e.base, this.#forbiddenPorts()) : null;
     if (!e || !v?.ok) return Promise.resolve();
@@ -693,9 +704,10 @@ export class LocalLane {
     const started = new Promise<void>((r) => (go = r));
     const run = (async (): Promise<void> => {
       await started;
+      if (background) await background.catch(() => undefined);
       this.#probes.delete(id);
       const caps = await this.#probe({ id, base: v.base, model: e.model }).catch(() => null);
-      if (caps?.ok) this.#measure(id, v.base, caps, { force: true });
+      if (caps?.ok && gen === this.#gen) this.#measure(id, v.base, caps, { force: true });
       await this.#measuring.get(id);
     })()
       .catch(() => undefined)
@@ -1906,9 +1918,19 @@ export class LocalLane {
       const id = p.endpoint;
       if (!this.#config?.endpoints.some((e) => e.id === id)) throw refused('NOT_FOUND', `${kind}: no configured endpoint ${id.slice(0, 64)}`, { reason: 'not-found', field: 'endpoint' });
       if (kind === LOCAL_TIER_CLEAR_REQUEST) return this.#clearTier(id);
-      const joined = this.#remeasuring.has(id) || this.#measuring.has(id);
+      // a re-measure already running is joined (no new work); otherwise at most one per endpoint per gap (Aegis L1)
+      const joined = this.#remeasuring.has(id);
+      if (!joined) {
+        const now = this.#now();
+        const gap = this.#o.remeasureGapMs ?? REMEASURE_GAP_MS;
+        const last = this.#remeasureAt.get(id);
+        if (last !== undefined && now - last < gap) throw refused('BAD_REQUEST', `${kind}: a re-measure just ran: try again in a moment`, { reason: 'rate-limited', why: 'rate-limited', retryAfterMs: Math.max(0, Math.ceil(gap - (now - last))) });
+        this.#remeasureAt.set(id, now);
+      }
+      // a background measurement running: the forced one is queued after it (it would otherwise find its cache hit)
+      const queued = !joined && this.#measuring.has(id);
       void this.remeasure(id);
-      return { endpoint: id, measuring: true, joined };
+      return { endpoint: id, measuring: true, joined: joined || queued, queued };
     }
     if (typeof p.hsid !== 'string' || !HSID_PATTERN.test(p.hsid)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const hsid = p.hsid;
