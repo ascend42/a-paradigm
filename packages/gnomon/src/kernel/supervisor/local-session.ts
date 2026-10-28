@@ -1901,7 +1901,9 @@ export class LocalLane {
    * pins (nothing is bound, started or sent). It folds mcpReport (the launch-check and pool refusals, the index
    * failures) with the pool's runtime state (a server that crashed after it started is `failed`). Every description,
    * error, why and server string is cleaned (cleanServerText) and capped (CAPABILITY_TEXT_MAX); a tool's fullSchema is
-   * returned only for a fullOfferable or human-only entry, every key and string of it cleaned.
+   * returned only for a fullOfferable or human-only entry, every key and string of it cleaned. Slice C6'a2-3 (K1): each
+   * tool names its "/" result policy (`send` | `ask`, read from the ResultPolicyBook for this repo and the entry's
+   * binding NOW; null: not chosen yet, the first use, or the binding changed).
    */
   #capabilities(s: LocalSession): Record<string, unknown> {
     const tier = s.tier?.tier ?? null;
@@ -1965,7 +1967,10 @@ export class LocalLane {
         // slice C6'a2-1: can the human run it from "/" (request.session.tools.run), and if not, why (shown in the menu)
         const unchecked = schemaRefusal(e.schema);
         const run = m.pool.trustBindingOf(e.server) === null ? { runnable: false, why: 'untrusted' } : unchecked ? { runnable: false, why: 'unchecked-schema', detail: capText(unchecked) } : { runnable: true };
-        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}), run });
+        // slice C6'a2-3 (K1): the tool's "/" result policy for this repo and binding NOW (null: not chosen yet, first use;
+        // a binding change or no live trust reads null too)
+        const policy = this.#policyOf(s, e)?.policy ?? null;
+        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}), run, policy });
       }
     }
     return {
