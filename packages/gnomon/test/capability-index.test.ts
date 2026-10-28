@@ -19,12 +19,14 @@ describe('narrow(): Paradigm golden', () => {
   const es = narrow(PARADIGM, 'paradigm', { trust: 'first-party', opAnnotations: PARADIGM_ANN });
 
   it('per-op classes from the real paradigm://tool-annotations document', () => {
-    // Aegis M2: Paradigm's document says readOnlyHint but not openWorldHint:false yet, so no op is read; a declared
-    // non-destructive op is mutate, a destructive one destructive
-    expect(byName(es, 'paradigm_lore.get').class).toBe('mutate');
+    // Aegis M2 + TD-2026-10-27-833: Paradigm's LOCAL_ONLY_OPS declare readOnlyHint AND openWorldHint:false, so they
+    // are read; a declared non-destructive op is mutate, a destructive one destructive
+    expect(byName(es, 'paradigm_lore.get').class).toBe('read');
+    expect(byName(es, 'paradigm_session.recover').class).toBe('read');
     expect(byName(es, 'paradigm_lore.delete').class).toBe('destructive');
     expect(byName(es, 'paradigm_lore.record').class).toBe('mutate');
-    expect(byName(es, 'paradigm_task.list').class).toBe('mutate');
+    expect(byName(es, 'paradigm_task.list').class).toBe('read');
+    expect(byName(es, 'paradigm_task.create').class).toBe('mutate');
     // without the resource a split op is never read
     const bare = narrow(PARADIGM, 'paradigm', { trust: 'first-party' });
     expect(bare.filter((e) => e.op !== null && e.class === 'read')).toEqual([]);
