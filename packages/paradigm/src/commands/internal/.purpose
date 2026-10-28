@@ -14,7 +14,7 @@ components:
       - hooks
       - scoped-learning
   learning-guard-command:
-    description: 'Scoped learning S2. `paradigm internal learning-guard --staged`, run by the git pre-commit hook `paradigm hooks install` writes: reads the staged .paradigm data files and exits 1 with the violations on stderr (#learning-commit-guard rules, visibility from config learning.visibility). PARADIGM_OVERRIDE=learning-guard lets the commit through and logs an override row (mechanism env) through the resolver.'
+    description: 'Scoped learning S2. `paradigm internal learning-guard --staged`, run by the git pre-commit hook `paradigm hooks install` writes: reads what the commit adds to learning-store files (#learning-commit-guard) and exits 1 ONLY on a real violation, with the refusal line on stderr; 2 on an internal error. The hook blocks only on exit 1 with that line and fails open on anything else (a crash, a YAML error, an older CLI). PARADIGM_OVERRIDE=learning-guard lets the commit through and logs an override row.'
     type: tool
     parent: '#InternalCommands'
     file: packages/paradigm/src/commands/internal/learning-guard.ts

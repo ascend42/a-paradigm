@@ -1658,10 +1658,26 @@ _pm_learn_path() {
   printf '%s\\n' "$_pm_lp"
 }
 
+# _pm_learn_skip <artifact> [<root>] — counts a hook write skipped because
+# learn-path could not resolve (one line per skip in the gitignored
+# .paradigm/.sessions/learn-path-skips, last 500 kept), so \`paradigm doctor\`
+# can tell lost data from no data. Silent; never fails.
+_pm_learn_skip() {
+  _pm_ksr=\${2:-\${PM_ROOT:-\${CLAUDE_PROJECT_DIR:-$PWD}}}
+  _pm_ksr=$(_pm_slashes "$_pm_ksr")
+  [ -d "$_pm_ksr/.paradigm" ] || return 0
+  mkdir -p "$_pm_ksr/.paradigm/.sessions" 2>/dev/null || return 0
+  _pm_ksf="$_pm_ksr/.paradigm/.sessions/learn-path-skips"
+  printf '%s\\t%s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$1" >> "$_pm_ksf" 2>/dev/null
+  { tail -n 500 "$_pm_ksf" > "$_pm_ksf.$$" && mv -f "$_pm_ksf.$$" "$_pm_ksf"; } 2>/dev/null || rm -f "$_pm_ksf.$$" 2>/dev/null
+  return 0
+}
+
 # _pm_learn_append <artifact> <json line> [<root>] — appends one row where
-# _pm_learn_path says (creating its folder). Status 1 when it cannot resolve.
+# _pm_learn_path says (creating its folder). Status 1 when it cannot resolve
+# (the skip is counted by _pm_learn_skip).
 _pm_learn_append() {
-  _pm_lf=$(_pm_learn_path "$1" "\${3:-}") || return 1
+  _pm_lf=$(_pm_learn_path "$1" "\${3:-}") || { _pm_learn_skip "$1" "\${3:-}"; return 1; }
   mkdir -p "\${_pm_lf%/*}" 2>/dev/null
   printf '%s\\n' "$2" >> "$_pm_lf" 2>/dev/null
 }
@@ -2664,7 +2680,17 @@ _pm_begin() {
   [ -d "\${CLAUDE_PROJECT_DIR:-$PWD}/.paradigm" ] || return 0
   command -v _pm_learn_path >/dev/null 2>&1 || { [ -f "\${_PM_DIR:-.}/paradigm-resolve.sh" ] && . "\${_PM_DIR:-.}/paradigm-resolve.sh"; } 2>/dev/null
   command -v _pm_learn_path >/dev/null 2>&1 || return 0
-  _PM_RING=$(_pm_learn_path hook-timings "\${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null) || { _PM_RING=; return 0; }
+  # The project root (a linked worktree resolves to its main checkout), so the
+  # learn-path cache and the skip counter live with the root's session state.
+  _pm_mroot=\${CLAUDE_PROJECT_DIR:-$PWD}
+  if [ -z "\${CLAUDE_PROJECT_DIR:-}" ] && command -v _pm_project_root >/dev/null 2>&1; then
+    _pm_project_root "$PWD" 2>/dev/null && _pm_mroot=$PM_ROOT
+  fi
+  _PM_RING=$(_pm_learn_path hook-timings "$_pm_mroot" 2>/dev/null) || {
+    _PM_RING=
+    command -v _pm_learn_skip >/dev/null 2>&1 && _pm_learn_skip hook-timings "$_pm_mroot" 2>/dev/null
+    return 0
+  }
   mkdir -p "\${_PM_RING%/*}" 2>/dev/null || { _PM_RING=; return 0; }
   _PM_OUTCOME=
   _pm_now

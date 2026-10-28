@@ -60,9 +60,13 @@ describe('migrate learning-stores --scopes', () => {
     expect(repo.map(r => r.migrated === true)).toEqual([true, false, true]);
     expect(repo[1]).toEqual(legacy[1]); // a teammate's row is untouched
 
-    // twice is safe
+    // a second --apply moves nothing: no steps, both files byte-identical
+    const repoBefore = fs.readFileSync(repoFile, 'utf8');
+    const userBefore = fs.readFileSync(userFile, 'utf8');
     const again = await migrateLearningScopes(root, { apply: true, yes: true });
     expect(again.steps).toEqual([]);
+    expect(fs.readFileSync(repoFile, 'utf8')).toBe(repoBefore);
+    expect(fs.readFileSync(userFile, 'utf8')).toBe(userBefore);
     expect(rows(userFile)).toHaveLength(2);
 
     // union readers see each verdict once (the frozen repo copies are skipped)

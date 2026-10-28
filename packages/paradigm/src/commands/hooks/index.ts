@@ -374,19 +374,27 @@ if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ] && _pm_res
 fi
 `;
 
-const PRE_COMMIT_HOOK = `#!/bin/sh
+export const PRE_COMMIT_HOOK = `#!/bin/sh
 # Paradigm pre-commit hook - scoped learning guard (#learning-commit-guard)
 # Installed by: paradigm hooks install
 # paradigm-hook-version: 3
-# Refuses a commit whose staged .paradigm data carries a home: user/machine
+# Refuses a commit whose staged learning-store data carries a home: user/machine
 # row, a machine path, or (learning.visibility public, the default) a
 # human_feedback entry without home: repo. Escape (logged):
 #   PARADIGM_OVERRIDE=learning-guard git commit ...
 # Fails open when the CLI cannot be found.
 
 ${GIT_HOOK_RESOLVE}
+# Blocks ONLY on exit 1 with the refusal line; any other failure (a crash, a
+# YAML error, an older CLI without the command) lets the commit through.
 if _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
-  $PARADIGM_BIN internal learning-guard --staged || exit 1
+  _pm_lg_out=$($PARADIGM_BIN internal learning-guard --staged 2>&1)
+  _pm_lg_rc=$?
+  if [ "$_pm_lg_rc" -eq 1 ] && printf '%s\\n' "$_pm_lg_out" | grep -q '^\\[paradigm\\] commit refused'; then
+    printf '%s\\n' "$_pm_lg_out" >&2
+    exit 1
+  fi
+  [ "$_pm_lg_rc" -eq 0 ] || printf '[paradigm] learning guard did not run cleanly (exit %s); commit allowed\\n' "$_pm_lg_rc" >&2
 fi
 exit 0
 `;

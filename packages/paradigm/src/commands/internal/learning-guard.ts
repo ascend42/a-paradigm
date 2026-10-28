@@ -18,6 +18,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import {
   LEARNING_GUARD_OVERRIDE_ID,
+  LEARNING_GUARD_REFUSAL,
   isGuardedPath,
   learningGuardOverridden,
   learningGuardViolations,
@@ -31,10 +32,35 @@ function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
 }
 
-/** Staged `.paradigm/**` data files (added, copied, modified, renamed) with their staged content. */
+/** The lines `git diff --cached -U0` adds to one file. */
+export function addedLines(diff: string): string[] {
+  return diff.split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).map(l => l.slice(1));
+}
+
+/**
+ * Staged learning-store data files with what the commit ADDS: JSONL added
+ * lines; YAML/JSON staged content plus the HEAD content when the file existed.
+ */
 export function stagedGuardFiles(root: string): GuardFile[] {
-  const names = git(root, ['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z']).split('\0').filter(Boolean);
-  return names.filter(isGuardedPath).map(p => ({ path: p, content: git(root, ['show', `:${p}`]) }));
+  const parts = git(root, ['diff', '--cached', '--name-status', '--no-renames', '--diff-filter=AM', '-z']).split('\0').filter(Boolean);
+  const files: GuardFile[] = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const status = parts[i];
+    const p = parts[i + 1];
+    if (!isGuardedPath(p)) continue;
+    const content = git(root, ['show', `:${p}`]);
+    if (p.endsWith('.jsonl')) {
+      const added = status === 'A' ? undefined : addedLines(git(root, ['diff', '--cached', '-U0', '--no-ext-diff', '--no-color', '--', p]));
+      files.push({ path: p, content, added });
+    } else {
+      let previous: string | undefined;
+      if (status !== 'A') {
+        try { previous = git(root, ['show', `HEAD:${p}`]); } catch { previous = undefined; }
+      }
+      files.push({ path: p, content, previous });
+    }
+  }
+  return files;
 }
 
 function localPaths(): string[] {
@@ -53,16 +79,28 @@ export function runLearningGuard(root: string, files: GuardFile[]): GuardViolati
   return learningGuardViolations(files, { visibility: visibilityOf(config), localPaths: localPaths() });
 }
 
+/**
+ * Exit codes: 1 ONLY for a real violation (with the refusal line on stderr);
+ * 0 when clean, overridden, or not a git repo; 2 on an internal error, which
+ * the hook treats as fail-open.
+ */
 export async function learningGuardCommand(_options: { staged?: boolean } = {}): Promise<void> {
   let root: string;
   let files: GuardFile[];
   try {
     root = git(process.cwd(), ['rev-parse', '--show-toplevel']).trim();
-    files = stagedGuardFiles(root);
   } catch {
     return; // not a git repo / git unavailable: nothing to guard
   }
-  const violations = runLearningGuard(root, files);
+  let violations: GuardViolation[];
+  try {
+    files = stagedGuardFiles(root);
+    violations = runLearningGuard(root, files);
+  } catch (err) {
+    process.stderr.write(`[paradigm] learning guard skipped (internal error: ${err instanceof Error ? err.message : String(err)})\n`);
+    process.exitCode = 2;
+    return;
+  }
   if (violations.length === 0) return;
   if (learningGuardOverridden(process.env.PARADIGM_OVERRIDE)) {
     try {
@@ -78,9 +116,9 @@ export async function learningGuardCommand(_options: { staged?: boolean } = {}):
     process.stderr.write(`[paradigm] learning guard overridden (PARADIGM_OVERRIDE=${LEARNING_GUARD_OVERRIDE_ID}); ${violations.length} violation(s) logged\n`);
     return;
   }
-  process.stderr.write('[paradigm] commit refused: staged learning data must stay repo-home and machine-free\n');
+  process.stderr.write(`${LEARNING_GUARD_REFUSAL} must stay repo-home and free of this machine's paths\n`);
   for (const v of violations) {
-    process.stderr.write(`  ${v.path}${v.line ? `:${v.line}` : ''} [${v.rule}] ${v.detail}\n`);
+    process.stderr.write(`  ${v.path}${v.line ? ` (added line ${v.line})` : ''} [${v.rule}] ${v.detail}\n`);
   }
   process.stderr.write(`  Unstage these rows, set home: repo where it belongs, or commit once with PARADIGM_OVERRIDE=${LEARNING_GUARD_OVERRIDE_ID} (logged).\n`);
   process.exitCode = 1;

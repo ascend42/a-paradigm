@@ -24,6 +24,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { pathFor } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+import { gitHookState, readGitHook } from '../hooks/git-hook-state.js';
 
 export interface HookHealthCheck {
   name: string;
@@ -373,6 +374,49 @@ export function hookRingDir(rootDir: string): string {
   return legacy;
 }
 
+/**
+ * Scoped learning S2: is the git pre-commit learning guard in place?
+ * installed (Paradigm's hook) / not installed / foreign pre-commit hook.
+ */
+export function learningGuardChecks(rootDir: string): HookHealthCheck[] {
+  if (!fs.existsSync(path.join(rootDir, '.git'))) return [];
+  const state = gitHookState(readGitHook(rootDir, 'pre-commit'), 'pre-commit');
+  if (state === 'absent') {
+    return [{ name: 'Learning guard', status: 'info', message: 'learning guard: not installed (no git pre-commit hook)', fix: 'Run `paradigm hooks install` to refuse commits of user/machine learning rows' }];
+  }
+  if (state === 'foreign') {
+    return [{ name: 'Learning guard', status: 'info', message: 'learning guard: foreign pre-commit hook (another tool owns .git/hooks/pre-commit)', fix: 'Call `paradigm internal learning-guard --staged` from your pre-commit hook; it exits 1 only on a real violation' }];
+  }
+  return [{ name: 'Learning guard', status: 'ok', message: `learning guard: installed${state === 'outdated' ? ' (outdated: run `paradigm hooks install`)' : ''}` }];
+}
+
+/**
+ * Scoped learning S2: hook writes skipped because `paradigm internal
+ * learn-path` could not resolve (.paradigm/.sessions/learn-path-skips), so a
+ * quiet store reads as lost data, not as no data.
+ */
+export function learnPathSkipChecks(rootDir: string): HookHealthCheck[] {
+  let lines: string[];
+  try {
+    lines = fs.readFileSync(path.join(rootDir, '.paradigm', '.sessions', 'learn-path-skips'), 'utf8').split('\n').filter(l => l.trim());
+  } catch {
+    return [];
+  }
+  if (lines.length === 0) return [];
+  const by: Record<string, number> = {};
+  for (const l of lines) {
+    const artifact = (l.split('\t')[1] ?? 'unknown').replace(/[^a-z0-9-]/gi, '').slice(0, 40) || 'unknown';
+    by[artifact] = (by[artifact] ?? 0) + 1;
+  }
+  const detail = Object.entries(by).sort().map(([a, n]) => `${a}: ${n}`).join(', ');
+  return [{
+    name: 'Learning writes skipped',
+    status: 'warn',
+    message: `${lines.length} hook write(s) skipped because learn-path could not resolve (${detail}); those rows were lost, not absent`,
+    fix: 'Make the paradigm CLI resolvable from the hooks (project install or PATH), then delete .paradigm/.sessions/learn-path-skips',
+  }];
+}
+
 export function hookHealthChecks(opts: { rootDir: string; homeDir: string; nowMs?: number }): HookHealthCheck[] {
   const events = hookRingDir(opts.rootDir);
   const nowMs = opts.nowMs ?? Date.now();
@@ -382,5 +426,7 @@ export function hookHealthChecks(opts: { rootDir: string; homeDir: string; nowMs
     ...repoTraitChecks(repoTraits(opts.rootDir)),
     ...pluginCacheChecks(opts.rootDir, opts.homeDir),
     ...staleSessionHookChecks(opts.rootDir, nowMs),
+    ...learningGuardChecks(opts.rootDir),
+    ...learnPathSkipChecks(opts.rootDir),
   ];
 }

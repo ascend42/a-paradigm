@@ -418,7 +418,7 @@ components:
       - scoped-learning
     file: packages/paradigm-mcp/src/utils/repo-id.ts
   learning-commit-guard:
-    description: 'Scoped learning S2 pre-commit guard (learning-commit-guard.ts), shaped like warpline stake-guard: frozen, schema-versioned rules (LEARNING_GUARD_SCHEMA) and pure functions. learningGuardViolations reads staged .paradigm/** data files (.jsonl/.json/.yaml/.yml only; source and docs never parsed) and reports home-not-repo (any home: user or machine row/entry), machine-path (/Users/x/, /home/x/, C:\Users\x, or this machine''s home, learning home and state dir) and, with learning.visibility public (default when unset), human-feedback-public (trigger human_feedback without home: repo). PARADIGM_OVERRIDE=learning-guard is the logged escape.'
+    description: 'Scoped learning S2 pre-commit guard (learning-commit-guard.ts, schema learning-guard:v2), shaped like warpline stake-guard. Scope: learning stores only, from the registry (listLearningStores pipeline/knowledge rows, project scope, minus decisions, protocols, skills and the event stream) plus agent-state/ and learned/; never decisions, lore, specs, docs, config, remediations, research, graphs or indexes. Only added content is judged: JSONL added lines (git diff --cached -U0), YAML/JSON new files or entries not in HEAD. Rules: home-not-repo (home user/machine), machine-path (this machine''s own home, learning home and state dir only) and, with learning.visibility public (default), human-feedback-public. PARADIGM_OVERRIDE=learning-guard is the logged escape.'
     type: utility
     tags:
       - scoped-learning

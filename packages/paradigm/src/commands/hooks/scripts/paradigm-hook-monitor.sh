@@ -104,7 +104,17 @@ _pm_begin() {
   [ -d "${CLAUDE_PROJECT_DIR:-$PWD}/.paradigm" ] || return 0
   command -v _pm_learn_path >/dev/null 2>&1 || { [ -f "${_PM_DIR:-.}/paradigm-resolve.sh" ] && . "${_PM_DIR:-.}/paradigm-resolve.sh"; } 2>/dev/null
   command -v _pm_learn_path >/dev/null 2>&1 || return 0
-  _PM_RING=$(_pm_learn_path hook-timings "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null) || { _PM_RING=; return 0; }
+  # The project root (a linked worktree resolves to its main checkout), so the
+  # learn-path cache and the skip counter live with the root's session state.
+  _pm_mroot=${CLAUDE_PROJECT_DIR:-$PWD}
+  if [ -z "${CLAUDE_PROJECT_DIR:-}" ] && command -v _pm_project_root >/dev/null 2>&1; then
+    _pm_project_root "$PWD" 2>/dev/null && _pm_mroot=$PM_ROOT
+  fi
+  _PM_RING=$(_pm_learn_path hook-timings "$_pm_mroot" 2>/dev/null) || {
+    _PM_RING=
+    command -v _pm_learn_skip >/dev/null 2>&1 && _pm_learn_skip hook-timings "$_pm_mroot" 2>/dev/null
+    return 0
+  }
   mkdir -p "${_PM_RING%/*}" 2>/dev/null || { _PM_RING=; return 0; }
   _PM_OUTCOME=
   _pm_now

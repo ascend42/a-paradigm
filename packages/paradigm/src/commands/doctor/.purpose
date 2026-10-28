@@ -15,6 +15,10 @@ components:
     tags:
       - doctor
       - hooks
+  doctor-learning-guard:
+    description: 'Scoped learning S2 doctor lines (hook-health.ts): learningGuardChecks reports learning guard installed / not installed / foreign pre-commit hook; learnPathSkipChecks counts hook writes skipped because learn-path could not resolve (.paradigm/.sessions/learn-path-skips, written by _pm_learn_skip), per artifact, so lost data is told apart from no data.'
+    type: handler
+    file: packages/paradigm/src/commands/doctor/hook-health.ts
   doctor-handler:
     description: Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. Warns on each Paradigm-owned git hook (.git/hooks/post-commit, pre-push) that #git-hook-state classes as outdated (below paradigm-hook-version 3, or still running `npx paradigm`), fix `paradigm hooks install`. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it). Scoped learning S2: the classroom repeat-failure rate is grouped by home (certificationsByHome), one warn per home; liveness reads the union of the machine home and the frozen repo logs.
     type: handler
