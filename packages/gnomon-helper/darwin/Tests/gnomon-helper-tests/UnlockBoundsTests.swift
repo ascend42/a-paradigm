@@ -7,7 +7,7 @@ import XCTest
 
 final class UnlockBoundsTests: XCTestCase {
     func testBoundsAreTwelveHoursAnd512WithNoSeparateIdle() {
-        XCTAssertEqual(gnomonHelperVersion, "1.9.0")
+        XCTAssertEqual(gnomonHelperVersion, "1.10.0")
         XCTAssertEqual(Bounds.unlockAbsoluteSeconds, 12 * 60 * 60)
         XCTAssertEqual(Bounds.unlockIdleSeconds, Bounds.unlockAbsoluteSeconds)
         XCTAssertEqual(Bounds.maxSignaturesPerUnlock, 512)

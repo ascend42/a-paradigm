@@ -6,7 +6,7 @@ keys with presence, Keychain / Credential Manager anchors and the kernel-key ite
 the Windows named pipe with its owner-only DACL, job objects, the WFP port filter,
 and the private launch-token URL hand-off.
 
-**Status: helper 1.6.0, protocol `gnomon-helper:v2`.** The darwin helper holds the root and approvals keys in the Secure Enclave, the per-connId cached unlocks and (1.6.0) the voice arms per armId (spec §14.7, S29-K5). It speaks NDJSON over stdin/stdout (`serve` / `once`); v2 adds the arm ops, `conn.close` and an unsolicited session push. The kernel's floor is 1.6.0, so a 1.5.0 helper is refused until this one is rebuilt and signed. Private, not published, outside the root build.
+**Status: helper 1.10.0 (source; the last signed build is 1.9.0, see `checksums.json`), protocol `gnomon-helper:v2`.** The darwin helper holds the root and approvals keys in the Secure Enclave, the per-connId cached unlocks and (1.6.0) the voice arms per armId (spec §14.7, S29-K5). It speaks NDJSON over stdin/stdout (`serve` / `once`); v2 adds the arm ops, `conn.close` and an unsolicited session push. The kernel's floor is 1.6.0, so a 1.5.0 helper is refused until this one is rebuilt and signed. Private, not published, outside the root build.
 
 | Path | What |
 |---|---|
@@ -90,6 +90,10 @@ production helper on its own App ID with its own profile, and no other team
 binary signed with that profile. `build-darwin.mjs` signs with exactly
 `SW4BMQ8PNL.gnomon.prod`, refuses any other signed group list, and records
 `groupGrant: explicit | team-wildcard` in `checksums.json`.
+
+## Helper 1.10.0: the `permission` row table (founder, TD-2026-10-28-969, G-HLP-02)
+
+1.10.0 adds one row table to `decision.sign`: a `permission` decision (a destructive brokered Always) signs its gnomon-root-decision:v2 row only, and any further row is refused. No new op, no new entitlement, same protocol `gnomon-helper:v2`; the kernel's floor (`MIN_HELPER_VERSION`) stays 1.6.0. The kernel offers a destructive Always only when the running helper is 1.10.0 or newer (`ROW_TABLE_MIN_HELPER.permission`); with 1.9.0 the card offers allow and deny only. Rebuild, sign and check it with the same steps as 1.6.0 below (`--version` prints `gnomon-helper 1.10.0`), and commit `checksums.json`. Users get it only inside a new signed `Gnomon.app` (`packages/gnomon/scripts/release-darwin.mjs --notarize`, then `seal-npm-release.mjs` and `npm run publish:gnomon`; spec §18.1).
 
 ## Helper 1.7.0: rebuild, sign, notarize (founder, TD-2026-10-20-086 F4/F5)
 
