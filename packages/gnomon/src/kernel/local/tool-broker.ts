@@ -600,6 +600,9 @@ export const TRUST_CARD_LINE: Readonly<Record<ServerTrust, string>> = Object.fre
   'first-party': "server: first-party · Gnomon's staged Paradigm server; this call still asks",
 });
 
+/** Aegis L3 (C6'a2-1): the card line of a call to a server with no live trust (its card is irreversible). */
+export const UNTRUSTED_IRREVERSIBLE_LINE = "this server isn't trusted, so Gnomon can't tell whether this undoes anything; Touch ID each time";
+
 /** Slice C5'a2: the card line of a ruleable call (the scope an `always` on it takes). */
 export const alwaysLine = (name: string): string => `Always: any call of ${name} in this repo, any arguments · paused if the tool or its server changes`;
 
@@ -928,9 +931,12 @@ export class LocalToolBroker {
     const plan = composePermission({ requestId: req.id, toolName: name, toolUseId: req.toolCallId, input: callArgs }, { repo: o.repo, denyWrite: [] });
     if (plan.kind !== 'card') return { decision: 'too-large', cardId: null };
     const destructive = cls === 'destructive';
+    // Aegis L3 (founder: fresh Touch ID): a server with no live trust has its labels ignored (every tool reads mutate),
+    // so ANY of its tools may undo something: its card is irreversible too (fresh presence each time; never Always)
+    const unknownClass = level === 'enabled';
     const human = ctx.author === 'human';
     const who = human ? `a "/" run you started in this local session, to ${target.server}` : `a brokered call from this local session to ${target.server}`;
-    const lines = [...plan.lines, `class: ${cls} · ${who}`, ...(level ? [TRUST_CARD_LINE[level]] : []), ...droppedLine(tool.entry?.dropped ?? []), ...(always ? [destructive ? destructiveAlwaysLine(tool.entry ? tool.entry.tool : tool.name, target.server) : alwaysLine(name)] : [])];
+    const lines = [...plan.lines, `class: ${cls} · ${who}`, ...(level ? [TRUST_CARD_LINE[level]] : []), ...(unknownClass ? [UNTRUSTED_IRREVERSIBLE_LINE] : []), ...droppedLine(tool.entry?.dropped ?? []), ...(always ? [destructive ? destructiveAlwaysLine(tool.entry ? tool.entry.tool : tool.name, target.server) : alwaysLine(name)] : [])];
     // slice C6'a2-1: detail.brokered.author marks a "/" run (free detail, inside the contentHash)
     const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: cls, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}), ...(level ? { trust: level === 'enabled' ? 'untrusted' : level } : {}), ...(always ? { bindHash: always.bindHash } : {}), ...(human ? { author: 'human' } : {}) }, ...(always ? { toolScopes: ['tool'] } : {}) };
     // slice C5'a3: a {type:'tool-scope', detail} node (like permission.ts edit-scope) carries the card's FULL detail, the
@@ -943,7 +949,7 @@ export class LocalToolBroker {
       // the broker's own timeout falls after the deadline, so the kernel's deadline (expired) always wins the race
       // slice C6'a2-1 (TD-2026-10-28-969): EVERY destructive brokered card is irreversible (allow takes fresh presence,
       // never a cached unlock or a standing grant), and its Always is root class (rootRows [], the `permission` table)
-      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, block, toolInput: callArgs, tool: name, decisions: always ? ['allow', 'deny', 'always'] : ['allow', 'deny'], ...(always ? { ruleScope: { repoKey: always.repoKey } } : {}), ...(destructive ? { flags: ['irreversible'] } : {}), ...(destructive && always ? { rootDecisions: ['always'] } : {}), timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
+      const c = await b.raise({ kind: 'permission', requestedBy: o.principalId, hsid: o.hsid, attended: true, detail, lines, block, toolInput: callArgs, tool: name, decisions: always ? ['allow', 'deny', 'always'] : ['allow', 'deny'], ...(always ? { ruleScope: { repoKey: always.repoKey } } : {}), ...(destructive || unknownClass ? { flags: ['irreversible'] } : {}), ...(destructive && always ? { rootDecisions: ['always'] } : {}), timeoutMs: Math.max(1000, deadline - this.#now() + 5_000) });
       cardId = c.cardId;
       try {
         ctx.onRaised?.(cardId);

@@ -14,7 +14,7 @@ import { HardwareRootAuthority, HelperApprovalsKey } from '../src/kernel/identit
 import { ROW_TABLE_MIN_HELPER, rowTableRefusal } from '../src/kernel/identity/decision-batch.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { narrow, type CapabilityEntry } from '../src/kernel/local/capability-index.js';
-import { DESTRUCTIVE_RULED_PER_RULE_DAY, DESTRUCTIVE_RULED_PER_SESSION_MINUTE, DestructiveRuleBudget, destructiveAlwaysLine, HUMAN_RUNS_PER_MINUTE, LocalToolBroker, schemaRefusal, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
+import { UNTRUSTED_IRREVERSIBLE_LINE, DESTRUCTIVE_RULED_PER_RULE_DAY, DESTRUCTIVE_RULED_PER_SESSION_MINUTE, DestructiveRuleBudget, destructiveAlwaysLine, HUMAN_RUNS_PER_MINUTE, LocalToolBroker, schemaRefusal, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
 import { frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { FakeHelper } from './helper-fake.js';
@@ -34,6 +34,7 @@ const cli = () => ({ ...gui(), credential: 'cli', surface: 'cli' });
 const TOOLS = [
   { name: 'write', description: 'Write a note.', inputSchema: { type: 'object', properties: { t: { type: 'string' } } }, annotations: { readOnlyHint: false, destructiveHint: false } },
   { name: 'drop', description: 'Delete a note.', inputSchema: { type: 'object', properties: { t: { type: 'string' } } }, annotations: { readOnlyHint: false, destructiveHint: true } },
+  { name: 'peek', description: 'Read a note.', inputSchema: { type: 'object', properties: { t: { type: 'string' } } }, annotations: { readOnlyHint: true, openWorldHint: false } },
 ];
 const entries: CapabilityEntry[] = narrow(TOOLS, 'srv', { trust: 'trusted' });
 const entry = (name: string): CapabilityEntry => entries.find((e) => e.name === name)!;
@@ -46,7 +47,7 @@ async function waitFor(f: () => boolean, ms = 5_000): Promise<void> {
   }
 }
 
-function rig(o: { version?: string; tainted?: () => boolean; rules?: { match(r: string, t: string, b: string, c: 'mutate' | 'destructive'): { ruleId: string } | null }; budget?: DestructiveRuleBudget } = {}) {
+function rig(o: { level?: () => 'trusted' | 'enabled'; version?: string; tainted?: () => boolean; rules?: { match(r: string, t: string, b: string, c: 'mutate' | 'destructive'): { ruleId: string } | null }; budget?: DestructiveRuleBudget } = {}) {
   const helper = new FakeHelper(GEN, { bounds: BOUNDS, version: o.version ?? '1.10.0' });
   const approvals = new HelperApprovalsKey({ gen: GEN, approvalsPublicKeyPem: helper.publicPem('approvals') }, HUMAN, helper);
   const root = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: helper.publicPem('root') }, { helper, once: () => { throw new Error('never the once seam'); } });
@@ -63,7 +64,7 @@ function rig(o: { version?: string; tainted?: () => boolean; rules?: { match(r: 
   const target: BrokerTarget = { server: 'srv', provenance: 'mcp:srv', ownsGate: false, list: async () => [], call: async (name, args) => (calls.push({ name, args }), { text: `ran ${JSON.stringify(args)}`, isError: false }) };
   const tools: BrokeredTool[] = entries.map((e) => ({ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }));
   const rules = o.rules ?? { match: (repoKey: string, tool: string, bindHash: string, toolClass: 'mutate' | 'destructive') => sync().match(repoKey, tool, bindHash, undefined, { prefixRules: true, roots: ['/r'], bindHash, toolClass }) };
-  const tb = new LocalToolBroker({ hsid: HSID, principalId: AGENT, repo: '/r', loop: false, log, broker, target, tools, running: () => true, manual: () => false, trustLive: () => 'trusted', rules, repoKey: REPO, trustBinding: () => BINDING, ...(o.tainted ? { tainted: o.tainted } : {}), ...(o.budget ? { destructiveBudget: o.budget } : {}) });
+  const tb = new LocalToolBroker({ hsid: HSID, principalId: AGENT, repo: '/r', loop: false, log, broker, target, tools, running: () => true, manual: () => false, trustLive: o.level ?? (() => 'trusted'), rules, repoKey: REPO, trustBinding: () => BINDING, ...(o.tainted ? { tainted: o.tainted } : {}), ...(o.budget ? { destructiveBudget: o.budget } : {}) });
   let n = 0;
   const call = (name: string, args: Record<string, unknown> = { t: 'x' }) => tb.handle({ id: `tr-${++n}`, toolCallId: `c${n}`, name, args, error: null });
   const run = (name: string, args: Record<string, unknown> = { t: 'x' }) => tb.runHuman({ runId: `r${++n}`, entry: entry(name), target, form: 'narrow', args });
@@ -114,6 +115,36 @@ describe('G-LCL-22 (amended): every destructive brokered card is irreversible', 
     await waitFor(() => r.pending().length === 1);
     r.broker.expire(r.pending()[0]!.cardId, 'cancelled');
     expect(await again).not.toMatchObject({ decision: 'cooldown' });
+  });
+});
+
+describe('Aegis L3 (founder: fresh Touch ID): a server with no live trust', () => {
+  it("an untrusted server's call under a cached unlock still asks fresh presence; its card says why and offers no Always", async () => {
+    let level: 'trusted' | 'enabled' = 'trusted';
+    const r = rig({ level: () => level });
+    for (const t of ['a', 'b']) {
+      const out = r.call('write', { t });
+      await waitFor(() => r.pending().length === 1);
+      await r.broker.approve(gui(), { cardId: r.pending()[0]!.cardId, decision: 'allow' });
+      await out;
+    }
+    expect(presenceOf(r.rows)).toEqual(['fresh', 'cached']);
+    level = 'enabled';
+    const out = r.call('write', { t: 'c' });
+    await waitFor(() => r.pending().length === 1);
+    const c = r.pending()[0]!;
+    expect(c.flags).toContain('irreversible');
+    expect(c.actions!.map((a) => a.decision).sort()).toEqual(['allow', 'deny']);
+    expect(JSON.stringify(c.block)).toContain(UNTRUSTED_IRREVERSIBLE_LINE);
+    await r.broker.approve(gui(), { cardId: c.cardId, decision: 'allow' });
+    await out;
+    expect(presenceOf(r.rows).at(-1)).toBe('fresh');
+  });
+
+  it('a trusted read is unchanged: it runs with no card', async () => {
+    const r = rig();
+    expect(await r.call('peek')).toMatchObject({ decision: 'ran' });
+    expect(r.pending()).toEqual([]);
   });
 });
 

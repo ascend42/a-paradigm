@@ -234,7 +234,8 @@ components:
       request.session.tools.result{hsid, runId} (a carded run, same
       principal, 10 min, read once). capabilities tools[].run says whether
       "/" can run it (untrusted, unchecked-schema via schemaRefusal).
-      #local-tool-broker: every destructive card is irreversible; a
+      #local-tool-broker: every destructive card, and (Aegis L3) every card of
+      a server with no live trust, is irreversible (fresh presence each time); a
       destructive tool's Always is root class (rootDecisions ['always'],
       rootRows [], row table permission, helper >= 1.10.0 asked first via
       ApprovalBroker.rootTableReady so an older helper gets allow | deny);
