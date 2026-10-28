@@ -206,6 +206,11 @@ export interface LocalLaneOptions {
    * slice C5'a2 (^local-tool-grant): the #always-rules match (SupervisorOptions.alwaysRule). A brokered call asks it for
    * a tool rule with the call's bindHash, never in manual mode. Absent: no rule matches and no card offers Always.
    */
+  /**
+   * slice C6'a1 (Aegis L1): whether a third-party server is still on at its open-time launch hash (McpServers.enabledAt);
+   * a restart of one that is not is refused disabled. Absent (test rigs): not checked.
+   */
+  mcpEnabled?: (id: string, launchHash: string) => boolean;
   alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; bindHash?: string | null }) => { ruleId: string } | null;
 }
 
@@ -459,6 +464,22 @@ function cleanSchema(v: unknown, depth = 0): unknown {
     out[k] = cleanSchema(x, depth + 1);
   }
   return out;
+}
+/**
+ * Slice C6'a1 (Aegis L2): a capability id as the capabilities reply keys it — the entry id when it is a clean
+ * `<server>/<name>@<hash8>` (the tool.selection id shape), else `<server>/~<sha256(id)[:16]>` (a raw server tool name never
+ * reaches the GUI). Stable per entry: entryByCapabilityKey maps it back.
+ */
+const CAPABILITY_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}@[0-9a-f]{8}$/;
+export function capabilityKey(id: string): string {
+  if (CAPABILITY_KEY_RE.test(id)) return id;
+  const server = serverLabel(id.split('/')[0] ?? '');
+  return `${server}/~${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
+}
+/** Slice C6'a1: the entry a capabilities key names (the input side of capabilityKey), or undefined. */
+export function entryByCapabilityKey<E extends { id: string }>(entries: Iterable<E>, key: string): E | undefined {
+  for (const e of entries) if (capabilityKey(e.id) === key) return e;
+  return undefined;
 }
 /** Slice C6'a1: one param of a tool as the capabilities reply lists it. */
 function paramsOf(schema: Record<string, unknown>): Array<{ name: string; required: boolean; type: string; enum?: unknown[]; description?: string }> {
@@ -1854,7 +1875,7 @@ export class LocalLane {
           const c = cleanSchema(fullParameters(e));
           if (Buffer.byteLength(JSON.stringify(c), 'utf8') <= CAPABILITY_SCHEMA_MAX_BYTES) fullSchema = c;
         }
-        tools.push({ id: e.id, name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}) });
+        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}) });
       }
     }
     return {
@@ -1889,7 +1910,7 @@ export class LocalLane {
     const srv = launch?.servers.find((x) => serverLabelOf(x) === label);
     if (!m || !launch || !srv || !m.pool.labels.includes(label)) throw refused('NOT_FOUND', `${kind}: no MCP server ${label} started in this session`, { reason: 'not-found', field: 'server' });
     if (m.pool.busy(label)) throw refused('BAD_REQUEST', `${kind}: ${label} is already starting`, { reason: 'busy' });
-    let refusal: { fit: ServerFit | 'trust-changed'; why: string } | null = null;
+    let refusal: { fit: ServerFit | 'trust-changed' | 'disabled'; why: string } | null = null;
     const fp = launch.firstParty;
     if (srv.staged) {
       let changed: string | null = recheckStaged(srv.staged.snapshot);
@@ -1901,6 +1922,16 @@ export class LocalLane {
         }
       }
       if (changed) refusal = { fit: 'pin-mismatch', why: changed };
+    }
+    // Aegis L1: a third-party server the human turned off (or relaunched under another hash) since open stays off
+    if (!refusal && !srv.staged && srv.trust !== 'first-party' && this.#o.mcpEnabled) {
+      let on = false;
+      try {
+        on = typeof srv.launchHash === 'string' && this.#o.mcpEnabled(srv.id, srv.launchHash);
+      } catch {
+        on = false;
+      }
+      if (!on) refusal = { fit: 'disabled', why: 'it is no longer turned on for sessions at the launch this session opened with' };
     }
     if (!refusal && !m.pool.trustHolds(label)) refusal = { fit: 'trust-changed', why: 'it changed since it was trusted, so its trust no longer holds' };
     if (!refusal) {

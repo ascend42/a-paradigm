@@ -13,7 +13,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateKindPayload } from '@a-company/gnomon-contracts';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
-import { CAPABILITY_TEXT_MAX, LocalLane } from '../src/kernel/supervisor/local-session.js';
+import { CAPABILITY_TEXT_MAX, capabilityKey, entryByCapabilityKey, LocalLane } from '../src/kernel/supervisor/local-session.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
 import { McpListCache } from '../src/kernel/local/mcp-client.js';
 import { bindingOf } from '../src/kernel/local/trust-book.js';
@@ -136,6 +136,15 @@ describe('G-LCL-24 request.session.capabilities (kernel side)', () => {
     expect(fq.description).not.toMatch(/‮/);
     expect([...fq.description].length).toBeLessThanOrEqual(512);
     for (const t of c1.tools) expect(t.id).toMatch(/^fake\//);
+    // Aegis L2: every id is a clean key (a raw server tool name becomes its hash), stable across reads, and maps back
+    const bad = c1.tools.find((t) => t.name.startsWith('bad name'))!;
+    expect(bad).toBeDefined();
+    expect(bad.id).toMatch(/^fake\/~[0-9a-f]{16}$/);
+    for (const t of c1.tools) expect(t.id).toMatch(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\/(?:[A-Za-z][A-Za-z0-9_.-]{0,63}@[0-9a-f]{8}|~[0-9a-f]{16})$/);
+    expect((await caps()).tools.map((t) => t.id)).toEqual(c1.tools.map((t) => t.id));
+    expect(capabilityKey('fake/echo@0123abcd')).toBe('fake/echo@0123abcd');
+    const rawId = 'fake/bad name<|x|>@0123abcd';
+    expect(entryByCapabilityKey([{ id: 'fake/echo@0123abcd' }, { id: rawId }], capabilityKey(rawId))).toEqual({ id: rawId });
 
     // mode: a manual session's mutate tools are manual-reads-only (an offered one stays offered until the set moves)
     mode = 'manual';
@@ -199,7 +208,8 @@ describe('G-LCL-24 request.session.capabilities (kernel side)', () => {
       for (const fn of listeners) fn(id);
     };
     const LAUNCH = `hmac-sha256:${'1'.repeat(64)}`;
-    const lane = new LocalLane({ sessionPath: null, pathDenies: [], mcpCache: cache, mcpTrust,
+    const on = new Set(['user::fake', 'user::linked']);
+    const lane = new LocalLane({ sessionPath: null, pathDenies: [], mcpCache: cache, mcpTrust, mcpEnabled: (id, h) => on.has(id) && h === LAUNCH,
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       broker: { raise: async () => ({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' }) as never, decisionOf: async () => 'allow', expire: async () => true },
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js'), contextTarget: 16384 },
@@ -237,6 +247,10 @@ describe('G-LCL-24 request.session.capabilities (kernel side)', () => {
     await expect(restart('fake')).rejects.toThrow(/not restarted/);
     expect(mcpRows().at(-1)).toEqual({ hsid: s.hsid, server: 'fake', state: 'refused', fit: 'trust-changed' });
 
+    // Aegis L1: turned off since open (or relaunched under another hash): the restart is refused disabled
+    on.delete('user::fake');
+    await expect(restart('fake')).rejects.toThrow(/not restarted/);
+    expect(mcpRows().at(-1)).toEqual({ hsid: s.hsid, server: 'fake', state: 'refused', fit: 'disabled' });
     // the launch moved inside the repo since open: the re-run launch check refuses it
     expect(await restart('linked')).toMatchObject({ state: 'running' });
     fs.unlinkSync(link);

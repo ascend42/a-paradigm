@@ -708,9 +708,9 @@ export type SessionMcpState = (typeof SESSION_MCP_STATES)[number];
 /**
  * session.mcp{fit} (CLOSED, state refused only): remote-refused, launch-writable, label-reserved and pin-mismatch as
  * #local-mcp-client's ServerFit; trust-changed (a restart of a server narrowed as trusted whose trust binding no longer
- * holds).
+ * holds); disabled (a restart of a server the human turned off, or relaunched under another hash, since open).
  */
-export const SESSION_MCP_FITS = ['remote-refused', 'launch-writable', 'label-reserved', 'pin-mismatch', 'trust-changed'] as const;
+export const SESSION_MCP_FITS = ['remote-refused', 'launch-writable', 'label-reserved', 'pin-mismatch', 'trust-changed', 'disabled'] as const;
 export type SessionMcpFit = (typeof SESSION_MCP_FITS)[number];
 /** session.mcp{error}: cleaned server text, at most this many characters, no control characters. */
 export const SESSION_MCP_ERROR_MAX = 240;

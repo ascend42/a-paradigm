@@ -538,7 +538,11 @@ components:
       CAPABILITY_SCHEMA_MAX_BYTES or left out); fullSchema only for a
       fullOfferable or human-only entry.
       request.session.mcp.restart{hsid, server} — a pooled server (never one
-      refused at open); re-checks the staged pin (recheckStaged + the pinned
+      refused at open); Aegis L1: a third-party server must still be on at
+      its open-time launch hash (mcpEnabled = McpServers.enabledAt, else
+      refused fit disabled); Aegis L2: tool ids are capabilityKey (a raw
+      server tool name becomes `<server>/~<hash16>`; entryByCapabilityKey
+      maps a key back); re-checks the staged pin (recheckStaged + the pinned
       node), the trust it was narrowed under (trustHolds) and launchCheck
       with the open's inputs; a failed check is FORBIDDEN reason refused
       with one session.mcp{state:'refused', fit} row; else

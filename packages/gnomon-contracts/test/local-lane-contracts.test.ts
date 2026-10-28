@@ -77,6 +77,7 @@ describe("session.mcp (8.0:local-lane C6'a1)", () => {
   it('started carries neither; refused carries fit; failed carries error', () => {
     expect(validateKindPayload('session.mcp', started)).toEqual([]);
     expect(validateKindPayload('session.mcp', { ...started, state: 'refused', fit: 'trust-changed' })).toEqual([]);
+    expect(validateKindPayload('session.mcp', { ...started, state: 'refused', fit: 'disabled' })).toEqual([]);
     expect(validateKindPayload('session.mcp', { ...started, state: 'failed', error: 'exited with code 3' })).toEqual([]);
     expect(validateKindPayload('session.mcp', { ...started, state: 'refused' }).length).toBeGreaterThan(0);
     expect(validateKindPayload('session.mcp', { ...started, state: 'failed' }).length).toBeGreaterThan(0);
