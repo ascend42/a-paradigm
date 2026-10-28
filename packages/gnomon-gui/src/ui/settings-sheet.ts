@@ -65,6 +65,10 @@ export interface SettingsDeps {
   rules?: RulesPress;
   /** #gui-mcp-servers: a press on an `mcp:` key (ui/mcp-servers.ts) */
   mcp?: { press(act: string, value: string | null, trusted: boolean): void; escape?(): boolean; sheetClosed?(): void };
+  /** #gui-capability-browser (C6'b1): a press on a `kept:` key (Local model › Kept memory; ui/tools-drawer.ts KeptFlow) */
+  kept?: { press(act: string, value: string | null, trusted: boolean): void; escape(): boolean };
+  /** called each time the sheet opens (Kept memory reads request.session.memory.list then) */
+  onOpen?: () => void;
 }
 
 /** Where focus goes after a Local model press: a field, a key, or the section's heading. */
@@ -90,13 +94,14 @@ function rich(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, t
   return h(doc, tag, attrs, ...parts.map((p, i) => (i % 2 ? h(doc, 'code', null, p) : p)));
 }
 
-function keyEl(doc: MiniDoc, k: FormKey): MiniEl {
-  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.ariaDisabled ? { 'aria-disabled': 'true' } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
+/** A settings-form key (exported for #gui-capability-browser's drawer, which reuses the readonly rows with keys). */
+export function keyEl(doc: MiniDoc, k: FormKey): MiniEl {
+  const b = h(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: k.submit ? 'submit' : 'button', 'data-lm-act': k.act, ...(k.value ? { 'data-lm-value': k.value } : {}), ...(k.expanded !== undefined ? { 'aria-expanded': String(k.expanded) } : {}), ...(k.busy ? { 'aria-busy': 'true' } : {}), ...(k.ariaDisabled ? { 'aria-disabled': 'true' } : {}), ...(k.pressed !== undefined ? { 'aria-pressed': String(k.pressed) } : {}), ...(k.describedBy ? { 'aria-describedby': k.describedBy } : {}), ...(k.title ? { title: k.title } : {}) }, k.label);
   if (k.disabled) (b as unknown as { disabled: boolean }).disabled = true;
   return b;
 }
 
-function resultEl(doc: MiniDoc, r: ResultView): MiniEl {
+export function resultEl(doc: MiniDoc, r: ResultView): MiniEl {
   return h(doc, 'p', { class: `sf-result${r.fail ? ' fail' : ''}`, role: r.fail ? 'alert' : 'status' }, r.lead ? h(doc, 'strong', null, r.lead) : null, r.text);
 }
 
@@ -136,7 +141,8 @@ function formEl(doc: MiniDoc, f: FormView): MiniEl {
   return form;
 }
 
-function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
+/** One row of a section (exported for #gui-capability-browser's drawer). */
+export function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
   if (r.kind === 'rules') return rulesBlockEl(doc, r.view);
   if (r.kind === 'term') return h(doc, 'div', { class: 'settings-row sf-term', 'data-row': r.id }, h(doc, 'span', { class: 'settings-label' }), h(doc, 'p', { class: 'meta settings-how' }, r.text, h(doc, 'code', null, r.code)));
   const head = h(doc, 'span', { class: 'settings-label' }, r.label);
@@ -186,7 +192,7 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     if (r.grp) row.setAttribute('data-grp', 'start');
     if (r.live) row.setAttribute('aria-live', 'polite');
     row.appendChild(h(doc, 'span', { class: 'settings-value kernel-owned', ...(r.slot ? { 'data-gnomon-slot': r.slot } : {}), ...(r.title ? { title: r.title } : {}) }, r.mark ? h(doc, 'span', { class: 'mk' }, r.mark) : null, r.mark ? ' ' : null, r.value, r.chip ? ' ' : null, r.chip ? h(doc, 'span', { class: `chip${r.chip.ink ? ' ink' : ''}` }, r.chip.text) : null));
-    if (r.how) row.appendChild(rich(doc, 'p', { class: 'meta settings-how' }, r.how));
+    if (r.how) row.appendChild(r.howId ? setId(rich(doc, 'p', { class: 'meta settings-how' }, r.how), r.howId) : rich(doc, 'p', { class: 'meta settings-how' }, r.how));
     // the keys are a group named by their row, so "Turn off" is heard with what it turns off (Mika 2026-10-23)
     if (r.keys?.length) row.appendChild(h(doc, 'div', { class: 'sf-keys', role: 'group', 'aria-label': r.label }, ...r.keys.map((k) => keyEl(doc, k))));
   }
@@ -296,6 +302,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     if (overlay.hidden) back = document.activeElement as HTMLElement | null;
     overlay.hidden = false;
     focused = section ?? null;
+    d.onOpen?.();
     repaint();
     const heading = section ? (body.querySelector(`#settings-h-${CSS.escape(section)}`) as HTMLElement | null) : null;
     if (heading) {
@@ -344,6 +351,10 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
       // the submit key presses through the form's submit (Enter in a field presses it too)
       if (lm.disabled || lm.type === 'submit') return;
       if (lm.dataset.lmAct!.startsWith('mcp:')) return d.mcp?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
+      if (lm.dataset.lmAct!.startsWith('kept:')) {
+        if (lm.getAttribute('aria-disabled') === 'true') return; // it keeps its focus; its press does nothing
+        return d.kept?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
+      }
       return d.local?.press(lm.dataset.lmAct!, lm.dataset.lmValue ?? null, e.isTrusted);
     }
     const b = t.closest('[data-settings-run]') as HTMLButtonElement | null;
@@ -403,6 +414,7 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     escape: () => {
       if (d.rules?.escape()) return; // #gui-rules-view: an open Turn off ▾ folds first, focus back on its key
       if (d.mcp?.escape?.()) return; // C5'b: an open trust preview closes first, focus back on its Trust… key
+      if (d.kept?.escape()) return; // C6'b1: an open Kept memory confirm closes first, focus back on its Delete
       if (!d.local?.escape()) close();
     },
     focusLocal,

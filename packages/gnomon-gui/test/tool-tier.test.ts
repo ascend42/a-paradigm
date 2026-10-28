@@ -98,7 +98,10 @@ describe('#gui-tool-tier: the preview sheet', () => {
   it('tier 0: no forms, the pins wait for a raise; from tier 0 the foot says MCP servers start first', () => {
     const down = previewView(pv({ to: 0, requested: 0, k: 0, slotTokens: 0, slotShare: 0, surface: 'full→compact', unfitPins: [{ name: 'echo', why: 'tier-0' }, { name: 'big', why: 'over-budget' }] }), 'm');
     expect(down.lines[0]).toBe('tools: its own file tools only (now full forms)'); // Mika F10
-    expect(down.lines).toContain('pins that won’t fit: echo (waits until you raise the tier), big (over budget)');
+    // C6'b1: the Tools drawer's words (pinWhyWords), never the selector's raw code ("over k", "over budget")
+    expect(down.lines).toContain('pins that won’t fit: echo (tier 0 has no tools), big (not offered at this tier)');
+    const raw = previewView(pv({ to: 1, requested: 1, k: 4, unfitPins: [{ name: 'a', why: 'over-k' }, { name: 'b', why: 'over-slot' }, { name: 'c', why: 'not-offerable' }] }), 'm');
+    expect(raw.lines).toContain('pins that won’t fit: a (waits: tier 1 offers 4 tools), b (no room in its tool space), c (this tier can’t show its arguments)');
     const up = previewView(pv({ from: 0, to: 2, requested: 2, measured: 2 }), 'm');
     expect(up.lines[0]).toBe('tools: up to 12, full forms (now no)');
     expect(up.foot).toBe(`${TIER_COPY.foot} MCP servers start first.`);
@@ -109,8 +112,8 @@ describe('#gui-tool-tier: the preview sheet', () => {
     const at = v.lines.findIndex((l) => l.startsWith('leaving: '));
     expect(v.lines[at]).toBe('leaving: t0, t1, t2, t3, t4, t5, t6, t7 and 3 more');
     expect(v.titles[at]).toBe(`leaving: ${names.join(', ')}`);
-    expect(v.lines[at + 1]).toMatch(/^pins that won’t fit: t0 \(waits until you raise the tier\), .* and 3 more$/);
-    expect(v.titles[at + 1]).toContain('t10 (waits until you raise the tier)');
+    expect(v.lines[at + 1]).toMatch(/^pins that won’t fit: t0 \(tier 0 has no tools\), .* and 3 more$/);
+    expect(v.titles[at + 1]).toContain('t10 (tier 0 has no tools)');
     expect(previewView(pv(), 'm').titles.every((t) => t === null)).toBe(true);
   });
   it('rememberable false disables the checkbox with the kernel’s reason inline', () => {

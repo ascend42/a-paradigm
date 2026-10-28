@@ -159,6 +159,35 @@ components:
       Reset to measured (request.local.tier.clear; shown only while a tier is
       remembered). Tests: test/tool-tier.test.ts, test/local-model.test.ts.
     tags: [gui, local, tier]
+  gui-capability-browser:
+    description: >-
+      8.0:local-lane slice C6'b1 (Mika's design; TD-2026-10-28-956, -969;
+      spec G-GUI-18; the kernel half is C6'a1, G-LCL-24): the "Tools and
+      memory" drawer of a local attended session. core/tools-drawer.ts
+      (PURE): capabilitiesOf / memoryOf (shape-checked, every server string
+      through displayText and capped), the words (CLASS_WORD reads · changes
+      · can't be undone; availabilityWord; pinWhyWords for every pin why,
+      also used by #gui-tool-tier's preview; fitWords and refusalWords: no
+      raw kernel code), toolsView (Now offered · tier n · x of k with
+      pinned/found/recent/ranked, Pins · n of 8, Servers with the C5'b trust
+      chip and class counts, All tools with a filter at 12 and a fold at 50,
+      Gnomon's verbs first; reading, unreachable, tier 0, no servers, ended,
+      not the owner), memoryView (From you and Gnomon; Data the model and
+      tools wrote behind the dashed "data" box; the inline delete confirm),
+      serversOffOf (the header's "· 1 server off"), mcpFailToastOf (the
+      "<server> stopped: <cause>" toast with "see Tools"), keptRows
+      (Settings › Local model › Kept memory). ui/tools-drawer.ts: ToolsFlow
+      (no DOM) reads request.session.capabilities and .memory.read,
+      re-reads on the open session's tool.selection and session.mcp rows,
+      pins (request.session.tools.pin), restarts
+      (request.session.mcp.restart) and deletes memory
+      (request.session.memory.delete) once per trusted press; KeptFlow
+      (request.session.memory.list); mountToolsDrawer (the sheet's drawer
+      variant, seg keys Tools · Memory, the shared trapTab, one live line).
+      Entry points in ui/app.ts: the ⋯ more menu, the tier key's menu, the
+      palette (tools.open). Tests: test/tools-drawer.test.ts,
+      test/tools-drawer-flow.test.ts, test/tools-drawer-memory.test.ts.
+    tags: [gui, local, tools, memory]
   gui:
     loop-cards: >-
       8.0:loops (gnomon-loops.md §3.1, §3.3; build step 2): the generic card

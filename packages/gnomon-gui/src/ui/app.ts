@@ -63,6 +63,8 @@ import { modPanelsFocus, modPanelsStatus, mountModPanels } from './mod-panels-mo
 import { mountMods } from './mods-panel.js';
 import { mountModelPicker, type ModelPicker } from './model-picker.js';
 import { mountTierPicker, type TierPicker } from './tier-picker.js';
+import { KeptFlow, mountToolsDrawer, type ToolsDrawer } from './tools-drawer.js';
+import { drawerAccess, mcpFailToastOf, MCP_FAIL_TOAST, serversOffOf, serversOffText } from '../core/tools-drawer.js';
 import { binaryChangedLine, cardOutcomeOf, FolderField, FF_COPY, REPIN_COPY, RepinReturn, type KeptChoice } from '../core/folder-field.js';
 import { mountFolderField, type MountedFolderField } from './folder-field.js';
 import { sessionModelOf, sessionModelText } from '../core/model-picker.js';
@@ -119,6 +121,8 @@ let noticeCard: { cardId: string; seen: boolean } | null = null;
 /** #gui-model-picker (ui/model-picker.ts), mounted below; null until then */
 let modelPicker: ModelPicker | null = null;
 let tierPicker: TierPicker | null = null;
+/** #gui-capability-browser (C6'b1): the Tools and memory drawer of a local session (ui/tools-drawer.ts), mounted below */
+let toolsDrawer: ToolsDrawer | null = null;
 /** #gui-toast: the one toast region (ui/toasts.ts), mounted on first use (the chat column's right edge). */
 let toastRegion: Toasts | null = null;
 const toasts = (): Toasts =>
@@ -327,6 +331,9 @@ function paintChatHead(): void {
     meta.prepend(h(doc, 'span', { class: `pink h${hue}`, title: proj }, '■ ', h(doc, 'span', { class: 'chead-proj' }, proj)) as unknown as Node, h(doc, 'span', { class: 'chead-backend' }, ` · ${backendWord(s.backend)}`) as unknown as Node);
     modelPicker?.headChip(meta, s.hsid); // #gui-model-picker: the kernel's model for this session, ▾ to switch
     tierPicker?.headChip(meta, s.hsid); // #gui-tool-tier: a local session's tool tier, ▾ to change it (its owner)
+    // #gui-capability-browser (C6'b1): a server of this session that stopped is plain meta text, never a chip
+    const off = s.backend === 'local' ? serversOffText(serversOffOf(store.transcript(s.hsid), s.hsid)) : '';
+    if (off) meta.appendChild(h(doc, 'span', { class: 'chead-off' }, off) as unknown as Node);
     // Mika (2026-10-23): "started · 9m" is the one part that ellipsizes, so the model key is never the one clipped
     meta.appendChild(h(doc, 'span', { class: 'chead-when' }, `${started ? ` · started ${started}` : ''}${mins !== null && Number.isFinite(mins) ? ` · ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`) as unknown as Node);
   }
@@ -1579,8 +1586,28 @@ store.onChange(() => standingFeed.repaint());
 modelPicker = mountModelPicker(document, { client: () => client, rows: (hsid) => store.transcript(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), focused: () => focused, notice, folder: () => nsField.value() });
 store.onChange(() => modelPicker?.repaint());
 // #gui-tool-tier (C4'b): a local session's tool tier in the header (the owner's key ▾, a plain chip otherwise)
-tierPicker = mountTierPicker(document, { client: () => client, session: (hsid) => store.sessions.get(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), me: () => session?.principal ?? myPrincipal(), model: (hsid) => sessionModelOf(store.transcript(hsid))?.model ?? 'this model', notice });
+tierPicker = mountTierPicker(document, { client: () => client, session: (hsid) => store.sessions.get(hsid), live: (hsid) => isLiveState(store.sessions.get(hsid)?.state ?? 'seen'), me: () => session?.principal ?? myPrincipal(), model: (hsid) => sessionModelOf(store.transcript(hsid))?.model ?? 'this model', notice, openTools: (hsid, trusted, opener) => void toolsDrawer?.open(hsid, 'tools', trusted, opener) });
 store.onChange(() => tierPicker?.repaint());
+// #gui-capability-browser (C6'b1): the Tools and memory drawer (⋯ more menu, the tier key's menu, the palette)
+toolsDrawer = mountToolsDrawer(document, {
+  client: () => client,
+  session: (hsid) => toolsSessionOf(hsid),
+  rows: (hsid) => store.transcript(hsid),
+  now: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  openTier: (hsid) => tierPicker?.openMenu(hsid) ?? false,
+  openSettings: () => settings.open(MCP_SECTION),
+});
+/** Who may see what of a session in the Tools and memory drawer (null: not a local attended session). */
+function toolsSessionOf(hsid: string): { access: NonNullable<ReturnType<typeof drawerAccess>>; title: string } | null {
+  const s = store.sessions.get(hsid);
+  const access = s ? drawerAccess({ backend: s.backend, loop: s.loop === true, live: isLiveState(s.state), owner: s.owner ?? null, me: session?.principal ?? myPrincipal() }) : null;
+  return s && access ? { access, title: sessionTitle(s) } : null;
+}
+/** The palette's and the more menu's "Tools and memory…": the focused session's drawer, or why not. */
+function openTools(trusted: boolean, opener: HTMLElement | null = null): void {
+  if (!focused || !toolsSessionOf(focused)) return notice('Tools and memory is for a local model session: focus one first', 'info', { source: 'tools' });
+  toolsDrawer?.open(focused, null, trusted, opener);
+}
 // #gui-settings: the sheet (⚙, ⌘, and the palette's "Settings…"); every control is an existing command or Revoke
 // #gui-local-model: the Local model section's press paths (ui/local-model.ts); the sheet hands it presses
 const localModel = new LocalModelController({
@@ -1622,9 +1649,28 @@ const mcpServers = new McpServersController({
     return a && a.closest(`#settings-body [data-section="${MCP_SECTION}"]`) ? (a.dataset.lmAct ?? null) : null;
   },
 });
+// #gui-capability-browser (C6'b1): Settings › Local model › Kept memory (the ended sessions' working memory)
+const keptTitle = (hsid: string): string => {
+  const s = store.sessions.get(hsid);
+  return s ? sessionTitle(s) : `session …${hsid.slice(-8)}`;
+};
+const kept = new KeptFlow({
+  call: (req) => (client ? client.call('log.append', req) : Promise.reject(new Error('not connected'))),
+  repaint: () => settings.repaint(),
+  title: keptTitle,
+  // Open: the drawer over the sheet; Esc closes it and focus returns to this Open key
+  open: (hsid) => void toolsDrawer?.openMemory(hsid, keptTitle(hsid), true, document.activeElement as HTMLElement | null),
+  focus: (f) => {
+    const sec = document.querySelector(`#settings-body [data-section="${LOCAL_SECTION}"]`);
+    const el = 'heading' in f ? sec?.querySelector('h3') : sec?.querySelector(`[data-lm-act="${CSS.escape(f.act)}"]${f.value !== undefined ? `[data-lm-value="${CSS.escape(f.value)}"]` : ''}`);
+    (el as HTMLElement | null | undefined)?.focus();
+  },
+});
 const settings = mountSettings(document, {
   local: localModel,
   mcp: mcpServers,
+  kept,
+  onOpen: () => void kept.read(),
   model: () =>
     settingsModel({
       theme,
@@ -1642,6 +1688,7 @@ const settings = mountSettings(document, {
       local: { ui: localModel.ui(), loopsUsing: loopsUsingLocal() },
       rules: rulesBlock(rulesStatusOf(status), rulesUi, (hsid) => sessionName(hsid) || null),
       mcp: { ui: mcpServers.ui(), hsid: focused },
+      kept: kept.ui(),
     }),
   run: (id) => run(id, true), // the sheet acts on trusted presses only (settings-sheet.ts)
   revoke: (grantId) => void revokeGrant(grantId),
@@ -1870,6 +1917,9 @@ async function attach(auth: { launchToken: string } | { reconnect: true } | { re
         localModel.row(r); // #gui-local-model: our card's outcome, a restart, a removal elsewhere, a probe
         rulesRow(r); // #gui-rules-view: a rule row re-reads status.rules; a timed off that ended is a 6 s toast
         trustDropRow(r); // C5'b: a server whose trust the kernel dropped (it changed) is a warn toast
+        mcpFailRow(r); // C6'b1: a server of my running local session stopped: a fail toast with "see Tools"
+        toolsDrawer?.row(r); // C6'b1: the open drawer re-reads on its session's tool.selection and session.mcp rows
+        if (r.kind === 'session.memory' && settings.isOpen() && (r.payload as { op?: unknown } | undefined)?.op === 'delete') void kept.read(); // C6'b1: Kept memory
         mcpServers.row(r); // #gui-mcp-servers: our enable card's outcome
       }
       modPanelRow(r); // K0 mod panels: a live #mod-host feed-kind row re-renders them (debounced)
@@ -2763,6 +2813,17 @@ function rulesRow(r: { kind: string; payload?: unknown; principal?: string }): v
   void refreshStatus();
 }
 
+/**
+ * C6'b1 (#gui-capability-browser): a kernel-signed session.mcp{state:'failed'} of a running local session this human
+ * opened is a fail toast "<server> stopped: <short cause>" whose key "see Tools" opens the drawer at that server.
+ */
+function mcpFailRow(r: { kind: string; payload?: unknown; principal?: string }): void {
+  if (r.kind !== 'session.mcp' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
+  const t = mcpFailToastOf(r);
+  if (!t || toolsSessionOf(t.hsid)?.access !== 'owner') return;
+  toasts().show(t.text, { kind: MCP_FAIL_TOAST.kind, key: { label: MCP_FAIL_TOAST.key, onPress: (e: MouseEvent) => e.isTrusted && toolsDrawer?.openServer(t.hsid, t.server, true) } });
+}
+
 /** C5'b: a kernel-signed tool.trust{op:'dropped'} (launch or tools changed) is a warn toast; Trust again… opens its row. */
 function trustDropRow(r: { kind: string; payload?: unknown; principal?: string }): void {
   if (r.kind !== 'tool.trust' || !isKernelPrincipal(r.principal, kernelPrincipalOf(session?.principal))) return;
@@ -3000,6 +3061,8 @@ function paintModeMenu(): void {
 }
 
 function openMoreMenu(): void {
+  // #gui-capability-browser (C6'b1): "Tools and memory…" for a local attended session only
+  $('tools-open').hidden = !focused || !toolsSessionOf(focused);
   $('more-menu').hidden = false;
   $('more-btn').setAttribute('aria-expanded', 'true');
 }
@@ -3637,6 +3700,7 @@ function run(id: string, trusted: boolean): void {
   else if (id === 'rules.open') settings.open('rules'); // #gui-rules-view: Settings › Permissions › Rules
   else if (id === 'local.setup') settings.open(LOCAL_SECTION); // #gui-local-model: section-focused
   else if (id === 'mcp.open') settings.open(MCP_SECTION); // #gui-mcp-servers: section-focused
+  else if (id === 'tools.open') openTools(trusted); // #gui-capability-browser: the focused local session's drawer
   else if (id === 'mods.open') modsPanel.open();
   else if (id === 'loops.open') loopsView.open();
   else if (id === 'loops.pause-all') void pauseAllLoops(trusted);
@@ -4104,6 +4168,10 @@ function wire(): void {
   });
   // fidelity 2: the ⋯ menu holds the item counts and the raw toggle (the comp's header has neither)
   $('more-btn').addEventListener('click', () => ($('more-menu').hidden ? openMoreMenu() : closeMoreMenu()));
+  $('tools-open').addEventListener('click', (e) => {
+    closeMoreMenu();
+    openTools(e.isTrusted, $('more-btn'));
+  });
   document.addEventListener('click', (e) => {
     if (!$('more-menu').hidden && !(e.target as HTMLElement).closest('.more-wrap')) closeMoreMenu();
   });
@@ -4196,6 +4264,9 @@ function wire(): void {
       closeVoiceMenu(true); // #gui-voice-ladder: back to the pill
     } else if (e.key === 'Escape' && voiceSheet.isOpen()) {
       voiceSheet.close(); // #gui-voice-settings: an inline step ends with the sheet (a trial never outlives it)
+    } else if (e.key === 'Escape' && toolsDrawer?.isOpen()) {
+      e.preventDefault();
+      toolsDrawer.close(); // #gui-capability-browser: focus returns to the opener
     } else if (e.key === 'Escape' && dict.grace) {
       e.preventDefault(); // TD-2026-10-21-514: "Sending… Esc keeps it"
       dispatchDictation({ type: 'graceCancel', now: Date.now() });
