@@ -17,6 +17,7 @@ import {
 import { AgentSpawner } from '../../core/agent-spawner.js';
 import { getBestProvider } from '../../core/provider-registry.js';
 import { loadAgentsManifest } from './loader.js';
+import { holdWhilePrompting } from '../../core/providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -157,6 +158,12 @@ export async function teamSpawnCommand(
       return;
     }
 
+    // While the consent question is on screen, agent output (this agent's or
+    // a parallel one's) is held, so it can't draw over or fake the question.
+    holdWhilePrompting(() => renderMessage(message));
+  };
+
+  const renderMessage = (message: AgentMessage): void => {
     // Stream text output
     if (message.type === 'text') {
       if (spinner.isSpinning) {

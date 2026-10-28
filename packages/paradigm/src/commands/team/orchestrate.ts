@@ -27,6 +27,7 @@ import {
   BackgroundOrchestration,
 } from '../../core/background-orchestrator.js';
 import { loadAgentsManifest } from './loader.js';
+import { holdWhilePrompting } from '../../core/providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -228,8 +229,8 @@ export async function teamOrchestrateCommand(
       if (options.json || options.quiet) return;
 
       if (options.live && message.type === 'text') {
-        // Live streaming mode
-        process.stdout.write(chalk.gray(`[${source}] `) + message.content);
+        // Live streaming mode. Held while the consent question is on screen.
+        holdWhilePrompting(() => process.stdout.write(chalk.gray(`[${source}] `) + message.content));
       }
     },
     onAgentStart: (agent, subtask, model) => {
@@ -237,7 +238,7 @@ export async function teamOrchestrateCommand(
 
       const agentLabel = `${agent} (${model})`;
       if (options.live) {
-        console.log(chalk.cyan(`\n▶ ${agentLabel}: ${subtask}`));
+        holdWhilePrompting(() => console.log(chalk.cyan(`\n▶ ${agentLabel}: ${subtask}`)));
       } else {
         spinner.text = `${agentLabel}: ${subtask.slice(0, 50)}...`;
       }
@@ -249,7 +250,7 @@ export async function teamOrchestrateCommand(
         const status = agentResult.success ? chalk.green('✓') : chalk.red('✗');
         const tokens = agentResult.relay ? formatTokens(agentResult.relay.metrics.tokens_used.total) : '0';
         const agentLabel = `${agent} (${model})`;
-        console.log(`${status} ${agentLabel} completed (${tokens})`);
+        holdWhilePrompting(() => console.log(`${status} ${agentLabel} completed (${tokens})`));
       }
     },
     onCheckpoint: async (description) => {

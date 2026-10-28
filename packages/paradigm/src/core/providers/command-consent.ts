@@ -24,6 +24,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as readline from 'readline';
+import * as tty from 'tty';
 import * as yaml from 'js-yaml';
 
 export interface CommandPolicy {
@@ -178,27 +179,105 @@ export function isInteractiveTerminal(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY);
 }
 
+/** Longest command or folder text shown in the consent question. */
+export const MAX_PROMPT_TEXT = 500;
+
 /**
- * The real terminal question. Written to stderr so --json output on stdout
- * stays clean. EOF or Ctrl+C counts as no.
+ * Model-written text made safe to show in the consent question: cut to
+ * MAX_PROMPT_TEXT characters, quoted with JSON.stringify (escapes C0 controls,
+ * quotes, backslashes and newlines), and DEL, C1 controls, bidi overrides,
+ * zero-width characters and line/paragraph separators shown as \uXXXX. It
+ * can't move the cursor, clear the screen, start a new line or reorder text,
+ * so it can't draw a fake question.
  */
-export const terminalConsentPrompt: ConsentPrompt = (command, cwd) =>
-  new Promise((resolve) => {
-    const err = process.stderr;
-    err.write('\nA Paradigm agent wants to run a shell command:\n');
-    err.write(`  ${command}\n`);
-    err.write(`  in ${cwd}\n\n`);
-    const rl = readline.createInterface({ input: process.stdin, output: err, terminal: true });
-    let answered = false;
-    rl.question(CONSENT_QUESTION, (answer) => {
-      answered = true;
-      rl.close();
-      resolve(/^\s*y(es)?\s*$/i.test(answer));
+export function escapeForTerminal(text: string, max = MAX_PROMPT_TEXT): string {
+  const chars = Array.from(String(text));
+  const cut = chars.length > max;
+  const shown = JSON.stringify(chars.slice(0, max).join('')).replace(
+    /[\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+  return cut ? `${shown} ... (${chars.length - max} more characters not shown)` : shown;
+}
+
+// While a consent question is open, agent output to the terminal is held here
+// and written after the answer (see holdWhilePrompting).
+let consentPromptOpen = false;
+const heldOutput: Array<() => void> = [];
+
+/** True while the consent question is on screen. */
+export function isConsentPromptOpen(): boolean {
+  return consentPromptOpen;
+}
+
+/**
+ * Run a terminal write now, or, while the consent question is open, after it
+ * is answered. CLI commands route agent output through this so nothing an
+ * agent prints can land between the question and the answer.
+ */
+export function holdWhilePrompting(write: () => void): void {
+  if (consentPromptOpen) heldOutput.push(write);
+  else write();
+}
+
+function setPromptOpen(open: boolean): void {
+  consentPromptOpen = open;
+  if (!open) {
+    for (const write of heldOutput.splice(0)) {
+      try {
+        write();
+      } catch {
+        // A failed write must not lose the rest.
+      }
+    }
+  }
+}
+
+export interface TerminalPromptIO {
+  /** Where the answer is read. Defaults to /dev/tty when it can be opened, else stdin. */
+  openInput?: () => { input: NodeJS.ReadableStream & { isTTY?: boolean }; close: () => void };
+  /** Where the question is written. Defaults to stderr, so --json stdout stays clean. */
+  output?: NodeJS.WritableStream;
+}
+
+function defaultInput(): { input: NodeJS.ReadableStream & { isTTY?: boolean }; close: () => void } {
+  try {
+    const fd = fs.openSync('/dev/tty', 'r');
+    const input = new tty.ReadStream(fd);
+    return { input, close: () => input.destroy() };
+  } catch {
+    return { input: process.stdin, close: () => {} };
+  }
+}
+
+/**
+ * Build the terminal consent question. The answer is read from /dev/tty when
+ * available (so piped stdin can't answer it), else stdin. Only y or yes counts
+ * as yes; Enter, anything else, EOF or Ctrl+C is no.
+ */
+export function makeTerminalPrompt(io: TerminalPromptIO = {}): ConsentPrompt {
+  return (command, cwd) =>
+    new Promise((resolve) => {
+      const out = io.output ?? process.stderr;
+      const { input, close } = (io.openInput ?? defaultInput)();
+      out.write('\nA Paradigm agent wants to run a shell command:\n');
+      out.write(`  command: ${escapeForTerminal(command)}\n`);
+      out.write(`  in:      ${escapeForTerminal(cwd)}\n\n`);
+      const rl = readline.createInterface({ input, output: out, terminal: Boolean(input.isTTY) });
+      let settled = false;
+      const finish = (yes: boolean): void => {
+        if (settled) return;
+        settled = true;
+        rl.close();
+        close();
+        resolve(yes);
+      };
+      rl.question(CONSENT_QUESTION, (answer) => finish(/^\s*y(es)?\s*$/i.test(answer)));
+      rl.on('close', () => finish(false));
     });
-    rl.on('close', () => {
-      if (!answered) resolve(false);
-    });
-  });
+}
+
+export const terminalConsentPrompt: ConsentPrompt = makeTerminalPrompt();
 
 // One question at a time per config file, even when parallel builders hit
 // run_command together.
@@ -264,22 +343,28 @@ export class CommandGate {
   }
 
   private async ask(command: string, cwd: string): Promise<boolean> {
-    this.policy.onBeforePrompt?.();
-    let yes: boolean;
-    let saved = false;
+    setPromptOpen(true);
+    let yes = false;
     try {
-      yes = await this.prompt(command, cwd);
-      writeAllowCommandsSetting(yes, this.configPath, this.workingDirectory);
-      saved = true;
-    } catch {
-      yes = false;
+      this.policy.onBeforePrompt?.();
+      let saved = false;
+      try {
+        yes = await this.prompt(command, cwd);
+        writeAllowCommandsSetting(yes, this.configPath, this.workingDirectory);
+        saved = true;
+      } catch {
+        yes = false;
+      }
+      this.notify(
+        saved
+          ? `Saved: agent shell commands are ${yes ? 'ON' : 'OFF'}. Change ${SETTING_KEY} in ${this.configPath}, or use --allow-commands / --no-allow-commands for one run.`
+          : 'Agent shell commands are OFF for this call; nothing was saved.',
+      );
+    } finally {
+      // Held agent output is written only after the answer and the saved line.
+      setPromptOpen(false);
+      this.policy.onAfterPrompt?.();
     }
-    this.notify(
-      saved
-        ? `Saved: agent shell commands are ${yes ? 'ON' : 'OFF'}. Change ${SETTING_KEY} in ${this.configPath}, or use --allow-commands / --no-allow-commands for one run.`
-        : 'Agent shell commands are OFF for this call; nothing was saved.',
-    );
-    this.policy.onAfterPrompt?.();
     return yes;
   }
 }
