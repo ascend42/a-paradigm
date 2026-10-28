@@ -106,8 +106,28 @@ function checkSourceFile(abs: string, rel: string, rootReal: string): fs.Stats {
   return st;
 }
 
+/** Aegis M4: read one selected source file through an O_NOFOLLOW fd whose fstat matches the checked lstat. */
+export function readChecked(f: { rel: string; abs: string; ino: number; dev: number }): Buffer {
+  let fd: number;
+  try {
+    fd = fs.openSync(f.abs, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    throw new StageRefused(code === 'ELOOP' ? 'symlink' : 'special', `the source changed while staging: ${f.rel.slice(0, 200)}`);
+  }
+  try {
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) throw new StageRefused('special', `the source changed while staging: ${f.rel.slice(0, 200)}`);
+    if (st.nlink > 1) throw new StageRefused('hardlink', `the source holds a hardlink: ${f.rel.slice(0, 200)}`);
+    if (st.ino !== f.ino || st.dev !== f.dev) throw new StageRefused('special', `the source was replaced while staging: ${f.rel.slice(0, 200)}`);
+    return fs.readFileSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /** What to copy: the bundle's named files when the install ships a bundle manifest, else the package tree. */
-export function selectStageFiles(src: ParadigmSource): { layout: 'bundle' | 'tree'; entry: string; files: Array<{ rel: string; abs: string }> } {
+export function selectStageFiles(src: ParadigmSource): { layout: 'bundle' | 'tree'; entry: string; files: Array<{ rel: string; abs: string; ino: number; dev: number }> } {
   const rootReal = fs.realpathSync.native(src.dir);
   const manifestPath = path.join(rootReal, ...PARADIGM_BUNDLE_MANIFEST);
   let bundle: Record<string, unknown> | null = null;
@@ -124,15 +144,15 @@ export function selectStageFiles(src: ParadigmSource): { layout: 'bundle' | 'tre
       const rel = isObj(f) && typeof f.relativePath === 'string' ? f.relativePath : '';
       if (!safeRel(rel)) throw new StageRefused('bad-manifest', 'the bundle manifest names an unsafe path');
       const abs = path.join(base, ...rel.split('/'));
-      checkSourceFile(abs, rel, rootReal);
-      return { rel, abs };
+      const st = checkSourceFile(abs, rel, rootReal);
+      return { rel, abs, ino: st.ino, dev: st.dev };
     });
     const entry = typeof bundle.entry === 'string' ? bundle.entry : '';
     if (!safeRel(entry) || !out.some((f) => f.rel === entry)) throw new StageRefused('no-entry', 'the bundle manifest entry is not one of its files');
     if (out.length > STAGE_MAX_FILES) throw new StageRefused('too-large', 'the bundle names too many files');
     return { layout: 'bundle', entry, files: out };
   }
-  const out: Array<{ rel: string; abs: string }> = [];
+  const out: Array<{ rel: string; abs: string; ino: number; dev: number }> = [];
   let bytes = 0;
   const walk = (d: string, prefix: string): void => {
     for (const name of fs.readdirSync(d).sort()) {
@@ -146,7 +166,7 @@ export function selectStageFiles(src: ParadigmSource): { layout: 'bundle' | 'tre
         checkSourceFile(abs, rel, rootReal);
         bytes += st.size;
         if (out.length >= STAGE_MAX_FILES || bytes > STAGE_MAX_BYTES) throw new StageRefused('too-large', 'the package tree is too large to stage');
-        out.push({ rel, abs });
+        out.push({ rel, abs, ino: st.ino, dev: st.dev });
       }
     }
   };
@@ -211,9 +231,11 @@ export function stageParadigm(home: string, src: ParadigmSource, o: { sourceKind
     for (const f of sel.files) {
       const to = path.join(tmp, ...f.rel.split('/'));
       fs.mkdirSync(path.dirname(to), { recursive: true, mode: STAGED_DIR_MODE });
-      fs.copyFileSync(f.abs, to, fs.constants.COPYFILE_EXCL);
+      // Aegis M4: no gap between the check and the copy — the source is opened O_NOFOLLOW, its fstat must be the same
+      // regular, single-link file selectStageFiles checked, and the bytes come from THAT fd
+      const b = readChecked(f);
+      fs.writeFileSync(to, b, { flag: 'wx', mode: 0o600 });
       fs.chmodSync(to, STAGED_FILE_MODE);
-      const b = fs.readFileSync(to);
       entries.push({ relativePath: f.rel, mode: STAGED_FILE_MODE, sha256: sha256(b), size: b.length });
     }
     const treeSha256 = stagedTreeHash(entries);

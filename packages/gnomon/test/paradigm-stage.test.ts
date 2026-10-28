@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { autoStage, PARADIGM_BUNDLE_SCHEMA, readParadigmPin, recheckStaged, selectStageFiles, stageParadigm, stageRoot, StageRefused, verifyStaged, type ParadigmSource } from '../src/kernel/local/paradigm-stage.js';
+import { autoStage, PARADIGM_BUNDLE_SCHEMA, readChecked, readParadigmPin, recheckStaged, selectStageFiles, stageParadigm, stageRoot, StageRefused, verifyStaged, type ParadigmSource } from '../src/kernel/local/paradigm-stage.js';
 
 let root: string | null = null;
 const roots: string[] = [];
@@ -89,6 +89,21 @@ describe('#paradigm-stage: stage', () => {
     fs.writeFileSync(path.join(b, 'manifest.json'), JSON.stringify({ schema: PARADIGM_BUNDLE_SCHEMA, entry: 'x.mjs', files: [{ relativePath: '../../../../x.mjs' }] }));
     expect(() => selectStageFiles(a.src)).toThrow(StageRefused);
     expect(readParadigmPin(a.home)).toBeNull();
+  });
+});
+
+describe('Aegis M4: no check-to-copy gap', () => {
+  it('a source replaced (new inode) or swapped for a symlink after selection is refused', () => {
+    const { src } = fixture();
+    const sel = selectStageFiles(src);
+    const f = sel.files.find((x) => x.rel === 'dist/mcp.js')!;
+    expect(readChecked(f).toString()).toBe('console.log(1)\n');
+    fs.rmSync(f.abs);
+    fs.writeFileSync(f.abs, 'console.log("swapped")\n');
+    expect(() => readChecked(f)).toThrow(/replaced/);
+    fs.rmSync(f.abs);
+    fs.symlinkSync('/etc/hosts', f.abs);
+    expect(() => readChecked(f)).toThrow(expect.objectContaining({ why: 'symlink' }));
   });
 });
 
