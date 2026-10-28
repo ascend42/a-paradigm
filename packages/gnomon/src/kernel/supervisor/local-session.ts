@@ -116,7 +116,8 @@ import type { RunMode } from '@a-company/gnomon-contracts';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { repoKeyOf } from './repo-hooks.js';
 import { inputHash } from './permission.js';
-import { prepareRunner, verifyNode } from '../local/runner-pin.js';
+import { prepareRunner, verifyNode, type LocalRunnerPin } from '../local/runner-pin.js';
+import { readParadigmPin, recheckStaged } from '../local/paradigm-stage.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint, loopbackPort } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
@@ -281,7 +282,7 @@ interface LocalSession {
   /** slice C2': the session's MCP servers (#local-mcp-client; attended sessions only), reaped at exit */
   mcp?: { pool: LocalMcpPool; kernel: BrokeredTool[]; entries: Map<string, CapabilityEntry[]>; manual: boolean; bound: Map<string, string>; offeredHash: string };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
-  mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }> };
+  mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }>; firstParty?: { launch: SessionLaunchInput; stateDir: string; nodePin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'> } };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
   memory?: WorkingMemory;
   /** slice B2: the hash of the last memory_set sent (a change that renders the same block sends nothing) */
@@ -305,6 +306,25 @@ function readableFailure(error: string, srv: LocalMcpServer | undefined, userHom
 }
 const userHomeOf = (h: string | undefined): string | null => (h ? path.resolve(h) : (process.env.HOME ?? null));
 const serverLabelOf = (s: LocalMcpServer): string => serverLabel(s.name);
+
+/**
+ * TD-2026-10-27-833: the env the staged first-party Paradigm MCP adds to the stripped server env — HOME (USERPROFILE
+ * on win32) at its per-session kernel-owned global dir, the staged mode, and git config from the env (which wins over
+ * the repo's .git/config): no fsmonitor, no hooks path, no system config.
+ */
+export function stagedParadigmEnv(stateDir: string, platform: string): Record<string, string> {
+  return {
+    HOME: stateDir,
+    ...(platform === 'win32' ? { USERPROFILE: stateDir } : {}),
+    PARADIGM_GNOMON_STAGED: '1',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'core.fsmonitor',
+    GIT_CONFIG_VALUE_0: 'false',
+    GIT_CONFIG_KEY_1: 'core.hooksPath',
+    GIT_CONFIG_VALUE_1: platform === 'win32' ? 'NUL' : '/dev/null',
+  };
+}
 
 /** Slice C2' (Aegis M4): the hash of an offered set (names, classes, schemas, descriptions, targets). */
 const offeredHash = (tools: readonly BrokeredTool[]): string => createHash('sha256').update(JSON.stringify(tools.map((t) => [t.name, t.class, t.description, t.parameters, t.target?.server ?? null]))).digest('hex');
@@ -850,6 +870,8 @@ export class LocalLane {
     let live: LocalSession | null = null;
     /** slice C2': the neutral MCP cwd this open made (removed if the open fails) */
     let neutralMade: string | null = null;
+    /** TD-2026-10-27-833: the staged Paradigm server's global dir this open made (removed if the open fails) */
+    let stateMade: string | null = null;
     try {
       // a loop step's permit: scope.loop is the PAYING loop (the root caller), scope.user the human who trusted it
       permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: !loop, kind: 'session.spawn', backend: 'local', model, scope: { user: loop?.info.trustedBy ?? req.principal, session: hsid, repo, ...(loop ? { loop: loop.info.rootKey } : {}) }, ...(loop ? { limits: { tokens: loop.maxTokens } } : {}) });
@@ -859,10 +881,10 @@ export class LocalLane {
       // the SAME session profile as claude -p (§15.5): keys/warpline/link/head unreadable, settings layers + linked mods unwritable
       // slice C2' (Aegis H1): the servers this session may run are fixed HERE, before its profile, so the profile
       // write-denies every launch-closure path inside the roots (a model-written file never decides what a server runs)
-      let mcpServers: readonly LocalMcpServer[] = [];
+      let mcpServers: LocalMcpServer[] = [];
       if (!loop && this.#o.localMcp) {
         try {
-          mcpServers = this.#o.localMcp({ hsid, cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) });
+          mcpServers = [...this.#o.localMcp({ hsid, cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) })];
         } catch {
           mcpServers = [];
         }
@@ -870,6 +892,11 @@ export class LocalLane {
       // Aegis H1 (re-check): servers run in a NEUTRAL cwd (empty, kernel-made, write-denied, under the Gnomon home and
       // outside every root) and are refused launch-writable when anything that decides what they run is in a root
       const neutralCwd = path.join(this.#o.home, 'sessions', `${hsidShort(hsid)}-mcp`); // a sibling of the session dir, never inside it
+      // TD-2026-10-27-833: the staged first-party Paradigm MCP runs with the runner's PINNED node (one node trust root,
+      // verifyNode'd by prepareRunner and again right before spawn), HOME at an empty per-session kernel-owned global
+      // dir (never the user's ~/.paradigm), the staged mode on and git's fsmonitor and hooks off
+      const stateDir = path.join(this.#o.home, 'sessions', `${hsidShort(hsid)}-pg`);
+      mcpServers = mcpServers.map((m) => (m.staged ? { ...m, command: runner.command, env: { ...(m.env ?? {}), ...stagedParadigmEnv(stateDir, this.#platform) } } : m));
       const closure = launchCheck(mcpServers, { roots: [cwdReal, ...(wtReal ? [wtReal] : [])], cwd: neutralCwd, sessionPath: env.PATH, home: userHome });
       const policyInput: Parameters<typeof buildSessionPolicy>[0] = {
         home: this.#o.home,
@@ -894,6 +921,7 @@ export class LocalLane {
       // key, local.yaml or memory.jsonl is readable to third-party code)
       // Aegis H1: the neutral cwd is its only readable home path (empty: made 0700, then 0500 once it exists)
       let mcpPolicy: SessionPolicy | null = null;
+      let paradigmPolicy: SessionPolicy | null = null;
       if (closure.servers.length) {
         // Aegis (final H1 lows): made non-recursively; an existing one is used only when it is an empty, owned, real
         // directory (never a symlink); the chmod never follows a link
@@ -910,6 +938,23 @@ export class LocalLane {
         }
         if (this.#platform !== 'win32' && !fs.lstatSync(neutralCwd).isSymbolicLink()) fs.chmodSync(neutralCwd, 0o500);
         mcpPolicy = buildSessionPolicy({ ...policyInput, homeReadable: [{ path: realRoot(neutralCwd) ?? neutralCwd, match: 'subpath' }], extraDenyWrite: [...(policyInput.extraDenyWrite ?? []), { path: realRoot(neutralCwd) ?? neutralCwd, match: 'subpath', class: 'binary' }] });
+        // TD-2026-10-27-833: the staged Paradigm server's OWN profile — third-party servers keep the neutral cwd only;
+        // this one also reads its staged dir and reads/writes its per-session global dir, and never the user's
+        // ~/.paradigm or ~/.conductor
+        const fpStaged = closure.servers.find((m) => m.staged);
+        if (fpStaged?.staged) {
+          fs.mkdirSync(stateDir, { mode: 0o700 }); // non-recursive: an existing (planted) dir fails the open
+          stateMade = stateDir;
+          const stateReal = realRoot(stateDir);
+          paradigmPolicy = buildSessionPolicy({
+            ...policyInput,
+            homeReadable: [{ path: realRoot(neutralCwd), match: 'subpath' }, { path: fpStaged.staged.dir, match: 'subpath' }, { path: stateReal, match: 'subpath' }],
+            extraDenyWrite: [...(policyInput.extraDenyWrite ?? []), { path: realRoot(neutralCwd), match: 'subpath', class: 'binary' }],
+            extraDenyRead: ['.paradigm', '.conductor'].map((n) => ({ path: path.join(userHome, n), match: 'subpath' as const, class: 'keys' as const })),
+            mcpStateDir: stateReal,
+          });
+          if (paradigmPolicy.mcpStateRefused) throw refused('UNSUPPORTED', `the Paradigm MCP state dir was withheld: ${paradigmPolicy.mcpStateRefused}`, { session: 'spawn_failed' });
+        }
       }
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const configPath = path.join(dir, 'local.yaml');
@@ -960,7 +1005,7 @@ export class LocalLane {
       tracked = true;
       const s: LocalSession = { hsid, cwd: wtReal ?? cwdReal, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: drv.newMeter(), maxSteps: sessionCfg.maxSteps, roots: { cwd: cwdReal, ...(wtReal ? { worktree: wtReal } : {}) }, pendingGoals: [], memorySetSeq: 0, toolPaths: new Map(), context: { target: sessionCfg.contextTarget, config: cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, nCtx: caps.nCtx, maxTokens: sessionCfg.maxTokens }, ...(loop ? {} : { memory: new WorkingMemory({ file: path.join(dir, MEMORY_FILE), hsid, owner: req.principal }) }), ...(loop ? { loop: { info: loop.info, reply: null, tokens: 0, fatal: null, pending: null, ...(loop.act ? { act: { scratch: loop.act.scratch, hits: [] } } : {}) } } : {}) };
       // Aegis H2: the servers get their own policy and an env without any kernel credential or handle
-      if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, servers: closure.servers, refused: closure.refused, failed: [] };
+      if (mcpPolicy) s.mcpLaunch = { launch: { ...launch, policy: mcpPolicy }, env: serverEnv(env, undefined, LOOP_SESSION_ENV_DROPPED), cwd: neutralCwd, servers: closure.servers, refused: closure.refused, failed: [], ...(paradigmPolicy && stateMade ? { firstParty: { launch: { ...launch, policy: paradigmPolicy }, stateDir: stateMade, nodePin: { node: pin.node, nodeSha256: pin.nodeSha256 } } } : {}) };
       else if (closure.refused.length) s.mcpLaunch = undefined;
       this.#sessions.set(hsid, s);
       live = s;
@@ -981,6 +1026,7 @@ export class LocalLane {
           /* gone */
         }
       }
+      if (stateMade && !live) fs.rmSync(stateMade, { recursive: true, force: true });
       if (this.#platform === 'win32' && !live) {
         // W5: an open that failed before a live session undoes its win32 labels and grants
         try {
@@ -1092,10 +1138,12 @@ export class LocalLane {
   }
 
   /** Slice C2': why this session's MCP servers were refused or failed (readable; no GUI surface yet). */
-  mcpReport(hsid: string): { refused: Array<{ id: string; name: string; fit: string; why?: string }>; failed: Array<{ label: string; error: string }> } | null {
+  mcpReport(hsid: string): { refused: Array<{ id: string; name: string; fit: string; why?: string }>; failed: Array<{ label: string; error: string }>; firstParty: { staged: boolean; version: string | null; treeSha256: string | null; source: string | null; sourceKind: string | null; dirty: boolean | null } } | null {
     const s = this.#sessions.get(hsid);
     if (!s?.mcpLaunch) return null;
-    return { refused: [...s.mcpLaunch.refused, ...(s.mcp?.pool.refused ?? [])], failed: [...s.mcpLaunch.failed] };
+    // TD-2026-10-27-833: what the staged Paradigm MCP of this session is (the pin it verified at open)
+    const pin = s.mcpLaunch.firstParty ? readParadigmPin(this.#o.home) : null;
+    return { refused: [...s.mcpLaunch.refused, ...(s.mcp?.pool.refused ?? [])], failed: [...s.mcpLaunch.failed], firstParty: { staged: !!pin, version: pin?.version ?? null, treeSha256: pin?.treeSha256 ?? null, source: pin?.source ?? null, sourceKind: pin?.sourceKind ?? null, dirty: pin?.dirty ?? null } };
   }
 
   /** Slice C2': a server's notifications/tools/list_changed — re-narrowed, re-offered, one new tools_set. */
@@ -1115,7 +1163,25 @@ export class LocalLane {
   #spawnMcp(s: LocalSession, srv: LocalMcpServer): ChildProcess {
     const m = s.mcpLaunch;
     if (!m || !srv.command || s.state !== 'running') throw new Error('the session is not running');
-    const input: SessionLaunchInput = { ...m.launch, binaryReal: srv.command, argv: [...(srv.args ?? [])] };
+    // TD-2026-10-27-833: the staged Paradigm server spawns under its OWN profile, and only after a synchronous node
+    // re-hash and a size/mtime/inode re-check of every staged file (nothing awaits between these and spawn)
+    const fp = srv.staged ? m.firstParty : undefined;
+    if (srv.staged) {
+      if (!fp) throw new Error('pin-mismatch: no profile for the staged Paradigm MCP');
+      const changed = recheckStaged(srv.staged.snapshot);
+      let nodeOk = true;
+      try {
+        nodeOk = verifyNode(fp.nodePin) === srv.command;
+      } catch {
+        nodeOk = false;
+      }
+      if (changed || !nodeOk) {
+        const why = changed ?? 'the pinned node changed';
+        void this.#o.log('session.sandbox', { hsid: s.hsid, phase: 'mcp-pin-mismatch', server: 'paradigm', why }, { session: s.hsid }).catch(() => undefined);
+        throw new Error(`pin-mismatch: ${why}`);
+      }
+    }
+    const input: SessionLaunchInput = { ...(fp ? fp.launch : m.launch), binaryReal: srv.command, argv: [...(srv.args ?? [])] };
     const plan = this.#o.launchPlan ? this.#o.launchPlan(input) : sessionLaunchPlan(input, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
     const env = serverEnv(m.env, srv.env, LOOP_SESSION_ENV_DROPPED);
     // Aegis H1: the neutral cwd, never the repo (the repo reaches the server only through its expanded args/env)
@@ -1403,6 +1469,8 @@ export class LocalLane {
       } catch {
         /* already gone */
       }
+      // TD-2026-10-27-833: the staged Paradigm server's per-session global dir goes with the session
+      if (s.mcpLaunch.firstParty) fs.rmSync(s.mcpLaunch.firstParty.stateDir, { recursive: true, force: true });
     }
     if (this.#platform === 'win32') {
       // W5: this session's win32 labels and grants (platform/win32/session-sandbox.ts releaseSession)

@@ -293,7 +293,7 @@ describe('G-MCP-05 #mcp-servers the enable card and requests', () => {
     expect(Object.keys(comp.servers)).toEqual(['paradigm', 'neurons']);
   });
 
-  it('slice C2\' (Aegis H1 interim): composeLocal gives a local session user/plugin servers only, never the first-party (linked) Paradigm; trust from the store', async () => {
+  it('slice C2\' + TD-2026-10-27-833: composeLocal gives user/plugin servers, and the first-party Paradigm only from a verified staged pin (none here: refused pin-mismatch); trust from the store', async () => {
     const { m, raised, w, home } = setup();
     const id = idOf(m, 'neurons');
     await m.request(human, MCP_ENABLE_REQUEST, { id, scope: 'all' });
@@ -303,13 +303,15 @@ describe('G-MCP-05 #mcp-servers the enable card and requests', () => {
     const repo = (m.status() as { repos: Array<{ repo: string }> }).repos[0]!.repo;
     expect(Object.keys(m.compose({ hsid: 'h1', cwd: repo }).servers)).toContain('paradigm');
     const local = m.composeLocal({ hsid: 'h1', cwd: repo });
-    expect(local.map((x) => [x.name, x.trust])).toEqual([['neurons', 'enabled']]);
+    // the install at /p does not exist, so nothing is staged: Paradigm is listed refused, never launched
+    expect(local.map((x) => [x.name, x.trust, x.refused?.fit ?? null])).toEqual([['paradigm', 'first-party', 'pin-mismatch'], ['neurons', 'enabled', null]]);
+    expect(local[0]!.command).toBeUndefined();
     // a stored `trusted` is read; any other value falls back to enabled
     const st = readMcpServersStore(home);
     writeMcpServersStore(home, { ...st, enabled: st.enabled.map((e) => ({ ...e, trust: 'trusted' as const })) });
-    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).map((x) => x.trust)).toEqual(['trusted']);
+    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).filter((x) => !x.refused).map((x) => x.trust)).toEqual(['trusted']);
     writeMcpServersStore(home, { ...st, enabled: st.enabled.map((e) => ({ ...e, trust: 'first-party' as never })) });
-    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).map((x) => x.trust)).toEqual(['enabled']);
+    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).filter((x) => !x.refused).map((x) => x.trust)).toEqual(['enabled']);
     void w;
   });
 

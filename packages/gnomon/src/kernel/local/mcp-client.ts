@@ -35,6 +35,7 @@ import { inlineOf, shellOf } from '../desk/mcp-servers.js';
 import { realPrefix as realLoose } from '../runner/env.js';
 import { narrow, OP_ANNOTATIONS_MAX_BYTES, OP_ANNOTATIONS_SCHEMA, type CapabilityEntry, type ServerTrust } from './capability-index.js';
 import type { BrokerTarget, TargetCall } from './tool-broker.js';
+import type { StagedSnapshot } from './paradigm-stage.js';
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 export const MCP_MESSAGE_MAX_BYTES = 4 * 1024 * 1024;
@@ -58,15 +59,24 @@ export interface LocalMcpServer {
   args?: readonly string[];
   env?: Readonly<Record<string, string>>;
   trust: ServerTrust;
+  /**
+   * TD-2026-10-27-833: the first-party Paradigm MCP from its VERIFIED staged copy (#paradigm-stage): its dir, the
+   * snapshot recheckStaged compares right before spawn, and the repo root it is launched for (args[1]).
+   */
+  staged?: { dir: string; snapshot: StagedSnapshot; repo: string };
+  /** TD-2026-10-27-833: refused before launch (e.g. pin-mismatch); launchCheck lists it and never runs it */
+  refused?: { fit: ServerFit; why: string };
 }
 
 /**
+ * pin-mismatch     (TD-2026-10-27-833) the first-party Paradigm MCP has no verified staged pin (not staged, tampered,
+ *                  or a staged file changed before spawn): not offered, never `first-party` trust
  * remote-refused   an http/sse server (never reached from a local session)
  * label-reserved   (Aegis L3) its label is gnomon, kernel, another server's, or paradigm for a non-first-party server
  * launch-writable  (Aegis H1) its command, a path-like arg, a path-like env segment or a PATH entry lies inside a
  *                  writable root (launchCheck): the server is refused
  */
-export type ServerFit = 'ok' | 'remote-refused' | 'launch-writable' | 'label-reserved';
+export type ServerFit = 'ok' | 'remote-refused' | 'launch-writable' | 'label-reserved' | 'pin-mismatch';
 /** Aegis L3: labels no third-party server may take. */
 export const RESERVED_LABELS: readonly string[] = Object.freeze(['gnomon', 'kernel'])
 
@@ -185,9 +195,25 @@ export function launchCheck(servers: readonly LocalMcpServer[], i: LaunchCheckIn
   const refused: Array<{ id: string; name: string; fit: ServerFit; why: string }> = [];
   const kept: LocalMcpServer[] = [];
   for (const s of servers) {
+    if (s.refused) {
+      refused.push({ id: s.id, name: s.name, fit: s.refused.fit, why: s.refused.why });
+      continue;
+    }
     if (s.transport !== 'stdio') {
       kept.push(s); // the pool refuses it remote-refused
       continue;
+    }
+    // TD-2026-10-27-833: the ONE exception to the arg rule — a first-party server launched from its verified staged
+    // copy as `node <staged>/<entry> <repoRoot>` may name the repo root as its LAST positional, and only exactly a
+    // session root (the project dir it serves, not launch material). Its entry must lie inside the staged dir.
+    let repoArg = -1;
+    if (s.trust === 'first-party' && s.staged) {
+      const a = s.args ?? [];
+      if (a.length !== 2 || !within(realOr(a[0]!), s.staged.dir, platform)) {
+        refused.push({ id: s.id, name: s.name, fit: 'launch-writable', why: 'the first-party launch is not `<staged entry> <repo root>`' });
+        continue;
+      }
+      if (a[1] === s.staged.repo && i.roots.includes(a[1]!)) repoArg = 1;
     }
     const why = ((): string | null => {
       if (inRoot(i.cwd)) return 'the neutral spawn directory lies inside a session root';
@@ -196,7 +222,7 @@ export function launchCheck(servers: readonly LocalMcpServer[], i: LaunchCheckIn
       const inline = s.command ? inlineOf(s.command, s.args ?? []) : null;
       if (sh || inline) return `it runs ${sh ? `a shell (${sh})` : `inline code (${inline})`}: Gnomon cannot see what it loads`;
       if (s.command && (inRoot(s.command) || forms.some((f) => containsAtBoundary(s.command!, f, fold)))) return 'its command lies inside a session root';
-      for (const a of s.args ?? []) if (a && named(a, false)) return 'an argument names a path inside a session root';
+      for (const [k, a] of (s.args ?? []).entries()) if (k !== repoArg && a && named(a, false)) return 'an argument names a path inside a session root';
       for (const [k, v] of Object.entries(s.env ?? {})) {
         if (k.toUpperCase() === 'PATH') continue;
         if (named(v, true)) return `env ${k} names a path inside a session root`;
@@ -577,6 +603,11 @@ export class LocalMcpPool {
     for (const s of o.servers) {
       if (s.transport !== 'stdio' || !s.command) {
         this.refused.push({ id: s.id, name: s.name, fit: 'remote-refused' });
+        continue;
+      }
+      // TD-2026-10-27-833: only a verified staged pin carries `first-party` trust
+      if (s.trust === 'first-party' && !s.staged) {
+        this.refused.push({ id: s.id, name: s.name, fit: 'pin-mismatch' });
         continue;
       }
       const label = serverLabel(s.name);

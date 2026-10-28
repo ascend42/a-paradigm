@@ -1036,7 +1036,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         }
       }
       // #mcp-servers (T-2026-10-23-003): the human turns their own MCP servers on or off (gui/device human only)
-      if ((pa?.kind === 'request.mcp.enable' || pa?.kind === 'request.mcp.disable') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.mcp) {
+      if ((pa?.kind === 'request.mcp.enable' || pa?.kind === 'request.mcp.disable' || pa?.kind === 'request.mcp.paradigm.stage') && cls === 'human' && (s.credential === 'gui' || s.credential === 'device') && o.requests?.mcp) {
         const extra = Object.keys(pa).filter((k) => k !== 'kind' && k !== 'payload');
         if (extra.length) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `log.append takes {kind, payload} for ${String(pa.kind)} (unknown: ${extra.slice(0, 4).join(', ')})`);
         try {

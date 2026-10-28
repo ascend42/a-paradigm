@@ -41,14 +41,20 @@ import type { PolicyPath } from '../manifest/policy.js';
 import { RpcRefusal } from '../socket/rpc.js';
 import { fieldLines, MAX_CARD_CHARS } from '../supervisor/permission.js';
 import type { LocalMcpServer } from '../local/mcp-client.js';
+import { autoStage, gitDirtyOf, readParadigmPin, sourceKindOf, stageParadigm, StageRefused, verifyStaged, type ParadigmPin, type VerifyResult } from '../local/paradigm-stage.js';
 import { allowRuleWords, autoAllowRules, composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
 
 export const MCP_SERVERS_SCHEMA = 'gnomon-mcp-servers:v1' as const;
-/** Slice C2' interim (Aegis H1): the server sources a LOCAL session may reach (no first-party, project or local). */
-export const LOCAL_MCP_SOURCES: readonly string[] = Object.freeze(['user', 'plugin']);
+/**
+ * The server sources a LOCAL session may reach. TD-2026-10-27-833: `first-party` again, but ONLY from a verified
+ * staged pin (#paradigm-stage; otherwise it is listed refused `pin-mismatch`). Project and local scope stay out.
+ */
+export const LOCAL_MCP_SOURCES: readonly string[] = Object.freeze(['first-party', 'user', 'plugin']);
 export const MCP_ENABLE_REQUEST = 'request.mcp.enable' as const;
 export const MCP_DISABLE_REQUEST = 'request.mcp.disable' as const;
-export const MCP_REQUESTS: readonly string[] = Object.freeze([MCP_ENABLE_REQUEST, MCP_DISABLE_REQUEST]);
+/** TD-2026-10-27-833: the human stages the first-party Paradigm MCP (the only way a linked checkout is ever staged). */
+export const MCP_PARADIGM_STAGE_REQUEST = 'request.mcp.paradigm.stage' as const;
+export const MCP_REQUESTS: readonly string[] = Object.freeze([MCP_ENABLE_REQUEST, MCP_DISABLE_REQUEST, MCP_PARADIGM_STAGE_REQUEST]);
 export const MCP_ENABLE_CARD_TTL_MS = 24 * 3600 * 1000;
 export const MCP_CHANGED_WHILE_OPEN = 'the server changed while the card was open: ask again';
 export const MCP_ALL_CHANGED_WHILE_OPEN = 'every server on the card changed while it was open: ask again';
@@ -269,6 +275,8 @@ export class McpServers {
   readonly #pending = new Map<string, { cardId: string; id: string; scope: McpScope }>();
   /** Aegis L1: per card (newest last, at most MCP_SKIPS_KEPT), so the next card never overwrites another's report */
   readonly #skips = new Map<string, McpSkip>();
+  /** TD-2026-10-27-833: the last full verification of the staged Paradigm pin (status reads it; never re-hashes) */
+  #lastVerify: { at: string; ok: boolean; why: string | null } | null = null;
 
   constructor(o: McpServersOptions) {
     this.#o = o;
@@ -381,11 +389,15 @@ export class McpServers {
       // a local session gets neither the first-party server (it can run from a linked checkout inside the roots) nor a
       // repo-written project/local-scope server. Only user and plugin servers reach local sessions today.
       if (!LOCAL_MCP_SOURCES.includes(a.source)) continue;
+      if (a.source === 'first-party') {
+        out.push(this.#stagedParadigm(ctx));
+        continue;
+      }
       const e = r.servers[a.server] as Record<string, unknown> | undefined;
       if (!e) continue;
       const transport = e.type === 'http' || e.type === 'sse' ? e.type : 'stdio';
       const entries = store.enabled.filter((x) => x.id === a.id && x.launchHash === a.launchHash);
-      const trust = a.source === 'first-party' ? 'first-party' : entries.length && entries.every((x) => x.trust === 'trusted') ? 'trusted' : 'enabled';
+      const trust = entries.length && entries.every((x) => x.trust === 'trusted') ? 'trusted' : 'enabled';
       out.push({
         id: a.id,
         name: a.server,
@@ -396,6 +408,66 @@ export class McpServers {
       });
     }
     return out;
+  }
+
+  /**
+   * TD-2026-10-27-833: the first-party Paradigm MCP for a LOCAL session — an npm-global install is staged when its
+   * version changed (autoStage; a linked checkout never), then the pin is FULLY verified. Verified: launched as
+   * `<node> <staged entry> <repo root>` (the lane swaps in the runner's pinned node), trust first-party. Otherwise it is
+   * listed refused `pin-mismatch` and the event is logged (daemon.desk mcp.first-party.pin-mismatch).
+   */
+  #stagedParadigm(ctx: { hsid: string; cwd: string }): LocalMcpServer {
+    const base = { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, transport: 'stdio' as const, trust: 'first-party' as const };
+    const fp = this.#o.firstParty();
+    if (fp.available) {
+      const st = autoStage(this.#o.home, { dir: fp.dir, entry: fp.entry, version: fp.version, linked: fp.linked });
+      if (st.staged && st.pin) this.#o.emit?.({ event: 'mcp.first-party.staged', id: FIRST_PARTY_PARADIGM, version: st.pin.version, treeSha256: st.pin.treeSha256, sourceKind: st.pin.sourceKind, by: 'auto' });
+      else if (st.why && st.why !== 'linked-checkout') this.#o.emit?.({ event: 'mcp.first-party.stage-failed', id: FIRST_PARTY_PARADIGM, why: st.why });
+    }
+    const v: VerifyResult = verifyStaged(this.#o.home);
+    this.#lastVerify = { at: new Date((this.#o.clock ?? Date.now)()).toISOString(), ok: v.ok, why: v.ok ? null : v.why };
+    if (!v.ok) {
+      this.#o.emit?.({ event: 'mcp.first-party.pin-mismatch', hsid: ctx.hsid, id: FIRST_PARTY_PARADIGM, why: v.why });
+      return { ...base, refused: { fit: 'pin-mismatch', why: v.why === 'no pin' ? 'the Paradigm MCP is not staged (a linked checkout is staged from Settings: request.mcp.paradigm.stage)' : `the staged Paradigm MCP does not verify: ${v.why}` } };
+    }
+    const repo = realOr(ctx.cwd);
+    return { ...base, command: fp.available ? fp.node : process.execPath, args: [v.entry, repo], staged: { dir: v.dir, snapshot: v.snapshot, repo } };
+  }
+
+  /** TD-2026-10-27-833: status.mcp.firstParty.staged — the pin, its dir and the last verification (no re-hash). */
+  #stagedStatus(): { staged: (ParadigmPin & { dir: string }) | null; pinMismatch: string | null; verifiedAt: string | null } {
+    const pin = readParadigmPin(this.#o.home);
+    const lv = this.#lastVerify;
+    return { staged: pin ? { ...pin, dir: path.join(this.#o.home, 'mcp', 'first-party', 'paradigm', `${pin.version.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'unknown'}-${pin.treeSha256.slice(0, 12)}`) } : null, pinMismatch: lv && !lv.ok ? lv.why : pin ? null : 'no pin', verifiedAt: lv?.at ?? null };
+  }
+
+  /**
+   * request.mcp.paradigm.stage{preview?} (human, gui/device): stage the installed Paradigm MCP now (an npm-global
+   * install or a LINKED CHECKOUT — the only way one is ever staged). The reply names the source path, version,
+   * source kind and the checkout's git dirty state; {preview: true} answers the same without staging.
+   */
+  #stageRequest(payload: unknown): unknown {
+    if (payload !== undefined && payload !== null && !isObj(payload)) throw bad('payload', `${MCP_PARADIGM_STAGE_REQUEST} takes {preview?: boolean}`);
+    const p = (payload ?? {}) as Record<string, unknown>;
+    for (const k of Object.keys(p)) if (k !== 'preview') throw bad(k.slice(0, 32), `unknown field ${k.slice(0, 32)}`);
+    if (p.preview !== undefined && typeof p.preview !== 'boolean') throw bad('preview', 'preview is a boolean');
+    const fp = this.#o.firstParty();
+    if (!fp.available) throw new RpcRefusal('NOT_FOUND', 'bad-params', `#mcp-servers: ${fp.why}`, { why: 'not-installed', next: PARADIGM_INSTALL_HINT });
+    const sourceKind = sourceKindOf(fp);
+    const dirty = gitDirtyOf(fp.dir);
+    const facts = { id: FIRST_PARTY_PARADIGM, source: fp.dir, version: fp.version, sourceKind, dirty };
+    if (p.preview === true) return { ...facts, staged: false, preview: true, current: readParadigmPin(this.#o.home) };
+    let pin: ParadigmPin;
+    try {
+      pin = stageParadigm(this.#o.home, { dir: fp.dir, entry: fp.entry, version: fp.version, linked: fp.linked }, { sourceKind, dirty, ...(this.#o.clock ? { now: this.#o.clock } : {}) });
+    } catch (e) {
+      if (e instanceof StageRefused) throw new RpcRefusal('UNSUPPORTED', 'bad-params', e.message, { why: e.why });
+      throw e;
+    }
+    const v = verifyStaged(this.#o.home);
+    this.#lastVerify = { at: new Date((this.#o.clock ?? Date.now)()).toISOString(), ok: v.ok, why: v.ok ? null : v.why };
+    this.#o.emit?.({ event: 'mcp.first-party.staged', id: FIRST_PARTY_PARADIGM, version: pin.version, treeSha256: pin.treeSha256, sourceKind, dirty, by: 'human' });
+    return { ...facts, staged: true, treeSha256: pin.treeSha256, layout: pin.layout, stagedAt: pin.stagedAt, verified: v.ok };
   }
 
   status(): Record<string, unknown> {
@@ -418,7 +490,8 @@ export class McpServers {
       platform: this.#platform(),
       unsupported: this.#platform() === 'win32' ? 'platform' : null,
       envFile: LOOP_ENV_SHOWN,
-      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }) },
+      // TD-2026-10-27-833: staged (the pin a local session runs) and pinMismatch (why it is not offered), for the C6' card
+      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }), ...this.#stagedStatus() },
       servers: all.filter((d) => d.source === 'user' || d.source === 'plugin').map(state),
       repos: [...live].map(([repo, hsids]) => ({ repo, folder: path.basename(repo), hsids, servers: all.filter((d) => d.repo === repo).map(state) })),
       // one entry per server; the servers of one batch card share its cardId
@@ -477,6 +550,7 @@ export class McpServers {
 
   async request(asker: McpAsker, kind: string, payload: unknown): Promise<unknown> {
     this.#human(asker, kind);
+    if (kind === MCP_PARADIGM_STAGE_REQUEST) return this.#stageRequest(payload);
     // #batch-card: several servers, each with its scope, on ONE card (one presence decides them all)
     if (kind === MCP_ENABLE_REQUEST && isObj(payload) && 'servers' in payload) {
       const items = this.#parseBatch(payload);

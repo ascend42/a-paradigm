@@ -247,8 +247,10 @@ describe('Aegis M4/M5: list_changed storms and open-time failures', () => {
 
 describe('Aegis L3 / Q7', () => {
   it('L3: gnomon, kernel and (unless first-party) paradigm labels are refused label-reserved', () => {
-    const pool = new LocalMcpPool({ servers: [server({ id: 'a', name: 'Gnomon' }), server({ id: 'b', name: 'kernel' }), server({ id: 'c', name: 'paradigm', trust: 'trusted' }), server({ id: 'd', name: 'paradigm', trust: 'first-party' })], spawn: () => spawnFake(), repo: '/r' });
-    expect(pool.refused.map((r) => [r.id, r.fit])).toEqual([['a', 'label-reserved'], ['b', 'label-reserved'], ['c', 'label-reserved']]);
+    const staged = { dir: '/s', snapshot: { files: [] }, repo: '/r' };
+    const pool = new LocalMcpPool({ servers: [server({ id: 'a', name: 'Gnomon' }), server({ id: 'b', name: 'kernel' }), server({ id: 'c', name: 'paradigm', trust: 'trusted' }), server({ id: 'e', name: 'paradigm', trust: 'first-party' }), server({ id: 'd', name: 'paradigm', trust: 'first-party', staged })], spawn: () => spawnFake(), repo: '/r' });
+    // TD-2026-10-27-833: first-party trust only with a verified staged pin
+    expect(pool.refused.map((r) => [r.id, r.fit])).toEqual([['a', 'label-reserved'], ['b', 'label-reserved'], ['c', 'label-reserved'], ['e', 'pin-mismatch']]);
     expect(pool.labels).toEqual(['paradigm']);
   });
 
@@ -300,6 +302,26 @@ describe('Aegis final H1: flag, URL, home, inline and not-yet-existing forms', (
     const chk = (s: Partial<LocalMcpServer>) => launchCheck([server(s)], { roots: [repo], cwd: neutral, sessionPath: '/usr/bin', home });
     return { d, home, repo, chk };
   };
+
+  it('TD-2026-10-27-833: only a staged first-party server may name exactly the repo root as its last positional', () => {
+    const { d, repo, chk } = setup();
+    const sdir = path.join(d, 'gnomon-home', 'mcp', 'first-party', 'paradigm', '9.9.9-abc');
+    fs.mkdirSync(sdir, { recursive: true });
+    const entry = path.join(sdir, 'paradigm-mcp.mjs');
+    fs.writeFileSync(entry, '');
+    const staged = { dir: sdir, snapshot: { files: [] }, repo };
+    const fp = { id: 'first-party:paradigm', name: 'paradigm', trust: 'first-party' as const, staged };
+    expect(chk({ ...fp, args: [entry, repo] }).refused).toEqual([]);
+    // the same launch from any other trust is refused (the repo arg is launch material for them)
+    expect(chk({ args: [entry, repo] }).refused).toHaveLength(1);
+    expect(chk({ ...fp, trust: 'trusted', args: [entry, repo] }).refused).toHaveLength(1);
+    // a subdir of the repo, an extra arg, or an entry outside the staged dir is refused
+    expect(chk({ ...fp, args: [entry, path.join(repo, 'sub')] }).refused).toHaveLength(1);
+    expect(chk({ ...fp, args: [entry, repo, `--x=${repo}`] }).refused).toHaveLength(1);
+    expect(chk({ ...fp, args: [path.join(repo, 'evil.mjs'), repo] }).refused).toHaveLength(1);
+    // a server already refused (pin-mismatch) is listed and never launched
+    expect(chk({ ...fp, refused: { fit: 'pin-mismatch', why: 'no pin' } })).toMatchObject({ servers: [], refused: [{ fit: 'pin-mismatch' }] });
+  });
 
   it('MF1/MF2: --config=, -I<repo>, file://, ~/, $HOME/ and RUBYOPT=-r<repo> are each refused', () => {
     const { repo, chk } = setup();
