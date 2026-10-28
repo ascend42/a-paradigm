@@ -1170,9 +1170,9 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       if (conflicts.length > 0) {
         const shown = conflicts.slice(0, 5).map(c => `${c.agent}/${c.concept} (repo ${c.repo.id} vs user ${c.user.id})`);
         results.push({
-          name: 'Learning conflicts',
+          name: 'Possible learning conflicts',
           status: 'info',
-          message: `${conflicts.length} repo/user conflict(s) for Loid: ${shown.join('; ')}${conflicts.length > 5 ? '; ...' : ''}`,
+          message: `${conflicts.length} possible repo/user conflict(s) for Loid (they may disagree; review them): ${shown.join('; ')}${conflicts.length > 5 ? '; ...' : ''}`,
           fix: 'Nothing is resolved automatically. Review with Loid; keep, refine or retire one side.',
         });
       }

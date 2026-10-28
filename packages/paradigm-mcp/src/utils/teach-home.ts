@@ -3,17 +3,19 @@
  * TD-2026-10-28-820). Pure functions; the journal_record tool and the
  * /paradigm:teach skill call them.
  *
- * Inference from the human's own words:
- *   repo  "for this repo", "here", "in this project", or the lesson names a
- *         repo symbol (#x, $x, ^x, !x, ~x) or a repo path;
- *   user  "for me", "always", "everywhere".
- * Signals on one side only settle it. Signals on both sides, or none, do not:
- * the caller asks ONE question (TEACH_HOME_QUESTION) and records the answer
- * with home_source: explicit.
+ * The human's own words NAME the home (home_source: explicit):
+ *   repo  "for this repo", "in this project" (and repository / codebase);
+ *   user  "for me", "everywhere", "every project", "all my projects".
+ * Bare "here" and "always" are not location words ("here's the rule";
+ * "always" is frequency) and are ignored.
+ * A repo symbol (#x, $x, ^x, !x, ~x) or a repo path only POINTS to repo
+ * (home_source: inferred). In a public repository (learning.visibility unset
+ * or public) an inferred repo home is not recorded: teach asks ONE question,
+ * TEACH_HOME_QUESTION, so the human is never surprised at commit time. Words
+ * on both sides, or no signal at all, also ask.
  *
- * home_source: `explicit` when the human chose or confirmed the home,
- * `inferred` otherwise. The commit guard refuses an inferred human-taught
- * entry in a public repository.
+ * The commit guard refuses an inferred human-taught entry in a public
+ * repository; after this, only entries that never went through teach reach it.
  */
 
 import type { HomeSource, LearningHome } from '../types/knowledge-streams.js';
@@ -26,15 +28,12 @@ export const TEACH_HOME_QUESTION = 'This repo or just you?';
 const REPO_WORDING: Array<[RegExp, string]> = [
   [/\bfor this (?:repo|repository|project|codebase)\b/i, 'for this repo'],
   [/\bin this (?:repo|repository|project|codebase)\b/i, 'in this project'],
-  [/\b(?:this|our) (?:repo|repository|codebase)\b/i, 'this repo'],
-  [/\bhere\b/i, 'here'],
 ];
 
 const USER_WORDING: Array<[RegExp, string]> = [
   [/\bfor me\b/i, 'for me'],
-  [/\balways\b/i, 'always'],
   [/\beverywhere\b/i, 'everywhere'],
-  [/\b(?:every|all (?:my )?|across) (?:repos?|repositories|projects)\b/i, 'every project'],
+  [/\b(?:every|all (?:my )?|across) (?:repos?|repositories|projects?)\b/i, 'every project'],
 ];
 
 /** A repo symbol: one of # $ ^ ! ~ then a kebab-case id. */
@@ -45,27 +44,37 @@ const REPO_PATH = /(?:^|[\s(`'"])((?:\.paradigm|packages|apps|src|lib|plugins|do
 export interface TeachHomeInference {
   /** The settled home, or null when the caller must ask. */
   home: Extract<LearningHome, 'repo' | 'user'> | null;
+  /** explicit when the human's words named the home; inferred from symbols or paths alone. */
+  source: HomeSource;
   /** What pointed to repo. */
   repoSignals: string[];
   /** What pointed to user. */
   userSignals: string[];
 }
 
-/** Infer a lesson's home from the human's words. Never throws. */
+/**
+ * Infer a lesson's home from the human's words. Location words on one side
+ * name it (explicit); symbols or paths alone point to repo (inferred); words
+ * on both sides, or nothing, give null. Never throws.
+ */
 export function inferTeachHome(text: string): TeachHomeInference {
   const t = text ?? '';
-  const repoSignals: string[] = [];
+  const repoWords: string[] = [];
   const userSignals: string[] = [];
-  for (const [re, label] of REPO_WORDING) if (re.test(t)) repoSignals.push(label);
+  for (const [re, label] of REPO_WORDING) if (re.test(t)) repoWords.push(label);
   for (const [re, label] of USER_WORDING) if (re.test(t)) userSignals.push(label);
+  const pointers: string[] = [];
   const sym = SYMBOL.exec(t);
-  if (sym) repoSignals.push(`names ${sym[1]}`);
+  if (sym) pointers.push(`names ${sym[1]}`);
   const p = REPO_PATH.exec(t);
-  if (p) repoSignals.push(`names ${p[1]}`);
-  const home = repoSignals.length > 0 && userSignals.length === 0
-    ? 'repo'
-    : userSignals.length > 0 && repoSignals.length === 0 ? 'user' : null;
-  return { home, repoSignals, userSignals };
+  if (p) pointers.push(`names ${p[1]}`);
+  const repoSignals = [...repoWords, ...pointers];
+  if (repoWords.length > 0 && userSignals.length === 0) return { home: 'repo', source: 'explicit', repoSignals, userSignals };
+  if (userSignals.length > 0 && repoWords.length === 0) return { home: 'user', source: 'explicit', repoSignals, userSignals };
+  if (repoWords.length === 0 && userSignals.length === 0 && pointers.length > 0) {
+    return { home: 'repo', source: 'inferred', repoSignals, userSignals };
+  }
+  return { home: null, source: 'inferred', repoSignals, userSignals };
 }
 
 export function isHomeSource(v: unknown): v is HomeSource {
@@ -79,6 +88,8 @@ export interface JournalHomeInput {
   home_source?: unknown;
   /** The human's own words (teach). When present and no home is given, the home is inferred from them. */
   taught_text?: unknown;
+  /** learning.visibility; unset counts as public. A public repo asks instead of inferring repo. */
+  visibility?: 'public' | 'private';
 }
 
 export type JournalHomeResolution =
@@ -88,8 +99,9 @@ export type JournalHomeResolution =
 /**
  * The home and home_source a new journal entry is recorded with.
  *   - a valid `home`: kept; home_source as given, else explicit (the caller chose it);
- *   - else `taught_text`: inferred from the words; when they do not settle it,
- *     `{ ask }` — record nothing and ask the human once;
+ *   - else `taught_text`: location words name the home (explicit); symbols or
+ *     paths alone infer repo, which in a public repo becomes `{ ask }`; when
+ *     the words do not settle it, `{ ask }` (record nothing, ask once);
  *   - else no home (promotionHomeOf derives it from transferable) and inferred.
  */
 export function resolveJournalHome(input: JournalHomeInput): JournalHomeResolution {
@@ -100,7 +112,11 @@ export function resolveJournalHome(input: JournalHomeInput): JournalHomeResoluti
   if (typeof input.taught_text === 'string' && input.taught_text.trim()) {
     const inference = inferTeachHome(input.taught_text);
     if (inference.home === null) return { ask: TEACH_HOME_QUESTION, inference };
-    return { home: inference.home, home_source: 'inferred' };
+    // No surprise at commit time: an inferred repo home in a public repo asks now.
+    if (inference.source === 'inferred' && inference.home === 'repo' && (input.visibility ?? 'public') === 'public') {
+      return { ask: TEACH_HOME_QUESTION, inference };
+    }
+    return { home: inference.home, home_source: inference.source };
   }
   return { home_source: 'inferred' };
 }

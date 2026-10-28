@@ -7,7 +7,7 @@ Paradigm keeps what your agents learn: notebooks, journals, verdicts, nomination
 | Home | Where | Shared with |
 |------|-------|-------------|
 | `repo` | `.paradigm/` in the repository, committed | everyone who clones the repo |
-| `user` | `~/.paradigm` (per repository under `~/.paradigm/projects/<repoId>/`) | just you, on every project |
+| `user` | `~/.paradigm` | just you; per-repository stores sit under `projects/<repoId>` |
 | `machine` | your OS state folder (for example `~/Library/Application Support/paradigm/state` on macOS) | this computer only |
 
 Defaults: project notebooks, decisions, wisdom, habits, overrides and classroom certifications are `repo`. Journals, verdicts, nominations, debates and calibration samples are `user`. Hook timings, liveness probes, the team funnel and compliance history are `machine`. You can change a default in `.paradigm/config.yaml` under `learning.default_home.<store>`.
@@ -18,12 +18,13 @@ A folder that is not in a git repository, or is your home folder, has no repo ho
 
 When you teach an agent (`/paradigm:teach`), Paradigm picks the home from your words:
 
-- "for this repo", "here", "in this project", or naming a repo symbol (`#checkout`) or path (`src/...`) means **repo**.
-- "for me", "always", "everywhere" means **user**.
+- "for this repo" or "in this project" puts it in the **repo**.
+- "for me", "everywhere" or "every project" keeps it for **you** (user).
+- Naming a repo symbol (`#checkout`) or path (`src/...`) only suggests the repo. In a public repository Paradigm asks rather than guess.
 
 When your words point both ways or nowhere, it asks one question: "This repo or just you?" The confirmation always says which home was picked.
 
-Each lesson also records `home_source`. It is `explicit` when you chose or confirmed the home, and `inferred` when it came from your wording. In `/paradigm:class`, every candidate shows its home at sign-off and you can flip it.
+Each lesson also records `home_source`. It is `explicit` when your words named the home or you answered the question, and `inferred` when it was only guessed. In `/paradigm:class`, every candidate shows its home at sign-off and you can flip it.
 
 To confirm or flip lessons already in the repo notebooks:
 
@@ -51,7 +52,7 @@ Records written before homes existed stay readable. `paradigm migrate learning-s
 `paradigm doctor` shows:
 
 - **Learning census**: for each store, how many records sit in each home, how many are legacy, the last write, and any hook writes that were skipped.
-- **Learning conflicts**: a repo lesson and a user lesson about the same thing that give different advice. These are listed for review. Nothing is resolved for you.
+- **Possible learning conflicts**: a repo lesson and a user lesson about the same thing that may disagree; review them. Nothing is resolved for you.
 - **Repeat-failure rate**, labelled by population (`repo`, `user`, `machine` or `legacy-prior`).
 
 `paradigm calibrate` and the planner's token estimate label their numbers the same way. Numbers from different populations are never added together.

@@ -29,6 +29,7 @@ import { loadJournalEntries, recordJournalEntry } from './journal-loader.js';
 import { autoPromoteJournalEntries, gatedPromoteJournalEntry } from './nomination-engine.js';
 import { loadNotebookEntries } from './notebook-loader.js';
 import type { ProjectContext } from './index-loader.js';
+import { learningGuardViolations } from './learning-commit-guard.js';
 
 const mockHome = shared.mockHome;
 let root: string;
@@ -52,29 +53,37 @@ afterAll(() => {
 });
 
 describe('teach: home inference from wording', () => {
-  it('repo wording → repo', () => {
-    expect(inferTeachHome('security, check rate limiting on auth routes for this repo').home).toBe('repo');
-    expect(inferTeachHome('in this project we never mock the db').home).toBe('repo');
-    expect(inferTeachHome('use pnpm here').home).toBe('repo');
+  it('repo location words name repo, explicitly', () => {
+    expect(inferTeachHome('security, check rate limiting on auth routes for this repo')).toMatchObject({ home: 'repo', source: 'explicit' });
+    expect(inferTeachHome('in this project we never mock the db')).toMatchObject({ home: 'repo', source: 'explicit' });
   });
 
-  it('a repo symbol or a repo path points to repo', () => {
+  it('personal location words name user, explicitly', () => {
+    expect(inferTeachHome('for me, prefer small commits')).toMatchObject({ home: 'user', source: 'explicit' });
+    expect(inferTeachHome('everywhere: no emojis in output')).toMatchObject({ home: 'user', source: 'explicit' });
+    expect(inferTeachHome('in every project, pin node')).toMatchObject({ home: 'user', source: 'explicit' });
+  });
+
+  it('a repo symbol or a repo path alone only infers repo', () => {
     const sym = inferTeachHome('check #payment-form before shipping');
-    expect(sym.home).toBe('repo');
+    expect(sym).toMatchObject({ home: 'repo', source: 'inferred' });
     expect(sym.repoSignals).toContain('names #payment-form');
-    expect(inferTeachHome('read packages/paradigm-mcp/src/utils/learning-stores.ts first').home).toBe('repo');
+    expect(inferTeachHome('read packages/paradigm-mcp/src/utils/learning-stores.ts first')).toMatchObject({ home: 'repo', source: 'inferred' });
   });
 
-  it('personal wording → user', () => {
-    expect(inferTeachHome('for me, prefer small commits').home).toBe('user');
-    expect(inferTeachHome('always write the test first').home).toBe('user');
-    expect(inferTeachHome('everywhere: no emojis in output').home).toBe('user');
+  it('bare "here" and "always" are not location words', () => {
+    expect(inferTeachHome("here's the rule: prefer early returns").home).toBeNull();
+    expect(inferTeachHome('always write the test first').home).toBeNull();
+    expect(inferTeachHome('use pnpm here').home).toBeNull();
   });
 
   it('ambiguous (no signal, or both sides) → null, so the caller asks', () => {
     expect(inferTeachHome('prefer early returns').home).toBeNull();
-    expect(inferTeachHome('always check #auth-gate').home).toBeNull();
     expect(inferTeachHome('for me, in this project, use tabs').home).toBeNull();
+  });
+
+  it('words beat symbols: "for me" naming a symbol is user, explicit', () => {
+    expect(inferTeachHome('for me, check #auth-gate first')).toMatchObject({ home: 'user', source: 'explicit' });
   });
 });
 
@@ -84,10 +93,19 @@ describe('teach: resolveJournalHome and home_source', () => {
     expect(resolveJournalHome({ home: 'user', home_source: 'inferred' })).toEqual({ home: 'user', home_source: 'inferred' });
   });
 
-  it('taught_text infers (inferred), or asks ONE question when it cannot', () => {
-    expect(resolveJournalHome({ taught_text: 'for this repo, run lint first' })).toEqual({ home: 'repo', home_source: 'inferred' });
-    const ask = resolveJournalHome({ taught_text: 'prefer early returns' });
-    expect(ask).toMatchObject({ ask: TEACH_HOME_QUESTION });
+  it('"for this repo" records explicit, in a public repo too', () => {
+    expect(resolveJournalHome({ taught_text: 'for this repo, run lint first' })).toEqual({ home: 'repo', home_source: 'explicit' });
+    expect(resolveJournalHome({ taught_text: 'for this repo, run lint first', visibility: 'public' })).toEqual({ home: 'repo', home_source: 'explicit' });
+  });
+
+  it('symbol-only teach asks in a public repo (unset counts as public), records inferred in a private one', () => {
+    expect(resolveJournalHome({ taught_text: 'check #payment-form first' })).toMatchObject({ ask: TEACH_HOME_QUESTION });
+    expect(resolveJournalHome({ taught_text: 'check #payment-form first', visibility: 'public' })).toMatchObject({ ask: TEACH_HOME_QUESTION });
+    expect(resolveJournalHome({ taught_text: 'check #payment-form first', visibility: 'private' })).toEqual({ home: 'repo', home_source: 'inferred' });
+  });
+
+  it('asks ONE question when the words do not settle it', () => {
+    expect(resolveJournalHome({ taught_text: 'prefer early returns' })).toMatchObject({ ask: TEACH_HOME_QUESTION });
     expect(TEACH_HOME_QUESTION).toBe('This repo or just you?');
   });
 
@@ -127,10 +145,33 @@ describe('teach via paradigm_journal_record', () => {
     expect(loadJournalEntries('security')[0]).toMatchObject({ home: 'repo', home_source: 'explicit' });
   });
 
-  it('inferred wording is recorded inferred, with the inferred home', async () => {
+  it('"for me" names the home: recorded explicit, confirmation shows it', async () => {
     const res = await record({ taught_text: 'for me, check rate limiting' });
-    expect(res).toMatchObject({ recorded: true, home: 'user', home_source: 'inferred' });
+    expect(res).toMatchObject({ recorded: true, home: 'user', home_source: 'explicit' });
     expect(res.confirmation).toContain('Home: user');
+  });
+
+  it('symbol-only teach in a public repo (no visibility set) asks; private records inferred', async () => {
+    const asked = await record({ taught_text: 'check #auth-gate rate limiting' });
+    expect(asked).toMatchObject({ recorded: false, ask: 'This repo or just you?' });
+    fs.mkdirSync(path.join(root, '.paradigm'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', 'config.yaml'), 'learning:\n  visibility: private\n');
+    const rec = await record({ taught_text: 'check #auth-gate rate limiting' });
+    expect(rec).toMatchObject({ recorded: true, home: 'repo', home_source: 'inferred' });
+  });
+
+  it('a teach answered "this repo" passes the commit guard; an un-taught inferred entry is still caught', async () => {
+    const answered = await record({ agent: 'warden', taught_text: 'check #auth-gate', home: 'repo', home_source: 'explicit', transferable: false, confidence_after: 0.9 });
+    expect(answered).toMatchObject({ recorded: true, home: 'repo', home_source: 'explicit' });
+    autoPromoteJournalEntries(root, 'warden');
+    const dir = path.join(root, '.paradigm', 'notebooks', 'warden');
+    const files = fs.readdirSync(dir);
+    expect(files.length).toBe(1);
+    const staged = [{ path: `.paradigm/notebooks/warden/${files[0]}`, content: fs.readFileSync(path.join(dir, files[0]), 'utf8') }];
+    expect(learningGuardViolations(staged)).toEqual([]);
+    // An entry that never went through teach (inferred) is what the guard catches.
+    const raw = { path: '.paradigm/notebooks/warden/nb-x.yaml', content: 'id: nb-x\nhome_source: inferred\ntags: [human-taught]\n' };
+    expect(learningGuardViolations([raw]).map(v => v.rule)).toEqual(['human-feedback-public']);
   });
 });
 

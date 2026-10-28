@@ -456,7 +456,7 @@ export async function handleAmbientTool(
             stats,
             note: stats.total < 5
               ? 'Insufficient data for threshold adjustment (need 5+ engaged nominations)'
-              : `Accept rate: ${(stats.acceptRate * 100).toFixed(0)}% — ${stats.acceptRate > 0.8 ? 'would lower threshold' : stats.acceptRate < 0.4 ? 'would raise threshold' : 'no adjustment needed'}`,
+              : `Accept rate [population: ${stats.population}]: ${(stats.acceptRate * 100).toFixed(0)}% — ${stats.acceptRate > 0.8 ? 'would lower threshold' : stats.acceptRate < 0.4 ? 'would raise threshold' : 'no adjustment needed'}`,
           }),
           handled: true,
         };
@@ -670,6 +670,11 @@ export async function runPostflightLearning(
     const revised = verdicts.filter(v => v.verdict === 'revised').length;
     const total = verdicts.length;
     const acceptRate = total > 0 ? accepted / total : 0;
+    // S4: the session rate names the population(s) its verdicts came from.
+    const population = Array.from(new Set(verdicts.map(v => {
+      const tags = v as { legacy?: unknown; home?: unknown };
+      return tags.legacy === true ? 'legacy-prior' : typeof tags.home === 'string' ? tags.home : 'user';
+    }))).sort().join('+') || 'user';
 
     for (const verdict of verdicts) {
       const trigger = VERDICT_TRIGGERS[verdict.verdict!];
@@ -683,6 +688,7 @@ export async function runPostflightLearning(
         accepted,
         dismissed,
         revised,
+        population,
       });
 
       // v7 §2.0: prefer the agent's REAL post-task confidence; fall back to the
@@ -846,7 +852,7 @@ export async function runPostflightLearning(
 function buildVerdictInsight(
   verdict: { verdict?: string; reason?: string; revisionDelta?: string; nominationId?: string; symbols?: string[] },
   contribution: { contribution?: string; attribution?: string } | undefined,
-  stats: { acceptRate: number; total: number; accepted: number; dismissed: number; revised: number },
+  stats: { acceptRate: number; total: number; accepted: number; dismissed: number; revised: number; population: string },
 ): string {
   const symbolsNote = verdict.symbols?.length
     ? ` (symbols: ${verdict.symbols.join(', ')})`
@@ -857,20 +863,20 @@ function buildVerdictInsight(
     case 'accepted':
       return `Contribution accepted by user${symbolsNote}.${reasonNote}` +
         (contribution?.contribution ? ` Original: "${contribution.contribution.slice(0, 120)}".` : '') +
-        ` Session accept rate: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
+        ` Session accept rate [population: ${stats.population}]: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
 
     case 'dismissed':
       return `Contribution dismissed by user${symbolsNote}.${reasonNote}` +
         (contribution?.contribution ? ` Rejected contribution: "${contribution.contribution.slice(0, 120)}".` : '') +
         ` Learn from this dismissal to improve future nominations.` +
-        ` Session accept rate: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
+        ` Session accept rate [population: ${stats.population}]: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
 
     case 'revised':
       return `Contribution revised by user${symbolsNote}.${reasonNote}` +
         (verdict.revisionDelta ? ` Delta: "${verdict.revisionDelta.slice(0, 120)}".` : '') +
         (contribution?.contribution ? ` Original: "${contribution.contribution.slice(0, 120)}".` : '') +
         ` Partial credit — close but not accurate enough.` +
-        ` Session accept rate: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
+        ` Session accept rate [population: ${stats.population}]: ${(stats.acceptRate * 100).toFixed(0)}% (${stats.accepted}/${stats.total}).`;
 
     default:
       return `Unknown verdict "${verdict.verdict}"${symbolsNote}.${reasonNote}`;

@@ -123,6 +123,37 @@ describe('calibration population tags', () => {
     expect(stats.legacy?.population).toBe('legacy-prior');
   });
 
+  it('ambient learn note, graduation suggestion and Neverland metrics carry the population; notebooks counted per home', async () => {
+    const base = { agent: 'kit', relevance: 1, urgency: 'low', type: 'observation', brief: 'b', surfaced: true, timestamp: new Date().toISOString() };
+    appendLearningRows('nominations', root, Array.from({ length: 10 }, (_, i) => ({ ...base, id: `u${i}`, engaged: true, response: 'accepted' })));
+    const agents = path.join(root, '.paradigm', 'agents');
+    fs.mkdirSync(agents, { recursive: true });
+    fs.writeFileSync(path.join(agents, 'kit.agent'), 'id: kit\nrole: test\nattention:\n  threshold: 0.6\n', 'utf8');
+    fs.mkdirSync(path.join(root, '.paradigm', 'notebooks', 'kit'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.paradigm', 'notebooks', 'kit', 'nb-kit-a.yaml'), 'id: nb-kit-a\n');
+    fs.mkdirSync(path.join(mockHome, '.paradigm', 'notebooks', 'kit'), { recursive: true });
+    fs.writeFileSync(path.join(mockHome, '.paradigm', 'notebooks', 'kit', 'nb-kit-b.yaml'), 'id: nb-kit-b\n');
+
+    const { handleAmbientTool } = await import('../tools/ambient.js');
+    const learn = JSON.parse((await handleAmbientTool('paradigm_ambient_learn', { agent: 'kit', dry_run: true }, { rootDir: root } as never)).text);
+    expect(learn.note).toContain('[population: user]');
+    expect(learn.stats.population).toBe('user');
+
+    const { checkAmbientGraduationCandidates } = await import('./graduation-engine.js');
+    const { loadAllAgentProfiles } = await import('./agent-loader.js');
+    const grad = checkAmbientGraduationCandidates(root, { getNominationStats, loadAllAgentProfiles }).find(c => c.agentId === 'kit')!;
+    expect(grad.population).toBe('user');
+    expect(grad.suggestion).toContain('[population: user]');
+
+    const { getNeverlandMetrics } = await import('./nomination-engine.js');
+    const m = getNeverlandMetrics(root);
+    expect(m.aggregate.population).toBe('user');
+    const kit = m.agents.find(a => a.id === 'kit')!;
+    expect(kit.population).toBe('user');
+    expect(kit.notebooksByHome).toEqual({ repo: 1, user: 1 });
+    expect(kit.notebookCount).toBe(2);
+  });
+
   it("the planner's estimate note names the population (learned and legacy-prior)", () => {
     const taskType = classifyTaskLocal('Build the cache').type;
     const row = (total: number) => ({ archetype: 'builder', taskType, actualTokens: { input: 0, output: 0, total } });

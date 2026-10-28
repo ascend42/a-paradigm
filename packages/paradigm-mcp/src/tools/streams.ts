@@ -16,7 +16,8 @@ import { recordJournalEntry, loadJournalEntries, getJournalStats, loadAllJournal
 import { recordDecision, loadDecisions, getDecisionSummary, writeCompanionLoreEntry } from '../utils/decision-loader.js';
 import { loadDataPolicy, filterContent } from '../utils/data-policy-loader.js';
 import { resolveJournalHome, teachConfirmationLine } from '../utils/teach-home.js';
-import { promotionHomeOf } from '../utils/learning-stores.js';
+import { promotionHomeOf, readLearningHomeConfig } from '../utils/learning-stores.js';
+import { visibilityOf } from '../utils/learning-commit-guard.js';
 
 export function getStreamsToolsList() {
   return [
@@ -263,7 +264,12 @@ export async function handleStreamsTool(
     case 'paradigm_journal_record': {
       // Scoped learning S3: resolve the lesson's home before recording. When the
       // human's words do not settle it, record nothing and ask once.
-      const homeRes = resolveJournalHome({ home: args.home, home_source: args.home_source, taught_text: args.taught_text });
+      const homeRes = resolveJournalHome({
+        home: args.home,
+        home_source: args.home_source,
+        taught_text: args.taught_text,
+        visibility: visibilityOf(readLearningHomeConfig(ctx.rootDir)),
+      });
       if ('ask' in homeRes) {
         return {
           text: json({ recorded: false, ask: homeRes.ask, repoSignals: homeRes.inference.repoSignals, userSignals: homeRes.inference.userSignals }),

@@ -41,6 +41,8 @@ import {
   readLearningHomeConfig,
   readLearningRows,
   rewriteLearningRows,
+  hasRepoHome,
+  populationOf,
   type CalibrationPopulation,
   type LearningHome,
 } from './learning-stores.js';
@@ -863,10 +865,16 @@ export function getNeverlandMetrics(
     threshold: number;
     expertiseCount: number;
     notebookCount: number;
+    /** S4: notebook entries per home (repo included). */
+    notebooksByHome: { repo: number; user: number };
+    /** S4: the population acceptRate is computed over. */
+    population: CalibrationPopulation;
     transferableCount: number;
     totalNominations: number;
   }>;
   aggregate: {
+    /** S4: the population avgAcceptRate is computed over (never pooled across homes). */
+    population: CalibrationPopulation;
     avgAcceptRate: number;
     avgThreshold: number;
     totalExpertise: number;
@@ -881,21 +889,30 @@ export function getNeverlandMetrics(
     .map(p => {
       const stats = getNominationStats(rootDir, p.id);
 
-      // Count notebook entries (check file existence)
-      let notebookCount = 0;
-      try {
-        const nbDir = path.join(os.homedir(), '.paradigm', 'notebooks', p.id);
-        if (fs.existsSync(nbDir)) {
-          notebookCount = fs.readdirSync(nbDir).filter(f => f.endsWith('.yaml')).length;
+      // Count notebook entries per home (S4): the repo notebooks and the user's.
+      const countIn = (dir: string): number => {
+        try {
+          return fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.yaml')).length : 0;
+        } catch {
+          return 0;
         }
-      } catch { /* skip */ }
+      };
+      const userNb = path.join(os.homedir(), '.paradigm', 'notebooks', p.id);
+      const repoNb = path.join(rootDir, '.paradigm', 'notebooks', p.id);
+      const notebooksByHome = {
+        repo: hasRepoHome(rootDir) && path.resolve(repoNb) !== path.resolve(userNb) ? countIn(repoNb) : 0,
+        user: countIn(userNb),
+      };
+      const notebookCount = notebooksByHome.repo + notebooksByHome.user;
 
       return {
         id: p.id,
+        population: stats.population,
         acceptRate: stats.acceptRate,
         threshold: p.attention?.threshold ?? 0.5,
         expertiseCount: (p.expertise || []).length,
         notebookCount,
+        notebooksByHome,
         transferableCount: (p.transferable || []).length,
         totalNominations: stats.total,
       };
@@ -924,6 +941,9 @@ export function getNeverlandMetrics(
   return {
     agents: agentMetrics,
     aggregate: {
+      // S4: every agent's headline rate is the nominations scope's population;
+      // the average is over that one population, never pooled across homes.
+      population: populationOf(nominationScope(rootDir)),
       avgAcceptRate,
       avgThreshold,
       totalExpertise,
