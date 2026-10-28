@@ -841,6 +841,10 @@ export class ApprovalBroker {
           throw fail('BAD_REQUEST', 'bad-params', 'an edit scope needs an edit card the kernel offered that scope on', { cardId });
         }
         scope = sc.kind === 'file' ? { kind: 'file', path: editPath } : { kind: 'repo-edits' };
+      } else if (sc.kind === 'tool') {
+        // 8.0:local-lane C5'a1: the contract knows the tool scope; no card offers it yet (C5'a2 adds detail.toolScopes and
+        // the brokered ruleScope), so it is refused here and never read as an exact rule
+        throw fail('BAD_REQUEST', 'bad-params', 'a tool scope needs a brokered card the kernel offered that scope on', { cardId });
       }
     }
     if (r.checkNote) {

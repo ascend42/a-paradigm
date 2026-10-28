@@ -286,7 +286,10 @@ const TABLE: Row[] = [
   // 8.0:local-lane (TD-2026-10-27-833 slice C3', Aegis M2, #tool-selector): tool.selection{hsid, trigger, hash, added,
   // removed, found, unfitPins} — a local session's offered narrow-tool set changed: capability ids only (never the
   // query, a find_tool need or any model text).
-  ['tool', 'kernel', 'brokered selection', LOCAL_LANE],
+  // 8.0:local-lane (TD-2026-10-27-833 slice C5'a1, #mcp-servers trust): tool.trust{id, label, op, binding, why?,
+  // launchHash?, toolsHash?} — the human trusted or cleared an MCP server's own tool labels, or the kernel dropped that
+  // trust (its launch or its tool list changed, or it was turned off). KERNEL-signed only; TrustBook folds no other row.
+  ['tool', 'kernel', 'brokered selection trust', LOCAL_LANE],
   // 8.0:local-lane (TD-2026-10-27-833 slice B2, #local-working-memory): session.memory{hsid, op, id?, source?, kind?,
   // textHash?, bytes, why?} — one change to a local session's kernel-owned working memory: HASH-ONLY (never the text).
   // session.context{hsid, target, previous, requested, configTarget, nCtx, aboveConfig} — the human changed a local
@@ -396,7 +399,9 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   // P8-D98 (TD-2026-10-19-528 F2): the match mode of a learned always-rule; only 'exact' (ALWAYS_RULE_MATCHES).
   // TD-2026-10-20-294: a prefix rule carries its words; the always decision that learned it carries the same scope.
   // TD-2026-10-23-939 follow-up: a file rule carries the kernel-resolved path of the card's edit (sensitive: project detail)
-  'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES, path: EDIT_RULES }),
+  // 8.0:local-lane (slice C5', ^local-tool-grant): a `tool` rule carries the card's bindHash (the entry, its full schema,
+  // its class and the server's trust binding); a different bindHash at call time leaves the rule dormant
+  'approval.rule.learned': Object.freeze({ match: D98, prefix: PREFIX_RULES, path: EDIT_RULES, bindHash: LOCAL_LANE }),
   // TD-2026-10-23-815 (Aegis L2): a standing-covered decision names the device (unlock key) the grant matched on
   'approval.decide': Object.freeze({ scope: PREFIX_RULES, device: EDIT_RULES }),
   // T-2026-10-20-007: the digest of the ANCHORED command the kernel actually ran (the rewritten updatedInput)
@@ -546,6 +551,8 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'session.memory': Object.freeze(['hsid', 'op', 'id', 'source', 'kind', 'textHash', 'bytes', 'why']),
   // 8.0:local-lane (C3'): closed; ids are capability ids, the hash the selection's; no query or need text
   'tool.selection': Object.freeze(['hsid', 'trigger', 'hash', 'added', 'removed', 'found', 'unfitPins']),
+  // 8.0:local-lane (C5'a1): closed; ids, the server label, hashes and closed values only (never a command or a value)
+  'tool.trust': Object.freeze(['id', 'label', 'op', 'binding', 'why', 'launchHash', 'toolsHash']),
   'session.context': Object.freeze(['hsid', 'target', 'previous', 'requested', 'configTarget', 'nCtx', 'aboveConfig']),
 });
 
@@ -557,6 +564,8 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'git.verb': Object.freeze(['why', 'cardId', 'host', 'exitCode']),
   'tool.brokered': Object.freeze(['tool', 'class', 'cardId']),
   'session.memory': Object.freeze(['id', 'source', 'kind', 'textHash', 'why']),
+  // 8.0:local-lane (C5'a1): a set row carries launchHash and toolsHash (a drop names which one changed)
+  'tool.trust': Object.freeze(['why', 'launchHash', 'toolsHash']),
   // 8.0:rules-view: cause 'human' carries batch, connId and cardId; cause 'expired' carries until (validateKindPayload)
   'approval.rule.enabled': Object.freeze(['batch', 'connId', 'cardId', 'until']),
 });
@@ -668,6 +677,23 @@ export const TOOL_SELECTION_MAX_IDS = 64;
 export const TOOL_BROKER_SERVER_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** tool.brokered{tool}: an offered tool name (kernel-chosen, never model text). */
 export const TOOL_BROKER_TOOL_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+/**
+ * tool.trust{op} (CLOSED, 8.0:local-lane C5'a1, #mcp-servers): set (the human's commit of request.mcp.trust), cleared
+ * (the human's clear) or dropped (the kernel: the server's binding changed, or it was turned off).
+ */
+export const TOOL_TRUST_OPS = ['set', 'cleared', 'dropped'] as const;
+export type ToolTrustOp = (typeof TOOL_TRUST_OPS)[number];
+/**
+ * tool.trust{why} (CLOSED): human (set and cleared), launch-changed (its command, args, env, plugin version: the launch
+ * hash or plugin version moved), tools-changed (its tools/list: names, schemas, annotations, op-annotations moved),
+ * disabled (the human turned the server off).
+ */
+export const TOOL_TRUST_WHYS = ['human', 'launch-changed', 'tools-changed', 'disabled'] as const;
+export type ToolTrustWhy = (typeof TOOL_TRUST_WHYS)[number];
+/** tool.trust{id}: a user or plugin MCP server id (`<source>:<owner>:<name>`, printable ASCII, no space). */
+export const TOOL_TRUST_ID_PATTERN = /^(?:user|plugin):[\x21-\x7e]{0,255}:[\x21-\x7e]{1,128}$/;
+/** tool.trust{launchHash}: the server's launch hash (#mcp-servers declHash, keyed: it never confirms a guessed value). */
+export const TOOL_TRUST_LAUNCH_PATTERN = /^hmac-sha256:[0-9a-f]{64}$/;
 
 /**
  * session.memory{op} (CLOSED, 8.0:local-lane slice B2): what changed in a local session's working memory.
@@ -845,8 +871,10 @@ export type VoiceDisarmReason = (typeof VOICE_DISARM_REASONS)[number];
  * the learned words (approval.rule.learned{match:'prefix', prefix}). TD-2026-10-23-939 follow-up (Aegis): `file` = later
  * edits of one kernel-resolved path (approval.rule.learned{match:'file', path}); `repo-edits` = every edit the auto-edits
  * pass allows in the repo. Both match only through the supervisor's auto-edits pass, never in manual mode.
+ * 8.0:local-lane (C5', ^local-tool-grant): `tool` = later calls of ONE brokered tool (+ op) on ONE server in the repo,
+ * any arguments, while the card's bindHash still holds (approval.rule.learned{match:'tool', bindHash}).
  */
-export const ALWAYS_RULE_MATCHES = ['exact', 'prefix', 'file', 'repo-edits'] as const;
+export const ALWAYS_RULE_MATCHES = ['exact', 'prefix', 'file', 'repo-edits', 'tool'] as const;
 export type AlwaysRuleMatch = (typeof ALWAYS_RULE_MATCHES)[number];
 
 /** F2: the always-rule `match` field is closed (absent = 'exact', the v1 `matchExact:true` reading). */
@@ -859,7 +887,11 @@ export const RULE_ID_PATTERN = ID_PATTERNS.card;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const KEBAB_64 = /^[a-z][a-z0-9-]{0,63}$/;
-const TOOL_NAME = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/;
+/**
+ * A rule's tool name: a Claude tool name, or (8.0:local-lane C5') a brokered MCP tool `mcp:<server>/<tool>` (the
+ * namespaced name a brokered card shows). Checked on approval.rule.revoked / disabled / enabled rows only.
+ */
+export const TOOL_NAME = /^(?:[A-Za-z][A-Za-z0-9_.:-]{0,127}|mcp:[a-z0-9][a-z0-9_-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63})$/;
 
 export interface SessionDrainedPayload {
   /** The backend session uuid the new kernel resumes with `--resume <uuid>`. */
@@ -1041,6 +1073,19 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('cardId' in v) c.str('cardId', v.cardId, ID_PATTERNS.card, 'card:<ULID>');
       if (('tool' in v) !== ('class' in v)) c.fail('class', 'is present exactly when the tool resolved');
       break;
+    case 'tool.trust': {
+      if ('id' in v) c.str('id', v.id, TOOL_TRUST_ID_PATTERN, 'a user or plugin MCP server id');
+      if ('label' in v) c.str('label', v.label, TOOL_BROKER_SERVER_PATTERN, 'an MCP server label');
+      if ('op' in v) c.closedEnum('op', v.op, TOOL_TRUST_OPS);
+      if ('binding' in v) c.str('binding', v.binding, SHA256_TAGGED, 'sha256:<hex>');
+      if ('why' in v) c.closedEnum('why', v.why, TOOL_TRUST_WHYS);
+      if ('launchHash' in v) c.str('launchHash', v.launchHash, TOOL_TRUST_LAUNCH_PATTERN, 'hmac-sha256:<hex>');
+      if ('toolsHash' in v) c.str('toolsHash', v.toolsHash, SHA256_TAGGED, 'sha256:<hex>');
+      if (v.op === 'set' && !('launchHash' in v && 'toolsHash' in v && v.why === 'human')) c.fail('op', 'a set row carries launchHash, toolsHash and why human');
+      if (v.op === 'cleared' && v.why !== 'human') c.fail('why', 'a cleared row is the human\'s (why human)');
+      if (v.op === 'dropped' && !(v.why === 'launch-changed' || v.why === 'tools-changed' || v.why === 'disabled')) c.fail('why', 'a dropped row names launch-changed, tools-changed or disabled');
+      break;
+    }
     case 'tool.selection': {
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
       if ('trigger' in v) c.closedEnum('trigger', v.trigger, TOOL_SELECTION_TRIGGERS);

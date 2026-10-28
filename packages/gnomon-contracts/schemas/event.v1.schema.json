@@ -257,6 +257,7 @@
     "tend.teacher.drafted",
     "tool.brokered",
     "tool.selection",
+    "tool.trust",
     "turn.ask-user",
     "turn.event",
     "turn.partial",
@@ -402,6 +403,7 @@
     "session.renamed": "8.0:session-rename",
     "tool.brokered": "8.0:local-lane",
     "tool.selection": "8.0:local-lane",
+    "tool.trust": "8.0:local-lane",
     "verdict.incident": "M1.1:P8-D86-D88"
   },
   "x-gnomon-reserved-payload-fields": {
@@ -454,7 +456,8 @@
     "approval.rule.learned": {
       "match": "8.0:P8-D98",
       "prefix": "8.0:TD-2026-10-20-294",
-      "path": "8.0:TD-2026-10-23-939"
+      "path": "8.0:TD-2026-10-23-939",
+      "bindHash": "8.0:local-lane"
     },
     "approval.decide": {
       "scope": "8.0:TD-2026-10-20-294",
@@ -966,6 +969,15 @@
       "removed",
       "found",
       "unfitPins"
+    ],
+    "tool.trust": [
+      "id",
+      "label",
+      "op",
+      "binding",
+      "why",
+      "launchHash",
+      "toolsHash"
     ],
     "session.context": [
       "hsid",
