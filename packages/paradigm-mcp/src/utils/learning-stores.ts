@@ -704,12 +704,13 @@ export function readLearningRows<T extends object>(
  * Rewrite every existing physical file of `artifact` in place. `fn` returns the
  * replacement row, or undefined to keep the line byte-identical. `at` is the
  * physical home. Returns the number of rows changed. Non-fatal per file.
+ * `dryRun` counts the rows `fn` would change and writes nothing.
  */
 export function rewriteLearningRows<T extends object>(
   artifact: LearningArtifact,
   root: string,
   fn: (row: T, at: LearningHome) => T | undefined,
-  opts: PathForOptions = {},
+  opts: PathForOptions & { dryRun?: boolean } = {},
 ): number {
   let changed = 0;
   for (const loc of existingLocations(artifact, root, opts)) {
@@ -727,7 +728,7 @@ export function rewriteLearningRows<T extends object>(
           return line;
         }
       });
-      if (fileChanged) fs.writeFileSync(loc.file, updated.join('\n') + '\n', 'utf8');
+      if (fileChanged && !opts.dryRun) fs.writeFileSync(loc.file, updated.join('\n') + '\n', 'utf8');
     } catch {
       /* non-fatal */
     }
@@ -819,11 +820,19 @@ export function currentAuthor(root?: string): string {
 }
 
 /**
- * Whether `author` is the current user: the hashed identity, or the raw OS
- * username S1 stamped before hashing (matched on read only, never written).
+ * Whether `author` is the current user: the hashed identity only. S3 removed
+ * the S1 transition shim (a raw OS username match); `paradigm migrate
+ * learning-stores --scopes --apply` restamps those S1 rows (s1RawAuthor).
  */
 export function isOwnAuthor(author: unknown, root?: string): boolean {
-  if (typeof author !== 'string') return false;
-  if (author === currentAuthor(root)) return true;
-  return !process.env.PARADIGM_AUTHOR && author === osUsername();
+  return typeof author === 'string' && author === currentAuthor(root);
+}
+
+/**
+ * The raw author S1 stamped before authors were hashed: this machine's OS
+ * username. Read ONLY by the migration that restamps those rows; never
+ * written, never matched by readers.
+ */
+export function s1RawAuthor(): string | null {
+  return osUsername();
 }

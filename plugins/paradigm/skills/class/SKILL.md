@@ -36,9 +36,10 @@ For each staged candidate (study-hall journals, **foraged externals**, or learni
 2. **The strongest breaking scenario, FIRST** — from a **cross-lens assessor** (a *different domain* than the learner; same-family peers share blind spots), who MUST author or pull a *breaking* scenario (`paradigm_classroom` (op `scenario_record`) / `paradigm_classroom` (op `scenario_list`)) and probe the learning. **No scenario, no assessment** — an assessment with no attached scenario is rejected. The advocate (Jinx) piles on or stands down. Record the outcome on the scenario.
 3. **One causal question, with a fork.** Present ONLY the dissent + the breaking scenarios (not "N concurred" — note the suppressed concurrences). Ask one: *does this hold BECAUSE of the rule, or were the cases easy?* — and offer the fork: **rule now, or interrogate an agent first.**
 4. **Interrogation (optional, on the record).** The human may `@<agent>` a direct question; the agent answers as a new attributed turn. A proposer that **concedes on the record** is the loop earning its keep — capture it.
-5. **Verdict (human):** `refine` (primary) / `promote` / `reject`.
+5. **Home (human):** show the candidate's home before the verdict: `repo` (committed, shared with the team) or `user` (just the human, every project), and whether it was chosen or only inferred. Ask "Keep it in the {home}, or flip it?" The human may flip it.
+6. **Verdict (human):** `refine` (primary) / `promote` / `reject`.
    - `refine` → rewrite as **"X except Y"** (the counterexample becomes an exception — the engine, not a confidence tweak). **Read it back and confirm** before promoting the refined form (provisional), with the breaking scenario linked as the exception's source.
-   - `promote` → certify: promote the staged journal entry to the notebook (the existing journal→notebook path) → a `pending` classroom-certification. The field confirms or overturns.
+   - `promote` → certify: promote the staged journal entry to the notebook with `paradigm_classroom` (op `promote`) → a `pending` classroom-certification. The field confirms or overturns. Pass `home` when the human flipped it, or `homeConfirmed: true` when they kept the shown home; both record `home_source: explicit`.
    - `reject` → leave staged / let it decay.
    - A candidate **no one could break** is **"untested, not strong"** — promote-as-provisional or hold for a harder scenario; never a silent pass.
 
@@ -49,7 +50,7 @@ A candidate with `provenance.source:'external'` (from `/paradigm:forage`) takes 
 - **Trust ceiling.** It promotes to **`provisional`**, never silently `certified`. The human MAY certify a strongly-sourced dossier (tier-A or multi-source corroboration) by **explicit ruling** — and even then it stays **field-watched** (a later break overturns it). A conflict with a SETTLED learning requires the human's explicit consent to put it on trial.
 
 ## Arm: `report` — close the term
-1. `paradigm_classroom` (op `status`) → per-agent + global **repeat-failure-rate** (team stronger ⇔ the same learning doesn't break twice). Also visible via `paradigm doctor`.
+1. `paradigm_classroom` (op `status`) → per-agent + global **repeat-failure-rate**. Every rate names its population (repo, user, machine or legacy-prior); never add them together. (team stronger ⇔ the same learning doesn't break twice). Also visible via `paradigm doctor`.
 2. Surface bench/recruit proposals (e.g. an agent with N≥2 terms and no certified delta → bench candidate) — recommendations only, routed through `paradigm shift`.
 3. Record a lore report of the term (`paradigm_lore` (op `record`), type `retro`).
 

@@ -2916,6 +2916,18 @@ program
     await calibrateCommand(options);
   });
 
+// paradigm teach --home <repo|user> — confirm or flip the home of taught lessons (scoped learning S3)
+program
+  .command('teach [entryIds...]')
+  .description('Confirm (--home repo) or flip (--home user) the home of taught lessons. With no ids, every human-taught repo notebook entry whose home was only inferred. Records home_source: explicit, which the commit guard accepts.')
+  .requiredOption('--home <home>', 'repo (committed, shared) or user (just you)')
+  .option('--json', 'Output as JSON')
+  .action(async (entryIds: string[], options) => {
+    const { teachHomeCommand } = await import('./commands/teach.js');
+    const ok = await teachHomeCommand({ home: options.home, ids: entryIds, json: options.json });
+    if (!ok) process.exitCode = 1;
+  });
+
 // paradigm learn routing --backfill — cold-start the routing store from git history
 const learnCmd = program
   .command('learn')

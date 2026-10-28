@@ -28,6 +28,12 @@
  */
 export type LearningHome = 'repo' | 'user' | 'machine';
 
+/**
+ * How a record's home was set (scoped learning S3): `explicit` when the human
+ * chose or confirmed it, `inferred` otherwise (from wording or transferable).
+ */
+export type HomeSource = 'explicit' | 'inferred';
+
 export type WorkOutcome = 'pass' | 'fail' | 'partial' | 'blocked';
 
 export interface WorkLogEntry {
@@ -143,7 +149,8 @@ export interface JournalEntry {
    * is carried to the notebook and the promotion-decision row. Absent: derived
    * from `transferable` (false → 'repo', true → 'user'); see promotionHomeOf.
    */
-  home?: LearningHome;
+  home?: LearningHome;  /** S3: whether the human chose/confirmed `home` (explicit) or it was inferred. Carried to the notebook entry. */
+  home_source?: HomeSource;
 }
 
 // ────────────────────────────────────────────────────────

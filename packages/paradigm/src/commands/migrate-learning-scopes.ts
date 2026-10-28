@@ -16,8 +16,14 @@
  *    refs) are offered back to the repo (same confirm). The user copy is
  *    renamed `<file>.moved-to-repo`.
  *
- * Safe to run twice: stamped rows are skipped, copies are deduped against the
- * user file, and a moved user file no longer exists.
+ * 0. (S3, runs first) Rows S1 stamped with the raw OS username as `author`
+ *    are restamped with the hashed author (currentAuthor), in every home, so
+ *    step 1 finds them by the hashed id alone (isOwnAuthor has no raw-name
+ *    shim any more).
+ *
+ * Safe to run twice: restamped rows no longer carry the raw name, stamped
+ * rows are skipped, copies are deduped against the user file, and a moved
+ * user file no longer exists.
  *
  * Symbol: #migrate-learning-scopes
  */
@@ -34,6 +40,8 @@ import {
   isOwnAuthor,
   pathFor,
   readLearningHomeConfig,
+  rewriteLearningRows,
+  s1RawAuthor,
   type LearningArtifact,
 } from '../../../paradigm-mcp/src/utils/learning-stores.js';
 
@@ -56,7 +64,7 @@ export interface MigrateScopesOptions {
 
 export interface ScopeStep {
   artifact: LearningArtifact;
-  kind: 'own-rows' | 'authorless-verdicts' | 'back-to-repo';
+  kind: 'restamp-authors' | 'own-rows' | 'authorless-verdicts' | 'back-to-repo';
   rows: number;
   from: string;
   to: string;
@@ -110,6 +118,19 @@ export async function migrateLearningScopes(rootDir: string, opts: MigrateScopes
   const repoHome = hasRepoHome(root);
   const config = readLearningHomeConfig(root);
 
+  // S3: restamp S1's raw-username authors with the hashed author, in every home.
+  const raw = s1RawAuthor();
+  const me = currentAuthor(root);
+  if (raw && raw !== me) {
+    for (const artifact of Object.keys(ARTIFACTS) as LearningArtifact[]) {
+      if (!ARTIFACTS[artifact].rel[ARTIFACTS[artifact].rel.length - 1].endsWith('.jsonl')) continue;
+      const n = rewriteLearningRows<Row>(artifact, root, row => (row.author === raw ? { ...row, author: me } : undefined), { dryRun: !apply });
+      if (n > 0) {
+        steps.push({ artifact, kind: 'restamp-authors', rows: n, from: 'raw OS username (S1)', to: me, status: apply ? 'done' : 'planned' });
+      }
+    }
+  }
+
   if (repoHome) {
     for (const artifact of FROZEN_USER_ARTIFACTS) {
       if (homeOf(artifact, null, config) === 'repo') continue; // configured back to repo: nothing frozen
@@ -136,7 +157,6 @@ export async function migrateLearningScopes(rootDir: string, opts: MigrateScopes
           return;
         }
         const have = new Set(readLines(userFile).map(l => parse(l)).filter((r): r is Row => !!r).map(rowKey));
-        const me = currentAuthor(root);
         const copies: string[] = [];
         for (const i of idx) {
           const row = parse(lines[i])!;

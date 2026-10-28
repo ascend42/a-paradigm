@@ -13,7 +13,7 @@
  * Publishing scope — controls which audiences can receive this entry.
  * Matches the enum in @a-company/agent-format.
  */
-import type { LearningHome } from './knowledge-streams.js';
+import type { HomeSource, LearningHome } from './knowledge-streams.js';
 
 export type NotebookScope = 'generalizable' | 'project-specific' | 'platform-specific';
 
@@ -97,6 +97,12 @@ export interface NotebookEntry {
    * `scope` (content class). Loaders tag it from the directory when absent.
    */
   home?: LearningHome;
+  /**
+   * S3: `explicit` when the human chose or confirmed `home`, `inferred`
+   * otherwise. The commit guard refuses an inferred `human-taught` entry in a
+   * public repository.
+   */
+  home_source?: HomeSource;
 }
 
 /**

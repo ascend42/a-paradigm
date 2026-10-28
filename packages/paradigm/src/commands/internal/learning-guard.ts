@@ -3,7 +3,8 @@
  * pre-commit check (#learning-commit-guard). Reads the staged `.paradigm/**`
  * data files and refuses the commit (exit 1, violations on stderr) when one
  * carries a home: user/machine row, a machine path, or (public visibility,
- * the default) a human_feedback entry without home: repo.
+ * the default) a human-taught entry whose home was only inferred
+ * (home_source: inferred; S3).
  *
  * Escape: PARADIGM_OVERRIDE=learning-guard. Its use is logged as an override
  * row (mechanism env) through the learning-stores resolver.

@@ -32,7 +32,7 @@ import { loadJournalEntries } from './journal-loader.js';
 import { addNotebookEntry, normalizeConcept, notebookPrior } from './notebook-loader.js';
 import { appendClassroomCertification } from './field-failures.js';
 import { log } from './mcp-logger.js';
-import type { PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
+import type { HomeSource, PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
 import {
   appendLearningRows,
   groupByHome,
@@ -1008,6 +1008,7 @@ export function autoPromoteJournalEntries(
     project: string;
     transferable?: boolean;
     home?: LearningHome;
+    home_source?: HomeSource;
   }>;
 
   const promoted: Array<{ journalId: string; notebookId: string }> = [];
@@ -1045,6 +1046,8 @@ export function autoPromoteJournalEntries(
     // Scoped learning: the promotion, its notebook entry, its cert and this
     // decision row all carry the JOURNAL's home (transferable:false → repo).
     const home = promotionHomeOf(entry);
+    // S3: the notebook entry says whether the human chose that home.
+    const homeSource: HomeSource = entry.home_source === 'explicit' ? 'explicit' : 'inferred';
     appendPromotionDecision(rootDir, {
       home,
       ts: new Date().toISOString(),
@@ -1089,6 +1092,7 @@ export function autoPromoteJournalEntries(
             createdBy: agentId,
           },
           home,
+          home_source: homeSource,
         },
         home === 'user' ? 'global' : 'project',
         rootDir
@@ -1182,8 +1186,15 @@ export function gatedPromoteJournalEntry(
   rootDir: string,
   agentId: string,
   journalId: string,
-  opts: { certifiedBy?: 'peer' | 'quorum'; refinedForm?: string } = {}
-): { promoted: boolean; journalId: string; notebookId?: string; reason?: string } {
+  opts: {
+    certifiedBy?: 'peer' | 'quorum';
+    refinedForm?: string;
+    /** S3: the home the human picked at sign-off (a flip). Recorded as explicit. */
+    home?: LearningHome;
+    /** S3: the human saw the home at sign-off and kept it. Recorded as explicit. */
+    homeConfirmed?: boolean;
+  } = {}
+): { promoted: boolean; journalId: string; notebookId?: string; reason?: string; home?: LearningHome; home_source?: HomeSource } {
   // Load all of the agent's journal entries (all triggers) and find the target.
   const journal = loadJournalEntries(agentId, { limit: 500 }) as Array<{
     id: string;
@@ -1194,6 +1205,7 @@ export function gatedPromoteJournalEntry(
     tags?: string[];
     transferable?: boolean;
     home?: LearningHome;
+    home_source?: HomeSource;
   }>;
 
   const entry = journal.find(e => e.id === journalId);
@@ -1214,8 +1226,12 @@ export function gatedPromoteJournalEntry(
     .map(normalizeConcept)
     .filter(Boolean);
 
-  // Scoped learning: the promotion carries the journal's home (transferable:false → repo).
-  const home = promotionHomeOf(entry);
+  // Scoped learning: the promotion carries the journal's home (transferable:false → repo),
+  // unless the human flipped it at sign-off (S3). A flip or a confirm is explicit.
+  const home = opts.home ?? promotionHomeOf(entry);
+  const homeSource: HomeSource = opts.home !== undefined || opts.homeConfirmed || entry.home_source === 'explicit'
+    ? 'explicit'
+    : 'inferred';
   const { entry: nbEntry } = addNotebookEntry(
     agentId,
     {
@@ -1232,6 +1248,7 @@ export function gatedPromoteJournalEntry(
         createdBy: agentId,
       },
       home,
+      home_source: homeSource,
     },
     home === 'user' ? 'global' : 'project',
     rootDir
@@ -1254,7 +1271,7 @@ export function gatedPromoteJournalEntry(
 
   markJournalPromoted(agentId, entry.id, nbEntry.id);
 
-  return { promoted: true, journalId, notebookId: nbEntry.id };
+  return { promoted: true, journalId, notebookId: nbEntry.id, home, home_source: homeSource };
 }
 
 // ── Surfacing Config ──

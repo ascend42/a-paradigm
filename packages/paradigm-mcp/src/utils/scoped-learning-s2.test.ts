@@ -206,8 +206,8 @@ describe('author identity (S2)', () => {
       const user = os.userInfo().username;
       expect(a).toBe(`uh:${createHash('sha256').update(user).digest('hex').slice(0, 12)}`);
       expect(a).not.toContain(user);
-      // an S1 row stamped with the raw username still reads as mine
-      expect(isOwnAuthor(user, root)).toBe(true);
+      // S3: the raw-username shim is gone; the migration restamps S1 rows instead
+      expect(isOwnAuthor(user, root)).toBe(false);
     } finally {
       if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
       else process.env.GIT_CONFIG_GLOBAL = prevGlobal;

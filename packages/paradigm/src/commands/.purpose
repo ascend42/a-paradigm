@@ -44,13 +44,20 @@ components:
       - v7.12
     file: packages/paradigm/src/commands/migrate-learning-stores.ts
   migrate-learning-scopes:
-    description: 'Scoped learning S2 (TD-2026-10-28-820). `paradigm migrate learning-stores --scopes [--apply] [--yes]`: dry run by default. Legacy repo logs of user-home stores are frozen (tracked, read, never written); --apply copies the current user''s own rows (by author) into the user home and stamps the repo rows migrated:true, which union readers skip. Authorless legacy verdicts are consumed once by whoever runs it, after a confirm prompt. After git init it offers to move user-home records of repo-home stores (overrides, classroom certifications, notebook refs) back to the repo. Idempotent.'
+    description: 'Scoped learning S2 (TD-2026-10-28-820). `paradigm migrate learning-stores --scopes [--apply] [--yes]`: dry run by default. Legacy repo logs of user-home stores are frozen (tracked, read, never written); --apply copies the current user''s own rows (by author) into the user home and stamps the repo rows migrated:true, which union readers skip. Authorless legacy verdicts are consumed once by whoever runs it, after a confirm prompt. After git init it offers to move user-home records of repo-home stores (overrides, classroom certifications, notebook refs) back to the repo. Idempotent. S3: runs first a restamp of rows S1 stamped with the raw OS username as author to the hashed author, in every home (dry run counts only), so isOwnAuthor needs no raw-name shim.'
     type: command
     tags:
       - migration
       - learning
       - scoped-learning
     file: packages/paradigm/src/commands/migrate-learning-scopes.ts
+  teach-command:
+    description: 'Scoped learning S3. `paradigm teach --home <repo|user> [entry-ids...]` confirms (repo: stamp home repo, home_source explicit) or flips (user: move to ~/.paradigm/notebooks/<agent>/) taught lessons in the repo notebooks. With no ids, every human-taught entry whose home_source is inferred. The commit guard''s refusal points here. Idempotent.'
+    type: command
+    tags:
+      - scoped-learning
+      - learning
+    file: packages/paradigm/src/commands/teach.ts
   DocsServeCommand:
     description: paradigm docs serve — launches the Platform with docs section enabled
     type: command

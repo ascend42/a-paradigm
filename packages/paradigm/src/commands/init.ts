@@ -712,7 +712,7 @@ export async function initCommand(options: InitOptions) {
   ensureSessionMarkersGitignore(paradigmDir);
 
   // Scoped learning S2: ask once whether the repo is public (the commit guard
-  // then refuses human_feedback entries without home: repo). Unset = public.
+  // then refuses human-taught entries whose home was only inferred). Unset = public.
   if (!options.quick && !options.dryRun) await askLearningVisibility(paradigmDir);
 
   // Create .premise file
