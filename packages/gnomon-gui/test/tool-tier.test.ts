@@ -6,7 +6,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import { RpcError } from '../src/core/client.js';
-import { TierFlow } from '../src/ui/tier-picker.js';
+import { TierFlow, trapTab } from '../src/ui/tier-picker.js';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 import { commitOutcome, previewOf, previewView, probeTierOf, refusalPhase, sessionTierOf, sheetView, tierChipOf, tierLabel, tierMenu, tierRequest, tierSettingsValue, TIER_COPY, WINDOW_TIER_MIN, type TierPreview } from '../src/core/tool-tier.js';
 
 const H = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
@@ -39,7 +44,9 @@ describe('#gui-tool-tier: the session label', () => {
     const base = { backend: 'local', loop: false, live: true, owner: ME, me: ME, tier };
     expect(tierChipOf(base)).toEqual({ kind: 'key', text: 'tier 1 · provisional ▾', title: TIER_COPY.provisional });
     expect(tierChipOf({ ...base, me: 'p:abcdefgh/other' })).toMatchObject({ kind: 'chip', text: 'tier 1 · provisional', title: `${TIER_COPY.notOwner} ${TIER_COPY.provisional}` });
-    expect(tierChipOf({ ...base, live: false })).toMatchObject({ kind: 'chip', title: expect.stringContaining('Only the person who opened this session') });
+    // Mika F7: an ended session says so, to its owner too; notOwner is for a live session that is not theirs
+    expect(tierChipOf({ ...base, live: false })).toMatchObject({ kind: 'chip', title: `This session has ended; its tier no longer changes. ${TIER_COPY.provisional}` });
+    expect(tierChipOf({ ...base, live: false, tier: { tier: 2, source: 'measured', measured: 2 } })?.title).toBe('This session has ended; its tier no longer changes.');
     expect(tierChipOf({ ...base, owner: null })?.kind).toBe('chip');
     // loop sessions and Claude sessions: no label
     expect(tierChipOf({ ...base, loop: true })).toBeNull();
@@ -83,16 +90,28 @@ describe('#gui-tool-tier: the preview sheet', () => {
     expect(v.apply).toBe(false);
     expect(v.checkbox).toBeNull();
     const s = sheetView({ phase: 'ready', from: 2, requested: 3, preview: p, model: 'm' });
+    // Mika F4: no question it can't act on
+    expect(s.title).toBe('This session already uses tier 2');
     expect(s.keys).toEqual([{ act: 'close', label: 'close', quiet: true }]);
     expect(s.focus).toBe('close');
   });
   it('tier 0: no forms, the pins wait for a raise; from tier 0 the foot says MCP servers start first', () => {
     const down = previewView(pv({ to: 0, requested: 0, k: 0, slotTokens: 0, slotShare: 0, surface: 'full→compact', unfitPins: [{ name: 'echo', why: 'tier-0' }, { name: 'big', why: 'over-budget' }] }), 'm');
-    expect(down.lines[0]).toBe('tools: up to 0, no forms (now full)');
+    expect(down.lines[0]).toBe('tools: its own file tools only (now full forms)'); // Mika F10
     expect(down.lines).toContain('pins that won’t fit: echo (waits until you raise the tier), big (over budget)');
     const up = previewView(pv({ from: 0, to: 2, requested: 2, measured: 2 }), 'm');
     expect(up.lines[0]).toBe('tools: up to 12, full forms (now no)');
     expect(up.foot).toBe(`${TIER_COPY.foot} MCP servers start first.`);
+  });
+  it('Mika F12: a long leaving list or pin list shows 8 names and "and N more", the whole list in its title', () => {
+    const names = Array.from({ length: 11 }, (_, n) => `t${n}`);
+    const v = previewView(pv({ leaving: names, unfitPins: names.map((name) => ({ name, why: 'tier-0' })) }), 'm');
+    const at = v.lines.findIndex((l) => l.startsWith('leaving: '));
+    expect(v.lines[at]).toBe('leaving: t0, t1, t2, t3, t4, t5, t6, t7 and 3 more');
+    expect(v.titles[at]).toBe(`leaving: ${names.join(', ')}`);
+    expect(v.lines[at + 1]).toMatch(/^pins that won’t fit: t0 \(waits until you raise the tier\), .* and 3 more$/);
+    expect(v.titles[at + 1]).toContain('t10 (waits until you raise the tier)');
+    expect(previewView(pv(), 'm').titles.every((t) => t === null)).toBe(true);
   });
   it('rememberable false disables the checkbox with the kernel’s reason inline', () => {
     expect(previewView(pv({ rememberable: false, rememberWhy: 'no-fingerprint' }), 'm').checkbox).toEqual({ label: 'Use tier 3 for m in new sessions too', disabled: true, why: 'can’t remember: the server didn’t name this model’s file' });
@@ -270,6 +289,60 @@ describe('#gui-tool-tier: the press paths', () => {
     expect(ok.flow.state()).toBeNull();
     await ok.flow.apply(true);
     expect([...r.calls, ...ok.calls].every((c) => c.op === 'preview')).toBe(true);
+  });
+  it('Mika F1: toggling remember repaints nothing (the box keeps its focus)', async () => {
+    let paints = 0;
+    const flow = new TierFlow({ call: async () => answer(), toast: () => undefined, repaint: () => void paints++, timer: () => () => undefined });
+    flow.open({ hsid: H, from: 2, requested: 3, model: 'qwen' }, true);
+    await new Promise((r) => setTimeout(r, 0));
+    const before = paints;
+    flow.setRemember(true, true);
+    expect(flow.state()?.remember).toBe(true);
+    expect(paints).toBe(before);
+  });
+  it('Mika F3: a commit lost in transit claims nothing; a preview lost in transit says nothing was sent', async () => {
+    const drop = () => {
+      throw new Error('socket closed');
+    };
+    const c = flowRig({ commit: [drop] });
+    await c.open();
+    const a = c.flow.apply(true);
+    await c.commitDone();
+    await a;
+    expect(c.flow.view()).toMatchObject({ status: 'Not known whether it changed: the connection dropped. The header shows this session’s tier.', fail: true });
+    const p = flowRig({ preview: [drop] });
+    await p.open();
+    expect(p.flow.view()?.status).toBe('Not changed: nothing was sent (socket closed)');
+  });
+  it('the sheet DOM: busy keys are aria-disabled (F2), the current tier asks nothing (F4), one live region (F8), Tab stays inside (F11)', () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'ui', 'tier-picker.ts'), 'utf8');
+    expect(src).toMatch(/if \(k\.busy\) \{\s*b\.setAttribute\('aria-disabled', 'true'\)/);
+    expect(src).toMatch(/'aria-current': 'true'/);
+    expect(src).toMatch(/if \(m\.current\) return btn\.focus\(\);/);
+    expect(src.match(/role: 'status'/g)).toHaveLength(1);
+    expect(src).toMatch(/status\.textContent = v\.status \?\? ''/);
+    expect(src).toMatch(/e\.key === 'Tab' && !sheet\.hidden\) return trapTab\(sheet, e\)/);
+    expect(src).toMatch(/card\.querySelector\(`\[data-act="\$\{had\.act\}"\]`\)/);
+    const mp = readFileSync(path.join(ROOT, 'src', 'ui', 'model-picker.ts'), 'utf8');
+    expect(mp).toMatch(/e\.key === 'Tab' && !sheet\.hidden\) return trapTab\(sheet, e\)/);
+    const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+    expect(css).toContain('.key.quiet[disabled], .key.quiet[aria-disabled="true"] { color: var(--sec); border-color: var(--rule); }');
+    expect(css).toContain('.tier-remember + .meta { margin-top: 2px; padding-left: 22px; }');
+    expect(css.indexOf('.key.quiet[disabled]')).toBeGreaterThan(css.indexOf('.key.quiet { box-shadow: none;'));
+  });
+  it('Mika F11: trapTab wraps Tab and Shift+Tab inside the dialog', () => {
+    const keys = ['a', 'b', 'c'].map((id) => ({ id, hidden: false, focus() { doc.activeElement = this; } }));
+    const doc: { activeElement: unknown } = { activeElement: keys[2] };
+    const dialog = { ownerDocument: doc, querySelectorAll: () => keys, contains: (x: unknown) => keys.includes(x as never) } as unknown as HTMLElement;
+    let prevented = 0;
+    trapTab(dialog, { shiftKey: false, preventDefault: () => void prevented++ } as KeyboardEvent);
+    expect(doc.activeElement).toBe(keys[0]);
+    trapTab(dialog, { shiftKey: true, preventDefault: () => void prevented++ } as KeyboardEvent);
+    expect(doc.activeElement).toBe(keys[2]);
+    doc.activeElement = keys[1];
+    trapTab(dialog, { shiftKey: false, preventDefault: () => void prevented++ } as KeyboardEvent);
+    expect(doc.activeElement).toBe(keys[1]);
+    expect(prevented).toBe(2);
   });
   it('to === from: no Apply; a preview closed before it lands is dropped', async () => {
     const r = flowRig({ preview: [answer({ from: 2, to: 2, requested: 3, window: 2 })] });

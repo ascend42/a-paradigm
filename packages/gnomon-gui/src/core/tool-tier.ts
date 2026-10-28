@@ -31,6 +31,8 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 
 export const TIER_COPY = Object.freeze({
   notOwner: 'Only the person who opened this session can change its tier.',
+  ended: 'This session has ended; its tier no longer changes.',
+  unknown: 'Not known whether it changed: the connection dropped. The header shows this session’s tier.',
   provisional: 'Set while the model was still being measured. It stays until you change it.',
   menu: Object.freeze({
     0: 'its own file tools only: no Gnomon or MCP tools',
@@ -60,7 +62,7 @@ export const TIER_COPY = Object.freeze({
     how: 'Change it for one session from its header; tick ‘in new sessions too’ to keep it.',
     remeasure: 'Re-measure',
     reset: 'Reset to measured',
-    resetNote: 'New sessions use the measured tier; open sessions keep theirs.',
+    resetNote: 'Reset to measured: new sessions go back to the measured tier; open sessions keep theirs.',
   }),
 });
 
@@ -109,7 +111,7 @@ export function tierChipOf(i: { backend: string | null; loop: boolean; live: boo
   const label = tierLabel(i.tier);
   const owner = i.live && i.owner !== null && i.me !== null && i.owner === i.me;
   const prov = i.tier.source === 'provisional' ? TIER_COPY.provisional : '';
-  if (!owner) return { kind: 'chip', text: label, title: [TIER_COPY.notOwner, prov].filter(Boolean).join(' ') };
+  if (!owner) return { kind: 'chip', text: label, title: [i.live ? TIER_COPY.notOwner : TIER_COPY.ended, prov].filter(Boolean).join(' ') };
   return { kind: 'key', text: `${label} ▾`, title: prov || `Tool tier of this session: ${label}. Change it for this session.` };
 }
 
@@ -176,10 +178,18 @@ export function previewOf(v: unknown): TierPreview | null {
 /** "16 384" (groups of three, a space between). */
 const grouped = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const formsOf = (tier: Tier, surface: string): string => (tier === 0 || surface === 'none' ? 'no' : surface === 'full' ? 'full' : 'short');
+/** Mika F12: at most this many names on a line; the rest is "and N more", the whole list in the line's title. */
+export const LIST_SHOWN = 8;
+function shortList(lead: string, xs: readonly string[]): [string, string | null] {
+  if (xs.length <= LIST_SHOWN) return [`${lead}${xs.join(', ')}`, null];
+  return [`${lead}${xs.slice(0, LIST_SHOWN).join(', ')} and ${xs.length - LIST_SHOWN} more`, `${lead}${xs.join(', ')}`];
+}
 const pinWhy = (why: string): string => (why === 'tier-0' ? TIER_COPY.pinWaits : why.replace(/-/g, ' '));
 
 export interface PreviewView {
   lines: string[];
+  /** the full text of a shortened line (the leaving list and the pins past LIST_SHOWN names), by line index */
+  titles: Array<string | null>;
   warnings: string[];
   /** null: nothing changes (no Apply, no checkbox) */
   checkbox: { label: string; disabled: boolean; why?: string } | null;
@@ -189,19 +199,23 @@ export interface PreviewView {
 
 /** What the sheet says about a preview (Mika's meta lines, the ◆ warnings, the checkbox and the foot). */
 export function previewView(p: TierPreview, model: string): PreviewView {
-  const lines = [
-    `tools: up to ${p.k}, ${formsOf(p.to, p.surface.to)} forms (now ${formsOf(p.from, p.surface.from)})`,
-    `tool space: ${grouped(p.slotTokens)} tokens, ${Math.round(p.slotShare * 100)}% of its context`,
-    p.leaving.length ? `leaving: ${p.leaving.join(', ')}` : TIER_COPY.noneLeave,
-    ...(p.unfitPins.length ? [`pins that won’t fit: ${p.unfitPins.map((u) => `${u.name} (${pinWhy(u.why)})`).join(', ')}`] : []),
-    ...(p.cacheLost ? [TIER_COPY.cache] : []),
+  const now = formsOf(p.from, p.surface.from);
+  const pins = p.unfitPins.map((u) => `${u.name} (${pinWhy(u.why)})`);
+  const rows: Array<[string, string | null]> = [
+    [p.to === 0 ? `tools: its own file tools only (now ${now} forms)` : `tools: up to ${p.k}, ${formsOf(p.to, p.surface.to)} forms (now ${now})`, null],
+    [`tool space: ${grouped(p.slotTokens)} tokens, ${Math.round(p.slotShare * 100)}% of its context`, null],
+    p.leaving.length ? shortList('leaving: ', p.leaving) : [TIER_COPY.noneLeave, null],
+    ...(pins.length ? [shortList('pins that won’t fit: ', pins)] : []),
+    ...(p.cacheLost ? [[TIER_COPY.cache, null] as [string, string | null]] : []),
   ];
+  const lines = rows.map((r) => r[0]);
+  const titles = rows.map((r) => r[1]);
   const warnings: string[] = [];
   if (p.measured === null ? p.to > 1 : p.to > p.measured) warnings.push(`◆ Above what this model measured (${p.measured ?? 'not yet'}). It may call tools badly; every call is still checked and carded.`);
   if (p.requested > p.window && p.requested > 0) warnings.push(`◆ Tier ${p.requested} needs a context target of ${grouped(WINDOW_TIER_MIN[p.requested as 1 | 2 | 3])} tokens or more, so this applies tier ${p.to}.`);
   const apply = p.to !== p.from;
   const checkbox = apply ? { label: `Use tier ${p.to} for ${model} in new sessions too`, disabled: !p.rememberable, ...(!p.rememberable ? { why: TIER_COPY.remember[p.rememberWhy ?? 'no-fingerprint'] } : {}) } : null;
-  return { lines, warnings, checkbox, apply, foot: p.from === 0 && p.to > 0 ? `${TIER_COPY.foot} ${TIER_COPY.footMcp}` : TIER_COPY.foot };
+  return { lines, titles, warnings, checkbox, apply, foot: p.from === 0 && p.to > 0 ? `${TIER_COPY.foot} ${TIER_COPY.footMcp}` : TIER_COPY.foot };
 }
 
 /* ── the sheet in every state ────────────────────────────────────────────────────────────────────────────────────── */
@@ -236,7 +250,7 @@ export function sheetView(s: { phase: SheetPhase; from: Tier; requested: Tier; p
     case 'loading':
       return { title, status: `Checking what tier ${s.requested} changes…`, fail: false, body: null, keys: [{ act: 'apply', label: TIER_COPY.apply, pri: true, disabled: true, busy: true }, cancel], focus: 'cancel' };
     case 'ready':
-      if (body && !body.apply) return { title, status: null, fail: false, body, keys: [{ act: 'close', label: TIER_COPY.close, quiet: true }], focus: 'close' };
+      if (body && !body.apply) return { title: `This session already uses tier ${p!.from}`, status: null, fail: false, body, keys: [{ act: 'close', label: TIER_COPY.close, quiet: true }], focus: 'close' };
       return { title, status: null, fail: false, body, keys: [{ act: 'apply', label: TIER_COPY.apply, pri: true }, cancel], focus: 'apply' };
     case 'applying':
       return { title, status: null, fail: false, body, keys: [{ act: 'apply', label: TIER_COPY.applying, pri: true, disabled: true, busy: true }, { ...cancel, disabled: true }], focus: 'apply' };

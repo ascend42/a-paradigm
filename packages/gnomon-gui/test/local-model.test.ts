@@ -533,7 +533,7 @@ describe('#gui-tool-tier: the Settings Tool tier row (C4\'b)', () => {
     expect(acts(tierRow(probe({})))).toEqual(['tier-remeasure']);
     const r = tierRow(probe({ human: 3 }));
     expect(acts(r)).toEqual(['tier-remeasure', 'tier-reset']);
-    expect(r).toMatchObject({ keys: [{ label: 'Re-measure', quiet: true }, { label: 'Reset to measured', quiet: true }], how: expect.stringMatching(/^New sessions use the measured tier; open sessions keep theirs\. /) });
+    expect(r).toMatchObject({ keys: [{ label: 'Re-measure', quiet: true }, { label: 'Reset to measured', quiet: true }], how: expect.stringMatching(/^Reset to measured: new sessions go back to the measured tier; open sessions keep theirs\. /) });
     expect(tierRow(probe({ measuring: true }))).toMatchObject({ keys: [{ act: 'tier-remeasure', disabled: true }] });
     expect(tierRow(probe({}), { ...emptyLocalUi(), measuring: 1 })).toMatchObject({ value: '2 · measured · measuring…', keys: [{ disabled: true }] });
   });

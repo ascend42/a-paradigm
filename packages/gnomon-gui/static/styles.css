@@ -252,6 +252,8 @@ html, body {
 .viewport { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: strict; overflow-anchor: none; }
 .jump { position: absolute; right: 18px; bottom: 10px; }
 .key.quiet { box-shadow: none; color: var(--ink2); font-size: var(--fs-control); min-height: var(--key-h); min-width: var(--key-h); padding: 0 8px; } /* quiet is a look, not a size (key-height) */
+/* Mika C4'b F5: a disabled (or busy) quiet key reads disabled; quiet's ink must not out-rank .key[disabled] */
+.key.quiet[disabled], .key.quiet[aria-disabled="true"] { color: var(--sec); border-color: var(--rule); }
 .spacer-v { width: 1px; }
 .trow { position: absolute; left: 0; right: 0; padding: 2px 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 96ch; }
 /* chat: the user's message and claude's text as blocks; tool calls, results and notes as quiet single lines */
@@ -1161,6 +1163,7 @@ html, body {
 .tier-wrap { vertical-align: baseline; }
 .model-switch-lines p.warn { color: var(--warn-ink); }
 .tier-remember { display: flex; align-items: center; gap: 6px; }
+.tier-remember + .meta { margin-top: 2px; padding-left: 22px; } /* F9: the reason sits under its box */
 
 /* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
 .seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }

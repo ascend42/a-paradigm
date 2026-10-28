@@ -87,7 +87,7 @@ export class TierFlow {
     const s = this.#s;
     if (!trusted || !s || s.phase !== 'ready' || !s.preview?.rememberable) return;
     s.remember = on;
-    this.#d.repaint();
+    // Mika F1: no repaint: the box already shows its own state (a repaint would rebuild it and drop its focus)
   }
 
   /** Apply: commits the preview's token ONCE (a second press finds no token and sends nothing). */
@@ -106,7 +106,7 @@ export class TierFlow {
       v = await this.#d.call(tierRequest(s.hsid, 'commit', token, remember, s.preview.to));
     } catch (err) {
       if (gen !== this.#gen || this.#s !== s) return;
-      this.#failed(s, err);
+      this.#failed(s, err, true);
       return;
     }
     const out = commitOutcome(v, remember);
@@ -175,7 +175,8 @@ export class TierFlow {
     this.#d.repaint();
   }
 
-  #failed(s: TierSheetState, err: unknown): void {
+  /** A refusal or a transport failure; `commit`: the commit may have reached the kernel, so nothing is claimed (F3). */
+  #failed(s: TierSheetState, err: unknown, commit = false): void {
     const reason = err instanceof RpcError ? err.refusal.reason : null;
     const ph = refusalPhase(reason);
     this.#token = null;
@@ -183,9 +184,28 @@ export class TierFlow {
     if (ph === 'stale') s.phase = 'stale';
     else {
       s.phase = 'error';
-      s.error = ph === 'gone' ? TIER_COPY.gone : err instanceof RpcError ? refusalLine(err.refusal) : `Not changed: nothing was sent (${err instanceof Error ? err.message.slice(0, 120) : 'failed'})`;
+      s.error = ph === 'gone' ? TIER_COPY.gone : err instanceof RpcError ? refusalLine(err.refusal) : commit ? TIER_COPY.unknown : `Not changed: nothing was sent (${err instanceof Error ? err.message.slice(0, 120) : 'failed'})`;
     }
     this.#d.repaint();
+  }
+}
+
+/**
+ * Mika F11: keep Tab inside an open dialog (aria-modal): Tab from the last focusable goes to the first, Shift+Tab
+ * from the first to the last. Shared with #model-switch-dialog (ui/model-picker.ts).
+ */
+export function trapTab(dialog: HTMLElement, e: KeyboardEvent): void {
+  const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((x) => !x.hidden);
+  if (!items.length) return;
+  const first = items[0]!;
+  const last = items[items.length - 1]!;
+  const at = dialog.ownerDocument.activeElement;
+  if (e.shiftKey && (at === first || !dialog.contains(at))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (at === last || !dialog.contains(at))) {
+    e.preventDefault();
+    first.focus();
   }
 }
 
@@ -245,6 +265,8 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
   const sheet = el(doc, 'div', { id: 'tier-dialog', class: 'overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'change tool tier' });
   sheet.hidden = true;
   const card = el(doc, 'div', { class: 'sheet-card' });
+  // Mika F8: one live region for the card's life (a region must exist before its text changes to be announced)
+  const status = el(doc, 'p', { class: 'meta', role: 'status' });
   sheet.appendChild(card);
   doc.body.appendChild(sheet);
   let lastPhase: SheetPhase | null = null;
@@ -270,12 +292,21 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
       }
       return;
     }
-    const kids: HTMLElement[] = [el(doc, 'p', { class: 'title' }, v.title)];
-    if (v.status !== null) kids.push(el(doc, 'p', { class: `meta${v.fail ? ' fail' : ''}`, role: 'status' }, v.status));
+    // Mika F1: the focused node (by id or data-act) is found again after the rebuild
+    const active = doc.activeElement as HTMLElement | null;
+    const had = active && card.contains(active) ? { id: active.getAttribute('id'), act: active.getAttribute('data-act') } : null;
+    const kids: HTMLElement[] = [el(doc, 'p', { class: 'title' }, v.title), status];
+    status.textContent = v.status ?? '';
+    status.setAttribute('class', `meta${v.fail ? ' fail' : ''}`);
     const keyBy = new Map<string, HTMLButtonElement>();
     if (v.body) {
       const lines = el(doc, 'div', { class: 'model-switch-lines' });
-      for (const t of v.body.lines) lines.appendChild(el(doc, 'p', { class: 'meta' }, t));
+      v.body.lines.forEach((t, n) => {
+        const line = el(doc, 'p', { class: 'meta' }, t);
+        const full = v.body!.titles[n];
+        if (full) line.title = full; // Mika F12: the whole list of a shortened line
+        lines.appendChild(line);
+      });
       for (const w of v.body.warnings) lines.appendChild(el(doc, 'p', { class: 'meta warn' }, w));
       kids.push(lines);
       const cb = v.body.checkbox;
@@ -297,8 +328,11 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
     const foot = el(doc, 'div', { class: 'composer-foot' });
     for (const k of v.keys) {
       const b = el(doc, 'button', { class: `key${k.pri ? ' pri' : ''}${k.quiet ? ' quiet' : ''}`, type: 'button', 'data-act': k.act }, k.label);
-      if (k.disabled) b.disabled = true;
-      if (k.busy) b.setAttribute('aria-busy', 'true');
+      // Mika F2: a busy key is aria-disabled (it keeps its focus; the flow ignores its press), never disabled
+      if (k.busy) {
+        b.setAttribute('aria-disabled', 'true');
+        b.setAttribute('aria-busy', 'true');
+      } else if (k.disabled) b.disabled = true;
       b.addEventListener('click', (e) => {
         const trusted = e.isTrusted;
         if (k.act === 'apply') void flow.apply(trusted);
@@ -315,6 +349,9 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
     if (lastPhase !== s.phase) {
       lastPhase = s.phase;
       keyBy.get(v.focus)?.focus();
+    } else if (had) {
+      const again = (had.id ? card.querySelector(`#${had.id}`) : null) ?? (had.act ? card.querySelector(`[data-act="${had.act}"]`) : null);
+      (again as HTMLElement | null)?.focus();
     }
   };
 
@@ -322,6 +359,7 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
     if (chip?.menu && !chip.menu.hidden && !(e.target as HTMLElement).closest('.tier-wrap, .tier-menu')) closeMenu();
   });
   doc.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !sheet.hidden) return trapTab(sheet, e);
     if (e.key !== 'Escape') return;
     if (chip?.menu && !chip.menu.hidden) {
       closeMenu();
@@ -377,10 +415,12 @@ export function mountTierPicker(doc: Document, d: TierPickerDeps): TierPicker {
         const t = d.session(hsid)?.tier;
         if (!t) return;
         menu.replaceChildren(...tierMenu(t.tier, t.measured).map((m) => {
-          const b = el(doc, 'button', { class: `mode-item${m.current ? ' current' : ''}`, type: 'button', role: 'menuitem', 'data-tier': String(m.tier) });
+          const b = el(doc, 'button', { class: `mode-item${m.current ? ' current' : ''}`, type: 'button', role: 'menuitem', 'data-tier': String(m.tier), ...(m.current ? { 'aria-current': 'true' } : {}) });
           b.append(el(doc, 'span', { class: 'mode-name' }, m.name), el(doc, 'span', { class: 'mode-note' }, m.note));
           b.addEventListener('click', (e) => {
             closeMenu();
+            // Mika F4: the current tier asks nothing: the menu closes and focus goes back to the key
+            if (m.current) return btn.focus();
             // the preview is a request: only the human's own press sends it (G-GUI-04)
             flow.open({ hsid, from: t.tier, requested: m.tier, model: d.model(hsid) }, e.isTrusted);
           });
