@@ -68,10 +68,10 @@ export const GENERATED_STATE: readonly string[] = Object.freeze([
   // Machine-churn event logs only: per-machine hook and liveness telemetry.
   // Learning records stay committed (verdicts, overrides, debates,
   // nominations, promotion-decisions, classroom-certifications, notebook-refs,
+  // team-funnel (Loid calibrates the invocation rate from it),
   // session-log, stream.jsonl + its .last-processed cursor) and so does
   // history/ (the repo's shared symbol history).
   'events/compliance-history.jsonl',
-  'events/team-funnel.jsonl',
   'events/postflight-liveness.jsonl',
   'events/settlement-liveness.jsonl',
   'events/hook-timings.jsonl.tmp.*',
