@@ -289,7 +289,7 @@ interface LocalSession {
    * names called this step and in the last STICKY_STEPS steps, find_tool's matches in force, the latest user or steer
    * text (bounded), and find_tool calls this turn
    */
-  sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; textTrusted: boolean; finds: number; mode: RunMode };
+  sel?: { step: number; selectedAt: number; current: Set<string>; recent: string[][]; found: { names: string[]; step: number } | null; text: string; textTrusted: boolean; finds: number; mode: RunMode; setSeq: number };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
   mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; failed: Array<{ label: string; error: string }>; firstParty?: { launch: SessionLaunchInput; stateDir: string; nodePin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'> } };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
@@ -1131,7 +1131,7 @@ export class LocalLane {
         // functional note (Aegis): a server that cannot start under the local profile says why, readably
         s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
         for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
-        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', textTrusted: true, finds: 0, mode: this.#mode(s) };
+        s.sel = { step: 0, selectedAt: 0, current: new Set(), recent: [], found: null, text: '', textTrusted: true, finds: 0, mode: this.#mode(s), setSeq: 0 };
         tools = this.#mcpOffer(s).tools;
         s.mcp.offeredHash = offeredHash(tools);
       }
@@ -1224,8 +1224,10 @@ export class LocalLane {
     const h = offeredHash(tools);
     if (h !== s.mcp.offeredHash) {
       s.mcp.offeredHash = h;
-      s.tools.setTools(tools);
-      this.#write(s, drv.toolsSetLine(s.tools.offered));
+      // Aegis M3: the previous set stays callable until the child acknowledges THIS tools_set id
+      const id = `ts-${++s.sel.setSeq}`;
+      s.tools.setTools(tools, { ackId: id });
+      this.#write(s, drv.toolsSetLine(s.tools.offered, id));
     }
     return found;
   }
@@ -1294,6 +1296,10 @@ export class LocalLane {
   #mcpChanged(s: LocalSession, label: string, entries: CapabilityEntry[]): void {
     if (!s.mcp || !s.tools || s.state !== 'running') return;
     s.mcp.entries.set(label, entries);
+    // Aegis M3: a previous-set tool a list_changed removed or changed (its entry id is gone), or whose server is gone,
+    // is never callable through the grace
+    const m = s.mcp;
+    s.tools.pruneGrace((t) => !t.entry || (m.pool.target(t.entry.server) !== undefined && m.pool.target(t.entry.server) !== null && (m.entries.get(t.entry.server) ?? []).some((e) => e.id === t.entry!.id)));
     // Aegis M4: a tools_set only when the offered set actually changed (#reselect compares the hash)
     this.#reselect(s);
   }
@@ -1656,7 +1662,7 @@ export class LocalLane {
     // slice C1: a tool_request line carries model-written args: hashed for every session (tool.brokered is hash-only too)
     // Aegis L3: so are the tool_execution_* lines of a brokered tool (they echo its args and the kernel's result)
     // slice B2: so are the memory tools' (note carries model-written text; session.memory rows are hash-only)
-    const brokeredTool = ev.kind === 'tool' && ev.tool !== null && ((s.tools?.offered.some((t) => t.name === ev.tool) ?? false) || (s.memory !== undefined && MEMORY_TOOL_NAMES.includes(ev.tool)) || ev.tool === FIND_TOOL_NAME);
+    const brokeredTool = ev.kind === 'tool' && ev.tool !== null && ((s.tools?.offered.some((t) => t.name === ev.tool) ?? false) || (s.tools?.grace.some((t) => t.name === ev.tool) ?? false) || (s.memory !== undefined && MEMORY_TOOL_NAMES.includes(ev.tool)) || ev.tool === FIND_TOOL_NAME);
     const hashOnly = bytes > EVENT_LINE_CAP || ev.kind === 'tool-request' || brokeredTool || (s.loop !== undefined && (ev.kind === 'message' || ev.kind === 'partial' || ev.kind === 'tool' || ev.type.startsWith('message') || ev.type.startsWith('tool')));
     await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(hashOnly ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     if (s.loop && ev.kind === 'message') s.loop.reply = loopReplyOf(line) ?? s.loop.reply;
@@ -1728,8 +1734,13 @@ export class LocalLane {
         if (ev.phase === 'end') this.#stepEnded(s);
         return;
       case 'start':
-        // slice C3': a run started (agent_start): find_tool's per-turn allowance resets
+        // slice C3': a run started (agent_start): find_tool's per-turn allowance resets; Aegis M3: no previous set
         if (s.sel) s.sel.finds = 0;
+        s.tools?.clearGrace();
+        return;
+      case 'tools-applied':
+        // slice C3' (Aegis M3): the child's next step offers the new set: the previous one is no longer callable
+        if (ev.id !== null) s.tools?.ackTools(ev.id);
         return;
       case 'tool-request':
         // slice C1: answered OUTSIDE this queue — a mutate call's card may wait minutes on a human

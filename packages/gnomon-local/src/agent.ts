@@ -80,6 +80,9 @@ import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOver
 import { contextLedger, contextReport, memoryBlockTokens, memorySlotTokens, resultCapChars, TARGET_HEADROOM, type ContextLedger } from './budget.js';
 import { MEMORY_TOOLS } from './memory-tools.js';
 import { FIND_TOOL } from './find-tool.js';
+
+/** slice C3' (Aegis M3): a kernel tools_set id (ts-N), echoed in tools_applied when the set takes effect. */
+export const TOOLS_SET_ID_RE = /^ts-[1-9]\d{0,8}$/;
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
 import { neutraliseResult, shapeResult, SHAPE_CAP_CHARS, SpillStore } from './shape.js';
 import { runTool, TOOLS } from './tools.js';
@@ -154,6 +157,8 @@ export class Agent {
   /** slice C1: the brokered set in effect (this step) and the one the kernel set for the next step */
   #brokered: BrokeredToolSpec[] = [];
   #nextBrokered: BrokeredToolSpec[] | null = null;
+  /** slice C3' (Aegis M3): the kernel's id of the pending tools_set; acknowledged with tools_applied{id} when it takes effect */
+  #nextBrokeredId: string | null = null;
   readonly #messages: ChatMessage[] = [];
   readonly #steer: string[] = [];
   readonly #follow: string[] = [];
@@ -283,6 +288,9 @@ export class Agent {
     let changed = false;
     if (this.#nextBrokered !== null) {
       this.#brokered = this.#nextBrokered;
+      // Aegis M3: the kernel keeps the previous set callable until it reads this acknowledgement
+      if (this.#nextBrokeredId !== null) this.#o.emit({ type: 'tools_applied', id: this.#nextBrokeredId });
+      this.#nextBrokeredId = null;
       this.#nextBrokered = null;
       changed = true;
     }
@@ -304,10 +312,11 @@ export class Agent {
    * Slice C1: the kernel's tools_set. Takes effect at the next step start. Refused (an error string) when this agent
    * has no broker port or is a loop act session (allowTools).
    */
-  setBrokered(tools: readonly BrokeredToolSpec[]): string | null {
+  setBrokered(tools: readonly BrokeredToolSpec[], id?: unknown): string | null {
     if (!this.#o.broker) return 'this session has no kernel broker';
     if (this.#o.allowTools) return 'a session with a tools allowlist takes no brokered tools';
     this.#nextBrokered = tools.map((t) => ({ ...t }));
+    this.#nextBrokeredId = typeof id === 'string' && TOOLS_SET_ID_RE.test(id) ? id : null;
     if (!this.#running) this.#takePending();
     return null;
   }

@@ -452,6 +452,37 @@ describe('slice C2\': narrow MCP tools through the broker (G-LCL-16)', () => {
     expect(r.rows.map((x) => x.payload.decision)).toEqual(['unknown-tool', 'ran']);
   });
 
+  it('Aegis M3: the previous set stays callable until the child acknowledges the tools_set id; prune and agent_start end it', async () => {
+    const r = mcpRig();
+    const all = r.b.offered;
+    const put = all.filter((t) => t.name === 'fam.put');
+    const get = all.filter((t) => t.name === 'fam.get');
+    r.b.setTools(put);
+    // the new set (get only) is pending in the child: fam.put still resolves (its current step offers it)
+    r.b.setTools(get, { ackId: 'ts-1' });
+    expect(r.b.grace.map((t) => t.name)).toEqual(['fam.put']);
+    expect(await r.b.handle(req('fam.put', { key: 'abc' }))).toMatchObject({ decision: 'approved' });
+    // an older id's ack ends nothing; the latest does
+    r.b.setTools(get, { ackId: 'ts-2' });
+    r.b.ackTools('ts-1');
+    expect(r.b.grace.map((t) => t.name)).toEqual(['fam.put']);
+    r.b.ackTools('ts-2');
+    expect(await r.b.handle({ ...req('fam.put', { key: 'abc' }), id: 'tr-2' })).toMatchObject({ decision: 'unknown-tool' });
+    // a list_changed prune drops a grace tool whose entry is gone; clearGrace (agent_start) drops the rest
+    r.b.setTools(put);
+    r.b.setTools(get, { ackId: 'ts-3' });
+    r.b.pruneGrace(() => false);
+    expect(r.b.grace).toEqual([]);
+    r.b.setTools(put);
+    r.b.setTools(get, { ackId: 'ts-4' });
+    r.b.clearGrace();
+    expect(r.b.grace).toEqual([]);
+    // a plain setTools (no ack id) never keeps a previous set
+    r.b.setTools(put);
+    r.b.setTools(get);
+    expect(r.b.grace).toEqual([]);
+  });
+
   it('the reserved names are the child\'s natives, memory tools and find_tool (slice C3\')', () => {
     expect([...LOCAL_RESERVED_TOOL_NAMES].sort()).toEqual([...TOOL_ORDER, ...MEMORY_TOOLS.map((t) => t.name), FIND_TOOL.name].sort());
   });

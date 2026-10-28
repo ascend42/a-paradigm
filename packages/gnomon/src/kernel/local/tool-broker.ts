@@ -385,6 +385,9 @@ export const brokeredToolName = (target: Pick<BrokerTarget, 'provenance' | 'serv
 export class LocalToolBroker {
   readonly #o: LocalToolBrokerOptions;
   #tools: readonly BrokeredTool[];
+  /** slice C3' (Aegis M3): the previous offered set, callable until the child acknowledges tools_set #graceAck */
+  #grace: readonly BrokeredTool[] = [];
+  #graceAck: string | null = null;
   readonly #inflight = new Map<string, { ctl: AbortController; carded: boolean }>();
   /** Aegis M4: `${tool}\0${argsHash}` → until (epoch ms) */
   readonly #cooldown = new Map<string, number>();
@@ -405,14 +408,44 @@ export class LocalToolBroker {
    * slice C2': replace the offered set (a server's notifications/tools/list_changed). A loop session stays empty. A
    * call already in flight keeps the tool it resolved.
    */
-  setTools(tools: readonly BrokeredTool[]): void {
+  setTools(tools: readonly BrokeredTool[], o: { ackId?: string } = {}): void {
     if (this.#o.loop) return;
-    this.#tools = tools.map((t) => ({ ...t, parameters: structuredClone(t.parameters) }));
+    const next = tools.map((t) => ({ ...t, parameters: structuredClone(t.parameters) }));
+    if (o.ackId !== undefined) {
+      // slice C3' (Aegis M3): the child applies a tools_set from its next step and says so with tools_applied{id}; until
+      // then its current step still offers the set the kernel offered before. Those tools stay callable (union) until
+      // the ack, never a name the new set holds (the new entry wins), and every call still runs the full validation,
+      // class gate and manual check
+      this.#grace = [...this.#tools, ...this.#grace].filter((t, i, a) => a.findIndex((x) => x.name === t.name) === i && !next.some((n) => n.name === t.name));
+      this.#graceAck = o.ackId;
+    } else this.clearGrace();
+    this.#tools = next;
+  }
+
+  /** Slice C3' (Aegis M3): the child applied tools_set `id`: the previous set's grace ends (only for the latest id). */
+  ackTools(id: string): void {
+    if (id === this.#graceAck) this.clearGrace();
+  }
+
+  /** Slice C3' (Aegis M3): no previous set is callable any more (agent_start, an ack, a list_changed reset). */
+  clearGrace(): void {
+    this.#grace = [];
+    this.#graceAck = null;
+  }
+
+  /** Slice C3' (Aegis M3): drop grace tools a list_changed removed or changed, or whose server is gone. */
+  pruneGrace(keep: (t: BrokeredTool) => boolean): void {
+    this.#grace = this.#grace.filter(keep);
   }
 
   /** What tools_set offers (empty for a loop session). */
   get offered(): readonly BrokeredTool[] {
     return this.#tools;
+  }
+
+  /** Slice C3': the previous set still callable until the child's ack (tests, hash-only logging). */
+  get grace(): readonly BrokeredTool[] {
+    return this.#grace;
   }
 
   get inflight(): number {
@@ -463,7 +496,7 @@ export class LocalToolBroker {
   async handle(req: ToolRequestIn): Promise<ToolResponseOut> {
     const o = this.#o;
     const argsHash = inputHash(req.args ?? null);
-    const tool = req.name !== null ? this.#tools.find((t) => t.name === req.name) : undefined;
+    const tool = req.name !== null ? (this.#tools.find((t) => t.name === req.name) ?? this.#grace.find((t) => t.name === req.name)) : undefined;
     const target = tool?.target ?? o.target;
     const done = async (decision: ToolBrokeredDecision, content: string, isError: boolean, cardId?: string): Promise<ToolResponseOut> => {
       await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool ? { tool: tool.name, class: tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}) }, { session: o.hsid }).catch(() => undefined);

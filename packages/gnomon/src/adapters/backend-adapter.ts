@@ -82,7 +82,7 @@ export interface SteerChannel {
 
 /** local (slice S1 / C1): the kernel's half of the brokered-tool protocol. */
 export interface ToolBrokerChannel {
-  toolsSetLine(tools: ReadonlyArray<OfferedTool>): string;
+  toolsSetLine(tools: ReadonlyArray<OfferedTool>, id?: string): string;
   toolResponseLine(r: ToolResponse): string;
   toolProgressLine(id: string): string;
 }

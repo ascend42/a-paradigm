@@ -69,6 +69,7 @@ export type LocalEvent =
   | { kind: 'response'; type: string; id: string | null; command: string | null; success: boolean | null; error: string | null }
   | { kind: 'tool-request'; type: string; id: string | null; toolCallId: string | null; name: string | null; args: Record<string, unknown> | null; error: string | null }
   | { kind: 'tool-cancel'; type: string; id: string | null }
+  | { kind: 'tools-applied'; type: string; id: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: 'malformed' };
@@ -138,6 +139,9 @@ export function parseLocalLine(line: string): LocalEvent {
     case 'tool_cancel':
       // Aegis M1: the child gave up on a call (its timeout or abort); honouring it only removes privilege
       return { kind: 'tool-cancel', type, id: typeof e.id === 'string' && TOOL_REQUEST_ID_RE.test(e.id) ? e.id : null };
+    case 'tools_applied':
+      // slice C3' (Aegis M3): the child applied the tools_set with this id (its next step offers that set)
+      return { kind: 'tools-applied', type, id: typeof e.id === 'string' && /^ts-[1-9]\d{0,8}$/.test(e.id) ? e.id : null };
     default:
       return { kind: 'unknown', type };
   }
@@ -235,7 +239,7 @@ export const toolResponseLine = (r: ToolResponse): string => line({ type: 'tool_
 /** Aegis N4: the call's effect started (the child extends its wait for this id). */
 export const toolProgressLine = (id: string): string => line({ type: 'tool_progress', id, state: 'running' });
 /** Slice S1: the brokered tools offered from the child's next step on. */
-export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>): string => line({ type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });
+export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>, id?: string): string => line({ ...(id ? { id } : {}), type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });
 
 /** Slice B2: the working-memory block (the kernel's render; goalHash only when it pins the goal whole). */
 export const memorySetLine = (m: MemorySet, id?: string): string => line({ ...(id ? { id } : {}), type: 'memory_set', render: m.render, hash: m.hash, bytes: m.bytes, ...(m.goalHash !== undefined ? { goalHash: m.goalHash } : {}) });
@@ -256,7 +260,7 @@ export const localAdapter: LocalAdapter = Object.freeze({
   turnLine: (t: { text: string; inFlight: boolean }): string => (t.inFlight ? followUpLine(t.text) : promptLine(t.text)),
   interruptLine: (): string => abortLine(),
   steerLine: (text: string): string => steerLine(text),
-  toolsSetLine: (tools: ReadonlyArray<OfferedTool>): string => toolsSetLine(tools),
+  toolsSetLine: (tools: ReadonlyArray<OfferedTool>, id?: string): string => toolsSetLine(tools, id),
   toolResponseLine: (r: ToolResponse): string => toolResponseLine(r),
   toolProgressLine: (id: string): string => toolProgressLine(id),
   memorySetLine: (m: MemorySet, id?: string): string => memorySetLine(m, id),

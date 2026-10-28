@@ -238,7 +238,7 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         // slice B2: the memory tools' names are reserved like the natives'; slice C3': so is find_tool
         const r = parseToolsSet(cmd, [...TOOLS.map((t) => t.name), ...MEMORY_TOOL_NAMES, FIND_TOOL_NAME]);
         if ('error' in r) return no(r.error);
-        const why = agent.setBrokered(r.tools);
+        const why = agent.setBrokered(r.tools, cmd.id);
         return why ? no(why) : ok({ tools: r.tools.length });
       }
       case 'memory_set':

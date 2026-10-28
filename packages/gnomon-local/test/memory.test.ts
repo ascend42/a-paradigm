@@ -212,7 +212,9 @@ describe('note / forget: brokered to the kernel; never for a loop session', () =
     expect(first).not.toContain('find_tool');
     s.send({ type: 'tools_set', tools: [{ name: 'find_tool', description: 'd', parameters: { type: 'object' }, class: 'read' }] });
     expect(s.last()).toMatchObject({ success: false, error: 'tools[0].name find_tool is taken' });
-    s.send({ type: 'tools_set', tools: [{ name: 'lore.get', description: 'Get lore.', parameters: { type: 'object', properties: {} }, class: 'read' }] });
+    s.send({ id: 'ts-7', type: 'tools_set', tools: [{ name: 'lore.get', description: 'Get lore.', parameters: { type: 'object', properties: {} }, class: 'read' }] });
+    // Aegis M3: the set took effect (idle: at once) and the child acknowledges the kernel's id
+    expect(s.evs.filter((e) => e.type === 'tools_applied')).toEqual([{ type: 'tools_applied', id: 'ts-7' }]);
     s.send({ type: 'prompt', message: 'find one' });
     await s.idle();
     const second = (agentRequests()[1]!.tools as Array<{ function: { name: string } }>).map((t) => t.function.name);

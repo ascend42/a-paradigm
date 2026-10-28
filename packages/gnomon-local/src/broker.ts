@@ -101,7 +101,8 @@ export function parseToolsSet(cmd: Record<string, unknown>, reserved: readonly s
     if (k) return { error: `tools[${i}]: ${k}` };
     if (typeof t.name !== 'string' || !TOOL_NAME_RE.test(t.name)) return { error: `tools[${i}].name is not a tool name` };
     // Aegis L6: reserved names compare case-insensitively
-    if (reserved.some((r) => r.toLowerCase() === t.name.toLowerCase()) || out.some((o) => o.name === t.name)) return { error: `tools[${i}].name ${t.name} is taken` };
+    const lower = t.name.toLowerCase();
+    if (reserved.some((r) => r.toLowerCase() === lower) || out.some((o) => o.name === t.name)) return { error: `tools[${i}].name ${t.name} is taken` };
     if (typeof t.description !== 'string' || t.description.length > BROKER_LIMITS.description) return { error: `tools[${i}].description must be text of at most ${BROKER_LIMITS.description} chars` };
     if (!isObj(t.parameters) || t.parameters.type !== 'object' || bytes(t.parameters) > BROKER_LIMITS.parametersBytes) return { error: `tools[${i}].parameters must be an object schema of at most ${BROKER_LIMITS.parametersBytes} bytes` };
     if (typeof t.class !== 'string' || !(TOOL_CLASSES as readonly string[]).includes(t.class)) return { error: `tools[${i}].class must be read, mutate or destructive` };
