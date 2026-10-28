@@ -133,7 +133,7 @@ components:
       - classroom
       - learning-loop
   classroom-fail-side:
-    description: 'The Classroom fail-side event writers + reducer (TD-2026-06-19-007). field-failures.ts: append-only field-failures.jsonl + classroom-certifications.jsonl; overturnCertification (pending→overturned) and surviveCertification (pending→survived, decay-pass writer) — both idempotent, overturn wins. field-failure-reducer.ts: joins reviewer verdicts to notebook-refs by orchestrationId, revises down, back-binds certs, seeds field-failure scenarios.'
+    description: 'The Classroom fail-side event writers + reducer (TD-2026-06-19-007). field-failures.ts: append-only field-failures.jsonl + classroom-certifications.jsonl; overturnCertification (pending→overturned) and surviveCertification (pending→survived, decay-pass writer) — both idempotent, overturn wins. field-failure-reducer.ts: joins reviewer verdicts to notebook-refs by orchestrationId, revises down, back-binds certs, seeds field-failure scenarios. S2: certificationsByHome splits certs into one population per home plus legacy repo rows; the doctor repeat-failure rate is computed per population, never pooled.'
     type: service
     anchors:
       - field-failures.ts:1-290
@@ -441,7 +441,7 @@ components:
     file: packages/paradigm-mcp/src/utils/arch-loader.ts
     type: loader
   calibration-aggregate:
-    description: 'Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals as the union of their homes (scoped learning S1), learns bands from one population (the home new actuals land in), reports other homes in otherHomes without pooling them, and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package.'
+    description: 'Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals as the union of their homes (scoped learning S1), learns bands from one population (the home new actuals land in), reports other homes in otherHomes without pooling them, and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package. S2: a table learned from the legacy population is written with meta: { population, legacyPrior: true }; the planner (loadLearnedTokenTable strips meta, learnedTableMeta reads it) resolves those bands as source prior with legacyPrior and labels the plan estimatedTokens basis legacy-prior.'
     file: packages/paradigm-mcp/src/utils/calibration-aggregate.ts
     type: utility
     tags: [feature, calibration, learning-loop]

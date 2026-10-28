@@ -173,6 +173,12 @@ export interface OrchestrationPlan {
   estimatedTokens: {
     min: number;
     max: number;
+    /**
+     * S2: present when the learned bands are a cold-start prior from legacy
+     * repo actuals: the estimate is labelled as a prior, not measured fact.
+     */
+    basis?: 'legacy-prior';
+    note?: string;
   };
   /** Agents requested (override / classification / roster) but not dispatchable */
   undispatchable?: UndispatchableAgent[];
@@ -369,6 +375,19 @@ type LearnedTokenTable = Record<string, Record<string, LearnedBand>>;
  */
 let _learnedTableCache: { path: string; mtimeMs: number; table: LearnedTokenTable } | null = null;
 
+/** The learned table's `meta` (S2): set when the bands are a legacy cold-start prior. */
+export interface LearnedTableMeta {
+  population?: string;
+  legacyPrior?: boolean;
+}
+
+const _learnedTableMeta = new WeakMap<LearnedTokenTable, LearnedTableMeta>();
+
+/** The `meta` loadLearnedTokenTable read with `table`, if any. */
+export function learnedTableMeta(table: LearnedTokenTable): LearnedTableMeta | undefined {
+  return _learnedTableMeta.get(table);
+}
+
 /**
  * Load the learned token-estimate table (#calibration, v7.1). Best-effort: a
  * missing or malformed file returns `{}` so the planner falls back cleanly to
@@ -398,8 +417,12 @@ export function loadLearnedTokenTable(rootDir: string): LearnedTokenTable {
     }
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    _learnedTableCache = { path: filePath, mtimeMs: stat.mtimeMs, table: parsed as LearnedTokenTable };
-    return parsed as LearnedTokenTable;
+    // `meta` (S2) is not an archetype row: strip it, keep it beside the table.
+    const { meta, ...rows } = parsed as LearnedTokenTable & { meta?: LearnedTableMeta };
+    const table = rows as LearnedTokenTable;
+    if (meta && typeof meta === 'object') _learnedTableMeta.set(table, meta);
+    _learnedTableCache = { path: filePath, mtimeMs: stat.mtimeMs, table };
+    return table;
   } catch (err) {
     log.component('#calibration').warn('learned token table load failed; using constant prior', {
       error: err instanceof Error ? err.message : String(err),
@@ -420,6 +443,11 @@ export interface TaskEstimate {
   max: number;
   n: number;
   source: 'learned' | 'prior';
+  /**
+   * S2: the band came from the learned table, but that table was learned from
+   * legacy repo rows (a labelled cold-start prior), so `source` is 'prior'.
+   */
+  legacyPrior?: true;
 }
 
 /**
@@ -439,7 +467,10 @@ export function resolveAgentEstimate(
   if (taskType) {
     const cell = learned[agentName]?.[taskType];
     if (cell && typeof cell.min === 'number' && typeof cell.max === 'number') {
-      return { min: cell.min, max: cell.max, n: typeof cell.n === 'number' ? cell.n : 0, source: 'learned' };
+      const n = typeof cell.n === 'number' ? cell.n : 0;
+      // A table learned from legacy repo rows is a labelled prior, not fact (S2).
+      if (learnedTableMeta(learned)?.legacyPrior) return { min: cell.min, max: cell.max, n, source: 'prior', legacyPrior: true };
+      return { min: cell.min, max: cell.max, n, source: 'learned' };
     }
   }
   const prior = AGENT_TOKEN_ESTIMATES[agentName] || { min: 5000, max: 20000 };
@@ -2077,10 +2108,12 @@ export function planAgentSequence(
   const taskType = classification?.type;
   let minTokens = 0;
   let maxTokens = 0;
+  let usedLegacyPrior = false;
   for (const agent of plannedAgents) {
     const estimate = resolveAgentEstimate(learnedTable, agent.name, taskType);
     minTokens += estimate.min;
     maxTokens += estimate.max;
+    if (estimate.legacyPrior) usedLegacyPrior = true;
   }
   // Add documentor estimate if included
   if (documentorAdded) {
@@ -2097,7 +2130,14 @@ export function planAgentSequence(
     stages,
     symbols,
     estimatedAgents: plannedAgents.length + (documentorAdded ? 1 : 0),
-    estimatedTokens: { min: minTokens, max: maxTokens },
+    estimatedTokens: usedLegacyPrior
+      ? {
+        min: minTokens,
+        max: maxTokens,
+        basis: 'legacy-prior',
+        note: 'Prior: bands learned from legacy repo actuals (cold start), not yet measured in this home',
+      }
+      : { min: minTokens, max: maxTokens },
     ...(undispatchable.length > 0 ? { undispatchable } : {}),
   };
 }

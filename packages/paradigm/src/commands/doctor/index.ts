@@ -24,7 +24,7 @@ import {
 // the same read field-failures.readClassroomCertifications does (that module
 // loads the MCP logger for its writers), never premise-core's repo-only reader.
 import { listLearningStores, readLearningRows } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
-import type { ClassroomCertRow } from '../../../../paradigm-mcp/src/utils/field-failures.js';
+import { certificationsByHome, type ClassroomCertRow } from '../../../../paradigm-mcp/src/utils/field-failures.js';
 
 interface CheckResult {
   name: string;
@@ -1155,24 +1155,23 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // Rendered as its own block (below), but we push a CheckResult here for the
   // WARN case so a high/rising repeat-failure-rate counts toward exit health.
   // ──────────────────────────────────────────────────────────────────────
+  // Scoped learning S2: the rate is computed PER HOME (repo, user, machine, and
+  // legacy repo rows on their own). Homes are never pooled.
   const classroom = (() => {
     try {
-      const certs = readLearningRows<ClassroomCertRow>('classroom-certifications', cwd);
-      const rollup = computeRepeatFailureRate(certs.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
-      const resolvedTotal = Object.values(rollup.perAgent).reduce(
-        (n, a) => n + a.resolved,
-        0,
-      );
-      const overturnedTotal = Object.values(rollup.perAgent).reduce(
-        (n, a) => n + a.overturned,
-        0,
-      );
+      const certs = readLearningRows<ClassroomCertRow & { legacy?: true }>('classroom-certifications', cwd);
+      const populations = Object.entries(certificationsByHome(certs)).map(([home, rows]) => {
+        const rollup = computeRepeatFailureRate(rows!.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
+        const resolvedTotal = Object.values(rollup.perAgent).reduce((n, a) => n + a.resolved, 0);
+        const overturnedTotal = Object.values(rollup.perAgent).reduce((n, a) => n + a.overturned, 0);
+        return { home, certCount: rows!.length, rollup, resolvedTotal, overturnedTotal };
+      });
       return {
         present: certs.length > 0,
         certCount: certs.length,
-        rollup,
-        resolvedTotal,
-        overturnedTotal,
+        populations,
+        resolvedTotal: populations.reduce((n, p) => n + p.resolvedTotal, 0),
+        overturnedTotal: populations.reduce((n, p) => n + p.overturnedTotal, 0),
       };
     } catch {
       // Advisory metric — a read failure must never break doctor.
@@ -1180,20 +1179,19 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     }
   })();
 
-  // Thresholds (MVP): warn if the global rate is high once enough certs have
-  // resolved to be meaningful. Floor avoids screaming over a single unlucky cert.
+  // Thresholds (MVP): warn if a home's rate is high once enough of its certs
+  // have resolved to be meaningful. Floor avoids screaming over a single unlucky cert.
   const REPEAT_FAILURE_WARN_THRESHOLD = 0.5;
   const REPEAT_FAILURE_RESOLVED_FLOOR = 3;
-  if (
-    classroom &&
-    classroom.rollup.overall !== null &&
-    classroom.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR &&
-    classroom.rollup.overall > REPEAT_FAILURE_WARN_THRESHOLD
-  ) {
+  const highHomes = (classroom?.populations ?? []).filter(p =>
+    p.rollup.overall !== null &&
+    p.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR &&
+    p.rollup.overall > REPEAT_FAILURE_WARN_THRESHOLD);
+  for (const p of highHomes) {
     results.push({
       name: 'Repeat-failure-rate',
       status: 'warn',
-      message: `High: ${classroom.rollup.overall} of resolved certs were overturned (${classroom.overturnedTotal}/${classroom.resolvedTotal})`,
+      message: `High in the ${p.home} home: ${p.rollup.overall} of resolved certs were overturned (${p.overturnedTotal}/${p.resolvedTotal})`,
       fix: 'Learnings are breaking repeatedly — review refinements via /paradigm:class review',
     });
   }
@@ -1277,39 +1275,28 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     if (!classroom.present) {
       dim('  No certifications yet — the learning loop has not turned. This is normal for a fresh project.');
     } else {
-      const { overall } = classroom.rollup;
-      const rateLabel = overall === null
-        ? 'n/a (no certs resolved yet)'
-        : String(overall);
-      kv('repeat-failure-rate (global)', rateLabel);
-      kv('resolved / overturned', `${classroom.resolvedTotal} / ${classroom.overturnedTotal}`);
-
-      // Per-agent split — only agents with at least one resolved cert.
-      const agents = Object.keys(classroom.rollup.perAgent).sort();
-      if (agents.length > 0) {
-        out('  ' + chalk.dim('per-agent:'));
-        for (const agent of agents) {
-          const a = classroom.rollup.perAgent[agent];
+      for (const p of classroom.populations) {
+        const { overall } = p.rollup;
+        const rateLabel = overall === null ? 'n/a (no certs resolved yet)' : String(overall);
+        kv(`repeat-failure-rate (${p.home} home)`, rateLabel);
+        kv('  resolved / overturned', `${p.resolvedTotal} / ${p.overturnedTotal}`);
+        // Per-agent split — only agents with at least one resolved cert.
+        for (const agent of Object.keys(p.rollup.perAgent).sort()) {
+          const a = p.rollup.perAgent[agent];
           const rate = a.rate === null ? 'n/a' : String(a.rate);
           out(`    ${chalk.dim(agent + ':')} rate ${rate} (${a.overturned}/${a.resolved} overturned)`);
         }
+        if (overall !== null && p.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR && overall > REPEAT_FAILURE_WARN_THRESHOLD) {
+          warn(`  Repeat-failure-rate is high in the ${p.home} home (${overall} > 0.5) — learnings are breaking repeatedly. Review refinements via /paradigm:class review.`);
+        } else if (overall !== null) {
+          success(`  ${p.home} home: repeat-failure-rate within healthy range.`);
+        }
       }
-
+      if (classroom.populations.length > 1) dim('  Homes are reported separately, never pooled.');
       // Healthy advisory: an overturned cert means the field caught a learning
       // and the loop is correcting — NOT a red flag on its own.
       if (classroom.overturnedTotal > 0) {
         dim(`  ${classroom.overturnedTotal} learning${classroom.overturnedTotal > 1 ? 's were' : ' was'} overturned by the field — the loop is correcting (healthy).`);
-      }
-
-      // High-rate WARN echoes the CheckResult so the block is self-contained.
-      if (
-        overall !== null &&
-        classroom.resolvedTotal >= 3 &&
-        overall > 0.5
-      ) {
-        warn(`  Repeat-failure-rate is high (${overall} > 0.5) — learnings are breaking repeatedly. Review refinements via /paradigm:class review.`);
-      } else if (overall !== null) {
-        success('  Repeat-failure-rate within healthy range.');
       }
     }
   }

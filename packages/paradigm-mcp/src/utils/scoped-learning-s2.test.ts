@@ -131,6 +131,39 @@ describe('machine home: the OS state directory (S2)', () => {
   });
 });
 
+describe('token-estimates meta and per-home repeat-failure (S2)', () => {
+  it('a table learned from legacy repo rows carries meta and the planner labels it a prior', async () => {
+    const { rebuildLearnedTable, learnedTablePath } = await import('./calibration-aggregate.js');
+    const { loadLearnedTokenTable, resolveAgentEstimate, planAgentSequence, classifyTaskLocal } = await import('../tools/orchestration.js');
+    const root = tmp('s2-cal-');
+    const ev = path.join(root, '.paradigm', 'events');
+    fs.mkdirSync(ev, { recursive: true });
+    const taskType = classifyTaskLocal('Build the cache').type;
+    const rows = Array.from({ length: 8 }, (_, i) => JSON.stringify({ archetype: 'builder', taskType, actualTokens: { total: 1000 + i } }));
+    fs.writeFileSync(path.join(ev, 'estimate-actuals.jsonl'), rows.join('\n') + '\n'); // legacy: no home, no author
+    const res = rebuildLearnedTable(root)!;
+    expect(res.coldStartPrior).toBe(true);
+    const written = JSON.parse(fs.readFileSync(learnedTablePath(root), 'utf8'));
+    expect(written.meta).toEqual({ population: 'legacy-repo', legacyPrior: true });
+    const table = loadLearnedTokenTable(root);
+    expect(Object.keys(table)).not.toContain('meta');
+    expect(resolveAgentEstimate(table, 'builder', taskType)).toMatchObject({ source: 'prior', legacyPrior: true, n: 8 });
+    const builder = { name: 'builder', role: 'b', focus: { reads: ['**/*'], writes: ['**/*'] } };
+    const plan = planAgentSequence('Build the cache', { builder }, ['builder'], classifyTaskLocal('Build the cache'), undefined, root);
+    expect(plan.estimatedTokens.basis).toBe('legacy-prior');
+    expect(plan.estimatedTokens.note).toMatch(/Prior/);
+  });
+
+  it('certificationsByHome never pools homes; legacy rows are their own population', async () => {
+    const { certificationsByHome } = await import('./field-failures.js');
+    const groups = certificationsByHome([
+      { home: 'repo', id: 1 }, { home: 'user', id: 2 }, { home: 'repo', legacy: true, id: 3 }, { home: 'user', id: 4 },
+    ]);
+    expect(Object.keys(groups).sort()).toEqual(['legacy', 'repo', 'user']);
+    expect(groups.user!.map(r => r.id)).toEqual([2, 4]);
+  });
+});
+
 describe('author identity (S2)', () => {
   let prevAuthor: string | undefined;
   beforeEach(() => {
