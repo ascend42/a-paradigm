@@ -22,6 +22,7 @@ import {
   getActiveRemediations,
   type RemediationOutput,
 } from './internal/active-remediations.js';
+import { appendLearningRows } from '../../../paradigm-mcp/src/utils/learning-stores.js';
 
 interface OverrideOptions {
   force?: boolean;
@@ -29,8 +30,6 @@ interface OverrideOptions {
 
 const REMEDIATIONS_DIR = '.paradigm/remediations';
 const ARCHIVED_DIR = '.paradigm/remediations/.archived';
-const EVENTS_DIR = '.paradigm/events';
-const OVERRIDES_JSONL = '.paradigm/events/overrides.jsonl';
 
 interface RemediationFile {
   id?: string;
@@ -44,7 +43,7 @@ interface RemediationFile {
 }
 
 /**
- * Append a single override-event row to .paradigm/events/overrides.jsonl.
+ * Append a single override-event row to the overrides store (resolver).
  * Mirrors the bash writer in paradigm-common.sh exactly except for
  * `mechanism: 'cli'`. Schema per spec §3.
  */
@@ -52,10 +51,7 @@ async function appendOverrideEvent(
   cwd: string,
   remediationId: string,
   claimant: string
-): Promise<void> {
-  const eventsDir = path.join(cwd, EVENTS_DIR);
-  await fs.mkdir(eventsDir, { recursive: true });
-
+): Promise<string> {
   const row = {
     timestamp: new Date().toISOString(),
     remediation_id: remediationId,
@@ -64,11 +60,9 @@ async function appendOverrideEvent(
     unblock_predicate_matched: false,
   };
 
-  await fs.appendFile(
-    path.join(cwd, OVERRIDES_JSONL),
-    JSON.stringify(row) + '\n',
-    'utf8'
-  );
+  // Through the learning-stores resolver (scoped learning S2): the repo home
+  // in a git repository, the user home otherwise.
+  return appendLearningRows('overrides', cwd, [row]);
 }
 
 /**
@@ -147,10 +141,10 @@ export async function overrideClearOne(id: string): Promise<void> {
   }
 
   const { claimant } = await archiveRemediation(cwd, id);
-  await appendOverrideEvent(cwd, id, claimant);
+  const recorded = await appendOverrideEvent(cwd, id, claimant);
 
   success(`${id} cleared`);
-  dim(`  Override recorded → ${OVERRIDES_JSONL}`);
+  dim(`  Override recorded → ${path.relative(cwd, recorded) || recorded}`);
   dim('  Re-run your blocked operation.');
 }
 
@@ -227,5 +221,5 @@ export async function overrideClearAll(options: OverrideOptions): Promise<void> 
   }
 
   success(`Cleared ${cleared} remediation${cleared === 1 ? '' : 's'}.`);
-  dim(`  Override events recorded → ${OVERRIDES_JSONL}`);
+  dim('  Override events recorded to the overrides store (.paradigm/events/overrides.jsonl in a git repository)');
 }

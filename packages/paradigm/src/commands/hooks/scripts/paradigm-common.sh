@@ -1178,10 +1178,9 @@ if [ "$_SEV" != "off" ]; then
       # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
       # would structurally deflate the invocation rate Loid calibrates from.
       if ! _marker_fresh ".paradigm/.team-bypass-recorded"; then
-        mkdir -p ".paradigm/events" 2>/dev/null
         _BYPASS_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         _BYPASS_REASONS=$(printf '%s' "$MAGNITUDE_REASONS" | tr -cd 'a-zA-Z0-9,. ' | head -c 120)
-        echo "{\"timestamp\":\"$_BYPASS_TS\",\"type\":\"bypass\",\"source\":\"stop-hook\",\"magnitude\":$MAGNITUDE,\"reasons\":\"$_BYPASS_REASONS\",\"severity\":\"$_SEV\"}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+        _pm_learn_append team-funnel "{\"timestamp\":\"$_BYPASS_TS\",\"type\":\"bypass\",\"source\":\"stop-hook\",\"magnitude\":$MAGNITUDE,\"reasons\":\"$_BYPASS_REASONS\",\"severity\":\"$_SEV\"}" "$PWD" 2>/dev/null || true
         touch ".paradigm/.team-bypass-recorded" 2>/dev/null
       fi
 
@@ -1206,7 +1205,8 @@ _pm_mark check14-remediations
 # Iterates the cached _REMEDIATIONS_JSON array. severity=guard adds to
 # VIOLATIONS (block); advise|auto-author goes to ADVISORY. PARADIGM_OVERRIDE
 # (comma-separated id list) skips matching remediations and writes an
-# override audit row to .paradigm/events/overrides.jsonl.
+# override audit row to the overrides store (_pm_learn_append: the repo home,
+# .paradigm/events/overrides.jsonl, in a git repository).
 #
 # Iteration uses a temp file + redirect (NOT pipe) so VIOLATION_COUNT
 # increments propagate out of the loop (POSIX subshell-safe — spec §12 #4).
@@ -1232,9 +1232,8 @@ if [ "$_REMEDIATIONS_JSON" != "[]" ] && [ -n "$_REMEDIATIONS_JSON" ]; then
       *",$_RID,"*)
         # Write override audit event (mirror compliance-snapshot pattern, line 906).
         _ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
-        mkdir -p ".paradigm/events" 2>/dev/null || true
-        printf '{"timestamp":"%s","remediation_id":"%s","claimant":"%s","mechanism":"env","unblock_predicate_matched":false}\n' \
-          "$_ts" "$_RID" "$_RCLAIM" >> ".paradigm/events/overrides.jsonl" 2>/dev/null || true
+        _pm_learn_append overrides "$(printf '{"timestamp":"%s","remediation_id":"%s","claimant":"%s","mechanism":"env","unblock_predicate_matched":false}' \
+          "$_ts" "$_RID" "$_RCLAIM")" "$PWD" 2>/dev/null || true
         continue
         ;;
     esac
@@ -1331,16 +1330,15 @@ fi
 
 _pm_mark snapshot
 # --- Compliance snapshot (non-fatal, fire-and-forget) ---
-# Record this stop-hook run to .paradigm/events/compliance-history.jsonl for trend analysis.
+# Record this stop-hook run to the machine-home compliance-history.jsonl
+# (_pm_learn_append) for trend analysis.
 # VIOLATION_COUNT and SOURCE_COUNT are now final at this point.
 _compliance_snapshot() {
   _ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
   _checks=$((SOURCE_COUNT + PARADIGM_COUNT))
   [ "$_checks" -eq 0 ] && _checks=1  # Avoid divide-by-zero downstream
-  _dir=".paradigm/events"
-  mkdir -p "$_dir" 2>/dev/null || return
-  printf '{"timestamp":"%s","violations":%d,"warnings":0,"checks":%d}\n' \
-    "$_ts" "$VIOLATION_COUNT" "$_checks" >> "$_dir/compliance-history.jsonl" 2>/dev/null || true
+  _pm_learn_append compliance-history "$(printf '{"timestamp":"%s","violations":%d,"warnings":0,"checks":%d}' \
+    "$_ts" "$VIOLATION_COUNT" "$_checks")" "$PWD" 2>/dev/null || true
 }
 _compliance_snapshot
 
@@ -1360,13 +1358,12 @@ _pm_violation_fp() {
 }
 
 # _pm_record_unresolved <fingerprint> <consecutive> — appends a
-# stop-block-unresolved row to .paradigm/events/team-funnel.jsonl (raw append,
-# same pattern as the bypass row in Check 13). Best-effort, never fails.
+# stop-block-unresolved row to the machine-home team-funnel.jsonl
+# (_pm_learn_append, like the bypass row in Check 13). Best-effort, never fails.
 _pm_record_unresolved() {
-  mkdir -p ".paradigm/events" 2>/dev/null
   _UNRES_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
   _UNRES_FP=$(printf '%s' "$1" | tr -cd '0-9 ')
   _UNRES_K=$(printf '%s' "$2" | tr -cd '0-9')
-  echo "{\"timestamp\":\"$_UNRES_TS\",\"type\":\"stop-block-unresolved\",\"source\":\"stop-hook\",\"fingerprint\":\"$_UNRES_FP\",\"violations\":${VIOLATION_COUNT:-0},\"consecutive\":${_UNRES_K:-0}}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+  _pm_learn_append team-funnel "{\"timestamp\":\"$_UNRES_TS\",\"type\":\"stop-block-unresolved\",\"source\":\"stop-hook\",\"fingerprint\":\"$_UNRES_FP\",\"violations\":${VIOLATION_COUNT:-0},\"consecutive\":${_UNRES_K:-0}}" "$PWD" 2>/dev/null
   return 0
 }

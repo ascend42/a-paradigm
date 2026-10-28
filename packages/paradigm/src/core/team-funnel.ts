@@ -6,7 +6,8 @@
  * that make the team-invocation rate (and the gate classifiers' false-positive
  * rate) measurable, per the Pillar 0 strategy (invocation reliability).
  *
- * Event sources (all append to .paradigm/events/team-funnel.jsonl):
+ * Event sources (all append to team-funnel.jsonl in the machine home, scoped
+ * learning S2; hooks resolve it with `paradigm internal learn-path`):
  *  - `eligible`       — prompt-gate hook classified an incoming task as
  *                       orchestration-eligible (fires every match → FP rate)
  *  - `edit-advisory`  — team-gate hook saw a source edit in an unresolved session
@@ -21,10 +22,8 @@
  * gates from this data — advisory tiers graduate to guards only on evidence.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-
-const TEAM_FUNNEL_FILE = '.paradigm/events/team-funnel.jsonl';
+// Relative-path import into bundled paradigm-mcp source (same pattern as core/task-bridge.ts).
+import { appendLearningRows, readLearningRows } from '../../../paradigm-mcp/src/utils/learning-stores.js';
 
 export type SoloReason = 'trivial' | 'hotfix' | 'user-directed' | 'exploratory';
 
@@ -77,40 +76,25 @@ export function appendTeamFunnelEvent(
   event: Omit<TeamFunnelEvent, 'timestamp'>,
 ): void {
   try {
-    const filePath = path.join(rootDir, TEAM_FUNNEL_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
     const entry: TeamFunnelEvent = { timestamp: new Date().toISOString(), ...event };
-    fs.appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf8');
+    appendLearningRows('team-funnel', rootDir, [entry]);
   } catch {
     // Non-fatal — telemetry is advisory.
   }
 }
 
 /**
- * Read funnel events, optionally limited to the last `sinceDays` days.
+ * Read funnel events, optionally limited to the last `sinceDays` days: the
+ * machine home plus the frozen legacy repo log.
  */
 export function readTeamFunnelEvents(rootDir: string, sinceDays?: number): TeamFunnelEvent[] {
   try {
-    const filePath = path.join(rootDir, TEAM_FUNNEL_FILE);
-    if (!fs.existsSync(filePath)) return [];
-
     const cutoff = sinceDays !== undefined
       ? Date.now() - sinceDays * 24 * 60 * 60 * 1000
       : undefined;
-
-    return fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as TeamFunnelEvent; }
-        catch { return null; }
-      })
-      .filter((e): e is TeamFunnelEvent => {
-        if (e === null || !e.type) return false;
+    return readLearningRows<TeamFunnelEvent>('team-funnel', rootDir)
+      .filter((e) => {
+        if (!e.type) return false;
         if (cutoff === undefined) return true;
         const t = Date.parse(e.timestamp);
         return !Number.isNaN(t) && t >= cutoff;

@@ -32,7 +32,6 @@ import { log } from './mcp-logger.js';
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
 const ITERATION_REVISIONS_FILE = '.paradigm/events/iteration-revisions.jsonl';
-const POSTFLIGHT_LIVENESS_FILE = '.paradigm/events/postflight-liveness.jsonl';
 const MAX_ENTRIES = 200;
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -291,15 +290,13 @@ export function recordPostflightLiveness(
   record: Omit<PostflightLivenessRecord, 'ts' | 'sessionId'> & { sessionId?: string },
 ): void {
   try {
-    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const full: PostflightLivenessRecord = {
       ts: new Date().toISOString(),
       sessionId: record.sessionId ?? resolveSessionId(),
       ...record,
     };
-    fs.appendFileSync(filePath, JSON.stringify(full) + '\n', 'utf8');
+    // Machine home (scoped learning S2); the legacy repo log is frozen, still read.
+    appendLearningRows('postflight-liveness', rootDir, [full]);
   } catch {
     // Non-fatal — the probe is advisory.
   }
@@ -311,17 +308,9 @@ export function recordPostflightLiveness(
  */
 export function readPostflightLiveness(rootDir: string): PostflightLivenessRecord[] {
   try {
-    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
-    if (!fs.existsSync(filePath)) return [];
-    return fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as PostflightLivenessRecord; }
-        catch { return null; }
-      })
-      .filter((e): e is PostflightLivenessRecord => e !== null && typeof e.journalsWritten === 'number');
+    return readLearningRows<PostflightLivenessRecord>('postflight-liveness', rootDir)
+      .filter(e => typeof e.journalsWritten === 'number')
+      .sort((a, b) => String(a.ts ?? '').localeCompare(String(b.ts ?? '')));
   } catch {
     return [];
   }

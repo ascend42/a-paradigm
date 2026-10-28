@@ -3315,6 +3315,16 @@ internalCmd
     await activeRemediationsCommand(options);
   });
 
+internalCmd
+  .command('learn-path <artifact>', { hidden: true })
+  .description('Print the file a learning-store row is appended to (hook writers, scoped learning)')
+  .option('--root <dir>', 'Project root (default: cwd)')
+  .option('--home <home>', 'Explicit home: repo, user or machine')
+  .action(async (artifact: string, options) => {
+    const { learnPathCommand } = await import('./commands/internal/learn-path.js');
+    await learnPathCommand(artifact, options);
+  });
+
 // paradigm override — public CLI to clear active soft-block remediations (v6.1 Wave 3)
 const overrideCmd = program
   .command('override [id]')

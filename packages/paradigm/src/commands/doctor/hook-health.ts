@@ -23,6 +23,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
+import { pathFor } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
 
 export interface HookHealthCheck {
   name: string;
@@ -359,8 +360,21 @@ export function staleSessionHookChecks(rootDir: string, nowMs: number, windowMs 
   }];
 }
 
+/**
+ * Where the hook ring lives (scoped learning S2): the machine home, else the
+ * legacy .paradigm/events copy (frozen, still read when no new ring exists).
+ */
+export function hookRingDir(rootDir: string): string {
+  const legacy = path.join(rootDir, '.paradigm', 'events');
+  try {
+    const dir = path.dirname(pathFor('hook-timings', 'machine', rootDir));
+    if (fs.existsSync(path.join(dir, 'hook-timings.jsonl')) || !fs.existsSync(path.join(legacy, 'hook-timings.jsonl'))) return dir;
+  } catch { /* no home dir: the legacy copy */ }
+  return legacy;
+}
+
 export function hookHealthChecks(opts: { rootDir: string; homeDir: string; nowMs?: number }): HookHealthCheck[] {
-  const events = path.join(opts.rootDir, '.paradigm', 'events');
+  const events = hookRingDir(opts.rootDir);
   const nowMs = opts.nowMs ?? Date.now();
   return [
     ...hookTimingChecks(summarizeHookRing(readHookRing(path.join(events, 'hook-timings.jsonl')), nowMs)),

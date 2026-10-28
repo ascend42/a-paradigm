@@ -8,12 +8,12 @@
  * `paradigm:*` or a project `.claude/agents/<type>.md` — returns a non-empty
  * response, and always appends a team-funnel row. Silent; always exit 0.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { SH, SYS_PATH, WIN, baseEnv, pathValue, shellPath, tempDir } from '../src/test-shell-utils.js';
+import { SH, SYS_PATH, WIN, baseEnv, learnPathStubBin, pathValue, shellPath, tempDir } from '../src/test-shell-utils.js';
 
 const SCRIPT = path.resolve(__dirname, '..', 'src', 'commands', 'hooks', 'scripts', 'claude-code-delegation.sh');
 const dirs: string[] = [];
@@ -37,6 +37,16 @@ function cleanup(d: string): void {
 }
 afterEach(() => { for (const d of dirs.splice(0)) cleanup(d); });
 
+// Scoped learning S2: the funnel row goes where `paradigm internal learn-path`
+// says (the machine home); a stub CLI answers it with this test's state dir.
+let state: string;
+let learnBin: string;
+beforeEach(() => {
+  state = tempDir('paradigm-deleg-state-');
+  learnBin = learnPathStubBin(state);
+  dirs.push(state, learnBin);
+});
+
 function project(paradigm = true): string {
   const root = tempDir('paradigm-deleg-');
   dirs.push(root);
@@ -56,7 +66,7 @@ function noJqBin(): string {
   if (WIN) return pathValue(SYS_PATH);
   const bin = tempDir('paradigm-deleg-bin-');
   dirs.push(bin);
-  for (const c of ['sh', 'cat', 'grep', 'sed', 'head', 'tr', 'date', 'mkdir']) {
+  for (const c of ['sh', 'cat', 'grep', 'sed', 'head', 'tr', 'date', 'mkdir', 'mv']) {
     const src = ['/usr/bin', '/bin'].map((d) => path.join(d, c)).find((p) => fs.existsSync(p));
     if (src) fs.symlinkSync(src, path.join(bin, c));
   }
@@ -70,7 +80,7 @@ function run(input: string, opts: { cwd?: string; noJq?: boolean } = {}) {
   return spawnSync(SH, [shellPath(SCRIPT)], {
     input,
     cwd,
-    env: { ...baseEnv(), PATH: opts.noJq ? noJqBin() : pathValue(JQ_PATH), HOME: os.tmpdir() },
+    env: { ...baseEnv(), PATH: opts.noJq ? pathValue([learnBin, noJqBin()]) : pathValue([learnBin, ...JQ_PATH]), HOME: os.tmpdir() },
     encoding: 'utf8',
   });
 }
@@ -86,7 +96,9 @@ const payload = (root: string, subagent: string | undefined, response: unknown) 
 
 const marker = (root: string) => path.join(root, '.paradigm', '.orchestrated');
 function funnel(root: string): Array<Record<string, unknown>> {
-  const f = path.join(root, '.paradigm', 'events', 'team-funnel.jsonl');
+  // the legacy repo log is frozen: nothing new may land there
+  expect(fs.existsSync(path.join(root, '.paradigm', 'events', 'team-funnel.jsonl'))).toBe(false);
+  const f = path.join(state, 'team-funnel.jsonl');
   if (!fs.existsSync(f)) return [];
   return fs.readFileSync(f, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 }
@@ -169,7 +181,7 @@ for (const noJq of [false, true]) {
       const r = spawnSync(SH, [shellPath(SCRIPT)], {
         input,
         cwd: home,
-        env: { ...baseEnv(), PATH: noJq ? noJqBin() : pathValue(JQ_PATH), HOME: home },
+        env: { ...baseEnv(), PATH: noJq ? pathValue([learnBin, noJqBin()]) : pathValue([learnBin, ...JQ_PATH]), HOME: home },
         encoding: 'utf8',
       });
       expect(r.status).toBe(0);
@@ -198,7 +210,7 @@ for (const noJq of [false, true]) {
       spawnSync(SH, [shellPath(SCRIPT)], {
         input: payload(root, 'nobody', 'x'),
         cwd: home,
-        env: { ...baseEnv(), PATH: noJq ? noJqBin() : pathValue(JQ_PATH), HOME: home },
+        env: { ...baseEnv(), PATH: noJq ? pathValue([learnBin, noJqBin()]) : pathValue([learnBin, ...JQ_PATH]), HOME: home },
         encoding: 'utf8',
       });
       expect(fs.existsSync(marker(root))).toBe(false);

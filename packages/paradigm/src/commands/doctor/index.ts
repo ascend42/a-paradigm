@@ -143,14 +143,6 @@ export function summarizeLearningLiveness(
   return { completions, journalsWritten, flatline, windowSize: window, level, probeSilent, postflightRows, settlementRows };
 }
 
-function readJsonlRows(file: string): Array<Record<string, unknown>> {
-  if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8')
-    .split('\n').filter(l => l.trim())
-    .map(l => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } })
-    .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object');
-}
-
 /**
  * Read BOTH liveness probe files and return the union, ordered by ts. A row
  * without ts inherits the ts of the nearest preceding row in its OWN file
@@ -159,7 +151,6 @@ function readJsonlRows(file: string): Array<Record<string, unknown>> {
  * consistent even when only some rows carry ts. Exported for tests.
  */
 export function readLearningLivenessRecords(rootDir: string): LearningLivenessRecord[] {
-  const ev = path.join(rootDir, '.paradigm', 'events');
   const tag = (source: 'postflight' | 'settlement') => (r: Record<string, unknown>): LearningLivenessRecord => ({
     journalsWritten: typeof r.journalsWritten === 'number' ? r.journalsWritten : undefined,
     ts: typeof r.ts === 'string' ? r.ts : undefined,
@@ -172,8 +163,9 @@ export function readLearningLivenessRecords(rootDir: string): LearningLivenessRe
     return rows.map(r => ({ r, key: (last = r.ts ?? last) }));
   };
   const rows = [
-    ...withSortKey(readJsonlRows(path.join(ev, 'postflight-liveness.jsonl')).map(tag('postflight'))),
-    ...withSortKey(readJsonlRows(path.join(ev, 'settlement-liveness.jsonl')).map(tag('settlement'))),
+    // Union of the machine home and the frozen legacy repo logs (scoped learning S2).
+    ...withSortKey(readLearningRows<Record<string, unknown>>('postflight-liveness', rootDir).map(tag('postflight'))),
+    ...withSortKey(readLearningRows<Record<string, unknown>>('settlement-liveness', rootDir).map(tag('settlement'))),
   ];
   return rows
     .map((x, i) => ({ ...x, i }))
@@ -1054,7 +1046,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       // Chain sub-detail from settlement rows (severed stages).
       type Chain = { status: CheckResult['status']; text: string; fix?: string };
       let chain: Chain | undefined;
-      const settlementRows = readJsonlRows(path.join(cwd, '.paradigm', 'events', 'settlement-liveness.jsonl')) as Array<{
+      const settlementRows = readLearningRows<Record<string, unknown>>('settlement-liveness', cwd) as Array<{
         chainLive?: boolean; stages?: Record<string, string>;
       }>;
       if (settlementRows.length > 0) {

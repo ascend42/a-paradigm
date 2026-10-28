@@ -12,7 +12,7 @@
 # Exit 0 = always (advisory only — never blocks)
 #
 # Telemetry: every eligible prompt appends an `eligible` event to
-# .paradigm/events/team-funnel.jsonl (even when the directive is capped),
+# the machine-home team-funnel.jsonl (even when the directive is capped),
 # so the classifier's false-positive rate and the team-invocation rate are
 # measurable from day one. Loid calibrates the gate from this data.
 #
@@ -82,12 +82,10 @@ if [ -z "$MATCHED" ]; then
 fi
 
 # Record the eligible event (telemetry fires every time, even when the
-# directive itself is capped)
-EVENTS_DIR="$CWD/.paradigm/events"
-mkdir -p "$EVENTS_DIR" 2>/dev/null
+# directive itself is capped). Machine home, via _pm_learn_append.
 MATCHED_CLEAN=$(printf '%s' "$MATCHED" | tr -cd 'a-zA-Z ' | head -c 40)
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "{\"timestamp\":\"$TS\",\"type\":\"eligible\",\"source\":\"prompt-gate\",\"matched\":\"$MATCHED_CLEAN\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
+_pm_learn_append team-funnel "{\"timestamp\":\"$TS\",\"type\":\"eligible\",\"source\":\"prompt-gate\",\"matched\":\"$MATCHED_CLEAN\"}" || true
 
 # Inject the directive at most once per session (per TTL window without a
 # session id)

@@ -71,12 +71,10 @@ esac
 # Remind once per session (per TTL window without a session id)
 _pm_once team-reminded || exit 0
 
-# Record the edit-advisory event (telemetry)
-EVENTS_DIR="$CWD/.paradigm/events"
-mkdir -p "$EVENTS_DIR" 2>/dev/null
+# Record the edit-advisory event (telemetry, machine home: _pm_learn_append)
 FILE_BASE=$(basename -- "$FILE_PATH" | tr -cd 'a-zA-Z0-9._-' | head -c 60)
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "{\"timestamp\":\"$TS\",\"type\":\"edit-advisory\",\"source\":\"team-gate\",\"file\":\"$FILE_BASE\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
+_pm_learn_append team-funnel "{\"timestamp\":\"$TS\",\"type\":\"edit-advisory\",\"source\":\"team-gate\",\"file\":\"$FILE_BASE\"}" || true
 
 # Emit advisory (non-blocking)
 echo "" >&2

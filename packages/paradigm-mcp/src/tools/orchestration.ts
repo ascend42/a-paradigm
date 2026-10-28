@@ -19,6 +19,7 @@ import { handleCaptainTool } from './captain.js';
 import { log } from '../utils/mcp-logger.js';
 import type { AgentRelay } from '../utils/agent-relay.js';
 import { learnedTablePath } from '../utils/calibration-aggregate.js';
+import { appendLearningRows } from '../utils/learning-stores.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 export type TaskClassification = {
@@ -660,14 +661,11 @@ async function handleOrchestrateInline(
 
   // Team-funnel telemetry: record that orchestration actually ran (Pillar 0 —
   // the invocation-rate metric counts these against bypasses/solo declarations)
+  // Machine home (scoped learning S2), through the learning-stores resolver.
   try {
-    const eventsDir = path.join(ctx.rootDir, '.paradigm', 'events');
-    if (!fs.existsSync(eventsDir)) fs.mkdirSync(eventsDir, { recursive: true });
-    fs.appendFileSync(
-      path.join(eventsDir, 'team-funnel.jsonl'),
-      JSON.stringify({ timestamp: new Date().toISOString(), type: 'orchestrated', source: 'orchestrate_inline', mode }) + '\n',
-      'utf8',
-    );
+    appendLearningRows('team-funnel', ctx.rootDir, [
+      { timestamp: new Date().toISOString(), type: 'orchestrated', source: 'orchestrate_inline', mode },
+    ]);
   } catch { /* best-effort */ }
 
   // Resolve the dispatchable agent set (TD-2026-09-26-846): roster.yaml + .agent

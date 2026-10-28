@@ -1,6 +1,6 @@
 #!/bin/sh
 # Paradigm Claude Code SessionStart hook — hook-health surfacing (#hook-health-warning)
-# Reads the hook timing ring (.paradigm/events/hook-timings.jsonl, written by
+# Reads the hook timing ring (machine-home hook-timings.jsonl, written by
 # paradigm-hook-monitor.sh) and, when a Paradigm hook was killed (start with no
 # end older than its timeout, or a recorded SIGTERM) or ran over its budget
 # since the last warning, prints ONE line per hook to stdout — SessionStart
@@ -41,8 +41,10 @@ if [ ! -f "$ROOT/.paradigm/scan-index.json" ] || [ ! -f "$ROOT/.paradigm/navigat
   fi
 fi
 
-RING="$ROOT/.paradigm/events/hook-timings.jsonl"
-[ -f "$RING" ] || exit 0
+# The ring lives in the machine home (scoped learning S2, _pm_learn_path).
+RING=
+command -v _pm_learn_path >/dev/null 2>&1 && RING=$(_pm_learn_path hook-timings "$ROOT" 2>/dev/null)
+[ -n "$RING" ] && [ -f "$RING" ] || exit 0
 MARK="$ROOT/.paradigm/.hook-health-warned"
 
 SID=$(printf '%s' "$INPUT" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
