@@ -260,6 +260,9 @@ ${RESOLVE_HOOK.replace(/^#!.*\n/, '')}
 _PM_GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 `;
 
+/** PostToolUse matcher for the touched-files ledger (paradigm-postwrite.sh). */
+export const POSTWRITE_MATCHER = 'Write|Edit|MultiEdit|NotebookEdit';
+
 const POST_COMMIT_HOOK = `#!/bin/sh
 # Paradigm post-commit hook - captures history from commits
 # Installed by: paradigm hooks install
@@ -732,11 +735,12 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   }
   hooks.UserPromptSubmit = userPromptSubmitHooks;
 
-  // PostToolUse Write|Edit — the session's touched-files ledger the Stop hook
-  // judges (.paradigm/.sessions/<id>.touched). Matchers are regexes: the old
-  // 'Edit,Write' entry never matched a tool, so it is upgraded in place.
+  // PostToolUse Write|Edit|MultiEdit|NotebookEdit — the session's
+  // touched-files ledger the Stop hook judges (.paradigm/.sessions/<id>.touched).
+  // Matchers are regexes: the old 'Edit,Write' entry never matched a tool and
+  // 'Write|Edit' missed NotebookEdit, so any other matcher is upgraded in place.
   const postWriteHookEntry = {
-    matcher: 'Write|Edit',
+    matcher: POSTWRITE_MATCHER,
     hooks: [{
       type: 'command',
       command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-postwrite.sh"`,
@@ -750,8 +754,8 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   );
   if (!paradigmPostwrite) {
     postToolUseHooks.push(postWriteHookEntry);
-  } else if (paradigmPostwrite.matcher === 'Edit,Write') {
-    paradigmPostwrite.matcher = 'Write|Edit';
+  } else if (paradigmPostwrite.matcher !== POSTWRITE_MATCHER) {
+    paradigmPostwrite.matcher = POSTWRITE_MATCHER;
   }
   // PostToolUse `Skill` — !skill-used ledger for Paradigm projections (silent, never blocks)
   if (!postToolUseHooks.some((h) => JSON.stringify(h).includes('paradigm-skill-used.sh'))) {

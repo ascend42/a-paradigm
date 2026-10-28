@@ -5,11 +5,12 @@
 # <root>/.claude/agents, or a user-global agent in ~/.claude/agents (by file
 # name <type>.md or `name:` frontmatter) — and it returned a non-empty
 # response, the orchestration gate is satisfied (TD-2026-10-28-956):
-#   - <root>/.paradigm/.sessions/<session_id>.orchestrated lasts for the session;
-#   - <root>/.paradigm/.orchestrated (same JSON payload shape as
+#   - with a session id: <root>/.paradigm/.sessions/<session_id>.orchestrated,
+#     which lasts for that session only;
+#   - without one: <root>/.paradigm/.orchestrated (same JSON payload shape as
 #     recordOrchestrationCompletion in packages/paradigm-mcp/src/utils/
-#     orchestration-marker.ts, source "delegation") is honoured by age
-#     (PARADIGM_GATE_TTL_HOURS, default 4h) when a reader has no session id.
+#     orchestration-marker.ts, source "delegation"), honoured by age
+#     (PARADIGM_GATE_TTL_HOURS, default 4h).
 # The Stop hook (Check 13), the team gate and the prompt gate read both, at the
 # project root (paradigm-resolve.sh). Every delegation, credited or not, is
 # appended to .paradigm/events/team-funnel.jsonl for Loid's invocation-rate
@@ -69,7 +70,8 @@ SUBAGENT=$(printf '%s' "$SUBAGENT" | tr -cd 'a-zA-Z0-9:._-' | head -c 80)
 _agent_defined() {
   [ -d "$1" ] || return 1
   [ -f "$1/$SUBAGENT.md" ] && return 0
-  grep -qE "^name:[[:space:]]*[\"']?$SUBAGENT[\"']?[[:space:]]*\$" "$1"/*.md 2>/dev/null
+  # Fixed-string match on the frontmatter value: `.` in a name is literal.
+  sed -n 's/^name:[[:space:]]*//p' "$1"/*.md 2>/dev/null | tr -d "\"'\r" | sed 's/[[:space:]]*$//' | grep -qxF -- "$SUBAGENT"
 }
 
 # Team agent? paradigm:* plugin agents, a project agent (<root>/.claude/agents)
@@ -90,11 +92,15 @@ CREDITED=false
 
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+# Credit scope: with a session id only this session's marker is written (it
+# lasts for the session and never credits another session); the shared
+# .orchestrated (honoured by age) only when the input has no session id.
 if [ "$CREDITED" = "true" ]; then
-  printf '{"timestamp":"%s","type":"orchestrated","verdicts":1,"source":"delegation","subagent":"%s"}\n' "$TS" "$SUBAGENT" > "$CWD/.paradigm/.orchestrated" 2>/dev/null || true
   if [ -n "$PM_SID" ]; then
     mkdir -p "$CWD/.paradigm/.sessions" 2>/dev/null
-    printf '{"timestamp":"%s","type":"orchestrated","source":"delegation","subagent":"%s","session":"%s"}\n' "$TS" "$SUBAGENT" "$PM_SID" > "$CWD/.paradigm/.sessions/$PM_SID.orchestrated" 2>/dev/null || true
+    printf '{"timestamp":"%s","type":"orchestrated","verdicts":1,"source":"delegation","subagent":"%s","session":"%s"}\n' "$TS" "$SUBAGENT" "$PM_SID" > "$CWD/.paradigm/.sessions/$PM_SID.orchestrated" 2>/dev/null || true
+  else
+    printf '{"timestamp":"%s","type":"orchestrated","verdicts":1,"source":"delegation","subagent":"%s"}\n' "$TS" "$SUBAGENT" > "$CWD/.paradigm/.orchestrated" 2>/dev/null || true
   fi
 fi
 

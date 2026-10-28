@@ -10,7 +10,7 @@ components:
       - hooks
       - skills
   delegation-hook:
-    description: 'Claude Code PostToolUse hook (matcher: Agent|Task) — scripts/claude-code-delegation.sh, copied to the plugin as paradigm-delegation.sh and installed by `paradigm hooks install --claude-code`. Credits Agent-tool delegation to the orchestration gates (TD-2026-10-28-956): when tool_input.subagent_type is a team agent (`paradigm:*`, a project agent in <root>/.claude/agents, or a user-global agent in ~/.claude/agents such as atelier-mika; matched by <type>.md or `name:` frontmatter) AND tool_response is non-empty, writes <root>/.paradigm/.sessions/<session_id>.orchestrated (lasts for the session) and <root>/.paradigm/.orchestrated with the #orchestration-marker payload shape (source delegation, plus subagent; honoured by age). Markers go to the project root (#paradigm-resolve _pm_project_root), never a linked worktree. Always appends a delegation row (credited true|false) to .paradigm/events/team-funnel.jsonl. Subagent string sanitized to [a-zA-Z0-9:._-]. jq with grep fallback; fail open, always exit 0, no output. Hook-monitor label PostToolUse-Agent.'
+    description: 'Claude Code PostToolUse hook (matcher: Agent|Task) — scripts/claude-code-delegation.sh, copied to the plugin as paradigm-delegation.sh and installed by `paradigm hooks install --claude-code`. Credits Agent-tool delegation to the orchestration gates (TD-2026-10-28-956): when tool_input.subagent_type is a team agent (`paradigm:*`, a project agent in <root>/.claude/agents, or a user-global agent in ~/.claude/agents such as atelier-mika; matched by <type>.md or `name:` frontmatter) AND tool_response is non-empty, writes only <root>/.paradigm/.sessions/<session_id>.orchestrated (lasts for that session) when the input has a session id, else <root>/.paradigm/.orchestrated with the #orchestration-marker payload shape (source delegation, plus subagent; honoured by age). Frontmatter names are matched as fixed strings. Markers go to the project root (#paradigm-resolve _pm_project_root), never a linked worktree. Always appends a delegation row (credited true|false) to .paradigm/events/team-funnel.jsonl. Subagent string sanitized to [a-zA-Z0-9:._-]. jq with grep fallback; fail open, always exit 0, no output. Hook-monitor label PostToolUse-Agent.'
     type: hook
     file: scripts/claude-code-delegation.sh
     components:
@@ -30,7 +30,7 @@ components:
     tags:
       - hooks
   touched-files-ledger:
-    description: 'Claude Code PostToolUse hook (matcher: Write|Edit) — scripts/claude-code-postwrite.sh, copied to the plugin as paradigm-postwrite.sh and installed by `paradigm hooks install --claude-code` (the installer upgrades the old never-matching ''Edit,Write'' matcher). Appends the edited file (tool_input.file_path or notebook_path), relative to the project root (logical or physical path), to <root>/.paradigm/.sessions/<session_id>.touched, deduped. The Claude Code Stop hook judges only `git diff --name-only HEAD` files in this ledger; other changed files (Bash edits, other sessions, worktrees) are listed as an advisory and never block. Without a session id the Stop hook judges the whole tree. Always exit 0, no output. Hook-monitor label PostToolUse-Write.'
+    description: 'Claude Code PostToolUse hook (matcher: Write|Edit|MultiEdit|NotebookEdit) — scripts/claude-code-postwrite.sh, copied to the plugin as paradigm-postwrite.sh and installed by `paradigm hooks install --claude-code` (the installer, via POSTWRITE_MATCHER, upgrades any other matcher in place, including the never-matching ''Edit,Write''). Appends the edited file (tool_input.file_path or notebook_path; backslashes normalised), relative to the project root (_pm_rel: logical, physical or Git Bash pwd -W form), to <root>/.paradigm/.sessions/<session_id>.touched, deduped. The Claude Code Stop hook reads `git -c core.quotePath=false diff --name-only --relative HEAD` line by line and judges the files in this ledger; other changed files (Bash edits, other sessions, worktrees) are listed as an advisory and never block. A session with no ledger is judged on the changed files newer than .sessions/<id>.started (written by SessionStart or the first hook, via _pm_session_started), or on the whole tree when the start is unknown. Without a session id the Stop hook judges the whole tree. Always exit 0, no output. Hook-monitor label PostToolUse-Write.'
     type: hook
     file: scripts/claude-code-postwrite.sh
     tags:
@@ -146,9 +146,12 @@ components:
       paradigm-skill-used.sh stays PATH-only (no project root).
       Project root and session state (T-2026-10-27-005): `_pm_project_root
       <cwd>` sets PM_ROOT to $CLAUDE_PROJECT_DIR (when it holds .paradigm/),
-      else the main checkout (parent of `git rev-parse --git-common-dir`), else
-      <cwd>; a linked worktree the session did not start in is judged at the
-      root. `_pm_session_id` reads session_id (sanitised) into PM_SID.
+      else the outermost .paradigm/ from the main checkout (parent of `git
+      rev-parse --path-format=absolute --git-common-dir`, relative form on old
+      git) down to the cwd's --show-prefix, else <cwd>; a linked worktree the
+      session did not start in is judged at the root and a project in a repo
+      subfolder is found. Backslashes are normalised (_pm_slashes). The Cursor
+      stop hook does not use it (workspace_roots[0]). `_pm_session_id` reads session_id (sanitised) into PM_SID.
       Per-session files live in <root>/.paradigm/.sessions/<id>.<kind>
       (touched ledger, orchestrated, stop-fp, team-prompted, team-reminded);
       `_pm_gate_resolved` honours the session's orchestrated file or a fresh

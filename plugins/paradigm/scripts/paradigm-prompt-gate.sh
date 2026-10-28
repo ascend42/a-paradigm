@@ -49,6 +49,7 @@ command -v _pm_project_root >/dev/null 2>&1 || exit 0
 _pm_project_root "$CWD" || exit 0
 CWD=$PM_ROOT
 _pm_session_id "$INPUT"
+_pm_session_started
 
 # Markers are not cleared by the Stop hook (it fires per assistant turn, so
 # clearing there would erase solo declarations mid-session and turn the

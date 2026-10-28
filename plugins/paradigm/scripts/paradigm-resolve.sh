@@ -78,34 +78,63 @@ _pm_resolve_paradigm() {
 
 # --- Project root and session state (shared by the Claude Code hooks) ---
 #
+# _pm_slashes <path> — backslashes to forward slashes (Windows paths from
+# Claude Code: C:\x\y, or C:\\x\\y when read from JSON without jq).
+_pm_slashes() {
+  printf '%s' "$1" | sed 's#\\\\#/#g; s#\\#/#g'
+}
+
 # _pm_project_root [<cwd>]   # 0 = found, 1 = not a Paradigm project
 #   Sets PM_ROOT to the Paradigm project the session belongs to:
 #   1. $CLAUDE_PROJECT_DIR when it holds a .paradigm/ (the directory the
 #      session started in, so a session started inside a worktree judges it);
-#   2. the main checkout, the parent of `git rev-parse --git-common-dir`. A
-#      linked worktree (e.g. .claude/worktrees/<agent>) carries the tracked part
-#      of .paradigm/, but a session that did not start there is judged, and
-#      keeps its gate markers, at the project root;
-#   3. <cwd> itself when it holds a .paradigm/ (no git, or a nested project).
+#   2. inside git: the main checkout M (the parent of
+#      `git rev-parse --path-format=absolute --git-common-dir`; git older than
+#      2.31 has no --path-format and gets the relative form). The outermost
+#      .paradigm/ on the way from M down to the cwd's position
+#      (M/<--show-prefix>) wins: a linked worktree (.claude/worktrees/<agent>)
+#      the session did not start in is judged, and keeps its gate markers, at
+#      the project root, and a project in a subfolder of its repo is found;
+#   3. no git: <cwd> itself when it holds a .paradigm/.
 #   Paths stay logical (no pwd -P) so they compare with the paths Claude Code
-#   sends in tool_input.file_path.
+#   sends in tool_input.file_path; backslashes become forward slashes.
+#   Limit: the Cursor stop hook takes workspace_roots[0] as its root and does
+#   not use this, so a Cursor workspace opened on a linked worktree is judged
+#   as its own project.
 _pm_project_root() {
   PM_ROOT=""
-  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR/.paradigm" ]; then
-    PM_ROOT=${CLAUDE_PROJECT_DIR%/}
+  _pm_cpd=$(_pm_slashes "${CLAUDE_PROJECT_DIR:-}")
+  _pm_cpd=${_pm_cpd%/}
+  if [ -n "$_pm_cpd" ] && [ -d "$_pm_cpd/.paradigm" ]; then
+    PM_ROOT=$_pm_cpd
     return 0
   fi
-  _pm_c=${1:-$PWD}
-  _pm_gcd=$(CDPATH= cd -- "$_pm_c" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || _pm_gcd=""
-  if [ -n "$_pm_gcd" ]; then
+  _pm_c=$(_pm_slashes "${1:-$PWD}")
+  _pm_git=$(CDPATH= cd -- "$_pm_c" 2>/dev/null && {
+    git rev-parse --path-format=absolute --git-common-dir --show-prefix 2>/dev/null \
+      || git rev-parse --git-common-dir --show-prefix 2>/dev/null
+  }) || _pm_git=""
+  if [ -n "$_pm_git" ]; then
+    _pm_gcd=$(printf '%s\n' "$_pm_git" | sed -n 1p)
+    _pm_pfx=$(printf '%s\n' "$_pm_git" | sed -n 2p)
     case "$_pm_gcd" in /*|[A-Za-z]:*) ;; *) _pm_gcd="$_pm_c/$_pm_gcd" ;; esac
     _pm_gcd=${_pm_gcd%/}
     case "$_pm_gcd" in
       */.git)
-        _pm_r=$(CDPATH= cd -- "${_pm_gcd%/.git}" 2>/dev/null && pwd) || _pm_r=""
-        if [ -n "$_pm_r" ] && [ -d "$_pm_r/.paradigm" ]; then
-          PM_ROOT=$_pm_r
-          return 0
+        _pm_m=$(CDPATH= cd -- "${_pm_gcd%/.git}" 2>/dev/null && pwd) || _pm_m=""
+        if [ -n "$_pm_m" ]; then
+          _pm_d=$_pm_m
+          _pm_rest=${_pm_pfx%/}
+          while :; do
+            if [ -d "$_pm_d/.paradigm" ]; then
+              PM_ROOT=$_pm_d
+              return 0
+            fi
+            [ -n "$_pm_rest" ] || break
+            _pm_seg=${_pm_rest%%/*}
+            case "$_pm_rest" in */*) _pm_rest=${_pm_rest#*/} ;; *) _pm_rest="" ;; esac
+            _pm_d="$_pm_d/$_pm_seg"
+          done
         fi
         ;;
     esac
@@ -114,6 +143,25 @@ _pm_project_root() {
     PM_ROOT=$(CDPATH= cd -- "$_pm_c" 2>/dev/null && pwd) || PM_ROOT=$_pm_c
     return 0
   fi
+  return 1
+}
+
+# _pm_rel <file> — prints <file> relative to $PM_ROOT (the form
+# `git diff --name-only --relative` prints), trying the logical root, the
+# physical one (macOS /var -> /private/var, symlinked checkouts) and the
+# Windows form (Git Bash `pwd -W`: C:/x for /c/x). Status 1 outside the root.
+_pm_rel() {
+  _pm_f=$(_pm_slashes "$1")
+  _pm_pr=$(CDPATH= cd -- "$PM_ROOT" 2>/dev/null && pwd -P)
+  _pm_wr=$(CDPATH= cd -- "$PM_ROOT" 2>/dev/null && pwd -W 2>/dev/null)
+  _pm_fd=$(CDPATH= cd -- "${_pm_f%/*}" 2>/dev/null && pwd -P)
+  _pm_pf=${_pm_fd:+$_pm_fd/${_pm_f##*/}}
+  for _pm_cand in "$_pm_f|$PM_ROOT" "$_pm_f|$_pm_pr" "$_pm_pf|$_pm_pr" "$_pm_f|$_pm_wr"; do
+    _pm_cf=${_pm_cand%%|*}
+    _pm_cr=${_pm_cand#*|}
+    [ -n "$_pm_cf" ] && [ -n "$_pm_cr" ] || continue
+    case "$_pm_cf" in "$_pm_cr"/*) printf '%s' "${_pm_cf#"$_pm_cr"/}"; return 0 ;; esac
+  done
   return 1
 }
 
@@ -133,7 +181,8 @@ _pm_session_id() {
 }
 
 # Session state lives in <root>/.paradigm/.sessions/<session_id>.<kind>
-# (gitignored): .touched (the Write/Edit ledger), .orchestrated (a team agent
+# (gitignored): .touched (the Write/Edit ledger), .started (session start
+# time, by mtime), .orchestrated (a team agent
 # was delegated to this session), .stop-fp (the last blocked violation set),
 # .team-prompted / .team-reminded (once-per-session reminders). A session file
 # lasts for the session. The shared .paradigm/.orchestrated and .solo-declared
@@ -171,5 +220,16 @@ _pm_once() {
   fi
   _pm_marker_fresh "$PM_ROOT/.paradigm/.$1" && return 1
   touch "$PM_ROOT/.paradigm/.$1" 2>/dev/null
+  return 0
+}
+
+# _pm_session_started — writes .paradigm/.sessions/<id>.started once per session
+# (SessionStart, else the first hook that has a session id). Its mtime is the
+# session's start: without a ledger, the Stop hook judges files changed since.
+_pm_session_started() {
+  _pm_sf=$(_pm_session_file started) || return 0
+  [ -f "$_pm_sf" ] && return 0
+  mkdir -p "${_pm_sf%/*}" 2>/dev/null
+  : > "$_pm_sf" 2>/dev/null
   return 0
 }

@@ -16,8 +16,18 @@ case "$0" in */*) _PM_DIR=${0%/*} ;; *) _PM_DIR=. ;; esac
 
 INPUT=$(cat)
 
-ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-[ -d "$ROOT/.paradigm" ] || exit 0
+[ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
+if command -v _pm_project_root >/dev/null 2>&1; then
+  _pm_project_root "$PWD" || exit 0
+  ROOT=$PM_ROOT
+  # The session's start (mtime): without a ledger the Stop hook judges files
+  # changed since then.
+  _pm_session_id "$INPUT"
+  _pm_session_started
+else
+  ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+  [ -d "$ROOT/.paradigm" ] || exit 0
+fi
 
 # Fresh clone: the generated indexes are gitignored (#session-markers-gitignore),
 # so readers that load them from disk (loop-files, workspace-loader, protocol
@@ -26,7 +36,6 @@ ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 # project's own CLI, then PATH; paradigm-resolve.sh) FULLY detached: a
 # background child holding this hook's pipes would stall the session start.
 if [ ! -f "$ROOT/.paradigm/scan-index.json" ] || [ ! -f "$ROOT/.paradigm/navigator.yaml" ]; then
-  [ -f "$_PM_DIR/paradigm-resolve.sh" ] && . "$_PM_DIR/paradigm-resolve.sh"
   if command -v _pm_resolve_paradigm >/dev/null 2>&1 && _pm_resolve_paradigm "$ROOT"; then
     ( cd "$ROOT" && $PARADIGM_BIN index --quiet ) </dev/null >/dev/null 2>&1 &
   fi

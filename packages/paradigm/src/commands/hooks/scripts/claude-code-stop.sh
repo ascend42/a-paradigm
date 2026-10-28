@@ -62,34 +62,56 @@ else
   STOP_FP_FILE=".paradigm/.stop-block-fingerprint"
 fi
 
-# Get modified files (uncommitted changes)
+# Get modified files (uncommitted changes), relative to the project root:
+# --relative keeps a project that lives in a subfolder of its repository (and
+# matches the root-relative ledger); core.quotePath=false keeps non-ASCII names
+# unquoted.
 _pm_mark git-diff
-MODIFIED_ALL=$(git diff --name-only HEAD 2>/dev/null)
+MODIFIED_ALL=$(git -c core.quotePath=false diff --name-only --relative HEAD 2>/dev/null)
 
 # --- Session attribution (touched-files ledger) ---
-# The PostToolUse Write|Edit hook records every file this session edited in
-# .paradigm/.sessions/<session_id>.touched. Only those files are judged; the
-# rest of the tree's changes (Bash edits, other sessions, generated state) are
-# listed as advisory. Without a session id (older hosts, tests) the whole tree
-# is judged, as before.
+# The PostToolUse Write|Edit|MultiEdit|NotebookEdit hook records every file
+# this session edited in .paradigm/.sessions/<session_id>.touched. Only those
+# files are judged; the rest of the tree's changes (Bash edits, other
+# sessions, generated state) are listed as advisory.
+# No ledger at all (the session edited only through Bash, or the postwrite
+# hook is not registered): judge the changed files modified since the session
+# started (.sessions/<id>.started, written at SessionStart or by the first
+# hook), or the whole tree when the start is unknown. Without a session id
+# (older hosts, tests) the whole tree is judged, as before.
 UNATTRIBUTED=""
+_NL='
+'
 if [ -n "$PM_SID" ]; then
   LEDGER=".paradigm/.sessions/$PM_SID.touched"
+  STARTED=".paradigm/.sessions/$PM_SID.started"
   MODIFIED=""
-  _NL='
-'
-  for _f in $MODIFIED_ALL; do
+  while IFS= read -r _f; do
+    [ -n "$_f" ] || continue
     if [ -f "$LEDGER" ] && grep -qxF -- "$_f" "$LEDGER" 2>/dev/null; then
       MODIFIED="$MODIFIED$_f$_NL"
     else
       case "$_f" in
         .paradigm/*|.warpline/*|*/.paradigm/*|*/.warpline/*) ;;  # generated state
-        *) UNATTRIBUTED="$UNATTRIBUTED$_f$_NL" ;;
+        *)
+          if [ ! -f "$LEDGER" ] && { [ ! -f "$STARTED" ] || [ ! -e "$_f" ] || [ -n "$(find "$_f" -prune -newer "$STARTED" 2>/dev/null)" ]; }; then
+            MODIFIED="$MODIFIED$_f$_NL"  # no ledger: changed since the session started
+          else
+            UNATTRIBUTED="$UNATTRIBUTED$_f$_NL"
+          fi
+          ;;
       esac
     fi
-  done
+  done <<EOF_MODIFIED
+$MODIFIED_ALL
+EOF_MODIFIED
   MODIFIED=${MODIFIED%"$_NL"}
   UNATTRIBUTED=${UNATTRIBUTED%"$_NL"}
+  # From now on the session has a known start.
+  if [ ! -f "$STARTED" ]; then
+    mkdir -p ".paradigm/.sessions" 2>/dev/null
+    : > "$STARTED" 2>/dev/null
+  fi
 else
   MODIFIED=$MODIFIED_ALL
 fi
@@ -131,8 +153,8 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   # --- Loop cap: one block per violation set ---
   # A violation set blocks once. After that the identical set (digits
   # ignored) is advisory: on the Stop that follows a Stop-hook continuation
-  # (stop_hook_active — the agent already had its fix attempt) and on every
-  # later turn of the session. A changed set blocks again, up to 3 consecutive
+  # (stop_hook_active — the agent already had its fix attempt) and, when the
+  # input has a session id, on every later turn of that session. A changed set blocks again, up to 3 consecutive
   # continuations. The last blocked set is kept per session
   # (.paradigm/.sessions/<id>.stop-fp) and cleared by a passing run.
   # PARADIGM_OVERRIDE is unaffected: overridden remediations never reach
@@ -153,7 +175,9 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
     _pm_record_unresolved "$STOP_FP" "$PREV_COUNT"
     exit 0
   fi
-  if [ "$STOP_FP" = "$PREV_FP" ]; then
+  # Later turns: only with a session id, so one session's block never
+  # silences another's (the shared no-id fingerprint serves the retry only).
+  if [ -n "$PM_SID" ] && [ "$STOP_FP" = "$PREV_FP" ]; then
     echo "" >&2
     echo "[paradigm] Advisory: already reported this session, not blocking again ($VIOLATION_COUNT violation(s)):" >&2
     echo "$VIOLATIONS" >&2

@@ -27,7 +27,7 @@ beforeEach(() => {
   spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'i', '--allow-empty'], { cwd: root });
   spawnSync('git', ['add', 'a.ts'], { cwd: root });
   // stub CLI: compliance-check hangs long enough to be "killed" mid-run
-  fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
+  fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) : > "$PM_CC_STARTED"; sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
   fs.chmodSync(path.join(bin, 'paradigm'), 0o755);
 });
 afterEach(() => {
@@ -35,7 +35,7 @@ afterEach(() => {
   fs.rmSync(bin, { recursive: true, force: true });
 });
 
-const env = (extra: Record<string, string> = {}): NodeJS.ProcessEnv => ({ PATH: `${bin}:/usr/bin:/bin`, HOME: root, CLAUDE_PROJECT_DIR: root, ...extra });
+const env = (extra: Record<string, string> = {}): NodeJS.ProcessEnv => ({ PATH: `${bin}:/usr/bin:/bin`, HOME: root, CLAUDE_PROJECT_DIR: root, PM_CC_STARTED: path.join(bin, 'cc-started'), ...extra });
 
 function runHook(script: string, input: object, extra: Record<string, string> = {}): { code: number | null; stdout: string } {
   const r = spawnSync('/bin/sh', [path.join(SCRIPTS, script)], { cwd: root, env: env(extra), input: JSON.stringify(input), encoding: 'utf8', timeout: 20_000 });
@@ -49,7 +49,15 @@ function killStopHook(signal: NodeJS.Signals): Promise<void> {
     fs.writeFileSync(path.join(root, '.paradigm', '.sessions', 'k.touched'), 'a.ts\n');
     const ch = spawn('/bin/sh', [path.join(SCRIPTS, 'paradigm-stop.sh')], { cwd: root, env: env(), stdio: ['pipe', 'ignore', 'ignore'] });
     ch.stdin.end(JSON.stringify({ session_id: 'k', cwd: root, hook_event_name: 'Stop' }));
-    setTimeout(() => ch.kill(signal), 700);
+    // Kill once the hook is inside compliance-check (the stub marks it), so a
+    // loaded machine cannot kill it earlier; 10 s cap.
+    const started = path.join(bin, 'cc-started');
+    const t0 = Date.now();
+    const poll = (): void => {
+      if (fs.existsSync(started) || Date.now() - t0 > 10_000) setTimeout(() => ch.kill(signal), 100);
+      else setTimeout(poll, 25);
+    };
+    poll();
     ch.on('exit', () => resolve());
   });
 }
@@ -203,7 +211,7 @@ describe('Stop per-section timing (stop-timing.jsonl) and the generated-state sc
   });
 
   it('a killed run names the section it was stuck in', async () => {
-    fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
+    fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) : > "$PM_CC_STARTED"; sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
     fs.writeFileSync(path.join(root, 'a.ts'), 'y\n');
     await killStopHook('SIGTERM');
     const r = timingRows().pop()!;

@@ -43,6 +43,7 @@ command -v _pm_project_root >/dev/null 2>&1 || exit 0
 _pm_project_root "$CWD" || exit 0
 CWD=$PM_ROOT
 _pm_session_id "$INPUT"
+_pm_session_started
 
 # Session already resolved the gate (team agent delegated this session, or a
 # fresh shared marker / solo declaration) — pass

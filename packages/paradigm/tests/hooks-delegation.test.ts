@@ -13,23 +13,32 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { SH, SYS_PATH, WIN, baseEnv, pathValue, shellPath, tempDir } from '../src/test-shell-utils.js';
 
 const SCRIPT = path.resolve(__dirname, '..', 'src', 'commands', 'hooks', 'scripts', 'claude-code-delegation.sh');
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 function project(paradigm = true): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-deleg-'));
+  const root = tempDir('paradigm-deleg-');
   dirs.push(root);
   if (paradigm) fs.mkdirSync(path.join(root, '.paradigm'), { recursive: true });
   return root;
 }
 
-/** PATH without jq exercises the grep fallback. */
+/** System tools plus jq where a developer machine keeps it (Git for Windows ships no jq). */
+const JQ_PATH = WIN ? SYS_PATH : [...SYS_PATH, '/opt/homebrew/bin', '/usr/local/bin'];
+
+/**
+ * PATH without jq exercises the grep fallback. POSIX: a dir of symlinked tools
+ * (no git either). Windows: Git Bash's own tools, which include no jq
+ * (symlinks need a privilege there).
+ */
 function noJqBin(): string {
-  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-deleg-bin-'));
+  if (WIN) return pathValue(SYS_PATH);
+  const bin = tempDir('paradigm-deleg-bin-');
   dirs.push(bin);
-  for (const c of ['cat', 'grep', 'sed', 'head', 'tr', 'date', 'mkdir']) {
+  for (const c of ['sh', 'cat', 'grep', 'sed', 'head', 'tr', 'date', 'mkdir']) {
     const src = ['/usr/bin', '/bin'].map((d) => path.join(d, c)).find((p) => fs.existsSync(p));
     if (src) fs.symlinkSync(src, path.join(bin, c));
   }
@@ -38,12 +47,12 @@ function noJqBin(): string {
 
 function run(input: string, opts: { cwd?: string; noJq?: boolean } = {}) {
   // Always run from a temp dir: the hook monitor writes its ring under $PWD/.paradigm.
-  const cwd = opts.cwd ?? fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-deleg-cwd-'));
+  const cwd = opts.cwd ?? tempDir('paradigm-deleg-cwd-');
   if (!opts.cwd) dirs.push(cwd);
-  return spawnSync('/bin/sh', [SCRIPT], {
+  return spawnSync(SH, [shellPath(SCRIPT)], {
     input,
     cwd,
-    env: { PATH: opts.noJq ? noJqBin() : '/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin', HOME: os.tmpdir() },
+    env: { ...baseEnv(), PATH: opts.noJq ? noJqBin() : pathValue(JQ_PATH), HOME: os.tmpdir() },
     encoding: 'utf8',
   });
 }
@@ -138,18 +147,28 @@ for (const noJq of [false, true]) {
       fs.mkdirSync(path.join(home, '.claude', 'agents'), { recursive: true });
       fs.writeFileSync(path.join(home, '.claude', 'agents', 'atelier-mika.md'), '---\nname: atelier-mika\n---\n');
       const input = JSON.stringify({ ...JSON.parse(payload(root, 'atelier-mika', 'reviewed')), session_id: 'g1' });
-      const r = spawnSync('/bin/sh', [SCRIPT], {
+      const r = spawnSync(SH, [shellPath(SCRIPT)], {
         input,
         cwd: home,
-        env: { PATH: noJq ? noJqBin() : '/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin', HOME: home },
+        env: { ...baseEnv(), PATH: noJq ? noJqBin() : pathValue(JQ_PATH), HOME: home },
         encoding: 'utf8',
       });
       expect(r.status).toBe(0);
       expect(r.stdout + r.stderr).toBe('');
-      expect(fs.existsSync(marker(root))).toBe(true);
+      expect(fs.existsSync(marker(root))).toBe(false); // with a session id only the session marker
       expect(JSON.parse(fs.readFileSync(path.join(root, '.paradigm', '.sessions', 'g1.orchestrated'), 'utf8')))
         .toMatchObject({ source: 'delegation', subagent: 'atelier-mika', session: 'g1' });
       expect(funnel(root)[0]).toMatchObject({ subagent: 'atelier-mika', credited: true });
+    });
+
+    it('a `.` in the agent name is literal (fixed-string frontmatter match)', () => {
+      const root = project();
+      fs.mkdirSync(path.join(root, '.claude', 'agents'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.claude', 'agents', 'helper.md'), '---\nname: axb\n---\n');
+      run(payload(root, 'a.b', 'ok'), { noJq });
+      expect(funnel(root)[0]).toMatchObject({ subagent: 'a.b', credited: false });
+      run(payload(root, 'axb', 'ok'), { noJq });
+      expect(funnel(root)[1]).toMatchObject({ subagent: 'axb', credited: true });
     });
 
     it('an unknown agent name is not credited even with a ~/.claude/agents dir', () => {
@@ -157,10 +176,10 @@ for (const noJq of [false, true]) {
       const home = project(false);
       fs.mkdirSync(path.join(home, '.claude', 'agents'), { recursive: true });
       fs.writeFileSync(path.join(home, '.claude', 'agents', 'other.md'), '---\nname: other\n---\n');
-      spawnSync('/bin/sh', [SCRIPT], {
+      spawnSync(SH, [shellPath(SCRIPT)], {
         input: payload(root, 'nobody', 'x'),
         cwd: home,
-        env: { PATH: noJq ? noJqBin() : '/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin', HOME: home },
+        env: { ...baseEnv(), PATH: noJq ? noJqBin() : pathValue(JQ_PATH), HOME: home },
         encoding: 'utf8',
       });
       expect(fs.existsSync(marker(root))).toBe(false);
@@ -180,10 +199,10 @@ describe('claude-code-delegation.sh from a linked worktree', () => {
     const wt = path.join(root, '.claude', 'worktrees', 'agent-1');
     git(root, 'worktree', 'add', '-q', '-b', 'agent-1', wt);
     const input = JSON.stringify({ ...JSON.parse(payload(wt, 'paradigm:builder', 'done')), session_id: 'w1' });
-    const r = spawnSync('/bin/sh', [SCRIPT], { input, cwd: wt, env: { PATH: '/usr/bin:/bin', HOME: os.tmpdir() }, encoding: 'utf8' });
+    const r = spawnSync(SH, [shellPath(SCRIPT)], { input, cwd: wt, env: { ...baseEnv(), PATH: pathValue(SYS_PATH), HOME: os.tmpdir() }, encoding: 'utf8' });
     expect(r.status).toBe(0);
     expect(fs.existsSync(path.join(root, '.paradigm', '.sessions', 'w1.orchestrated'))).toBe(true);
-    expect(fs.existsSync(marker(root))).toBe(true);
+    expect(fs.existsSync(marker(root))).toBe(false); // with a session id only the session marker
     expect(fs.existsSync(marker(wt))).toBe(false);
   });
 });
