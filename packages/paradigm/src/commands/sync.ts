@@ -6,7 +6,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../utils/logger.js';
-import { ensureSessionMarkersGitignore } from '../core/session-markers-gitignore.js';
+import { ensureSessionMarkersGitignore, untrackGeneratedState } from '../core/session-markers-gitignore.js';
 import {
   detectIDE,
   getAdapter,
@@ -53,8 +53,21 @@ export async function syncCommand(ide: string | undefined, options: SyncOptions)
 
   if (!quiet) spinner.succeed(`Loaded configuration for ${chalk.cyan(files.projectName)}`);
 
-  // Keep hook session markers (.purpose-paths, .orchestrated, ...) out of git
+  // Keep hook session markers (.purpose-paths, .orchestrated, ...) and
+  // generated state (indexes, event logs) out of git; untrack any already
+  // committed (git rm --cached, files stay on disk; a no-op on later runs).
   ensureSessionMarkersGitignore(path.join(rootDir, '.paradigm'));
+  try {
+    const untracked = untrackGeneratedState(rootDir);
+    if (untracked.length > 0) {
+      log.command('sync').info('Untracked generated .paradigm state', { count: untracked.length });
+      if (!quiet) {
+        console.log(chalk.gray(`  Untracked ${untracked.length} generated .paradigm file(s) (kept on disk); commit the removal.`));
+      }
+    }
+  } catch (err) {
+    log.command('sync').warn('Could not untrack generated .paradigm state', { error: (err as Error).message });
+  }
   log.command('sync').debug('Configuration loaded', { projectName: files.projectName });
 
   // Sync to all IDEs if --all flag

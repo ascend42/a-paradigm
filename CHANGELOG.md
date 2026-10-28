@@ -5,6 +5,32 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**The Paradigm hooks stop interrupting long sessions.** The Stop hook now judges only the files your session changed, at the project root. A problem it already reported in a session is not blocked a second time. Commits no longer pick up `.paradigm` index changes.
+
+### Fixed
+- **The Stop hook judges the session's own edits** (`#touched-files-ledger`, `#paradigm-hooks`). The PostToolUse hook (Write, Edit, MultiEdit and NotebookEdit) records each edited file in `.paradigm/.sessions/<session_id>.touched`. The Stop hook blocks only on those files. Other changed files (Bash edits, other sessions, other worktrees) are listed as an advisory.
+  - A session that has no ledger (it edited only through Bash, or the postwrite hook is not registered) is judged on the files changed since it started. SessionStart, or the first hook, records the start. When the start is unknown, the whole tree is judged.
+  - Without a session id the whole tree is judged, as before.
+  - `paradigm hooks install --claude-code` registers the postwrite hook with the `Write|Edit|MultiEdit|NotebookEdit` matcher and upgrades older entries in place. The old `Edit,Write` matcher never fired.
+- **The project root is found reliably** (`#paradigm-resolve`). The root is `$CLAUDE_PROJECT_DIR`, then the main checkout (from `git rev-parse --path-format=absolute --git-common-dir`; older git falls back to the relative form), then the cwd.
+  - A linked worktree the session did not start in is judged at the project root.
+  - A Paradigm project in a subfolder of its repository is found, and judged on `git diff --relative`.
+  - Windows backslash paths from Claude Code are normalised.
+  - Cursor still takes its first workspace root, so a Cursor workspace opened on a worktree is judged as its own project.
+- **Gate markers live at the project root** (`#delegation-hook`, `#team-invocation-gates`). A credited delegation with a session id writes only that session's marker (`.paradigm/.sessions/<id>.orchestrated`), which lasts for the session. The shared `.orchestrated` is written only without a session id. It and `paradigm solo` keep the 4h TTL. The team and prompt reminders fire once per session.
+- **One block per violation set** (`#stop-loop-guard`). After one block, the identical set is advisory on the `stop_hook_active` retry and, with a session id, on later turns of that session. A changed set blocks again. Without a session id, a later turn blocks again, so one session never silences another.
+- **The gates recommend delegating to a team agent** with the Agent tool, not `paradigm_orchestrate_inline`, which does not satisfy the gate.
+- **User-global agents count as team agents.** Delegating to an agent in `~/.claude/agents` (for example `atelier-mika`) satisfies the orchestration gate. Names are matched literally.
+- **Commits no longer stage `.paradigm` files** (`#precommit-hooks`, `#session-markers-gitignore`). The pre-commit hooks no longer rebuild or `git add` scan-index.json, navigator.yaml and flow-index.json. They are no-ops now.
+  - Gitignored as generated state: the indexes, manifest.consistency.json, session-breadcrumbs.prev.json, `lore/timeline.yaml`, and the generated protocols, personas, curriculum, scenarios and university `index.yaml`.
+  - Gitignored as machine-only telemetry: `compliance-history`, `team-funnel` (each machine's funnel calibrates its own invocation rate), `postflight-liveness` and `settlement-liveness` event logs, and the hook-timings trim files.
+  - Learning records (verdicts, overrides, debates, nominations, promotion decisions, the event stream and its cursor) and `history/` stay committed.
+  - `paradigm sync` untracks these files and any committed session markers, in `.paradigm/` and in nested `.paradigm/` folders (`git rm --cached`; the files stay on disk). Run `paradigm sync` once and commit the removal.
+  - **Teammates:** before pulling that commit, run `paradigm sync` (with this version) or discard your local copies of the untracked logs. Otherwise git refuses the pull, because the pull would delete files you changed locally.
+- **A fresh clone rebuilds its indexes** (`#IndexCommand`, `#hook-health-warning`). SessionStart runs `paradigm index` in the background when scan-index.json or navigator.yaml is missing. `paradigm index` also rebuilds the generated YAML indexes.
+
 ## [8.0.5] — 2026-10-28
 
 **Agents run through the Anthropic API ask before running commands, and stay in the project.** With `ANTHROPIC_API_KEY` set, the agents `paradigm team spawn`, `paradigm team orchestrate` and background orchestrations start could run any shell command without asking, and read or write files anywhere on your disk. Now `run_command` asks you once and remembers your answer for your user account only, and file tools are confined to the run's working directory. Files that would run commands later are refused. If you use Paradigm agents with an API key, upgrade. Gnomon is unchanged at 8.0.2.

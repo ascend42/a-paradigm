@@ -10,7 +10,7 @@ components:
       - hooks
       - skills
   delegation-hook:
-    description: 'Claude Code PostToolUse hook (matcher: Agent|Task) — scripts/claude-code-delegation.sh, copied to the plugin as paradigm-delegation.sh and installed by `paradigm hooks install --claude-code`. Credits Agent-tool delegation to the orchestration gates: when tool_input.subagent_type is a roster agent (`paradigm:*`, or $CWD/.claude/agents/<type>.md exists) AND tool_response is non-empty, writes .paradigm/.orchestrated with the #orchestration-marker payload shape (source delegation, plus subagent). Always appends a delegation row (credited true|false) to .paradigm/events/team-funnel.jsonl. Subagent string sanitized to [a-zA-Z0-9:._-]. jq with grep fallback; fail open, always exit 0, no output. Hook-monitor label PostToolUse-Agent.'
+    description: 'Claude Code PostToolUse hook (matcher: Agent|Task) — scripts/claude-code-delegation.sh, copied to the plugin as paradigm-delegation.sh and installed by `paradigm hooks install --claude-code`. Credits Agent-tool delegation to the orchestration gates (TD-2026-10-28-956): when tool_input.subagent_type is a team agent (`paradigm:*`, a project agent in <root>/.claude/agents, or a user-global agent in ~/.claude/agents such as atelier-mika; matched by <type>.md or `name:` frontmatter) AND tool_response is non-empty, writes only <root>/.paradigm/.sessions/<session_id>.orchestrated (lasts for that session) when the input has a session id, else <root>/.paradigm/.orchestrated with the #orchestration-marker payload shape (source delegation, plus subagent; honoured by age). Frontmatter names are matched as fixed strings. Markers go to the project root (#paradigm-resolve _pm_project_root), never a linked worktree. Always appends a delegation row (credited true|false) to .paradigm/events/team-funnel.jsonl. Subagent string sanitized to [a-zA-Z0-9:._-]. jq with grep fallback; fail open, always exit 0, no output. Hook-monitor label PostToolUse-Agent.'
     type: hook
     file: scripts/claude-code-delegation.sh
     components:
@@ -23,6 +23,19 @@ components:
       - hooks
       - orchestration
       - team-funnel
+  precommit-hooks:
+    description: 'Retired pre-commit hooks (scripts/claude-code-precommit.sh PreToolUse Bash, scripts/cursor-precommit.sh beforeShellExecution). They used to rebuild the index on `git commit` and `git add` scan-index.json, navigator.yaml and flow-index.json, whose generatedAt stamp gave every commit an index diff (T-2026-10-28-002). Now no-ops that drain stdin and exit 0; the files stay because existing settings.json / hooks.json entries call them. The generated files are gitignored (#session-markers-gitignore); the MCP server serves a live index and SessionStart rebuilds on a fresh clone.'
+    type: hook
+    file: scripts/claude-code-precommit.sh
+    tags:
+      - hooks
+  touched-files-ledger:
+    description: 'Claude Code PostToolUse hook (matcher: Write|Edit|MultiEdit|NotebookEdit) — scripts/claude-code-postwrite.sh, copied to the plugin as paradigm-postwrite.sh and installed by `paradigm hooks install --claude-code` (the installer, via POSTWRITE_MATCHER, upgrades any other matcher in place, including the never-matching ''Edit,Write''). Appends the edited file (tool_input.file_path or notebook_path; backslashes normalised), relative to the project root (_pm_rel: logical, physical or Git Bash pwd -W form), to <root>/.paradigm/.sessions/<session_id>.touched, deduped. The Claude Code Stop hook reads `git -c core.quotePath=false diff --name-only --relative HEAD` line by line and judges the files in this ledger; other changed files (Bash edits, other sessions, worktrees) are listed as an advisory and never block. A session with no ledger is judged on the changed files newer than .sessions/<id>.started (written by SessionStart or the first hook, via _pm_session_started), or on the whole tree when the start is unknown. Without a session id the Stop hook judges the whole tree. Always exit 0, no output. Hook-monitor label PostToolUse-Write.'
+    type: hook
+    file: scripts/claude-code-postwrite.sh
+    tags:
+      - hooks
+      - stop-hook
   paradigm-hooks:
     description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing lore entries); uncovered directories are filed as a purpose-coverage task (#purpose-coverage-queue) and still named in the block message, and no .purpose stub is ever written. Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
     type: command
@@ -68,6 +81,10 @@ components:
       (.paradigm/.hook-health-warned = "<session_id> <ms>"); also trims the
       ring to its cap. Always exits 0. Registered by the plugin hooks.json AND by
       the project-level `paradigm hooks install --claude-code` (.claude/settings.json).
+      Fresh-clone rebuild (T-2026-10-28-002): when .paradigm/scan-index.json or
+      navigator.yaml is missing (generated state is gitignored by
+      #session-markers-gitignore) it starts `paradigm index --quiet` through
+      #paradigm-resolve, fully detached; cursor-session-start.sh does the same.
     type: hook
     file: scripts/claude-code-session-start.sh
     tags:
@@ -127,6 +144,19 @@ components:
       same order. Aegis L3 is narrowed, not dropped: only @a-company/paradigm
       at the project root runs (the trust of the workspace itself);
       paradigm-skill-used.sh stays PATH-only (no project root).
+      Project root and session state (T-2026-10-27-005): `_pm_project_root
+      <cwd>` sets PM_ROOT to $CLAUDE_PROJECT_DIR (when it holds .paradigm/),
+      else the outermost .paradigm/ from the main checkout (parent of `git
+      rev-parse --path-format=absolute --git-common-dir`, relative form on old
+      git) down to the cwd's --show-prefix, else <cwd>; a linked worktree the
+      session did not start in is judged at the root and a project in a repo
+      subfolder is found. Backslashes are normalised (_pm_slashes). The Cursor
+      stop hook does not use it (workspace_roots[0]). `_pm_session_id` reads session_id (sanitised) into PM_SID.
+      Per-session files live in <root>/.paradigm/.sessions/<id>.<kind>
+      (touched ledger, orchestrated, stop-fp, team-prompted, team-reminded);
+      `_pm_gate_resolved` honours the session's orchestrated file or a fresh
+      shared .orchestrated / .solo-declared (TTL); `_pm_once` caps a reminder
+      to once per session (per TTL window without a session id).
     type: utility
     file: scripts/paradigm-resolve.sh
     components:
@@ -165,15 +195,17 @@ components:
       forever. Claude Code: the hook reads stop_hook_active (jq, grep
       fallback); on a blocked Stop it fingerprints the violation set (headline
       "  - " lines, digits stripped, sorted, cksum) and keeps it in the marker
-      .paradigm/.stop-block-fingerprint (line 1 fingerprint, line 2
-      consecutive blocks). When stop_hook_active is true AND the fingerprint
-      matches the marker (the fix attempt changed nothing) OR the count is
-      already 3, it prints the violations under "unresolved after a fix
-      attempt — ending the turn", appends a stop-block-unresolved row
-      (fingerprint, violations, consecutive) to
-      .paradigm/events/team-funnel.jsonl and exits 0, leaving the marker; the
-      next turn (not active) blocks again. Otherwise it writes the marker
-      (count+1 when active, else 1) and exits 2. Cursor: RETRY_COUNT comes from
+      .paradigm/.sessions/<session_id>.stop-fp (.paradigm/.stop-block-fingerprint
+      without a session id; line 1 fingerprint, line 2 consecutive blocks).
+      Loop cap (T-2026-10-27-005): a violation set blocks once. When
+      stop_hook_active is true AND the fingerprint matches (the fix attempt
+      changed nothing) OR the count is already 3, it prints the violations
+      under "unresolved after a fix attempt — ending the turn", appends a
+      stop-block-unresolved row (fingerprint, violations, consecutive) to
+      .paradigm/events/team-funnel.jsonl and exits 0, leaving the marker. On a
+      later turn the identical set is advisory ("already reported this
+      session"), exit 0. A changed set writes the marker (count+1 when active,
+      else 1) and exits 2. Cursor: RETRY_COUNT comes from
       the input's loop_count when present, else the .stop-hook-active file
       counter; the same fingerprint rule runs before the 3-retry cap. Every
       pass (including no modifications) removes the marker. PARADIGM_OVERRIDE
@@ -233,11 +265,17 @@ components:
       injects a decision-time orchestration directive into model context, once
       per TTL window, telemetry on every match) and team-gate (PreToolUse
       Write|Edit; one-time stderr advisory before source edits in unresolved
-      sessions). Both honor fresh .orchestrated / .solo-declared markers and
-      the PARADIGM_TEAM_GATE=off kill switch. All gate markers, .orchestrated
-      included, are honored by AGE (PARADIGM_GATE_TTL_HOURS, default 4h) and
-      never stop-cleared, because Stop fires per assistant turn (Check 13 uses
-      the same TTL test). Check 13 in paradigm-common.sh records deduped
+      sessions). Both read markers at the project root (#paradigm-resolve) and
+      honour a team-agent delegation this session
+      (.paradigm/.sessions/<id>.orchestrated, lasts for the session), fresh
+      shared .orchestrated / .solo-declared markers (by AGE,
+      PARADIGM_GATE_TTL_HOURS, default 4h), and the PARADIGM_TEAM_GATE=off kill
+      switch. Each reminder fires once per session (.sessions/<id>.team-prompted
+      / .team-reminded; per TTL window without a session id). The copy
+      recommends delegating to a team agent with the Agent tool, or `paradigm
+      solo`; paradigm_orchestrate_inline does not satisfy the gate (T-2026-10-27-005).
+      Markers are never stop-cleared, because Stop fires per assistant turn
+      (Check 13 reads the same markers). Check 13 in paradigm-common.sh records deduped
       bypass events to team-funnel telemetry at both warn and block severity.
     type: utility
     components:

@@ -4,8 +4,9 @@
  * `loop_count`. A violation the agent cannot fix inside the turn used to block
  * every stop forever. Now an unchanged violation set (digits ignored) on such
  * a Stop — or a 4th consecutive block — ends the turn, logs
- * `stop-block-unresolved` to team-funnel.jsonl and keeps the marker so the
- * next turn blocks again.
+ * `stop-block-unresolved` to team-funnel.jsonl and keeps the marker. With a
+ * session id the identical set stays advisory on later turns (hooks-severity);
+ * without one the shared marker only serves the retry, so a fresh turn blocks.
  *
  * Violations come from Check 14 (a guard remediation served by a stub
  * `paradigm internal active-remediations`), so each test controls the exact
@@ -147,7 +148,7 @@ describe('Claude Code Stop hook loop guard', () => {
     expect(unresolvedRows(fx.root)[0]).toMatchObject({ consecutive: 3 });
   });
 
-  it('(6) a fresh turn after an unresolved release blocks again; PARADIGM_OVERRIDE unchanged', () => {
+  it('(6) without a session id a fresh turn after an unresolved release blocks again; PARADIGM_OVERRIDE unchanged', () => {
     const fx = fixture();
     fx.setReasons(['purpose missing for src/a']);
     expect(claude(fx, false).status).toBe(2);

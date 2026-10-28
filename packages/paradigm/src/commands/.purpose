@@ -12,6 +12,9 @@ components:
   InitCommand:
     description: paradigm init — initialize Paradigm in a project
     type: command
+  IndexCommand:
+    description: paradigm index (commands/probe/index.ts) — writes scan-index.json, navigator.yaml and flow-index.json, then rebuildGeneratedIndexes rebuilds the gitignored generated YAML indexes (lore/timeline.yaml, protocols, personas, curriculum, scenarios, university index.yaml), each only when its source directory exists and each non-fatal. SessionStart runs it detached on a fresh clone.
+    type: command
   ScanCommand:
     description: paradigm scan — rebuild symbol index. navigator.ts buildSymbolMap (exported) maps premise-core aggregator `filePath` to the project-relative containing directory (v7.9.1 fix — navigator.yaml had 0 symbol mappings because only path/directory were read)
     type: command

@@ -297,7 +297,7 @@ describe('paradigm-resolve.sh — git and cd edge cases', { timeout: SHELL_TEST_
  * The pre-commit hooks resolve the CLI through the same paradigm-resolve.sh and
  * run from the project root, even when `git commit` runs in a subdirectory.
  */
-describe('pre-commit hooks — local CLI from the project root', { timeout: SHELL_TEST_TIMEOUT }, () => {
+describe('pre-commit hooks — retired no-ops', { timeout: SHELL_TEST_TIMEOUT }, () => {
   const ENTRY = `
 if (process.argv[2] === 'index') require('fs').writeFileSync(require('path').join(process.env.PM_MARK_DIR, '.local-index-ran'), process.cwd());
 `;
@@ -332,31 +332,23 @@ if (process.argv[2] === 'index') require('fs').writeFileSync(require('path').joi
     return { status: res.status, ranIn: fs.existsSync(marker) ? realPath(fs.readFileSync(marker, 'utf8').trim()) : null, root };
   }
 
-  it('without a repo or project dir, a subdirectory is not mistaken for the root', () => {
-    const r = precommit('claude-code-precommit.sh', () => ({ tool_input: { command: 'git commit -m x' } }), undefined, false);
+  // Retired (T-2026-10-28-002): the pre-commit hooks no longer rebuild or stage
+  // the generated index; they are no-ops kept for existing settings entries.
+  it('claude-code-precommit.sh never runs the CLI (git toplevel, no project dir)', () => {
+    const r = precommit('claude-code-precommit.sh', () => ({ tool_input: { command: 'git commit -m x' } }));
     expect(r.status).toBe(0);
     expect(r.ranIn).toBeNull();
   });
 
-  it('claude-code-precommit.sh run from a subdirectory (git toplevel) runs the local CLI in the root', () => {
-    const r = precommit('claude-code-precommit.sh', () => ({ tool_input: { command: 'git commit -m x' } }));
-    expect(r.status).toBe(0);
-    expect(r.ranIn).toBe(r.root);
-  });
-
-  it('claude-code-precommit.sh prefers CLAUDE_PROJECT_DIR', () => {
+  it('claude-code-precommit.sh never runs the CLI with CLAUDE_PROJECT_DIR', () => {
     const r = precommit('claude-code-precommit.sh', () => ({ tool_input: { command: 'git commit -m x' } }), (root) => ({ CLAUDE_PROJECT_DIR: root }), false);
-    expect(r.ranIn).toBe(r.root);
-  });
-
-  it('cursor-precommit.sh run from a subdirectory (git toplevel) runs the local CLI in the root', () => {
-    const r = precommit('cursor-precommit.sh', () => ({ command: 'git commit -m x' }));
     expect(r.status).toBe(0);
-    expect(r.ranIn).toBe(r.root);
+    expect(r.ranIn).toBeNull();
   });
 
-  it("cursor-precommit.sh uses the input's cwd", () => {
-    const r = precommit('cursor-precommit.sh', (root) => ({ command: 'git commit -m x', cwd: root }), undefined, false);
-    expect(r.ranIn).toBe(r.root);
+  it('cursor-precommit.sh never runs the CLI', () => {
+    const r = precommit('cursor-precommit.sh', (root) => ({ command: 'git commit -m x', cwd: root }));
+    expect(r.status).toBe(0);
+    expect(r.ranIn).toBeNull();
   });
 });

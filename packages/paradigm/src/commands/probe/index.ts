@@ -15,6 +15,7 @@ import {
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { generateFlowIndex } from '../scan/index.js';
 import { generateNavigator } from '../scan/navigator.js';
+import { log } from '../../utils/logger.js';
 
 interface IndexOptions {
   output?: string;
@@ -147,6 +148,11 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
     }
   }
 
+  // Generated .paradigm indexes (gitignored; a fresh clone has none)
+  if (!paradigmIsFile) {
+    await rebuildGeneratedIndexes(rootDir);
+  }
+
   // Summary
   if (!options.quiet) {
     console.log(chalk.gray(`\n  Output: ${outputPath}`));
@@ -163,6 +169,53 @@ export async function indexCommand(targetPath: string | undefined, options: Inde
   }
 
   return index;
+}
+
+/**
+ * Rebuild the generated YAML indexes under `.paradigm/` that are gitignored
+ * generated state (#session-markers-gitignore GENERATED_STATE): the lore
+ * timeline and the protocol, persona, curriculum, scenario and university
+ * indexes. Each runs only when its source directory exists, and each is
+ * non-fatal. The same rebuilders run in the MCP server's paradigm_reindex.
+ * SessionStart calls `paradigm index` when a fresh clone lacks the indexes.
+ */
+export async function rebuildGeneratedIndexes(rootDir: string): Promise<string[]> {
+  const p = (...parts: string[]) => path.join(rootDir, '.paradigm', ...parts);
+  const rebuilt: string[] = [];
+  const step = async (name: string, sourceDir: string, run: () => Promise<unknown>) => {
+    if (!fs.existsSync(sourceDir)) return;
+    try {
+      await run();
+      rebuilt.push(name);
+    } catch (err) {
+      log.command('index').debug('Generated index rebuild skipped', { index: name, error: (err as Error).message });
+    }
+  };
+  await step('lore/timeline.yaml', p('lore'), async () => {
+    const { rebuildTimeline } = await import('../../core/lore/storage.js');
+    await rebuildTimeline(rootDir);
+  });
+  await step('protocols/index.yaml', p('protocols'), async () => {
+    const { rebuildProtocolIndex } = await import('../../../../paradigm-mcp/src/utils/protocol-loader.js');
+    await rebuildProtocolIndex(rootDir);
+  });
+  await step('personas/index.yaml', p('personas'), async () => {
+    const { rebuildPersonaIndex } = await import('../../../../paradigm-mcp/src/utils/personas-loader.js');
+    await rebuildPersonaIndex(rootDir);
+  });
+  await step('curriculum/index.yaml', p('curriculum'), async () => {
+    const { rebuildSyllabusIndex } = await import('../../../../paradigm-mcp/src/utils/syllabus-loader.js');
+    await rebuildSyllabusIndex(rootDir);
+  });
+  await step('curriculum/scenarios/index.yaml', p('curriculum', 'scenarios'), async () => {
+    const { rebuildScenarioIndex } = await import('../../../../paradigm-mcp/src/utils/scenario-loader.js');
+    await rebuildScenarioIndex(rootDir);
+  });
+  await step('university/index.yaml', p('university'), async () => {
+    const { rebuildUniversityIndex } = await import('@a-company/university-core');
+    rebuildUniversityIndex(rootDir);
+  });
+  return rebuilt;
 }
 
 /**
