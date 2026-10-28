@@ -361,6 +361,12 @@ interface LocalSession {
   /** slice C6'a2-1: framed "/" results waiting for the human's next turn (the result policy said send) */
   pendingSend?: SendItem[];
   /**
+   * slice C6'a2-3: every "/" run that ran, by runId, kept for a one-off send (request.session.tools.send) until
+   * RUN_RESULT_TTL_MS after the run or until it is sent (then only the `sent` mark stays, for already-sent). Separate from
+   * `runs`: reading a carded result (tools.result, read once) never consumes it. Bounded (RUN_RESULTS_MAX).
+   */
+  sendable?: Map<string, SendableRun>;
+  /**
    * slice C6'a2-1 (INJECTION PAUSE, founder: whole session): set once the session took in ANY sent tool result or skill
    * text. The text stays in the child's history (and can be copied into a note), so it lasts for the rest of the
    * session — through compaction — and ends only with the session (a new session starts clean).
@@ -379,6 +385,22 @@ interface SlashResult {
   /** the server's trust when it ran (the frame names it) */
   trust: ServerTrust;
   at: number;
+  /** slice C6'a2-3: the "/" run it came from */
+  runId?: string;
+}
+
+/** Slice C6'a2-3: one ran "/" result held for a one-off send (never logged: the row is hash-only). */
+interface SendableRun {
+  /** the principal that ran it (only they send it) */
+  principal: string;
+  /** the capability entry it ran (kept after the send: an already-sending check reads its policy) */
+  entryId: string;
+  /** the result; dropped once it is sent */
+  result?: SlashResult;
+  /** the bindHash (#local-result-policy key) the entry had when it ran: a send re-checks it */
+  bindHash: string;
+  expires: number;
+  sent: boolean;
 }
 
 /** Slice C6'a2-1: a "/" run's held result (pending until the carded run settles). */
@@ -491,13 +513,19 @@ export const LOCAL_SESSION_TOOLS_RUN_REQUEST = 'request.session.tools.run' as co
 export const LOCAL_SESSION_TOOLS_RESULT_REQUEST = 'request.session.tools.result' as const;
 export const LOCAL_SESSION_TOOLS_POLICY_REQUEST = 'request.session.tools.policy' as const;
 /**
+ * Slice C6'a2-3 (founder: "ask" means ask each time): the human sends ONE held "/" result to the model, framed as data,
+ * without changing the tool's policy ({hsid, runId}; gui press only, the owner, never a loop session). Dispatcher-only:
+ * its row is the tool.result.sent{policy:'once'} written when the human's next turn takes it.
+ */
+export const LOCAL_SESSION_TOOLS_SEND_REQUEST = 'request.session.tools.send' as const;
+/**
  * Slice C6'a2-2 ("/" skills, TD-2026-10-28-956 / -969; kernel/supervisor/skill-run.ts): the human lists the repo skills
  * staged for a running session ({hsid}) and runs one ({hsid, name, args}). Dispatcher-only: never rows of their own
  * (each run logs one skill.run row). The supervisor serves a Claude session's; the lane serves a local session's.
  */
 export const SESSION_SKILLS_LIST_REQUEST = 'request.session.skills.list' as const;
 export const SESSION_SKILL_RUN_REQUEST = 'request.session.skill.run' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST, LOCAL_SESSION_TOOLS_START_REQUEST, LOCAL_SESSION_TOOLS_RUN_REQUEST, LOCAL_SESSION_TOOLS_RESULT_REQUEST, LOCAL_SESSION_TOOLS_POLICY_REQUEST, SESSION_SKILLS_LIST_REQUEST, SESSION_SKILL_RUN_REQUEST]);
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST, LOCAL_SESSION_TOOLS_START_REQUEST, LOCAL_SESSION_TOOLS_RUN_REQUEST, LOCAL_SESSION_TOOLS_RESULT_REQUEST, LOCAL_SESSION_TOOLS_POLICY_REQUEST, LOCAL_SESSION_TOOLS_SEND_REQUEST, SESSION_SKILLS_LIST_REQUEST, SESSION_SKILL_RUN_REQUEST]);
 /** Slice C6'a2-2: a skill run's reply status. */
 export type SkillRunStatus = 'ran' | 'refused';
 /** Slice C6'a2-1: at most this many framed "/" results wait for the human's next turn (the oldest goes first). */
@@ -1901,7 +1929,10 @@ export class LocalLane {
    * pins (nothing is bound, started or sent). It folds mcpReport (the launch-check and pool refusals, the index
    * failures) with the pool's runtime state (a server that crashed after it started is `failed`). Every description,
    * error, why and server string is cleaned (cleanServerText) and capped (CAPABILITY_TEXT_MAX); a tool's fullSchema is
-   * returned only for a fullOfferable or human-only entry, every key and string of it cleaned.
+   * returned only for a fullOfferable or human-only entry, every key and string of it cleaned. Slice C6'a2-3 (K1): each
+   * tool names its "/" result policy (`send` | `ask`, read from the ResultPolicyBook for this repo and the entry's
+   * binding NOW; null: not chosen yet, the first use, or the binding changed). K2: a top-level `tainted` says whether
+   * THIS session is tainted (#taintedNow).
    */
   #capabilities(s: LocalSession): Record<string, unknown> {
     const tier = s.tier?.tier ?? null;
@@ -1965,7 +1996,10 @@ export class LocalLane {
         // slice C6'a2-1: can the human run it from "/" (request.session.tools.run), and if not, why (shown in the menu)
         const unchecked = schemaRefusal(e.schema);
         const run = m.pool.trustBindingOf(e.server) === null ? { runnable: false, why: 'untrusted' } : unchecked ? { runnable: false, why: 'unchecked-schema', detail: capText(unchecked) } : { runnable: true };
-        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}), run });
+        // slice C6'a2-3 (K1): the tool's "/" result policy for this repo and binding NOW (null: not chosen yet, first use;
+        // a binding change or no live trust reads null too)
+        const policy = this.#policyOf(s, e)?.policy ?? null;
+        tools.push({ id: capabilityKey(e.id), name: capText(e.name, 64), server: capText(e.server, 64), class: e.class, humanOnly: e.humanOnly, availability, description: capText(e.description), params: paramsOf(e.humanOnly ? fullParameters(e) : e.parameters), ...(fullSchema !== undefined ? { fullSchema } : {}), run, policy });
       }
     }
     return {
@@ -1979,6 +2013,9 @@ export class LocalLane {
       servers,
       pins,
       tools,
+      // slice C6'a2-3 (K2): THIS session took in a sent tool result or skill text (the injection pause); the GUI re-reads
+      // it on this session's tool.result.sent and skill.run rows. Per session: never another session's taint.
+      tainted: this.#taintedNow(s),
     };
   }
 
@@ -2103,28 +2140,34 @@ export class LocalLane {
       // the card waits on the human: the run settles later and its result is held for tools.result
       const held = this.#holdRun(s, runId, { principal, cardId: first.cardId, expires: this.#now() + RUN_RESULT_TTL_MS });
       void run.then((r) => {
-        held.out = this.#runOut(s, entry, args, trust, r);
+        held.out = this.#runOut(s, entry, args, trust, r, { runId, principal, expires: held.expires });
       }).catch(() => {
         held.out = { status: 'refused', why: 'refused', content: 'the run failed', isError: true };
       });
       return { hsid: s.hsid, status: 'carded' satisfies SlashRunStatus, runId, cardId: first.cardId, isError: false };
     }
-    const out = this.#runOut(s, entry, args, trust, first.r);
+    const out = this.#runOut(s, entry, args, trust, first.r, { runId, principal, expires: this.#now() + RUN_RESULT_TTL_MS });
     return { hsid: s.hsid, ...out, runId, ...(first.r.cardId ? { cardId: first.r.cardId } : {}) };
   }
 
   /** Slice C6'a2-1: a settled "/" run's reply, and its result kept for the result policy (ran only). */
-  #runOut(s: LocalSession, entry: CapabilityEntry, args: Record<string, unknown>, trust: ServerTrust, r: { content: string; isError: boolean; decision?: string }): { status: 'ran' | 'refused'; why?: string; content: string; isError: boolean } {
+  #runOut(s: LocalSession, entry: CapabilityEntry, args: Record<string, unknown>, trust: ServerTrust, r: { content: string; isError: boolean; decision?: string }, hold: { runId: string; principal: string; expires: number }): { status: 'ran' | 'refused'; why?: string; content: string; isError: boolean } {
     const ran = r.decision === 'ran' || r.decision === 'approved';
     if (!ran) return { status: 'refused', why: r.decision ?? 'refused', content: r.content, isError: true };
-    this.#ranResult(s, { entry, argsHash: inputHash(args), text: r.content, isError: r.isError, trust, at: this.#now() });
+    this.#ranResult(s, { entry, argsHash: inputHash(args), text: r.content, isError: r.isError, trust, at: this.#now(), runId: hold.runId }, hold);
     return { status: 'ran', content: r.content, isError: r.isError };
   }
 
   /** Slice C6'a2-1: the latest "/" result of each entry (the result policy reads it). */
-  #ranResult(s: LocalSession, r: SlashResult): void {
+  #ranResult(s: LocalSession, r: SlashResult, hold: { principal: string; expires: number }): void {
+    const key = this.#policyOf(s, r.entry);
+    // slice C6'a2-3: held for a one-off send under the binding it ran with (a run with no live binding is never sendable)
+    if (key && r.runId) this.#keepSendable(s, r.runId, { principal: hold.principal, entryId: r.entry.id, result: r, bindHash: key.bindHash, expires: hold.expires, sent: false });
     // #local-result-policy: `send` (for this repo, tool and binding NOW) queues it for the human's next turn
-    if (this.#policyOf(s, r.entry)?.policy === 'send') return this.#queueSend(s, r);
+    if (key?.policy === 'send') {
+      this.#queueSend(s, r);
+      return;
+    }
     const last = (s.lastRuns ??= new Map());
     last.delete(r.entry.id);
     last.set(r.entry.id, r);
@@ -2151,19 +2194,75 @@ export class LocalLane {
     return { repoKey, tool, bindHash, policy };
   }
 
-  /** Slice C6'a2-1: frame one "/" result for the human's next turn (capped, at most PENDING_SEND_MAX waiting). */
-  #queueSend(s: LocalSession, r: SlashResult): void {
+  /**
+   * Slice C6'a2-1: frame one "/" result for the human's next turn (capped, at most PENDING_SEND_MAX waiting). Slice
+   * C6'a2-3: `once` (a one-off send) marks the item and its row policy 'once'; either way the run is marked sent (its
+   * held text dropped), and the entry's latest result is forgotten only when it is this run (never sent twice).
+   */
+  #queueSend(s: LocalSession, r: SlashResult, once = false): SendItem | null {
     const key = this.#policyOf(s, r.entry);
-    if (!key) return;
+    if (!key) return null;
     const tool = key.tool;
     // Aegis Low 1: the WHOLE frame fits the turn's cap less the note reserve, so an oversize result is sent cut
     const cap = resultCap(s.context.target);
     const reserve = noteReserve();
     const f = frameResult({ tool, trust: r.trust, text: r.text, isError: r.isError }, { bytes: Math.max(0, cap.bytes - reserve.bytes), tokens: Math.max(0, cap.tokens - reserve.tokens) });
     const q = (s.pendingSend ??= []);
-    q.push({ frame: f.frame, row: { hsid: s.hsid, tool, argsHash: r.argsHash, bytes: f.bytes, cut: f.cut, policy: 'send' }, entryId: r.entry.id, tool, bindHash: key.bindHash });
+    const item: SendItem = { frame: f.frame, row: { hsid: s.hsid, tool, argsHash: r.argsHash, bytes: f.bytes, cut: f.cut, policy: once ? 'once' : 'send' }, entryId: r.entry.id, tool, bindHash: key.bindHash, ...(once ? { once: true } : {}) };
+    q.push(item);
     while (q.length > PENDING_SEND_MAX) q.shift();
-    s.lastRuns?.delete(r.entry.id);
+    const last = s.lastRuns?.get(r.entry.id);
+    if (last && (!once || last.runId === r.runId)) s.lastRuns!.delete(r.entry.id);
+    const held = r.runId ? s.sendable?.get(r.runId) : undefined;
+    if (held) {
+      held.sent = true;
+      delete held.result;
+    }
+    return item;
+  }
+
+  /** Slice C6'a2-3: keep a ran "/" result for a one-off send (bounded, expired ones dropped first). */
+  #keepSendable(s: LocalSession, runId: string, h: SendableRun): void {
+    const m = (s.sendable ??= new Map());
+    const now = this.#now();
+    for (const [id, x] of m) if (x.expires <= now) m.delete(id);
+    m.set(runId, h);
+    while (m.size > RUN_RESULTS_MAX) m.delete(m.keys().next().value!);
+  }
+
+  /**
+   * Slice C6'a2-3 (founder: "ask" means ask each time): request.session.tools.send{hsid, runId} — the human sends ONE held
+   * "/" result to the model, framed as data, WITHOUT changing the tool's policy. A gui press only (as moving a policy to
+   * send; the dispatcher already holds it to the owner and refuses a loop session). Allowed while the tool's policy is ask
+   * or unchosen (send: already-sending). The run must still be held: this session's, the asker's, within
+   * RUN_RESULT_TTL_MS of the run and not sent yet (a second send: already-sent; a tools.result read never consumes it).
+   * The trust and binding are re-checked as the Aegis M2 attach check does (the entry's bindHash NOW must equal the one it
+   * ran with, else changed). Then the same #queueSend (frameResult, the whole-queue cap at attach) with policy 'once',
+   * and the session is tainted at once (it is sent data). The tool.result.sent{policy:'once'} row is written when the
+   * human's next turn takes it.
+   */
+  #toolsSend(asker: LocalSessionAsker, s: LocalSession, p: Record<string, unknown>): Record<string, unknown> {
+    const kind = LOCAL_SESSION_TOOLS_SEND_REQUEST;
+    if (typeof p.runId !== 'string' || !/^run-[0-9a-f]{24}$/.test(p.runId)) throw refused('BAD_REQUEST', `${kind}: runId must be a run id`, { reason: 'bad-params', field: 'runId' });
+    if (asker.credential !== 'gui') throw refused('FORBIDDEN', `${kind}: sending a result to the model takes a press in the Gnomon app`, { reason: 'matrix' });
+    if (!this.#o.resultPolicy) throw refused('UNSUPPORTED', `${kind}: the result policy is not available in this daemon`, { reason: 'unavailable' });
+    const runId = p.runId;
+    const m = s.sendable;
+    const now = this.#now();
+    if (m) for (const [id, x] of m) if (x.expires <= now) m.delete(id);
+    const h = m?.get(runId);
+    if (!h || h.principal !== asker.principal) throw refused('NOT_FOUND', `${kind}: no held result for this run (it expired, is from another session or is not yours)`, { reason: 'not-found' });
+    const ran = h.result;
+    const e = s.mcp ? [...s.mcp.entries.values()].flat().find((y) => y.id === h.entryId) : undefined;
+    const key = e ? this.#policyOf(s, e) : null;
+    if (key?.policy === 'send') throw refused('BAD_REQUEST', `${kind}: ${key.tool} already sends its results to the model`, { reason: 'already-sending' });
+    if (h.sent || !ran) throw refused('BAD_REQUEST', `${kind}: this result was already sent`, { reason: 'already-sent' });
+    if (!key || key.bindHash !== h.bindHash) throw refused('FORBIDDEN', `${kind}: the tool or its server's trust changed since it ran, so this result is not sent`, { reason: 'changed' });
+    // tainted FIRST (as a skill run): the result is sent data from here on
+    s.tainted = true;
+    const item = this.#queueSend(s, ran, true);
+    if (!item) throw refused('FORBIDDEN', `${kind}: the tool or its server's trust changed since it ran, so this result is not sent`, { reason: 'changed' });
+    return { hsid: s.hsid, runId, tool: key.tool, policy: 'once', queued: true, bytes: item.row.bytes, cut: item.row.cut, tainted: true };
   }
 
   /**
@@ -2532,7 +2631,7 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_TOOLS_RUN_REQUEST ? ['hsid', 'id', 'args', 'form'] : kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST ? ['hsid', 'runId'] : kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST ? ['hsid', 'id', 'policy'] : kind === SESSION_SKILL_RUN_REQUEST ? ['hsid', 'name', 'args'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_TOOLS_RUN_REQUEST ? ['hsid', 'id', 'args', 'form'] : kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST || kind === LOCAL_SESSION_TOOLS_SEND_REQUEST ? ['hsid', 'runId'] : kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST ? ['hsid', 'id', 'policy'] : kind === SESSION_SKILL_RUN_REQUEST ? ['hsid', 'name', 'args'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
@@ -2577,6 +2676,8 @@ export class LocalLane {
     if (kind === LOCAL_SESSION_TOOLS_RUN_REQUEST) return this.#toolsRun(asker.principal, s, p);
     if (kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST) return this.#toolsResult(asker.principal, s, p);
     if (kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST) return this.#toolsPolicy(asker, s, p);
+    // slice C6'a2-3: a one-off send of one held "/" result (gui press, owner; a loop session is refused above)
+    if (kind === LOCAL_SESSION_TOOLS_SEND_REQUEST) return this.#toolsSend(asker, s, p);
     // slice C6'a2-2: "/" skills (the human's own; a loop session is refused above)
     if (kind === SESSION_SKILLS_LIST_REQUEST) return { hsid: s.hsid, skills: this.#skillList(s) };
     if (kind === SESSION_SKILL_RUN_REQUEST) return this.#skillRun(asker.principal, s, p);
@@ -2941,7 +3042,8 @@ export class LocalLane {
     const still = stillSendable(s.pendingSend ?? [], (x) => {
       const e = s.mcp ? [...s.mcp.entries.values()].flat().find((y) => y.id === x.entryId) : undefined;
       const k = e ? this.#policyOf(s, e) : null;
-      return k !== null && k.policy === 'send' && k.bindHash === x.bindHash;
+      // slice C6'a2-3: a one-off (once) frame needs only the same binding: the human sent it while the tool was ask
+      return k !== null && k.bindHash === x.bindHash && (x.once === true || k.policy === 'send');
     });
     // Aegis M3: the cap covers the whole turn's data; the oldest frames go first and a kernel label says so
     const cap = resultCap(s.context.target);

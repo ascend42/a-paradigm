@@ -365,6 +365,9 @@ describe('G-LCL-26 the result policy and framing', () => {
     expect(r.dropped).toBe(2);
     expect(stillSendable(q, () => { throw new Error('unreadable'); }).keep).toEqual([]);
     expect(dropTool(q, 'mcp:srv/a').map((x) => x.tool)).toEqual(['mcp:srv/b', 'mcp:srv/c']);
+    // C6'a2-3: a one-off send (once) the human made under ask stays when its tool is moved to ask
+    const once: SendItem = { ...item('mcp:srv/a'), frame: 'once', once: true };
+    expect(dropTool([...q, once], 'mcp:srv/a').map((x) => x.frame)).toEqual(['mcp:srv/b', 'mcp:srv/c', 'once']);
   });
 
   it('Aegis M3: the cap covers the whole queue (oldest dropped first, labelled); non-ASCII text counts stricter', () => {

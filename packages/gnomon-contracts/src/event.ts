@@ -294,7 +294,8 @@ const TABLE: Row[] = [
   // policy} — the human's choice whether a tool's "/" results go to the model (send) or not (ask), keyed by the repo,
   // the brokered tool name and its bindHash: KERNEL-signed only (ResultPolicyBook folds no other row; a binding change
   // reads ask). tool.result.sent{hsid, tool, argsHash, bytes, cut, policy} — one "/" result the kernel attached to the
-  // human's next turn as framed data (hash-only: never the result).
+  // human's next turn as framed data (hash-only: never the result); its policy is send, or (slice C6'a2-3) once: the
+  // human sent one held result while the tool stayed ask.
   ['tool', 'kernel', 'brokered selection trust result.policy result.sent', LOCAL_LANE],
   // 8.0:local-lane (slice C6'a2): skill.run{hsid, name, skillHash, argsHash, via, decision, tokens?} — the human ran a
   // repo skill from "/" (native: the model's own slash skill; template: the kernel's sanitized template). Hash-only.
@@ -713,6 +714,13 @@ export type ToolBrokeredAuthor = (typeof TOOL_BROKERED_AUTHORS)[number];
  */
 export const TOOL_RESULT_POLICIES = ['send', 'ask'] as const;
 export type ToolResultPolicy = (typeof TOOL_RESULT_POLICIES)[number];
+/**
+ * tool.result.sent{policy} (CLOSED, C6'a2-3): the policies above, plus `once` — a held "/" result the human sent to the
+ * model one time (request.session.tools.send) while the tool's policy stayed ask or unchosen. tool.result.policy never
+ * takes `once` (it is not a standing choice).
+ */
+export const TOOL_RESULT_SENT_POLICIES = [...TOOL_RESULT_POLICIES, 'once'] as const;
+export type ToolResultSentPolicy = (typeof TOOL_RESULT_SENT_POLICIES)[number];
 /** skill.run{name}: a repo skill name (lowercase letters, digits and hyphens, at most 64). */
 export const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 /** skill.run{via} (CLOSED, C6'a2): native (the model's own slash skill) or template (the kernel's sanitized template). */
@@ -1151,7 +1159,7 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if ('argsHash' in v) c.str('argsHash', v.argsHash, SHA256_TAGGED, 'sha256:<hex>');
       if ('bytes' in v && (typeof v.bytes !== 'number' || !Number.isSafeInteger(v.bytes) || v.bytes < 0)) c.fail('bytes', 'must be a non-negative integer');
       if ('cut' in v && typeof v.cut !== 'boolean') c.fail('cut', 'must be a boolean');
-      if ('policy' in v) c.closedEnum('policy', v.policy, TOOL_RESULT_POLICIES);
+      if ('policy' in v) c.closedEnum('policy', v.policy, TOOL_RESULT_SENT_POLICIES);
       break;
     case 'skill.run':
       if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');

@@ -32,7 +32,9 @@ components:
       approval.rule.enabled{cause:'human'}. expireDue() writes
       approval.rule.enabled{cause:'expired', until} for each passed off time
       (the GUI feed shows it). status.rules (human class): every rule, its
-      words, state, until, and the kernel-clock presets. #always-rules folds
+      words, state, until, and the kernel-clock presets; a tool rule also
+      names its class (destructive | mutate, as learned; 8.0:local-lane
+      C6'a2-3), other rules none. #always-rules folds
       the rows: an off rule never matches, is not repoEditsRule (the mode
       chip) and `gnomon rules list` says off. Tests: test/rules-view.test.ts,
       test/socket-abi.test.ts (8.0:rules-view request.rules.apply).

@@ -64,6 +64,6 @@ describe('8.0:rules-view kinds', () => {
     expect(RULES_BATCH_PATTERN.test(`batch:${ULID}`)).toBe(true);
     expect((CLIENT_API_DESCRIPTOR as unknown as Record<string, unknown>).rulesView).toEqual({ request: 'request.rules.apply', max: 64, ops: ['remove', 'off', 'on'], offMaxMs: RULE_OFF_MAX_MS, untilManual: 'manual', enableCauses: ['human', 'expired'], batchPattern: RULES_BATCH_PATTERN.source, cardOp: 'rules.apply' });
     // moved again after this one by 8.0:git-verbs (merged later): the live pin is m1-1-reservations' PINNED_CLIENT_API_ID
-    expect(CLIENT_API_ID).toBe('sha256:ef710386692316235e192831734ddd1b98c77b900456c20d59d674696976e6c3');
+    expect(CLIENT_API_ID).toBe('sha256:fed7e22ca4e35405f65592e3a3d829b33beeaada98b7321483496f4dd185c4a3');
   });
 });
