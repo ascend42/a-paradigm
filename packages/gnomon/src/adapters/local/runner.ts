@@ -238,8 +238,11 @@ export const abortLine = (): string => line({ type: 'abort' });
 export const toolResponseLine = (r: ToolResponse): string => line({ type: 'tool_response', id: r.id, content: r.content.slice(0, TOOL_RESPONSE_MAX_CHARS), isError: r.isError, provenance: r.provenance });
 /** Aegis N4: the call's effect started (the child extends its wait for this id). */
 export const toolProgressLine = (id: string): string => line({ type: 'tool_progress', id, state: 'running' });
-/** Slice S1: the brokered tools offered from the child's next step on. */
-export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>, id?: string): string => line({ ...(id ? { id } : {}), type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })) });
+/**
+ * Slice S1: the brokered tools offered from the child's next step on. Slice C4'a (#local-tool-tier): an optional
+ * `surface` (compact | full) the child applies together with the set (a tier change), then recomputes its ledger.
+ */
+export const toolsSetLine = (tools: ReadonlyArray<OfferedTool>, id?: string, surface?: 'compact' | 'full'): string => line({ ...(id ? { id } : {}), type: 'tools_set', tools: tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, class: t.class })), ...(surface ? { surface } : {}) });
 
 /** Slice B2: the working-memory block (the kernel's render; goalHash only when it pins the goal whole). */
 export const memorySetLine = (m: MemorySet, id?: string): string => line({ ...(id ? { id } : {}), type: 'memory_set', render: m.render, hash: m.hash, bytes: m.bytes, ...(m.goalHash !== undefined ? { goalHash: m.goalHash } : {}) });
@@ -260,7 +263,7 @@ export const localAdapter: LocalAdapter = Object.freeze({
   turnLine: (t: { text: string; inFlight: boolean }): string => (t.inFlight ? followUpLine(t.text) : promptLine(t.text)),
   interruptLine: (): string => abortLine(),
   steerLine: (text: string): string => steerLine(text),
-  toolsSetLine: (tools: ReadonlyArray<OfferedTool>, id?: string): string => toolsSetLine(tools, id),
+  toolsSetLine: (tools: ReadonlyArray<OfferedTool>, id?: string, surface?: 'compact' | 'full'): string => toolsSetLine(tools, id, surface),
   toolResponseLine: (r: ToolResponse): string => toolResponseLine(r),
   toolProgressLine: (id: string): string => toolProgressLine(id),
   memorySetLine: (m: MemorySet, id?: string): string => memorySetLine(m, id),

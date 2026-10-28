@@ -252,11 +252,19 @@ describe('TD-2026-10-27-833: a local session runs the REAL staged Paradigm bundl
       launchPlan: (i) => (plans.push(i as never), { command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
       localMcp: (ctx) => m.composeLocal(ctx),
     });
+    // slice C4'a: measure the endpoint's tool skill first, as the daemon's start probe does (the fake passes T1-T4;
+    // the 8k window caps it at tier 2); an unmeasured endpoint opens provisional at tier 1
+    await lane.probeAll();
+    await lane.tierSettled();
     const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.repo, model: 'local' }, async () => null))!;
     const offered = rows.find((r) => r.kind === 'session.sandbox' && r.payload.hsid === s.hsid)!.payload.brokeredTools as string[];
     // C2' slot rule (offerWithin): Paradigm's first narrow tools in index order while they fit the tools slot
     expect(offered.filter((n) => n.startsWith('paradigm_')).length).toBeGreaterThan(5);
-    expect(offered).toEqual(expect.arrayContaining(['paradigm_status', 'paradigm_lore.calibration', 'paradigm_lore.assess']));
+    // slice C4'a: tier 2 offers at most K 12 narrow tools (C3' offered 24), so the two this test calls are human pins
+    for (const name of ['paradigm_lore.calibration', 'paradigm_lore.assess']) await lane.humanRequest(human as never, 'request.session.tools.pin', { hsid: s.hsid, name, pinned: true });
+    const now = rows.filter((r) => r.kind === 'tool.selection' && r.payload.hsid === s.hsid).at(-1)!.payload;
+    expect(now.trigger).toBe('pin');
+    expect(offered).toContain('paradigm_status');
     await lane.send(HUMAN, { hsid: s.hsid, text: 'go' });
     expect(await waitFor(() => rows.some((r) => r.kind === 'turn.result'), 30_000)).toBe(true);
     const brokered = rows.filter((r) => r.kind === 'tool.brokered').map((r) => [r.payload.server, r.payload.tool, r.payload.class, r.payload.decision]);
@@ -319,6 +327,10 @@ describe('slice C3\' (#tool-selector): per-step selection and find_tool with the
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
       localMcp: (ctx) => m.composeLocal(ctx),
     });
+    // slice C4'a: measure the endpoint's tool skill first, as the daemon's start probe does (the fake passes T1-T4;
+    // the 8k window caps it at tier 2); an unmeasured endpoint opens provisional at tier 1
+    await lane.probeAll();
+    await lane.tierSettled();
     const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.repo, model: 'local' }, async () => null))!;
     // a human pin (human-only request) is offered from the next selection; the model has no path to one
     const pin = await lane.humanRequest(human as never, 'request.session.tools.pin', { hsid: s.hsid, name: 'paradigm_task.list', pinned: true });

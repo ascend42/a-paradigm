@@ -55,6 +55,11 @@
  * reassembled (the op fixed by the kernel), validated against the FULL schema,
  * class-gated as above, and its card shows `mcp:<server>/<tool>` with the
  * reassembled call; setTools() replaces the set on a server's list_changed.
+ * Slice C4'a (#local-tool-tier): each offered narrow tool carries the FORM it
+ * was offered in; a 'full' one goes through reassembleFull (an op key refused,
+ * the op set, the full schema), a 'narrow' one through reassemble. A tier
+ * change that re-offers the same entry in another form keeps the previous
+ * form callable (and winning its name) until the child's tools_applied.
  * GAPS left for C3'/C5' (documented in .purpose): no selection beyond the
  * C2' slot rule; no Always/standing grants for brokered tools; no grant UI
  * for per-server trust; the suspension notice is the tool.brokered row
@@ -67,7 +72,7 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { KERNEL_MCP_SERVER } from '../git/verbs.js';
 import { kernelMcpAnswer } from '../supervisor/kernel-mcp.js';
 import { composePermission, inputHash } from '../supervisor/permission.js';
-import { reassemble, type CapabilityEntry } from './capability-index.js';
+import { reassemble, reassembleFull, type CapabilityEntry, type ToolForm } from './capability-index.js';
 
 /** The same deadlines the child waits (gnomon-local broker.ts TOOL_TIMEOUT_MS / CARD_TIMEOUT_MS). */
 export const TOOL_TIMEOUT_MS = 30_000;
@@ -102,6 +107,11 @@ export interface BrokeredTool {
    * dotted params) and validated against `entry.schema` (the FULL schema) before the target sees them
    */
   entry?: CapabilityEntry;
+  /**
+   * slice C4'a (#local-tool-tier): the form a narrow tool was OFFERED in — 'full' (tier 3: its full schema, the call
+   * goes through reassembleFull) or 'narrow' (default: reassemble). A call routes by the form it was offered in.
+   */
+  form?: ToolForm;
   /** slice C2': the target this tool goes to (an MCP server of the session's pool); default the broker's own */
   target?: BrokerTarget;
 }
@@ -379,6 +389,9 @@ export function droppedLine(dropped: readonly string[]): string[] {
   return [`not offered to the model: ${plain.join(', ')}${rest ? `${plain.length ? ' ' : ''}(+${rest} more)` : ''}`];
 }
 
+/** Slice C4'a: `a` is the same capability entry as `b`, offered in another form. */
+const formShadow = (a: BrokeredTool, b: BrokeredTool): boolean => a.entry !== undefined && b.entry !== undefined && a.entry.id === b.entry.id && (a.form ?? 'narrow') !== (b.form ?? 'narrow');
+
 /** The namespaced name a brokered card shows (Aegis L6): never a Claude tool name composePermission special-cases. */
 export const brokeredToolName = (target: Pick<BrokerTarget, 'provenance' | 'server'>, tool: string): string => (target.provenance === 'kernel' ? `kernel:${tool}` : `mcp:${target.server}/${tool}`);
 
@@ -416,7 +429,9 @@ export class LocalToolBroker {
       // then its current step still offers the set the kernel offered before. Those tools stay callable (union) until
       // the ack, never a name the new set holds (the new entry wins), and every call still runs the full validation,
       // class gate and manual check
-      this.#grace = [...this.#tools, ...this.#grace].filter((t, i, a) => a.findIndex((x) => x.name === t.name) === i && !next.some((n) => n.name === t.name));
+      // slice C4'a: a tier change can re-offer the SAME entry in another form; until the ack the child still offers the
+      // previous form, so that grace entry stays (formShadow) and wins its name while the ack is pending
+      this.#grace = [...this.#tools, ...this.#grace].filter((t, i, a) => a.findIndex((x) => x.name === t.name) === i && !next.some((n) => n.name === t.name && !formShadow(t, n)));
       this.#graceAck = o.ackId;
     } else this.clearGrace();
     this.#tools = next;
@@ -436,6 +451,17 @@ export class LocalToolBroker {
   /** Slice C3' (Aegis M3): drop grace tools a list_changed removed or changed, or whose server is gone. */
   pruneGrace(keep: (t: BrokeredTool) => boolean): void {
     this.#grace = this.#grace.filter(keep);
+  }
+
+  /**
+   * The tool a request names: the current set's, else the previous set's (until the ack); slice C4'a: while the ack is
+   * pending, a previous-set entry that is the same capability in another form wins (the child still offers that form).
+   */
+  #resolve(name: string): BrokeredTool | undefined {
+    const cur = this.#tools.find((t) => t.name === name);
+    const prev = this.#grace.find((t) => t.name === name);
+    if (cur && prev && this.#graceAck !== null && formShadow(prev, cur)) return prev;
+    return cur ?? prev;
   }
 
   /** What tools_set offers (empty for a loop session). */
@@ -496,7 +522,7 @@ export class LocalToolBroker {
   async handle(req: ToolRequestIn): Promise<ToolResponseOut> {
     const o = this.#o;
     const argsHash = inputHash(req.args ?? null);
-    const tool = req.name !== null ? (this.#tools.find((t) => t.name === req.name) ?? this.#grace.find((t) => t.name === req.name)) : undefined;
+    const tool = req.name !== null ? this.#resolve(req.name) : undefined;
     const target = tool?.target ?? o.target;
     const done = async (decision: ToolBrokeredDecision, content: string, isError: boolean, cardId?: string): Promise<ToolResponseOut> => {
       await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool ? { tool: tool.name, class: tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}) }, { session: o.hsid }).catch(() => undefined);
@@ -513,7 +539,9 @@ export class LocalToolBroker {
     // RESULT is validated against the FULL schema (its patterns through the safe-regex gate); a refusal never runs
     let callArgs: Record<string, unknown> = req.args;
     if (tool.entry) {
-      const r = reassemble(tool.entry, req.args);
+      // slice C4'a: the form it was offered in decides how its args are read (a full-form call: an op key refused, the
+      // op set, the full schema)
+      const r = tool.form === 'full' ? reassembleFull(tool.entry, req.args) : reassemble(tool.entry, req.args);
       if ('error' in r) return done('bad-args', `${tool.name}: ${r.error}`, true);
       callArgs = r.args;
     }

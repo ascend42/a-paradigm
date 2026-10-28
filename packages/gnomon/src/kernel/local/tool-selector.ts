@@ -13,8 +13,12 @@
  *   ORDER     priority, then budget. Human pins first (always, while they fit), then STICKY tools (called in the
  *             last two steps), then FOUND tools (a find_tool need's top matches, ranked: they replace the bottom of
  *             the set), then every candidate with a positive score (score desc, ties by id), then the rest in index
- *             order. Walking that order, a candidate is taken while the set stays under K and its compact-surface
- *             tokens fit the ledger's tools slot after the fixed tools (kernel verbs and find_tool).
+ *             order. Walking that order, a candidate is taken while the set stays under K and its surface tokens (in
+ *             the form it is offered in) fit the tools slot after the fixed tools (kernel verbs and find_tool).
+ *   TIER      slice C4'a (#local-tool-tier): K, the slot and the surface come from the session's tierPlan (tier 0: K
+ *             0, nothing selected, every pin unfit; tier 3: full forms for fullOfferable entries, a complex human-only
+ *             one included, costed in the full surface). Pins go first but never raise K or the slot (unfitPins says
+ *             why). The ranking is unchanged by the tier (BM25 always scores the narrow document).
  *   OUTPUT    the taken entries in INDEX order (so an unchanged membership is an unchanged native tools array and
  *             llama.cpp's prompt cache holds), the found matches that were taken, and a hash of the selected ids.
  *
@@ -25,14 +29,17 @@
  * its card at call time (#local-tool-broker), and a tool it does not offer is refused by the child and the broker.
  */
 import { createHash } from 'node:crypto';
-import { compactSurfaceTokens, MAX_OFFERED, toolsSlotTokens, type CapabilityEntry } from './capability-index.js';
+import { fullOfferable, MAX_OFFERED, offeredForm, parametersIn, surfaceTokens, toolsSlotTokens, type CapabilityEntry, type ToolForm } from './capability-index.js';
 
 /** The fields of a capability entry the selector reads. */
-export type SelectableEntry = Pick<CapabilityEntry, 'id' | 'name' | 'description' | 'parameters' | 'humanOnly' | 'server'>;
+export type SelectableEntry = Pick<CapabilityEntry, 'id' | 'name' | 'description' | 'parameters' | 'humanOnly' | 'server' | 'schema' | 'opParam'>;
 type Surface = Pick<CapabilityEntry, 'name' | 'description' | 'parameters'>;
 
-/** At most this many narrow tools are selected (until C4' derives K from the tier; the tools slot binds first at ~8k). */
-export const SELECT_K = 24;
+/**
+ * The default K when the caller passes none (slice C4'a: LocalLane always passes the tier's K from tierPlan — 0, 4, 12,
+ * 12 — and its slot; this default is the largest tier's K).
+ */
+export const SELECT_K = 12;
 /** A tool called in the last this-many steps stays selected. */
 export const STICKY_STEPS = 2;
 /** Re-select every this-many steps (and on a goal change, a steer, a find_tool); never every step (prompt caching). */
@@ -156,8 +163,17 @@ export interface SelectInput<T extends SelectableEntry> {
   allow?: (e: T) => boolean;
   /** Aegis L1: the class of an entry (destructive entries enter only via trusted text, pins, sticky or a need) */
   classOf?: (e: T) => string;
-  /** at most this many narrow tools (default SELECT_K) */
+  /** at most this many narrow tools (default SELECT_K; slice C4'a: the tier's K — 0 at tier 0 selects nothing) */
   k?: number;
+  /** slice C4'a: the tools slot in tokens (the tier's; default toolsSlotTokens(contextTarget)) */
+  slot?: number;
+  /** slice C4'a: the child's surface the costs are counted in (default compact; tier 3 full) */
+  surface?: 'compact' | 'full';
+  /**
+   * slice C4'a (tier 3): offer each fullOfferable entry in its FULL form (a complex human-only one included); the rest
+   * keep the narrow form (a human-only one without it is never a candidate)
+   */
+  allowFull?: boolean;
 }
 
 export interface Selection<T extends SelectableEntry> {
@@ -167,6 +183,10 @@ export interface Selection<T extends SelectableEntry> {
   found: T[];
   /** pins that did not fit the slot (or are not candidates) */
   unfit: string[];
+  /** slice C4'a: each unfit pin and why (tier-0, not-offerable, over-k, over-slot) */
+  unfitPins: Array<{ name: string; why: 'tier-0' | 'not-offerable' | 'over-k' | 'over-slot' }>;
+  /** slice C4'a: the form each selected entry is offered in (aligned with `selected`) */
+  forms: ToolForm[];
   /** candidates with a positive query score, best first (ids and scores; diagnostics and tests) */
   ranked: Array<{ id: string; name: string; score: number }>;
   /** sha256 of the selected ids in order */
@@ -174,14 +194,15 @@ export interface Selection<T extends SelectableEntry> {
 }
 
 /** The candidates in index order: offerable, unreserved, unbound elsewhere, allowed, first name wins. */
-export function candidatesOf<T extends SelectableEntry>(i: Pick<SelectInput<T>, 'entries' | 'fixed' | 'reserved' | 'bound' | 'allow'>): T[] {
+export function candidatesOf<T extends SelectableEntry>(i: Pick<SelectInput<T>, 'entries' | 'fixed' | 'reserved' | 'bound' | 'allow' | 'allowFull'>): T[] {
   // Aegis L6: reserved and fixed names compare case-insensitively
   const taken = new Set([...(i.reserved ?? []), ...i.fixed.map((f) => f.name)].map((n) => n.toLowerCase()));
   const seen = new Set<string>();
   const out: T[] = [];
   for (const e of i.entries) {
     // Aegis L3 (C2'): a server tool never takes a kernel verb's name or the gnomon_ prefix
-    if (e.humanOnly || taken.has(e.name.toLowerCase()) || /^gnomon_/i.test(e.name) || seen.has(e.name)) continue;
+    // slice C4'a: a human-only entry is a candidate only in its full form (tier 3, fullOfferable)
+    if ((e.humanOnly && !(i.allowFull && fullOfferable(e))) || taken.has(e.name.toLowerCase()) || /^gnomon_/i.test(e.name) || seen.has(e.name)) continue;
     const b = i.bound?.get(e.name);
     if (b !== undefined && b !== e.server) continue;
     if (i.allow && !i.allow(e)) continue;
@@ -223,24 +244,45 @@ export function selectTools<T extends SelectableEntry>(i: SelectInput<T>): Selec
   });
   const tiers = capped([...needRanked.map((x) => x.e), ...inIndex(i.found), ...ranked.map((x) => x.e)].filter((e, n, a) => a.indexOf(e) === n));
   const order: T[] = [...pins, ...inIndex(i.sticky), ...tiers, ...cands.filter((e) => !destructive(e))];
-  const slot = toolsSlotTokens(i.contextTarget);
-  let used = compactSurfaceTokens(i.fixed);
+  // slice C4'a: the tier's slot and surface; each candidate costs its OFFERED form (full or narrow) in that surface
+  const slot = Math.max(0, i.slot ?? toolsSlotTokens(i.contextTarget));
+  const surface = i.surface ?? 'compact';
+  const formOf = (e: T): ToolForm => offeredForm(e, i.allowFull === true) ?? 'narrow';
+  let used = surfaceTokens(i.fixed, surface);
   const chosen = new Set<T>();
+  const overK = new Set<T>();
+  const overSlot = new Set<T>();
   for (const e of order) {
-    if (chosen.has(e) || chosen.size >= k) continue;
-    const cost = compactSurfaceTokens([e]);
-    if (used + cost > slot) continue;
+    if (chosen.has(e)) continue;
+    if (chosen.size >= k) {
+      overK.add(e);
+      continue;
+    }
+    const cost = surfaceTokens([{ name: e.name, description: e.description, parameters: parametersIn(e, formOf(e)) }], surface);
+    if (used + cost > slot) {
+      overSlot.add(e);
+      continue;
+    }
     used += cost;
     chosen.add(e);
   }
   const selected = cands.filter((e) => chosen.has(e));
+  const forms = selected.map(formOf);
   const unfit = [...new Set(i.pins ?? [])].filter((n) => { const e = byName.get(n); return e === undefined || !chosen.has(e); });
+  // slice C4'a: pins never raise K or the slot; at tier 0 (K 0) every pin is unfit
+  const unfitPins = unfit.map((name) => {
+    const e = byName.get(name);
+    const why = k === 0 ? 'tier-0' as const : e === undefined ? 'not-offerable' as const : overSlot.has(e) && !overK.has(e) ? 'over-slot' as const : 'over-k' as const;
+    return { name, why };
+  });
   return {
     selected,
     found: needRanked.map((x) => x.e).filter((e) => chosen.has(e)),
     unfit,
+    unfitPins,
+    forms,
     ranked: ranked.map((x) => ({ id: x.id, name: x.e.name, score: x.score })),
-    hash: createHash('sha256').update(selected.map((e) => e.id).join('\n')).digest('hex'),
+    hash: createHash('sha256').update(selected.map((e, n) => (forms[n] === 'full' ? `${e.id}#full` : e.id)).join('\n')).digest('hex'),
   };
 }
 

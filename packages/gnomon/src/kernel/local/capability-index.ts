@@ -35,10 +35,18 @@
  * property name, never model text, and `__proto__`/`constructor`/`prototype` are never flattened). The broker then
  * validates the result against the FULL schema (validateBrokeredArgs: its safe-regex gate covers server patterns)
  * before any target runs.
+ *
+ * FULL FORM (slice C4'a, #local-tool-tier tier 3): an unsplit tool offered with its original inputSchema, a split
+ * `<tool>.<op>` with that schema MINUS its op param (same name, same id) — fullParameters. Only when fullOfferable
+ * (fullRefusal: every keyword at every depth is one the validator checks, depth <= 6, no proto keys, a model tool name,
+ * <= BROKER_PARAMETERS_BYTES and <= FULL_TOOL_MAX_TOKENS, every description/title/enum/default string unchanged by
+ * cleanServerText); otherwise the narrow form, or nothing for a human-only entry. A full-form call goes through
+ * reassembleFull (an op-param key refused, the op set, validated against the full schema). BM25 still scores the narrow
+ * document, so a tier change never reorders the ranking.
  */
 import { createHash } from 'node:crypto';
 import { canonicalJson, type ToolBrokerClass } from '@a-company/gnomon-contracts';
-import { SCHEMA_KEYWORDS } from './tool-broker.js';
+import { SCHEMA_KEYWORDS, unsafePattern, validateBrokeredArgs } from './tool-broker.js';
 import { neutraliseKernelText } from './working-memory.js';
 
 /** How much the kernel believes a server's own annotations (C5' adds the grant UI; config sets it today). */
@@ -147,6 +155,8 @@ export function firstSentence(d: string): string {
 
 /** Aegis M1: characters never let into a tool definition (the broker's FORBIDDEN_CHARS set). */
 const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Default_Ignorable_Code_Point}]/gu;
+/** The same set, non-global (a test with no lastIndex state). */
+const UNSAFE_CHAR = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Default_Ignorable_Code_Point}]/u;
 
 /**
  * Aegis M1: server text that reaches the model's TOOL LIST (descriptions) is data from a third party: controls,
@@ -160,10 +170,34 @@ export function cleanServerText(t: string): string {
 /** Aegis M1: an enum value safe to show the model as-is (else the enum stays in the full schema only). */
 const SAFE_ENUM_VALUE = /^[A-Za-z0-9 _.:/@+-]{0,64}$/;
 
+/**
+ * Aegis C4'a M1 (+ the sign-off low): chat-template and kernel-delimiter SHAPES server text may never carry to the model
+ * (the child does not clean tool `parameters`, and descriptions reach the tool list at every tier). Tested on the NFKC
+ * form, so fullwidth ＜| |＞ ＜｜ are caught. Case-insensitive: `<|` `|>` `<｜` `｜>`, any closing tag `</`, `<tool…`,
+ * `<function…`, `<think`, `<s>`, `…_of_turn>`, `<working-memory`, `<<` and `>>`. Case-SENSITIVE: a bracketed upper-case
+ * token `[NAME]` / `[/NAME]` (Mistral [INST], [TOOL_CALLS], tekken [TOOL_CONTENT], [ARGS], [CALL_ID], [THINK], [IMG]…),
+ * so ordinary bracketed words like `[optional]` stay.
+ *
+ * Not shared with working-memory's SPECIAL_TOKEN / gnomon-local shape.ts: those NEUTRALISE text the model must still
+ * read (tool results, memory; parity-tested across the two packages) by inserting a word joiner after the opening
+ * character, and stay narrow so code in tool output (`</div>`, `a << 2`, `[TODO]`) is untouched. This is a REFUSAL
+ * predicate for third-party schema and description text, deliberately broader.
+ */
+const TOKEN_SHAPE_CI = /<\||\|>|<｜|｜>|<\/|<tool|<function|<think|<\/?s>|_of_turn>|<working-memory|<<|>>/i;
+const TOKEN_SHAPE_UPPER = /\[\/?[A-Z][A-Z_]{1,31}\]/;
+export function tokenShape(t: string): boolean {
+  const n = t.normalize('NFKC');
+  return TOKEN_SHAPE_CI.test(n) || TOKEN_SHAPE_UPPER.test(n);
+}
+
 function describe(d: string, op: string | null): string {
   const label = op ? ` (${op})` : '';
   const room = DESCRIPTION_MAX - label.length;
-  let s = cleanServerText(firstSentence(d)) || 'MCP tool.';
+  // Aegis C4'a sign-off: a description holding a template-token shape is replaced whole (every tier)
+  // (tested on the raw sentence too: cleanServerText's neutraliser would hide `<|` and `[INST]` behind a word joiner)
+  const raw = firstSentence(d);
+  const first = cleanServerText(raw);
+  let s = first && !tokenShape(raw) && !tokenShape(first) ? first : 'MCP tool.';
   if (s.length > room) s = `${s.slice(0, room - 1).trimEnd()}…`;
   return `${s}${label}`;
 }
@@ -505,6 +539,163 @@ export function offerWithin<T extends Pick<CapabilityEntry, 'name' | 'descriptio
     chosen.push(e);
   }
   return chosen;
+}
+
+// ── slice C4'a (#local-tool-tier): the FULL form of a capability entry (tier 3) ────────────────────────────────────
+
+/**
+ * gnomon-local BROKER_LIMITS.parametersBytes (the child refuses a tools_set whose parameters are larger), duplicated
+ * here; a parity test keeps them equal.
+ */
+export const BROKER_PARAMETERS_BYTES = 16 * 1024;
+/** A full-form tool's surface may take at most this many tokens. */
+export const FULL_TOOL_MAX_TOKENS = 800;
+/** Schema nesting a full-form tool may have. */
+export const FULL_SCHEMA_MAX_DEPTH = 6;
+
+export type ToolForm = 'narrow' | 'full';
+
+/**
+ * The FULL parameters of an entry: an unsplit tool's original inputSchema; a split `<tool>.<op>`'s original schema
+ * MINUS its op param (the op stays kernel-fixed). A copy: the entry is never changed.
+ */
+export function fullParameters(e: Pick<CapabilityEntry, 'schema' | 'opParam'>): Record<string, unknown> {
+  const s = structuredClone(e.schema);
+  if (e.opParam !== null) {
+    if (isObj(s.properties)) {
+      const props: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(s.properties)) if (k !== e.opParam) props[k] = v;
+      s.properties = props;
+    }
+    if (Array.isArray(s.required)) s.required = s.required.filter((r) => r !== e.opParam);
+  }
+  return s;
+}
+
+const SCHEMA_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'array', 'object', 'null']);
+/** Text a full schema may carry: bounded, unchanged by cleanServerText, and no template-token shape. */
+const clean = (t: unknown): boolean => typeof t === 'string' && t.length <= 2048 && cleanServerText(t) === t && !tokenShape(t);
+const cleanValue = (v: unknown): boolean => v === null || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 256 && clean(v));
+
+/** Why a schema node cannot be offered in full, or null (every keyword the validator checks, clean text, bounded depth). */
+function fullSchemaRefusal(s: unknown, depth: number, at: string): string | null {
+  if (!isObj(s)) return `${at} is not a schema object`;
+  if (depth > FULL_SCHEMA_MAX_DEPTH) return `${at} is nested deeper than ${FULL_SCHEMA_MAX_DEPTH}`;
+  const kw = Object.keys(s).find((k) => !SCHEMA_KEYWORDS.includes(k));
+  if (kw !== undefined) return `${at} uses ${kw.slice(0, 32)}, which the kernel validator does not check`;
+  for (const k of ['description', 'title', '$schema']) if (Object.hasOwn(s, k) && !clean(s[k])) return `${at}.${k} is text the kernel would rewrite`;
+  if (Object.hasOwn(s, 'type')) {
+    const ts = typeof s.type === 'string' ? [s.type] : Array.isArray(s.type) ? s.type : null;
+    if (!ts || !ts.length || ts.some((t) => typeof t !== 'string' || !SCHEMA_TYPES.has(t))) return `${at}.type is not a known type`;
+  }
+  if (Object.hasOwn(s, 'enum') && (!Array.isArray(s.enum) || s.enum.length > 64 || !s.enum.every(cleanValue))) return `${at}.enum holds a value the model should not read verbatim`;
+  if (Object.hasOwn(s, 'default') && !cleanValue(s.default)) return `${at}.default is not a clean primitive`;
+  if (Object.hasOwn(s, 'pattern')) {
+    // Aegis C4'a M1: the pattern reaches the model verbatim: clean text, no template token
+    if (typeof s.pattern !== 'string' || UNSAFE_CHAR.test(s.pattern) || !clean(s.pattern)) return `${at}.pattern is not plain text`;
+    if (unsafePattern(s.pattern)) return `${at}.pattern is unsafe`;
+  }
+  // Aegis C4'a M1: each required name is a carriable property name of THIS node's properties (never free text)
+  if (Object.hasOwn(s, 'required')) {
+    const props = isObj(s.properties) ? s.properties : {};
+    if (!Array.isArray(s.required) || !s.required.every((r) => typeof r === 'string' && PROP_NAME_RE.test(r) && !FORBIDDEN_KEYS.has(r) && Object.hasOwn(props, r))) return `${at}.required is not a list of this object's property names`;
+  }
+  for (const k of ['minLength', 'maxLength', 'maxItems']) if (Object.hasOwn(s, k) && !(Number.isSafeInteger(s[k]) && (s[k] as number) >= 0)) return `${at}.${k} is not a count`;
+  if (Object.hasOwn(s, 'properties')) {
+    if (!isObj(s.properties)) return `${at}.properties is not an object`;
+    for (const [k, v] of Object.entries(s.properties)) {
+      if (!PROP_NAME_RE.test(k) || FORBIDDEN_KEYS.has(k)) return `${at} has a property name the kernel cannot carry`;
+      const r = fullSchemaRefusal(v, depth + 1, `${at}.${k}`);
+      if (r) return r;
+    }
+  }
+  if (Object.hasOwn(s, 'items')) {
+    const r = fullSchemaRefusal(s.items, depth + 1, `${at}[]`);
+    if (r) return r;
+  }
+  if (Object.hasOwn(s, 'additionalProperties') && typeof s.additionalProperties !== 'boolean') {
+    const r = fullSchemaRefusal(s.additionalProperties, depth + 1, `${at}.*`);
+    if (r) return r;
+  }
+  return null;
+}
+
+/** The full-form surface of one entry (what the child shows under surface 'full'). */
+export function fullSurface(e: Pick<CapabilityEntry, 'name' | 'description' | 'schema' | 'opParam'>): { name: string; description: string; parameters: Record<string, unknown> } {
+  return { name: e.name, description: e.description, parameters: fullParameters(e) };
+}
+
+const fullWhy = new WeakMap<object, string | null>();
+// Aegis C4'a M1 sweep: every string a full schema carries is one of description / title / $schema / pattern (clean()),
+// enum and default primitives (cleanValue, at every depth), type names (SCHEMA_TYPES), property and required names
+// (PROP_NAME_RE); any other keyword (format, const, examples…) is outside SCHEMA_KEYWORDS and refuses the full form.
+
+/**
+ * Why an entry cannot be offered in its FULL form, or null when it can (fullOfferable): every keyword at every depth is
+ * one validateBrokeredArgs checks (no $ref/oneOf/anyOf/allOf/not/if/patternProperties…), depth at most
+ * FULL_SCHEMA_MAX_DEPTH, no __proto__/constructor/prototype (or otherwise uncarriable) property name, the name a model
+ * tool name, the parameters at most BROKER_PARAMETERS_BYTES and the surface at most FULL_TOOL_MAX_TOKENS, and EVERY
+ * description, title, enum and default string unchanged by cleanServerText. Memoised per entry object.
+ */
+export function fullRefusal(e: Pick<CapabilityEntry, 'name' | 'description' | 'schema' | 'opParam'>): string | null {
+  if (fullWhy.has(e)) return fullWhy.get(e)!;
+  const why = ((): string | null => {
+    if (!TOOL_NAME_RE.test(e.name)) return 'the tool name does not fit a model tool name';
+    if (!isObj(e.schema) || e.schema.type !== 'object') return 'the schema is not an object schema';
+    const p = fullParameters(e);
+    const r = fullSchemaRefusal(p, 0, 'arguments');
+    if (r) return r;
+    let bytes: number;
+    try {
+      bytes = Buffer.byteLength(JSON.stringify(p), 'utf8');
+    } catch {
+      return 'the schema is not plain JSON';
+    }
+    if (bytes > BROKER_PARAMETERS_BYTES) return `the schema is over ${BROKER_PARAMETERS_BYTES} bytes`;
+    if (surfaceTokens([{ name: e.name, description: e.description, parameters: p }], 'full') > FULL_TOOL_MAX_TOKENS) return `the full tool is over ${FULL_TOOL_MAX_TOKENS} tokens`;
+    return null;
+  })();
+  fullWhy.set(e, why);
+  return why;
+}
+
+export const fullOfferable = (e: Pick<CapabilityEntry, 'name' | 'description' | 'schema' | 'opParam'>): boolean => fullRefusal(e) === null;
+
+/**
+ * The form an entry is offered in: 'full' when the session takes full forms (tier 3, surface full) and the entry is
+ * fullOfferable; else its narrow form; null when it has none (a human-only entry that is not fullOfferable at tier 3,
+ * or any human-only entry below it).
+ */
+export function offeredForm(e: Pick<CapabilityEntry, 'name' | 'description' | 'schema' | 'opParam' | 'humanOnly'>, full: boolean): ToolForm | null {
+  if (full && fullOfferable(e)) return 'full';
+  return e.humanOnly ? null : 'narrow';
+}
+
+/** An entry's parameters in a form. */
+export const parametersIn = (e: Pick<CapabilityEntry, 'parameters' | 'schema' | 'opParam'>, form: ToolForm): Record<string, unknown> => (form === 'full' ? fullParameters(e) : e.parameters);
+
+/**
+ * Surface tokens of a set of tools under the child's surface ('compact': names, one-line descriptions, property types;
+ * 'full': name, description and parameters as given): ceil(chars / 4), the child's estimate (agent.ts).
+ */
+export function surfaceTokens(tools: ReadonlyArray<Pick<CapabilityEntry, 'name' | 'description' | 'parameters'>>, form: 'compact' | 'full'): number {
+  if (form === 'compact') return compactSurfaceTokens(tools);
+  return Math.ceil(JSON.stringify(tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }))).length / 4);
+}
+
+/**
+ * A FULL-form call's args → the call: an op-param key is refused (the op is kernel-fixed), the op is set, and the result
+ * is validated against the FULL schema (validateBrokeredArgs, its safe-regex gate included). Own properties only.
+ */
+export function reassembleFull(entry: Pick<CapabilityEntry, 'op' | 'opParam' | 'schema' | 'name'>, args: unknown): { args: Record<string, unknown> } | { error: string } {
+  if (!isObj(args)) return { error: 'arguments must be a JSON object' };
+  if (entry.opParam !== null && Object.hasOwn(args, entry.opParam)) return { error: `${entry.opParam} is fixed by the kernel` };
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(args)) define(out, k, args[k]);
+  if (entry.opParam !== null && entry.op !== null) define(out, entry.opParam, entry.op);
+  const bad = validateBrokeredArgs(entry.schema, out);
+  if (bad) return { error: bad };
+  return { args: out };
 }
 
 /**

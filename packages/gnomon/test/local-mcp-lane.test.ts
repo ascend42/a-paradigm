@@ -77,6 +77,10 @@ describe('slice C2\': a local session calls a narrow MCP tool end to end', () =>
       launchPlan: (i) => (plans.push(i), { command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
       localMcp: () => [{ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE, pidfile], trust: 'trusted' }, { id: 'user::far', name: 'far', transport: 'http', trust: 'trusted' }],
     });
+    // slice C4'a: measure the endpoint's tool skill first, as the daemon's start probe does (the fake passes T1-T4;
+    // the 8k window caps it at tier 2); an unmeasured endpoint opens provisional at tier 1
+    await lane.probeAll();
+    await lane.tierSettled();
     const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
     const offered = rows.find((r) => r.kind === 'session.sandbox' && r.payload.hsid === s.hsid)!.payload.brokeredTools as string[];
     expect(offered).toEqual(expect.arrayContaining(['echo', 'poke', 'fam.get', 'fam.set']));
