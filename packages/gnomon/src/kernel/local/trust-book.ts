@@ -205,6 +205,8 @@ export class McpTrust implements PoolTrust {
   /** The human's commit (request.mcp.trust): one set row. */
   async set(e: { id: string; label: string; binding: string; launchHash: string; toolsHash: string }): Promise<void> {
     await this.#o.append('tool.trust', { id: e.id, label: e.label, op: 'set', binding: e.binding, why: 'human', launchHash: e.launchHash, toolsHash: e.toolsHash });
+    // Aegis L1: a newer set row ends an earlier drop's hiding (a re-trust of the same binding is trusted)
+    this.#hidden.delete(e.id);
     this.sync();
   }
 

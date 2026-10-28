@@ -749,6 +749,8 @@ export class LocalMcpPool {
     p.toolsHash = toolsHash;
     p.binding = p.s.trust !== 'first-party' && p.s.launchHash ? bindingOf({ id: p.s.id, launchHash: p.s.launchHash, pluginVersion: p.s.pluginVersion ?? null, toolsHash }) : null;
     p.eff = this.#effective(p, toolsHash);
+    // Aegis L2: trusted with no live client (a cache hit, or trust set after one): its first spawn re-lists once
+    if (p.eff === 'trusted' && (!p.client || p.client.dead)) p.relistOnSpawn = true;
     return narrow(v.tools, p.label, { trust: p.eff, opAnnotations: p.eff === 'first-party' ? v.annotations : null });
   }
 

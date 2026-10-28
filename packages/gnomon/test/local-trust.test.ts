@@ -256,3 +256,24 @@ describe('G-LCL-23 the broker believes a read label only while trustLive says so
     expect(await r.b.handle(req('tr-2'))).toMatchObject({ decision: 'unknown-tool' });
   });
 });
+
+describe('Aegis C5\'a1 review L2: trust set after a cache hit still re-lists at the first spawn', () => {
+  it('index from the cache untrusted, then trusted: the first call re-lists, finds the change, drops trust and refuses the uncarded read', async () => {
+    const c = chain();
+    const cache = new McpListCache();
+    const old = [{ name: 'echo', description: 'Echo.', inputSchema: { type: 'object', properties: { text: { type: 'string' } } }, annotations: { readOnlyHint: true, openWorldHint: false } }];
+    cache.set(launchKey(server(), '/r'), { tools: old, annotations: null }, { id: 'user::fake', label: 'fake', launchHash: L1, pluginVersion: null, toolsHash: toolsHashOf(old) });
+    let spawned = 0;
+    const pool = new LocalMcpPool({ servers: [server()], repo: '/r', cache, trust: c.trust, spawn: () => (spawned++, spawnFake()) });
+    expect(classes((await pool.index()).entries)).toEqual({ echo: 'mutate' });
+    await trustNewest(c, cache);
+    expect(classes(pool.renarrow('fake')!)).toEqual({ echo: 'read' });
+    expect(spawned).toBe(0);
+    const r = await pool.target('fake')!.call('echo', { text: 'x' }, { signal: new AbortController().signal, deadline: Date.now() + 10_000, trustedRead: true });
+    expect(spawned).toBe(1);
+    expect(r).toMatchObject({ isError: true, why: 'trust-dropped' });
+    await waitFor(() => c.trustRows().some((p) => p.op === 'dropped'));
+    expect(c.trustRows().filter((p) => p.op === 'dropped').map((p) => p.why)).toEqual(['tools-changed']);
+    await pool.closeAll();
+  }, 20_000);
+});
