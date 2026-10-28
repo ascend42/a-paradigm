@@ -487,6 +487,21 @@ components:
       root>`) name a session root, and nothing else (an entry outside the
       staged dir, a subdir, an extra arg or any other trust is refused); a
       server composed refused (pin-mismatch) is listed and never launched.
+      Slice C6'a1 (TD-2026-10-28-956): LocalMcpPool.report() gives each
+      server's state now (starting, running, failed, not-started), its last
+      error (failed only), starts and live trust; onState says started (its
+      initialize answered) and failed (a start, a failed listing, or the
+      process after it started: a runtime crash, once; never a kill of the
+      pool's own), which LocalLane logs as session.mcp{hsid, server, state,
+      fit?, error?} (also one refused row per launch-check and pool
+      refusal). restart(label) is the human's request.session.mcp.restart:
+      the process reaped, starts, last error and the cache's recent-failure
+      mark reset, started and listed again under one deadline (onChanged
+      re-selects), one per server (busy); trustHolds(label) is false once a
+      server narrowed trusted in this session is not believed now, or the
+      TrustBook holds another binding (the restart is then refused
+      trust-changed); LocalLane re-checks the staged pin and launchCheck
+      with the open's inputs (mcpLaunch.check) first.
     path: src/kernel/local/mcp-client.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833]
@@ -496,7 +511,49 @@ components:
       - test/local-mcp-lane.test.ts
       - test/paradigm-staged-lane.test.ts
       - test/local-trust.test.ts
-    oracles: [G-LCL-17, G-LCL-18, G-LCL-19, G-LCL-23]
+      - test/local-capabilities-lane.test.ts
+    oracles: [G-LCL-17, G-LCL-18, G-LCL-19, G-LCL-23, G-LCL-24]
+  gui-capability-browser:
+    description: >-
+      #gui-capability-browser, KERNEL SIDE (TD-2026-10-27-833 slice C6'a1,
+      TD-2026-10-28-956; designed by Mika; the GUI drawer itself is a later
+      slice). LocalLane.humanRequest serves, human-only (gui or device),
+      owner-gated (a non-owner NOT_FOUND) and dispatcher-only (in
+      LOCAL_SESSION_REQUESTS, never rows):
+      request.session.capabilities{hsid} — READ ONLY (no row, nothing
+      selected, bound, started or sent): {generation, tier, k, surface,
+      mode, verbs:[{name, class}], servers:[{label, trust, state
+      running|starting|not-started|refused|failed, fit?, why?, error?,
+      starts, counts:{read, mutate, destructive}}], pins:[{name, offered,
+      why? over-k|no-room|no-full-form|tier-0}] (a dry selection at the
+      session's own tier; the GUI words the code), tools:[{id, name,
+      server, class, humanOnly, availability
+      offered|findable|slash-only|not-at-tier|manual-reads-only,
+      description, params:[{name, required, type, enum?, description?}],
+      fullSchema?}]}. It folds mcpReport (launch-check and pool refusals,
+      index failures) with LocalMcpPool.report() (runtime crashes). Every
+      description, error, why and server string goes through
+      cleanServerText and is capped (CAPABILITY_TEXT_MAX 240; a full
+      schema's strings 512, keys 64, depth 8, at most
+      CAPABILITY_SCHEMA_MAX_BYTES or left out); fullSchema only for a
+      fullOfferable or human-only entry.
+      request.session.mcp.restart{hsid, server} — a pooled server (never one
+      refused at open); re-checks the staged pin (recheckStaged + the pinned
+      node), the trust it was narrowed under (trustHolds) and launchCheck
+      with the open's inputs; a failed check is FORBIDDEN reason refused
+      with one session.mcp{state:'refused', fit} row; else
+      LocalMcpPool.restart (starts reset; one at a time, else BAD_REQUEST
+      reason busy) and its session.mcp started or failed row.
+    path: src/kernel/supervisor/local-session.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, mcp, td-2026-10-27-833, c6]
+    signals: []
+    related: ["#local-runner", "#local-mcp-client", "#tool-selector", "#local-tool-tier"]
+    tests:
+      - test/local-capabilities-lane.test.ts
+      - test/local-mcp-client.test.ts
+      - ../gnomon-contracts/test/local-lane-contracts.test.ts
+    oracles: [G-LCL-24]
   paradigm-stage:
     description: >-
       #paradigm-stage (TD-2026-10-27-833, follow-up to slice C2'):

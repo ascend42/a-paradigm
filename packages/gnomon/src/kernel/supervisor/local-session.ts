@@ -2,6 +2,7 @@
  * @symbol #local-runner
  * @symbol #supervisor
  * @symbol ^subscription-only
+ * @symbol #gui-capability-browser
  *
  * #supervisor's LOCAL path (spec §3.3, §6.1, §13; M1.8 slice 1): attended,
  * human-started sessions whose declared model is `local` or `any`. The
@@ -82,6 +83,10 @@
  *   aboveConfig on the session.context row and the reply; a lower target re-renders memory first) and
  *   request.session.memory.delete{hsid} (live or ended; the owner recorded in memory.jsonl; the file is unlinked;
  *   one session.memory{op:'delete'} row). The session dir is never pruned while it holds memory.
+ * SLICE C6'a1 (#gui-capability-browser kernel side, TD-2026-10-28-956): humanRequest also serves the read-only
+ *   request.session.capabilities{hsid} (#capabilities: tools, servers, pins; every server string cleaned and capped) and
+ *   request.session.mcp.restart{hsid, server} (#restartMcp: pin, trust and launchCheck re-checked, then the starts
+ *   counter reset). Every MCP server start, failure and refusal is one session.mcp row (#mcpRow).
  * DEFERRED (reported): unattended local automations other than loops (law 5;
  * the scheduler still refuses them), the claude estimate on the card (null: no per-task
  * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
