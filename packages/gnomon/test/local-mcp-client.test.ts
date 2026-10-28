@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LocalMcpPool, McpListCache, McpStdioClient, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
+import { launchClosure, launchDenies, LocalMcpPool, McpListCache, McpStdioClient, serverEnv, serverLabel, type LocalMcpServer } from '../src/kernel/local/mcp-client.js';
 
 const FAKE = path.join(__dirname, 'fixtures', 'fake-mcp-server.mjs');
 const dirs: string[] = [];
@@ -187,4 +187,29 @@ describe('LocalMcpPool', () => {
     expect(spawned).toBe(2);
     await pool.closeAll();
   }, 30_000);
+});
+
+describe('Aegis H1/H2: launch closure and server env', () => {
+  it('a model-writable launch file inside the roots is write-denied; a closure that is a root refuses the server', () => {
+    const d = tmp();
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(path.join(repo, 'tools'), { recursive: true });
+    const s = server({ command: process.execPath, args: ['./tools/mcp.js', '--flag'] });
+    const r = launchDenies([s], repo, [repo]);
+    const denied = r.denies.map((x) => x.path);
+    expect(denied).toEqual(expect.arrayContaining([path.join(repo, 'tools', 'mcp.js'), path.join(repo, 'package.json'), path.join(repo, 'node_modules')]));
+    expect(r.denies.find((x) => x.path === path.join(repo, 'node_modules'))!.match).toBe('subpath');
+    expect(r.servers).toHaveLength(1);
+    // the command itself outside the roots is in the closure but never a session deny
+    expect(launchClosure(s, repo).map((c) => c.path)).toContain(fs.realpathSync.native(process.execPath));
+    expect(denied).not.toContain(fs.realpathSync.native(process.execPath));
+    const bad = launchDenies([server({ args: [repo] })], repo, [repo]);
+    expect(bad.refused).toEqual([{ id: 'user::fake', name: 'fake', fit: 'launch-writable' }]);
+    expect(bad.servers).toEqual([]);
+  });
+
+  it('the server env never carries GNOMON_* or the loop-dropped names', () => {
+    const env = serverEnv({ PATH: '/bin', GNOMON_SOCK: 's', GNOMON_SESSION_KEY: 'k', GNOMON_HSID: 'h', GNOMON_X: 'x' }, { TOKEN: 't', GNOMON_Y: 'y' }, ['GNOMON_SOCK', 'GNOMON_SESSION_KEY', 'GNOMON_HSID']);
+    expect(env).toEqual({ PATH: '/bin', TOKEN: 't' });
+  });
 });

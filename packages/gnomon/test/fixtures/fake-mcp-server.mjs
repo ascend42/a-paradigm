@@ -6,6 +6,7 @@ import * as fs from 'node:fs';
 
 const pidfile = process.argv[2];
 if (pidfile) fs.writeFileSync(pidfile, String(process.pid));
+if (pidfile) fs.writeFileSync(`${pidfile}.env`, JSON.stringify(Object.keys(process.env).filter((k) => /^GNOMON_/i.test(k))));
 let changed = false;
 let calls = 0;
 const send = (m) => process.stdout.write(`${JSON.stringify(m)}\n`);

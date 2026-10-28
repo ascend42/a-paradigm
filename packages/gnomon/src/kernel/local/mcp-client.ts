@@ -29,6 +29,9 @@
  */
 import type { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import type { PolicyPath } from '../manifest/policy.js';
 import { narrow, OP_ANNOTATIONS_MAX_BYTES, OP_ANNOTATIONS_SCHEMA, type CapabilityEntry, type ServerTrust } from './capability-index.js';
 import type { BrokerTarget, TargetCall } from './tool-broker.js';
 
@@ -56,7 +59,98 @@ export interface LocalMcpServer {
   trust: ServerTrust;
 }
 
-export type ServerFit = 'ok' | 'remote-refused';
+/**
+ * remote-refused   an http/sse server (never reached from a local session)
+ * launch-writable  (Aegis H1) a launch-closure path IS a session root or holds one, so it cannot be write-denied
+ *                  without taking the root away: the server is refused
+ */
+export type ServerFit = 'ok' | 'remote-refused' | 'launch-writable';
+
+/** Commands whose launch reads project files beside the cwd (package manifests, installed packages, lockfiles, venvs). */
+const PROJECT_RUNNERS = new Set(['node', 'npx', 'npm', 'pnpm', 'pnpx', 'yarn', 'bun', 'bunx', 'tsx', 'ts-node', 'deno', 'uv', 'uvx', 'python', 'python3', 'pipx', 'poetry']);
+/** What a project runner reads from the cwd (each a launch-closure path when the command is one of them). */
+export const PROJECT_LAUNCH_FILES: readonly string[] = Object.freeze(['package.json', 'node_modules', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock', '.yarnrc.yml', '.pnp.cjs', 'bun.lockb', 'bun.lock', '.npmrc', 'deno.json', 'deno.lock', 'pyproject.toml', 'uv.lock', 'requirements.txt', 'setup.py', 'setup.cfg', 'poetry.lock', '.python-version', '.venv', 'venv']);
+
+const pathLike = (a: string): boolean => path.isAbsolute(a) || a.startsWith('./') || a.startsWith('../') || a.startsWith('.\\') || /[\\/]/.test(a) || /\.(?:[cm]?[jt]s|py|sh|rb|exe|cmd|bat)$/i.test(a);
+const realOr = (p: string): string => {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return path.resolve(p);
+  }
+};
+const within = (p: string, root: string): boolean => {
+  const r = path.relative(root, p);
+  return r === '' || (!r.startsWith('..') && !path.isAbsolute(r));
+};
+
+/**
+ * Aegis H1: a server's LAUNCH CLOSURE — every file whose content decides what the server runs: its resolved command,
+ * each path-like arg (absolute, or resolved against the spawn cwd), and for a project runner (node, npx, uv, python…)
+ * the project files it reads beside the cwd (PROJECT_LAUNCH_FILES). Paths that do not exist yet are included (a model
+ * could create them).
+ */
+export function launchClosure(s: Pick<LocalMcpServer, 'command' | 'args'>, cwd: string): Array<{ path: string; match: 'literal' | 'subpath' }> {
+  const out = new Map<string, 'literal' | 'subpath'>();
+  const add = (p: string): void => {
+    const r = realOr(p);
+    let match: 'literal' | 'subpath' = 'literal';
+    try {
+      if (fs.statSync(r).isDirectory()) match = 'subpath';
+    } catch {
+      /* absent: denied as written */
+    }
+    if (out.get(r) !== 'subpath') out.set(r, match);
+  };
+  if (s.command) add(s.command);
+  for (const a of s.args ?? []) if (a && !a.startsWith('-') && pathLike(a)) add(path.resolve(cwd, a));
+  const base = s.command ? path.basename(s.command).replace(/\.(exe|cmd|bat)$/i, '').toLowerCase() : '';
+  if (PROJECT_RUNNERS.has(base) || /^python3(\.\d+)?$/.test(base)) {
+    for (const f of PROJECT_LAUNCH_FILES) {
+      const p = path.join(cwd, f);
+      out.set(realOr(p), f === 'node_modules' || f === '.venv' || f === 'venv' ? 'subpath' : 'literal');
+    }
+  }
+  return [...out].map(([p, match]) => ({ path: p, match }));
+}
+
+/**
+ * Aegis H1: the write-denies a LOCAL session needs so no model-written file decides what its servers run: every
+ * launch-closure path inside the session's writable roots (no overlap skip: inside the roots is exactly the danger).
+ * A closure path that IS a root or holds one cannot be denied without taking the root away: that server is refused
+ * `launch-writable`.
+ */
+export function launchDenies(servers: readonly LocalMcpServer[], cwd: string, roots: readonly string[]): { denies: PolicyPath[]; refused: Array<{ id: string; name: string; fit: ServerFit }>; servers: LocalMcpServer[] } {
+  const rs = roots.map(realOr);
+  const denies: PolicyPath[] = [];
+  const refused: Array<{ id: string; name: string; fit: ServerFit }> = [];
+  const kept: LocalMcpServer[] = [];
+  for (const s of servers) {
+    if (s.transport !== 'stdio') {
+      kept.push(s); // the pool refuses it remote-refused
+      continue;
+    }
+    const closure = launchClosure(s, cwd);
+    if (closure.some((c) => rs.some((r) => within(r, c.path)))) {
+      refused.push({ id: s.id, name: s.name, fit: 'launch-writable' });
+      continue;
+    }
+    for (const c of closure) if (rs.some((r) => within(c.path, r)) && !denies.some((d) => d.path === c.path)) denies.push({ path: c.path, match: c.match, class: 'binary' });
+    kept.push(s);
+  }
+  return { denies, refused, servers: kept };
+}
+
+/**
+ * Aegis H2: a server's env — the session's, minus every kernel credential and handle (LOOP_SESSION_ENV_DROPPED and any
+ * GNOMON_* name), plus the server's own (whose names #mcp-servers already hazard-checked; a GNOMON_* one is dropped).
+ */
+export function serverEnv(sessionEnv: Readonly<Record<string, string | undefined>>, own: Readonly<Record<string, string>> | undefined, dropped: readonly string[]): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(sessionEnv)) if (!dropped.includes(k) && !/^GNOMON_/i.test(k)) out[k] = v;
+  for (const [k, v] of Object.entries(own ?? {})) if (!/^GNOMON_/i.test(k)) out[k] = v;
+  return out;
+}
 
 /** The label a server goes by in ids, provenance (`mcp:<label>`) and tool.brokered{server}. */
 export const serverLabel = (name: string): string => {

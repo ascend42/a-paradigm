@@ -66,11 +66,12 @@ describe('slice C2\': a local session calls a narrow MCP tool end to end', () =>
     const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
     const cards: Array<Record<string, unknown>> = [];
+    const plans: Array<{ binaryReal: string; argv: readonly string[]; policy: { allowRead: Array<{ path: string }>; denyWrite: Array<{ path: string }> } }> = [];
     const lane = new LocalLane({ sessionPath: null, pathDenies: [],
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
       broker: { raise: async (i) => (cards.push(i as never), { cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ' } as never), decisionOf: async () => 'allow', expire: async () => true },
       config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp', surface: 'full' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
-      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+      launchPlan: (i) => (plans.push(i), { command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
       localMcp: () => [{ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE, pidfile], trust: 'trusted' }, { id: 'user::far', name: 'far', transport: 'http', trust: 'trusted' }],
     });
     const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
@@ -96,6 +97,16 @@ describe('slice C2\': a local session calls a narrow MCP tool end to end', () =>
     expect(toolMsgs[0]!.content).toContain('echo:{"text":"hi"}');
     // the server ran exactly two calls: echo (1) and poke (2); fam never reached it
     expect(toolMsgs[2]!.content).toContain('poke:{"text":"there"}:2');
+    // Aegis H2: the server's own profile reads nothing of the session dir; its env carries no kernel credential
+    const runnerPlan = plans.find((p) => p.argv[0] !== FAKE)!;
+    const mcpPlan = plans.find((p) => p.argv[0] === FAKE)!;
+    const sessionDir = path.join(home, 'sessions');
+    expect(runnerPlan.policy.allowRead.some((r) => r.path.startsWith(sessionDir))).toBe(true);
+    expect(mcpPlan.policy.allowRead.some((r) => r.path.startsWith(sessionDir))).toBe(false);
+    // Aegis H1: the session profile write-denies the node server's project launch files inside the root
+    const real = fs.realpathSync.native(cwd);
+    expect(runnerPlan.policy.denyWrite.map((d) => d.path)).toEqual(expect.arrayContaining([path.join(real, 'package.json'), path.join(real, 'node_modules')]));
+    expect(JSON.parse(fs.readFileSync(`${pidfile}.env`, 'utf8'))).toEqual([]);
     const pid = Number(fs.readFileSync(pidfile, 'utf8'));
     expect(alive(pid)).toBe(true);
     await lane.stop(HUMAN, { hsid: s.hsid });

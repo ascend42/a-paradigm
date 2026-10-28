@@ -293,6 +293,26 @@ describe('G-MCP-05 #mcp-servers the enable card and requests', () => {
     expect(Object.keys(comp.servers)).toEqual(['paradigm', 'neurons']);
   });
 
+  it('slice C2\' (Aegis H1 interim): composeLocal gives a local session user/plugin servers only, never the first-party (linked) Paradigm; trust from the store', async () => {
+    const { m, raised, w, home } = setup();
+    const id = idOf(m, 'neurons');
+    await m.request(human, MCP_ENABLE_REQUEST, { id, scope: 'all' });
+    const c = raised[0]!;
+    expect(c.prepare('allow')).toBeNull();
+    await c.effect('allow');
+    const repo = (m.status() as { repos: Array<{ repo: string }> }).repos[0]!.repo;
+    expect(Object.keys(m.compose({ hsid: 'h1', cwd: repo }).servers)).toContain('paradigm');
+    const local = m.composeLocal({ hsid: 'h1', cwd: repo });
+    expect(local.map((x) => [x.name, x.trust])).toEqual([['neurons', 'enabled']]);
+    // a stored `trusted` is read; any other value falls back to enabled
+    const st = readMcpServersStore(home);
+    writeMcpServersStore(home, { ...st, enabled: st.enabled.map((e) => ({ ...e, trust: 'trusted' as const })) });
+    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).map((x) => x.trust)).toEqual(['trusted']);
+    writeMcpServersStore(home, { ...st, enabled: st.enabled.map((e) => ({ ...e, trust: 'first-party' as never })) });
+    expect(m.composeLocal({ hsid: 'h1', cwd: repo }).map((x) => x.trust)).toEqual(['enabled']);
+    void w;
+  });
+
   it('prepare refuses when the server changed while the card was open', async () => {
     const { m, raised, w } = setup();
     await m.request(human, MCP_ENABLE_REQUEST, { id: idOf(m, 'neurons'), scope: 'all' });

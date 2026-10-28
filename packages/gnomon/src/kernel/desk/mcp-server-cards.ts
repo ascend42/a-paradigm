@@ -44,6 +44,8 @@ import type { LocalMcpServer } from '../local/mcp-client.js';
 import { allowRuleWords, autoAllowRules, composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
 
 export const MCP_SERVERS_SCHEMA = 'gnomon-mcp-servers:v1' as const;
+/** Slice C2' interim (Aegis H1): the server sources a LOCAL session may reach (no first-party, project or local). */
+export const LOCAL_MCP_SOURCES: readonly string[] = Object.freeze(['user', 'plugin']);
 export const MCP_ENABLE_REQUEST = 'request.mcp.enable' as const;
 export const MCP_DISABLE_REQUEST = 'request.mcp.disable' as const;
 export const MCP_REQUESTS: readonly string[] = Object.freeze([MCP_ENABLE_REQUEST, MCP_DISABLE_REQUEST]);
@@ -282,6 +284,9 @@ export class McpServers {
    * (measured on the founder's Mac: the global package realpaths into a-paradigm/packages/paradigm); a session working
    * in that checkout must still edit it. Residual: such a session can change the server the next session runs, which
    * then runs under the same session profile (no escalation).
+   * LOCAL sessions (TD-2026-10-27-833 slice C2', Aegis H1) do not rely on this overlap skip: their profile also
+   * write-denies every launch-closure path of their servers INSIDE the roots (#local-mcp-client launchDenies), and a
+   * server whose closure is a root itself is refused `launch-writable`.
    */
   sessionDenies(ctx?: { cwd: string; worktree?: string }): PolicyPath[] {
     const roots = ctx ? [ctx.cwd, ...(ctx.worktree ? [ctx.worktree] : [])].map(realOr) : [];
@@ -360,6 +365,10 @@ export class McpServers {
     const store = readMcpServersStore(this.#o.home);
     const out: LocalMcpServer[] = [];
     for (const a of r.added) {
+      // INTERIM (Aegis H1, until the first-party Paradigm MCP is staged as a pinned, hashed copy in the Gnomon home):
+      // a local session gets neither the first-party server (it can run from a linked checkout inside the roots) nor a
+      // repo-written project/local-scope server. Only user and plugin servers reach local sessions today.
+      if (!LOCAL_MCP_SOURCES.includes(a.source)) continue;
       const e = r.servers[a.server] as Record<string, unknown> | undefined;
       if (!e) continue;
       const transport = e.type === 'http' || e.type === 'sse' ? e.type : 'stdio';
