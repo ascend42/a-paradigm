@@ -98,7 +98,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { releaseSession, sessionSidFor } from '../../platform/win32/session-sandbox.js';
-import { HSID_PATTERN, HSID_V1_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, TOOL_BROKER_TOOL_PATTERN, COMPACTION_REASONS, type CompactionReason, type ToolSelectionTrigger, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
+import { HSID_PATTERN, HSID_V1_PATTERN, hsidShort, mintHsid, refuse, RefusedError, turnId, TOOL_BROKER_TOOL_PATTERN, type ToolResultPolicy, COMPACTION_REASONS, type CompactionReason, type ToolSelectionTrigger, type SessionCompactedPayload, type VoiceSentBy } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -113,7 +113,8 @@ import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js'
 import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
-import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, schemaRefusal, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
+import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, schemaRefusal, toolBindHash, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
+import { frameResult, resultCapBytes, type ResultPolicyPort } from '../local/result-policy.js';
 import { cleanServerText, fullOfferable, fullParameters, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry, type ServerTrust } from '../local/capability-index.js';
 import { candidatesOf, FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpError, McpListCache, serverEnv, type LaunchCheckInput, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
@@ -202,6 +203,11 @@ export interface LocalLaneOptions {
   mcpCache?: McpListCache;
   /** slice C5'a1: the kernel's TrustBook (absent: no third-party server is trusted); a fold re-narrows every session */
   mcpTrust?: PoolTrust & { subscribe?: (fn: (id: string) => void) => () => void };
+  /**
+   * slice C6'a2-1 (#local-result-policy): the human's "/" result policy (kernel-signed tool.result.policy rows). Absent:
+   * every result is `ask` (never sent) and request.session.tools.policy is refused.
+   */
+  resultPolicy?: ResultPolicyPort;
   /**
    * slice C5'a2 (^local-tool-grant): the #always-rules match (SupervisorOptions.alwaysRule). A brokered call asks it for
    * a tool rule with the call's bindHash, never in manual mode. Absent: no rule matches and no card offers Always.
@@ -470,7 +476,10 @@ export const LOCAL_SESSION_MCP_RESTART_REQUEST = 'request.session.mcp.restart' a
 export const LOCAL_SESSION_TOOLS_START_REQUEST = 'request.session.tools.start' as const;
 export const LOCAL_SESSION_TOOLS_RUN_REQUEST = 'request.session.tools.run' as const;
 export const LOCAL_SESSION_TOOLS_RESULT_REQUEST = 'request.session.tools.result' as const;
-export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST, LOCAL_SESSION_TOOLS_START_REQUEST, LOCAL_SESSION_TOOLS_RUN_REQUEST, LOCAL_SESSION_TOOLS_RESULT_REQUEST]);
+export const LOCAL_SESSION_TOOLS_POLICY_REQUEST = 'request.session.tools.policy' as const;
+export const LOCAL_SESSION_REQUESTS: readonly string[] = Object.freeze([LOCAL_SESSION_COMPACT_REQUEST, LOCAL_SESSION_CONTEXT_REQUEST, LOCAL_SESSION_MEMORY_DELETE_REQUEST, LOCAL_SESSION_MEMORY_READ_REQUEST, LOCAL_SESSION_MEMORY_LIST_REQUEST, LOCAL_SESSION_TOOLS_PIN_REQUEST, LOCAL_SESSION_TIER_REQUEST, LOCAL_TIER_REMEASURE_REQUEST, LOCAL_TIER_CLEAR_REQUEST, LOCAL_SESSION_CAPABILITIES_REQUEST, LOCAL_SESSION_MCP_RESTART_REQUEST, LOCAL_SESSION_TOOLS_START_REQUEST, LOCAL_SESSION_TOOLS_RUN_REQUEST, LOCAL_SESSION_TOOLS_RESULT_REQUEST, LOCAL_SESSION_TOOLS_POLICY_REQUEST]);
+/** Slice C6'a2-1: at most this many framed "/" results wait for the human's next turn (the oldest goes first). */
+export const PENDING_SEND_MAX = 4;
 /** Slice C6'a2-1: a carded "/" run's result is held this long for request.session.tools.result (read once). */
 export const RUN_RESULT_TTL_MS = 10 * 60_000;
 /** Slice C6'a2-1: at most this many "/" run results a session holds (the oldest goes first). */
@@ -1484,7 +1493,7 @@ export class LocalLane {
     const roots = [s.roots.cwd, ...(s.roots.worktree ? [s.roots.worktree] : [])];
     const alwaysRule = this.#o.alwaysRule;
     const rules = alwaysRule && s.loop === undefined ? { rules: { match: (repoKey: string, tool: string, bindHash: string, toolClass: 'mutate' | 'destructive') => alwaysRule(repoKey, tool, bindHash, undefined, { prefixRules: this.#mode(s) !== 'manual', roots, bindHash, toolClass }) }, repoKey: repoKeyOf(roots), trustBinding: (server: string) => s.mcp?.pool.trustBindingOf(server) ?? null } : {};
-    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual', trustLive: (server) => s.mcp?.pool.trustLive(server) ?? 'enabled', destructiveBudget: this.#destructiveBudget, ...rules });
+    return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)), manual: () => this.#mode(s) === 'manual', trustLive: (server) => s.mcp?.pool.trustLive(server) ?? 'enabled', destructiveBudget: this.#destructiveBudget, tainted: () => this.#taintedNow(s), ...rules });
   }
 
   /**
@@ -2083,10 +2092,85 @@ export class LocalLane {
 
   /** Slice C6'a2-1: the latest "/" result of each entry (the result policy reads it). */
   #ranResult(s: LocalSession, r: SlashResult): void {
+    // #local-result-policy: `send` (for this repo, tool and binding NOW) queues it for the human's next turn
+    if (this.#policyOf(s, r.entry)?.policy === 'send') return this.#queueSend(s, r);
     const last = (s.lastRuns ??= new Map());
     last.delete(r.entry.id);
     last.set(r.entry.id, r);
     while (last.size > RUN_RESULTS_MAX) last.delete(last.keys().next().value!);
+  }
+
+  /**
+   * Slice C6'a2-1 (#local-result-policy): the policy key of an entry NOW — (repoKey, mcp:<server>/<tool>, bindHash over
+   * the entry, its class and the server's live trust binding) — and the policy recorded for exactly that key (null: ask).
+   * No live trust binding: null key (never sent).
+   */
+  #policyOf(s: LocalSession, e: CapabilityEntry): { repoKey: string; tool: string; bindHash: string; policy: ToolResultPolicy | null } | null {
+    const binding = s.mcp?.pool.trustBindingOf(e.server) ?? null;
+    if (binding === null) return null;
+    const repoKey = repoKeyOf([s.roots.cwd, ...(s.roots.worktree ? [s.roots.worktree] : [])]);
+    const tool = `mcp:${e.server}/${e.tool}`;
+    const bindHash = toolBindHash(e, e.class, binding);
+    let policy: ToolResultPolicy | null = null;
+    try {
+      policy = this.#o.resultPolicy?.of(repoKey, tool, bindHash) ?? null;
+    } catch {
+      policy = null; // an unreadable book never sends
+    }
+    return { repoKey, tool, bindHash, policy };
+  }
+
+  /** Slice C6'a2-1: frame one "/" result for the human's next turn (capped, at most PENDING_SEND_MAX waiting). */
+  #queueSend(s: LocalSession, r: SlashResult): void {
+    const tool = `mcp:${r.entry.server}/${r.entry.tool}`;
+    const f = frameResult({ tool, trust: r.trust, text: r.text, isError: r.isError }, resultCapBytes(s.context.target));
+    const q = (s.pendingSend ??= []);
+    q.push({ frame: f.frame, row: { hsid: s.hsid, tool, argsHash: r.argsHash, bytes: f.bytes, cut: f.cut, policy: 'send' } });
+    while (q.length > PENDING_SEND_MAX) q.shift();
+    s.lastRuns?.delete(r.entry.id);
+  }
+
+  /**
+   * Slice C6'a2-1: request.session.tools.policy{hsid, id, policy} — the human's first-use choice for a tool's "/"
+   * results: `send` (they go to the model with the human's next turn, framed as data) or `ask` (they do not). One
+   * kernel-signed tool.result.policy row keyed (repoKey, tool, bindHash). Moving to ask is always allowed; moving to send
+   * needs a GUI press (credential gui: never a device CLI, voice, the model or a loop session). Choosing send also sends
+   * this tool's latest "/" result of this session, if it was not sent yet.
+   */
+  async #toolsPolicy(asker: LocalSessionAsker, s: LocalSession, p: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const kind = LOCAL_SESSION_TOOLS_POLICY_REQUEST;
+    if (typeof p.id !== 'string' || p.id.length === 0 || p.id.length > 256) throw refused('BAD_REQUEST', `${kind}: id must be a capability id`, { reason: 'bad-params', field: 'id' });
+    if (p.policy !== 'send' && p.policy !== 'ask') throw refused('BAD_REQUEST', `${kind}: policy must be send or ask`, { reason: 'bad-params', field: 'policy' });
+    const policy: ToolResultPolicy = p.policy;
+    if (policy === 'send' && asker.credential !== 'gui') throw refused('FORBIDDEN', `${kind}: sending results to the model takes a press in the Gnomon app`, { reason: 'matrix' });
+    const port = this.#o.resultPolicy;
+    if (!port) throw refused('UNSUPPORTED', `${kind}: the result policy is not available in this daemon`, { reason: 'unavailable' });
+    const m = s.mcp;
+    const entry = m ? entryByCapabilityKey([...m.entries.values()].flat(), p.id) : undefined;
+    if (!entry) throw refused('NOT_FOUND', `${kind}: no tool ${p.id.slice(0, 64)} in this session's index`, { reason: 'not-found', field: 'id' });
+    const key = this.#policyOf(s, entry);
+    if (!key) throw refused('FORBIDDEN', `${kind}: ${entry.server} is not trusted, so its results are never sent`, { reason: 'untrusted' });
+    const previous = key.policy ?? 'ask';
+    try {
+      await port.set({ hsid: s.hsid, repoKey: key.repoKey, tool: key.tool, bindHash: key.bindHash, policy });
+    } catch {
+      throw refused('ENGINE', `${kind}: the choice could not be recorded`, { reason: 'unavailable' });
+    }
+    let queued = false;
+    if (policy === 'send') {
+      const last = s.lastRuns?.get(entry.id);
+      if (last && this.#now() - last.at <= RUN_RESULT_TTL_MS) {
+        this.#queueSend(s, last);
+        queued = true;
+      }
+    }
+    return { hsid: s.hsid, id: p.id, tool: key.tool, policy, previous, queued };
+  }
+
+  /** Slice C6'a2-1 (INJECTION PAUSE): the turn running now took in sent tool results or skill text. */
+  #taintedNow(s: LocalSession): boolean {
+    if (!s.tainted?.size || s.turnPermits.length === 0) return false;
+    return s.tainted.has(s.turns - s.turnPermits.length + 1);
   }
 
   /** Slice C6'a2-1: hold a "/" run's result (bounded, expired ones dropped first). */
@@ -2350,7 +2434,7 @@ export class LocalLane {
     if (asker.principalClass !== 'human' || (asker.credential !== 'gui' && asker.credential !== 'device') || !asker.principal) {
       throw refused('FORBIDDEN', `${kind.slice(0, 40)} is the human's, on a gui or device connection`, { reason: 'matrix' });
     }
-    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_TOOLS_RUN_REQUEST ? ['hsid', 'id', 'args', 'form'] : kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST ? ['hsid', 'runId'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
+    const keys = kind === LOCAL_SESSION_CONTEXT_REQUEST ? ['hsid', 'target'] : kind === LOCAL_SESSION_MCP_RESTART_REQUEST ? ['hsid', 'server'] : kind === LOCAL_SESSION_TOOLS_RUN_REQUEST ? ['hsid', 'id', 'args', 'form'] : kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST ? ['hsid', 'runId'] : kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST ? ['hsid', 'id', 'policy'] : kind === LOCAL_SESSION_MEMORY_LIST_REQUEST ? [] : kind === LOCAL_SESSION_MEMORY_DELETE_REQUEST ? ['hsid', 'stop'] : kind === LOCAL_SESSION_TOOLS_PIN_REQUEST ? ['hsid', 'name', 'pinned'] : kind === LOCAL_SESSION_TIER_REQUEST ? ['hsid', 'op', 'tier', 'token', 'remember'] : kind === LOCAL_TIER_REMEASURE_REQUEST || kind === LOCAL_TIER_CLEAR_REQUEST ? ['endpoint'] : ['hsid'];
     if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) throw refused('BAD_REQUEST', `${kind} takes {${keys.join(', ')}}`, { reason: 'bad-params' });
     const p = payload as Record<string, unknown>;
     const extra = Object.keys(p).filter((k) => !keys.includes(k));
@@ -2394,6 +2478,7 @@ export class LocalLane {
     if (kind === LOCAL_SESSION_TOOLS_START_REQUEST) return this.#toolsStart(s);
     if (kind === LOCAL_SESSION_TOOLS_RUN_REQUEST) return this.#toolsRun(asker.principal, s, p);
     if (kind === LOCAL_SESSION_TOOLS_RESULT_REQUEST) return this.#toolsResult(asker.principal, s, p);
+    if (kind === LOCAL_SESSION_TOOLS_POLICY_REQUEST) return this.#toolsPolicy(asker, s, p);
     // slice C4'a: the human's two-phase tool-tier change
     if (kind === LOCAL_SESSION_TIER_REQUEST) return this.#tierRequest(asker.principal, s, p);
     if (kind === LOCAL_SESSION_COMPACT_REQUEST) {
@@ -2600,6 +2685,8 @@ export class LocalLane {
         s.replyBytes = null;
         await usage('turn.result', s.meter.charge(ev), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', runUsage, replyBytes, maxSteps: s.maxSteps, ...(ev.error ? { error: ev.error } : {}), ...(closing > 0 ? { turn: turnId(s.hsid, closing) } : {}) });
         const head = s.turnPermits.shift();
+        // slice C6'a2-1: a closed turn's taint is history
+        if (closing > 0) s.tainted?.delete(closing);
         s.lastTurnEndAt = Date.now();
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         // slice B2: the follow_up queued behind this run starts now: its text is the goal
@@ -2735,7 +2822,18 @@ export class LocalLane {
       // slice C3': a new goal re-selects the tools; any tools_set goes out ahead of the prompt line
       this.#goalChanged(s, p.text, untrusted === undefined);
     } else if (s.memory && s.pendingGoals.length < PENDING_GOALS_CAP) s.pendingGoals.push(goal);
-    s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight }));
+    // slice C6'a2-1 (#local-result-policy): "/" results the policy sends go in as DATA parts of THIS human turn (never
+    // the system role), before the human's text; the turn is marked tainted (INJECTION PAUSE: destructive rules pass no
+    // model call in it). One hash-only tool.result.sent row each.
+    let message = p.text;
+    const sendNow = s.pendingSend ?? [];
+    if (sendNow.length && !s.loop) {
+      s.pendingSend = [];
+      (s.tainted ??= new Set()).add(n);
+      for (const x of sendNow) await this.#o.log('tool.result.sent', x.row, { session: s.hsid }).catch(() => undefined);
+      message = `${sendNow.map((x) => x.frame).join('\n\n')}\n\n${p.text}`;
+    }
+    s.child.stdin?.write(drv.turnLine({ text: message, inFlight }));
     return { turn: turnId(s.hsid, n) };
   }
 

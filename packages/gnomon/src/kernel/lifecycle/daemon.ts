@@ -164,6 +164,7 @@ import { McpServers } from '../desk/mcp-server-cards.js';
 import { McpListCache } from '../local/mcp-client.js';
 import { toolRulePaused, type ToolRulePauseSource } from '../local/tool-broker.js';
 import { McpTrust, trustSourceOf } from '../local/trust-book.js';
+import { ResultPolicy, resultPolicySourceOf } from '../local/result-policy.js';
 import { resolveFirstPartyParadigm, type FirstPartyResolution } from '../desk/mcp-servers.js';
 import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
@@ -896,6 +897,9 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // before any local session can index or start a pool, and every later read catches up again (a fold re-narrows)
   const mcpTrust = new McpTrust({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: trustSourceOf(log), append: (kind, payload) => appendRow(kind, payload), onError: (op, id) => emit({ kind: 'daemon.desk', event: 'mcp.trust.write-failed', op, id } as DaemonEvent) });
   mcpTrust.sync();
+  // slice C6'a2-1 (#local-result-policy): the human's "/" result policy, folded from KERNEL-signed tool.result.policy rows
+  const resultPolicy = new ResultPolicy({ principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k), source: resultPolicySourceOf(log), append: (kind, payload) => appendRow(kind, payload) });
+  resultPolicy.sync();
   // slice C5'a1: the one tools/list cache (LocalLane's sessions list into it; request.mcp.trust reads its newest per id)
   const mcpListCache = new McpListCache();
   // P8-D86/D87 run modes: folded from KERNEL-signed approval.mode.set / session.open{runMode} rows (a repo's mode
@@ -1017,6 +1021,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     localMcp: (ctx) => mcpServers.composeLocal(ctx),
     localMcpCache: mcpListCache,
     localMcpTrust: mcpTrust,
+    localResultPolicy: resultPolicy,
     localMcpEnabled: (id, launchHash) => mcpServers.enabledAt(id, launchHash),
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored
