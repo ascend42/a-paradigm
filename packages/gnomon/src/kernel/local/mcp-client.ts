@@ -661,6 +661,16 @@ interface PoolServer {
   relistOnSpawn: boolean;
 }
 
+/** Slice C6'a1: one pool server's state as request.session.capabilities reports it. */
+export interface PoolServerReport {
+  label: string;
+  id: string;
+  state: 'running' | 'starting' | 'not-started' | 'failed';
+  error: string | null;
+  starts: number;
+  trust: ServerTrust;
+}
+
 /** One local session's MCP servers (never shared across sessions). */
 export class LocalMcpPool {
   readonly #o: LocalMcpPoolOptions;
@@ -699,6 +709,19 @@ export class LocalMcpPool {
   /** How many server processes this session has spawned and still holds. */
   get live(): number {
     return this.#servers.filter((p) => p.client && !p.client.dead).length;
+  }
+
+  /**
+   * Slice C6'a1 (request.session.capabilities): each server's state NOW — starting (a start in flight), running (a live
+   * client), failed (its last start or its process ended with an error: a runtime crash included), else not-started (a
+   * cache hit spawns nothing until first use) — with its last error (failed only), its starts and its live trust.
+   */
+  report(): PoolServerReport[] {
+    return this.#servers.map((p) => {
+      const live = p.client !== null && !p.client.dead;
+      const state: PoolServerReport['state'] = p.starting ? 'starting' : live ? 'running' : p.error ? 'failed' : 'not-started';
+      return { label: p.label, id: p.s.id, state, error: state === 'failed' ? p.error : null, starts: p.starts, trust: this.trustLive(p.label) };
+    });
   }
 
   #start(p: PoolServer, signal?: AbortSignal): Promise<McpStdioClient> {
