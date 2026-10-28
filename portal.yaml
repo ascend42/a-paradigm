@@ -105,6 +105,12 @@ gates:
     location: packages/gnomon/src/kernel/git/kernel-verbs.ts (#git-verbs)
     check: session not a loop and not manual without a plan AND configProblems(.git/config) = [] AND (an allowed or always card OR a kernel-derived Always rule for that exact remote, not force, not flagged) AND the re-read remote URL and branch equal the card's
     prizes: []
+  command-execution-consent:
+    description: 'Operator consent before an agent run through the Anthropic API provider (#claude-provider; paradigm team spawn / orchestrate, background orchestrations) may run shell commands on the operator''s machine. run_command stays on by default, but the first call asks the person at the terminal once ("Paradigm agents can run shell commands on your machine with your permissions. Keep this on? [y/N]") and saves the answer as agent-provider.allow-commands in ~/.paradigm/config.yaml (per user, never read from the project''s config, so a cloned repo cannot grant itself shell access). Undecided with no terminal (background, orchestrated, MCP, piped) means the tool is not offered; false means not offered; --allow-commands / --no-allow-commands override for one run and are not saved. Separately, read_file, write_file, search_files and the run_command cwd resolve by realpath inside the run''s working directory, symlinks that lead out are refused, and every run_command (command, cwd, exit code, timestamp; never env values) is appended to .paradigm/events/agent-commands.jsonl.'
+    type: capability
+    location: packages/paradigm/src/core/providers/command-consent.ts (#command-consent) + packages/paradigm/src/core/providers/claude-tools.ts (#claude-provider tools)
+    check: flag allowCommands, else saved agent-provider.allow-commands, else (interactive terminal AND the operator answers y) ; run_command offered only when not denied, and refused at call time unless allowed ; model-supplied paths pass resolveContained(workingDirectory)
+    prizes: []
   gate-check:
     description: Internal gate used by the @a-company/portal SDK for validating gate definitions and checks (see packages/portal/sdk/.purpose).
     type: internal

@@ -19,6 +19,7 @@
 
 import type { SpawnResult } from './agent-spawner.js';
 import type { TokenUsage, AgentModel, BudgetConfig } from './agent-provider.js';
+import type { CommandPolicy } from './providers/command-consent.js';
 
 /** Convergence signal emitted by the iterating agent. */
 export type IterationVerdict = 'approved' | 'changes-requested';
@@ -57,6 +58,8 @@ export interface IterationOptions {
   reviewAgent?: string;
   workingDirectory?: string;
   mcpServerPath?: string;
+  /** ^command-execution-consent policy, passed to every round's spawn. */
+  commandPolicy?: CommandPolicy;
   /** Per-round model resolver (e.g. budget-aware downgrade). When omitted the
    *  spawner resolves the model itself. Keeps the loop honoring the same
    *  model/budget policy as the surrounding pipeline. */

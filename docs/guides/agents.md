@@ -188,6 +188,42 @@ The intent is twofold: (1) the agent reads its own scope each session and self-r
 
 `paradigm agent review`, `approve`, and `deny` manage scope-change proposals — when an agent wants to expand its claimed scope, it routes through this approval queue rather than silently edits its own `.agent` file.
 
+### Shell commands from agents run through the Anthropic API (enforced)
+
+Unlike adoption contracts, this one is enforced in code. When `ANTHROPIC_API_KEY` is set, `paradigm team spawn`, `paradigm team orchestrate` and background orchestrations run agents through the Anthropic API provider, which gives the model four tools: `read_file`, `write_file`, `search_files` and `run_command`.
+
+**Files stay in the project.** Every path the model gives, and the folder it asks `run_command` to use, must resolve inside the run's working directory, with symlinks followed. An absolute path such as `~/.ssh/id_ed25519`, a `../` path, or a symlink in the repo that points outside is refused, and the model is told why.
+
+**`run_command` asks once.** It is on by default, but the first time an agent tries a command, Paradigm shows the command and asks:
+
+```
+A Paradigm agent wants to run a shell command:
+  npm test
+  in /path/to/your/project
+
+Paradigm agents can run shell commands on your machine with your permissions. Keep this on? [y/N]
+```
+
+Your answer is saved in `~/.paradigm/config.yaml` and used from then on:
+
+```yaml
+agent-provider:
+  allow-commands: true   # false turns run_command off; delete the line to be asked again
+```
+
+| Situation | `run_command` |
+|---|---|
+| `--allow-commands` on this run | Offered and runs without asking. Not saved. |
+| `--no-allow-commands` on this run | Not offered. Not saved. |
+| Saved `true` | Offered and runs. |
+| Saved `false` | Not offered. |
+| Not decided, you're at a terminal | Offered. The first call asks the question above. |
+| Not decided, no terminal (`--background`, orchestrated from MCP, piped, CI) | Not offered until you decide. |
+
+The setting is per user. It is never read from a project's `.paradigm/config.yaml`, so a repo you clone can't turn commands on for itself, and the agent's file tools can't reach it. Note that once commands are on, a command can do anything you can; keeping its folder inside the project does not limit what the command itself touches. Turn it on only for repos and tasks you trust.
+
+**Every command is logged.** Each `run_command`, whether it ran or was refused, is appended to `.paradigm/events/agent-commands.jsonl` in the project, with the command, folder, exit code, agent and time. Environment values are never written. Set `DEBUG=1` to also see each command in the Paradigm log output.
+
 ## 7. How agents learn
 
 Three storage tiers feed the learning loop:

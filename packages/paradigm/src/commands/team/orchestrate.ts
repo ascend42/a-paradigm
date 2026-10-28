@@ -49,6 +49,8 @@ export interface OrchestrateCommandOptions {
   notify?: string;
   /** Enable PM governance */
   pm?: boolean;
+  /** --allow-commands / --no-allow-commands; undefined = use the saved choice. */
+  allowCommands?: boolean;
 }
 
 // ============================================================================
@@ -136,6 +138,7 @@ export async function teamOrchestrateCommand(
 
     const bgOrch = await bgOrchestrator.startBackground(task, {
       mode,
+      commandPolicy: { allowCommands: options.allowCommands, interactive: false },
       orchestratorModel: options.model,
       budget,
       notify: true,
@@ -164,6 +167,11 @@ export async function teamOrchestrateCommand(
 
     const comparison = await orchestrator.compare(task, {
       orchestratorModel: options.model,
+      commandPolicy: {
+        allowCommands: options.allowCommands,
+        onBeforePrompt: () => spinner.stop(),
+        onAfterPrompt: () => spinner.start(),
+      },
       budget,
       checkpoints: options.checkpoint ? {
         beforeAgentSpawn: true,
@@ -199,6 +207,11 @@ export async function teamOrchestrateCommand(
   const result = await orchestrator.orchestrate(task, {
     mode,
     orchestratorModel: options.model,
+    commandPolicy: {
+      allowCommands: options.allowCommands,
+      onBeforePrompt: () => spinner.stop(),
+      onAfterPrompt: () => { if (!options.live) spinner.start(); },
+    },
     budget,
     checkpoints: options.checkpoint ? {
       beforeAgentSpawn: true,

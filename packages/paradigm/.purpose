@@ -358,7 +358,7 @@ features:
     components:
       - '#tutorial-handler'
   path-containment:
-    description: "resolveInsideRoot(baseDir, p) — the real path (symlinks followed) of an existing file strictly inside baseDir, or null for anything outside, baseDir itself or missing. Used for paths read from repo content by #drift-command and #tutorial-command."
+    description: "resolveInsideRoot(baseDir, p) — the real path (symlinks followed) of an existing file strictly inside baseDir, or null for anything outside, baseDir itself or missing. Used for paths read from repo content by #drift-command and #tutorial-command. resolveContained(baseDir, p, {allowRoot, allowMissing}) does the same for a path that may not exist yet: realpath of the longest existing prefix plus the missing tail; a dangling symlink or NUL byte is null. Used by #claude-provider for model-supplied paths, the run_command cwd and its command log."
     type: utility
     file: src/utils/path-containment.ts
     tags: [security, paths]

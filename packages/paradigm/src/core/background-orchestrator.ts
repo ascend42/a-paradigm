@@ -395,6 +395,10 @@ export class BackgroundOrchestrator {
 
         const result = await orchestrator.orchestrate(task, {
           ...options,
+          // No one answers a terminal question in the background: until the
+          // user has saved a choice (or passed --allow-commands), run_command
+          // is not offered (^command-execution-consent).
+          commandPolicy: { ...options.commandPolicy, interactive: false },
           onMessage: (source, message) => {
             if (message.type === 'text') {
               outputStream.write(`[${source}] ${message.content}\n`);

@@ -47,6 +47,7 @@ import {
   type BridgeHandle,
 } from './task-bridge.js';
 import { recordEstimateActual } from './calibration.js';
+import type { CommandPolicy } from './providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -93,6 +94,8 @@ export interface OrchestrationOptions {
     enabled: boolean;
     blockOnViolations?: boolean;
   };
+  /** ^command-execution-consent policy, passed to every agent spawn. */
+  commandPolicy?: CommandPolicy;
 }
 
 export interface OrchestrationResult {
@@ -481,6 +484,7 @@ export class Orchestrator {
       model,
       workingDirectory: options.workingDirectory || this.rootDir,
       mcpServerPath: options.mcpServerPath,
+      commandPolicy: options.commandPolicy,
       budget: options.budget,
       onMessage: options.onMessage
         ? (msg) => options.onMessage!('solo', msg)
@@ -677,6 +681,7 @@ export class Orchestrator {
           model,
           workingDirectory: options.workingDirectory || this.rootDir,
           mcpServerPath: options.mcpServerPath,
+          commandPolicy: options.commandPolicy,
           budget: options.agentBudgets?.[step.agent] || options.budget,
           onMessage: options.onMessage
             ? (msg) => options.onMessage!(step.agent, msg)
@@ -903,6 +908,7 @@ export class Orchestrator {
       reviewAgent: 'reviewer',
       workingDirectory: options.workingDirectory || this.rootDir,
       mcpServerPath: options.mcpServerPath,
+      commandPolicy: options.commandPolicy,
       resolveModel,
       resolveBudget,
       onRound: options.onAgentComplete
@@ -928,6 +934,7 @@ export class Orchestrator {
           model: 'haiku',
           workingDirectory: options.workingDirectory || this.rootDir,
           mcpServerPath: options.mcpServerPath,
+          commandPolicy: options.commandPolicy,
         },
       );
       extraResults.push(testerResult);
@@ -1496,6 +1503,7 @@ export class Orchestrator {
           model: 'haiku', // Builders always use haiku
           workingDirectory: options.workingDirectory || this.rootDir,
           mcpServerPath: options.mcpServerPath,
+          commandPolicy: options.commandPolicy,
           budget: options.budget,
           onMessage: options.onMessage
             ? (msg) => options.onMessage!(builder.agent, msg)
@@ -1607,6 +1615,7 @@ export class Orchestrator {
       const spawnerOptions: SpawnerOptions = {
         workingDirectory: opts.workingDirectory || this.rootDir,
         mcpServerPath: opts.mcpServerPath,
+        commandPolicy: opts.commandPolicy,
         model: opts.resolveModel?.(agent),
         budget: opts.resolveBudget?.(agent),
       };

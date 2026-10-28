@@ -5,10 +5,18 @@ description: |
 
 components:
   claude-provider:
-    description: Anthropic API direct — requires ANTHROPIC_API_KEY environment variable
+    description: "Anthropic API direct — requires ANTHROPIC_API_KEY environment variable. Offers the model read_file, write_file, search_files and run_command (claude-tools.ts). Every model-supplied path and the run_command cwd must resolve by realpath inside the run's workingDirectory (resolveContained, symlinks that lead out refused). run_command is offered and run only as ^command-execution-consent allows, and every call (command, cwd, exit code, timestamp, refusals too; never env values) is appended to .paradigm/events/agent-commands.jsonl, never through a symlink that leads out."
     type: service
     path: claude.ts
-    aspects: ["~provider-cascade"]
+    files: [claude.ts, claude-tools.ts]
+    aspects: ["~provider-cascade", "~agent-tools-confined"]
+    gates: ["^command-execution-consent"]
+
+  command-consent:
+    description: "Decides whether run_command is offered and allowed for an API-run agent. Order: --allow-commands / --no-allow-commands for one run (never saved); then agent-provider.allow-commands in ~/.paradigm/config.yaml (per user only, never the project config); then, when undecided, an interactive terminal is asked once on the first call ('Paradigm agents can run shell commands on your machine with your permissions. Keep this on? [y/N]', on stderr) and the answer is saved, while background, orchestrated, MCP and piped runs do not get the tool. Parallel first calls share one question."
+    type: service
+    path: command-consent.ts
+    gates: ["^command-execution-consent"]
 
   claude-code-provider:
     description: Claude Code Task tool — requires Max subscription
@@ -50,6 +58,18 @@ signals:
     tags: [team, warning]
 
 aspects:
+  ~agent-tools-confined:
+    description: The Anthropic API provider's file tools and run_command cwd stay inside the run's working directory (realpath of the longest existing prefix, so symlinks are followed), and run_command needs ^command-execution-consent. The consent setting lives outside the working directory, so the agent cannot grant it to itself.
+    category: invariant
+    severity: high
+    tags: [providers, security]
+    anchors:
+      - claude-tools.ts:1-1
+      - command-consent.ts:1-1
+    applies-to:
+      - "#claude-provider"
+      - "#command-consent"
+
   ~provider-api-key-requirements:
     description: Each provider has specific environment detection — claude requires ANTHROPIC_API_KEY, claude-code requires CLAUDE_CODE=1 or TERM_PROGRAM=claude, cursor-cli requires Cursor IDE environment, claude-cli checks claude command in PATH
     category: constraint

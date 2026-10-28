@@ -23,6 +23,7 @@ import { buildAgentContext } from './context-builder.js';
 import { loadAgentsManifest } from '../commands/team/loader.js';
 import { BudgetTracker } from './budget-tracker.js';
 import { AuditLogger, AgentLog } from './audit-logger.js';
+import type { CommandPolicy } from './providers/command-consent.js';
 
 // ============================================================================
 // Types
@@ -58,6 +59,8 @@ export interface SpawnerOptions {
   onMessage?: (message: AgentMessage) => void;
   /** Callback for checkpoint approval */
   onCheckpoint?: (description: string) => Promise<boolean>;
+  /** ^command-execution-consent policy, passed to the provider. */
+  commandPolicy?: CommandPolicy;
 }
 
 // ============================================================================
@@ -175,6 +178,7 @@ export class AgentSpawner {
       workingDirectory: options.workingDirectory || this.rootDir,
       checkpoints: options.checkpoints,
       timeout: options.timeout,
+      commandPolicy: options.commandPolicy,
     };
 
     // Track start time

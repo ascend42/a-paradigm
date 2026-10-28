@@ -31,6 +31,8 @@ export interface SpawnCommandOptions {
   budget?: string;
   timeout?: string;
   checkpoint?: boolean;
+  /** --allow-commands / --no-allow-commands; undefined = use the saved choice. */
+  allowCommands?: boolean;
 }
 
 // ============================================================================
@@ -200,6 +202,10 @@ export async function teamSpawnCommand(
     checkpoints: options.checkpoint ? { beforeActions: ['write', 'delete', 'execute'] } : undefined,
     onMessage,
     onCheckpoint,
+    commandPolicy: {
+      allowCommands: options.allowCommands,
+      onBeforePrompt: () => { if (spinner.isSpinning) spinner.stop(); },
+    },
   });
 
   // Ensure newline after streamed output

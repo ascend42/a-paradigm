@@ -766,6 +766,8 @@ teamCmd
   .option('--budget <budget>', 'Budget limits (e.g., "tokens=100000,cost=2")')
   .option('--timeout <ms>', 'Timeout in milliseconds')
   .option('--checkpoint', 'Pause for approval before writes/deletes')
+  .option('--allow-commands', 'Let API-run agents use run_command this run, without asking (not saved)')
+  .option('--no-allow-commands', 'Do not offer run_command to API-run agents this run')
   .option('-q, --quiet', 'Suppress output')
   .option('--json', 'Output as JSON')
   .action(async (agent, path, options) => {
@@ -788,6 +790,8 @@ teamCmd
   .option('--checkpoint', 'Pause for approval between agents')
   .option('--live', 'Stream agent output live')
   .option('--pm', 'Enable PM governance (compliance checks before/after)')
+  .option('--allow-commands', 'Let API-run agents use run_command this run, without asking (not saved)')
+  .option('--no-allow-commands', 'Do not offer run_command to API-run agents this run')
   .option('-q, --quiet', 'Suppress output')
   .option('--json', 'Output as JSON')
   .action(async (task, path, options) => {
