@@ -36,7 +36,10 @@ components:
       config.ts), config.ts (compat names = gnomon-local allowlist, no cloud;
       assertNotClaude: law 7 never runs claude under a backend:local permit),
       probe.ts (/slots n_ctx, else /props, else Ollama /api/show num_ctx, else
-      the loaded context in /api/ps; tools only on a live tool call),
+      the loaded context in /api/ps; tools only on a live tool call; slice C4'a: probeToolSkill
+      runs T2-T4 after a successful T1 — pure predicates over the reply JSON, byte-stable bodies,
+      120 s per test, 3 min in all, stop at the first failure — and fingerprintOf keys the tier
+      cache, see #local-tool-tier),
       routing.ts (local|claude|any; capable = probe ok + tools (or text-tool
       opt-in) + n_ctx >= floor 8192), src/adapters/local/runner.ts (pi rpc
       JSONL driver, tolerant parse, LocalUsageMeter no double count),
@@ -189,7 +192,10 @@ components:
       the kernel's own (answered in local-session.ts, never by this broker);
       a manual session gets read-class narrow tools only; loop sessions get no
       MCP tools; a session with MCP servers also takes #mcp-servers'
-      write-denies (mcpDenyWrite).
+      write-denies (mcpDenyWrite). Slice C4'a (#local-tool-tier): BrokeredTool.form ('narrow' |
+      'full') is the form a narrow tool was OFFERED in; a full one is read by reassembleFull, a
+      narrow one by reassemble; a tier change re-offering the same entry in another form keeps the
+      previous form callable and winning its name until the child's tools_applied (formShadow).
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
@@ -234,7 +240,13 @@ components:
       toolsSlotTokens(contextTarget) = min(1500, 15 % of the target), at most
       48 brokered tools; human-only and taken names skipped. C3' replaced it
       in LocalLane with #tool-selector (the slot rule and MAX_OFFERED stay;
-      LOCAL_RESERVED_TOOL_NAMES now holds find_tool too).
+      LOCAL_RESERVED_TOOL_NAMES now holds find_tool too). Slice C4'a (#local-tool-tier): the FULL
+      form — fullParameters (an unsplit tool's inputSchema; a split op's minus its op param),
+      fullRefusal/fullOfferable (every keyword at every depth in SCHEMA_KEYWORDS, depth <= 6, no
+      proto keys, TOOL_NAME_RE, <= BROKER_PARAMETERS_BYTES (the child's parametersBytes, parity
+      test) and <= FULL_TOOL_MAX_TOKENS 800, every description/title/enum/default string unchanged
+      by cleanServerText), offeredForm, parametersIn, surfaceTokens(tools, compact|full) and
+      reassembleFull (an op-param key refused, the op set, validateBrokeredArgs on the full schema).
     path: src/kernel/local/capability-index.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
@@ -311,8 +323,13 @@ components:
       L3 toolPins() keeps well-formed names, at most 8; L4 a run-mode change
       re-selects at the next step end; L5 find_tool lines name the server;
       L6 reserved names compare lower-cased (selector and child). Gaps: K and
-      the slot are not yet per tier (C4'); a found mutate tool is offered
-      (carded), not refused; the mode change is noticed at a step end.
+      the slot were not per tier until C4'a; a found mutate tool is offered
+      (carded), not refused; the mode change is noticed at a step end. Slice C4'a
+      (#local-tool-tier): new inputs slot, surface and allowFull (K, slot and surface from
+      tierPlan; SELECT_K is only the default, 12); each candidate costs its OFFERED form in the
+      session's surface; tier 3 admits fullOfferable human-only entries; pins go first but never
+      raise K or the slot (unfitPins{name, why tier-0|not-offerable|over-k|over-slot}; at K 0
+      every pin is unfit); output forms[] aligned with selected (a full id hashes as id#full).
     path: src/kernel/local/tool-selector.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
@@ -324,6 +341,49 @@ components:
       - test/local-working-memory.test.ts
       - test/paradigm-staged-lane.test.ts
     oracles: [G-LCL-20]
+  local-tool-tier:
+    description: >-
+      #local-tool-tier (TD-2026-10-27-833 slice C4'a; spec §13.1 "Tool tiers"; founder rulings in the C4'a brief):
+      src/kernel/local/tool-tier.ts (pure table + store), wired in src/kernel/supervisor/local-session.ts. One tier
+      0-3 per attended local session, fixed at open, changed only by the human's two-phase commit (never implicitly:
+      the prompt cache). effectiveTier = min(human ?? skill, windowTier(target)); skill = skillTier(passed) (T1 1,
+      T1-T3 2, all four 3, T1 failed 0); window: <4096 0, >=4096 1, >=8192 2, >=16384 3 of min(config, n_ctx) (never
+      the trained maximum), an unknown n_ctx caps it at 1; a pending measurement opens provisional at min(1, window).
+      tierPlan: tier 0 K 0, no brokered tool at all (no kernel verb, no MCP server started, so no find_tool); 1 K 4,
+      slot min(600, 10%); 2 K 12, min(1500, 15%); 3 K 12, min(4000, 25%), surface full (every offered tool FULL when
+      fullOfferable, complex human-only ones included; else narrow). The endpoint's configured surface only lowers the
+      tier's (lowerSurface). Store <gnomonHome>/local/tool-tiers.json (schema gnomon-tool-tiers:v1; 0600, temp +
+      fsync + rename, never through a symlink; shape-validated, a corrupt/oversized file ignored, a bad record
+      dropped): records keyed sha256(base|model|fingerprint) with skill, passed, version (TIER_PROBE_VERSION), human;
+      readTiers, lookupTier, writeMeasured, setHuman; a new fingerprint drops the old digest's records (human value
+      too); no TTL. LocalLane: probeAll and Check again (recordProbe) run #measure in the background (fingerprintOf,
+      then probeToolSkill on a cache miss; a model with no fingerprint is measured into memory only); remeasure(id)
+      forces one (no dispatcher request yet: C4'b); tierSettled() for tests; status.local.lastProbe.tier{skill,
+      passed, measuring, window, human}. At open: local.yaml surface from the tier, model.capabilities{hsid, tier,
+      tierSource measured|human|provisional, measured, surface}. request.session.tier (dispatcher-only, human-only
+      via humanRequest: an agent principal is refused on both phases; the owner of a running attended session):
+      {op:'preview', tier} → {from, to (window-capped), requested, measured, window, k, slotTokens, slotShare,
+      surface 'a→b', cacheLost, leaving, unfitPins, notice, token, expiresInMs}; the token is 128-bit random, single
+      use (every commit attempt consumes it), TIER_TOKEN_TTL_MS 60 s, bound to the principal, the session, the tier
+      and the selection generation (bumped on every change of the offered set), else refused reason 'stale';
+      {op:'commit', token, remember?} re-selects (a raise from 0 starts the MCP pool), sends tools_set{id, tools,
+      surface}, logs model.capabilities{hsid, tier, previous, measured, tierSource:'human'} and tool.selection{trigger
+      'tier'} (the one contracts change); remember:true writes the per-model human value (rememberWhy no-fingerprint
+      when none is known). Until tools_applied the previous set and its forms stay callable (#local-tool-broker form
+      shadow). A tier never touches allow, classOf, cards, trust, the manual filter or the destructive-entry rules
+      (C5' owns grants). Gaps: no GUI (C4'b); remeasure has no request; a context-target change does not re-tier a
+      live session (the slot follows the target); after a config hot apply an endpoint whose base or model changed
+      is provisional until Check again or a restart.
+    path: src/kernel/local/tool-tier.ts
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, broker, td-2026-10-27-833]
+    related: ["#tool-selector", "#capability-index", "#local-tool-broker", "#local-runner", "#gnomon-local"]
+    signals: []
+    tests:
+      - test/tool-tier.test.ts
+      - test/tier-probe.test.ts
+      - test/local-tier-lane.test.ts
+    oracles: [G-LCL-21]
   local-mcp-client:
     description: >-
       #local-mcp-client (TD-2026-10-27-833 slice C2'): the kernel's minimal

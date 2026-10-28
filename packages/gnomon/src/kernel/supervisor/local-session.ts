@@ -1508,7 +1508,10 @@ export class LocalLane {
   async #tierModel(ep: { id: string; base: string; model: string }): Promise<TierModel | null> {
     const f = this.#fingerprints.get(ep.id);
     let fp = f && f.base === ep.base && f.model === ep.model ? f.fingerprint : undefined;
-    if (fp === undefined) fp = await fingerprintOf({ base: ep.base, model: ep.model }, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+    if (fp === undefined) {
+      fp = await fingerprintOf({ base: ep.base, model: ep.model }, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+      this.#fingerprints.set(ep.id, { base: ep.base, model: ep.model, fingerprint: fp, at: Date.now() });
+    }
     return fp ? { base: ep.base, model: ep.model, fingerprint: fp } : null;
   }
 
