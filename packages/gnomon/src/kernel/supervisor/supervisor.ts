@@ -291,6 +291,8 @@ export interface SupervisorOptions {
   localMcpTrust?: PoolTrust & { subscribe?: (fn: (id: string) => void) => () => void };
   /** slice C6'a2-1 (#local-result-policy): the human's "/" result policy (kernel-signed tool.result.policy rows) */
   localResultPolicy?: ResultPolicyPort;
+  /** slice C6'a2-1 (Aegis L1): the last day's rule passes (approval.auto{modeRef:'rule:<id>'}) */
+  localRulePasses?: () => Iterable<{ ruleId: string; at: number }>;
   /** slice C6'a1 (Aegis L1): McpServers.enabledAt — a third-party server is still on at its open-time launch hash */
   localMcpEnabled?: (id: string, launchHash: string) => boolean;
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
@@ -780,7 +782,7 @@ export class SessionSupervisor {
       ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
       ...(o.localMcp ? { localMcp: o.localMcp } : {}), ...(o.mcpDenyWrite ? { mcpDenyWrite: o.mcpDenyWrite } : {}),
-      ...(o.localMcpCache ? { mcpCache: o.localMcpCache } : {}), ...(o.localMcpTrust ? { mcpTrust: o.localMcpTrust } : {}), ...(o.localResultPolicy ? { resultPolicy: o.localResultPolicy } : {}), ...(o.localMcpEnabled ? { mcpEnabled: o.localMcpEnabled } : {}),
+      ...(o.localMcpCache ? { mcpCache: o.localMcpCache } : {}), ...(o.localMcpTrust ? { mcpTrust: o.localMcpTrust } : {}), ...(o.localResultPolicy ? { resultPolicy: o.localResultPolicy } : {}), ...(o.localRulePasses ? { rulePasses: o.localRulePasses } : {}), ...(o.localMcpEnabled ? { mcpEnabled: o.localMcpEnabled } : {}),
       // slice C5'a2 (^local-tool-grant): brokered tool rules from the same RuleBook
       ...(o.alwaysRule ? { alwaysRule: o.alwaysRule } : {}),
     });

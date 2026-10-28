@@ -164,7 +164,7 @@ import { McpServers } from '../desk/mcp-server-cards.js';
 import { McpListCache } from '../local/mcp-client.js';
 import { toolRulePaused, type ToolRulePauseSource } from '../local/tool-broker.js';
 import { McpTrust, trustSourceOf } from '../local/trust-book.js';
-import { ResultPolicy, resultPolicySourceOf } from '../local/result-policy.js';
+import { ResultPolicy, resultPolicySourceOf, rulePassesOf } from '../local/result-policy.js';
 import { resolveFirstPartyParadigm, type FirstPartyResolution } from '../desk/mcp-servers.js';
 import { DeskMods, deskLaunchKey, McpConfigCards, mergeDeskMcp, readMcpOverrides, repoServersOnly, UNCONFIGURED_HINT } from '../desk/mcp-passthrough.js';
 import { PICKUP_SCAN_MS } from '../modhost/control.js';
@@ -1022,6 +1022,8 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     localMcpCache: mcpListCache,
     localMcpTrust: mcpTrust,
     localResultPolicy: resultPolicy,
+    // Aegis L1 (C6'a2-1): the last day's Always-rule passes, so a restart never resets a destructive rule's day count
+    localRulePasses: () => rulePassesOf(log),
     localMcpEnabled: (id, launchHash) => mcpServers.enabledAt(id, launchHash),
     // #mcp-passthrough: granted mods' provides.mcp as gnomon-<mod> servers; never a repo name; repo-muted mods skipped
     // S0b: the supervisor's base is the VERIFIED GENERATED distro mcp.json (kernel output) → `distro`, not repo-authored

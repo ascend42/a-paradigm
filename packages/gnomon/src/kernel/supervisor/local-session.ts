@@ -209,6 +209,11 @@ export interface LocalLaneOptions {
    */
   resultPolicy?: ResultPolicyPort;
   /**
+   * slice C6'a2-1 (Aegis L1): the rule passes of the last day, from the kernel's own approval.auto{modeRef:'rule:<id>'}
+   * rows, so a daemon restart never resets a destructive rule's day count. Read once at construction.
+   */
+  rulePasses?: () => Iterable<{ ruleId: string; at: number }>;
+  /**
    * slice C5'a2 (^local-tool-grant): the #always-rules match (SupervisorOptions.alwaysRule). A brokered call asks it for
    * a tool rule with the call's bindHash, never in manual mode. Absent: no rule matches and no card offers Always.
    */
@@ -663,6 +668,12 @@ export class LocalLane {
 
   constructor(o: LocalLaneOptions) {
     this.#o = o;
+    // Aegis L1: the destructive rules' day counts survive a restart (rebuilt from the chain's approval.auto rows)
+    try {
+      if (o.rulePasses) this.#destructiveBudget.seed(o.rulePasses(), Date.now());
+    } catch {
+      /* an unreadable chain seeds nothing (the in-memory count starts over) */
+    }
     this.#config = o.config;
     this.#platform = o.platform ?? process.platform;
     this.#identity = o.identity !== undefined ? o.identity : sessionIdentity();

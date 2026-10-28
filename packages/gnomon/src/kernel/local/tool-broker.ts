@@ -137,6 +137,24 @@ export class DestructiveRuleBudget {
   readonly #session = new Map<string, number[]>();
   readonly #rule = new Map<string, number[]>();
 
+  /**
+   * Aegis L1: rebuild the per-rule day counts at startup from the kernel's own approval.auto{modeRef:'rule:<id>'} rows
+   * of the last day (`at` epoch ms); a row older than a day, or in the future, is ignored.
+   */
+  seed(passes: Iterable<{ ruleId: string; at: number }>, now: number): number {
+    let n = 0;
+    for (const p of passes) {
+      if (!Number.isFinite(p.at) || p.at <= now - DAY_MS || p.at > now) continue;
+      const a = this.#rule.get(p.ruleId) ?? [];
+      a.push(p.at);
+      a.sort((x, y) => x - y);
+      this.#rule.set(p.ruleId, a);
+      n++;
+    }
+    while (this.#rule.size > 1024) this.#rule.delete(this.#rule.keys().next().value as string);
+    return n;
+  }
+
   take(hsid: string, ruleId: string, now: number): boolean {
     const prune = (m: Map<string, number[]>, k: string, win: number): number[] => {
       const a = (m.get(k) ?? []).filter((t) => t > now - win);

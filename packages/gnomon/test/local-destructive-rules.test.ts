@@ -15,7 +15,7 @@ import { ROW_TABLE_MIN_HELPER, rowTableRefusal } from '../src/kernel/identity/de
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { narrow, type CapabilityEntry } from '../src/kernel/local/capability-index.js';
 import { UNTRUSTED_IRREVERSIBLE_LINE, DESTRUCTIVE_RULED_PER_RULE_DAY, DESTRUCTIVE_RULED_PER_SESSION_MINUTE, DestructiveRuleBudget, destructiveAlwaysLine, HUMAN_RUNS_PER_MINUTE, LocalToolBroker, schemaRefusal, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
-import { droppedLabel, fitQueue, resultCap, sendTokens, dropTool, stillSendable, type SendItem, frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
+import { rulePassesOf, droppedLabel, fitQueue, resultCap, sendTokens, dropTool, stillSendable, type SendItem, frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { followUpLine, promptLine } from '../src/adapters/local/runner.js';
 import { FakeHelper } from './helper-fake.js';
@@ -281,6 +281,20 @@ describe('INJECTION PAUSE and the pass limits', () => {
     for (let i = 0; i < DESTRUCTIVE_RULED_PER_RULE_DAY; i++) expect(b.take(`hsid-${i}`, 'rule', (t += 1000))).toBe(true);
     expect(b.take('hsid-x', 'rule', (t += 1000))).toBe(false);
     expect(b.take('hsid-x', 'rule', t + 24 * 3600_000)).toBe(true);
+  });
+
+  it('Aegis L1: a restart rebuilds the per-rule day count from the last day of approval.auto rule rows', () => {
+    const now = T0;
+    const ev = (hoursAgo: number, modeRef: string) => ({ view: 'full', event: { at: new Date(now - hoursAgo * 3600_000).toISOString(), payload: { hsid: HSID, tool: 'mcp:srv/drop', inputHash: REPO, modeRef } } });
+    const rows = [...Array.from({ length: DESTRUCTIVE_RULED_PER_RULE_DAY - 1 }, (_, i) => ev(1 + i / 10, 'rule:R')), ev(30, 'rule:R'), ev(2, 'manual'), ev(2, 'rule:OTHER')];
+    const log = { read: () => rows } as never;
+    const passes = [...rulePassesOf(log, now)];
+    expect(passes.filter((p) => p.ruleId === 'R')).toHaveLength(DESTRUCTIVE_RULED_PER_RULE_DAY - 1);
+    const b = new DestructiveRuleBudget();
+    expect(b.seed(passes, now)).toBe(DESTRUCTIVE_RULED_PER_RULE_DAY);
+    expect(b.take('hsid-new', 'R', now + 1)).toBe(true); // the 30th of the day
+    expect(b.take('hsid-other', 'R', now + 2)).toBe(false); // the 31st: carded
+    expect(b.take('hsid-other', 'OTHER', now + 3)).toBe(true);
   });
 
   it(`"/" runs: their own ${HUMAN_RUNS_PER_MINUTE}/min bucket`, async () => {

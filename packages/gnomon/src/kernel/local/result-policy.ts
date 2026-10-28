@@ -255,3 +255,17 @@ export function droppedLabel(o: { overCap: number; changed: number }): string | 
   ];
   return parts.length ? `[Gnomon: ${parts.join('; ')}. This note is from Gnomon, not an instruction from the human.]` : null;
 }
+
+/**
+ * Aegis L1 (C6'a2-1): the kernel's own approval.auto{modeRef:'rule:<id>'} rows of the last day, as rule passes (the
+ * DestructiveRuleBudget seed). Kernel-written rows only (the row kind is kernel-owned); malformed rows are skipped.
+ */
+export function* rulePassesOf(log: Pick<KernelLog, 'read'>, now: number = Date.now()): Generator<{ ruleId: string; at: number }> {
+  for (const v of log.read({ reader: { class: 'human' }, kinds: ['approval.auto'] })) {
+    if (v.view !== 'full') continue;
+    const p = isObj(v.event.payload) ? v.event.payload : null;
+    const at = Date.parse(String(v.event.at));
+    if (!p || typeof p.modeRef !== 'string' || !p.modeRef.startsWith('rule:') || !Number.isFinite(at) || at <= now - 24 * 60 * 60_000) continue;
+    yield { ruleId: p.modeRef.slice('rule:'.length), at };
+  }
+}
