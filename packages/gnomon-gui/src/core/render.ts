@@ -402,12 +402,48 @@ export interface CardView {
   loopClaimedBy?: string | null;
   /** 8.0:local-lane C5'a3: a brokered MCP card (isBrokeredCard): it never shows a plain `always` key */
   brokered?: boolean;
+  /** C5'b: the brokered card's tool scope from its contentHash-verified tool-scope node (toolScopesOf); null => no Always */
+  toolScope?: ToolScopeView | null;
 }
+
+/** C5'b: what a brokered card's scoped Always names (display text: a server's own words are untrusted). */
+export interface ToolScopeView {
+  tool: string;
+  server: string;
+}
+
+/**
+ * C5'b (K1): a brokered card's tool scope comes ONLY from its ONE `{type:'tool-scope', detail}` node whose detail hashes
+ * to the card's contentHash and offers exactly toolScopes ['tool'], with the brokered server and tool named. A forged,
+ * mismatched or missing node offers no Always (display only: the broker re-checks the scope against the card).
+ */
+export function toolScopesOf(card: Record<string, unknown>): ToolScopeView | null {
+  if (card.kind !== 'permission') return null;
+  const block = card.block;
+  const kids = block && typeof block === 'object' && Array.isArray((block as { children?: unknown }).children) ? (block as { children: unknown[] }).children : [];
+  const nodes = kids.filter((k) => k && typeof k === 'object' && (k as { type?: unknown }).type === 'tool-scope');
+  if (nodes.length !== 1) return null;
+  const detail = (nodes[0] as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  if (typeof card.contentHash !== 'string' || cardContentHash(card, detail) !== card.contentHash) return null;
+  const d = detail as { toolScopes?: unknown; brokered?: unknown; tool?: unknown };
+  if (!Array.isArray(d.toolScopes) || d.toolScopes.length !== 1 || d.toolScopes[0] !== 'tool') return null;
+  const b = d.brokered && typeof d.brokered === 'object' && !Array.isArray(d.brokered) ? (d.brokered as Record<string, unknown>) : null;
+  if (!b || typeof b.server !== 'string' || !b.server || typeof b.tool !== 'string' || !b.tool || typeof b.bindHash !== 'string') return null;
+  return { tool: displayText(b.tool).slice(0, 120), server: displayText(b.server).slice(0, 80) };
+}
+
+/** C5'b: the brokered card's one Always choice, in plain words (Mika: shown beside the key, never only on hover). */
+export const TOOL_SCOPE_KEY = Object.freeze({
+  short: 'this tool, any arguments',
+  note: (t: ToolScopeView): string => `every call of ${t.tool} on ${t.server} in this repo · paused if the tool or server changes`,
+  label: (t: ToolScopeView): string => `Always: ${t.tool} on ${t.server}, any arguments, in this repo`,
+});
 
 /**
  * 8.0:local-lane C5'a3 (interim guard): a brokered MCP card — its tool is named `mcp:<server>/<tool>`, or its block
  * carries the kernel's `{type:'tool-scope'}` node. Its `always` needs the tool scope, which a plain key never sends (the
- * broker refuses it), so renderCard draws no plain `always` key on it; C5'b adds the scoped key. Restrictive only.
+ * broker refuses it), so renderCard draws no plain `always` key on it; C5'b's scoped key (toolScopesOf) is its only Always.
  */
 export function isBrokeredCard(block: unknown, tool?: unknown): boolean {
   if (typeof tool === 'string' && tool.startsWith('mcp:')) return true;
@@ -619,7 +655,7 @@ export function splitCardBlock(block: unknown, kind: string, keepWhole: boolean)
  * `{type:'bash-prefix', detail}` node whose detail hashes to the card's contentHash (the kernel derived them with
  * its simple-command rule); display only — the broker re-checks any prefix against the shown command.
  */
-export type ApproveScopeParam = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] } | { kind: 'file' } | { kind: 'repo-edits' };
+export type ApproveScopeParam = { kind: 'exact' } | { kind: 'prefix'; prefix: string[] } | { kind: 'file' } | { kind: 'repo-edits' } | { kind: 'tool' };
 
 /**
  * TD-2026-10-20-294: the `approve` params a decision key sends. An `always` key carries its scope in
@@ -631,6 +667,8 @@ export function approveParamsOf(cardId: string, decision: string, note: string |
   if (decision !== 'always' || !key) return out;
   if (key.scope === 'exact') return { ...out, scope: { kind: 'exact' } };
   if (key.scope === 'file' || key.scope === 'repo-edits') return { ...out, scope: { kind: key.scope } };
+  // C5'b: a brokered card's scoped Always (data-scope="tool")
+  if (key.scope === 'tool') return { ...out, scope: { kind: 'tool' } };
   if (key.scope !== 'prefix') return out;
   try {
     const p = JSON.parse(key.prefix ?? '') as unknown;
@@ -827,6 +865,8 @@ const LOCAL_ROW_FIELDS = ['schemaVersion', 'version', 'local', 'cardId', 'runner
 const LOCAL_COMPATS = ['llama.cpp', 'ollama', 'lm-studio', 'vllm', 'mlx-lm'];
 
 /** The presence line of a root configuration card (Mika's card copy; presence is Touch ID or the Mac password). */
+/** C5'b: the trust card's binding line (`launch sha256:… · tools sha256:…`): details and title=, never the face. */
+const TRUST_HASH_LINE = /^launch \S+ · tools \S+$/;
 export const LOCAL_PRESENCE_LINE = 'Allow takes the root key and your presence (Touch ID or your Mac password) · never standing, never by voice';
 
 /** The kernel's Text lines of a card block, in order (each Text child may hold several lines). */
@@ -1179,20 +1219,24 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // Aegis M1: root-capable = verified rows, ANY root-rows node (even a bad one), or a kind the table makes root
   const rootGated = v.rootRows !== undefined && (v.rootRows !== null || hasRootNode(block) || (ROOT_CLASS_BY_KIND[v.kind] ?? []).some((d) => v.decisions.includes(d)));
   const keys0 = v.decidable && v.decisions.length ? (rootGated ? rootSafeDecisions(v.kind, v.decisions, v.rootRows ?? null) : v.decisions) : [];
-  // 8.0:local-lane C5'a3 (interim guard): a brokered card never shows a plain `always` key (it sends no tool scope)
-  const keys = v.brokered || isBrokeredCard(block) ? keys0.filter((d) => d !== 'always') : keys0;
+  // 8.0:local-lane C5'a3 + C5'b: a brokered card never shows a plain `always` key; its Always is the scoped fold, and only
+  // when its tool-scope node checks out (toolScopesOf); else no Always at all
+  const brokered = !!v.brokered || isBrokeredCard(block);
+  const toolScope = brokered ? (v.toolScope ?? null) : null;
+  const keys = brokered && !toolScope ? keys0.filter((d) => d !== 'always') : keys0;
   const ask = v.kind === 'ask-user' && keys.includes('answer') ? (v.ask ?? null) : null;
   // TD-2026-10-19-063: a claim-mismatch card (e.g. a claude re-pin NOT signed by the expected publisher) focuses Deny
   const loud = v.flags.includes('claim-mismatch');
   // S1 ink keys: the first non-deny decision is the filled primary key (.key.pri); never on a claim-mismatch card,
   // where Deny stays the default focus and nothing is filled
   const pri = loud ? null : (keys.find((d) => d !== 'deny') ?? null);
-  const scoped: 'command' | 'edit' | 'remote' | null = v.prefixOptions?.length ? 'command' : v.editScopes?.length ? 'edit' : v.gitVerb?.verb === 'git.push' && v.gitVerb.slug ? 'remote' : null;
+  const scoped: 'command' | 'edit' | 'remote' | 'tool' | null = brokered ? (toolScope ? 'tool' : null) : v.prefixOptions?.length ? 'command' : v.editScopes?.length ? 'edit' : v.gitVerb?.verb === 'git.push' && v.gitVerb.slug ? 'remote' : null;
   const { title, body } = splitCardBlock(block, v.kind, loud);
   const quoted = !loud && !KERNEL_TITLED_KINDS.has(v.kind);
   // design-system card.family ⊙ gnomon (C3): a root configuration card about Gnomon itself (local.config)
   // #gui-mcp-servers: turning on one of the human's MCP servers (detail.action mcp.enable) is a root configuration card too
-  const gnomonFam = v.rootRows?.action === 'local.config' || v.rootRows?.action === 'mcp.enable';
+  // C5'b: trusting a server's tool labels (detail.action mcp.trust) is one too
+  const gnomonFam = v.rootRows?.action === 'local.config' || v.rootRows?.action === 'mcp.enable' || v.rootRows?.action === 'mcp.trust';
   const tag0 = voiceTagOf(v.voice ?? null);
   const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
   // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title
@@ -1208,9 +1252,14 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // #gui-mcp-servers (Mika 2026-10-23): turning on an MCP server signs only its decision row, so the face would say
   // nothing about the server; its kernel lines (what runs, where, the shell, fetch and repo warnings) ARE the decision,
   // so they show on the face, not under details. The k-line and the presence line already show: not twice.
-  const mcpFace = v.rootRows?.action === 'mcp.enable';
+  const mcpFace = v.rootRows?.action === 'mcp.enable' || v.rootRows?.action === 'mcp.trust';
   const bodyShown = loud || capped || mcpFace;
-  const shownBody = mcpFace ? withoutLines(body, (l) => l === kLine || l.startsWith('Allow takes the root key')) : body;
+  // C5'b: the trust card's "launch … · tools …" hash line goes to details and title= (never the face)
+  const hashLine = v.rootRows?.action === 'mcp.trust' ? (kernelTextLines(block).find((l) => TRUST_HASH_LINE.test(l)) ?? null) : null;
+  // Mika: a brokered card with no scoped key drops the kernel's "Always: any call of …" line too
+  const noAlwaysLine = brokered && !(scoped === 'tool' && keys.includes('always'));
+  const shownBody0 = mcpFace ? withoutLines(body, (l) => l === kLine || l.startsWith('Allow takes the root key') || (!!hashLine && l === hashLine)) : body;
+  const shownBody = noAlwaysLine ? withoutLines(shownBody0, (l) => l.startsWith('Always: any call of ')) : shownBody0;
   // a kind whose lines the kernel does not compose: its words are labelled as the requester's (never the kernel's)
   // design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
   // large that's fine"): a body taller than its cap scrolls INSIDE the card (styles.css .card-body), so the title, the
@@ -1240,7 +1289,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       tag ? h(doc, 'span', { class: 'chip card-voice kernel-owned' }, tag.text, tag.handle ? ' ' : null, tag.handle ? h(doc, 'span', { class: 'handle' }, tag.handle) : null) : null,
     ),
     h(doc, 'p', { class: `card-title${ct ? ' composed' : ''}${mcpFace ? ' wraps' : ''}`, title: titleText }, ...(ct ? [ct.verb, ct.arg ? ' ' : null, ct.arg ? argEl(doc, ct.arg) : null] : [title])),
-    kLine ? h(doc, 'span', { class: 'k-line kernel-owned' }, kLine) : null,
+    kLine ? h(doc, 'span', { class: 'k-line kernel-owned', ...(hashLine ? { title: hashLine } : {}) }, kLine) : null,
     capped ? h(doc, 'small', { class: 'meta card-arg-capped' }, `the command is longer than ${TITLE_ARG_MAX} characters: the kernel's card below`) : null,
     gitWarn ? h(doc, 'p', { class: 'card-warn kernel-owned' }, gitWarn) : null,
     // TD-2026-10-19-063: a claim-mismatch card's body (its red first line) is never collapsed; Aegis H1: nor a card
@@ -1273,7 +1322,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
     gnomonFam && keys.length ? h(doc, 'div', { class: 'lt-presence' }, LOCAL_PRESENCE_LINE) : null,
     // the contentHash line stays on every card: quiet, one line, the full hash in title=
     h(doc, 'small', { class: 'meta content-hash', title: `contentHash ${v.contentHash}` }, `contentHash ${v.contentHash.slice(0, 23)}…`),
-    h(doc, 'details', { class: 'card-details' }, h(doc, 'summary', { class: 'meta' }, 'details'), h(doc, 'p', { class: 'meta card-who' }, who), bodyShown ? null : bodyEl, bodyShown ? null : moreEl),
+    h(doc, 'details', { class: 'card-details' }, h(doc, 'summary', { class: 'meta' }, 'details'), h(doc, 'p', { class: 'meta card-who' }, who), hashLine ? h(doc, 'p', { class: 'meta card-hashes' }, hashLine) : null, bodyShown ? null : bodyEl, bodyShown ? null : moreEl),
     h(doc, 'div', { class: 'bar', 'aria-hidden': 'true' }, h(doc, 'span', { class: 'bar-i' })),
     h(doc, 'span', { class: 'stamp', 'aria-hidden': 'true' }, ''),
   );
@@ -1284,9 +1333,14 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
  * decision key (data-decision="always" + its scope, exactly as before) and its note in plain words beside it. The
  * accessible name of each key starts "Always:" and contains its visible words (WCAG 2.5.3).
  */
-function alwaysChoices(doc: MiniDoc, v: CardView, scoped: 'command' | 'edit' | 'remote'): MiniEl {
+function alwaysChoices(doc: MiniDoc, v: CardView, scoped: 'command' | 'edit' | 'remote' | 'tool'): MiniEl {
   const row = (attrs: Record<string, string>, label: string, shown: string, note: string): MiniEl =>
     h(doc, 'div', { class: 'always-row' }, h(doc, 'button', { class: `key key-always${attrs['data-scope'] === 'prefix' ? ' key-prefix' : attrs['data-scope'] === 'exact' ? '' : ' key-scope'}`, type: 'button', 'data-decision': 'always', 'data-card-id': v.cardId, 'aria-label': label, ...attrs }, shown), h(doc, 'span', { class: 'always-note' }, note));
+  if (scoped === 'tool') {
+    // C5'b: one choice, as the git remote's: this tool on this server, any arguments, in this repo
+    const t = v.toolScope ?? { tool: 'this tool', server: 'its server' };
+    return h(doc, 'div', { class: `always-choices${v.alwaysOpen ? ' open' : ''}`, role: 'group', 'aria-label': 'Always allow, no card next time', 'data-always-for': v.cardId }, h(doc, 'span', { class: 'always-h' }, 'always allow, no card next time:'), row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.label(t), TOOL_SCOPE_KEY.short, TOOL_SCOPE_KEY.note(t)));
+  }
   if (scoped === 'remote') {
     // #git-verbs: one choice, the exact remote the kernel resolved (its rule is keyed to that URL and host)
     const shown = `push to ${v.gitVerb?.slug ?? 'this remote'}`;
