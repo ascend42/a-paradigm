@@ -135,9 +135,11 @@ describe('#prefix-policy match time: git options, location (M3), manual mode (M2
   it('a prefix-ruled argument never names a gate-class path (.git/** needs a card)', () => {
     expect(gateClassPathRule('.git/config')).not.toBeNull();
     expect(gateClassPathRule('.git/hooks/pre-commit')).not.toBeNull();
-    const cp = book(rows(card(34), ['cp', 'a.txt'], 'cp a.txt b.txt'));
-    expect(m(cp, 'cp a.txt b.txt')).not.toBeNull();
-    for (const c of ['cp a.txt .git/config', `cp a.txt ${ROOT}/.git/hooks/pre-commit`, 'cp a.txt package.json', 'cp a.txt .claude/settings.json', 'cp a.txt sub/.git/config', 'cp a.txt --target=.git']) expect(m(cp, c), c).toBeNull();
+    // Aegis C6'a2-2 R2: cp is destructive now (never a prefix rule); the gate-class check is shown with diff
+    expect(book(rows(card(35), ['cp', 'a.txt'], 'cp a.txt b.txt')).list()).toEqual([]);
+    const df = book(rows(card(34), ['diff', 'a.txt'], 'diff a.txt b.txt'));
+    expect(m(df, 'diff a.txt b.txt')).not.toBeNull();
+    for (const c of ['diff a.txt .git/config', `diff a.txt ${ROOT}/.git/hooks/pre-commit`, 'diff a.txt package.json', 'diff a.txt .claude/settings.json', 'diff a.txt sub/.git/config', 'diff a.txt --target=.git']) expect(m(df, c), c).toBeNull();
     expect(m(b, 'git log -- .git/config')).toBeNull();
   });
 
@@ -176,7 +178,17 @@ describe('#prefix-policy M1: display', () => {
     expect(shownPrefixWords(['git log', 'x'])).toBe("'git log' 'x'");
     expect(shownPrefixWords(['git', 'log', 'x'])).toBe("'git' 'log' 'x'");
     // G-BRK-09 (Aegis C6'a2-2 M1): a destructive argv0, in any case, with .exe, mkfs.* — refused at prefix and match
-    for (const a0 of ['rm', 'RM', 'Rm.EXE', 'rmdir', 'unlink', 'mv', 'dd', 'truncate', 'shred', 'chmod', 'chown', 'chgrp', 'rsync', 'ln', 'kill', 'mkfs.ext4', 'newfs_apfs']) {
+    // R1: the case- and .exe-normalised argv0 drives every check (interpreter, python, git, build tool)
+    expect(prefixRefusal(['Env', 'rm'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['SUDO', 'rm'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['Bash', 'x'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['Python3.EXE', 'x'])).toMatch(/arbitrary code/);
+    expect(prefixRefusal(['Git', 'clean'])).toMatch(/never a prefix rule/);
+    expect(prefixRefusal(['GIT', 'log', 'x'])).toMatch(/exactly two words/);
+    expect(prefixRefusal(['NPM', 'test'])).toBe(prefixRefusal(['npm', 'test']));
+    expect(prefixRefusal(['NPM', 'ls'])).toMatch(/project config/);
+    expect(prefixMatchRefusal(['Git', 'log', '--output=x'], ['Git', 'log'], ['/work/repo'])).not.toBeNull();
+    for (const a0 of ['rm', 'RM', 'Rm.EXE', 'rmdir', 'unlink', 'mv', 'dd', 'truncate', 'shred', 'chmod', 'chown', 'chgrp', 'rsync', 'ln', 'kill', 'mkfs.ext4', 'newfs_apfs', 'cp', 'tee', 'tar', 'unzip', 'ditto', 'patch', 'split', 'scp', 'curl', 'Wget']) {
       expect(prefixRefusal([a0, 'build/x']), a0).toMatch(/delete or overwrite/);
       expect(prefixMatchRefusal([a0, 'build/x', '-rf', 'src'], [a0, 'build/x'], ['/work/repo']), a0).not.toBeNull();
     }

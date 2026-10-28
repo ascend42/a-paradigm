@@ -20,6 +20,8 @@
  *   - argv0 is not an interpreter, shell or runner (INTERPRETER_DENYLIST, plus python*).
  *   - argv0 is not a destructive program (DESTRUCTIVE_ARGV0: rm, mv, dd, truncate, shred, chmod, chown, rsync …;
  *     Aegis C6'a2-2 M1): its later arguments decide what it destroys, so no match-time check can bound it.
+ *   - every argv0 check uses ONE normalised form (normalArgv0: lowercased, `.exe` dropped; Aegis C6'a2-2 R1), as
+ *     APFS and NTFS resolve `Env`, `GIT` or `bash.exe`; a git or build-tool subcommand is lowercased too.
  *   - package managers / build tools (BUILD_TOOLS): NONE is ever a prefix rule. BUILD_TOOL_PREFIX_ALLOW is EMPTY
  *     (Aegis second BLOCK, H2–H4/M1/M2): even a "read-only" subcommand runs or routes code the repo controls —
  *     `.yarnrc.yml` yarnPath swaps the yarn binary, `.cargo/config.toml` rustc-wrapper / build.rustc runs a program
@@ -79,11 +81,22 @@ export const DESTRUCTIVE_ARGV0: ReadonlySet<string> = new Set([
   'rm', 'rmdir', 'unlink', 'srm', 'shred', 'wipe', 'trash', 'mv', 'dd', 'truncate', 'ln', 'install', 'rsync',
   'chmod', 'chown', 'chgrp', 'chflags', 'chattr', 'setfacl', 'xattr', 'mkfs', 'newfs', 'fdisk', 'diskutil', 'wipefs', 'mkswap',
   'kill', 'pkill', 'killall', 'del', 'erase', 'rd', 'move', 'ren', 'rename', 'remove-item',
+  // Aegis C6'a2-2 R2: they overwrite or extract files where their later arguments say
+  'cp', 'tee', 'tar', 'unzip', 'ditto', 'patch', 'split', 'scp', 'curl', 'wget', 'copy', 'xcopy', 'robocopy',
 ]);
 
 /** Aegis C6'a2-2 M1: argv0 names a destructive program (case-insensitive, `.exe` dropped, mkfs.* / newfs_* too). */
+/**
+ * Aegis C6'a2-2 R1: argv0 as the filesystem resolves it. APFS and NTFS are case-insensitive and Windows adds `.exe`,
+ * so `Env`, `GIT` and `bash.exe` are env, git and bash: EVERY argv0 check (interpreter, python, git, build tool,
+ * destructive) uses this one form, at offer, accept, fold and match.
+ */
+export function normalArgv0(a0: string): string {
+  return a0.toLowerCase().replace(/\.exe$/, '');
+}
+
 export function destructiveArgv0(a0: string): boolean {
-  const n = a0.toLowerCase().replace(/\.exe$/, '');
+  const n = normalArgv0(a0);
   return DESTRUCTIVE_ARGV0.has(n) || /^(mkfs|newfs)[._]/.test(n);
 }
 
@@ -144,9 +157,12 @@ const PRINTABLE = /^[\x21-\x7e]+$/;
 export function prefixRefusal(prefix: readonly string[]): string | null {
   if (prefix.length < 2 || prefix.length > 3) return 'a prefix rule is 2 or 3 words (a single word allows every command of the program)';
   if (!prefix.every((w) => typeof w === 'string' && w.length <= 128 && PRINTABLE.test(w))) return 'prefix words are printable ASCII only';
-  const [a0, a1] = prefix as [string, string];
-  if (a0.includes('/') || a0.includes('\\')) return 'the program is named by a path';
-  if (INTERPRETER_DENYLIST.has(a0) || /^python/.test(a0)) return `${a0} runs arbitrary code: never a prefix rule`;
+  const [raw0, raw1] = prefix as [string, string];
+  if (raw0.includes('/') || raw0.includes('\\')) return 'the program is named by a path';
+  // Aegis R1: one normalised argv0 (and git/build-tool subcommand) for every check below
+  const a0 = normalArgv0(raw0);
+  const a1 = raw1.toLowerCase();
+  if (INTERPRETER_DENYLIST.has(a0) || /^python/.test(a0)) return `${raw0} runs arbitrary code: never a prefix rule`;
   if (destructiveArgv0(a0)) return `${a0} can delete or overwrite whatever its later arguments name: never a prefix rule`;
   if (prefix.some((w) => pathWordBad(w))) return 'a prefix word names a path';
   if (a0 === 'git') {
@@ -211,10 +227,10 @@ export function prefixMatchRefusal(argv: readonly string[], prefix: readonly str
       if (gate) return `${a}: a gate-class path (${gate})`;
     }
   }
-  if (prefix[0] === 'git') {
+  if (normalArgv0(prefix[0] ?? '') === 'git') {
     const later = argv.slice(2);
     for (const a of later) if (gitPrefixOptBad(a)) return `git ${a.split('=')[0]}: an option that runs a program or redirects git`;
-    if (prefix[1] === 'branch' && !later.every((a) => GIT_BRANCH_LIST.has(a) || /^--(sort|format)=/.test(a))) return 'git branch only lists under a prefix rule';
+    if ((prefix[1] ?? '').toLowerCase() === 'branch' && !later.every((a) => GIT_BRANCH_LIST.has(a) || /^--(sort|format)=/.test(a))) return 'git branch only lists under a prefix rule';
   }
   return null;
 }

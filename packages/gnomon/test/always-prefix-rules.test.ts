@@ -205,6 +205,21 @@ describe('G-BRK-09 (Aegis C6\'a2-2 M1): a destructive program is never a prefix 
     }
     expect(m(book(prefixRows(card(41), { command: 'rm build/x', scope: { kind: 'prefix', prefix: ['rm', 'build/x'] }, prefix: ['rm', 'build/x'] })), 'rm build/x -rf src')).toBeNull();
   });
+  it('R1: argv0 is normalised (case, .exe) for every check, at offer, fold and match', () => {
+    for (const c of ['Env rm -rf src', 'Git clean -fdx', 'SUDO rm -rf src', 'Bash -c x', 'bash.EXE -c x', 'PYTHON3 x y', 'Cp a b', 'TEE out x']) expect(offers(c), c).toEqual([]);
+    expect(offers('NPM test x')).toEqual(offers('npm test x'));
+    expect(offers('NPM ls x')).toEqual(offers('npm ls x'));
+    for (const prefix of [['Env', 'rm'], ['Git', 'clean'], ['SUDO', 'rm'], ['Bash', '-c'], ['NPM', 'test'], ['GIT', 'RESET']]) {
+      const b = book(prefixRows(card(43), { command: `${prefix.join(' ')} -rf src`, scope: { kind: 'prefix', prefix }, prefix }));
+      expect(b.list(), prefix.join(' ')).toEqual([]);
+      expect(m(b, `${prefix.join(' ')} -rf src`), prefix.join(' ')).toBeNull();
+    }
+  });
+  it('R2: cp, tee, tar, unzip, curl and wget prefixes are never offered or folded', () => {
+    for (const c of ['cp a b', 'tee out x', 'tar xf a.tar', 'unzip a.zip x', 'curl -o f url', 'wget -O f url', 'patch -p1 x', 'scp a b']) expect(offers(c), c).toEqual([]);
+    const b = book(prefixRows(card(44), { command: 'cp a b', scope: { kind: 'prefix', prefix: ['cp', 'a'] }, prefix: ['cp', 'a'] }));
+    expect(b.list()).toEqual([]);
+  });
   it('a forged rm prefix rule never folds', () => {
     const rows = prefixRows(card(42), { command: 'rm build/x', scope: { kind: 'prefix', prefix: ['rm', 'build/x'] }, prefix: ['rm', 'build/x'], principal: 'p:abcdefgh/founder' });
     expect(book(rows).list()).toEqual([]);
