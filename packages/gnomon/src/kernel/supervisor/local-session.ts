@@ -114,7 +114,7 @@ import { LineSplitter } from '../../adapters/line-splitter.js';
 import { localAdapter, type LocalAdapter, type LocalEvent } from '../../adapters/local/runner.js';
 import type { UsageMeter } from '../../adapters/backend-adapter.js';
 import { DestructiveRuleBudget, kernelSdkTarget, LocalToolBroker, offeredKernelTools, schemaRefusal, toolBindHash, type BrokerTarget, type BrokeredTool } from '../local/tool-broker.js';
-import { dropTool, frameResult, resultCapBytes, stillSendable, type ResultPolicyPort, type SendItem } from '../local/result-policy.js';
+import { droppedLabel, dropTool, fitQueue, frameResult, resultCap, sendTokens, stillSendable, type ResultPolicyPort, type SendItem } from '../local/result-policy.js';
 import { cleanServerText, fullOfferable, fullParameters, LOCAL_RESERVED_TOOL_NAMES, parametersIn, type CapabilityEntry, type ServerTrust } from '../local/capability-index.js';
 import { candidatesOf, FIND_TOOL_NAME, FIND_TOOL_NEED_MAX, FIND_TOOL_PER_TURN, FIND_TOOL_SPEC, findToolAnswer, QUERY_PART_MAX, RESELECT_EVERY_STEPS, selectTools, STICKY_STEPS } from '../local/tool-selector.js';
 import { launchCheck, serverLabel, LocalMcpPool, McpError, McpListCache, serverEnv, type LaunchCheckInput, type LocalMcpServer, type ServerFit } from '../local/mcp-client.js';
@@ -2129,7 +2129,7 @@ export class LocalLane {
     const key = this.#policyOf(s, r.entry);
     if (!key) return;
     const tool = key.tool;
-    const f = frameResult({ tool, trust: r.trust, text: r.text, isError: r.isError }, resultCapBytes(s.context.target));
+    const f = frameResult({ tool, trust: r.trust, text: r.text, isError: r.isError }, resultCap(s.context.target));
     const q = (s.pendingSend ??= []);
     q.push({ frame: f.frame, row: { hsid: s.hsid, tool, argsHash: r.argsHash, bytes: f.bytes, cut: f.cut, policy: 'send' }, entryId: r.entry.id, tool, bindHash: key.bindHash });
     while (q.length > PENDING_SEND_MAX) q.shift();
@@ -2833,16 +2833,23 @@ export class LocalLane {
     let data: string[] | undefined;
     // Aegis M2: each frame goes only if its tool is STILL `send` under the same trust binding (a policy, trust or schema
     // change since it was queued drops it)
-    const sendNow = stillSendable(s.pendingSend ?? [], (x) => {
+    const still = stillSendable(s.pendingSend ?? [], (x) => {
       const e = s.mcp ? [...s.mcp.entries.values()].flat().find((y) => y.id === x.entryId) : undefined;
       const k = e ? this.#policyOf(s, e) : null;
       return k !== null && k.policy === 'send' && k.bindHash === x.bindHash;
-    }).keep;
+    });
+    // Aegis M3: the cap covers the whole turn's data; the oldest frames go first and a kernel label says so
+    const cap = resultCap(s.context.target);
+    const label = (n: { overCap: number; changed: number }): string | null => droppedLabel(n);
+    const probe = label({ overCap: 1, changed: still.dropped }) ?? '';
+    const fit = fitQueue(still.keep, { bytes: Math.max(0, cap.bytes - Buffer.byteLength(probe, 'utf8')), tokens: Math.max(0, cap.tokens - sendTokens(probe)) });
+    const sendNow = fit.keep;
+    const note = label({ overCap: fit.dropped, changed: still.dropped });
     s.pendingSend = [];
-    if (sendNow.length && !s.loop) {
-      s.tainted = true;
+    if ((sendNow.length || note) && !s.loop) {
+      if (sendNow.length) s.tainted = true;
       for (const x of sendNow) await this.#o.log('tool.result.sent', x.row, { session: s.hsid }).catch(() => undefined);
-      data = sendNow.map((x) => x.frame);
+      data = [...(note ? [note] : []), ...sendNow.map((x) => x.frame)];
     }
     // Aegis M1: the frames ride as the line's own `data` (the child pushes each as a data message; the goal stays the text)
     s.child.stdin?.write(drv.turnLine({ text: p.text, inFlight, ...(data ? { data } : {}) }));

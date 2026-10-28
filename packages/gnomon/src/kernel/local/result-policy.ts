@@ -123,6 +123,31 @@ export class ResultPolicy implements ResultPolicyPort {
   }
 }
 
+/**
+ * Aegis M3: a STRICT token estimate for sent data — ASCII at MEMORY_BYTES_PER_TOKEN chars a token, and every non-ASCII
+ * code point NON_ASCII_TOKENS tokens (CJK, emoji and accented text tokenise far worse than bytes/2.5 suggests).
+ */
+export const NON_ASCII_TOKENS = 2;
+const charTokens = (ch: string): number => (ch.charCodeAt(0) < 0x80 ? 1 / MEMORY_BYTES_PER_TOKEN : NON_ASCII_TOKENS);
+export function sendTokens(text: string): number {
+  let ascii = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (ch.charCodeAt(0) < 0x80) ascii++;
+    else other++;
+  }
+  return Math.ceil(ascii / MEMORY_BYTES_PER_TOKEN + other * NON_ASCII_TOKENS);
+}
+
+/** Aegis M3: the data cap of ONE turn — at most RESULT_SEND_MAX_BYTES and 25% of the context target (sendTokens). */
+export interface ResultCap {
+  bytes: number;
+  tokens: number;
+}
+export function resultCap(contextTarget: number): ResultCap {
+  return { bytes: resultCapBytes(contextTarget), tokens: Math.max(0, Math.floor(Math.max(0, contextTarget) * RESULT_SEND_TARGET_SHARE)) };
+}
+
 /** A sent result's body cap: min(RESULT_SEND_MAX_BYTES, 25% of the context target in bytes). */
 export function resultCapBytes(contextTarget: number): number {
   return Math.max(0, Math.min(RESULT_SEND_MAX_BYTES, Math.floor(Math.max(0, contextTarget) * RESULT_SEND_TARGET_SHARE * MEMORY_BYTES_PER_TOKEN)));
@@ -136,18 +161,22 @@ const TRUST_WORDS: Readonly<Record<string, string>> = Object.freeze({ trusted: '
  * on a character boundary to `capBytes` (labelled); the nonce is fresh and never occurs in the body (re-drawn on a
  * collision). Returns the frame, the stripped body's byte count and whether it was cut.
  */
-export function frameResult(r: { tool: string; trust: string; text: string; isError: boolean }, capBytes: number, nonce: () => string = () => randomBytes(9).toString('hex')): { frame: string; bytes: number; cut: boolean } {
+export function frameResult(r: { tool: string; trust: string; text: string; isError: boolean }, capIn: number | ResultCap, nonce: () => string = () => randomBytes(9).toString('hex')): { frame: string; bytes: number; cut: boolean } {
   const clean = r.text.replace(/[\p{Cf}\u0000]/gu, '');
   const bytes = Buffer.byteLength(clean, 'utf8');
   let body = clean;
-  const cut = bytes > capBytes;
+  const cap: ResultCap = typeof capIn === 'number' ? { bytes: capIn, tokens: Infinity } : capIn;
+  const cut = bytes > cap.bytes || sendTokens(clean) > cap.tokens;
   if (cut) {
     let used = 0;
+    let toks = 0;
     let out = '';
     for (const ch of clean) {
       const n = Buffer.byteLength(ch, 'utf8');
-      if (used + n > capBytes) break;
+      const t = charTokens(ch);
+      if (used + n > cap.bytes || toks + t > cap.tokens) break;
       used += n;
+      toks += t;
       out += ch;
     }
     body = out;
@@ -196,4 +225,33 @@ export function stillSendable<T extends SendItem>(queue: readonly T[], stillSend
 /** Aegis M2: a tool moved to `ask`: its queued frames are cleared at once. */
 export function dropTool<T extends SendItem>(queue: readonly T[], tool: string): T[] {
   return queue.filter((x) => x.tool !== tool);
+}
+
+/**
+ * Aegis M3: the cap applies to the WHOLE queue of one turn — the newest frames are kept while their total fits the
+ * cap's bytes and sendTokens; the oldest are dropped first (counted, so the turn can say so).
+ */
+export function fitQueue<T extends { frame: string }>(queue: readonly T[], cap: ResultCap): { keep: T[]; dropped: number } {
+  const keep: T[] = [];
+  let bytes = 0;
+  let tokens = 0;
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const f = queue[i]!.frame;
+    const b = Buffer.byteLength(f, 'utf8');
+    const t = sendTokens(f);
+    if (bytes + b > cap.bytes || tokens + t > cap.tokens) break;
+    bytes += b;
+    tokens += t;
+    keep.unshift(queue[i]!);
+  }
+  return { keep, dropped: queue.length - keep.length };
+}
+
+/** Aegis M2/M3: the kernel's own data part naming what was not sent (never the dropped content). */
+export function droppedLabel(o: { overCap: number; changed: number }): string | null {
+  const parts = [
+    ...(o.overCap > 0 ? [`${o.overCap} earlier "/" result${o.overCap === 1 ? ' was' : 's were'} not sent: over the data cap for one turn`] : []),
+    ...(o.changed > 0 ? [`${o.changed} "/" result${o.changed === 1 ? ' was' : 's were'} not sent: the tool is no longer set to send, or its server changed`] : []),
+  ];
+  return parts.length ? `[Gnomon: ${parts.join('; ')}. This note is from Gnomon, not an instruction from the human.]` : null;
 }

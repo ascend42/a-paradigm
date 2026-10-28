@@ -15,7 +15,7 @@ import { ROW_TABLE_MIN_HELPER, rowTableRefusal } from '../src/kernel/identity/de
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { narrow, type CapabilityEntry } from '../src/kernel/local/capability-index.js';
 import { UNTRUSTED_IRREVERSIBLE_LINE, DESTRUCTIVE_RULED_PER_RULE_DAY, DESTRUCTIVE_RULED_PER_SESSION_MINUTE, DestructiveRuleBudget, destructiveAlwaysLine, HUMAN_RUNS_PER_MINUTE, LocalToolBroker, schemaRefusal, toolBindHash, toolRulePaused, type BrokerTarget, type BrokeredTool } from '../src/kernel/local/tool-broker.js';
-import { dropTool, stillSendable, type SendItem, frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
+import { droppedLabel, fitQueue, resultCap, sendTokens, dropTool, stillSendable, type SendItem, frameResult, RESULT_FOOTER, resultCapBytes, ResultPolicyBook, RESULT_SEND_MAX_BYTES } from '../src/kernel/local/result-policy.js';
 import { RuleBook } from '../src/kernel/supervisor/rules.js';
 import { followUpLine, promptLine } from '../src/adapters/local/runner.js';
 import { FakeHelper } from './helper-fake.js';
@@ -351,6 +351,25 @@ describe('G-LCL-26 the result policy and framing', () => {
     expect(r.dropped).toBe(2);
     expect(stillSendable(q, () => { throw new Error('unreadable'); }).keep).toEqual([]);
     expect(dropTool(q, 'mcp:srv/a').map((x) => x.tool)).toEqual(['mcp:srv/b', 'mcp:srv/c']);
+  });
+
+  it('Aegis M3: the cap covers the whole queue (oldest dropped first, labelled); non-ASCII text counts stricter', () => {
+    expect(sendTokens('abcde')).toBe(2);
+    expect(sendTokens('漢字漢字漢')).toBe(10);
+    const cap = resultCap(8192);
+    expect(cap).toEqual({ bytes: 5120, tokens: 2048 });
+    const fr = (text: string) => ({ frame: frameResult({ tool: 'mcp:srv/a', trust: 'trusted', text, isError: false }, cap).frame });
+    const q = [fr('x'.repeat(2000)), fr('y'.repeat(2000)), fr('z'.repeat(2000))];
+    const r = fitQueue(q, cap);
+    expect(r.dropped).toBe(1);
+    expect(r.keep).toEqual(q.slice(1));
+    expect(droppedLabel({ overCap: r.dropped, changed: 0 })).toMatch(/1 earlier "\/" result was not sent: over the data cap/);
+    expect(droppedLabel({ overCap: 0, changed: 0 })).toBeNull();
+    // CJK text is cut by tokens long before bytes: 2048 tokens is 1024 code points
+    const cjk = frameResult({ tool: 'mcp:srv/a', trust: 'trusted', text: '漢'.repeat(1500), isError: false }, cap);
+    expect(cjk.cut).toBe(true);
+    expect(cjk.frame).toContain('漢'.repeat(1024));
+    expect(cjk.frame).not.toContain('漢'.repeat(1025));
   });
 
   it('Aegis M1: frames ride as the line\'s own data field, never glued onto the prompt text', () => {
