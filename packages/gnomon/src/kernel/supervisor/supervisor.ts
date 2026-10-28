@@ -291,7 +291,7 @@ export interface SupervisorOptions {
   /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
   repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   /** S-L1: the standing `always` rule an exact (repoKey, tool, inputHash) matches, DERIVED from kernel-signed rows only (rules.ts RuleBook); absent ⇒ none */
-  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; editPath?: string | null; repoEdits?: boolean }) => { ruleId: string } | null;
+  alwaysRule?: (repoKey: string, tool: string, inputHash: string, toolInput?: unknown, ctx?: { prefixRules: boolean; roots: readonly string[]; editPath?: string | null; repoEdits?: boolean; bindHash?: string | null }) => { ruleId: string } | null;
   /**
    * P8-D87 run modes (broker/run-mode.ts RunModeControl.view): the session's EFFECTIVE mode (stricter of the chosen
    * mode and the strictness ceiling), read at every permission request. Absent ⇒ `ask` (Move 1's behaviour).
@@ -776,6 +776,8 @@ export class SessionSupervisor {
       ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
       ...(o.localMcp ? { localMcp: o.localMcp } : {}), ...(o.mcpDenyWrite ? { mcpDenyWrite: o.mcpDenyWrite } : {}),
       ...(o.localMcpCache ? { mcpCache: o.localMcpCache } : {}), ...(o.localMcpTrust ? { mcpTrust: o.localMcpTrust } : {}),
+      // slice C5'a2 (^local-tool-grant): brokered tool rules from the same RuleBook
+      ...(o.alwaysRule ? { alwaysRule: o.alwaysRule } : {}),
     });
   }
 

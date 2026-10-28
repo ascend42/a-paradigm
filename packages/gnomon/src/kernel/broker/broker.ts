@@ -363,10 +363,25 @@ interface CardRecord {
  * The scope an `always` decision was taken with, as the prompt shows it (TD-2026-10-20-294 prefix; TD-2026-10-23-939
  * follow-up file / repo-edits: the file is the kernel-held detail.editPath of the card, never a client value).
  */
-type ShownScope = { kind: 'prefix'; prefix: string[] } | { kind: 'file'; path: string } | { kind: 'repo-edits' };
+type ShownScope = { kind: 'prefix'; prefix: string[] } | { kind: 'file'; path: string } | { kind: 'repo-edits' } | { kind: 'tool' };
 /** The tools an edit scope may be taken on (the auto-edits tools, broker/run-mode.ts AUTO_EDIT_TOOLS; no import: run-mode imports the broker). */
 const EDIT_SCOPE_TOOLS: readonly string[] = Object.freeze(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const digestScope = (sc: ShownScope): string => scopeDigest(sc.kind === 'prefix' ? { kind: 'prefix', prefix: sc.prefix } : { kind: sc.kind });
+/** 8.0:local-lane C5'a2 (^local-tool-grant): the namespaced name of a brokered MCP card (tool-broker.ts brokeredToolName). */
+const BROKERED_MCP_TOOL = /^mcp:[a-z0-9][a-z0-9_-]{0,63}\/[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+const BIND_HASH = /^sha256:[0-9a-f]{64}$/;
+/**
+ * 8.0:local-lane C5'a2: the bindHash a brokered card's detail carries (detail.brokered.bindHash, inside the contentHash),
+ * or null. #local-tool-broker sets it only on a card it offered the tool scope on (detail.toolScopes).
+ */
+export function brokeredBindHashOf(detail: Record<string, unknown> | undefined): string | null {
+  const b = detail?.brokered;
+  if (b === null || typeof b !== 'object' || Array.isArray(b)) return null;
+  const h = (b as Record<string, unknown>).bindHash;
+  return typeof h === 'string' && BIND_HASH.test(h) ? h : null;
+}
+/** A brokered call's card (detail.brokered present): `always` on it takes only the tool scope. */
+const isBrokeredCard = (detail: Record<string, unknown>): boolean => detail.brokered !== null && typeof detail.brokered === 'object' && !Array.isArray(detail.brokered);
 
 /** The extra presence-binding field of a v2 decision: the answer digest, or a scoped always's scope digest. */
 type BindingExtra = { answerDigest: string } | { scopeDigest: string };
@@ -561,7 +576,10 @@ export class ApprovalBroker {
     const errors = validateCardV1(card, { mode: 'strict' });
     if (errors.length) throw fail('BAD_REQUEST', 'bad-params', `card does not validate: ${errors.join('; ')}`);
     // log before the card exists for anyone (B3: only the broker appends approval.*)
-    await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}) }, input.hsid ? { session: input.hsid } : {});
+    // 8.0:local-lane C5'a2: a brokered card the kernel offered the tool scope on carries its bindHash on the request row
+    // too (the row holds no detail), so #always-rules forms a tool rule only for the binding this card showed
+    const bindHash = Array.isArray(input.detail.toolScopes) && (input.detail.toolScopes as unknown[]).includes('tool') ? brokeredBindHashOf(input.detail) : null;
+    await this.#o.log('approval.request', { card, flags, ...(input.toolInput !== undefined ? { tool_input: input.toolInput } : {}), ...(input.tool ? { tool: input.tool } : {}), ...(bindHash ? { bindHash } : {}) }, input.hsid ? { session: input.hsid } : {});
     if (input.standingGrant && input.kind !== 'grant') throw fail('BAD_REQUEST', 'bad-params', 'standingGrant is a grant card');
     this.#cards.set(cardId, { card, detail: input.detail, ...(input.standingGrant ? { standingGrant: true } : {}), ...(input.tool ? { tool: input.tool } : {}), ...(input.presence ? { presence: input.presence } : {}), ...(input.effect ? { effect: input.effect } : {}), ...(input.prepare ? { prepare: input.prepare } : {}), ...(input.rootDecisions ? { rootDecisions: [...input.rootDecisions] } : {}), ...(input.decisions ? { decisions: [...input.decisions] } : {}), ...(input.checkNote ? { checkNote: input.checkNote } : {}), ...(input.privateNote ? { privateNote: true } : {}), ...(typeof input.maxNoteChars === 'number' && input.maxNoteChars > NOTE_MAX_CHARS ? { maxNoteChars: Math.min(input.maxNoteChars, NOTE_ABS_MAX_CHARS) } : {}), ...(input.ruleScope ? { ruleScope: { repoKey: input.ruleScope.repoKey } } : {}), ...((): { bashArgv?: string[] } => { const a = input.ruleScope ? bashArgvOf(input.kind, input.tool, input.toolInput) : null; return a ? { bashArgv: a } : {}; })(), ...(input.handOnly || (input.kind === 'gate-class' && input.detail?.target === 'claude-binary') ? { handOnly: true } : {}), waiters: [] });
     return card;
@@ -822,7 +840,7 @@ export class ApprovalBroker {
     let scope: ShownScope | null = null;
     if (p.scope !== undefined) {
       const sc = parseApproveScope(p.scope);
-      if (!sc) throw fail('BAD_REQUEST', 'bad-params', "scope is {kind:'exact'}, {kind:'prefix', prefix:[1-3 words]}, {kind:'file'} or {kind:'repo-edits'}", { cardId });
+      if (!sc) throw fail('BAD_REQUEST', 'bad-params', "scope is {kind:'exact'}, {kind:'prefix', prefix:[1-3 words]}, {kind:'file'}, {kind:'repo-edits'} or {kind:'tool'}", { cardId });
       if (decision !== 'always') throw fail('BAD_REQUEST', 'bad-params', 'a scope is taken only with always', { cardId });
       if (sc.kind === 'prefix') {
         const argv = r.bashArgv;
@@ -842,11 +860,18 @@ export class ApprovalBroker {
         }
         scope = sc.kind === 'file' ? { kind: 'file', path: editPath } : { kind: 'repo-edits' };
       } else if (sc.kind === 'tool') {
-        // 8.0:local-lane C5'a1: the contract knows the tool scope; no card offers it yet (C5'a2 adds detail.toolScopes and
-        // the brokered ruleScope), so it is refused here and never read as an exact rule
-        throw fail('BAD_REQUEST', 'bad-params', 'a tool scope needs a brokered card the kernel offered that scope on', { cardId });
+        // 8.0:local-lane C5'a2 (^local-tool-grant): only on a brokered MCP permission card the KERNEL offered the scope on
+        // (detail.toolScopes and detail.brokered.bindHash, inside contentHash: #local-tool-broker sets them only for a
+        // mutate tool of a server trusted NOW, never destructive, manual or a loop session) that carries a ruleScope
+        const offered = Array.isArray(r.detail.toolScopes) ? (r.detail.toolScopes as unknown[]) : [];
+        if (String(card.kind) !== 'permission' || !r.tool || !BROKERED_MCP_TOOL.test(r.tool) || !offered.includes('tool') || brokeredBindHashOf(r.detail) === null || !r.ruleScope) {
+          throw fail('BAD_REQUEST', 'bad-params', 'a tool scope needs a brokered card the kernel offered that scope on', { cardId });
+        }
+        scope = { kind: 'tool' };
       }
     }
+    // 8.0:local-lane C5'a2: a brokered card never learns an exact (or any other) rule: its always takes the tool scope
+    if (decision === 'always' && isBrokeredCard(r.detail) && scope?.kind !== 'tool') throw fail('BAD_REQUEST', 'bad-params', "a brokered card takes always only with scope {kind:'tool'}", { cardId });
     if (r.checkNote) {
       const why = r.checkNote(decision, typeof p.note === 'string' ? p.note : undefined);
       if (why !== null) throw fail('BAD_REQUEST', 'bad-params', why, { cardId });
@@ -1090,7 +1115,8 @@ export class ApprovalBroker {
     // F6: the notify row of a standing use, right after the record it notifies about (the GUI's feed + Revoke)
     if (standing && this.#standing) await this.#standing.used(standing, { cardId, decision, hsid: card.hsid ?? null, connId: ctx.connId });
     if (decision === 'always') {
-      const match = scope?.kind === 'prefix' ? { match: 'prefix', prefix: scope.prefix } : scope?.kind === 'file' ? { match: 'file', path: scope.path } : scope?.kind === 'repo-edits' ? { match: 'repo-edits' } : { matchExact: true };
+      // 8.0:local-lane C5'a2: a tool rule names the card's bindHash (the same one its approval.request row carries)
+      const match = scope?.kind === 'prefix' ? { match: 'prefix', prefix: scope.prefix } : scope?.kind === 'file' ? { match: 'file', path: scope.path } : scope?.kind === 'repo-edits' ? { match: 'repo-edits' } : scope?.kind === 'tool' ? { match: 'tool', bindHash: brokeredBindHashOf(r.detail) } : { matchExact: true };
       await this.#o.log('approval.rule.learned', { cardId, tool: r.tool ?? null, ...match, presence, repoKey: r.ruleScope?.repoKey ?? null }, { connId: ctx.connId });
     }
     for (const why of this.#suspicions(ctx, isCli, prov, presence, cls)) {
@@ -1140,7 +1166,7 @@ export class ApprovalBroker {
   }
 
   /** Expected binding digest for a decision (tests: mint a token bound to it). */
-  bindingFor(cardId: string, decision: string, answer?: string, prefix?: readonly string[], editScope?: 'file' | 'repo-edits'): { purpose: PresencePurpose; binding: PresenceBinding; digest: string } {
+  bindingFor(cardId: string, decision: string, answer?: string, prefix?: readonly string[], editScope?: 'file' | 'repo-edits' | 'tool'): { purpose: PresencePurpose; binding: PresenceBinding; digest: string } {
     const digest: BindingExtra | undefined = usesDecisionV2(decision) && answer !== undefined ? { answerDigest: answerDigest(answer) } : decision === 'always' && prefix ? { scopeDigest: scopeDigest({ kind: 'prefix', prefix: [...prefix] }) } : decision === 'always' && editScope ? { scopeDigest: scopeDigest({ kind: editScope }) } : undefined;
     const r = this.#cards.get(cardId);
     if (!r) throw fail('NOT_FOUND', 'not-found', `no card ${cardId}`);
@@ -1157,6 +1183,8 @@ export class ApprovalBroker {
         ? `fresh presence: always allow edits to ${JSON.stringify(scope.path)} (any content) in this repo`
         : decision === 'always' && scope?.kind === 'repo-edits'
         ? 'fresh presence: always allow edits in this repo (same as auto-edits for this repo)'
+        : decision === 'always' && scope?.kind === 'tool'
+        ? `fresh presence: always allow ${String(r.tool)} calls (any arguments) in this repo, paused if the tool or its server changes`
         : decision === 'always'
         ? 'fresh presence: always is a standing rule'
         : cls === 'root'

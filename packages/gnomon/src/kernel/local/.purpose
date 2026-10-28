@@ -202,9 +202,20 @@ components:
       nothing. A trusted read the pool finds untrusted at its first spawn is refused
       (trust-dropped -> refused). Every brokered MCP card names the server's trust level
       (TRUST_CARD_LINE).
+      Slice C5'a2 (^local-tool-grant, G-LCL-22): a mutate narrow tool of a server trusted
+      or first-party NOW is ruleable. toolBindHash = sha256 of the entry id, the sha256 of
+      its FULL schema, its class and the server's live trust binding (trustBindingOf; the
+      entry, never its form). The rule pass (after the manual check, before the carded rate
+      limit) asks options.rules.match(repoKey, mcp:<server>/<tool>, bindHash); a match writes
+      approval.auto{modeRef:'rule:<id>'} first (no row, no run), counts as carded in flight,
+      takes RULED_PER_MINUTE (20) and the tool timeout, runs on trust (trustedRead) and logs
+      approved with no cardId. No match: the card offers allow | deny | always with a
+      ruleScope, detail.toolScopes ['tool'] and detail.brokered.bindHash; always counts as
+      allow. Destructive, read, untrusted, kernel verbs, manual and loop never.
     path: src/kernel/local/tool-broker.ts
     type: module
     tags: [gnomon, kernel, local, paradigm-8, broker]
+    gates: ['^local-tool-grant']
     signals: []
     tests:
       - test/local-tool-broker.test.ts
@@ -213,7 +224,8 @@ components:
       - test/loop-model-e2e.test.ts
       - test/git-verbs.test.ts
       - test/local-trust.test.ts
-    oracles: [G-LCL-15, G-LCL-16, G-LCL-23]
+      - test/local-tool-rules.test.ts
+    oracles: [G-LCL-15, G-LCL-16, G-LCL-22, G-LCL-23]
   capability-index:
     description: >-
       #capability-index (TD-2026-10-27-833 slice C2'): narrow(list, server,
@@ -433,7 +445,9 @@ components:
       with one tool.trust{op:'dropped', why launch-changed|tools-changed}
       row; op-annotation resources are read for first-party only; the cache
       keeps a newest-per-id index {launchHash, toolsHash, at} for
-      request.mcp.trust; trustLive(label) answers the broker; LocalLane
+      request.mcp.trust; trustLive(label) answers the broker (slice C5'a2:
+      trustBindingOf(label) gives a tool rule's trust half: the TrustBook
+      binding while trusted, first-party:<toolsHash>, else null); LocalLane
       re-narrows every session on a trust fold (pruneGrace by class, forced
       tools_set)); http/sse refused remote-refused, reserved labels
       label-reserved. Aegis H1 (re-check): servers run in a neutral cwd

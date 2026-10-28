@@ -777,6 +777,18 @@ export class LocalMcpPool {
     return this.#o.trust?.of(p.s.id)?.binding === p.binding ? 'trusted' : 'enabled';
   }
 
+  /**
+   * Slice C5'a2 (^local-tool-grant): the trust half of a tool rule's bindHash NOW: the TrustBook binding this session
+   * narrowed under while it still holds, `first-party:<toolsHash>` for the staged pin, else null (not ruleable).
+   */
+  trustBindingOf(label: string): string | null {
+    const p = this.#servers.find((x) => x.label === label);
+    if (!p) return null;
+    const live = this.trustLive(label);
+    if (live === 'first-party') return p.toolsHash ? `first-party:${p.toolsHash}` : null;
+    return live === 'trusted' ? p.binding : null;
+  }
+
   /** Slice C5'a1: the labels of the servers with this id in this session. */
   labelsOf(id: string): string[] {
     return this.#servers.filter((p) => p.s.id === id).map((p) => p.label);

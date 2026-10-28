@@ -491,16 +491,29 @@ components:
       too), when both the learned and the later input have only command,
       description, timeout keys; run_in_background or any other key on either
       side leaves only the whole-input hash.
+      TOOL RULES (TD-2026-10-27-833 slice C5'a2, ^local-tool-grant, G-LCL-22):
+      {match:'tool', bindHash} forms a rule for a brokered MCP tool
+      mcp:<server>/<tool> ONLY when the kernel-signed approval.request carries
+      the card's bindHash (the broker copies detail.brokered.bindHash, inside
+      contentHash), the decide row carries scope {kind:'tool'} and the learned
+      row names the same tool and bindHash; an mcp: tool learns no other rule.
+      match() (ctx.bindHash) answers it only for the same repo, tool and
+      bindHash NOW and never in manual mode; a different bindHash (schema,
+      class or trust changed) leaves it dormant. A standing grant's
+      permission:always forms one like any other rule. LocalLane reaches it
+      through SupervisorOptions.alwaysRule (LocalLaneOptions.alwaysRule).
     path: src/kernel/supervisor/rules.ts
     type: module
     tags: [gnomon, kernel, approvals, paradigm-8, move-1]
+    gates: ['^local-tool-grant']
     tests:
       - test/always-rules.test.ts
       - test/always-prefix-rules.test.ts
       - test/approval-prefix-scope.test.ts
       - test/rules-bash-hash.test.ts
       - test/permission-session.test.ts
-    oracles: [G-BRK-05]
+      - test/local-tool-rules.test.ts
+    oracles: [G-BRK-05, G-LCL-22]
   prefix-policy:
     description: >-
       #prefix-policy (TD-2026-10-20-294, Aegis H1/M1/M3) in
