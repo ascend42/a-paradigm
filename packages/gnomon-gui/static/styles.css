@@ -1467,8 +1467,8 @@ body:has(.vs-drawer:not([hidden])) .feed > .toast-anchor { right: calc(min(520px
 .card .path { font-size: var(--fs-control); color: var(--ink2); margin: 2px 0; }
 .card .path .x { color: var(--fail); font-weight: 600; }
 .card .path .u { color: var(--warn-ink); font-weight: 600; }
-.card .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; font-size: var(--fs-control); color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
-.card .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
+.card .agent-claimed, .tools-sheet .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; font-size: var(--fs-control); color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
+.card .agent-claimed .ac-tag, .tools-sheet .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
 .card.long .card-details[open] { max-height: none; }
 .card.long .lt-scroll { max-height: 360px; overflow-y: auto; padding-right: 4px; }
 .card.long .lst > li { grid-template-columns: 14px 14px minmax(0, 1fr); }
@@ -1704,3 +1704,19 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .rules-next { display: block; margin-top: 2px; }
 .rules-close-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 8px; border: 1px solid var(--key-edge); border-radius: var(--radius); }
 .rules-close-prompt .rcp-text { font-size: var(--fs-control); font-weight: 600; margin-right: auto; }
+
+/* #gui-capability-browser (8.0:local-lane C6'b1, Mika): the Tools and memory drawer. The sheet's drawer variant (as
+   Voice settings, .vs-drawer .voice-sheet), its seg keys under the head, then the Settings sheet's sections and readonly
+   rows with keys (a narrower label column: the drawer is 520px), All tools in the Rules block's groups and fold, and
+   the memory's model and tool text behind model-text-control's dashed edge with the label "data" (.agent-claimed, as the
+   run trace's). No new token. */
+.tools-sheet .td-segs { padding: 8px 18px; border-bottom: 1px solid var(--rule); }
+.tools-sheet .settings-body { flex: 1 1 auto; min-height: 0; }
+.tools-sheet .settings-row { grid-template-columns: minmax(96px, 150px) minmax(0, 1fr); }
+.tools-sheet .settings-row > .settings-label { overflow-wrap: anywhere; }
+.tools-sheet .settings-sec[data-kernel-owned] .settings-row[data-readonly] > .settings-label { grid-row: span 3; align-self: start; }
+.tools-sheet .td-notice .sf-result { font-size: var(--fs-control); }
+.tools-sheet .td-notice .sf-keys { margin-top: 6px; }
+.tools-sheet .agent-claimed .settings-row { padding: 2px 0; }
+.tools-sheet .rule-row .why-off { grid-column: 1; }
+.tools-sheet .td-foot { border-bottom: 0; }
