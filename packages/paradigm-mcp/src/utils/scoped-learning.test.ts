@@ -37,7 +37,8 @@ import { recordJournalEntry } from './journal-loader.js';
 import { autoPromoteJournalEntries, gatedPromoteJournalEntry, getNominationStats } from './nomination-engine.js';
 import { loadNotebookEntries } from './notebook-loader.js';
 import { appendVerdictEntry, markVerdictsConsumed, readPendingVerdicts } from './session-work-log.js';
-import { rebuildLearnedTable } from './calibration-aggregate.js';
+import { learnedTablePath, rebuildLearnedTable } from './calibration-aggregate.js';
+import { loadLearnedTokenTable } from '../tools/orchestration.js';
 import { readClassroomCertifications } from './field-failures.js';
 import type { JournalEntry } from '../types/knowledge-streams.js';
 
@@ -277,6 +278,30 @@ describe('calibration is per scope', () => {
     const adj = adjustAttentionFromFeedback(root, 'kit');
     expect(adj.population).toBe('legacy-repo');
     expect(adj.reason).toContain('cold-start prior: legacy repo population');
+  });
+});
+
+describe('learned token table lives in the user home (F3)', () => {
+  const row = (total: number) => ({ archetype: 'builder', taskType: 'feature', actualTokens: { input: 0, output: 0, total } });
+
+  it('writes the user-learned table outside the repo and reads it first', () => {
+    appendLearningRows('estimate-actuals', root, Array.from({ length: 8 }, (_, i) => row(1000 + i)));
+    const res = rebuildLearnedTable(root)!;
+    expect(res.learnedFile).toBe(learnedTablePath(root));
+    expect(res.learnedFile.startsWith(root)).toBe(false);
+    expect(fs.existsSync(path.join(root, '.paradigm', 'learned', 'token-estimates.json'))).toBe(false);
+    // a stale legacy repo copy is shadowed by the user copy
+    const legacy = path.join(root, '.paradigm', 'learned', 'token-estimates.json');
+    fs.mkdirSync(path.dirname(legacy), { recursive: true });
+    fs.writeFileSync(legacy, JSON.stringify({ builder: { feature: { min: 1, max: 2, n: 99 } } }), 'utf8');
+    expect(loadLearnedTokenTable(root).builder.feature.n).toBe(8);
+  });
+
+  it('falls back to the legacy repo copy when no user copy exists', () => {
+    const legacy = path.join(root, '.paradigm', 'learned', 'token-estimates.json');
+    fs.mkdirSync(path.dirname(legacy), { recursive: true });
+    fs.writeFileSync(legacy, JSON.stringify({ tester: { bugfix: { min: 1, max: 2, n: 9 } } }), 'utf8');
+    expect(loadLearnedTokenTable(root).tester.bugfix.n).toBe(9);
   });
 });
 

@@ -35,7 +35,6 @@ export { MIN_SAMPLES, aggregateActuals, percentile };
 export type { LearnedBand, LearnedTokenTable };
 
 const ACTUALS_FILE = '.paradigm/events/estimate-actuals.jsonl';
-const LEARNED_FILE = '.paradigm/learned/token-estimates.json';
 
 /**
  * `paradigm calibrate` — rebuild the learned token-estimate table from captured
@@ -55,7 +54,7 @@ export async function calibrateCommand(options: {
     dim('Run some orchestrations first — actuals are captured per agent-step.');
     return;
   }
-  const { groups, samplesRead, home, otherHomes, legacySamples, coldStartPrior } = result;
+  const { groups, samplesRead, home, otherHomes, legacySamples, coldStartPrior, learnedFile } = result;
 
   const learned = groups.filter(g => g.learned);
   const pending = groups.filter(g => !g.learned);
@@ -67,7 +66,7 @@ export async function calibrateCommand(options: {
   const others = Object.entries(otherHomes).map(([h, n]) => `${h}: ${n}`);
   if (others.length > 0) dim(`  Not pooled (other homes): ${others.join(', ')}`);
   kv('Groups', String(groups.length));
-  kv('Written to', LEARNED_FILE);
+  kv('Written to', learnedFile);
 
   if (learned.length > 0) {
     out('');

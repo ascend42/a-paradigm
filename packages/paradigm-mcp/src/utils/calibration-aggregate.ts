@@ -18,12 +18,21 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { homeOf, readLearningHomeConfig, readLearningRows, type LearningHome } from './learning-stores.js';
+import { homeOf, pathFor, readLearningHomeConfig, readLearningRows, type LearningHome } from './learning-stores.js';
 
 /** Minimum samples per (archetype, taskType) group before a band is learned. */
 export const MIN_SAMPLES = 8;
 
-const LEARNED_FILE = '.paradigm/learned/token-estimates.json';
+/**
+ * Where the learned table is written: the same home as the actuals it is
+ * learned from (review F3; a personal table never lands in the committed repo
+ * unless the actuals' home is repo). The legacy repo copy is read as a fallback
+ * by orchestration.ts loadLearnedTokenTable.
+ */
+export function learnedTablePath(rootDir: string, home?: LearningHome): string {
+  const h = home ?? homeOf('estimate-actuals', null, readLearningHomeConfig(rootDir));
+  return pathFor('learned-token-estimates', h, rootDir);
+}
 
 /** A learned band for one (archetype, taskType) cell. */
 export interface LearnedBand {
@@ -140,6 +149,8 @@ export function rebuildLearnedTable(rootDir: string): {
   population: LearningHome | 'legacy-repo';
   /** True when the bands come from the legacy population as a cold-start prior. */
   coldStartPrior: boolean;
+  /** Where the table was written. */
+  learnedFile: string;
 } | null {
   try {
     const rows = readLearningRows<ActualRecord>('estimate-actuals', rootDir);
@@ -164,9 +175,9 @@ export function rebuildLearnedTable(rootDir: string): {
     const legacySamples = legacyLines.length;
     const { table, groups } = aggregateActuals(lines);
 
-    const learnedDir = path.join(rootDir, path.dirname(LEARNED_FILE));
-    if (!fs.existsSync(learnedDir)) fs.mkdirSync(learnedDir, { recursive: true });
-    fs.writeFileSync(path.join(rootDir, LEARNED_FILE), JSON.stringify(table, null, 2) + '\n', 'utf8');
+    const learnedFile = learnedTablePath(rootDir, home);
+    fs.mkdirSync(path.dirname(learnedFile), { recursive: true });
+    fs.writeFileSync(learnedFile, JSON.stringify(table, null, 2) + '\n', 'utf8');
 
     return {
       table,
@@ -177,6 +188,7 @@ export function rebuildLearnedTable(rootDir: string): {
       legacySamples,
       population,
       coldStartPrior: population === 'legacy-repo',
+      learnedFile,
     };
   } catch {
     return null;

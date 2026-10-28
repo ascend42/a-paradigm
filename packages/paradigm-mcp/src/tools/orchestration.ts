@@ -18,6 +18,7 @@ import { resolveDispatchableAgents, formatUndispatchableNote } from '../utils/ag
 import { handleCaptainTool } from './captain.js';
 import { log } from '../utils/mcp-logger.js';
 import type { AgentRelay } from '../utils/agent-relay.js';
+import { learnedTablePath } from '../utils/calibration-aggregate.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 export type TaskClassification = {
@@ -374,13 +375,23 @@ let _learnedTableCache: { path: string; mtimeMs: number; table: LearnedTokenTabl
  */
 export function loadLearnedTokenTable(rootDir: string): LearnedTokenTable {
   try {
-    const filePath = path.join(rootDir, '.paradigm', 'learned', 'token-estimates.json');
-    let stat: fs.Stats;
+    // Scoped learning (review F3): the scoped copy (user home by default) first,
+    // then the legacy repo copy written before scoping.
+    const candidates: string[] = [];
     try {
-      stat = fs.statSync(filePath);
-    } catch {
-      return {}; // missing file → cold-start constant
+      candidates.push(learnedTablePath(rootDir));
+    } catch { /* a misplaced home is skipped; the legacy copy still serves */ }
+    candidates.push(path.join(rootDir, '.paradigm', 'learned', 'token-estimates.json'));
+    let filePath = '';
+    let stat: fs.Stats | null = null;
+    for (const c of candidates) {
+      try {
+        stat = fs.statSync(c);
+        filePath = c;
+        break;
+      } catch { /* try the next */ }
     }
+    if (!stat) return {}; // missing file → cold-start constant
     if (_learnedTableCache && _learnedTableCache.path === filePath && _learnedTableCache.mtimeMs === stat.mtimeMs) {
       return _learnedTableCache.table;
     }

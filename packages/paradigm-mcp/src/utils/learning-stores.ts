@@ -265,7 +265,7 @@ export type LearningArtifact =
   | 'classroom-certifications' | 'notebook-refs'
   // user by default
   | 'journals' | 'verdicts' | 'provisional-mined' | 'nominations' | 'debates'
-  | 'promotion-decisions' | 'estimate-actuals'
+  | 'promotion-decisions' | 'estimate-actuals' | 'learned-token-estimates'
   // machine by default
   | 'hook-timings' | 'settlement-liveness' | 'postflight-liveness' | 'team-funnel' | 'compliance-history';
 
@@ -299,6 +299,8 @@ export const ARTIFACTS: Readonly<Record<LearningArtifact, ArtifactSpec>> = {
   'debates': { defaultHome: 'user', rel: ['events', 'debates.jsonl'] },
   'promotion-decisions': { defaultHome: 'user', rel: ['events', 'promotion-decisions.jsonl'] },
   'estimate-actuals': { defaultHome: 'user', rel: ['events', 'estimate-actuals.jsonl'] },
+  // Derived from estimate-actuals; lives in the same home as the actuals it measures.
+  'learned-token-estimates': { defaultHome: 'user', rel: ['learned', 'token-estimates.json'] },
   'hook-timings': { defaultHome: 'machine', rel: ['events', 'hook-timings.jsonl'] },
   'settlement-liveness': { defaultHome: 'machine', rel: ['events', 'settlement-liveness.jsonl'] },
   'postflight-liveness': { defaultHome: 'machine', rel: ['events', 'postflight-liveness.jsonl'] },
