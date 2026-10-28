@@ -31,6 +31,8 @@ import type { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { inlineOf, shellOf } from '../desk/mcp-servers.js';
+import { realPrefix as realLoose } from '../runner/env.js';
 import { narrow, OP_ANNOTATIONS_MAX_BYTES, OP_ANNOTATIONS_SCHEMA, type CapabilityEntry, type ServerTrust } from './capability-index.js';
 import type { BrokerTarget, TargetCall } from './tool-broker.js';
 
@@ -90,23 +92,95 @@ export interface LaunchCheckInput {
   cwd: string;
   /** the session env PATH (a server's own env PATH replaces it) */
   sessionPath: string | undefined;
+  /** the user's home (`~`, `$HOME`, `${HOME}`, `%USERPROFILE%` expand to it) */
+  home?: string;
   platform?: string;
+}
+
+/**
+ * The path candidates one arg or env value names (Aegis MF1/MF2): the whole text, the text after its first `=`, the
+ * rest of a short flag (`-I/repo` → `/repo`), the text after a `-flag:` (`-javaagent:C:\repo\a.jar`); each with
+ * `file://` stripped and a leading `~`, `$HOME`, `${HOME}` or `%USERPROFILE%` expanded.
+ */
+export function pathCandidates(v: string, home: string | undefined): string[] {
+  const raw = new Set<string>([v]);
+  const eq = v.indexOf('=');
+  if (eq >= 0) raw.add(v.slice(eq + 1));
+  const short = /^-{1,2}[A-Za-z](.+)$/.exec(v);
+  if (short) raw.add(short[1]!);
+  const colon = /^-{1,2}[A-Za-z][\w.-]*:(.+)$/.exec(v);
+  if (colon) raw.add(colon[1]!);
+  const out = new Set<string>();
+  for (let c of raw) {
+    c = c.replace(/^["']|["']$/g, '').replace(/^file:\/\//i, '');
+    if (home) c = c.replace(/^(?:~|\$HOME|\$\{HOME\}|%USERPROFILE%)(?=$|[\\/])/i, home);
+    if (c) out.add(c);
+  }
+  return [...out];
+}
+
+/** Every form of a root a value could spell it in (lexical, realpath, `~/…`, `$HOME/…`), for the substring backstop. */
+function rootForms(roots: readonly string[], home: string | undefined): string[] {
+  const out = new Set<string>();
+  for (const r of roots) {
+    for (const f of [r, realOr(r)]) {
+      out.add(f);
+      if (home) {
+        for (const h of [home, realOr(home)]) {
+          if (f === h || f.startsWith(h + path.sep)) {
+            const rest = f.slice(h.length);
+            out.add(`~${rest}`);
+            out.add(`$HOME${rest}`);
+            out.add(`\${HOME}${rest}`);
+          }
+        }
+      }
+    }
+  }
+  return [...out].filter((f) => f.length > 1);
+}
+
+/** `text` contains `form` ending at a path boundary (end, a separator, a quote, `=`, `:` or `;`). */
+function containsAtBoundary(text: string, form: string, fold: boolean): boolean {
+  const t = fold ? text.toLowerCase() : text;
+  const f = fold ? form.toLowerCase() : form;
+  let i = t.indexOf(f);
+  while (i >= 0) {
+    const after = t[i + f.length];
+    if (after === undefined || /[\\/"'=:;,\s]/.test(after)) return true;
+    i = t.indexOf(f, i + 1);
+  }
+  return false;
 }
 
 /**
  * Aegis H1 (re-check): what decides what a server runs must never be model-writable. The server is spawned in a
  * NEUTRAL cwd (an empty, kernel-made, write-denied dir under the Gnomon home, outside every root), so nothing a runner
  * reads beside its cwd (package.json, node_modules, .npmrc, pyproject, `python -m` packages, `go run .`, bunfig, .env,
- * tsconfig…) comes from the repo. It is REFUSED `launch-writable` when any of these lies inside a writable root
- * (lexically or by realpath, case-folded on darwin/win32): the command, any path-like arg, any path-like segment of
- * any env value (split on the path delimiter), any PATH entry. A neutral cwd inside a root refuses every server.
+ * tsconfig…) comes from the repo. It is REFUSED `launch-writable` when:
+ *   - it runs a shell (`sh -c`, `cmd /c`…) or inline code (`node -e`, `python -c`…): Gnomon cannot see what it loads;
+ *   - its command, any path candidate of any arg or env value (pathCandidates: whole, after `=`, a short flag's rest,
+ *     `file://` stripped, `~`/`$HOME`/`%USERPROFILE%` expanded; env values split on the path delimiter) or any PATH
+ *     entry lies inside a writable root — checked lexically and by the realpath of its longest existing prefix
+ *     (realLoose: a path that does not exist yet still resolves through a symlinked parent), case-folded on darwin
+ *     and win32;
+ *   - BACKSTOP: any arg or env value CONTAINS a root's text at a path boundary (lexical, realpath, `~/…`, `$HOME/…`),
+ *     which catches quoting and key=value forms the parser misses.
+ * A neutral dir inside a root refuses every server.
  */
 export function launchCheck(servers: readonly LocalMcpServer[], i: LaunchCheckInput): { refused: Array<{ id: string; name: string; fit: ServerFit; why: string }>; servers: LocalMcpServer[] } {
   const platform = i.platform ?? process.platform;
+  const fold = platform === 'darwin' || platform === 'win32';
   const roots = [...new Set([...i.roots, ...i.roots.map(realOr)])];
+  const forms = rootForms(i.roots, i.home);
   const inRoot = (p: string): boolean => {
     const abs = path.resolve(i.cwd, p);
-    return roots.some((r) => within(abs, r, platform) || within(realOr(abs), r, platform));
+    return roots.some((r) => within(abs, r, platform) || within(realLoose(abs), r, platform));
+  };
+  const named = (v: string, splitDelim: boolean): boolean => {
+    const parts = splitDelim ? v.split(path.delimiter) : [v];
+    for (const part of parts) for (const c of pathCandidates(part, i.home)) if (pathLike(c) && inRoot(c)) return true;
+    return forms.some((f) => containsAtBoundary(v, f, fold));
   };
   const refused: Array<{ id: string; name: string; fit: ServerFit; why: string }> = [];
   const kept: LocalMcpServer[] = [];
@@ -117,14 +191,18 @@ export function launchCheck(servers: readonly LocalMcpServer[], i: LaunchCheckIn
     }
     const why = ((): string | null => {
       if (inRoot(i.cwd)) return 'the neutral spawn directory lies inside a session root';
-      if (s.command && inRoot(s.command)) return 'its command lies inside a session root';
-      for (const a of s.args ?? []) if (a && !a.startsWith('-') && pathLike(a) && inRoot(a)) return 'an argument names a path inside a session root';
+      // Aegis MF3: a shell or inline code: Gnomon cannot see what it loads
+      const sh = s.command ? shellOf(s.command) : null;
+      const inline = s.command ? inlineOf(s.command, s.args ?? []) : null;
+      if (sh || inline) return `it runs ${sh ? `a shell (${sh})` : `inline code (${inline})`}: Gnomon cannot see what it loads`;
+      if (s.command && (inRoot(s.command) || forms.some((f) => containsAtBoundary(s.command!, f, fold)))) return 'its command lies inside a session root';
+      for (const a of s.args ?? []) if (a && named(a, false)) return 'an argument names a path inside a session root';
       for (const [k, v] of Object.entries(s.env ?? {})) {
         if (k.toUpperCase() === 'PATH') continue;
-        for (const seg of v.split(path.delimiter)) if (seg && pathLike(seg) && inRoot(seg)) return `env ${k} names a path inside a session root`;
+        if (named(v, true)) return `env ${k} names a path inside a session root`;
       }
       const envPath = Object.entries(s.env ?? {}).find(([k]) => k.toUpperCase() === 'PATH')?.[1] ?? i.sessionPath ?? '';
-      for (const seg of envPath.split(path.delimiter)) if (seg && inRoot(seg)) return 'a PATH entry lies inside a session root';
+      for (const seg of envPath.split(path.delimiter)) for (const c of seg ? pathCandidates(seg, i.home) : []) if (inRoot(c)) return 'a PATH entry lies inside a session root';
       return null;
     })();
     if (why) refused.push({ id: s.id, name: s.name, fit: 'launch-writable', why });
@@ -195,7 +273,8 @@ export class McpStdioClient {
       if (this.#leaderClosed) return;
       this.#leaderClosed = true;
       const pid = child.pid;
-      if (pid !== undefined) (o.killGroup ?? killGroup)(pid);
+      // win32: no process groups (the server sits in the daemon's kill-on-close job); a pid kill after close is unsafe
+      if (pid !== undefined && process.platform !== 'win32') (o.killGroup ?? killGroup)(pid);
     });
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', (chunk: string) => this.#data(chunk));
@@ -527,6 +606,8 @@ export class LocalMcpPool {
     if (p.starts >= MAX_STARTS) return Promise.reject(new McpError(`not restarted after ${MAX_STARTS} starts in this session (${p.error ?? 'failed'})`, 'exited'));
     p.starts++;
     p.starting = (async () => {
+      // a replaced client whose leader still lives is reaped first (never one that already closed)
+      if (p.client && !p.client.closed) p.client.kill();
       const child = this.#o.spawn(p.s);
       this.#o.track?.(child, p.label);
       const c = new McpStdioClient(child, {

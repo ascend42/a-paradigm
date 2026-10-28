@@ -288,3 +288,47 @@ describe('Aegis M3 (re-check): pid-reuse-safe reaping', () => {
     expect(pool.live).toBe(0);
   }, 20_000);
 });
+
+describe('Aegis final H1: flag, URL, home, inline and not-yet-existing forms', () => {
+  const setup = () => {
+    const d = tmp();
+    const home = path.join(d, 'home');
+    const repo = path.join(home, 'code', 'repo');
+    const neutral = path.join(d, 'gnomon-home', 'sessions', 'x-mcp');
+    fs.mkdirSync(repo, { recursive: true });
+    fs.mkdirSync(neutral, { recursive: true });
+    const chk = (s: Partial<LocalMcpServer>) => launchCheck([server(s)], { roots: [repo], cwd: neutral, sessionPath: '/usr/bin', home });
+    return { d, home, repo, chk };
+  };
+
+  it('MF1/MF2: --config=, -I<repo>, file://, ~/, $HOME/ and RUBYOPT=-r<repo> are each refused', () => {
+    const { repo, chk } = setup();
+    for (const args of [[`--config=${repo}/x`], [`-I${repo}`], [`file://${repo}/x`], ['~/code/repo/x'], ['$HOME/code/repo/x'], ['${HOME}/code/repo/x'], [`-javaagent:${repo}/a.jar`]]) {
+      expect(chk({ args }).refused, JSON.stringify(args)).toHaveLength(1);
+    }
+    expect(chk({ env: { RUBYOPT: `-r${repo}/x` } }).refused[0]!.why).toMatch(/env RUBYOPT/);
+    expect(chk({ env: { PERL5OPT: `-I${repo}` } }).refused).toHaveLength(1);
+    expect(chk({ args: ['--port=8080', '-v'] }).servers).toHaveLength(1);
+  });
+
+  it('MF3: sh -c and node -e are refused (Gnomon cannot see what they load)', () => {
+    const { chk } = setup();
+    expect(chk({ command: '/bin/sh', args: ['-c', 'exec x'] }).refused[0]!.why).toMatch(/cannot see what it loads/);
+    expect(chk({ command: process.execPath, args: ['-e', 'require("x")'] }).refused[0]!.why).toMatch(/inline code/);
+  });
+
+  it('MF4: a path through a symlink to the repo whose file does not exist yet is refused', () => {
+    const { d, repo, chk } = setup();
+    const link = path.join(d, 'link');
+    fs.symlinkSync(repo, link, 'junction'); // a junction needs no privilege on Windows; posix ignores the type
+    expect(chk({ args: [path.join(link, 'not-yet', 'server.js')] }).refused).toHaveLength(1);
+  });
+
+  it('backstop: a quoted form the parser misses is caught by the root text at a path boundary', () => {
+    const { repo, chk } = setup();
+    expect(chk({ args: [`--opts={"root":"${repo}"}`] }).refused).toHaveLength(1);
+    expect(chk({ env: { CFG: `x;load=${repo}/y` } }).refused).toHaveLength(1);
+    // a sibling whose name merely starts with the root's text is not inside it
+    expect(chk({ args: [`${repo}-other/x`] }).servers).toHaveLength(1);
+  });
+});

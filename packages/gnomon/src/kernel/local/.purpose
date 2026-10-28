@@ -257,9 +257,13 @@ components:
       label-reserved. Aegis H1 (re-check): servers run in a neutral cwd
       (sessions/<short>-mcp under the Gnomon home: empty, write-denied,
       outside every root, removed at exit) and are refused launch-writable
-      when the command, a path-like arg, a path-like env segment or a PATH
-      entry lies in a root (launchCheck; lexical + realpath, case-folded on
-      darwin/win32). Aegis H2: each server spawns lazily under its OWN
+      when it runs a shell or inline code, or when the command, a path
+      candidate of an arg or env value (whole, after =, a flag's rest,
+      file:// stripped, ~/$HOME/%USERPROFILE% expanded) or a PATH entry lies
+      in a root (launchCheck; lexical + longest-prefix realpath, case-folded
+      on darwin/win32), with a substring backstop on each root's text at a
+      path boundary. The neutral dir is made non-recursively and an existing
+      one must be an empty, owned, real directory. Aegis H2: each server spawns lazily under its OWN
       policy (no session dir or runner copy; the neutral cwd readable) with
       every GNOMON_* name stripped (serverEnv); runner and servers are
       denied the kernel socket. Failures are recorded readably

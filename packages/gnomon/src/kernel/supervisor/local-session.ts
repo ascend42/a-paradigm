@@ -848,6 +848,8 @@ export class LocalLane {
     let child: ChildProcess | null = null;
     let tracked = false;
     let live: LocalSession | null = null;
+    /** slice C2': the neutral MCP cwd this open made (removed if the open fails) */
+    let neutralMade: string | null = null;
     try {
       // a loop step's permit: scope.loop is the PAYING loop (the root caller), scope.user the human who trusted it
       permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: !loop, kind: 'session.spawn', backend: 'local', model, scope: { user: loop?.info.trustedBy ?? req.principal, session: hsid, repo, ...(loop ? { loop: loop.info.rootKey } : {}) }, ...(loop ? { limits: { tokens: loop.maxTokens } } : {}) });
@@ -868,7 +870,7 @@ export class LocalLane {
       // Aegis H1 (re-check): servers run in a NEUTRAL cwd (empty, kernel-made, write-denied, under the Gnomon home and
       // outside every root) and are refused launch-writable when anything that decides what they run is in a root
       const neutralCwd = path.join(this.#o.home, 'sessions', `${hsidShort(hsid)}-mcp`); // a sibling of the session dir, never inside it
-      const closure = launchCheck(mcpServers, { roots: [cwdReal, ...(wtReal ? [wtReal] : [])], cwd: neutralCwd, sessionPath: env.PATH });
+      const closure = launchCheck(mcpServers, { roots: [cwdReal, ...(wtReal ? [wtReal] : [])], cwd: neutralCwd, sessionPath: env.PATH, home: userHome });
       const policyInput: Parameters<typeof buildSessionPolicy>[0] = {
         home: this.#o.home,
         cwd: cwdReal,
@@ -893,8 +895,20 @@ export class LocalLane {
       // Aegis H1: the neutral cwd is its only readable home path (empty: made 0700, then 0500 once it exists)
       let mcpPolicy: SessionPolicy | null = null;
       if (closure.servers.length) {
-        fs.mkdirSync(neutralCwd, { recursive: true, mode: 0o700 });
-        if (this.#platform !== 'win32') fs.chmodSync(neutralCwd, 0o500);
+        // Aegis (final H1 lows): made non-recursively; an existing one is used only when it is an empty, owned, real
+        // directory (never a symlink); the chmod never follows a link
+        fs.mkdirSync(path.dirname(neutralCwd), { recursive: true, mode: 0o700 });
+        try {
+          fs.mkdirSync(neutralCwd, { mode: 0o700 });
+          neutralMade = neutralCwd;
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+          const st = fs.lstatSync(neutralCwd);
+          const owned = this.#platform === 'win32' || st.uid === process.getuid?.();
+          if (st.isSymbolicLink() || !st.isDirectory() || !owned || fs.readdirSync(neutralCwd).length) throw refused('UNSUPPORTED', 'the neutral MCP directory exists and is not an empty directory of the kernel user', { session: 'spawn_failed' });
+          neutralMade = neutralCwd;
+        }
+        if (this.#platform !== 'win32' && !fs.lstatSync(neutralCwd).isSymbolicLink()) fs.chmodSync(neutralCwd, 0o500);
         mcpPolicy = buildSessionPolicy({ ...policyInput, homeReadable: [{ path: realRoot(neutralCwd) ?? neutralCwd, match: 'subpath' }], extraDenyWrite: [...(policyInput.extraDenyWrite ?? []), { path: realRoot(neutralCwd) ?? neutralCwd, match: 'subpath', class: 'binary' }] });
       }
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -958,6 +972,15 @@ export class LocalLane {
       if (offered.length) this.#write(s, drv.toolsSetLine(s.tools.offered));
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
+      // slice C2': a failed open removes the neutral MCP cwd it made
+      if (neutralMade && !live) {
+        try {
+          fs.chmodSync(neutralMade, 0o700);
+          fs.rmSync(neutralMade, { recursive: true, force: true });
+        } catch {
+          /* gone */
+        }
+      }
       if (this.#platform === 'win32' && !live) {
         // W5: an open that failed before a live session undoes its win32 labels and grants
         try {

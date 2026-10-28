@@ -435,3 +435,6 @@ export function buildCheckEnv(i: CheckEnvInput): { env: Record<string, string>; 
   applyLoopEnv(env, i.named);
   return { env, envKeys: Object.keys(env).sort() };
 }
+
+/** realLoose (longest existing prefix realpathed, the rest appended) for #local-mcp-client launchCheck (Aegis MF4). */
+export const realPrefix = (p: string): string => realLoose(p);
