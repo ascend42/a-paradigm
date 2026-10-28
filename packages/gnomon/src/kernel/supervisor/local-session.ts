@@ -279,7 +279,7 @@ interface LocalSession {
   /** slice C1: this session's brokered tools (a loop session's offers none and refuses every call) */
   tools?: LocalToolBroker;
   /** slice C2': the session's MCP servers (#local-mcp-client; attended sessions only), reaped at exit */
-  mcp?: { pool: LocalMcpPool; kernel: BrokeredTool[]; entries: Map<string, CapabilityEntry[]>; manual: boolean };
+  mcp?: { pool: LocalMcpPool; kernel: BrokeredTool[]; entries: Map<string, CapabilityEntry[]>; manual: boolean; bound: Map<string, string>; offeredHash: string };
   /** slice C2': how this session's MCP servers are spawned (its own launch plan, env and cwd) */
   mcpLaunch?: { launch: SessionLaunchInput; env: Record<string, string | undefined>; cwd: string; servers: readonly LocalMcpServer[]; refused: Array<{ id: string; name: string; fit: ServerFit }> };
   /** slice B2: the kernel-owned working memory (attended sessions only; a loop session has none) */
@@ -297,6 +297,9 @@ interface LocalSession {
   /** slice B2: the context target in effect, the signed config's, the endpoint's n_ctx and the reply budget */
   context: { target: number; config: number; nCtx: number | null; maxTokens: number };
 }
+
+/** Slice C2' (Aegis M4): the hash of an offered set (names, classes, schemas, descriptions, targets). */
+const offeredHash = (tools: readonly BrokeredTool[]): string => createHash('sha256').update(JSON.stringify(tools.map((t) => [t.name, t.class, t.description, t.parameters, t.target?.server ?? null]))).digest('hex');
 
 /** Slice B2: the human-only dispatcher requests a local session serves (dispatcher-only: never §9.1 rows themselves). */
 export const LOCAL_SESSION_COMPACT_REQUEST = 'request.session.compact' as const;
@@ -1005,11 +1008,14 @@ export class LocalLane {
       // exactly the servers whose launch closure the session profile write-denies (fixed at open)
       const servers = s.mcpLaunch.servers;
       if (servers.length) {
-        const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries) });
-        s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual };
+        const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries),
+          // Aegis M3: stopped with the daemon too (kind mcp-server: no session rows)
+          track: (child, label) => void this.#o.children.track({ kind: 'mcp-server', child, hsid: s.hsid, name: `mcp:${label}` }).catch(() => undefined) });
+        s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual, bound: new Map(), offeredHash: '' };
         const ix = await pool.index();
         for (const label of pool.labels) s.mcp.entries.set(label, ix.entries.filter((e) => e.server === label));
         tools = this.#mcpOffer(s);
+        s.mcp.offeredHash = offeredHash(tools);
       }
     }
     return new LocalToolBroker({ hsid: s.hsid, principalId: s.principalId, repo: s.roots.worktree ?? s.roots.cwd, loop: s.loop !== undefined, log: this.#o.log, ...(this.#o.broker ? { broker: this.#o.broker } : {}), target, tools, running: () => s.state === 'running', progress: (id) => this.#write(s, drv.toolProgressLine(id)) });
@@ -1022,8 +1028,18 @@ export class LocalLane {
    */
   #mcpOffer(s: LocalSession): BrokeredTool[] {
     const m = s.mcp!;
-    const all = [...m.entries.values()].flat().filter((e) => !m.manual || e.class === 'read');
+    // Aegis M4: a name once offered from one server is never rebound to another in this session; Aegis L3: names are
+    // de-duplicated (first in index order wins) BEFORE the budget
+    const seen = new Set<string>();
+    const all = [...m.entries.values()].flat().filter((e) => {
+      if ((m.manual && e.class !== 'read') || seen.has(e.name)) return false;
+      const b = m.bound.get(e.name);
+      if (b !== undefined && b !== e.server) return false;
+      seen.add(e.name);
+      return true;
+    });
     const chosen = offerWithin(m.kernel, all, { contextTarget: s.context.target, reserved: LOCAL_RESERVED_TOOL_NAMES });
+    for (const e of chosen) if (!m.bound.has(e.name)) m.bound.set(e.name, e.server);
     return [...m.kernel, ...chosen.flatMap((e) => {
       const target = m.pool.target(e.server);
       return target ? [{ name: e.name, description: e.description, parameters: e.parameters, class: e.class, entry: e, target }] : [];
@@ -1034,7 +1050,12 @@ export class LocalLane {
   #mcpChanged(s: LocalSession, label: string, entries: CapabilityEntry[]): void {
     if (!s.mcp || !s.tools || s.state !== 'running') return;
     s.mcp.entries.set(label, entries);
-    s.tools.setTools(this.#mcpOffer(s));
+    const tools = this.#mcpOffer(s);
+    // Aegis M4: a tools_set only when the offered set actually changed
+    const h = offeredHash(tools);
+    if (h === s.mcp.offeredHash) return;
+    s.mcp.offeredHash = h;
+    s.tools.setTools(tools);
     this.#write(s, drv.toolsSetLine(s.tools.offered));
   }
 

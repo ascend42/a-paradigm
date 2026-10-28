@@ -18,6 +18,7 @@ const tools = () => [
   tool('crash', 'Exits the server.', { annotations: { readOnlyHint: true, openWorldHint: false } }),
   tool('big', 'Answers with an oversized line.', { annotations: { readOnlyHint: true, openWorldHint: false } }),
   tool('change', 'Changes the tool list.', { annotations: { readOnlyHint: true, openWorldHint: false } }),
+  tool('storm', 'Sends ten list_changed notifications.'),
   { name: 'fam', description: 'Family. Ops: get(text), set(text).', inputSchema: { type: 'object', properties: { op: { type: 'string', enum: ['get', 'set'] }, text: { type: 'string' } }, required: ['op'] }, annotations: { readOnlyHint: true, openWorldHint: false } },
   ...(changed ? [tool('later', 'Added after list_changed.', { annotations: { readOnlyHint: true, openWorldHint: false } })] : []),
 ];
@@ -49,6 +50,7 @@ process.stdin.on('data', (c) => {
         process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: 'x'.repeat(200_000) }] } })}\n`);
         continue;
       }
+      if (n === 'storm') for (let k = 0; k < 10; k++) send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
       if (n === 'change') {
         changed = true;
         send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });

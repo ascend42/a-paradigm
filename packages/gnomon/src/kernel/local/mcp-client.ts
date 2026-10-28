@@ -370,21 +370,42 @@ export class McpStdioClient {
   }
 
   /** Reap: the server's process group (posix: spawned detached) or the process. */
+  get pid(): number | undefined {
+    return this.#child.pid;
+  }
+
+  /**
+   * Aegis M3: reap the server's whole process group, ALWAYS (even after the leader exited, its children may live on):
+   * `process.kill(-pid, 'SIGKILL')` on POSIX (servers are spawned detached, so pid = pgid), ESRCH ignored; on Windows
+   * the process itself (it stays in the daemon's kill-on-close job).
+   */
   kill(): void {
     const pid = this.#child.pid;
-    if (pid === undefined || this.#child.exitCode !== null || this.#child.signalCode !== null) return;
+    if (pid !== undefined) killGroup(pid);
     try {
-      if (process.platform !== 'win32') process.kill(-pid, 'SIGKILL');
-      else this.#child.kill('SIGKILL');
+      this.#child.kill('SIGKILL');
     } catch {
-      try {
-        this.#child.kill('SIGKILL');
-      } catch {
-        /* gone */
-      }
+      /* gone */
     }
   }
 }
+
+/** SIGKILL a process group (POSIX) or process (win32); a missing group (ESRCH) or a non-leader is ignored. */
+export function killGroup(pid: number): void {
+  try {
+    if (process.platform !== 'win32') process.kill(-pid, 'SIGKILL');
+    else process.kill(pid, 'SIGKILL');
+  } catch {
+    /* ESRCH: gone */
+  }
+}
+
+/** Aegis M4: list_changed storms — at most this many relists per server per minute (past it the server is stale). */
+export const RELISTS_PER_MINUTE = 6;
+/** … and at least this long between two relists of one server. */
+export const RELIST_MIN_GAP_MS = 2_000;
+/** Aegis M5: a server that failed to start or list is not tried again for this long (kernel-wide, per launch). */
+export const FAILURE_TTL_MS = 60_000;
 
 /** What a server listed, as the kernel caches it per launch. */
 export interface ListedServer {
@@ -395,6 +416,18 @@ export interface ListedServer {
 /** The kernel-lifetime tools/list cache (LocalLane owns one; bounded, oldest dropped). */
 export class McpListCache {
   readonly #m = new Map<string, ListedServer>();
+  readonly #failed = new Map<string, { at: number; why: string }>();
+  /** Aegis M5: a recent failure of this launch (within FAILURE_TTL_MS), or undefined */
+  failure(k: string, now = Date.now()): string | undefined {
+    const f = this.#failed.get(k);
+    if (f && now - f.at < FAILURE_TTL_MS) return f.why;
+    this.#failed.delete(k);
+    return undefined;
+  }
+  fail(k: string, why: string, now = Date.now()): void {
+    this.#failed.set(k, { at: now, why });
+    if (this.#failed.size > LIST_CACHE_MAX) this.#failed.delete(this.#failed.keys().next().value as string);
+  }
   get(k: string): ListedServer | undefined {
     return this.#m.get(k);
   }
@@ -424,6 +457,8 @@ export interface LocalMcpPoolOptions {
   maxMessageBytes?: number;
   /** a server re-listed after notifications/tools/list_changed: its new entries */
   onChanged?: (label: string, entries: CapabilityEntry[]) => void;
+  /** Aegis M3: register each spawned server with the daemon's children (stopped with the daemon) */
+  track?: (child: ChildProcess, label: string) => void;
 }
 
 interface PoolServer {
@@ -435,6 +470,8 @@ interface PoolServer {
   /** last failure (spawn, initialize, crash) */
   error: string | null;
   starts: number;
+  /** Aegis M4: relist throttle */
+  relist: { inflight: boolean; pending: boolean; last: number; recent: number[]; stale: boolean };
 }
 
 /** One local session's MCP servers (never shared across sessions). */
@@ -455,7 +492,7 @@ export class LocalMcpPool {
       const label = serverLabel(s.name);
       if (labels.has(label) || label === 'gnomon') continue; // a name that would collide with another (or the kernel's own)
       labels.add(label);
-      this.#servers.push({ s, label, key: launchKey(s, o.repo), client: null, starting: null, error: null, starts: 0 });
+      this.#servers.push({ s, label, key: launchKey(s, o.repo), client: null, starting: null, error: null, starts: 0, relist: { inflight: false, pending: false, last: 0, recent: [], stale: false } });
     }
   }
 
@@ -468,25 +505,32 @@ export class LocalMcpPool {
     return this.#servers.filter((p) => p.client && !p.client.dead).length;
   }
 
-  #start(p: PoolServer): Promise<McpStdioClient> {
+  /** Aegis M3: every pid this session ever spawned (each group is killed at close, live or not). */
+  readonly #pids = new Set<number>();
+
+  #start(p: PoolServer, signal?: AbortSignal): Promise<McpStdioClient> {
     if (this.#closed) return Promise.reject(new McpError('the session is closed', 'exited'));
     if (p.client && !p.client.dead) return Promise.resolve(p.client);
     if (p.starting) return p.starting;
+    // Aegis M3: a dead server's group is reaped before it is started again
+    if (p.client?.pid !== undefined) killGroup(p.client.pid);
     if (p.starts >= MAX_STARTS) return Promise.reject(new McpError(`not restarted after ${MAX_STARTS} starts in this session (${p.error ?? 'failed'})`, 'exited'));
     p.starts++;
     p.starting = (async () => {
       const child = this.#o.spawn(p.s);
+      if (child.pid !== undefined) this.#pids.add(child.pid);
+      this.#o.track?.(child, p.label);
       const c = new McpStdioClient(child, {
         ...(this.#o.maxMessageBytes ? { maxMessageBytes: this.#o.maxMessageBytes } : {}),
         ...(this.#o.listTimeoutMs ? { listTimeoutMs: this.#o.listTimeoutMs } : {}),
-        onListChanged: () => void this.#relist(p).catch(() => undefined),
+        onListChanged: () => this.#relistSoon(p),
         onExit: (why) => {
           p.error = why;
         },
       });
       p.client = c;
       try {
-        await c.initialize();
+        await c.initialize(signal ? { signal } : {});
       } catch (e) {
         c.kill();
         throw e;
@@ -499,9 +543,10 @@ export class LocalMcpPool {
     return p.starting;
   }
 
-  async #listed(c: McpStdioClient, p: PoolServer): Promise<ListedServer> {
-    const tools = await c.listTools();
-    const annotations = p.s.trust === 'enabled' ? null : await c.readOpAnnotations().catch(() => null);
+  async #listed(c: McpStdioClient, p: PoolServer, signal?: AbortSignal): Promise<ListedServer> {
+    const o = signal ? { signal } : {};
+    const tools = await c.listTools(o);
+    const annotations = p.s.trust === 'enabled' ? null : await c.readOpAnnotations(o).catch(() => null);
     const v = { tools, annotations };
     this.#o.cache?.set(p.key, v);
     return v;
@@ -511,11 +556,47 @@ export class LocalMcpPool {
     return narrow(v.tools, p.label, { trust: p.s.trust, opAnnotations: v.annotations });
   }
 
+  /**
+   * Aegis M4: a list_changed — one relist in flight plus one pending, at least RELIST_MIN_GAP_MS apart, at most
+   * RELISTS_PER_MINUTE a minute; past the cap the server is STALE (its last list stands, no more relists this session).
+   */
+  #relistSoon(p: PoolServer): void {
+    const r = p.relist;
+    if (r.stale || this.#closed) return;
+    if (r.inflight) {
+      r.pending = true;
+      return;
+    }
+    const now = Date.now();
+    r.recent = r.recent.filter((t) => now - t < 60_000);
+    if (r.recent.length >= RELISTS_PER_MINUTE) {
+      r.stale = true;
+      p.error = 'stale: too many tools/list_changed';
+      return;
+    }
+    const wait = Math.max(0, r.last + RELIST_MIN_GAP_MS - now);
+    r.inflight = true;
+    const t = setTimeout(() => {
+      r.last = Date.now();
+      r.recent.push(r.last);
+      void this.#relist(p)
+        .catch(() => undefined)
+        .finally(() => {
+          r.inflight = false;
+          if (r.pending) {
+            r.pending = false;
+            this.#relistSoon(p);
+          }
+        });
+    }, wait);
+    t.unref?.();
+  }
+
   async #relist(p: PoolServer): Promise<void> {
     const c = p.client;
     if (!c || c.dead || this.#closed) return;
-    const v = await this.#listed(c, p);
-    this.#o.onChanged?.(p.label, this.#narrow(p, v));
+    const v = await this.#listed(c, p, AbortSignal.timeout(this.#o.listTimeoutMs ?? LIST_TIMEOUT_MS));
+    if (!this.#closed) this.#o.onChanged?.(p.label, this.#narrow(p, v));
   }
 
   /**
@@ -527,9 +608,16 @@ export class LocalMcpPool {
       this.#servers.map(async (p) => {
         try {
           const hit = this.#o.cache?.get(p.key);
-          return this.#narrow(p, hit ?? (await this.#listed(await this.#start(p), p)));
+          if (hit) return this.#narrow(p, hit);
+          // Aegis M5: a launch that just failed is not retried at every open (briefly cached)
+          const failed = this.#o.cache?.failure(p.key);
+          if (failed) throw new Error(`failed recently: ${failed}`);
+          // Aegis M5: one deadline per server for start + list + annotations at open
+          const signal = AbortSignal.timeout(this.#o.listTimeoutMs ?? LIST_TIMEOUT_MS);
+          return this.#narrow(p, await this.#listed(await this.#start(p, signal), p, signal));
         } catch (e) {
           p.error = (e as Error).message.slice(0, 200);
+          if (!/^failed recently/.test(p.error)) this.#o.cache?.fail(p.key, p.error);
           return null;
         }
       }),
@@ -575,6 +663,8 @@ export class LocalMcpPool {
       p.client.kill();
       waits.push(Promise.race([p.client.exited, new Promise<void>((r) => setTimeout(r, 2000).unref?.())]));
     }
+    // Aegis M3: every group this session ever spawned (restarted servers' old groups too)
+    for (const pid of this.#pids) killGroup(pid);
     await Promise.all(waits);
   }
 }

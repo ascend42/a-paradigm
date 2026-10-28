@@ -213,3 +213,30 @@ describe('Aegis H1/H2: launch closure and server env', () => {
     expect(env).toEqual({ PATH: '/bin', TOKEN: 't' });
   });
 });
+
+describe('Aegis M4/M5: list_changed storms and open-time failures', () => {
+  it('ten list_changed at once give one relist now and one pending (at least 2 s apart), never ten', async () => {
+    let n = 0;
+    const pool = new LocalMcpPool({ servers: [server()], repo: '/r', spawn: () => spawnFake(), onChanged: () => void n++ });
+    await pool.index();
+    await pool.target('fake')!.call('storm', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 });
+    await waitFor(() => n >= 1);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(n).toBe(1);
+    await waitFor(() => n >= 2, 6_000);
+    await new Promise((r) => setTimeout(r, 2_500));
+    expect(n).toBe(2);
+    await pool.closeAll();
+  }, 30_000);
+
+  it('a server that fails at open is not retried by the next session for a while (failure cached)', async () => {
+    const cache = new McpListCache();
+    let spawned = 0;
+    const mk = (): LocalMcpPool => new LocalMcpPool({ servers: [server()], repo: '/r', cache, spawn: () => (spawned++, spawn(process.execPath, ['-e', 'process.exit(2)'], { stdio: ['pipe', 'pipe', 'ignore'] })) });
+    const a = await mk().index();
+    expect(a.failed).toHaveLength(1);
+    const b = await mk().index();
+    expect(b.failed[0]!.error).toMatch(/failed recently/);
+    expect(spawned).toBe(1);
+  }, 20_000);
+});
