@@ -549,7 +549,14 @@ export function fullParameters(e: Pick<CapabilityEntry, 'schema' | 'opParam'>): 
 }
 
 const SCHEMA_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'array', 'object', 'null']);
-const clean = (t: unknown): boolean => typeof t === 'string' && t.length <= 2048 && cleanServerText(t) === t;
+/**
+ * Aegis C4'a M1: chat-template and kernel-delimiter shapes a full schema may never carry to the model (the child does
+ * not clean `parameters`): `<|` / `|>` (ChatML, DeepSeek fullwidth too), any closing tag `</…`, `<tool…`, `<think`,
+ * `<s>`, `…_of_turn>`, `[INST]`-style brackets.
+ */
+const TOKEN_SHAPE = /<\||\|>|<｜|｜>|<\/|<tool|<think|<\/?s>|_of_turn>|<working-memory|\[\/?(?:INST|TOOL_CALLS|AVAILABLE_TOOLS|TOOL_RESULTS|SYSTEM_PROMPT)\]/i;
+/** Text a full schema may carry: bounded, unchanged by cleanServerText, and no template-token shape. */
+const clean = (t: unknown): boolean => typeof t === 'string' && t.length <= 2048 && cleanServerText(t) === t && !TOKEN_SHAPE.test(t);
 const cleanValue = (v: unknown): boolean => v === null || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 256 && clean(v));
 
 /** Why a schema node cannot be offered in full, or null (every keyword the validator checks, clean text, bounded depth). */
@@ -566,10 +573,15 @@ function fullSchemaRefusal(s: unknown, depth: number, at: string): string | null
   if (Object.hasOwn(s, 'enum') && (!Array.isArray(s.enum) || s.enum.length > 64 || !s.enum.every(cleanValue))) return `${at}.enum holds a value the model should not read verbatim`;
   if (Object.hasOwn(s, 'default') && !cleanValue(s.default)) return `${at}.default is not a clean primitive`;
   if (Object.hasOwn(s, 'pattern')) {
-    if (typeof s.pattern !== 'string' || UNSAFE_CHAR.test(s.pattern)) return `${at}.pattern is not plain text`;
+    // Aegis C4'a M1: the pattern reaches the model verbatim: clean text, no template token
+    if (typeof s.pattern !== 'string' || UNSAFE_CHAR.test(s.pattern) || !clean(s.pattern)) return `${at}.pattern is not plain text`;
     if (unsafePattern(s.pattern)) return `${at}.pattern is unsafe`;
   }
-  if (Object.hasOwn(s, 'required') && (!Array.isArray(s.required) || !s.required.every((r) => typeof r === 'string'))) return `${at}.required is not a list of names`;
+  // Aegis C4'a M1: each required name is a carriable property name of THIS node's properties (never free text)
+  if (Object.hasOwn(s, 'required')) {
+    const props = isObj(s.properties) ? s.properties : {};
+    if (!Array.isArray(s.required) || !s.required.every((r) => typeof r === 'string' && PROP_NAME_RE.test(r) && !FORBIDDEN_KEYS.has(r) && Object.hasOwn(props, r))) return `${at}.required is not a list of this object's property names`;
+  }
   for (const k of ['minLength', 'maxLength', 'maxItems']) if (Object.hasOwn(s, k) && !(Number.isSafeInteger(s[k]) && (s[k] as number) >= 0)) return `${at}.${k} is not a count`;
   if (Object.hasOwn(s, 'properties')) {
     if (!isObj(s.properties)) return `${at}.properties is not an object`;
@@ -596,6 +608,9 @@ export function fullSurface(e: Pick<CapabilityEntry, 'name' | 'description' | 's
 }
 
 const fullWhy = new WeakMap<object, string | null>();
+// Aegis C4'a M1 sweep: every string a full schema carries is one of description / title / $schema / pattern (clean()),
+// enum and default primitives (cleanValue, at every depth), type names (SCHEMA_TYPES), property and required names
+// (PROP_NAME_RE); any other keyword (format, const, examples…) is outside SCHEMA_KEYWORDS and refuses the full form.
 
 /**
  * Why an entry cannot be offered in its FULL form, or null when it can (fullOfferable): every keyword at every depth is
