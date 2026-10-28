@@ -44,6 +44,9 @@ components:
       - '!hook-installed'
   hook-monitor:
     description: |
+      S2: the ring (hook-timings.jsonl) and stop-timing.jsonl live in the
+      project's machine home (OS state dir), resolved by _pm_learn_path; the
+      legacy .paradigm/events copy is frozen and read by doctor only as a fallback.
       7.15.2 hook self-monitoring (scripts/paradigm-hook-monitor.sh, sourced by
       every Claude Code hook via _pm_begin <Hook> <timeoutMs> <budgetMs>).
       Appends a start record and, from an EXIT trap, an end record (wall ms,
@@ -122,6 +125,13 @@ components:
       - git
   paradigm-resolve:
     description: |
+      S2: _pm_learn_path <artifact> [<root>] prints where a hook appends a
+      learning row (`paradigm internal learn-path`), cached in
+      .paradigm/.sessions/learn-paths keyed by the physical root and
+      $PARADIGM_LEARNING_HOME (a moved repo misses and its stale lines are
+      dropped); _pm_learn_append writes the row. The team-funnel, overrides,
+      compliance-history and hook-timings writers go through it; when it
+      cannot resolve, the write is skipped (legacy repo logs stay frozen).
       Sourced POSIX-sh helper (scripts/paradigm-resolve.sh, copied to both
       plugins and written by `paradigm hooks install` beside paradigm-common.sh;
       the git post-commit / pre-push hooks embed it, hook version 3) that is the

@@ -42,6 +42,7 @@ import type {
 } from '../types/captain.js';
 import type { Task, Claimant } from '../utils/task-loader.js';
 import { queueCoverageGapTask, PURPOSE_COVERAGE_TASK_TAG } from '../utils/purpose-coverage-queue.js';
+import { readLearningRows } from '../utils/learning-stores.js';
 
 // ────────────────────────────────────────────────────────
 // Tool Definitions
@@ -867,7 +868,6 @@ async function handleCaptainDebrief(
 // Postflight liveness check (v7 §3 — Cid session-close self-heal)
 // ────────────────────────────────────────────────────────
 
-const LIVENESS_REL = path.join('events', 'settlement-liveness.jsonl');
 /** Window for "this session ran postflight" — recent settlements only. */
 const POSTFLIGHT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6h
 
@@ -883,25 +883,17 @@ export { PURPOSE_COVERAGE_TASK_TAG };
  * self-heals. No file at all (no settlement happened) also returns false.
  */
 function sessionPostflightRan(paradigmDir: string): boolean {
-  const filePath = path.join(paradigmDir, LIVENESS_REL);
-  if (!fs.existsSync(filePath)) return false;
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split('\n').filter(l => l.trim().length > 0);
+    // Union of the machine home and the frozen legacy repo log (scoped learning S2).
+    const rows = readLearningRows<{ ts?: string; stages?: { runPostflightLearning?: string } }>(
+      'settlement-liveness', path.dirname(paradigmDir),
+    ).sort((a, b) => String(a.ts ?? '').localeCompare(String(b.ts ?? '')));
     const cutoff = Date.now() - POSTFLIGHT_WINDOW_MS;
     // Scan recent records (last 50) for a live postflight stage.
-    for (const line of lines.slice(-50)) {
-      try {
-        const rec = JSON.parse(line) as {
-          ts?: string;
-          stages?: { runPostflightLearning?: string };
-        };
-        const ts = rec.ts ? new Date(rec.ts).getTime() : NaN;
-        if (Number.isNaN(ts) || ts < cutoff) continue;
-        if (rec.stages?.runPostflightLearning === 'ok') return true;
-      } catch {
-        // Malformed line — skip.
-      }
+    for (const rec of rows.slice(-50)) {
+      const ts = rec.ts ? new Date(rec.ts).getTime() : NaN;
+      if (Number.isNaN(ts) || ts < cutoff) continue;
+      if (rec.stages?.runPostflightLearning === 'ok') return true;
     }
   } catch {
     // Read failure → treat as "did not run" so Cid self-heals rather than

@@ -374,6 +374,31 @@ if [ -d ".paradigm/history" ] && [ -f ".paradigm/history/log.jsonl" ] && _pm_res
 fi
 `;
 
+export const PRE_COMMIT_HOOK = `#!/bin/sh
+# Paradigm pre-commit hook - scoped learning guard (#learning-commit-guard)
+# Installed by: paradigm hooks install
+# paradigm-hook-version: 3
+# Refuses a commit whose staged learning-store data carries a home: user/machine
+# row, a machine path, or (learning.visibility public, the default) a
+# human_feedback entry without home: repo. Escape (logged):
+#   PARADIGM_OVERRIDE=learning-guard git commit ...
+# Fails open when the CLI cannot be found.
+
+${GIT_HOOK_RESOLVE}
+# Blocks ONLY on exit 1 with the refusal line; any other failure (a crash, a
+# YAML error, an older CLI without the command) lets the commit through.
+if _pm_resolve_paradigm "$_PM_GIT_ROOT"; then
+  _pm_lg_out=$($PARADIGM_BIN internal learning-guard --staged 2>&1)
+  _pm_lg_rc=$?
+  if [ "$_pm_lg_rc" -eq 1 ] && printf '%s\\n' "$_pm_lg_out" | grep -q '^\\[paradigm\\] commit refused'; then
+    printf '%s\\n' "$_pm_lg_out" >&2
+    exit 1
+  fi
+  [ "$_pm_lg_rc" -eq 0 ] || printf '[paradigm] learning guard did not run cleanly (exit %s); commit allowed\\n' "$_pm_lg_rc" >&2
+fi
+exit 0
+`;
+
 /**
  * Write one git hook. Without --force an existing hook is kept, except a
  * Paradigm-owned one (its own header) that is outdated (below
@@ -446,6 +471,7 @@ export async function hooksInstallCommand(options: {
     const scriptsToValidate = [
       { name: 'post-commit', content: POST_COMMIT_HOOK },
       { name: 'pre-push', content: PRE_PUSH_HOOK },
+      { name: 'pre-commit', content: PRE_COMMIT_HOOK },
       { name: 'paradigm-common', content: COMMON_HOOK },
       { name: 'paradigm-resolve', content: RESOLVE_HOOK },
       { name: 'paradigm-hook-monitor', content: HOOK_MONITOR },
@@ -502,6 +528,9 @@ export async function hooksInstallCommand(options: {
     }
     if (installAllGit || options.prePush) {
       installGitHook(hooksDir, 'pre-push', PRE_PUSH_HOOK, { force: options.force, dryRun }, installed);
+    }
+    if (installAllGit) {
+      installGitHook(hooksDir, 'pre-commit', PRE_COMMIT_HOOK, { force: options.force, dryRun }, installed);
     }
 
     if (!dryRun && installed.length > 0) {
@@ -972,7 +1001,7 @@ export async function hooksUninstallCommand(options: { cursor?: boolean; dryRun?
     const hooksDir = path.join(gitDir, 'hooks');
     const removed: string[] = [];
 
-    for (const hookName of ['post-commit', 'pre-push']) {
+    for (const hookName of ['post-commit', 'pre-push', 'pre-commit']) {
       const hookPath = path.join(hooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         const content = fs.readFileSync(hookPath, 'utf8');
@@ -1072,7 +1101,7 @@ export async function hooksStatusCommand(): Promise<void> {
     console.log(chalk.magenta('\n  Git Hooks Status\n'));
 
     const hooksDir = path.join(gitDir, 'hooks');
-    const hooks = ['post-commit', 'pre-push'];
+    const hooks = ['post-commit', 'pre-push', 'pre-commit'];
 
     for (const hookName of hooks) {
       const hookPath = path.join(hooksDir, hookName);

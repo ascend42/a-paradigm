@@ -67,6 +67,24 @@ export function nodeOnlyDir(cleanups: Array<() => void>): string {
   return d;
 }
 
+/**
+ * Shell lines a `paradigm` stub starts with to answer `paradigm internal learn-path <artifact> --root <root>`
+ * (scoped learning S2) the way the real CLI does in a git repository: overrides in the repo home, every other
+ * store as `<stateDir>/<artifact>.jsonl` (pass the test's machine-home events dir). Any other call falls through.
+ */
+export const learnPathStubLines = (stateDir: string): string =>
+  'if [ "$1" = internal ] && [ "$2" = learn-path ]; then\n' +
+  `  case "$3" in overrides) printf '%s/.paradigm/events/overrides.jsonl\\n' "$5" ;; *) printf '%s/%s.jsonl\\n' '${shellPath(stateDir)}' "$3" ;; esac\n` +
+  '  exit 0\n' +
+  'fi\n';
+
+/** A temp dir holding a `paradigm` stub that answers only `internal learn-path` (see learnPathStubLines). */
+export function learnPathStubBin(stateDir: string): string {
+  const d = tempDir('paradigm-learn-stub-');
+  fs.writeFileSync(path.join(d, 'paradigm'), `#!/bin/sh\n${learnPathStubLines(stateDir)}exit 0\n`, { mode: 0o755 });
+  return d;
+}
+
 /** Per-test timeout: process start-up through cmd.exe / Git Bash is slow on Windows runners. */
 export const SHELL_TEST_TIMEOUT = WIN ? 180_000 : 30_000;
 

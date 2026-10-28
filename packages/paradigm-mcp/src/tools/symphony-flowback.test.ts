@@ -25,13 +25,14 @@ import * as os from 'os';
 import { applyTaskStatusFlowBack } from './symphony.js';
 import { createTask, loadTask } from '../utils/task-loader.js';
 import type { SymphonyMessage, MessageIntent } from '../utils/symphony-loader.js';
+import { pathFor } from '../utils/learning-stores.js';
 
 let root: string;
 let homeDir: string;
 let priorHome: string | undefined;
 
 const LIVENESS = (r: string) =>
-  path.join(r, '.paradigm/events/settlement-liveness.jsonl');
+  pathFor('settlement-liveness', 'machine', r);
 
 function readLiveness(r: string): Array<Record<string, unknown>> {
   const p = LIVENESS(r);

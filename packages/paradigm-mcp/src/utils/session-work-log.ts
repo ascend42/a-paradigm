@@ -20,6 +20,7 @@ import * as path from 'path';
 import {
   appendLearningRows,
   currentAuthor,
+  isOwnAuthor,
   homeOf,
   readLearningHomeConfig,
   readLearningRows,
@@ -31,7 +32,6 @@ import { log } from './mcp-logger.js';
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
 const ITERATION_REVISIONS_FILE = '.paradigm/events/iteration-revisions.jsonl';
-const POSTFLIGHT_LIVENESS_FILE = '.paradigm/events/postflight-liveness.jsonl';
 const MAX_ENTRIES = 200;
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -290,15 +290,13 @@ export function recordPostflightLiveness(
   record: Omit<PostflightLivenessRecord, 'ts' | 'sessionId'> & { sessionId?: string },
 ): void {
   try {
-    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const full: PostflightLivenessRecord = {
       ts: new Date().toISOString(),
       sessionId: record.sessionId ?? resolveSessionId(),
       ...record,
     };
-    fs.appendFileSync(filePath, JSON.stringify(full) + '\n', 'utf8');
+    // Machine home (scoped learning S2); the legacy repo log is frozen, still read.
+    appendLearningRows('postflight-liveness', rootDir, [full]);
   } catch {
     // Non-fatal — the probe is advisory.
   }
@@ -310,17 +308,9 @@ export function recordPostflightLiveness(
  */
 export function readPostflightLiveness(rootDir: string): PostflightLivenessRecord[] {
   try {
-    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
-    if (!fs.existsSync(filePath)) return [];
-    return fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as PostflightLivenessRecord; }
-        catch { return null; }
-      })
-      .filter((e): e is PostflightLivenessRecord => e !== null && typeof e.journalsWritten === 'number');
+    return readLearningRows<PostflightLivenessRecord>('postflight-liveness', rootDir)
+      .filter(e => typeof e.journalsWritten === 'number')
+      .sort((a, b) => String(a.ts ?? '').localeCompare(String(b.ts ?? '')));
   } catch {
     return [];
   }
@@ -336,7 +326,7 @@ export function readPostflightLiveness(rootDir: string): PostflightLivenessRecor
  */
 export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): void {
   try {
-    appendLearningRows('verdicts', rootDir, [{ ...entry, author: entry.author ?? currentAuthor() }]);
+    appendLearningRows('verdicts', rootDir, [{ ...entry, author: entry.author ?? currentAuthor(rootDir) }]);
   } catch (err) {
     log.component('#session-work-log').warn('failed to record verdict', {
       error: err instanceof Error ? err.message : String(err),
@@ -349,8 +339,8 @@ export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): vo
  * author belongs to a teammate's pending queue, never this user's postflight.
  * Rows without an author are read as before (the S2 migration retires them).
  */
-function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, me: string): boolean {
-  return at === 'repo' && typeof row.author === 'string' && row.author !== me;
+function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, rootDir: string): boolean {
+  return at === 'repo' && typeof row.author === 'string' && !isOwnAuthor(row.author, rootDir);
 }
 
 /**
@@ -358,9 +348,8 @@ function isTeammateRepoVerdict(row: SessionWorkEntry, at: LearningHome, me: stri
  * repo rows, minus a teammate's repo rows.
  */
 export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
-  const me = currentAuthor();
   return readLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', rootDir, {
-    filter: (row, at) => !row.consumed && !isTeammateRepoVerdict(row, at, me),
+    filter: (row, at) => !row.consumed && !isTeammateRepoVerdict(row, at, rootDir),
   });
 }
 
@@ -371,10 +360,9 @@ export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
  */
 export function markVerdictsConsumed(rootDir: string, nominationIds: string[]): void {
   const consumed = new Set(nominationIds);
-  const me = currentAuthor();
-  rewriteLearningRows<SessionWorkEntry & { consumed?: boolean }>('verdicts', rootDir, (row, at) => {
+  rewriteLearningRows<SessionWorkEntry & { consumed?: boolean; migrated?: boolean }>('verdicts', rootDir, (row, at) => {
     if (!row.nominationId || !consumed.has(row.nominationId)) return undefined;
-    if (row.consumed || isTeammateRepoVerdict(row, at, me)) return undefined;
+    if (row.consumed || row.migrated || isTeammateRepoVerdict(row, at, rootDir)) return undefined;
     return { ...row, consumed: true };
   });
 }

@@ -411,7 +411,14 @@ migrateCmd
   .option('--dry-run', 'Print the per-step plan without writing anything')
   .option('--apply', 'Also move habits that reference removed University paths into the backup')
   .option('--json', 'Emit the result as JSON')
+  .option('--scopes', 'Scoped learning: copy your own legacy repo rows to your user home (dry run unless --apply)')
+  .option('--yes', 'With --scopes: answer the confirm prompts with yes')
   .action(async (options) => {
+    if (options.scopes) {
+      const { migrateLearningScopesCommand } = await import('./commands/migrate-learning-scopes.js');
+      await migrateLearningScopesCommand({ apply: options.apply, yes: options.yes, json: options.json });
+      return;
+    }
     const { migrateLearningStoresCommand } = await import('./commands/migrate-learning-stores.js');
     await migrateLearningStoresCommand(options);
   });
@@ -3313,6 +3320,25 @@ internalCmd
   .action(async (options) => {
     const { activeRemediationsCommand } = await import('./commands/internal/active-remediations.js');
     await activeRemediationsCommand(options);
+  });
+
+internalCmd
+  .command('learning-guard', { hidden: true })
+  .description('Refuse a commit whose staged .paradigm data carries user/machine rows or machine paths (git pre-commit)')
+  .option('--staged', 'Check the staged files (default and only mode)')
+  .action(async (options) => {
+    const { learningGuardCommand } = await import('./commands/internal/learning-guard.js');
+    await learningGuardCommand(options);
+  });
+
+internalCmd
+  .command('learn-path <artifact>', { hidden: true })
+  .description('Print the file a learning-store row is appended to (hook writers, scoped learning)')
+  .option('--root <dir>', 'Project root (default: cwd)')
+  .option('--home <home>', 'Explicit home: repo, user or machine')
+  .action(async (artifact: string, options) => {
+    const { learnPathCommand } = await import('./commands/internal/learn-path.js');
+    await learnPathCommand(artifact, options);
   });
 
 // paradigm override — public CLI to clear active soft-block remediations (v6.1 Wave 3)

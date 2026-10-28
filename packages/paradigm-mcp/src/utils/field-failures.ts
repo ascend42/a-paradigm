@@ -227,6 +227,10 @@ export function appendClassroomCertification(rootDir: string, row: ClassroomCert
   }
 }
 
+// certificationsByHome lives in learning-stores.ts (logger-free, so doctor can
+// load it without @a-company/paradigm-logger); re-exported here.
+export { certificationsByHome, type CertPopulation } from './learning-stores.js';
+
 /** Read all classroom-certification rows (union of homes, each tagged with its home). */
 export function readClassroomCertifications(rootDir: string): ClassroomCertRow[] {
   return readLearningRows<ClassroomCertRow>('classroom-certifications', rootDir);

@@ -236,3 +236,71 @@ _pm_session_started() {
   : > "$_pm_sf" 2>/dev/null
   return 0
 }
+
+# --- Scoped learning: where a hook appends a learning row (S2) ---
+#
+# _pm_learn_path <artifact> [<root>] — prints the absolute file a row of
+# <artifact> (overrides, team-funnel, compliance-history, hook-timings, ...)
+# goes to, as `paradigm internal learn-path` resolves it: machine stores in
+# the OS state dir, user stores in the user home, repo stores in .paradigm.
+# Status 1 (and nothing printed) when the root is not a Paradigm project, the
+# CLI cannot be found, or it refuses: the hook then skips its write. Legacy
+# repo logs are never written again.
+# Cached in <root>/.paradigm/.sessions/learn-paths, one line per artifact:
+#   <physical root> TAB <$PARADIGM_LEARNING_HOME> TAB <artifact> TAB <path>
+# A line whose root differs (the repo moved) is a miss and is dropped on the
+# next write. Needs no HOME: the CLI resolves the home itself.
+_pm_learn_path() {
+  _pm_la=$1
+  _pm_lr=${2:-${PM_ROOT:-${CLAUDE_PROJECT_DIR:-$PWD}}}
+  _pm_lr=$(_pm_slashes "$_pm_lr")
+  _pm_lr=$(CDPATH= cd -P -- "$_pm_lr" 2>/dev/null && pwd -P) || return 1
+  [ -d "$_pm_lr/.paradigm" ] || return 1
+  _pm_tab=$(printf '\t')
+  _pm_lc="$_pm_lr/.paradigm/.sessions/learn-paths"
+  _pm_lk="$_pm_lr$_pm_tab${PARADIGM_LEARNING_HOME:-}$_pm_tab"
+  if [ -f "$_pm_lc" ]; then
+    while IFS= read -r _pm_ll || [ -n "$_pm_ll" ]; do
+      case $_pm_ll in
+        "$_pm_lk$_pm_la$_pm_tab"?*) printf '%s\n' "${_pm_ll#"$_pm_lk$_pm_la$_pm_tab"}"; return 0 ;;
+      esac
+    done < "$_pm_lc"
+  fi
+  _pm_resolve_paradigm "$_pm_lr" || return 1
+  _pm_lp=$($PARADIGM_BIN internal learn-path "$_pm_la" --root "$_pm_lr" 2>/dev/null) || return 1
+  _pm_lp=$(_pm_slashes "$(printf '%s\n' "$_pm_lp" | sed -n 1p)")
+  case $_pm_lp in /*|[A-Za-z]:/*) ;; *) return 1 ;; esac
+  mkdir -p "$_pm_lr/.paradigm/.sessions" 2>/dev/null
+  # keep this root's lines only (a moved repo's stale lines go), then add ours
+  if [ -f "$_pm_lc" ]; then
+    { while IFS= read -r _pm_ll || [ -n "$_pm_ll" ]; do
+        case $_pm_ll in "$_pm_lk"*) printf '%s\n' "$_pm_ll" ;; esac
+      done < "$_pm_lc"; } > "$_pm_lc.$$" 2>/dev/null && mv -f "$_pm_lc.$$" "$_pm_lc" 2>/dev/null
+  fi
+  printf '%s%s%s%s\n' "$_pm_lk" "$_pm_la" "$_pm_tab" "$_pm_lp" >> "$_pm_lc" 2>/dev/null
+  printf '%s\n' "$_pm_lp"
+}
+
+# _pm_learn_skip <artifact> [<root>] — counts a hook write skipped because
+# learn-path could not resolve (one line per skip in the gitignored
+# .paradigm/.sessions/learn-path-skips, last 500 kept), so `paradigm doctor`
+# can tell lost data from no data. Silent; never fails.
+_pm_learn_skip() {
+  _pm_ksr=${2:-${PM_ROOT:-${CLAUDE_PROJECT_DIR:-$PWD}}}
+  _pm_ksr=$(_pm_slashes "$_pm_ksr")
+  [ -d "$_pm_ksr/.paradigm" ] || return 0
+  mkdir -p "$_pm_ksr/.paradigm/.sessions" 2>/dev/null || return 0
+  _pm_ksf="$_pm_ksr/.paradigm/.sessions/learn-path-skips"
+  printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$1" >> "$_pm_ksf" 2>/dev/null
+  { tail -n 500 "$_pm_ksf" > "$_pm_ksf.$$" && mv -f "$_pm_ksf.$$" "$_pm_ksf"; } 2>/dev/null || rm -f "$_pm_ksf.$$" 2>/dev/null
+  return 0
+}
+
+# _pm_learn_append <artifact> <json line> [<root>] — appends one row where
+# _pm_learn_path says (creating its folder). Status 1 when it cannot resolve
+# (the skip is counted by _pm_learn_skip).
+_pm_learn_append() {
+  _pm_lf=$(_pm_learn_path "$1" "${3:-}") || { _pm_learn_skip "$1" "${3:-}"; return 1; }
+  mkdir -p "${_pm_lf%/*}" 2>/dev/null
+  printf '%s\n' "$2" >> "$_pm_lf" 2>/dev/null
+}

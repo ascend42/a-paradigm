@@ -22,12 +22,14 @@
  * promotion-decisions stay separate append-only instruments, decisions ≠ antipatterns.
  */
 
+import { createHash } from 'crypto';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { LearningHome } from '../types/knowledge-streams.js';
-import { repoIdSegment } from './repo-id.js';
+import { repoIdSegment, resetRepoIdCache } from './repo-id.js';
 
 export type { LearningHome } from '../types/knowledge-streams.js';
 
@@ -142,7 +144,7 @@ export function nativeMemorySlug(rootDir: string): string {
  */
 export function listLearningStores(rootDir: string, opts: LearningStoreOptions = {}): LearningStore[] {
   const root = path.resolve(rootDir);
-  const home = opts.homeDir ?? os.homedir();
+  const home = safeHomeDir(opts);
   const p = (...parts: string[]) => path.join(root, '.paradigm', ...parts);
   const g = (...parts: string[]) => path.join(home, '.paradigm', ...parts);
   const ev = (f: string) => p('events', f);
@@ -240,7 +242,7 @@ export function legacyStorePaths(rootDir: string, opts: LearningStoreOptions = {
   projectWisdomDecisions: string;
   globalWisdomDecisions: string;
 } {
-  const home = opts.homeDir ?? os.homedir();
+  const home = safeHomeDir(opts);
   return {
     projectWisdomDecisions: path.join(path.resolve(rootDir), '.paradigm', 'wisdom', 'decisions'),
     globalWisdomDecisions: path.join(home, '.paradigm', 'wisdom', 'decisions'),
@@ -415,18 +417,78 @@ export function assertHomePlacement(home: LearningHome, filePath: string, root: 
   }
 }
 
+/**
+ * The home directory, never empty (S2: the hook shell may run with no HOME).
+ * opts.homeDir > os.homedir() (HOME, else the passwd entry / USERPROFILE) >
+ * os.userInfo().homedir. Throws LearningHomeError when none can be found, so
+ * a caller never writes relative to the cwd (which may be the repo).
+ */
+export function safeHomeDir(opts: { homeDir?: string } = {}): string {
+  if (opts.homeDir) return opts.homeDir;
+  const candidates: Array<() => string> = [() => os.homedir(), () => os.userInfo().homedir];
+  for (const c of candidates) {
+    try {
+      const h = c();
+      if (h && path.isAbsolute(h)) return h;
+    } catch {
+      /* try the next */
+    }
+  }
+  throw new LearningHomeError('no home directory: set HOME or PARADIGM_LEARNING_HOME');
+}
+
 function learningBase(opts: PathForOptions): string {
   return opts.learningHome
     ?? process.env.PARADIGM_LEARNING_HOME
-    ?? path.join(opts.homeDir ?? os.homedir(), '.paradigm');
+    ?? path.join(safeHomeDir(opts), '.paradigm');
+}
+
+export interface MachineStateOptions {
+  homeDir?: string;
+  /** Defaults to process.platform (tests pass 'win32' / 'linux' / 'darwin'). */
+  platform?: NodeJS.Platform;
+  /** Defaults to process.env (XDG_STATE_HOME, LOCALAPPDATA). */
+  env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * The OS state directory machine-home stores live under (S2), before the
+ * repo id segment:
+ *   macOS   ~/Library/Application Support/paradigm/state
+ *   Linux   $XDG_STATE_HOME/paradigm, else ~/.local/state/paradigm
+ *   Windows %LOCALAPPDATA%\paradigm\state, else ~\AppData\Local\paradigm\state
+ * A relative XDG_STATE_HOME or LOCALAPPDATA is ignored (the XDG spec says so).
+ */
+export function machineStateDir(opts: MachineStateOptions = {}): string {
+  const platform = opts.platform ?? process.platform;
+  const env = opts.env ?? process.env;
+  if (platform === 'win32') {
+    const w = path.win32;
+    const local = env.LOCALAPPDATA && w.isAbsolute(env.LOCALAPPDATA)
+      ? env.LOCALAPPDATA
+      : w.join(safeHomeDir(opts), 'AppData', 'Local');
+    return w.join(local, 'paradigm', 'state');
+  }
+  const p = path.posix;
+  if (platform === 'darwin') return p.join(safeHomeDir(opts), 'Library', 'Application Support', 'paradigm', 'state');
+  const xdg = env.XDG_STATE_HOME && p.isAbsolute(env.XDG_STATE_HOME) ? env.XDG_STATE_HOME : p.join(safeHomeDir(opts), '.local', 'state');
+  return p.join(xdg, 'paradigm');
+}
+
+/** The per-repo machine home: <learning home>/machine/<repoId> when overridden, else <OS state dir>/<repoId>. */
+function machineBase(r: string, opts: PathForOptions): string {
+  const override = opts.learningHome ?? process.env.PARADIGM_LEARNING_HOME;
+  if (override) return path.join(override, 'machine', repoIdSegment(r));
+  return path.join(machineStateDir(opts), repoIdSegment(r));
 }
 
 /** The raw location of `artifact` in `home` (no guard, no mapping). */
 function locate(artifact: LearningArtifact, home: LearningHome, r: string, opts: PathForOptions): string {
   const spec = ARTIFACTS[artifact];
   if (home === 'repo') return path.join(r, '.paradigm', ...spec.rel);
-  if (home === 'user' && spec.userShared) return path.join(opts.homeDir ?? os.homedir(), '.paradigm', ...spec.rel);
-  return path.join(learningBase(opts), home === 'user' ? 'projects' : 'machine', repoIdSegment(r), ...spec.rel);
+  if (home === 'user' && spec.userShared) return path.join(safeHomeDir(opts), '.paradigm', ...spec.rel);
+  if (home === 'machine') return path.join(machineBase(r, opts), ...spec.rel);
+  return path.join(learningBase(opts), 'projects', repoIdSegment(r), ...spec.rel);
 }
 
 function hasGitAncestor(dir: string): boolean {
@@ -446,10 +508,34 @@ function hasGitAncestor(dir: string): boolean {
  */
 export function hasRepoHome(root: string, opts: PathForOptions = {}): boolean {
   const r = realOrResolved(root);
-  const home = realOrResolved(opts.homeDir ?? os.homedir());
-  if (isInside(home, r)) return false;
-  if (process.env.PARADIGM_LEARNING_ASSUME_REPO === '1') return true;
-  return hasGitAncestor(r);
+  let homeRaw: string;
+  try {
+    homeRaw = safeHomeDir(opts);
+  } catch {
+    homeRaw = '';
+  }
+  const assume = process.env.PARADIGM_LEARNING_ASSUME_REPO === '1';
+  // S2: cached per root for the life of the process (every pathFor and union
+  // read asks; the answer only changes on `git init`, which a migration run
+  // handles in its own process).
+  const key = `${r}\0${homeRaw}\0${assume ? 1 : 0}`;
+  const hit = _hasRepoHomeCache.get(key);
+  if (hit !== undefined) return hit;
+  let result: boolean;
+  if (homeRaw && isInside(realOrResolved(homeRaw), r)) result = false;
+  else if (assume) result = true;
+  else result = hasGitAncestor(r);
+  _hasRepoHomeCache.set(key, result);
+  return result;
+}
+
+const _hasRepoHomeCache = new Map<string, boolean>();
+
+/** Test hook: forget the per-process caches (hasRepoHome, repo ids, author). */
+export function resetLearningStoreCaches(): void {
+  _hasRepoHomeCache.clear();
+  _authorCache.clear();
+  resetRepoIdCache();
 }
 
 /** The home a write actually uses: repo becomes user when the root has no repo home. */
@@ -592,6 +678,9 @@ export function readLearningRows<T extends object>(
   const out: Array<T & LearningRowTags> = [];
   for (const loc of ordered) {
     for (const row of parseJsonl<T>(loc.file)) {
+      // S2: a repo row a migration copied into its owner's home is frozen and
+      // never read again (the copy is), so it neither double-counts nor wins.
+      if ((row as { migrated?: unknown }).migrated === true) continue;
       if (opts.filter && !opts.filter(row, loc.home)) continue;
       const { home: own, author } = row as { home?: unknown; author?: unknown };
       const tagged = (isLearningHome(own)
@@ -656,6 +745,25 @@ export function promotionHomeOf(journal: { home?: unknown; transferable?: boolea
   return journal.transferable === false ? 'repo' : 'user';
 }
 
+/** A certification population: one home, or the pre-scoping legacy repo rows. */
+export type CertPopulation = LearningHome | 'legacy';
+
+/**
+ * Split certifications into populations for the repeat-failure rate (scoped
+ * learning S2): one per home, plus legacy repo rows (no home, no author) on
+ * their own. Calibration never pools homes; empty populations are omitted.
+ */
+export function certificationsByHome<T extends { home?: unknown; legacy?: unknown }>(certs: T[]): Partial<Record<CertPopulation, T[]>> {
+  const out: Partial<Record<CertPopulation, T[]>> = {};
+  for (const c of certs) {
+    const key: CertPopulation = c.legacy === true
+      ? 'legacy'
+      : c.home === 'user' || c.home === 'machine' ? c.home : 'repo';
+    (out[key] ??= []).push(c);
+  }
+  return out;
+}
+
 /** Group samples by home: calibration never pools populations silently. */
 export function groupByHome<T extends { home?: LearningHome }>(rows: T[], fallback: LearningHome): Record<LearningHome, T[]> {
   const out: Record<LearningHome, T[]> = { repo: [], user: [], machine: [] };
@@ -663,12 +771,59 @@ export function groupByHome<T extends { home?: LearningHome }>(rows: T[], fallba
   return out;
 }
 
-/** Who wrote a row (verdict authorship): $PARADIGM_AUTHOR, else the OS user. */
-export function currentAuthor(): string {
-  if (process.env.PARADIGM_AUTHOR) return process.env.PARADIGM_AUTHOR;
+const _authorCache = new Map<string, string>();
+
+const hash12 = (v: string): string => createHash('sha256').update(v).digest('hex').slice(0, 12);
+
+function gitUserEmail(cwd: string | undefined): string | null {
   try {
-    return os.userInfo().username;
+    const out = execFileSync('git', ['config', '--get', 'user.email'], {
+      cwd: cwd ?? process.cwd(),
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: false,
+    }).trim();
+    return out || null;
   } catch {
-    return 'unknown';
+    return null;
   }
+}
+
+function osUsername(): string | null {
+  try {
+    return os.userInfo().username || null;
+  } catch {
+    return process.env.USER || process.env.USERNAME || null;
+  }
+}
+
+/**
+ * Who wrote a row (verdict authorship, S2). Never a raw email or username:
+ *   $PARADIGM_AUTHOR (used as given),
+ *   else `ue:` + 12 hex of sha256(lowercased, trimmed git user.email),
+ *   else `uh:` + 12 hex of sha256(the OS username),
+ *   else `unknown`.
+ * Cached per root for the life of the process.
+ */
+export function currentAuthor(root?: string): string {
+  if (process.env.PARADIGM_AUTHOR) return process.env.PARADIGM_AUTHOR;
+  const key = root ? path.resolve(root) : '';
+  const hit = _authorCache.get(key);
+  if (hit) return hit;
+  const email = gitUserEmail(root);
+  const user = email ? null : osUsername();
+  const id = email ? `ue:${hash12(email.toLowerCase())}` : user ? `uh:${hash12(user)}` : 'unknown';
+  _authorCache.set(key, id);
+  return id;
+}
+
+/**
+ * Whether `author` is the current user: the hashed identity, or the raw OS
+ * username S1 stamped before hashing (matched on read only, never written).
+ */
+export function isOwnAuthor(author: unknown, root?: string): boolean {
+  if (typeof author !== 'string') return false;
+  if (author === currentAuthor(root)) return true;
+  return !process.env.PARADIGM_AUTHOR && author === osUsername();
 }

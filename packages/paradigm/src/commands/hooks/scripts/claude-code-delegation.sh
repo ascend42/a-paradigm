@@ -13,7 +13,7 @@
 #     (PARADIGM_GATE_TTL_HOURS, default 4h).
 # The Stop hook (Check 13), the team gate and the prompt gate read both, at the
 # project root (paradigm-resolve.sh). Every delegation, credited or not, is
-# appended to .paradigm/events/team-funnel.jsonl for Loid's invocation-rate
+# appended to the machine-home team-funnel.jsonl (_pm_learn_append) for Loid's invocation-rate
 # calibration.
 # Installed by: paradigm hooks install --claude-code
 #
@@ -104,7 +104,6 @@ if [ "$CREDITED" = "true" ]; then
   fi
 fi
 
-mkdir -p "$CWD/.paradigm/events" 2>/dev/null
-printf '{"timestamp":"%s","type":"delegation","source":"delegation-hook","subagent":"%s","credited":%s}\n' "$TS" "$SUBAGENT" "$CREDITED" >> "$CWD/.paradigm/events/team-funnel.jsonl" 2>/dev/null || true
+_pm_learn_append team-funnel "$(printf '{"timestamp":"%s","type":"delegation","source":"delegation-hook","subagent":"%s","credited":%s}' "$TS" "$SUBAGENT" "$CREDITED")" || true
 
 exit 0

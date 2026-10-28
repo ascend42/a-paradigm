@@ -15,11 +15,11 @@
  * connections.
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import { appendLearningRows } from './learning-stores.js';
 
 import {
   listAgents,
@@ -164,6 +164,9 @@ export class SymphonyRelay {
   /** Pairing code stored for client reconnect. */
   private serverCode: string | null = null;
 
+  /** Project root forwarded nominations are recorded under (scoped learning S2). */
+  private rootDir: string;
+
   /** Maximum number of message IDs to keep for dedup. */
   private static MAX_SEEN_IDS = 10_000;
 
@@ -172,7 +175,10 @@ export class SymphonyRelay {
     peerId: string;
     port?: number;
     events?: RelayEvents;
+    /** Project the relay's forwarded nominations are recorded for (default: cwd). */
+    rootDir?: string;
   }) {
+    this.rootDir = options.rootDir ?? process.cwd();
     this.mode = options.mode;
     this.myPeerId = options.peerId;
     this.port = options.port ?? 3939;
@@ -607,12 +613,12 @@ export class SymphonyRelay {
     // Tag with remote origin
     const tagged = { ...nomination, remote_origin: origin, forwarded_at: new Date().toISOString() };
 
-    // Append to local nominations file
+    // Record through the learning-stores resolver (scoped learning S2): the
+    // nominations store of this project, in its home (user by default), where
+    // the nomination readers look. It used to land in ~/.paradigm/events, a
+    // path no reader read.
     try {
-      const eventsDir = path.join(os.homedir(), '.paradigm', 'events');
-      fs.mkdirSync(eventsDir, { recursive: true });
-      const nomPath = path.join(eventsDir, 'nominations.jsonl');
-      fs.appendFileSync(nomPath, JSON.stringify(tagged) + '\n', 'utf8');
+      appendLearningRows('nominations', this.rootDir, [tagged]);
     } catch {
       // Non-fatal — remote nomination storage failure
     }

@@ -6,11 +6,14 @@
 #
 # Appends a "start" record when the hook begins and an "end" record (wall ms
 # + outcome ok|blocked|error|killed) when it exits, to the bounded ring
-# .paradigm/events/hook-timings.jsonl. A hook killed with SIGKILL cannot write
+# hook-timings.jsonl in the project's MACHINE home (scoped learning S2: the OS
+# state dir, resolved by `_pm_learn_path hook-timings` in paradigm-resolve.sh
+# and cached per root in .paradigm/.sessions/learn-paths; the legacy
+# .paradigm/events/hook-timings.jsonl is no longer written). A hook killed with SIGKILL cannot write
 # its end record; the next SessionStart (paradigm-session-start.sh) and
 # `paradigm doctor` treat a start with no end, older than its timeout, as
-# killed. Cost per run: two `date` calls and two appended lines through shell
-# redirection — no CLI or node spawn. FAIL OPEN: nothing here may print to
+# killed. Cost per run: two `date` calls, a cache read and two appended lines
+# through shell redirection; one CLI spawn per root on a cache miss. FAIL OPEN: nothing here may print to
 # stdout, change the hook's exit code, or stop the hook; every write is
 # best-effort (a read-only tree or sandbox just records nothing).
 
@@ -96,9 +99,23 @@ _pm_sections_flush() {
 
 _pm_begin() {
   _PM_HOOK=$1
-  _PM_RING="${CLAUDE_PROJECT_DIR:-$PWD}/.paradigm/events/hook-timings.jsonl"
-  [ -n "$PARADIGM_HOOK_MONITOR_OFF" ] && { _PM_RING=; return 0; }
-  [ -d "${_PM_RING%/*}" ] || { _PM_RING=; return 0; }
+  _PM_RING=
+  [ -n "$PARADIGM_HOOK_MONITOR_OFF" ] && return 0
+  [ -d "${CLAUDE_PROJECT_DIR:-$PWD}/.paradigm" ] || return 0
+  command -v _pm_learn_path >/dev/null 2>&1 || { [ -f "${_PM_DIR:-.}/paradigm-resolve.sh" ] && . "${_PM_DIR:-.}/paradigm-resolve.sh"; } 2>/dev/null
+  command -v _pm_learn_path >/dev/null 2>&1 || return 0
+  # The project root (a linked worktree resolves to its main checkout), so the
+  # learn-path cache and the skip counter live with the root's session state.
+  _pm_mroot=${CLAUDE_PROJECT_DIR:-$PWD}
+  if [ -z "${CLAUDE_PROJECT_DIR:-}" ] && command -v _pm_project_root >/dev/null 2>&1; then
+    _pm_project_root "$PWD" 2>/dev/null && _pm_mroot=$PM_ROOT
+  fi
+  _PM_RING=$(_pm_learn_path hook-timings "$_pm_mroot" 2>/dev/null) || {
+    _PM_RING=
+    command -v _pm_learn_skip >/dev/null 2>&1 && _pm_learn_skip hook-timings "$_pm_mroot" 2>/dev/null
+    return 0
+  }
+  mkdir -p "${_PM_RING%/*}" 2>/dev/null || { _PM_RING=; return 0; }
   _PM_OUTCOME=
   _pm_now
   _PM_T0=$_pm_t

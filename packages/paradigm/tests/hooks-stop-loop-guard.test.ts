@@ -17,13 +17,18 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { learnPathStubLines } from '../src/test-shell-utils.js';
 
 const SCRIPTS = path.resolve(__dirname, '..', 'src', 'commands', 'hooks', 'scripts');
 const MARKER = path.join('.paradigm', '.stop-block-fingerprint');
-const FUNNEL = path.join('.paradigm', 'events', 'team-funnel.jsonl');
+// Scoped learning S2: the funnel row lands in the machine home, answered here by
+// the stub CLI's `internal learn-path` as <bin>/state/team-funnel.jsonl.
+const FUNNEL = path.join('state', 'team-funnel.jsonl');
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+
+const fixtureBin = new Map<string, string>();
 
 interface Fixture { root: string; bin: string; setReasons: (reasons: string[]) => void }
 
@@ -36,7 +41,7 @@ function fixture(): Fixture {
   fs.writeFileSync(
     path.join(bin, 'paradigm'),
     `#!/bin/sh
-case "$1" in
+${learnPathStubLines(path.join(bin, 'state'))}case "$1" in
   compliance-check) echo '{"driftedCount":0,"healedCount":0,"usedButUndeclaredCount":0}' ;;
   internal) cat "${rmds}" ;;
 esac
@@ -57,6 +62,7 @@ exit 0
       rmds,
       JSON.stringify(reasons.map((reason, i) => ({ id: `rmd-${i}`, severity: 'guard', claimant: 'compliance', reason }))),
     );
+  fixtureBin.set(root, bin);
   return { root, bin, setReasons };
 }
 
@@ -76,7 +82,8 @@ const claude = (fx: Fixture, active: boolean, env?: Record<string, string>) =>
   runStop(fx, { cwd: fx.root, hook_event_name: 'Stop', stop_hook_active: active }, { env });
 
 function unresolvedRows(root: string): Array<Record<string, unknown>> {
-  const f = path.join(root, FUNNEL);
+  expect(fs.existsSync(path.join(root, '.paradigm', 'events', 'team-funnel.jsonl'))).toBe(false); // legacy log frozen
+  const f = path.join(fixtureBin.get(root)!, FUNNEL);
   if (!fs.existsSync(f)) return [];
   return fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean)
     .map((l) => JSON.parse(l) as Record<string, unknown>)

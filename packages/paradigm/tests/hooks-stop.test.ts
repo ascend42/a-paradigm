@@ -30,6 +30,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { learnPathStubLines } from '../src/test-shell-utils.js';
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -172,7 +173,7 @@ function seedFixture(opts: FixtureOptions): FixtureResult {
     fs.writeFileSync(
       stubPath,
       `#!/bin/sh
-case "$1" in
+${learnPathStubLines(path.join(binDir, 'state'))}case "$1" in
   compliance-check)
     cat <<'JSON'
 ${json}
@@ -399,12 +400,8 @@ describe('paradigm-common.sh — cohort gating (v6.0.4)', () => {
     });
     cleanups.push(fx.cleanup);
 
-    const historyPath = path.join(
-      fx.rootDir,
-      '.paradigm',
-      'events',
-      'compliance-history.jsonl',
-    );
+    // Scoped learning S2: the machine home (the stub's learn-path answer).
+    const historyPath = path.join(fx.binDir, 'state', 'compliance-history.jsonl');
     const before = fs.existsSync(historyPath)
       ? fs.readFileSync(historyPath, 'utf8').split('\n').filter(Boolean).length
       : 0;

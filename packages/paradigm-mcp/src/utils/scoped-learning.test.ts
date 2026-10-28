@@ -31,6 +31,7 @@ import {
   listLearningStores,
   pathFor,
   promotionHomeOf,
+  resetLearningStoreCaches,
   readLearningRows,
 } from './learning-stores.js';
 import { repoIdOf, repoIdSegment } from './repo-id.js';
@@ -329,6 +330,7 @@ describe('no repo home (F4)', () => {
       expect(file.startsWith(root)).toBe(false);
       expect(readLearningRows('notebook-refs', root)[0].home).toBe('user');
       fs.mkdirSync(path.join(root, '.git'));
+      resetLearningStoreCaches(); // hasRepoHome is cached per root (S2)
       expect(hasRepoHome(root)).toBe(true);
       expect(appendLearningRows('notebook-refs', root, [{ type: 'notebook-reference' }])).toBe(events('notebook-refs.jsonl'));
       // a subfolder project inside a repo still has a repo home

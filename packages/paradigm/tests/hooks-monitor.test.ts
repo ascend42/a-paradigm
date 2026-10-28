@@ -10,24 +10,31 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync } from 'child_process';
+import { learnPathStubLines } from '../src/test-shell-utils.js';
+import { pathFor } from '../../paradigm-mcp/src/utils/learning-stores.js';
 import { hookHealthChecks, summarizeHookRing, readHookRing, readStopTiming, stopSectionChecks, staleSessionHookChecks } from '../src/commands/doctor/hook-health.js';
 
 const SCRIPTS = path.resolve(__dirname, '..', '..', '..', 'plugins', 'paradigm', 'scripts');
 let root: string;
 let bin: string;
 let ring: string;
+let state: string;
 
 beforeEach(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pdg-mon-')));
   bin = fs.mkdtempSync(path.join(os.tmpdir(), 'pdg-mon-bin-'));
   fs.mkdirSync(path.join(root, '.paradigm', 'events'), { recursive: true });
-  ring = path.join(root, '.paradigm', 'events', 'hook-timings.jsonl');
+  // Scoped learning S2: the ring lives in the machine home; the stub CLI answers
+  // `internal learn-path` with the dir the doctor reader resolves too.
+  ring = pathFor('hook-timings', 'machine', root);
+  state = path.dirname(ring);
+  fs.mkdirSync(state, { recursive: true });
   spawnSync('git', ['init', '-q'], { cwd: root });
   fs.writeFileSync(path.join(root, 'a.ts'), 'x\n');
   spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'i', '--allow-empty'], { cwd: root });
   spawnSync('git', ['add', 'a.ts'], { cwd: root });
   // stub CLI: compliance-check hangs long enough to be "killed" mid-run
-  fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) : > "$PM_CC_STARTED"; sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
+  fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\n' + learnPathStubLines(state) + 'case "$1" in compliance-check) : > "$PM_CC_STARTED"; sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
   fs.chmodSync(path.join(bin, 'paradigm'), 0o755);
 });
 afterEach(() => {
@@ -75,8 +82,8 @@ describe('hook self-monitoring', () => {
     expect(typeof e.ms).toBe('number');
   });
 
-  it('fails open: no .paradigm/events dir means no records and an unchanged hook', () => {
-    fs.rmSync(path.join(root, '.paradigm', 'events'), { recursive: true });
+  it('fails open: no .paradigm dir (not a Paradigm project) means no records and an unchanged hook', () => {
+    fs.rmSync(path.join(root, '.paradigm'), { recursive: true });
     expect(runHook('paradigm-precommit.sh', { tool_input: { command: 'ls' } }).code).toBe(0);
     expect(fs.existsSync(ring)).toBe(false);
   });
@@ -180,7 +187,7 @@ describe('doctor hook-health section renders from a fixture ring and plugin inst
 });
 
 describe('Stop per-section timing (stop-timing.jsonl) and the generated-state scope', () => {
-  const timing = () => path.join(root, '.paradigm', 'events', 'stop-timing.jsonl');
+  const timing = () => path.join(state, 'stop-timing.jsonl');
   const timingRows = (): Array<Record<string, any>> => fs.readFileSync(timing(), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const calls = () => path.join(bin, 'calls.log');
   const commitAll = () => {
@@ -189,7 +196,7 @@ describe('Stop per-section timing (stop-timing.jsonl) and the generated-state sc
   };
   beforeEach(() => {
     // stub CLI that logs each subcommand, answers instantly
-    fs.writeFileSync(path.join(bin, 'paradigm'), `#!/bin/sh\necho "$1" >> "${calls()}"\ncase "$1" in compliance-check) echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n`);
+    fs.writeFileSync(path.join(bin, 'paradigm'), `#!/bin/sh\n${learnPathStubLines(state)}echo "$1" >> "${calls()}"\ncase "$1" in compliance-check) echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n`);
     fs.mkdirSync(path.join(root, '.warpline'), { recursive: true });
     fs.writeFileSync(path.join(root, '.paradigm', 'state.yaml'), 'a: 1\n');
     fs.writeFileSync(path.join(root, '.warpline', 'fabric.jsonl'), '{}\n');
@@ -211,7 +218,7 @@ describe('Stop per-section timing (stop-timing.jsonl) and the generated-state sc
   });
 
   it('a killed run names the section it was stuck in', async () => {
-    fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) : > "$PM_CC_STARTED"; sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
+    fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\n' + learnPathStubLines(state) + 'case "$1" in compliance-check) : > "$PM_CC_STARTED"; sleep 2; echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
     fs.writeFileSync(path.join(root, 'a.ts'), 'y\n');
     await killStopHook('SIGTERM');
     const r = timingRows().pop()!;
@@ -243,12 +250,15 @@ describe('Stop per-section timing (stop-timing.jsonl) and the generated-state sc
     expect(t.counts.generated_only).toBeUndefined();
   });
 
-  it('stop-timing.jsonl is capped and fails open without .paradigm/events', () => {
+  it('stop-timing.jsonl is capped and fails open when the machine home cannot be resolved', () => {
     fs.writeFileSync(timing(), Array.from({ length: 300 }, () => JSON.stringify({ hook: 'Stop', t: 1, ms: 1, sections: {} })).join('\n') + '\n');
     fs.writeFileSync(path.join(root, 'a.ts'), 'y\n');
     runHook('paradigm-stop.sh', { cwd: root }, { PARADIGM_HOOK_RING_TRIM_EVERY: '1', PARADIGM_STOP_TIMING_MAX: '50' });
     expect(fs.readFileSync(timing(), 'utf8').trim().split('\n').length).toBeLessThanOrEqual(50);
-    fs.rmSync(path.join(root, '.paradigm', 'events'), { recursive: true });
+    // no learn-path answer (and no cache): the monitor records nothing, the hook is unchanged
+    fs.rmSync(path.join(root, '.paradigm', '.sessions'), { recursive: true, force: true });
+    fs.rmSync(timing());
+    fs.writeFileSync(path.join(bin, 'paradigm'), '#!/bin/sh\ncase "$1" in compliance-check) echo "{}" ;; internal) echo "[]" ;; esac\nexit 0\n');
     const r = runHook('paradigm-stop.sh', { cwd: root });
     expect(r.stdout).toBe('');
     expect(fs.existsSync(timing())).toBe(false);

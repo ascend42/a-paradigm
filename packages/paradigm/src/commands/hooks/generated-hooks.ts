@@ -1184,10 +1184,9 @@ if [ "$_SEV" != "off" ]; then
       # Deduped per TTL window: Stop fires per turn, and per-turn duplicates
       # would structurally deflate the invocation rate Loid calibrates from.
       if ! _marker_fresh ".paradigm/.team-bypass-recorded"; then
-        mkdir -p ".paradigm/events" 2>/dev/null
         _BYPASS_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         _BYPASS_REASONS=$(printf '%s' "$MAGNITUDE_REASONS" | tr -cd 'a-zA-Z0-9,. ' | head -c 120)
-        echo "{\\"timestamp\\":\\"$_BYPASS_TS\\",\\"type\\":\\"bypass\\",\\"source\\":\\"stop-hook\\",\\"magnitude\\":$MAGNITUDE,\\"reasons\\":\\"$_BYPASS_REASONS\\",\\"severity\\":\\"$_SEV\\"}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+        _pm_learn_append team-funnel "{\\"timestamp\\":\\"$_BYPASS_TS\\",\\"type\\":\\"bypass\\",\\"source\\":\\"stop-hook\\",\\"magnitude\\":$MAGNITUDE,\\"reasons\\":\\"$_BYPASS_REASONS\\",\\"severity\\":\\"$_SEV\\"}" "$PWD" 2>/dev/null || true
         touch ".paradigm/.team-bypass-recorded" 2>/dev/null
       fi
 
@@ -1212,7 +1211,8 @@ _pm_mark check14-remediations
 # Iterates the cached _REMEDIATIONS_JSON array. severity=guard adds to
 # VIOLATIONS (block); advise|auto-author goes to ADVISORY. PARADIGM_OVERRIDE
 # (comma-separated id list) skips matching remediations and writes an
-# override audit row to .paradigm/events/overrides.jsonl.
+# override audit row to the overrides store (_pm_learn_append: the repo home,
+# .paradigm/events/overrides.jsonl, in a git repository).
 #
 # Iteration uses a temp file + redirect (NOT pipe) so VIOLATION_COUNT
 # increments propagate out of the loop (POSIX subshell-safe — spec §12 #4).
@@ -1238,9 +1238,8 @@ if [ "$_REMEDIATIONS_JSON" != "[]" ] && [ -n "$_REMEDIATIONS_JSON" ]; then
       *",$_RID,"*)
         # Write override audit event (mirror compliance-snapshot pattern, line 906).
         _ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
-        mkdir -p ".paradigm/events" 2>/dev/null || true
-        printf '{"timestamp":"%s","remediation_id":"%s","claimant":"%s","mechanism":"env","unblock_predicate_matched":false}\\n' \\
-          "$_ts" "$_RID" "$_RCLAIM" >> ".paradigm/events/overrides.jsonl" 2>/dev/null || true
+        _pm_learn_append overrides "$(printf '{"timestamp":"%s","remediation_id":"%s","claimant":"%s","mechanism":"env","unblock_predicate_matched":false}' \\
+          "$_ts" "$_RID" "$_RCLAIM")" "$PWD" 2>/dev/null || true
         continue
         ;;
     esac
@@ -1337,16 +1336,15 @@ fi
 
 _pm_mark snapshot
 # --- Compliance snapshot (non-fatal, fire-and-forget) ---
-# Record this stop-hook run to .paradigm/events/compliance-history.jsonl for trend analysis.
+# Record this stop-hook run to the machine-home compliance-history.jsonl
+# (_pm_learn_append) for trend analysis.
 # VIOLATION_COUNT and SOURCE_COUNT are now final at this point.
 _compliance_snapshot() {
   _ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")
   _checks=$((SOURCE_COUNT + PARADIGM_COUNT))
   [ "$_checks" -eq 0 ] && _checks=1  # Avoid divide-by-zero downstream
-  _dir=".paradigm/events"
-  mkdir -p "$_dir" 2>/dev/null || return
-  printf '{"timestamp":"%s","violations":%d,"warnings":0,"checks":%d}\\n' \\
-    "$_ts" "$VIOLATION_COUNT" "$_checks" >> "$_dir/compliance-history.jsonl" 2>/dev/null || true
+  _pm_learn_append compliance-history "$(printf '{"timestamp":"%s","violations":%d,"warnings":0,"checks":%d}' \\
+    "$_ts" "$VIOLATION_COUNT" "$_checks")" "$PWD" 2>/dev/null || true
 }
 _compliance_snapshot
 
@@ -1366,14 +1364,13 @@ _pm_violation_fp() {
 }
 
 # _pm_record_unresolved <fingerprint> <consecutive> — appends a
-# stop-block-unresolved row to .paradigm/events/team-funnel.jsonl (raw append,
-# same pattern as the bypass row in Check 13). Best-effort, never fails.
+# stop-block-unresolved row to the machine-home team-funnel.jsonl
+# (_pm_learn_append, like the bypass row in Check 13). Best-effort, never fails.
 _pm_record_unresolved() {
-  mkdir -p ".paradigm/events" 2>/dev/null
   _UNRES_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
   _UNRES_FP=$(printf '%s' "$1" | tr -cd '0-9 ')
   _UNRES_K=$(printf '%s' "$2" | tr -cd '0-9')
-  echo "{\\"timestamp\\":\\"$_UNRES_TS\\",\\"type\\":\\"stop-block-unresolved\\",\\"source\\":\\"stop-hook\\",\\"fingerprint\\":\\"$_UNRES_FP\\",\\"violations\\":\${VIOLATION_COUNT:-0},\\"consecutive\\":\${_UNRES_K:-0}}" >> ".paradigm/events/team-funnel.jsonl" 2>/dev/null
+  _pm_learn_append team-funnel "{\\"timestamp\\":\\"$_UNRES_TS\\",\\"type\\":\\"stop-block-unresolved\\",\\"source\\":\\"stop-hook\\",\\"fingerprint\\":\\"$_UNRES_FP\\",\\"violations\\":\${VIOLATION_COUNT:-0},\\"consecutive\\":\${_UNRES_K:-0}}" "$PWD" 2>/dev/null
   return 0
 }
 `;
@@ -1615,6 +1612,74 @@ _pm_session_started() {
   mkdir -p "\${_pm_sf%/*}" 2>/dev/null
   : > "$_pm_sf" 2>/dev/null
   return 0
+}
+
+# --- Scoped learning: where a hook appends a learning row (S2) ---
+#
+# _pm_learn_path <artifact> [<root>] — prints the absolute file a row of
+# <artifact> (overrides, team-funnel, compliance-history, hook-timings, ...)
+# goes to, as \`paradigm internal learn-path\` resolves it: machine stores in
+# the OS state dir, user stores in the user home, repo stores in .paradigm.
+# Status 1 (and nothing printed) when the root is not a Paradigm project, the
+# CLI cannot be found, or it refuses: the hook then skips its write. Legacy
+# repo logs are never written again.
+# Cached in <root>/.paradigm/.sessions/learn-paths, one line per artifact:
+#   <physical root> TAB <$PARADIGM_LEARNING_HOME> TAB <artifact> TAB <path>
+# A line whose root differs (the repo moved) is a miss and is dropped on the
+# next write. Needs no HOME: the CLI resolves the home itself.
+_pm_learn_path() {
+  _pm_la=$1
+  _pm_lr=\${2:-\${PM_ROOT:-\${CLAUDE_PROJECT_DIR:-$PWD}}}
+  _pm_lr=$(_pm_slashes "$_pm_lr")
+  _pm_lr=$(CDPATH= cd -P -- "$_pm_lr" 2>/dev/null && pwd -P) || return 1
+  [ -d "$_pm_lr/.paradigm" ] || return 1
+  _pm_tab=$(printf '\\t')
+  _pm_lc="$_pm_lr/.paradigm/.sessions/learn-paths"
+  _pm_lk="$_pm_lr$_pm_tab\${PARADIGM_LEARNING_HOME:-}$_pm_tab"
+  if [ -f "$_pm_lc" ]; then
+    while IFS= read -r _pm_ll || [ -n "$_pm_ll" ]; do
+      case $_pm_ll in
+        "$_pm_lk$_pm_la$_pm_tab"?*) printf '%s\\n' "\${_pm_ll#"$_pm_lk$_pm_la$_pm_tab"}"; return 0 ;;
+      esac
+    done < "$_pm_lc"
+  fi
+  _pm_resolve_paradigm "$_pm_lr" || return 1
+  _pm_lp=$($PARADIGM_BIN internal learn-path "$_pm_la" --root "$_pm_lr" 2>/dev/null) || return 1
+  _pm_lp=$(_pm_slashes "$(printf '%s\\n' "$_pm_lp" | sed -n 1p)")
+  case $_pm_lp in /*|[A-Za-z]:/*) ;; *) return 1 ;; esac
+  mkdir -p "$_pm_lr/.paradigm/.sessions" 2>/dev/null
+  # keep this root's lines only (a moved repo's stale lines go), then add ours
+  if [ -f "$_pm_lc" ]; then
+    { while IFS= read -r _pm_ll || [ -n "$_pm_ll" ]; do
+        case $_pm_ll in "$_pm_lk"*) printf '%s\\n' "$_pm_ll" ;; esac
+      done < "$_pm_lc"; } > "$_pm_lc.$$" 2>/dev/null && mv -f "$_pm_lc.$$" "$_pm_lc" 2>/dev/null
+  fi
+  printf '%s%s%s%s\\n' "$_pm_lk" "$_pm_la" "$_pm_tab" "$_pm_lp" >> "$_pm_lc" 2>/dev/null
+  printf '%s\\n' "$_pm_lp"
+}
+
+# _pm_learn_skip <artifact> [<root>] — counts a hook write skipped because
+# learn-path could not resolve (one line per skip in the gitignored
+# .paradigm/.sessions/learn-path-skips, last 500 kept), so \`paradigm doctor\`
+# can tell lost data from no data. Silent; never fails.
+_pm_learn_skip() {
+  _pm_ksr=\${2:-\${PM_ROOT:-\${CLAUDE_PROJECT_DIR:-$PWD}}}
+  _pm_ksr=$(_pm_slashes "$_pm_ksr")
+  [ -d "$_pm_ksr/.paradigm" ] || return 0
+  mkdir -p "$_pm_ksr/.paradigm/.sessions" 2>/dev/null || return 0
+  _pm_ksf="$_pm_ksr/.paradigm/.sessions/learn-path-skips"
+  printf '%s\\t%s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$1" >> "$_pm_ksf" 2>/dev/null
+  { tail -n 500 "$_pm_ksf" > "$_pm_ksf.$$" && mv -f "$_pm_ksf.$$" "$_pm_ksf"; } 2>/dev/null || rm -f "$_pm_ksf.$$" 2>/dev/null
+  return 0
+}
+
+# _pm_learn_append <artifact> <json line> [<root>] — appends one row where
+# _pm_learn_path says (creating its folder). Status 1 when it cannot resolve
+# (the skip is counted by _pm_learn_skip).
+_pm_learn_append() {
+  _pm_lf=$(_pm_learn_path "$1" "\${3:-}") || { _pm_learn_skip "$1" "\${3:-}"; return 1; }
+  mkdir -p "\${_pm_lf%/*}" 2>/dev/null
+  printf '%s\\n' "$2" >> "$_pm_lf" 2>/dev/null
 }
 `;
 
@@ -2062,7 +2127,7 @@ export const CLAUDE_CODE_PROMPT_GATE_HOOK = `#!/bin/sh
 # Exit 0 = always (advisory only — never blocks)
 #
 # Telemetry: every eligible prompt appends an \`eligible\` event to
-# .paradigm/events/team-funnel.jsonl (even when the directive is capped),
+# the machine-home team-funnel.jsonl (even when the directive is capped),
 # so the classifier's false-positive rate and the team-invocation rate are
 # measurable from day one. Loid calibrates the gate from this data.
 #
@@ -2132,12 +2197,10 @@ if [ -z "$MATCHED" ]; then
 fi
 
 # Record the eligible event (telemetry fires every time, even when the
-# directive itself is capped)
-EVENTS_DIR="$CWD/.paradigm/events"
-mkdir -p "$EVENTS_DIR" 2>/dev/null
+# directive itself is capped). Machine home, via _pm_learn_append.
 MATCHED_CLEAN=$(printf '%s' "$MATCHED" | tr -cd 'a-zA-Z ' | head -c 40)
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"eligible\\",\\"source\\":\\"prompt-gate\\",\\"matched\\":\\"$MATCHED_CLEAN\\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
+_pm_learn_append team-funnel "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"eligible\\",\\"source\\":\\"prompt-gate\\",\\"matched\\":\\"$MATCHED_CLEAN\\"}" || true
 
 # Inject the directive at most once per session (per TTL window without a
 # session id)
@@ -2226,12 +2289,10 @@ esac
 # Remind once per session (per TTL window without a session id)
 _pm_once team-reminded || exit 0
 
-# Record the edit-advisory event (telemetry)
-EVENTS_DIR="$CWD/.paradigm/events"
-mkdir -p "$EVENTS_DIR" 2>/dev/null
+# Record the edit-advisory event (telemetry, machine home: _pm_learn_append)
 FILE_BASE=$(basename -- "$FILE_PATH" | tr -cd 'a-zA-Z0-9._-' | head -c 60)
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"edit-advisory\\",\\"source\\":\\"team-gate\\",\\"file\\":\\"$FILE_BASE\\"}" >> "$EVENTS_DIR/team-funnel.jsonl" 2>/dev/null
+_pm_learn_append team-funnel "{\\"timestamp\\":\\"$TS\\",\\"type\\":\\"edit-advisory\\",\\"source\\":\\"team-gate\\",\\"file\\":\\"$FILE_BASE\\"}" || true
 
 # Emit advisory (non-blocking)
 echo "" >&2
@@ -2290,7 +2351,7 @@ export const CLAUDE_CODE_DELEGATION_HOOK = `#!/bin/sh
 #     (PARADIGM_GATE_TTL_HOURS, default 4h).
 # The Stop hook (Check 13), the team gate and the prompt gate read both, at the
 # project root (paradigm-resolve.sh). Every delegation, credited or not, is
-# appended to .paradigm/events/team-funnel.jsonl for Loid's invocation-rate
+# appended to the machine-home team-funnel.jsonl (_pm_learn_append) for Loid's invocation-rate
 # calibration.
 # Installed by: paradigm hooks install --claude-code
 #
@@ -2381,15 +2442,14 @@ if [ "$CREDITED" = "true" ]; then
   fi
 fi
 
-mkdir -p "$CWD/.paradigm/events" 2>/dev/null
-printf '{"timestamp":"%s","type":"delegation","source":"delegation-hook","subagent":"%s","credited":%s}\\n' "$TS" "$SUBAGENT" "$CREDITED" >> "$CWD/.paradigm/events/team-funnel.jsonl" 2>/dev/null || true
+_pm_learn_append team-funnel "$(printf '{"timestamp":"%s","type":"delegation","source":"delegation-hook","subagent":"%s","credited":%s}' "$TS" "$SUBAGENT" "$CREDITED")" || true
 
 exit 0
 `;
 
 export const CLAUDE_CODE_SESSION_START_HOOK = `#!/bin/sh
 # Paradigm Claude Code SessionStart hook — hook-health surfacing (#hook-health-warning)
-# Reads the hook timing ring (.paradigm/events/hook-timings.jsonl, written by
+# Reads the hook timing ring (machine-home hook-timings.jsonl, written by
 # paradigm-hook-monitor.sh) and, when a Paradigm hook was killed (start with no
 # end older than its timeout, or a recorded SIGTERM) or ran over its budget
 # since the last warning, prints ONE line per hook to stdout — SessionStart
@@ -2430,8 +2490,10 @@ if [ ! -f "$ROOT/.paradigm/scan-index.json" ] || [ ! -f "$ROOT/.paradigm/navigat
   fi
 fi
 
-RING="$ROOT/.paradigm/events/hook-timings.jsonl"
-[ -f "$RING" ] || exit 0
+# The ring lives in the machine home (scoped learning S2, _pm_learn_path).
+RING=
+command -v _pm_learn_path >/dev/null 2>&1 && RING=$(_pm_learn_path hook-timings "$ROOT" 2>/dev/null)
+[ -n "$RING" ] && [ -f "$RING" ] || exit 0
 MARK="$ROOT/.paradigm/.hook-health-warned"
 
 SID=$(printf '%s' "$INPUT" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\\([^"]*\\)"$/\\1/')
@@ -2520,11 +2582,14 @@ export const HOOK_MONITOR = `#!/bin/sh
 #
 # Appends a "start" record when the hook begins and an "end" record (wall ms
 # + outcome ok|blocked|error|killed) when it exits, to the bounded ring
-# .paradigm/events/hook-timings.jsonl. A hook killed with SIGKILL cannot write
+# hook-timings.jsonl in the project's MACHINE home (scoped learning S2: the OS
+# state dir, resolved by \`_pm_learn_path hook-timings\` in paradigm-resolve.sh
+# and cached per root in .paradigm/.sessions/learn-paths; the legacy
+# .paradigm/events/hook-timings.jsonl is no longer written). A hook killed with SIGKILL cannot write
 # its end record; the next SessionStart (paradigm-session-start.sh) and
 # \`paradigm doctor\` treat a start with no end, older than its timeout, as
-# killed. Cost per run: two \`date\` calls and two appended lines through shell
-# redirection — no CLI or node spawn. FAIL OPEN: nothing here may print to
+# killed. Cost per run: two \`date\` calls, a cache read and two appended lines
+# through shell redirection; one CLI spawn per root on a cache miss. FAIL OPEN: nothing here may print to
 # stdout, change the hook's exit code, or stop the hook; every write is
 # best-effort (a read-only tree or sandbox just records nothing).
 
@@ -2610,9 +2675,23 @@ _pm_sections_flush() {
 
 _pm_begin() {
   _PM_HOOK=$1
-  _PM_RING="\${CLAUDE_PROJECT_DIR:-$PWD}/.paradigm/events/hook-timings.jsonl"
-  [ -n "$PARADIGM_HOOK_MONITOR_OFF" ] && { _PM_RING=; return 0; }
-  [ -d "\${_PM_RING%/*}" ] || { _PM_RING=; return 0; }
+  _PM_RING=
+  [ -n "$PARADIGM_HOOK_MONITOR_OFF" ] && return 0
+  [ -d "\${CLAUDE_PROJECT_DIR:-$PWD}/.paradigm" ] || return 0
+  command -v _pm_learn_path >/dev/null 2>&1 || { [ -f "\${_PM_DIR:-.}/paradigm-resolve.sh" ] && . "\${_PM_DIR:-.}/paradigm-resolve.sh"; } 2>/dev/null
+  command -v _pm_learn_path >/dev/null 2>&1 || return 0
+  # The project root (a linked worktree resolves to its main checkout), so the
+  # learn-path cache and the skip counter live with the root's session state.
+  _pm_mroot=\${CLAUDE_PROJECT_DIR:-$PWD}
+  if [ -z "\${CLAUDE_PROJECT_DIR:-}" ] && command -v _pm_project_root >/dev/null 2>&1; then
+    _pm_project_root "$PWD" 2>/dev/null && _pm_mroot=$PM_ROOT
+  fi
+  _PM_RING=$(_pm_learn_path hook-timings "$_pm_mroot" 2>/dev/null) || {
+    _PM_RING=
+    command -v _pm_learn_skip >/dev/null 2>&1 && _pm_learn_skip hook-timings "$_pm_mroot" 2>/dev/null
+    return 0
+  }
+  mkdir -p "\${_PM_RING%/*}" 2>/dev/null || { _PM_RING=; return 0; }
   _PM_OUTCOME=
   _pm_now
   _PM_T0=$_pm_t

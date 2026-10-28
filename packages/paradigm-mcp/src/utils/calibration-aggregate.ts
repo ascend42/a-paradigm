@@ -177,7 +177,12 @@ export function rebuildLearnedTable(rootDir: string): {
 
     const learnedFile = learnedTablePath(rootDir, home);
     fs.mkdirSync(path.dirname(learnedFile), { recursive: true });
-    fs.writeFileSync(learnedFile, JSON.stringify(table, null, 2) + '\n', 'utf8');
+    // A table learned from the legacy population is a labelled cold-start
+    // prior, not fact (S2): `meta` tells the planner so.
+    const written = population === 'legacy-repo'
+      ? { meta: { population, legacyPrior: true }, ...table }
+      : table;
+    fs.writeFileSync(learnedFile, JSON.stringify(written, null, 2) + '\n', 'utf8');
 
     return {
       table,

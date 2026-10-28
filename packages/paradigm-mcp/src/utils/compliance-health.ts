@@ -2,7 +2,8 @@
  * Compliance Health Tracker — records compliance snapshots over time and
  * computes trends for surfacing in paradigm_status.
  *
- * Storage: .paradigm/events/compliance-history.jsonl
+ * Storage: compliance-history.jsonl in the machine home (scoped learning S2,
+ * learning-stores pathFor); the legacy .paradigm/events copy is still read.
  *
  * Design:
  *   - Pure append log — one record per stop-hook run
@@ -11,10 +12,8 @@
  *   - All writes are non-fatal; callers must never fail because of this module
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+import { appendLearningRows, readLearningRows } from './learning-stores.js';
 
-const COMPLIANCE_HISTORY_FILE = '.paradigm/events/compliance-history.jsonl';
 const DEFAULT_WINDOW = 10;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -45,19 +44,12 @@ export function recordComplianceSnapshot(
   record: Omit<ComplianceRecord, 'timestamp'>
 ): void {
   try {
-    const filePath = path.join(rootDir, COMPLIANCE_HISTORY_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
     const entry: ComplianceRecord = {
       timestamp: new Date().toISOString(),
       ...record,
     };
-
-    const line = JSON.stringify(entry) + '\n';
-    fs.appendFileSync(filePath, line, 'utf8');
+    // Machine home (scoped learning S2); the legacy repo log is frozen.
+    appendLearningRows('compliance-history', rootDir, [entry]);
   } catch {
     // Non-fatal — compliance history is advisory
   }
@@ -66,23 +58,14 @@ export function recordComplianceSnapshot(
 // ── Read ──────────────────────────────────────────────────────────────────────
 
 /**
- * Read the last N compliance records from history.
+ * Read the last N compliance records: the union of the machine home and the
+ * frozen legacy repo log, in time order.
  */
 function readComplianceHistory(rootDir: string, limit?: number): ComplianceRecord[] {
   try {
-    const filePath = path.join(rootDir, COMPLIANCE_HISTORY_FILE);
-    if (!fs.existsSync(filePath)) return [];
-
-    const all = fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        try { return JSON.parse(line) as ComplianceRecord; }
-        catch { return null; }
-      })
-      .filter((r): r is ComplianceRecord => r !== null);
-
+    const all = readLearningRows<ComplianceRecord>('compliance-history', rootDir)
+      .filter(r => typeof r.timestamp === 'string')
+      .sort((x, y) => x.timestamp.localeCompare(y.timestamp));
     if (limit && limit > 0) {
       return all.slice(-limit);
     }
