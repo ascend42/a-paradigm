@@ -417,6 +417,13 @@ components:
       - learning
       - scoped-learning
     file: packages/paradigm-mcp/src/utils/repo-id.ts
+  learning-commit-guard:
+    description: 'Scoped learning S2 pre-commit guard (learning-commit-guard.ts), shaped like warpline stake-guard: frozen, schema-versioned rules (LEARNING_GUARD_SCHEMA) and pure functions. learningGuardViolations reads staged .paradigm/** data files (.jsonl/.json/.yaml/.yml only; source and docs never parsed) and reports home-not-repo (any home: user or machine row/entry), machine-path (/Users/x/, /home/x/, C:\Users\x, or this machine''s home, learning home and state dir) and, with learning.visibility public (default when unset), human-feedback-public (trigger human_feedback without home: repo). PARADIGM_OVERRIDE=learning-guard is the logged escape.'
+    type: utility
+    tags:
+      - scoped-learning
+      - guard
+    file: packages/paradigm-mcp/src/utils/learning-commit-guard.ts
   no-repo-only-cert-reader-guard:
     description: 'Test guard (no-repo-only-cert-reader.test.ts): fails if any paradigm or paradigm-mcp source imports or re-exports premise-core''s deprecated repo-only readClassroomCertifications. Certifications are read through field-failures.readClassroomCertifications (the union of every home).'
     type: test

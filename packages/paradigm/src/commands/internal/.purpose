@@ -13,6 +13,15 @@ components:
       - internal
       - hooks
       - scoped-learning
+  learning-guard-command:
+    description: 'Scoped learning S2. `paradigm internal learning-guard --staged`, run by the git pre-commit hook `paradigm hooks install` writes: reads the staged .paradigm data files and exits 1 with the violations on stderr (#learning-commit-guard rules, visibility from config learning.visibility). PARADIGM_OVERRIDE=learning-guard lets the commit through and logs an override row (mechanism env) through the resolver.'
+    type: tool
+    parent: '#InternalCommands'
+    file: packages/paradigm/src/commands/internal/learning-guard.ts
+    tags:
+      - internal
+      - hooks
+      - scoped-learning
   active-remediations:
     description: Reads .paradigm/remediations/*.yaml, filters expired, outputs JSON array. Backs Stop hook Check 14 to avoid YAML parsing in bash.
     type: tool

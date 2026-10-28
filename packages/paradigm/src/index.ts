@@ -3323,6 +3323,15 @@ internalCmd
   });
 
 internalCmd
+  .command('learning-guard', { hidden: true })
+  .description('Refuse a commit whose staged .paradigm data carries user/machine rows or machine paths (git pre-commit)')
+  .option('--staged', 'Check the staged files (default and only mode)')
+  .action(async (options) => {
+    const { learningGuardCommand } = await import('./commands/internal/learning-guard.js');
+    await learningGuardCommand(options);
+  });
+
+internalCmd
   .command('learn-path <artifact>', { hidden: true })
   .description('Print the file a learning-store row is appended to (hook writers, scoped learning)')
   .option('--root <dir>', 'Project root (default: cwd)')

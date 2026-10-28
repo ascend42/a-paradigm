@@ -13,8 +13,8 @@ import * as path from 'path';
 /** Bump together with the `paradigm-hook-version:` marker in the git hook bodies (hooks/index.ts). */
 export const GIT_HOOK_VERSION = 3;
 
-export type GitHookName = 'post-commit' | 'pre-push';
-export const GIT_HOOK_NAMES: GitHookName[] = ['post-commit', 'pre-push'];
+export type GitHookName = 'post-commit' | 'pre-push' | 'pre-commit';
+export const GIT_HOOK_NAMES: GitHookName[] = ['post-commit', 'pre-push', 'pre-commit'];
 
 /**
  * absent   — no hook file
