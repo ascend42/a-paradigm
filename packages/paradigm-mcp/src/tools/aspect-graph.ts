@@ -11,6 +11,7 @@
  * - paradigm_aspect_confirm: Reinforce search learning from user selection
  */
 
+import { gnomonStaged, GNOMON_STAGED_REFUSAL } from '../utils/gnomon-staged.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -661,6 +662,12 @@ async function handleAspectSuggestScan(
   try {
     // Dynamic import of the suggest module (may not exist yet)
     // Use a variable to prevent TypeScript from statically resolving the module
+    // TD-2026-10-27-833 (Aegis low): a runtime module path cannot be bundled; the staged Gnomon mode refuses it
+    if (gnomonStaged()) {
+      const text = JSON.stringify({ error: GNOMON_STAGED_REFUSAL, tool: 'paradigm_aspect_suggest_scan' }, null, 2);
+      trackToolCall(text.length, 'paradigm_aspect_suggest_scan');
+      return { handled: true, text };
+    }
     const modulePath = '../utils/aspect-suggest.js';
     const suggestModule = await import(/* webpackIgnore: true */ modulePath);
     const suggestions = suggestModule.suggestAspects(absolutePath);

@@ -419,6 +419,8 @@ export class McpServers {
    */
   #stagedParadigm(ctx: { hsid: string; cwd: string }): LocalMcpServer {
     const base = { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, transport: 'stdio' as const, trust: 'first-party' as const };
+    // Aegis (low): no helper grants a Windows session SID a read ACE on the staged dir yet, so win32 refuses it outright
+    if (this.#platform() === 'win32') return { ...base, refused: { fit: 'pin-mismatch', why: 'the staged Paradigm MCP is not offered to local sessions on Windows yet (no read grant for the session on the staged dir)' } };
     const fp = this.#o.firstParty();
     if (fp.available) {
       const st = autoStage(this.#o.home, { dir: fp.dir, entry: fp.entry, version: fp.version, linked: fp.linked });

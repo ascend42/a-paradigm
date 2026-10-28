@@ -338,6 +338,8 @@ function within(p: string, root: string): boolean {
 export const HOME_READABLE_ROOTS = Object.freeze(['sessions', 'bin', 'runners', 'mcp']);
 /** TD-2026-10-27-833: the name of a session's first-party MCP state dir (`<home>/sessions/<name>`). */
 export const MCP_STATE_DIR_RE = /^[A-Za-z0-9]{1,64}-pg$/;
+/** #paradigm-stage stagedDirName: `<safe version>-<treeSha256[:12]>`. */
+export const STAGED_PARADIGM_DIR_RE = /^[A-Za-z0-9._-]{1,64}-[0-9a-f]{12}$/;
 
 /** The kernel log files inside the home (spec §3.2; kernel-log.ts ACTIVE_DB + SEGMENTS_DIR): read-denied by name too. */
 export const KERNEL_LOG_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }> = Object.freeze([
@@ -511,7 +513,9 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     const real = realpathLoose(a.path);
     const rel = path.relative(homeReal, real);
     const parts = rel.split(path.sep);
-    if (!rel || path.isAbsolute(rel) || parts[0] === '..' || parts.length < 2 || !HOME_READABLE_ROOTS.includes(parts[0]!) || parts.some((x) => x === '' || x === '.' || x === '..')) {
+    // Aegis (staged Paradigm, low): `mcp/` is readable ONLY as mcp/first-party/paradigm/<version>-<treeSha12>[/…]
+    const mcpBad = parts[0] === 'mcp' && !(parts.length >= 4 && parts[1] === 'first-party' && parts[2] === 'paradigm' && STAGED_PARADIGM_DIR_RE.test(parts[3]!));
+    if (!rel || path.isAbsolute(rel) || parts[0] === '..' || parts.length < 2 || !HOME_READABLE_ROOTS.includes(parts[0]!) || mcpBad || parts.some((x) => x === '' || x === '.' || x === '..')) {
       throw new TypeError(`#manifest-loader: a session may read only inside ${HOME_READABLE_ROOTS.map((r) => `${r}/<x>`).join(', ')} of the Gnomon home (got ${JSON.stringify(rel)})`);
     }
     allowRead.push({ path: real, match: a.match, class: 'gnomon-home' });

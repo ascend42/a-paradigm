@@ -253,6 +253,25 @@ describe('TD-2026-10-27-833: the mcpStateDir carve-back is strict', () => {
   });
 });
 
+describe('Aegis lows: the readable mcp/ path is exact; Windows refuses the staged server', () => {
+  it('homeReadable under mcp/ must be mcp/first-party/paradigm/<version>-<sha12>', async () => {
+    const { buildSessionPolicy } = await import('../src/kernel/manifest/policy.js');
+    const w = world();
+    const base = { home: w.home, cwd: w.repo, userClaudeDir: path.join(w.userHome, '.claude'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null };
+    expect(() => buildSessionPolicy({ ...base, homeReadable: [{ path: path.join(w.home, 'mcp', 'first-party', 'paradigm', '9.9.9-0123456789ab'), match: 'subpath' }] })).not.toThrow();
+    for (const bad of [path.join(w.home, 'mcp', 'other'), path.join(w.home, 'mcp', 'first-party', 'paradigm'), path.join(w.home, 'mcp', 'first-party', 'paradigm', 'pin.json'), path.join(w.home, 'mcp', 'first-party', 'evil', '9.9.9-0123456789ab')]) {
+      expect(() => buildSessionPolicy({ ...base, homeReadable: [{ path: bad, match: 'subpath' }] }), bad).toThrow(TypeError);
+    }
+  });
+
+  it('composeLocal refuses the first-party server on win32', () => {
+    const w = world();
+    const m = new McpServers({ home: w.home, broker: { raise: async () => ({ cardId: 'card:x' }) as never, card: () => undefined } as never, userHome: w.userHome, pathDirs: () => [], launchKey: KEY, platform: 'win32', firstParty: () => ({ available: true, node: process.execPath, dir: w.pkg, entry: path.join(w.pkg, 'dist', 'mcp.js'), version: '9.9.9', linked: false }), liveRepos: () => [] });
+    expect(m.composeLocal({ hsid: 'h1', cwd: w.repo })[0]).toMatchObject({ refused: { fit: 'pin-mismatch', why: expect.stringMatching(/Windows/) } });
+    expect(fs.existsSync(stageRoot(w.home))).toBe(false);
+  });
+});
+
 describe('Aegis M3: the staged Paradigm env hardens git', () => {
   it('carries the anchor git config plus no lazy fetch, no system/global config or attributes, no prompt', async () => {
     const { stagedParadigmEnv } = await import('../src/kernel/supervisor/local-session.js');
