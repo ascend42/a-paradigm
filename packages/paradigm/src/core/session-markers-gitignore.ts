@@ -49,9 +49,10 @@ export const SESSION_MARKERS: readonly string[] = Object.freeze([
 /**
  * Generated state (paths relative to `.paradigm/`): rebuilt from sources by
  * `paradigm index`, the MCP server (paradigm_reindex, the live index) or the
- * hooks. Authored content stays committed: config.yaml, decisions/,
- * lore/entries/, specs/, docs/ (including the hand-written docs .index.yaml
- * files), roster, habits, protocol and university sources.
+ * hooks, plus the machine-churn event logs. Authored content and learning
+ * records stay committed: config.yaml, decisions/, lore/entries/, specs/,
+ * docs/ (including the hand-written docs .index.yaml files), roster, habits,
+ * protocol and university sources, the learning event logs and history/.
  * Every `<dir>/index.yaml` listed here has a rebuild function and a `generated`
  * stamp: protocols (rebuildProtocolIndex), personas (rebuildPersonaIndex),
  * curriculum + scenarios (rebuildSyllabusIndex / rebuildScenarioIndex),
@@ -64,9 +65,16 @@ export const GENERATED_STATE: readonly string[] = Object.freeze([
   'navigator.yaml',
   'manifest.consistency.json',
   'session-breadcrumbs.prev.json',
-  'events/*.jsonl',
-  'events/.last-processed',
-  'history/',
+  // Machine-churn event logs only: per-machine hook and liveness telemetry.
+  // Learning records stay committed (verdicts, overrides, debates,
+  // nominations, promotion-decisions, classroom-certifications, notebook-refs,
+  // session-log, stream.jsonl + its .last-processed cursor) and so does
+  // history/ (the repo's shared symbol history).
+  'events/compliance-history.jsonl',
+  'events/team-funnel.jsonl',
+  'events/postflight-liveness.jsonl',
+  'events/settlement-liveness.jsonl',
+  'events/hook-timings.jsonl.tmp.*',
   'lore/timeline.yaml',
   'protocols/index.yaml',
   'personas/index.yaml',
