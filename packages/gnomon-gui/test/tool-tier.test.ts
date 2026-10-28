@@ -322,18 +322,22 @@ describe('#gui-tool-tier: the press paths', () => {
     expect(src.match(/role: 'status'/g)).toHaveLength(1);
     expect(src).toMatch(/status\.textContent = v\.status \?\? ''/);
     expect(src).toMatch(/e\.key === 'Tab' && !sheet\.hidden\) return trapTab\(sheet, e\)/);
+    expect(src).toContain(".filter((x) => !x.closest('[hidden]') && x.getClientRects().length > 0)");
     expect(src).toMatch(/card\.querySelector\(`\[data-act="\$\{had\.act\}"\]`\)/);
     const mp = readFileSync(path.join(ROOT, 'src', 'ui', 'model-picker.ts'), 'utf8');
     expect(mp).toMatch(/e\.key === 'Tab' && !sheet\.hidden\) return trapTab\(sheet, e\)/);
     const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
     expect(css).toContain('.key.quiet[disabled], .key.quiet[aria-disabled="true"] { color: var(--sec); border-color: var(--rule); }');
     expect(css).toContain('.tier-remember + .meta { margin-top: 2px; padding-left: 22px; }');
+    expect(css).toContain('#tier-dialog p[role="status"]:empty { margin: 0; }');
     expect(css.indexOf('.key.quiet[disabled]')).toBeGreaterThan(css.indexOf('.key.quiet { box-shadow: none;'));
   });
   it('Mika F11: trapTab wraps Tab and Shift+Tab inside the dialog', () => {
-    const keys = ['a', 'b', 'c'].map((id) => ({ id, hidden: false, focus() { doc.activeElement = this; } }));
+    const keys = ['a', 'b', 'c'].map((id) => ({ id, closest: () => null, getClientRects: () => [{}], focus() { doc.activeElement = this; } }));
+    // R1: a control inside a hidden row (#model-switch-id when the model is not custom) is not a stop
+    const hiddenField = { id: 'x', closest: (s: string) => (s === '[hidden]' ? {} : null), getClientRects: () => [], focus() { doc.activeElement = this; } };
     const doc: { activeElement: unknown } = { activeElement: keys[2] };
-    const dialog = { ownerDocument: doc, querySelectorAll: () => keys, contains: (x: unknown) => keys.includes(x as never) } as unknown as HTMLElement;
+    const dialog = { ownerDocument: doc, querySelectorAll: () => [...keys, hiddenField], contains: (x: unknown) => keys.includes(x as never) } as unknown as HTMLElement;
     let prevented = 0;
     trapTab(dialog, { shiftKey: false, preventDefault: () => void prevented++ } as KeyboardEvent);
     expect(doc.activeElement).toBe(keys[0]);

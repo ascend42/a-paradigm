@@ -1164,6 +1164,7 @@ html, body {
 .model-switch-lines p.warn { color: var(--warn-ink); }
 .tier-remember { display: flex; align-items: center; gap: 6px; }
 .tier-remember + .meta { margin-top: 2px; padding-left: 22px; } /* F9: the reason sits under its box */
+#tier-dialog p[role="status"]:empty { margin: 0; } /* R2: the empty live region takes no room */
 
 /* #gui-settings: the header Day / Night / Auto switch (ink keys by day, [bracketed] by night via .key) and the sheet */
 .seg { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }

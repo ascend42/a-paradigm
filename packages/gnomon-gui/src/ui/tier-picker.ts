@@ -195,7 +195,7 @@ export class TierFlow {
  * from the first to the last. Shared with #model-switch-dialog (ui/model-picker.ts).
  */
 export function trapTab(dialog: HTMLElement, e: KeyboardEvent): void {
-  const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((x) => !x.hidden);
+  const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((x) => !x.closest('[hidden]') && x.getClientRects().length > 0); // R1: nothing inside a hidden row
   if (!items.length) return;
   const first = items[0]!;
   const last = items[items.length - 1]!;
