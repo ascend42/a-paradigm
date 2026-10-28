@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
+import { gitRenameLog } from './safe-git.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -276,10 +276,8 @@ function normalizeBlock(content: string): string {
  */
 export function detectFileRename(rootDir: string, oldPath: string): string | null {
   try {
-    const result = execSync(
-      `git log --follow --diff-filter=R --name-status --format="" -- "${oldPath}"`,
-      { cwd: rootDir, encoding: 'utf8', timeout: 5000 }
-    ).trim();
+    // No shell: oldPath is an anchor path from a .purpose file (repo content).
+    const result = (gitRenameLog(rootDir, oldPath) ?? '').trim();
 
     if (!result) return null;
 

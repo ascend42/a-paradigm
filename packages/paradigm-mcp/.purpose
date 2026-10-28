@@ -173,7 +173,7 @@ components:
     type: tool
     anchors:
       - src/tools/conductor.ts:1-200
-      - src/utils/conductor-loader.ts:1-238
+      - src/utils/conductor-loader.ts:1-239
     tags:
       - mcp
       - conductor
@@ -370,7 +370,7 @@ components:
   AspectGraph:
     description: SQLite graph engine for the Aspect Graph system (v3.5). Provides materialization from SymbolEntry[], weighted BFS ripple traversal, heatmap tracking, and drift detection for code anchors. Database stored at .paradigm/aspect-graph.db.
     anchors:
-      - src/utils/aspect-graph.ts:1-1468
+      - src/utils/aspect-graph.ts:1-1464
     tags:
       - feature
       - aspect-graph
@@ -755,7 +755,7 @@ aspects:
       - aspect-graph
       - traversal
     anchors:
-      - src/utils/aspect-graph.ts:586-587
+      - src/utils/aspect-graph.ts:587-588
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -769,8 +769,8 @@ aspects:
       - aspect-graph
       - performance
     anchors:
-      - src/utils/aspect-graph.ts:591-591
-      - src/utils/aspect-graph.ts:603-603
+      - src/utils/aspect-graph.ts:592-592
+      - src/utils/aspect-graph.ts:604-604
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -783,7 +783,7 @@ aspects:
       - aspect-graph
       - edges
     anchors:
-      - src/utils/aspect-graph.ts:432-441
+      - src/utils/aspect-graph.ts:433-442
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -797,8 +797,8 @@ aspects:
       - aspect-graph
       - traversal
     anchors:
-      - src/utils/aspect-graph.ts:662-662
-      - src/utils/aspect-graph.ts:677-677
+      - src/utils/aspect-graph.ts:663-663
+      - src/utils/aspect-graph.ts:678-678
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -812,7 +812,7 @@ aspects:
       - aspect-graph
       - heuristics
     anchors:
-      - src/utils/aspect-graph.ts:1429-1440
+      - src/utils/aspect-graph.ts:1425-1436
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -825,7 +825,7 @@ aspects:
       - aspect-graph
       - heuristics
     anchors:
-      - src/utils/aspect-graph.ts:1447-1456
+      - src/utils/aspect-graph.ts:1443-1452
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -837,8 +837,8 @@ aspects:
       - aspect-graph
       - data-integrity
     anchors:
-      - src/utils/aspect-graph.ts:770-1107
-      - src/utils/aspect-graph.ts:1111-1209
+      - src/utils/aspect-graph.ts:771-1108
+      - src/utils/aspect-graph.ts:1112-1210
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -853,7 +853,7 @@ aspects:
       - sqlite
       - resilience
     anchors:
-      - src/utils/aspect-graph.ts:254-259
+      - src/utils/aspect-graph.ts:255-260
       - src/utils/aspect-search.ts:114-124
     applies-to:
       - '#AspectGraph'

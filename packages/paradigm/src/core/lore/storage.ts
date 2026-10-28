@@ -93,10 +93,18 @@ function validateLoreSymbols(rootDir: string, symbols: string[]): SymbolValidati
   const declaredSymbols = new Set<string>();
 
   try {
-    const findResult = require('child_process').execSync(
-      `find "${rootDir}" -name ".purpose" -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null || true`,
-      { encoding: 'utf-8' }
-    ) as string;
+    // No shell: rootDir is an argument, never part of a command string.
+    let findResult = '';
+    try {
+      findResult = require('child_process').execFileSync(
+        'find',
+        [rootDir, '-name', '.purpose', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'],
+        { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 }
+      ) as string;
+    } catch (err) {
+      // find exits non-zero on unreadable dirs but still prints what it found
+      findResult = String((err as { stdout?: string }).stdout ?? '');
+    }
 
     for (const purposePath of findResult.split('\n').filter(Boolean)) {
       try {

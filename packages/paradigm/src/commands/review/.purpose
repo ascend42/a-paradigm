@@ -6,7 +6,7 @@ description: |
 
 components:
   ReviewCommand:
-    description: "paradigm review — two-stage automated review with CI exit codes"
+    description: "paradigm review — two-stage automated review with CI exit codes. --pr is checked by isPrRef (one token, no leading dash) and passed to `gh pr diff` as an argv element (execFileSync, no shell)."
     type: command
     tags: [feature, review, compliance, cli]
 

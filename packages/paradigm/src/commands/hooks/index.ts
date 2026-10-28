@@ -13,7 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import chalk from 'chalk';
 import {
   COMMON_HOOK,
@@ -228,7 +228,8 @@ function validateBashSyntax(scriptContent: string, scriptName: string): string |
     const tmpPath = path.join(os.tmpdir(), `paradigm-hook-validate-${Date.now()}.sh`);
     fs.writeFileSync(tmpPath, scriptContent, 'utf8');
     try {
-      execSync(`bash -n "${tmpPath}" 2>&1`, { encoding: 'utf-8' });
+      // No shell. A failed execFileSync puts bash's stderr in err.message, which the catch below reads.
+      execFileSync('bash', ['-n', tmpPath], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
       return null; // Syntax OK
     } catch (err) {
       // Only a real syntax report blocks. No usable bash (Windows without Git Bash on PATH, or the WSL stub

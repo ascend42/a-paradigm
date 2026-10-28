@@ -12,7 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
+import { gitDiffSinceCommit } from '../../../paradigm-mcp/src/utils/safe-git.js';
 import chalk from 'chalk';
 
 interface AnchorRow {
@@ -85,15 +85,10 @@ function computeShift(
   startLine: number,
   endLine: number,
 ): { newStart: number; newEnd: number } | null {
-  let diff: string;
-  try {
-    diff = execSync(
-      `git diff ${fromCommit}..HEAD --unified=0 -- "${filePath}"`,
-      { cwd: rootDir, encoding: 'utf8', timeout: 5000 }
-    );
-  } catch {
-    return null;
-  }
+  // No shell: filePath is a .purpose anchor and fromCommit comes from the graph
+  // (repo content). gitDiffSinceCommit refuses non-hex commit ids.
+  const diff = gitDiffSinceCommit(rootDir, fromCommit, filePath);
+  if (diff === null) return null;
 
   if (!diff.trim()) {
     return null; // No changes
