@@ -19,6 +19,8 @@
  *   }
  */
 
+// TD-2026-10-27-833 (Aegis M1): FIRST, so the staged-mode fs guard is installed before any other module evaluates
+import './staged-guard-first.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadProjectContext, type ProjectContext } from './utils/index-loader.js';
@@ -30,10 +32,6 @@ import { getSessionTracker } from './utils/session-tracker.js';
 import { resolveProjectRoot } from './utils/global-store.js';
 import { autoRegisterWithConductor } from './utils/conductor-loader.js';
 import { gnomonStaged } from './utils/gnomon-staged.js';
-import { installStagedGuard } from './utils/staged-guard.js';
-import * as os from 'os';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { log } from './utils/mcp-logger.js';
 import { setUniversityCoreLogger } from '@a-company/university-core';
 
@@ -88,11 +86,6 @@ async function reloadContext(opts?: { rebuildStatic?: boolean }): Promise<Projec
  * Main entry point
  */
 async function main() {
-  // TD-2026-10-27-833 (Aegis M1): staged for a Gnomon local session, every fs write is confined to the project's
-  // .paradigm/, .purpose files, portal.yaml and HOME, and every read to the project, HOME and this bundle's dir
-  if (gnomonStaged()) {
-    installStagedGuard({ root: projectDir, home: os.homedir(), selfDir: path.dirname(fileURLToPath(import.meta.url)) });
-  }
   // Load project context
   log.component('#paradigm-mcp').info('Loading project', { projectDir });
 

@@ -17,6 +17,7 @@
  */
 import { createRequire, syncBuiltinESMExports } from 'module';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 // the MUTABLE CommonJS fs object (an ESM namespace is frozen); syncBuiltinESMExports then refreshes every
 // `import * as fs from 'fs'` binding (including the bundle's external node:fs imports) to the guarded functions
@@ -103,7 +104,12 @@ export function installStagedGuard(o: StagedGuardOptions): ReturnType<typeof sta
   const pol = stagedPathPolicy(o);
   if (installed) return pol;
   installed = true;
-  const asPath = (v: unknown): string | null => (typeof v === 'string' ? v : v instanceof URL ? v.pathname : Buffer.isBuffer(v) ? v.toString() : null);
+  // Aegis should-fix: a file: URL resolves through fileURLToPath (percent-decoding, Windows drive letters), never .pathname
+  const asPath = (v: unknown): string | null => {
+    if (typeof v === 'string') return v;
+    if (v instanceof URL) return v.protocol === 'file:' ? fileURLToPath(v) : `\0not-a-file-url:${v.href}`;
+    return Buffer.isBuffer(v) ? v.toString() : null;
+  };
   const writeFlag = (flags: unknown): boolean => {
     if (typeof flags === 'number') return (flags & (fs.constants.O_WRONLY | fs.constants.O_RDWR | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_APPEND)) !== 0;
     return typeof flags === 'string' && /[wa+]/.test(flags);
@@ -141,6 +147,23 @@ export function installStagedGuard(o: StagedGuardOptions): ReturnType<typeof sta
   const CP = (a: unknown[]): Array<[unknown, 'read' | 'write']> => [[a[0], 'read'], [a[1], 'write']];
   const OPEN = (a: unknown[]): Array<[unknown, 'read' | 'write']> => [[a[0], writeFlag(a[1]) ? 'write' : 'read']];
   const STREAM_W = (a: unknown[]): Array<[unknown, 'read' | 'write']> => [[a[0], 'write']];
+  // Aegis should-fix: glob reads the directories under the static (non-glob) prefix of each pattern, resolved against
+  // its cwd option (default process.cwd())
+  const GLOB = (a: unknown[]): Array<[unknown, 'read' | 'write']> => {
+    const opts = a[1] && typeof a[1] === 'object' ? (a[1] as { cwd?: unknown }) : {};
+    const cwd = asPath(opts.cwd) ?? process.cwd();
+    const pats = Array.isArray(a[0]) ? a[0] : [a[0]];
+    return pats.map((p): [unknown, 'read' | 'write'] => {
+      const text = typeof p === 'string' ? p : '';
+      const parts = text.split(/[\\/]/);
+      const stat: string[] = [];
+      for (const part of parts) {
+        if (/[*?[\]{}()!]/.test(part)) break;
+        stat.push(part);
+      }
+      return [path.resolve(cwd, stat.join('/') || '.'), 'read'];
+    });
+  };
   const table: Array<[string, (a: unknown[]) => Array<[unknown, 'read' | 'write']>]> = [
     ['writeFile', W1], ['appendFile', W1], ['mkdir', W1], ['mkdtemp', W1], ['rm', W1], ['rmdir', W1], ['unlink', W1], ['truncate', W1],
     ['chmod', W1], ['lchmod', W1], ['chown', W1], ['lchown', W1], ['utimes', W1], ['lutimes', W1],
@@ -155,6 +178,9 @@ export function installStagedGuard(o: StagedGuardOptions): ReturnType<typeof sta
   }
   wrap(f, 'createWriteStream', STREAM_W);
   wrap(f, 'createReadStream', R1);
+  wrap(f, 'openAsBlob', R1, true);
+  for (const n of ['glob', 'globSync']) wrap(f, n, GLOB);
+  wrap(fs.promises as unknown as Record<string, unknown>, 'glob', GLOB); // an async iterator: refused synchronously
   syncBuiltinESMExports();
   return pol;
 }
