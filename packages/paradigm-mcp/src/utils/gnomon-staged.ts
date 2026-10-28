@@ -10,6 +10,9 @@
  * `.paradigm/` file as code in any mode (habits, protocols, loops and config are data; loop checks run only in the
  * Gnomon kernel after a human trusts the exact content hash).
  */
+import * as os from 'os';
+import * as path from 'path';
+
 export const GNOMON_STAGED_ENV = 'PARADIGM_GNOMON_STAGED';
 
 export function gnomonStaged(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -17,3 +20,12 @@ export function gnomonStaged(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 export const GNOMON_STAGED_REFUSAL = 'not available when Paradigm runs staged for a Gnomon local session';
+
+/**
+ * Aegis H2: where per-project session trails live (breadcrumbs, the session work log, postflight liveness, verdicts).
+ * In the staged Gnomon mode they go under HOME (the kernel's per-session dir), never into the repo's `.paradigm/`: a
+ * local model's tool trail must not replay into a later Claude session's recover.
+ */
+export function breadcrumbBase(rootDir: string): string {
+  return gnomonStaged() ? path.join(os.homedir(), 'staged-project') : rootDir;
+}

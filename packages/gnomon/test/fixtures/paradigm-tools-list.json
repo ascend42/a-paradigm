@@ -1962,8 +1962,7 @@
       },
       "annotations": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       }
     },
     {

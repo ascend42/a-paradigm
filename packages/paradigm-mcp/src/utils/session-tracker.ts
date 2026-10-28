@@ -14,6 +14,7 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import { getSessionDir, writeProjectMeta } from './global-store.js';
 import { log } from './mcp-logger.js';
+import { breadcrumbBase } from './gnomon-staged.js';
 
 /**
  * Supported Claude models with pricing per 1M tokens
@@ -209,11 +210,11 @@ export class SessionTracker {
       let globalDir: string | null = null;
       try { globalDir = getSessionDir(rootDir); } catch { globalDir = null; }
       const globalCur = globalDir ? readJson(path.join(globalDir, 'breadcrumbs.json')) : null;
-      const localCur = readJson(path.join(rootDir, BREADCRUMBS_FILE));
+      const localCur = readJson(path.join(breadcrumbBase(rootDir), BREADCRUMBS_FILE));
       const prior = globalCur ?? localCur;
       if (!prior || prior.sessionId === this.session.sessionId) return; // nothing to preserve
       if (globalDir) writeJson(path.join(globalDir, 'breadcrumbs.prev.json'), prior);
-      writeJson(path.join(rootDir, PREVIOUS_BREADCRUMBS_FILE), prior);
+      writeJson(path.join(breadcrumbBase(rootDir), PREVIOUS_BREADCRUMBS_FILE), prior);
     } catch { /* best-effort — rotation never blocks startup */ }
   }
 
@@ -289,7 +290,7 @@ export class SessionTracker {
 
     // Write to local .paradigm/session-breadcrumbs.json
     try {
-      const filePath = path.join(this.rootDir, BREADCRUMBS_FILE);
+      const filePath = path.join(breadcrumbBase(this.rootDir), BREADCRUMBS_FILE);
       const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -330,9 +331,9 @@ export class SessionTracker {
     // fallback. Never return the CURRENT session as "previous".
     const candidates = [
       globalDir ? path.join(globalDir, 'breadcrumbs.prev.json') : null,
-      path.join(this.rootDir, PREVIOUS_BREADCRUMBS_FILE),
+      path.join(breadcrumbBase(this.rootDir), PREVIOUS_BREADCRUMBS_FILE),
       globalDir ? path.join(globalDir, 'breadcrumbs.json') : null,
-      path.join(this.rootDir, BREADCRUMBS_FILE),
+      path.join(breadcrumbBase(this.rootDir), BREADCRUMBS_FILE),
     ].filter((p): p is string => p !== null);
 
     for (const p of candidates) {

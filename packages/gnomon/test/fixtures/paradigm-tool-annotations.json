@@ -97,8 +97,7 @@
     "paradigm_wisdom": {
       "context": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       },
       "expert": {
         "readOnlyHint": true,
@@ -289,8 +288,7 @@
       },
       "get": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       },
       "graph": {
         "readOnlyHint": true,
@@ -304,13 +302,11 @@
       },
       "search": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       },
       "suggest_scan": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       }
     },
     "paradigm_tags": {
@@ -379,8 +375,7 @@
       },
       "brief": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       },
       "debrief": {
         "readOnlyHint": false,
@@ -390,13 +385,11 @@
     "paradigm_pm": {
       "postflight": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       },
       "preflight": {
         "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": false
       }
     },
     "paradigm_docs": {

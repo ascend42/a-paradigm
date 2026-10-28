@@ -22,6 +22,7 @@ import type { WisdomContext, HistoryContext } from '../types/index.js';
 import { loadWisdomContext } from './wisdom-loader.js';
 import { loadHistoryContext } from './history-loader.js';
 import { loadWorkspaceContext, type WorkspaceContext } from './workspace-loader.js';
+import { gnomonStaged } from './gnomon-staged.js';
 
 export interface ProjectContext {
   /** Root directory of the project */
@@ -239,6 +240,10 @@ const staticRebuilds = new Map<string, { running: Promise<void>; next: ProjectCo
  * with the latest context. Failures are logged, never thrown.
  */
 function scheduleStaticRebuild(ctx: ProjectContext): void {
+  // TD-2026-10-27-833 (Aegis H2): staged for a Gnomon local session, a tool call never writes the generated index
+  // files in the background (a read-class op must not write .paradigm/); the in-memory context is still refreshed and
+  // paradigm_reindex (a carded op) writes them on request
+  if (gnomonStaged()) return;
   const root = ctx.rootDir;
   const existing = staticRebuilds.get(root);
   if (existing) {

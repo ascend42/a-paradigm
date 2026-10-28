@@ -12,6 +12,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { breadcrumbBase } from './gnomon-staged.js';
 
 const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
@@ -133,7 +134,7 @@ export interface SessionActivitySummary {
  */
 export function appendSessionWorkEntry(rootDir: string, entry: SessionWorkEntry): void {
   try {
-    const filePath = path.join(rootDir, SESSION_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), SESSION_LOG_FILE);
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -187,7 +188,7 @@ export function appendSessionWorkEntry(rootDir: string, entry: SessionWorkEntry)
  */
 export function readSessionWorkLog(rootDir: string): SessionWorkEntry[] {
   try {
-    const filePath = path.join(rootDir, SESSION_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), SESSION_LOG_FILE);
     if (!fs.existsSync(filePath)) return [];
 
     return fs.readFileSync(filePath, 'utf8')
@@ -211,7 +212,7 @@ export function readSessionWorkLog(rootDir: string): SessionWorkEntry[] {
  */
 export function clearSessionWorkLog(rootDir: string): void {
   try {
-    const filePath = path.join(rootDir, SESSION_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), SESSION_LOG_FILE);
     if (fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, '', 'utf8');
     }
@@ -271,7 +272,7 @@ export function recordPostflightLiveness(
   record: Omit<PostflightLivenessRecord, 'ts' | 'sessionId'> & { sessionId?: string },
 ): void {
   try {
-    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), POSTFLIGHT_LIVENESS_FILE);
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const full: PostflightLivenessRecord = {
@@ -291,7 +292,7 @@ export function recordPostflightLiveness(
  */
 export function readPostflightLiveness(rootDir: string): PostflightLivenessRecord[] {
   try {
-    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), POSTFLIGHT_LIVENESS_FILE);
     if (!fs.existsSync(filePath)) return [];
     return fs.readFileSync(filePath, 'utf8')
       .trim()
@@ -317,7 +318,7 @@ export function readPostflightLiveness(rootDir: string): PostflightLivenessRecor
  */
 export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): void {
   try {
-    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), VERDICTS_LOG_FILE);
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -333,7 +334,7 @@ export function appendVerdictEntry(rootDir: string, entry: SessionWorkEntry): vo
  */
 export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
   try {
-    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), VERDICTS_LOG_FILE);
     if (!fs.existsSync(filePath)) return [];
     return fs.readFileSync(filePath, 'utf8')
       .trim()
@@ -355,7 +356,7 @@ export function readPendingVerdicts(rootDir: string): SessionWorkEntry[] {
  */
 export function markVerdictsConsumed(rootDir: string, nominationIds: string[]): void {
   try {
-    const filePath = path.join(rootDir, VERDICTS_LOG_FILE);
+    const filePath = path.join(breadcrumbBase(rootDir), VERDICTS_LOG_FILE);
     if (!fs.existsSync(filePath)) return;
     const consumed = new Set(nominationIds);
     const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(l => l.trim());

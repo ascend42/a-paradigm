@@ -684,7 +684,15 @@ function getLocalUniversityMtimeMs(projectRoot: string): number | undefined {
   }
 }
 
+/**
+ * TD-2026-10-27-833 (Aegis H2): when the Paradigm MCP runs staged for a Gnomon local session
+ * (PARADIGM_GNOMON_STAGED=1) the discovery cache is neither read nor written: a read op must not write into the
+ * repo's .paradigm/, and a cache a model planted there must not steer discovery.
+ */
+const stagedNoCache = (): boolean => process.env.PARADIGM_GNOMON_STAGED === '1';
+
 function tryReadCache(projectRoot: string): PackLocation[] | null {
+  if (stagedNoCache()) return null;
   const cachePath = path.join(projectRoot, CACHE_REL_PATH);
   if (!fs.existsSync(cachePath)) return null;
 
@@ -712,6 +720,7 @@ function tryReadCache(projectRoot: string): PackLocation[] | null {
 }
 
 function tryWriteCache(projectRoot: string, packs: PackLocation[]): void {
+  if (stagedNoCache()) return;
   const cachePath = path.join(projectRoot, CACHE_REL_PATH);
   try {
     fs.mkdirSync(path.dirname(cachePath), { recursive: true });
