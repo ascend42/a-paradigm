@@ -96,7 +96,10 @@ describe("C5'b scoped Always on a brokered card (K1 node verified against the co
     expect(always[0]!.text).toBe('this tool, any arguments');
     expect(always[0]!.attrs.get('aria-label')).toBe('Always: write on srv, any arguments, in this repo');
     expect(el.text).toContain('every call of write on srv in this repo · paused if the tool or server changes');
-    expect(el.text).toContain('server: untrusted');
+    // Mika: the kernel's server trust line is the k-line on the face (once: not again in the body)
+    const k = el.all().find((e) => e.className.startsWith('k-line'))!;
+    expect(k.text).toBe('server: untrusted · its labels are not believed');
+    expect(el.text.split('server: untrusted').length).toBe(2);
   });
 
   it('a forged or mismatched node offers no Always, and the kernel’s "Always: any call of" line is dropped too', () => {

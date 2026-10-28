@@ -1241,7 +1241,9 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   const tag = gnomonFam ? { text: `${tag0?.text ?? 'hand only'} · root key`, handle: tag0?.handle ?? null } : tag0;
   // the kernel's second line ("asked from Settings · 23:20 · applies at once, no restart") shows under the title
   // #git-verbs: a lookalike host (claim-mismatch) shows no k-line: its red warning stays the first thing under the title
-  const kLine = gnomonFam ? (kernelTextLines(block).find((l) => /^asked from (Settings|the terminal) · /.test(l)) ?? null) : v.gitVerb && !loud ? gitVerbLine(v.gitVerb) : null;
+  // C5'b (Mika): a brokered card's k-line is the kernel's server trust line ("server: trusted · …"): whether the
+  // server's labels are believed is the context of both Allow and Always, so it shows on the face
+  const kLine = gnomonFam ? (kernelTextLines(block).find((l) => /^asked from (Settings|the terminal) · /.test(l)) ?? null) : brokered && !loud ? (kernelTextLines(block).find((l) => l.startsWith('server: ')) ?? null) : v.gitVerb && !loud ? gitVerbLine(v.gitVerb) : null;
   const gitWarn = v.gitVerb && !loud ? gitVerbWarning(v.gitVerb) : null;
   const raised = v.held ? `Allowing in ${Math.max(0, Math.ceil(v.held.seconds))} · say “${v.held.undo}”` : raisedLine(v.raisedAt, v.now ?? Date.now());
   const failed = v.kind === 'incident' || v.flags.includes('failed');
@@ -1259,7 +1261,8 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   // Mika: a brokered card with no scoped key drops the kernel's "Always: any call of …" line too
   const noAlwaysLine = brokered && !(scoped === 'tool' && keys.includes('always'));
   const shownBody0 = mcpFace ? withoutLines(body, (l) => l === kLine || l.startsWith('Allow takes the root key') || (!!hashLine && l === hashLine)) : body;
-  const shownBody = noAlwaysLine ? withoutLines(shownBody0, (l) => l.startsWith('Always: any call of ')) : shownBody0;
+  const shownBody1 = brokered && kLine ? withoutLines(shownBody0, (l) => l === kLine) : shownBody0;
+  const shownBody = noAlwaysLine ? withoutLines(shownBody1, (l) => l.startsWith('Always: any call of ')) : shownBody1;
   // a kind whose lines the kernel does not compose: its words are labelled as the requester's (never the kernel's)
   // design-system card.body-scroll (founder 2026-10-23: "as long as the card text is scrollable in the event it's too
   // large that's fine"): a body taller than its cap scrolls INSIDE the card (styles.css .card-body), so the title, the

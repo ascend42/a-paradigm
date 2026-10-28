@@ -97,7 +97,7 @@ describe("C5'b trust preview (TrustFlow, inline under the row)", () => {
   }
   const flush = () => new Promise((r) => setTimeout(r, 0));
   const preview = { id: 'user::neurons', name: 'neurons', preview: true, token: 'tok-1', expiresAt: '2026-10-28T14:05:00Z', notice: "Trust neurons's tool labels? …", reads: ['search', 'read'] };
-  const panel = (c: McpServersController) => rows(status(), c.ui()).find((r) => r.id === 'mcp-trust' || r.id === 'mcp-trust-request') as (SettingRow & { confirm?: { text: string; lines?: string[]; list?: string[]; keys: Array<Record<string, unknown>> }; result?: { lead?: string; text: string } }) | undefined;
+  const panel = (c: McpServersController) => rows(status(), c.ui()).find((r) => r.id === 'mcp-trust' || r.id === 'mcp-trust-request') as (SettingRow & { confirm?: { text: string; lines?: string[]; list?: string[]; after?: string[]; result?: { lead?: string; text: string }; keys: Array<Record<string, unknown>> }; result?: { lead?: string; text: string } }) | undefined;
 
   it('an untrusted press sends nothing; checking → ready: the notice verbatim, the reads, Trust · root card and Cancel', async () => {
     const { c, calls, focus, setActive } = ctl(async () => preview);
@@ -114,7 +114,10 @@ describe("C5'b trust preview (TrustFlow, inline under the row)", () => {
     expect(mcpSection({ status: status(), ui: c.ui(), hsid: null }).live).toBe(TRUST_COPY.checking);
     await flush();
     const p = panel(c)!;
-    expect(p.confirm!.text).toBe(preview.notice);
+    expect(p.confirm!.text).toBe('Gnomon will believe what neurons says about its tools.');
+    expect(p.confirm!.lines).toEqual(['These run with no card:']);
+    expect(p.confirm!.after).toEqual([TRUST_COPY.after]);
+    expect(JSON.stringify(p)).not.toContain(preview.notice); // the kernel's notice stays on the card
     expect(p.confirm!.list).toEqual(['search', 'read']);
     expect(p.confirm!.keys.map((k) => [k.act, k.label, !!k.pri, !!k.quiet])).toEqual([['mcp:trust-commit', 'Trust · root card', true, false], ['mcp:trust-cancel', 'Cancel', false, true]]);
     expect(JSON.stringify(c.ui())).not.toContain('tok-1'); // the token never sits in view state
@@ -123,11 +126,13 @@ describe("C5'b trust preview (TrustFlow, inline under the row)", () => {
     expect(rs[rs.findIndex((r) => 'label' in r && r.label === 'neurons') + 1]!.id).toBe('mcp-trust');
   });
 
-  it('no reads: "none: every tool still asks; trust lets you make Always rules"', async () => {
+  it('no reads: one line, no lead and no list', async () => {
     const { c } = ctl(async () => ({ ...preview, reads: [] }));
     c.press('mcp:trust', 'user::neurons', true);
     await flush();
-    expect(panel(c)!.confirm!.lines).toEqual(['These run with no card: none: every tool still asks; trust lets you make Always rules']);
+    expect(panel(c)!.confirm!.lines).toEqual(['No tool runs without a card. Trust lets you make Always rules for its tools.']);
+    expect(panel(c)!.confirm!.list).toBeUndefined();
+    expect(panel(c)!.confirm!.after).toBeUndefined();
   });
 
   it('at expiresAt the primary becomes Preview again (no countdown); it sends a new preview, never a commit', async () => {
@@ -181,7 +186,9 @@ describe("C5'b trust preview (TrustFlow, inline under the row)", () => {
     setActive('mcp:trust');
     c2.press('mcp:trust', 'user::neurons', true);
     await flush();
-    const p = panel(c2)!;
+    const p = { result: panel(c2)!.confirm!.result };
+    expect(panel(c2)!.confirm!.keys.map((k) => [k.act, k.label])).toEqual([['mcp:trust-cancel', 'Close']]);
+    expect(panel(c2)!.result).toBeUndefined();
     expect(p.result!.lead).toBe('Not changed:');
     expect(p.result!.text).toContain('next: open a local session');
     expect(p.result!.text).not.toContain('not-listed');
@@ -212,7 +219,7 @@ describe("C5'b trust preview (TrustFlow, inline under the row)", () => {
   for (const [kind, decision, lead, text] of [
     ['approval.decide', 'allow', 'Trusted', ' neurons’s tool labels at 14:02. 2 tools run with no card.'],
     ['approval.decide', 'deny', 'Not changed:', ' neurons stays untrusted; the card was denied at 14:02.'],
-    ['approval.expire', undefined, 'Not changed:', ' neurons stays untrusted; the card was expired at 14:02.'],
+    ['approval.expire', undefined, 'Not changed:', ' neurons stays untrusted; the card expired at 14:02.'],
   ] as const) {
     it(`the outcome under the row (${kind} ${decision ?? ''}); focus on the server's first key`, async () => {
       const { c, focus } = ctl(async (r) => (r.payload.op === 'commit' ? { pending: true, cardId: 'card:T' } : preview));
@@ -238,7 +245,78 @@ describe("C5'b trust preview (TrustFlow, inline under the row)", () => {
     await flush();
     await flush();
     expect(calls).toEqual([{ kind: 'request.mcp.trust', payload: { id: 'user::neurons', op: 'clear' } }]);
-    expect(c.ui().result).toMatchObject({ lead: 'Cleared trust' });
+    expect(c.ui().result).toMatchObject({ lead: 'Cleared:', text: " Gnomon no longer trusts neurons’s tool labels (14:02). Its tools ask again; its Always rules are paused." });
     expect(focus.at(-1)).toBe('[data-lm-value="user::neurons"]:not([disabled])');
+  });
+
+  it("Mika rework: another server's Trust… takes over a ready, expired or refused panel; committing and pending block, saying why", async () => {
+    const two = status([row({}), row({ id: 'user::linear', name: 'linear' })]);
+    let pend: (v: unknown) => void = () => undefined;
+    const { c, calls } = ctl((r) => (r.payload.op === 'commit' ? new Promise((res) => (pend = res)) : Promise.resolve({ ...preview, token: `tok-${String(r.payload.id)}` })), two);
+    c.press('mcp:trust', 'user::neurons', true);
+    await flush();
+    expect(c.ui().trust).toMatchObject({ id: 'user::neurons', phase: 'ready' });
+    // the same server's Trust… leaves its open panel as it is (no second preview)
+    c.press('mcp:trust', 'user::neurons', true);
+    expect(calls).toHaveLength(1);
+    // another server's Trust…: the ready panel gives way (its token dropped), the new one opens
+    c.press('mcp:trust', 'user::linear', true);
+    await flush();
+    expect(c.ui().trust).toMatchObject({ id: 'user::linear', phase: 'ready' });
+    c.press('mcp:trust-commit', 'user::linear', true);
+    expect(c.ui().trust!.phase).toBe('committing');
+    // committing: Esc is consumed (the sheet stays), the open Trust… is aria-disabled, the other waits and says why
+    expect(c.escape()).toBe(true);
+    const rs = rows(two, c.ui());
+    expect(byLabel(rs, 'linear')!.keys!.find((k) => k.act === 'mcp:trust')).toMatchObject({ ariaDisabled: true, expanded: true });
+    const n = byLabel(rs, 'neurons')!;
+    expect(n.keys!.find((k) => k.act === 'mcp:trust')).toMatchObject({ ariaDisabled: true, title: 'one trust preview at a time: finish or cancel linear’s first' });
+    expect(n.how).toContain('one trust preview at a time: finish or cancel linear’s first');
+    c.press('mcp:trust', 'user::neurons', true);
+    expect(c.ui().trust!.id).toBe('user::linear');
+    pend({ pending: true, cardId: 'card:L' });
+    await flush();
+    expect(c.ui().trust!.phase).toBe('pending');
+    expect(byLabel(rows(two, c.ui()), 'linear')!.keys!.find((k) => k.act === 'mcp:trust')).toMatchObject({ ariaDisabled: true });
+    c.press('mcp:trust', 'user::neurons', true);
+    expect(c.ui().trust!.id).toBe('user::linear');
+    // pending: Esc closes the sheet (not consumed); the card stays in the stack
+    expect(c.escape()).toBe(false);
+    expect(c.ui().trust!.phase).toBe('pending');
+  });
+});
+
+describe("C5'b chip only where trust is a question (Mika)", () => {
+  it('no chip for not-local, remote, problem, platform or a row with a problem; untrusted stays for fetches, remote-proxy, bad-id', () => {
+    const rs = rows(status([row({ id: 'a', name: 'a', trust: { level: 'untrusted', why: 'not-local' } }), row({ id: 'b', name: 'b', trust: { level: 'untrusted', why: 'remote' } }), row({ id: 'c', name: 'c', trust: { level: 'untrusted', why: 'problem' } }), row({ id: 'd', name: 'd', trust: { level: 'untrusted', why: 'platform' } }), row({ id: 'e', name: 'e', problems: [{ code: 'command', text: 'e is not on the PATH' }] }), row({ id: 'f', name: 'f', trust: { level: 'untrusted', why: 'fetches' } }), row({ id: 'g', name: 'g', trust: { level: 'untrusted', why: 'remote-proxy' } }), row({ id: 'h', name: 'h', trust: { level: 'untrusted', why: 'bad-id' } })]));
+    for (const l of ['a', 'b', 'c', 'd', 'e']) expect(byLabel(rs, l)!.chip, l).toBeUndefined();
+    for (const l of ['f', 'g', 'h']) expect(byLabel(rs, l)!.chip, l).toEqual({ text: 'untrusted' });
+  });
+
+  it("the enable flow's outcome grammar: the card expired at / the card was denied at", async () => {
+    const { notChangedResult } = await import('../src/core/mcp-servers.js');
+    expect(notChangedResult('neurons', '14:12', 'expired').text).toBe(' neurons stays off; the card expired at 14:12.');
+    expect(notChangedResult('neurons', '14:02', 'denied').text).toBe(' neurons stays off; the card was denied at 14:02.');
+  });
+
+  it('a refused panel paints its reason INSIDE the block as a role=alert result line, above Close', async () => {
+    const { sectionEl } = await import('../src/ui/settings-sheet.js');
+    type El = { tag: string; className: string; attrs: Map<string, string>; kids: unknown[]; appendChild(c: unknown): unknown; setAttribute(n: string, v: string): void };
+    const doc = { createElement: (tag: string) => ({ tag, className: '', attrs: new Map(), kids: [], appendChild(this: El, c: unknown) { this.kids.push(c); return c; }, setAttribute(this: El, n: string, v: string) { this.attrs.set(n, v); } }), createTextNode: (t: string) => t };
+    const ui = { ...emptyMcpUi(), trust: { id: 'user::neurons', name: 'neurons', phase: 'refused' as const, notice: null, reads: [], expiresAt: null, result: { lead: 'Not changed:', text: ' it changed since a session listed its tools · next: open a new local session', fail: true }, cardId: null } };
+    const sec = sectionEl(doc as never, mcpSection({ status: status(), ui, hsid: null })) as unknown as El;
+    const all = (e: El): El[] => [e, ...e.kids.filter((k): k is El => typeof k === 'object').flatMap(all)];
+    const block = all(sec).find((e) => e.className === 'set-form')!;
+    const alert = all(block).find((e) => e.attrs.get('role') === 'alert')!;
+    expect(alert.className).toContain('sf-result fail');
+    expect(all(block).find((e) => e.tag === 'button')!.kids).toEqual(['Close']);
+  });
+
+  it('the Settings dialog keeps Tab inside it with the shared trapTab (never a copy)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/ui/settings-sheet.ts', import.meta.url), 'utf8');
+    expect(src).toContain("import { trapTab } from './tier-picker.js';");
+    expect(src).toMatch(/key === 'Tab' && !overlay\.hidden\) trapTab\(dialog, e as KeyboardEvent\)/);
+    expect(src).not.toMatch(/function trapTab/);
   });
 });

@@ -286,8 +286,12 @@ export const TRUST_COPY = Object.freeze({
   again: 'Preview again',
   checking: 'Checking what Gnomon would trust…',
   committing: 'Raising the card…',
-  noReads: 'none: every tool still asks; trust lets you make Always rules',
+  noReads: 'No tool runs without a card. Trust lets you make Always rules for its tools.',
   readsLead: 'These run with no card:',
+  /** the panel's own words (Mika: the kernel's notice stays on the card, which is what is signed) */
+  believe: (name: string): string => `Gnomon will believe what ${name} says about its tools.`,
+  after: 'You can make Always rules for its other tools. Tools that change or delete things still ask each time. Trust ends by itself if its command, arguments, environment or tool list changes.',
+  close: 'Close',
   expired: 'Not changed: this preview expired.',
   stale: 'Not changed: the server changed since the preview.',
   pendingChip: 'card waiting',
@@ -355,9 +359,20 @@ export function trustKeys(r: McpRowView, ui: McpUi, windows: boolean): FormKey[]
   const words = t.why ? trustRefusalWords(t.why, r) : null;
   if (words?.key === 'none') return [];
   const open = ui.trust?.id === r.id;
-  // one trust panel at a time: another server's Trust… waits (aria-disabled, it keeps its place in the Tab order)
-  return [{ act: 'mcp:trust', value: r.id, label: TRUST_COPY.trust, title: title('Trust'), expanded: open, ...(words || (ui.trust && !open) ? { ariaDisabled: true } : ui.busy ? { disabled: true } : {}) }];
+  // Mika: the open server's own Trust… is dead while its commit is in flight or its card waits; another server's
+  // Trust… waits only then (a ready, expired or refused panel gives way to it), and its title says why
+  const blocked = trustBlocking(ui.trust);
+  const other = !!blocked && !open;
+  return [{ act: 'mcp:trust', value: r.id, label: TRUST_COPY.trust, title: other ? trustBlockedWords(ui.trust!.name) : title('Trust'), expanded: open, ...(words || blocked ? { ariaDisabled: true } : ui.busy ? { disabled: true } : {}) }];
 }
+
+/** C5'b: a panel that holds the one-at-a-time slot (its commit is in flight or its card waits). */
+export const trustBlocking = (t: McpTrustUi | null | undefined): boolean => !!t && (t.phase === 'committing' || t.phase === 'pending');
+/** C5'b: why another server's Trust… waits (its title and its how line). */
+export const trustBlockedWords = (name: string): string => `one trust preview at a time: finish or cancel ${name}’s first`;
+
+/** C5'b (Mika): no chip where there is no trust question (never runs locally, a problem, Windows). */
+const NO_TRUST_CHIP: readonly string[] = ['not-local', 'remote', 'problem', 'platform'];
 
 /** The reads as the panel lists them: at most readsMax, then "+N more". */
 export function readsShown(reads: readonly string[]): string[] {
@@ -378,11 +393,13 @@ export function trustPanelRows(t: McpTrustUi): SettingRow[] {
     case 'committing':
       return [form({ label, text: TRUST_COPY.committing, keys: [commit({ busy: true, ariaDisabled: true }), cancel] })];
     case 'refused':
-      return [form({ label, text: '', keys: [cancel] }, t.result)];
+      // Mika: the reason sits inside the block (its result line, role=alert), and the one key closes it
+      return [form({ label, text: '', ...(t.result ? { result: t.result } : {}), keys: [{ ...cancel, label: TRUST_COPY.close }] })];
     default: {
       const list = t.reads.length ? readsShown(t.reads) : null;
       const keys: FormKey[] = t.phase === 'expired' ? [{ act: 'mcp:trust-again', value: t.id, label: TRUST_COPY.again, pri: true }, cancel] : [commit({}), cancel];
-      return [form({ label, text: t.notice ?? '', lines: [list ? TRUST_COPY.readsLead : `${TRUST_COPY.readsLead} ${TRUST_COPY.noReads}`], ...(list ? { list } : {}), keys }, t.phase === 'expired' ? t.result : null)];
+      const words = list ? { lines: [TRUST_COPY.readsLead], list, after: [TRUST_COPY.after] } : { lines: [TRUST_COPY.noReads] };
+      return [form({ label, text: TRUST_COPY.believe(t.name), ...words, keys }, t.phase === 'expired' ? t.result : null)];
     }
   }
 }
@@ -407,8 +424,8 @@ export function trustLiveText(t: McpTrustUi | null | undefined): string {
 }
 
 export const trustedResult = (name: string, at: string, n: number): ResultView => ({ lead: 'Trusted', text: ` ${name}’s tool labels at ${at}. ${n} tool${n === 1 ? ' runs' : 's run'} with no card.` });
-export const trustNotChangedResult = (name: string, at: string, why: 'denied' | 'expired'): ResultView => ({ lead: 'Not changed:', text: ` ${name} stays untrusted; the card was ${why} at ${at}.` });
-export const trustClearedResult = (name: string, at: string): ResultView => ({ lead: 'Cleared trust', text: ` in ${name}’s tool labels at ${at}. Its tools ask again; its Always rules are paused.` });
+export const trustNotChangedResult = (name: string, at: string, why: 'denied' | 'expired'): ResultView => ({ lead: 'Not changed:', text: ` ${name} stays untrusted; ${why === 'expired' ? 'the card expired' : 'the card was denied'} at ${at}.` });
+export const trustClearedResult = (name: string, at: string): ResultView => ({ lead: 'Cleared:', text: ` Gnomon no longer trusts ${name}’s tool labels (${at}). Its tools ask again; its Always rules are paused.` });
 
 /** request.mcp.trust: preview and clear take no token; a commit carries the preview's. */
 export function trustRequest(id: string, op: 'preview' | 'commit' | 'clear', token?: string): { kind: string; payload: Record<string, unknown> } {
@@ -548,10 +565,13 @@ export function mcpSection(i: McpSectionInput): SettingsSection {
     if (keys.some((k) => /^mcp:(on|mark)-/.test(k.act))) offerable += 1;
     const p0 = r.problems[0];
     // C5'b: why it can't be trusted now sits in the row's how line (never the kernel's code)
-    const tw = r.trust && r.trust.level === 'untrusted' && r.trust.why && !r.problems.length && !v.windows ? trustRefusalWords(r.trust.why, r).how : '';
+    const tw0 = r.trust && r.trust.level === 'untrusted' && r.trust.why && !r.problems.length && !v.windows ? trustRefusalWords(r.trust.why, r).how : '';
+    // another server's panel holds the slot: this row's Trust… says why it waits
+    const waitsFor = r.trust?.level === 'untrusted' && !r.trust.why && !r.problems.length && !v.windows && trustBlocking(i.ui.trust) && i.ui.trust!.id !== r.id ? trustBlockedWords(i.ui.trust!.name) : '';
+    const tw = tw0 || waitsFor;
     const how0 = p0 && p0.code !== 'first-party' ? `${howWords(r, v.envFile)} · ${problemNext(p0.code, r)}` : howWords(r, v.envFile);
     const how = tw ? `${how0} · ${tw}` : how0;
-    const chip = p0?.code === 'first-party' ? null : trustChipOf(r.trust);
+    const chip = p0?.code === 'first-party' || NO_TRUST_CHIP.includes(r.trust?.why ?? '') || r.problems.length ? null : trustChipOf(r.trust);
     rows.push({ kind: 'readonly', id: `mcp-${r.source}-${n}`, label, value: st.value, how, ...(st.mark ? { mark: st.mark } : {}), ...(grp ? { grp: true } : {}), ...(keys.length ? { keys } : {}), ...(chip ? { chip } : {}), title: `${r.sessionName} · tools mcp__${r.sessionName}__*` });
     // C5'b: the trust preview opens INLINE under its row (never a modal over the sheet); then its outcome
     if (i.ui.trust?.id === r.id) rows.push(...trustPanelRows(i.ui.trust));
@@ -674,4 +694,4 @@ export const skippedResult = (on: readonly string[], skipped: readonly string[],
   text: `${on.length ? ` ${on.join(', ')} at ${at}.` : ''} ${skipped.join(', ')} changed while the card waited, so ${skipped.length === 1 ? 'it stays' : 'they stay'} off. next: look at ${skipped.length === 1 ? 'it' : 'them'} again, then turn ${skipped.length === 1 ? 'it' : 'them'} on again.`,
   ...(on.length ? {} : { fail: true }),
 });
-export const notChangedResult = (name: string, at: string, why: 'denied' | 'expired'): ResultView => ({ lead: 'Not changed:', text: ` ${name} ${name.includes(', ') ? 'stay' : 'stays'} off; the card was ${why} at ${at}.` });
+export const notChangedResult = (name: string, at: string, why: 'denied' | 'expired'): ResultView => ({ lead: 'Not changed:', text: ` ${name} ${name.includes(', ') ? 'stay' : 'stays'} off; ${why === 'expired' ? 'the card expired' : 'the card was denied'} at ${at}.` });

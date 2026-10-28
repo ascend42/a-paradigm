@@ -58,8 +58,10 @@ export class TrustFlow {
 
   /** Trust…: the panel opens at once (Checking…) and the preview is sent (a trusted press only). */
   open(id: string, name: string, trusted: boolean): boolean {
-    if (!trusted || (this.#s && this.#s.id !== id)) return false; // G-GUI-04; one panel at a time
-    if (this.#s && (this.#s.phase === 'committing' || this.#s.phase === 'pending')) return false;
+    if (!trusted) return false; // G-GUI-04
+    // one panel at a time: a commit in flight or a waiting card holds it; a ready, expired or refused panel gives way
+    // to another server's Trust… (its token dropped); the same server's open panel stays as it is
+    if (this.#s && (this.#s.phase === 'committing' || this.#s.phase === 'pending' || this.#s.id === id)) return false;
     this.#drop();
     this.#s = { id, name, phase: 'checking', notice: null, reads: [], expiresAt: null, result: null, cardId: null };
     void this.#preview();
@@ -273,7 +275,10 @@ export class McpServersController {
   /** Esc inside the sheet: the trust panel closes first, focus back on its Trust… key. */
   escape(): boolean {
     const t = this.#trust.view();
-    if (!t || !this.#trust.cancel()) return false;
+    if (!t) return false;
+    // Mika: Esc while the commit is in flight is consumed (the sheet stays); a waiting card lets Esc close the sheet
+    if (t.phase === 'committing') return true;
+    if (!this.#trust.cancel()) return false;
     this.#d.focus?.(sel('mcp:trust', t.id));
     return true;
   }

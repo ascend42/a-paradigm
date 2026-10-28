@@ -25,6 +25,7 @@
 import { h, type MiniDoc, type MiniEl } from '../core/render.js';
 import { folderFieldEl } from './folder-field.js';
 import { rulesBlockEl } from './rules-block.js';
+import { trapTab } from './tier-picker.js';
 import { SETTINGS_RUNS, type FieldView, type FormKey, type FormView, type ResultView, type SectionId, type SettingRow, type SettingsSection } from '../core/settings.js';
 
 /** The Local model section's press path (ui/local-model.ts LocalModelController). */
@@ -145,7 +146,7 @@ function rowEl(doc: MiniDoc, r: SettingRow): MiniEl {
     else if (r.confirm) {
       const c = r.confirm;
       // C5'b: the trust preview's notice, its lead line and the reads list sit above the keys
-      row.appendChild(h(doc, 'div', { class: 'set-form', role: 'group', 'aria-label': c.label }, c.text ? h(doc, 'p', { class: 'sf-lead' }, c.text) : null, ...(c.lines ?? []).map((l) => h(doc, 'p', { class: 'sf-note' }, l)), c.list?.length ? h(doc, 'ul', { class: 'sf-list' }, ...c.list.map((x) => h(doc, 'li', null, x))) : null, h(doc, 'div', { class: 'sf-keys' }, ...c.keys.map((k) => keyEl(doc, k)))));
+      row.appendChild(h(doc, 'div', { class: 'set-form', role: 'group', 'aria-label': c.label }, c.text ? h(doc, 'p', { class: 'sf-lead' }, c.text) : null, ...(c.lines ?? []).map((l) => h(doc, 'p', { class: 'sf-note' }, l)), c.list?.length ? h(doc, 'ul', { class: 'sf-list' }, ...c.list.map((x) => h(doc, 'li', null, x))) : null, ...(c.after ?? []).map((l) => h(doc, 'p', { class: 'sf-note' }, l)), c.result ? resultEl(doc, c.result) : null, h(doc, 'div', { class: 'sf-keys' }, ...c.keys.map((k) => keyEl(doc, k)))));
     }
     else if (r.keys.length === 1) row.appendChild(keyEl(doc, r.keys[0]!));
     else if (r.keys.length) row.appendChild(h(doc, 'div', { class: 'sf-keys' }, ...r.keys.map((k) => keyEl(doc, k))));
@@ -386,6 +387,11 @@ export function mountSettings(document: Document, d: SettingsDeps): SettingsShee
     true,
   );
   document.getElementById('settings-close')?.addEventListener('click', close);
+  // Mika (C5'b review): the sheet is aria-modal, so Tab stays inside it (the shared trapTab, never a copy)
+  const dialog = (overlay.querySelector('[role="dialog"]') as HTMLElement | null) ?? overlay;
+  overlay.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Tab' && !overlay.hidden) trapTab(dialog, e as KeyboardEvent);
+  });
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close(); // a press on the scrim closes it
   });

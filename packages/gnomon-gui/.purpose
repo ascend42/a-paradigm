@@ -1856,6 +1856,20 @@ components:
       panel back onto Trust…; one persistent polite line per section
       (SettingsSection.live, the sheet keeps its node). A tool.trust row
       re-reads status. Tests: test/mcp-trust.test.ts.
+      Mika's C5'b review (2026-10-28): no chip where trust is no question
+      (not-local, remote, problem, platform, a row with a problem); the panel
+      speaks its own words ("Gnomon will believe what <name> says about its
+      tools.", the reads, then what still asks and when trust ends; zero
+      reads: one line) and the kernel's notice stays on the card; a refused
+      panel holds its reason (role=alert) above Close; another server's
+      Trust… takes over a ready, expired or refused panel, while committing
+      or pending it waits and its title and how line say "one trust preview
+      at a time: finish or cancel <name>'s first"; the open Trust… is
+      aria-disabled then too; Esc is consumed while committing; "the card
+      expired at" / "was denied at"; Clear trust reads "Cleared: Gnomon no
+      longer trusts …". A brokered card's k-line is the kernel's "server: …"
+      trust line. The Settings dialog traps Tab with the shared trapTab
+      (ui/tier-picker.ts); any aria-disabled key draws the quiet look.
     path: src/core/mcp-servers.ts
     type: module
     tags: [gnomon, gui, settings, mcp, paradigm-8]

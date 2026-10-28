@@ -14,7 +14,7 @@ const drop = (o: Record<string, unknown>) => ({ kind: 'tool.trust', payload: { i
 describe("C5'b drop toast", () => {
   it('fires on a drop because its tool list or its command changed, in the founder words, warn for 10 s', () => {
     expect(trustDropToastOf(drop({ why: 'tools-changed' }), status)).toEqual({ id: 'user::neurons', text: 'neurons changed (its tool list changed): Gnomon stopped trusting its tool labels. Its tools ask again; its Always rules are paused.' });
-    expect(trustDropToastOf(drop({ why: 'launch-changed' }), status)!.text).toBe('neurons changed (its command changed): Gnomon stopped trusting its tool labels. Its tools ask again; its Always rules are paused.');
+    expect(trustDropToastOf(drop({ why: 'launch-changed' }), status)!.text).toBe('neurons changed (its command, arguments or environment changed): Gnomon stopped trusting its tool labels. Its tools ask again; its Always rules are paused.');
     expect(TRUST_DROP_TOAST).toEqual({ kind: 'warn', key: 'Trust again…' });
     expect(toastTtl(TRUST_DROP_TOAST.kind, false)).toBe(TOAST_WARN_MS);
   });

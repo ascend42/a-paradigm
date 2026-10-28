@@ -111,7 +111,7 @@ export function trustDropToastOf(row: { kind?: unknown; payload?: unknown }, sta
   const all = [...(Array.isArray(m?.servers) ? m.servers : []), ...repos.flatMap((r) => (r && Array.isArray(r.servers) ? r.servers : []))] as Array<{ id?: unknown; name?: unknown } | null>;
   const found = all.find((s) => s && s.id === p.id);
   const name = displayText(typeof found?.name === 'string' ? found.name : typeof p.label === 'string' ? p.label : 'an MCP server').slice(0, 64);
-  const what = p.why === 'launch-changed' ? 'its command changed' : 'its tool list changed';
+  const what = p.why === 'launch-changed' ? 'its command, arguments or environment changed' : 'its tool list changed';
   return { id: p.id, text: `${name} changed (${what}): Gnomon stopped trusting its tool labels. Its tools ask again; its Always rules are paused.` };
 }
 

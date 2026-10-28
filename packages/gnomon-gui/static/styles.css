@@ -195,6 +195,8 @@ html, body {
 .key:active { transform: translate(2px, 2px); box-shadow: none; }
 .key:focus-visible, .field:focus-visible, .viewport:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 1px; }
 .key[disabled], .key[aria-disabled="true"] { color: var(--sec); cursor: not-allowed; } /* aria-disabled: a busy key that keeps its focus (folder-field Choosing…) */
+/* C5'b (Mika): an aria-disabled key draws the quiet look (no key edge, no offset): its edge must not say it presses */
+.key[aria-disabled="true"] { border-color: var(--rule); box-shadow: none; }
 /* design-system migration keys (session 2026-10-22-gnomon-local-model F10): a disabled pri key (Run now, a busy Allow,
    Checking…) draws as a default key with --sec text, as .seg-key[disabled]; --sec on the ink fill was about 2.6:1 */
 .key.pri[disabled] { background: var(--sheet); color: var(--sec); border-color: var(--rule); box-shadow: none; }
@@ -1544,7 +1546,7 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .settings-row > .set-form, .settings-row > .sf-request, .settings-row > .sf-result, .settings-row > .sf-keys { grid-column: 2; }
 .set-form { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 2px; padding: 2px 0 2px 12px; border-left: 2px solid var(--ink); }
 .set-form > p { margin: 0; }
-.sf-lead { font-size: var(--fs-control); color: var(--ink2); }
+.sf-lead { font-size: var(--fs-control); color: var(--ink2); overflow-wrap: anywhere; }
 .sf-field { display: flex; flex-direction: column; gap: 2px; margin: 0; border: 0; padding: 0; min-width: 0; }
 .sf-label { font-size: var(--fs-label); color: var(--sec); padding: 0; }
 .sf-field .field { font-size: var(--fs-control); min-height: 28px; max-width: 100%; }
@@ -1567,7 +1569,7 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 /* C5'b: a settings-form readonly row's trust chip (untrusted plain; trusted and first-party .ink): told by its word, never a hue */
 .settings-row .settings-value .chip { margin-left: 2px; }
 /* C5'b: the trust preview's reads list (inside the inline confirm block) */
-.sf-list { margin: 0; padding-left: 16px; font-size: var(--fs-label); color: var(--ink2); overflow-wrap: anywhere; }
+.sf-list { margin: 0; padding-left: 16px; font-size: var(--fs-control); color: var(--ink); overflow-wrap: anywhere; }
 .settings-row.settings-form { align-items: start; }
 .settings-row.settings-form > .settings-label { padding-top: 6px; }
 .settings-row[data-grp="start"] { margin-top: 8px; }
