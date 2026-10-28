@@ -17,10 +17,14 @@ import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
 import {
   computeRepeatFailureRate,
 } from '@a-company/premise-core';
-// Scoped learning: the union of every home, not premise-core's repo-only reader.
-import { readClassroomCertifications } from '../../../../paradigm-mcp/src/utils/field-failures.js';
 // Relative-path import into bundled paradigm-mcp source (same pattern as core/task-bridge.ts).
-import { listLearningStores } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+// Doctor's static graph stays logger-free: learning-stores pulls in no
+// @a-company/paradigm-logger, so the doctor suite runs without a logger build.
+// Certifications are read as the union of every home with readLearningRows,
+// the same read field-failures.readClassroomCertifications does (that module
+// loads the MCP logger for its writers), never premise-core's repo-only reader.
+import { listLearningStores, readLearningRows } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
+import type { ClassroomCertRow } from '../../../../paradigm-mcp/src/utils/field-failures.js';
 
 interface CheckResult {
   name: string;
@@ -1161,7 +1165,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   // ──────────────────────────────────────────────────────────────────────
   const classroom = (() => {
     try {
-      const certs = readClassroomCertifications(cwd);
+      const certs = readLearningRows<ClassroomCertRow>('classroom-certifications', cwd);
       const rollup = computeRepeatFailureRate(certs.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
       const resolvedTotal = Object.values(rollup.perAgent).reduce(
         (n, a) => n + a.resolved,
