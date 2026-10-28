@@ -1296,6 +1296,8 @@ export class LocalLane {
       else if (closure.refused.length) s.mcpLaunch = undefined;
       this.#sessions.set(hsid, s);
       live = s;
+      // slice C6'a1: one session.mcp row per server the launch check refused
+      for (const r of s.mcpLaunch?.refused ?? []) await this.#mcpRow(s, serverLabel(r.name), 'refused', { fit: r.fit });
       // slice C1: the brokered tools (a loop session: none, every call refused), built before stdout is read (Aegis L7)
       s.tools = await this.#toolBroker(s);
       this.#wire(s);
@@ -1428,9 +1430,13 @@ export class LocalLane {
     const servers = s.mcpLaunch.servers;
     if (!servers.length) return null;
     const pool = new LocalMcpPool({ servers, repo: s.cwd, cache: this.#mcpCache, ...(this.#o.mcpTrust ? { trust: this.#o.mcpTrust } : {}), spawn: (srv) => this.#spawnMcp(s, srv), onChanged: (label, entries) => this.#mcpChanged(s, label, entries),
+      // slice C6'a1: one session.mcp row per start and failure (a runtime crash included)
+      onState: (label, state, error) => void this.#mcpRow(s, label, state, error !== undefined ? { error } : {}),
       // Aegis M3: stopped with the daemon too (kind mcp-server: no session rows)
       track: (child, label) => void this.#o.children.track({ kind: 'mcp-server', child, hsid: s.hsid, name: `mcp:${label}` }).catch(() => undefined) });
     s.mcp = { pool, kernel: kernelTools, entries: new Map(), manual, bound: new Map(), offeredHash: '' };
+    // slice C6'a1: the servers the pool refuses (remote, a reserved label)
+    for (const r of pool.refused) await this.#mcpRow(s, serverLabel(r.name), 'refused', { fit: r.fit });
     const ix = await pool.index();
     // functional note (Aegis): a server that cannot start under the local profile says why, readably
     s.mcpLaunch.failed = ix.failed.map((f) => ({ label: f.label, error: readableFailure(f.error, servers.find((x) => serverLabelOf(x) === f.label), userHomeOf(this.#o.userHome)) }));
@@ -1851,6 +1857,16 @@ export class LocalLane {
       pins,
       tools,
     };
+  }
+
+  /**
+   * Slice C6'a1: one session.mcp{hsid, server, state, fit?|error?} row — a server of this session started, failed or was
+   * refused (the GUI toasts it). The error is cleaned server text, capped (SESSION_MCP_ERROR_MAX); never fatal.
+   */
+  async #mcpRow(s: LocalSession, label: string, state: 'started' | 'failed' | 'refused', extra: { fit?: string; error?: string }): Promise<void> {
+    if (s.state === 'exited') return;
+    const error = extra.error !== undefined ? capText(extra.error, CAPABILITY_TEXT_MAX) || 'failed' : undefined;
+    await this.#o.log('session.mcp', { hsid: s.hsid, server: label, state, ...(state === 'refused' && extra.fit ? { fit: extra.fit } : {}), ...(state === 'failed' ? { error: error ?? 'failed' } : {}) }, { session: s.hsid }).catch(() => undefined);
   }
 
   /** Slice C2': a server's notifications/tools/list_changed — re-narrowed, re-offered, one new tools_set. */

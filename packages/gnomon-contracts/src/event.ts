@@ -294,7 +294,11 @@ const TABLE: Row[] = [
   // textHash?, bytes, why?} — one change to a local session's kernel-owned working memory: HASH-ONLY (never the text).
   // session.context{hsid, target, previous, requested, configTarget, nCtx, aboveConfig} — the human changed a local
   // session's context target; aboveConfig labels a raise past the signed config (notify-and-proceed, founder Q4).
-  ['session', 'kernel', 'memory context', LOCAL_LANE],
+  // 8.0:local-lane (TD-2026-10-27-833 slice C6'a1, #local-mcp-client): session.mcp{hsid, server, state, fit?, error?} —
+  // one MCP server of a local session started, failed (its start, or its process after it started) or was refused (at
+  // open, or a restart whose launch, trust or pin binding no longer holds), so the GUI can say so. The server is its
+  // label; the error is cleaned server text, capped (a field-level sensitive label: it can name a path).
+  ['session', 'kernel', 'memory context mcp', LOCAL_LANE],
 ];
 
 /** Per-kind sensitivity overrides from §9.1's last column. */
@@ -326,6 +330,8 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'approval.auto.miss': { why: 'sensitive', inputHash: 'sensitive' },
   // TD-2026-10-23-939 follow-up: a file rule's path is project detail, like approval.auto's
   'approval.rule.learned': { path: 'sensitive' },
+  // 8.0:local-lane (C6'a1): a server's error can name a path under the human's home
+  'session.mcp': { error: 'sensitive' },
   // 8.0:session-rename: a session name is the human's own words (it may echo the conversation): a limited reader never gets it
   'request.session.rename': { name: 'sensitive' },
   'session.renamed': { name: 'sensitive' },
@@ -553,6 +559,8 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'tool.selection': Object.freeze(['hsid', 'trigger', 'hash', 'added', 'removed', 'found', 'unfitPins']),
   // 8.0:local-lane (C5'a1): closed; ids, the server label, hashes and closed values only (never a command or a value)
   'tool.trust': Object.freeze(['id', 'label', 'op', 'binding', 'why', 'launchHash', 'toolsHash']),
+  // 8.0:local-lane (C6'a1): closed state and fit; refused carries fit, failed carries error
+  'session.mcp': Object.freeze(['hsid', 'server', 'state', 'fit', 'error']),
   'session.context': Object.freeze(['hsid', 'target', 'previous', 'requested', 'configTarget', 'nCtx', 'aboveConfig']),
 });
 
@@ -566,6 +574,7 @@ export const KIND_PAYLOAD_OPTIONAL: Readonly<Record<string, readonly string[]>> 
   'session.memory': Object.freeze(['id', 'source', 'kind', 'textHash', 'why']),
   // 8.0:local-lane (C5'a1): a set row carries launchHash and toolsHash (a drop names which one changed)
   'tool.trust': Object.freeze(['why', 'launchHash', 'toolsHash']),
+  'session.mcp': Object.freeze(['fit', 'error']),
   // 8.0:rules-view: cause 'human' carries batch, connId and cardId; cause 'expired' carries until (validateKindPayload)
   'approval.rule.enabled': Object.freeze(['batch', 'connId', 'cardId', 'until']),
 });
@@ -690,6 +699,21 @@ export type ToolTrustOp = (typeof TOOL_TRUST_OPS)[number];
  */
 export const TOOL_TRUST_WHYS = ['human', 'launch-changed', 'tools-changed', 'disabled'] as const;
 export type ToolTrustWhy = (typeof TOOL_TRUST_WHYS)[number];
+/**
+ * session.mcp{state} (CLOSED, 8.0:local-lane C6'a1): started (its initialize answered), failed (a start, or its process
+ * after it started, ended with an error: `error`), refused (never run: `fit`).
+ */
+export const SESSION_MCP_STATES = ['started', 'failed', 'refused'] as const;
+export type SessionMcpState = (typeof SESSION_MCP_STATES)[number];
+/**
+ * session.mcp{fit} (CLOSED, state refused only): remote-refused, launch-writable, label-reserved and pin-mismatch as
+ * #local-mcp-client's ServerFit; trust-changed (a restart of a server narrowed as trusted whose trust binding no longer
+ * holds).
+ */
+export const SESSION_MCP_FITS = ['remote-refused', 'launch-writable', 'label-reserved', 'pin-mismatch', 'trust-changed'] as const;
+export type SessionMcpFit = (typeof SESSION_MCP_FITS)[number];
+/** session.mcp{error}: cleaned server text, at most this many characters, no control characters. */
+export const SESSION_MCP_ERROR_MAX = 240;
 /** tool.trust{id}: a user or plugin MCP server id (`<source>:<owner>:<name>`, printable ASCII, no space). */
 export const TOOL_TRUST_ID_PATTERN = /^(?:user|plugin):[\x21-\x7e]{0,255}:[\x21-\x7e]{1,128}$/;
 /** tool.trust{launchHash}: the server's launch hash (#mcp-servers declHash, keyed: it never confirms a guessed value). */
@@ -1084,6 +1108,16 @@ export function validateKindPayload(kind: string, value: unknown): string[] {
       if (v.op === 'set' && !('launchHash' in v && 'toolsHash' in v && v.why === 'human')) c.fail('op', 'a set row carries launchHash, toolsHash and why human');
       if (v.op === 'cleared' && v.why !== 'human') c.fail('why', 'a cleared row is the human\'s (why human)');
       if (v.op === 'dropped' && !(v.why === 'launch-changed' || v.why === 'tools-changed' || v.why === 'disabled')) c.fail('why', 'a dropped row names launch-changed, tools-changed or disabled');
+      break;
+    }
+    case 'session.mcp': {
+      if ('hsid' in v) c.str('hsid', v.hsid, HSID_PATTERN, 'an hsid');
+      if ('server' in v) c.str('server', v.server, TOOL_BROKER_SERVER_PATTERN, 'an MCP server label');
+      if ('state' in v) c.closedEnum('state', v.state, SESSION_MCP_STATES);
+      if ('fit' in v) c.closedEnum('fit', v.fit, SESSION_MCP_FITS);
+      if ('error' in v && (typeof v.error !== 'string' || v.error.length === 0 || [...v.error].length > SESSION_MCP_ERROR_MAX || /[\p{Cc}]/u.test(v.error))) c.fail('error', `must be 1..${SESSION_MCP_ERROR_MAX} characters of text`);
+      if (('fit' in v) !== (v.state === 'refused')) c.fail('fit', 'is present exactly when state is refused');
+      if (('error' in v) !== (v.state === 'failed')) c.fail('error', 'is present exactly when state is failed');
       break;
     }
     case 'tool.selection': {

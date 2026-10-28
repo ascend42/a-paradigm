@@ -639,6 +639,11 @@ export interface LocalMcpPoolOptions {
   track?: (child: ChildProcess, label: string) => void;
   /** slice C5'a1: the kernel's TrustBook (absent: no server is trusted; first-party stays first-party) */
   trust?: PoolTrust;
+  /**
+   * slice C6'a1: a server started (its initialize answered) or failed (a start, a listing at index, or its process
+   * after it started, ended with an error; never a kill of the pool's own). The lane logs session.mcp.
+   */
+  onState?: (label: string, state: 'started' | 'failed', error?: string) => void;
 }
 
 interface PoolServer {
@@ -677,6 +682,8 @@ export class LocalMcpPool {
   readonly #servers: PoolServer[] = [];
   readonly refused: Array<{ id: string; name: string; fit: ServerFit }> = [];
   #closed = false;
+  /** slice C6'a1: clients the pool killed itself (their exit is no failure) */
+  readonly #killed = new WeakSet<McpStdioClient>();
 
   constructor(o: LocalMcpPoolOptions) {
     this.#o = o;
@@ -732,25 +739,41 @@ export class LocalMcpPool {
     p.starts++;
     p.starting = (async () => {
       // a replaced client whose leader still lives is reaped first (never one that already closed)
-      if (p.client && !p.client.closed) p.client.kill();
-      const child = this.#o.spawn(p.s);
-      this.#o.track?.(child, p.label);
-      const c = new McpStdioClient(child, {
-        ...(this.#o.maxMessageBytes ? { maxMessageBytes: this.#o.maxMessageBytes } : {}),
-        ...(this.#o.listTimeoutMs ? { listTimeoutMs: this.#o.listTimeoutMs } : {}),
-        onListChanged: () => this.#relistSoon(p),
-        onExit: (why) => {
-          p.error = why;
-        },
-      });
-      p.client = c;
+      if (p.client && !p.client.closed) this.#kill(p.client);
+      // slice C6'a1: `up` once initialize answered — an exit after that is a runtime failure (one onState)
+      let up = false;
+      let c: McpStdioClient;
       try {
-        await c.initialize(signal ? { signal } : {});
+        const child = this.#o.spawn(p.s);
+        this.#o.track?.(child, p.label);
+        const client: McpStdioClient = new McpStdioClient(child, {
+          ...(this.#o.maxMessageBytes ? { maxMessageBytes: this.#o.maxMessageBytes } : {}),
+          ...(this.#o.listTimeoutMs ? { listTimeoutMs: this.#o.listTimeoutMs } : {}),
+          onListChanged: () => this.#relistSoon(p),
+          onExit: (why) => {
+            p.error = why;
+            if (up && !this.#closed && !this.#killed.has(client)) this.#o.onState?.(p.label, 'failed', why);
+          },
+        });
+        c = client;
+        p.client = c;
+        try {
+          await c.initialize(signal ? { signal } : {});
+        } catch (e) {
+          this.#kill(c);
+          throw e;
+        }
       } catch (e) {
-        c.kill();
+        const why = (e as Error).message.slice(0, 200);
+        p.error = why;
+        if (!this.#closed) this.#o.onState?.(p.label, 'failed', why);
         throw e;
       }
-      if (this.#closed) c.kill();
+      if (this.#closed) this.#kill(c);
+      else {
+        up = true;
+        this.#o.onState?.(p.label, 'started');
+      }
       // slice C5'a1: a trusted server narrowed from the cache lists once more at its first spawn, BEFORE its first call;
       // a changed list re-narrows (the binding check drops trust) and a failed one stops believing its labels
       if (p.relistOnSpawn && !this.#closed) {
@@ -897,6 +920,7 @@ export class LocalMcpPool {
   async index(): Promise<{ entries: CapabilityEntry[]; failed: Array<{ label: string; error: string }> }> {
     const res = await Promise.all(
       this.#servers.map(async (p) => {
+        let startOk = true;
         try {
           const hit = this.#o.cache?.get(p.key);
           if (hit) {
@@ -910,10 +934,16 @@ export class LocalMcpPool {
           if (failed) throw new Error(`failed recently: ${failed}`);
           // Aegis M5: one deadline per server for start + list + annotations at open
           const signal = AbortSignal.timeout(this.#o.listTimeoutMs ?? LIST_TIMEOUT_MS);
-          return this.#narrow(p, await this.#listed(await this.#start(p, signal), p, signal));
+          const c = await this.#start(p, signal).catch((e: unknown) => {
+            startOk = false;
+            throw e;
+          });
+          return this.#narrow(p, await this.#listed(c, p, signal));
         } catch (e) {
           p.error = (e as Error).message.slice(0, 200);
           if (!/^failed recently/.test(p.error)) this.#o.cache?.fail(p.key, p.error);
+          // slice C6'a1: a failed start already said so (#start); a recent failure or a failed listing says it here
+          if (startOk && !this.#closed) this.#o.onState?.(p.label, 'failed', p.error);
           return null;
         }
       }),
@@ -953,13 +983,19 @@ export class LocalMcpPool {
     };
   }
 
+  /** Slice C6'a1: the pool kills a client itself (a replaced or abandoned one, or at close): its exit is no failure. */
+  #kill(c: McpStdioClient): void {
+    this.#killed.add(c);
+    c.kill();
+  }
+
   /** Session exit: every server reaped; later uses refuse. */
   async closeAll(): Promise<void> {
     this.#closed = true;
     const waits: Array<Promise<void>> = [];
     for (const p of this.#servers) {
       if (!p.client) continue;
-      p.client.kill();
+      this.#kill(p.client);
       waits.push(Promise.race([p.client.exited, new Promise<void>((r) => setTimeout(r, 2000).unref?.())]));
     }
     await Promise.all(waits);

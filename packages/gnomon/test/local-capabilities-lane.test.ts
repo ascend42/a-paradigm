@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { validateKindPayload } from '@a-company/gnomon-contracts';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { CAPABILITY_TEXT_MAX, LocalLane } from '../src/kernel/supervisor/local-session.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
@@ -96,6 +97,16 @@ describe('G-LCL-24 request.session.capabilities (kernel side)', () => {
     expect(byLabel.broken).toMatchObject({ state: 'failed', error: expect.stringMatching(/could not start|exited|closed/) });
     expect(byLabel.inline).toMatchObject({ state: 'refused', fit: 'launch-writable', why: expect.stringMatching(/inline code/) });
     expect(byLabel.far).toMatchObject({ state: 'refused', fit: 'remote-refused', why: expect.stringMatching(/remote/) });
+    // session.mcp rows: one per start, failure and refusal, each a valid closed row (no server text past its cap)
+    const mcpRows = rows.filter((r) => r.kind === 'session.mcp').map((r) => r.payload);
+    for (const r of mcpRows) expect(validateKindPayload('session.mcp', r)).toEqual([]);
+    expect(mcpRows).toEqual(expect.arrayContaining([
+      { hsid: s.hsid, server: 'fake', state: 'started' },
+      { hsid: s.hsid, server: 'broken', state: 'failed', error: expect.any(String) },
+      { hsid: s.hsid, server: 'inline', state: 'refused', fit: 'launch-writable' },
+      { hsid: s.hsid, server: 'far', state: 'refused', fit: 'remote-refused' },
+    ]));
+    expect(mcpRows.filter((r) => r.server === 'broken')).toHaveLength(1);
     for (const x of c1.servers) for (const t of [x.why, x.error].filter((v): v is string => v !== undefined)) expect([...t].length).toBeLessThanOrEqual(CAPABILITY_TEXT_MAX);
 
     // tools: at tier 1 (K 4) some are offered and the rest are findable; a human-only one is slash-only

@@ -67,6 +67,45 @@ afterEach(() => {
 });
 
 const server = (over: Partial<LocalMcpServer> = {}): LocalMcpServer => ({ id: 'user::fake', name: 'fake', transport: 'stdio', command: process.execPath, args: [FAKE], trust: 'enabled', launchHash: LAUNCH, ...over });
+/** slice C6'a1: a server process that exits before it answers initialize. */
+const spawnDead = (): ChildProcess => {
+  const c = spawn(process.execPath, ['-e', 'process.exit(4)'], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+  kids.push(c);
+  return c;
+};
+
+describe("slice C6'a1: the pool's state report and its onState (session.mcp)", () => {
+  it('a start, a runtime crash (once), a respawn; the pool\'s own kills say nothing; report() follows', async () => {
+    const states: string[] = [];
+    const pool = new LocalMcpPool({ servers: [server()], repo: '/r', spawn: () => spawnFake(), onState: (l, st, err) => states.push(`${l}:${st}${err ? `:${err}` : ''}`) });
+    expect(pool.report()).toEqual([{ label: 'fake', id: 'user::fake', state: 'not-started', error: null, starts: 0, trust: 'enabled' }]);
+    await pool.index();
+    expect(states).toEqual(['fake:started']);
+    expect(pool.report()[0]).toMatchObject({ state: 'running', starts: 1, error: null });
+    const t = pool.target('fake')!;
+    await t.call('crash', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 });
+    await waitFor(() => states.length === 2);
+    expect(states[1]).toMatch(/^fake:failed:/);
+    expect(pool.report()[0]).toMatchObject({ state: 'failed', starts: 1, error: expect.any(String) });
+    expect((await t.call('echo', {}, { signal: new AbortController().signal, deadline: Date.now() + 10_000 })).isError).toBe(false);
+    expect(states.slice(2)).toEqual(['fake:started']);
+    expect(pool.report()[0]).toMatchObject({ state: 'running', starts: 2 });
+    await pool.closeAll();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(states).toHaveLength(3);
+  }, 30_000);
+
+  it('a start that fails says failed once; a remote server is the pool\'s refusal', async () => {
+    const states: string[] = [];
+    const pool = new LocalMcpPool({ servers: [server(), server({ id: 'user::far', name: 'far', transport: 'http', command: undefined })], repo: '/r', spawn: () => spawnDead(), onState: (l, st) => states.push(`${l}:${st}`) });
+    expect(pool.refused).toEqual([{ id: 'user::far', name: 'far', fit: 'remote-refused' }]);
+    const ix = await pool.index();
+    expect(ix.failed).toHaveLength(1);
+    expect(states).toEqual(['fake:failed']);
+    expect(pool.report()[0]).toMatchObject({ state: 'failed', starts: 1 });
+    await pool.closeAll();
+  }, 30_000);
+});
 
 describe('McpStdioClient', () => {
   it('initialize, tools/list, tools/call; a server request is answered not-supported', async () => {
