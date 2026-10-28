@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { PlatformWsContext } from '../ws/index.js';
+import { readLearningRows, rewriteLearningRows } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -66,15 +67,6 @@ function readJsonlSafe<T>(filePath: string): T[] {
   }
 }
 
-function writeJsonl<T>(filePath: string, items: T[]): void {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const content = items.map(item => JSON.stringify(item)).join('\n') + '\n';
-  fs.writeFileSync(filePath, content, 'utf-8');
-}
-
 /**
  * Parse a relative time string like "1h", "30m", "2d" into a Date.
  * Returns null if the string is not a recognized format.
@@ -101,8 +93,10 @@ export function createAmbientRouter(projectDir: string, wsContext: PlatformWsCon
   const router = Router();
 
   const eventsPath = path.join(projectDir, '.paradigm', 'events', 'stream.jsonl');
-  const nominationsPath = path.join(projectDir, '.paradigm', 'events', 'nominations.jsonl');
-  const debatesPath = path.join(projectDir, '.paradigm', 'events', 'debates.jsonl');
+  // Scoped learning: nominations and debates live in the user home by default;
+  // read the union of every home (repo wins on the same id) and rewrite in place.
+  const readNominations = () => readLearningRows<Nomination>('nominations', projectDir, { idOf: n => n.id });
+  const readDebates = () => readLearningRows<Debate>('debates', projectDir, { idOf: d => d.id as string | undefined });
   const policyPath = path.join(projectDir, '.paradigm', 'data-policy.yaml');
 
   // ── GET /events ─────────────────────────────────────────────
@@ -170,7 +164,7 @@ export function createAmbientRouter(projectDir: string, wsContext: PlatformWsCon
       const pendingOnly = pendingOnlyParam !== 'false';
       const includeDebates = includeDebatesParam === 'true';
 
-      let nominations = readJsonlSafe<Nomination>(nominationsPath);
+      let nominations: Nomination[] = readNominations();
 
       // Apply filters
       if (agentFilter) {
@@ -188,7 +182,7 @@ export function createAmbientRouter(projectDir: string, wsContext: PlatformWsCon
       // Optionally attach debates
       let debateMap: Map<string, Debate[]> | undefined;
       if (includeDebates) {
-        const debates = readJsonlSafe<Debate>(debatesPath);
+        const debates: Debate[] = readDebates();
         debateMap = new Map();
         for (const debate of debates) {
           if (debate.nominationId) {
@@ -225,21 +219,16 @@ export function createAmbientRouter(projectDir: string, wsContext: PlatformWsCon
         return;
       }
 
-      const nominations = readJsonlSafe<Nomination>(nominationsPath);
-      const index = nominations.findIndex(n => n.id === id);
+      const changed = rewriteLearningRows<Nomination>('nominations', projectDir, n =>
+        n.id === id ? { ...n, engaged: true, response } : undefined,
+      );
 
-      if (index === -1) {
+      if (changed === 0) {
         res.status(404).json({ error: `Nomination not found: ${id}` });
         return;
       }
-
-      nominations[index] = {
-        ...nominations[index],
-        engaged: true,
-        response,
-      };
-
-      writeJsonl(nominationsPath, nominations);
+      const nominations = readNominations();
+      const index = nominations.findIndex(n => n.id === id);
 
       wsContext.broadcast({
         type: 'ambient:nomination',

@@ -9,8 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **The Paradigm hooks stop interrupting long sessions.** The Stop hook now judges only the files your session changed, at the project root. A problem it already reported in a session is not blocked a second time. Commits no longer pick up `.paradigm` index changes.
 
-### Fixed
-- **The Stop hook judges the session's own edits** (`#touched-files-ledger`, `#paradigm-hooks`). The PostToolUse hook (Write, Edit, MultiEdit and NotebookEdit) records each edited file in `.paradigm/.sessions/<session_id>.touched`. The Stop hook blocks only on those files. Other changed files (Bash edits, other sessions, other worktrees) are listed as an advisory.
+### Added
+- **Learning records have a home** (`#learning-stores`, `#repo-id`, TD-2026-10-28-820, slices S0 and S1). Each learning record lives in one of three homes. `repo` is committed and shared. `user` follows the person: `~/.paradigm`, and per repository `~/.paradigm/projects/<repoId>/`. `machine` stays local. The field is `home`, because notebook `scope` already names the content class.
+  - The home is resolved in this order: the record's own `home`, then `learning.default_home.<artifact>` in `.paradigm/config.yaml`, then the default. Defaults: project notebooks, decisions, wisdom, habits, overrides, classroom certifications and notebook refs are `repo`. Verdicts, journals, global notebooks, nominations, debates, promotion decisions, mined provisional candidates and estimate actuals are `user`. Hook timings, liveness, team funnel and compliance history are `machine`.
+  - A write that would put user or machine data under the repository root throws, and so does repo data outside it.
+  - Readers combine the repo and user copies. On the same id the repo copy wins. An older row with no `home` and no author counts under the home it was read from, as a separate legacy population.
+  - A folder that is your home directory, or is not in a git repository, has no repo home. Its records all go to the user home.
+  - **Behaviour change in a project without git:** records that default to the repo home (project notebooks, overrides, classroom certifications, notebook refs) now land in the user home. Rows already in `.paradigm/` are still read.
+  - The platform's nomination list and the classroom metrics read every home.
+  - Promotion follows the journal. A lesson taught with `transferable: false` becomes a repo notebook, and its certification and promotion-decision row are written to the repo too. Before this change every promotion went to the global notebook.
+  - Verdicts are written to the user home with an author. Postflight skips a teammate's verdict in the repository when the row names a different author.
+  - Calibration samples carry their home. Nomination accept rates, the attention threshold and the learned token table are computed per home, and the other homes are reported separately, not pooled. Legacy rows are used only as a labelled cold-start prior when a home has no data.
+  - The learned token table is written next to the actuals it is learned from, in the user home by default. The planner still reads an older repo copy when no user copy exists.
+  - `repoIdOf(root)` matches gnomon's id: the `.gnomon/project.yaml` `repoId`, or a hash of the real path. A test fails if the two drift apart.
+  - Hook writers, migrating existing stores, the doctor census and the skills follow in slices S2 to S4.
+ (`#touched-files-ledger`, `#paradigm-hooks`). The PostToolUse hook (Write, Edit, MultiEdit and NotebookEdit) records each edited file in `.paradigm/.sessions/<session_id>.touched`. The Stop hook blocks only on those files. Other changed files (Bash edits, other sessions, other worktrees) are listed as an advisory.
   - A session that has no ledger (it edited only through Bash, or the postwrite hook is not registered) is judged on the files changed since it started. SessionStart, or the first hook, records the start. When the start is unknown, the whole tree is judged.
   - Without a session id the whole tree is judged, as before.
   - `paradigm hooks install --claude-code` registers the postwrite hook with the `Write|Edit|MultiEdit|NotebookEdit` matcher and upgrades older entries in place. The old `Edit,Write` matcher never fired.

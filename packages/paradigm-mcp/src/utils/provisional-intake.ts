@@ -21,16 +21,15 @@
  * Idempotency: every staged source is recorded in a mined-ledger
  * (.paradigm/events/provisional-mined.jsonl) keyed by a stable source id, so
  * re-running the miner on each completion never double-stages.
+ *
+ * Scoped learning (S1): the mined-ledger lives in the USER home (it tracks this
+ * person's staging); overrides are read as the union of their homes.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { log } from './mcp-logger.js';
+import { appendLearningRows, readLearningRows } from './learning-stores.js';
 import { recordJournalEntry } from './journal-loader.js';
 import { readPendingVerdicts } from './session-work-log.js';
-
-const OVERRIDES_FILE = '.paradigm/events/overrides.jsonl';
-const MINED_LEDGER_FILE = '.paradigm/events/provisional-mined.jsonl';
 
 interface OverrideRow {
   timestamp?: string;
@@ -44,49 +43,30 @@ interface MinedLedgerRow {
   stagedAt: string;
 }
 
-/** Read the set of already-mined source ids. Never throws. */
+/** Read the set of already-mined source ids (union of homes). Never throws. */
 function readMinedIds(rootDir: string): Set<string> {
-  try {
-    const filePath = path.join(rootDir, MINED_LEDGER_FILE);
-    if (!fs.existsSync(filePath)) return new Set();
-    const ids = fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(l => l.trim())
-      .map(l => { try { return (JSON.parse(l) as MinedLedgerRow).sourceId; } catch { return null; } })
-      .filter((s): s is string => !!s);
-    return new Set(ids);
-  } catch {
-    return new Set();
-  }
+  return new Set(
+    readLearningRows<MinedLedgerRow>('provisional-mined', rootDir)
+      .map(r => r.sourceId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
 }
 
-/** Append a mined-ledger row. Non-fatal. */
+/** Append a mined-ledger row in its resolved home. Non-fatal. */
 function markMined(rootDir: string, sourceId: string): void {
   try {
-    const filePath = path.join(rootDir, MINED_LEDGER_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const row: MinedLedgerRow = { sourceId, stagedAt: new Date().toISOString() };
-    fs.appendFileSync(filePath, JSON.stringify(row) + '\n', 'utf8');
-  } catch {
-    // Non-fatal
+    appendLearningRows('provisional-mined', rootDir, [row]);
+  } catch (err) {
+    log.component('#provisional-intake').warn('failed to record mined source', {
+      sourceId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
 function readOverrides(rootDir: string): OverrideRow[] {
-  try {
-    const filePath = path.join(rootDir, OVERRIDES_FILE);
-    if (!fs.existsSync(filePath)) return [];
-    return fs.readFileSync(filePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(l => l.trim())
-      .map(l => { try { return JSON.parse(l) as OverrideRow; } catch { return null; } })
-      .filter((r): r is OverrideRow => r !== null);
-  } catch {
-    return [];
-  }
+  return readLearningRows<OverrideRow>('overrides', rootDir);
 }
 
 /**

@@ -6,6 +6,11 @@
  *   .paradigm/notebooks/{agent-id}/      (project-level)
  *
  * Each entry is a YAML file: nb-{concept}.yaml
+ *
+ * Scoped learning (TD-2026-10-28-820): the project dir is the 'repo' home and
+ * the global dir the 'user' home. Loaders tag every entry with the home it was
+ * read from; addNotebookEntry resolves the home (entry.home > scope arg) and
+ * writes through the learning-stores resolver and its guard.
  */
 
 import * as fs from 'fs';
@@ -14,6 +19,7 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import type { NotebookEntry, NotebookProvenance, NotebookScope } from '../types/notebooks.js';
+import { assertHomePlacement, effectiveHome, hasRepoHome, isLearningHome, pathFor, type LearningHome } from './learning-stores.js';
 
 // ────────────────────────────────────────────────────────
 // Constants
@@ -120,11 +126,15 @@ export function loadNotebookEntries(
 
   // Load global entries first
   const globalDir = path.join(GLOBAL_NOTEBOOKS_DIR, agentId);
-  loadEntriesFromDir(globalDir, entries);
+  loadEntriesFromDir(globalDir, entries, 'user');
 
   // Load project entries (override global with same id)
   const projectDir = path.join(rootDir, PROJECT_NOTEBOOKS_DIR, agentId);
-  loadEntriesFromDir(projectDir, entries);
+  // With no repo home (root is the home dir, or not a git repo) a project dir
+  // is user data, and may BE the global dir (review F4).
+  if (path.resolve(projectDir) !== path.resolve(globalDir)) {
+    loadEntriesFromDir(projectDir, entries, hasRepoHome(rootDir) ? 'repo' : 'user');
+  }
 
   let result = Array.from(entries.values());
 
@@ -148,7 +158,7 @@ export function loadNotebookEntries(
   return result.sort((a, b) => b.appliedCount - a.appliedCount);
 }
 
-function loadEntriesFromDir(dir: string, entries: Map<string, NotebookEntry>): void {
+function loadEntriesFromDir(dir: string, entries: Map<string, NotebookEntry>, home: LearningHome): void {
   if (!fs.existsSync(dir)) return;
 
   try {
@@ -161,7 +171,8 @@ function loadEntriesFromDir(dir: string, entries: Map<string, NotebookEntry>): v
         const content = fs.readFileSync(path.join(dir, file), 'utf-8');
         const entry = yaml.load(content) as NotebookEntry;
         if (entry?.id) {
-          entries.set(entry.id, entry);
+          // The physical home wins over a stale field: the file is where it is.
+          entries.set(entry.id, { ...entry, home });
         }
       } catch { /* skip invalid */ }
     }
@@ -297,9 +308,20 @@ export function addNotebookEntry(
   const agentSlug = slugify(agentId);
   const baseId = `nb-${agentSlug}-${conceptSlug}`;
 
-  const dir = scope === 'global'
-    ? path.join(GLOBAL_NOTEBOOKS_DIR, agentId)
-    : path.join(rootDir || process.cwd(), PROJECT_NOTEBOOKS_DIR, agentId);
+  // Precedence: the entry's own home > the scope argument (global → user, project → repo).
+  // A root with no repo home (the home dir itself, or not a git repo) writes to user (review F4).
+  const root = rootDir || process.cwd();
+  const home: LearningHome = effectiveHome(
+    isLearningHome(entry.home) ? entry.home : scope === 'global' ? 'user' : 'repo',
+    root,
+  );
+  let dir: string;
+  if (home === 'user') {
+    dir = path.join(GLOBAL_NOTEBOOKS_DIR, agentId);
+    if (rootDir && hasRepoHome(rootDir)) assertHomePlacement('user', dir, rootDir);
+  } else {
+    dir = path.join(pathFor('notebooks', home, root), agentId);
+  }
 
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -341,6 +363,7 @@ export function addNotebookEntry(
     concepts: normalizedConcepts,
     id,
     scope: resolvedScope,
+    home,
     publishable: entry.publishable ?? true,
     // Persist confidence explicitly. The NotebookEntry type requires a number,
     // but callers (e.g. autoPromoteJournalEntries before the open-loop fix) could

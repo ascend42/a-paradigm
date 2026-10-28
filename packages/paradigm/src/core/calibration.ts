@@ -21,14 +21,19 @@
  * purely from ACTUALS, so we avoid cross-package coupling to the MCP planner's
  * `AGENT_TOKEN_ESTIMATES` constant. `estTokens` stays a diagnostic the capture
  * path doesn't need.
+ *
+ * Scoped learning (S1, TD-2026-10-28-820): actuals are written through the
+ * learning-stores resolver (default USER home, per repo) and every row carries
+ * its `home` so the aggregate never pools populations silently.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-
 import { log } from '../../../paradigm-mcp/src/utils/mcp-logger.js';
+import { appendLearningRows, type LearningHome } from '../../../paradigm-mcp/src/utils/learning-stores.js';
 
-/** Storage for captured per-agent token actuals (append-only). */
+/**
+ * LEGACY repo location of the captured actuals (pre-scoping). New rows go to
+ * pathFor('estimate-actuals', homeOf(...), root); readers take the union.
+ */
 export const ESTIMATE_ACTUALS_FILE = '.paradigm/events/estimate-actuals.jsonl';
 
 /** Token breakdown for one captured agent-step. */
@@ -50,6 +55,8 @@ export interface EstimateActualRecord {
   parentTaskId?: string;
   /** ISO timestamp; defaults to capture time when omitted. */
   ts?: string;
+  /** Scoped learning: explicit home for this sample (else config, else 'user'). */
+  home?: LearningHome;
 }
 
 /**
@@ -66,11 +73,6 @@ export function recordEstimateActual(
   record: EstimateActualRecord,
 ): boolean {
   try {
-    const filePath = path.join(rootDir, ESTIMATE_ACTUALS_FILE);
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
     const line: EstimateActualRecord = {
       archetype: record.archetype,
       taskType: record.taskType,
@@ -78,7 +80,7 @@ export function recordEstimateActual(
       ...(record.parentTaskId ? { parentTaskId: record.parentTaskId } : {}),
       ts: record.ts || new Date().toISOString(),
     };
-    fs.appendFileSync(filePath, JSON.stringify(line) + '\n', 'utf8');
+    appendLearningRows('estimate-actuals', rootDir, [line], { home: record.home });
     return true;
   } catch (err) {
     log.component('#calibration').warn('estimate-actual capture failed (non-fatal)', {

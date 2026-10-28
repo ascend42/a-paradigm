@@ -9,16 +9,30 @@
  * Pure aggregation: read the captured per-agent actuals → group by
  * (archetype, taskType) → compute p10/p90 bands for groups at/above the sample
  * floor (MIN_SAMPLES) → write `.paradigm/learned/token-estimates.json`.
+ *
+ * Scoped learning (S1): actuals are read as the union of their homes, each
+ * sample tagged with its home. The table is learned from ONE population (the
+ * home new actuals land in); samples from other homes are reported, never
+ * pooled silently.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { homeOf, pathFor, readLearningHomeConfig, readLearningRows, type LearningHome } from './learning-stores.js';
 
 /** Minimum samples per (archetype, taskType) group before a band is learned. */
 export const MIN_SAMPLES = 8;
 
-const ACTUALS_FILE = '.paradigm/events/estimate-actuals.jsonl';
-const LEARNED_FILE = '.paradigm/learned/token-estimates.json';
+/**
+ * Where the learned table is written: the same home as the actuals it is
+ * learned from (review F3; a personal table never lands in the committed repo
+ * unless the actuals' home is repo). The legacy repo copy is read as a fallback
+ * by orchestration.ts loadLearnedTokenTable.
+ */
+export function learnedTablePath(rootDir: string, home?: LearningHome): string {
+  const h = home ?? homeOf('estimate-actuals', null, readLearningHomeConfig(rootDir));
+  return pathFor('learned-token-estimates', h, rootDir);
+}
 
 /** A learned band for one (archetype, taskType) cell. */
 export interface LearnedBand {
@@ -121,19 +135,61 @@ export function aggregateActuals(lines: string[]): { table: LearnedTokenTable; g
  * outcome, or `null` when there are no actuals yet (nothing written). Never
  * throws (a settlement must not break on a calibration hiccup).
  */
-export function rebuildLearnedTable(rootDir: string): { table: LearnedTokenTable; groups: GroupReport[]; samplesRead: number } | null {
+export function rebuildLearnedTable(rootDir: string): {
+  table: LearnedTokenTable;
+  groups: GroupReport[];
+  samplesRead: number;
+  /** The population the table was learned from. */
+  home: LearningHome;
+  /** Samples in other homes, counted but not pooled into the bands. */
+  otherHomes: Partial<Record<LearningHome, number>>;
+  /** Pre-scoping repo rows (no home, no author): a separate population. */
+  legacySamples: number;
+  /** The population the bands were learned from. */
+  population: LearningHome | 'legacy-repo';
+  /** True when the bands come from the legacy population as a cold-start prior. */
+  coldStartPrior: boolean;
+  /** Where the table was written. */
+  learnedFile: string;
+} | null {
   try {
-    const actualsPath = path.join(rootDir, ACTUALS_FILE);
-    if (!fs.existsSync(actualsPath)) return null;
-
-    const lines = fs.readFileSync(actualsPath, 'utf8').split('\n');
+    const rows = readLearningRows<ActualRecord>('estimate-actuals', rootDir);
+    if (rows.length === 0) return null;
+    const home = homeOf('estimate-actuals', null, readLearningHomeConfig(rootDir));
+    const otherHomes: Partial<Record<LearningHome, number>> = {};
+    let lines: string[] = [];
+    const legacyLines: string[] = [];
+    for (const r of rows) {
+      if (r.legacy) legacyLines.push(JSON.stringify(r));
+      else if (r.home === home) lines.push(JSON.stringify(r));
+      else otherHomes[r.home] = (otherHomes[r.home] ?? 0) + 1;
+    }
+    // Legacy rows (no home, no author) are a separate repo population (review
+    // F2). They seed the table only when the scope has no samples, and the
+    // result is then labelled a cold-start prior.
+    let population: LearningHome | 'legacy-repo' = home;
+    if (lines.length === 0 && legacyLines.length > 0) {
+      lines = legacyLines;
+      population = 'legacy-repo';
+    }
+    const legacySamples = legacyLines.length;
     const { table, groups } = aggregateActuals(lines);
 
-    const learnedDir = path.join(rootDir, path.dirname(LEARNED_FILE));
-    if (!fs.existsSync(learnedDir)) fs.mkdirSync(learnedDir, { recursive: true });
-    fs.writeFileSync(path.join(rootDir, LEARNED_FILE), JSON.stringify(table, null, 2) + '\n', 'utf8');
+    const learnedFile = learnedTablePath(rootDir, home);
+    fs.mkdirSync(path.dirname(learnedFile), { recursive: true });
+    fs.writeFileSync(learnedFile, JSON.stringify(table, null, 2) + '\n', 'utf8');
 
-    return { table, groups, samplesRead: groups.reduce((s, g) => s + g.n, 0) };
+    return {
+      table,
+      groups,
+      samplesRead: groups.reduce((s, g) => s + g.n, 0),
+      home,
+      otherHomes,
+      legacySamples,
+      population,
+      coldStartPrior: population === 'legacy-repo',
+      learnedFile,
+    };
   } catch {
     return null;
   }

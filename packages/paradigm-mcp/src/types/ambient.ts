@@ -96,6 +96,10 @@ export type NominationType = 'warning' | 'suggestion' | 'question' | 'offer' | '
 export type NominationUrgencyLevel = 'critical' | 'high' | 'medium' | 'low';
 
 export interface Nomination {
+  /** Scoped learning: where this row lives (readers tag legacy rows by the file they were read from). */
+  home?: import('./knowledge-streams.js').LearningHome;
+  /** Read-time tag: a pre-scoping row (no home, no author); its own calibration population. */
+  legacy?: true;
   /** Unique nomination ID */
   id: string;
   /** Agent making the nomination */
@@ -174,6 +178,8 @@ export interface SurfacingConfig {
 // ────────────────────────────────────────────────────────
 
 export interface Debate {
+  /** Scoped learning: where this row lives (readers tag legacy rows with the default). */
+  home?: import('./knowledge-streams.js').LearningHome;
   /** Unique debate ID */
   id: string;
   /** Topic of the debate (derived from overlapping symbols/events) */

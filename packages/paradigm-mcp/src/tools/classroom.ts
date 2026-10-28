@@ -37,10 +37,10 @@ import { gatedPromoteJournalEntry } from '../utils/nomination-engine.js';
 // (TD-2026-06-19-007) — shared with `paradigm doctor` so the metric never
 // drifts between the MCP tool and the CLI. The cert WRITER stays in
 // field-failures.ts; only the read + rollup is shared.
-import {
-  readClassroomCertifications,
-  computeRepeatFailureRate,
-} from '@a-company/premise-core';
+// Scoped learning: certifications are read through field-failures (the union of
+// every home), so a transferable:true promotion's user-home cert is counted.
+import { computeRepeatFailureRate } from '@a-company/premise-core';
+import { readClassroomCertifications } from '../utils/field-failures.js';
 
 export function getClassroomToolsList() {
   return [
@@ -304,7 +304,7 @@ export async function handleClassroomTool(
       // (shared with `paradigm doctor`). We map its per-agent { resolved,
       // overturned, rate } onto this tool's stable output shape (which also
       // reports pending/survived counts + field-failures).
-      const rollup = computeRepeatFailureRate(certs);
+      const rollup = computeRepeatFailureRate(certs.map((c): Parameters<typeof computeRepeatFailureRate>[0][number] => ({ ...c })));
 
       // Per-agent rollup.
       const agents = new Set<string>();
