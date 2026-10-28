@@ -575,7 +575,7 @@ export class McpServers {
     const state = (d: McpServerDecl) => {
       const hash = declHash(d, key);
       const mine = store.enabled.filter((e) => e.id === d.id);
-      return { ...mcpServerRow(d), autoAllowed: autoAllowRules(this.#o.userHome, d.sessionName), on: { all: mine.some((e) => e.scope === 'all' && e.launchHash === hash), repos: mine.filter((e) => e.scope !== 'all' && e.launchHash === hash).map((e) => (e.scope as { repo: string }).repo) }, changed: mine.some((e) => e.launchHash !== hash) };
+      return { ...mcpServerRow(d), autoAllowed: autoAllowRules(this.#o.userHome, d.sessionName), on: { all: mine.some((e) => e.scope === 'all' && e.launchHash === hash), repos: mine.filter((e) => e.scope !== 'all' && e.launchHash === hash).map((e) => (e.scope as { repo: string }).repo) }, changed: mine.some((e) => e.launchHash !== hash), trust: this.#trustRow(d, hash, mine.some((e) => e.launchHash === hash)) };
     };
     const live = new Map<string, string[]>();
     for (const l of this.#o.liveRepos?.() ?? []) {
@@ -589,7 +589,7 @@ export class McpServers {
       unsupported: this.#platform() === 'win32' ? 'platform' : null,
       envFile: LOOP_ENV_SHOWN,
       // TD-2026-10-27-833: staged (the pin a local session runs) and pinMismatch (why it is not offered), for the C6' card
-      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }), ...this.#stagedStatus() },
+      firstParty: { id: FIRST_PARTY_PARADIGM, name: FIRST_PARTY_PARADIGM_NAME, trust: { level: 'first-party', why: 'first-party' }, on: store.firstParty.paradigm === 'on', available: fp.available, autoAllowed: autoAllowRules(this.#o.userHome, FIRST_PARTY_PARADIGM_NAME), ...(fp.available ? { version: fp.version, dir: fp.dir, linked: fp.linked } : { why: fp.why }), ...this.#stagedStatus() },
       servers: all.filter((d) => d.source === 'user' || d.source === 'plugin').map(state),
       repos: [...live].map(([repo, hsids]) => ({ repo, folder: path.basename(repo), hsids, servers: all.filter((d) => d.repo === repo).map(state) })),
       // one entry per server; the servers of one batch card share its cardId
@@ -599,6 +599,22 @@ export class McpServers {
       skips: [...this.#skips.values()],
       ...(this.#skips.size ? { skipped: [...this.#skips.values()].at(-1) } : {}),
     };
+  }
+
+  /**
+   * Slice C5'a1 (for the C5'b GUI): a server row's trust — level untrusted | trusted (the TrustBook holds it; the pool
+   * still checks the binding at every listing), and why it cannot be trusted now (MCP_TRUST_REFUSALS) or null when a
+   * preview would be answered. Hashes and names only.
+   */
+  #trustRow(d: McpServerDecl, hash: string, on: boolean): { level: 'untrusted' | 'trusted'; why: McpTrustRefusal | null; since?: number } {
+    const t = this.#o.trust?.of(d.id) ?? null;
+    let why: McpTrustRefusal | null = this.#trustRefusal(d);
+    if (!why && !on) why = 'not-enabled';
+    if (!why) {
+      const l = this.#o.listedOf?.(d.id) ?? null;
+      why = !l || !l.tools ? 'not-listed' : l.launchHash !== hash || l.pluginVersion !== (d.plugin?.version ?? null) ? 'changed' : null;
+    }
+    return { level: t ? 'trusted' : 'untrusted', why, ...(t ? { since: t.seq } : {}) };
   }
 
   #human(asker: McpAsker, kind: string): void {

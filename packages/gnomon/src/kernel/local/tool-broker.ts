@@ -60,7 +60,13 @@
  * the op set, the full schema), a 'narrow' one through reassemble. A tier
  * change that re-offers the same entry in another form keeps the previous
  * form callable (and winning its name) until the child's tools_applied.
- * GAPS left for C3'/C5' (documented in .purpose): no selection beyond the
+ * Slice C5'a1 (#mcp-servers trust): a narrow tool's `read` class is believed
+ * only while trustLive(server) answers trusted or first-party, checked on the
+ * RESOLVED tool (grace entries included) at call time; otherwise it takes a
+ * card like a mutate tool (logged with that class), and a trusted read the
+ * target finds untrusted by the time it runs is refused (why trust-dropped).
+ * Every brokered MCP card names the server's trust level.
+ * GAPS left for C5'a2/C5'b (documented in .purpose): no selection beyond the
  * C2' slot rule; no Always/standing grants for brokered tools; no grant UI
  * for per-server trust; the suspension notice is the tool.brokered row
  * (no GUI notice yet); control characters are refused outright (no newline in
@@ -400,6 +406,13 @@ export function droppedLine(dropped: readonly string[]): string[] {
   return [`not offered to the model: ${plain.join(', ')}${rest ? `${plain.length ? ' ' : ''}(+${rest} more)` : ''}`];
 }
 
+/** Slice C5'a1: the brokered MCP card's server line, one per trust level. */
+export const TRUST_CARD_LINE: Readonly<Record<ServerTrust, string>> = Object.freeze({
+  enabled: 'server: untrusted · Gnomon ignores its tool labels',
+  trusted: 'server: trusted · Gnomon believes its tool labels; this call still asks',
+  'first-party': "server: first-party · Gnomon's staged Paradigm server; this call still asks",
+});
+
 /** Slice C4'a: `a` is the same capability entry as `b`, offered in another form. */
 const formShadow = (a: BrokeredTool, b: BrokeredTool): boolean => a.entry !== undefined && b.entry !== undefined && a.entry.id === b.entry.id && (a.form ?? 'narrow') !== (b.form ?? 'narrow');
 
@@ -535,8 +548,10 @@ export class LocalToolBroker {
     const argsHash = inputHash(req.args ?? null);
     const tool = req.name !== null ? this.#resolve(req.name) : undefined;
     const target = tool?.target ?? o.target;
+    // slice C5'a1: the class the kernel treats the call as (a read narrow tool of a server no longer believed: mutate)
+    let cls: ToolBrokerClass | undefined = tool?.class;
     const done = async (decision: ToolBrokeredDecision, content: string, isError: boolean, cardId?: string): Promise<ToolResponseOut> => {
-      await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool ? { tool: tool.name, class: tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}) }, { session: o.hsid }).catch(() => undefined);
+      await o.log('tool.brokered', { hsid: o.hsid, server: target.server, ...(tool ? { tool: tool.name, class: cls ?? tool.class } : {}), argsHash, decision, bytes: Buffer.byteLength(content, 'utf8'), isError, ...(cardId ? { cardId } : {}) }, { session: o.hsid }).catch(() => undefined);
       return { id: req.id, content, isError, provenance: target.provenance, decision };
     };
     if (o.loop) return done('loop-session', 'Loop sessions never run brokered tools.', true);
@@ -560,7 +575,12 @@ export class LocalToolBroker {
     if (bad) return done('bad-args', `${tool.name}: ${bad}`, true);
     const key = `${tool.name}\u0000${argsHash}`;
     if ((this.#cooldown.get(key) ?? 0) > this.#now()) return done('cooldown', `${tool.name} with these arguments was just denied: ask the human differently or wait.`, true);
-    const carded = tool.class !== 'read';
+    // slice C5'a1 (Arky 4): a narrow tool's class came from the server's own labels only if the server was trusted when
+    // it was narrowed; it is believed NOW only while trustLive says so (the resolved tool, grace entries included)
+    const level: ServerTrust | null = tool.entry && !target.ownsGate ? (o.trustLive?.(target.server) ?? 'enabled') : null;
+    if (tool.class === 'read' && level === 'enabled') cls = 'mutate';
+    const carded = cls !== 'read';
+    const trustedRead = !carded && level !== null;
     // Aegis L2: manual mode is read at call time too (the human may have switched since open)
     if (carded && !target.ownsGate && o.manual?.()) return done('refused', `${tool.name}: this session is in manual mode, so calls that need the human are off.`, true);
     if (carded) {
@@ -583,7 +603,7 @@ export class LocalToolBroker {
       let cardId: string | undefined;
       let allowed = false;
       if (carded && !target.ownsGate) {
-        const d = await this.#card(tool, target, req, callArgs, deadline, ctl.signal);
+        const d = await this.#card(tool, target, req, callArgs, deadline, ctl.signal, cls ?? tool.class, level);
         cardId = d.cardId ?? undefined;
         if (d.decision === 'none') return done('no-approval-surface', 'No approval surface could take the card: not run.', true, cardId);
         if (d.decision === 'stopped') return stopped(false, cardId);
@@ -606,7 +626,7 @@ export class LocalToolBroker {
       if (!target.ownsGate) onRunning();
       let r: { text: string; isError: boolean; why?: string; cardId?: string };
       try {
-        r = await target.call(tool.entry ? tool.entry.tool : tool.name, callArgs, { signal: ctl.signal, deadline, onRunning });
+        r = await target.call(tool.entry ? tool.entry.tool : tool.name, callArgs, { signal: ctl.signal, deadline, onRunning, ...(trustedRead ? { trustedRead: true } : {}) });
       } catch (err) {
         r = { text: `the ${tool.name} call failed: ${(err as Error).message.slice(0, 200)}`, isError: true };
       }
@@ -618,7 +638,7 @@ export class LocalToolBroker {
         this.#denied(key);
         return done('denied', text, true, cardId);
       }
-      const mapped: Record<string, ToolBrokeredDecision> = { 'no-approval-surface': 'no-approval-surface', busy: 'busy', 'bad-input': 'bad-args', 'loop-session': 'loop-session' };
+      const mapped: Record<string, ToolBrokeredDecision> = { 'no-approval-surface': 'no-approval-surface', busy: 'busy', 'bad-input': 'bad-args', 'loop-session': 'loop-session', 'trust-dropped': 'refused' };
       if (r.why !== undefined && Object.hasOwn(mapped, r.why)) return done(mapped[r.why]!, text, true, cardId);
       if (r.isError && (carded || target.ownsGate)) return done('refused', text, true, cardId);
       return done(carded ? 'approved' : 'ran', text, r.isError, cardId);
@@ -629,7 +649,7 @@ export class LocalToolBroker {
   }
 
   /** Step 3 (a target with no gate of its own): the card, every argument shown, allow | deny, expired on stop. */
-  async #card(tool: BrokeredTool, target: BrokerTarget, req: ToolRequestIn, callArgs: Record<string, unknown>, deadline: number, signal: AbortSignal): Promise<{ decision: string; cardId: string | null }> {
+  async #card(tool: BrokeredTool, target: BrokerTarget, req: ToolRequestIn, callArgs: Record<string, unknown>, deadline: number, signal: AbortSignal, cls: ToolBrokerClass, level: ServerTrust | null): Promise<{ decision: string; cardId: string | null }> {
     const o = this.#o;
     const b = o.broker;
     if (!b || typeof b.decisionOf !== 'function') return { decision: 'none', cardId: null };
@@ -638,8 +658,8 @@ export class LocalToolBroker {
     const name = brokeredToolName(target, tool.entry ? tool.entry.tool : tool.name);
     const plan = composePermission({ requestId: req.id, toolName: name, toolUseId: req.toolCallId, input: callArgs }, { repo: o.repo, denyWrite: [] });
     if (plan.kind !== 'card') return { decision: 'too-large', cardId: null };
-    const lines = [...plan.lines, `class: ${tool.class} · a brokered call from this local session to ${target.server}`, ...droppedLine(tool.entry?.dropped ?? [])];
-    const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: tool.class, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}) } };
+    const lines = [...plan.lines, `class: ${cls} · a brokered call from this local session to ${target.server}`, ...(level ? [TRUST_CARD_LINE[level]] : []), ...droppedLine(tool.entry?.dropped ?? [])];
+    const detail = { ...plan.detail, brokered: { server: target.server, tool: tool.name, class: cls, argsHash: inputHash(callArgs), ...(tool.entry ? { id: tool.entry.id } : {}), ...(level ? { trust: level === 'enabled' ? 'untrusted' : level } : {}) } };
     let cardId: string;
     try {
       // the broker's own timeout falls after the deadline, so the kernel's deadline (expired) always wins the race
