@@ -12,6 +12,10 @@
  *             Send this one key (request.session.tools.send{hsid, runId}) sends THIS result once, the tool staying ask;
  *             then the word reads "sent with your next message". Its refusals in words: already sent, held 10 min and
  *             gone (not-found), the binding changed, the tool already sends.
+ *   asked     C6'b2-2 (founder: inline, not a stack card): after a result of a tool whose policy is not chosen, the row
+ *             adds "Send {tool}'s results to the model? · [Always send] [Keep to me]". Always send (its note: "sends
+ *             this result now") is request.session.tools.policy{policy:'send'}, a trusted press; the reply's `queued`
+ *             is said in the polite live line. Keep to me sets ask, and Send this one appears.
  *   refused   plain words and next:, never the code. The human limit is said here only: "10 runs a minute from /; try
  *             again in Ns".
  *   carded    "waiting for your card", its key Decide in the stack (it focuses the card, never its Allow). When the
@@ -64,10 +68,14 @@ export interface RunView {
   send: 'idle' | 'sending' | 'sent' | 'refused';
   /** C6'b2-2: a refused send in words; `retry`: pressing again may work (the connection dropped) */
   sendNote: { text: string; next: string | null; retry: boolean } | null;
+  /** C6'b2-2: the first-use question's press in flight (Always send / Keep to me) */
+  choosing: 'send' | 'ask' | null;
+  /** C6'b2-2: the first-use choice was refused, in words */
+  chooseNote: string | null;
 }
 
 export function startRun(o: { key: string; hsid: string; tool: string; server: string; toolId: string; cls: ToolClass; policy: 'send' | 'ask' | null; at: string }): RunView {
-  return { ...o, phase: 'running', runId: null, cardId: null, content: null, isError: false, refusal: null, read: false, open: false, goes: o.policy === 'send', send: 'idle', sendNote: null };
+  return { ...o, phase: 'running', runId: null, cardId: null, content: null, isError: false, refusal: null, read: false, open: false, goes: o.policy === 'send', send: 'idle', sendNote: null, choosing: null, chooseNote: null };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -144,7 +152,11 @@ export type RunEvent =
   /** C6'b2-2: the tools.send request failed: an RpcError's reason, or the network */
   | { type: 'send-failed'; reason: string | null; network: boolean }
   /** C6'b2-2: the tool's policy moved (`queued`: the kernel queued THIS row's result as it moved to send) */
-  | { type: 'policy'; policy: 'send' | 'ask'; queued?: boolean };
+  | { type: 'policy'; policy: 'send' | 'ask'; queued?: boolean }
+  /** C6'b2-2: the first-use question was answered (its tools.policy request is going out) */
+  | { type: 'choosing'; policy: 'send' | 'ask' }
+  /** C6'b2-2: the tools.policy request failed: an RpcError's reason, or the network */
+  | { type: 'choose-failed'; reason: string | null; network: boolean };
 
 /** The ran / refused outcome of a reply body ({status, content, isError, why}). */
 function outcome(r: RunView, v: Record<string, unknown>, waitSecs?: number): RunView {
@@ -198,7 +210,11 @@ export function runReducer(r: RunView, e: RunEvent): RunView {
     case 'send-failed':
       return r.send === 'sending' ? { ...r, send: 'refused', sendNote: sendRefusalWords(e.reason, e.network, r.tool) } : r;
     case 'policy':
-      return { ...r, policy: e.policy, ...(e.queued && r.phase === 'ran' && r.send !== 'sent' ? { goes: true } : {}) };
+      return { ...r, policy: e.policy, choosing: null, chooseNote: null, ...(e.queued && r.phase === 'ran' && r.send !== 'sent' ? { goes: true } : {}) };
+    case 'choosing':
+      return askedOf(r) && r.choosing === null ? { ...r, choosing: e.policy, chooseNote: null } : r;
+    case 'choose-failed':
+      return r.choosing !== null ? { ...r, choosing: null, chooseNote: chooseRefusalWords(e.reason, e.network, r.server) } : r;
     case 'result-failed':
       if (r.phase !== 'reading') return r;
       if (!e.network && e.reason === 'not-found') return { ...r, phase: 'gone' };
@@ -245,6 +261,31 @@ export function policyLine(r: Pick<RunView, 'goes' | 'send'>): string {
  */
 export function canSend(r: RunView): boolean {
   return r.phase === 'ran' && r.runId !== null && !r.goes && r.policy === 'ask' && (r.send === 'idle' || (r.send === 'refused' && r.sendNote?.retry === true));
+}
+
+/** C6'b2-2: the first-use question (Mika): its words and keys. */
+export const ASK_COPY = Object.freeze({
+  question: (tool: string): string => `Send ${tool}’s results to the model?`,
+  always: 'Always send',
+  alwaysNote: 'sends this result now',
+  keep: 'Keep to me',
+  saving: 'Saving…',
+  liveSend: (tool: string, queued: boolean): string => `${tool}’s results go to the model from now on; ${queued ? 'this result goes with your next message' : `this result is past ${RESULT_HELD_MIN} min and stays here`}`,
+  liveAsk: (tool: string): string => `${tool}’s results stay here; Send this one sends one`,
+});
+
+/** C6'b2-2: the row asks the first-use question: a ran row of a tool whose policy is not chosen, whose result did not go. */
+export function askedOf(r: RunView): boolean {
+  return r.phase === 'ran' && r.policy === null && !r.goes && r.send !== 'sent';
+}
+
+/** C6'b2-2: a refused request.session.tools.policy in words, never the code. */
+export function chooseRefusalWords(reason: string | null, network: boolean, server: string): string {
+  if (network) return 'not known whether your choice was saved: the connection dropped · next: choose again once Gnomon is connected';
+  if (reason === 'untrusted') return `${server} isn’t trusted, so its results are never sent · next: trust it in Settings › MCP servers`;
+  if (reason === 'not-found') return 'this tool isn’t in this session any more · next: open / again';
+  if (reason === 'matrix') return 'only the person who opened this session can choose where its results go';
+  return 'Gnomon didn’t save your choice · next: choose again';
 }
 
 /** C6'b2-2: a refused request.session.tools.send in words, never the code. */
@@ -302,6 +343,9 @@ export interface RunWords {
   sendKey: 'idle' | 'busy' | null;
   /** C6'b2-2: a refused send: "not sent: … · next: …" */
   sendNote: string | null;
+  /** C6'b2-2: the first-use question (busy: the press in flight), and a refused choice in words */
+  question: { text: string; busy: 'send' | 'ask' | null } | null;
+  questionNote: string | null;
 }
 
 export const RUN_COPY = Object.freeze({
@@ -322,7 +366,7 @@ export const RUN_COPY = Object.freeze({
 /** A run row in words. */
 export function runWords(r: RunView): RunWords {
   const head = RUN_COPY.head(r.tool, r.server);
-  const base = { head, next: null, key: null, tone: null, live: false, data: null, policy: null, sendKey: null, sendNote: null } as const;
+  const base = { head, next: null, key: null, tone: null, live: false, data: null, policy: null, sendKey: null, sendNote: null, question: null, questionNote: null } as const;
   switch (r.phase) {
     case 'running':
       return { ...base, state: RUN_COPY.running, live: true };
@@ -339,6 +383,8 @@ export function runWords(r: RunView): RunWords {
         policy: policyLine(r),
         sendKey: r.send === 'sending' ? 'busy' : canSend(r) ? 'idle' : null,
         sendNote: r.send === 'refused' && r.sendNote ? `not sent: ${r.sendNote.text}${r.sendNote.next ? ` · next: ${r.sendNote.next}` : ''}` : null,
+        question: askedOf(r) ? { text: ASK_COPY.question(r.tool), busy: r.choosing } : null,
+        questionNote: askedOf(r) ? r.chooseNote : null,
       };
     case 'denied':
       return { ...base, state: RUN_COPY.denied, tone: 'quiet' };
@@ -359,7 +405,7 @@ export function runRowOf(row: { kind: string; payload?: unknown }): { tool: stri
   const server = displayText(p.server).slice(0, 64);
   const d = typeof p.decision === 'string' ? p.decision : null;
   const head = RUN_COPY.head(tool ?? 'a tool', server);
-  const base = { head, next: null, key: null, live: false, data: null, policy: null, sendKey: null, sendNote: null } as const;
+  const base = { head, next: null, key: null, live: false, data: null, policy: null, sendKey: null, sendNote: null, question: null, questionNote: null } as const;
   if (d === 'ran' || d === 'approved') return { tool, server, words: { ...base, state: p.isError === true ? `${RUN_COPY.error} · ${RUN_COPY.history}` : `${RUN_COPY.ran} · ${RUN_COPY.history}`, tone: p.isError === true ? 'fail' : null } };
   if (d === 'denied') return { tool, server, words: { ...base, state: RUN_COPY.denied, tone: 'quiet' } };
   // a busy row carries no text: the history cannot tell the minute limit from a waiting card, so it says neither

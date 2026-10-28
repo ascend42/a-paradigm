@@ -153,3 +153,28 @@ describe("#gui-slash-runs: Send this one (C6'b2-2)", () => {
     expect(runWords(r).policy).toBe('kept here; not sent');
   });
 });
+
+describe("#gui-slash-runs: the first-use question (C6'b2-2)", () => {
+  const ran = () => runReducer(base({ policy: null }), { type: 'reply', v: { status: 'ran', runId: RUN, content: 'x', isError: false } });
+
+  it('a ran row of a tool not chosen asks inline: "Send grep’s results to the model?"', () => {
+    expect(runWords(ran()).question).toEqual({ text: 'Send grep’s results to the model?', busy: null });
+    expect(runWords(base({ policy: null })).question).toBeNull(); // still running
+    expect(runWords(runReducer(base({ policy: 'ask' }), { type: 'reply', v: { status: 'ran', runId: RUN, content: 'x' } })).question).toBeNull();
+  });
+
+  it('Always send: busy, then the policy with queued: the row goes; Keep to me: ask and Send this one', () => {
+    const busy = runReducer(ran(), { type: 'choosing', policy: 'send' });
+    expect(runWords(busy).question!.busy).toBe('send');
+    expect(runReducer(busy, { type: 'choosing', policy: 'ask' })).toBe(busy);
+    const sent = runReducer(busy, { type: 'policy', policy: 'send', queued: true });
+    expect(runWords(sent)).toMatchObject({ question: null, policy: 'goes with your next message', sendKey: null });
+    const kept = runReducer(runReducer(ran(), { type: 'choosing', policy: 'ask' }), { type: 'policy', policy: 'ask' });
+    expect(runWords(kept)).toMatchObject({ question: null, policy: 'kept here; not sent', sendKey: 'idle' });
+  });
+
+  it('a refused choice reads in words and the question stays', () => {
+    const r = runReducer(runReducer(ran(), { type: 'choosing', policy: 'send' }), { type: 'choose-failed', reason: 'untrusted', network: false });
+    expect(runWords(r)).toMatchObject({ question: { busy: null }, questionNote: 'fs isn’t trusted, so its results are never sent · next: trust it in Settings › MCP servers' });
+  });
+});

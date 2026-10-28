@@ -224,6 +224,45 @@ describe("#gui-slash-runs: Send this one (C6'b2-2)", () => {
   });
 });
 
+describe("#gui-slash-runs: the first-use question (C6'b2-2)", () => {
+  it('Always send sends tools.policy{send} once; every row of the tool moves; queued is said in the live line', async () => {
+    const r = rig({ 'request.session.tools.run': [{ status: 'ran', runId: RUN, content: 'a', isError: false }, { status: 'ran', runId: `run-${'c'.repeat(24)}`, content: 'b', isError: false }], 'request.session.tools.policy': [{ hsid: H, id: 'fs/grep@0123abcd', tool: 'mcp:fs/grep', policy: 'send', previous: 'ask', queued: true }] });
+    for (let i = 0; i < 2; i++) {
+      r.flow.open(H, 'grep', true);
+      await tick();
+      r.flow.press(null, true);
+      await tick();
+    }
+    const [a, b] = r.added.map((x) => x.key);
+    await r.flow.choosePolicy(a!, 'send', false);
+    expect(r.kinds()).not.toContain('request.session.tools.policy');
+    await r.flow.choosePolicy(a!, 'send', true);
+    expect(r.calls.filter((c) => c.kind === 'request.session.tools.policy')).toEqual([{ kind: 'request.session.tools.policy', payload: { hsid: H, id: 'fs/grep@0123abcd', policy: 'send' } }]);
+    expect(r.flow.run(a!)).toMatchObject({ policy: 'send', goes: false });
+    expect(r.flow.run(b!)).toMatchObject({ policy: 'send', goes: true }); // the latest: the kernel queued it
+    expect(r.lives.at(-1)).toBe('grep’s results go to the model from now on; this result goes with your next message');
+  });
+
+  it('Keep to me sets ask; Send this one appears', async () => {
+    const r = rig({ 'request.session.tools.run': [{ status: 'ran', runId: RUN, content: 'a', isError: false }], 'request.session.tools.policy': [{ hsid: H, policy: 'ask', queued: false }] });
+    r.flow.open(H, 'grep', true);
+    await tick();
+    r.flow.press(null, true);
+    await tick();
+    const key = r.added[0]!.key;
+    await r.flow.choosePolicy(key, 'ask', true);
+    expect(r.flow.run(key)!.policy).toBe('ask');
+    expect(r.lives.at(-1)).toBe('grep’s results stay here; Send this one sends one');
+  });
+
+  it('the run row draws the question with two quiet keys and the note; wiring in app.ts', () => {
+    expect(UI).toContain("'data-run-act': 'always-send'");
+    expect(UI).toContain("'data-run-act': 'keep'");
+    expect(APP).toContain("act === 'always-send' || act === 'keep'");
+    expect(APP).toContain("if (act === 'send') void slashMenu!.flow.sendOne(key, true)");
+  });
+});
+
 describe('#gui-slash-runs: transcript rows (chatItems)', () => {
   const at = '2026-10-28T12:00:00.000Z';
   it('this page’s run row shows once: the kernel row for it is claimed; another is history', () => {
