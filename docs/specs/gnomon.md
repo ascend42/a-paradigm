@@ -422,9 +422,14 @@ kernel key     Ed25519 keypair, EPHEMERAL: generated in kernel memory at every s
                Forgery scope (P8-D68 as amended by TD-2026-10-29-746, S29-K1): the helper certifies ONLY a kernel it identifies by code signature. On macOS the
                kernel is the signed Node SEA `gnomon.kernel` (#kernel-sea; packages/gnomon/scripts/build-sea.mjs): code identifier gnomon.kernel, team SW4BMQ8PNL,
                hardened runtime, allow-jit only, no get-task-allow; `--disable-sigusr1` baked into its execArgv and `execArgvExtension: "none"`, so NODE_OPTIONS
-               is never read (NODE_OPTIONS, NODE_PATH and NODE_EXTRA_CA_CERTS are also stripped from its env before any kernel code runs). Its node children
-               (sessions' PATH head, the MCP pool, gnomon-web, mods, voice, the local runner, loop checks) run the separately signed `gnomon.node`
-               (Contents/Resources/node/bin/node), never the kernel. Transport: the helper is the kernel's stdio child; it reads the peer's audit token with
+               is never read; it refuses to start when NODE_EXTRA_CA_CERTS, NODE_ICU_DATA, SSL_CERT_FILE, SSL_CERT_DIR, OPENSSL_CONF or
+               NODE_TLS_REJECT_UNAUTHORIZED is set (read before any JS), and deletes every NODE_*, OPENSSL_* and SSL_CERT_* variable before kernel code
+               runs. Its node children (sessions' PATH head, the MCP pool, gnomon-web, mods, voice, the local runner, loop checks) run the separately
+               signed `gnomon.node` (Contents/Resources/node/bin/node), never the kernel. The SEA trusts nothing beside it (Aegis S0 H1): the kernel-tree
+               hash of dist/ + package.json and the child node's cdhash-pinned code requirement are baked into the signed binary; the tree is checked
+               before any kernel code runs (mismatch: refuse to start) and both are re-checked before every child spawn (mismatch: no child). Only
+               the release script signs `gnomon.kernel`; dev builds sign `gnomon.kernel.dev` / `gnomon.node.dev` (Developer ID or ad-hoc), which
+               never meet the release requirement, and a dev Gnomon.app accepts only `gnomon.kernel.dev` (Aegis S0 H2). Transport: the helper is the kernel's stdio child; it reads the peer's audit token with
                LOCAL_PEERTOKEN on its stdin socketpair and runs SecCodeCheckValidity against `identifier "gnomon.kernel" and anchor apple generic and certificate
                leaf[subject.OU] = SW4BMQ8PNL` (probe P1; the XPC service below is the fallback if that probe fails). A same-user `node` running a script fails that
                check, so status.kernelKeyCustody is `full` on macOS ONLY for a Developer-ID-signed SEA; an ad-hoc SEA (CI, dev without the identity: "unsigned →
@@ -485,7 +490,7 @@ Generalizes `packages/warpline/src/fabric/keys.ts`: key identity `keys.ts:15-18,
 | `G-ID-10` | `#identity`, `#approval-broker`, `#gnomon-helper`, `#gnomon-voice`, `#manifest-loader`, `#mod-host` | a batch the binding rules refuse (decision row, `rowsDigest` over `detail.rootRows`, the card kind's row table), a bad root signature, a wrong key, a replaced line or a declined prompt signs nothing and appends nothing; the card stays pending |
 | `G-ID-11` | `#approval-broker`, `#gui` | the GUI shows a root-class key only beside a contentHash-verified, fully rendered `detail.rootRows` and flags red a logged `rowsDigest` that is not the shown rows' digest |
 | `G-ID-12` | `#kernel-log` | replay checks every v2 decision row's `rowsDigest` against the logged card and, with the pinned root key, its `rootSig` |
-| `G-ID-13` | `#kernel-sea`, `#gnomon-wrapper` | the kernel is a signed SEA `gnomon.kernel` (identifier gnomon.kernel, hardened runtime, no get-task-allow; ad-hoc only with the "unsigned → guarded only" note); `NODE_OPTIONS=--require=<x.js>` never runs in it; every node child runs `gnomon.node`, never the kernel (no `gnomon.node` ⇒ refused, never execPath); the app spawns the SEA after its hash and code-requirement pins (test/sea.test.ts, test/sea-kernel.test.ts, gnomon-wrapper kernel.rs; probes p15–p17) |
+| `G-ID-13` | `#kernel-sea`, `#gnomon-wrapper` | the kernel is a signed SEA `gnomon.kernel` (identifier gnomon.kernel, hardened runtime, no get-task-allow; ad-hoc only with the "unsigned → guarded only" note); `NODE_OPTIONS=--require=<x.js>` never runs in it and `--inspect`, `-e`, `--eval` in argv are not node flags; a pre-JS variable (NODE_EXTRA_CA_CERTS, NODE_ICU_DATA, SSL_CERT_FILE, SSL_CERT_DIR, OPENSSL_CONF, NODE_TLS_REJECT_UNAUTHORIZED) refuses the start; every node child runs `gnomon.node`, never the kernel (no `gnomon.node` ⇒ refused, never execPath); beside a changed dist/ it refuses to start, and beside a node failing its cdhash-pinned requirement it spawns no child; a dev SEA (`gnomon.kernel.dev`) never meets the release requirement and a dev app accepts only it; the app spawns the SEA after its hash and code-requirement pins (test/sea.test.ts, test/sea-kernel.test.ts, gnomon-wrapper kernel.rs; probes p15–p17) |
 
 ### 3.2 `#kernel-log` — the one hash-chained index
 

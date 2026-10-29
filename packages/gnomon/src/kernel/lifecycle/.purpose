@@ -75,14 +75,21 @@ components:
       SecCodeCheckValidity; probe p15). scripts/build-sea.mjs bundles
       scripts/sea/sea-main.mjs with both dist entries into one CommonJS main;
       the sea-config bakes --disable-sigusr1 and execArgvExtension "none"
-      (NODE_OPTIONS is never read); sea-prelude.mjs strips NODE_OPTIONS,
-      NODE_PATH and NODE_EXTRA_CA_CERTS, selects gnomond with --gnomond and
-      defines import.meta.url from the SEA's own location (the kernel package
-      root). --sign auto uses the Developer ID when present, else ad-hoc with
-      "unsigned → guarded only". sea.ts childNodePath: under the SEA every node
-      child runs gnomon.node (Resources/node/bin/node in the app, else
-      <dir of gnomon.kernel>/node/bin/node); none ⇒ SeaChildNodeMissing, never
-      execPath. reexecArgs under the SEA starts with --gnomond.
+      (NODE_OPTIONS is never read). sea-prelude.mjs refuses to start when a
+      variable node reads before JS is set (NODE_EXTRA_CA_CERTS, NODE_ICU_DATA,
+      SSL_CERT_FILE, SSL_CERT_DIR, OPENSSL_CONF, NODE_TLS_REJECT_UNAUTHORIZED),
+      deletes every NODE_*, OPENSSL_*, SSL_CERT_*, selects gnomond with
+      --gnomond, defines import.meta.url from the SEA's own location, and
+      checks dist/ + package.json against the kernel-tree hash baked in at
+      build (mismatch: exit 78) before any kernel code (Aegis S0 H1, M1).
+      sea.ts childNodePath: under the SEA every node child runs gnomon.node
+      (Resources/node/bin/node in the app, else <dir of gnomon.kernel>/node/bin/node);
+      before every spawn the frozen globalThis.__gnomonSea guard re-checks the
+      tree and the node's cdhash-pinned code requirement; none or a failure ⇒
+      SeaChildNodeMissing / SeaChildNodeRefused, never execPath. Dev builds
+      (npm run build:sea) sign gnomon.kernel.dev + gnomon.node.dev, Developer ID
+      or ad-hoc ("unsigned → guarded only"); only release-darwin.mjs signs
+      gnomon.kernel (Aegis S0 H2). reexecArgs under the SEA starts with --gnomond.
     path: src/kernel/lifecycle/sea.ts
     type: module
     tags: [kernel, lifecycle, security, identity]

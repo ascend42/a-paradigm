@@ -135,9 +135,13 @@ Gnomon.app/Contents/
   The kernel copies it into `<home>/bin/voice/client` and pins it, as before.
 - **Kernel.** The wrapper spawns the signed SEA `Resources/kernel/gnomon.kernel`
   (#kernel-sea, TD-2026-10-29-746). Its identifier is `gnomon.kernel` and it is
-  built by `packages/gnomon/scripts/build-sea.mjs`. `--disable-sigusr1` is baked
-  in and NODE_OPTIONS is never read. The app pins the SEA's sha256 and code
-  requirement, and checks both before every spawn.
+  built by this release script. `--disable-sigusr1` is baked in and
+  NODE_OPTIONS is never read. The app pins the SEA's sha256 and code
+  requirement, and checks both before every spawn. The SEA carries the kernel
+  tree hash and the bundled node's cdhash-pinned requirement, so a copy of it
+  next to other files refuses to start or to spawn. Only the release signs
+  `gnomon.kernel`. `npm run build:sea` builds a dev `gnomon.kernel.dev`, and
+  a dev app accepts only that.
 - **Children.** The kernel's `process.execPath` is the SEA itself, so every
   node child (gnomon-web, mods, the voice client, the model fetch, the MCP pool,
   sessions' PATH head) runs the bundled node, which is signed `gnomon.node`

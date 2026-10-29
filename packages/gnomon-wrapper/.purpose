@@ -32,7 +32,11 @@ components:
       kernel.rs check_bundle_sea_with, checked last before the spawn); a stage
       without it fails the build. Dev builds pin packages/gnomon/gnomon.kernel
       and its node/bin/node when present (scripts/build-darwin.mjs builds them
-      first; --no-sea keeps node + script, guarded only). The PATH head stays
+      first) and check the dev SEA against identifier gnomon.kernel.dev at
+      spawn (layout.rs kernel_dev_requirement; a dev app never spawns a
+      production gnomon.kernel, Aegis S0 H2); --no-sea passes
+      GNOMON_WRAPPER_NO_SEA=1 and build.rs pins no SEA (node + script, guarded
+      only, Aegis S0 M2). The PATH head stays
       gnomon.node's dir. KernelEntitlements.plist: allow-jit only.
       Legacy flow (no SEA pinned): the app spawns `node --disable-sigusr1 <dist>/cli/gnomon.js
       up --wrapper` (src/kernel.rs: env_clear + HOME USER LOGNAME LANG TMPDIR
