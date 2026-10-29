@@ -43,9 +43,11 @@ private final class Rig {
             return msgs.map { _ in "c2ln" }
         },
         session: FakeProbe(true),
+        caller: CallerGate(probe: probe, acceptDev: false),
         items: items,
         certKey: VectorCertKey())
     let items = MemoryItemStore()
+    let probe = FixedCaller()
 }
 
 /// The shared vectors' kernel-cert key (0x04 + 64 x 0x07): the kernel-custody card must name THIS helper's key.
@@ -179,8 +181,21 @@ final class DecisionSignTests: XCTestCase {
 
     func testKernelCustodyRegistersOnlyThisHelpersKey() throws {
         let r = Rig()
-        r.server = Server(presence: { _ in SpyContext() }, signer: { _, _, _, m in m.map { _ in "c2ln" } }, session: FakeProbe(true), items: r.items, certKey: SoftCertKey())
+        r.server = Server(presence: { _ in SpyContext() }, signer: { _, _, _, m in m.map { _ in "c2ln" } }, session: FakeProbe(true), caller: CallerGate(probe: FixedCaller(), acceptDev: false), items: r.items, certKey: SoftCertKey())
         XCTAssertEqual(errorCode { try r.server.handle(request(try vector("kernel-custody: register the kernel-cert key and seal the legacy keys"))) }, "batch-refused")
+    }
+
+    func testHelperStateCardsComeOnlyFromTheVerifiedKernel() throws {
+        // Aegis S1 L2: presence.mode, kernel-custody and log.quarantine need the caller check, before any prompt
+        for name in ["presence.mode: switch Touch ID off", "kernel-custody: register the kernel-cert key and seal the legacy keys", "log.quarantine: move the anchor from the anchored head to a new log"] {
+            let r = Rig()
+            r.probe.f.matchedIdentifier = nil
+            XCTAssertEqual(errorCode { try r.server.handle(request(try vector(name))) }, "caller-refused", name)
+            XCTAssertTrue(r.prompts.isEmpty)
+        }
+        let r = Rig()
+        r.probe.f.matchedIdentifier = nil
+        XCTAssertNil(errorCode { try r.server.handle(request(try vector(allFive))) }, "an install card is presence-gated, not caller-gated")
     }
 
     func testAPresenceModeDecisionStoresTheModeAndItsRowHash() throws {

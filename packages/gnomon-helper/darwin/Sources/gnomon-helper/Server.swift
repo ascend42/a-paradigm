@@ -190,6 +190,8 @@ final class Server {
             let g = try generation(req)
             _ = try connId(req) // validated (the kernel's connection, informational)
             let batch = try decisionBatch(req)
+            // Aegis S1 L2: the cards that change what the helper itself holds come only from the verified kernel
+            if ["presence.mode", "kernel-custody", "log.quarantine"].contains(batch.cardKind) { _ = try caller.require() }
             if batch.cardKind == "kernel-custody" {
                 // 1.11.0: the migration card registers THIS helper's kernel-cert key, never another
                 guard batch.rows[1]["certKey"] as? String == (try issuer.key.publicKey()).base64EncodedString() else {

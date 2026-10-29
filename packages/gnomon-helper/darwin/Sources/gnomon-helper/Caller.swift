@@ -180,6 +180,23 @@ private func name16(_ d: Data, _ o: Int) -> String {
 func readKernelStamp(path: String) -> KernelStamp? {
     guard let h = FileHandle(forReadingAtPath: path) else { return nil }
     defer { try? h.close() }
+    return readKernelStamp(handle: h)
+}
+
+/// The identity of an open file or a path (dev, ino, size, mtime, ctime): equal before and after = the same bytes.
+func fileIdentity(fd: Int32) -> [Int64]? {
+    var st = stat()
+    guard fstat(fd, &st) == 0 else { return nil }
+    return [Int64(st.st_dev), Int64(st.st_ino), Int64(st.st_size), Int64(st.st_mtimespec.tv_sec), Int64(st.st_mtimespec.tv_nsec), Int64(st.st_ctimespec.tv_sec), Int64(st.st_ctimespec.tv_nsec)]
+}
+
+func fileIdentity(path: String) -> [Int64]? {
+    var st = stat()
+    guard stat(path, &st) == 0 else { return nil }
+    return [Int64(st.st_dev), Int64(st.st_ino), Int64(st.st_size), Int64(st.st_mtimespec.tv_sec), Int64(st.st_mtimespec.tv_nsec), Int64(st.st_ctimespec.tv_sec), Int64(st.st_ctimespec.tv_nsec)]
+}
+
+func readKernelStamp(handle h: FileHandle) -> KernelStamp? {
     guard let magic = readAt(h, 0, 8) else { return nil }
     var base: UInt64 = 0
     if u32(magic, 0, big: true) == 0xCAFE_BABE { // FAT_MAGIC (big-endian), 32-bit fat_arch entries
@@ -260,16 +277,23 @@ final class SystemCallerProbe: CallerProbe {
         let unique = d[kSecCodeInfoUnique as String] as? Data ?? Data()
         f.cdhash = hex(unique)
         f.startedAt = processStart(f.tokenPid)
-        // the stamp: read from the on-disk file only when that file IS the running code (same cdhash, strict-valid)
+        // the stamp (Aegis S1 L1): ONE open of the file; the stamp is read from that descriptor, then the path is
+        // validated strictly (all pages, so the GNOMON_STAMP section too) with the running code's cdhash, and the path
+        // must still name the very file that was read (same dev, inode, size, mtime, ctime) — never a re-opened copy
         var url: CFURL?
-        if SecCodeCopyPath(unsafeBitCast(c, to: SecStaticCode.self), [], &url) == errSecSuccess, let u = url as URL? {
+        if SecCodeCopyPath(unsafeBitCast(c, to: SecStaticCode.self), [], &url) == errSecSuccess, let u = url as URL?,
+           let h = FileHandle(forReadingAtPath: u.path) {
+            defer { try? h.close() }
+            let before = fileIdentity(fd: h.fileDescriptor)
+            let stamp = readKernelStamp(handle: h)
             var sc: SecStaticCode?
-            if SecStaticCodeCreateWithPath(u as CFURL, [], &sc) == errSecSuccess, let s = sc,
-               SecStaticCodeCheckValidity(s, strict, nil) == errSecSuccess {
+            if before != nil, SecStaticCodeCreateWithPath(u as CFURL, [], &sc) == errSecSuccess, let s = sc,
+               SecStaticCodeCheckValidity(s, SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures), nil) == errSecSuccess {
                 var sinfo: CFDictionary?
                 if SecCodeCopySigningInformation(s, SecCSFlags(rawValue: kSecCSSigningInformation), &sinfo) == errSecSuccess,
-                   let sd = sinfo as? Json, (sd[kSecCodeInfoUnique as String] as? Data) == unique, !unique.isEmpty {
-                    f.stamp = readKernelStamp(path: u.path)
+                   let sd = sinfo as? Json, (sd[kSecCodeInfoUnique as String] as? Data) == unique, !unique.isEmpty,
+                   fileIdentity(path: u.path) == before, fileIdentity(fd: h.fileDescriptor) == before {
+                    f.stamp = stamp
                 }
             }
         }

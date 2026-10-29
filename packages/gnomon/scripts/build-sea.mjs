@@ -289,7 +289,10 @@ export async function buildKernelSea({ pkg = PKG, outDir = PKG, sign = 'auto', n
     must(capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${childReq}`, to]), 'codesign -R child node requirement');
     // 2. the SEA, with the dist tree and the child-node requirement baked in
     const { kernelTreeHash, voiceTreeHash } = await import('./release-darwin.mjs');
-    // the voice client beside the kernel dir (packages/gnomon-voice in a checkout, Resources/gnomon-voice in the app)
+    // the voice client beside the kernel dir (packages/gnomon-voice in a checkout, Resources/gnomon-voice in the app).
+    // Aegis S1 L3 (accepted): in a checkout this pins packages/gnomon-voice's package.json, dist and LOCAL node_modules
+    // only; its dependencies hoisted to the repo's root node_modules are NOT covered. A release pins the whole
+    // Resources/gnomon-voice tree, addons included.
     const voiceDir = path.join(path.dirname(pkg), 'gnomon-voice');
     const voiceTree = existsSync(path.join(voiceDir, 'package.json')) ? voiceTreeHash(voiceDir) : null;
     const build = { profile: 'dev', version, distTree: kernelTreeHash(pkg), childNodeRequirement: childReq, voiceTree };
