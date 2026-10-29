@@ -47,16 +47,26 @@ export function fail(msg) {
   process.exit(1);
 }
 
-/** Exactly one valid "Developer ID Application: … (SW4BMQ8PNL)" identity; returns its SHA-1 (public cert hash) and name. */
-export function findIdentity() {
+/**
+ * Every valid "Developer ID Application: … (SW4BMQ8PNL)" identity in the keychain, de-duplicated (never exits).
+ * `null` when `security find-identity` itself fails (no keychain access, not macOS). Shared with
+ * packages/gnomon/scripts/build-sea.mjs, whose `--sign auto` falls back to ad-hoc when this is empty.
+ */
+export function listIdentities() {
   const r = run('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning']);
-  if (r.status !== 0) fail(`security find-identity failed: ${r.stderr.slice(0, 200)}`);
+  if (r.status !== 0) return null;
   const found = [];
   for (const line of r.stdout.split('\n')) {
     const m = /^\s*\d+\)\s+([0-9A-F]{40})\s+"(Developer ID Application: [^"]+ \(([A-Z0-9]{10})\))"/.exec(line);
     if (m && m[3] === TEAM) found.push({ sha1: m[1], name: m[2] });
   }
-  const unique = [...new Map(found.map((f) => [f.sha1, f])).values()];
+  return [...new Map(found.map((f) => [f.sha1, f])).values()];
+}
+
+/** Exactly one valid "Developer ID Application: … (SW4BMQ8PNL)" identity; returns its SHA-1 (public cert hash) and name. */
+export function findIdentity() {
+  const unique = listIdentities();
+  if (unique === null) fail('security find-identity failed');
   if (unique.length === 0) fail(`no valid "Developer ID Application: … (${TEAM})" identity in the keychain`);
   if (unique.length > 1) fail(`more than one Developer ID Application identity for ${TEAM}; remove the stale one (${unique.map((u) => u.sha1.slice(0, 8)).join(', ')})`);
   return unique[0];

@@ -33,6 +33,7 @@
   "scripts": {
     "build": "tsup && node scripts/build-stamp.mjs",
     "build:release": "node scripts/build-release.mjs",
+    "build:sea": "node scripts/build-sea.mjs",
     "release:darwin": "node scripts/release-darwin.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
@@ -49,6 +50,8 @@
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",
     "@types/node": "^24.0.0",
+    "esbuild": "0.28.2",
+    "postject": "1.0.0-alpha.6",
     "tsup": "^9.0.0",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"

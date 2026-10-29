@@ -229,6 +229,10 @@ packages/warpline/probe-*/
 # T-2026-10-21-029: Gnomon.app release output (packages/gnomon/scripts/release-darwin.mjs)
 packages/gnomon/release/
 
+# TD-2026-10-29-746 (#kernel-sea): the dev SEA kernel and its children's node (packages/gnomon/scripts/build-sea.mjs)
+packages/gnomon/gnomon.kernel
+packages/gnomon/node/
+
 # T-2026-10-21-030 (8.0 M3): release zips copied into the platform packages, and the prepack copy of the mods
 packages/gnomon-darwin-*/Gnomon.app.zip
 packages/gnomon-darwin-*/Gnomon.app.zip.sha256

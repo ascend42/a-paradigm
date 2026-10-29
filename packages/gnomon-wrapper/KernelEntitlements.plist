@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- #kernel-sea (TD-2026-10-29-746, spec P8-D68): the signed SEA kernel, Contents/Resources/kernel/gnomon.kernel
+     (packages/gnomon/scripts/build-sea.mjs), signed with identifier gnomon.kernel under the hardened runtime. It is the
+     bundled node 24 binary with the kernel injected, so it needs exactly what that node needs (NodeEntitlements.plist):
+     ONE entitlement, allow-jit, for V8's MAP_JIT. No get-task-allow (build-sea.mjs refuses a signature that carries
+     it), no library-validation opt-out (the kernel loads no native addon: zero runtime deps, G-SEC-01), no DYLD
+     environment, no keychain group (the kernel holds no keychain item; the helper does). -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+</dict>
+</plist>
