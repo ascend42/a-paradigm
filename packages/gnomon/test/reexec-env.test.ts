@@ -58,6 +58,7 @@ describe('G-DMN-05 cleanReexecEnv: the activator env never reaches the daemon', 
       '--idle-ms',
       '5',
     ]);
-    expect(reexecArgs({ home: '/h' })).toEqual(['--foreground', '--home', '/h']);
+    // #kernel-sea (TD-2026-10-29-746): the SEA (no entry) selects gnomond with --gnomond; no node flag, no script
+    expect(reexecArgs({ home: '/h' })).toEqual(['--gnomond', '--foreground', '--home', '/h']);
   });
 });
