@@ -38,7 +38,7 @@ import { DISABLE_SIGUSR1 } from '../lifecycle/env.js';
 import { appBundleOf } from '../lifecycle/app-bundle.js';
 import { artifactPin, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
 import { voiceChildEnv, type VoicePrepared } from './voice-child.js';
-import { checkVoiceClient, childNodePath, verifyRunningChild } from '../lifecycle/sea.js';
+import { checkVoiceClient, childNodePath, gateRunningChild } from '../lifecycle/sea.js';
 
 // the ONE requirement shared with the build script (gnomon-contracts; Developer ID CA + leaf, team, identifier)
 export { VOICE_IO_IDENTIFIER, VOICE_IO_REQUIREMENT, VOICE_IO_TEAM };
@@ -427,7 +427,7 @@ export function fetchVoiceModels(o: { home: string; entry: string; report: (mb: 
     }
     const command = o.execPath ?? childNodePath();
     const child = spawn(command, [DISABLE_SIGUSR1, o.entry, 'models', 'fetch', '--json', '--home', o.home], { stdio: ['ignore', 'pipe', 'pipe'], env: voiceChildEnv(process.env, o.home) });
-    if (!o.execPath) void verifyRunningChild(command, child);
+    if (!o.execPath) void gateRunningChild(child); // Aegis S1 M2
     let buf = '';
     let err = '';
     let reported = false;

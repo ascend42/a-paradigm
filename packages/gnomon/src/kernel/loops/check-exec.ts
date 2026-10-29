@@ -58,7 +58,7 @@ import type { MacosProbe, SipProbe } from '../../platform/darwin/macos.js';
 import { applyPassRule, type ParsedCounts } from './check-parse.js';
 import { scanSecrets, type Redaction } from './secret-scan.js';
 import { literalsOf, resolveLoopEnvFiles, type LoopEnvSource, type LoopLiteral } from './loop-env.js';
-import { childNodePath, verifyRunningChild } from '../lifecycle/sea.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export const CHECK_COPY_LIMITS = Object.freeze({ maxFiles: 50_000, maxBytes: 500 * 1024 * 1024, maxNodeModules: 500 });
 export const CHECK_EVIDENCE_TAIL_BYTES = 64 * 1024;
@@ -551,7 +551,6 @@ function runPlan(plan: ChildLaunchPlan, cwd: string, timeoutSec: number, platfor
     let closed = false;
     let exited = false;
     const child = spawn(plan.command, plan.args, { cwd, env: plan.env, detached: true, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-    void verifyRunningChild(plan.command, child); // TD-2026-10-29-746: a direct gnomon.node child is checked running
     const pgid = child.pid ?? 0;
     const tree = new TreeTracker(pc, pgid);
     let polling: Promise<void> = Promise.resolve();

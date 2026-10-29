@@ -109,7 +109,7 @@ import { blobsDir, ModState, stateDir } from './state.js';
 import { isUserPaused, modNames } from './control.js';
 import { feedAccessOf, feedReaches, projectFeedEvent } from './feed.js';
 import { PARADIGM_SUMMARY_CAPABILITY, ParadigmSliceCache, unfocusedSlice } from './paradigm-slice.js';
-import { verifyRunningChild } from '../lifecycle/sea.js';
+import { gateRunningChild } from '../lifecycle/sea.js';
 
 const isLink = (p: string): boolean => {
   try {
@@ -561,7 +561,7 @@ export class ModHost {
       }
       this.#emit('mod.sandbox', { name, profile: 'mod', sandbox: plan.sandbox, profileHash: plan.profileHash });
       const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe'], env: plan.env, detached: true, windowsHide: true });
-      void verifyRunningChild(plan.command, child); // TD-2026-10-29-746: a direct gnomon.node child is checked running
+      void gateRunningChild(child); // Aegis S1 M2: no mod RPC is read until the RUNNING child meets gnomon.node's pin
       child.on('error', () => undefined);
       const channel = new ModChannel(child, (method, params) => this.#onModRequest(name, method, params));
       try {

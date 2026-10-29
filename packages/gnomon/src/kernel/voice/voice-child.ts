@@ -24,7 +24,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as net from 'node:net';
 import { DEFAULT_REEXEC_PATH, DISABLE_SIGUSR1 } from '../lifecycle/env.js';
-import { checkVoiceClient, childNodePath, verifyRunningChild } from '../lifecycle/sea.js';
+import { checkVoiceClient, childNodePath, gateRunningSocket } from '../lifecycle/sea.js';
 
 export type VoiceChildPhase = 'stopped' | 'preparing' | 'installing' | 'downloading-models' | 'starting' | 'running' | 'backoff' | 'failed' | 'unavailable';
 
@@ -285,7 +285,6 @@ export class VoiceChildSupervisor {
       detached: false,
     });
     this.#child = child;
-    if (!this.#o.execPath) void verifyRunningChild(command, child); // the RUNNING child meets gnomon.node's pin, else SIGKILL
     this.#startedAt = this.#now();
     child.stdout?.resume();
     let tail = '';
@@ -322,6 +321,12 @@ export class VoiceChildSupervisor {
     if (!sock) {
       this.#lastError = 'the voice app has no kernel link';
       await this.#kill();
+      return void this.#set('failed');
+    }
+    // Aegis S1 M2: the kernel link is attached only after the child's first bytes AND its RUNNING pid meets gnomon.node's pin
+    const gate = this.#o.execPath ? null : gateRunningSocket(child, sock);
+    if (gate && !(await gate)) {
+      this.#lastError = 'the running voice app is not the signed gnomon.node; it was stopped';
       return void this.#set('failed');
     }
     try {

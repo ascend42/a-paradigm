@@ -6,7 +6,9 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { checkVoiceClient, verifyRunningChild, type SeaGuard } from '../src/kernel/lifecycle/sea.js';
+import type { ChildProcess } from 'node:child_process';
+import { PassThrough } from 'node:stream';
+import { checkVoiceClient, gateRunningChild, gateRunningSocket, type SeaGuard } from '../src/kernel/lifecycle/sea.js';
 import * as sea from '../scripts/build-sea.mjs';
 
 const dirs: string[] = [];
@@ -48,31 +50,68 @@ describe('checkVoiceClient (the SEA voice client pin)', () => {
   });
 });
 
-describe('verifyRunningChild (the running child meets the child-node pin)', () => {
-  const child = () => ({ pid: 4242, kill: vi.fn(() => true) });
+describe('gateRunningChild / gateRunningSocket (Aegis S1 M2: nothing a child says is read before its RUNNING pid passes)', () => {
+  const mk = () => {
+    const stdout = new PassThrough();
+    return { pid: 4242, kill: vi.fn(() => true), stdout, stdio: [null, stdout, null] } as unknown as ChildProcess & { kill: ReturnType<typeof vi.fn> };
+  };
 
-  it('is a no-op outside the SEA and for a command that is not the child node (sandbox-exec, claude)', () => {
-    expect(verifyRunningChild('/usr/bin/node', child(), { sea: false })).toBeNull();
-    expect(verifyRunningChild('/usr/bin/sandbox-exec', child(), { sea: true, guard: guard(), verify: async () => 0 })).toBeNull();
+  it('is a no-op outside the SEA', () => {
+    expect(gateRunningChild(mk(), { sea: false })).toBeNull();
+    expect(gateRunningSocket(mk(), new PassThrough(), { sea: false })).toBeNull();
   });
 
-  it('FALSIFIER: no guard kills the child', async () => {
-    const c = child();
-    expect(await verifyRunningChild('/x/node', c, { sea: true, guard: null })).toBe(false);
+  it('FALSIFIER: bytes are held until the pid passes, then delivered in order (direct or under sandbox-exec: no command check)', async () => {
+    const c = mk();
+    const raw = c.stdout!;
+    let release!: (n: number) => void;
+    const seen: Array<[number, string]> = [];
+    const p = gateRunningChild(c, { sea: true, guard: guard(), verify: (pid, req) => (seen.push([pid, req]), new Promise<number>((r) => (release = r))) })!;
+    const chunks: string[] = [];
+    c.stdout!.on('data', (b: Buffer) => chunks.push(b.toString()));
+    raw.write('hello ');
+    raw.write('world');
+    await new Promise((r) => setImmediate(r));
+    expect(seen).toEqual([[4242, 'identifier "gnomon.node"']]);
+    expect(chunks).toEqual([]);
+    release(0);
+    expect(await p).toBe(true);
+    await new Promise((r) => setImmediate(r));
+    expect(chunks.join('')).toBe('hello world');
+    expect(c.kill).not.toHaveBeenCalled();
+  });
+
+  it('FALSIFIER: a failing pid is SIGKILLed and nothing it wrote is ever delivered', async () => {
+    const c = mk();
+    const raw = c.stdout!;
+    const p = gateRunningChild(c, { sea: true, guard: guard(), verify: async () => 3 })!;
+    const chunks: string[] = [];
+    c.stdout!.on('data', (b: Buffer) => chunks.push(b.toString()));
+    raw.write('{"forged":true}');
+    expect(await p).toBe(false);
+    expect(c.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(chunks).toEqual([]);
+  });
+
+  it('FALSIFIER: no guard kills at once', async () => {
+    const c = mk();
+    expect(await gateRunningChild(c, { sea: true, guard: null })).toBe(false);
     expect(c.kill).toHaveBeenCalledWith('SIGKILL');
   });
 
-  it('FALSIFIER: a running child that fails codesign -R is SIGKILLed; one that passes is kept', async () => {
-    // the dev SEA candidate: <dir of execPath>/node/bin/node
-    const node = path.join(path.dirname(process.execPath), 'node', 'bin', 'node');
-    const bad = child();
-    const seen: Array<[number, string]> = [];
-    expect(await verifyRunningChild(node, bad, { sea: true, guard: guard(), verify: async (pid, req) => (seen.push([pid, req]), 3) })).toBe(false);
+  it('the duplex link (voice fd 3) is handed over only after the first bytes and a passing pid; the bytes stay unread', async () => {
+    const c = mk();
+    const sock = new PassThrough();
+    const p = gateRunningSocket(c, sock, { sea: true, guard: guard(), verify: async () => 0 })!;
+    sock.write('hi');
+    expect(await p).toBe(true);
+    expect(String(sock.read())).toBe('hi');
+    const bad = mk();
+    const s2 = new PassThrough();
+    const q = gateRunningSocket(bad, s2, { sea: true, guard: guard(), verify: async () => 1 })!;
+    s2.write('x');
+    expect(await q).toBe(false);
     expect(bad.kill).toHaveBeenCalledWith('SIGKILL');
-    expect(seen).toEqual([[4242, 'identifier "gnomon.node"']]);
-    const good = child();
-    expect(await verifyRunningChild(node, good, { sea: true, guard: guard(), verify: async () => 0 })).toBe(true);
-    expect(good.kill).not.toHaveBeenCalled();
   });
 });
 
