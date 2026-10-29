@@ -1,0 +1,61 @@
+id: TD-2026-10-29-340
+timestamp: '2026-10-29T20:37:15.075Z'
+title: Gnomon terminal parity by default, and a global Touch ID switch
+decision: >-
+  A Gnomon Claude session behaves like Claude Code in the terminal by default (the `terminal` profile). It runs the real
+  claude binary with the founder's env, settings (user, project, local), MCP servers and plugins. Cards appear only
+  where Claude Code's own permission rules would ask. Gnomon's own default sandbox and forced asks (ALWAYS_ASK_TOOLS,
+  steering and escape auto-denies) are gone from this profile.
+
+
+  Founder answers on the details:
+
+  - **Thin integrity layer:** keep it for now. It denies only access to Gnomon's keys, log and other state. It gets
+  dropped once the kernel signing key moves into the helper.
+
+  - **Always:** writes Claude's own settings.local.json rule, the same as the terminal.
+
+  - **Folder trust:** one trust card per new folder, skipped when the terminal has already trusted it.
+
+  - **Law-7 API-billing refusal:** kept.
+
+
+  The `guarded` profile, today's sandbox plus Gnomon's cards, is opt-in per repo. Repos already set to manual or L2/L3
+  stay guarded after the upgrade.
+
+
+  **Touch ID switch:** one global toggle in Settings. Turning it off takes one Touch ID; turning it on needs none. While
+  it is off, every approval is a click.
+
+
+  Root actions keep presence: install/repin, API token, peer pair, root grant, loop trust, voice enrol, and the
+  switch-off itself.
+
+
+  Every flip writes a signed row, and the GUI shows the state.
+
+
+  The local-model lane keeps its brokered safeguards. With Touch ID off, its cards become clicks.
+rationale: >-
+  Founder: Gnomon's restrictions made it more of a hindrance than Claude Code in the terminal. The sandbox blocked
+  normal work, there were too many cards, and Touch ID broke the flow. Parity keeps what Gnomon adds (recording, audit,
+  GUI, voice, cost) without friction the terminal doesn't have. The thin layer and root presence keep the kernel's own
+  integrity, which a same-user process could otherwise forge.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: No wrapper at all
+    rejected_because: A session could read Gnomon's signing keys and forge approvals; revisit once the key is in the helper
+  - option: Keep it strict with fewer cards
+    rejected_because: Founder chose terminal parity
+status: active
+tags:
+  - gnomon
+  - parity
+  - presence
+  - sandbox

@@ -1,0 +1,72 @@
+id: TD-2026-10-29-746
+timestamp: '2026-10-29T21:08:48.436Z'
+title: 'Kernel key custody: ephemeral kernel key certified by the helper; signed SEA kernel; npm installs stay guarded'
+decision: >-
+  Amends TD-2026-10-29-894 and spec P8-D68.
+
+
+  **Kernel key.** The kernel keeps its ephemeral Ed25519 key, generated at each start. A Secure Enclave P-256
+  `kernel-cert` key held by the helper certifies it at every boot. kernel-pub.jsonl is sealed by a root-signed legacy
+  row, and history before the seal stays labelled `partial`.
+
+
+  **Signed kernel.** The kernel becomes a signed Node SEA (`gnomon.kernel`) that ignores NODE_OPTIONS, and its children
+  use `gnomon.node`. The helper certifies only a signed kernel, which it checks by audit token and code requirement.
+
+
+  **Dev builds** also produce a signed SEA, so the founder can dogfood.
+
+
+  **npm-only installs** get only the guarded profile.
+
+
+  **With Touch ID off,** the CLI `gnomon open` delegates to the app, and no launch token leaves the kernel.
+
+
+  **Click key.** It is ephemeral and non-permanent in the Secure Enclave. It is bound to the app-bound GUI connId and
+  can sign approve:v1 only. It is revoked on close, lock, sleep, user switch, after 12 h, and when the switch goes back
+  on. It fails closed.
+
+
+  **Slices:**
+
+  - S0: SEA plus probes (LOCAL_PEERTOKEN on a libuv socketpair, a non-permanent Secure Enclave key, AfterFirstUnlock).
+
+  - S1: helper 1.11.0.
+
+  - S2: kernel cert trust and the migration card.
+
+  - S3: the wrapper launch without device.key, and the gated CLI open.
+
+  - S4: the Touch ID switch and the click key.
+
+  - S5: the reduced terminal profile.
+
+
+  **Transport:** stdio if the probe passes, otherwise XPC.
+rationale: >-
+  The real forgery path is the appendable kernel-pub.jsonl, not a key file. Certifying the ephemeral key leaves all
+  existing signatures valid and rotates keys for free. Only a signed binary can be identified as the kernel, so parity
+  requires the SEA.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: security
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: A persistent keychain Ed25519 kernel key (the original P8-D68)
+    rejected_because: It needs signature migration and more helper work; the ephemeral certified key achieves the same
+  - option: Terminal profile for npm installs
+    rejected_because: An unsigned kernel can't be verified, so it would stay forgeable
+status: active
+tags:
+  - gnomon
+  - parity
+  - helper
+  - security
+  - identity
