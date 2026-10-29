@@ -15,6 +15,9 @@
 //   GNOMON_BUILD_GNOMON_PKG  layout::KERNEL_REL    GNOMON_BUILD_KERNEL_TREE its kernel tree hash
 //   GNOMON_BUILD_NODE_REQUIREMENT the designated requirement the node must meet at spawn (layout::node_requirement
 //                            of GNOMON_WRAPPER_BUNDLE_SIGNING = developer-id | adhoc; src/codesign.rs)
+//   GNOMON_BUILD_KERNEL_EXE  layout::KERNEL_EXE_REL (#kernel-sea, TD-2026-10-29-746: the signed SEA kernel the
+//                            app spawns), GNOMON_BUILD_KERNEL_EXE_SHA256 its hash, GNOMON_BUILD_KERNEL_EXE_REQUIREMENT
+//                            layout::kernel_requirement (identifier gnomon.kernel); a stage without it FAILS
 // A bundle build with a missing or unhashable stage FAILS (never a pinless bundle), and a RELEASE-profile build
 // without a stage FAILS unless GNOMON_WRAPPER_DEV=1 opts into a dev app (Aegis M2 high 2).
 // DEV mode (no stage; founder dogfooding from a checkout, unchanged):
@@ -29,6 +32,9 @@
 //   GNOMON_BUILD_KERNEL_TREE gnomon-wrapper-kernel-tree:v1 of its dist/ + package.json
 //                            (src/tree.rs, shared with the app; Aegis C1); empty when
 //                            dist is not built — the app then refuses to spawn
+//   #kernel-sea: when <pkg>/gnomon.kernel and <pkg>/node/bin/node exist (npm run build:sea), GNOMON_BUILD_KERNEL_EXE
+//                            is the absolute SEA, GNOMON_BUILD_KERNEL_EXE_SHA256 its hash, and the node pin is that
+//                            gnomon.node (source "sea-dev"); otherwise both are empty and the app runs node + script
 // Build-time inputs only: nothing here is read from the environment at RUN time.
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -99,16 +105,37 @@ fn bundle_pins(stage: &Path) {
     println!("cargo:rustc-env=GNOMON_BUILD_NODE_SOURCE=bundle");
     println!("cargo:rustc-env=GNOMON_BUILD_GNOMON_PKG={}", layout::KERNEL_REL);
     println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_TREE={tree}");
+    // #kernel-sea (TD-2026-10-29-746): the signed SEA kernel the app spawns; a bundle without it FAILS (never a
+    // node + script release)
+    let kexe = stage.join(layout::KERNEL_EXE_REL);
+    println!("cargo:rerun-if-changed={}", kexe.display());
+    let ksha = layout::kernel_exe_hash(stage).unwrap_or_else(|e| panic!("gnomon-wrapper build: the bundle stage {} has no signed SEA kernel ({e}); release-darwin.mjs builds it (scripts/build-sea.mjs)", stage.display()));
+    let kreq = layout::kernel_requirement(&signing).unwrap_or_else(|e| panic!("gnomon-wrapper build: GNOMON_WRAPPER_BUNDLE_SIGNING: {e}"));
+    println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE={}", layout::KERNEL_EXE_REL);
+    println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_SHA256={ksha}");
+    println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_REQUIREMENT={kreq}");
+}
+
+/// DEV mode #kernel-sea: `<pkg>/gnomon.kernel` and its children's `<pkg>/node/bin/node` (npm run build:sea), when
+/// both exist: (kernel path, kernel sha256, node path, node sha256). None ⇒ the legacy node + script dev app.
+fn dev_sea(pkg: &Path) -> Option<(String, String, String, String)> {
+    let kexe = pkg.join("gnomon.kernel");
+    let knode = pkg.join("node/bin/node");
+    println!("cargo:rerun-if-changed={}", kexe.display());
+    println!("cargo:rerun-if-changed={}", knode.display());
+    if !kexe.is_file() || !knode.is_file() {
+        println!("cargo:warning=gnomon-wrapper dev build: no {} (npm run build:sea -w @a-company/gnomon): this app runs node + dist/cli/gnomon.js, which the helper cannot certify (guarded only)", kexe.display());
+        return None;
+    }
+    let ksha = tree::sha256_file(&kexe).unwrap_or_else(|e| panic!("gnomon-wrapper build: cannot hash {}: {e}", kexe.display()));
+    let nsha = tree::sha256_file(&knode).unwrap_or_else(|e| panic!("gnomon-wrapper build: cannot hash {}: {e}", knode.display()));
+    Some((kexe.display().to_string(), ksha, knode.display().to_string(), nsha))
 }
 
 /// DEV mode: the builder's node as found and this checkout's packages/gnomon, absolute (founder dogfooding).
 fn dev_pins(manifest: &Path) {
     println!("cargo:rustc-env=GNOMON_BUILD_MODE=dev");
     println!("cargo:rustc-env=GNOMON_BUILD_NODE_REQUIREMENT=");
-    let (node, node_sha, source) = build_node();
-    println!("cargo:rustc-env=GNOMON_BUILD_NODE={node}");
-    println!("cargo:rustc-env=GNOMON_BUILD_NODE_SHA256={node_sha}");
-    println!("cargo:rustc-env=GNOMON_BUILD_NODE_SOURCE={source}");
     println!("cargo:rerun-if-env-changed=GNOMON_WRAPPER_GNOMON_PKG");
     let pkg = match std::env::var("GNOMON_WRAPPER_GNOMON_PKG") {
         Ok(p) => PathBuf::from(p),
@@ -117,6 +144,23 @@ fn dev_pins(manifest: &Path) {
             std::fs::canonicalize(&p).unwrap_or(p)
         }
     };
+    // #kernel-sea: a dev SEA wins; its children's node (gnomon.node) is the node pin, never the builder's PATH node
+    let (node, node_sha, source) = match dev_sea(&pkg) {
+        Some((kexe, ksha, knode, nsha)) => {
+            println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE={kexe}");
+            println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_SHA256={ksha}");
+            (knode, nsha, "sea-dev")
+        }
+        None => {
+            println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE=");
+            println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_SHA256=");
+            build_node()
+        }
+    };
+    println!("cargo:rustc-env=GNOMON_BUILD_KERNEL_EXE_REQUIREMENT=");
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE={node}");
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE_SHA256={node_sha}");
+    println!("cargo:rustc-env=GNOMON_BUILD_NODE_SOURCE={source}");
     println!("cargo:rustc-env=GNOMON_BUILD_GNOMON_PKG={}", pkg.display());
     println!("cargo:rerun-if-changed={}", pkg.join("dist").display());
     println!("cargo:rerun-if-changed={}", pkg.join("package.json").display());

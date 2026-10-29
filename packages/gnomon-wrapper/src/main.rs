@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 
 use gnomon_wrapper::bundle::PIN;
 use gnomon_wrapper::contract::{parse_line, read_line_capped, ChannelLine, LineRead, MAX_LINE};
-use gnomon_wrapper::kernel::{check_trust_root, child_command, cli_command, parse_cli, BUILD_MODE};
+use gnomon_wrapper::kernel::{check_trust_root, child_command, cli_command, parse_cli, sea_child_command, sea_cli_command, BUILD_MODE};
 use gnomon_wrapper::loopback::{preflight, setup_preflight};
 use gnomon_wrapper::nav::{navigation_allowed, Phase, APP_ORIGIN};
 use gnomon_wrapper::surface::{IPC_DISABLED_SCRIPT, SURFACE_SCRIPT};
@@ -119,12 +119,20 @@ fn start_kernel(app: AppHandle, sh: Arc<Shared>) {
         Err(e) => return show_status(&app, &sh, "Gnomon.app was built against a different node or kernel", &e, true),
     };
     let (node, js) = (t.node.clone(), t.gnomon_js.clone());
-    sh.log(&format!("[{BUILD_MODE}] node {} (recorded {} via {}; sha256 equals the build pin); kernel {} (tree equals the build pin)", node.display(), t.node_recorded.display(), t.node_source, js.display()));
+    match &t.kernel {
+        Some(k) => sh.log(&format!("[{BUILD_MODE}] signed kernel {} (sha256 equals the build pin); children's node {} (via {}); kernel tree equals the build pin", k.display(), node.display(), t.node_source)),
+        None => sh.log(&format!("[{BUILD_MODE}] node {} (recorded {} via {}; sha256 equals the build pin); kernel {} (tree equals the build pin); no SEA kernel: guarded only", node.display(), t.node_recorded.display(), t.node_source, js.display())),
+    }
     let env: Vec<(String, String)> = std::env::vars().collect();
     let stderr = sh.log.lock().unwrap().as_ref().and_then(|f| f.try_clone().ok()).map(Stdio::from).unwrap_or_else(Stdio::null);
-    let mut child = match child_command(&node, &js, None, &env, stderr).spawn() {
+    // #kernel-sea (TD-2026-10-29-746): the signed gnomon.kernel when the build pinned one, else node + script
+    let (mut cmd, program) = match &t.kernel {
+        Some(k) => (sea_child_command(k, &node, None, &env, stderr), k.clone()),
+        None => (child_command(&node, &js, None, &env, stderr), node.clone()),
+    };
+    let mut child = match cmd.spawn() {
         Ok(c) => c,
-        Err(e) => return show_status(&app, &sh, "the kernel did not start", &format!("{}: {e}", node.display()), true),
+        Err(e) => return show_status(&app, &sh, "the kernel did not start", &format!("{}: {e}", program.display()), true),
     };
     let out = child.stdout.take().expect("piped stdout");
     *sh.stdin.lock().unwrap() = child.stdin.take();
@@ -236,8 +244,12 @@ fn run_cli(cli: Result<Vec<String>, String>) -> i32 {
         }
     };
     let env: Vec<(String, String)> = std::env::vars().collect();
-    let e = std::os::unix::process::CommandExt::exec(&mut cli_command(&t.node, &t.gnomon_js, &args, &env));
-    eprintln!("gnomon: could not start the kernel CLI ({}): {e}", t.node.display());
+    let (mut cmd, program) = match &t.kernel {
+        Some(k) => (sea_cli_command(k, &t.node, &args, &env), k.clone()),
+        None => (cli_command(&t.node, &t.gnomon_js, &args, &env), t.node.clone()),
+    };
+    let e = std::os::unix::process::CommandExt::exec(&mut cmd);
+    eprintln!("gnomon: could not start the kernel CLI ({}): {e}", program.display());
     70
 }
 

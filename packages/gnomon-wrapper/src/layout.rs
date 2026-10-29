@@ -6,6 +6,8 @@
 //!   Contents/MacOS/gnomon-wrapper            this binary
 //!   Contents/Resources/node/bin/node         the pinned official Node 24 (packages/gnomon-wrapper/bundled-node.lock.json)
 //!   Contents/Resources/kernel/{dist,package.json}   the build:release kernel, GUI embedded, zero runtime deps
+//!   Contents/Resources/kernel/gnomon.kernel  the signed SEA kernel (#kernel-sea): what the app spawns; its node
+//!                                            children run Resources/node/bin/node (gnomon.node)
 //!   Contents/Resources/gnomon-voice/         the voice client package (+ node_modules/sherpa-onnx-*)
 //!   Contents/Resources/gnomon-mods/          the first-party mods (8.0 M4; the kernel's, not checked here)
 //!   Contents/Helpers/GnomonHelper.app, Contents/Helpers/GnomonVoiceIO.app
@@ -33,6 +35,34 @@ pub fn node_requirement(signing: &str) -> Result<String, String> {
         "adhoc" => Ok(format!("identifier \"{NODE_IDENTIFIER}\"")),
         other => Err(format!("unknown bundle signing {other:?} (developer-id | adhoc)")),
     }
+}
+
+/// #kernel-sea (TD-2026-10-29-746, spec P8-D68): the signed SEA kernel the app spawns, relative to `Contents`. It
+/// sits at the kernel package root, beside dist/ (packages/gnomon/scripts/build-sea.mjs, sea-prelude.mjs).
+pub const KERNEL_EXE_REL: &str = "Resources/kernel/gnomon.kernel";
+/// The code-signing identifier of the SEA kernel (build-sea.mjs KERNEL_IDENTIFIER; what the helper certifies).
+pub const KERNEL_IDENTIFIER: &str = "gnomon.kernel";
+
+/// The designated requirement the SEA kernel must meet at spawn, by how the release was signed (as node_requirement):
+/// `developer-id` (Apple anchor, Developer ID CA + leaf, our team, identifier gnomon.kernel) or `adhoc` (identifier only).
+pub fn kernel_requirement(signing: &str) -> Result<String, String> {
+    match signing {
+        "developer-id" => Ok(format!("anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"{TEAM}\" and identifier \"{KERNEL_IDENTIFIER}\"")),
+        "adhoc" => Ok(format!("identifier \"{KERNEL_IDENTIFIER}\"")),
+        other => Err(format!("unknown bundle signing {other:?} (developer-id | adhoc)")),
+    }
+}
+
+/// sha256 of `<contents>/KERNEL_EXE_REL`: a regular file inside `contents`, never a symlink or a hard link (what
+/// build.rs pins from the stage and the app recomputes before every spawn).
+pub fn kernel_exe_hash(contents: &Path) -> Result<String, String> {
+    let k = inside(contents, KERNEL_EXE_REL)?;
+    let st = std::fs::symlink_metadata(&k).map_err(|e| format!("{}: {e}", k.display()))?;
+    if !st.is_file() {
+        return Err(format!("{} is not a regular file", k.display()));
+    }
+    refuse_hard_link(&k, &st)?;
+    super_tree::sha256_file(&k)
 }
 
 /// The `Contents` directory of the app whose executable is `exe` (`<X>.app/Contents/MacOS/<exe>`), realpath'd.

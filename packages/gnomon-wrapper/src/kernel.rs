@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::codesign::verify_static_code;
-use crate::layout::{bundle_hashes, contents_of, inside, KERNEL_REL, NODE_REL};
+use crate::layout::{bundle_hashes, contents_of, inside, kernel_exe_hash, KERNEL_EXE_REL, KERNEL_REL, NODE_REL};
 use crate::tree::{kernel_tree_hash, sha256_file};
 
 /// "bundle" (a release Gnomon.app: bundle-relative pins) | "dev" (a checkout build: absolute pins).
@@ -43,6 +43,12 @@ pub const BUILD_NODE_SHA256: &str = env!("GNOMON_BUILD_NODE_SHA256");
 pub const BUILD_NODE_SOURCE: &str = env!("GNOMON_BUILD_NODE_SOURCE");
 pub const BUILD_GNOMON_PKG: &str = env!("GNOMON_BUILD_GNOMON_PKG");
 pub const BUILD_KERNEL_TREE: &str = env!("GNOMON_BUILD_KERNEL_TREE");
+/// #kernel-sea (TD-2026-10-29-746): the signed SEA kernel the app spawns. bundle: layout::KERNEL_EXE_REL; dev: the
+/// absolute `<pkg>/gnomon.kernel`, or empty (no dev SEA: node + script, guarded only).
+pub const BUILD_KERNEL_EXE: &str = env!("GNOMON_BUILD_KERNEL_EXE");
+pub const BUILD_KERNEL_EXE_SHA256: &str = env!("GNOMON_BUILD_KERNEL_EXE_SHA256");
+/// bundle: layout::kernel_requirement (identifier gnomon.kernel, + team for developer-id); dev: empty (hash only).
+pub const BUILD_KERNEL_EXE_REQUIREMENT: &str = env!("GNOMON_BUILD_KERNEL_EXE_REQUIREMENT");
 
 /// What a bundle-mode refusal tells the user: the signed app was modified, so it is replaced, never rebuilt.
 pub const REINSTALL: &str = "reinstall Gnomon (npm i -g @a-company/paradigm, then run gnomon)";
@@ -60,18 +66,55 @@ pub struct TrustRoot {
     pub node: PathBuf,
     /// the node path as recorded at build (may be a symlink)
     pub node_recorded: PathBuf,
-    /// "build-env" | "which" (dev) | "bundle" (release: `node_recorded` is the bundle-relative path)
+    /// "build-env" | "which" | "sea-dev" (dev) | "bundle" (release: `node_recorded` is the bundle-relative path)
     pub node_source: &'static str,
     pub gnomon_js: PathBuf,
+    /// #kernel-sea: the signed SEA kernel to spawn (hash- and, in a bundle, signature-checked); None: node + gnomon_js
+    pub kernel: Option<PathBuf>,
 }
 
 /// The node + kernel pins recorded in this binary, re-checked now (bundle: from this app's own location).
 pub fn check_trust_root() -> Result<TrustRoot, String> {
     if BUILD_MODE == "bundle" {
         let exe = std::env::current_exe().map_err(|e| format!("Gnomon.app cannot locate itself ({e}); {REINSTALL}"))?;
-        return check_bundle_trust_root_with(&exe, BUILD_NODE_SHA256, BUILD_KERNEL_TREE, BUILD_NODE_REQUIREMENT);
+        return check_bundle_sea_with(&exe, BUILD_NODE_SHA256, BUILD_KERNEL_TREE, BUILD_NODE_REQUIREMENT, BUILD_KERNEL_EXE_SHA256, BUILD_KERNEL_EXE_REQUIREMENT);
     }
-    check_trust_root_with(BUILD_NODE, BUILD_NODE_SHA256, BUILD_NODE_SOURCE, Path::new(BUILD_GNOMON_PKG), BUILD_KERNEL_TREE)
+    let t = check_trust_root_with(BUILD_NODE, BUILD_NODE_SHA256, BUILD_NODE_SOURCE, Path::new(BUILD_GNOMON_PKG), BUILD_KERNEL_TREE)?;
+    if BUILD_KERNEL_EXE.is_empty() {
+        return Ok(t);
+    }
+    check_dev_sea_with(t, Path::new(BUILD_KERNEL_EXE), BUILD_KERNEL_EXE_SHA256)
+}
+
+/// #kernel-sea BUNDLE mode over explicit pins (tests): [`check_bundle_trust_root_with`] (node + kernel tree + node
+/// signature), then the SEA kernel at `Contents/KERNEL_EXE_REL`: a regular file inside the bundle (no symlink, no hard
+/// link) hashing to `kernel_sha`, then its code signature against `kernel_requirement` (identifier gnomon.kernel),
+/// LAST, right before the spawn. A bundle with no kernel pin is refused (a release always carries the SEA).
+pub fn check_bundle_sea_with(exe: &Path, node_sha: &str, tree: &str, node_requirement: &str, kernel_sha: &str, kernel_requirement: &str) -> Result<TrustRoot, String> {
+    if kernel_sha.is_empty() || kernel_requirement.is_empty() {
+        return Err(format!("this Gnomon.app carries no signed-kernel pin (gnomon.kernel); {REINSTALL}"));
+    }
+    let mut t = check_bundle_trust_root_with(exe, node_sha, tree, node_requirement)?;
+    let contents = contents_of(exe).map_err(|e| format!("Gnomon.app is not a complete app bundle: {e}; {REINSTALL}"))?;
+    let sha = kernel_exe_hash(&contents).map_err(|e| format!("Gnomon.app's signed kernel is unreadable or was modified ({e}); {REINSTALL}"))?;
+    if sha != kernel_sha {
+        return Err(format!("Gnomon.app's signed kernel ({KERNEL_EXE_REL}) does not hash to the release pin: the app was modified; {REINSTALL}"));
+    }
+    let k = inside(&contents, KERNEL_EXE_REL)?;
+    verify_static_code(&k, kernel_requirement).map_err(|e| format!("Gnomon.app's signed kernel failed its code-signature check ({e}); {REINSTALL}"))?;
+    t.kernel = Some(k);
+    Ok(t)
+}
+
+/// #kernel-sea DEV mode: the dev SEA (`<pkg>/gnomon.kernel`, npm run build:sea) must still hash to the build's pin.
+pub fn check_dev_sea_with(mut t: TrustRoot, kernel: &Path, kernel_sha: &str) -> Result<TrustRoot, String> {
+    let real = std::fs::canonicalize(kernel).map_err(|_| format!("Gnomon.app was built against a dev SEA kernel that is gone ({}). Rebuild the app: {REBUILD}", kernel.display()))?;
+    let now = sha256_file(&real).map_err(|e| format!("Gnomon.app cannot read its SEA kernel ({e}). Rebuild the app: {REBUILD}"))?;
+    if now != kernel_sha {
+        return Err(format!("Gnomon.app was built against a different SEA kernel: {} changed since the build (npm run build:sea). Rebuild the app: {REBUILD}", kernel.display()));
+    }
+    t.kernel = Some(real);
+    Ok(t)
 }
 
 /// BUNDLE mode over explicit pins (tests): `exe` is the running app executable; node and kernel are resolved
@@ -94,7 +137,7 @@ pub fn check_bundle_trust_root_with(exe: &Path, node_sha: &str, tree: &str, requ
     let node = inside(&contents, NODE_REL)?;
     let pkg = inside(&contents, KERNEL_REL)?;
     verify_static_code(&node, requirement).map_err(|e| format!("Gnomon.app's bundled node failed its code-signature check ({e}); {REINSTALL}"))?;
-    Ok(TrustRoot { node: node.clone(), node_recorded: PathBuf::from(NODE_REL), node_source: "bundle", gnomon_js: pkg.join("dist/cli/gnomon.js") })
+    Ok(TrustRoot { node: node.clone(), node_recorded: PathBuf::from(NODE_REL), node_source: "bundle", gnomon_js: pkg.join("dist/cli/gnomon.js"), kernel: None })
 }
 
 /// [`check_trust_root`] over explicit pins (tests).
@@ -114,7 +157,7 @@ pub fn check_trust_root_with(node: &str, node_sha: &str, source: &'static str, p
     if k != tree {
         return Err(format!("Gnomon.app was built against a different kernel: {}/dist changed since the build (npm run build:gnomon, a git pull, or an edit). Rebuild the app: {REBUILD}", pkg.display()));
     }
-    Ok(TrustRoot { node: real, node_recorded: PathBuf::from(node), node_source: source, gnomon_js: pkg.join("dist/cli/gnomon.js") })
+    Ok(TrustRoot { node: real, node_recorded: PathBuf::from(node), node_source: source, gnomon_js: pkg.join("dist/cli/gnomon.js"), kernel: None })
 }
 
 /// The kernel child's environment: the allowlist from `from`, plus a fixed PATH that starts with node's own dir.
@@ -149,6 +192,34 @@ pub fn child_command(node: &Path, gnomon_js: &Path, dev_home: Option<&Path>, fro
     if let Some(home) = from_env.iter().find(|(k, _)| k == "HOME") {
         c.current_dir(&home.1);
     }
+    c
+}
+
+/// #kernel-sea: argv of the SEA kernel child, `up --wrapper` (or `dev up --home <h> --wrapper`). No node flag
+/// (--disable-sigusr1 is baked into the SEA and execArgvExtension "none" refuses more) and no script (the code is
+/// inside the signed binary).
+pub fn sea_child_args(dev_home: Option<&Path>) -> Vec<String> {
+    match dev_home {
+        Some(h) => vec!["dev".into(), "up".into(), "--home".into(), h.display().to_string(), "--wrapper".into()],
+        None => vec!["up".into(), "--wrapper".into()],
+    }
+}
+
+/// #kernel-sea: the SEA kernel child, stdio wired as [`child_command`]; the same env scrub, PATH headed by the dir of
+/// `node` (gnomon.node, what the kernel's children run), never the kernel's own dir.
+pub fn sea_child_command(kernel: &Path, node: &Path, dev_home: Option<&Path>, from_env: &[(String, String)], stderr: Stdio) -> Command {
+    let mut c = Command::new(kernel);
+    c.args(sea_child_args(dev_home)).env_clear().envs(child_env(from_env, node)).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(stderr);
+    if let Some(home) = from_env.iter().find(|(k, _)| k == "HOME") {
+        c.current_dir(&home.1);
+    }
+    c
+}
+
+/// #kernel-sea: the CLI passthrough through the SEA kernel: `gnomon.kernel <args...>`, the [`cli_command`] env scrub.
+pub fn sea_cli_command(kernel: &Path, node: &Path, args: &[String], from_env: &[(String, String)]) -> Command {
+    let mut c = Command::new(kernel);
+    c.args(args).env_clear().envs(child_env(from_env, node));
     c
 }
 
@@ -481,6 +552,95 @@ mod tests {
         std::fs::remove_dir_all(&d).unwrap();
     }
 
+    /// app_rig + a SEA kernel at Contents/KERNEL_EXE_REL, ad-hoc signed as `identifier`.
+    fn sea_rig(tag: &str, identifier: &str) -> (PathBuf, PathBuf) {
+        let (d, c) = app_rig(tag);
+        signed_copy(Path::new("/usr/bin/true"), &c.join(KERNEL_EXE_REL), identifier);
+        (d, c)
+    }
+
+    fn kreq() -> String {
+        crate::layout::kernel_requirement("adhoc").unwrap()
+    }
+
+    #[test]
+    fn sea_the_bundle_spawns_the_signed_kernel_with_no_node_flag_and_no_script() {
+        let (d, c) = sea_rig("sea-ok", crate::layout::KERNEL_IDENTIFIER);
+        let exe = c.join("MacOS/gnomon-wrapper");
+        let (sha, tree) = bundle_hashes(&c).unwrap();
+        let ksha = kernel_exe_hash(&c).unwrap();
+        let t = check_bundle_sea_with(&exe, &sha, &tree, &req(), &ksha, &kreq()).unwrap();
+        assert_eq!(t.kernel.as_deref(), Some(c.join(KERNEL_EXE_REL).as_path()));
+        assert_eq!(sea_child_args(None), vec!["up", "--wrapper"]);
+        assert_eq!(sea_child_args(Some(Path::new("/h"))), vec!["dev", "up", "--home", "/h", "--wrapper"]);
+        let cmd = sea_child_command(t.kernel.as_ref().unwrap(), &t.node, None, &env(), Stdio::null());
+        assert_eq!(cmd.get_program(), c.join(KERNEL_EXE_REL).as_os_str());
+        let args: Vec<String> = cmd.get_args().map(|s| s.to_string_lossy().to_string()).collect();
+        assert!(!args.iter().any(|a| a.starts_with("--disable") || a.ends_with(".js")), "{args:?}");
+        let envs: Vec<(String, String)> = cmd.get_envs().map(|(k, v)| (k.to_string_lossy().to_string(), v.map(|v| v.to_string_lossy().to_string()).unwrap_or_default())).collect();
+        assert!(!envs.iter().any(|(k, _)| k == "NODE_OPTIONS" || k.starts_with("GNOMON_") || k.starts_with("DYLD_")), "{envs:?}");
+        // PATH is headed by gnomon.node's dir (what the kernel's children run), never the kernel's
+        let path = &envs.iter().find(|(k, _)| k == "PATH").unwrap().1;
+        assert!(path.starts_with(&c.join("Resources/node/bin").display().to_string()), "{path}");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn falsifier_sea_a_modified_unsigned_or_missing_kernel_is_refused() {
+        let (d, c) = sea_rig("sea-mod", crate::layout::KERNEL_IDENTIFIER);
+        let exe = c.join("MacOS/gnomon-wrapper");
+        let (sha, tree) = bundle_hashes(&c).unwrap();
+        let ksha = kernel_exe_hash(&c).unwrap();
+        // no kernel pin compiled: refused
+        assert!(check_bundle_sea_with(&exe, &sha, &tree, &req(), "", &kreq()).unwrap_err().contains("no signed-kernel pin"));
+        // another identifier with a recomputed hash: refused by the requirement
+        std::fs::remove_file(c.join(KERNEL_EXE_REL)).unwrap();
+        signed_copy(Path::new("/usr/bin/true"), &c.join(KERNEL_EXE_REL), "evil.kernel");
+        let evil = kernel_exe_hash(&c).unwrap();
+        assert!(check_bundle_sea_with(&exe, &sha, &tree, &req(), &evil, &kreq()).unwrap_err().contains("code-signature check"));
+        // the right identifier but different bytes than the pin: refused by the hash
+        assert!(check_bundle_sea_with(&exe, &sha, &tree, &req(), &ksha, &kreq()).unwrap_err().contains("does not hash"));
+        // the shipped requirement refuses an ad-hoc kernel
+        std::fs::remove_file(c.join(KERNEL_EXE_REL)).unwrap();
+        signed_copy(Path::new("/usr/bin/true"), &c.join(KERNEL_EXE_REL), crate::layout::KERNEL_IDENTIFIER);
+        let team = crate::layout::kernel_requirement("developer-id").unwrap();
+        assert!(team.contains("SW4BMQ8PNL") && team.contains("identifier \"gnomon.kernel\""));
+        assert!(check_bundle_sea_with(&exe, &sha, &tree, &req(), &kernel_exe_hash(&c).unwrap(), &team).unwrap_err().contains("code-signature check"));
+        // a hard link to the kernel: refused
+        std::fs::hard_link(c.join(KERNEL_EXE_REL), d.join("kernel-alias")).unwrap();
+        assert!(check_bundle_sea_with(&exe, &sha, &tree, &req(), &ksha, &kreq()).is_err());
+        std::fs::remove_file(d.join("kernel-alias")).unwrap();
+        // missing: refused
+        std::fs::remove_file(c.join(KERNEL_EXE_REL)).unwrap();
+        assert!(check_bundle_sea_with(&exe, &sha, &tree, &req(), &ksha, &kreq()).unwrap_err().contains("signed kernel"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn sea_dev_kernel_is_hash_pinned_and_the_cli_passes_args_only() {
+        let (d, pkg, node) = rig("sea-dev");
+        let sha = sha256_file(&d.join("bin/node-26")).unwrap();
+        let tree = kernel_tree_hash(&pkg).unwrap();
+        // a fake SEA that prints its env and argv
+        let k = pkg.join("gnomon.kernel");
+        std::fs::write(&k, b"#!/bin/sh\n/usr/bin/env\necho \"ARGS $*\"\n").unwrap();
+        std::fs::set_permissions(&k, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        let ksha = sha256_file(&k).unwrap();
+        let t = check_trust_root_with(node.to_str().unwrap(), &sha, "sea-dev", &pkg, &tree).unwrap();
+        let t = check_dev_sea_with(t, &k, &ksha).unwrap();
+        assert_eq!(t.kernel.as_deref(), Some(k.as_path()));
+        let out = sea_cli_command(t.kernel.as_ref().unwrap(), &t.node, &argv(&["identity", "status"]), &env()).output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        assert!(text.contains("ARGS identity status\n"), "{text}");
+        assert!(!text.contains("NODE_OPTIONS") && !text.contains("GNOMON_HOME") && !text.contains("DYLD_"), "{text}");
+        std::fs::write(&k, b"#!/bin/sh\necho changed\n").unwrap();
+        let t = check_trust_root_with(node.to_str().unwrap(), &sha, "sea-dev", &pkg, &tree).unwrap();
+        assert!(check_dev_sea_with(t.clone(), &k, &ksha).unwrap_err().contains("different SEA kernel"));
+        std::fs::remove_file(&k).unwrap();
+        assert!(check_dev_sea_with(t, &k, &ksha).unwrap_err().contains("is gone"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
     #[test]
     fn this_build_is_dev_or_a_complete_bundle() {
         assert!(BUILD_MODE == "dev" || BUILD_MODE == "bundle", "{BUILD_MODE}");
@@ -490,8 +650,11 @@ mod tests {
             // a bundle build compiles NO absolute path from the build machine
             assert!(!BUILD_NODE.starts_with('/') && !BUILD_GNOMON_PKG.starts_with('/'));
             assert!(BUILD_NODE_REQUIREMENT.contains("identifier \"gnomon.node\""));
+            assert_eq!(BUILD_KERNEL_EXE, KERNEL_EXE_REL);
+            assert!(BUILD_KERNEL_EXE_SHA256.len() == 64 && BUILD_KERNEL_EXE_REQUIREMENT.contains("identifier \"gnomon.kernel\""));
         } else {
-            assert!(BUILD_NODE_REQUIREMENT.is_empty());
+            assert!(BUILD_NODE_REQUIREMENT.is_empty() && BUILD_KERNEL_EXE_REQUIREMENT.is_empty());
+            assert_eq!(BUILD_KERNEL_EXE.is_empty(), BUILD_KERNEL_EXE_SHA256.is_empty());
         }
     }
 
