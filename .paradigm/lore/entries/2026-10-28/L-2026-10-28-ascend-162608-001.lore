@@ -1,0 +1,67 @@
+id: L-2026-10-28-ascend-162608-001
+type: agent-session
+timestamp: '2026-10-28T16:26:08.655Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'C5''a: per-server trust and brokered Always rules (kernel)'
+summary: |-
+  Aegis owned the design of C5'. The founder's answers:
+  - repo/local servers stay out of local sessions;
+  - no Always for untrusted servers;
+  - one tool per rule, no expiry, a rule pauses when its binding changes;
+  - standing grants can create rules.
+
+  Arky's review added 11 amendments and split the work.
+
+  C5'a1 (trust):
+  - trust lives in kernel-signed tool.trust rows (TrustBook); the store's trust field is never read;
+  - trust is bound to the keyed launch hash, pluginVersion and toolsHash, and drops with a row;
+  - request.mcp.trust is preview then commit.
+  - Aegis H1: commit had no fresh press. It now raises a root+presence grant card that is never standing and hand-only.
+  - Merged e5eaf815.
+
+  C5'a2 (rules):
+  - the 'tool' approve scope;
+  - the bindHash taken from the request row inside the contentHash;
+  - the rule pass for mutate tools on live-trust servers only, with RULED_PER_MINUTE 20;
+  - portal ^local-tool-grant;
+  - G-LCL-22, G-LCL-23;
+  - one trust card per server, replaced when the listing changes.
+  - Aegis signed off.
+
+  Merged and pushed. The full gnomon suite: 4195 passed, 0 failed.
+symbols_touched:
+  - ^local-tool-grant
+  - '#mcp-servers'
+  - '#local-tool-broker'
+  - '#local-mcp-client'
+  - '#always-rules'
+decisions:
+  - id: c5-repo-servers-out
+    decision: Project/local MCP servers stay out of local sessions until they have their own approval step
+    rationale: A cloned repo could choose a server command; founder agreed with Aegis
+  - id: c5-trust-fresh-press
+    decision: Trusting a server needs a fresh root+presence card, never standing, never voice
+    rationale: 'Founder: trusting always needs a fresh press; Aegis H1'
+  - id: c5-rule-shape
+    decision: Always rule = one tool on one trusted server in one repo, no expiry, dormant on a binding change; never destructive
+    rationale: Founder choice; the narrowest rule that removes repeat cards
+learnings:
+  - A design that says 'like X' about who may call should also say whether presence is needed; Aegis's own brief caused H1.
+  - Builders reliably hit the 100-turn limit on kernel slices with 10+ files; split slices at about 8 source files, or plan a resume.
+verification:
+  status: pass
+  details:
+    full_suite: 4195 passed, 0 failed
+    tsc: clean x4
+tags:
+  - gnomon
+  - local-model
+  - c5
+  - security
+git_context:
+  ref: 97c173acc8991ad8680cede1e0e75919e33e3a83
+  branch: feat/gnomon
+  dirty: true

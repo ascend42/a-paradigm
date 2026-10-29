@@ -1,0 +1,70 @@
+id: TD-2026-10-28-820
+timestamp: '2026-10-28T20:18:29.823Z'
+title: 'Scoped learning: every learning record has a home (repo, user or machine)'
+decision: >-
+  Learning and calibration records get a `home` field: repo (committed and shared), user (stored under
+  ~/.paradigm/projects/<repoId>, follows the person), or machine (local only). A field named home is used because
+  `scope` already means content class on notebooks.
+
+
+  Rule (Loid): an instrument lives in the same scope as what it measures.
+
+
+  How a home is chosen: the entry's own home, else the config `learning.default_home`, else the registry default.
+
+
+  Readers union repo and user records, deduped by id, with repo winning. Doctor reports conflicts to Loid. Calibration
+  tags every sample with its home and never pools scopes silently.
+
+
+  Promotion carries the journal's home, which fixes the hardcoded 'global' in nomination-engine.ts:1130/1267.
+
+
+  Paradigm:teach infers the home and asks one question only when unclear. Class sign-off shows the home and lets the
+  user flip it.
+
+
+  Guard: write-side resolver refusals, plus a pre-commit check. `learning.visibility` defaults to public; `paradigm
+  init` asks once.
+
+
+  Migration: nothing is moved or deleted, legacy rows still count, and `paradigm migrate learning-stores --scopes` moves
+  rows only with --apply.
+
+
+  Founder defaults:
+
+  - pending verdicts are user (no teammate consumption);
+
+  - overrides are repo;
+
+  - estimate-actuals are user, per repo;
+
+  - team-funnel is machine;
+
+  - the visibility default is public.
+rationale: >-
+  Founder: the system should not upend how learning works, and learning sometimes belongs to the repo and sometimes to
+  the person. Arky and Loid found real bugs: repo-only lessons promoted into ~/, and teammates consuming each other's
+  verdicts.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: forge
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Ignore all event logs
+    rejected_because: Would make team learning per-machine
+  - option: Keep team-funnel committed
+    rejected_because: It measures this machine's gates; founder chose machine-only
+status: active
+tags:
+  - learning
+  - loid
+  - calibration
+  - hooks

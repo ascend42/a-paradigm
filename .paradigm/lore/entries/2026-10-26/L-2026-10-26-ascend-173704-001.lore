@@ -1,0 +1,32 @@
+id: L-2026-10-26-ascend-173704-001
+type: insight
+timestamp: '2026-10-26T17:37:04.600Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Disk at 98%: Chrome code-sign clones (99 GB) traced to browser automation; fixed at the source'
+summary: 'Disk scan (420/460 GB used, 9.2 GB free) found the biggest item was 118 copies of Chrome.app (99 GB by du; APFS clones may share blocks) in /var/folders/…/X/com.google.Chrome.code_sign_clone, all since the Oct 16 reboot. macOS Chrome clones its app bundle at every launch for code-sign-safe updates and deletes the clone only on graceful exit (crbug.com/379125944, fixed upstream only for Chrome for Testing). Leaks come from automation that kills Chrome: Gnomon''s gui-browser-darwin test SIGKILLed it (126 cdp-* profiles, spike Oct 19-20), plus ad-hoc agent capture scripts and an orphaned headless screenshot Chrome since Oct 23. Fixed: paradigm PR #62 (flag --disable-features=MacAppCodeSignClone, CDP Browser.close then timed SIGKILL; verified clone count unchanged), a-atelier PR #25 (Mika render step + atelier-design Rules; installed copies updated), global notebooks for designer/tester/builder. Other findings: Atelier design-eye bench 40 GB (36 Next.js app copies with node_modules), Xcode iOS DeviceSupport 29 GB, simulator runtimes/caches, repo node_modules 26 GB + Rust target 17 GB, Docker 18 GB reclaimable, package caches ~16 GB, ~/.gnomon/bin keeps every old pinned claude binary (Gnomon bug). Report: scratchpad disk-report.html.'
+symbols_touched:
+  - '#gui'
+  - '#gnomon-probes'
+  - '#gnomon-gui'
+  - '#atelier-mika'
+  - '#atelier-design'
+learnings:
+  - macOS Chrome leaks a ~1 GB app-bundle clone per launch when killed; automation must pass --disable-features=MacAppCodeSignClone and close gracefully, or use Playwright's bundled Chromium
+  - Clones accumulate since the last reboot; a reboot clears them
+  - Clearing code_sign_clone never touches Chrome profile data (~/Library/Application Support/Google/Chrome)
+  - du overcounts APFS clones and mounted simulator volumes; simctl runtime list gives the real image size
+  - Gnomon keeps every pinned claude binary in ~/.gnomon/bin and never prunes
+tags:
+  - disk-space
+  - chrome
+  - macos
+  - browser-automation
+  - atelier
+linked_commits: []
+git_context:
+  ref: 32898075cb003f3d3bade54c9efcdbd7ce09bc92
+  branch: feat/gnomon
+  dirty: true

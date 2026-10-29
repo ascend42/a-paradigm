@@ -1,0 +1,63 @@
+id: TD-2026-10-28-956
+timestamp: '2026-10-28T18:27:32.851Z'
+title: 'Gnomon C6'': the "/" menu, human tool runs, and an Always option for destructive tools'
+decision: >-
+  C6' adds a tools-and-memory drawer and a "/" menu, which lets the human run tools, including humanOnly ones.
+
+
+  Founder rulings:
+
+  1. The first time the human runs a tool from "/", a card asks them to choose a policy for that tool's results: always
+  send them to the model, or ask each time. Results that are sent are attached as labelled data.
+
+  2. Memory: only the single "Delete memory" button for now. No per-entry delete.
+
+  3. At tier 0, "/" starts MCP servers only after an explicit "Start servers for /" press.
+
+  4. Running a destructive tool needs a Touch ID card. That card offers "always allow this tool", and the rule covers
+  BOTH the human's "/" runs AND the model's calls of that tool.
+
+
+  Item 4 supersedes the C5' rule "destructive never Always". The Always rule for a destructive tool:
+
+  - can only be created through a Touch ID / root-presence card;
+
+  - keeps the C5' rule shape: one tool, one server, one repo, bound to bindHash, paused when the binding changes, live
+  trust required.
+
+
+  Aegis designs the safeguards.
+
+
+  Hooks: delegating to a team agent satisfies the orchestration gate. That includes user-global agents.
+  orchestrate_inline does not satisfy it, which keeps T-005. The hook copy changes to match.
+rationale: >-
+  The founder wants continuous daily use without repeat friction. Choosing once on first use avoids repeated prompts. A
+  Touch ID card that offers always-allow keeps destructive actions behind real presence, and removes repeat cards for
+  tools the founder deliberately trusts.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: designer
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Destructive Always only for the human's "/" runs
+    rejected_because: Founder chose that the rule covers model calls too
+  - option: orchestrate_inline execute mode satisfies the orchestration gate
+    rejected_because: Would reopen T-005; delegation is the intended signal
+symbols_affected:
+  - '#gui-capability-browser'
+  - '#gui-slash-menu'
+  - ^local-tool-grant
+  - '#local-working-memory'
+status: active
+tags:
+  - gnomon
+  - local-model
+  - c6
+  - hooks

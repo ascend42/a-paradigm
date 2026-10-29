@@ -1,0 +1,56 @@
+id: L-2026-10-29-ascend-001425-001
+type: milestone
+timestamp: '2026-10-29T00:14:25.082Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'C6'' complete: the "/" menu, tool runs, skills, send policy, destructive Always; scoped learning S0-S4 on main'
+summary: |-
+  **Gnomon local lane C6' merged on feat/gnomon** (each slice Aegis-signed for the kernel, Mika-approved for the GUI after rendered review):
+  - C6'a1: capabilities and restart.
+  - C6'b1: the Tools and memory drawer.
+  - C6'a2-1: "/" runs, result policy, fresh Touch ID on destructive and untrusted calls, destructive Always behind helper 1.10.0, session-wide taint.
+  - a2-h: helper 1.10.0, the permission row table.
+  - C6'a2-2: skills, plus the class fix that keeps destructive programs out of prefix rules: case- and extension-normalised, cp/tee/tar and the like included.
+  - C6'a2-3: policy, taint, rule class, one-off send.
+  - C6'b2-1: the "/" menu.
+  - C6'b2-2: the first-use question inline, Send this one, the destructive card Always with the founder's verbatim line, the ran-by-rule toast with Revoke, taint, the Rules chip, and the drawer.
+
+  Pending: C6'a2-4 (author and callId on approval.auto, so the toast can say who started the call).
+
+  **Paradigm main:**
+  - PR #70: the hook fixes.
+  - PRs #71/#72/#73: scoped learning S0-S4 (homes, resolver, learn-path, migrate, commit guard, teach inference, census, population tags).
+  - PR #74: learning.visibility public.
+
+  Decisions: TD-2026-10-28-956, -969, -820.
+
+  Suites: gnomon 4276, gui 1276, paradigm-mcp 939, paradigm 1123.
+symbols_touched:
+  - '#gui-slash-menu'
+  - '#gui-slash-runs'
+  - '#gui-capability-browser'
+  - ^local-tool-grant
+  - '#prefix-policy'
+  - '#learning-stores'
+  - '#paradigm-hooks'
+learnings:
+  - Ask the builder to stop and name the missing kernel field instead of inferring audit facts in the GUI.
+  - Denylists over argv0 must normalise case and Windows extensions once and apply that everywhere.
+  - A guard that scans whole files punishes old content; check only what was added, and only learning stores.
+  - Teach-time questions beat commit-time refusals for the founder's no-interruption goal.
+verification:
+  status: pass
+  details:
+    gnomon: 4276 passed, 0 failed
+    gui: 1276 passed
+tags:
+  - gnomon
+  - c6
+  - scoped-learning
+  - milestone
+git_context:
+  ref: bbb30402099ab2a0a0394fb15cb8e129977bb407
+  branch: feat/gnomon
+  dirty: true

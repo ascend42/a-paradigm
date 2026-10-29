@@ -1,0 +1,42 @@
+id: L-2026-10-25-ascend-214220-001
+type: milestone
+timestamp: '2026-10-25T21:42:20.166Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Paradigm 8.0.3 released: first real end-to-end run of the 8.0 release pipeline'
+summary: 'Shipped @a-company/paradigm 8.0.3 (latest), gnomon + gnomon-darwin-arm64 8.0.2 (signed, notarized, stapled), warpline 0.2.2, premise-core 3.12.0, purpose-core 3.7.0, portal-core 3.5.0. Clean npm install: 0 vulnerabilities, CLI + MCP work. The first real run of the 8.0 pipeline surfaced bugs that fixtures/dry-runs and stale dist folders had hidden: release-darwin built voice-io before gnomon-contracts (#58); assertReleaseKernel demanded the app''s own zip pin (#59, Aegis-approved, plus native artifact pin check); check-gnomon-published misread npm view under changesets'' npm publish --json, and the platform-package lock placeholder broke npm ci after first publish (#60, refresh-platform-lock step); 8.0.1 plugin version reused so installs stayed stale (8.0.2 bump #57, plugin-version test); bundled workspace packages listed as "*" runtime deps pulled zod 3 into user audits (8.0.3 #61, runtime-deps test). Earlier same session: Stop hook loop guard + nested state (#54), dep security (#55), vitest 5/tsup 9 (#56).'
+symbols_touched:
+  - '#release-darwin'
+  - '#loops-gate'
+  - '#publish-gnomon'
+  - '#gnomon-npm-packaging'
+  - '#paradigm-cli'
+  - '#paradigm-plugin'
+  - '#stop-loop-guard'
+learnings:
+  - The release pipeline had never run end to end from a clean checkout; every bug was in a path only exercised by fixtures or dry runs
+  - Stale dist/ folders hide missing or misordered build steps; verify from fresh clones
+  - 'Never reuse a public version: Claude Code caches plugins by version'
+  - npm lifecycle scripts inherit npm_config_json from `npm publish --json`; always pass --json and parse npm view
+  - A versionless optional-dep lock placeholder breaks npm ci once that version is published
+  - Packages bundled by tsup (noExternal) must not be runtime dependencies
+  - General CI is disabled; paradigm's suite runs on no PR, so a release rehearsal job is needed
+verification:
+  status: pass
+  details:
+    npm_latest: 8.0.3
+    clean_install_audit: 0 vulnerabilities
+    cli: 8.0.3
+    mcp: initialize ok
+linked_commits:
+  - 979e2bb8
+  - 1731f362
+  - 61792c18
+  - 320830a4
+  - d9e2ff99
+git_context:
+  ref: 32898075cb003f3d3bade54c9efcdbd7ce09bc92
+  branch: feat/gnomon
+  dirty: true
