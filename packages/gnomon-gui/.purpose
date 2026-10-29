@@ -69,6 +69,10 @@ components:
       a hue; the keys are unchanged; the summary and group counts name it
       ("3 rules · 1 off · 1 paused"). The rule's words are the kernel's
       (K3). Design system rule-row.paused. Test: test/trust-drop-paused.test.ts.
+      Slice C6'b2-2: status.rules[].class (K3) is read; a destructive tool
+      rule carries the chip 'can't be undone' and its repo group states
+      'these run for you and the model · at most 3 a minute per session, 30 a
+      day per rule' once under its heading.
   gui-session-rename:
     description: >-
       8.0:session-rename (founder ask: rename a session). core/rename.ts
@@ -187,6 +191,11 @@ components:
       Entry points in ui/app.ts: the ⋯ more menu, the tier key's menu, the
       palette (tools.open). Tests: test/tools-drawer.test.ts,
       test/tools-drawer-flow.test.ts, test/tools-drawer-memory.test.ts.
+      Slice C6'b2-2: each server tool row says 'results: send · ask · not
+      chosen'; a tool that sends has a quiet Stop sending key
+      (request.session.tools.policy{ask}, ToolsFlow.stopSending); a tainted
+      session shows TAINT_LINE at the top of Tools; the drawer re-reads on
+      tool.result.sent, skill.run and tool.result.policy rows.
     tags: [gui, local, tools, memory]
   gui-slash-menu:
     description: >-
@@ -226,9 +235,19 @@ components:
       carded run's card settled allowed; results live in page memory only.
       core/store.ts chatItems draws the page's slash-run and skill-ran rows
       and claims the kernel row; ui/slash-menu.ts renderRunRow paints it.
-      The first-use policy question and Send this one are slice b2-2.
       Tests: test/slash-runs.test.ts, test/slash-menu-flow.test.ts,
       test/host-hints.test.ts.
+      Slice C6'b2-2: under ask a ran row offers Send this one
+      (request.session.tools.send{hsid, runId}; then 'sent with your next
+      message'; refusals already-sent, not-found, changed, already-sending in
+      words); a tool whose policy is not chosen asks inline 'Send {tool}'s
+      results to the model? · Always send (sends this result now) · Keep to
+      me' via request.session.tools.policy, every row of the tool moving, the
+      latest ran row taking the reply's queued (said in the polite live
+      line); TAINT_LINE is one transcript system row where the session first
+      took in a sent result or skill text (kernel tool.result.sent /
+      skill.run{ran}); SlashFlow.humanRunning names a rule's author for the
+      rule-ran toast. Tests: test/rule-ran-toast.test.ts too.
     tags: [gui, local, tools]
   gui:
     loop-cards: >-
@@ -1731,6 +1750,14 @@ components:
       which opens Settings at that server's row (ui/app.ts trustDropRow).
       disabled and a clear from Settings raise no toast. Test:
       test/trust-drop-paused.test.ts.
+      Slice C6'b2-2: variant rule-ran (ruleRanOf, ruleRanText,
+      RULE_RAN_TOAST, ruleRevokeRequest): approval.auto{modeRef rule:} for an
+      mcp: tool of a session this human opened is 'ran by rule · {tool} on
+      {server} · by the model' or '· by you from /'; warn for a destructive
+      rule, else info; one toast per rule updated in place by
+      ToastHandle.update ('ran 4 times by rule'); its Revoke key removes the
+      rule (request.rules.apply{remove}, no presence). Test:
+      test/rule-ran-toast.test.ts, test/toasts.test.ts.
     path: src/ui/toasts.ts
     type: module
     tags: [gnomon, gui, design-system, toast, notice]
