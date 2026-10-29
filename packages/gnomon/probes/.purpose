@@ -19,6 +19,15 @@ components:
       ^[a-z0-9][a-z0-9-]*$ (no path traversal). p-harness is the self-test and
       its results are gitignored; real results are committed from hardware runs
       only. A `fail` on a ruling means a re-plan memo before dependent builds.
+      S0 (TD-2026-10-29-746, #kernel-sea): run-s0.mjs runs p15-sea-peertoken
+      (probe SEA gnomon.kernel.probe → stdio child → LOCAL_PEERTOKEN →
+      SecCodeCheckValidity; plain node must fail), p16-se-ephemeral
+      (non-permanent SE key, no presence, never in the keychain; records
+      whether its toid blob reloads in another process) and
+      p17-se-afterfirstunlock (permanent SE key, AfterFirstUnlockThisDeviceOnly,
+      group SW4BMQ8PNL.gnomon.probe; an unentitled signed binary is refused),
+      built from _shared/kernel/KernelProbe.swift by _shared/kernel-probe.mjs.
+      GNOMON_PROBE_ADHOC=1 forces ad-hoc signing.
       Unsigned macOS probes: p10m-sbx-deny-mac (S29-03/04 sandbox-exec session
       denies + escape matrix), p11-ws-framing (RFC 6455 over node:http with a
       forked server child, 27 Autobahn-style raw cases, 4 MiB throughput, RSS

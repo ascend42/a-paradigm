@@ -61,6 +61,7 @@ import type { LocalMcpServer } from '../local/mcp-client.js';
 import { autoStage, builtAtOf, gitStatusOf, headCommitTimeOf, readParadigmPin, sourceKindOf, stageParadigm, StageRefused, verifyStaged, type ParadigmPin, type VerifyResult } from '../local/paradigm-stage.js';
 import { localWritesUnder } from '../local/edit-ledger.js';
 import { allowRuleWords, autoAllowRules, composeSessionMcp, declHash, discoverMcpServers, FIRST_PARTY_PARADIGM, FIRST_PARTY_PARADIGM_NAME, LOOP_ENV_SHOWN, loopEnvValues, mcpServerRow, PARADIGM_INSTALL_HINT, type ComposeResult, type FirstPartyResolution, type McpServerDecl, type McpServerRow } from './mcp-servers.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export const MCP_SERVERS_SCHEMA = 'gnomon-mcp-servers:v1' as const;
 /**
@@ -514,7 +515,7 @@ export class McpServers {
       return { ...base, refused: { fit: 'pin-mismatch', why: v.why === 'no pin' ? 'the Paradigm MCP is not staged (a linked checkout is staged from Settings: request.mcp.paradigm.stage)' : `the staged Paradigm MCP does not verify: ${v.why}` } };
     }
     const repo = realOr(ctx.cwd);
-    return { ...base, command: fp.available ? fp.node : process.execPath, args: [v.entry, repo], staged: { dir: v.dir, snapshot: v.snapshot, repo } };
+    return { ...base, command: fp.available ? fp.node : childNodePath(), args: [v.entry, repo], staged: { dir: v.dir, snapshot: v.snapshot, repo } };
   }
 
   /** TD-2026-10-27-833: status.mcp.firstParty.staged — the pin, its dir and the last verification (no re-hash). */

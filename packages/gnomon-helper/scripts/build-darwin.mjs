@@ -111,6 +111,16 @@ if (!unsigned) {
     accessGroup: ACCESS_GROUP,
     groupGrant: profile.groupGrant,
   };
+} else {
+  // --unsigned: seal the BUNDLE ad-hoc (no identity, no entitlements, no runtime). The linker signs only the
+  // executable, which leaves Info.plist and resources unsealed, and an app that nests it then fails
+  // `codesign --verify --strict --deep` (found by the first real `release-darwin.mjs --unsigned`). An ad-hoc helper
+  // still never passes the kernel's HELPER_REQUIREMENT (no Apple anchor, no team).
+  const cs = run('/usr/bin/codesign', ['--force', '--sign', '-', app], { timeout: 180_000 });
+  if (cs.status !== 0) fail(`ad-hoc codesign failed: ${cs.stderr.slice(0, 600)}`);
+  const v = run('/usr/bin/codesign', ['--verify', '--strict', '--deep', '-vv', app]);
+  if (v.status !== 0) fail(`codesign --verify --strict of the ad-hoc bundle failed: ${v.stderr.slice(0, 600)}`);
+  signing = { signed: false, adhocSealed: true };
 }
 
 // move into place

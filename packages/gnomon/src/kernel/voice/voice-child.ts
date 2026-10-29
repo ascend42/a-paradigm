@@ -24,6 +24,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type * as net from 'node:net';
 import { DEFAULT_REEXEC_PATH, DISABLE_SIGUSR1 } from '../lifecycle/env.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export type VoiceChildPhase = 'stopped' | 'preparing' | 'installing' | 'downloading-models' | 'starting' | 'running' | 'backoff' | 'failed' | 'unavailable';
 
@@ -263,7 +264,7 @@ export class VoiceChildSupervisor {
     this.#devUnsigned = prepared.devUnsigned;
     if (!this.#wanted || this.#closed) return void this.#set('stopped');
     this.#set('starting');
-    const child = this.#o.spawn(this.#o.execPath ?? process.execPath, voiceChildArgs(prepared.clientEntry ?? this.#o.clientEntry!, this.#o.home, prepared.ioBinary, this.#capture), {
+    const child = this.#o.spawn(this.#o.execPath ?? childNodePath(), voiceChildArgs(prepared.clientEntry ?? this.#o.clientEntry!, this.#o.home, prepared.ioBinary, this.#capture), {
       stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
       env: voiceChildEnv(this.#o.sourceEnv ?? process.env, this.#o.home),
       cwd: this.#o.home,

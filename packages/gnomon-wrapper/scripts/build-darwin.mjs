@@ -8,7 +8,8 @@
 //   node packages/gnomon-wrapper/scripts/build-darwin.mjs --unsigned   dev build: ad-hoc signature only
 //
 // Steps:
-//   1. checks packages/gnomon/dist/cli/gnomon.js exists (the kernel the app runs);
+//   1. checks packages/gnomon/dist/cli/gnomon.js exists, then builds the signed SEA kernel
+//      packages/gnomon/gnomon.kernel + node/bin/node (scripts/build-sea.mjs; skip with --no-sea);
 //   2. `cargo tauri build --bundles app --no-sign` (release: no devtools);
 //   3. codesign --force --options runtime --timestamp --entitlements Entitlements.plist
 //      --sign <identity sha1> Gnomon.app   (or `--sign -` with --unsigned);
@@ -42,10 +43,18 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   const js = path.join(process.env.GNOMON_WRAPPER_GNOMON_PKG ?? path.resolve(PKG_ROOT, '..', 'gnomon'), 'dist', 'cli', 'gnomon.js');
   if (!existsSync(js)) fail(`${js} is missing: run \`npm run build:gnomon\` first (the app runs this kernel)`);
 
+  // #kernel-sea (TD-2026-10-29-746): the dev app launches the signed SEA kernel, so build it first (Developer ID from
+  // the keychain when present, ad-hoc with --unsigned or when none: "unsigned → guarded only"). build.rs pins it.
+  if (!process.argv.includes('--no-sea')) {
+    say(`build the SEA kernel (packages/gnomon/scripts/build-sea.mjs --sign ${unsigned ? 'adhoc' : 'auto'}) …`);
+    const s = spawnSync(process.execPath, [path.resolve(PKG_ROOT, '..', 'gnomon', 'scripts', 'build-sea.mjs'), '--sign', unsigned ? 'adhoc' : 'auto'], { stdio: ['ignore', 'inherit', 'inherit'], timeout: 600_000 });
+    if (s.status !== 0) fail('build-sea.mjs failed (output above); --no-sea builds the legacy node + script app');
+  }
   const cargoBin = path.join(process.env.HOME ?? '', '.cargo', 'bin');
   const cargo = existsSync(path.join(cargoBin, 'cargo')) ? path.join(cargoBin, 'cargo') : 'cargo';
   // a DEV app pinned to this checkout: build.rs refuses a release build without a stage unless this is explicit
-  const env = { ...process.env, GNOMON_WRAPPER_DEV: '1', PATH: `${cargoBin}:${process.env.PATH ?? ''}` };
+  // Aegis S0 M2: --no-sea really builds node + script: build.rs then never pins a (possibly stale) gnomon.kernel
+  const env = { ...process.env, GNOMON_WRAPPER_DEV: '1', GNOMON_WRAPPER_NO_SEA: process.argv.includes('--no-sea') ? '1' : '', PATH: `${cargoBin}:${process.env.PATH ?? ''}` };
   say('cargo tauri build --bundles app --no-sign (release) …');
   const b = spawnSync(cargo, ['tauri', 'build', '--bundles', 'app', '--no-sign'], { cwd: PKG_ROOT, env, stdio: ['ignore', 'inherit', 'inherit'], timeout: 1_800_000 });
   if (b.status !== 0) fail('cargo tauri build failed (output above)');

@@ -137,7 +137,7 @@ export const LINUX_SESSION_PATH_TAIL = Object.freeze(['/usr/local/bin', '/usr/bi
 
 /**
  * TD-2026-10-21-077: the built-in session PATH when `config.sessions.path` is unset; null on win32 (today's
- * behaviour: the allowlisted PATH). `nodeDir` is the dir of the node running the kernel (process.execPath, an OS
+ * behaviour: the allowlisted PATH). `nodeDir` is the dir of the kernel's child node (childNodePath(): process.execPath, or gnomon.node under the SEA; an OS
  * fact), `home` the OS home (os.userInfo().homedir). Never reads process.env. Entries holding `:` are skipped.
  */
 export function defaultSessionPath(o: { platform?: NodeJS.Platform; nodeDir?: string; home?: string } = {}): string[] | null {

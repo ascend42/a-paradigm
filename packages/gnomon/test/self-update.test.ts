@@ -212,7 +212,9 @@ describe('the successor', () => {
     expect(a.slice(-2)).toEqual(['--prefer-port', '51234']);
     const b = successorArgs({ home: path.resolve('h'), preferPort: 51234, listenFd: 17, handoff: { kernelKeyPem: 'k', resume: null } });
     expect(b.slice(-5)).toEqual(['--prefer-port', '51234', '--web-listen-fd', '3', '--kernel-key-stdin']);
-    const pb = parseDaemonArgs(b);
+    // #kernel-sea: a SEA successor (no entry) starts with --gnomond, which sea-prelude.mjs consumes before gnomond parses
+    expect(b[0]).toBe('--gnomond');
+    const pb = parseDaemonArgs(b.slice(1));
     expect(typeof pb === 'object' && [pb.webListenFd, pb.kernelKeyStdin]).toEqual([3, true]);
     expect(parseDaemonArgs(['--web-listen-fd', '9'])).toMatch(/is 3/);
     expect(parseHandoff('{"kernelKeyPem":"nope"}')).toBeNull();

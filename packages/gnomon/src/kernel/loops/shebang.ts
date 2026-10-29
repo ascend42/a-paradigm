@@ -12,6 +12,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export function readShebang(file: string): string | null {
   let fd: number | null = null;
@@ -65,7 +66,7 @@ export function resolveShebangInterpreter(shebang: string, o: { execPath?: strin
   const env = envPath ? realOrNull(envPath) : null;
   const base = { shebang, program, env };
   if (viaEnv && path.posix.basename(program) === 'node') {
-    const r = realOrNull(o.execPath ?? process.execPath);
+    const r = realOrNull(o.execPath ?? childNodePath());
     return { ...base, real: r, via: r ? 'kernel-node' : 'unresolved' };
   }
   if (!program) return { ...base, real: null, via: 'unresolved' };

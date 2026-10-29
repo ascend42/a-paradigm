@@ -17,6 +17,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { treeHash } from './runner-pin.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 /** Replaced by tsup `define` when the build found gnomon-local/dist/cli.js; undeclared everywhere else. */
 declare const __GNOMON_LOCAL_TREE_SHA256__: string | undefined;
@@ -88,7 +89,7 @@ export function runnerVersionOf(dir: string, tree: string | null): string | null
 /** The pinned node's version when it is the kernel's own node (the bundled one in the app), else null (never exec'd to ask). */
 export function nodeVersionOf(node: string): string | null {
   try {
-    return fs.realpathSync.native(node) === fs.realpathSync.native(process.execPath) ? process.versions.node : null;
+    return fs.realpathSync.native(node) === fs.realpathSync.native(childNodePath()) ? process.versions.node : null;
   } catch {
     return null;
   }

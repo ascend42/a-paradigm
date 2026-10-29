@@ -6,8 +6,10 @@
  * "Bundle layout"):
  *
  *   <X>.app/Contents/Resources/kernel/{dist,package.json}   this kernel (any file under it identifies the bundle)
- *   <X>.app/Contents/Resources/node/bin/node                 the bundled node (the wrapper spawns the kernel with it,
- *                                                            so process.execPath IS it, and every child inherits it)
+ *   <X>.app/Contents/Resources/kernel/gnomon.kernel          the signed SEA kernel (#kernel-sea, sea.ts): the wrapper
+ *                                                            spawns it, so process.execPath IS it
+ *   <X>.app/Contents/Resources/node/bin/node                 the bundled node, signed gnomon.node: every node child
+ *                                                            runs it (sea.ts childNodePath), never the kernel
  *   <X>.app/Contents/Resources/gnomon-voice/                 the voice client package (+ node_modules/sherpa-onnx-*)
  *   <X>.app/Contents/Resources/gnomon-mods/                  the first-party mods catalog (8.0 M4; packages/gnomon-mods
  *                                                            byte for byte, so each keeps its pinned packageHash)

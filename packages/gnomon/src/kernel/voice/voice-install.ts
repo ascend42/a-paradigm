@@ -38,6 +38,7 @@ import { DISABLE_SIGUSR1 } from '../lifecycle/env.js';
 import { appBundleOf } from '../lifecycle/app-bundle.js';
 import { artifactPin, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
 import { voiceChildEnv, type VoicePrepared } from './voice-child.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 // the ONE requirement shared with the build script (gnomon-contracts; Developer ID CA + leaf, team, identifier)
 export { VOICE_IO_IDENTIFIER, VOICE_IO_REQUIREMENT, VOICE_IO_TEAM };
@@ -416,7 +417,7 @@ export function parseFetchProgress(line: string): { total: number; bytes: number
 /** Run the client's `models fetch --json`; reports the download size once bytes are moving. */
 export function fetchVoiceModels(o: { home: string; entry: string; report: (mb: number) => void; execPath?: string }): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(o.execPath ?? process.execPath, [DISABLE_SIGUSR1, o.entry, 'models', 'fetch', '--json', '--home', o.home], { stdio: ['ignore', 'pipe', 'pipe'], env: voiceChildEnv(process.env, o.home) });
+    const child = spawn(o.execPath ?? childNodePath(), [DISABLE_SIGUSR1, o.entry, 'models', 'fetch', '--json', '--home', o.home], { stdio: ['ignore', 'pipe', 'pipe'], env: voiceChildEnv(process.env, o.home) });
     let buf = '';
     let err = '';
     let reported = false;

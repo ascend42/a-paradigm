@@ -49,6 +49,7 @@ import { ModHost, type ModHostOptions, type ModHostSeams } from './modhost/host.
 import type { ModLaunchInput } from './sandbox/mod.js';
 import { type DaemonHandle, type DaemonOptions, type DaemonSeams } from './lifecycle/daemon.js';
 import './lifecycle/daemon.js'; // registers the 'daemon' seam
+import { childNodePath } from './lifecycle/sea.js';
 
 /** Marker string: test/seams-fence.test.ts asserts it never appears in dist/. */
 export const GNOMON_INTERNAL_TEST_ENTRY = 'gnomon:internal-test-entry:v1' as const;
@@ -114,7 +115,7 @@ export { PresenceToken };
 export function unsandboxedLauncher(input: TransportLaunchInput): ChildLaunchPlan {
   const env: Record<string, string> = {};
   if (process.env.SYSTEMROOT) env.SYSTEMROOT = process.env.SYSTEMROOT; // win32 Node needs it to start
-  return { command: input.nodePath ?? process.execPath, args: [input.scriptPath], env, sandbox: 'none', profile: null, profileHash: null };
+  return { command: input.nodePath ?? childNodePath(), args: [input.scriptPath], env, sandbox: 'none', profile: null, profileHash: null };
 }
 
 /** A #web-endpoint with substituted seams (default launcher: unsandboxed). */
@@ -126,7 +127,7 @@ export function createWebEndpointForTest(opts: WebEndpointOptions, seams: WebEnd
 export function unsandboxedModLauncher(input: ModLaunchInput): ChildLaunchPlan {
   const env: Record<string, string> = { ...input.env };
   if (process.env.SYSTEMROOT) env.SYSTEMROOT = process.env.SYSTEMROOT; // win32 Node needs it to start
-  return { command: input.nodePath ?? process.execPath, args: [input.entry], env, sandbox: 'none', profile: null, profileHash: null };
+  return { command: input.nodePath ?? childNodePath(), args: [input.entry], env, sandbox: 'none', profile: null, profileHash: null };
 }
 
 /** A #mod-host with substituted seams (no default: pass `launcher: unsandboxedModLauncher` explicitly to drop the profile). */

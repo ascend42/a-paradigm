@@ -50,6 +50,7 @@ import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from './p
 import { capability } from './routing.js';
 import { LOCAL_ROW_MAX_ENDPOINTS } from '../identity/decision-batch.js';
 import { pinOf, type LocalRunnerPin } from './runner-pin.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export const LOCAL_CONFIG_REQUEST = 'request.local.config' as const;
 export const LOCAL_PROBE_REQUEST = 'request.local.probe' as const;
@@ -141,7 +142,7 @@ export function validateLocalConfigInput(input: unknown, o: { forbiddenPorts?: r
   }
   if (!entryOk) throw bad('runner', `no gnomon-local runner (${BUNDLED_RUNNER_ENTRY}) in ${runnerDir.slice(0, 200)}`, { why: 'no-runner' });
   // law 7 / S8: never claude, by the dir or the entry, as given or by realpath
-  assertNotClaude({ command: process.execPath, args: [runnerDir, path.join(runnerDir, BUNDLED_RUNNER_ENTRY)] });
+  assertNotClaude({ command: childNodePath(), args: [runnerDir, path.join(runnerDir, BUNDLED_RUNNER_ENTRY)] });
   // Aegis L6: a runner that is not the bundled one must say it is gnomon-local (its package.json, or the marker in cli.js)
   if (runnerSource !== 'bundled' && !isGnomonLocal(runnerDir)) throw bad('runner', `${runnerDir.slice(0, 200)} is not a gnomon-local runner (no @a-company/gnomon-local package.json beside it and no ${RUNNER_MARKER} marker in cli.js)`, { why: 'not-gnomon-local' });
   const endpoint: LocalEndpointConfig = { id, base, model, compat, ...(input.loops === true ? { loops: true } : {}) };
@@ -360,7 +361,7 @@ export class LocalConfigCards {
   }
 
   #pin(dir: string): LocalRunnerPin {
-    const pin = pinOf(dir, BUNDLED_RUNNER_ENTRY, this.#o.node ?? process.execPath);
+    const pin = pinOf(dir, BUNDLED_RUNNER_ENTRY, this.#o.node ?? childNodePath());
     assertNotClaude({ command: pin.node, args: [pin.dir, path.join(pin.dir, pin.entry)] });
     return pin;
   }

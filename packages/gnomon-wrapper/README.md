@@ -108,6 +108,7 @@ Gnomon.app/Contents/
   Info.plist, Resources/icon.icns      from cargo tauri build
   Resources/node/bin/node              official Node 24.x (bundled-node.lock.json), re-signed, NodeEntitlements.plist
   Resources/node/LICENSE
+  Resources/kernel/gnomon.kernel       the signed SEA kernel (identifier gnomon.kernel, KernelEntitlements.plist)
   Resources/kernel/dist/…              npm run build:release (GUI embedded, helper/voice-io sha256 compiled in)
   Resources/kernel/package.json
   Resources/gnomon-voice/              the voice client: package.json, dist/, voice-models.manifest.json,
@@ -132,10 +133,21 @@ Gnomon.app/Contents/
   `Resources/kernel` is `dist/` plus `package.json`. The voice client is a
   pruned copy: its package, dist, models manifest and the two sherpa packages.
   The kernel copies it into `<home>/bin/voice/client` and pins it, as before.
-- **Children.** The wrapper spawns the kernel with the bundled node, so the
-  kernel's `process.execPath` is that node. Every node child (gnomon-web, mods,
-  the voice client, the model fetch, a successor) is spawned with it, never
-  with PATH `node`.
+- **Kernel.** The wrapper spawns the signed SEA `Resources/kernel/gnomon.kernel`
+  (#kernel-sea, TD-2026-10-29-746). Its identifier is `gnomon.kernel` and it is
+  built by this release script. `--disable-sigusr1` is baked in and
+  NODE_OPTIONS is never read. The app pins the SEA's sha256 and code
+  requirement, and checks both before every spawn. The SEA carries the kernel
+  tree hash and the bundled node's cdhash-pinned requirement, so a copy of it
+  next to other files refuses to start or to spawn. Only the release signs
+  `gnomon.kernel`. `npm run build:sea` builds a dev `gnomon.kernel.dev`, and
+  a dev app accepts only that.
+- **Children.** The kernel's `process.execPath` is the SEA itself, so every
+  node child (gnomon-web, mods, the voice client, the model fetch, the MCP pool,
+  sessions' PATH head) runs the bundled node, which is signed `gnomon.node`
+  (`src/kernel/lifecycle/sea.ts` `childNodePath`). No child runs PATH `node` or
+  the kernel. Only the kernel's own re-execs (the gnomond activator and the
+  upgrade successor) run the SEA, with `--gnomond`.
 - **Helpers.** A kernel running from a bundle finds the helper, voice-io and
   voice client inside its own app (`src/kernel/lifecycle/app-bundle.ts`),
   from its own location. A moved app (M4 copies it to `~/Applications`)

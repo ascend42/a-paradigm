@@ -58,6 +58,7 @@ import type { MacosProbe, SipProbe } from '../../platform/darwin/macos.js';
 import { applyPassRule, type ParsedCounts } from './check-parse.js';
 import { scanSecrets, type Redaction } from './secret-scan.js';
 import { literalsOf, resolveLoopEnvFiles, type LoopEnvSource, type LoopLiteral } from './loop-env.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export const CHECK_COPY_LIMITS = Object.freeze({ maxFiles: 50_000, maxBytes: 500 * 1024 * 1024, maxNodeModules: 500 });
 export const CHECK_EVIDENCE_TAIL_BYTES = 64 * 1024;
@@ -667,7 +668,7 @@ export async function runCheck(i: CheckExecInput): Promise<CheckResult> {
   const t0 = Date.now();
   const platform = i.platform ?? process.platform;
   const limits = { ...CHECK_COPY_LIMITS, ...(i.limits ?? {}) };
-  const nodePath = i.nodePath ?? process.execPath;
+  const nodePath = i.nodePath ?? childNodePath();
   const fail = (reason: CheckErrorReason, detail: string, extra: Partial<CheckResult> = {}): CheckResult => ({
     verdict: 'error', reason, detail, exitCode: null, signal: null, durationMs: Date.now() - t0, evidence: emptyEvidence(), profileHash: null, envKeys: [],
     copy: { dir: '', files: 0, bytes: 0, kept: false }, ...extra,

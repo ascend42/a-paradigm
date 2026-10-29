@@ -148,6 +148,7 @@ import type { GitVerbs, VerbSession } from '../git/kernel-verbs.js';
 import { GIT_VERB_TOOLS, GIT_VERBS_GUIDANCE, KERNEL_MCP_SERVER, kernelToolName, kernelWorktreeDirs } from '../git/verbs.js';
 import { sessionSystemPrompt } from './host-guidance.js';
 import { KERNEL_MCP_ENTRY, kernelMcpAnswer } from './kernel-mcp.js';
+import { childNodePath } from '../lifecycle/sea.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 export const STDERR_CAP = 64 * 1024;
@@ -782,7 +783,7 @@ export class SessionSupervisor {
     // TD-2026-10-21-077: the session PATH, once: config, else the per-platform default (the running node's dir, an OS fact)
     // TD-2026-10-21-077/-162: the session PATH (config, else the default headed by the node dir's realpath), then every
     // user-writable dir on it is write-denied in every session profile (planSessionPath); win32 keeps the allowlist
-    const nodeDir = sessionNodeDir(o.nodeExecPath ?? process.execPath);
+    const nodeDir = sessionNodeDir(o.nodeExecPath ?? childNodePath());
     const joined = sessionPathFor(o.sessionPath, { ...(nodeDir ? { nodeDir } : {}), home: this.#userHome() });
     if (joined === null || process.platform === 'win32') {
       this.#sessionPath = joined;

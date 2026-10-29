@@ -58,6 +58,7 @@ import { parseResumeRecord, type ResumeRecord } from '../kernel/web/resume.js';
 import { SoftwareEd25519Signer } from '../kernel/log/index.js';
 import { heading, readout, refused } from './readout.js';
 import { humanDeviceOf } from './rules-cli.js';
+import { gnomondEntryOf } from '../kernel/lifecycle/sea.js';
 
 /**
  * #dev-launch tripwire: gnomond (foreground or detaching) and `gnomon daemon start` refuse,
@@ -461,7 +462,7 @@ function usage(msg: string): number {
 
 export { usage as daemonUsage };
 
-/** The gnomond entry next to this bundle (dist/cli/gnomond.js), or the SEA itself. */
+/** The gnomond entry next to this bundle (dist/cli/gnomond.js), or the SEA itself (#kernel-sea: execPath, selected by --gnomond). */
 export function gnomondEntryFrom(metaUrl: string): string {
-  return path.join(path.dirname(fileURLToPath(metaUrl)), 'gnomond.js');
+  return gnomondEntryOf(path.join(path.dirname(fileURLToPath(metaUrl)), 'gnomond.js'));
 }

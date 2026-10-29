@@ -22,6 +22,7 @@
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import { cleanReexecEnv, reexecArgs } from './env.js';
+import { runningAsSea } from './sea.js';
 
 /** The fd the successor's inherited web listener sits on (stdio slot 3). */
 export const WEB_LISTEN_FD = 3;
@@ -54,10 +55,10 @@ export function successorArgs(p: Omit<SuccessorPlan, 'execPath'>): string[] {
   return args;
 }
 
-/** The successor plan for THIS process: entry = argv[1] unless it is a SEA. */
+/** The successor plan for THIS process: entry = argv[1] unless it is a SEA (#kernel-sea: node:sea, or argv[1] = execPath). */
 export function successorPlanOf(home: string, preferPort: number | null, o: { idleMs?: number; argv1?: string; listenFd?: number; handoff?: SuccessorHandoff } = {}): SuccessorPlan {
   const argv1 = 'argv1' in o ? o.argv1 : process.argv[1];
-  const isSea = argv1 === undefined || path.resolve(process.execPath) === path.resolve(argv1);
+  const isSea = runningAsSea() || argv1 === undefined || path.resolve(process.execPath) === path.resolve(argv1);
   return {
     execPath: process.execPath,
     ...(isSea ? {} : { entry: argv1 }),

@@ -24,7 +24,21 @@ components:
       window.gnomonSurface='wrapper' on the 127.0.0.1 origin only, which the
       GUI reads to declare hello surface wrapper and drop the extension-risk
       badge (display only). Hardened runtime with an EMPTY entitlements set.
-      Double-click flow (src/main.rs): the app spawns `node --disable-sigusr1 <dist>/cli/gnomon.js
+      #kernel-sea (TD-2026-10-29-746, G-ID-13): the app spawns the signed SEA
+      `Resources/kernel/gnomon.kernel up --wrapper` (no node flag, no script;
+      the --cli passthrough runs `gnomon.kernel <args>`). Bundle builds pin its
+      sha256 and its code requirement (layout.rs KERNEL_EXE_REL,
+      kernel_requirement: identifier gnomon.kernel, + team for developer-id;
+      kernel.rs check_bundle_sea_with, checked last before the spawn); a stage
+      without it fails the build. Dev builds pin packages/gnomon/gnomon.kernel
+      and its node/bin/node when present (scripts/build-darwin.mjs builds them
+      first) and check the dev SEA against identifier gnomon.kernel.dev at
+      spawn (layout.rs kernel_dev_requirement; a dev app never spawns a
+      production gnomon.kernel, Aegis S0 H2); --no-sea passes
+      GNOMON_WRAPPER_NO_SEA=1 and build.rs pins no SEA (node + script, guarded
+      only, Aegis S0 M2). The PATH head stays
+      gnomon.node's dir. KernelEntitlements.plist: allow-jit only.
+      Legacy flow (no SEA pinned): the app spawns `node --disable-sigusr1 <dist>/cli/gnomon.js
       up --wrapper` (src/kernel.rs: env_clear + HOME USER LOGNAME LANG TMPDIR
       SHELL + fixed PATH, no NODE_OPTIONS/GNOMON_*/DYLD_*). Trust root (Aegis
       C1, src/tree.rs shared with build.rs): the build records the node path

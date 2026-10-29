@@ -18,6 +18,8 @@
  * `process.on('SIGUSR1')` listener does NOT count — it can be removed at run
  * time and is not what the guard reads.
  */
+import { SEA_GNOMOND_ARG } from './sea.js';
+
 /** Fixed PATH pending the root-signed config of M1.1. */
 export const DEFAULT_REEXEC_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
 
@@ -78,10 +80,13 @@ export function sigusr1Refusal(execArgv: readonly string[] = process.execArgv): 
  * argv for the re-exec'd foreground daemon. Home travels in argv, never env.
  * Under node the first arg is `--disable-sigusr1`; a SEA (no entry) cannot take
  * node flags in argv and must bake it into its sea-config `execArgv` — the
- * foreground guard refuses it otherwise (fail closed).
+ * foreground guard refuses it otherwise (fail closed). The SEA kernel
+ * (#kernel-sea, `gnomon.kernel`) carries both entries, so its argv starts with
+ * SEA_GNOMOND_ARG (`--gnomond`), which selects gnomond over the CLI
+ * (scripts/sea/sea-prelude.mjs).
  */
 export function reexecArgs(opts: Pick<DetachOptions, 'entry' | 'home' | 'idleMs'> & { readyFd?: number; readyFifo?: string }): string[] {
-  const args = opts.entry ? [DISABLE_SIGUSR1, opts.entry] : [];
+  const args = opts.entry ? [DISABLE_SIGUSR1, opts.entry] : [SEA_GNOMOND_ARG];
   args.push('--foreground', '--home', opts.home);
   if (opts.idleMs !== undefined) args.push('--idle-ms', String(opts.idleMs));
   if (opts.readyFd !== undefined) args.push('--ready-fd', String(opts.readyFd)); // ready.ts handshake

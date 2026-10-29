@@ -89,6 +89,22 @@ prompt-free half and records `partial`.
 - **S29-10** is a stub (`s29-10-voice-custody/README.md`). It needs the signed
   helper (M1.1) and the wrapper panel (M1.13).
 
+## S0: the signed SEA kernel (TD-2026-10-29-746)
+
+    node packages/gnomon/probes/run-s0.mjs        # P1, P2, P3 in order; one PASS / PARTIAL / FAIL line each
+
+- **P1 `p15-sea-peertoken`**: a probe SEA (scripts/build-sea.mjs pipeline, identifier `gnomon.kernel.probe`, never
+  `gnomon.kernel`) spawns `_shared/kernel/KernelProbe.swift` with stdio pipes. The tool checks that stdin is a unix
+  socketpair, reads `LOCAL_PEERTOKEN`, and runs `SecCodeCheckValidity` on the token. The pinned plain `node` running
+  the same script must fail. Signed: `pass`; ad-hoc: `partial` (anchor and team pending).
+- **P2 `p16-se-ephemeral`**: a non-permanent SE key (`.privateKeyUsage`, no presence) signs and is never in the
+  keychain. It also records whether a second process can reload the key's token blob (`toid`).
+- **P3 `p17-se-afterfirstunlock`**: a permanent SE key, `AfterFirstUnlockThisDeviceOnly`, in
+  `SW4BMQ8PNL.gnomon.probe` (not `.prod`, Aegis H1). A Developer ID binary without the entitlement, and an ad-hoc
+  copy, must be refused. It needs the identity and the profile.
+
+`GNOMON_PROBE_ADHOC=1` forces ad-hoc signing everywhere. This is the half an agent can run.
+
 ## P09: Safari by hand
 
 Open `p09-ed25519-matrix/safari.html` in real Safari (File > Open File). It

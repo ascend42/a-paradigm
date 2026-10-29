@@ -173,6 +173,7 @@ import { DeskTally } from '../desk/desk-stats.js';
 import { EconomyTally } from '../desk/turn-economy.js';
 import { FolderPicker, type ChooserRunner, type FolderAsker, type FolderRow } from '../folders/folders.js';
 import { spawn as spawnChild } from 'node:child_process';
+import { childNodePath } from './sea.js';
 
 /**
  * `stop`: an accepted daemon-stop card (§3.1 I3, F3). `upgrade`: an accepted daemon-stop{reason:'upgrade'} card,
@@ -990,7 +991,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   // servers they turned on, composed into every session's mcp.json (still --strict-mcp-config); names in events only
   const mcpUserHome = seams.supervisor?.userHome ?? osUserHome();
   const mcpPathDirs = (): string[] => {
-    const nodeDir = sessionNodeDir(process.execPath);
+    const nodeDir = sessionNodeDir(childNodePath());
     const joined = sessionPathFor(fuseCfg.sessions.path, { ...(nodeDir ? { nodeDir } : {}), home: mcpUserHome });
     return joined ? joined.split(process.platform === 'win32' ? ';' : ':').filter(Boolean) : [];
   };
@@ -1004,7 +1005,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     // resolved at most every 30 s (an install or upgrade of @a-company/paradigm is picked up by the next session)
     firstParty: () => {
       const now = Date.now();
-      if (!mcpFirstParty || now - mcpFirstParty.at > 30_000) mcpFirstParty = { at: now, r: resolveFirstPartyParadigm({ execPath: process.execPath, userHome: mcpUserHome, ...(process.env.APPDATA ? { appData: process.env.APPDATA } : {}) }) };
+      if (!mcpFirstParty || now - mcpFirstParty.at > 30_000) mcpFirstParty = { at: now, r: resolveFirstPartyParadigm({ execPath: childNodePath(), userHome: mcpUserHome, ...(process.env.APPDATA ? { appData: process.env.APPDATA } : {}) }) };
       return mcpFirstParty.r;
     },
     liveRepos: () => supervisor.liveScopes().map((x) => ({ cwd: x.cwd, hsid: x.hsid })),
