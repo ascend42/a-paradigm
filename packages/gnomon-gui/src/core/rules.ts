@@ -22,6 +22,9 @@
  *   - C5'b paused (status.rules[].paused): a tool rule that would not match now says why in its state ("paused: <server>
  *     isn't trusted now", "paused: the tool changed", "paused: <server> is off"), by word and weight, never a hue; the
  *     keys are unchanged and the counts name it ("3 rules · 1 off · 1 paused").
+ *   - C6'b2-2 (Mika, from K3 status.rules[].class): a rule for a tool that can't be undone carries the chip "can't be
+ *     undone" (a word, never a hue); its repo group states the kernel's limit ONCE under its heading: "these run for you
+ *     and the model · at most 3 a minute per session, 30 a day per rule".
  */
 import type { ShownRefusal } from './client.js';
 import { displayText } from './render.js';
@@ -38,6 +41,12 @@ export const waitingText = (saved: number, ons: number): string => `${saved ? `$
 /** A row whose turn-back-on waits on the card (no key: deciding the card is the next move). */
 export const WAITING_ROW = '→ on again when you allow its card';
 export const REMOVED_WORD = 'removed on save';
+/** C6'b2-2: the kernel's DESTRUCTIVE_RULED_PER_SESSION_MINUTE and DESTRUCTIVE_RULED_PER_RULE_DAY (tool-broker.ts). */
+export const DESTRUCTIVE_PER_MINUTE = 3;
+export const DESTRUCTIVE_PER_DAY = 30;
+/** C6'b2-2 (Mika): the destructive chip and the group's one limit line. */
+export const DESTRUCTIVE_CHIP = 'can’t be undone';
+export const DESTRUCTIVE_LIMIT = `rules that can’t be undone run for you and the model · at most ${DESTRUCTIVE_PER_MINUTE} a minute per session, ${DESTRUCTIVE_PER_DAY} a day per rule`;
 /** The request kind (dispatcher-only; contracts CLIENT_API_DESCRIPTOR.rulesView.request). */
 export const RULES_APPLY_REQUEST = 'request.rules.apply';
 /** Rows whose arrival changes status.rules (the page re-reads status on them). */
@@ -60,6 +69,8 @@ export interface RuleItem {
   until: string | null;
   /** C5'a3 K2 / C5'b: why a tool rule would not match now (status.rules[].paused; null: it would, or not known) */
   paused?: RulePause | null;
+  /** C6'b2-2 (K3): a tool rule's class as it was learned (status.rules[].class); null: not a tool rule, or not known */
+  class?: 'destructive' | 'mutate' | null;
 }
 
 /** C5'b: status.rules[].paused (closed): the server is not trusted now, the tool changed, the server is off. */
@@ -88,7 +99,7 @@ export function rulesStatusOf(status: unknown): RulesStatus {
         if (!x || typeof x !== 'object') return [];
         const r = x as Record<string, unknown>;
         if (typeof r.ruleId !== 'string' || typeof r.words !== 'string' || typeof r.repoKey !== 'string' || (r.state !== 'on' && r.state !== 'off')) return [];
-        return [{ ruleId: r.ruleId, match: str(r.match) ?? 'exact', tool: str(r.tool) ?? '?', repoKey: r.repoKey, repoName: str(r.repoName), words: r.words, learnedAt: str(r.learnedAt), hsid: str(r.hsid), state: r.state, until: r.state === 'off' ? str(r.until) : null, paused: PAUSES.includes(r.paused as string) ? (r.paused as RulePause) : null }];
+        return [{ ruleId: r.ruleId, match: str(r.match) ?? 'exact', tool: str(r.tool) ?? '?', repoKey: r.repoKey, repoName: str(r.repoName), words: r.words, learnedAt: str(r.learnedAt), hsid: str(r.hsid), state: r.state, until: r.state === 'off' ? str(r.until) : null, paused: PAUSES.includes(r.paused as string) ? (r.paused as RulePause) : null, class: r.class === 'destructive' || r.class === 'mutate' ? r.class : null }];
       })
     : [];
   return { built: o.built === true, now: str(o.now), presets: { hour: str(p.hour), tomorrow: str(p.tomorrow) }, pendingCardId: str(o.pendingCardId), rules };
@@ -312,6 +323,8 @@ export interface RuleRowView {
   off: boolean;
   /** C5'b: the rule is on but would not match now (its state says why) */
   paused?: boolean;
+  /** C6'b2-2: the chip of a rule for a tool that can't be undone, or null */
+  chip?: string | null;
   staged: string | null;
   removed: boolean;
   offOpen: boolean;
@@ -326,6 +339,8 @@ export interface RuleGroupView {
   off: number;
   /** C5'b: rules on but paused */
   paused?: number;
+  /** C6'b2-2: the destructive limit, stated once under the heading when the group holds such a rule */
+  limit?: string | null;
   /** FOLD_AT and up: the heading is a fold key */
   foldable: boolean;
   /** folded: the heading and its count only, no rows */
@@ -376,6 +391,7 @@ export function rowView(r: RuleItem, ui: RulesUi, rs: RulesStatus, sessionName?:
     state: stateText(r, rs.now),
     off: r.state === 'off',
     paused: !!pausedText(r),
+    chip: r.class === 'destructive' ? DESTRUCTIVE_CHIP : null,
     staged: st ? stagedText(st) : waits ? WAITING_ROW : null,
     removed: st?.op === 'remove',
     offOpen,
@@ -411,7 +427,7 @@ export function rulesBlock(rs: RulesStatus, ui: RulesUi, sessionName?: (hsid: st
     const all = rs.rules.filter((r) => r.repoKey === repoKey);
     const busy = list.some((r) => ui.staged.has(r.ruleId) || ui.offOpen === r.ruleId || !!ui.waiting?.ruleIds.includes(r.ruleId));
     const open = !foldable || !!q || busy || ui.folds.get(repoKey) === true;
-    return { repoKey, label: all.find((r) => r.repoName)?.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, paused: all.filter((r) => !!pausedText(r)).length, foldable: foldable && !q && !busy, folded: !open, rows: open ? list.map((r) => rowView(r, ui, rs, sessionName)) : [] };
+    return { repoKey, label: all.find((r) => r.repoName)?.repoName ?? 'a repo not open now', count: all.length, off: all.filter((r) => r.state === 'off').length, paused: all.filter((r) => !!pausedText(r)).length, limit: all.some((r) => r.class === 'destructive') ? DESTRUCTIVE_LIMIT : null, foldable: foldable && !q && !busy, folded: !open, rows: open ? list.map((r) => rowView(r, ui, rs, sessionName)) : [] };
   });
   const n = ui.staged.size;
   return {

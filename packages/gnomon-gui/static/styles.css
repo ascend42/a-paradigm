@@ -419,6 +419,9 @@ html, body {
 .card-body.quoted { padding-left: 8px; font-style: italic; color: var(--ink2); }
 .pinned .card { --r: 0deg; margin: 0; }
 .card-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Mika C6'b2-2 #2: a brokered card's flag chips on their own line, so its keys stay Allow · Deny · Always ▾ at 340px */
+.card-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.card-flags + .card-keys { margin-top: 6px; }
 /* Mika 2026-10-23: the scoped always choices, folded under "Always ▾": one row per choice, its note beside the key */
 .always-choices { display: none; margin-top: 6px; padding-left: 8px; border-left: 1px solid var(--rule); }
 .always-choices.open { display: grid; gap: 8px; }
@@ -1695,6 +1698,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 /* C5'b: a paused rule (status.rules paused) says why in its state: weight 600 --ink2, never a hue */
 .rule-row.is-paused .rule-state { font-weight: 600; color: var(--ink2); }
 .rule-staged { grid-column: 1; font-size: var(--fs-label); font-weight: 600; color: var(--ink); }
+/* C6'b2-2: a rule for a tool that can't be undone: the chip in a word (ink, never a hue); the group's limit once */
+.rule-row .rule-chip { grid-column: 1; justify-self: start; }
+.rules-limit { margin: 0 0 2px; font-size: var(--fs-label); color: var(--sec); }
 .rule-keys { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 6px; align-items: center; justify-self: end; }
 /* Turn off ▾ opens inline under the row, like the card's Always ▾ (.always-choices) */
 .rule-offs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; padding-left: 8px; border-left: 1px solid var(--rule); }
@@ -1722,6 +1728,9 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .tools-sheet .agent-claimed .settings-readonly .settings-label::after { content: none; }
 .tools-sheet .agent-claimed .settings-row > .settings-label { align-self: start; }
 .tools-sheet .rule-row .why-off { grid-column: 1; }
+/* C6'b2-2: a refused Stop sending under its row; the injection-pause line at the top of Tools */
+.tools-sheet .rule-row .td-stop-note { grid-column: 1; color: var(--fail); }
+.tools-sheet .td-taint .sf-result { color: var(--ink2); }
 .tools-sheet .td-foot { border-bottom: 0; }
 
 /* #gui-slash-menu (C6'b2-1; design-system slash-menu): the "/" menu, a menu variant hung ABOVE the composer. The
@@ -1769,6 +1778,14 @@ g[tabindex]:focus-visible rect { stroke-width: 3; stroke: var(--key-edge); }
 .trow.role-run .run-clock { color: var(--sec); }
 .trow.role-run .run-next, .trow.role-run .run-policy { font-size: var(--fs-label); color: var(--sec); }
 .trow.role-run .run-keys { margin-top: 4px; }
+.trow.role-run .run-policy { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-top: 2px; }
+.trow.role-run .run-policy:focus { outline: none; }
+.trow.role-run .run-policy:focus-visible { outline: 2px solid var(--key-edge); outline-offset: 2px; }
+.trow.role-run .run-send-note { font-size: var(--fs-label); color: var(--fail); }
+.trow.role-run .run-ask { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-top: 4px; }
+.trow.role-run .run-ask-q { color: var(--ink); }
+.trow.role-run .run-ask-keys { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.trow.role-run .run-ask-note { font-size: var(--fs-label); color: var(--sec); }
 .trow.role-run .agent-claimed { display: block; margin: 4px 0; padding: 2px 8px; color: var(--ink2); border: 1px dashed var(--key-edge); border-radius: var(--radius); }
 .trow.role-run .agent-claimed .ac-tag { display: block; font-size: var(--fs-label); color: var(--sec); }
 .trow.role-run .run-data-text { margin: 2px 0 4px; font-family: var(--mono); font-size: var(--fs-control); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow-y: auto; }

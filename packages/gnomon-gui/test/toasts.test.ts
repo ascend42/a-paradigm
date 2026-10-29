@@ -400,3 +400,28 @@ describe('a toast key focuses its own card or none (ui/card-focus.ts, Mika #1)',
     expect(app).toMatch(/const stackCovers: CoveringSheet\[\] = \[\{ open: \(\) => !\$\('new-session-dialog'\)\.hidden, close: \(\) => closeNewSessionSheet\(\) \}\]/);
   });
 });
+
+describe("C6'b2-2: toast variant rule-ran — one toast updated in place", () => {
+  afterEach(() => vi.useRealTimers());
+  it('update() changes the text, restarts its time and can drop its key; no new toast is made', () => {
+    vi.useFakeTimers();
+    const doc = new FakeDoc();
+    const region = doc.createElement('div');
+    const say = doc.createElement('span');
+    const t = mountToasts(doc as unknown as Document, region as unknown as HTMLElement, { say: say as unknown as HTMLElement });
+    const h = t.show('ran by rule · rm on fs · by the model', { kind: 'warn', variant: 'rule-ran', key: { label: 'Revoke', onPress: () => undefined } });
+    expect(region.children).toHaveLength(1);
+    expect(region.children[0]!.className).toBe('toast warn rule-ran');
+    vi.advanceTimersByTime(TOAST_WARN_MS - 1000);
+    h.update('ran 2 times by rule · rm on fs · by the model');
+    vi.advanceTimersByTime(TOAST_WARN_MS - 1000);
+    expect(h.present).toBe(true); // its time started again
+    expect(region.children).toHaveLength(1);
+    expect(region.children[0]!.children.find((c) => c.className === 'toast-text')!.textContent).toBe('ran 2 times by rule · rm on fs · by the model');
+    h.update('rule removed; its next call takes a card', { dropKey: true });
+    expect(h.keyEl).toBeNull();
+    expect(region.text()).not.toContain('Revoke');
+    vi.advanceTimersByTime(TOAST_WARN_MS);
+    expect(h.present).toBe(false);
+  });
+});
