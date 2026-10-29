@@ -419,6 +419,9 @@ html, body {
 .card-body.quoted { padding-left: 8px; font-style: italic; color: var(--ink2); }
 .pinned .card { --r: 0deg; margin: 0; }
 .card-keys { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Mika C6'b2-2 #2: a brokered card's flag chips on their own line, so its keys stay Allow · Deny · Always ▾ at 340px */
+.card-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.card-flags + .card-keys { margin-top: 6px; }
 /* Mika 2026-10-23: the scoped always choices, folded under "Always ▾": one row per choice, its note beside the key */
 .always-choices { display: none; margin-top: 6px; padding-left: 8px; border-left: 1px solid var(--rule); }
 .always-choices.open { display: grid; gap: 8px; }

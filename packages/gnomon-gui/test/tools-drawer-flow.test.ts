@@ -141,12 +141,23 @@ describe("#gui-capability-browser: C6'b2-2 Stop sending", () => {
     const r = rig({ 'request.session.capabilities': [caps({ tools: [tool('grep', { policy: 'send' })] })], 'request.session.tools.policy': [() => { throw refusal('not-found'); }] });
     await open(r);
     await r.flow.stopSending('fs/grep@0123abcd', true);
-    expect(r.flow.tools()!.all!.groups[0]!.rows[0]!.stopNote).toBe('Still sending: this tool isn’t in this session any more · next: Read again');
+    expect(r.flow.tools()!.all!.groups[0]!.rows[0]!.stopNote).toBe('Still sending: this tool isn’t in this session any more');
     const n = r.kinds().filter((k) => k === 'request.session.capabilities').length;
     r.flow.row({ kind: 'tool.result.sent', payload: { hsid: H } });
     r.flow.row({ kind: 'skill.run', payload: { hsid: H, decision: 'ran' } });
     await tick();
     expect(r.kinds().filter((k) => k === 'request.session.capabilities').length).toBe(n + 2);
+  });
+  it('Mika #4: a refused Stop sending re-reads the tools, so the row shows the kernel’s state; focus moves to its Pin', async () => {
+    const r = rig({ 'request.session.capabilities': [caps({ tools: [tool('grep', { policy: 'send' })] }), caps({ generation: 2, tools: [tool('grep', { policy: null })] })], 'request.session.tools.policy': [() => { throw refusal('untrusted'); }] });
+    await open(r);
+    r.flow.takeFocus();
+    await r.flow.stopSending('fs/grep@0123abcd', true);
+    const row = r.flow.tools()!.all!.groups[0]!.rows[0]!;
+    expect(row.stop).toBeNull();
+    expect(row.meta).toContain('results: not chosen');
+    expect(row.stopNote).toBe('Its results aren’t sent: its server isn’t trusted now');
+    expect(r.flow.takeFocus()).toEqual({ act: 'pin', value: 'grep' });
   });
   it('the painted row: Stop sending beside Pin; the taint line at the top', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'ui', 'tools-drawer.ts'), 'utf8');

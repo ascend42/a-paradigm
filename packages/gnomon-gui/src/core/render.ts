@@ -445,6 +445,8 @@ export function toolScopesOf(card: Record<string, unknown>): ToolScopeView | nul
 export const TOOL_SCOPE_KEY = Object.freeze({
   /** C6'b2-2 (Mika): a destructive tool's one Always key, and its Allow, name the Touch ID they take */
   destructive: (t: ToolScopeView): string => `Always: ${t.tool} on ${t.server} · Touch ID`,
+  /** Mika C6'b2-2 #5: its visible words, like the other scoped keys (the kernel's note under it names the tool and server) */
+  destructiveShort: 'this tool, any arguments · Touch ID',
   touchId: 'allow · Touch ID',
   short: 'this tool, any arguments',
   note: (t: ToolScopeView): string => `every call of ${t.tool} on ${t.server} in this repo · paused if the tool or server changes`,
@@ -1322,11 +1324,13 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
         ? h(doc, 'p', { class: 'refusal root-rows-missing' }, 'This card does not show what its approval signs: there is no Approve here. Raise it again from the kernel.')
         : null,
     v.batchUnavailable && rootGated ? h(doc, 'small', { class: 'meta helper-batch-note' }, 'The helper is older than 1.8.0: this approval asks Touch ID once per signed row.') : null,
+    brokered && v.flags.length ? h(doc, 'div', { class: 'card-flags' }, ...v.flags.map((f) => flagChip(doc, f))) : null,
     h(
       doc,
       'div',
       { class: 'card-keys' },
-      ...v.flags.map((f) => h(doc, 'span', { class: `chip warn flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi: shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
+      // Mika C6'b2-2 #2: a brokered card's flag chips sit on their own line (flagsEl, above), so its key row stays Allow · Deny · Always ▾
+      ...(brokered ? [] : v.flags.map((f) => flagChip(doc, f))),
       ...keys.map((d) =>
         // Mika 2026-10-23: scoped always choices fold under ONE "Always ▾" key (the row stays Allow · Deny · Always ▾ at every
         // width); the key itself decides nothing, each choice below is the decision key
@@ -1346,6 +1350,12 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
   );
 }
 
+/** Mika C6'b2-2 #1: a card flag in words (a flag code never shows raw: irreversible reads "can't be undone"). */
+export const FLAG_WORD: Readonly<Record<string, string>> = Object.freeze({ irreversible: 'can’t be undone' });
+function flagChip(doc: MiniDoc, f: string): MiniEl {
+  return h(doc, 'span', { class: `chip warn flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi: shown as ${BIDI_LEGEND}` : `card flag: ${FLAG_WORD[f] ?? f}` }, FLAG_WORD[f] ?? f);
+}
+
 /**
  * Mika 2026-10-23: the scoped always choices of a card, unfolded under its keys by "Always ▾": one row per choice, the
  * decision key (data-decision="always" + its scope, exactly as before) and its note in plain words beside it. The
@@ -1358,7 +1368,7 @@ function alwaysChoices(doc: MiniDoc, v: CardView, scoped: 'command' | 'edit' | '
     // C5'b: one choice, as the git remote's: this tool on this server, any arguments, in this repo
     const t = v.toolScope ?? { tool: 'this tool', server: 'its server' };
     // C6'b2-2 (Mika): a destructive tool's one key names its Touch ID; its note is the kernel's line, verbatim
-    const choice = t.destructive ? row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.destructive(t), TOOL_SCOPE_KEY.destructive(t), t.alwaysLine ?? TOOL_SCOPE_KEY.note(t)) : row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.label(t), TOOL_SCOPE_KEY.short, TOOL_SCOPE_KEY.note(t));
+    const choice = t.destructive ? row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.destructive(t), TOOL_SCOPE_KEY.destructiveShort, t.alwaysLine ?? TOOL_SCOPE_KEY.note(t)) : row({ 'data-scope': 'tool' }, TOOL_SCOPE_KEY.label(t), TOOL_SCOPE_KEY.short, TOOL_SCOPE_KEY.note(t));
     return h(doc, 'div', { class: `always-choices${v.alwaysOpen ? ' open' : ''}${t.destructive ? ' destructive' : ''}`, role: 'group', 'aria-label': 'Always allow, no card next time', 'data-always-for': v.cardId }, h(doc, 'span', { class: 'always-h' }, 'always allow, no card next time:'), choice);
   }
   if (scoped === 'remote') {

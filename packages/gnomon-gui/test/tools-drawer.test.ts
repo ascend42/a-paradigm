@@ -401,7 +401,8 @@ describe("#gui-capability-browser: C6'b2-2 the policy word, Stop sending, the ta
     expect(toolsView(ui()).taint).toBeNull();
   });
   it('a refused Stop sending in words', () => {
-    expect(refusalWords('stop', { reason: 'not-found', data: null })).toBe('Still sending: this tool isn’t in this session any more · next: Read again');
+    expect(refusalWords('stop', { reason: 'not-found', data: null })).toBe('Still sending: this tool isn’t in this session any more');
+    expect(refusalWords('stop', { reason: 'untrusted', data: null })).toBe('Its results aren’t sent: its server isn’t trusted now');
     expect(refusalWords('stop', null)).toBe('Still sending: nothing was sent, the connection dropped · next: try again once Gnomon is connected');
   });
 });

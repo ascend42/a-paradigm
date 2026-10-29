@@ -46,7 +46,7 @@ export const DESTRUCTIVE_PER_MINUTE = 3;
 export const DESTRUCTIVE_PER_DAY = 30;
 /** C6'b2-2 (Mika): the destructive chip and the group's one limit line. */
 export const DESTRUCTIVE_CHIP = 'can’t be undone';
-export const DESTRUCTIVE_LIMIT = `these run for you and the model · at most ${DESTRUCTIVE_PER_MINUTE} a minute per session, ${DESTRUCTIVE_PER_DAY} a day per rule`;
+export const DESTRUCTIVE_LIMIT = `rules that can’t be undone run for you and the model · at most ${DESTRUCTIVE_PER_MINUTE} a minute per session, ${DESTRUCTIVE_PER_DAY} a day per rule`;
 /** The request kind (dispatcher-only; contracts CLIENT_API_DESCRIPTOR.rulesView.request). */
 export const RULES_APPLY_REQUEST = 'request.rules.apply';
 /** Rows whose arrival changes status.rules (the page re-reads status on them). */

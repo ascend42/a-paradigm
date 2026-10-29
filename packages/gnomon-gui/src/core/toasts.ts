@@ -120,9 +120,6 @@ export const TRUST_DROP_TOAST = Object.freeze({ kind: 'warn' as ToastKind, key: 
 
 /* ── C6'b2-2 (Mika): the "ran by rule" toast (variant rule-ran) ──────────────────────────────────────────────────── */
 
-/** Who a rule passed a call for: the model, the human from "/", or both (one toast counts every pass of its rule). */
-export type RuleRanAuthor = 'model' | 'human' | 'both';
-
 export interface RuleRan {
   ruleId: string;
   hsid: string;
@@ -149,16 +146,19 @@ export const RULE_RAN_TOAST = Object.freeze({
   removed: 'rule removed; its next call takes a card',
   /** a rule for a tool that can't be undone (or one the page cannot place) is a warn: amber, 10 s, paused on hover or focus */
   kind: (cls: 'destructive' | 'mutate' | null): ToastKind => (cls === 'mutate' ? 'info' : 'warn'),
-  by: Object.freeze({ model: 'by the model', human: 'by you from /', both: 'by you and the model' }) as Readonly<Record<RuleRanAuthor, string>>,
+  /** Mika C6'b2-2 #6: the key's accessible name says which rule */
+  keyName: (t: Pick<RuleRan, 'tool' | 'server'>): string => `Revoke the rule for ${t.tool} on ${t.server}`,
 });
 
-/** "ran by rule · write on fs · by the model"; repeated passes of one rule: "ran 4 times by rule · …". */
-export function ruleRanText(t: Pick<RuleRan, 'tool' | 'server'>, n: number, author: RuleRanAuthor): string {
-  return `${n > 1 ? `ran ${n} times by rule` : 'ran by rule'} · ${t.tool} on ${t.server} · ${RULE_RAN_TOAST.by[author]}`;
+/**
+ * "ran by rule · write on fs"; repeated passes of one rule: "ran 4 times by rule · …". WHO it ran for is not said: the
+ * kernel's approval.auto names no author and shares no call id with its tool.brokered row (whose argsHash is of the
+ * model's args, while approval.auto's inputHash is of the reassembled call args), so the page cannot pair them, and an
+ * audit notice never guesses. "by the model" / "by you from /" wait on a kernel `author` on approval.auto.
+ */
+export function ruleRanText(t: Pick<RuleRan, 'tool' | 'server'>, n: number): string {
+  return `${n > 1 ? `ran ${n} times by rule` : 'ran by rule'} · ${t.tool} on ${t.server}`;
 }
-
-/** The author after one more pass: the same, or both. */
-export const ruleRanAuthor = (was: RuleRanAuthor | null, now: 'model' | 'human'): RuleRanAuthor => (was === null || was === now ? now : 'both');
 
 /** The Revoke key's request: remove the rule (it only tightens: no presence). */
 export const ruleRevokeRequest = (ruleId: string): { kind: string; payload: { changes: Array<{ ruleId: string; op: 'remove' }> } } => ({ kind: 'request.rules.apply', payload: { changes: [{ ruleId, op: 'remove' }] } });

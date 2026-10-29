@@ -246,8 +246,7 @@ components:
       latest ran row taking the reply's queued (said in the polite live
       line); TAINT_LINE is one transcript system row where the session first
       took in a sent result or skill text (kernel tool.result.sent /
-      skill.run{ran}); SlashFlow.humanRunning names a rule's author for the
-      rule-ran toast. Tests: test/rule-ran-toast.test.ts too.
+      skill.run{ran}). Tests: test/rule-ran-toast.test.ts too.
     tags: [gui, local, tools]
   gui:
     loop-cards: >-
@@ -1753,10 +1752,13 @@ components:
       Slice C6'b2-2: variant rule-ran (ruleRanOf, ruleRanText,
       RULE_RAN_TOAST, ruleRevokeRequest): approval.auto{modeRef rule:} for an
       mcp: tool of a session this human opened is 'ran by rule · {tool} on
-      {server} · by the model' or '· by you from /'; warn for a destructive
+      {server}' (who it ran for is not said: approval.auto names no author
+      and shares no call id with its tool.brokered row; it waits on a kernel
+      author field); warn for a destructive
       rule, else info; one toast per rule updated in place by
       ToastHandle.update ('ran 4 times by rule'); its Revoke key removes the
-      rule (request.rules.apply{remove}, no presence). Test:
+      rule (request.rules.apply{remove}, no presence), named 'Revoke the
+      rule for {tool} on {server}'. Test:
       test/rule-ran-toast.test.ts, test/toasts.test.ts.
     path: src/ui/toasts.ts
     type: module

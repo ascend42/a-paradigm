@@ -280,7 +280,11 @@ export class ToolsFlow {
       s.policyBusy = null;
       s.policyResult = { id, text: refusalWords('stop', reasonOf(err)) };
       this.#d.live(s.policyResult.text);
-      this.#focus = { act: 'stop-sending', value: id };
+      // Mika C6'b2-2 #4: read the tools again, so the row shows the kernel's state (not a Stop sending it refused)
+      if (err instanceof RpcError) await this.readTools('selection');
+      if (gen !== this.#gen || this.#s !== s) return;
+      const still = this.tools()?.all?.groups.some((g) => g.rows.some((r) => r.stop?.value === id)) ?? false;
+      this.#focus = still ? { act: 'stop-sending', value: id } : { act: s.caps?.pins.some((p) => p.name === t.name) ? 'unpin' : 'pin', value: t.name };
       return this.#d.repaint();
     }
     if (gen !== this.#gen || this.#s !== s) return;

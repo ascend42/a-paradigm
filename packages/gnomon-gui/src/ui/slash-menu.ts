@@ -202,14 +202,6 @@ export class SlashFlow {
     return this.#runs.get(key) ?? null;
   }
 
-  /**
-   * C6'b2-2: is a "/" run of this tool on this server in flight from this page (the kernel's approval.auto names no
-   * author; a rule that passed it while one of ours runs passed ours: "by you from /")?
-   */
-  humanRunning(hsid: string, server: string, tool: string): boolean {
-    for (const v of this.#runs.values()) if (v.hsid === hsid && v.phase === 'running' && v.server === server && v.tool === tool) return true;
-    return false;
-  }
 
   /** Open the menu on a session (typing "/" is the human's own input; the palette and a slip key are trusted presses). */
   open(hsid: string, query: string, trusted: boolean): boolean {

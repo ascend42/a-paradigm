@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { cardContentHash, isBrokeredCard, renderCard, toolScopesOf, type MiniDoc, type MiniEl } from '../src/core/render.js';
 import { TAINT_LINE, taintsSession } from '../src/core/slash-runs.js';
 import { chatItems, type Row } from '../src/core/store.js';
-import { RULE_RAN_TOAST, ruleRanAuthor, ruleRanOf, ruleRanText, ruleRevokeFailWords, ruleRevokeRequest, TOAST_MAX } from '../src/core/toasts.js';
+import { RULE_RAN_TOAST, ruleRanOf, ruleRanText, ruleRevokeFailWords, ruleRevokeRequest, TOAST_MAX } from '../src/core/toasts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP = readFileSync(path.join(ROOT, 'src', 'ui', 'app.ts'), 'utf8');
@@ -28,13 +28,12 @@ describe("C6'b2-2: the ran-by-rule toast (core/toasts.ts)", () => {
     expect(ruleRanOf({ kind: 'approval.auto', payload: { hsid: H, tool: 'mcp:f‮s/write', modeRef: 'rule:card:1' } })!.server).not.toContain('‮');
   });
 
-  it('the words: by the model, by you from /, and repeated passes in ONE toast', () => {
+  it('the words: repeated passes in ONE toast; WHO it ran for is never guessed (the kernel names no author)', () => {
     const t = { tool: 'write', server: 'fs' };
-    expect(ruleRanText(t, 1, 'model')).toBe('ran by rule · write on fs · by the model');
-    expect(ruleRanText(t, 1, 'human')).toBe('ran by rule · write on fs · by you from /');
-    expect(ruleRanText(t, 4, 'model')).toBe('ran 4 times by rule · write on fs · by the model');
-    expect(ruleRanText(t, 2, ruleRanAuthor('model', 'human'))).toBe('ran 2 times by rule · write on fs · by you and the model');
-    expect(ruleRanAuthor(null, 'human')).toBe('human');
+    expect(ruleRanText(t, 1)).toBe('ran by rule · write on fs');
+    expect(ruleRanText(t, 4)).toBe('ran 4 times by rule · write on fs');
+    expect(APP).not.toMatch(/humanRunning|by you from \//);
+    expect(RULE_RAN_TOAST.keyName(t)).toBe('Revoke the rule for write on fs'); // Mika #6
   });
 
   it('a destructive rule (or one not placed) is warn; a mutate rule is info', () => {
@@ -53,7 +52,9 @@ describe("C6'b2-2: the ran-by-rule toast (core/toasts.ts)", () => {
   it('app.ts: one toast per rule, updated in place (never a flood past TOAST_MAX); Revoke once per trusted press', () => {
     expect(TOAST_MAX).toBe(3);
     expect(APP).toContain('ruleRanRow(r); // C6\'b2-2');
-    expect(APP).toContain('const ruleToasts = new Map<string, { n: number; author: RuleRanAuthor; handle: ToastHandle }>()');
+    expect(APP).toContain('const ruleToasts = new Map<string, { n: number; handle: ToastHandle }>()');
+    expect(APP).toContain('ariaLabel: RULE_RAN_TOAST.keyName(t),');
+    expect(TOASTS_UI).toContain("if (o.key.ariaLabel) keyEl.setAttribute('aria-label', o.key.ariaLabel);");
     expect(APP).toContain('if (had?.handle.present) {');
     expect(APP).toContain("variant: 'rule-ran'");
     expect(APP).toContain("if (!e.isTrusted || !k || k.getAttribute('aria-disabled') === 'true') return;");
@@ -107,14 +108,19 @@ describe("C6'b2-2: the destructive brokered card", () => {
     expect(toolScopesOf(card)).toEqual({ tool: 'rm', server: 'fs', destructive: true, alwaysLine: LINE });
   });
 
-  it('the irreversible chip, then allow · Touch ID · deny · Always ▾; the fold holds ONE key with the kernel’s line as its note', () => {
+  it('the chip "can’t be undone" on its own line, then allow · Touch ID · deny · Always ▾; the fold holds ONE key with the kernel’s line as its note', () => {
     const el = draw();
     const keys = el.all().filter((e) => e.attrs.has('data-decision') || e.attrs.has('data-always-fold'));
-    expect(keys.map((e) => e.text)).toEqual(['allow · Touch ID', 'deny', 'Always ▴', 'Always: rm on fs · Touch ID']);
+    expect(keys.map((e) => e.text)).toEqual(['allow · Touch ID', 'deny', 'Always ▴', 'this tool, any arguments · Touch ID']); // Mika #5
     expect(keys[0]!.attrs.get('data-decision')).toBe('allow');
-    const chipAt = el.all().findIndex((e) => e.className.includes('flag-irreversible'));
-    expect(chipAt).toBeGreaterThanOrEqual(0);
-    expect(chipAt).toBeLessThan(el.all().indexOf(keys[0]!));
+    // Mika #1, #2: the flag in words, never the code, on its own line above the key row
+    const chip = el.all().find((e) => e.className.includes('flag-irreversible'))!;
+    expect(chip.text).toBe('can’t be undone');
+    const flags = el.all().find((e) => e.className === 'card-flags')!;
+    expect(flags.all()).toContain(chip);
+    const row = el.all().find((e) => e.className === 'card-keys')!;
+    expect(row.all().some((e) => e.className.includes('flag'))).toBe(false);
+    expect(el.all().indexOf(flags)).toBeLessThan(el.all().indexOf(row));
     const always = el.all().filter((e) => e.attrs.get('data-decision') === 'always');
     expect(always).toHaveLength(1);
     expect(always[0]!.attrs.get('data-scope')).toBe('tool');

@@ -243,7 +243,7 @@ describe("#gui-rules-view: C6'b2-2 destructive tool rules (K3 class)", () => {
 
   it('the group states the limit once, only when it holds a destructive rule', () => {
     const v = rulesBlock(st([tr(1, 'destructive'), tr(2, 'destructive'), tr(3, 'mutate', REPO_B)]), emptyRulesUi());
-    expect(DESTRUCTIVE_LIMIT).toBe('these run for you and the model · at most 3 a minute per session, 30 a day per rule');
+    expect(DESTRUCTIVE_LIMIT).toBe('rules that can’t be undone run for you and the model · at most 3 a minute per session, 30 a day per rule'); // Mika #3
     expect(v.groups.find((g) => g.repoKey === REPO_A)!.limit).toBe(DESTRUCTIVE_LIMIT);
     expect(v.groups.find((g) => g.repoKey === REPO_B)!.limit).toBeNull();
     const els: Array<{ className: string; kids: unknown[] }> = [];

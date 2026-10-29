@@ -22,6 +22,8 @@ const ANNOUNCE_KEEP_MS = 10_000;
 
 export interface ToastKey {
   label: string;
+  /** an accessible name that says which toast's key it is (Mika C6'b2-2 #6: several toasts can be up at once) */
+  ariaLabel?: string;
   title?: string;
   /** the press; the caller checks e.isTrusted before it sends anything */
   onPress: (e: MouseEvent) => void;
@@ -180,6 +182,7 @@ export function mountToasts(doc: Document, region: HTMLElement, opts: ToastMount
       keyEl.className = 'key quiet toast-key';
       keyEl.textContent = o.key.label;
       if (o.key.title) keyEl.title = o.key.title;
+      if (o.key.ariaLabel) keyEl.setAttribute('aria-label', o.key.ariaLabel);
       const press = o.key.onPress;
       keyEl.addEventListener('click', (e) => press(e));
       acts.appendChild(keyEl);

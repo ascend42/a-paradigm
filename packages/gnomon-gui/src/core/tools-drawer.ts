@@ -680,8 +680,9 @@ export function refusalWords(what: 'pin' | 'restart' | 'delete' | 'stop', r: { r
   }
   if (what === 'restart' && reason === 'busy') return 'Not restarted: it is already starting · next: wait for it, then look again';
   if (what === 'pin' && reason === 'full') return `Not pinned: ${TOOLS_COPY.pinsFull}`;
-  if (what === 'stop' && reason === 'not-found') return 'Still sending: this tool isn’t in this session any more · next: Read again';
-  if (what === 'stop' && reason === 'untrusted') return 'Its results aren’t sent: its server isn’t trusted now · next: Read again';
+  // Mika C6'b2-2 #4: a refused Stop sending re-reads the tools, so the row shows the kernel's state under these words
+  if (what === 'stop' && reason === 'not-found') return 'Still sending: this tool isn’t in this session any more';
+  if (what === 'stop' && reason === 'untrusted') return 'Its results aren’t sent: its server isn’t trusted now';
   const lead = what === 'pin' ? 'Not pinned' : what === 'restart' ? 'Not restarted' : what === 'stop' ? 'Still sending' : 'Not deleted';
   if (reason === 'not-found') return what === 'delete' ? `${lead}: Gnomon holds no memory for this session any more · next: close this and look again` : `${lead}: this session isn’t running any more · next: open a new session`;
   if (r === null) return `${lead}: nothing was sent, the connection dropped · next: try again once Gnomon is connected`;
