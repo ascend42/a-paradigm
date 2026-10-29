@@ -171,6 +171,32 @@ export function voiceTreeHash(dir) {
   return `sha256:${h.digest('hex')}`;
 }
 
+/**
+ * Aegis S1 H1: a release ships only the RELEASE helper. Refuses a bundle whose CFBundleIdentifier is not gnomon.helper,
+ * whose `info` does not say devKernel: false (a -DGNOMON_HELPER_DEV helper says true; a pre-1.11 one says nothing),
+ * or, when signed, that does not meet the release HELPER_REQUIREMENT (identifier gnomon.helper). Runs on the built
+ * AND the --skip-native path. `cap` is the capture function (tests stub it).
+ */
+export function assertReleaseHelper(app, { signed, requirement, cap }) {
+  const exe = path.join(app, 'Contents', 'MacOS', 'gnomon-helper');
+  const id = cap('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', path.join(app, 'Contents', 'Info.plist')]);
+  if (id.status !== 0 || String(id.stdout).trim() !== 'gnomon.helper') throw new Error(`the helper bundle id is ${JSON.stringify(String(id.stdout).trim())}, not gnomon.helper: a dev helper is never shipped`);
+  const r = cap(exe, ['once'], { input: '{"id":1,"op":"info"}\n' });
+  let info = null;
+  try {
+    info = JSON.parse(String(r.stdout).trim().split('\n').pop());
+  } catch {
+    // not JSON
+  }
+  if (!info || info.ok !== true || info.devKernel !== false) throw new Error(`the helper's info.devKernel is ${JSON.stringify(info?.devKernel)}, not false: a dev helper (or one older than 1.11.0) is never shipped`);
+  if (signed) {
+    if (!/identifier "gnomon\.helper"$/.test(requirement)) throw new Error('the release helper requirement must pin identifier gnomon.helper');
+    const v = cap('/usr/bin/codesign', ['--verify', '--strict', `-R=${requirement}`, app]);
+    if (v.status !== 0) throw new Error(`the helper does not meet the release requirement (identifier gnomon.helper): ${String(v.stderr).slice(0, 300)}`);
+  }
+  return info;
+}
+
 /** The validated lock entry for `arch`: { version, url, file, sha256 }. */
 export function nodeLockFor(arch, lockFile = NODE_LOCK, keysFile = RELEASE_KEYS) {
   const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
@@ -382,8 +408,8 @@ function run(cmd, args, opts = {}) {
   if (r.status !== 0) throw new Error(`${path.basename(cmd)} ${args.slice(0, 3).join(' ')} failed (exit ${r.status ?? r.signal})`);
 }
 
-function capture(cmd, args) {
-  return spawnSync(cmd, args, { encoding: 'utf8', timeout: 180_000 });
+function capture(cmd, args, opts = {}) {
+  return spawnSync(cmd, args, { encoding: 'utf8', timeout: 180_000, ...(opts.input !== undefined ? { input: opts.input } : {}) });
 }
 
 /** The placeholder framework a --dry-run helper app carries: the real versioned-bundle symlink shape. */
@@ -466,6 +492,13 @@ export async function release(argv) {
       await step('npm run build -w @a-company/gnomon-contracts', () => run('npm', ['run', 'build', '-w', '@a-company/gnomon-contracts']));
       await step('build GnomonHelper.app', () => run(process.execPath, [path.join(PACKAGES, 'gnomon-helper', 'scripts', 'build-darwin.mjs'), ...signFlag]));
       await step('build GnomonVoiceIO.app', () => run(process.execPath, [path.join(PACKAGES, 'gnomon-voice', 'scripts', 'build-voice-io.mjs'), ...signFlag]));
+    }
+    // Aegis S1 H1: built or reused (--skip-native), the helper that ships is the release helper, never a dev one
+    if (!o.dryRun) {
+      await step('the helper is the release helper (gnomon.helper, devKernel false)', async () => {
+        const { HELPER_REQUIREMENT } = await import(path.join(PACKAGES, 'gnomon-helper', 'scripts', 'signing.mjs'));
+        assertReleaseHelper(path.join(PACKAGES, 'gnomon-helper', 'bin', 'darwin', 'GnomonHelper.app'), { signed: !o.unsigned, requirement: HELPER_REQUIREMENT, cap: capture });
+      });
     }
     // 2. the kernel (GUI embedded, helper and voice-io pins compiled in)
     await step('npm run build:gnomon', () => run('npm', ['run', 'build:gnomon']));

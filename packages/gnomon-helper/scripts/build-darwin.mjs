@@ -22,7 +22,7 @@
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ACCESS_GROUP, APP_ID, APP_NAME, BUNDLE_ID, EXE_NAME, HELPER_REQUIREMENT, PKG_ROOT, PROFILE_PATH, TEAM, checkProfile, fail, findIdentity, run, sha256File } from './signing.mjs';
+import { APP_NAME, EXE_NAME, PKG_ROOT, TEAM, checkProfile, fail, findIdentity, helperFlavor, run, sha256File } from './signing.mjs';
 
 if (process.platform !== 'darwin') fail('the darwin helper builds on macOS only');
 
@@ -34,8 +34,12 @@ const value = (name) => {
 };
 const unsigned = flag('--unsigned');
 const devKernel = flag('--dev-kernel');
-const outDir = path.resolve(value('--out') ?? path.join(PKG_ROOT, 'bin', 'darwin'));
-const profilePath = value('--profile') ?? PROFILE_PATH;
+// Aegis S1 H1: the dev helper's identity, group, profile and output dir never overlap the release ones
+const F = helperFlavor(devKernel);
+const { bundleId: BUNDLE_ID, appId: APP_ID, accessGroup: ACCESS_GROUP, requirement: HELPER_REQUIREMENT } = F;
+const outDir = path.resolve(value('--out') ?? path.join(PKG_ROOT, 'bin', F.outDir));
+if (devKernel && path.resolve(outDir) === path.resolve(PKG_ROOT, 'bin', 'darwin')) fail('a --dev-kernel helper never goes to bin/darwin (the release helper dir); it builds into bin/darwin-dev');
+const profilePath = value('--profile') ?? F.profilePath;
 
 const say = (s) => process.stdout.write(`${s}\n`);
 
@@ -151,5 +155,5 @@ checksums = {
   note: 'sha256 per built helper executable; written by scripts/build-darwin.mjs. ADVISORY: the kernel does not read this file; a release kernel pins the helper sha256 from its release manifest (packages/gnomon/scripts/write-release-manifest.mjs, G-HLP-01) on top of the code-signing requirement and the version floor. A timestamped signature changes the sha on every build.',
   binaries: { ...(checksums.binaries ?? {}), [rel]: { sha256: sha256File(destExe), version, ...signing } },
 };
-writeFileSync(checksumsFile, `${JSON.stringify(checksums, null, 2)}\n`);
+if (!devKernel) writeFileSync(checksumsFile, `${JSON.stringify(checksums, null, 2)}\n`);
 say(JSON.stringify({ app: dest, version, ...signing }, null, 2));

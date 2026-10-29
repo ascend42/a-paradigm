@@ -35,6 +35,24 @@ export const NOTARY_PROFILE = 'gnomon-notary';
 export const HELPER_REQUIREMENT =
   `anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${TEAM}" and identifier "${BUNDLE_ID}"`;
 
+/**
+ * Aegis S1 H1: a DEV helper (build-darwin.mjs --dev-kernel, -DGNOMON_HELPER_DEV: its caller check also accepts
+ * gnomon.kernel.dev) is a different signed identity — identifier and bundle id gnomon.helper.dev, its OWN keychain
+ * access group SW4BMQ8PNL.gnomon.dev (never the production group), its own provisioning profile and its own output
+ * dir (bin/darwin-dev). It never meets HELPER_REQUIREMENT, so neither a release kernel nor release-darwin.mjs takes it.
+ */
+export const DEV_BUNDLE_ID = 'gnomon.helper.dev';
+export const DEV_APP_ID = `${TEAM}.${DEV_BUNDLE_ID}`;
+export const DEV_ACCESS_GROUP = `${TEAM}.gnomon.dev`;
+export const DEV_PROFILE_PATH = path.join(os.homedir(), '.config/gnomon-signing/gnomon-helper-dev.provisionprofile');
+export const HELPER_DEV_REQUIREMENT = HELPER_REQUIREMENT.replace(`identifier "${BUNDLE_ID}"`, `identifier "${DEV_BUNDLE_ID}"`);
+/** Everything that differs between the release and the dev helper. */
+export function helperFlavor(dev) {
+  return dev
+    ? { dev: true, bundleId: DEV_BUNDLE_ID, appId: DEV_APP_ID, accessGroup: DEV_ACCESS_GROUP, profilePath: DEV_PROFILE_PATH, requirement: HELPER_DEV_REQUIREMENT, outDir: 'darwin-dev' }
+    : { dev: false, bundleId: BUNDLE_ID, appId: APP_ID, accessGroup: ACCESS_GROUP, profilePath: PROFILE_PATH, requirement: HELPER_REQUIREMENT, outDir: 'darwin' };
+}
+
 export const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function run(cmd, args, opts = {}) {

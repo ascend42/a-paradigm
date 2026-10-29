@@ -41,6 +41,7 @@ import * as fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { helperVerifierFor } from '../../platform/helper-verifier.js';
 import { artifactPin, loadedReleasePins, type ReleasePins } from '../lifecycle/release-pins.js';
+import { seaGuard } from '../lifecycle/sea.js';
 
 export const HELPER_TEAM = 'SW4BMQ8PNL';
 export const HELPER_IDENTIFIER = 'gnomon.helper';
@@ -74,6 +75,18 @@ export const MIN_HELPER_VERSION = '1.6.0'; // 1.6.0: protocol v2, voice arms (ow
 /** The designated requirement the helper must satisfy (Developer ID, this team, this identifier). */
 export const HELPER_REQUIREMENT =
   `anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "${HELPER_TEAM}" and identifier "${HELPER_IDENTIFIER}"`;
+
+/**
+ * Aegis S1 H1: the DEV helper (gnomon.helper.dev, its own keychain group SW4BMQ8PNL.gnomon.dev; build-darwin.mjs
+ * --dev-kernel). Only a dev SEA kernel (its baked profile is `dev`) accepts it; a release kernel, and any kernel that
+ * is not a dev SEA, accepts only HELPER_REQUIREMENT (identifier gnomon.helper).
+ */
+export const HELPER_DEV_IDENTIFIER = 'gnomon.helper.dev';
+export const HELPER_DEV_REQUIREMENT = HELPER_REQUIREMENT.replace(`identifier "${HELPER_IDENTIFIER}"`, `identifier "${HELPER_DEV_IDENTIFIER}"`);
+/** The requirements this kernel accepts for its helper, in order. */
+export function helperRequirements(profile: 'release' | 'dev' | null = seaGuard()?.profile ?? null): readonly string[] {
+  return profile === 'dev' ? [HELPER_REQUIREMENT, HELPER_DEV_REQUIREMENT] : [HELPER_REQUIREMENT];
+}
 
 /** One reply line and one request line are bounded (the helper bounds its side the same). */
 export const HELPER_MAX_LINE_BYTES = 1 << 20;
@@ -165,16 +178,17 @@ export interface HelperVerifier {
 }
 
 /** Production: the platform backend's code-signing check against HELPER_REQUIREMENT (platform/helper-verifier.ts). */
-export function productionHelperVerifier(platform: string = process.platform): HelperVerifier {
+export function productionHelperVerifier(platform: string = process.platform, profile: 'release' | 'dev' | null = seaGuard()?.profile ?? null): HelperVerifier {
   const v = helperVerifierFor(platform);
+  const reqs = helperRequirements(profile);
   return Object.freeze({
     kind: v.kind === 'codesign' ? ('codesign' as const) : ('unavailable' as const),
     verify(exe: string): void {
       if (v.kind !== 'codesign') throw new HelperUnavailableError('platform', `this platform ${v.why}`);
-      if (!v.verifyFile(exe, HELPER_REQUIREMENT)) throw new HelperUnavailableError('unsigned', `${exe} ${v.why} (team ${HELPER_TEAM}, ${HELPER_IDENTIFIER})`);
+      if (!reqs.some((r) => v.verifyFile(exe, r))) throw new HelperUnavailableError('unsigned', `${exe} ${v.why} (team ${HELPER_TEAM}, ${HELPER_IDENTIFIER})`);
     },
     verifyRunning(pid: number): void {
-      if (v.verifyPid(pid, HELPER_REQUIREMENT) !== true) throw new HelperUnavailableError('unsigned', `the running helper (pid ${pid}) ${v.why}`);
+      if (!reqs.some((r) => v.verifyPid(pid, r) === true)) throw new HelperUnavailableError('unsigned', `the running helper (pid ${pid}) ${v.why}`);
     },
   });
 }
