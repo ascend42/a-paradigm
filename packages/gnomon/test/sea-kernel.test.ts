@@ -1,6 +1,6 @@
 // @gnomon-platform: darwin
 /**
- * #kernel-sea (TD-2026-10-29-746, G-ID-12): the BUILT SEA kernel, ad-hoc (scripts/build-sea.mjs --sign adhoc), in a
+ * #kernel-sea (TD-2026-10-29-746, G-ID-13): the BUILT SEA kernel, ad-hoc (scripts/build-sea.mjs --sign adhoc), in a
  * private kernel root (a copy of dist + package.json, gnomon.kernel, node/bin/node).
  *
  * Falsifiers:

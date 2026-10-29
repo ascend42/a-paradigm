@@ -1,4 +1,4 @@
-// p15-sea-peertoken — S0 P1 (TD-2026-10-29-746; spec P8-D68 amended, G-ID-12). FOUNDER-RUN for the signed half.
+// p15-sea-peertoken — S0 P1 (TD-2026-10-29-746; spec P8-D68 amended, G-ID-13). FOUNDER-RUN for the signed half.
 //   node packages/gnomon/probes/run.mjs p15-sea-peertoken --timeout 900000
 // Claims:
 //   a. a helper spawned as a stdio child of a SEA over libuv pipes sees a unix-domain SOCKET on stdin (libuv uses
@@ -17,7 +17,7 @@ import { onAbort } from '../_shared/abort.mjs';
 import { buildProbeSea, buildTool, json, PROBE_SEA_IDENTIFIER, rmSync, signingAvailable, workDir } from '../_shared/kernel-probe.mjs';
 import { TEAM } from '../_shared/signing.mjs';
 
-export const specRefs = ['P8-D68', 'TD-2026-10-29-746 S0 P1', 'G-ID-12'];
+export const specRefs = ['P8-D68', 'TD-2026-10-29-746 S0 P1', 'G-ID-13'];
 
 export default async function probe(ctx) {
   if (ctx.platform !== 'darwin') return { verdict: 'partial', evidence: { skipped: `${ctx.platform}: LOCAL_PEERTOKEN and SecCode are macOS` } };

@@ -414,15 +414,25 @@ approvals key  hardware-backed P-256 (same providers), unlocked by presence ONCE
                ≤ 240 configurable, 30 decisions; gate 5 min hard, ≤ 60 configurable, 3 decisions), on screen lock, on either connection closing, or on any narrowing.
                Only the broker signs under it; a decision arriving on any connection other than the paired voice connection never uses it; it never signs
                install, use-api-token, always, voice-arm, grant or any hand-only kind (§14.7).
-kernel key     Ed25519 keypair held in the OS keystore item `gnomon-kernel-key` (macOS: Keychain item in the helper's keychain access group; Windows: Credential Manager
-               generic credential), written and read only by the signed helper, handed only to the signed kernel binary (P8-D68, below), loaded into kernel memory at daemon start, rotated by the root-signed CLI
-               verb `gnomon key rotate kernel`; never a plain file. Its registry row ("gkey:v1:<sha256(spki)>", kind kernel) is root-signed, so a forged kernel key cannot be
-               registered. Signs: serverSig in `hello` (§4.9), `card.actions[]` and the presence-prompt record (§3.4), `oracle.result` (§7.3), every event the kernel appends.
-               Forgery scope (P8-D68, S29-K1): macOS — the kernel ships as a Developer-ID-signed single executable (Node SEA), and the helper is an XPC service under
-               launchd that answers only a peer meeting that binary's code-signing requirement (xpc_connection_set_peer_code_signing_requirement) and refuses to run when
-               it is itself sandboxed (sandbox_check on its own pid); a same-user process — `node` running a script included — must defeat that peer check to obtain the key,
-               so status.kernelKeyCustody is `full` on macOS ONLY under this design (any other build reports `partial`); Windows — Credential Manager is readable by any
-               same-user process, so kernel-signed rows on Windows carry the `partial` fidelity of §A.3 until the helper's protected store is proven (full|partial).
+kernel key     Ed25519 keypair, EPHEMERAL: generated in kernel memory at every start, never written (TD-2026-10-29-746, amending the keystore design below).
+               At every boot the helper certifies it: a Secure Enclave P-256 `kernel-cert` key the helper holds (permanent, access group SW4BMQ8PNL.gnomon.prod,
+               AfterFirstUnlockThisDeviceOnly, .privateKeyUsage, no presence; probe P3) signs the kernel's public key. `kernel-pub.jsonl` is sealed by one
+               root-signed legacy row; history before the seal stays labelled `partial`. Existing signatures stay valid and the key rotates every start for free.
+               Signs: serverSig in `hello` (§4.9), `card.actions[]` and the presence-prompt record (§3.4), `oracle.result` (§7.3), every event the kernel appends.
+               Forgery scope (P8-D68 as amended by TD-2026-10-29-746, S29-K1): the helper certifies ONLY a kernel it identifies by code signature. On macOS the
+               kernel is the signed Node SEA `gnomon.kernel` (#kernel-sea; packages/gnomon/scripts/build-sea.mjs): code identifier gnomon.kernel, team SW4BMQ8PNL,
+               hardened runtime, allow-jit only, no get-task-allow; `--disable-sigusr1` baked into its execArgv and `execArgvExtension: "none"`, so NODE_OPTIONS
+               is never read (NODE_OPTIONS, NODE_PATH and NODE_EXTRA_CA_CERTS are also stripped from its env before any kernel code runs). Its node children
+               (sessions' PATH head, the MCP pool, gnomon-web, mods, voice, the local runner, loop checks) run the separately signed `gnomon.node`
+               (Contents/Resources/node/bin/node), never the kernel. Transport: the helper is the kernel's stdio child; it reads the peer's audit token with
+               LOCAL_PEERTOKEN on its stdin socketpair and runs SecCodeCheckValidity against `identifier "gnomon.kernel" and anchor apple generic and certificate
+               leaf[subject.OU] = SW4BMQ8PNL` (probe P1; the XPC service below is the fallback if that probe fails). A same-user `node` running a script fails that
+               check, so status.kernelKeyCustody is `full` on macOS ONLY for a Developer-ID-signed SEA; an ad-hoc SEA (CI, dev without the identity: "unsigned →
+               guarded only") and npm-only installs (node + script) report `partial` and get only the guarded profile. Dev builds also produce a signed SEA so the
+               founder can dogfood. Superseded original: the key in the keystore item `gnomon-kernel-key`, released only to the signed kernel by an XPC service
+               under launchd (xpc_connection_set_peer_code_signing_requirement), rotated by `gnomon key rotate kernel`. The helper still refuses to run sandboxed
+               (sandbox_check on its own pid). Windows — Credential Manager is readable by any same-user process, so kernel-signed rows on Windows carry the
+               `partial` fidelity of §A.3 until the helper's protected store is proven (full|partial). Falsifier: `G-ID-13`.
 link key       X25519 static key (P8-R9, §3.9) in the OS keystore item `gnomon-link-key` behind the helper, with the kernel key's custody rules (macOS `full` only
                under P8-D68; Windows Credential Manager `partial`) and handed only to the signed kernel binary; bound to kernelKeyId + deviceId by a root-signed registry
                row ("gkey-x25519:v1:<sha256(raw public key)>", kind link); rotated by the root-signed `gnomon key rotate link` (paired peers receive the new row over the
@@ -475,6 +485,7 @@ Generalizes `packages/warpline/src/fabric/keys.ts`: key identity `keys.ts:15-18,
 | `G-ID-10` | `#identity`, `#approval-broker`, `#gnomon-helper`, `#gnomon-voice`, `#manifest-loader`, `#mod-host` | a batch the binding rules refuse (decision row, `rowsDigest` over `detail.rootRows`, the card kind's row table), a bad root signature, a wrong key, a replaced line or a declined prompt signs nothing and appends nothing; the card stays pending |
 | `G-ID-11` | `#approval-broker`, `#gui` | the GUI shows a root-class key only beside a contentHash-verified, fully rendered `detail.rootRows` and flags red a logged `rowsDigest` that is not the shown rows' digest |
 | `G-ID-12` | `#kernel-log` | replay checks every v2 decision row's `rowsDigest` against the logged card and, with the pinned root key, its `rootSig` |
+| `G-ID-13` | `#kernel-sea`, `#gnomon-wrapper` | the kernel is a signed SEA `gnomon.kernel` (identifier gnomon.kernel, hardened runtime, no get-task-allow; ad-hoc only with the "unsigned → guarded only" note); `NODE_OPTIONS=--require=<x.js>` never runs in it; every node child runs `gnomon.node`, never the kernel (no `gnomon.node` ⇒ refused, never execPath); the app spawns the SEA after its hash and code-requirement pins (test/sea.test.ts, test/sea-kernel.test.ts, gnomon-wrapper kernel.rs; probes p15–p17) |
 
 ### 3.2 `#kernel-log` — the one hash-chained index
 
@@ -2368,6 +2379,7 @@ Regenerated by the checker that implements §7.1 (including the suffixed-range r
 | `sym:#identity` | symbol | 2.1 | G-HLP-01, G-ID-01, G-ID-02, G-ID-03, G-ID-04, G-ID-05, G-ID-06, G-ID-07, G-ID-08, G-ID-09, G-ID-10 |
 | `sym:#kernel-log` | symbol | 2.1 | G-ID-12, G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11 |
 | `sym:#kernel-mcp` | symbol | 6.6 | G-GIT-08 |
+| `sym:#kernel-sea` | symbol | 3.1 | G-ID-13 |
 | `sym:#knowledge-query` | symbol | 2.1 | G-KNW-01, G-KNW-02, G-KNW-03, G-KNW-04 |
 | `sym:#learning-loop` | symbol | 2.1 | G-LRN-01, G-LRN-02, G-LRN-03, G-STR-10 |
 | `sym:#ledger-mod` | symbol | 11.6 |  |

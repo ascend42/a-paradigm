@@ -1,5 +1,5 @@
 /**
- * #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-12): the pure parts of the signed SEA kernel.
+ * #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-13): the pure parts of the signed SEA kernel.
  *
  * Falsifiers:
  *   - under the SEA, every node child runs gnomon.node (the bundle's Resources/node/bin/node, else

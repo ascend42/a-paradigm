@@ -1,7 +1,7 @@
 /**
  * @symbol #kernel-sea
  *
- * #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-12) — the kernel as a signed Node Single Executable
+ * #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-13) — the kernel as a signed Node Single Executable
  * Application, `gnomon.kernel` (code identifier gnomon.kernel, team SW4BMQ8PNL, hardened runtime, no get-task-allow;
  * scripts/build-sea.mjs). The helper certifies only a kernel it can identify by code signature, which `node` + a
  * script never is.

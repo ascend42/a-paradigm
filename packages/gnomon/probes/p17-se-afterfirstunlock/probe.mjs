@@ -19,7 +19,7 @@ import { onAbort } from '../_shared/abort.mjs';
 import { buildProbeApp, buildTool, checkProfile, json, PROBE_GROUP, rmSync, signBare, signingAvailable, workDir } from '../_shared/kernel-probe.mjs';
 import { prerequisiteFailure } from '../_shared/signing.mjs';
 
-export const specRefs = ['P8-D68', 'TD-2026-10-29-746 S0 P3', 'G-ID-12'];
+export const specRefs = ['P8-D68', 'TD-2026-10-29-746 S0 P3', 'G-ID-13'];
 
 export default async function probe(ctx) {
   if (ctx.platform !== 'darwin') return { verdict: 'partial', evidence: { skipped: `${ctx.platform}: Secure Enclave is macOS` } };

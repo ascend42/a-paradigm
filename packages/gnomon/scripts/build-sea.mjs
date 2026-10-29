@@ -2,7 +2,7 @@
 /**
  * @symbol #kernel-sea
  *
- * Build the signed SEA kernel `gnomon.kernel` (TD-2026-10-29-746, spec P8-D68 amended, G-ID-12). The helper can
+ * Build the signed SEA kernel `gnomon.kernel` (TD-2026-10-29-746, spec P8-D68 amended, G-ID-13). The helper can
  * certify only a kernel it identifies by code signature; `node` + a script cannot be told apart from any other
  * script, so the kernel becomes a Node Single Executable Application whose signature covers its code.
  *

@@ -66,6 +66,30 @@ components:
     tests:
       - test/release-pins.test.ts
       - test/daemon-lifecycle.test.ts
+  kernel-sea:
+    description: >-
+      #kernel-sea (TD-2026-10-29-746, spec P8-D68 amended, G-ID-13) — the
+      kernel as a signed Node SEA, gnomon.kernel (identifier gnomon.kernel,
+      team SW4BMQ8PNL, hardened runtime, allow-jit only, no get-task-allow),
+      so the helper can identify it by code signature (audit token +
+      SecCodeCheckValidity; probe p15). scripts/build-sea.mjs bundles
+      scripts/sea/sea-main.mjs with both dist entries into one CommonJS main;
+      the sea-config bakes --disable-sigusr1 and execArgvExtension "none"
+      (NODE_OPTIONS is never read); sea-prelude.mjs strips NODE_OPTIONS,
+      NODE_PATH and NODE_EXTRA_CA_CERTS, selects gnomond with --gnomond and
+      defines import.meta.url from the SEA's own location (the kernel package
+      root). --sign auto uses the Developer ID when present, else ad-hoc with
+      "unsigned → guarded only". sea.ts childNodePath: under the SEA every node
+      child runs gnomon.node (Resources/node/bin/node in the app, else
+      <dir of gnomon.kernel>/node/bin/node); none ⇒ SeaChildNodeMissing, never
+      execPath. reexecArgs under the SEA starts with --gnomond.
+    path: src/kernel/lifecycle/sea.ts
+    type: module
+    tags: [kernel, lifecycle, security, identity]
+    related: ["#app-bundle", "#gnomon-wrapper", "#gnomon-helper", "#release-darwin", "$daemon-lifecycle"]
+    tests:
+      - test/sea.test.ts
+      - test/sea-kernel.test.ts
   app-bundle:
     description: >-
       #app-bundle (T-2026-10-21-029, TD-2026-10-21-758 zero-build; 8.0 M2) —
@@ -73,9 +97,10 @@ components:
       derived from its OWN file's realpath at run time (never recorded), so a
       moved or copied app (M4: ~/Applications) still works. Layout:
       <X>.app/Contents/Resources/kernel (this kernel), Resources/node/bin/node
-      (the bundled node: the wrapper spawns the kernel with it, so
-      process.execPath and every child — gnomon-web, mods, the voice client,
-      the model fetch, successors — use it, never PATH node),
+      (the bundled node, signed gnomon.node: every node child — gnomon-web,
+      mods, the voice client, the model fetch — runs it via #kernel-sea
+      childNodePath, never PATH node), Resources/kernel/gnomon.kernel (the
+      signed SEA the wrapper spawns; successors re-exec it),
       Resources/gnomon-voice (the voice client + sherpa), Helpers/GnomonHelper.app,
       Helpers/GnomonVoiceIO.app. appBundleOf(from) is null outside a bundle,
       where every caller keeps its monorepo / node_modules lookup. In a bundle:
