@@ -19,6 +19,7 @@
  * Neither present ⇒ SeaChildNodeMissing, fail closed: the kernel never falls back to spawning itself.
  * Not a SEA (npm installs, a checkout's `node dist/cli/gnomon.js`, tests): process.execPath, unchanged.
  */
+import { execFile, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isSea } from 'node:sea';
@@ -56,6 +57,9 @@ export interface SeaGuard {
   readonly childNodeRequirement: string;
   checkDist(): void;
   checkChildNode(node: string): void;
+  /** helper 1.11.0 slice: the pinned voice client dir (`gnomon-voice` beside the kernel dir) and its tree check. */
+  readonly voiceRoot?: string;
+  checkVoice?(): void;
 }
 
 /** The SEA's guard, or null (plain node, or a SEA built without one). */
@@ -143,6 +147,70 @@ export function childNodePath(f?: SeaFacts): string {
     throw new SeaChildNodeRefused(hit, e instanceof Error ? e.message : String(e));
   }
   return hit;
+}
+
+/** The voice client (or its entry) the SEA's pin refused: no voice child and no model fetch. */
+export class SeaVoiceClientRefused extends Error {
+  constructor(why: string) {
+    super(`the SEA kernel refuses to start the voice client: ${why}; reinstall Gnomon`);
+    this.name = 'VoiceClientRefused';
+  }
+}
+
+/**
+ * TD-2026-10-29-746 (helper 1.11.0 slice, kernel side): before each voice spawn and each model fetch, the SEA re-checks
+ * the voice client tree baked in at build (package.json, dist, node_modules with the .node and .dylib addons; stat
+ * cached) and that `entry` is inside it. Not a SEA: nothing to check (npm installs keep the install-time pin only).
+ */
+export function checkVoiceClient(entry: string, f: Pick<SeaFacts, 'sea' | 'guard'> = {}): void {
+  const sea = f.sea ?? runningAsSea();
+  if (!sea) return;
+  const guard = 'guard' in f ? (f.guard ?? null) : seaGuard();
+  if (!guard || typeof guard.checkVoice !== 'function' || typeof guard.voiceRoot !== 'string') throw new SeaVoiceClientRefused('this SEA carries no voice client pin');
+  try {
+    guard.checkVoice();
+  } catch (e) {
+    throw new SeaVoiceClientRefused(e instanceof Error ? e.message : String(e));
+  }
+  const root = realOr(guard.voiceRoot);
+  const real = realOr(entry);
+  if (!real.startsWith(root + path.sep)) throw new SeaVoiceClientRefused(`${entry} is outside the pinned voice client ${guard.voiceRoot}`);
+}
+
+/** Runs `codesign --verify -R=<req> <pid>`; resolves to the exit status (tests stub it). */
+export type RunningChildVerifier = (pid: number, requirement: string) => Promise<number>;
+const codesignPid: RunningChildVerifier = (pid, requirement) =>
+  new Promise((resolve) => {
+    execFile('/usr/bin/codesign', ['--verify', `-R=${requirement}`, String(pid)], { timeout: 60_000 }, (err) => {
+      resolve(err ? (typeof (err as { code?: unknown }).code === 'number' ? ((err as { code: number }).code) : 1) : 0);
+    });
+  });
+
+/**
+ * TD-2026-10-29-746 (kernel side): RIGHT AFTER a node child is spawned, verify the RUNNING process against the
+ * cdhash-pinned child-node requirement and SIGKILL it on any failure. This closes the gap between checkChildNode (the
+ * file, before the spawn) and the exec. Applies to a child whose command IS the child node; a sandbox-exec launch is
+ * skipped here (its pid is sandbox-exec until it execs node, so a check would race it; its node was checked by
+ * childNodePath first). Not a SEA: no-op. Returns the check's promise (true = kept; false = killed), or null when skipped.
+ */
+export function verifyRunningChild(command: string, child: Pick<ChildProcess, 'pid' | 'kill'>, f: Pick<SeaFacts, 'sea' | 'guard'> & { verify?: RunningChildVerifier } = {}): Promise<boolean> | null {
+  const sea = f.sea ?? runningAsSea();
+  if (!sea) return null;
+  const guard = 'guard' in f ? (f.guard ?? null) : seaGuard();
+  const kill = (): false => {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // already gone
+    }
+    return false;
+  };
+  if (!guard) return Promise.resolve(kill());
+  const real = realOr(command);
+  const isNode = path.basename(real) === 'node' && seaChildNodeCandidates().some((c) => realOr(c) === real);
+  if (!isNode) return null;
+  if (typeof child.pid !== 'number' || child.pid <= 0) return Promise.resolve(kill());
+  return (f.verify ?? codesignPid)(child.pid, guard.childNodeRequirement).then((code) => (code === 0 ? true : kill()));
 }
 
 /** The gnomond entry a launcher passes: the SEA itself (no script; SEA_GNOMOND_ARG selects it) or the dist script. */

@@ -288,8 +288,11 @@ export async function buildKernelSea({ pkg = PKG, outDir = PKG, sign = 'auto', n
     const childReq = childNodeRequirement({ signing: s.signing, identifier: NODE_DEV_IDENTIFIER, cdhash: cdhashOf(to) });
     must(capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${childReq}`, to]), 'codesign -R child node requirement');
     // 2. the SEA, with the dist tree and the child-node requirement baked in
-    const { kernelTreeHash } = await import('./release-darwin.mjs');
-    const build = { profile: 'dev', version, distTree: kernelTreeHash(pkg), childNodeRequirement: childReq };
+    const { kernelTreeHash, voiceTreeHash } = await import('./release-darwin.mjs');
+    // the voice client beside the kernel dir (packages/gnomon-voice in a checkout, Resources/gnomon-voice in the app)
+    const voiceDir = path.join(path.dirname(pkg), 'gnomon-voice');
+    const voiceTree = existsSync(path.join(voiceDir, 'package.json')) ? voiceTreeHash(voiceDir) : null;
+    const build = { profile: 'dev', version, distTree: kernelTreeHash(pkg), childNodeRequirement: childReq, voiceTree };
     const main = await bundleSeaMain(path.join(work, 'sea-main.cjs'), { pkg, build });
     const kernel = path.join(outDir, KERNEL_SEA_NAME);
     const built = await buildSeaBinary({ baseNode: base.node, main, out: kernel, identifier: KERNEL_DEV_IDENTIFIER, identity: s.identity, work, stamp: { profile: 'dev', version } });

@@ -64,7 +64,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -132,6 +132,41 @@ export function kernelTreeHash(pkg) {
   files.push(['package.json', sha256File(path.join(pkg, 'package.json'))]);
   files.sort((a, b) => Buffer.compare(Buffer.from(a[0]), Buffer.from(b[0])));
   const h = createHash('sha256').update(`${KERNEL_TREE_DOMAIN}\n`);
+  for (const [n, s] of files) h.update(`${n}\0${s}\n`);
+  return `sha256:${h.digest('hex')}`;
+}
+
+export const VOICE_TREE_DOMAIN = 'gnomon-voice-tree:v1';
+const VOICE_MAX_FILES = 50_000;
+const VOICE_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * Helper 1.11.0 slice (TD-2026-10-29-746): the voice client tree the SEA pins — package.json, dist/ and node_modules/
+ * (the .node and .dylib addons included, after they were codesigned) of Resources/gnomon-voice. A symlink is hashed
+ * as its target text, never followed. The JS twin of sea-prelude.mjs checkVoice.
+ */
+export function voiceTreeHash(dir) {
+  const files = [];
+  let total = 0;
+  const walk = (abs, rel) => {
+    for (const name of readdirSync(abs).sort()) {
+      const full = path.join(abs, name);
+      const r = `${rel}/${name}`;
+      const st = lstatSync(full);
+      if (st.isSymbolicLink()) files.push([r, `link:${readlinkSync(full)}`]);
+      else if (st.isDirectory()) walk(full, r);
+      else if (st.isFile()) {
+        total += st.size;
+        if (files.length >= VOICE_MAX_FILES || total > VOICE_MAX_BYTES) throw new Error('the voice client tree is too large');
+        files.push([r, sha256File(full)]);
+      } else throw new Error(`not a regular file in the voice client tree: ${r}`);
+    }
+  };
+  if (!lstatSync(path.join(dir, 'package.json')).isFile()) throw new Error('the voice client package.json is not a regular file');
+  files.push(['package.json', sha256File(path.join(dir, 'package.json'))]);
+  for (const sub of ['dist', 'node_modules']) if (existsSync(path.join(dir, sub))) walk(path.join(dir, sub), sub);
+  files.sort((a, b) => Buffer.compare(Buffer.from(a[0]), Buffer.from(b[0])));
+  const h = createHash('sha256').update(`${VOICE_TREE_DOMAIN}\n`);
   for (const [n, s] of files) h.update(`${n}\0${s}\n`);
   return `sha256:${h.digest('hex')}`;
 }
@@ -485,7 +520,7 @@ export async function release(argv) {
       mkdirSync(seaWork, { recursive: true });
       // Aegis S0 H1: the staged node's cdhash-pinned requirement and the staged kernel tree are baked into the SEA
       const childReq = sea.childNodeRequirement({ signing, identifier: NODE_IDENTIFIER, cdhash: sea.cdhashOf(stagedNode) });
-      const build = { profile: 'release', version, distTree: kernelTreeHash(path.join(stage, LAYOUT.kernel)), childNodeRequirement: childReq };
+      const build = { profile: 'release', version, distTree: kernelTreeHash(path.join(stage, LAYOUT.kernel)), childNodeRequirement: childReq, voiceTree: voiceTreeHash(path.join(stage, LAYOUT.voice)) };
       const main = await sea.bundleSeaMain(path.join(seaWork, 'sea-main.cjs'), { build });
       await sea.buildSeaBinary({ baseNode: fetched.node, main, out: stagedKernelExe, identifier: sea.KERNEL_IDENTIFIER, release: true, identity, work: seaWork, stamp: { profile: 'release', version } });
       const kq = capture('/usr/bin/codesign', ['--verify', '--strict', `-R=${sea.kernelRequirement(signing)}`, stagedKernelExe]);

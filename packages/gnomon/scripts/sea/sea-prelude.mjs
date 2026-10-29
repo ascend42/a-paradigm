@@ -140,6 +140,52 @@ function checkChildNode(node) {
   nodeVerified = print;
 }
 
+/**
+ * Helper 1.11.0 slice (TD-2026-10-29-746): the voice client pin. Resources/gnomon-voice (the app) or
+ * packages/gnomon-voice (a checkout) — the `gnomon-voice` directory beside the kernel's — must hash to BUILD.voiceTree
+ * (release-darwin.mjs voiceTreeHash) before each voice spawn and each model fetch; the same stat cache as checkDist.
+ * A SEA built without a voice pin refuses every voice spawn.
+ */
+const voiceRoot = path.join(path.dirname(root), 'gnomon-voice');
+let voiceVerified = null;
+function voiceFiles() {
+  const out = [];
+  let total = 0;
+  const walk = (abs, rel) => {
+    for (const name of fs.readdirSync(abs)) {
+      const full = path.join(abs, name);
+      const r = `${rel}/${name}`;
+      const st = fs.lstatSync(full, { bigint: true });
+      if (st.isSymbolicLink()) out.push([r, full, st, true]);
+      else if (st.isDirectory()) walk(full, r);
+      else if (st.isFile()) {
+        total += Number(st.size);
+        if (out.length >= 50_000 || total > 2 * 1024 * 1024 * 1024) throw new Error('the voice client tree is too large');
+        out.push([r, full, st, false]);
+      } else throw new Error(`not a regular file in the voice client tree: ${r}`);
+    }
+  };
+  const pj = path.join(voiceRoot, 'package.json');
+  const st = fs.lstatSync(pj, { bigint: true });
+  if (!st.isFile()) throw new Error('the voice client package.json is not a regular file');
+  out.push(['package.json', pj, st, false]);
+  for (const sub of ['dist', 'node_modules']) if (fs.existsSync(path.join(voiceRoot, sub))) walk(path.join(voiceRoot, sub), sub);
+  return out;
+}
+function checkVoice() {
+  if (typeof BUILD.voiceTree !== 'string') throw new Error('this kernel build pins no voice client');
+  const files = voiceFiles();
+  const print = files.map(([r, , st]) => `${r}:${fp(st)}`).sort().join('\n');
+  if (print === voiceVerified) return;
+  const rows = files.map(([r, abs, , link]) => [r, link ? `link:${fs.readlinkSync(abs)}` : createHash('sha256').update(fs.readFileSync(abs)).digest('hex')]);
+  rows.sort((a, b) => Buffer.compare(Buffer.from(a[0]), Buffer.from(b[0])));
+  const h = createHash('sha256').update('gnomon-voice-tree:v1\n');
+  for (const [n, s] of rows) h.update(`${n}\0${s}\n`);
+  const got = `sha256:${h.digest('hex')}`;
+  if (got !== BUILD.voiceTree) throw new Error(`the voice client in ${voiceRoot} hashes to ${got.slice(0, 19)}…, not this build's ${BUILD.voiceTree.slice(0, 19)}…`);
+  voiceVerified = print;
+}
+
 try {
   checkDist();
 } catch (e) {
@@ -147,7 +193,7 @@ try {
 }
 
 Object.defineProperty(globalThis, '__gnomonSea', {
-  value: Object.freeze({ profile: BUILD.profile, version: BUILD.version, distTree: BUILD.distTree, childNodeRequirement: BUILD.childNodeRequirement, checkDist, checkChildNode }),
+  value: Object.freeze({ profile: BUILD.profile, version: BUILD.version, distTree: BUILD.distTree, childNodeRequirement: BUILD.childNodeRequirement, voiceRoot, checkDist, checkChildNode, checkVoice }),
   writable: false,
   configurable: false,
   enumerable: false,
