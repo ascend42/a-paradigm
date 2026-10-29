@@ -131,7 +131,7 @@ describe('#local-config-request: the ONE input check (shared with gnomon dev loc
     for (const base of ['http://192.168.1.20:11434', 'http://10.0.0.5:8080', 'http://[fd00::1]:8080']) {
       const r = await refusal(() => ok({ model: 'm', base }));
       expect(r).toMatchObject({ code: 'ENGINE', reason: 'not-implemented', data: { milestone: '8.1', why: 'lan-endpoint' } });
-      expect(r.message).toMatch(/LAN endpoints land in 8\.1/);
+      expect(r.message).toMatch(/LAN endpoints are not supported yet/);
     }
     for (const base of ['https://api.anthropic.com', 'http://8.8.8.8:80', 'http://169.254.169.254', 'http://example.com:11434']) expect((await refusal(() => ok({ model: 'm', base }))).code).toBe('BILLING_REFUSED');
     expect((await refusal(() => ok({ model: 'm', base: 'http://127.0.0.1:7531' }))).data).toMatchObject({ why: 'port' });
@@ -161,7 +161,7 @@ describe('#local-config-request: the root card', () => {
     const card = r.broker.card(res.cardId)!;
     expect(card.kind).toBe('grant');
     const text = JSON.stringify(card.block);
-    for (const want of ['Set up the local model', 'asked from Settings · ', 'applies at once, no restart', 'This decision signs:', 'local model config v1 · new', 'endpoint ollama · an Ollama server at http://127.0.0.1:11434', 'model qwen3.5:9b · loops may use it', 'runner gnomon-local', 'bundled · tree ', 'Loopback only in 8.0; LAN endpoints land in 8.1', 'Allow takes the root key and your presence (Touch ID or your Mac password)']) expect(text).toContain(want);
+    for (const want of ['Set up the local model', 'asked from Settings · ', 'applies at once, no restart', 'This decision signs:', 'local model config v1 · new', 'endpoint ollama · an Ollama server at http://127.0.0.1:11434', 'model qwen3.5:9b · loops may use it', 'runner gnomon-local', 'bundled · tree ', 'Loopback only; LAN endpoints are not supported yet', 'Allow takes the root key and your presence (Touch ID or your Mac password)']) expect(text).toContain(want);
     expect(text).not.toContain('Not on Windows');
     const rootRows = (card.block as { children: Array<{ type: string; detail?: { rootRows: unknown[]; action: string } }> }).children.find((c) => c.type === 'root-rows')!.detail!;
     expect(rootRows.action).toBe('local.config');

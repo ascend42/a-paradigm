@@ -35,8 +35,8 @@ export const LOCAL_USAGE = `usage: gnomon local set --model <id> [--base <url>] 
 
   set     ask Gnomon to use a local model (Ollama, llama.cpp, LM Studio, vLLM or
           mlx-lm) for model: local sessions and, with --loops, for trusted loops.
-          The endpoint is loopback only in 8.0 (default http://127.0.0.1:11434,
-          compat ollama); LAN endpoints land in 8.1. The runner is the one that
+          The endpoint is loopback only (default http://127.0.0.1:11434,
+          compat ollama); LAN endpoints are not supported yet. The runner is the one that
           ships with Gnomon unless --runner names another absolute directory.
           This raises a card you allow in Gnomon with your password and the root
           key; once allowed it applies without a restart.
@@ -179,7 +179,7 @@ export function printStatus(out: Out, st: Record<string, unknown>): number {
     ...(runner ? ([['runner', `${String(runner.dir)} (tree ${String(runner.treeSha256).slice(0, 12)}…)`]] as Array<[string, string]>) : []),
     ['default runner', d.source ? `${String(d.dir)} (${String(d.source)})` : `none: ${String(d.why ?? 'unknown')}`],
     ...(st.pendingCardId ? ([['pending', `card ${String(st.pendingCardId)} waits on your approval`]] as Array<[string, string]>) : []),
-    ['endpoints', 'loopback only in 8.0; LAN endpoints land in 8.1'],
+    ['endpoints', 'loopback only; LAN endpoints are not supported yet'],
     ...(st.configured === true ? [] : ([['next', 'gnomon local set --model <id> (or Settings → Local model in Gnomon)']] as Array<[string, string]>)),
   ]);
   return LOCAL_EXIT_OK;

@@ -231,7 +231,7 @@ describe('#loop-runner: the walk (§2)', () => {
     const ok = compileLoop({ ...def, nodes: [chk('a', { pass: '@stop' })] } as any, { scope: 'repo' }).compiled!;
     const forged = { ...ok, nodes: ok.nodes.map((n) => ({ ...n, effect: 'write' })) } as typeof ok;
     expect(unsupportedNodes(forged)).toEqual(['a']);
-    expect(ACT_NODES_LATER).toBe('write checks (effect: write) land in 8.1');
+    expect(ACT_NODES_LATER).toBe('write checks (effect: write) are not in this release yet');
   });
 
   it('exit.maxVisits and exit.maxFailStreak end the run node-exit before the next step', async () => {

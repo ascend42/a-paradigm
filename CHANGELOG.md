@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A destructive Always needs helper 1.10.0** (`#gnomon-helper`). The helper signs the destructive rule's decision row. Gnomon offers "Always" on a destructive card only when the running helper is 1.10.0 or newer; with an older helper the card offers Allow and Deny only. The helper ships inside the signed `Gnomon.app`.
 
 ### Known limitations
-- **Loops stay off in release builds.** The refusal still reads "They arrive in Gnomon 8.1."; that line is out of date and loops are not in 8.1.0.
+- **Loops stay off in release builds.** The refusal now reads "Loops are off in this release while they are finished." Messages that promised other features "in 8.1" (LAN endpoints for local models, write checks, auto-land, Claude in loops, sentinel triggers) now say they are not in this release yet.
 - Gnomon's repo id does not yet follow linked worktrees, while Paradigm's learning homes key on the main checkout. The two agree for a plain checkout.
 - Gnomon runs on Apple silicon Macs only.
 

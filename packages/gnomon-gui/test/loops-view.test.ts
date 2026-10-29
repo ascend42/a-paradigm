@@ -311,7 +311,7 @@ describe('loops off in this build (TD-2026-10-24-447)', () => {
     const { fileURLToPath } = await import('node:url');
     const src = readFileSync(fileURLToPath(new URL('../src/ui/loops-view.ts', import.meta.url)), 'utf8');
     const { LOOPS_OFF_TEXT } = await import('../src/core/loops.js');
-    expect(LOOPS_OFF_TEXT).toBe('Loops are off in this build. They arrive in Gnomon 8.1.');
+    expect(LOOPS_OFF_TEXT).toBe('Loops are off in this release while they are finished.');
     const list = src.slice(src.indexOf('function paintList('), src.indexOf('if (!m.loops.length) body'));
     expect(list).toContain('loopsOff(m)');
     expect(list).toContain('LOOPS_OFF_TEXT');

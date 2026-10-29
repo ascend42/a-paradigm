@@ -132,7 +132,7 @@ export interface LoopsModel {
 }
 
 /** The words every loops-off surface shows (TD-2026-10-24-447); the kernel's refusal `loops-disabled` carries the same text. */
-export const LOOPS_OFF_TEXT = 'Loops are off in this build. They arrive in Gnomon 8.1.';
+export const LOOPS_OFF_TEXT = 'Loops are off in this release while they are finished.';
 /** The loop card kinds the broker may still hold from an 8.0.0 install (they are hidden while loops are off). */
 export const isLoopCardKind = (kind: string): boolean => kind === 'loop-trust' || kind === 'loop-choice';
 /** True when the kernel says loops are off in this build. */

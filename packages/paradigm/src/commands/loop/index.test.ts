@@ -108,7 +108,7 @@ describe('paradigm loop validate', () => {
     fs.mkdirSync(loops(), { recursive: true });
     fs.writeFileSync(loops('later.yaml'), "schema: loop:v2\nid: later\ntriggers: [{ schedule: { cron: '0 * * * *' } }]\nstart: a\nnodes:\n  - { id: a, type: check, builtin: git.clean }\n");
     await loopValidateCommand('later', { root });
-    expect(stdout).toContain('triggers[0].schedule.cron: LANDS_IN_8_1: the cron trigger lands in 8.1');
+    expect(stdout).toContain('triggers[0].schedule.cron: LANDS_IN_8_1: the cron trigger is not in this release yet');
   });
 });
 

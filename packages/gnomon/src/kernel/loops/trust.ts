@@ -116,7 +116,7 @@ export function renderDefinition(c: CompiledLoop, h: LoopHash, calleeEnv?: (node
   push(`Flows: ${list(c.flows)}${c.flowPaths ? ` (paths: ${Object.entries(c.flowPaths).map(([f, g]) => `${f} → ${g.join(', ') || 'none'}`).join('; ')})` : c.flows.length ? ' (unresolved: no flow index at compile)' : ''}`);
   push(`Source hash (what a caller's pin names): ${c.compiled.sourceHash ?? 'none (compiled without one: no loop can call it)'}`);
   push(`Autonomy: ${c.autonomy}; decide: ${c.decide}; notify on ${list(c.notify.on)} as ${c.notify.as}`);
-  push('Model: local only (Claude in loops lands in 8.1)');
+  push('Model: local only (Claude in loops is not in this release yet)');
   const trig = c.triggers.map((t) => {
     if (t.type === 'schedule') return `schedule ${t.every !== undefined ? `every ${t.every}s` : t.daily !== undefined ? `daily ${t.daily}` : `weekly ${t.weekly?.day} ${t.weekly?.at}`} (catch up: ${t.catchUp})`;
     if (t.type === 'event') return `event ${t.kind}${t.flow ? ` ${t.flow}` : ''}${t.paths ? ` [${t.paths.join(', ')}]` : ''}${t.loop ? ` ${t.loop}.${t.node}` : ''} (debounce ${t.debounceSec}s)`;

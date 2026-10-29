@@ -444,7 +444,7 @@ class Checker {
     this.warnings.push({ path, code, message });
   }
   later(path: string, what: string): void {
-    this.err(path, LANDS_IN_8_1, `${what} lands in 8.1`);
+    this.err(path, LANDS_IN_8_1, `${what} is not in this release yet`);
   }
 
   /** Refuse keys outside `allowed` (closed shape); `deferred` keys get LANDS_IN_8_1 instead. */

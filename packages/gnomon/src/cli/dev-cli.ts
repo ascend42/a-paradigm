@@ -40,7 +40,7 @@ usage: gnomon dev init [--home <abs>]   provision a dev home (default ~/${'.gnom
                                     (--wrapper: the grant goes on the stdout pipe of the parent, #gnomon-wrapper)
        gnomon dev local --model <id> [--base <url>] [--compat <name>] [--id <name>] [--runner <dir>] [--loops] [--home <abs>]
                                     sign the local-model lane config (local.signed.json) with the dev root:
-                                    one LOOPBACK endpoint (default http://127.0.0.1:11434, ollama; LAN lands in 8.1)
+                                    one LOOPBACK endpoint (default http://127.0.0.1:11434, ollama; no LAN yet)
                                     and the gnomon-local runner pinned by sha256 (default: the runner that ships
                                     with this build, else this clone's gnomon-local/dist);
                                     --loops lets trusted loops' model steps use the endpoint (off by default);

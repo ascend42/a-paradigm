@@ -14,7 +14,7 @@
 import { loadedReleasePins } from '../lifecycle/release-pins.js';
 
 export const LOOPS_DISABLED_REASON = 'loops-disabled';
-export const LOOPS_DISABLED_MESSAGE = 'Loops are off in this build. They arrive in Gnomon 8.1.';
+export const LOOPS_DISABLED_MESSAGE = 'Loops are off in this release while they are finished.';
 export const LOOPS_DISABLED_STATUS_REASON = 'not-in-this-build';
 
 /** Env lookup that ignores the case of the NAME (Windows env names are case-insensitive). */
